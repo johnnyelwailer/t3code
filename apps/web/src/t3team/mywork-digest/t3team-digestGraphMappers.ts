@@ -151,6 +151,8 @@ export function payloadToDigestGraph(input: {
         ...(pr.host !== undefined ? { host: pr.host } : {}),
         repo: pr.repo,
         number: pr.number,
+        ...(pr.title !== undefined ? { title: pr.title } : {}),
+        projectId: projectForEntry(input.entries[position])?.id ?? data.project.id,
         state: pr.state,
         updatedAt: pr.updatedAt,
         // TODO(digest-data): per-reviewer verdicts have no host source yet; PR-level only.
@@ -192,7 +194,8 @@ export function payloadToDigestGraph(input: {
   });
 
   const jiraSyncedAt = oldestJiraSync(input.payload.projects);
-  const reviewRequests = digestReviewRequests(input.payload.projects, resolveTicketId);
+  const projectIdAt = (at: number) => projects[at]?.id ?? "";
+  const reviewRequests = digestReviewRequests(input.payload.projects, resolveTicketId, projectIdAt);
   return {
     scope: input.payload.scope,
     projects,

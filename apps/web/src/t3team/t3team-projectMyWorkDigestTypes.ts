@@ -45,6 +45,9 @@ export type DigestReviewer = {
 export type DigestChangeRequest = {
   readonly id: string;
   readonly ticketId: string;
+  readonly title?: string;
+  /** The app project whose digest carried it — the PR detail panel reads through that project. */
+  readonly projectId?: string;
   /** The PR host (github.com or a GHE install); absent means github.com. */
   readonly host?: string;
   readonly repo: string;
@@ -70,6 +73,7 @@ export type DigestChangeRequest = {
  */
 export type DigestReviewRequest = {
   readonly id: string;
+  readonly projectId: string;
   readonly host?: string;
   readonly repo: string;
   readonly number: number;

@@ -1,7 +1,9 @@
+import { ProjectId } from "@t3tools/contracts";
 import type { MouseEvent } from "react";
 
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { DigestKicker, formatDigestAgo } from "~/t3team/t3team-ProjectMyWorkDigestChips";
+import { openDigestPullRequest } from "~/t3team/t3team-digestPrAsideStore";
 import { digestPrUrl } from "~/t3team/t3team-projectMyWorkDigestFacts";
 import type { DigestGraph, DigestSection } from "~/t3team/t3team-projectMyWorkDigestPlan";
 
@@ -35,7 +37,18 @@ export function DigestReviewSection({
           const openTicket = (event: MouseEvent) => {
             if (!review.ticketId || !onOpenTicket) return;
             event.preventDefault();
+            event.stopPropagation();
             onOpenTicket(review.ticketId);
+          };
+          const openPullRequest = (event: MouseEvent) => {
+            if (event.metaKey || event.ctrlKey || review.projectId === "") return;
+            event.preventDefault();
+            openDigestPullRequest({
+              projectId: ProjectId.make(review.projectId),
+              ...(review.host !== undefined ? { host: review.host } : {}),
+              repository: review.repo,
+              number: review.number,
+            });
           };
           return (
             <a
@@ -43,6 +56,7 @@ export function DigestReviewSection({
               href={digestPrUrl(review)}
               target="_blank"
               rel="noreferrer"
+              onClick={openPullRequest}
               className="block min-w-0 px-3 py-2 hover:bg-accent/30"
             >
               <p className="line-clamp-2 break-words text-sm font-medium leading-5">

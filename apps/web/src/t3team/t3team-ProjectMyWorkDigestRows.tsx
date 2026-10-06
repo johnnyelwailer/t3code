@@ -14,6 +14,7 @@ import { DigestAgentDots } from "~/t3team/t3team-ProjectMyWorkDigestAgentDots";
 import { DigestItemActions } from "~/t3team/t3team-ProjectMyWorkDigestActions";
 import { DigestPeoplePills } from "~/t3team/t3team-ProjectMyWorkDigestPeople";
 import { DigestPrChips } from "~/t3team/t3team-ProjectMyWorkDigestPrChips";
+import { digestRepoLabeler } from "~/t3team/t3team-projectMyWorkDigestRepoLabels";
 import {
   DigestProjectChip,
   DigestStatusDot,
@@ -64,7 +65,10 @@ export function DigestChips({
       {chips.length > 0 ? <div className="flex flex-wrap gap-1">{chips}</div> : null}
       {prs.length > 0 ? (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <DigestPrChips prs={prs} />
+          <DigestPrChips
+            prs={prs}
+            repoLabel={digestRepoLabeler(graph.changeRequests.map((pr) => pr.repo))}
+          />
           <DigestAgentDots claims={claims} nowMs={nowMs} />
         </div>
       ) : null}

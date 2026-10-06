@@ -70,6 +70,7 @@ export function resolveIndexedTicketId(
 export function digestReviewRequests(
   projects: MyWorkDigestPayload["projects"],
   resolveTicketId: (position: number, ref: DigestTicketRefLike) => string,
+  projectIdAt: (position: number) => string,
 ): DigestReviewRequest[] {
   const byId = new Map<string, DigestReviewRequest>();
   projects.forEach((data, position) => {
@@ -80,6 +81,7 @@ export function digestReviewRequests(
         pr.workItemKey !== undefined ? resolveTicketId(position, { issueKey: pr.workItemKey }) : "";
       byId.set(pr.id, {
         id: pr.id,
+        projectId: projectIdAt(position),
         ...(pr.host !== undefined ? { host: pr.host } : {}),
         repo: pr.repo,
         number: pr.number,
