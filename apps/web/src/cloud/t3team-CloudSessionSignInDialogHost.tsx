@@ -42,14 +42,17 @@ export function CloudSessionSignInDialogHost() {
   // `idle`, is not a sign-in and must not re-run the action.
   const startedRef = useRef(false);
   const sawSignInRef = useRef(false);
+  const startedHereRef = useRef(false);
   const startSignIn = () => {
     startedRef.current = true;
+    startedHereRef.current = true;
     sawSignInRef.current = false;
     onConnect();
   };
 
   useEffect(() => {
     startedRef.current = false;
+    startedHereRef.current = false;
     sawSignInRef.current = false;
     if (request === null || phase === "connected") return;
     // A sign-in already running (another surface started it) is watched, not started twice.
@@ -75,7 +78,9 @@ export function CloudSessionSignInDialogHost() {
       open={request !== null}
       onOpenChange={(open) => {
         if (open) return;
-        if (startedRef.current && phase !== "connected") onCancel();
+        // Only a sign-in this dialog started is cancelled; one started elsewhere (Settings) is
+        // that surface's to end.
+        if (startedHereRef.current && phase !== "connected") onCancel();
         clearCloudSessionSignIn();
       }}
     >
