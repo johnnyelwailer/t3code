@@ -52,6 +52,8 @@ export interface BranchToolbarEnvironmentSelectorProps {
    * connected without this thread's project is shown as unavailable, not as one to connect.
    */
   connectedEnvironmentIds?: ReadonlySet<string>;
+  /** t3team: environments that are cloud machines; a finished one is not offered as a machine. */
+  cloudEnvironmentIds?: ReadonlySet<string>;
   /**
    * Present when the server has a cloud provider configured: the menu offers a
    * one-click "New cloud session". Absent hides the action item entirely.
@@ -104,6 +106,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   displayMode = "toolbar",
   pendingCloudSessions,
   connectedEnvironmentIds,
+  cloudEnvironmentIds,
   onCreateCloudSession,
   cloudSessionCreatePending = false,
   cloudSessionProject,
@@ -121,13 +124,17 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   // t3team: one list — the machines, then one row per cloud session (connected or not).
   const { machines: runOnEnvironments, cloud: cloudRows } = useMemo(
     () =>
-      runOnRows(
-        availableEnvironments,
-        pendingCloudSessions ?? [],
-        environmentId,
-        connectedEnvironmentIds,
-      ),
-    [availableEnvironments, connectedEnvironmentIds, environmentId, pendingCloudSessions],
+      runOnRows(availableEnvironments, pendingCloudSessions ?? [], environmentId, {
+        connected: connectedEnvironmentIds,
+        cloud: cloudEnvironmentIds,
+      }),
+    [
+      availableEnvironments,
+      cloudEnvironmentIds,
+      connectedEnvironmentIds,
+      environmentId,
+      pendingCloudSessions,
+    ],
   );
   const connectedCloudEnvironments = useMemo(
     () => cloudRows.flatMap((row) => (row.environment === null ? [] : [row.environment])),

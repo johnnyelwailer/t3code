@@ -40,7 +40,9 @@ describe("runOnRows", () => {
   });
 
   it("marks a machine connected without this project as unavailable, not as one to connect", () => {
-    const rows = runOnRows([PRIMARY], [session("1")], PRIMARY.environmentId, new Set(["env-1"]));
+    const rows = runOnRows([PRIMARY], [session("1")], PRIMARY.environmentId, {
+      connected: new Set(["env-1"]),
+    });
     expect(rows.cloud[0]?.environment).toBeNull();
     expect(rows.cloud[0]?.unavailable).toBe(true);
   });
@@ -52,5 +54,27 @@ describe("runOnRows", () => {
       PRIMARY.environmentId,
     );
     expect(rows.machines).toHaveLength(2);
+  });
+
+  it("leaves out a finished cloud machine, unless the thread is on it", () => {
+    const ended = env("env-old", "nexi-machine-qa · 12:20 PM");
+    const cloud = new Set(["env-old"]);
+    expect(runOnRows([PRIMARY, ended], [], PRIMARY.environmentId, { cloud }).machines).toEqual([
+      PRIMARY,
+    ]);
+    expect(
+      runOnRows([PRIMARY, ended], [], ended.environmentId, { cloud }).machines.map(
+        (machine) => machine.environmentId,
+      ),
+    ).toEqual(["local", "env-old"]);
+  });
+
+  it("keeps a connected cloud machine even before its session is listed", () => {
+    const live = env("env-live", "Cloud session");
+    const rows = runOnRows([PRIMARY, live], [], PRIMARY.environmentId, {
+      cloud: new Set(["env-live"]),
+      connected: new Set(["env-live"]),
+    });
+    expect(rows.machines.map((machine) => machine.environmentId)).toEqual(["local", "env-live"]);
   });
 });
