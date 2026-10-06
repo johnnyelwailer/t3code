@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import * as NodeFS from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -260,5 +261,26 @@ describe("T3TeamNexploreStripArt traffic-light wash", () => {
     } finally {
       Object.defineProperty(navigator, "platform", { value: "MacIntel", configurable: true });
     }
+  });
+});
+
+describe("T3TeamNexploreStripArt dark-mode orb dimming", () => {
+  it("routes the strip orb opacity through a token that is 1 in light and dimmed in dark", async () => {
+    const { cleanup, circle } = await renderHeader({
+      width: 420,
+      brand: [18, 120],
+      toggle: [372, 404],
+    } satisfies HeaderLayout);
+    try {
+      expect(circle().getAttribute("style")).toContain("var(--stage-nx-strip-orb-opacity, 1)");
+    } finally {
+      cleanup();
+    }
+    const css = NodeFS.readFileSync("src/index.css", "utf8");
+    const light = /:root \{[^}]*--stage-nx-strip-orb-opacity:\s*([\d.]+)/.exec(css);
+    const dark = /\.dark \{[^}]*--stage-nx-strip-orb-opacity:\s*([\d.]+)/.exec(css);
+    expect(Number(light?.[1])).toBe(1);
+    expect(Number(dark?.[1])).toBeGreaterThan(0);
+    expect(Number(dark?.[1])).toBeLessThan(0.6);
   });
 });
