@@ -21,6 +21,9 @@ export type DigestClaim = {
   readonly lastActivityAt: string;
   /** Where the claiming thread lives, so the dot can link to it. */
   readonly threadUrl?: string;
+  /** Known run state (PR-linked threads): a running thread pulses, a finished one is outlined. */
+  readonly running?: boolean;
+  readonly finished?: boolean;
 };
 
 export type DigestDecision = {
