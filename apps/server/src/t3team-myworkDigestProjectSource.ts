@@ -27,6 +27,7 @@ import type {
   T3TeamDigestProjectSource,
   T3TeamMyWorkDigestProjectInput,
 } from "./t3team-myworkDigestTypes.ts";
+import { readDigestDependencies } from "./t3team-myworkDigestDependencies.ts";
 import { readDigestViewerTickets } from "./t3team-myworkDigestViewer.ts";
 
 const DIGEST_TRANSITION_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
@@ -77,6 +78,7 @@ export function loadDigestProjectSource(
     const viewerPrs = yield* loadDigestViewerPrEntries();
     const pending = projectPrsPending || viewerPrs.pending;
     const jiraSyncedAtMs = yield* readDigestJiraSyncedAtMs(project);
+    const dependencies = yield* readDigestDependencies({ identity, assigned: viewer.assigned });
 
     // Burndown history: the sprint's backfilled changelog rows; when the
     // backfill has not run yet this round it is kicked in the background
@@ -154,6 +156,7 @@ export function loadDigestProjectSource(
       nowIso: ctx.nowIso,
       ...(prRead?.note !== undefined ? { changeRequestNote: prRead.note } : {}),
       ...(jiraSyncedAtMs !== undefined ? { jiraSyncedAt: millisToIso(jiraSyncedAtMs) } : {}),
+      ...(dependencies.length > 0 ? { dependencies } : {}),
     };
     return { source, viewerUnresolved: viewer.unresolved, changeRequestsPending: pending };
   });

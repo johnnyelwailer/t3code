@@ -113,6 +113,7 @@ export function assembleMyWorkDigestChangeRequests(
       title: entry.title,
       ...(entry.viewerAuthored !== undefined ? { viewerAuthored: entry.viewerAuthored } : {}),
       ...(entry.viewerReviewRequested ? { viewerReviewRequested: true } : {}),
+      ...(entry.authorLogin !== undefined ? { authorLogin: entry.authorLogin } : {}),
       ...(entry.reviewers !== undefined ? { reviewers: entry.reviewers } : {}),
       ...(entry.unhandledReviewThreads !== undefined
         ? { unhandledReviewThreads: entry.unhandledReviewThreads }
@@ -185,6 +186,7 @@ export function assembleMyWorkDigestProjectData(
       ? { changeRequestNote: source.changeRequestNote }
       : {}),
     ...(source.jiraSyncedAt !== undefined ? { jiraSyncedAt: source.jiraSyncedAt } : {}),
+    ...(source.dependencies?.length ? { dependencies: source.dependencies } : {}),
   };
 }
 

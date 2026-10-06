@@ -18,8 +18,8 @@ import type { T3TeamDigestProjectSource } from "./t3team-myworkDigestTypes.ts";
 
 type DigestPrEntry = T3TeamDigestProjectSource["prEntries"][number];
 
-const VIEWER_PR_LIMIT = "50";
-const SEARCH_FIELDS = "number,title,repository,updatedAt,isDraft";
+const VIEWER_PR_LIMIT = "100";
+const SEARCH_FIELDS = "number,title,repository,updatedAt,isDraft,author";
 
 const decodeHits = Schema.decodeUnknownOption(
   Schema.fromJsonString(
@@ -30,6 +30,7 @@ const decodeHits = Schema.decodeUnknownOption(
         repository: Schema.Struct({ nameWithOwner: Schema.String }),
         updatedAt: Schema.String,
         isDraft: Schema.Boolean,
+        author: Schema.optional(Schema.NullOr(Schema.Struct({ login: Schema.String }))),
       }),
     ),
   ),
@@ -74,6 +75,7 @@ function searchHost(
           updatedAt: hit.updatedAt,
           viewerReviewRequested: role === "review-requested",
           viewerAuthored: role === "author",
+          ...(hit.author?.login ? { authorLogin: hit.author.login } : {}),
         })),
       ),
     );

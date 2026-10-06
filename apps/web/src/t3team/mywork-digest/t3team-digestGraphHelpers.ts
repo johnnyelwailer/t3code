@@ -1,7 +1,5 @@
 /** Pure helpers of the digest graph mapper (`t3team-digestGraphMappers.ts`). */
 
-import type { MyWorkDigestPayload } from "~/t3team/backend/t3team-myworkDigestBackendApi";
-import type { DigestReviewRequest } from "~/t3team/t3team-projectMyWorkDigestTypes";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
 export type TicketIndex = Map<string, string>;
@@ -61,34 +59,4 @@ export function resolveIndexedTicketId(
   if (byId !== undefined) return byId;
   const byKey = ref.issueKey !== undefined ? index.get(ref.issueKey.toUpperCase()) : undefined;
   return byKey ?? "";
-}
-
-/**
- * Other people's PRs waiting for the viewer's review, once each across projects: the review lane's
- * rows. A PR the viewer wrote is theirs to move and stays a chip on its ticket instead.
- */
-export function digestReviewRequests(
-  projects: MyWorkDigestPayload["projects"],
-  resolveTicketId: (position: number, ref: DigestTicketRefLike) => string,
-): DigestReviewRequest[] {
-  const byId = new Map<string, DigestReviewRequest>();
-  projects.forEach((data, position) => {
-    for (const pr of data.changeRequests) {
-      if (pr.viewerReviewRequested !== true || pr.viewerAuthored === true || byId.has(pr.id))
-        continue;
-      const ticketId =
-        pr.workItemKey !== undefined ? resolveTicketId(position, { issueKey: pr.workItemKey }) : "";
-      byId.set(pr.id, {
-        id: pr.id,
-        ...(pr.host !== undefined ? { host: pr.host } : {}),
-        repo: pr.repo,
-        number: pr.number,
-        title: pr.title ?? `${pr.repo}#${pr.number}`,
-        updatedAt: pr.updatedAt,
-        ...(pr.workItemKey !== undefined ? { workItemKey: pr.workItemKey } : {}),
-        ...(ticketId !== "" ? { ticketId } : {}),
-      });
-    }
-  });
-  return [...byId.values()].toSorted((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 }
