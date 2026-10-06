@@ -2,7 +2,6 @@ import { useCallback } from "react";
 
 import { useProjectDashboardBacklogViewMode } from "~/t3team/hooks/t3team-useProjectDashboardBacklogViewMode";
 import { useProjectDashboardModeState } from "~/t3team/hooks/t3team-useProjectDashboardModeState";
-import { planningSpaceEnabled } from "~/t3team/planning-space/t3team-planningSpaceFlag";
 import { projectBacklogViewModes } from "~/t3team/t3team-projectBacklogPresentation";
 import { useProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboardMyWorkState";
 import type { ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
@@ -27,7 +26,7 @@ export function useProjectDashboardViewTab(projectId: string) {
   const lens = myWorkState.lens;
   const onBacklog = mode === "backlog";
   // Behind the same flag as the planning-space view mode itself (and its options-menu entry).
-  const planningActive = onBacklog && planningSpaceEnabled && backlogViewMode === "planning-space";
+  const planningActive = onBacklog && backlogViewMode === "planning-space";
   const backlogActive = onBacklog && !planningActive;
 
   const selectLens = useCallback(

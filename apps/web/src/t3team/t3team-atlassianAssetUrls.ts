@@ -1,3 +1,5 @@
+import { resolvePrimaryEnvironmentHttpUrl } from "~/environments/primary/target";
+
 export function buildAtlassianAssetContentUrl(input: {
   accountId: string;
   url: string;
@@ -18,7 +20,22 @@ export function buildAtlassianAssetContentUrl(input: {
   }
 
   const path = `/api/t3team/atlassian/asset/content?${params.toString()}`;
-  return input.httpBaseUrl ? new URL(path, input.httpBaseUrl).toString() : path;
+  const baseUrl = input.httpBaseUrl ?? primaryHttpBaseUrl();
+  return baseUrl ? new URL(path, baseUrl).toString() : path;
+}
+
+/**
+ * The packaged desktop app serves its UI from the `t3code://` scheme with no backend behind it, so
+ * a relative `/api/...` image URL resolves to the SPA's index.html and every proxied icon breaks.
+ * Anchor it on the primary environment instead. Undefined (relative path) only when there is no
+ * primary to resolve, e.g. outside a browser.
+ */
+function primaryHttpBaseUrl(): string | undefined {
+  try {
+    return resolvePrimaryEnvironmentHttpUrl("/");
+  } catch {
+    return undefined;
+  }
 }
 
 const ASSET_PROXY_PATH = "/api/t3team/atlassian/asset/content";
@@ -40,7 +57,11 @@ export function proxyAtlassianAssetUrl(input: {
 }): string | undefined {
   const { url, accountId, httpBaseUrl } = input;
   if (!url || !accountId) return url;
-  if (url.startsWith("data:") || url.includes(ASSET_PROXY_PATH)) return url;
+  if (url.startsWith("data:")) return url;
+  if (url.includes(ASSET_PROXY_PATH)) {
+    const baseUrl = url.startsWith("/") ? (httpBaseUrl ?? primaryHttpBaseUrl()) : undefined;
+    return baseUrl ? new URL(url, baseUrl).toString() : url;
+  }
 
   try {
     const parsed = new URL(url);
