@@ -76,7 +76,7 @@ const cases: ReadonlyArray<{
   {
     name: "claude validate",
     request: req("dynamic_tool_call"),
-    toolItem: item("dynamic_tool", { toolName: "mcp__t3-code__t3team_recipe_validate" }),
+    toolItem: item("dynamic_tool", { toolName: "mcp__t3-code__t3_recipe_validate" }),
     decision: "accept",
   },
   {
@@ -94,13 +94,13 @@ const cases: ReadonlyArray<{
   {
     name: "claude status (a t3team tool that is not the author's)",
     request: req("dynamic_tool_call"),
-    toolItem: item("dynamic_tool", { toolName: "mcp__t3-code__t3team_orchestration_status" }),
+    toolItem: item("dynamic_tool", { toolName: "mcp__t3-code__t3_orchestration_status" }),
     decision: "decline",
   },
   {
     name: "claude other server",
     request: req("dynamic_tool_call"),
-    toolItem: item("dynamic_tool", { toolName: "mcp__other__t3team_recipe_validate" }),
+    toolItem: item("dynamic_tool", { toolName: "mcp__other__t3_recipe_validate" }),
     decision: "decline",
   },
   // Codex app-server
@@ -121,7 +121,7 @@ const cases: ReadonlyArray<{
   {
     name: "cursor validate (title only)",
     request: req("command"),
-    toolItem: item("dynamic_tool", { toolName: null, title: "t3team_recipe_validate" }),
+    toolItem: item("dynamic_tool", { toolName: null, title: "t3_recipe_validate" }),
     decision: "accept",
   },
   {
@@ -134,7 +134,7 @@ const cases: ReadonlyArray<{
   {
     name: "cursor exec with a spoofed author title",
     request: req("command"),
-    toolItem: item("command_execution", { title: "t3team_recipe_validate" }),
+    toolItem: item("command_execution", { title: "t3_recipe_validate" }),
     decision: "decline",
   },
   { name: "permission with no tool item", request: req("permission"), decision: "decline" },
@@ -154,11 +154,11 @@ it("accepts only the author's own tool and declines shell, file and every other 
 });
 
 it("names a tool exactly: one known prefix, then an author MCP name or broker id", () => {
-  assert.isTrue(isWorkflowAuthorToolName("t3team_orchestration_run"));
-  assert.isTrue(isWorkflowAuthorToolName("mcp__t3_code__t3team_orchestration_run"));
+  assert.isTrue(isWorkflowAuthorToolName("t3_orchestration_run"));
+  assert.isTrue(isWorkflowAuthorToolName("mcp__t3_code__t3_orchestration_run"));
   assert.isTrue(isWorkflowAuthorToolName("t3team.recipe.validate"));
-  assert.isFalse(isWorkflowAuthorToolName("mcp__t3-code__mcp__t3-code__t3team_orchestration_run"));
-  assert.isFalse(isWorkflowAuthorToolName("t3team_orchestration_run "));
+  assert.isFalse(isWorkflowAuthorToolName("mcp__t3-code__mcp__t3-code__t3_orchestration_run"));
+  assert.isFalse(isWorkflowAuthorToolName("t3_orchestration_run "));
   assert.isFalse(isWorkflowAuthorToolName("delegate_task"));
   assert.isFalse(isWorkflowAuthorToolName(null));
 });

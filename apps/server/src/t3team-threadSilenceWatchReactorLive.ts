@@ -2,7 +2,7 @@
  * Production wiring of the thread silence watch: ONE core instance per process
  * (`T3TeamThreadSilenceWatchLive`, memoized by layer reference) shared by
  *
- * - `T3TeamSilenceWatchPortLive` — the `t3team_children op:"watch"/"unwatch"`
+ * - `T3TeamSilenceWatchPortLive` — the `t3_task_ops op:"watch"/"unwatch"`
  *   port (provided to the tool broker layer in server.ts);
  * - `T3TeamThreadSilenceWatchReactorLive` — the live domain-event reactor and
  *   the durable sweep (a `Scheduler` source: 5 s tick, first run at start, which

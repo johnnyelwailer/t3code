@@ -14,7 +14,7 @@ const build = (input: Parameters<typeof buildAskUserQuestion>[0]) => {
 describe("buildAskUserQuestion", () => {
   it("rejects an empty question", () => {
     expect(buildAskUserQuestion({ question: "   " }, "q-1")).toEqual({
-      error: "t3team_ask_user requires a non-empty 'question'.",
+      error: "t3_ask_user requires a non-empty 'question'.",
     });
   });
 

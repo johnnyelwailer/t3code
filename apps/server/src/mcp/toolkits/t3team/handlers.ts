@@ -96,31 +96,25 @@ const threadSkillMetadata = Effect.fn("T3TeamMcpToolkit.threadSkillMetadata")(fu
 });
 
 export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
-  t3team_provider_usage: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_provider_usage, input),
-  t3team_search_thread: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_search_thread, input),
-  t3team_search_source: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_search_source, input),
-  t3team_read_message: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_read_message, input),
-  t3team_ask_user: (input) => askUser(input),
-  t3team_children: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_children, input),
-  t3team_orchestration_run: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_orchestration_run, input),
-  t3team_orchestration_status: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_orchestration_status, input),
-  t3team_orchestration_resume: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_orchestration_resume, input),
-  t3team_orchestration_pause: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_orchestration_pause, input),
-  t3team_orchestration_stop: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_orchestration_stop, input),
-  t3team_show_widget: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_show_widget, input),
-  t3team_recipe_list: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_recipe_list, input),
-  t3team_recipe_validate: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_recipe_validate, input),
+  t3_provider_usage: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_provider_usage, input),
+  t3_search_thread: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_search_thread, input),
+  t3_search_source: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_search_source, input),
+  t3_read_message: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_read_message, input),
+  t3_ask_user: (input) => askUser(input),
+  t3_task_ops: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_task_ops, input),
+  t3_orchestration_run: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_run, input),
+  t3_orchestration_status: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_status, input),
+  t3_orchestration_resume: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_resume, input),
+  t3_orchestration_pause: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_pause, input),
+  t3_orchestration_stop: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_stop, input),
+  t3_show_widget: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_show_widget, input),
+  t3_recipe_list: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_list, input),
+  t3_recipe_validate: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_validate, input),
   t3team_thread_skill_metadata: (input) => threadSkillMetadata(input),
 });

@@ -87,7 +87,7 @@ describe("t3teamToolCatalog", () => {
     // Regression: a run launched via t3team.orchestration.run is fire-and-forget
     // (`status: "accepted"`) and can fail asynchronously afterwards. An agent that can launch a
     // run must also be able to observe it, or it is blind to that failure — the
-    // t3team_orchestration_resume description's "reading a failure" advice is unreachable
+    // t3_orchestration_resume description's "reading a failure" advice is unreachable
     // without this tool.
     const runEnabled = DEFAULT_T3TEAM_THREAD_TOOL_IDS.includes("t3team.orchestration.run");
     expect(runEnabled).toBe(true);

@@ -7,7 +7,7 @@
  * silently removes every t3team AND every preview tool from the agent's reach.
  *
  * It has now regressed twice, the same way both times:
- *   - `t3team_recipe_list` — caught before shipping.
+ *   - `t3_recipe_list` — caught before shipping.
  *   - `t3team_task_list` (#209) — shipped. Every Nexplore agent lost all 22 t3team_* and all 14
  *     preview_* tools, silently, for a day. This test was RED on main and the PR merged anyway.
  *
@@ -52,7 +52,7 @@ describe.each(toolkits)("$label MCP tool input schemas", ({ tools, atLeast }) =>
 });
 
 /**
- * The `t3team_show_widget` model-facing contract must stay in lockstep with the documented
+ * The `t3_show_widget` model-facing contract must stay in lockstep with the documented
  * guidance (packages/project-context/src/t3teamWidgetGuidance.ts).
  *
  * This regressed silently once: the guidance constant and the catalog snapshot both carried the
@@ -63,7 +63,7 @@ describe.each(toolkits)("$label MCP tool input schemas", ({ tools, atLeast }) =>
  * surface drifted with every CI run green. These assertions check the LIVE JSON schema the
  * MCP server advertises.
  */
-describe("t3team_show_widget model-facing contract", () => {
+describe("t3_show_widget model-facing contract", () => {
   const tool = T3TeamShowWidgetTool;
   const schema = Tool.getJsonSchema(tool as never) as Record<string, unknown>;
   const schemaText = JSON.stringify(schema);

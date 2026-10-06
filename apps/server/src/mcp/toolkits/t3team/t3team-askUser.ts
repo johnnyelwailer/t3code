@@ -1,5 +1,5 @@
 /**
- * t3team_ask_user — structured user questions on any t3team agent thread.
+ * t3_ask_user — structured user questions on any t3team agent thread.
  *
  * The question is recorded as a V2 message-capability runtime request on the
  * calling thread's active run (`T3TeamAskUserWriter`). The tool does NOT

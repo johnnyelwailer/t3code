@@ -1,5 +1,5 @@
 /**
- * The thread silence watch on V2: register / cancel (the `t3team_children`
+ * The thread silence watch on V2: register / cancel (the `t3_task_ops`
  * watch port), the live domain-event path (activity + prompt stop detection)
  * and the durable sweep (silence breaches, stop backstop, restart rehydrate).
  *

@@ -1,7 +1,7 @@
 /**
  * Live-path integration for the recipe MCP tools: proves that a provider agent reaching the
  * server over `/mcp` can (a) authenticate with a real `McpSessionRegistry`-minted bearer, (b) see
- * `t3team_recipe_list`/`t3team_recipe_validate` in the registered toolkit, and (c) get a REAL
+ * `t3_recipe_list`/`t3_recipe_validate` in the registered toolkit, and (c) get a REAL
  * static-validation result back — the full registration → handler → broker dispatch → recipe
  * validation chain, driven through the same `McpServer` object the HTTP transport uses. The broker
  * binding runs the real `callT3TeamRecipeTool` + `makeRecipeToolHandlers` (no mock result), so the
@@ -135,12 +135,12 @@ it.effect(
     }),
 );
 
-it.effect("registers t3team_recipe_list and t3team_recipe_validate in the live toolkit", () =>
+it.effect("registers t3_recipe_list and t3_recipe_validate in the live toolkit", () =>
   Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
     const names = server.tools.map(({ tool }) => tool.name);
-    expect(names).toContain("t3team_recipe_list");
-    expect(names).toContain("t3team_recipe_validate");
+    expect(names).toContain("t3_recipe_list");
+    expect(names).toContain("t3_recipe_validate");
   }).pipe(Effect.provide(TestLayer)),
 );
 
@@ -150,7 +150,7 @@ it.effect(
     Effect.gen(function* () {
       const server = yield* McpServer.McpServer;
       const result = yield* server
-        .callTool({ name: "t3team_recipe_validate", arguments: { source: VALID_WORKFLOW } })
+        .callTool({ name: "t3_recipe_validate", arguments: { source: VALID_WORKFLOW } })
         .pipe(
           Effect.provideService(McpInvocationContext.McpInvocationContext, {
             environmentId,
@@ -183,7 +183,7 @@ it.effect(
     Effect.gen(function* () {
       const server = yield* McpServer.McpServer;
       const result = yield* server
-        .callTool({ name: "t3team_recipe_validate", arguments: { source: INVALID_WORKFLOW } })
+        .callTool({ name: "t3_recipe_validate", arguments: { source: INVALID_WORKFLOW } })
         .pipe(
           Effect.provideService(McpInvocationContext.McpInvocationContext, {
             environmentId,
