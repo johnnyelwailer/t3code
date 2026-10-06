@@ -1,5 +1,6 @@
 import {
   type CloudSession,
+  type CloudSessionCreateInput,
   CloudSessionFailedError,
   type CloudSessionListResult,
 } from "@t3tools/contracts";
@@ -23,6 +24,7 @@ import { dispatchCredentialHandoff } from "./t3team-CloudSessionMintGate.ts";
 import { makePayloadIssueCleanup } from "./t3team-CloudSessionPayloadCleanup.ts";
 import { makeSessionTag, projectCloudSession } from "./t3team-CloudSessionProjection.ts";
 import { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
+import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
 
 /**
  * Starts and tracks *cloud sessions*: full Nexi workspaces provisioned on
@@ -54,9 +56,9 @@ export class CloudSessionService extends Context.Service<
   CloudSessionService,
   {
     readonly list: Effect.Effect<CloudSessionListResult, CloudSessionFailedError>;
-    readonly create: (input: {
-      readonly durationSeconds: number;
-    }) => Effect.Effect<CloudSession, CloudSessionFailedError>;
+    readonly create: (
+      input: CloudSessionCreateInput,
+    ) => Effect.Effect<CloudSession, CloudSessionFailedError>;
     readonly cancel: (input: {
       readonly sessionId: string;
     }) => Effect.Effect<void, CloudSessionFailedError>;
@@ -68,6 +70,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
   const cloudCli = yield* CliTokenManager.CloudCliTokenManager;
   const minter = yield* ConnectCredentialMinter;
   const broker = yield* NexiBrokerService;
+  const machines = yield* CloudSessionMachines;
   const handoffEnabled = yield* isSessionCredentialIssueEnabled();
   const { repoRef, machineLabel } = yield* resolveFleetConfig();
 
@@ -129,9 +132,31 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       // session, and then cancelling yours kills theirs.
       const sessionTag = yield* makeSessionTag;
 
+      // Project machine (#562), resolved before any side effect; null means a plain session. Its
+      // repository token reaches the session only as a broker-held secret, so it needs the broker.
+      const machine =
+        input.projectId === undefined ? null : yield* machines.resolve(input.projectId);
+      if (machine !== null && !broker.enabled) {
+        return yield* new CloudSessionFailedError({
+          reason: "machine_unavailable",
+          message: "Project machines need the Nexplore sign-in, which is not set up here.",
+        });
+      }
+
       // Broker mode: a grant only a run this login dispatched can redeem replaces the whole T3
       // Connect handoff. Fails with `broker_sign_in_required` before any dispatch when signed out.
-      const brokerGrant = broker.enabled ? yield* broker.requestGrant(login) : null;
+      const brokerGrant = broker.enabled
+        ? yield* broker.requestGrant(
+            login,
+            machine
+              ? {
+                  GIT_TOKEN: machine.token,
+                  GIT_AUTHOR_NAME: machine.author.name,
+                  GIT_AUTHOR_EMAIL: machine.author.email,
+                }
+              : undefined,
+          )
+        : null;
 
       // Credential handoff, with the in-app mint fallback: if this machine
       // has no usable T3 Connect credential yet, the mint (a browser
@@ -160,6 +185,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
         listRuns: gh.listRunsFor(login),
         discoveryAttempts: DISPATCH_DISCOVERY_ATTEMPTS,
         brokerGrant,
+        machine,
       });
     });
 

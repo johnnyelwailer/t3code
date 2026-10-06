@@ -149,6 +149,11 @@ import { RemoveT3ConnectEnvironmentDialog } from "../clerk/RemoveT3ConnectEnviro
 import { useCloudLinkController } from "~/cloud/useCloudLinkController";
 import { useCloudSessionController } from "~/cloud/t3team-useCloudSessionController";
 import { savedEnvironmentForCloudSession } from "~/cloud/t3team-cloudSessionEnvironmentMatch";
+import { endedCloudSessionEnvironmentIds } from "~/cloud/t3team-endedCloudSessionEnvironments";
+import {
+  LOCAL_ENVIRONMENT_LABEL,
+  primaryEnvironmentLabel,
+} from "~/connection/t3team-localEnvironmentLabel";
 import { authEnvironment } from "~/state/auth";
 import { environmentCatalog } from "~/connection/catalog";
 import {
@@ -1441,6 +1446,8 @@ type SavedBackendListRowProps = {
   onRemove: (environment: EnvironmentPresentation) => void;
   /** A live cloud session's machine: a read-only connect target (the panel owns it). */
   isCloudSession: boolean;
+  /** t3team: this environment's cloud session ended; it can only be removed. */
+  cloudSessionEnded?: boolean;
 };
 
 /**
@@ -1491,6 +1498,7 @@ function SavedBackendListRow({
   onSetEnabled,
   onRemove,
   isCloudSession,
+  cloudSessionEnded = false,
 }: SavedBackendListRowProps) {
   const environmentId = environment.environmentId;
   const unsupported = environment.connection.phase === "unsupported";
@@ -1533,7 +1541,9 @@ function SavedBackendListRow({
   const serverUpdateState = useAtomValue(serverEnvironment.updateStateAtom(environmentId));
   const resumingServerUpdate =
     serverUpdateState.status === "running" && serverUpdateState.stage === "resuming";
-  const status = savedBackendStatus(environment);
+  const status = cloudSessionEnded
+    ? ({ text: "Session ended", tone: "muted" } as const)
+    : savedBackendStatus(environment);
   const serverVersion = environment.serverConfig?.environment.serverVersion ?? null;
   // A saved T3 Connect machine this device has never reached (unsupported,
   // or not yet connected) still has a descriptor from relay discovery, so
@@ -1645,6 +1655,7 @@ function SavedBackendListRow({
           isConnecting={environment.connection.phase === "connecting"}
           isRemoving={isRemoving}
           isCloudSession={isCloudSession}
+          sessionEnded={cloudSessionEnded}
           onConnect={() => onSetEnabled(environmentId, true)}
           onRemove={() => onRemove(environment)}
         />
@@ -1915,6 +1926,10 @@ export function ConnectionsSettings() {
         (environment) => !isDesktopLocalConnectionTarget(environment.entry.target),
       ),
     [savedEnvironments],
+  );
+  const endedCloudSessionEnvironments = useMemo(
+    () => endedCloudSessionEnvironmentIds(listedEnvironments, cloudSessions.sessions),
+    [listedEnvironments, cloudSessions.sessions],
   );
   // Machines "Update all" can reach: switched on, connected, behind the client
   // version, remotely updatable, and not already mid-update. The button only
@@ -3356,7 +3371,11 @@ export function ConnectionsSettings() {
           <SettingsSection
             {...searchableSetting("connections-environment")}
             title={
-              primaryEnvironment?.label ?? (desktopBridge ? "This machine" : "Primary environment")
+              primaryEnvironment
+                ? primaryEnvironmentLabel(primaryEnvironment.label)
+                : desktopBridge
+                  ? LOCAL_ENVIRONMENT_LABEL
+                  : "Primary environment"
             }
             icon={
               <EnvironmentMachineIcon
@@ -3838,6 +3857,7 @@ export function ConnectionsSettings() {
             onSetEnabled={handleSetSavedBackendEnabled}
             onRemove={handleRemoveSavedBackend}
             isCloudSession={cloudSessions.hasLiveCloudSession(environment.environmentId)}
+            cloudSessionEnded={endedCloudSessionEnvironments.has(environment.environmentId)}
           />
         ))}
         {cloudSessions.available ? (
@@ -3845,9 +3865,8 @@ export function ConnectionsSettings() {
             <CloudSessionProvisionPanel
               sessions={cloudSessions.sessions}
               loading={cloudSessions.loading}
+              loadError={cloudSessions.loadError}
               createPending={cloudSessions.createPending}
-              durationSeconds={cloudSessions.durationSeconds}
-              onDurationChange={cloudSessions.onDurationChange}
               onCreate={cloudSessions.onCreate}
               onSessionAction={cloudSessions.onSessionAction}
               onSessionSecondaryAction={cloudSessions.onSessionSecondaryAction}

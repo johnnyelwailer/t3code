@@ -94,6 +94,42 @@ function cloudSessionProgress(elapsedSeconds: number): number {
   return Math.min(1, Math.max(0, elapsedSeconds / CLOUD_SESSION_TYPICAL_TOTAL_SECONDS));
 }
 
+/** A project machine's milestones read as its own; a plain session builds the workspace. */
+function preparingWords(session: CloudSession): {
+  readonly title: string;
+  readonly detail: string;
+} {
+  const elapsed = formatDuration(session.elapsedSeconds);
+  if (session.projectMachine !== true) {
+    return {
+      title: "Building the workspace",
+      detail: `Installing dependencies and building · ${elapsed}`,
+    };
+  }
+  switch (session.machineStage) {
+    case "building":
+      return {
+        title: "Building the project machine",
+        detail: `From its devcontainer · ${elapsed}`,
+      };
+    case "checking":
+      return {
+        title: "Checking the project machine",
+        detail: `Running its health check · ${elapsed}`,
+      };
+    case "installing":
+      return {
+        title: "Setting up Nexi in the machine",
+        detail: `Installing the session server · ${elapsed}`,
+      };
+    case undefined:
+      return {
+        title: "Preparing the project machine",
+        detail: `Starting the cloud machine · ${elapsed}`,
+      };
+  }
+}
+
 export function presentCloudSession(session: CloudSession): CloudSessionProvisionPresentation {
   const elapsed = formatDuration(session.elapsedSeconds);
 
@@ -120,8 +156,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
       };
     case "preparing":
       return {
-        title: "Building the workspace",
-        detail: `Installing dependencies and building · ${elapsed}`,
+        ...preparingWords(session),
         tone: "working",
         progress: cloudSessionProgress(session.elapsedSeconds),
         actionLabel: "Cancel",

@@ -259,6 +259,11 @@ import {
   CloudSessionService,
   layer as CloudSessionServiceLayer,
 } from "./cloud/t3team-CloudSessionService.ts";
+import {
+  ProjectMachineDiscovery,
+  layer as ProjectMachineDiscoveryLayer,
+} from "./project/t3team-ProjectMachineDiscovery.ts";
+import { layer as CloudSessionMachinesLayer } from "./cloud/t3team-CloudSessionMachine.ts";
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
 import * as ConnectCredentialMinter from "./cloud/t3team-ConnectCredentialMinter.ts";
 import {
@@ -1294,6 +1299,7 @@ const makeWsRpcLayer = (
       });
       const relayClient = yield* RelayClient.RelayClient;
       const cloudSessions = yield* CloudSessionService;
+      const projectMachines = yield* ProjectMachineDiscovery;
       const authorizationError = (requiredScope: AuthEnvironmentScope) =>
         new EnvironmentAuthorizationError({
           message: `The authenticated token is missing required scope: ${requiredScope}.`,
@@ -2767,6 +2773,12 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.cloudSessionCancel, cloudSessions.cancel(input), {
             "rpc.aggregate": "cloud",
           }),
+        [WS_METHODS.projectMachineDiscover]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectMachineDiscover,
+            projectMachines.discover(input.projectId),
+            { "rpc.aggregate": "cloud" },
+          ),
         [WS_METHODS.cloudInstallRelayClient]: (_input) =>
           observeRpcStream(
             WS_METHODS.cloudInstallRelayClient,
@@ -4001,8 +4013,12 @@ export const websocketRpcRouteLayer = Layer.unwrap(
                   // The create path mints the caller's credential in-app
                   // before the handoff; the minter layer is self-contained.
                   Layer.provide(ConnectCredentialMinter.layer),
+                  // A session for a project runs in its machine; the resolver reads the
+                  // project's checkouts (discovery, provided below) and the user's gh login.
+                  Layer.provide(CloudSessionMachinesLayer.pipe(Layer.provide(GitHubCli.layer))),
                 ),
               ),
+              Layer.provide(ProjectMachineDiscoveryLayer),
               Layer.provide(
                 SourceControlDiscovery.layer.pipe(
                   Layer.provide(

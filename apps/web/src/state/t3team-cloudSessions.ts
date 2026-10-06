@@ -4,6 +4,7 @@ import type { CloudSession } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 
+import { cloudSessionFailureDescription } from "../cloud/t3team-cloudSessionFailureDescription";
 import { connectionAtomRuntime } from "../connection/runtime";
 import { primaryEnvironmentIdAtom } from "./primaryEnvironment";
 
@@ -21,6 +22,8 @@ export interface CloudSessionListState {
   readonly configured: boolean;
   /** The provider's full-history page for this user; null when not offered. */
   readonly historyUrl: string | null;
+  /** Why the list could not be read, when it never could; null otherwise. */
+  readonly loadError: string | null;
 }
 
 const NO_ENVIRONMENT: CloudSessionListState = {
@@ -28,6 +31,7 @@ const NO_ENVIRONMENT: CloudSessionListState = {
   loading: false,
   configured: true,
   historyUrl: null,
+  loadError: null,
 };
 
 const LOADING: CloudSessionListState = {
@@ -35,6 +39,7 @@ const LOADING: CloudSessionListState = {
   loading: true,
   configured: true,
   historyUrl: null,
+  loadError: null,
 };
 
 /**
@@ -53,12 +58,18 @@ export const cloudSessionListAtom = Atom.make<CloudSessionListState>((get) => {
 
   const result = get(cloudSessionEnvironment.list({ environmentId, input: {} }));
   const value = AsyncResult.value(result);
-  if (Option.isNone(value)) return LOADING;
+  if (Option.isNone(value)) {
+    // A list that failed before it ever loaded must say so; skeletons would wait forever.
+    return AsyncResult.isFailure(result)
+      ? { ...LOADING, loading: false, loadError: cloudSessionFailureDescription(result) }
+      : LOADING;
+  }
   return {
     sessions: value.value.sessions,
     loading: false,
     configured: value.value.configured,
     historyUrl: value.value.historyUrl ?? null,
+    loadError: null,
   };
 }).pipe(Atom.withLabel("web-cloud-sessions"));
 

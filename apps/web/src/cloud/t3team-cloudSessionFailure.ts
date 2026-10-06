@@ -4,7 +4,7 @@ import type * as Cause from "effect/Cause";
 
 import { toastManager } from "~/components/ui/toast";
 
-import { cloudSessionFailureDescription } from "./t3team-cloudSessionToast";
+import { cloudSessionFailureDescription } from "./t3team-cloudSessionFailureDescription";
 
 /** The title for a create failure nothing more specific is known about. */
 export const CLOUD_SESSION_CREATE_FAILED_TITLE = "Could not start a cloud session.";
@@ -21,6 +21,8 @@ const CREATE_FAILURE_HINTS: Partial<Record<CloudSessionFailureReason, string>> =
   payload_issue_failed: "Could not hand the session its credential — try again.",
   broker_sign_in_required: "Sign in to Nexplore first (Settings → Connections).",
   broker_unavailable: "The Nexi cloud-session service is not reachable right now.",
+  machine_unavailable: "This project's machine cannot start yet.",
+  repository_sign_in_required: "Sign in to the GitHub CLI for the project's repository host.",
 };
 
 // A cloud-session create failure arrives over WS RPC, so on the client it may

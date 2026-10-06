@@ -1,4 +1,4 @@
-import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
+import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { useCallback, useMemo, useState } from "react";
 
 import { environmentCatalog } from "~/connection/catalog";
@@ -20,7 +20,7 @@ import { showCloudSessionFailureToast } from "./t3team-cloudSessionToast";
 import { useCloudSessionListRefresh } from "./t3team-useCloudSessionListRefresh";
 import { useCloudSessionConnect } from "./t3team-useCloudSessionConnect";
 import { liveCloudSessionForEnvironment } from "./t3team-cloudSessionEnvironmentMatch";
-import { useCloudSessionDuration } from "./t3team-useCloudSessionDuration";
+import { CLOUD_SESSION_LIFETIME_SECONDS } from "./t3team-cloudSessionLifetime";
 import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
 
 /**
@@ -31,8 +31,13 @@ import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
 export function useCloudSessionController() {
   const environmentId = usePrimaryEnvironmentId();
   const { environments: relayDiscovered } = useRelayEnvironmentDiscovery();
-  const { sessions: serverSessions, loading, configured, historyUrl } = useCloudSessions();
-  const [durationSeconds, setDurationSeconds] = useCloudSessionDuration(environmentId);
+  const {
+    sessions: serverSessions,
+    loading,
+    configured,
+    historyUrl,
+    loadError,
+  } = useCloudSessions();
   const [createPending, setCreatePending] = useState(false);
   const [actionPending, setActionPending] = useState<{
     readonly sessionId: string;
@@ -75,8 +80,9 @@ export function useCloudSessionController() {
     register: registerRelayEnvironment,
   });
 
+  /** `projectId` (a project on the primary environment) runs the session in its machine. */
   const onCreate = useCallback(
-    (seconds: number) => {
+    (projectId?: ProjectId) => {
       if (environmentId === null || createPending) return;
       setRelayIdsBefore(
         new Set(
@@ -84,7 +90,13 @@ export function useCloudSessionController() {
         ),
       );
       setCreatePending(true);
-      void createSession({ environmentId, input: { durationSeconds: seconds } })
+      void createSession({
+        environmentId,
+        input: {
+          durationSeconds: CLOUD_SESSION_LIFETIME_SECONDS,
+          ...(projectId ? { projectId } : {}),
+        },
+      })
         .then((result) => {
           if (result._tag === "Success") {
             setLocalSession({
@@ -147,12 +159,12 @@ export function useCloudSessionController() {
         // "Start another": a fresh session at the remembered duration. The
         // record carries no requested hold (the runs API omits dispatch
         // inputs), so replaying the ended session's own is not possible.
-        onCreate(durationSeconds);
+        onCreate();
         return;
       }
       cancelRun(session, "cancel", "Cancelling that session…");
     },
-    [beginConnect, cancelRun, durationSeconds, onCreate],
+    [beginConnect, cancelRun, onCreate],
   );
 
   const onSessionSecondaryAction = useCallback(
@@ -175,10 +187,9 @@ export function useCloudSessionController() {
   return {
     sessions,
     loading,
+    loadError,
     configured,
     historyUrl,
-    durationSeconds,
-    onDurationChange: setDurationSeconds,
     createPending,
     pendingSessionId,
     pendingKind,
@@ -194,5 +205,7 @@ export function useCloudSessionController() {
     onCloudMenuOpenChange: useCallback((open: boolean) => setCloudMenuOpen(open), []),
     onPanelVisibilityChange: useCallback((open: boolean) => setPanelVisible(open), []),
     available: environmentId !== null,
+    /** Where sessions are created; a project must live here to run in its machine. */
+    primaryEnvironmentId: environmentId,
   };
 }

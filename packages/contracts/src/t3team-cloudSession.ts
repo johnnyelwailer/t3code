@@ -1,5 +1,7 @@
 import * as Schema from "effect/Schema";
 
+import { ProjectId } from "./baseSchemas.ts";
+
 /**
  * A *cloud session* is a full Nexi workspace provisioned on remote compute,
  * which joins the user's environment list once its relay link is up.
@@ -47,6 +49,18 @@ export const CloudSessionPhaseSchema = Schema.Literals([
 ]);
 export type CloudSessionPhase = typeof CloudSessionPhaseSchema.Type;
 
+/**
+ * Where a project-machine session is while it prepares: its devcontainer being built, its health
+ * check running, then the session server being installed into it. The slowest part of a machine
+ * session, so the client names it instead of one long "preparing".
+ */
+export const CloudSessionMachineStageSchema = Schema.Literals([
+  "building",
+  "checking",
+  "installing",
+]);
+export type CloudSessionMachineStage = typeof CloudSessionMachineStageSchema.Type;
+
 export const CloudSessionSchema = Schema.Struct({
   /** Stable per attempt. Opaque to the client — do not parse it. */
   sessionId: Schema.String,
@@ -82,6 +96,10 @@ export const CloudSessionSchema = Schema.Struct({
   durationSeconds: Schema.optional(Schema.Int),
   /** How a client connects to this session; absent means `t3_connect`. */
   transport: Schema.optional(CloudSessionTransportSchema),
+  /** True when the session runs inside a project machine (its devcontainer); absent means not. */
+  projectMachine: Schema.optional(Schema.Boolean),
+  /** A project-machine session's milestone, present only while `phase` is `preparing`. */
+  machineStage: Schema.optional(CloudSessionMachineStageSchema),
 });
 export type CloudSession = typeof CloudSessionSchema.Type;
 
@@ -104,6 +122,12 @@ export type CloudSessionListResult = typeof CloudSessionListResultSchema.Type;
 export const CloudSessionCreateInputSchema = Schema.Struct({
   /** How long to hold the machine before it stops itself. */
   durationSeconds: Schema.Int,
+  /**
+   * The project the session is for. When the project's checkouts hold a machine definition
+   * (`t3team-projectMachine.ts`), the session runs inside that machine; otherwise it is a plain
+   * session, exactly as without a project.
+   */
+  projectId: Schema.optional(ProjectId),
 });
 export type CloudSessionCreateInput = typeof CloudSessionCreateInputSchema.Type;
 
@@ -151,6 +175,16 @@ export const CloudSessionFailureReasonSchema = Schema.Literals([
   "broker_sign_in_required",
   /** The Nexi broker could not be reached or refused the request. */
   "broker_unavailable",
+  /**
+   * The project has a machine definition the session cannot use as it is: the pointer is broken,
+   * or the definition has changes that are not committed and pushed. The message says which.
+   */
+  "machine_unavailable",
+  /**
+   * The project machine's repository host has no `gh` sign-in on this machine, so the session
+   * cannot clone it as the user. The remediation is `gh auth login` for that host.
+   */
+  "repository_sign_in_required",
 ]);
 export type CloudSessionFailureReason = typeof CloudSessionFailureReasonSchema.Type;
 

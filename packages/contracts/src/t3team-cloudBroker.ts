@@ -2,15 +2,15 @@ import * as Schema from "effect/Schema";
 
 /**
  * The Nexi broker: how `nexi_broker` cloud sessions are reached (issue #556 in the distribution).
- * The fleet VM dials out to the broker; this server signs the user in to it with Entra (device
- * code, no localhost port) and runs a loopback forwarder per attached session, so the client
+ * The fleet VM dials out to the broker; this server signs the user in to it with Entra (the
+ * browser, or a device code where none can open) and runs a loopback forwarder per attached session, so the client
  * connects to the VM exactly like any other bearer-authenticated environment.
  */
 
 /** The user's Entra sign-in with the broker, as this server holds it. */
 export const CloudBrokerAuthStateSchema = Schema.Union([
   Schema.TaggedStruct("SignedOut", {}),
-  /** A device-code sign-in is waiting for the user to enter `userCode` at `verificationUri`. */
+  /** A sign-in is waiting: in the browser it opened, or by entering `userCode` at `verificationUri`. */
   Schema.TaggedStruct("SigningIn", {
     userCode: Schema.String,
     verificationUri: Schema.String,

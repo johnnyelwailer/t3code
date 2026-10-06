@@ -10,7 +10,10 @@ import * as TestClock from "effect/testing/TestClock";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 
+import { ExternalLauncherBrowserSpawnError } from "@t3tools/contracts";
+
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
+import * as ExternalLauncher from "../process/externalLauncher.ts";
 import { NexiBrokerAuth, layer as NexiBrokerAuthLayer } from "./t3team-NexiBrokerAuth.ts";
 
 const SECRET = "nexi-broker-refresh-token";
@@ -80,6 +83,14 @@ const memorySecrets = (initial: Record<string, string> = {}) => {
   return { layer, read };
 };
 
+/** A machine without a browser: the device code is the only way in, and no real browser opens. */
+const noBrowser = Layer.mock(ExternalLauncher.ExternalLauncher)({
+  launchBrowser: (target) =>
+    Effect.fail(
+      new ExternalLauncherBrowserSpawnError({ command: "open", args: [], target, cause: null }),
+    ),
+});
+
 const withBroker = (
   env: Record<string, string> = { T3CODE_NEXI_BROKER_URL: "https://broker.test/" },
 ) => ConfigProvider.layer(ConfigProvider.fromEnv({ env }));
@@ -90,7 +101,7 @@ const authWith = (
   env?: Record<string, string>,
 ) =>
   NexiBrokerAuthLayer.pipe(
-    Layer.provide(Layer.mergeAll(entraLayer(fake), secrets.layer, withBroker(env))),
+    Layer.provide(Layer.mergeAll(entraLayer(fake), secrets.layer, withBroker(env), noBrowser)),
   );
 
 it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
@@ -153,6 +164,113 @@ it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
       }).pipe(Effect.provide(authWith(fake, secrets)));
     },
   );
+
+  it.effect("a browser that is already signed in finishes the sign-in without the code", () => {
+    const fake: EntraFake = {
+      requests: [],
+      tokenReplies: [
+        {
+          status: 200,
+          body: {
+            access_token: accessTokenFor("Pj"),
+            refresh_token: "rt-browser",
+            expires_in: 3600,
+          },
+        },
+      ],
+    };
+    const secrets = memorySecrets();
+    // Stands in for a browser with a live Microsoft session: it follows the authorize URL straight
+    // to its redirect, carrying a code — over the real loopback listener.
+    const opened: Array<URL> = [];
+    const signedInBrowser = Layer.mock(ExternalLauncher.ExternalLauncher)({
+      launchBrowser: (target) =>
+        Effect.sync(() => {
+          const authorize = new URL(target);
+          opened.push(authorize);
+          const redirect = new URL(authorize.searchParams.get("redirect_uri") ?? "");
+          redirect.searchParams.set("code", "auth-code-1");
+          redirect.searchParams.set("state", authorize.searchParams.get("state") ?? "");
+          // @effect-diagnostics-next-line globalTimersInEffect:off globalFetch:off - The fake browser makes a real HTTP request to the loopback listener, after the launch returns.
+          setTimeout(() => void fetch(redirect).catch(() => {}), 10);
+        }),
+    });
+    // @effect-diagnostics-next-line globalTimers:off - Real time: the loopback round trip is real I/O, not TestClock time.
+    const realWait = (ms: number) => Effect.promise(() => new Promise((r) => setTimeout(r, ms)));
+    return Effect.gen(function* () {
+      const auth = yield* NexiBrokerAuth;
+      yield* auth.signIn;
+      for (let i = 0; i < 100 && (yield* auth.status).auth._tag !== "SignedIn"; i++) {
+        yield* realWait(20);
+      }
+      assert.deepEqual((yield* auth.status).auth, { _tag: "SignedIn", name: "Pj" });
+      assert.equal(secrets.read(SECRET), "rt-browser");
+      const authorize = opened[0];
+      assert.equal(authorize?.searchParams.get("code_challenge_method"), "S256");
+      assert.match(authorize?.searchParams.get("redirect_uri") ?? "", /^http:\/\/localhost:\d+$/);
+      const exchange = fake.requests.find(
+        (r) => r.params.get("grant_type") === "authorization_code",
+      );
+      assert.equal(exchange?.params.get("code"), "auth-code-1");
+      assert.equal(
+        exchange?.params.get("redirect_uri"),
+        authorize?.searchParams.get("redirect_uri"),
+      );
+      assert.isTrue((exchange?.params.get("code_verifier") ?? "").length >= 43);
+      // The device code never had to be used.
+      assert.isFalse(
+        fake.requests.some((r) => r.params.get("grant_type")?.endsWith("device_code")),
+      );
+    }).pipe(
+      Effect.provide(
+        NexiBrokerAuthLayer.pipe(
+          Layer.provide(
+            Layer.mergeAll(entraLayer(fake), secrets.layer, withBroker(), signedInBrowser),
+          ),
+        ),
+      ),
+    );
+  });
+
+  it.effect("a sign-in declined in the browser is shown, and the code still works", () => {
+    const fake: EntraFake = {
+      requests: [],
+      tokenReplies: [{ status: 400, body: { error: "authorization_pending" } }],
+    };
+    let page = "";
+    const decliningBrowser = Layer.mock(ExternalLauncher.ExternalLauncher)({
+      launchBrowser: (target) =>
+        Effect.sync(() => {
+          const authorize = new URL(target);
+          const redirect = new URL(authorize.searchParams.get("redirect_uri") ?? "");
+          redirect.searchParams.set("error", "access_denied");
+          redirect.searchParams.set("error_description", "The user declined.");
+          redirect.searchParams.set("state", authorize.searchParams.get("state") ?? "");
+          // @effect-diagnostics-next-line globalTimersInEffect:off globalFetch:off - The fake browser makes a real HTTP request to the loopback listener, after the launch returns.
+          setTimeout(() => void fetch(redirect).then(async (r) => (page = await r.text())), 10);
+        }),
+    });
+    // @effect-diagnostics-next-line globalTimers:off - Real time: the loopback round trip is real I/O, not TestClock time.
+    const realWait = (ms: number) => Effect.promise(() => new Promise((r) => setTimeout(r, ms)));
+    return Effect.gen(function* () {
+      const auth = yield* NexiBrokerAuth;
+      yield* auth.signIn;
+      for (let i = 0; i < 100 && (yield* auth.status).lastError === null; i++) yield* realWait(20);
+      const status = yield* auth.status;
+      assert.equal(status.lastError, "The user declined.");
+      assert.equal(status.auth._tag, "SigningIn");
+      assert.include(page, "did not finish");
+      assert.notInclude(page, "You're signed in");
+    }).pipe(
+      Effect.provide(
+        NexiBrokerAuthLayer.pipe(
+          Layer.provide(
+            Layer.mergeAll(entraLayer(fake), memorySecrets().layer, withBroker(), decliningBrowser),
+          ),
+        ),
+      ),
+    );
+  });
 
   it.effect("an expired code ends the sign-in with a reason the user can act on", () =>
     Effect.gen(function* () {

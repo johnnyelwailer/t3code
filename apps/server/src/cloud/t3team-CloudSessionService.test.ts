@@ -1,4 +1,4 @@
-import { CloudSessionFailedError } from "@t3tools/contracts";
+import { CloudSessionFailedError, ProjectId } from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
@@ -16,6 +16,12 @@ import * as ConnectCredentialMinter from "./t3team-ConnectCredentialMinter.ts";
 import * as NexiBrokerService from "./t3team-NexiBrokerService.ts";
 import { ConnectCredentialMintError } from "./t3team-ConnectCredentialMintError.ts";
 import * as CloudSessionService from "./t3team-CloudSessionService.ts";
+import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
+
+/** Sessions here are plain ones: no project, so the machine resolver is never consulted. */
+const noMachines = Layer.mock(CloudSessionMachines)({
+  resolve: () => Effect.die("these sessions have no project"),
+});
 
 const ghOut = (stdout: string): VcsProcess.VcsProcessOutput => ({
   exitCode: ChildProcessSpawner.ExitCode(0),
@@ -165,6 +171,7 @@ describe("CloudSessionService.create credential handoff", () => {
         ghMock,
         cloudCliMock,
         minterMock,
+        noMachines,
         configLayer,
         NexiBrokerService.layerDisabled,
       );
@@ -227,6 +234,7 @@ describe("CloudSessionService.create credential handoff", () => {
         ghMock,
         cloudCliMock,
         minterMock,
+        noMachines,
         configLayer,
         NexiBrokerService.layerDisabled,
       );
@@ -283,6 +291,7 @@ describe("CloudSessionService.create credential handoff", () => {
         ghMock,
         cloudCliMock,
         minterMock,
+        noMachines,
         configLayer,
         NexiBrokerService.layerDisabled,
       );
@@ -341,6 +350,7 @@ const providersFor = (
   });
   const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }));
   return Layer.mergeAll(
+    noMachines,
     ghMock,
     cloudCliMock,
     minterMock,
@@ -412,7 +422,10 @@ const isCloudSessionFailed = Schema.is(CloudSessionFailedError);
 
 describe("CloudSessionService.create over the Nexi broker", () => {
   const brokerMock = (
-    requestGrant: (login: string) => Effect.Effect<string, CloudSessionFailedError>,
+    requestGrant: (
+      login: string,
+      secrets?: Readonly<Record<string, string>>,
+    ) => Effect.Effect<string, CloudSessionFailedError>,
   ) =>
     Layer.succeed(NexiBrokerService.NexiBrokerService, {
       enabled: true,
@@ -426,8 +439,10 @@ describe("CloudSessionService.create over the Nexi broker", () => {
   const providersWith = (
     execute: ReturnType<typeof makeGithubMock>["execute"],
     broker: ReturnType<typeof brokerMock>,
+    machines: Layer.Layer<CloudSessionMachines> = noMachines,
   ) =>
     Layer.mergeAll(
+      machines,
       Layer.mock(GitHubCli.GitHubCli)({ execute }),
       Layer.mock(CliTokenManager.CloudCliTokenManager)({
         getExisting: Effect.succeed(Option.none()),
@@ -438,9 +453,11 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })),
       broker,
     );
-  const create = (providers: ReturnType<typeof providersWith>) =>
+  const create = (providers: ReturnType<typeof providersWith>, projectId?: ProjectId) =>
     Effect.service(CloudSessionService.CloudSessionService).pipe(
-      Effect.flatMap((svc) => svc.create({ durationSeconds: 3600 })),
+      Effect.flatMap((svc) =>
+        svc.create({ durationSeconds: 3600, ...(projectId ? { projectId } : {}) }),
+      ),
       Effect.provide(
         Layer.mergeAll(CloudSessionService.layer.pipe(Layer.provide(providers)), providers),
       ),
@@ -463,6 +480,57 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       );
       const dispatch = calls.find((call) => call.args.join(" ").includes("/dispatches"));
       assert.include(dispatch?.stdin ?? "", '"broker_grant":"grant-xyz"');
+    }),
+  );
+
+  it.effect("a project machine's token rides with the grant, never in the dispatch inputs", () =>
+    Effect.gen(function* () {
+      const { calls, execute } = makeGithubMock();
+      const parked: Array<Readonly<Record<string, string>> | undefined> = [];
+      const machines = Layer.mock(CloudSessionMachines)({
+        resolve: () =>
+          Effect.succeed({
+            repository: {
+              url: "https://nexplore.ghe.com/acme/api.git",
+              host: "nexplore.ghe.com",
+              owner: "acme",
+              name: "api",
+            },
+            commit: "a".repeat(40),
+            devcontainerPath: ".devcontainer/devcontainer.json",
+            healthCheck: "pnpm test --run smoke",
+            workspace: "machine-acme.api",
+            token: "ghp_never-an-input",
+            author: { name: "Pj", email: "pj@example.test" },
+          }),
+      });
+      const broker = brokerMock((_login, secrets) =>
+        Effect.sync(() => (parked.push(secrets), "g")),
+      );
+      yield* runPastDiscoveryPoll(
+        create(providersWith(execute, broker, machines), ProjectId.make("p1")),
+      );
+      assert.deepEqual(parked, [
+        {
+          GIT_TOKEN: "ghp_never-an-input",
+          GIT_AUTHOR_NAME: "Pj",
+          GIT_AUTHOR_EMAIL: "pj@example.test",
+        },
+      ]);
+      const dispatch = calls.find((call) => call.args.join(" ").includes("/dispatches"))?.stdin;
+      for (const input of [
+        '"machine_repository":"https://nexplore.ghe.com/acme/api.git"',
+        `"machine_commit":"${"a".repeat(40)}"`,
+        '"machine_devcontainer":".devcontainer/devcontainer.json"',
+        '"workspace":"machine-acme.api"',
+        '"machine_health_check":"pnpm test --run smoke"',
+      ]) {
+        assert.include(dispatch ?? "", input);
+      }
+      const everything = calls
+        .map((call) => `${call.args.join(" ")} ${call.stdin ?? ""}`)
+        .join("\n");
+      assert.notInclude(everything, "ghp_never-an-input");
     }),
   );
 
@@ -495,6 +563,7 @@ describe("CloudSessionService.cancel", () => {
         ...(cancelFailsThenStatus !== undefined ? { cancelFailsThenStatus } : {}),
       });
       const providers = Layer.mergeAll(
+        noMachines,
         Layer.mock(GitHubCli.GitHubCli)({ execute }),
         Layer.mock(CliTokenManager.CloudCliTokenManager)({
           getExisting: Effect.succeed(Option.none()),

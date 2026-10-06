@@ -615,7 +615,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   const labelsOverflow = useLabelsOverflow(stripElement);
 
   // t3team: the "Run on" menu's cloud entries (shared with the thread details panel).
-  const cloudSessions = useT3TeamRunOnCloudSessionProps();
+  const cloudSessions = useT3TeamRunOnCloudSessionProps(activeProjectRef);
 
   // The same machine can reach the catalog under two environment ids (its T3
   // Connect identity and a relay id minted when a cloud session's relay link
@@ -682,16 +682,29 @@ export const BranchToolbar = memo(function BranchToolbar({
     >
       {showGitControls ? (
         <div className="contents @3xl/composer-surface:hidden">
+          {/* t3team: cloud sessions keep their Run-on entry in the narrow strip too; the compact
+              selector below then leaves the environment to it. */}
+          {cloudSessions.available && runOnEnvironments ? (
+            <BranchToolbarEnvironmentSelector
+              autoEnvironmentLabel={autoEnvironmentLabel}
+              onAutoEnvironment={onAutoEnvironment}
+              envLocked={envLocked}
+              environmentId={environmentId}
+              availableEnvironments={runOnEnvironments}
+              {...(showEnvironmentPicker && onEnvironmentChange ? { onEnvironmentChange } : {})}
+              {...cloudSessions.selectorProps}
+            />
+          ) : null}
           <MobileRunContextSelector
             forceNewWorktree={forceNewWorktree}
-            autoEnvironmentLabel={autoEnvironmentLabel}
-            onAutoEnvironment={onAutoEnvironment}
+            autoEnvironmentLabel={cloudSessions.available ? undefined : autoEnvironmentLabel}
+            onAutoEnvironment={cloudSessions.available ? undefined : onAutoEnvironment}
             envLocked={envLocked}
             envModeLocked={envModeLocked}
             environmentId={environmentId}
             availableEnvironments={runOnEnvironments ?? []}
-            showEnvironmentPicker={showEnvironmentPicker}
-            showEnvironmentIndicator={showEnvironmentIndicator}
+            showEnvironmentPicker={showEnvironmentPicker && !cloudSessions.available}
+            showEnvironmentIndicator={showEnvironmentIndicator && !cloudSessions.available}
             onEnvironmentChange={onEnvironmentChange}
             effectiveEnvMode={effectiveEnvMode}
             activeWorktreePath={activeWorktreePath}

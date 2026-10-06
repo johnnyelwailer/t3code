@@ -11,6 +11,7 @@ import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-githubActions
  */
 
 const GENERIC_FAILURE = "Cloud session provisioning failed.";
+const NO_MACHINE = "No cloud machine became free in time. Start another to try again.";
 
 /** Run conclusions that say more than the generic line, when no step names the failure. */
 const CONCLUSION_REASONS: Readonly<Record<string, string>> = {
@@ -39,6 +40,22 @@ export function cloudSessionFailureReason(
     return step.conclusion === "timed_out"
       ? `Timed out at “${step.name}”.`
       : `Failed at “${step.name}”.`;
+  }
+  // A settled run with a step still in progress lost its machine mid-step (the runner died or
+  // dropped off the network); one with no step started never got a machine at all.
+  if (steps !== null && run.conclusion === "failure") {
+    const stranded = steps.find((candidate) => candidate.status === "in_progress");
+    if (stranded !== undefined) {
+      return `The cloud machine stopped responding at “${stranded.name}”. Start another to try again.`;
+    }
+    if (steps.length > 0 && steps.every((candidate) => candidate.status === "pending")) {
+      return NO_MACHINE;
+    }
+    // Lost between steps: work finished up to a point and the rest never started.
+    const lastDone = steps.findLast((candidate) => candidate.status === "completed");
+    if (lastDone !== undefined && steps.some((candidate) => candidate.status === "pending")) {
+      return `The cloud machine stopped responding after “${lastDone.name}”. Start another to try again.`;
+    }
   }
   return (
     (run.conclusion === null ? undefined : CONCLUSION_REASONS[run.conclusion]) ?? GENERIC_FAILURE

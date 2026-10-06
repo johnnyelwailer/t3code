@@ -9,6 +9,7 @@ export * from "./environment.ts";
 export * from "./environmentHttp.ts";
 export * from "./t3team-cloudSession.ts";
 export * from "./t3team-cloudBroker.ts";
+export * from "./t3team-projectMachine.ts";
 export * from "./relayClient.ts";
 export * from "./desktopBootstrap.ts";
 export * from "./desktopAppActivation.ts";
