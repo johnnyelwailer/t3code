@@ -122,7 +122,8 @@ export const log = call<[string], void>("log");
  * Durable relative timer (`durationMs`): parks the run as `sleeping` without holding an agent
  * turn. Survives a server restart — the deadline is persisted, and an overdue deadline found at
  * restart resumes the run immediately instead of waiting another interval. Never poll, `setTimeout`,
- * shell-sleep or rely on external cron: this IS the schedule. Requires `capabilities: ["schedule"]`.
+ * shell-sleep or rely on external cron: this IS the schedule. Requires `capabilities: ["schedule"]`:
+ * without it there is no park, so `wait` is only an in-process timer that a restart fails.
  */
 export const wait = call<[number], Promise<void>>("wait");
 /**

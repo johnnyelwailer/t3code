@@ -16,6 +16,7 @@ import {
 } from "@t3tools/project-context/t3teamToolCatalog";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
+import { T3TEAM_MCP_CANONICAL_TOOL_MAP } from "../../../t3team-mcpCanonicalToolMap.ts";
 import { T3TeamAskUserWriter } from "./t3team-askUserWriter.ts";
 
 const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroker];
@@ -25,25 +26,7 @@ const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroke
 // and returns immediately; the answer arrives later as a user message.
 const askUserDependencies = [McpInvocationContext.McpInvocationContext, T3TeamAskUserWriter];
 
-/** Canonical broker tools exposed through provider-safe MCP names. Keep this registry beside
- * the toolkit; the parity test requires every implemented catalog tool to be mapped or named
- * in the explicit policy-exclusion set. */
-export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
-  t3_provider_usage: "t3team.runtime.provider_usage",
-  t3_search_thread: "t3team.thread.search",
-  t3_search_source: "t3team.thread.search_source",
-  t3_read_message: "t3team.thread.read_message",
-  t3_ask_user: "t3team.thread.ask_user",
-  t3_task_ops: "t3team.thread.children",
-  t3_orchestration_run: "t3team.orchestration.run",
-  t3_orchestration_status: "t3team.orchestration.status",
-  t3_orchestration_resume: "t3team.orchestration.resume",
-  t3_orchestration_pause: "t3team.orchestration.pause",
-  t3_orchestration_stop: "t3team.orchestration.stop",
-  t3_show_widget: "t3team.widget.show",
-  t3_recipe_list: "t3team.recipe.list",
-  t3_recipe_validate: "t3team.recipe.validate",
-} as const;
+export { T3TEAM_MCP_CANONICAL_TOOL_MAP };
 
 /**
  * The broker catalog's description for a canonical tool, with every canonical id the text names

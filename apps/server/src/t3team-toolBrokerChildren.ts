@@ -61,7 +61,7 @@ export function callT3TeamChildrenTool(input: {
     return Effect.succeed(
       errorResult(
         `${T3TEAM_CHILDREN_TOOL_ID} requires an 'op'. Valid ops: ${T3TEAM_CHILD_OPS.join(", ")}. ` +
-          `Call children({ op: "help" }) for per-op usage.`,
+          `Call t3_task_ops({ op: "help" }) for per-op usage.`,
       ),
     );
   }

@@ -25,6 +25,9 @@ const PROTOCOL = [
   "- t3_orchestration_run({ source, intent }): launches the validated source as THIS run. It",
   "  runs the same check and refuses with the findings if anything is still wrong; fix and call it",
   "  again. Call it successfully exactly once, then end your turn with one line.",
+  "This thread runs in plan mode only to withhold edit and shell tools; both tools above work in",
+  "it. A successful t3_orchestration_run IS the approval: never call ExitPlanMode or wait for a",
+  "plan to be approved — no one reads this thread, so stopping there fails the run.",
   "If the intent genuinely cannot be fulfilled as an orchestration, do not launch; end your turn",
   "with one line that says why — that line is reported to the caller.",
 ].join("\n");

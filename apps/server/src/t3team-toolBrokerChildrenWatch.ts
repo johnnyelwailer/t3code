@@ -32,7 +32,9 @@ export function opWatch(
     (typeof timeout !== "number" || !Number.isFinite(timeout) || timeout <= 0)
   ) {
     return Effect.succeed(
-      errorResult(`children({ op: "watch" }) 'timeout' must be a positive number of milliseconds.`),
+      errorResult(
+        `t3_task_ops({ op: "watch" }) 'timeout' must be a positive number of milliseconds.`,
+      ),
     );
   }
   const port = deps.silenceWatch;

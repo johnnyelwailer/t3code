@@ -136,7 +136,7 @@ export const listRecipesTool = defineTool({
   result: ListRecipesToolResult,
   handler: async (_args, ctx) => {
     if (!ctx.t3team?.listRecipes) {
-      throw new Error("t3team.recipe.list requires a t3team recipe client in ToolHandlerCtx.");
+      throw new Error("t3_recipe_list requires a t3team recipe client in ToolHandlerCtx.");
     }
     // The host result is re-validated against ListRecipesToolResult by executeToolHandler.
     return (await ctx.t3team.listRecipes()) as ListRecipesToolResult;
@@ -153,11 +153,11 @@ export const validateRecipeTool = defineTool({
     const source = args.source?.trim() ?? "";
     if ((path.length === 0) === (source.length === 0)) {
       throw new Error(
-        "t3team.recipe.validate requires exactly one of 'path' (workspace .workflow.ts or recipe directory) or 'source' (inline workflow TypeScript).",
+        "t3_recipe_validate requires exactly one of 'path' (workspace .workflow.ts or recipe directory) or 'source' (inline workflow TypeScript).",
       );
     }
     if (!ctx.t3team?.validateRecipe) {
-      throw new Error("t3team.recipe.validate requires a t3team recipe client in ToolHandlerCtx.");
+      throw new Error("t3_recipe_validate requires a t3team recipe client in ToolHandlerCtx.");
     }
     // The host result is re-validated against ValidateRecipeToolResult by executeToolHandler.
     return (await ctx.t3team.validateRecipe(

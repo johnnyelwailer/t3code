@@ -43,15 +43,15 @@ export type T3TeamWorkflowControlToolHandlers = {
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 const notFoundHint = (runId: string) =>
-  `No orchestration run found for runId '${runId}'. Use t3team.orchestration.status to list your ` +
+  `No orchestration run found for runId '${runId}'. Use t3_orchestration_status to list your ` +
   "recent runs.";
 
 const hintFor = (action: WorkflowControlToolAction): string =>
   action === "pause"
     ? "Paused at its current waiting point; its continuation is kept. Resume it with " +
-      "t3team.orchestration.resume (same runId) or the card's Resume button."
+      "t3_orchestration_resume (same runId) or the card's Resume button."
     : "Stopped: child agent turns were interrupted and no further steps will run. Launch again " +
-      "with t3team.orchestration.run if the work is still needed.";
+      "with t3_orchestration_run if the work is still needed.";
 
 /** Build the per-thread pause/stop handler factory. */
 export function makeWorkflowControlToolHandlers(

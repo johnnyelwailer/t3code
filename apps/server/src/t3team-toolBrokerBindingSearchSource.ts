@@ -13,6 +13,7 @@ import {
   type ThreadMessageSearchableActivity,
   type ThreadMessageSearchableMessage,
 } from "./t3team-threadMessageSearch.ts";
+import { mcpToolNameOf } from "./t3team-mcpCanonicalToolMap.ts";
 
 /**
  * `t3team.thread.search_source` — search the FULL transcript (messages and tool
@@ -57,7 +58,7 @@ export function callT3TeamSearchSourceTool(input: {
   const query = typeof args.query === "string" ? args.query.trim() : "";
   if (query.length === 0) {
     return Effect.succeed(
-      errorResult(`${SEARCH_SOURCE_TOOL_ID} requires a non-empty 'query' string.`),
+      errorResult(`${mcpToolNameOf(SEARCH_SOURCE_TOOL_ID)} requires a non-empty 'query' string.`),
     );
   }
   const limit = normalizeThreadSearchLimit(args.limit);
@@ -80,7 +81,7 @@ export function callT3TeamSearchSourceTool(input: {
     if (currentThread.forkSourceThreadId === null) {
       return errorResult(
         "This thread has no fork source. " +
-          `${SEARCH_SOURCE_TOOL_ID} only works in a thread that was forked from another thread.`,
+          `${mcpToolNameOf(SEARCH_SOURCE_TOOL_ID)} only works in a thread that was forked from another thread.`,
       );
     }
     const sourceThreadId = ThreadId.make(currentThread.forkSourceThreadId);

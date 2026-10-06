@@ -179,7 +179,7 @@ describe("workflow-sdk", () => {
         }),
       ),
     ).rejects.toThrow(
-      "t3team.recipe.validate requires exactly one of 'path' (workspace .workflow.ts or recipe directory) or 'source' (inline workflow TypeScript).",
+      "t3_recipe_validate requires exactly one of 'path' (workspace .workflow.ts or recipe directory) or 'source' (inline workflow TypeScript).",
     );
   });
 
@@ -195,7 +195,7 @@ describe("workflow-sdk", () => {
         }),
       ),
     ).rejects.toThrow(
-      "t3team.recipe.validate requires exactly one of 'path' (workspace .workflow.ts or recipe directory) or 'source' (inline workflow TypeScript).",
+      "t3_recipe_validate requires exactly one of 'path' (workspace .workflow.ts or recipe directory) or 'source' (inline workflow TypeScript).",
     );
   });
 
