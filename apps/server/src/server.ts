@@ -613,12 +613,19 @@ const T3TeamProjectSourceIconReactorStartLive = Layer.effectDiscard(
   ),
 ).pipe(Layer.provideMerge(T3TeamProjectSourceIconReactorLive));
 
+// The workflow engine's port onto V2. One const so the broker and the runtime head below share a
+// single instance (layers memoize by reference).
+const T3TeamWorkflowHostLive = T3TeamWorkflowHost.layer.pipe(Layer.provide(T3TeamV2FoundationLive));
+
 // The fork MCP tool broker and the in-memory stores it shares with the routes/reactors.
 const T3TeamToolBrokerLayerLive = T3TeamToolBrokerLive.pipe(
   Layer.provideMerge(T3TeamThreadToolContextStoreLive),
   Layer.provideMerge(T3TeamWidgetRegistryLive),
   Layer.provideMerge(T3TeamContextRefreshServiceLive),
   Layer.provide(WorkflowSignalSourcesLive),
+  // The broker mounts beneath the runtime head, so the V2 orchestration tools only see the host
+  // (`serviceOption` at construction) when it is provided to the broker itself.
+  Layer.provide(T3TeamWorkflowHostLive),
   Layer.provide(ProviderRegistryLive),
   // The broker reads thread facts; same layer reference as the runtime registers (memoized).
   Layer.provide(T3TeamV2FoundationLive),
@@ -746,7 +753,7 @@ const RuntimeCoreDependenciesBaseLive = Layer.mergeAll(
   T3TeamActorMailboxLive,
   // t3team: the workflow engine's port onto V2 (threads, turns, notes, step pips, run facts),
   // over the same foundation writers (layer references memoize).
-  T3TeamWorkflowHost.layer.pipe(Layer.provide(T3TeamV2FoundationLive)),
+  T3TeamWorkflowHostLive,
 ).pipe(
   // t3team: the tool broker reads several capabilities through serviceOption at construction
   // time. Mount it before the runtime services so the later provideMerges expose the production
