@@ -65,7 +65,8 @@ export function DigestChips({
     <div className="space-y-1">
       {chips.length > 0 ? <div className="flex flex-wrap gap-1">{chips}</div> : null}
       {prs.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        // Its own size query: how much a chip says follows the room this row has, not the screen.
+        <div className="@container/prs flex flex-wrap items-center gap-x-2 gap-y-1">
           <DigestPrChips
             prs={prs}
             repoLabel={digestRepoLabeler(graph.changeRequests.map((pr) => pr.repo))}

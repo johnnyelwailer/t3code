@@ -1,9 +1,9 @@
 /**
- * Who else is on the PRs waiting for the viewer's review: requested reviewers, everyone who
- * already commented, and the change size. Host-wide search results carry none of that, so the
- * reviews the digest shows are read once more through the shared cached PR detail/activity
- * (bounded, stale-while-revalidate like every digest PR read). A PR nobody has looked at yet is
- * the one the viewer should take first.
+ * Faces, coverage and size for the open PRs the host-wide search found: requested reviewers,
+ * everyone who already commented, the change size. The search carries none of that, so these PRs
+ * are read once more through the shared cached PR detail/activity (bounded, stale-while-revalidate
+ * like every digest PR read). Reviews waiting on the viewer come first — a PR nobody has looked at
+ * yet is the one to take first — then the viewer's own, whose chips show who reviews them.
  */
 
 import { ProjectId } from "@t3tools/contracts";
@@ -16,16 +16,23 @@ import type { T3TeamDigestProjectSource } from "./t3team-myworkDigestTypes.ts";
 
 type DigestPrEntry = T3TeamDigestProjectSource["prEntries"][number];
 
-const REVIEW_ENRICH_LIMIT = 10;
+const ENRICH_LIMIT = 30;
+// Reviewers, comments and size move slowly; re-reading 30 PRs every half minute would not.
+const ENRICH_FRESH_MS = 5 * 60_000;
 
 const needsEnrichment = (entry: DigestPrEntry) =>
-  entry.viewerReviewRequested && entry.viewerAuthored !== true && entry.engaged === undefined;
+  entry.state === "open" && entry.engaged === undefined;
+const isReviewForViewer = (entry: DigestPrEntry) =>
+  entry.viewerReviewRequested && entry.viewerAuthored !== true;
 
 export function enrichDigestReviewEntries(
   entries: ReadonlyArray<DigestPrEntry>,
   appProjectId: string | undefined,
 ) {
-  const todo = entries.filter(needsEnrichment).slice(0, REVIEW_ENRICH_LIMIT);
+  const todo = entries
+    .filter(needsEnrichment)
+    .toSorted((a, b) => Number(isReviewForViewer(b)) - Number(isReviewForViewer(a)))
+    .slice(0, ENRICH_LIMIT);
   if (appProjectId === undefined || todo.length === 0) {
     return Effect.succeed({ entries: [...entries], pending: false });
   }
@@ -52,7 +59,7 @@ export function enrichDigestReviewEntries(
       }),
     );
   });
-  return readCached(key, load, new Map()).pipe(
+  return readCached(key, load, new Map(), ENRICH_FRESH_MS).pipe(
     Effect.map(({ read, pending }) => ({
       pending,
       entries: entries.map((entry) => {

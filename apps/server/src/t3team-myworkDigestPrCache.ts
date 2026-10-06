@@ -71,12 +71,18 @@ function rememberRead(key: string, read: unknown, atMs: number) {
 }
 
 /** Stale-while-revalidate for one keyed read; `fallback` is what a cold read ships meanwhile. */
-export function readCached<A, R>(key: string, load: Effect.Effect<A, never, R>, fallback: A) {
+export function readCached<A, R>(
+  key: string,
+  load: Effect.Effect<A, never, R>,
+  fallback: A,
+  /** How long a read serves without a background refresh; slow-changing facts can wait longer. */
+  freshMs = DIGEST_PR_FRESH_MS,
+) {
   return Effect.gen(function* () {
     const nowMs = yield* Clock.currentTimeMillis;
     const cached = cachedReads.get(key);
     if (cached !== undefined) {
-      if (nowMs - cached.atMs >= DIGEST_PR_FRESH_MS) yield* startRefresh(key, load);
+      if (nowMs - cached.atMs >= freshMs) yield* startRefresh(key, load);
       return { read: cached.read as A, pending: refreshes.has(key) };
     }
     const fiber = yield* startRefresh(key, load);
