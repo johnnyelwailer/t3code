@@ -9,7 +9,6 @@
 import { AbsolutePath, Location, Model, Provider, Session } from "@opencode/client/effect";
 import { TextGenerationError } from "@t3tools/contracts";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
-import { extractJsonObject } from "@t3tools/shared/schemaJson";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -20,7 +19,10 @@ import { resolveAttachmentPath } from "../attachmentStore.ts";
 import type { OpenCode2Connection } from "../provider/opencode2/OpenCode2Server.ts";
 import * as OpenCode2Server from "../provider/opencode2/OpenCode2Server.ts";
 import { parseOpenCodeModelSlug } from "../provider/opencodeRuntime.ts";
-import { makeOpenCodeOperations, type OpenCodeJsonRunner } from "./OpenCodeTextGeneration.ts";
+import type * as TextGeneration from "./TextGeneration.ts";
+import * as TextGenerationOperations from "./TextGenerationOperations.ts";
+import { buildActivityLabelPrompt } from "./TextGenerationPrompts.ts";
+import { sanitizeActivityLabel } from "./TextGenerationUtils.ts";
 
 const isTextGenerationError = Schema.is(TextGenerationError);
 
@@ -42,7 +44,7 @@ type Outcome =
 
 const runOnServer = (
   connection: OpenCode2Connection,
-  input: Parameters<OpenCodeJsonRunner>[0],
+  input: TextGenerationOperations.Request<Schema.Top>,
   attachmentsDir: string,
 ) =>
   Effect.gen(function* () {
@@ -188,10 +190,8 @@ const runOnServer = (
 export const make = Effect.fn("OpenCode2TextGeneration.make")(function* () {
   const server = yield* OpenCode2Server.OpenCode2Server;
   const { attachmentsDir } = yield* ServerConfig.ServerConfig;
-  const run: OpenCodeJsonRunner = (input) => {
-    // Each operation has its own output schema, as in 1.x.
-    const decodeOutput = Schema.decodeEffect(Schema.fromJsonString(input.outputSchemaJson));
-    return server
+  const run: TextGenerationOperations.Runner = (input) =>
+    server
       .withConnection((connection) => runOnServer(connection, input, attachmentsDir))
       .pipe(
         Effect.mapError((cause) =>
@@ -203,19 +203,42 @@ export const make = Effect.fn("OpenCode2TextGeneration.make")(function* () {
                 cause,
               }),
         ),
-        Effect.flatMap((raw) =>
-          decodeOutput(extractJsonObject(raw)).pipe(
-            Effect.mapError(
-              (cause) =>
-                new TextGenerationError({
-                  operation: input.operation,
-                  detail: "OpenCode returned invalid structured output.",
-                  cause,
-                }),
-            ),
-          ),
-        ),
+        Effect.flatMap((raw) => TextGenerationOperations.decodeJsonReply(input, "OpenCode", raw)),
       );
-  };
-  return makeOpenCodeOperations(run);
+
+  // The OpenCode session API carries no reasoning-effort or thinking-budget
+  // parameter (the aux model selection is option-stripped by the caller), so
+  // the light-inference requirement for this op holds by construction.
+  const generateActivityLabel: TextGeneration.TextGeneration["Service"]["generateActivityLabel"] =
+    Effect.fn("OpenCode2TextGeneration.generateActivityLabel")(function* (input) {
+      const { prompt, outputSchema } = buildActivityLabelPrompt({ context: input.context });
+      const generated = yield* run({
+        operation: "generateActivityLabel",
+        cwd: input.cwd,
+        prompt,
+        outputSchema,
+        modelSelection: input.modelSelection,
+      });
+
+      return {
+        label: sanitizeActivityLabel(generated.label),
+      } satisfies TextGeneration.ActivityLabelGenerationResult;
+    });
+
+  const generateStructured: TextGeneration.TextGeneration["Service"]["generateStructured"] = (
+    input,
+  ) =>
+    run({
+      operation: "generateStructured",
+      cwd: input.cwd,
+      prompt: input.prompt,
+      outputSchema: input.outputSchema,
+      modelSelection: input.modelSelection,
+    });
+
+  return {
+    ...TextGenerationOperations.fromRunner("OpenCode2TextGeneration", run),
+    generateActivityLabel,
+    generateStructured,
+  } satisfies TextGeneration.TextGeneration["Service"];
 });

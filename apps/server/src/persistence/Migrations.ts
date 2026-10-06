@@ -8,9 +8,9 @@
  * schema is always up to date before the application starts.
  */
 
-import * as Migrator from "effect/unstable/sql/Migrator";
+import * as Migrator from "effect/sql/Migrator";
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import { reconcileV2PreviewMigration } from "./reconcileV2PreviewMigration.ts";
 
 // Import all migrations statically
@@ -140,13 +140,17 @@ import Migration0098 from "./Migrations/t3team-076_ThreadSilenceWatches.ts";
 import Migration0099 from "./Migrations/t3team-077_RepairForkPortTables.ts";
 // Project main repository + feature flags: main's sprint migrations. Main originally registered
 // these at 84/85, which this fork's V2 sync already uses, so they move above the current maximum
-// id (now 101) to keep the ledger monotonic on every existing fork install.
+// id (101 at the time) to keep the ledger monotonic on every existing fork install.
 import Migration0100 from "./Migrations/t3team-064_ProjectionProjectsMainRepository.ts";
 import Migration0101 from "./Migrations/t3team-065_FeatureFlags.ts";
 // Skills-as-subagents Phase 1 (WI-1): delegate_task `extensions.skills` persists the
 // REQUESTED skill names on the child's metadata row. The host never resolves them — the
 // child's driver loads them from its pack registry at session start (no second catalog).
 import Migration0102 from "./Migrations/t3team-078_SkillDelegationMetadata.ts";
+// New from the 2026-10-06 upstream sync (upstream 057/058). Appended above the fork's maximum id
+// rather than taking upstream's numbers, which this fork already uses — see the rule above.
+import Migration0103 from "./Migrations/057_ScheduledTaskWebhooks.ts";
+import Migration0104 from "./Migrations/058_WebhookRelayDeliveries.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -244,7 +248,7 @@ export const migrationEntries = [
   [83, "OrchestrationEventsTypeSequenceIndex", Migration0083],
   // Upstream 055/056 (orchestration V2) live at 84/85 in this fork's ledger; see the import comment.
   // Preserve this migration's schema. Future V2 schema changes need new migrations. A new
-  // migration must take an id ABOVE the highest id registered here (currently 101) — never one of
+  // migration must take an id ABOVE the highest id registered here (currently 104) — never one of
   // the gaps (88-89, 93-96): upgraded databases have recorded the maximum, and the Migrator skips
   // every id at or below it. Upstream's reconcileV2PreviewMigration stays a no-op on fork ledgers
   // (fork ids 53/54 are never named OrchestrationV2).
@@ -261,6 +265,9 @@ export const migrationEntries = [
   [100, "ProjectionProjectsMainRepository", Migration0100],
   [101, "FeatureFlags", Migration0101],
   [102, "SkillDelegationMetadata", Migration0102],
+  // Upstream 057/058 live at 103/104 in this fork's ledger; see the import comment.
+  [103, "ScheduledTaskWebhooks", Migration0103],
+  [104, "WebhookRelayDeliveries", Migration0104],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
