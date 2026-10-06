@@ -31,6 +31,7 @@ import {
 } from "./t3team-toolBrokerChildrenTypes.ts";
 import { opUnwatch, opWatch } from "./t3team-toolBrokerChildrenWatch.ts";
 import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
+import { mcpToolNameOf } from "./t3team-mcpCanonicalToolMap.ts";
 
 export type { ChildrenArgs, T3TeamChildrenToolDeps } from "./t3team-toolBrokerChildrenTypes.ts";
 
@@ -60,7 +61,7 @@ export function callT3TeamChildrenTool(input: {
   if (!op) {
     return Effect.succeed(
       errorResult(
-        `${T3TEAM_CHILDREN_TOOL_ID} requires an 'op'. Valid ops: ${T3TEAM_CHILD_OPS.join(", ")}. ` +
+        `${mcpToolNameOf(T3TEAM_CHILDREN_TOOL_ID)} requires an 'op'. Valid ops: ${T3TEAM_CHILD_OPS.join(", ")}. ` +
           `Call t3_task_ops({ op: "help" }) for per-op usage.`,
       ),
     );

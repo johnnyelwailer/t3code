@@ -17,7 +17,7 @@ import type { SchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
 type WaitRecord = { readonly deadline: number; readonly parked?: true };
 
 export interface DurableWaitDeps {
-  readonly runtime: Pick<DurableWorkflowRuntime, "callPrimitive" | "hostNow">;
+  readonly runtime: Pick<DurableWorkflowRuntime, "callPrimitive" | "hostNow" | "isBlackBoxed">;
   readonly park: SchedulePrimitives["waitUntil"];
   readonly sleep?: (durationMs: number) => Promise<void>;
 }
@@ -36,7 +36,13 @@ export function createDurableWait(deps: DurableWaitDeps): (durationMs: number) =
       kind: "wait",
       refId: "wait",
       args: { durationMs },
-      exec: async () => ({ deadline: deps.runtime.hostNow() + durationMs, parked: true }),
+      // Inside parallel()/pipeline() nothing is journaled, so a park there could never be resumed
+      // (handlesDispatch arms an unresumable black-box suspension): sleep in process instead, as
+      // `wait` always did. The branch is re-run live on resume, so this is still deterministic.
+      exec: async () => {
+        const deadline = deps.runtime.hostNow() + durationMs;
+        return deps.runtime.isBlackBoxed() ? { deadline } : { deadline, parked: true };
+      },
       decodeRecorded: (value) => value as WaitRecord,
     });
     if (recorded.parked === true) return deps.park(recorded.deadline);

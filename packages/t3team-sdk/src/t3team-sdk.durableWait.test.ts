@@ -5,7 +5,7 @@ import type { WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
 import type * as T from "./t3team-sdk.types.ts";
 
 /** A one-entry seat: replays `recorded` when given, else executes and captures the record. */
-function seat(recorded?: unknown, now = 1_000) {
+function seat(recorded?: unknown, now = 1_000, blackBoxed = false) {
   const journal: unknown[] = [];
   const callPrimitive = async <R>(call: T.PrimitiveCall<R>): Promise<R> => {
     if (recorded !== undefined) return (await call.decodeRecorded!(recorded)) as R;
@@ -13,7 +13,10 @@ function seat(recorded?: unknown, now = 1_000) {
     journal.push(value);
     return value;
   };
-  return { runtime: { callPrimitive, hostNow: () => now }, journal };
+  return {
+    runtime: { callPrimitive, hostNow: () => now, isBlackBoxed: () => blackBoxed },
+    journal,
+  };
 }
 
 function recorder() {
@@ -51,6 +54,15 @@ describe("durable wait(ms)", () => {
     await createDurableWait({ runtime, park: r.park, sleep: r.sleep })(500);
     expect(r.parked).toEqual([]);
     expect(r.slept).toEqual([500]);
+  });
+
+  it("sleeps in process inside a parallel()/pipeline() branch, where a park could never resume", async () => {
+    const { runtime, journal } = seat(undefined, 1_000, true);
+    const r = recorder();
+    await createDurableWait({ runtime, park: r.park, sleep: r.sleep })(250);
+    expect(journal).toEqual([{ deadline: 1_250 }]);
+    expect(r.parked).toEqual([]);
+    expect(r.slept).toEqual([250]);
   });
 
   it("binds the parking wait only for a body that declares the schedule capability", () => {

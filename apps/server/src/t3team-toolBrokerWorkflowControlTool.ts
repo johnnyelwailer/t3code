@@ -68,7 +68,7 @@ export function makeWorkflowControlToolHandlers(
       Effect.gen(function* () {
         const runId = args.runId?.trim() ?? "";
         if (runId.length === 0) {
-          return yield* Effect.fail(`t3team.orchestration.${action} requires a runId.`);
+          return yield* Effect.fail(`t3_orchestration_${action} requires a runId.`);
         }
         const found = yield* deps.repo.getById({ runId }).pipe(Effect.mapError(errorMessage));
         if (Option.isNone(found) || found.value.launchThreadId !== String(threadId)) {
