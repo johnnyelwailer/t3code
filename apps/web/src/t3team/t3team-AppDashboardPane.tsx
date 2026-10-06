@@ -67,6 +67,7 @@ export function AppDashboardPane({
   // Opening a PR, or staging a recipe, from the digest raises the drawer where the aside cannot
   // sit beside the view.
   const openedPullRequest = useDigestPrAsideStore((state) => state.pullRequest);
+  const openedTicket = useDigestPrAsideStore((state) => state.ticket);
   const recipeRequest = useDigestRecipeLaunchStore((state) => state.request);
 
   return (
@@ -84,8 +85,16 @@ export function AppDashboardPane({
             defaultAsideWidth={24 * 16}
             mobileDefaultPanel={activeThread ? "aside" : "main"}
             mobileMainLabel={activeDashboardMode === "backlog" ? "Backlog" : "My work"}
-            mobileAsideLabel={openedPullRequest ? "Pull request" : activeThread ? "Chat" : "Agent"}
-            mobileAsideRequest={openedPullRequest ?? recipeRequest}
+            mobileAsideLabel={
+              openedPullRequest
+                ? "Pull request"
+                : openedTicket
+                  ? openedTicket.ticketId
+                  : activeThread
+                    ? "Chat"
+                    : "Agent"
+            }
+            mobileAsideRequest={openedPullRequest ?? openedTicket ?? recipeRequest}
             main={
               <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
                 {renderDashboard(project)}
@@ -93,7 +102,9 @@ export function AppDashboardPane({
             }
             aside={
               <DigestPrAside
-                projectId={project.id}
+                project={project}
+                projectThreads={projectThreads}
+                onRememberEmbeddedThread={onRememberEmbeddedThread}
                 fallback={
                   <ProjectDashboardKickoffAside
                     // One composer per project: a recipe staged for project A's PR must not stay

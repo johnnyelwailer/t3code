@@ -15,6 +15,7 @@ import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDig
 import { readMyWorkDigestArrangementApi } from "~/t3team/backend/t3team-myworkDigestArrangementApi";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import { toastManager } from "~/components/ui/toast";
+import { openDigestTicket } from "~/t3team/t3team-digestPrAsideStore";
 import { toDigestProjectEntries } from "~/t3team/mywork-digest/t3team-digestProjectEntries";
 import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
 import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
@@ -26,8 +27,6 @@ import { filterDigestTickets, hasActiveDigestFilters } from "~/t3team/t3team-pro
 import type { DigestFilterState } from "~/t3team/t3team-projectMyWorkDigestTypes";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
-// TODO(digest-nav): rows navigate to the ticket URL today; thread an in-app onOpenTicket through
-// ProjectMyWorkDigestView -> DigestStoryGroup/DigestRow once the Storybook cut settles.
 export function ProjectMyWorkDigestContent({
   project,
   onOpenTicket,
@@ -38,11 +37,14 @@ export function ProjectMyWorkDigestContent({
   digestFilters?: DigestFilterState | undefined;
 }) {
   const { flags } = useT3TeamBetaFlags();
-  // Beta flag: rows open the ticket in-app, or fall back to the ticket URL.
-  const openTicketInApp =
-    flags.digestRowNavigation === "in-app"
-      ? (ticketId: string) => onOpenTicket(project.id, ticketId)
-      : undefined;
+  // A row opens its ticket beside the digest (the dashboard aside, a drawer on narrow screens);
+  // the full ticket page is one click from there.
+  const openTicketInApp = (ticketId: string) =>
+    openDigestTicket({
+      projectId: project.id,
+      ticketId,
+      openFullPage: () => onOpenTicket(project.id, ticketId),
+    });
   const projects = useMemo(() => [project], [project]);
   const arrangementApi = readMyWorkDigestArrangementApi(useBackend());
   const { graph, status, error, viewerUnresolved, sessionExpired, updatedAt, reload } =
