@@ -24,7 +24,12 @@ export function useCreateProjectPreselect(input: {
   const loadStartedFor = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!preselect || bootstrapping) return;
+    if (!preselect) {
+      // Applied or dropped: a later request for the same project must load afresh.
+      loadStartedFor.current = null;
+      return;
+    }
+    if (bootstrapping) return;
     const account = accounts.find((candidate) => candidate.id === preselect.accountId);
     if (!account) {
       consume();
