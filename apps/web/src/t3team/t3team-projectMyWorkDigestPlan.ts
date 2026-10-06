@@ -85,6 +85,7 @@ function reviewSections(graph: DigestGraph): DigestSection[] {
     {
       id: "to-review",
       kind: "reviews",
+      widget: "my-work.reviews",
       placement: "side",
       heading: "To review",
       hint: "other people's pull requests waiting for you",
@@ -111,6 +112,7 @@ export function buildHeuristicDigestPlan(
   const sections = DIGEST_BUCKETS.map((bucket) => ({
     id: bucket.id,
     kind: "items" as const,
+    widget: "my-work.tickets",
     placement: bucket.placement,
     heading: bucket.heading,
     ...(bucket.hint !== undefined ? { hint: bucket.hint } : {}),
@@ -129,6 +131,15 @@ export function buildHeuristicDigestPlan(
     producedAt: new Date(nowMs).toISOString(),
     sections: onlyTicketIds === undefined ? [...reviewSections(graph), ...sections] : sections,
   };
+}
+
+/** The plan a digest shows: the arrangement an agent stored for this scope, else the default. */
+export function buildDigestPlan(graph: DigestGraph, nowMs: number): ResolvedDigestPlan {
+  return resolveDigestPlan(
+    graph.arrangement ?? buildHeuristicDigestPlan(graph, nowMs),
+    graph,
+    nowMs,
+  );
 }
 
 export function resolveDigestPlan(

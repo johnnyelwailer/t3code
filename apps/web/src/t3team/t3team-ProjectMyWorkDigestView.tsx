@@ -1,12 +1,8 @@
 import { digestLaneLayout } from "~/t3team/t3team-projectMyWorkDigestLaneLayout";
 import { digestShownTicketIds } from "~/t3team/t3team-projectMyWorkDigestGroups";
-import { DigestReviewSection } from "~/t3team/t3team-ProjectMyWorkDigestReviewSection";
+import { DashboardWidget } from "~/t3team/t3team-dashboardWidgetRegistry";
+import { DigestArrangementBar } from "~/t3team/t3team-ProjectMyWorkDigestArrangementBar";
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
-import {
-  FooterSection,
-  MainSection,
-  SideSection,
-} from "~/t3team/t3team-ProjectMyWorkDigestSections";
 import {
   ProjectMyWorkDigestHeader,
   type DigestBurndownVariant,
@@ -20,6 +16,7 @@ export function ProjectMyWorkDigestView({
   onOpenTicket,
   burndownVariant = "off",
   updatedAtMs,
+  onResetArrangement,
 }: {
   plan: ResolvedDigestPlan;
   graph: DigestGraph;
@@ -27,6 +24,8 @@ export function ProjectMyWorkDigestView({
   onOpenTicket?: ((ticketId: string) => void) | undefined;
   burndownVariant?: DigestBurndownVariant;
   updatedAtMs?: number;
+  /** Clears an agent-made arrangement for this scope (back to the default). */
+  onResetArrangement?: (() => Promise<void>) | undefined;
 }) {
   const ticketsById = new Map(graph.tickets.map((ticket) => [ticket.id, ticket]));
   const lane = { graph, ticketsById, nowMs, onOpenTicket };
@@ -38,10 +37,18 @@ export function ProjectMyWorkDigestView({
       {...(updatedAtMs !== undefined ? { updatedAtMs } : {})}
     />
   );
+  const arranged = graph.arrangement ? (
+    <DigestArrangementBar
+      arrangement={graph.arrangement}
+      nowMs={nowMs}
+      onReset={onResetArrangement}
+    />
+  ) : null;
   if (plan.sections.length === 0) {
     return (
       <div className="@container/digest space-y-8">
         {header}
+        {arranged}
         <T3SurfacePanel
           tone="dashed"
           className="px-6 py-10 text-center text-sm text-muted-foreground"
@@ -71,6 +78,7 @@ export function ProjectMyWorkDigestView({
   return (
     <div className="@container/digest space-y-8">
       {header}
+      {arranged}
       {lanesEmpty ? (
         <T3SurfacePanel
           tone="dashed"
@@ -82,19 +90,21 @@ export function ProjectMyWorkDigestView({
         <div className={lanes.gridClassName}>
           {lanes.showSide ? (
             <div className="min-w-0 space-y-8">
-              {side.map((s) =>
-                s.kind === "reviews" ? (
-                  <DigestReviewSection key={s.id} section={s} {...lane} />
-                ) : (
-                  <SideSection key={s.id} section={s} {...lane} />
-                ),
-              )}
+              {side.map((s) => (
+                <DashboardWidget key={s.id} section={s} placement="side" {...lane} />
+              ))}
             </div>
           ) : null}
           {lanes.showMain ? (
             <div className="@container/lane min-w-0 space-y-8">
               {main.map((s) => (
-                <MainSection key={s.id} section={s} {...lane} shownTicketIds={shownTicketIds} />
+                <DashboardWidget
+                  key={s.id}
+                  section={s}
+                  placement="main"
+                  {...lane}
+                  shownTicketIds={shownTicketIds}
+                />
               ))}
             </div>
           ) : null}
@@ -105,7 +115,7 @@ export function ProjectMyWorkDigestView({
           className={`grid grid-cols-1 gap-x-6 gap-y-6 border-t border-border/70 pt-6 @xl/digest:gap-x-10 ${footerColumns}`}
         >
           {footer.map((s) => (
-            <FooterSection key={s.id} section={s} {...lane} />
+            <DashboardWidget key={s.id} section={s} placement="footer" {...lane} />
           ))}
         </div>
       ) : null}

@@ -192,6 +192,7 @@ export function payloadToDigestGraph(input: {
     changeRequests,
     reviewRequests,
     dependencies,
+    ...(input.payload.arrangement !== undefined ? { arrangement: input.payload.arrangement } : {}),
     transitions,
     blockers,
   };

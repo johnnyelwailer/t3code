@@ -77,6 +77,7 @@ export function buildBundledRecipeTemplateValues(
 
   return {
     projectTitle: input.project.title,
+    projectId: input.project.id,
     selectedWorkLabel: input.selectedWorkLabel,
     selectedWorkTitle: input.selectedWorkTitle ?? "",
     jiraIssueType: input.jiraIssueType ?? "",

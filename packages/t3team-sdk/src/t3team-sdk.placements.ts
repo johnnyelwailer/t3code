@@ -9,17 +9,24 @@
  * module owned them, the SDK deep-imported `@t3tools/project-recipes/placements`, which inverted
  * that direction and forced consumers to resolve project-recipes just to import the SDK.)
  *
- * SHIPPED helpers cover the placements that exist on disk today: `sidecar.section`
+ * SHIPPED helpers cover the placements that exist on disk today: `dashboard.widget`
+ * (`defineDashboardWidget`, the My Work digest's sections), `sidecar.section`
  * (`defineSidecarSection`, Epic 19 status "Built (Phase 5a)") and `action`
  * (`defineAction` — the recipe-launcher action view the quick-starts surface renders; the
  * bundled skill-pack recipes run their views through it).
- * The remaining helpers in the Epic 19 table (`defineWorkItemSection`, `defineDashboardWidget`,
+ * The remaining helpers in the Epic 19 table (`defineWorkItemSection`,
  * `defineNavSection`, `defineHomeBlock`, `defineProjectView`, `defineCommandPaletteContributor`,
  * `defineArtifactRenderer`, `defineConversationCard`, `defineConversationSidecar`,
  * `defineContextAction`, `defineInlineAction`) are intentionally absent: their placements are not
  * built, and Epic 19 §No generic primitive is explicit that a helper ships *with* its placement.
  */
 export { ActionDefinition, defineAction } from "./t3team-sdk.actionPlacement.ts";
+export {
+  DashboardWidgetContent,
+  DashboardWidgetDefinition,
+  DashboardWidgetPlacement,
+  defineDashboardWidget,
+} from "./t3team-sdk.dashboardWidget.ts";
 export {
   ActionRecipeSurface,
   defineSidecarSection,

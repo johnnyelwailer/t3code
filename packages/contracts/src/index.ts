@@ -74,6 +74,7 @@ export * from "./t3team-resourcePressureCleanup.ts";
 export * from "./t3team-toolauth.ts";
 export * from "./usage.ts";
 export * from "./t3team-providerUsage.ts";
+export * from "./t3team-myworkArrangement.ts";
 export * from "./scheduledTask.ts";
 export * from "./worktreeMcp.ts";
 export * from "./resourceTelemetry.ts";

@@ -160,6 +160,8 @@ export type DigestGraph = {
   readonly dependencies?: readonly DigestDependency[];
   readonly transitions: readonly DigestTransition[];
   readonly blockers: readonly DigestBlocker[];
+  /** The arrangement an agent stored for this scope (the arrange-my-work recipe); absent = default. */
+  readonly arrangement?: DigestPlan;
 };
 
 export type DigestFacet = "decision" | "claim" | "changeRequest" | "moved" | "stalled";
@@ -176,6 +178,8 @@ export type DigestPlacement = "side" | "main" | "footer";
 export type DigestSection = {
   readonly id: string;
   readonly kind: "items" | "reviews";
+  /** The `dashboard.widget` that renders it; absent means the default for its `kind`. */
+  readonly widget?: string;
   readonly reviewIds?: readonly string[];
   readonly placement: DigestPlacement;
   readonly heading: string;

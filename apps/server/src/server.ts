@@ -640,6 +640,11 @@ const T3TeamToolBrokerLayerLive = T3TeamToolBrokerLive.pipe(
   // as the reactor mounted with the app layer).
   Layer.provide(T3TeamSilenceWatchPortLive),
   Layer.provide(T3TeamActorMailboxStoreLive),
+  // t3team: `t3team.mywork.*` run the digest loader, which reads runs, child-thread metadata and
+  // pull requests; they are in the runtime head, which the broker does not see (same references).
+  Layer.provide(WorkflowRunRepositoryLive),
+  Layer.provide(T3TeamChildThreadMetadataLive),
+  Layer.provide(PullRequestServiceLive),
 );
 
 const OrchestrationV2RuntimeLayerLive = OrchestrationV2ProductionLayerLive.pipe(

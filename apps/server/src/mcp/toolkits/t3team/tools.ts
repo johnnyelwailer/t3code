@@ -18,6 +18,9 @@ import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP } from "../../../t3team-mcpCanonicalToolMap.ts";
 import { T3TeamAskUserWriter } from "./t3team-askUserWriter.ts";
+import { T3TeamMcpToolError } from "./t3team-mcpToolError.ts";
+import { mcpDescriptionOf } from "./t3team-mcpToolDescription.ts";
+import { T3TeamMyWorkArrangeTool, T3TeamMyWorkDigestTool } from "./t3team-myworkTools.ts";
 
 const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroker];
 
@@ -28,17 +31,7 @@ const askUserDependencies = [McpInvocationContext.McpInvocationContext, T3TeamAs
 
 export { T3TEAM_MCP_CANONICAL_TOOL_MAP };
 
-/**
- * The broker catalog's description for a canonical tool, with every canonical id the text names
- * rewritten to its MCP tool name (table-driven through the map above, so it is exact).
- */
-export function mcpDescriptionOf(canonicalId: T3TeamImplementedToolId): string {
-  let text: string = getT3TeamToolDefinition(canonicalId).description;
-  for (const [mcpName, id] of Object.entries(T3TEAM_MCP_CANONICAL_TOOL_MAP)) {
-    text = text.replaceAll(id, mcpName);
-  }
-  return text;
-}
+export { mcpDescriptionOf };
 
 /**
  * Canonical tools deliberately NOT on the provider `/mcp` surface. The parity test forces an
@@ -71,10 +64,7 @@ export const T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS: ReadonlySet<string> = n
   "t3team.work_item.link.draft_remove",
 ]);
 
-export class T3TeamMcpToolError extends Schema.TaggedError<T3TeamMcpToolError>()(
-  "T3TeamMcpToolError",
-  { message: Schema.String },
-) {}
+export { T3TeamMcpToolError };
 
 const T3TeamProviderUsageTool = Tool.make("t3_provider_usage", {
   description:
@@ -490,5 +480,7 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamShowWidgetTool,
   T3TeamRecipeListTool,
   T3TeamRecipeValidateTool,
+  T3TeamMyWorkDigestTool,
+  T3TeamMyWorkArrangeTool,
   T3TeamThreadSkillMetadataTool,
 );

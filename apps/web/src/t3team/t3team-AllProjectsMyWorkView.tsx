@@ -24,10 +24,7 @@ import { JiraSignInPanel } from "~/t3team/components/t3team-JiraSignInPanel";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import { useProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboardMyWorkState";
-import {
-  buildHeuristicDigestPlan,
-  resolveDigestPlan,
-} from "~/t3team/t3team-projectMyWorkDigestPlan";
+import { buildDigestPlan } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
 import { AllProjectsMyWorkSection } from "~/t3team/t3team-AllProjectsMyWorkSection";
 import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
@@ -97,7 +94,7 @@ export function AllProjectsMyWorkView({
     if (!digestGraph) {
       return null;
     }
-    return resolveDigestPlan(buildHeuristicDigestPlan(digestGraph, nowMs), digestGraph, nowMs);
+    return buildDigestPlan(digestGraph, nowMs);
   }, [digestGraph, nowMs]);
 
   if (boundProjects.length === 0) {
