@@ -1,5 +1,6 @@
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
+  type EnvironmentId,
   type ProviderInstanceId,
   type ProviderDriverKind,
   type ResolvedKeybindingsConfig,
@@ -175,6 +176,8 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
    * for the locked-mode header.
    */
   instanceEntries: ReadonlyArray<ProviderInstanceEntry>;
+  /** t3team: the environment the entries come from; a tool connect acts there. Default: primary. */
+  environmentId?: EnvironmentId | undefined;
   keybindings?: ResolvedKeybindingsConfig;
   /**
    * Model options per instance. Keyed by `ProviderInstanceId` so the
@@ -980,6 +983,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
 
             {connectPanelTarget ? (
               <ModelPickerProviderConnectPanel
+                {...(props.environmentId ? { environmentId: props.environmentId } : {})}
                 entry={connectPanelTarget.entry}
                 tool={connectPanelTarget.tool}
                 readiness={connectPanelTarget.readiness}
