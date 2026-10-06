@@ -25,6 +25,7 @@ type CloudSelectorProps = Pick<
   | "onSetupCloudSessions"
   | "cloudSessionProject"
   | "connectedEnvironmentIds"
+  | "cloudEnvironmentIds"
 >;
 
 /**
@@ -90,6 +91,14 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
     () => new Set(connectedKey === "" ? [] : connectedKey.split("\u0000")),
     [connectedKey],
   );
+  const cloudKey = environments
+    .filter((environment) => environment.entry.target._tag === "BrokerConnectionTarget")
+    .map((environment) => environment.environmentId)
+    .join("\u0000");
+  const cloudEnvironmentIds = useMemo(
+    () => new Set(cloudKey === "" ? [] : cloudKey.split("\u0000")),
+    [cloudKey],
+  );
   const onSetupCloudSessions = useCallback(() => {
     void navigate({ to: "/settings/connections" });
   }, [navigate]);
@@ -101,6 +110,7 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
           ? {
               pendingCloudSessions,
               connectedEnvironmentIds,
+              cloudEnvironmentIds,
               onCreateCloudSession,
               cloudSessionCreatePending: createPending,
               ...(cloudSessionProject ? { cloudSessionProject } : {}),
@@ -114,6 +124,7 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
       cloudSessionProject,
       configured,
       connectedEnvironmentIds,
+      cloudEnvironmentIds,
       createPending,
       onCloudMenuOpenChange,
       onCreateCloudSession,
