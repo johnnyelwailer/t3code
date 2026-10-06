@@ -5,7 +5,7 @@ import type { ProjectKickoffThreadInput } from "~/t3team/t3team-kickoffTypes";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
 import { ProjectDashboardKickoffAside } from "~/t3team/t3team-ProjectDashboardKickoffAside";
 import { DigestPrAside } from "~/t3team/t3team-DigestPrAside";
-import { useDigestPrAsideStore } from "~/t3team/t3team-digestPrAsideStore";
+import { closeDigestPullRequest, useDigestPrAsideStore } from "~/t3team/t3team-digestPrAsideStore";
 import { DigestRecipeCatalogProvider } from "~/t3team/t3team-digestRecipeCatalog";
 import { useDigestRecipeLaunchStore } from "~/t3team/t3team-digestRecipeLaunchStore";
 import { T3TeamDashboardRecipeActionProvider } from "~/t3team/t3team-dashboardRecipeActions";
@@ -66,7 +66,19 @@ export function AppDashboardPane({
 
   // Opening a PR, or staging a recipe, from the digest raises the drawer where the aside cannot
   // sit beside the view.
-  const openedPullRequest = useDigestPrAsideStore((state) => state.pullRequest);
+  // Only this project's: a detail opened on another project's dashboard neither labels nor raises
+  // this one's drawer.
+  const projectId: string = project.id;
+  const openedPullRequest = useDigestPrAsideStore((state) =>
+    state.pullRequest?.projectId === projectId ? state.pullRequest : null,
+  );
+  const openedTicket = useDigestPrAsideStore((state) =>
+    state.ticket?.projectId === projectId ? state.ticket : null,
+  );
+  // Picking a thread hands the aside to it: an open PR or ticket would otherwise hide the chat.
+  useEffect(() => {
+    if (activeThreadId !== null) closeDigestPullRequest();
+  }, [activeThreadId]);
   const recipeRequest = useDigestRecipeLaunchStore((state) => state.request);
 
   return (
@@ -84,8 +96,16 @@ export function AppDashboardPane({
             defaultAsideWidth={24 * 16}
             mobileDefaultPanel={activeThread ? "aside" : "main"}
             mobileMainLabel={activeDashboardMode === "backlog" ? "Backlog" : "My work"}
-            mobileAsideLabel={openedPullRequest ? "Pull request" : activeThread ? "Chat" : "Agent"}
-            mobileAsideRequest={openedPullRequest ?? recipeRequest}
+            mobileAsideLabel={
+              openedPullRequest
+                ? "Pull request"
+                : openedTicket
+                  ? openedTicket.ticketId
+                  : activeThread
+                    ? "Chat"
+                    : "Agent"
+            }
+            mobileAsideRequest={openedPullRequest ?? openedTicket ?? recipeRequest}
             main={
               <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
                 {renderDashboard(project)}
@@ -93,7 +113,9 @@ export function AppDashboardPane({
             }
             aside={
               <DigestPrAside
-                projectId={project.id}
+                project={project}
+                projectThreads={projectThreads}
+                onRememberEmbeddedThread={onRememberEmbeddedThread}
                 fallback={
                   <ProjectDashboardKickoffAside
                     // One composer per project: a recipe staged for project A's PR must not stay

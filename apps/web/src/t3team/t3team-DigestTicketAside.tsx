@@ -1,0 +1,107 @@
+import type { ProjectShellProject } from "@t3tools/project-context";
+import { ExternalLink, Maximize2, XIcon } from "lucide-react";
+import { useCallback } from "react";
+
+import { Button } from "~/t3team/components/ui/t3team-button";
+import { useAgentContext } from "~/t3team/hooks/t3team-useAgentContext";
+import { useWorkItemDetailViewModel } from "~/t3team/hooks/t3team-useWorkItemDetailViewModel";
+import type { ProjectThread } from "~/t3team/t3team-types";
+import { buildWorkItemDetailMainProps } from "~/t3team/workitem/t3team-buildWorkItemDetailMainProps";
+import { WorkItemBreadcrumb } from "~/t3team/workitem/t3team-WorkItemBreadcrumb";
+import { WorkItemDetailMain } from "~/t3team/workitem/t3team-WorkItemDetailMain";
+
+import {
+  closeDigestPullRequest,
+  openDigestTicket,
+  type DigestAsideTicket,
+} from "./t3team-digestPrAsideStore";
+
+/**
+ * A ticket a digest row opened, beside the digest: the work item's own detail column (the one the
+ * ticket page renders, from the same view model), under a slim bar that says where you are and
+ * offers the full page, Jira, and close. A parent or child clicked inside replaces it here.
+ */
+export function DigestTicketAside({
+  project,
+  ticket,
+  projectThreads,
+  onRememberEmbeddedThread,
+}: {
+  project: ProjectShellProject;
+  ticket: DigestAsideTicket;
+  projectThreads: ProjectThread[];
+  onRememberEmbeddedThread: (threadId: string) => void;
+}) {
+  const { showAgentContextMenu } = useAgentContext();
+  const view = useWorkItemDetailViewModel({
+    project,
+    ticketId: ticket.ticketId,
+    projectThreads,
+    onRememberEmbeddedThread,
+  });
+  const openTicket = useCallback(
+    (ticketId: string) =>
+      openDigestTicket({
+        projectId: project.id,
+        ticketId,
+        ...(ticket.openFullPage ? { openFullPage: ticket.openFullPage } : {}),
+      }),
+    [project.id, ticket.openFullPage],
+  );
+  return (
+    <div className="@container/workitem-header flex h-full min-h-0 flex-col">
+      <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border/60 px-2">
+        <WorkItemBreadcrumb
+          projectTitle={project.title}
+          itemKey={view.displayId}
+          {...(view.fieldModel.parent ? { parent: view.fieldModel.parent } : {})}
+          onOpenParent={openTicket}
+          className="min-w-0 flex-1"
+        />
+        {ticket.openFullPage ? (
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            onClick={() => ticket.openFullPage?.(ticket.ticketId)}
+            aria-label="Open full page"
+            title="Open full page"
+          >
+            <Maximize2 className="size-3.5" />
+          </Button>
+        ) : null}
+        {view.ticketUrl ? (
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            render={<a href={view.ticketUrl} target="_blank" rel="noreferrer" />}
+            aria-label="Open in Jira"
+            title="Open in Jira"
+          >
+            <ExternalLink className="size-3.5" />
+          </Button>
+        ) : null}
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          onClick={closeDigestPullRequest}
+          aria-label="Close"
+          title="Close"
+        >
+          <XIcon className="size-3.5" />
+        </Button>
+      </div>
+      {/* A flex column, as on the ticket page: the detail layout's own scroll area fills it and
+          scrolls, instead of growing with its content and being clipped. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <WorkItemDetailMain
+          {...buildWorkItemDetailMainProps({
+            view,
+            project,
+            onOpenTicket: openTicket,
+            showAgentContextMenu,
+          })}
+        />
+      </div>
+    </div>
+  );
+}
