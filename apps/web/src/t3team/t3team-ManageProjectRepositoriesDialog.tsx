@@ -1,13 +1,10 @@
-import { useMemo, useState } from "react";
-import { Link2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { X } from "lucide-react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
-import { GitHubRepositoryDiscoverySection } from "~/t3team/components/t3team-GitHubRepositoryDiscoverySection";
-import { LinkedRepositoryListEditor } from "~/t3team/components/t3team-LinkedRepositoryListEditor";
+import { RepositoryPicker } from "~/t3team/components/t3team-RepositoryPicker";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { Card } from "~/t3team/components/ui/t3team-card";
-import { T3SurfaceCardContent } from "~/t3team/components/ui/t3team-surface";
-import { ScrollArea } from "~/t3team/components/ui/t3team-scroll-area";
 import { splitRepositoryInput } from "~/t3team/components/t3team-linkedRepositories";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import { MainRepositoryPicker } from "~/t3team/components/t3team-MainRepositoryPicker";
@@ -20,6 +17,7 @@ import {
   readMainRepositoryFromProject,
 } from "~/t3team/hooks/t3team-projectMainRepository";
 import { saveProjectRepositories } from "~/t3team/hooks/t3team-saveProjectRepositories";
+import { useGitHubRepositoryDiscovery } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
 import { useServerConfig } from "~/t3team/t3team-serverState";
 
 export function ManageProjectRepositoriesDialog({
@@ -34,10 +32,6 @@ export function ManageProjectRepositoriesDialog({
   const backend = useBackend();
   const currentUrls = useMemo(() => readLinkedRepositoryUrlsFromProject(project), [project]);
   const [linkedRepositoryUrls, setLinkedRepositoryUrls] = useState(currentUrls);
-  const [discoveredRepositoryUrls, setDiscoveredRepositoryUrls] = useState<ReadonlyArray<string>>(
-    [],
-  );
-  const [newRepositoryUrl, setNewRepositoryUrl] = useState("");
   const [saveError, setSaveError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
   const mainRepositoryEnabled = useServerConfig()?.mainRepository === true;
@@ -46,23 +40,37 @@ export function ManageProjectRepositoriesDialog({
   const initialMainUrl = currentMain?.status === "adopted" ? null : (currentMain?.url ?? null);
   const [mainRepositoryUrl, setMainRepositoryUrl] = useState<string | null>(initialMainUrl);
 
-  const addRepository = () => {
-    const normalized = splitRepositoryInput(newRepositoryUrl);
-    if (normalized.length === 0) return;
-    setLinkedRepositoryUrls((current) => normalizeRepositoryUrls([...current, ...normalized]));
-    setNewRepositoryUrl("");
-  };
+  const discovery = useGitHubRepositoryDiscovery({
+    enabled: true,
+    projectKey: project.source.externalProjectKey ?? undefined,
+    projectTitle: project.title ?? undefined,
+    linkedRepositoryUrls,
+  });
 
-  const removeRepository = (url: string) => {
-    setLinkedRepositoryUrls((current) => current.filter((entry) => entry !== url));
+  const dirty =
+    mainRepositoryUrl !== initialMainUrl ||
+    linkedRepositoryUrls.length !== currentUrls.length ||
+    linkedRepositoryUrls.some((url) => !currentUrls.includes(url));
+
+  const toggleRepository = (url: string) => {
+    setLinkedRepositoryUrls((current) =>
+      current.includes(url)
+        ? current.filter((entry) => entry !== url)
+        : normalizeRepositoryUrls([...current, ...splitRepositoryInput(url)]),
+    );
     if (url === mainRepositoryUrl) setMainRepositoryUrl(null);
   };
 
-  const handleDiscoveredRepositoryUrlsChange = (urls: ReadonlyArray<string>) => {
-    setDiscoveredRepositoryUrls(urls);
-    if (urls.length === 0) return;
+  const linkRepositories = (urls: ReadonlyArray<string>) =>
     setLinkedRepositoryUrls((current) => normalizeRepositoryUrls([...current, ...urls]));
-  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !saving) onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose, saving]);
 
   const saveLinkedRepositories = async () => {
     setSaveError(null);
@@ -86,84 +94,68 @@ export function ManageProjectRepositoriesDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/40 p-2 sm:items-center sm:p-4">
-      <Card className="flex h-full w-full max-w-3xl flex-col overflow-hidden sm:h-[min(42rem,calc(100dvh-2rem))]">
-        <header className="flex items-center justify-between border-b border-border px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Link2 className="size-4 text-primary" />
-            <h2 className="text-sm font-semibold">Manage Linked Repositories</h2>
+    <div
+      className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/50 p-2 sm:items-center sm:p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !saving) onClose();
+      }}
+    >
+      <Card
+        role="dialog"
+        aria-label="Linked repositories"
+        className="flex h-full w-full max-w-2xl flex-col overflow-hidden sm:h-[min(40rem,calc(100dvh-2rem))]"
+      >
+        <header className="flex items-start justify-between gap-3 px-5 pt-5 pb-4">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold">Linked repositories</h2>
+            <p className="truncate text-xs text-muted-foreground">
+              Code, PRs and branches for {project.title ?? "this project"} come from these.
+            </p>
           </div>
           <Button size="icon-xs" variant="ghost" onClick={onClose} aria-label="Close dialog">
             <X className="size-4" />
           </Button>
         </header>
 
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-4 p-4">
-            <Card>
-              <T3SurfaceCardContent>
-                <GitHubRepositoryDiscoverySection
-                  projectKey={project.source.externalProjectKey ?? undefined}
-                  projectTitle={project.title ?? undefined}
-                  linkedRepositoryUrls={linkedRepositoryUrls}
-                  onVisibleSuggestionsChange={handleDiscoveredRepositoryUrlsChange}
-                />
-              </T3SurfaceCardContent>
-            </Card>
+        <RepositoryPicker
+          discovery={discovery}
+          linkedUrls={linkedRepositoryUrls}
+          onToggle={toggleRepository}
+          onLinkMany={linkRepositories}
+        />
 
-            <Card>
-              <T3SurfaceCardContent>
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold">Linked repositories</h3>
-                  <LinkedRepositoryListEditor
-                    repositoryUrls={linkedRepositoryUrls}
-                    newRepositoryUrl={newRepositoryUrl}
-                    setNewRepositoryUrl={setNewRepositoryUrl}
-                    onAddRepository={addRepository}
-                    onRemoveRepository={removeRepository}
-                    onAddSearchableOption={(url) =>
-                      setLinkedRepositoryUrls((current) =>
-                        normalizeRepositoryUrls([...current, url]),
-                      )
-                    }
-                    searchableRepositoryOptions={discoveredRepositoryUrls}
-                    helpText="Saving updates this project and refreshes workspace references."
-                  />
-                </div>
-              </T3SurfaceCardContent>
-            </Card>
-
-            {mainRepositoryEnabled ? (
-              <Card>
-                <T3SurfaceCardContent>
-                  <MainRepositoryPicker
-                    repositoryUrls={linkedRepositoryUrls}
-                    candidates={readMainRepositoryCandidatesFromProject(project)}
-                    value={mainRepositoryUrl}
-                    onChange={setMainRepositoryUrl}
-                    disabled={saving}
-                  />
-                </T3SurfaceCardContent>
-              </Card>
-            ) : null}
-
-            {saveError ? (
-              <T3TeamErrorState
-                error={saveError}
-                action="updating linked repositories"
-                onRetry={() => void saveLinkedRepositories()}
-              />
-            ) : null}
+        {mainRepositoryEnabled && linkedRepositoryUrls.length > 0 ? (
+          <div className="border-t border-border px-4 py-3">
+            <MainRepositoryPicker
+              repositoryUrls={linkedRepositoryUrls}
+              candidates={readMainRepositoryCandidatesFromProject(project)}
+              value={mainRepositoryUrl}
+              onChange={setMainRepositoryUrl}
+              disabled={saving}
+            />
           </div>
-        </ScrollArea>
+        ) : null}
 
-        <footer className="border-t border-border bg-card px-4 py-3">
-          <div className="flex items-center justify-between gap-2">
-            <Button variant="outline" onClick={onClose} disabled={saving}>
+        {saveError ? (
+          <div className="border-t border-border p-3">
+            <T3TeamErrorState
+              error={saveError}
+              action="updating linked repositories"
+              onRetry={() => void saveLinkedRepositories()}
+            />
+          </div>
+        ) : null}
+
+        <footer className="flex items-center justify-between gap-2 border-t border-border bg-card px-5 py-3.5">
+          <span className="text-xs text-muted-foreground">
+            {linkedRepositoryUrls.length} linked{dirty ? " · unsaved changes" : ""}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={onClose} disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={() => void saveLinkedRepositories()} disabled={saving}>
-              {saving ? "Saving..." : "Save linked repositories"}
+            <Button onClick={() => void saveLinkedRepositories()} disabled={saving || !dirty}>
+              {saving ? "Saving..." : "Save"}
             </Button>
           </div>
         </footer>
