@@ -44,6 +44,7 @@ const workspaceFiles = [
   "packages/runbook-threads/package.json",
   "packages/runbook-tools/package.json",
   "packages/runbook-ts/package.json",
+  "packages/t3team-pack-api/package.json",
   "packages/t3team-packs/package.json",
   "packages/t3team-sdk/package.json",
   "packages/t3team-skill-packs/package.json",
