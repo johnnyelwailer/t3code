@@ -159,11 +159,11 @@ describe("static capability scan — source:<name>", () => {
       { declared: new Set(declared) },
     );
   const body = [
-    `import { getSignalSource, watermark, WorkItemUpdates as Updates } from "@t3team/sdk";`,
+    `import { getSignalSource, watermark, WorkItemUpdates } from "@t3team/sdk";`,
     `export const meta = { name: "x.source", description: "d" } as const;`,
     `export default async function run() {`,
     `  const cursor = watermark("work-item.updates");`,
-    `  const source = await getSignalSource(Updates, { projectId: "p", issueKey: "K" });`,
+    `  const source = await getSignalSource(WorkItemUpdates, { projectId: "p", issueKey: "K" });`,
     `  return cursor.current();`,
     `}`,
   ];
