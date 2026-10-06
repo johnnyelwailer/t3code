@@ -1,4 +1,8 @@
-import { CloudSessionFailedError, ProjectId } from "@t3tools/contracts";
+import {
+  CloudSessionFailedError,
+  ORCHESTRATION_PROTOCOL_VERSION,
+  ProjectId,
+} from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
@@ -524,6 +528,8 @@ describe("CloudSessionService.create over the Nexi broker", () => {
         '"machine_devcontainer":".devcontainer/devcontainer.json"',
         '"workspace":"machine-acme.api"',
         '"machine_health_check":"pnpm test --run smoke"',
+        // The VM installs the server build for this client's protocol, never the rolling latest.
+        `"server_ref":"protocol-${ORCHESTRATION_PROTOCOL_VERSION}"`,
       ]) {
         assert.include(dispatch ?? "", input);
       }

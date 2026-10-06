@@ -1,4 +1,4 @@
-import { CloudSessionFailedError } from "@t3tools/contracts";
+import { CloudSessionFailedError, ORCHESTRATION_PROTOCOL_VERSION } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 
@@ -12,6 +12,14 @@ import {
 } from "./t3team-githubActionsSessionClient.ts";
 import { pendingCloudSession, projectCloudSession } from "./t3team-CloudSessionProjection.ts";
 import type { CloudSessionMachine } from "./t3team-CloudSessionMachine.ts";
+
+/**
+ * Which published session-server build the session installs (`server_ref`): the one tagged for this
+ * client's orchestration protocol, so the server on the VM always speaks what the client that
+ * dispatched it speaks. A rolling tag per protocol, not one shared "latest": a desktop on an older
+ * protocol keeps getting a server it can talk to after a newer one is published.
+ */
+export const sessionServerRef = `protocol-${ORCHESTRATION_PROTOCOL_VERSION}`;
 
 type RunExecutor = (
   invocation: GhInvocation,
@@ -48,6 +56,7 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
       dispatchSessionInvocation(input.repoRef, {
         hold_minutes: String(Math.max(1, Math.round(input.durationSeconds / 60))),
         session_tag: input.sessionTag,
+        server_ref: sessionServerRef,
         ...(input.brokerGrant ? { broker_grant: input.brokerGrant } : {}),
         ...(input.machine
           ? {
