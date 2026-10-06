@@ -30,6 +30,7 @@ export function WelcomeCloudSessions() {
       <CloudSessionProvisionPanel
         sessions={cloud.sessions}
         loading={cloud.loading}
+        loadError={cloud.loadError}
         createPending={cloud.createPending}
         durationSeconds={cloud.durationSeconds}
         onDurationChange={cloud.onDurationChange}

@@ -71,6 +71,22 @@ function expandHistory(node: HTMLDivElement) {
 }
 
 describe("CloudSessionProvisionPanel", () => {
+  it("says why the list could not load instead of waiting on skeletons", () => {
+    const node = render(
+      <CloudSessionProvisionPanel
+        sessions={[]}
+        loading
+        loadError="The authenticated token is missing required scope: relay:write."
+        onCreate={() => {}}
+        onSessionAction={() => {}}
+      />,
+    );
+    expect(node.textContent).toContain(
+      "Could not load your cloud sessions: The authenticated token is missing required scope: relay:write.",
+    );
+    expect(node.textContent).not.toContain("No active cloud sessions.");
+  });
+
   it("surfaces active sessions with row actions and parks finished ones in history", () => {
     const onCreate = vi.fn();
     const node = render(

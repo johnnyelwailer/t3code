@@ -41,6 +41,7 @@ export {
 export function CloudSessionProvisionPanel({
   sessions,
   loading = false,
+  loadError = null,
   createPending = false,
   durationSeconds = DEFAULT_CLOUD_SESSION_DURATION_SECONDS,
   onDurationChange,
@@ -58,6 +59,8 @@ export function CloudSessionProvisionPanel({
 }: {
   readonly sessions: ReadonlyArray<CloudSession>;
   readonly loading?: boolean;
+  /** Why the session list could not be read; replaces the rows when set. */
+  readonly loadError?: string | null;
   readonly createPending?: boolean;
   readonly durationSeconds?: number;
   readonly onDurationChange?: (seconds: number) => void;
@@ -120,7 +123,11 @@ export function CloudSessionProvisionPanel({
       {banner}
 
       <div className="space-y-1">
-        {loading ? (
+        {loadError !== null ? (
+          <p className="px-3 py-6 text-center text-destructive text-xs sm:px-4">
+            Could not load your cloud sessions: {loadError}
+          </p>
+        ) : loading ? (
           <>
             <CloudSessionRowsSkeleton />
             <CloudSessionRowsSkeleton />
