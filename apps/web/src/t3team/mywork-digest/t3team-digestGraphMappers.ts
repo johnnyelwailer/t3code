@@ -7,6 +7,7 @@
  * the view layer memoizes over the returned graph.
  */
 
+import { withSharedFaces } from "./t3team-digestPeopleFaces";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import type {
@@ -181,7 +182,7 @@ export function payloadToDigestGraph(input: {
   const reviewRequests = digestReviewRequests(...joins, projectIdAt);
   const dependencies = digestDependencies(...joins);
   const yesterday = digestYesterday(...joins, projectIdAt);
-  return {
+  return withSharedFaces({
     scope: input.payload.scope,
     projects,
     ...(jiraSyncedAt !== undefined ? { jiraSyncedAt } : {}),
@@ -198,5 +199,5 @@ export function payloadToDigestGraph(input: {
     ...(input.payload.arrangement !== undefined ? { arrangement: input.payload.arrangement } : {}),
     transitions,
     blockers,
-  };
+  });
 }
