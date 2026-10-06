@@ -44,6 +44,7 @@ const workspaceFiles = [
   "packages/runbook-threads/package.json",
   "packages/runbook-tools/package.json",
   "packages/runbook-ts/package.json",
+  "packages/t3team-pack-api/package.json",
   "packages/t3team-packs/package.json",
   "packages/t3team-sdk/package.json",
   "packages/t3team-skill-packs/package.json",
@@ -228,6 +229,13 @@ try {
 
   NodeFS.rmSync(NodePath.resolve(tempRoot, "pnpm-lock.yaml"), { force: true });
 
+  // The lockfile was just deleted, so transitive deps resolve fresh and a patch pinned to an exact
+  // transitive version (expo-modules-core) can miss its target. That is no smoke-test signal, so
+  // the throwaway workspace tolerates unused patches.
+  NodeFS.appendFileSync(
+    NodePath.resolve(tempRoot, "pnpm-workspace.yaml"),
+    "\nallowUnusedPatches: true\n",
+  );
   NodeChildProcess.execFileSync("vp", ["install", "--lockfile-only", "--ignore-scripts"], {
     cwd: tempRoot,
     stdio: "inherit",
