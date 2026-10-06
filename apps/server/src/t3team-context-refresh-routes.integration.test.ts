@@ -32,11 +32,13 @@ const makeRouteHttpTestLayer = (prefix: string) =>
       t3teamProjectWorkspaceRefreshProjectContextRouteLayer,
       t3teamProjectWorkspaceRefreshWorkItemContextRouteLayer,
       t3teamProjectWorkspaceRefreshWorkItemSliceContextRouteLayer,
-      makeContextRefreshIntegrationTestLayer(prefix),
-      makeContextRefreshScopeTestLayer(),
     ),
     { disableListenLog: true, disableLogger: true },
-  ).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+  ).pipe(
+    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(makeContextRefreshIntegrationTestLayer(prefix)),
+    Layer.provideMerge(makeContextRefreshScopeTestLayer()),
+  );
 
 const runRouteHttpTest = <A, E, R>(prefix: string, effect: Effect.Effect<A, E, R>) =>
   Effect.runPromise(

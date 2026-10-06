@@ -62,10 +62,16 @@ const OUTPUT_TRUNCATED_MARKER = "\n\n[truncated]";
 /** Keep stderr diagnostics in GitCommandError bounded (4KB). */
 const GIT_COMMAND_STDERR_CAP = 4_096;
 
+// A classified reason already names the cause, so raw stderr would only add
+// unredacted detail (worktree paths, repo layout) for no diagnostic gain.
+// Only an unclassified failure keeps the (argument-redacted) stderr, since
+// the reason tag is the sole diagnostic otherwise.
 const gitCommandStderr = (
   stderr: string,
   args: readonly string[],
+  reason: GitCommandFailureReason | null,
 ): { readonly stderr: string } | {} => {
+  if (reason !== null) return {};
   const trimmed = redactCommandArgs(stderr, args).trim();
   return trimmed.length > 0 ? { stderr: truncate(trimmed, GIT_COMMAND_STDERR_CAP) } : {};
 };
@@ -1021,7 +1027,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
             exitCode,
             stdoutLength: stdout.text.length,
             stderrLength: stderr.text.length,
-            ...(trimmedStderr.length > 0
+            ...(reason === null && trimmedStderr.length > 0
               ? {
                   stderr: truncate(
                     redactCommandArgs(trimmedStderr, commandInput.args ?? []),
@@ -1118,7 +1124,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
             ...(result.exitCode === null ? {} : { exitCode: result.exitCode }),
             stdoutLength: result.stdout.length,
             stderrLength: result.stderr.length,
-            ...gitCommandStderr(result.stderr, args),
+            ...gitCommandStderr(result.stderr, args, reason),
           }),
         );
       }),

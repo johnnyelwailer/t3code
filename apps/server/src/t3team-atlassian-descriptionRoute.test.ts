@@ -51,8 +51,8 @@ const serverSourcePath = (file: string) =>
  */
 function mergedRouteLayers(file: string): ReadonlyArray<string> {
   const source = NodeFS.readFileSync(serverSourcePath(file), "utf8");
-  const start = source.indexOf("const makeRoutesLayer =");
-  if (start === -1) throw new Error(`${file}: makeRoutesLayer declaration not found`);
+  const start = source.indexOf("const layerMakeRoutes =");
+  if (start === -1) throw new Error(`${file}: layerMakeRoutes declaration not found`);
   const end = source.indexOf("\n).pipe(", start);
   if (end === -1) throw new Error(`${file}: end of makeRoutesLayer not found`);
   const registry = source.slice(start, end);

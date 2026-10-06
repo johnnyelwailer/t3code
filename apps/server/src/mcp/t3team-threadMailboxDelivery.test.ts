@@ -2,6 +2,7 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import {
   EnvironmentId,
   type OrchestrationV2ThreadProjection,
+  type OrchestrationV2ThreadShell,
   ProjectId,
   ProviderInstanceId,
   ThreadId,
@@ -63,7 +64,12 @@ const projection = (threadId: ThreadId) =>
       createdAt: now,
       updatedAt: now,
     },
-    runs: [],
+    // The sender must own a live run for `assertLiveCaller` (OrchestratorMcpService.ts) to let
+    // it reach another thread; the target's own run state is irrelevant to a mailbox delivery.
+    runs:
+      threadId === senderId
+        ? [{ ordinal: 1, status: "running", providerInstanceId: instanceId }]
+        : [],
     runtimeRequests: [],
     messages: [],
     contextTransfers: [],
@@ -78,6 +84,8 @@ const makeLayer = (mailbox: Layer.Layer<never>) =>
     Layer.provide(
       Layer.mergeAll(
         Layer.mock(ThreadManagementService.ThreadManagementService)({
+          getThreadShell: (threadId) =>
+            Effect.succeed(projection(threadId).thread as unknown as OrchestrationV2ThreadShell),
           getThreadRecords: (threadId) => Effect.succeed(projection(threadId)),
           getProjectThreadRecords: (input) => Effect.succeed(projection(input.threadId)),
           sendToThread: () => Effect.die("mailbox mode must not start, queue or steer a run"),

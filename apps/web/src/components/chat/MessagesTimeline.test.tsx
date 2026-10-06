@@ -19,6 +19,7 @@ import {
 } from "react";
 // @effect-diagnostics nodeBuiltinImport:off - Regression coverage asserts the narrow-panel clamp rules in t3team-index-aciLead.css.
 import * as NodeFS from "node:fs";
+import * as NodeURL from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createRoot } from "react-dom/client";
 import { create, type ReactTestRenderer } from "react-test-renderer";
@@ -3114,7 +3115,9 @@ describe("MessagesTimeline t3team working row (GHE #201/#208/#236)", () => {
 
   it("keeps the lead slot's clamp + per-piece ellipsis in .t3team-aci-lead (GHE #208 follow-up)", () => {
     const css = NodeFS.readFileSync(
-      new URL("../../t3team/t3team-index-aciLead.css", import.meta.url),
+      NodeURL.fileURLToPath(
+        new NodeURL.URL("../../t3team/t3team-index-aciLead.css", import.meta.url),
+      ),
       "utf8",
     );
     const rule = css.match(/\.t3team-aci-lead\s*\{[^}]*\}/)?.[0] ?? "";

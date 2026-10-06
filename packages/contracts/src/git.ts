@@ -358,9 +358,12 @@ export type VcsPullResult = typeof VcsPullResult.Type;
 // RPC / domain errors
 
 // Well-known git failures, recognized from stderr at the driver and carried as
-// a closed set of diagnostic tags. Git's stderr itself stays off the error: it
-// echoes argv and remote URLs, which can hold credentials. The tag names the
-// cause for logs and callers; it does not select a message.
+// a closed set of diagnostic tags. The tag names the cause for logs and
+// callers; it does not select a message. When a tag is found, raw stderr
+// stays off the error (it echoes argv and remote URLs, which can hold
+// credentials, and the tag already explains the cause). When nothing
+// matches, the driver falls back to attaching (argument-redacted) stderr
+// so an unclassified failure is still diagnosable — see `stderr` below.
 export const GitCommandFailureReason = Schema.Literals([
   "authentication_failed",
   "branch_already_exists",
