@@ -483,7 +483,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       const dispatch = calls.find((call) => call.args.join(" ").includes("/dispatches"));
       assert.include(dispatch?.stdin ?? "", '"broker_grant":"grant-xyz"');
       // A plain session persists under the creator's own workspace, never the shared default.
-      assert.include(dispatch?.stdin ?? "", '"workspace":"u-pj"');
+      assert.include(dispatch?.stdin ?? "", '"workspace":"u-pj_"');
     }),
   );
 
@@ -526,7 +526,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
         `"machine_commit":"${"a".repeat(40)}"`,
         '"machine_devcontainer":".devcontainer/devcontainer.json"',
         // The creator's own workspace, so no other user's session restores this one's snapshot.
-        `"workspace":"m-pj.acme.api"`,
+        `"workspace":"m-pj.acme.api_"`,
         '"machine_health_check":"pnpm test --run smoke"',
         // The VM installs the server build for this client's protocol, never the rolling latest.
         `"server_ref":"protocol-${ORCHESTRATION_PROTOCOL_VERSION}"`,

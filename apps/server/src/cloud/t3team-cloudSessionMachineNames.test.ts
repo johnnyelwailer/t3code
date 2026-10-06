@@ -50,9 +50,19 @@ describe("machineRepositoryFromRemote", () => {
 
 describe("sessionWorkspaceName", () => {
   it("is the creator's own: two users on one project never share a snapshot", () => {
-    expect(sessionWorkspaceName("pj", API)).toBe("m-pj.acme.api");
-    expect(sessionWorkspaceName("other", API)).toBe("m-other.acme.api");
-    expect(sessionWorkspaceName("pj", null)).toBe("u-pj");
+    expect(sessionWorkspaceName("pj", API)).toBe("m-pj.acme.api_");
+    expect(sessionWorkspaceName("other", API)).toBe("m-other.acme.api_");
+    expect(sessionWorkspaceName("pj", null)).toBe("u-pj_");
+  });
+
+  it("is never a prefix of another user's (restore matches keys by prefix)", () => {
+    const keyPrefix = (workspace: string) => `nexi-session-userdata-${workspace}-`;
+    const pj = sessionWorkspaceName("pj", null);
+    const pjX = sessionWorkspaceName("pj-x", null);
+    expect(`${keyPrefix(pjX)}123`.startsWith(keyPrefix(pj))).toBe(false);
+    const repo = sessionWorkspaceName("pj", { owner: "acme", name: "api" });
+    const repoLonger = sessionWorkspaceName("pj", { owner: "acme", name: "api-v2" });
+    expect(`${keyPrefix(repoLonger)}123`.startsWith(keyPrefix(repo))).toBe(false);
   });
 
   it("stays within the workflow's workspace rule, and long names stay distinct", () => {

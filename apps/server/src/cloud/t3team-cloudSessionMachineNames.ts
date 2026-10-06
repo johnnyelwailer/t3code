@@ -70,7 +70,8 @@ export function machineGitAuthor(
 
 /** At most 64 characters of `[A-Za-z0-9._-]`, as the session workflow's `workspace` input requires. */
 const WORKSPACE_LIMIT = 64;
-const workspaceSegment = (value: string) => value.replace(/[^A-Za-z0-9._-]/g, "-");
+/** `_` is reserved as the terminator, so a segment never contains it. */
+const workspaceSegment = (value: string) => value.replace(/[^A-Za-z0-9.-]/g, "-");
 
 /** FNV-1a, as 8 hex digits: keeps two long names that share a prefix apart once truncated. */
 const shortHash = (value: string) => {
@@ -88,6 +89,10 @@ const shortHash = (value: string) => {
  * the fleet's cache is shared by everyone who dispatches sessions there. `u-<login>` for a plain
  * session, `m-<login>.<owner>.<repo>` for one in a project machine; at most 64 characters of
  * `[A-Za-z0-9._-]`, the workflow's rule.
+ *
+ * Every name ends in `_`, which appears nowhere else in it: the workflow restores by key PREFIX
+ * (`…-<workspace>-`), and without a terminator `u-pj` would be a prefix of `u-pj-x` and restore
+ * that other user's snapshot.
  */
 export function sessionWorkspaceName(
   login: string,
@@ -97,7 +102,9 @@ export function sessionWorkspaceName(
     repository === null
       ? `u-${workspaceSegment(login)}`
       : `m-${workspaceSegment(login)}.${workspaceSegment(repository.owner)}.${workspaceSegment(repository.name)}`;
-  return name.length <= WORKSPACE_LIMIT
-    ? name
-    : `${name.slice(0, WORKSPACE_LIMIT - 9)}-${shortHash(name)}`;
+  const body =
+    name.length <= WORKSPACE_LIMIT - 1
+      ? name
+      : `${name.slice(0, WORKSPACE_LIMIT - 10)}-${shortHash(name)}`;
+  return `${body}_`;
 }
