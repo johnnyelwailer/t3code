@@ -88,6 +88,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
   const myWorkTools = yield* makeMyWorkToolHandlers({
     projects: yield* ProjectStoreV2,
     threads,
+    loadThreadProject,
   });
 
   const bindSession = makeBindSession({

@@ -94,6 +94,7 @@ export function dispatchT3TeamToolCall(input: {
       tool,
       scopeLabel: input.scopeLabel,
       toolArgs,
+      ...(input.threadId ? { threadId: input.threadId } : {}),
       ...(input.myWorkTools ? { myWorkTools: input.myWorkTools } : {}),
     });
   }

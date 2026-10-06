@@ -27,15 +27,21 @@ type MyWorkToolArgs = typeof MyWorkToolArgs.Type;
 const decodeArgs = Schema.decodeUnknownExit(MyWorkToolArgs);
 
 /** Host-side My Work tool handlers; the message of a failure reaches the agent verbatim. */
+/** `threadId` is the caller: with no `projectId`, the tools act on that thread's project. */
+type CallerArgs = { readonly threadId?: string | undefined };
+
 export type T3TeamMyWorkToolHandlers = {
-  readonly readDigest: (args: Pick<MyWorkToolArgs, "projectId">) => Effect.Effect<unknown, string>;
-  readonly arrange: (args: MyWorkToolArgs) => Effect.Effect<unknown, string>;
+  readonly readDigest: (
+    args: Pick<MyWorkToolArgs, "projectId"> & CallerArgs,
+  ) => Effect.Effect<unknown, string>;
+  readonly arrange: (args: MyWorkToolArgs & CallerArgs) => Effect.Effect<unknown, string>;
 };
 
 export function callT3TeamMyWorkTool(input: {
   readonly tool: string;
   readonly scopeLabel: string;
   readonly toolArgs: unknown;
+  readonly threadId?: string | undefined;
   readonly myWorkTools?: T3TeamMyWorkToolHandlers;
 }): Effect.Effect<T3TeamToolCallResult, never> {
   const { tool, myWorkTools } = input;
@@ -46,9 +52,13 @@ export function callT3TeamMyWorkTool(input: {
   if (Exit.isFailure(argsExit)) {
     return Effect.succeed(errorResult(`Invalid arguments for ${tool}: ${String(argsExit.cause)}`));
   }
-  const args = argsExit.value;
+  const args = { ...argsExit.value, threadId: input.threadId };
   if (tool === T3TEAM_MY_WORK_DIGEST_READ_TOOL_ID) {
-    return foldResult(myWorkTools.readDigest({ projectId: args.projectId }), okResult, errorResult);
+    return foldResult(
+      myWorkTools.readDigest({ projectId: args.projectId, threadId: args.threadId }),
+      okResult,
+      errorResult,
+    );
   }
   const wantsReset = args.reset === true;
   if (wantsReset === (args.plan !== undefined)) {

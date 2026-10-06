@@ -7,8 +7,9 @@ import type { T3TeamToolCatalogEntry } from "./t3teamToolCatalogCore.ts";
  */
 
 const MY_WORK_DIGEST_READ_DESCRIPTION =
-  "Read the viewer's My Work digest for one project (projectId) or all Jira-bound projects " +
-  "(omit it) — the data you arrange with t3team.mywork.arrange. Read-only. Answer: { scope, " +
+  "Read the viewer's My Work digest for one project (projectId; omitted = the project of the " +
+  "thread calling it, or all Jira-bound projects outside one) — the data you arrange with " +
+  "t3team.mywork.arrange. Read-only. Answer: { scope, " +
   "projects: [{ project, tickets, claims, decisions, changeRequests, transitions, sprint?, " +
   "blockers?, burndown?, dependencies? }], viewer, arrangement? }. tickets are the viewer's " +
   "Jira tickets (use their `id` in arrangement items, not the key). claims are threads (agents) " +
@@ -52,7 +53,8 @@ export const IMPLEMENTED_T3TEAM_MY_WORK_TOOL_CATALOG = {
       properties: {
         projectId: {
           type: "string",
-          description: "App project id. Omit to read the digest across all Jira-bound projects.",
+          description:
+            "App project id. Omit for the calling thread's project (all Jira-bound projects when the thread has none).",
         },
       },
     },
@@ -73,7 +75,8 @@ export const IMPLEMENTED_T3TEAM_MY_WORK_TOOL_CATALOG = {
       properties: {
         projectId: {
           type: "string",
-          description: "App project id. Omit to arrange the digest across all projects.",
+          description:
+            "App project id. Omit for the calling thread's project (the all-projects digest when the thread has none).",
         },
         plan: {
           type: "object",

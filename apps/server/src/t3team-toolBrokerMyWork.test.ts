@@ -53,40 +53,55 @@ const asText = (result: { readonly content: ReadonlyArray<{ readonly text: strin
 
 it.layer(SqlitePersistenceMemory)("t3team.mywork.* tools", (it) => {
   /** A real binding over the real handlers; only the digest load and the project list are stubbed. */
-  const makeBinding = Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    const loaded: T3TeamMyWorkDigestInput[] = [];
-    const handlers = makeMyWorkHandlers({
-      projects: {
-        listShells: (options) =>
-          Effect.succeed(
-            options?.projectIds === undefined
-              ? shells
-              : shells.filter((candidate) => options.projectIds?.includes(candidate.id)),
+  const makeBindingWith = (threadProjectId?: (threadId: string) => Effect.Effect<string, string>) =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const loaded: T3TeamMyWorkDigestInput[] = [];
+      const handlers = makeMyWorkHandlers({
+        projects: {
+          listShells: (options) =>
+            Effect.succeed(
+              options?.projectIds === undefined
+                ? shells
+                : shells.filter((candidate) => options.projectIds?.includes(candidate.id)),
+            ),
+        },
+        ...(threadProjectId ? { threadProjectId } : {}),
+        loadDigest: (digest) => {
+          loaded.push(digest);
+          return Effect.succeed({ scope: digest.scope, projects: [], viewer: { name: "Pat" } });
+        },
+        runStore: (effect) =>
+          effect.pipe(
+            Effect.provideService(SqlClient.SqlClient, sql),
+            Effect.mapError((error) => (error instanceof Error ? error.message : String(error))),
           ),
-      },
-      loadDigest: (digest) => {
-        loaded.push(digest);
-        return Effect.succeed({ scope: digest.scope, projects: [], viewer: { name: "Pat" } });
-      },
-      runStore: (effect) =>
-        effect.pipe(
-          Effect.provideService(SqlClient.SqlClient, sql),
-          Effect.mapError((error) => (error instanceof Error ? error.message : String(error))),
-        ),
+      });
+      const binding = createT3TeamThreadToolBinding({
+        threadId,
+        toolContext: createThreadToolContext({ tools: [] }),
+        availableToolIds: [DIGEST, ARRANGE],
+        allowedToolGroups: ["integration.read", "view.state"],
+        readView: () => Effect.succeed({}),
+        myWorkTools: handlers,
+      });
+      const call = (tool: string, args: unknown) =>
+        binding.callTool({ server: "t3team", tool, arguments: args });
+      return { call, loaded };
     });
-    const binding = createT3TeamThreadToolBinding({
-      threadId,
-      toolContext: createThreadToolContext({ tools: [] }),
-      availableToolIds: [DIGEST, ARRANGE],
-      allowedToolGroups: ["integration.read", "view.state"],
-      readView: () => Effect.succeed({}),
-      myWorkTools: handlers,
-    });
-    const call = (tool: string, args: unknown) =>
-      binding.callTool({ server: "t3team", tool, arguments: args });
-    return { call, loaded };
-  });
+  const makeBinding = makeBindingWith();
+
+  it.effect("with no projectId, acts on the calling thread's project", () =>
+    Effect.gen(function* () {
+      const { call, loaded } = yield* makeBindingWith(() => Effect.succeed("app-2"));
+      yield* call(DIGEST, {});
+      assert.equal(loaded[0]?.scope, "project");
+      assert.deepEqual(
+        loaded[0]?.projects.map((p) => p.appProjectId),
+        ["app-2"],
+      );
+    }),
+  );
 
   it.effect("reads the digest for one project, or for every bound project", () =>
     Effect.gen(function* () {

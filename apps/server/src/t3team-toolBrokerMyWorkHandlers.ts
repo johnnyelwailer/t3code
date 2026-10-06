@@ -8,6 +8,7 @@ import { ProjectId } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import type * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import type { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
@@ -41,12 +42,24 @@ export const makeMyWorkHandlers = (input: {
   readonly loadDigest: (
     digest: T3TeamMyWorkDigestInput,
   ) => Effect.Effect<T3TeamMyWorkDigestPayload, string>;
+  /** The calling thread's app project; how a call without `projectId` finds its project. */
+  readonly threadProjectId?: (threadId: string) => Effect.Effect<string, string>;
   /** Run an arrangement-store effect; its failures reach the agent as text. */
   readonly runStore: <A, E>(
     effect: Effect.Effect<A, E, SqlClient.SqlClient>,
   ) => Effect.Effect<A, string>;
 }): T3TeamMyWorkToolHandlers => {
-  const resolveDigestInput = (projectId: string | undefined) =>
+  // No `projectId`: the caller's own project (a recipe launched on a project dashboard arranges
+  // that project), else every bound project. A caller outside any project gets the latter.
+  const callerProjectId = (projectId: string | undefined, threadId: string | undefined) =>
+    projectId !== undefined || threadId === undefined || input.threadProjectId === undefined
+      ? Effect.succeed(projectId)
+      : input.threadProjectId(threadId).pipe(Effect.option, Effect.map(Option.getOrUndefined));
+  const resolveDigestInput = (requested: string | undefined, threadId: string | undefined) =>
+    callerProjectId(requested, threadId).pipe(
+      Effect.flatMap((projectId) => digestInputFor(projectId)),
+    );
+  const digestInputFor = (projectId: string | undefined) =>
     input.projects
       .listShells(projectId === undefined ? undefined : { projectIds: [ProjectId.make(projectId)] })
       .pipe(
@@ -62,15 +75,15 @@ export const makeMyWorkHandlers = (input: {
       );
 
   return {
-    readDigest: ({ projectId }) =>
+    readDigest: ({ projectId, threadId }) =>
       Effect.gen(function* () {
-        const digest = yield* resolveDigestInput(projectId);
+        const digest = yield* resolveDigestInput(projectId, threadId);
         const payload = yield* input.loadDigest(digest);
         return yield* input.runStore(attachDigestArrangement(digest, payload));
       }),
-    arrange: ({ projectId, plan, reset }) =>
+    arrange: ({ projectId, plan, reset, threadId }) =>
       Effect.gen(function* () {
-        const digest = yield* resolveDigestInput(projectId);
+        const digest = yield* resolveDigestInput(projectId, threadId);
         const key = digestArrangementKey(digest);
         if (key === undefined) {
           return yield* Effect.fail("Cannot resolve a viewer and scope for this arrangement.");
