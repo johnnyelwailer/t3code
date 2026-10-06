@@ -92,19 +92,16 @@ const shortHash = (value: string) => {
  *
  * Every name ends in `_`, which appears nowhere else in it: the workflow restores by key PREFIX
  * (`…-<workspace>-`), and without a terminator `u-pj` would be a prefix of `u-pj-x` and restore
- * that other user's snapshot.
+ * that other user's snapshot. A name that had to be rewritten (an unsafe character, or too long)
+ * carries a hash of the raw identity, so `acme/my_repo` and `acme/my-repo` stay apart.
  */
 export function sessionWorkspaceName(
   login: string,
   repository: Pick<MachineRepository, "owner" | "name"> | null,
 ): string {
-  const name =
-    repository === null
-      ? `u-${workspaceSegment(login)}`
-      : `m-${workspaceSegment(login)}.${workspaceSegment(repository.owner)}.${workspaceSegment(repository.name)}`;
-  const body =
-    name.length <= WORKSPACE_LIMIT - 1
-      ? name
-      : `${name.slice(0, WORKSPACE_LIMIT - 10)}-${shortHash(name)}`;
-  return `${body}_`;
+  const parts = repository === null ? [login] : [login, repository.owner, repository.name];
+  const raw = `${repository === null ? "u" : "m"}-${parts.join(".")}`;
+  const name = `${repository === null ? "u" : "m"}-${parts.map(workspaceSegment).join(".")}`;
+  if (name === raw && name.length <= WORKSPACE_LIMIT - 1) return `${name}_`;
+  return `${name.slice(0, WORKSPACE_LIMIT - 10)}-${shortHash(JSON.stringify(parts))}_`;
 }

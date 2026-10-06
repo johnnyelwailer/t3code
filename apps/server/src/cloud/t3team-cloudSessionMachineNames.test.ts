@@ -74,4 +74,19 @@ describe("sessionWorkspaceName", () => {
     }
     expect(a).not.toBe(b);
   });
+
+  it("keeps repos apart that differ only in a rewritten character", () => {
+    const underscore = sessionWorkspaceName("pj", { owner: "acme", name: "my_repo" });
+    const dash = sessionWorkspaceName("pj", { owner: "acme", name: "my-repo" });
+    expect(dash).toBe("m-pj.acme.my-repo_");
+    expect(underscore).toMatch(/^m-pj\.acme\.my-repo-[0-9a-f]{8}_$/);
+  });
+
+  it("hashes only past the limit: 63 characters stay readable, 64 do not", () => {
+    const fits = sessionWorkspaceName("pj", { owner: "acme", name: "r".repeat(63 - 10) });
+    const over = sessionWorkspaceName("pj", { owner: "acme", name: "r".repeat(64 - 10) });
+    expect(fits).toBe(`m-pj.acme.${"r".repeat(53)}_`);
+    expect(over).toMatch(/^m-pj\.acme\.r+-[0-9a-f]{8}_$/);
+    expect(over.length).toBeLessThanOrEqual(64);
+  });
 });
