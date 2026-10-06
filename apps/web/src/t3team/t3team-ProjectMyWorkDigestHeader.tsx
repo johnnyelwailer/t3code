@@ -1,3 +1,4 @@
+import { DigestSprintAxis } from "~/t3team/t3team-ProjectMyWorkDigestSprintAxis";
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import {
   DigestBurndownChart,
@@ -80,9 +81,6 @@ export function ProjectMyWorkDigestHeader({
                 </span>
               ))
             : null}
-          <span>
-            {[graph.viewer.name, graph.viewer.role].filter((part) => part?.trim()).join(" · ")}
-          </span>
           <DigestAutoStatus
             updatedAtMs={updatedAtMs}
             jiraSyncedAt={graph.jiraSyncedAt}
@@ -111,19 +109,11 @@ export function ProjectMyWorkDigestHeader({
           </h1>
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground sm:gap-x-7">
-          {datesKnown ? (
-            <span>
-              {formatDay(sprint.startDate)} – {formatDay(sprint.endDate)}
-            </span>
-          ) : null}
           {datesKnown && ended === null ? (
             <span>
               <b className="font-semibold text-foreground">{daysLeft}</b> days left
             </span>
           ) : null}
-          <span>
-            {[graph.viewer.name, graph.viewer.role].filter((part) => part?.trim()).join(" · ")}
-          </span>
           <DigestAutoStatus
             updatedAtMs={updatedAtMs}
             jiraSyncedAt={graph.jiraSyncedAt}
@@ -138,30 +128,8 @@ export function ProjectMyWorkDigestHeader({
           ) : burndownVariant === "sparkline" ? (
             <DigestBurndownSparkline graph={graph} nowMs={nowMs} />
           ) : (
-            <div className="relative h-1 rounded-full bg-border">
-              {/* The fill clips to the track; the dot sits outside the clip so it is not
-                  half-cut at 0 % / 100 %. */}
-              <div className="absolute inset-0 overflow-hidden rounded-full">
-                <div
-                  className={`absolute inset-y-0 left-0 rounded-full ${ended ? "bg-foreground/40" : "bg-foreground/70"}`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <div
-                className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background bg-foreground"
-                style={{ left: `${pct}%` }}
-              />
-            </div>
+            <DigestSprintAxis graph={graph} nowMs={nowMs} />
           )}
-          {datesKnown ? (
-            <div className="flex justify-between text-3xs text-muted-foreground/80">
-              <span>{formatDay(sprint.startDate)}</span>
-              <span>
-                {ended ?? `${pct} % elapsed`} · today {formatDay(new Date(nowMs).toISOString())}
-              </span>
-              <span>{formatDay(sprint.endDate)}</span>
-            </div>
-          ) : null}
         </div>
       ) : null}
       {sprint.goal.length > 0 ? (
