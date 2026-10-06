@@ -130,7 +130,6 @@ export function DigestOtherChildren({
                 ...(child.assigneeAvatarUrl ? { avatarUrl: child.assigneeAvatarUrl } : {}),
               }}
               size="sm"
-              isCurrentUser={child.assignee === viewerName}
             />
           ) : null}
         </a>
