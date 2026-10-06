@@ -164,10 +164,6 @@ it.effect(
         { name: "t3_task_ops", arguments: { op: "environments" } },
         { name: "t3_orchestration_stop", arguments: { runId: "run-other" } },
         { name: "t3_ask_user", arguments: { question: "Approve?" } },
-        // The deprecated aliases forward to the same handlers, so they are refused the same way.
-        { name: "t3team_children", arguments: { op: "environments" } },
-        { name: "t3team_orchestration_stop", arguments: { runId: "run-other" } },
-        { name: "t3team_ask_user", arguments: { question: "Approve?" } },
         { name: "t3team_thread_skill_metadata", arguments: {} },
       ];
       for (const refusal of refusals) {

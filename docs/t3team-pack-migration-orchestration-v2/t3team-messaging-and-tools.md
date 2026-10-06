@@ -74,37 +74,39 @@ keeps the same ops-bag shape and the ops that survived 3.3 (`watch`, `unwatch`, 
 registered name moved; broker ids (`t3team.thread.children`, …) and internal code names are not
 renamed.
 
-| Old name (deprecated alias)   | New name                  |
-| ----------------------------- | ------------------------- |
-| `t3team_children`             | `t3_task_ops`             |
-| `t3team_orchestration_run`    | `t3_orchestration_run`    |
-| `t3team_orchestration_status` | `t3_orchestration_status` |
-| `t3team_orchestration_resume` | `t3_orchestration_resume` |
-| `t3team_orchestration_pause`  | `t3_orchestration_pause`  |
-| `t3team_orchestration_stop`   | `t3_orchestration_stop`   |
-| `t3team_provider_usage`       | `t3_provider_usage`       |
-| `t3team_search_thread`        | `t3_search_thread`        |
-| `t3team_search_source`        | `t3_search_source`        |
-| `t3team_read_message`         | `t3_read_message`         |
-| `t3team_ask_user`             | `t3_ask_user`             |
-| `t3team_show_widget`          | `t3_show_widget`          |
-| `t3team_recipe_list`          | `t3_recipe_list`          |
-| `t3team_recipe_validate`      | `t3_recipe_validate`      |
+| Old name (dispatch alias only) | New name                  |
+| ------------------------------ | ------------------------- |
+| `t3team_children`              | `t3_task_ops`             |
+| `t3team_orchestration_run`     | `t3_orchestration_run`    |
+| `t3team_orchestration_status`  | `t3_orchestration_status` |
+| `t3team_orchestration_resume`  | `t3_orchestration_resume` |
+| `t3team_orchestration_pause`   | `t3_orchestration_pause`  |
+| `t3team_orchestration_stop`    | `t3_orchestration_stop`   |
+| `t3team_provider_usage`        | `t3_provider_usage`       |
+| `t3team_search_thread`         | `t3_search_thread`        |
+| `t3team_search_source`         | `t3_search_source`        |
+| `t3team_read_message`          | `t3_read_message`         |
+| `t3team_ask_user`              | `t3_ask_user`             |
+| `t3team_show_widget`           | `t3_show_widget`          |
+| `t3team_recipe_list`           | `t3_recipe_list`          |
+| `t3team_recipe_validate`       | `t3_recipe_validate`      |
 
 Already on the target surface and unchanged: `delegate_task`, `t3_thread_send`,
 `t3_thread_update`, `orchestrator_capabilities`, `link_pull_request`, `unlink_pull_request`,
 `list_thread_pull_requests`, `preview_*`, `device_*`. `t3team_thread_skill_metadata` (a driver-only
 read path, not an agent tool) keeps its name.
 
-**Alias window.** Every old name above is still registered as a deprecated alias that forwards to
-the replacement's handler (`apps/server/src/mcp/toolkits/t3team/t3team-mcpToolAliases.ts`). Its
-description reads "Deprecated — use `t3_<new>`; this alias is kept for one release cycle and will
-be removed", and it carries only the schema, not a second copy of the replacement's text. Shipped
-distributions, V1-imported history replays and existing recipes/workflows keep working. The
-workflow-author approval gate and the no-capability author scope accept the aliases of the two
-author tools (`t3_recipe_validate`, `t3_orchestration_run`) exactly as they accept the new names.
-Remove the aliases (table, `deprecatedAlias(...)` registrations and handler lines) one release
-after this lands. In-repo prompts, docs and recipes ship only the new names.
+**Alias window.** The old names are not registered tools and are never advertised: the `tools/list`
+a model sees contains only the new names (no extra definitions in context). The alias table
+(`apps/server/src/mcp/toolkits/t3team/t3team-mcpToolAliases.ts`) is applied at dispatch: the
+transport's protocol adapter (`t3team-mcpToolAliasProtocol.ts`, wired in `McpHttpServer.ts`)
+rewrites a `tools/call` carrying an old name to the replacement before the handler lookup, so the
+handler, the `orchestration` capability gate, the author scope and the result are identical, and one
+`MCP tool 'x' is deprecated; use 'y'` line is logged. Shipped distributions, V1-imported history
+replays and existing recipes/workflows keep working for one release cycle. The workflow-author
+approval gate also accepts the old names of its two tools (`t3_recipe_validate`,
+`t3_orchestration_run`). Remove the alias table, the adapter wrapper and the extra approval-gate
+entries one release after this lands. In-repo prompts, docs and recipes ship only the new names.
 
 Behaviour changes:
 

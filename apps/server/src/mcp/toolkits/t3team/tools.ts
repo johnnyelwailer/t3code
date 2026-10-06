@@ -3,7 +3,6 @@
  * t3team-toolBrokerBindingDispatch.ts. Adding a host tool means adding it to that
  * dispatch/catalog once, then adding only a small static Tool.make wrapper here.
  */
-import type * as Context from "effect/Context";
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/unstable/ai";
 
@@ -18,7 +17,6 @@ import {
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { T3TeamAskUserWriter } from "./t3team-askUserWriter.ts";
-import { deprecatedMcpAliasDescription } from "./t3team-mcpToolAliases.ts";
 
 const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroker];
 
@@ -494,140 +492,6 @@ const T3TeamThreadSkillMetadataTool = Tool.make("t3team_thread_skill_metadata", 
   dependencies: [McpInvocationContext.McpInvocationContext],
 });
 
-/**
- * A deprecated `t3team_*` alias of a renamed tool (see t3team-mcpToolAliases.ts): the SAME
- * parameter/result schemas, a one-line deprecation description instead of a second full copy of
- * the replacement's text (every tool definition costs agent context). The handler is the
- * replacement's, wired in handlers.ts. `parameters` overrides the schema where the primary's is
- * dominated by long authoring guidance.
- */
-const deprecatedAlias = <
-  const Alias extends string,
-  P extends Schema.Constraint,
-  S extends Schema.Constraint,
-  F extends Schema.Constraint,
-  D extends Array<Context.Key<any, any>>,
->(
-  alias: Alias,
-  replacement: string,
-  primary: Tool.Tool<
-    string,
-    {
-      readonly parameters: P;
-      readonly success: S;
-      readonly failure: F;
-      readonly failureMode: "error";
-    },
-    any
-  >,
-  dependencies_: D,
-  parameters?: P,
-) =>
-  Tool.make(alias, {
-    description: deprecatedMcpAliasDescription(replacement),
-    parameters: parameters ?? primary.parametersSchema,
-    success: primary.successSchema,
-    failure: primary.failureSchema,
-    dependencies: dependencies_,
-  });
-
-// The primary widget schema carries the whole authoring contract on \`widget_code\`; a deprecated
-// alias repeats only the shape, so the window does not double that text in agent context.
-const widgetAliasParameters = Schema.Struct({
-  title: Schema.String,
-  widget_code: Schema.String,
-  format: Schema.optional(Schema.Literals(["html", "svg"])),
-  loading_messages: Schema.optional(Schema.Array(Schema.String)),
-  capabilities: Schema.optional(
-    Schema.Struct({ tools: Schema.optional(Schema.Array(Schema.String)) }),
-  ),
-});
-const T3TeamDeprecatedProviderUsageTool = deprecatedAlias(
-  "t3team_provider_usage",
-  "t3_provider_usage",
-  T3TeamProviderUsageTool,
-  dependencies,
-);
-const T3TeamDeprecatedSearchThreadTool = deprecatedAlias(
-  "t3team_search_thread",
-  "t3_search_thread",
-  T3TeamSearchThreadTool,
-  dependencies,
-);
-const T3TeamDeprecatedSearchSourceTool = deprecatedAlias(
-  "t3team_search_source",
-  "t3_search_source",
-  T3TeamSearchSourceTool,
-  dependencies,
-);
-const T3TeamDeprecatedReadMessageTool = deprecatedAlias(
-  "t3team_read_message",
-  "t3_read_message",
-  T3TeamReadMessageTool,
-  dependencies,
-);
-const T3TeamDeprecatedAskUserTool = deprecatedAlias(
-  "t3team_ask_user",
-  "t3_ask_user",
-  T3TeamAskUserTool,
-  askUserDependencies,
-);
-const T3TeamDeprecatedChildrenTool = deprecatedAlias(
-  "t3team_children",
-  "t3_task_ops",
-  T3TeamChildrenTool,
-  dependencies,
-);
-const T3TeamDeprecatedOrchestrationRunTool = deprecatedAlias(
-  "t3team_orchestration_run",
-  "t3_orchestration_run",
-  T3TeamOrchestrationRunTool,
-  dependencies,
-);
-const T3TeamDeprecatedOrchestrationStatusTool = deprecatedAlias(
-  "t3team_orchestration_status",
-  "t3_orchestration_status",
-  T3TeamOrchestrationStatusTool,
-  dependencies,
-);
-const T3TeamDeprecatedOrchestrationResumeTool = deprecatedAlias(
-  "t3team_orchestration_resume",
-  "t3_orchestration_resume",
-  T3TeamOrchestrationResumeTool,
-  dependencies,
-);
-const T3TeamDeprecatedOrchestrationPauseTool = deprecatedAlias(
-  "t3team_orchestration_pause",
-  "t3_orchestration_pause",
-  T3TeamOrchestrationPauseTool,
-  dependencies,
-);
-const T3TeamDeprecatedOrchestrationStopTool = deprecatedAlias(
-  "t3team_orchestration_stop",
-  "t3_orchestration_stop",
-  T3TeamOrchestrationStopTool,
-  dependencies,
-);
-const T3TeamDeprecatedShowWidgetTool = deprecatedAlias(
-  "t3team_show_widget",
-  "t3_show_widget",
-  T3TeamShowWidgetTool,
-  dependencies,
-  widgetAliasParameters,
-);
-const T3TeamDeprecatedRecipeListTool = deprecatedAlias(
-  "t3team_recipe_list",
-  "t3_recipe_list",
-  T3TeamRecipeListTool,
-  dependencies,
-);
-const T3TeamDeprecatedRecipeValidateTool = deprecatedAlias(
-  "t3team_recipe_validate",
-  "t3_recipe_validate",
-  T3TeamRecipeValidateTool,
-  dependencies,
-);
-
 export const T3TeamToolkit = Toolkit.make(
   T3TeamProviderUsageTool,
   T3TeamSearchThreadTool,
@@ -644,18 +508,4 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamRecipeListTool,
   T3TeamRecipeValidateTool,
   T3TeamThreadSkillMetadataTool,
-  T3TeamDeprecatedProviderUsageTool,
-  T3TeamDeprecatedSearchThreadTool,
-  T3TeamDeprecatedSearchSourceTool,
-  T3TeamDeprecatedReadMessageTool,
-  T3TeamDeprecatedAskUserTool,
-  T3TeamDeprecatedChildrenTool,
-  T3TeamDeprecatedOrchestrationRunTool,
-  T3TeamDeprecatedOrchestrationStatusTool,
-  T3TeamDeprecatedOrchestrationResumeTool,
-  T3TeamDeprecatedOrchestrationPauseTool,
-  T3TeamDeprecatedOrchestrationStopTool,
-  T3TeamDeprecatedShowWidgetTool,
-  T3TeamDeprecatedRecipeListTool,
-  T3TeamDeprecatedRecipeValidateTool,
 );

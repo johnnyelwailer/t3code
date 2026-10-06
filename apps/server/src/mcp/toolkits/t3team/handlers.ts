@@ -95,40 +95,26 @@ const threadSkillMetadata = Effect.fn("T3TeamMcpToolkit.threadSkillMetadata")(fu
   return { skills: [...(rows[0]?.skills ?? [])] };
 });
 
-/** The handler of a tool that routes straight to its broker tool; the alias reuses it. */
-const brokerHandler = (name: keyof typeof T3TEAM_MCP_CANONICAL_TOOL_MAP) => (input: unknown) =>
-  callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP[name], input);
-
-// Each deprecated `t3team_*` alias forwards to the replacement's handler (see
-// t3team-mcpToolAliases.ts); the pairs are pinned by t3team-toolkit.test.ts.
 export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
-  t3_provider_usage: brokerHandler("t3_provider_usage"),
-  t3_search_thread: brokerHandler("t3_search_thread"),
-  t3_search_source: brokerHandler("t3_search_source"),
-  t3_read_message: brokerHandler("t3_read_message"),
-  t3_task_ops: brokerHandler("t3_task_ops"),
-  t3_orchestration_run: brokerHandler("t3_orchestration_run"),
-  t3_orchestration_status: brokerHandler("t3_orchestration_status"),
-  t3_orchestration_resume: brokerHandler("t3_orchestration_resume"),
-  t3_orchestration_pause: brokerHandler("t3_orchestration_pause"),
-  t3_orchestration_stop: brokerHandler("t3_orchestration_stop"),
-  t3_show_widget: brokerHandler("t3_show_widget"),
-  t3_recipe_list: brokerHandler("t3_recipe_list"),
-  t3_recipe_validate: brokerHandler("t3_recipe_validate"),
+  t3_provider_usage: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_provider_usage, input),
+  t3_search_thread: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_search_thread, input),
+  t3_search_source: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_search_source, input),
+  t3_read_message: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_read_message, input),
   t3_ask_user: (input) => askUser(input),
+  t3_task_ops: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_task_ops, input),
+  t3_orchestration_run: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_run, input),
+  t3_orchestration_status: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_status, input),
+  t3_orchestration_resume: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_resume, input),
+  t3_orchestration_pause: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_pause, input),
+  t3_orchestration_stop: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_stop, input),
+  t3_show_widget: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_show_widget, input),
+  t3_recipe_list: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_list, input),
+  t3_recipe_validate: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_validate, input),
   t3team_thread_skill_metadata: (input) => threadSkillMetadata(input),
-  t3team_provider_usage: brokerHandler("t3_provider_usage"),
-  t3team_search_thread: brokerHandler("t3_search_thread"),
-  t3team_search_source: brokerHandler("t3_search_source"),
-  t3team_read_message: brokerHandler("t3_read_message"),
-  t3team_children: brokerHandler("t3_task_ops"),
-  t3team_orchestration_run: brokerHandler("t3_orchestration_run"),
-  t3team_orchestration_status: brokerHandler("t3_orchestration_status"),
-  t3team_orchestration_resume: brokerHandler("t3_orchestration_resume"),
-  t3team_orchestration_pause: brokerHandler("t3_orchestration_pause"),
-  t3team_orchestration_stop: brokerHandler("t3_orchestration_stop"),
-  t3team_show_widget: brokerHandler("t3_show_widget"),
-  t3team_recipe_list: brokerHandler("t3_recipe_list"),
-  t3team_recipe_validate: brokerHandler("t3_recipe_validate"),
-  t3team_ask_user: (input) => askUser(input),
 });

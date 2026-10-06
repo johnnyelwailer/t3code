@@ -1,9 +1,11 @@
 /**
- * The agent-facing MCP names of the t3team toolkit were unified on the `t3_` prefix. Every
- * former `t3team_*` name stays registered as a deprecated alias that forwards to the same
- * handler: shipped distributions, V1-imported history replays and existing recipes/workflows
- * still call the old names. Pure constants — imported by the toolkit, the author-approval gate
- * and tests, so it must not pull in the toolkit itself.
+ * The agent-facing MCP names of the t3team toolkit were unified on the `t3_` prefix. The former
+ * `t3team_*` names are NOT registered tools and are never advertised (no extra tools in any
+ * model's context): they resolve only at dispatch, where a `tools/call` carrying an old name is
+ * routed to the replacement's handler (`t3team-mcpToolAliasProtocol.ts`). Shipped distributions,
+ * V1-imported history replays and existing recipes/workflows keep working. Pure constants —
+ * imported by the transport, the author-approval gate and tests, so it must not pull in the
+ * toolkit itself.
  */
 
 /** Deprecated MCP name → current MCP name. Kept for one release cycle, then removed. */
@@ -23,8 +25,3 @@ export const T3TEAM_DEPRECATED_MCP_TOOL_ALIASES = {
   t3team_recipe_list: "t3_recipe_list",
   t3team_recipe_validate: "t3_recipe_validate",
 } as const;
-
-/** The description every deprecated alias carries (the schema is the replacement's). */
-export const deprecatedMcpAliasDescription = (replacement: string): string =>
-  `Deprecated — use ${replacement}; this alias is kept for one release cycle and will be removed. ` +
-  `Same parameters and behavior as ${replacement}.`;

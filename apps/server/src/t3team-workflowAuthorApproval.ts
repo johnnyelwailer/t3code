@@ -45,7 +45,7 @@ const T3_ELICITATION_NATIVE_ID = `mcp-elicitation:${T3_MCP_SERVER_NAME}`;
 export const WORKFLOW_AUTHOR_MCP_TOOL_NAMES: Readonly<Record<string, string>> = {
   t3_recipe_validate: "t3team.recipe.validate",
   t3_orchestration_run: "t3team.orchestration.run",
-  // Deprecated aliases (t3team-mcpToolAliases.ts) still reach the same broker tools.
+  // Old names (t3team-mcpToolAliases.ts) are dispatch aliases: calls for them reach the same broker tools.
   t3team_recipe_validate: "t3team.recipe.validate",
   t3team_orchestration_run: "t3team.orchestration.run",
 };
