@@ -91,6 +91,9 @@ export interface BranchToolbarEnvironmentSelectorProps {
   onCloudMenuOpenChange?: (open: boolean) => void;
 }
 
+/** t3team: how long a just-connected cloud machine gets to register this thread's project. */
+const PROJECT_SYNC_GRACE_MS = 30_000;
+
 export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvironmentSelector({
   autoEnvironmentLabel,
   onAutoEnvironment,
@@ -163,8 +166,14 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       setMenuOpen(false);
       onCloudMenuOpenChange?.(false);
     } else if (connectedEnvironmentIds?.has(selectWhenConnected)) {
-      setRefusedEnvironmentId(selectWhenConnected);
-      setSelectWhenConnected(null);
+      // Connected, project not (yet) there: a fresh machine registers its project seconds after
+      // it connects, so only a machine that still lacks it after the grace period is refused.
+      const environment = selectWhenConnected;
+      const timer = setTimeout(() => {
+        setRefusedEnvironmentId(environment);
+        setSelectWhenConnected(null);
+      }, PROJECT_SYNC_GRACE_MS);
+      return () => clearTimeout(timer);
     }
   }, [
     connectedEnvironmentIds,
@@ -344,7 +353,10 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             <>
               {cloudRows
                 .filter(
-                  (row) => !row.unavailable || row.session.environmentId === refusedEnvironmentId,
+                  (row) =>
+                    !row.unavailable ||
+                    row.session.environmentId === refusedEnvironmentId ||
+                    row.session.environmentId === selectWhenConnected,
                 )
                 .map((row) => (
                   <RunOnCloudRow
