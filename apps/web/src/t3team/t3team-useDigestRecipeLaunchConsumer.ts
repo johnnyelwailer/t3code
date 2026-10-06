@@ -63,10 +63,17 @@ export function useDigestRecipeLaunchConsumer(input: {
     }
   }, [selectedRecipe]);
 
-  useEffect(
-    () => () => {
-      if (staged.current) settleDigestRecipeLaunch(staged.current.requestId);
-    },
-    [],
-  );
+  // Settles on a real unmount only: StrictMode's mount-unmount-mount replay remounts before the
+  // microtask runs, so the request (and the drawer it holds up) survives it.
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      const current = staged.current;
+      queueMicrotask(() => {
+        if (!mounted.current && current) settleDigestRecipeLaunch(current.requestId);
+      });
+    };
+  }, []);
 }
