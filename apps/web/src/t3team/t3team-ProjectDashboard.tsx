@@ -33,10 +33,12 @@ export function ProjectDashboard({
   const { state: dashboardState } = useProjectDashboardModeState(project.id);
   const dashboardMode = dashboardState.dashboardMode;
   const { state: myWorkState } = useProjectDashboardMyWorkState(project.id);
-  // The digest lens spans the full pane; the other My Work lenses keep the centered column.
+  // Every lens is a centered column so switching lenses does not jump the width; the digest's
+  // two lanes get a wider cap, and it grows with its content (min-h-full) so the bottom padding
+  // survives a tall digest instead of being cut by a fixed h-full box.
   const myWorkContentClassName =
     myWorkState.lens === "digest"
-      ? "flex h-full min-h-0 w-full flex-col p-4 sm:p-6"
+      ? "mx-auto flex min-h-full w-full max-w-[96rem] flex-col p-4 pb-6 sm:p-6"
       : "mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col p-4 sm:p-6";
 
   return (

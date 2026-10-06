@@ -104,6 +104,7 @@ export function assembleMyWorkDigestChangeRequests(
     const workItemKey = matchDigestWorkItemKey(entry.title, entry.headBranch, ticketKeys);
     changeRequests.push({
       id: `${entry.host}:${entry.repository}#${entry.number}`,
+      host: entry.host,
       repo: entry.repository,
       number: entry.number,
       state: digestChangeRequestStateFromPr(entry),
@@ -128,6 +129,7 @@ export function pickDigestSprint(
   if (chosen === undefined) return undefined;
   return {
     name: chosen.name,
+    ...(chosen.state !== undefined && chosen.state.trim() !== "" ? { state: chosen.state } : {}),
     ...(chosen.goal !== undefined && chosen.goal.trim() !== "" ? { goal: chosen.goal } : {}),
     ...(chosen.startDate !== undefined ? { startDate: chosen.startDate } : {}),
     ...(chosen.endDate !== undefined ? { endDate: chosen.endDate } : {}),

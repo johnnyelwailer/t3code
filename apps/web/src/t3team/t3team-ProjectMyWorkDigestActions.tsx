@@ -23,18 +23,19 @@ function DigestActionPill({ action }: { action: DigestItemAction }) {
 }
 
 /**
- * The row's next-step cluster, pinned to the row's bottom-right corner and revealed on hover.
- * The agent dots live on the left-side PR row, so this corner is theirs alone. Absolutely
- * positioned, so it never shifts the row's layout. Fades and slides in instead of popping;
- * always visible on small screens, which have no hover.
+ * The row's next-step cluster: its own line at the bottom of the row, right-aligned and revealed
+ * on hover or keyboard focus. It is IN the row's flow (never absolutely positioned), so it can
+ * not cover the PR chips or the why-text; the space is reserved so revealing it does not shift
+ * the list. Wraps instead of overflowing on a narrow lane; always visible on small screens,
+ * which have no hover (including touch screens wider than `sm`).
  */
 export function DigestItemActions({ actions }: { actions: readonly DigestItemAction[] }) {
   if (actions.length === 0) return null;
   return (
-    <span className="pointer-events-none absolute bottom-1 right-3 z-10 flex translate-y-1 items-center gap-1.5 rounded-lg bg-background/95 p-1 opacity-0 shadow-sm ring-1 ring-border/60 transition-[opacity,transform] duration-150 ease-out group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 max-sm:pointer-events-auto max-sm:translate-y-0 max-sm:opacity-100">
+    <div className="pointer-events-none mt-1.5 flex min-w-0 flex-wrap items-center justify-end gap-1.5 opacity-0 transition-opacity duration-150 ease-out group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100">
       {actions.map((action) => (
         <DigestActionPill key={action.label} action={action} />
       ))}
-    </span>
+    </div>
   );
 }
