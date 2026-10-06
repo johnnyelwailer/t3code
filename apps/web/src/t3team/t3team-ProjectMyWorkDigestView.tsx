@@ -8,10 +8,11 @@ import {
   type DigestBurndownVariant,
 } from "~/t3team/t3team-ProjectMyWorkDigestHeader";
 import type { DigestGraph, ResolvedDigestPlan } from "~/t3team/t3team-projectMyWorkDigestPlan";
+import { useDigestPrThreadClaims } from "~/t3team/mywork-digest/t3team-useDigestPrThreadClaims";
 
 export function ProjectMyWorkDigestView({
   plan,
-  graph,
+  graph: serverGraph,
   nowMs,
   onOpenTicket,
   burndownVariant = "off",
@@ -27,6 +28,7 @@ export function ProjectMyWorkDigestView({
   /** Clears an agent-made arrangement for this scope (back to the default). */
   onResetArrangement?: (() => Promise<void>) | undefined;
 }) {
+  const graph = useDigestPrThreadClaims(serverGraph, nowMs);
   const ticketsById = new Map(graph.tickets.map((ticket) => [ticket.id, ticket]));
   const lane = { graph, ticketsById, nowMs, onOpenTicket };
   const header = (
