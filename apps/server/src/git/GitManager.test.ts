@@ -5951,7 +5951,9 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
       );
 
       expect(errorMessage).toContain("Git command failed in GitVcsDriver.commit.commit");
-      expect(errorMessage).not.toContain("hook: fail");
+      // GitCommandError.message carries the (redacted, capped) stderr (fork commit 407138b345) so a
+      // rejected hook is actionable from the error alone; the same text also streams as `hook_output`.
+      expect(errorMessage).toContain("stderr: hook: fail");
       expect(events).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
