@@ -16,16 +16,32 @@ import { credentialRoute } from "./t3team-credentialRoute.ts";
  * (relay:read / relay:write). Signing in is the account's job (`t3team-account-routes`).
  */
 
-const readSessionId = Effect.gen(function* () {
+/** The JSON body, read once: a request body is a stream. */
+const readBody = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
-  const body = yield* request.json.pipe(Effect.orElseSucceed(() => ({})));
-  const sessionId = (body as { readonly sessionId?: unknown }).sessionId;
-  if (typeof sessionId === "string" && /^\d{1,20}$/.test(sessionId)) return sessionId;
-  return yield* new CloudSessionFailedError({
-    reason: "unknown_session",
-    message: "That session does not exist.",
-  });
+  return (yield* request.json.pipe(Effect.orElseSucceed(() => ({})))) as {
+    readonly sessionId?: unknown;
+    readonly environmentId?: unknown;
+  };
 });
+
+const sessionIdOf = (body: { readonly sessionId?: unknown }) => {
+  const sessionId = body.sessionId;
+  if (typeof sessionId === "string" && /^\d{1,20}$/.test(sessionId))
+    return Effect.succeed(sessionId);
+  return Effect.fail(
+    new CloudSessionFailedError({
+      reason: "unknown_session",
+      message: "That session does not exist.",
+    }),
+  );
+};
+
+/** The environment the client knows the session by, when it sent one (an opaque id). */
+const environmentIdOf = (body: { readonly environmentId?: unknown }) =>
+  typeof body.environmentId === "string" && /^[\w.:-]{1,128}$/.test(body.environmentId)
+    ? body.environmentId
+    : undefined;
 
 const route = <A, R>(
   method: "GET" | "POST",
@@ -48,10 +64,19 @@ export const t3teamCloudBrokerRouteLayer = Layer.mergeAll(
     Effect.succeed(broker.status),
   ),
   route("POST", "/api/t3team/cloud-broker/attach", AuthRelayWriteScope, (broker) =>
-    readSessionId.pipe(Effect.flatMap(broker.attach)),
+    Effect.gen(function* () {
+      const body = yield* readBody;
+      const sessionId = yield* sessionIdOf(body);
+      const environmentId = environmentIdOf(body);
+      return yield* broker.attach({
+        sessionId,
+        ...(environmentId !== undefined ? { environmentId } : {}),
+      });
+    }),
   ),
   route("POST", "/api/t3team/cloud-broker/pairing", AuthRelayWriteScope, (broker) =>
-    readSessionId.pipe(
+    readBody.pipe(
+      Effect.flatMap(sessionIdOf),
       Effect.flatMap(broker.pair),
       Effect.map((pairingCredential) => ({ pairingCredential })),
     ),

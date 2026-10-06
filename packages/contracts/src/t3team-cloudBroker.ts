@@ -20,11 +20,18 @@ export type CloudBrokerStatus = typeof CloudBrokerStatusSchema.Type;
 
 export const CloudSessionAttachInputSchema = Schema.Struct({
   sessionId: Schema.String,
+  /**
+   * The environment the client knows the session by. Sessions in one workspace share it (the
+   * snapshot keeps it), so when `sessionId` has ended the live session serving it is attached.
+   */
+  environmentId: Schema.optional(Schema.String),
 });
 export type CloudSessionAttachInput = typeof CloudSessionAttachInputSchema.Type;
 
 /** A ready broker session, made reachable on this machine through a loopback forwarder. */
 export const CloudSessionAttachResultSchema = Schema.Struct({
+  /** The session actually attached: `sessionId`, or the live one serving the same environment. */
+  sessionId: Schema.optional(Schema.String),
   environmentId: Schema.String,
   label: Schema.String,
   httpBaseUrl: Schema.String,

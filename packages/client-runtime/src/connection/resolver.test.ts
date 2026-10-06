@@ -210,8 +210,9 @@ const makeDependencies = Effect.fn("TestConnectionResolver.makeDependencies")((o
       BrokerEnvironmentGateway.of({
         attach:
           options?.attachBroker ??
-          (() =>
+          ((input) =>
             Effect.succeed({
+              sessionId: input.sessionId,
               httpBaseUrl: "http://127.0.0.1:4020",
               wsBaseUrl: "ws://127.0.0.1:4020",
             })),
@@ -235,9 +236,12 @@ describe("ConnectionResolver", () => {
     readonly rejectBearer?: (
       token: string,
     ) => ConnectionBlockedError | ConnectionTransientError | null;
+    /** The session the server attached instead, as when the known one has ended. */
+    readonly liveSessionId?: string;
   }) {
     const attached = yield* Ref.make<ReadonlyArray<string>>([]);
     const pairings = yield* Ref.make(0);
+    const pairedSessions = yield* Ref.make<ReadonlyArray<string>>([]);
     const bearers = yield* Ref.make<ReadonlyArray<{ token: string; method: string }>>([]);
     const tokenExchanges: Array<string> = [];
     const credentials = new Map(options?.credentials ?? []);
@@ -249,9 +253,17 @@ describe("ConnectionResolver", () => {
           ...values,
           `${input.sessionId}:${input.expectedEnvironmentId}`,
         ]).pipe(
-          Effect.as({ httpBaseUrl: "http://127.0.0.1:4020", wsBaseUrl: "ws://127.0.0.1:4020" }),
+          Effect.as({
+            sessionId: options?.liveSessionId ?? input.sessionId,
+            httpBaseUrl: "http://127.0.0.1:4020",
+            wsBaseUrl: "ws://127.0.0.1:4020",
+          }),
         ),
-      pairBroker: () => Ref.update(pairings, (n) => n + 1).pipe(Effect.as("broker-pairing")),
+      pairBroker: (input) =>
+        Ref.update(pairings, (n) => n + 1).pipe(
+          Effect.andThen(Ref.update(pairedSessions, (values) => [...values, input.sessionId])),
+          Effect.as("broker-pairing"),
+        ),
       authorizeBearer: (input) =>
         Effect.gen(function* () {
           yield* Ref.update(bearers, (values) => [
@@ -270,7 +282,7 @@ describe("ConnectionResolver", () => {
         }),
     });
     const resolver = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(layer));
-    return { resolver, credentials, attached, pairings, bearers, tokenExchanges };
+    return { resolver, credentials, attached, pairings, pairedSessions, bearers, tokenExchanges };
   });
 
   it.effect("connects a broker session once by pairing, then reuses the stored bearer", () =>
@@ -296,6 +308,25 @@ describe("ConnectionResolver", () => {
         { token: "broker-bearer", method: "relay" },
         { token: "broker-bearer", method: "relay" },
       ]);
+    }),
+  );
+
+  it.effect("follows the workspace's live session when the known one has ended", () =>
+    Effect.gen(function* () {
+      // A new session in the same workspace serves the same environment (the snapshot keeps its
+      // id): the server attaches the live one, and pairing and the bearer go with it.
+      const harness = yield* makeBrokerHarness({
+        credentials: [
+          ["nexi-broker:290877467", new BearerConnectionCredential({ token: "old-bearer" })],
+        ],
+        liveSessionId: "299999999",
+      });
+      yield* harness.resolver.prepare(catalogEntry(BROKER_TARGET));
+      expect(yield* Ref.get(harness.pairedSessions)).toEqual(["299999999"]);
+      expect(harness.credentials.has("nexi-broker:299999999")).toBe(true);
+      expect((yield* Ref.get(harness.bearers)).map((bearer) => bearer.token)).not.toContain(
+        "old-bearer",
+      );
     }),
   );
 
