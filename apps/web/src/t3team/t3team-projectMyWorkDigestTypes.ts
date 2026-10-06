@@ -103,6 +103,8 @@ export type DigestGraph = {
   readonly scope: "project" | "all";
   readonly projects: readonly DigestProject[];
   readonly viewer: { readonly name: string; readonly role: string; readonly lastVisitAt: string };
+  /** When the oldest project's Jira tickets last matched Jira (ISO). */
+  readonly jiraSyncedAt?: string;
   readonly sprint?: DigestSprint;
   /** The viewer's personal burndown for the digest sprint, in the project's estimate unit. */
   readonly burndown?: {

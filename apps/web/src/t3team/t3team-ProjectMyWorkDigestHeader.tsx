@@ -7,15 +7,32 @@ import { formatDigestAgo } from "~/t3team/t3team-ProjectMyWorkDigestChips";
 import { digestSprintProgress } from "~/t3team/t3team-projectMyWorkDigestSprintProgress";
 
 /**
- * The digest's data-source status. Read-only: the deterministic layer refreshes on its own
- * ("auto"); the owner's live "arranging · 2 h" read was a status-reading bug — the view shows
- * when the data was last updated, not a vague in-progress verb.
+ * The digest's data-source status: when Jira was last matched, not when this view fetched —
+ * a fetch reads "just now" over a mirror days old. Amber once the sync is over an hour old.
+ * Falls back to the fetch time only when the server reports no sync at all.
  */
-function DigestAutoStatus({ updatedAtMs, nowMs }: { updatedAtMs: number; nowMs: number }) {
+const JIRA_SYNC_STALE_MS = 60 * 60 * 1000;
+
+function DigestAutoStatus({
+  updatedAtMs,
+  jiraSyncedAt,
+  nowMs,
+}: {
+  updatedAtMs: number | undefined;
+  jiraSyncedAt: string | undefined;
+  nowMs: number;
+}) {
+  if (jiraSyncedAt === undefined && updatedAtMs === undefined) return null;
+  const stale = jiraSyncedAt !== undefined && nowMs - Date.parse(jiraSyncedAt) > JIRA_SYNC_STALE_MS;
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className="size-1.5 rounded-full bg-success" aria-hidden />
-      auto · updated {formatDigestAgo(nowMs, new Date(updatedAtMs).toISOString())} ago
+      <span
+        className={`size-1.5 rounded-full ${stale ? "bg-warning" : "bg-success"}`}
+        aria-hidden
+      />
+      {jiraSyncedAt !== undefined
+        ? `Jira synced ${formatDigestAgo(nowMs, jiraSyncedAt)} ago`
+        : `auto · updated ${formatDigestAgo(nowMs, new Date(updatedAtMs ?? nowMs).toISOString())} ago`}
     </span>
   );
 }
@@ -64,11 +81,13 @@ export function ProjectMyWorkDigestHeader({
               ))
             : null}
           <span>
-            {graph.viewer.name} · {graph.viewer.role}
+            {[graph.viewer.name, graph.viewer.role].filter((part) => part?.trim()).join(" · ")}
           </span>
-          {updatedAtMs !== undefined ? (
-            <DigestAutoStatus updatedAtMs={updatedAtMs} nowMs={nowMs} />
-          ) : null}
+          <DigestAutoStatus
+            updatedAtMs={updatedAtMs}
+            jiraSyncedAt={graph.jiraSyncedAt}
+            nowMs={nowMs}
+          />
         </div>
       </header>
     );
@@ -103,11 +122,13 @@ export function ProjectMyWorkDigestHeader({
             </span>
           ) : null}
           <span>
-            {graph.viewer.name} · {graph.viewer.role}
+            {[graph.viewer.name, graph.viewer.role].filter((part) => part?.trim()).join(" · ")}
           </span>
-          {updatedAtMs !== undefined ? (
-            <DigestAutoStatus updatedAtMs={updatedAtMs} nowMs={nowMs} />
-          ) : null}
+          <DigestAutoStatus
+            updatedAtMs={updatedAtMs}
+            jiraSyncedAt={graph.jiraSyncedAt}
+            nowMs={nowMs}
+          />
         </div>
       </div>
       {burndownVariant !== "off" || datesKnown ? (

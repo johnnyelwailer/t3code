@@ -167,9 +167,10 @@ export function DigestItemRow({
           {hasPrs ? null : <span className="shrink-0">{dots}</span>}
         </div>
       ) : null}
-      <div className="mt-1 min-w-0">
+      {/* empty:hidden — a row with no chips must not keep a blank line under its title. */}
+      <div className="mt-1 min-w-0 empty:hidden">
         <DigestChips graph={graph} ticketId={ticket.id} nowMs={nowMs} claims={claims} />
-        {hasPrs || action || why ? null : <span className="inline-flex">{dots}</span>}
+        {hasPrs || action || why || !dots ? null : <span className="inline-flex">{dots}</span>}
       </div>
       <DigestItemActions actions={actions} />
     </div>

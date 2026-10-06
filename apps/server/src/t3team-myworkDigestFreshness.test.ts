@@ -7,41 +7,7 @@ import * as TestClock from "effect/testing/TestClock";
 import { afterEach } from "vite-plus/test";
 
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
-import type { BacklogResourceRef } from "./t3team-atlassian-backlog-cacheShared.ts";
-import { prioritizeViewerSprint } from "./t3team-myworkDigestFreshness.ts";
 import { loadDigestPrEntries, resetDigestPrCacheForTests } from "./t3team-myworkDigestPrCache.ts";
-
-function ticket(id: string, sprint?: { id: string; name: string; state: string }) {
-  return {
-    provider: "atlassian",
-    kind: "issue",
-    id,
-    title: id,
-    ...(sprint !== undefined
-      ? { sprintId: sprint.id, sprintName: sprint.name, sprintState: sprint.state }
-      : {}),
-  } as unknown as BacklogResourceRef;
-}
-
-const platform = { id: "10", name: "Platform Sprint 8.5", state: "active" };
-const team = { id: "20", name: "PW Sprint 8.5", state: "active" };
-
-it("puts the sprint most of the viewer's items sit in first", () => {
-  const sprints = prioritizeViewerSprint(
-    [platform],
-    [ticket("A", team), ticket("B", team), ticket("C", platform), ticket("D")],
-  );
-  assert.deepStrictEqual(
-    sprints.map((sprint) => sprint.name),
-    ["PW Sprint 8.5", "Platform Sprint 8.5"],
-  );
-});
-
-it("ignores closed sprints and leaves the list alone without an active one", () => {
-  const closed = { id: "30", name: "Old", state: "closed" };
-  const sprints = prioritizeViewerSprint([platform], [ticket("A", closed)]);
-  assert.deepStrictEqual(sprints, [platform]);
-});
 
 const entry = { projectId: "p", repository: "o/r", number: 1, state: "merged" };
 

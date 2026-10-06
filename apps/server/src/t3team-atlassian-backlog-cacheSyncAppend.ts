@@ -11,6 +11,7 @@ import {
   type T3TeamBacklogCacheIdentity,
 } from "./t3team-atlassian-backlog-cacheShared.ts";
 import { ensureBacklogCacheTables } from "./t3team-atlassian-backlog-cacheTables.ts";
+import { captureDigestStatusTransitionsOf } from "./t3team-digestStatusTransitions.ts";
 
 export const appendCachedT3TeamAtlassianBacklogSyncPage = Effect.fn(
   "t3team.atlassianBacklogCache.appendSyncPage",
@@ -34,6 +35,7 @@ export const appendCachedT3TeamAtlassianBacklogSyncPage = Effect.fn(
     const sql = yield* SqlClient.SqlClient;
     const updatedAt = yield* Clock.currentTimeMillis;
 
+    yield* captureDigestStatusTransitionsOf(input, input.items);
     yield* sql.withTransaction(
       Effect.gen(function* () {
         for (const item of input.items) {

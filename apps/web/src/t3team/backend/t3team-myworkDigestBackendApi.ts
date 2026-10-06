@@ -122,6 +122,7 @@ export type MyWorkDigestPayload = {
     }>;
     readonly sprint?: DigestSprint;
     readonly changeRequestNote?: string;
+    readonly jiraSyncedAt?: string;
   }>;
 };
 

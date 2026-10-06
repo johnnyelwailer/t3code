@@ -181,6 +181,7 @@ export function assembleMyWorkDigestProjectData(
     ...(source.changeRequestNote !== undefined
       ? { changeRequestNote: source.changeRequestNote }
       : {}),
+    ...(source.jiraSyncedAt !== undefined ? { jiraSyncedAt: source.jiraSyncedAt } : {}),
   };
 }
 

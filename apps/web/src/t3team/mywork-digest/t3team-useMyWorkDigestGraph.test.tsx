@@ -11,7 +11,8 @@ import type {
 } from "~/t3team/backend/t3team-myworkDigestBackendApi";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { clearCachedDigestGraphsForTests } from "./t3team-digestGraphCache";
-import { digestSprintGoals, payloadToDigestGraph } from "./t3team-digestGraphMappers";
+import { payloadToDigestGraph } from "./t3team-digestGraphMappers";
+import { digestSprintGoals } from "./t3team-digestGraphHelpers";
 import { useMyWorkDigestGraph } from "./t3team-useMyWorkDigestGraph";
 import { createRecordingOrchestrationApi } from "~/t3team/backend/t3team-orchestrationApi.testSupport";
 

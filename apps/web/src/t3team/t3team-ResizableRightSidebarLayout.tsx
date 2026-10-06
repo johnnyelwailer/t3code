@@ -10,14 +10,14 @@ import {
 import * as Schema from "effect/Schema";
 import { cn } from "~/lib/utils";
 import { useMediaQuery } from "~/t3team/hooks/t3team-useMediaQuery";
-import { getLocalStorageItem, setLocalStorageItem } from "~/t3team/hooks/t3team-useLocalStorage";
+import { setLocalStorageItem } from "~/t3team/hooks/t3team-useLocalStorage";
 import { T3TeamMobilePanelLayout } from "~/t3team/t3team-MobilePanelLayout";
 import {
   clampRightSidebarWidth,
-  readStoredRightSidebarCollapsedState,
+  useElementFitsWidth,
+  useStoredRightSidebarState,
   type ResizableRightSidebarDragState,
 } from "~/t3team/t3team-ResizableRightSidebarLayoutShared";
-import { runT3TeamViewTransition } from "~/t3team/t3team-runViewTransition";
 import { ResizableRightSidebarAside } from "./t3team-ResizableRightSidebarAside";
 
 type ResizableRightSidebarLayoutProps = {
@@ -53,21 +53,26 @@ export function ResizableRightSidebarLayout({
 }: ResizableRightSidebarLayoutProps) {
   const isDesktop = useMediaQuery("lg");
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [asideWidth, setAsideWidth] = useState(defaultAsideWidth);
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"main" | "aside">(mobileDefaultPanel);
   const widthStorageKey = `${storageKey}:width`;
-  const effectiveCollapsedStorageKey = collapsedStorageKey ?? `${storageKey}:collapsed`;
+  const { asideWidth, setAsideWidth, isCollapsed, setCollapsedState } = useStoredRightSidebarState({
+    widthStorageKey,
+    collapsedStorageKey: collapsedStorageKey ?? `${storageKey}:collapsed`,
+    defaultAsideWidth,
+  });
+  // Side by side only while both panes get their minimum; a narrower pane switches to the
+  // one-at-a-time tabs instead of squeezing the main content into a sliver.
+  const pane = useElementFitsWidth(minMainWidth + minAsideWidth);
+  const showTabs = !isDesktop || (!isCollapsed && !pane.fits);
+  const measurePane = pane.ref;
+  const setContainerNode = useCallback(
+    (node: HTMLDivElement | null) => {
+      containerRef.current = node;
+      measurePane(node);
+    },
+    [measurePane],
+  );
   const dragStateRef = useRef<ResizableRightSidebarDragState | null>(null);
-
-  useEffect(() => {
-    const storedWidth = getLocalStorageItem(widthStorageKey, Schema.Finite);
-    if (storedWidth !== null) {
-      setAsideWidth(storedWidth);
-    }
-
-    setIsCollapsed(readStoredRightSidebarCollapsedState(effectiveCollapsedStorageKey));
-  }, [effectiveCollapsedStorageKey, widthStorageKey]);
 
   useEffect(
     () => () => {
@@ -82,16 +87,6 @@ export function ResizableRightSidebarLayout({
       setMobilePanel(mobileDefaultPanel);
     }
   }, [isDesktop, mobileDefaultPanel]);
-
-  const setCollapsedState = useCallback(
-    (nextCollapsed: boolean) => {
-      runT3TeamViewTransition(() => {
-        setIsCollapsed(nextCollapsed);
-        setLocalStorageItem(effectiveCollapsedStorageKey, nextCollapsed, Schema.Boolean);
-      });
-    },
-    [effectiveCollapsedStorageKey],
-  );
 
   const handleResizePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -170,25 +165,27 @@ export function ResizableRightSidebarLayout({
     [stopResize],
   );
 
-  if (!isDesktop) {
+  if (showTabs) {
     return (
-      <T3TeamMobilePanelLayout
-        activePanel={mobilePanel}
-        onActivePanelChange={setMobilePanel}
-        main={main}
-        aside={aside}
-        className={className}
-        mainClassName={mainClassName}
-        asideClassName={asideClassName}
-        mainLabel={mobileMainLabel}
-        asideLabel={mobileAsideLabel}
-      />
+      <div ref={pane.ref} className="flex h-full min-h-0 min-w-0 flex-1">
+        <T3TeamMobilePanelLayout
+          activePanel={mobilePanel}
+          onActivePanelChange={setMobilePanel}
+          main={main}
+          aside={aside}
+          className={className}
+          mainClassName={mainClassName}
+          asideClassName={asideClassName}
+          mainLabel={mobileMainLabel}
+          asideLabel={mobileAsideLabel}
+        />
+      </div>
     );
   }
 
   return (
     <div
-      ref={containerRef}
+      ref={setContainerNode}
       className={cn("relative h-full min-h-0 flex flex-1 overflow-hidden", className)}
       style={
         {
