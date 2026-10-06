@@ -22,6 +22,7 @@ import { useCloudSessionConnect } from "./t3team-useCloudSessionConnect";
 import { liveCloudSessionForEnvironment } from "./t3team-cloudSessionEnvironmentMatch";
 import { CLOUD_SESSION_LIFETIME_SECONDS } from "./t3team-cloudSessionLifetime";
 import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
+import { useCanManageRelay } from "./t3team-useCanManageRelay";
 
 /**
  * Drives the cloud session surfaces (settings panel + "Run on" menu): create,
@@ -30,6 +31,7 @@ import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
  */
 export function useCloudSessionController() {
   const environmentId = usePrimaryEnvironmentId();
+  const canManageRelay = useCanManageRelay();
   const { environments: relayDiscovered } = useRelayEnvironmentDiscovery();
   const {
     sessions: serverSessions,
@@ -83,7 +85,7 @@ export function useCloudSessionController() {
   /** `projectId` (a project on the primary environment) runs the session in its machine. */
   const onCreate = useCallback(
     (projectId?: ProjectId) => {
-      if (environmentId === null || createPending) return;
+      if (environmentId === null || !canManageRelay || createPending) return;
       setRelayIdsBefore(
         new Set(
           [...relayDiscovered.values()].map((entry) => String(entry.environment.environmentId)),
@@ -111,6 +113,7 @@ export function useCloudSessionController() {
         .finally(() => setCreatePending(false));
     },
     [
+      canManageRelay,
       createPending,
       createSession,
       environmentId,
@@ -205,7 +208,8 @@ export function useCloudSessionController() {
     ),
     onCloudMenuOpenChange: useCallback((open: boolean) => setCloudMenuOpen(open), []),
     onPanelVisibilityChange: useCallback((open: boolean) => setPanelVisible(open), []),
-    available: environmentId !== null,
+    // Starting a cloud session spends relay compute: without `relay:write` no entry offers it.
+    available: environmentId !== null && canManageRelay,
     /** Where sessions are created; a project must live here to run in its machine. */
     primaryEnvironmentId: environmentId,
   };
