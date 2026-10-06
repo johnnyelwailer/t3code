@@ -193,6 +193,79 @@ describe("BranchToolbarEnvironmentSelector", () => {
     expect(onCreateCloudSession).toHaveBeenCalledTimes(1);
   });
 
+  it("lists a connected cloud machine once: as its environment, not again as a ready session", () => {
+    const cloudEnv = {
+      environmentId: EnvironmentId.make("env-cloud"),
+      projectId: ProjectId.make("project-x"),
+      label: "Cloud session",
+      isPrimary: false,
+      machine: "server" as const,
+    };
+    const ready = {
+      sessionId: "1",
+      phase: "ready",
+      environmentId: "env-cloud",
+      machineLabel: "ubuntu-slim",
+    } as unknown as CloudSession;
+    mountSelector({
+      availableEnvironments: [PRIMARY, cloudEnv],
+      onEnvironmentChange: () => {},
+      onCreateCloudSession: () => {},
+      pendingCloudSessions: [ready],
+    });
+    const rows = Array.from(liveContainer?.querySelectorAll("button") ?? []).map(
+      (button) => button.textContent ?? "",
+    );
+    expect(rows.some((text) => text.startsWith("Ready"))).toBe(false);
+  });
+
+  it("clicking a ready machine connects it, then selects it for the thread", () => {
+    const ready = {
+      sessionId: "1",
+      phase: "ready",
+      environmentId: "env-cloud",
+      machineLabel: "ubuntu-slim",
+    } as unknown as CloudSession;
+    const onCloudSessionAction = vi.fn();
+    const onEnvironmentChange = vi.fn();
+    const props = {
+      onEnvironmentChange,
+      onCreateCloudSession: () => {},
+      onCloudSessionAction,
+      pendingCloudSessions: [ready],
+    };
+    mountSelector(props);
+    const readyRow = Array.from(liveContainer?.querySelectorAll("button") ?? []).find((button) =>
+      button.textContent?.startsWith("Ready"),
+    );
+    act(() => {
+      readyRow?.click();
+    });
+    expect(onCloudSessionAction).toHaveBeenCalledWith(ready);
+    expect(liveContainer?.textContent).toContain("Connecting…");
+    expect(onEnvironmentChange).not.toHaveBeenCalled();
+
+    // The connect registers the machine's environment: it is selected for the thread.
+    const cloudEnv = {
+      environmentId: EnvironmentId.make("env-cloud"),
+      projectId: ProjectId.make("project-x"),
+      label: "Cloud session",
+      isPrimary: false,
+      machine: "server" as const,
+    };
+    act(() => {
+      liveRoot?.render(
+        <BranchToolbarEnvironmentSelector
+          envLocked={false}
+          environmentId={PRIMARY.environmentId}
+          availableEnvironments={[PRIMARY, cloudEnv]}
+          {...props}
+        />,
+      );
+    });
+    expect(onEnvironmentChange).toHaveBeenCalledWith("env-cloud");
+  });
+
   it("wires menu open/close to the polling callback", () => {
     const onCloudMenuOpenChange = vi.fn();
     renderSelector({ onCreateCloudSession: () => {}, onCloudMenuOpenChange });
