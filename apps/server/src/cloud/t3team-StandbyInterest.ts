@@ -14,6 +14,8 @@ import { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
  * (`t3team-CloudSessionService.ts`). A failed report is retried on the next round, never surfaced.
  */
 const REPORT_EVERY = "10 minutes";
+/** The broker takes at most this many projects per report. */
+const MAX_REPORTED = 200;
 
 /** The pool keys of this server's projects that have a machine (de-duplicated). */
 export const projectPoolKeys = Effect.gen(function* () {
@@ -25,7 +27,7 @@ export const projectPoolKeys = Effect.gen(function* () {
     const key = yield* machines.poolKeyOf(shell.id);
     if (key !== null) keys.add(key);
   }
-  return [...keys];
+  return [...keys].slice(0, MAX_REPORTED);
 });
 
 export const StandbyInterestLive = Layer.effectDiscard(
