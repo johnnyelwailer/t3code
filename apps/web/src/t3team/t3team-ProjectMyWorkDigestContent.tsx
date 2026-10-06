@@ -15,7 +15,7 @@ import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDig
 import { readMyWorkDigestArrangementApi } from "~/t3team/backend/t3team-myworkDigestArrangementApi";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import { toastManager } from "~/components/ui/toast";
-import { openDigestTicket } from "~/t3team/t3team-digestPrAsideStore";
+import { closeDigestPullRequest, openDigestTicket } from "~/t3team/t3team-digestPrAsideStore";
 import { toDigestProjectEntries } from "~/t3team/mywork-digest/t3team-digestProjectEntries";
 import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
 import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
@@ -43,7 +43,11 @@ export function ProjectMyWorkDigestContent({
     openDigestTicket({
       projectId: project.id,
       ticketId,
-      openFullPage: () => onOpenTicket(project.id, ticketId),
+      // The page replaces the aside: coming back to the digest shows the default aside again.
+      openFullPage: () => {
+        closeDigestPullRequest();
+        onOpenTicket(project.id, ticketId);
+      },
     });
   const projects = useMemo(() => [project], [project]);
   const arrangementApi = readMyWorkDigestArrangementApi(useBackend());
