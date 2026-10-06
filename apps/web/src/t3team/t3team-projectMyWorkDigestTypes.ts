@@ -67,6 +67,8 @@ export type DigestChangeRequest = {
   readonly reviewers: readonly DigestReviewer[];
   /** Unhandled review comments since the viewer's last visit. */
   readonly unhandledComments?: number;
+  readonly additions?: number;
+  readonly deletions?: number;
   readonly updatedAt: string;
 };
 

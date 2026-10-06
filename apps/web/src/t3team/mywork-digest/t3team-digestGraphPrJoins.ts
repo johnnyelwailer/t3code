@@ -41,6 +41,8 @@ export function digestTicketChangeRequests(
           updatedAt: pr.updatedAt,
           // TODO(digest-data): per-reviewer verdicts have no host source yet; PR-level only.
           reviewers: pr.reviewers ?? [],
+          ...(pr.additions !== undefined ? { additions: pr.additions } : {}),
+          ...(pr.deletions !== undefined ? { deletions: pr.deletions } : {}),
           ...(pr.unhandledReviewThreads !== undefined
             ? { unhandledComments: countUnhandledThreads(pr.unhandledReviewThreads, lastVisitMs) }
             : {}),

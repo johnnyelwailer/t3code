@@ -121,13 +121,19 @@ export function DigestPrChip({
               {repoLabel(pr.repo)}#{pr.number}
             </span>
             {pr.title ? (
-              <span className="min-w-0 max-w-64 -translate-y-px truncate leading-none text-foreground/80">
+              <span className="hidden min-w-0 max-w-64 -translate-y-px truncate leading-none text-foreground/80 @sm/prs:inline">
                 {digestTitleWithoutKey(pr.title, pr.ticketId)}
               </span>
             ) : null}
             <Badge size="sm" variant={state.variant}>
               {state.label}
             </Badge>
+            {pr.additions !== undefined && pr.deletions !== undefined ? (
+              <span className="hidden -translate-y-px font-mono text-3xs leading-none tabular-nums @md/prs:inline">
+                <span className="text-success">+{pr.additions}</span>{" "}
+                <span className="text-destructive">−{pr.deletions}</span>
+              </span>
+            ) : null}
             <DigestReviewerStack reviewers={pr.reviewers} host={pr.host} />
             {pr.unhandledComments && pr.unhandledComments > 0 ? (
               <span className="-translate-y-px text-3xs leading-none">
@@ -141,6 +147,9 @@ export function DigestPrChip({
         <p className="font-medium">{pr.title ?? `${pr.repo}#${pr.number}`}</p>
         <p className="text-muted-foreground">
           {pr.repo}#{pr.number} · {state.label} · updated {pr.updatedAt.slice(0, 10)}
+          {pr.additions !== undefined && pr.deletions !== undefined
+            ? ` · +${pr.additions} −${pr.deletions}`
+            : ""}
         </p>
       </TooltipPopup>
     </Tooltip>
