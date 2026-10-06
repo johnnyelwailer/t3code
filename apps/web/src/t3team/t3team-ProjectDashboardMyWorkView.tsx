@@ -31,6 +31,7 @@ export function ProjectDashboardMyWorkView({
   });
   const {
     loading,
+    loadStatus,
     tickets,
     reloadTickets,
     jiraLastCheckedAt,
@@ -167,6 +168,7 @@ export function ProjectDashboardMyWorkView({
 
         <ProjectMyWorkContent
           loading={loading}
+          loadStatus={loadStatus}
           project={project}
           tickets={tickets}
           assignedWorkItems={assignedWorkItems}

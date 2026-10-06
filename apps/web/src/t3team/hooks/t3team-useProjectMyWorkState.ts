@@ -6,7 +6,10 @@ import {
   buildDistinctOptions,
   buildProjectMyWorkStatusOptions,
   countProjectMyWorkActiveOptions,
+  buildProjectMyWorkIdentity,
   hasProjectMyWorkDisplayNameDependentAssignments,
+  isAwaitingFirstProjectMyWorkLoad,
+  PROJECT_MY_WORK_RESET_OPTIONS_PATCH,
   setSortedStringMembership,
   shouldShowProjectMyWorkLoadingState,
 } from "~/t3team/hooks/t3team-projectMyWorkStateHelpers";
@@ -36,19 +39,21 @@ export function useProjectMyWorkState({
     useAtlassianCurrentUserDisplayNameState(project.source.accountId);
   const {
     tickets: fetchedTickets,
+    viewerAccountId,
     lastCheckedAt,
     reload,
     loading: resourcesLoading,
+    error: loadError,
+    sessionExpired,
+    isLinked,
   } = useProjectMyWork(project);
+  const loadStatus = { loadError, sessionExpired, isLinked, onRetry: reload };
   const { boardColumns, availableStatuses } = useProjectKanbanBoardColumns(project);
   const tickets = fetchedTickets.length > 0 ? fetchedTickets : fallbackTickets;
   const kanbanProfileId = useMemo(() => readProjectSetupProfileIdFromProject(project), [project]);
   const identity = useMemo(
-    () => ({
-      ...(project.source.accountId ? { accountId: project.source.accountId } : {}),
-      ...(currentUserDisplayName ? { displayName: currentUserDisplayName } : {}),
-    }),
-    [currentUserDisplayName, project.source.accountId],
+    () => buildProjectMyWorkIdentity(viewerAccountId, currentUserDisplayName),
+    [currentUserDisplayName, viewerAccountId],
   );
 
   const { state, setState } = useProjectDashboardMyWorkState(project.id);
@@ -103,11 +108,12 @@ export function useProjectMyWorkState({
   });
   const loading = shouldShowProjectMyWorkLoadingState({
     resourcesLoading,
+    awaitingFirstLoad: isAwaitingFirstProjectMyWorkLoad(loadStatus, lastCheckedAt),
     ticketCount: tickets.length,
     currentUserDisplayNameLoading,
     hasDisplayNameDependentAssignments: hasProjectMyWorkDisplayNameDependentAssignments(
       tickets,
-      project.source.accountId,
+      viewerAccountId,
     ),
     assignedWorkItemsCount: assignedWorkItems.length,
   });
@@ -118,6 +124,7 @@ export function useProjectMyWorkState({
 
   return {
     loading,
+    loadStatus,
     tickets,
     reloadTickets: reload,
     currentUserDisplayName,
@@ -178,16 +185,7 @@ export function useProjectMyWorkState({
       hiddenKanbanColumnIds: normalizedHiddenKanbanColumnIds,
       excludedTypeKeys: normalizedExcludedTypeKeys,
     }),
-    resetOptionsFilters: () => {
-      updateState({
-        statusCategory: "all",
-        hiddenKanbanColumnIds: [],
-        hasCustomizedKanbanLanes: false,
-        excludedTypeKeys: [],
-        selectedPriority: "all",
-        selectedStatus: "all",
-      });
-    },
+    resetOptionsFilters: () => updateState(PROJECT_MY_WORK_RESET_OPTIONS_PATCH),
     assignedWorkItems,
     filteredWorkItems,
     visibleHierarchy,

@@ -92,6 +92,26 @@ describe("project my work state helpers", () => {
     ).toBe(true);
   });
 
+  it("keeps my work loading until the first response arrives, even with fallback tickets", () => {
+    expect(
+      shouldShowProjectMyWorkLoadingState({
+        resourcesLoading: false,
+        awaitingFirstLoad: true,
+        ticketCount: 5,
+        currentUserDisplayNameLoading: false,
+        hasDisplayNameDependentAssignments: false,
+        assignedWorkItemsCount: 0,
+      }),
+    ).toBe(true);
+  });
+
+  it("treats tickets assigned to the viewer's Jira user id as not display-name dependent", () => {
+    const tickets = [createTicket({ id: "mine", assignee: "Phil", assigneeAccountId: "user-1" })];
+
+    expect(hasProjectMyWorkDisplayNameDependentAssignments(tickets, "user-1")).toBe(false);
+    expect(hasProjectMyWorkDisplayNameDependentAssignments(tickets, undefined)).toBe(true);
+  });
+
   it("keeps my work loading while display-name dependent assignments could still resolve", () => {
     expect(
       shouldShowProjectMyWorkLoadingState({

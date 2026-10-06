@@ -6,10 +6,12 @@ import {
 } from "~/t3team/t3team-ProjectDashboardKanban";
 import { ProjectMyWorkHierarchyView } from "~/t3team/t3team-ProjectMyWorkHierarchyView";
 import { ProjectMyWorkSimpleViews } from "~/t3team/t3team-ProjectMyWorkSimpleViews";
+import { ProjectMyWorkLoadFailure } from "~/t3team/t3team-ProjectMyWorkLoadFailure";
 import { ProjectMyWorkTableView } from "~/t3team/t3team-ProjectMyWorkTableView";
 import {
   ProjectMyWorkLoadingState,
   resolveProjectMyWorkContentState,
+  type ProjectMyWorkLoadStatus,
 } from "~/t3team/t3team-projectMyWorkContentState";
 import {
   buildProjectMyWorkTableRows,
@@ -33,6 +35,7 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 
 export function ProjectMyWorkContent({
   loading,
+  loadStatus,
   project,
   tickets,
   assignedWorkItems,
@@ -55,6 +58,7 @@ export function ProjectMyWorkContent({
   onOpenTicket,
 }: {
   loading: boolean;
+  loadStatus?: ProjectMyWorkLoadStatus;
   project: ProjectShellProject;
   tickets: readonly ProjectTicket[];
   assignedWorkItems: readonly ProjectTicket[];
@@ -91,6 +95,7 @@ export function ProjectMyWorkContent({
     loading,
     assignedWorkItemsCount: assignedWorkItems.length,
     filteredWorkItemsCount: filteredWorkItems.length,
+    ...loadStatus,
   });
   const renderTicketExtra = (ticket: ProjectTicket, compact?: boolean) =>
     renderProjectMyWorkTicketExtra({ ticket, compact, githubActivityByWorkItem });
@@ -108,6 +113,10 @@ export function ProjectMyWorkContent({
           digestFilters={digestFilters}
         />
       );
+    }
+
+    if (contentState.kind === "sessionExpired" || contentState.kind === "error") {
+      return <ProjectMyWorkLoadFailure state={contentState} onRetry={loadStatus?.onRetry} />;
     }
 
     if (contentState.kind === "loading") {

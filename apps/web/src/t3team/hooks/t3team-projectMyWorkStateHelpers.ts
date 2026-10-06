@@ -1,17 +1,41 @@
 import { normalizeHiddenKanbanColumnIds } from "~/t3team/hooks/t3team-projectKanbanDerivedData";
 import type {
+  ProjectMyWorkIdentity,
   ProjectMyWorkKanbanLaneOption,
   ProjectMyWorkStatusCategory,
 } from "~/t3team/t3team-projectMyWork";
+import type { ProjectMyWorkLoadStatus } from "~/t3team/t3team-projectMyWorkContentState";
+import type { ProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboardMyWorkState";
 import type { ProjectTicketKanbanBoardColumn } from "~/t3team/t3team-projectTicketStatus";
 import { matchesProjectTicketStatusCategory } from "~/t3team/t3team-projectTicketStatus";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
+/**
+ * Who "me" is for matching tickets. `project.source.accountId` is the Jira *site* id and can never
+ * equal a ticket's `assigneeAccountId`; the Jira user id comes from the server-scoped My Work page.
+ * Display name is only a fallback.
+ */
+export function buildProjectMyWorkIdentity(
+  viewerAccountId: string | undefined,
+  displayName: string | undefined,
+): ProjectMyWorkIdentity {
+  return {
+    ...(viewerAccountId ? { accountId: viewerAccountId } : {}),
+    ...(displayName ? { displayName } : {}),
+  };
+}
+
+/**
+ * True when at least one assigned ticket can only be matched to the viewer by
+ * display name — i.e. its `assigneeAccountId` is not the viewer's Jira user id.
+ * `viewerAccountId` is the Jira *user* id from the My Work page, never the
+ * Jira site id (`project.source.accountId`).
+ */
 export function hasProjectMyWorkDisplayNameDependentAssignments(
   tickets: readonly ProjectTicket[],
-  accountId?: string,
+  viewerAccountId?: string,
 ): boolean {
-  const normalizedAccountId = accountId?.trim();
+  const normalizedAccountId = viewerAccountId?.trim();
 
   return tickets.some((ticket) => {
     if (!ticket.assignee?.trim()) {
@@ -91,6 +115,16 @@ export function countMatchingStatusCategory(
     .length;
 }
 
+/** State patch applied by "Reset" in the My Work options menu. */
+export const PROJECT_MY_WORK_RESET_OPTIONS_PATCH: Partial<ProjectDashboardMyWorkState> = {
+  statusCategory: "all",
+  hiddenKanbanColumnIds: [],
+  hasCustomizedKanbanLanes: false,
+  excludedTypeKeys: [],
+  selectedPriority: "all",
+  selectedStatus: "all",
+};
+
 export function countProjectMyWorkActiveOptions(input: {
   statusCategory: ProjectMyWorkStatusCategory | "all";
   selectedPriority: string;
@@ -117,8 +151,23 @@ export function buildProjectMyWorkMetrics(tickets: readonly ProjectTicket[]) {
   };
 }
 
+/** Linked project whose first My Work response has neither arrived nor failed. */
+export function isAwaitingFirstProjectMyWorkLoad(
+  status: ProjectMyWorkLoadStatus,
+  lastCheckedAt: number | undefined,
+): boolean {
+  return (
+    Boolean(status.isLinked) &&
+    lastCheckedAt === undefined &&
+    !status.loadError &&
+    !status.sessionExpired
+  );
+}
+
 export function shouldShowProjectMyWorkLoadingState(input: {
   resourcesLoading: boolean;
+  /** Linked project whose first My Work response has neither arrived nor failed yet. */
+  awaitingFirstLoad?: boolean;
   ticketCount: number;
   currentUserDisplayNameLoading: boolean;
   hasDisplayNameDependentAssignments: boolean;
@@ -126,6 +175,7 @@ export function shouldShowProjectMyWorkLoadingState(input: {
 }): boolean {
   return (
     (input.resourcesLoading && input.ticketCount === 0) ||
+    input.awaitingFirstLoad === true ||
     (input.currentUserDisplayNameLoading &&
       input.hasDisplayNameDependentAssignments &&
       input.ticketCount > 0 &&
