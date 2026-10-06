@@ -19,7 +19,7 @@ import type { CloudSessionMachine } from "./t3team-CloudSessionMachine.ts";
  * dispatched it speaks. A rolling tag per protocol, not one shared "latest": a desktop on an older
  * protocol keeps getting a server it can talk to after a newer one is published.
  */
-export const sessionServerRef = `protocol-${ORCHESTRATION_PROTOCOL_VERSION}`;
+const sessionServerRef = `protocol-${ORCHESTRATION_PROTOCOL_VERSION}`;
 
 type RunExecutor = (
   invocation: GhInvocation,
