@@ -8,6 +8,8 @@
  * so the ticket mapping (`resourceRefToProjectTicket`) stays where it lives.
  */
 
+import type { T3TeamMyWorkDigestPlan } from "@t3tools/contracts";
+
 import type { BacklogResourceRef } from "./t3team-atlassian-backlog-cacheShared.ts";
 import type { T3TeamPollEnvelope } from "./t3team-integration-polling.ts";
 import type { T3TeamDigestChangeRequest } from "./t3team-myworkDigestTypesPrs.ts";
@@ -137,6 +139,12 @@ export type T3TeamMyWorkDigestPayload = {
   };
   /** A first change-request read is still running; the client re-polls soon for it. */
   readonly changeRequestsPending?: true;
+  /**
+   * The layout an agent stored for this viewer and scope (t3team-myworkDigestArrangement);
+   * absent means the client's heuristic default. Part of the fingerprint: a new arrangement
+   * is a changed digest.
+   */
+  readonly arrangement?: T3TeamMyWorkDigestPlan;
 };
 
 /**

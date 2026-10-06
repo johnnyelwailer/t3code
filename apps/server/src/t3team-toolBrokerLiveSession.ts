@@ -94,6 +94,7 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
             loadThreadDetail: reads.loadSearchableThread,
           }),
         recipeTools: deps.recipeToolsForThread(threadId),
+        ...(deps.myWorkTools ? { myWorkTools: deps.myWorkTools } : {}),
         ...(deps.workflowTools.workflowRunToolsForThread
           ? { workflowRunTools: deps.workflowTools.workflowRunToolsForThread(threadId) }
           : {}),

@@ -15,6 +15,7 @@ import type { ResourcePressureMonitorShape } from "./t3team-resourcePressureMoni
 import type { T3TeamThreadToolContextStoreShape } from "./t3team-threadToolContextStore.ts";
 import type { T3TeamToolCallResult, T3TeamTurnToolContext } from "./t3team-toolBroker.ts";
 import type { ReadMessageMailboxEntry } from "./t3team-toolBrokerBindingReadMessage.ts";
+import type { T3TeamMyWorkToolHandlers } from "./t3team-toolBrokerBindingMyWork.ts";
 import type { T3TeamRecipeToolHandlers } from "./t3team-toolBrokerBindingRecipes.ts";
 import type { T3TeamThreadReads } from "./t3team-toolBrokerThreadReads.ts";
 import type { makeT3TeamShowWidget } from "./t3team-toolBrokerWidgetShow.ts";
@@ -53,6 +54,8 @@ export interface BindSessionDeps {
     toolArgs: unknown,
     callerThreadId: ThreadIdType,
   ) => Effect.Effect<T3TeamToolCallResult>;
+  /** My Work digest/arrangement tools; absent when the runtime lacks the digest's services. */
+  readonly myWorkTools: T3TeamMyWorkToolHandlers | undefined;
   readonly recipeToolsForThread: (threadId: ThreadIdType) => T3TeamRecipeToolHandlers;
   readonly workflowTools: {
     readonly workflowRunToolsForThread?:

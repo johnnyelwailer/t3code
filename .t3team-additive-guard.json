@@ -360,6 +360,7 @@
     "packages/project-context/src/index.ts",
     "packages/project-context/src/t3teamContextPaths.ts",
     "packages/project-context/src/t3teamToolCatalog.test.ts",
+    "packages/project-context/src/t3teamToolCatalog.ts",
     "packages/project-context/src/t3teamToolCatalogImplemented.ts",
     "packages/project-context/src/t3teamToolCatalogItemTools.ts",
     "packages/project-context/src/t3teamWidgetGuidance.ts",

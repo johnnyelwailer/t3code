@@ -21,6 +21,8 @@ export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3_show_widget: "t3team.widget.show",
   t3_recipe_list: "t3team.recipe.list",
   t3_recipe_validate: "t3team.recipe.validate",
+  t3_mywork_digest: "t3team.mywork.digest.read",
+  t3_mywork_arrange: "t3team.mywork.arrange",
 } as const;
 
 const MCP_NAME_BY_TOOL_ID: ReadonlyMap<string, string> = new Map(

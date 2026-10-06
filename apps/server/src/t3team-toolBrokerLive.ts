@@ -23,6 +23,7 @@ import { T3TeamToolBroker, type T3TeamToolBrokerShape } from "./t3team-toolBroke
 import { createT3TeamPrelaunchToolBinding } from "./t3team-toolBrokerBinding.ts";
 import { makeManageChildrenHandler } from "./t3team-toolBrokerChildrenLive.ts";
 import { makeBindSession } from "./t3team-toolBrokerLiveSession.ts";
+import { makeMyWorkToolHandlers } from "./t3team-toolBrokerMyWorkLive.ts";
 import { buildPrelaunchView } from "./t3team-toolBrokerPrelaunchView.ts";
 import { makeRecipeToolHandlers } from "./t3team-toolBrokerRecipeTools.ts";
 import { makeT3TeamThreadReads } from "./t3team-toolBrokerThreadReads.ts";
@@ -84,6 +85,11 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     localEnvironmentId === undefined ? {} : { localEnvironmentId },
   );
 
+  const myWorkTools = yield* makeMyWorkToolHandlers({
+    projects: yield* ProjectStoreV2,
+    threads,
+  });
+
   const bindSession = makeBindSession({
     contextStore,
     genericThreadToolIds: T3TEAM_GENERIC_THREAD_TOOL_IDS,
@@ -101,6 +107,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
             mailbox.find(threadId, messageId).pipe(Effect.mapError((error) => error.operation)),
     loadThreadView: makeLoadThreadView(loadThreadProject, reads.loadThreadStats),
     manageChildren,
+    myWorkTools,
     recipeToolsForThread: makeRecipeToolHandlers({
       fileSystem,
       path,
