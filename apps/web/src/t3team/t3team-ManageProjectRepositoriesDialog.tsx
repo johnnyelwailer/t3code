@@ -108,9 +108,6 @@ export function ManageProjectRepositoriesDialog({
         <header className="flex items-start justify-between gap-3 px-5 pt-5 pb-4">
           <div className="min-w-0">
             <h2 className="text-base font-semibold">Linked repositories</h2>
-            <p className="truncate text-xs text-muted-foreground">
-              Code, PRs and branches for {project.title ?? "this project"} come from these.
-            </p>
           </div>
           <Button size="icon-xs" variant="ghost" onClick={onClose} aria-label="Close dialog">
             <X className="size-4" />
