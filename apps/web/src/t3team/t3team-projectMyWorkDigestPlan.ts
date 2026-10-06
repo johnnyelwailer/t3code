@@ -6,6 +6,7 @@ export type {
   DigestDecision,
   DigestReviewer,
   DigestChangeRequest,
+  DigestPrPerson,
   DigestReviewRequest,
   DigestDependency,
   DigestBlocker,

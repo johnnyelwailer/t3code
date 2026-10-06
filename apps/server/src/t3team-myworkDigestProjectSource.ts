@@ -17,6 +17,7 @@ import { loadDigestPrEntries, loadDigestViewerPrEntries } from "./t3team-myworkD
 import { readDigestYesterday } from "./t3team-myworkDigestYesterdayRead.ts";
 import type { DigestYesterdayWindow } from "./t3team-myworkDigestYesterdayWindow.ts";
 import { viewerPrsForProject } from "./t3team-myworkDigestViewerPrs.ts";
+import { enrichDigestReviewEntries } from "./t3team-myworkDigestReviewEnrich.ts";
 import {
   readDigestEstimateUnit,
   type DigestThreadRow,
@@ -94,7 +95,6 @@ export function loadDigestProjectSource(
       tickets,
       transitions,
     });
-    const pending = projectPrsPending || viewerPrs.pending || yesterdayRead.pending;
     const jiraSyncedAtMs = yield* readDigestJiraSyncedAtMs(project);
     const dependencies = yield* readDigestDependencies({ identity, assigned: viewer.assigned });
 
@@ -144,6 +144,17 @@ export function loadDigestProjectSource(
         askedAt: run.updatedAt,
       }));
 
+    const reviewRead = yield* enrichDigestReviewEntries(
+      viewerPrsForProject({
+        viewerEntries: viewerPrs.read,
+        projectEntries: toDigestPrEntries(prRead),
+        ticketDisplayIds: tickets.map((ticket) => ticket.displayId),
+      }),
+      appProjectId,
+    );
+    const pending =
+      projectPrsPending || viewerPrs.pending || reviewRead.pending || yesterdayRead.pending;
+
     const source: T3TeamDigestProjectSource = {
       input: project,
       tickets,
@@ -153,11 +164,7 @@ export function loadDigestProjectSource(
       })),
       claims,
       decisions,
-      prEntries: viewerPrsForProject({
-        viewerEntries: viewerPrs.read,
-        projectEntries: toDigestPrEntries(prRead),
-        ticketDisplayIds: tickets.map((ticket) => ticket.displayId),
-      }),
+      prEntries: reviewRead.entries,
       transitions,
       ...(burndownTransitions.length > 0 ? { burndownTransitions } : {}),
       ...(viewerName !== undefined ? { viewerName } : {}),

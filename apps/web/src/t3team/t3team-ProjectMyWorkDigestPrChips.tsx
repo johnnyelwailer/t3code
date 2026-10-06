@@ -4,7 +4,11 @@ import { useState, type MouseEvent } from "react";
 import { Badge } from "~/t3team/components/ui/t3team-badge";
 import { openDigestPullRequest } from "~/t3team/t3team-digestPrAsideStore";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
-import { digestPrUrl, digestReviewerUrl } from "~/t3team/t3team-projectMyWorkDigestFacts";
+import {
+  digestPrUrl,
+  digestReviewerUrl,
+  digestTitleWithoutKey,
+} from "~/t3team/t3team-projectMyWorkDigestFacts";
 import type { DigestChangeRequest, DigestReviewer } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import { WorkItemPersonAvatar } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
 
@@ -55,7 +59,13 @@ export function DigestReviewerStack({
                 className="inline-flex opacity-80 hover:opacity-100"
                 aria-label={`Reviewed by ${reviewer.name}`}
               >
-                <WorkItemPersonAvatar person={{ displayName: reviewer.name }} size="sm" />
+                <WorkItemPersonAvatar
+                  person={{
+                    displayName: reviewer.name,
+                    ...(reviewer.avatarUrl ? { avatarUrl: reviewer.avatarUrl } : {}),
+                  }}
+                  size="sm"
+                />
               </a>
             }
           />
@@ -112,7 +122,7 @@ export function DigestPrChip({
             </span>
             {pr.title ? (
               <span className="min-w-0 max-w-64 -translate-y-px truncate leading-none text-foreground/80">
-                {pr.title}
+                {digestTitleWithoutKey(pr.title, pr.ticketId)}
               </span>
             ) : null}
             <Badge size="sm" variant={state.variant}>

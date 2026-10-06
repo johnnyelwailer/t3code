@@ -3,9 +3,11 @@ import { getProjectTicketKanbanLane } from "~/t3team/t3team-projectTicketStatus"
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { WorkItemPersonAvatar } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
 
+// Said from the ticket's side, the way Jira links read: this ticket blocks theirs (they wait on
+// you), or theirs blocks this one (you wait on them).
 const LEAD: Record<DigestDependency["relation"], string> = {
-  "waits-on-you": "waits on this",
-  "you-wait-on": "you wait on",
+  "waits-on-you": "blocks",
+  "you-wait-on": "blocked by",
   "same-story": "same story",
 };
 
@@ -24,8 +26,20 @@ function DependencyPerson({ dependency }: { dependency: DigestDependency }) {
             onClick={(event) => event.stopPropagation()}
             className="inline-flex items-center gap-1 text-foreground/80 hover:text-foreground"
           >
-            <WorkItemPersonAvatar person={{ displayName: name }} size="sm" />
+            <WorkItemPersonAvatar
+              person={{
+                displayName: name,
+                ...(other.assigneeAvatarUrl ? { avatarUrl: other.assigneeAvatarUrl } : {}),
+              }}
+              size="sm"
+            />
             <span>{name.split(" ")[0]}</span>
+            {dependency.relation !== "same-story" ? (
+              // Their ticket says what part they own (FE, BE, review…) and is what links the two.
+              <span className="min-w-0 max-w-48 truncate text-muted-foreground">
+                <span className="font-mono">{other.key}</span> {other.title}
+              </span>
+            ) : null}
           </a>
         }
       />

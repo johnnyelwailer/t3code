@@ -39,6 +39,7 @@ export type DigestDecision = {
 export type DigestReviewer = {
   readonly name: string;
   readonly login: string;
+  readonly avatarUrl?: string;
   readonly decision?: "approved" | "changes-requested";
 };
 
@@ -71,6 +72,12 @@ export type DigestChangeRequest = {
  * `ticketId` is set when the PR names a ticket the digest holds; a colleague's ticket keeps just
  * its key.
  */
+export type DigestPrPerson = {
+  readonly name: string;
+  readonly login: string;
+  readonly avatarUrl?: string;
+};
+
 export type DigestReviewRequest = {
   readonly id: string;
   readonly projectId: string;
@@ -80,7 +87,12 @@ export type DigestReviewRequest = {
   readonly title: string;
   readonly updatedAt: string;
   /** Who opened it: the person waiting on the viewer. */
-  readonly author?: string;
+  readonly author?: DigestPrPerson;
+  /** Other humans asked to review, and those who already commented: someone is on it already. */
+  readonly reviewers?: readonly DigestPrPerson[];
+  readonly engaged?: readonly DigestPrPerson[];
+  readonly additions?: number;
+  readonly deletions?: number;
   readonly workItemKey?: string;
   readonly ticketId?: string;
 };
@@ -98,6 +110,7 @@ export type DigestDependency = {
     readonly title: string;
     readonly status: string;
     readonly assignee?: string;
+    readonly assigneeAvatarUrl?: string;
     readonly url?: string;
   };
 };

@@ -71,7 +71,7 @@ function rememberRead(key: string, read: unknown, atMs: number) {
 }
 
 /** Stale-while-revalidate for one keyed read; `fallback` is what a cold read ships meanwhile. */
-function readCached<A, R>(key: string, load: Effect.Effect<A, never, R>, fallback: A) {
+export function readCached<A, R>(key: string, load: Effect.Effect<A, never, R>, fallback: A) {
   return Effect.gen(function* () {
     const nowMs = yield* Clock.currentTimeMillis;
     const cached = cachedReads.get(key);
