@@ -12,6 +12,7 @@ import { useProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboard
 import { getT3TeamMainContentHeaderClassName } from "~/t3team/t3team-mainContentHeader";
 import { ProjectBindingRepairBanner } from "~/t3team/t3team-ProjectBindingRepairBanner";
 import { ProjectDashboardBacklogView } from "~/t3team/t3team-ProjectDashboardBacklogView";
+import { ProjectDashboardModeTabs } from "~/t3team/t3team-ProjectDashboardModeTabs";
 import { ProjectDashboardMyWorkView } from "~/t3team/t3team-ProjectDashboardMyWorkView";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
@@ -30,7 +31,11 @@ export function ProjectDashboard({
   onManageRepositories: (projectId: string) => void;
   onProjectUpdated: (project: ProjectShellProject) => void;
 }) {
-  const { state: dashboardState } = useProjectDashboardModeState(project.id);
+  // One state, one setter: the header tabs write the same persisted mode (and `?projectView=`)
+  // that picks the body below, so the URL, the tabs and the rendered view cannot disagree.
+  const { state: dashboardState, setState: setDashboardState } = useProjectDashboardModeState(
+    project.id,
+  );
   const dashboardMode = dashboardState.dashboardMode;
   const { state: myWorkState } = useProjectDashboardMyWorkState(project.id);
   // Every lens is a centered column so switching lenses does not jump the width; the digest's
@@ -70,6 +75,10 @@ export function ProjectDashboard({
             </MenuPopup>
           </Menu>
         </div>
+        <ProjectDashboardModeTabs
+          mode={dashboardMode}
+          onModeChange={(nextMode) => setDashboardState({ dashboardMode: nextMode })}
+        />
       </header>
 
       <ProjectBindingRepairBanner project={project} onProjectUpdated={onProjectUpdated} />

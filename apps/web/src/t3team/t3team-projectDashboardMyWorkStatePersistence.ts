@@ -16,6 +16,7 @@ import {
   type ProjectDashboardMyWorkState,
 } from "./t3team-projectDashboardMyWorkStateShared";
 import { readT3TeamBetaFlags } from "./t3team-betaFlags";
+import { resolveProjectMyWorkLensFromRouteSearch } from "./t3team-projectMyWorkLensRoute";
 
 export function readPersistedProjectDashboardMyWorkState(
   storageKey: string,
@@ -122,6 +123,8 @@ export function resolveProjectDashboardMyWorkState(input: {
   if (search.myWorkQ !== undefined) next.query = search.myWorkQ;
   if (search.myWorkView !== undefined) next.viewMode = search.myWorkView;
   if (search.myWorkGroup !== undefined) next.groupMode = search.myWorkGroup;
+  const routeLens = resolveProjectMyWorkLensFromRouteSearch(search);
+  if (routeLens !== undefined) next.lens = routeLens;
   if (search.myWorkStatus !== undefined) next.statusCategory = search.myWorkStatus;
   const kanbanLaneSelectionMode = parseRouteEnum(
     search.myWorkLanesMode,
@@ -156,6 +159,7 @@ export function buildProjectDashboardMyWorkRouteSearch(
 ): ProjectDashboardMyWorkRouteSearch {
   return {
     myWorkQ: state.query,
+    myWorkLens: state.lens,
     myWorkView: state.viewMode,
     myWorkGroup: state.groupMode,
     myWorkStatus: state.statusCategory,
