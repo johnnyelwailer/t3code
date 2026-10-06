@@ -33,6 +33,17 @@ export function digestReviewerUrl(
   return `${digestHostOrigin(host)}/${reviewer.login}`;
 }
 
+/**
+ * A PR title without the ticket key it opens with, for places that already show that key beside
+ * it ("IES-1 Fix login" under IES-1 reads "Fix login"). A title naming another ticket stays whole.
+ */
+export function digestTitleWithoutKey(title: string, key: string | undefined): string {
+  if (!key || !title.toUpperCase().startsWith(key.toUpperCase())) return title;
+  const rest = title.slice(key.length);
+  if (rest !== "" && !/^[\s:\-–|\]\)]/.test(rest)) return title;
+  return rest.replace(/^[\s:\-–|\]\)]+/, "") || title;
+}
+
 export function digestPrsFor(graph: DigestGraph, ticketId: string): readonly DigestChangeRequest[] {
   return graph.changeRequests.filter((pr) => pr.ticketId === ticketId);
 }

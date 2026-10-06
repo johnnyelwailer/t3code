@@ -75,13 +75,27 @@ export function digestReviewRequests(
         number: pr.number,
         title: pr.title ?? `${pr.repo}#${pr.number}`,
         updatedAt: pr.updatedAt,
-        ...(pr.authorLogin !== undefined ? { author: pr.authorLogin } : {}),
+        ...(pr.author !== undefined
+          ? { author: pr.author }
+          : pr.authorLogin !== undefined
+            ? { author: { name: pr.authorLogin, login: pr.authorLogin } }
+            : {}),
+        ...(pr.reviewers !== undefined ? { reviewers: pr.reviewers } : {}),
+        ...(pr.engaged !== undefined ? { engaged: pr.engaged } : {}),
+        ...(pr.additions !== undefined ? { additions: pr.additions } : {}),
+        ...(pr.deletions !== undefined ? { deletions: pr.deletions } : {}),
         ...(pr.workItemKey !== undefined ? { workItemKey: pr.workItemKey } : {}),
         ...(ticketId !== "" ? { ticketId } : {}),
       });
     }
   });
-  return [...byId.values()].toSorted((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  // Nobody on it yet comes first — someone else already reviewing makes a PR less urgent for the
+  // viewer — then the one waiting longest.
+  return [...byId.values()].toSorted(
+    (a, b) =>
+      Number((a.engaged?.length ?? 0) > 0) - Number((b.engaged?.length ?? 0) > 0) ||
+      Date.parse(a.updatedAt) - Date.parse(b.updatedAt),
+  );
 }
 
 /** Who each of the viewer's tickets hangs together with, on the ticket ids the rows use. */

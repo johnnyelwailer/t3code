@@ -9,6 +9,7 @@ import type { T3TeamMyWorkDigestPlan } from "@t3tools/contracts";
  * adds the fingerprint envelope so unchanged digests cost one word of body.
  */
 
+import type { MyWorkDigestChangeRequest } from "./t3team-myworkDigestBackendPrTypes";
 import { postJson } from "./t3team-t3BackendHttp";
 
 type DigestAccountRef = { readonly id: string; readonly provider: string };
@@ -85,31 +86,7 @@ export type MyWorkDigestPayload = {
       readonly question: string;
       readonly askedAt: string;
     }>;
-    readonly changeRequests: ReadonlyArray<{
-      readonly id: string;
-      /** Absent on payloads from a server that predates the field. */
-      readonly host?: string;
-      readonly repo: string;
-      readonly number: number;
-      readonly state:
-        | "draft"
-        | "open"
-        | "needs-you"
-        | "changes-requested"
-        | "ci-failing"
-        | "approved"
-        | "merged";
-      readonly updatedAt: string;
-      readonly workItemKey?: string;
-      readonly title?: string;
-      /** The viewer wrote it, or is asked to review it (host-wide search; absent on older servers). */
-      readonly viewerAuthored?: boolean;
-      readonly viewerReviewRequested?: boolean;
-      readonly authorLogin?: string;
-      /** Open PRs only, off the server's cached detail read. */
-      readonly reviewers?: ReadonlyArray<{ readonly name: string; readonly login: string }>;
-      readonly unhandledReviewThreads?: ReadonlyArray<{ readonly lastCommentAt?: string }>;
-    }>;
+    readonly changeRequests: ReadonlyArray<MyWorkDigestChangeRequest>;
     /** Who the viewer's tickets hang together with: Jira `blocks` links both ways, same story. */
     readonly dependencies?: ReadonlyArray<{
       readonly ticketKey: string;

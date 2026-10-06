@@ -9,11 +9,22 @@
  */
 
 import { ProjectId, type PullRequestListEntry } from "@t3tools/contracts";
-import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
 import type { T3TeamDigestProjectSource } from "./t3team-myworkDigestTypes.ts";
+import {
+  digestEnrichmentFields,
+  enrichPr,
+  toDigestPerson,
+  type PrEnrichment,
+} from "./t3team-myworkDigestPrEnrich.ts";
+
+export {
+  digestEnrichmentFields,
+  enrichPr,
+  type PrEnrichment,
+} from "./t3team-myworkDigestPrEnrich.ts";
 
 const DIGEST_PR_LIMIT = 50;
 /**
@@ -23,12 +34,6 @@ const DIGEST_PR_LIMIT = 50;
  * chips a single screen shows before the section scrolls.
  */
 const DIGEST_PR_ENRICH_LIMIT = 8;
-
-export type PrEnrichment = {
-  readonly reviewers: ReadonlyArray<{ readonly name: string; readonly login: string }>;
-  readonly unhandledReviewThreads: ReadonlyArray<{ readonly lastCommentAt?: string }>;
-  readonly body: string;
-};
 
 export type PrReadResult = {
   readonly entries: readonly PullRequestListEntry[];
@@ -45,53 +50,17 @@ function digestPrKey(entry: {
   return `${entry.host}:${entry.repository}#${entry.number}`;
 }
 
-function mapReviewers(detail: {
-  readonly reviewers: ReadonlyArray<{ readonly name: string | null; readonly login: string }>;
-}): PrEnrichment["reviewers"] {
-  return detail.reviewers.map((reviewer) => ({
-    name: reviewer.name !== null && reviewer.name.trim() !== "" ? reviewer.name : reviewer.login,
-    login: reviewer.login,
-  }));
-}
-
-/** Unresolved threads only, newest comment time where the host carried one. */
-function mapUnhandledThreads(activity: {
-  readonly reviewThreads: ReadonlyArray<{
-    readonly isResolved: boolean;
-    readonly comments: ReadonlyArray<{ readonly createdAt: string }>;
-  }>;
-}): PrEnrichment["unhandledReviewThreads"] {
-  return activity.reviewThreads
-    .filter((thread) => !thread.isResolved)
-    .map((thread) => {
-      const times = thread.comments
-        .map((comment) => Date.parse(comment.createdAt))
-        .filter((time) => Number.isFinite(time));
-      return times.length > 0
-        ? { lastCommentAt: DateTime.formatIso(DateTime.makeUnsafe(Math.max(...times))) }
-        : {};
-    });
-}
-
 /**
  * One open PR's enrichment, through the shared cached reads. Any per-PR
  * failure (a repo the CLI cannot see, a host blip) skips that PR's enrichment
  * instead of sinking the round — the chip simply loses its faces.
  */
 function enrichOnePr(service: PullRequestService["Service"], entry: PullRequestListEntry) {
-  const ref = {
+  return enrichPr(service, {
     projectId: entry.projectId,
     repository: entry.repository,
     number: entry.number,
-  };
-  return Effect.all([service.detail(ref), service.activity(ref)], { concurrency: 2 }).pipe(
-    Effect.map(([detail, activity]): PrEnrichment => ({
-      reviewers: mapReviewers(detail),
-      unhandledReviewThreads: mapUnhandledThreads(activity),
-      body: typeof detail.body === "string" ? detail.body : "",
-    })),
-    Effect.catch(() => Effect.succeed<PrEnrichment | undefined>(undefined)),
-  );
+  });
 }
 
 /** The digest's PR rows: the cached listing shaped for the joiner, enrichment merged in. */
@@ -113,13 +82,9 @@ export function toDigestPrEntries(
       viewerReviewRequested: entry.viewerReviewRequested,
       ...(entry.reviewDecision !== undefined ? { reviewDecision: entry.reviewDecision } : {}),
       ...(entry.checksState !== undefined ? { checksState: entry.checksState } : {}),
-      ...(enrichment !== undefined
-        ? {
-            reviewers: enrichment.reviewers,
-            unhandledReviewThreads: enrichment.unhandledReviewThreads,
-            body: enrichment.body,
-          }
-        : {}),
+      ...(entry.author?.login ? { authorLogin: entry.author.login } : {}),
+      ...(entry.author ? { author: toDigestPerson(entry.author) } : {}),
+      ...(enrichment !== undefined ? digestEnrichmentFields(enrichment) : {}),
     };
   });
 }

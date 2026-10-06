@@ -12,7 +12,10 @@ import type { T3TeamMyWorkDigestPlan } from "@t3tools/contracts";
 
 import type { BacklogResourceRef } from "./t3team-atlassian-backlog-cacheShared.ts";
 import type { T3TeamPollEnvelope } from "./t3team-integration-polling.ts";
-import type { T3TeamDigestChangeRequest } from "./t3team-myworkDigestTypesPrs.ts";
+import type {
+  T3TeamDigestChangeRequest,
+  T3TeamDigestPerson,
+} from "./t3team-myworkDigestTypesPrs.ts";
 import type { T3TeamDigestDependency } from "./t3team-myworkDigestDependencies.ts";
 
 export type {
@@ -173,13 +176,17 @@ export type T3TeamDigestProjectSource = {
     /** The viewer wrote it; set by the host-wide search, absent on a repository listing. */
     readonly viewerAuthored?: boolean;
     readonly authorLogin?: string;
+    readonly author?: T3TeamDigestPerson;
     readonly reviewDecision?: string;
     readonly checksState?: string;
     /** Open PRs only, from the cached detail/activity reads. */
-    readonly reviewers?: ReadonlyArray<{ readonly name: string; readonly login: string }>;
+    readonly reviewers?: ReadonlyArray<T3TeamDigestPerson>;
     readonly unhandledReviewThreads?: ReadonlyArray<{ readonly lastCommentAt?: string }>;
     /** The PR body, for open PRs only (the blocker mention source). */
     readonly body?: string;
+    readonly engaged?: ReadonlyArray<T3TeamDigestPerson>;
+    readonly additions?: number;
+    readonly deletions?: number;
   }>;
   readonly transitions: ReadonlyArray<T3TeamDigestTransition>;
   /**
