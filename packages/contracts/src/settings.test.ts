@@ -7,6 +7,7 @@ import {
   ClientSettingsPatch,
   ClaudeSettings,
   DEFAULT_SERVER_SETTINGS,
+  OpenCodeSettings,
   defaultEnabledForDriver,
   resolveProviderInstanceEnabled,
   ServerSettings,
@@ -20,6 +21,172 @@ const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
 const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
+const decodeOpenCodeSettings = Schema.decodeUnknownSync(OpenCodeSettings);
+
+describe("ServerSettings usage price overrides", () => {
+  const prices = { inputCostPerMillionTokens: 2, outputCostPerMillionTokens: 8 };
+
+  it("defaults to automatic pricing and round-trips arbitrary model IDs", () => {
+    expect(decodeServerSettings({}).usagePriceOverrides).toEqual({});
+    const settings = decodeServerSettings({
+      usagePriceOverrides: { "  vendor/example-model  ": prices },
+    });
+    expect(encodeServerSettings(settings).usagePriceOverrides).toEqual({
+      "vendor/example-model": prices,
+    });
+  });
+
+  it("accepts zero rates, optional cache rates, and per-model deletion", () => {
+    const overrides = {
+      "example-model": {
+        inputCostPerMillionTokens: 0,
+        outputCostPerMillionTokens: 0,
+        cacheReadCostPerMillionTokens: 0.5,
+        cacheWriteCostPerMillionTokens: 3,
+      },
+      "removed-model": null,
+    };
+    expect(
+      decodeServerSettingsPatch({ usagePriceOverrides: overrides }).usagePriceOverrides,
+    ).toEqual(overrides);
+  });
+
+  it.each([
+    "inputCostPerMillionTokens",
+    "outputCostPerMillionTokens",
+    "cacheReadCostPerMillionTokens",
+    "cacheWriteCostPerMillionTokens",
+  ])("rejects invalid %s rates at the settings boundary", (field) => {
+    for (const value of [-1, Number.NaN, Number.POSITIVE_INFINITY, "2"]) {
+      const usagePriceOverrides = { "example-model": { ...prices, [field]: value } };
+      expect(() => decodeServerSettings({ usagePriceOverrides })).toThrow();
+      expect(() => decodeServerSettingsPatch({ usagePriceOverrides })).toThrow();
+    }
+  });
+
+  it("rejects empty model IDs and incomplete input/output pricing", () => {
+    for (const usagePriceOverrides of [
+      { " ": prices },
+      { "example-model": { inputCostPerMillionTokens: 2 } },
+      { "example-model": { outputCostPerMillionTokens: 8 } },
+    ]) {
+      expect(() => decodeServerSettingsPatch({ usagePriceOverrides })).toThrow();
+    }
+  });
+});
+
+describe("custom model settings", () => {
+  const capabilities = {
+    optionDescriptors: [
+      {
+        id: "effort",
+        label: "Reasoning",
+        type: "select",
+        options: [{ id: "high", label: "High", isDefault: true }],
+      },
+    ],
+  };
+
+  it("accepts legacy bare slugs alongside full entries", () => {
+    const decoded = decodeClaudeSettings({
+      customModels: ["bare-slug", { slug: "named", name: "Named", capabilities }],
+    });
+    expect(decoded.customModels).toEqual([
+      "bare-slug",
+      { slug: "named", name: "Named", capabilities },
+    ]);
+  });
+
+  it("accepts entries at the settings patch boundary", () => {
+    expect(
+      decodeServerSettingsPatch({
+        providers: { codex: { customModels: [{ slug: "x", capabilities }] } },
+      }).providers?.codex?.customModels,
+    ).toEqual([{ slug: "x", capabilities }]);
+    expect(() =>
+      decodeServerSettingsPatch({ providers: { codex: { customModels: [{ name: "no slug" }] } } }),
+    ).toThrow();
+  });
+});
+
+describe("OpenCodeSettings configContent and custom models", () => {
+  // `configContent` is the user's own opencode.json. It is written verbatim
+  // and hand-edited, so whitespace and key order are load-bearing — the
+  // schema must neither trim nor reorder it.
+  const configContent = [
+    "{",
+    '  "$schema": "https://opencode.ai/config.json",',
+    '  "theme": "system",',
+    "}",
+  ].join("\n");
+  const capabilities = {
+    optionDescriptors: [
+      { id: "fastMode", label: "Fast mode", type: "boolean" as const, currentValue: true },
+    ],
+  };
+
+  it("defaults both fields so a legacy config decodes without complaint", () => {
+    const decoded = decodeOpenCodeSettings({});
+    expect(decoded.configContent).toBe("");
+    expect(decoded.customModels).toEqual([]);
+  });
+
+  it("retains config content verbatim while custom models hold slugs and entries", () => {
+    const indented = `  ${configContent}  `;
+    const decoded = decodeOpenCodeSettings({
+      configContent: indented,
+      customModels: ["vendor/bare-slug", { slug: "vendor/named", name: "Named", capabilities }],
+    });
+
+    expect(decoded.configContent).toBe(indented);
+    expect(decoded.customModels).toEqual([
+      "vendor/bare-slug",
+      { slug: "vendor/named", name: "Named", capabilities },
+    ]);
+  });
+
+  it("round-trips content and both custom model shapes through ServerSettings", () => {
+    const settings = decodeServerSettings({
+      providers: {
+        opencode: {
+          configContent,
+          customModels: ["vendor/bare-slug", { slug: "vendor/named", capabilities }],
+        },
+      },
+    });
+
+    expect(settings.providers.opencode.configContent).toBe(configContent);
+    expect(encodeServerSettings(settings).providers?.opencode).toMatchObject({
+      configContent,
+      customModels: ["vendor/bare-slug", { slug: "vendor/named", capabilities }],
+    });
+  });
+
+  it("decodes a patch that sets content and custom models together", () => {
+    const patch = decodeServerSettingsPatch({
+      providers: {
+        opencode: {
+          configContent,
+          customModels: ["vendor/bare-slug", { slug: "vendor/named", name: "Named" }],
+        },
+      },
+    });
+
+    expect(patch.providers?.opencode).toEqual({
+      configContent,
+      customModels: ["vendor/bare-slug", { slug: "vendor/named", name: "Named" }],
+    });
+  });
+
+  it("rejects a custom model entry with no usable slug at either boundary", () => {
+    for (const customModels of [[{ name: "no slug" }], [{ slug: "  " }], [42]]) {
+      expect(() => decodeOpenCodeSettings({ customModels })).toThrow();
+      expect(() =>
+        decodeServerSettingsPatch({ providers: { opencode: { customModels } } }),
+      ).toThrow();
+    }
+  });
+});
 
 describe("ClaudeSettings auto-compaction", () => {
   it("uses Claude's default threshold when no override is configured", () => {
@@ -64,6 +231,15 @@ describe("ClientSettings word wrap", () => {
     expect(decoded.wordWrap).toBe(true);
     expect(decoded).not.toHaveProperty("chatWordWrap");
     expect(decoded).not.toHaveProperty("diffWordWrap");
+  });
+});
+
+describe("ClientSettings proactive panels", () => {
+  it("is opt-in and accepts client-local updates", () => {
+    expect(decodeClientSettings({}).proactivePanelsEnabled).toBe(false);
+    expect(decodeClientSettingsPatch({ proactivePanelsEnabled: true }).proactivePanelsEnabled).toBe(
+      true,
+    );
   });
 });
 
@@ -144,6 +320,22 @@ describe("ClientSettings appearance contrast", () => {
   });
 });
 
+describe("ClientSettings panel animations", () => {
+  it("defaults to instant changes", () => {
+    expect(decodeClientSettings({}).panelAnimationDurationMs).toBe(0);
+  });
+
+  it.each([0, 400])("accepts a panel animation duration: %s", (value) => {
+    expect(decodeClientSettingsPatch({ panelAnimationDurationMs: value })).toEqual({
+      panelAnimationDurationMs: value,
+    });
+  });
+
+  it.each([-1, 401, 150.5])("rejects an invalid panel animation duration: %s", (value) => {
+    expect(() => decodeClientSettingsPatch({ panelAnimationDurationMs: value })).toThrow();
+  });
+});
+
 describe("ClientSettings environment identification", () => {
   it("defaults to artwork and accepts each presentation mode", () => {
     expect(decodeClientSettings({}).environmentIdentificationMode).toBe("artwork");
@@ -188,6 +380,34 @@ describe("ClientSettings sidebar", () => {
     expect(decodeClientSettings({}).confirmThreadUnpin).toBe(false);
     expect(decodeClientSettingsPatch({ confirmThreadUnpin: true }).confirmThreadUnpin).toBe(true);
     expect(() => decodeClientSettingsPatch({ confirmThreadUnpin: "yes" })).toThrow();
+  });
+});
+
+describe("ClientSettings context window meter", () => {
+  it("defaults off and preserves an explicit legacy opt-in", () => {
+    expect(decodeClientSettings({}).contextWindowMeterEnabled).toBe(false);
+    expect(
+      decodeClientSettings({ contextWindowMeterEnabled: true }).contextWindowMeterEnabled,
+    ).toBe(true);
+    expect(
+      decodeClientSettingsPatch({ contextWindowMeterEnabled: true }).contextWindowMeterEnabled,
+    ).toBe(true);
+  });
+});
+
+describe("ClientSettings composer collapse", () => {
+  it("collapses on blur and scroll by default and accepts opting out of each", () => {
+    const defaults = decodeClientSettings({});
+    expect(defaults.composerCollapseOnBlur).toBe(true);
+    expect(defaults.composerCollapseOnScroll).toBe(true);
+
+    const blurOff = decodeClientSettings({ composerCollapseOnBlur: false });
+    expect(blurOff.composerCollapseOnBlur).toBe(false);
+    expect(blurOff.composerCollapseOnScroll).toBe(true);
+
+    expect(
+      decodeClientSettingsPatch({ composerCollapseOnScroll: false }).composerCollapseOnScroll,
+    ).toBe(false);
   });
 });
 
@@ -326,6 +546,10 @@ describe("provider enabled defaults", () => {
     // No flags anywhere: driver default applies.
     expect(resolveProviderInstanceEnabled({ driver: grok, config: {} })).toBe(false);
     expect(resolveProviderInstanceEnabled({ driver: codex, config: {} })).toBe(true);
+    // Unknown fork drivers stay enabled.
+    expect(
+      resolveProviderInstanceEnabled({ driver: ProviderDriverKind.make("ollama"), config: {} }),
+    ).toBe(true);
     // Envelope flag wins over the driver default.
     expect(resolveProviderInstanceEnabled({ driver: grok, enabled: true, config: {} })).toBe(true);
     expect(resolveProviderInstanceEnabled({ driver: codex, enabled: false, config: {} })).toBe(
@@ -512,5 +736,24 @@ describe("ServerSettings agentInstructions", () => {
 
   it("keeps the decoded default in DEFAULT_SERVER_SETTINGS", () => {
     expect(DEFAULT_SERVER_SETTINGS.agentInstructions).toBe("");
+  });
+});
+
+describe("ServerSettings environment icon", () => {
+  it("defaults to null", () => {
+    expect(decodeServerSettings({}).environmentIcon).toBeNull();
+  });
+
+  it("keeps a kind this build knows", () => {
+    expect(decodeServerSettings({ environmentIcon: "mac-mini" }).environmentIcon).toBe("mac-mini");
+  });
+
+  it("decodes a kind from a newer server as null instead of failing the snapshot", () => {
+    expect(decodeServerSettings({ environmentIcon: "toaster" }).environmentIcon).toBeNull();
+  });
+
+  it("round-trips through encode", () => {
+    const settings = decodeServerSettings({ environmentIcon: "laptop" });
+    expect(encodeServerSettings(settings).environmentIcon).toBe("laptop");
   });
 });
