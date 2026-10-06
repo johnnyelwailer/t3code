@@ -324,7 +324,6 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                       <button
                         type="button"
                         aria-label="Dismiss"
-                        title="Dismiss"
                         onClick={() => onDismissCloudSession(cloudSession)}
                         className="-mr-1 shrink-0 cursor-pointer rounded-sm p-0.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                       >
