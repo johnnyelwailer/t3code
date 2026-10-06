@@ -377,6 +377,7 @@ import {
 import { type ReviewCommentContext } from "../reviewCommentContext";
 import { environmentCatalog } from "../connection/catalog";
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
+import { primaryEnvironmentLabel } from "../connection/t3team-localEnvironmentLabel";
 import { useEnvironmentDisconnectDelay } from "../hooks/useEnvironmentDisconnectDelay";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { useKnownTerminalSessions, useThreadRunningTerminalIds } from "../state/terminalSessions";
@@ -2735,7 +2736,10 @@ export default function ChatView(props: ChatViewProps) {
       envs.push({
         environmentId: p.environmentId,
         projectId: p.id,
-        label: environment?.label ?? p.environmentId,
+        // t3team: the user's own machine reads "This computer", not its hostname.
+        label: isPrimary
+          ? primaryEnvironmentLabel(environment?.label ?? p.environmentId)
+          : (environment?.label ?? p.environmentId),
         isPrimary,
         machine: resolveEnvironmentMachineKind(environment?.serverConfig ?? null),
         // The dedupe tie-break in `dedupeRunOnEnvironments`: when the same machine sits in

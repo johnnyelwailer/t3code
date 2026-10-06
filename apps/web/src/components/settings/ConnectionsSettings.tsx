@@ -150,6 +150,10 @@ import { useCloudLinkController } from "~/cloud/useCloudLinkController";
 import { useCloudSessionController } from "~/cloud/t3team-useCloudSessionController";
 import { savedEnvironmentForCloudSession } from "~/cloud/t3team-cloudSessionEnvironmentMatch";
 import { endedCloudSessionEnvironmentIds } from "~/cloud/t3team-endedCloudSessionEnvironments";
+import {
+  LOCAL_ENVIRONMENT_LABEL,
+  primaryEnvironmentLabel,
+} from "~/connection/t3team-localEnvironmentLabel";
 import { authEnvironment } from "~/state/auth";
 import { environmentCatalog } from "~/connection/catalog";
 import {
@@ -3367,7 +3371,11 @@ export function ConnectionsSettings() {
           <SettingsSection
             {...searchableSetting("connections-environment")}
             title={
-              primaryEnvironment?.label ?? (desktopBridge ? "This machine" : "Primary environment")
+              primaryEnvironment
+                ? primaryEnvironmentLabel(primaryEnvironment.label)
+                : desktopBridge
+                  ? LOCAL_ENVIRONMENT_LABEL
+                  : "Primary environment"
             }
             icon={
               <EnvironmentMachineIcon

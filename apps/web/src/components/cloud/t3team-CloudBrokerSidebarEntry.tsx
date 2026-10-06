@@ -2,7 +2,15 @@ import { ChevronDownIcon, CloudIcon, LogInIcon, LogOutIcon } from "lucide-react"
 
 import { useCloudBrokerAuth } from "~/cloud/t3team-useCloudBrokerAuth";
 
-import { Menu, MenuGroupLabel, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
+import {
+  Menu,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuTrigger,
+} from "../ui/menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "../ui/sidebar";
 
 /**
@@ -27,9 +35,11 @@ export function CloudBrokerSidebarEntry() {
               <ChevronDownIcon className="ml-auto opacity-60" />
             </MenuTrigger>
             <MenuPopup align="start" side="top">
-              <MenuGroupLabel>
-                Signed in to Nexplore{state.name ? ` as ${state.name}` : ""}
-              </MenuGroupLabel>
+              <MenuGroup>
+                <MenuGroupLabel>
+                  Signed in to Nexplore{state.name ? ` as ${state.name}` : ""}
+                </MenuGroupLabel>
+              </MenuGroup>
               <MenuSeparator />
               <MenuItem disabled={auth.pending} onClick={auth.signOut}>
                 <LogOutIcon />
