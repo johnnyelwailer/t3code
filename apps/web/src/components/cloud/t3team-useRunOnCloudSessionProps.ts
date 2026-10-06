@@ -4,7 +4,6 @@ import { type ComponentProps, useCallback, useMemo } from "react";
 
 import { useCloudSessionController } from "~/cloud/t3team-useCloudSessionController";
 import type { BranchToolbarEnvironmentSelector } from "~/components/BranchToolbarEnvironmentSelector";
-import { formatHoldDuration } from "./t3team-cloudSessionHoldFormat";
 import { runOnCloudSessions } from "./t3team-cloudSessionSplit";
 
 type SelectorProps = ComponentProps<typeof BranchToolbarEnvironmentSelector>;
@@ -12,7 +11,6 @@ type CloudSelectorProps = Pick<
   SelectorProps,
   | "pendingCloudSessions"
   | "onCreateCloudSession"
-  | "cloudSessionDurationLabel"
   | "onCloudSessionAction"
   | "onCloudMenuOpenChange"
   | "onSetupCloudSessions"
@@ -35,7 +33,7 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
 } {
   const cloudSessions = useCloudSessionController();
   const navigate = useNavigate();
-  const { available, configured, sessions, durationSeconds, onCreate } = cloudSessions;
+  const { available, configured, sessions, onCreate } = cloudSessions;
   const { primaryEnvironmentId } = cloudSessions;
   const { onSessionAction, onCloudMenuOpenChange } = cloudSessions;
   const pendingCloudSessions = useMemo(
@@ -54,8 +52,8 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
     [primaryEnvironmentId, projectEnvironmentId, projectId],
   );
   const onCreateCloudSession = useCallback(
-    () => onCreate(durationSeconds, cloudSessionProject?.projectId),
-    [cloudSessionProject, durationSeconds, onCreate],
+    () => onCreate(cloudSessionProject?.projectId),
+    [cloudSessionProject, onCreate],
   );
   // Unconfigured: the entry leaves for the Connections settings, where provisioning lives.
   const onSetupCloudSessions = useCallback(() => {
@@ -69,7 +67,6 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
           ? {
               pendingCloudSessions,
               onCreateCloudSession,
-              cloudSessionDurationLabel: formatHoldDuration(durationSeconds),
               ...(cloudSessionProject ? { cloudSessionProject } : {}),
               onCloudSessionAction: onSessionAction,
               onCloudMenuOpenChange,
@@ -79,7 +76,6 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
       available,
       cloudSessionProject,
       configured,
-      durationSeconds,
       onCloudMenuOpenChange,
       onCreateCloudSession,
       onSessionAction,

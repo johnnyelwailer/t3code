@@ -6,7 +6,6 @@ import {
   isCloudSessionProvisionPending,
   presentCloudSession,
 } from "./t3team-cloudSessionProvisionPresentation";
-import { formatHoldDuration } from "./t3team-cloudSessionHoldFormat";
 
 const session = (overrides: Partial<CloudSession> = {}): CloudSession => ({
   sessionId: "s1",
@@ -97,15 +96,6 @@ describe("presentCloudSession for a project machine", () => {
 
   it("keeps the plain session's words", () => {
     expect(preparing({}).title).toBe("Building the workspace");
-  });
-});
-
-describe("formatHoldDuration", () => {
-  it("tags the picker's choices compactly", () => {
-    expect(formatHoldDuration(3600)).toBe("1h");
-    expect(formatHoldDuration(4 * 3600)).toBe("4h");
-    expect(formatHoldDuration(90 * 60)).toBe("1h 30m");
-    expect(formatHoldDuration(45 * 60)).toBe("45m");
   });
 });
 

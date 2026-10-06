@@ -20,7 +20,7 @@ import { showCloudSessionFailureToast } from "./t3team-cloudSessionToast";
 import { useCloudSessionListRefresh } from "./t3team-useCloudSessionListRefresh";
 import { useCloudSessionConnect } from "./t3team-useCloudSessionConnect";
 import { liveCloudSessionForEnvironment } from "./t3team-cloudSessionEnvironmentMatch";
-import { useCloudSessionDuration } from "./t3team-useCloudSessionDuration";
+import { CLOUD_SESSION_LIFETIME_SECONDS } from "./t3team-cloudSessionLifetime";
 import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
 
 /**
@@ -38,7 +38,6 @@ export function useCloudSessionController() {
     historyUrl,
     loadError,
   } = useCloudSessions();
-  const [durationSeconds, setDurationSeconds] = useCloudSessionDuration(environmentId);
   const [createPending, setCreatePending] = useState(false);
   const [actionPending, setActionPending] = useState<{
     readonly sessionId: string;
@@ -83,7 +82,7 @@ export function useCloudSessionController() {
 
   /** `projectId` (a project on the primary environment) runs the session in its machine. */
   const onCreate = useCallback(
-    (seconds: number, projectId?: ProjectId) => {
+    (projectId?: ProjectId) => {
       if (environmentId === null || createPending) return;
       setRelayIdsBefore(
         new Set(
@@ -93,7 +92,10 @@ export function useCloudSessionController() {
       setCreatePending(true);
       void createSession({
         environmentId,
-        input: { durationSeconds: seconds, ...(projectId ? { projectId } : {}) },
+        input: {
+          durationSeconds: CLOUD_SESSION_LIFETIME_SECONDS,
+          ...(projectId ? { projectId } : {}),
+        },
       })
         .then((result) => {
           if (result._tag === "Success") {
@@ -157,12 +159,12 @@ export function useCloudSessionController() {
         // "Start another": a fresh session at the remembered duration. The
         // record carries no requested hold (the runs API omits dispatch
         // inputs), so replaying the ended session's own is not possible.
-        onCreate(durationSeconds);
+        onCreate();
         return;
       }
       cancelRun(session, "cancel", "Cancelling that session…");
     },
-    [beginConnect, cancelRun, durationSeconds, onCreate],
+    [beginConnect, cancelRun, onCreate],
   );
 
   const onSessionSecondaryAction = useCallback(
@@ -188,8 +190,6 @@ export function useCloudSessionController() {
     loadError,
     configured,
     historyUrl,
-    durationSeconds,
-    onDurationChange: setDurationSeconds,
     createPending,
     pendingSessionId,
     pendingKind,

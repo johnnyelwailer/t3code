@@ -23,11 +23,11 @@ const detected = (repository: string): ProjectMachineDiscovery =>
 describe("presentProjectMachine", () => {
   it("names the linked repository whose devcontainer the session runs in", () => {
     expect(presentProjectMachine(detected("acme/api"))).toEqual({
-      label: "api machine",
+      label: "In the api machine",
       detail: "Runs in the devcontainer .devcontainer/devcontainer.json from acme/api.",
       tone: "info",
     });
-    expect(presentProjectMachine(detected("."))?.label).toBe("project machine");
+    expect(presentProjectMachine(detected("."))?.label).toBe("In this project's machine");
   });
 
   it("says nothing for a project without a definition", () => {
@@ -43,7 +43,7 @@ describe("presentProjectMachine", () => {
       rejected: [{ repository: ".", path: ".nexi/machine.json", reason: "is not valid." }],
     } as never);
     expect(hint).toEqual({
-      label: "machine needs fixing",
+      label: "Machine needs fixing",
       detail: ".nexi/machine.json: is not valid.",
       tone: "warning",
     });

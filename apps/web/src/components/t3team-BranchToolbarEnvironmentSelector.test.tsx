@@ -193,14 +193,6 @@ describe("BranchToolbarEnvironmentSelector", () => {
     expect(onCreateCloudSession).toHaveBeenCalledTimes(1);
   });
 
-  it("labels 'New cloud session' with the duration it will run for", () => {
-    mountSelector({ onCreateCloudSession: () => {}, cloudSessionDurationLabel: "4h" });
-
-    const label = findCreateButton()?.textContent ?? "";
-    expect(label).toContain("New cloud session");
-    expect(label).toContain("Runs 4h");
-  });
-
   it("wires menu open/close to the polling callback", () => {
     const onCloudMenuOpenChange = vi.fn();
     renderSelector({ onCreateCloudSession: () => {}, onCloudMenuOpenChange });

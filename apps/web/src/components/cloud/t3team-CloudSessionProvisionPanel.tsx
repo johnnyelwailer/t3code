@@ -2,10 +2,6 @@ import type { CloudSession } from "@t3tools/contracts";
 import { type ReactNode, useCallback, useMemo } from "react";
 
 import { Button } from "../ui/button";
-import {
-  CloudSessionDurationSelect,
-  DEFAULT_CLOUD_SESSION_DURATION_SECONDS,
-} from "./t3team-CloudSessionDurationSelect";
 import { CloudSessionHistoryDisclosure } from "./t3team-CloudSessionHistoryDisclosure";
 import { CloudSessionRow, CloudSessionRowsSkeleton } from "./t3team-CloudSessionProvisionRow";
 import {
@@ -18,7 +14,7 @@ import { splitCloudSessions } from "./t3team-cloudSessionSplit";
  * The one-click surface: start a Nexi workspace on fleet compute and connect to
  * it when it comes up.
  *
- * Owns the panel chrome — the duration picker, the create button, and the
+ * Owns the panel chrome — the create button and the
  * composition of session rows. The list is split into sessions still doing
  * work (shown by default, with their row actions) and a collapsed history of
  * finished sessions (capped, no actions); the split rule lives in
@@ -33,18 +29,11 @@ import { splitCloudSessions } from "./t3team-cloudSessionSplit";
  * separate, replaceable layer.
  */
 
-export {
-  CLOUD_SESSION_DURATION_CHOICES,
-  DEFAULT_CLOUD_SESSION_DURATION_SECONDS,
-} from "./t3team-CloudSessionDurationSelect";
-
 export function CloudSessionProvisionPanel({
   sessions,
   loading = false,
   loadError = null,
   createPending = false,
-  durationSeconds = DEFAULT_CLOUD_SESSION_DURATION_SECONDS,
-  onDurationChange,
   onCreate,
   onSessionAction,
   onSessionSecondaryAction,
@@ -62,9 +51,7 @@ export function CloudSessionProvisionPanel({
   /** Why the session list could not be read; replaces the rows when set. */
   readonly loadError?: string | null;
   readonly createPending?: boolean;
-  readonly durationSeconds?: number;
-  readonly onDurationChange?: (seconds: number) => void;
-  readonly onCreate: (durationSeconds: number) => void;
+  readonly onCreate: () => void;
   readonly onSessionAction: (session: CloudSession) => void;
   /** Secondary action on a ready row (release the machine). Absent hides it. */
   readonly onSessionSecondaryAction?: ((session: CloudSession) => void) | undefined;
@@ -84,9 +71,7 @@ export function CloudSessionProvisionPanel({
   /** Shown under the header, e.g. the Nexplore sign-in the broker needs. */
   readonly banner?: ReactNode;
 }) {
-  const handleCreate = useCallback(() => {
-    onCreate(durationSeconds);
-  }, [onCreate, durationSeconds]);
+  const handleCreate = useCallback(() => onCreate(), [onCreate]);
 
   const pendingCount = sessions.filter((session) =>
     isCloudSessionProvisionPending(session.phase),
@@ -110,11 +95,6 @@ export function CloudSessionProvisionPanel({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <span className="text-muted-foreground text-xs">Runs for</span>
-          <CloudSessionDurationSelect
-            durationSeconds={durationSeconds}
-            onDurationChange={onDurationChange}
-          />
           <Button size="sm" disabled={createPending} onClick={handleCreate}>
             {createPending ? "Starting…" : "New session"}
           </Button>

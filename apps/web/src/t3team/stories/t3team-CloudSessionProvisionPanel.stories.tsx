@@ -2,10 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 import type { CloudSession } from "@t3tools/contracts";
 import { useCallback, useEffect, useState } from "react";
 
-import {
-  CloudSessionProvisionPanel,
-  DEFAULT_CLOUD_SESSION_DURATION_SECONDS,
-} from "~/components/cloud/t3team-CloudSessionProvisionPanel";
+import { CloudSessionProvisionPanel } from "~/components/cloud/t3team-CloudSessionProvisionPanel";
+import { CLOUD_SESSION_LIFETIME_SECONDS } from "~/cloud/t3team-cloudSessionLifetime";
 import type { CloudSessionProvisionPhase } from "~/components/cloud/t3team-cloudSessionProvisionPresentation";
 
 const FLEET_MACHINE_LABEL = "ubuntu-slim · 12 GB · 4 cores";
@@ -31,7 +29,6 @@ const meta = {
   args: {
     onCreate: () => {},
     onSessionAction: () => {},
-    durationSeconds: DEFAULT_CLOUD_SESSION_DURATION_SECONDS,
   },
 } satisfies Meta<typeof CloudSessionProvisionPanel>;
 
@@ -153,7 +150,6 @@ export const LiveLifecycle: Story = {
   args: { sessions: [] },
   render: function LiveLifecycleStory() {
     const [elapsed, setElapsed] = useState<number | null>(null);
-    const [durationSeconds, setDurationSeconds] = useState(DEFAULT_CLOUD_SESSION_DURATION_SECONDS);
 
     useEffect(() => {
       if (elapsed === null) return;
@@ -185,12 +181,11 @@ export const LiveLifecycle: Story = {
                   phase,
                   elapsedSeconds: elapsed,
                   detailsUrl: phase === "ready" ? DETAILS_URL : null,
-                  remainingSeconds: phase === "ready" ? durationSeconds - elapsed : null,
+                  remainingSeconds:
+                    phase === "ready" ? CLOUD_SESSION_LIFETIME_SECONDS - elapsed : null,
                 }),
               ]
         }
-        durationSeconds={durationSeconds}
-        onDurationChange={setDurationSeconds}
         createPending={elapsed !== null && phase !== "ready"}
         onCreate={handleCreate}
         onSessionAction={handleAction}

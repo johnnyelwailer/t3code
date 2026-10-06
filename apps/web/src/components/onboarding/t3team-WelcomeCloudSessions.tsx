@@ -32,8 +32,6 @@ export function WelcomeCloudSessions() {
         loading={cloud.loading}
         loadError={cloud.loadError}
         createPending={cloud.createPending}
-        durationSeconds={cloud.durationSeconds}
-        onDurationChange={cloud.onDurationChange}
         onCreate={cloud.onCreate}
         onSessionAction={cloud.onSessionAction}
         onSessionSecondaryAction={cloud.onSessionSecondaryAction}

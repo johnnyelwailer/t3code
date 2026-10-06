@@ -31,7 +31,7 @@ export function CloudSessionMachineHint({
         render={<span />}
         className={hint.tone === "warning" ? "text-warning-foreground" : "text-muted-foreground"}
       >
-        · {hint.label}
+        {hint.label}
       </TooltipTrigger>
       <TooltipPopup>{hint.detail}</TooltipPopup>
     </Tooltip>

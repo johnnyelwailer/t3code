@@ -2,10 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import type { CloudBrokerStatus, CloudSession } from "@t3tools/contracts";
 
 import { CloudBrokerSignInCard } from "~/components/cloud/t3team-CloudBrokerSignInCard";
-import {
-  CloudSessionProvisionPanel,
-  DEFAULT_CLOUD_SESSION_DURATION_SECONDS,
-} from "~/components/cloud/t3team-CloudSessionProvisionPanel";
+import { CloudSessionProvisionPanel } from "~/components/cloud/t3team-CloudSessionProvisionPanel";
 
 /** The Nexplore sign-in cloud sessions need when they run over the Nexi broker. */
 
@@ -83,7 +80,6 @@ export const InTheProvisionPanel: StoryObj<typeof CloudSessionProvisionPanel> = 
   render: () => (
     <CloudSessionProvisionPanel
       sessions={[readySession]}
-      durationSeconds={DEFAULT_CLOUD_SESSION_DURATION_SECONDS}
       onCreate={() => {}}
       onSessionAction={() => {}}
       banner={

@@ -55,8 +55,6 @@ export interface BranchToolbarEnvironmentSelectorProps {
    * one-click "New cloud session". Absent hides the action item entirely.
    */
   onCreateCloudSession?: () => void;
-  /** The duration "New cloud session" will run for (e.g. "4h"), shown on the item. */
-  cloudSessionDurationLabel?: string;
   /**
    * The project "New cloud session" starts for, when it lives on the environment sessions are
    * created on: the item then says which machine (devcontainer) the session will run in.
@@ -93,7 +91,6 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   displayMode = "toolbar",
   pendingCloudSessions,
   onCreateCloudSession,
-  cloudSessionDurationLabel,
   cloudSessionProject,
   onSetupCloudSessions,
   onCloudSessionAction,
@@ -334,14 +331,9 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                 <CloudIcon className="mt-0.5 size-3 shrink-0 self-start" aria-hidden="true" />
                 <span className="flex min-w-0 flex-col items-start text-left">
                   <span>New cloud session</span>
-                  {cloudSessionDurationLabel || cloudSessionProject ? (
-                    <span className="flex min-w-0 max-w-full gap-1 text-muted-foreground text-xs">
-                      {cloudSessionDurationLabel ? (
-                        <span className="shrink-0">Runs {cloudSessionDurationLabel}</span>
-                      ) : null}
-                      {cloudSessionProject ? (
-                        <CloudSessionMachineHint {...cloudSessionProject} />
-                      ) : null}
+                  {cloudSessionProject ? (
+                    <span className="max-w-full truncate text-muted-foreground text-xs">
+                      <CloudSessionMachineHint {...cloudSessionProject} />
                     </span>
                   ) : null}
                 </span>

@@ -4,7 +4,7 @@ import type * as Cause from "effect/Cause";
 
 import { toastManager } from "~/components/ui/toast";
 
-import { cloudSessionFailureDescription } from "./t3team-cloudSessionToast";
+import { cloudSessionFailureDescription } from "./t3team-cloudSessionFailureDescription";
 
 /** The title for a create failure nothing more specific is known about. */
 export const CLOUD_SESSION_CREATE_FAILED_TITLE = "Could not start a cloud session.";

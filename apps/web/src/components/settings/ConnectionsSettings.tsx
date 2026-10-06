@@ -3859,8 +3859,6 @@ export function ConnectionsSettings() {
               loading={cloudSessions.loading}
               loadError={cloudSessions.loadError}
               createPending={cloudSessions.createPending}
-              durationSeconds={cloudSessions.durationSeconds}
-              onDurationChange={cloudSessions.onDurationChange}
               onCreate={cloudSessions.onCreate}
               onSessionAction={cloudSessions.onSessionAction}
               onSessionSecondaryAction={cloudSessions.onSessionSecondaryAction}

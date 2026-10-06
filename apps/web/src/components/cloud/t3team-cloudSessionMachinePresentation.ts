@@ -18,7 +18,10 @@ export function presentProjectMachine(
     const { repository, devcontainerPath } = discovery.status.definition;
     const owner = repository === "." ? "this project" : repository;
     return {
-      label: repository === "." ? "project machine" : `${repository.split("/").pop()} machine`,
+      label:
+        repository === "."
+          ? "In this project's machine"
+          : `In the ${repository.split("/").pop()} machine`,
       detail: `Runs in the devcontainer ${devcontainerPath} from ${owner}.`,
       tone: "info",
     };
@@ -26,7 +29,7 @@ export function presentProjectMachine(
   const broken = discovery.rejected[0];
   if (broken === undefined) return null;
   return {
-    label: "machine needs fixing",
+    label: "Machine needs fixing",
     detail: `${broken.path}: ${broken.reason}`,
     tone: "warning",
   };

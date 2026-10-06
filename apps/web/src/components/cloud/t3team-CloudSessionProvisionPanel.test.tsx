@@ -10,10 +10,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  CloudSessionProvisionPanel,
-  DEFAULT_CLOUD_SESSION_DURATION_SECONDS,
-} from "./t3team-CloudSessionProvisionPanel";
+import { CloudSessionProvisionPanel } from "./t3team-CloudSessionProvisionPanel";
 
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
@@ -293,7 +290,7 @@ describe("CloudSessionProvisionPanel", () => {
     act(() => {
       startButtons[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(onCreate).toHaveBeenCalledWith(DEFAULT_CLOUD_SESSION_DURATION_SECONDS);
+    expect(onCreate).toHaveBeenCalledTimes(1);
     // Finished sessions still sit in the collapsed history.
     expect(node.textContent).toContain("History · 1");
   });

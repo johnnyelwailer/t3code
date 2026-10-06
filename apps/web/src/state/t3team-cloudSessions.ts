@@ -4,7 +4,7 @@ import type { CloudSession } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 
-import { cloudSessionFailureDescription } from "../cloud/t3team-cloudSessionToast";
+import { cloudSessionFailureDescription } from "../cloud/t3team-cloudSessionFailureDescription";
 import { connectionAtomRuntime } from "../connection/runtime";
 import { primaryEnvironmentIdAtom } from "./primaryEnvironment";
 
