@@ -26,11 +26,13 @@ export type T3TeamMyWorkDigestItemRef = typeof T3TeamMyWorkDigestItemRef.Type;
 
 /**
  * One block. `items` sections list tickets (`items`); `reviews` sections list the pull requests in
- * `reviewIds` (the digest's `reviewRequests` ids). `widget` absent means the default for its kind.
+ * `reviewIds` (the digest's `reviewRequests` ids); `graph` sections list nothing — their widget
+ * reads the digest itself (`my-work.yesterday`) and must be named. `widget` absent means the
+ * default for its kind.
  */
 export const T3TeamMyWorkDigestSection = Schema.Struct({
   id: TrimmedNonEmptyString.check(Schema.isMaxLength(80)),
-  kind: Schema.Literals(["items", "reviews"]),
+  kind: Schema.Literals(["items", "reviews", "graph"]),
   widget: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(120))),
   placement: T3TeamMyWorkDigestPlacement,
   heading: TrimmedNonEmptyString.check(Schema.isMaxLength(120)),

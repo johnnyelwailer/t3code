@@ -14,12 +14,18 @@ import type { BacklogResourceRef } from "./t3team-atlassian-backlog-cacheShared.
 import type { T3TeamPollEnvelope } from "./t3team-integration-polling.ts";
 import type { T3TeamDigestChangeRequest } from "./t3team-myworkDigestTypesPrs.ts";
 import type { T3TeamDigestDependency } from "./t3team-myworkDigestDependencies.ts";
+import type { T3TeamDigestYesterday } from "./t3team-myworkDigestTypesYesterday.ts";
 
 export type {
   T3TeamDigestChangeRequest,
   T3TeamDigestChangeRequestState,
 } from "./t3team-myworkDigestTypesPrs.ts";
 export type { T3TeamDigestDependency } from "./t3team-myworkDigestDependencies.ts";
+export type {
+  T3TeamDigestYesterday,
+  T3TeamDigestYesterdayMerged,
+  T3TeamDigestYesterdayMoved,
+} from "./t3team-myworkDigestTypesYesterday.ts";
 
 export type T3TeamMyWorkDigestAccountRef = {
   readonly id: string;
@@ -46,6 +52,8 @@ export type T3TeamMyWorkDigestInput = {
   readonly projects: ReadonlyArray<T3TeamMyWorkDigestProjectInput>;
   /** The viewer's Jira display name; drives the personal burndown when present. */
   readonly viewer?: { readonly name?: string };
+  /** The viewer's IANA time zone: "yesterday" is their previous working day. Absent = the server's. */
+  readonly timeZone?: string;
 };
 
 export type T3TeamMyWorkDigestPollInput = T3TeamMyWorkDigestInput & {
@@ -121,6 +129,8 @@ export type T3TeamDigestProjectData = {
   readonly jiraSyncedAt?: string;
   /** Who the viewer's tickets hang together with (Jira links, same story). */
   readonly dependencies?: ReadonlyArray<T3TeamDigestDependency>;
+  /** What the viewer merged and moved in the previous working day; absent when neither. */
+  readonly yesterday?: T3TeamDigestYesterday;
 };
 
 export type T3TeamMyWorkDigestPayload = {
@@ -204,6 +214,7 @@ export type T3TeamDigestProjectSource = {
   readonly jiraSyncedAt?: string;
   /** Who the viewer's tickets hang together with (Jira links, same story). */
   readonly dependencies?: ReadonlyArray<T3TeamDigestDependency>;
+  readonly yesterday?: T3TeamDigestYesterday;
   /** The round's clock, so the burndown "today" and unhandled-comment cutoffs are deterministic. */
   readonly nowIso: string;
 };

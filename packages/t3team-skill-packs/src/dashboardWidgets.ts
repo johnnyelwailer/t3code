@@ -29,6 +29,18 @@ export const BUNDLED_DASHBOARD_WIDGETS: ReadonlyArray<DashboardWidgetDefinition>
     content: "reviews",
     placements: ["side", "main"],
   }),
+  defineDashboardWidget({
+    id: "my-work.yesterday",
+    version: "1.0.0",
+    title: "Yesterday",
+    shortDescription:
+      "What the viewer did in the previous working day: the pull requests they merged and the " +
+      "tickets of theirs that moved, each a link. Reads the digest itself, so it lists nothing.",
+    surfaces: ["project.dashboard.myWork"],
+    component: "digest-yesterday",
+    content: "none",
+    placements: ["side", "footer"],
+  }),
 ];
 
 export function bundledDashboardWidget(id: string): DashboardWidgetDefinition | undefined {

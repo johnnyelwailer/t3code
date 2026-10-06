@@ -11,14 +11,15 @@ const MY_WORK_DIGEST_READ_DESCRIPTION =
   "thread calling it, or all Jira-bound projects outside one) — the data you arrange with " +
   "t3team.mywork.arrange. Read-only. Answer: { scope, " +
   "projects: [{ project, tickets, claims, decisions, changeRequests, transitions, sprint?, " +
-  "blockers?, burndown?, dependencies? }], viewer, arrangement? }. tickets are the viewer's " +
+  "blockers?, burndown?, dependencies?, yesterday? }], viewer, arrangement? }. tickets are the viewer's " +
   "Jira tickets (use their `id` in arrangement items, not the key). claims are threads (agents) " +
   "working a ticket. decisions are questions an agent parked waiting for the viewer. " +
   "changeRequests are pull requests: viewerAuthored ones are the viewer's own to move; ones " +
   "with viewerReviewRequested are other people's PRs awaiting the viewer's review — those are " +
   "the review requests, referenced by their `id` in a 'reviews' section's reviewIds. " +
   "dependencies say which tickets wait on or are waited on by the viewer's. transitions are " +
-  "recent status changes. sprint is the active sprint. arrangement is the layout currently " +
+  "recent status changes. yesterday is what the viewer merged and moved in the previous " +
+  "working day (merged pull requests; tickets of theirs that moved or were updated). sprint is the active sprint. arrangement is the layout currently " +
   "stored for this scope (absent = the default layout).";
 
 const MY_WORK_ARRANGE_DESCRIPTION =
@@ -27,10 +28,13 @@ const MY_WORK_ARRANGE_DESCRIPTION =
   "that read (unknown ids are dropped when shown). A plan is { sections: [{ id, kind, widget?, " +
   "placement, heading, hint?, items: [{ ticketId, why? }], reviewIds? }] } — kind 'items' " +
   "lists tickets in `items`, kind 'reviews' lists review-owed pull requests in `reviewIds` " +
-  "(items empty). `why` is one short line shown beside a ticket. Bundled widgets (widget " +
+  "(items empty), kind 'graph' lists nothing and needs its widget named — the widget reads the " +
+  "digest itself (items and reviewIds empty). `why` is one short line shown beside a ticket. Bundled widgets (widget " +
   "defaults to the one for the kind): my-work.tickets lists tickets, placements side|main|footer " +
   "(side = compact list, main = grouped by story, footer = collapsed count); my-work.reviews " +
-  "lists review-owed pull requests, placements side|main. An unknown widget or a placement a " +
+  "lists review-owed pull requests, placements side|main; my-work.yesterday reads the digest " +
+  "itself, placements side|footer: the pull requests the viewer merged and the tickets of theirs " +
+  "that moved in the previous working day (kind 'graph'). An unknown widget or a placement a " +
   "widget does not allow is rejected with the reason — fix and call again. Section ids must be " +
   "unique, at most 12 sections. The latest arrangement per project (or for all projects) " +
   "replaces the previous one. Pass { reset: true } instead of a plan to return to the default " +
@@ -93,11 +97,12 @@ export const IMPLEMENTED_T3TEAM_MY_WORK_TOOL_CATALOG = {
                 additionalProperties: false,
                 properties: {
                   id: { type: "string", description: "Unique within the plan." },
-                  kind: { type: "string", enum: ["items", "reviews"] },
+                  kind: { type: "string", enum: ["items", "reviews", "graph"] },
                   widget: {
                     type: "string",
-                    enum: ["my-work.tickets", "my-work.reviews"],
-                    description: "Defaults to the widget for the kind.",
+                    enum: ["my-work.tickets", "my-work.reviews", "my-work.yesterday"],
+                    description:
+                      "Defaults to the widget for the kind; a 'graph' section must name one.",
                   },
                   placement: { type: "string", enum: ["side", "main", "footer"] },
                   heading: { type: "string" },
