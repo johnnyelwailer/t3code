@@ -36,13 +36,15 @@ function lookup(gh: GitHubCli.GitHubCli["Service"], host: string, login: string)
         const name = profile._tag === "Some" ? profile.value.name?.trim() : undefined;
         return name ? name : null;
       }),
-      Effect.orElseSucceed(() => null),
+      // Only an answer is remembered (a name, or "this profile has none"); a failed read is
+      // asked again next round.
       Effect.tap((name) =>
         Effect.sync(() => {
           if (known.size >= MAX_REMEMBERED) known.delete(known.keys().next().value!);
           known.set(`${host}:${login}`, name);
         }),
       ),
+      Effect.orElseSucceed(() => null),
     );
 }
 

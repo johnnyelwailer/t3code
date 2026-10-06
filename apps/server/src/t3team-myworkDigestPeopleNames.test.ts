@@ -59,3 +59,26 @@ it.effect("names login-only people from the host profile, once per person", () =
     assert.strictEqual(calls.length, 3);
   }),
 );
+
+it.effect("asks again after a failed lookup instead of remembering it as nameless", () =>
+  Effect.gen(function* () {
+    resetDigestPeopleNamesForTests();
+    let calls = 0;
+    let fail = true;
+    const gh = Layer.mock(GitHubCli.GitHubCli)({
+      execute: () => {
+        calls += 1;
+        return fail
+          ? Effect.fail(new Error("rate limited") as never)
+          : Effect.succeed({ stdout: '{"name":"Ada Lovelace"}', stderr: "", exitCode: 0 } as never);
+      },
+    });
+    const entries = [{ host: "h", author: person("ada") }];
+    const first = yield* withProfileNames(entries).pipe(Effect.provide(gh));
+    assert.strictEqual(first[0]?.author?.name, "ada");
+    fail = false;
+    const second = yield* withProfileNames(entries).pipe(Effect.provide(gh));
+    assert.strictEqual(second[0]?.author?.name, "Ada Lovelace");
+    assert.strictEqual(calls, 2);
+  }),
+);
