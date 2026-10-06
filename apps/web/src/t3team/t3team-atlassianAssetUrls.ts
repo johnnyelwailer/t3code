@@ -31,12 +31,24 @@ export function buildAtlassianAssetContentUrl(input: {
  * primary to resolve, e.g. outside a browser.
  */
 function primaryHttpBaseUrl(): string | undefined {
-  try {
-    return resolvePrimaryEnvironmentHttpUrl("/");
-  } catch {
-    return undefined;
+  // On desktop the resolve is a synchronous IPC round-trip and a long list calls this once per
+  // icon/avatar: share one answer per tick. The bootstrap can change mid-session (WSL settings),
+  // so it is never held longer than that.
+  if (cachedPrimaryHttpBaseUrl === null) {
+    try {
+      cachedPrimaryHttpBaseUrl = resolvePrimaryEnvironmentHttpUrl("/");
+    } catch {
+      cachedPrimaryHttpBaseUrl = undefined;
+    }
+    queueMicrotask(() => {
+      cachedPrimaryHttpBaseUrl = null;
+    });
   }
+  return cachedPrimaryHttpBaseUrl;
 }
+
+/** `null` = not resolved this tick. */
+let cachedPrimaryHttpBaseUrl: string | undefined | null = null;
 
 const ASSET_PROXY_PATH = "/api/t3team/atlassian/asset/content";
 

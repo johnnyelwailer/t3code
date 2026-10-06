@@ -116,7 +116,7 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
 
       if (result.unchanged) {
         fingerprintRef.current = result.fingerprint;
-        pendingRetry.update(undefined, () => void loadRef.current(scope, entries));
+        pendingRetry.update(undefined, () => void loadRef.current(scope, entriesRef.current));
         return;
       }
 
@@ -147,7 +147,7 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
       writeCachedDigestGraph(digestScopeSignature(scope, entries), nextGraph, unresolved);
       // Change requests still being read server-side: pick them up in a moment, not a poll later.
       const crPending = result.value.changeRequestsPending === true;
-      pendingRetry.update(crPending, () => void loadRef.current(scope, entries));
+      pendingRetry.update(crPending, () => void loadRef.current(scope, entriesRef.current));
       setViewerUnresolved(unresolved);
       setSessionExpired(false);
       setGraph(nextGraph);
