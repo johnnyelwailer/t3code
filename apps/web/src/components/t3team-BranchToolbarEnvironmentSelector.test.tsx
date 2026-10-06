@@ -32,6 +32,7 @@ vi.mock("lucide-react", () => ({
   CloudIcon: "svg",
   ScaleIcon: "svg",
   SettingsIcon: "svg",
+  XIcon: "svg",
 }));
 vi.mock("./ui/select", () => ({
   Select: (props: {
@@ -193,30 +194,44 @@ describe("BranchToolbarEnvironmentSelector", () => {
     expect(onCreateCloudSession).toHaveBeenCalledTimes(1);
   });
 
-  it("lists a connected cloud machine once: as its environment, not again as a ready session", () => {
-    const cloudEnv = {
-      environmentId: EnvironmentId.make("env-cloud"),
+  it("lists every cloud machine once, by name, in the one Run on list", () => {
+    // Two connected machines, both registered under the generic label: neither folds into the
+    // other, neither appears a second time as a session, and each shows its own name.
+    const cloudEnv = (id: string) => ({
+      environmentId: EnvironmentId.make(id),
       projectId: ProjectId.make("project-x"),
       label: "Cloud session",
       isPrimary: false,
       machine: "server" as const,
-    };
-    const ready = {
-      sessionId: "1",
-      phase: "ready",
-      environmentId: "env-cloud",
-      machineLabel: "ubuntu-slim",
-    } as unknown as CloudSession;
+    });
+    const session = (id: string, name?: string) =>
+      ({
+        sessionId: id,
+        phase: "ready",
+        environmentId: `env-${id}`,
+        machineLabel: "ubuntu-slim",
+        remainingSeconds: null,
+        ...(name ? { name } : {}),
+      }) as unknown as CloudSession;
     mountSelector({
-      availableEnvironments: [PRIMARY, cloudEnv],
+      availableEnvironments: [PRIMARY, cloudEnv("env-1"), cloudEnv("env-2")],
       onEnvironmentChange: () => {},
       onCreateCloudSession: () => {},
-      pendingCloudSessions: [ready],
+      pendingCloudSessions: [session("1", "nexi-machine-qa"), session("2")],
     });
-    const rows = Array.from(liveContainer?.querySelectorAll("button") ?? []).map(
-      (button) => button.textContent ?? "",
+    const items = Array.from(liveContainer?.querySelectorAll("[data-select-item]") ?? []).map(
+      (item) => item.textContent ?? "",
     );
-    expect(rows.some((text) => text.startsWith("Ready"))).toBe(false);
+    expect(items).toEqual([
+      PRIMARY.label,
+      "nexi-machine-qaReady · ubuntu-slim",
+      "Cloud sessionReady · ubuntu-slim",
+    ]);
+    expect(testState.selectProps?.items?.map((item) => item.label)).toEqual([
+      PRIMARY.label,
+      "nexi-machine-qa",
+      "Cloud session",
+    ]);
   });
 
   it("clicking a ready machine connects it, then selects it for the thread", () => {
@@ -236,7 +251,7 @@ describe("BranchToolbarEnvironmentSelector", () => {
     };
     mountSelector(props);
     const readyRow = Array.from(liveContainer?.querySelectorAll("button") ?? []).find((button) =>
-      button.textContent?.startsWith("Ready"),
+      button.textContent?.startsWith("Cloud session"),
     );
     act(() => {
       readyRow?.click();
