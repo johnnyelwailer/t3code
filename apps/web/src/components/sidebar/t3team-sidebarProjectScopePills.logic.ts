@@ -54,7 +54,8 @@ export function splitProjectScopePills<TItem extends { readonly projectKey: stri
   activeScopeKey: string | null,
   capacity: number,
 ): { readonly shown: ReadonlyArray<TItem>; readonly overflow: ReadonlyArray<TItem> } {
-  if (capacity <= 0) return { shown: [], overflow: [] };
+  // No room for a disc: every site is still one click away, behind the +N pill.
+  if (capacity <= 0) return { shown: [], overflow: items };
   if (items.length <= capacity) return { shown: items, overflow: [] };
   const shown = selectProjectScopePillGroups(items, activeScopeKey, capacity - 1);
   const shownKeys = new Set(shown.map((item) => item.projectKey));
