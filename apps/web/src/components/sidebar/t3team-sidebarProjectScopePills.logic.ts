@@ -38,6 +38,30 @@ export function selectProjectScopePillGroups<TGroup extends { readonly projectKe
 }
 
 /**
+ * What clicking a Jira project that is not in the app yet does. "create" opens the Create-Project
+ * wizard already pointed at that project; "disabled" leaves the pill inert with a tooltip. The
+ * product call is still open, so this one switch flips the behaviour.
+ */
+export const ADD_PILL_CLICK_BEHAVIOR: "create" | "disabled" = "create";
+
+/**
+ * Splits an ordered list of scope items into the discs that fit and the overflow behind "+N".
+ * When everything fits there is no overflow disc; otherwise one slot is reserved for it. The
+ * active scope keeps a disc even when it would have overflowed.
+ */
+export function splitProjectScopePills<TItem extends { readonly projectKey: string }>(
+  items: ReadonlyArray<TItem>,
+  activeScopeKey: string | null,
+  capacity: number,
+): { readonly shown: ReadonlyArray<TItem>; readonly overflow: ReadonlyArray<TItem> } {
+  if (capacity <= 0) return { shown: [], overflow: [] };
+  if (items.length <= capacity) return { shown: items, overflow: [] };
+  const shown = selectProjectScopePillGroups(items, activeScopeKey, capacity - 1);
+  const shownKeys = new Set(shown.map((item) => item.projectKey));
+  return { shown, overflow: items.filter((item) => !shownKeys.has(item.projectKey)) };
+}
+
+/**
  * Depth of one disc in the stack: 0 for the selection (or "All" when nothing is selected),
  * one more per step away on either side, so the row reads as a pyramid with the selection
  * on top. `coveredSide` names the edge the disc one level up lies on.
