@@ -35,7 +35,7 @@ export function RepositoryPickerRow({
       >
         <span
           className={cn(
-            "flex size-[18px] shrink-0 items-center justify-center rounded-[5px] border transition-colors",
+            "flex size-[18px] shrink-0 items-center justify-center rounded-sm border transition-colors",
             linked
               ? "border-primary bg-primary text-primary-foreground"
               : "border-input bg-background/40 text-transparent group-hover:border-foreground/40",
@@ -58,7 +58,9 @@ export function RepositoryPickerRow({
           ) : null}
         </span>
         {showHost ? (
-          <span className="shrink-0 text-[11px] text-muted-foreground/80">{entry.host}</span>
+          <span className="shrink-0 text-2xs text-muted-foreground/80 max-sm:hidden">
+            {entry.host}
+          </span>
         ) : null}
       </button>
     </li>

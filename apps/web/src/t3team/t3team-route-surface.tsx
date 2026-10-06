@@ -12,7 +12,6 @@ import {
   parseT3TeamRouteSearch,
   parseT3TeamViewFromPath,
   T3TEAM_CREATE_PATH,
-  type T3TeamRouteSearch,
 } from "~/t3team/t3team-routeState";
 import { readActiveThreadIdFromView } from "~/t3team/t3team-types";
 import { Route as RootRoute } from "~/routes/__root";
@@ -25,23 +24,8 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { readThreadShells } from "~/state/entities";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { buildThreadRouteParams } from "~/threadRoutes";
-
-function buildRouteSearch(
-  search: T3TeamRouteSearch,
-  input: {
-    projectView?: T3TeamRouteSearch["projectView"];
-    chatThreadId?: string | null;
-  } = {},
-): T3TeamRouteSearch {
-  const { chatThreadId: _ignoredChatThreadId, setup: _ignoredSetup, ...rest } = search;
-  const projectView = input.projectView ?? search.projectView;
-
-  return {
-    ...rest,
-    ...(projectView ? { projectView } : {}),
-    ...(input.chatThreadId ? { chatThreadId: input.chatThreadId } : {}),
-  };
-}
+import { buildRouteSearch } from "~/t3team/t3team-buildRouteSearch";
+import { useCreateProjectRequestNavigation } from "~/t3team/hooks/t3team-useCreateProjectRequestNavigation";
 
 export function T3TeamRouteSurface() {
   const [backend] = useState(() => createT3Backend(resolveWsBaseUrl()));
@@ -49,6 +33,7 @@ export function T3TeamRouteSurface() {
   const authenticated =
     authGateState.status === "authenticated" || authGateState.status === "hosted-static";
   const navigate = useNavigate();
+  useCreateProjectRequestNavigation();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const search = useSearch({
@@ -190,10 +175,12 @@ export function T3TeamRouteSurface() {
             });
           }}
           onProjectCreated={(project: ProjectShellProject) => {
+            // Replace, not push: Back must not return to a form for a project that now exists.
             void navigate({
               to: project.source.provider === "local" ? "/t3team" : "/t3team/projects/$projectId",
               ...(project.source.provider === "local" ? {} : { params: { projectId: project.id } }),
               search: buildRouteSearch(search),
+              replace: true,
             });
           }}
         />

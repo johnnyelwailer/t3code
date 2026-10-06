@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { SidebarTrigger } from "~/t3team/components/ui/t3team-sidebar";
@@ -52,15 +52,11 @@ export function useSyncActiveChatTarget(view: ViewState | null) {
 
 function ProjectBrowserEmpty({
   onCreate,
-  content,
   setupSurfaceReason = T3TEAM_FIRST_PROJECT_SETUP_REASON,
-  showInlineCreateWizard = false,
   shouldInsetDesktopHeader = false,
 }: {
   onCreate: () => void;
-  content?: ReactNode;
   setupSurfaceReason?: T3TeamSetupSurfaceReason;
-  showInlineCreateWizard?: boolean;
   shouldInsetDesktopHeader?: boolean;
 }) {
   // The welcome surface beside this header already titles itself with the pack's
@@ -86,11 +82,8 @@ function ProjectBrowserEmpty({
         <span className="text-sm font-medium text-muted-foreground/70">{headerLabel}</span>
       </header>
       <div className="min-h-0 flex-1 overflow-hidden">
-        <div
-          key={showInlineCreateWizard ? "wizard" : "welcome"}
-          className="flex h-full min-h-0 [view-transition-name:t3team-create-project-entry-surface]"
-        >
-          {content ?? <T3TeamSetupWelcomeSurface onCreate={onCreate} reason={setupSurfaceReason} />}
+        <div className="flex h-full min-h-0">
+          <T3TeamSetupWelcomeSurface onCreate={onCreate} reason={setupSurfaceReason} />
         </div>
       </div>
     </div>
@@ -106,9 +99,7 @@ export function ProjectBrowserEmptyWithChat({
   onKickoffThread,
   onStartScratch,
   showAside = true,
-  emptyContent,
   setupSurfaceReason = T3TEAM_FIRST_PROJECT_SETUP_REASON,
-  showInlineCreateWizard = false,
   shouldInsetDesktopHeader = false,
 }: {
   onCreate: () => void;
@@ -120,18 +111,14 @@ export function ProjectBrowserEmptyWithChat({
   /** Creates the Scratch project the project-less chat lives in, while it does not exist yet. */
   onStartScratch?: (() => void) | undefined;
   showAside?: boolean;
-  emptyContent?: ReactNode;
   setupSurfaceReason?: T3TeamSetupSurfaceReason;
-  showInlineCreateWizard?: boolean;
   shouldInsetDesktopHeader?: boolean;
 }) {
   if (!showAside) {
     return (
       <ProjectBrowserEmpty
         onCreate={onCreate}
-        content={emptyContent}
         setupSurfaceReason={setupSurfaceReason}
-        showInlineCreateWizard={showInlineCreateWizard}
         shouldInsetDesktopHeader={shouldInsetDesktopHeader}
       />
     );
@@ -142,14 +129,12 @@ export function ProjectBrowserEmptyWithChat({
       storageKey="t3team_home_right_sidebar"
       defaultAsideWidth={28 * 16}
       minAsideWidth={24 * 16}
-      mobileMainLabel={showInlineCreateWizard ? "Setup" : "Home"}
+      mobileMainLabel="Home"
       mobileAsideLabel="Agent"
       main={
         <ProjectBrowserEmpty
           onCreate={onCreate}
-          content={emptyContent}
           setupSurfaceReason={setupSurfaceReason}
-          showInlineCreateWizard={showInlineCreateWizard}
           shouldInsetDesktopHeader={shouldInsetDesktopHeader}
         />
       }

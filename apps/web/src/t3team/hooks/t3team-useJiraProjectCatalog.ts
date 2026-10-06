@@ -18,10 +18,15 @@ const LIVE_REFRESH_MIN_INTERVAL_MS = 5 * 60_000;
 
 let lastLiveRefreshAt = 0;
 
-function readCachedCatalog(): ReadonlyArray<JiraCatalogProject> {
-  const accounts =
+export function readCachedJiraAccounts(): ReadonlyArray<IntegrationAccount> {
+  return (
     readIntegrationCache<ReadonlyArray<IntegrationAccount>>(ATLASSIAN_ACCOUNTS_CACHE_KEY)?.value ??
-    [];
+    []
+  );
+}
+
+export function readCachedCatalog(): ReadonlyArray<JiraCatalogProject> {
+  const accounts = readCachedJiraAccounts();
   const byAccount = new Map<string, ReadonlyArray<ExternalProject>>();
   for (const account of accounts) {
     const cached = readIntegrationCache<ReadonlyArray<ExternalProject>>(
@@ -32,10 +37,16 @@ function readCachedCatalog(): ReadonlyArray<JiraCatalogProject> {
   return buildJiraCatalog(accounts, byAccount);
 }
 
-async function fetchLiveCatalog(backend: BackendApi): Promise<ReadonlyArray<JiraCatalogProject>> {
+/** The connected sites and every project on them; `accounts` is empty when Jira is not connected. */
+export async function fetchLiveJiraCatalog(backend: BackendApi): Promise<{
+  readonly accounts: ReadonlyArray<IntegrationAccount>;
+  readonly catalog: ReadonlyArray<JiraCatalogProject>;
+}> {
   const accounts = await backend.atlassian.listAccounts();
   writeIntegrationCache(ATLASSIAN_ACCOUNTS_CACHE_KEY, accounts);
   const byAccount = new Map<string, ReadonlyArray<ExternalProject>>();
+  let lastFailure: unknown = null;
+  let failures = 0;
   await Promise.all(
     accounts.map(async (account) => {
       try {
@@ -45,7 +56,9 @@ async function fetchLiveCatalog(backend: BackendApi): Promise<ReadonlyArray<Jira
         });
         writeIntegrationCache(atlassianProjectsCacheKey(account), projects);
         byAccount.set(account.id, projects);
-      } catch {
+      } catch (error) {
+        failures += 1;
+        lastFailure = error;
         // One unreachable site must not hide the others; keep that site's cached list.
         const cached = readIntegrationCache<ReadonlyArray<ExternalProject>>(
           atlassianProjectsCacheKey(account),
@@ -54,7 +67,16 @@ async function fetchLiveCatalog(backend: BackendApi): Promise<ReadonlyArray<Jira
       }
     }),
   );
-  return buildJiraCatalog(accounts, byAccount);
+  const catalog = buildJiraCatalog(accounts, byAccount);
+  // Every site failing and nothing cached is "Jira is unreachable", not "there are no projects".
+  if (accounts.length > 0 && failures === accounts.length && catalog.length === 0) {
+    throw lastFailure instanceof Error ? lastFailure : new Error("Could not reach Jira.");
+  }
+  return { accounts, catalog };
+}
+
+async function fetchLiveCatalog(backend: BackendApi): Promise<ReadonlyArray<JiraCatalogProject>> {
+  return (await fetchLiveJiraCatalog(backend)).catalog;
 }
 
 /**

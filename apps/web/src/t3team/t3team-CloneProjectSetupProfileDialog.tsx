@@ -29,9 +29,12 @@ import {
 export function T3TeamCloneProjectSetupProfileDialog({
   sourceProfileId,
   onClone,
+  triggerLabel = "New custom style…",
 }: {
   readonly sourceProfileId: string;
   readonly onClone: (profile: T3TeamProfile) => void;
+  /** The trigger's wording; the title attribute spells out what it does. */
+  readonly triggerLabel?: string;
 }) {
   const bundledProfiles = useMemo(() => listT3TeamProfiles(), []);
   const [open, setOpen] = useState(false);
@@ -64,14 +67,23 @@ export function T3TeamCloneProjectSetupProfileDialog({
         De-emphasized on purpose: this is a secondary escape hatch off the profile-card decision
         above it, not a second call to action competing with it.
       */}
-      <DialogTrigger render={<Button type="button" variant="ghost-muted" size="sm" />}>
-        Clone starter profile
+      <DialogTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost-muted"
+            size="sm"
+            title="Create your own working style, starting from a bundled one"
+          />
+        }
+      >
+        {triggerLabel}
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Clone starter profile</DialogTitle>
+          <DialogTitle>New custom working style</DialogTitle>
           <DialogDescription>
-            Create a project-local profile from a bundled starter. It is saved under
+            Start from a bundled working style and make it your own. It is saved under
             .t3team/setup/profiles when the project workspace is created.
           </DialogDescription>
         </DialogHeader>

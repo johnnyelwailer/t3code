@@ -1,9 +1,13 @@
 import { useMemo, useState } from "react";
-import { RefreshCw, Search, ShieldAlert, X } from "lucide-react";
-import { Button } from "~/t3team/components/ui/t3team-button";
-import { Input } from "~/t3team/components/ui/t3team-input";
+import { ShieldAlert } from "lucide-react";
 import { Skeleton } from "~/t3team/components/ui/t3team-skeleton";
-import { parseRepositoryLabel } from "~/t3team/components/t3team-linkedRepositories";
+import { PickerSearchInput } from "~/t3team/components/t3team-PickerSearchInput";
+import { PickerSection as Section } from "~/t3team/components/t3team-PickerSection";
+import {
+  buildRepositoryPickerEntries,
+  entryFromUrl,
+} from "~/t3team/components/t3team-repositoryPickerEntries";
+import { RepositoryPickerStatus } from "~/t3team/components/t3team-RepositoryPickerStatus";
 import {
   RepositoryPickerRow,
   type RepositoryPickerEntry,
@@ -12,37 +16,6 @@ import type { GitHubDiscoveryState } from "~/t3team/hooks/t3team-useGitHubReposi
 
 const BROWSE_LIMIT = 30;
 const SEARCH_LIMIT = 60;
-
-function entryFromUrl(url: string): RepositoryPickerEntry {
-  const label = parseRepositoryLabel(url);
-  const slash = label.indexOf("/");
-  return { url, host: slash < 0 ? label : label.slice(0, slash), name: label.slice(slash + 1) };
-}
-
-function Section({
-  title,
-  count,
-  action,
-  children,
-}: {
-  title: string;
-  count?: number;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="pb-1">
-      <div className="sticky top-0 z-10 flex items-center justify-between bg-card/95 px-2.5 py-1.5 backdrop-blur">
-        <h3 className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-          {title}
-          {count !== undefined ? <span className="ml-1.5 opacity-60">{count}</span> : null}
-        </h3>
-        {action}
-      </div>
-      <ul>{children}</ul>
-    </section>
-  );
-}
 
 /**
  * One search box over every signed-in host. Linked repos come first, then matches for the
@@ -64,25 +37,10 @@ export function RepositoryPicker({
   const loading = discovery.authStatus === "checking" || discovery.loadingAuth;
   const linked = useMemo(() => new Set(linkedUrls), [linkedUrls]);
 
-  const entries = useMemo(() => {
-    const byUrl = new Map<string, RepositoryPickerEntry>();
-    const newestFirst = [...discovery.catalog].sort((a, b) =>
-      (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""),
-    );
-    for (const repo of newestFirst) {
-      byUrl.set(repo.url, {
-        url: repo.url,
-        name: repo.nameWithOwner,
-        host: repo.host,
-        ...(repo.description ? { description: repo.description } : {}),
-        ...(repo.isPrivate !== undefined ? { isPrivate: repo.isPrivate } : {}),
-      });
-    }
-    for (const url of [...linkedUrls, ...discovery.suggestedUrls]) {
-      if (!byUrl.has(url)) byUrl.set(url, entryFromUrl(url));
-    }
-    return byUrl;
-  }, [discovery.catalog, discovery.suggestedUrls, linkedUrls]);
+  const entries = useMemo(
+    () => buildRepositoryPickerEntries(discovery.catalog, linkedUrls, discovery.suggestedUrls),
+    [discovery.catalog, discovery.suggestedUrls, linkedUrls],
+  );
 
   const hostCount = new Set(discovery.authenticatedHosts.map((entry) => entry.host)).size;
   const showHost = hostCount > 1 || new Set([...entries.values()].map((e) => e.host)).size > 1;
@@ -126,77 +84,35 @@ export function RepositoryPicker({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="space-y-2.5 px-4 pb-3">
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            autoFocus
-            size="lg"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={
-              hosts.length > 1
-                ? `Search repositories on ${hosts.length} hosts, or paste a URL`
-                : "Search repositories, or paste a URL"
-            }
-            className="[&_input]:pl-9"
-            aria-label="Search repositories"
-          />
-          {query ? (
-            <button
-              type="button"
-              onClick={() => setQuery("")}
-              aria-label="Clear search"
-              className="absolute top-1/2 right-2 z-10 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
-            >
-              <X className="size-3.5" />
-            </button>
-          ) : null}
-        </div>
-        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-            {signedIn ? (
-              discovery.authenticatedHosts.map((entry) => (
-                <span key={entry.host} className="inline-flex items-center gap-1.5">
-                  <span className="size-1.5 rounded-full bg-emerald-500" />
-                  {entry.host}
-                  {entry.account ? (
-                    <span className="opacity-60">· {entry.account}</span>
-                  ) : null}
-                  {repoCountByHost.has(entry.host) ? (
-                    <span className="opacity-60">{repoCountByHost.get(entry.host)}</span>
-                  ) : null}
-                </span>
-              ))
-            ) : (
-              <span>{loading ? "Checking your GitHub sign-in…" : "Not signed in to GitHub"}</span>
-            )}
-          </div>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => discovery.refresh()}
-            disabled={!discovery.backendAvailable || loading || discovery.loadingDiscovery}
-            aria-label="Refresh repositories"
-          >
-            <RefreshCw
-              className={`size-3.5 ${loading || discovery.loadingDiscovery ? "animate-spin" : ""}`}
-            />
-          </Button>
-        </div>
+        <PickerSearchInput
+          value={query}
+          onChange={setQuery}
+          label="Search repositories"
+          placeholder={
+            hosts.length > 1
+              ? `Search repositories on ${hosts.length} hosts, or paste a URL`
+              : "Search repositories, or paste a URL"
+          }
+        />
+        <RepositoryPickerStatus
+          discovery={discovery}
+          loading={loading}
+          repoCountByHost={repoCountByHost}
+        />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto border-t border-border px-2 pb-2">
         {loading ? (
           <div className="space-y-2 p-3">
             {[0, 1, 2, 3].map((index) => (
-              <Skeleton key={index} className="h-9 w-full rounded-lg" />
+              <Skeleton key={index} className="h-9 w-full" />
             ))}
           </div>
         ) : null}
 
         {!loading && !signedIn ? (
           <div className="m-3 flex gap-3 rounded-lg border border-border/60 bg-muted/35 p-3 text-xs text-muted-foreground">
-            <ShieldAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" />
             <span>
               Sign in with <code className="font-mono">gh auth login</code> (add{" "}
               <code className="font-mono">--hostname your.ghe.host</code> for Enterprise), then
@@ -252,7 +168,9 @@ export function RepositoryPicker({
                 {[...otherByHost].map(([host, list]) => (
                   <Section
                     key={host}
-                    title={otherByHost.size > 1 ? `Your repositories · ${host}` : "Your repositories"}
+                    title={
+                      otherByHost.size > 1 ? `Your repositories · ${host}` : "Your repositories"
+                    }
                   >
                     {list.map((entry) => row(entry))}
                   </Section>

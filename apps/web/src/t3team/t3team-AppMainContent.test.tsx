@@ -108,7 +108,6 @@ describe("AppMainContent", () => {
         onThreadDisplayModeChange={() => {}}
         onBackToDashboard={() => {}}
         onCreate={() => {}}
-        onInlineProjectCreated={() => {}}
         renderDashboard={(project) => <div>dashboard:{project.title}</div>}
         renderTicketDetail={(project, ticketId, activeThreadId) => (
           <div>
@@ -150,7 +149,6 @@ describe("AppMainContent", () => {
         onThreadDisplayModeChange={() => {}}
         onBackToDashboard={() => {}}
         onCreate={() => {}}
-        onInlineProjectCreated={() => {}}
         renderDashboard={(project) => <div>dashboard:{project.title}</div>}
         renderTicketDetail={(project, ticketId, activeThreadId) => (
           <div>
@@ -186,7 +184,6 @@ describe("AppMainContent", () => {
         onThreadDisplayModeChange={() => {}}
         onBackToDashboard={() => {}}
         onCreate={() => {}}
-        onInlineProjectCreated={() => {}}
         renderDashboard={(project) => <div>dashboard:{project.title}</div>}
         renderTicketDetail={(project, ticketId) => (
           <div>
@@ -221,7 +218,6 @@ describe("AppMainContent", () => {
         onThreadDisplayModeChange={() => {}}
         onBackToDashboard={() => {}}
         onCreate={() => {}}
-        onInlineProjectCreated={() => {}}
         renderDashboard={(project) => <div>dashboard:{project.title}</div>}
         renderTicketDetail={(project, ticketId, activeThreadId) => (
           <div>

@@ -36,7 +36,6 @@ type MainContentProps = {
   onThreadDisplayModeChange: (threadId: string, displayMode: ProjectThreadDisplayMode) => void;
   onBackToDashboard: (projectId: string) => void;
   onCreate: () => void;
-  onInlineProjectCreated: (project: ProjectShellProject) => void;
   renderDashboard: (project: ProjectShellProject) => React.ReactNode;
   renderTicketDetail: (
     project: ProjectShellProject,
@@ -62,7 +61,6 @@ export function AppMainContent({
   onKickoffProjectThread,
   onBackToDashboard,
   onCreate,
-  onInlineProjectCreated,
   renderDashboard,
   renderTicketDetail,
   onThreadKickoffConsumed,
@@ -86,8 +84,6 @@ export function AppMainContent({
   const homeBrowser = (
     <AppMainContentHomeBrowser
       onCreate={onCreate}
-      onInlineProjectCreated={onInlineProjectCreated}
-      showInitialSetup={showInitialSetup}
       setupSurfaceReason={setupSurfaceReason}
       showAside={!reopenInitialSetup && projects.length > 0}
       shouldInsetDesktopHeader={shouldInsetDesktopHeader}

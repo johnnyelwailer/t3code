@@ -1,87 +1,8 @@
 @supports (view-transition-name: none) {
-  /*
-   * While a view transition is running, the browser paints OLD snapshots for up to its full
-   * animation duration while still hit-testing the LIVE DOM underneath. A click in that window
-   * can land on whatever now occupies that screen position (wrong row) or land between
-   * mousedown/mouseup and get dispatched to a container ancestor instead of any row (no
-   * selection at all). Disabling pointer events on the stepped wizard panel for the duration of
-   * the transition closes that window entirely, regardless of which race variant would
-   * otherwise fire. See t3team-runViewTransition.ts for the attribute lifecycle.
-   */
-  html[data-t3team-view-transition-types] [data-step] {
-    pointer-events: none;
-  }
-
   ::view-transition-group(t3team-right-sidebar-shell),
   ::view-transition-group(t3team-right-sidebar-panel) {
     animation-duration: 180ms;
     animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
-  }
-
-  ::view-transition-group(t3team-create-project-step-panel) {
-    animation-duration: 240ms;
-    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  ::view-transition-group(t3team-create-project-entry-surface) {
-    animation-duration: 320ms;
-    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  ::view-transition-old(t3team-create-project-step-panel),
-  ::view-transition-new(t3team-create-project-step-panel) {
-    animation-duration: 240ms;
-    animation-fill-mode: both;
-    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-    mix-blend-mode: normal;
-  }
-
-  ::view-transition-old(t3team-create-project-step-panel) {
-    animation-name: t3team-create-project-step-out-forward;
-  }
-
-  ::view-transition-new(t3team-create-project-step-panel) {
-    animation-name: t3team-create-project-step-in-forward;
-  }
-
-  ::view-transition-old(t3team-create-project-entry-surface),
-  ::view-transition-new(t3team-create-project-entry-surface) {
-    animation-duration: 320ms;
-    animation-fill-mode: both;
-    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-    mix-blend-mode: normal;
-  }
-
-  ::view-transition-old(t3team-create-project-entry-surface) {
-    animation-name: t3team-create-project-entry-out-forward;
-  }
-
-  ::view-transition-new(t3team-create-project-entry-surface) {
-    animation-name: t3team-create-project-entry-in-forward;
-  }
-
-  html[data-t3team-view-transition-types~="t3team-wizard-forward"] {
-    view-transition-name: none;
-  }
-
-  html[data-t3team-view-transition-types~="t3team-wizard-back"] {
-    view-transition-name: none;
-  }
-
-  html[data-t3team-view-transition-types~="t3team-wizard-back"]::view-transition-old(t3team-create-project-step-panel) {
-    animation-name: t3team-create-project-step-out-back;
-  }
-
-  html[data-t3team-view-transition-types~="t3team-wizard-back"]::view-transition-old(t3team-create-project-entry-surface) {
-    animation-name: t3team-create-project-entry-out-back;
-  }
-
-  html[data-t3team-view-transition-types~="t3team-wizard-back"]::view-transition-new(t3team-create-project-step-panel) {
-    animation-name: t3team-create-project-step-in-back;
-  }
-
-  html[data-t3team-view-transition-types~="t3team-wizard-back"]::view-transition-new(t3team-create-project-entry-surface) {
-    animation-name: t3team-create-project-entry-in-back;
   }
 }
 

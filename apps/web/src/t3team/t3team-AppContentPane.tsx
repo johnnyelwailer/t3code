@@ -73,10 +73,6 @@ export function AppContentPane({
             onThreadDisplayModeChange={onThreadDisplayModeChange}
             onBackToDashboard={onBackToDashboard}
             onCreate={onCreate}
-            onInlineProjectCreated={(project) => {
-              store.addProject(project);
-              onBackToDashboard(project.id);
-            }}
             renderDashboard={(project) => (
               <ProjectDashboard
                 project={project}
