@@ -215,6 +215,7 @@ function RootRouteView() {
           <T3TeamPackAppearanceSync />
           <T3TeamPackAppearanceDefaultsSync />
           <CustomSnoozeDialogHost />
+          <CloudSessionSignInDialogHost />
           <CommandPalette>
             <AppSidebarLayout>
               <Outlet />

@@ -17,6 +17,13 @@ import { useToolAuthActions, useToolAuthStates } from "~/state/t3team-toolauth";
 import { clearCloudSessionSignIn, useCloudSessionSignInStore } from "./t3team-cloudSessionSignIn";
 
 const GH = toolAuthMetaForTool("gh");
+const IN_PROGRESS = new Set([
+  "installing",
+  "starting",
+  "awaiting-open",
+  "awaiting-code",
+  "verifying",
+]);
 
 /**
  * Signs the GitHub CLI in to the cloud-session host when a session action needed it, then runs
@@ -30,18 +37,29 @@ export function CloudSessionSignInDialogHost() {
   const state = useToolAuthStates(environmentId).get(GH.tool);
   const { onConnect, onSubmitCode, onCancel } = useToolAuthActions(GH, environmentId);
   const phase = state?.phase ?? "idle";
-  // The action is repeated only after a sign-in this dialog watched happen: a phase other than
-  // `connected` seen first, then `connected`. A credential gh already had is not proof enough.
+  // The action is repeated only after a sign-in THIS dialog started reached `connected` by way
+  // of another phase. A credential gh already had, or a status re-probe flickering through
+  // `idle`, is not a sign-in and must not re-run the action.
+  const startedRef = useRef(false);
   const sawSignInRef = useRef(false);
+  const startSignIn = () => {
+    startedRef.current = true;
+    sawSignInRef.current = false;
+    onConnect();
+  };
 
   useEffect(() => {
+    startedRef.current = false;
     sawSignInRef.current = false;
-    if (request !== null && phase !== "connected") onConnect();
-    // Start once per request, not on every phase change (those are handled below).
+    if (request === null || phase === "connected") return;
+    // A sign-in already running (another surface started it) is watched, not started twice.
+    if (IN_PROGRESS.has(phase)) startedRef.current = true;
+    else startSignIn();
+    // Once per request; phase changes are handled below.
   }, [request]);
 
   useEffect(() => {
-    if (request === null) return;
+    if (request === null || !startedRef.current) return;
     if (phase !== "connected") {
       sawSignInRef.current = true;
       return;
@@ -51,13 +69,13 @@ export function CloudSessionSignInDialogHost() {
     request.retry();
   }, [phase, request]);
 
-  const staleCredential = request !== null && phase === "connected" && !sawSignInRef.current;
+  const staleCredential = request !== null && phase === "connected" && !startedRef.current;
   return (
     <Dialog
       open={request !== null}
       onOpenChange={(open) => {
         if (open) return;
-        if (phase !== "connected" && phase !== "idle") onCancel();
+        if (startedRef.current && phase !== "connected") onCancel();
         clearCloudSessionSignIn();
       }}
     >
@@ -74,7 +92,7 @@ export function CloudSessionSignInDialogHost() {
             <ToolAuthCard
               meta={GH}
               state={state}
-              onConnect={onConnect}
+              onConnect={startSignIn}
               onSubmitCode={onSubmitCode}
               onCancel={onCancel}
             />
@@ -82,7 +100,7 @@ export function CloudSessionSignInDialogHost() {
           {staleCredential ? (
             <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
               GitHub refused the saved sign-in.
-              <Button size="sm" variant="outline" onClick={onConnect}>
+              <Button size="sm" variant="outline" onClick={startSignIn}>
                 Sign in again
               </Button>
             </div>
