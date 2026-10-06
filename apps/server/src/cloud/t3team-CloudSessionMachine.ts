@@ -24,7 +24,6 @@ import {
   type MachineRepository,
   machineGitAuthor,
   machineRepositoryFromRemote,
-  machineWorkspaceName,
 } from "./t3team-cloudSessionMachineNames.ts";
 
 export interface CloudSessionMachine {
@@ -33,7 +32,6 @@ export interface CloudSessionMachine {
   readonly devcontainerPath: string;
   /** Run inside the machine once it is up; a failure fails the session. Null when none. */
   readonly healthCheck: string | null;
-  readonly workspace: string;
   /** The user's token for `repository.host`; travels only to the broker, as a session secret. */
   readonly token: string;
   /** The user's commit identity, so the machine's commits carry their name like their pushes do. */
@@ -192,7 +190,6 @@ const make = Effect.gen(function* () {
       author: machineGitAuthor(profile, repository.host),
       devcontainerPath: machine.devcontainerPath,
       healthCheck: machine.healthCheck,
-      workspace: machineWorkspaceName(repository),
       token,
     } satisfies CloudSessionMachine;
   });

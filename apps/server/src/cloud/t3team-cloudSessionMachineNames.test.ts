@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 
 import {
   machineRepositoryFromRemote,
-  machineWorkspaceName,
+  sessionWorkspaceName,
 } from "./t3team-cloudSessionMachineNames.ts";
 
 const API = {
@@ -48,11 +48,45 @@ describe("machineRepositoryFromRemote", () => {
   });
 });
 
-describe("machineWorkspaceName", () => {
-  it("stays within the workflow's workspace rule", () => {
-    const long = machineWorkspaceName({ ...API, owner: "o".repeat(40), name: "n".repeat(40) });
-    expect(machineWorkspaceName(API)).toBe("machine-acme.api");
-    expect(long).toHaveLength(64);
-    expect(long).toMatch(/^[A-Za-z0-9._-]{1,64}$/);
+describe("sessionWorkspaceName", () => {
+  it("is the creator's own: two users on one project never share a snapshot", () => {
+    expect(sessionWorkspaceName("pj", API)).toBe("m-pj.acme.api_");
+    expect(sessionWorkspaceName("other", API)).toBe("m-other.acme.api_");
+    expect(sessionWorkspaceName("pj", null)).toBe("u-pj_");
+  });
+
+  it("is never a prefix of another user's (restore matches keys by prefix)", () => {
+    const keyPrefix = (workspace: string) => `nexi-session-userdata-${workspace}-`;
+    const pj = sessionWorkspaceName("pj", null);
+    const pjX = sessionWorkspaceName("pj-x", null);
+    expect(`${keyPrefix(pjX)}123`.startsWith(keyPrefix(pj))).toBe(false);
+    const repo = sessionWorkspaceName("pj", { owner: "acme", name: "api" });
+    const repoLonger = sessionWorkspaceName("pj", { owner: "acme", name: "api-v2" });
+    expect(`${keyPrefix(repoLonger)}123`.startsWith(keyPrefix(repo))).toBe(false);
+  });
+
+  it("stays within the workflow's workspace rule, and long names stay distinct", () => {
+    const a = sessionWorkspaceName("pj", { owner: "o".repeat(40), name: `${"n".repeat(40)}-a` });
+    const b = sessionWorkspaceName("pj", { owner: "o".repeat(40), name: `${"n".repeat(40)}-b` });
+    for (const name of [a, b]) {
+      expect(name).toHaveLength(64);
+      expect(name).toMatch(/^[A-Za-z0-9._-]{1,64}$/);
+    }
+    expect(a).not.toBe(b);
+  });
+
+  it("keeps repos apart that differ only in a rewritten character", () => {
+    const underscore = sessionWorkspaceName("pj", { owner: "acme", name: "my_repo" });
+    const dash = sessionWorkspaceName("pj", { owner: "acme", name: "my-repo" });
+    expect(dash).toBe("m-pj.acme.my-repo_");
+    expect(underscore).toMatch(/^m-pj\.acme\.my-repo-[0-9a-f]{8}_$/);
+  });
+
+  it("hashes only past the limit: 63 characters stay readable, 64 do not", () => {
+    const fits = sessionWorkspaceName("pj", { owner: "acme", name: "r".repeat(63 - 10) });
+    const over = sessionWorkspaceName("pj", { owner: "acme", name: "r".repeat(64 - 10) });
+    expect(fits).toBe(`m-pj.acme.${"r".repeat(53)}_`);
+    expect(over).toMatch(/^m-pj\.acme\.r+-[0-9a-f]{8}_$/);
+    expect(over.length).toBeLessThanOrEqual(64);
   });
 });

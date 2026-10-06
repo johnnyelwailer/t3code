@@ -20,6 +20,7 @@ import { resolveFleetConfig, workflowHistoryUrl } from "./t3team-CloudSessionFle
 import { makeFailureReasonCache } from "./t3team-cloudSessionFailureReason.ts";
 import { ConnectCredentialMinter } from "./t3team-ConnectCredentialMinter.ts";
 import { dispatchAndDiscoverSession } from "./t3team-CloudSessionDispatch.ts";
+import { sessionWorkspaceName } from "./t3team-cloudSessionMachineNames.ts";
 import { dispatchCredentialHandoff } from "./t3team-CloudSessionMintGate.ts";
 import { makePayloadIssueCleanup } from "./t3team-CloudSessionPayloadCleanup.ts";
 import { makeSessionTag, projectCloudSession } from "./t3team-CloudSessionProjection.ts";
@@ -187,6 +188,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
         discoveryAttempts: DISPATCH_DISCOVERY_ATTEMPTS,
         brokerGrant,
         machine,
+        workspace: sessionWorkspaceName(login, machine?.repository ?? null),
       });
     });
 
