@@ -17,6 +17,7 @@ type CloudSelectorProps = Pick<
   SelectorProps,
   | "pendingCloudSessions"
   | "onCreateCloudSession"
+  | "cloudSessionCreatePending"
   | "onCloudSessionAction"
   | "onDismissCloudSession"
   | "onCloudMenuOpenChange"
@@ -40,7 +41,7 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
 } {
   const cloudSessions = useCloudSessionController();
   const navigate = useNavigate();
-  const { available, configured, sessions, onCreate } = cloudSessions;
+  const { available, configured, sessions, onCreate, createPending } = cloudSessions;
   const { primaryEnvironmentId } = cloudSessions;
   const { onSessionAction, onCloudMenuOpenChange } = cloudSessions;
   // A failure surfaced in the menu stays dismissed once the user closed it (kept per browser; the
@@ -87,6 +88,7 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
           ? {
               pendingCloudSessions,
               onCreateCloudSession,
+              cloudSessionCreatePending: createPending,
               ...(cloudSessionProject ? { cloudSessionProject } : {}),
               onCloudSessionAction: onSessionAction,
               onDismissCloudSession,
@@ -97,6 +99,7 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
       available,
       cloudSessionProject,
       configured,
+      createPending,
       onCloudMenuOpenChange,
       onCreateCloudSession,
       onDismissCloudSession,

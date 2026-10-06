@@ -193,6 +193,19 @@ describe("BranchToolbarEnvironmentSelector", () => {
     expect(onCreateCloudSession).toHaveBeenCalledTimes(1);
   });
 
+  it("shows a create in flight at once, and a second click cannot start a second machine", () => {
+    const onCreateCloudSession = vi.fn();
+    mountSelector({ onCreateCloudSession, cloudSessionCreatePending: true });
+
+    const buttons = Array.from(liveContainer?.querySelectorAll("button") ?? []);
+    const pending = buttons.find((button) => button.textContent?.includes("Requesting a machine"));
+    expect(pending?.disabled).toBe(true);
+    act(() => {
+      pending?.click();
+    });
+    expect(onCreateCloudSession).not.toHaveBeenCalled();
+  });
+
   it("wires menu open/close to the polling callback", () => {
     const onCloudMenuOpenChange = vi.fn();
     renderSelector({ onCreateCloudSession: () => {}, onCloudMenuOpenChange });
