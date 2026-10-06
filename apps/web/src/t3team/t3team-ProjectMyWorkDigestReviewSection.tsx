@@ -117,8 +117,8 @@ export function DigestReviewSection({
               number: review.number,
             });
           };
-          // The PR is the row's link; the ticket key and the next-step pills sit beside and below
-          // it as their own buttons, never a link inside a link.
+          // The PR is the row's link; the ticket key and the next-step pills sit beside it as their
+          // own buttons, never a link inside a link.
           return (
             <div key={review.id} className="group px-3 py-2 hover:bg-accent/30">
               <div className="flex min-w-0 items-start gap-2">
@@ -147,18 +147,22 @@ export function DigestReviewSection({
                   </p>
                   <ReviewCoverage review={review} />
                 </a>
-                {review.workItemKey ? (
-                  <button
-                    type="button"
-                    disabled={!review.ticketId}
-                    onClick={openTicket}
-                    className="shrink-0 font-mono text-xs text-muted-foreground enabled:text-foreground enabled:hover:underline"
-                  >
-                    {review.workItemKey}
-                  </button>
-                ) : null}
+                {/* Key on top, next step under it: the PR text column is taller, so the pill costs
+                    the row no extra line. */}
+                <div className="flex shrink-0 flex-col items-end">
+                  {review.workItemKey ? (
+                    <button
+                      type="button"
+                      disabled={!review.ticketId}
+                      onClick={openTicket}
+                      className="font-mono text-xs text-muted-foreground enabled:text-foreground enabled:hover:underline"
+                    >
+                      {review.workItemKey}
+                    </button>
+                  ) : null}
+                  <DigestItemActions actions={digestReviewActions(review)} />
+                </div>
               </div>
-              <DigestItemActions actions={digestReviewActions(review)} />
             </div>
           );
         })}
