@@ -23,7 +23,7 @@ export const CAPABILITIES_JSON = Schema.encodeSync(PackCodec.capabilities)(
 ) as PackJson;
 
 /** Async iterable fed by `push`; ends on `end`. */
-export const makePushIterable = () => {
+const makePushIterable = () => {
   const buffer: unknown[] = [];
   let wake: (() => void) | undefined;
   let done = false;

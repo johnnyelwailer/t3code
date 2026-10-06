@@ -30,6 +30,7 @@ import { createModelSelection } from "@t3tools/shared/model";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { discoverProjectRecipes } from "./t3team-projectRecipeDiscovery.ts";
+import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 import { resolveRecipeWorkflowScripts } from "./t3team-recipeWorkflowScripts.ts";
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
@@ -48,7 +49,7 @@ afterAll(() => {
   NodeFS.rmSync(runsRoot, { recursive: true, force: true });
 });
 
-const recipeRoot = NodePath.join(workspaceRoot, ".t3team", "recipes", "estimation-stats");
+const recipeRoot = NodePath.join(workspaceRoot, HIDDEN_T3TEAM_DIR, "recipes", "estimation-stats");
 NodeFS.mkdirSync(NodePath.join(recipeRoot, "scripts"), { recursive: true });
 NodeFS.writeFileSync(
   NodePath.join(recipeRoot, "scripts", "computeStats.ts"),

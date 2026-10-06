@@ -32,6 +32,3 @@ export const packRoundTrip = <E, I, IJ, O, OJ>(
     Effect.flatMap((encoded) => bridge.call(() => run(encoded))),
     Effect.flatMap((raw) => bridge.decode(output, raw)),
   );
-
-export const errorDetail = (cause: unknown): string =>
-  cause instanceof Error ? cause.message : String(cause);

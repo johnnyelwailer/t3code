@@ -209,7 +209,23 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     id: "t3team.orchestration.run",
     label: "Run ephemeral orchestration",
     title: "Run a temporary agent orchestration in this conversation",
-    description: `Run a temporary agent orchestration immediately in this conversation — a durable, journaled t3team engine run that can pause for user decisions; NOT a Claude Code/Codex/CI workflow. Pass exactly one of 'source' (inline orchestration TypeScript, persisted under .t3team-runs/<runId>/) or 'workflowPath' (existing .workflow.ts in the workspace), plus the required 'intent' ({goal, expectedOutcome, guardrails}) — the run's contract. Body format: ${PROJECT_STATE_DIR}/recipes/AUTHORING.md; validate with t3team.recipe.validate first. Returns {runId, status: accepted|completed|suspended|failed, handoff: 'workflow-ui', output?, error?}. A successful 'workflow-ui' handoff means the orchestration card owns progress: end the current turn immediately with no follow-up assistant prose. A user decision appears on that card and resumes the orchestration on reply — do not poll. On 'failed', fix the source using 'error' and re-run. No approval gate; at most 8 live ephemeral runs.`,
+    description:
+      "Agent orchestration: run a structure that fans work out to several agents (parallel or in " +
+      "sequence), enforces result contracts, and can wake itself on durable timers — a durable, " +
+      "journaled t3team engine run that can pause for user decisions; NOT a Claude Code/Codex/CI " +
+      "workflow. Use it for complex or long work; for a simple single-agent task, just do it " +
+      "directly. You describe, the host authors: pass 'intent' ({goal, expectedOutcome, " +
+      "guardrails} — put constraints such as which provider/model to use in plain language " +
+      "here) and optional 'args' (the orchestration's input); a dedicated author agent writes, " +
+      "validates and launches the source (persisted under .t3team-runs/<runId>/). Pass " +
+      "'workflowPath' only to run an existing saved .workflow.ts as-is (body format: " +
+      `${PROJECT_STATE_DIR}/recipes/AUTHORING.md). Returns {runId, status: authoring|accepted, ` +
+      "handoff: 'workflow-ui'} " +
+      "immediately; the orchestration card shows authoring → running → the result, and only a " +
+      "genuinely unfixable outcome is reported back, once. After the handoff, end the current " +
+      "turn with no assistant prose. ONE launch per turn: while a run this thread launched is " +
+      "still active, a second call is refused — pass 'replaceRunId' to stop that run and launch " +
+      "the replacement instead. No approval gate; at most 8 live ephemeral runs.",
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],
@@ -221,14 +237,12 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       properties: {
         source: {
           type: "string",
-          description:
-            "Inline orchestration TypeScript (meta + top-level body). Exactly one of source/workflowPath.",
           minLength: 1,
         },
         workflowPath: {
           type: "string",
           description:
-            "Path to an existing .workflow.ts, relative to the project workspace root (absolute paths must stay inside the workspace). Exactly one of source/workflowPath.",
+            "Path to an existing saved .workflow.ts to run as-is, relative to the project workspace root (absolute paths must stay inside the workspace). Omit to have the orchestration authored from intent.",
           minLength: 1,
         },
         args: {
@@ -296,9 +310,8 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       'via t3team.orchestration.status. Reading a failure: "Invalid inputs for workflow" means ' +
       "the launch args were wrong — resume the same runId with corrected 'args' (never a new " +
       'run); "The agent turn failed" means a step\'s provider turn died — resume the same runId ' +
-      "and it re-drives that step; anything else is a source defect — for an ephemeral run, " +
-      "resume with a corrected 'source' (same-prefix replay — do not change already-executed " +
-      "steps).",
+      "and it re-drives that step; anything else is a source defect the run's author handles — " +
+      "resume only once the card offers it (an ephemeral run also accepts corrected 'source').",
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],

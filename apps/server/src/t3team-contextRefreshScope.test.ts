@@ -4,7 +4,11 @@ import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 
-import { buildJiraTicketEntryPoint } from "@t3tools/project-context/t3teamContextPaths";
+import {
+  buildJiraTicketEntryPoint,
+  T3TEAM_PROJECT_CONTEXT_ROOT,
+  T3TEAM_WORK_ITEMS_INDEX_PATH,
+} from "@t3tools/project-context/t3teamContextPaths";
 import { loadT3TeamContextRefreshScope } from "./t3team-contextRefreshScope.ts";
 import {
   makeContextRefreshScopeTestLayer,
@@ -53,17 +57,17 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const { root, project } = makeContextRefreshTestWorkspace({ projectId: "project-1" });
-      writeContextRefreshTestJson(root, ".t3team/context/work-items/proj-7.json", {
+      writeContextRefreshTestJson(root, `${T3TEAM_PROJECT_CONTEXT_ROOT}/work-items/proj-7.json`, {
         ticket: {
           id: "10001",
           ref: { id: "10001", displayId: "PROJ-7" },
         },
       });
-      writeContextRefreshTestJson(root, ".t3team/context/work-items/index.json", {
+      writeContextRefreshTestJson(root, T3TEAM_WORK_ITEMS_INDEX_PATH, {
         workItems: [
           {
             key: "PROJ-7",
-            relativePath: ".t3team/context/work-items/proj-7.json",
+            relativePath: `${T3TEAM_PROJECT_CONTEXT_ROOT}/work-items/proj-7.json`,
             ticketEntryPointRelativePath: buildJiraTicketEntryPoint(project.id, "PROJ-7"),
           },
         ],

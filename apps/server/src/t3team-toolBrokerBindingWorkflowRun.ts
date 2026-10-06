@@ -12,6 +12,7 @@ import {
   executeWorkflowSdkWorkflowRunTool,
   WorkflowSdkBridgeError,
 } from "./t3team-workflowSdkToolBridge.ts";
+import { mcpToolNameOf } from "./t3team-mcpCanonicalToolMap.ts";
 
 export const T3TEAM_WORKFLOW_RUN_TOOL_ID = "t3team.orchestration.run";
 
@@ -23,7 +24,9 @@ export function callT3TeamWorkflowRunTool(input: {
   const handlers = input.workflowRunTools;
   if (!handlers) {
     return Effect.succeed(
-      errorResult(`Tool '${T3TEAM_WORKFLOW_RUN_TOOL_ID}' is not enabled ${input.scopeLabel}.`),
+      errorResult(
+        `Tool '${mcpToolNameOf(T3TEAM_WORKFLOW_RUN_TOOL_ID)}' is not enabled ${input.scopeLabel}.`,
+      ),
     );
   }
 
@@ -39,8 +42,8 @@ export function callT3TeamWorkflowRunTool(input: {
     }),
     okResult,
     (message) =>
-      message.startsWith(`${T3TEAM_WORKFLOW_RUN_TOOL_ID} requires`)
+      message.startsWith(`${mcpToolNameOf(T3TEAM_WORKFLOW_RUN_TOOL_ID)} requires`)
         ? errorResult(message)
-        : errorResult(`Failed to run ${T3TEAM_WORKFLOW_RUN_TOOL_ID}: ${message}`),
+        : errorResult(`Failed to run ${mcpToolNameOf(T3TEAM_WORKFLOW_RUN_TOOL_ID)}: ${message}`),
   );
 }

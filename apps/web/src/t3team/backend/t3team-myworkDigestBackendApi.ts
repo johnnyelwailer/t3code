@@ -33,6 +33,7 @@ export type MyWorkDigestPollInput = {
 type DigestTicketRef = { readonly issueId?: string; readonly issueKey?: string };
 type DigestSprint = {
   readonly name: string;
+  readonly state?: string;
   readonly goal?: string;
   readonly startDate?: string;
   readonly endDate?: string;
@@ -83,6 +84,8 @@ export type MyWorkDigestPayload = {
     }>;
     readonly changeRequests: ReadonlyArray<{
       readonly id: string;
+      /** Absent on payloads from a server that predates the field. */
+      readonly host?: string;
       readonly repo: string;
       readonly number: number;
       readonly state:

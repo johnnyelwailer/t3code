@@ -34,6 +34,9 @@ import { environmentServerConfigsAtom } from "../state/server";
 import { resolveThreadRouteTarget } from "../threadRoutes";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { useClientSettings } from "./useSettings";
+import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
+import { pickScopedDefaultProject } from "../t3team/t3team-scopeProjectResolution";
+import { useT3TeamSidebarProjectScope } from "../t3team/t3team-sidebarProjectScopeStore";
 
 interface NewThreadWorkspaceOptions {
   branch?: string | null;
@@ -464,12 +467,40 @@ export function useHandleNewThread() {
     });
   }, [projectOrder, projects]);
   const handleNewThread = useNewThreadHandler();
+  // t3team: the default project is the first one whose environment is reachable — a project on a
+  // machine that went away (an ended cloud session) cannot take a new thread.
+  // This computer always counts as reachable, even while it is still connecting at startup.
+  const { environments } = useEnvironments();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  // t3team: the sidebar's project scope outranks project order for the default — "new thread"
+  // starts in the project the user is looking at. An open thread or draft still wins (see
+  // resolveThreadActionProjectRef), and an unscoped sidebar behaves as before.
+  const scopedProjectRefs = useT3TeamSidebarProjectScope((state) => state.scopedProjectRefs);
+  const defaultProject = useMemo(() => {
+    const offline = new Set<string>(
+      environments
+        .filter(
+          (environment) =>
+            environment.connection.phase !== "connected" &&
+            environment.environmentId !== primaryEnvironmentId,
+        )
+        .map((environment) => environment.environmentId),
+    );
+    return pickScopedDefaultProject({
+      orderedProjects,
+      scopedProjectRefs,
+      offlineEnvironmentIds: offline,
+      fallback:
+        orderedProjects.find((project) => !offline.has(project.environmentId)) ??
+        orderedProjects[0],
+    });
+  }, [environments, orderedProjects, primaryEnvironmentId, scopedProjectRefs]);
 
   return {
     activeDraftThread,
     activeThread,
-    defaultProjectRef: orderedProjects[0]
-      ? scopeProjectRef(orderedProjects[0].environmentId, orderedProjects[0].id)
+    defaultProjectRef: defaultProject
+      ? scopeProjectRef(defaultProject.environmentId, defaultProject.id)
       : null,
     handleNewThread,
     routeDraftId,

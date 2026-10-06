@@ -15,6 +15,8 @@ import * as Schema from "effect/Schema";
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
+import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
+import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts";
 import {
   makeWorkflowRunToolHandlers,
   type T3TeamWorkflowRunToolHandlers,
@@ -59,6 +61,13 @@ export const makeWorkflowRunToolsForThread = Effect.fn("makeWorkflowRunToolsForT
     const scheduler = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamWorkflowScheduler));
     const host = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamWorkflowHost));
     const textGeneration = Option.getOrUndefined(yield* Effect.serviceOption(TextGeneration));
+    // The author agent's model choice and the launch check's live model gate both read the same
+    // provider snapshots `start_child` resolves against; the context store scopes the author's
+    // tools. Both optional: a harness without them authors on the caller's model, unscoped.
+    const providerRegistry = Option.getOrUndefined(yield* Effect.serviceOption(ProviderRegistry));
+    const contextStore = Option.getOrUndefined(
+      yield* Effect.serviceOption(T3TeamThreadToolContextStore),
+    );
     // Durable signal-source state (GHE #332) — optional, like the other engine services above:
     // absent, a launched run simply has no signal verbs.
     const signalStore = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowSignalStore));
@@ -73,6 +82,10 @@ export const makeWorkflowRunToolsForThread = Effect.fn("makeWorkflowRunToolsForT
       path: deps.path,
       loadThreadProject: deps.loadThreadProject,
       ...(deps.stopRun === undefined ? {} : { stopRun: deps.stopRun }),
+      ...(providerRegistry === undefined
+        ? {}
+        : { listProviders: () => providerRegistry.getProviders }),
+      ...(contextStore === undefined ? {} : { contextStore }),
       launch: {
         registry,
         runRepository,

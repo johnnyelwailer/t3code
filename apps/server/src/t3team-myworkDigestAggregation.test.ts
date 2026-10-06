@@ -228,8 +228,22 @@ describe("my work digest aggregation", () => {
     expect(data.decisions).toHaveLength(1);
     expect(data.transitions).toHaveLength(1);
     expect(data.sprint?.name).toBe("PW Sprint 8.5");
+    expect(data.sprint?.state).toBe("active");
     expect(data.changeRequestNote).toBeUndefined();
   }, 10_000);
+
+  it("carries a GitHub Enterprise PR's host so the chip can link to it", () => {
+    const source = fixtureSources();
+    const [first, ...rest] = source.prEntries;
+    if (first === undefined) throw new Error("fixture has no PRs");
+    const ghe = { ...first, host: "ghe.example.com", state: "open" as const };
+    const changeRequests = assembleMyWorkDigestChangeRequests({
+      ...source,
+      prEntries: [ghe, ...rest],
+    });
+    expect(changeRequests[0]?.host).toBe("ghe.example.com");
+    expect(changeRequests[0]?.id.startsWith("ghe.example.com:")).toBe(true);
+  });
 
   it("matches PRs to tickets by key and maps the chip states", () => {
     const source = fixtureSources();
@@ -237,6 +251,7 @@ describe("my work digest aggregation", () => {
     const openExpected = source.prEntries.filter((entry) => entry.state === "open").length;
     const mergedExpected = source.prEntries.filter((entry) => entry.state === "merged").length;
     expect(changeRequests).toHaveLength(openExpected + mergedExpected);
+    expect(changeRequests.every((pr) => pr.host === "github.com")).toBe(true);
     expect(changeRequests.every((pr) => pr.id.startsWith("github.com:hive/ies-spital#"))).toBe(
       true,
     );
@@ -354,6 +369,10 @@ describe("digest PR helpers", () => {
     const picked = pickDigestSprint(sprints);
     expect(picked?.name).toBe("B");
     expect(picked?.goal).toBe(" goal ");
+    expect(picked?.state).toBe("ACTIVE");
+    // A sprint without a state (or a blank one) carries no `state` key at all.
+    expect(pickDigestSprint([{ id: "1", name: "A" }])).not.toHaveProperty("state");
+    expect(pickDigestSprint([{ id: "1", name: "A", state: " " }])).not.toHaveProperty("state");
     expect(pickDigestSprint([{ id: "1", name: "A" }])?.name).toBe("A");
     expect(pickDigestSprint([])).toBeUndefined();
   });

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   applyDelegationEffort,
   parseDelegationExtensions,
+  parseSkillsExtension,
   resolveEnvironmentBinding,
   T3TEAM_DELEGATION_EXTENSIONS,
 } from "./t3team-delegateTaskExtensions.ts";
@@ -43,6 +44,7 @@ describe("parseDelegationExtensions", () => {
       "effort",
       "ticketId",
       "environment",
+      "skills",
     ]);
   });
 
@@ -72,6 +74,43 @@ describe("parseDelegationExtensions", () => {
     const environment = parseDelegationExtensions({ environment: "env-2" });
     expect(environment.ok).toBe(false);
     if (!environment.ok) expect(environment.message).toContain("extensions.environment");
+  });
+});
+
+describe("parseSkillsExtension", () => {
+  it("accepts 1-5 well-formed names, in order", () => {
+    expect(parseSkillsExtension(["deploy-staging", "a"])).toEqual({
+      ok: true,
+      value: ["deploy-staging", "a"],
+    });
+    expect(parseSkillsExtension(Array(5).fill("s")).ok).toBe(true);
+    expect(parseSkillsExtension(undefined)).toEqual({ ok: true, value: undefined });
+    expect(parseDelegationExtensions({ skills: ["deploy-staging"] })).toEqual({
+      ok: true,
+      value: { skills: ["deploy-staging"] },
+    });
+  });
+
+  it("rejects malformed values, naming what a valid skill name looks like", () => {
+    const notArray = parseSkillsExtension("deploy-staging");
+    expect(notArray.ok).toBe(false);
+    if (!notArray.ok) {
+      expect(notArray.message).toContain("extensions.skills must be a non-empty array");
+      expect(notArray.message).toContain("lowercase letters, digits and dashes");
+    }
+    expect(parseSkillsExtension([]).ok).toBe(false);
+    const tooMany = parseSkillsExtension(Array(6).fill("s"));
+    expect(tooMany.ok).toBe(false);
+    if (!tooMany.ok) expect(tooMany.message).toContain("at most 5");
+    // NOTE: a bare "-" passes the spec'd charset ^[a-z0-9-]{1,64}$ (format gate only —
+    // the driver's registry is what makes such a name unresolvable).
+    for (const bad of ["Deploy", "deploy_staging", "dep loy", "s".repeat(65), 7, null]) {
+      const rejected = parseSkillsExtension([bad]);
+      expect(rejected.ok, JSON.stringify(bad)).toBe(false);
+      if (!rejected.ok) expect(rejected.message).toContain("invalid skill name");
+    }
+    const viaGate = parseDelegationExtensions({ skills: ["Nope!"] });
+    expect(viaGate.ok).toBe(false);
   });
 });
 

@@ -32,6 +32,7 @@ import { defineRecipe, type WorkflowRef } from "@t3team/sdk";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { discoverProjectRecipes } from "./t3team-projectRecipeDiscovery.ts";
+import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
@@ -49,7 +50,7 @@ afterAll(() => {
   NodeFS.rmSync(runsRoot, { recursive: true, force: true });
 });
 
-const recipeRoot = NodePath.join(workspaceRoot, ".t3team", "recipes", "example-pr-review");
+const recipeRoot = NodePath.join(workspaceRoot, HIDDEN_T3TEAM_DIR, "recipes", "example-pr-review");
 NodeFS.mkdirSync(recipeRoot, { recursive: true });
 NodeFS.writeFileSync(
   NodePath.join(recipeRoot, "example-pr-review.workflow.ts"),

@@ -45,6 +45,7 @@ function harness() {
     postMessage: async () => {},
     upsertActivity: async () => {},
     interrupt: async () => {},
+    archiveThread: async () => {},
     syncRunFacts: async () => {},
   };
   const broker = createWorkflowEngineBroker({

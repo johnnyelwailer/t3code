@@ -54,6 +54,8 @@ export type OrchestrationThreadActivityState = typeof OrchestrationThreadActivit
 export const OrchestrationWorkflowRunStatus = Schema.Struct({
   runId: Schema.optional(Schema.String),
   status: Schema.Literals([
+    // The run exists and its hidden author is writing the source (no source yet).
+    "authoring",
     "queued",
     "running",
     "suspended",
@@ -74,11 +76,11 @@ export type OrchestrationWorkflowRunStatus = typeof OrchestrationWorkflowRunStat
  * The execution environment a thread is bound to (env-identity: the same
  * EnvironmentId + label pair every other environment reference in the
  * contracts carries — relay, background, citations). Set on threads created
- * through `t3team.thread.start_child` with an explicit `environment` argument
+ * through `delegate_task` with an explicit `extensions.environment`
  * pointing at a DIFFERENT environment than the creating server's own.
  *
  * Delivery boundary (documented, not built here): inter-agent messaging
- * (send_message / mailbox / children ops) reaches only threads in THIS
+ * (`t3_thread_send` mailbox / `t3_task_ops` ops) reaches only threads in THIS
  * environment's store. A cross-environment child is recorded, bound, and
  * visible to its parent with its environment shown; routing execution and
  * report-back across environments is a separate design (no relay invented

@@ -9,12 +9,28 @@ import { buildProjectTicketHierarchy } from "~/t3team/t3team-ticketHierarchy";
 
 const STALE_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
 
-export function digestPrUrl(pr: Pick<DigestChangeRequest, "repo" | "number">): string {
-  return `https://github.com/${pr.repo}/pull/${pr.number}`;
+/**
+ * The PR's page on its own host. A GitHub Enterprise PR links to its GHE install; a PR without a
+ * host (older server payloads, blocker mentions) falls back to github.com.
+ */
+function digestHostOrigin(host: string | undefined): string {
+  const bare = host
+    ?.trim()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/+$/, "");
+  return `https://${bare ? bare : "github.com"}`;
 }
 
-export function digestReviewerUrl(reviewer: Pick<DigestReviewer, "login">): string {
-  return `https://github.com/${reviewer.login}`;
+export function digestPrUrl(pr: Pick<DigestChangeRequest, "repo" | "number" | "host">): string {
+  return `${digestHostOrigin(pr.host)}/${pr.repo}/pull/${pr.number}`;
+}
+
+/** The reviewer's profile on the PR's host (a GHE reviewer is not on github.com). */
+export function digestReviewerUrl(
+  reviewer: Pick<DigestReviewer, "login">,
+  host?: string | undefined,
+): string {
+  return `${digestHostOrigin(host)}/${reviewer.login}`;
 }
 
 export function digestPrsFor(graph: DigestGraph, ticketId: string): readonly DigestChangeRequest[] {
@@ -28,7 +44,7 @@ export function digestPrsFor(graph: DigestGraph, ticketId: string): readonly Dig
  */
 export type DigestAction = {
   readonly text: string;
-  readonly pr?: { readonly repo: string; readonly number: number };
+  readonly pr?: { readonly repo: string; readonly number: number; readonly host?: string };
 };
 
 export function digestActionLine(graph: DigestGraph, ticketId: string): DigestAction | null {
@@ -66,7 +82,7 @@ export function digestItemActions(
   if (blocker) {
     actions.push({
       label: "Open enabler",
-      href: `https://github.com/${blocker.repo}/pull/${blocker.number}`,
+      href: digestPrUrl(blocker),
     });
     return actions;
   }

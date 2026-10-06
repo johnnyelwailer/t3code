@@ -30,7 +30,13 @@ const PR_STATE: Record<
  * repeats what the avatar's initials already say. Two at most, then a count. Each links to the
  * GitHub handle.
  */
-export function DigestReviewerStack({ reviewers }: { reviewers: readonly DigestReviewer[] }) {
+export function DigestReviewerStack({
+  reviewers,
+  host,
+}: {
+  reviewers: readonly DigestReviewer[];
+  host?: string | undefined;
+}) {
   if (reviewers.length === 0) return null;
   const shown = reviewers.slice(0, 2);
   const rest = reviewers.length - shown.length;
@@ -41,7 +47,7 @@ export function DigestReviewerStack({ reviewers }: { reviewers: readonly DigestR
           <TooltipTrigger
             render={
               <a
-                href={digestReviewerUrl(reviewer)}
+                href={digestReviewerUrl(reviewer, host)}
                 className="inline-flex opacity-80 hover:opacity-100"
                 aria-label={`Reviewed by ${reviewer.name}`}
               >
@@ -73,17 +79,17 @@ export function DigestReviewerStack({ reviewers }: { reviewers: readonly DigestR
 export function DigestPrChip({ pr }: { pr: DigestChangeRequest }) {
   const state = PR_STATE[pr.state];
   return (
-    <span className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-background/70 px-1.5 py-0.5 text-2xs text-muted-foreground ring-1 ring-border/50 hover:ring-border">
+    <span className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md bg-background/70 px-1.5 py-0.5 text-2xs text-muted-foreground ring-1 ring-border/50 hover:ring-border">
       <a
         href={digestPrUrl(pr)}
-        className="-translate-y-px font-mono text-3xs leading-none text-muted-foreground hover:text-foreground hover:underline"
+        className="min-w-0 -translate-y-px truncate font-mono text-3xs leading-none text-muted-foreground hover:text-foreground hover:underline"
       >
         {pr.repo}#{pr.number}
       </a>
       <Badge size="sm" variant={state.variant}>
         {state.label}
       </Badge>
-      <DigestReviewerStack reviewers={pr.reviewers} />
+      <DigestReviewerStack reviewers={pr.reviewers} host={pr.host} />
       {pr.unhandledComments && pr.unhandledComments > 0 ? (
         <span className="-translate-y-px text-3xs leading-none text-muted-foreground">
           {pr.unhandledComments} comments

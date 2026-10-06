@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ProjectShellProject, ResourcePage } from "@t3tools/project-context";
-import { asT3TeamPollingBackend } from "~/t3team/backend/t3team-pollingBackend";
+import type { ProjectShellProject } from "@t3tools/project-context";
+import {
+  asT3TeamPollingBackend,
+  type T3TeamMyWorkPage,
+} from "~/t3team/backend/t3team-pollingBackend";
 import { isJiraSessionExpiredError } from "~/t3team/backend/t3team-t3BackendHttp";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import { resourceRefToProjectTicket } from "~/t3team/t3team-ticketMappers";
@@ -18,7 +21,7 @@ import {
  */
 export function useProjectMyWork(project: ProjectShellProject) {
   const backend = asT3TeamPollingBackend(useBackend());
-  const [resources, setResources] = useState<ResourcePage | null>(null);
+  const [resources, setResources] = useState<T3TeamMyWorkPage | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +36,9 @@ export function useProjectMyWork(project: ProjectShellProject) {
   // in-flight load() from a stale project/account cannot clobber state that
   // belongs to whatever is current by the time its await resolves.
   const generationRef = useRef(0);
+  // Latest load() call. An overlapping older call (poll vs. a card-move reload)
+  // that rejects after a newer one succeeded must not put its error back.
+  const requestSeqRef = useRef(0);
 
   const accountId = project.source.accountId;
   const externalProjectId = project.source.externalProjectId;
@@ -49,8 +55,7 @@ export function useProjectMyWork(project: ProjectShellProject) {
       return;
     }
     setLoading(fingerprintRef.current === undefined);
-    setError(null);
-    setSessionExpired(false);
+    const requestSeq = ++requestSeqRef.current;
 
     try {
       if (!backend) throw new Error("Backend not available");
@@ -64,6 +69,11 @@ export function useProjectMyWork(project: ProjectShellProject) {
       });
 
       if (generationRef.current !== generation) return;
+
+      // Cleared on success only (not when a poll starts) so a retry during an
+      // outage keeps showing the error instead of flickering to "loading".
+      setError(null);
+      setSessionExpired(false);
 
       if (result.unchanged) {
         fingerprintRef.current = result.fingerprint;
@@ -81,13 +91,14 @@ export function useProjectMyWork(project: ProjectShellProject) {
       setResources(result.value);
       setLastCheckedAt(nextCheckedAt);
     } catch (e) {
-      if (generationRef.current !== generation) return;
+      if (generationRef.current !== generation || requestSeqRef.current !== requestSeq) return;
       // A dead refresh token is not a load failure to retry: the server cleared the credentials,
       // so the only way forward is a fresh sign-in.
       if (isJiraSessionExpiredError(e)) {
         setSessionExpired(true);
         setError(null);
       } else {
+        setSessionExpired(false);
         setError(e instanceof Error ? e.message : "Failed to load resources");
       }
     } finally {
@@ -101,6 +112,10 @@ export function useProjectMyWork(project: ProjectShellProject) {
   useEffect(() => {
     generationRef.current += 1;
     setResources(null);
+    setError(null);
+    // An in-flight load of the previous project skips its own `finally` (stale
+    // generation); without this an unlinked/idle project would stay "loading".
+    setLoading(false);
     setLastCheckedAt(undefined);
     setSessionExpired(false);
     fingerprintRef.current = undefined;
@@ -143,5 +158,19 @@ export function useProjectMyWork(project: ProjectShellProject) {
     return resources.items.map((ref) => resourceRefToProjectTicket(project.id, ref, accountId));
   }, [resources, project.id, accountId]);
 
-  return { resources, tickets, loading, error, sessionExpired, reload: load, lastCheckedAt };
+  // `viewerAccountId` is the Jira *user* the server scoped the page to; it is
+  // what `assigneeAccountId` is compared against (never `project.source.accountId`,
+  // which is the Jira site id).
+  return {
+    resources,
+    tickets,
+    viewerAccountId: resources?.viewerAccountId,
+    loading,
+    error,
+    sessionExpired,
+    reload: load,
+    lastCheckedAt,
+    // No Jira project bound => `load` is a no-op, so the view must not wait on it.
+    isLinked: Boolean(externalProjectId),
+  };
 }

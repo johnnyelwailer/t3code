@@ -6,7 +6,7 @@
  * Delivery keeps per-process state (one drain per thread at a time, the
  * once-per-session standing protocol), so every consumer must share this
  * instance: the reactor, the `t3_thread_send` mailbox hook and the
- * `t3team_children op:"drain"` port all reach it through
+ * `t3_task_ops op:"drain"` port all reach it through
  * `T3TeamActorMailboxLive` (one layer reference, memoized).
  *
  * @module t3team-actorMailboxService

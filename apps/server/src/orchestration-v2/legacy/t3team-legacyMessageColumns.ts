@@ -28,7 +28,7 @@ export const readLegacyExtColumn = Effect.gen(function* () {
 });
 
 /** SQLite's TRIM strips only spaces by default; match JS `trim()` for the usual whitespace. */
-export const hasTextExpression = (column: string) =>
+const hasTextExpression = (column: string) =>
   `TRIM(${column}, ' ' || char(9) || char(10) || char(13)) <> ''`;
 
 const visibleExpression = (column: string) =>

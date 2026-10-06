@@ -7,6 +7,7 @@ import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { splitRepositoryInput } from "~/t3team/components/t3team-linkedRepositories";
 import { useAtlassianOAuth } from "~/t3team/hooks/t3team-useAtlassianOAuth";
 import { useCreateProject } from "~/t3team/hooks/t3team-useCreateProject";
+import { useCreateProjectPreselect } from "~/t3team/hooks/t3team-useCreateProjectPreselect";
 import {
   CreateProjectWizardFrame,
   type CreateProjectWizardVariant,
@@ -107,6 +108,16 @@ export function CreateProjectDialog({
     }
     setup.setSelectedProject(project);
   };
+
+  useCreateProjectPreselect({
+    bootstrapping,
+    loadingProjects,
+    accounts: setup.accounts,
+    selectedAccount,
+    projects,
+    loadProjects: setup.loadProjects,
+    onSelectProject: handleSelectProject,
+  });
 
   const addRepository = () => {
     const normalized = splitRepositoryInput(newRepositoryUrl);

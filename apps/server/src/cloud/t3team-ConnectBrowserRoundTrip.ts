@@ -19,7 +19,8 @@ const fail = (
 ): Effect.Effect<never, ConnectCredentialMintError> =>
   Effect.fail(new ConnectCredentialMintError({ reason, cause }));
 
-const makePkceRequest = Effect.gen(function* () {
+/** PKCE verifier + S256 challenge and a CSRF state, for any loopback browser sign-in. */
+export const makePkceRequest = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const verifier = Encoding.encodeBase64Url(yield* crypto.randomBytes(32));
   const challenge = Encoding.encodeBase64Url(

@@ -23,6 +23,16 @@ export type T3TeamAtlassianMyWorkPollInput = T3TeamAtlassianMyWorkInput & {
   readonly poll: T3TeamPollEnvelope;
 };
 
+/**
+ * `viewerAccountId` is the Jira (user) accountId the page was scoped to. The
+ * client needs it to tell "assigned to me" rows from parent-context rows —
+ * `account.id` is the Jira *site* id and can never be compared against an
+ * issue's `assigneeAccountId`. Absent when the viewer could not be resolved.
+ */
+export type T3TeamAtlassianMyWorkPage = ResourcePage & {
+  readonly viewerAccountId?: string;
+};
+
 function dedupeById(items: ReadonlyArray<ExternalResourceRef>): ReadonlyArray<ExternalResourceRef> {
   const byId = new Map<string, ExternalResourceRef>();
   for (const item of items) {
@@ -75,13 +85,14 @@ export function loadT3TeamAtlassianMyWorkPage(input: T3TeamAtlassianMyWorkInput)
         return {
           items,
           totalCount: items.length,
-        } satisfies ResourcePage;
+          viewerAccountId,
+        } satisfies T3TeamAtlassianMyWorkPage;
       }
     }
 
     // Mirror not populated yet (or viewer accountId unresolved) — fall back to
     // the live paginated path for this response only.
-    return yield* tryAtlassianPromise(
+    const livePage = yield* tryAtlassianPromise(
       () =>
         provider.listResources({
           account: input.account,
@@ -89,6 +100,10 @@ export function loadT3TeamAtlassianMyWorkPage(input: T3TeamAtlassianMyWorkInput)
         }),
       "Failed to load My Work issues.",
     );
+    return {
+      ...livePage,
+      ...(viewerAccountId ? { viewerAccountId } : {}),
+    } satisfies T3TeamAtlassianMyWorkPage;
   });
 }
 

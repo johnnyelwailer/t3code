@@ -53,7 +53,7 @@ describe("parseJobSpec", () => {
     expect(() => parseJobSpec({ ...base, runtime: "kata" })).toThrow(JobSpecValidationError);
   });
 
-  for (const secretKey of [
+  it.each([
     "API_TOKEN",
     "GITHUB_TOKEN",
     "SECRET_KEY",
@@ -61,13 +61,11 @@ describe("parseJobSpec", () => {
     "PASSWORD",
     "AWS_SECRET_ACCESS_KEY",
     "PRIVATE_KEY",
-  ]) {
-    it(`rejects secret-shaped env key ${secretKey}`, () => {
-      expect(() => parseJobSpec({ ...base, env: { [secretKey]: "shh" } })).toThrow(
-        JobSpecValidationError,
-      );
-    });
-  }
+  ])("rejects secret-shaped env key %s", (secretKey) => {
+    expect(() => parseJobSpec({ ...base, env: { [secretKey]: "shh" } })).toThrow(
+      JobSpecValidationError,
+    );
+  });
 
   it("accepts non-secret-shaped env keys", () => {
     const spec = parseJobSpec({

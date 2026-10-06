@@ -37,6 +37,7 @@ import { ServerConfig } from "./config.ts";
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
+import { retireWorkflowAuthorThread } from "./t3team-workflowAuthorThreadCleanup.ts";
 import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
 import { T3TeamWorkflowEngineReactorLive } from "./t3team-workflowEngineReactor.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
@@ -86,6 +87,38 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
     // A process died while executing a non-idempotent live step. Never blindly replay it at
     // boot: surface Needs attention instead of leaving a forever-running orphan — and TELL the
     // launching conversation, or its agent keeps assuming the run is still going.
+    // An AUTHORING row has no source and its author session died with the process: never launch
+    // it (a `queued` restart would run an empty file); fail it once, tell the launch thread, and
+    // retire the deterministic author thread. The caller can start the same intent again.
+    const authoring = yield* repo.listByStatus({ status: "authoring" });
+    for (const run of authoring) {
+      yield* repo.clearPending({
+        runId: run.runId,
+        status: "failed",
+        updatedAt: nowIso(),
+        failureReason: "The server restarted while this orchestration was being authored.",
+        failureStep: "authoring",
+      });
+      yield* Effect.logWarning("marked interrupted authoring workflow failed", {
+        runId: run.runId,
+      });
+      yield* Effect.promise(() =>
+        deliverWorkflowFailure({
+          launchThreadId: run.launchThreadId ?? undefined,
+          workflowRunId: run.runId,
+          errorText:
+            "The server restarted while this orchestration was being authored; it was not started.",
+          host,
+        }),
+      );
+      if (run.launchThreadId !== null) {
+        const launchThreadId = run.launchThreadId;
+        yield* Effect.promise(() => host.syncRunFacts(launchThreadId).catch(() => undefined));
+      }
+      yield* Effect.promise(() =>
+        retireWorkflowAuthorThread({ runId: run.runId, host, force: true }),
+      );
+    }
     const running = yield* repo.listByStatus({ status: "running" });
     for (const run of running) {
       yield* repo.setStatus({ runId: run.runId, status: "failed", updatedAt: nowIso() });
@@ -102,6 +135,11 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
         const launchThreadId = run.launchThreadId;
         yield* Effect.promise(() => host.syncRunFacts(launchThreadId).catch(() => undefined));
       }
+      // A running row may still hold the author thread that repairs it. The process
+      // that owned that conversation is gone, so the thread is retired with the run.
+      yield* Effect.promise(() =>
+        retireWorkflowAuthorThread({ runId: run.runId, host, force: true }),
+      );
     }
     if (
       suspended.length === 0 &&

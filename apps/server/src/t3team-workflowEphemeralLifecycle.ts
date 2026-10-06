@@ -20,6 +20,8 @@ export function buildPreparedWorkflowLifecycle(input: {
   readonly deps: PreparedWorkflowLaunchDeps;
   readonly run: PreparedWorkflowLaunchInput;
   readonly nowIso: () => string;
+  /** Admit writes `authoring` in the same upsert. A direct launch stays `queued`. */
+  readonly initialStatus?: "queued" | "authoring";
 }) {
   const { deps, run, nowIso } = input;
   return makeWorkflowRunLifecycle({
@@ -46,7 +48,7 @@ export function buildPreparedWorkflowLifecycle(input: {
       // with no intent) leaves the column NULL — the domain field is optional, not defaulted, so
       // "never given one" and "given an empty one" stay distinguishable.
       ...(run.intent === undefined ? {} : { intent: run.intent }),
-      ...(run.origin === "ephemeral" ? { status: "queued" as const } : {}),
+      ...(run.origin === "ephemeral" ? { status: input.initialStatus ?? ("queued" as const) } : {}),
     },
     nowIso,
     onSleep: () => {

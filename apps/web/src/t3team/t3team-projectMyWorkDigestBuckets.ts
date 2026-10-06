@@ -85,11 +85,21 @@ export const DIGEST_BUCKETS: readonly DigestBucket[] = [
     why: (ticket, nowMs) =>
       `${ticket.status} · untouched ${Math.round(quietFor(ticket, nowMs) / DAY_MS)} d`,
   },
+  // Open work outside any running or planned sprint (no sprint, rolled out of a closed one, a state
+  // this code does not know) is still the viewer's work while it is fresh; stale, it folds below.
+  {
+    id: "your-tickets",
+    heading: "Your tickets",
+    placement: "main",
+    accepts: (_f, ticket, nowMs) =>
+      ticket.sprintState?.trim().toLowerCase() !== "future" &&
+      quietFor(ticket, nowMs) <= DIGEST_QUIET_AFTER_MS,
+  },
   {
     id: "rest",
-    heading: "Not in this sprint",
+    heading: "Parked",
     placement: "footer",
-    hint: "assigned to you, not planned into the current sprint",
+    hint: "planned for a later sprint, or untouched for 2+ weeks",
     accepts: () => true,
   },
 ];

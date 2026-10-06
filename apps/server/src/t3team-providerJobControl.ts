@@ -19,7 +19,7 @@ import { ThreadManagementService } from "./orchestration-v2/ThreadManagementServ
 import { ProviderJobControlUnsupportedError } from "./provider/Errors.ts";
 
 /** The thread has no live provider session, so it has no live jobs either. */
-export class ProviderJobControlNoSessionError extends Data.TaggedError(
+class ProviderJobControlNoSessionError extends Data.TaggedError(
   "ProviderJobControlNoSessionError",
 )<{ readonly threadId: string }> {}
 

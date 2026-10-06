@@ -140,7 +140,7 @@ import {
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
 import * as CloudCliState from "./cloud/CliState.ts";
 import * as ConnectCredentialMinter from "./cloud/t3team-ConnectCredentialMinter.ts";
-import * as NexiBrokerAuth from "./cloud/t3team-NexiBrokerAuth.ts";
+import * as Accounts from "./account/t3team-Accounts.ts";
 import * as NexiBrokerService from "./cloud/t3team-NexiBrokerService.ts";
 import { runConnectCredentialTopUp } from "./cloud/t3team-ConnectCredentialTopUp.ts";
 import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
@@ -210,6 +210,7 @@ import {
 import { t3teamRouteAuthLayer } from "./t3team-routeAuth.ts";
 import { t3teamTempoRouteLayer } from "./t3team-tempo-routes.ts";
 import { t3teamCloudBrokerRouteLayer } from "./t3team-cloud-broker-routes.ts";
+import { t3teamAccountRouteLayer } from "./t3team-account-routes.ts";
 import { t3teamProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3team-project-workspace-recipe-routes.ts";
 import { t3teamProjectWorkspaceWriteContextFilesRouteLayer } from "./t3team-project-workspace-write-routes.ts";
 import {
@@ -613,12 +614,19 @@ const T3TeamProjectSourceIconReactorStartLive = Layer.effectDiscard(
   ),
 ).pipe(Layer.provideMerge(T3TeamProjectSourceIconReactorLive));
 
+// The workflow engine's port onto V2. One const so the broker and the runtime head below share a
+// single instance (layers memoize by reference).
+const T3TeamWorkflowHostLive = T3TeamWorkflowHost.layer.pipe(Layer.provide(T3TeamV2FoundationLive));
+
 // The fork MCP tool broker and the in-memory stores it shares with the routes/reactors.
 const T3TeamToolBrokerLayerLive = T3TeamToolBrokerLive.pipe(
   Layer.provideMerge(T3TeamThreadToolContextStoreLive),
   Layer.provideMerge(T3TeamWidgetRegistryLive),
   Layer.provideMerge(T3TeamContextRefreshServiceLive),
   Layer.provide(WorkflowSignalSourcesLive),
+  // The broker mounts beneath the runtime head, so the V2 orchestration tools only see the host
+  // (`serviceOption` at construction) when it is provided to the broker itself.
+  Layer.provide(T3TeamWorkflowHostLive),
   Layer.provide(ProviderRegistryLive),
   // The broker reads thread facts; same layer reference as the runtime registers (memoized).
   Layer.provide(T3TeamV2FoundationLive),
@@ -737,7 +745,7 @@ const RuntimeCoreDependenciesBaseLive = Layer.mergeAll(
   T3TeamV2FoundationLive,
   // t3team: delegated-child ticket/placement store (delegate_task extension, placement readers).
   T3TeamChildThreadMetadataLive,
-  // t3team: t3team_ask_user questions as V2 message-capability runtime requests.
+  // t3team: t3_ask_user questions as V2 message-capability runtime requests.
   T3TeamAskUserWriterLive,
   // t3team: the process's ONE inter-agent mailbox (durable store + delivery) and the composing
   // heartbeat it backs off on; ws.ts (noteComposing), the broker drain port and the
@@ -746,7 +754,7 @@ const RuntimeCoreDependenciesBaseLive = Layer.mergeAll(
   T3TeamActorMailboxLive,
   // t3team: the workflow engine's port onto V2 (threads, turns, notes, step pips, run facts),
   // over the same foundation writers (layer references memoize).
-  T3TeamWorkflowHost.layer.pipe(Layer.provide(T3TeamV2FoundationLive)),
+  T3TeamWorkflowHostLive,
 ).pipe(
   // t3team: the tool broker reads several capabilities through serviceOption at construction
   // time. Mount it before the runtime services so the later provideMerges expose the production
@@ -838,11 +846,15 @@ const RuntimeCoreDependenciesLive = RuntimeCoreDependenciesBaseLive.pipe(
       // ExternalLauncher instances the CLI flow uses, so minted and CLI
       // credentials land in one shared secret.
       ConnectCredentialMinter.layer,
-      // Server-lifetime, not per connection: the Entra sign-in in flight and the loopback
+      // Server-lifetime, not per connection: an account sign-in in flight and the loopback
       // forwarders of attached broker sessions are shared by the RPCs and the HTTP routes.
       NexiBrokerService.layer.pipe(
-        Layer.provideMerge(NexiBrokerAuth.layer),
-        Layer.provide(ServerSecretStore.layer),
+        Layer.provideMerge(
+          Accounts.layer.pipe(
+            Layer.provide(ServerSecretStore.layer),
+            Layer.provide(ExternalLauncher.layer),
+          ),
+        ),
       ),
       CloudManagedEndpointRuntimeLive,
     ),
@@ -870,7 +882,7 @@ const commandReadinessLayer = HttpRouter.middleware(
   { global: true },
 );
 
-export const makeRoutesLayer = Layer.mergeAll(
+const makeRoutesLayer = Layer.mergeAll(
   Layer.mergeAll(
     HttpApiBuilder.layer(EnvironmentHttpApi).pipe(
       Layer.provide(authHttpApiLayer),
@@ -896,6 +908,7 @@ export const makeRoutesLayer = Layer.mergeAll(
     t3teamAtlassianAssetContentRouteLayer,
     t3teamAtlassianOAuthCallbackRouteLayer,
     t3teamCloudBrokerRouteLayer,
+    t3teamAccountRouteLayer,
   ),
   // Every other t3team route requires a session, like upstream's raw routes (t3team-routeAuth.ts).
   Layer.mergeAll(

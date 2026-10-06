@@ -94,11 +94,15 @@ export function MainSection({
     <section className="space-y-2">
       <DigestKicker count={section.items.length}>{section.heading}</DigestKicker>
       {section.hint ? <p className="text-xs text-muted-foreground">{section.hint}</p> : null}
-      <div className="grid items-start gap-3 2xl:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-3 @3xl/lane:grid-cols-2">
         {groupByParent(section, graph, ticketsById).map((group) => {
           if (!group.parent) {
             return (
-              <T3SurfacePanel key="standalone" tone="muted" className="divide-y divide-border/50">
+              <T3SurfacePanel
+                key="standalone"
+                tone="muted"
+                className="min-w-0 divide-y divide-border/50 overflow-hidden"
+              >
                 {group.items.map((item) => {
                   const ticket = ticketsById.get(item.ticketId);
                   if (!ticket) return null;

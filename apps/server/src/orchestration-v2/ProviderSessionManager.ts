@@ -36,6 +36,7 @@ import * as EventSink from "./EventSink.ts";
 import * as IdAllocator from "./IdAllocator.ts";
 import { makeKeyedSerialExecutor } from "./KeyedSerialExecutor.ts";
 import * as ProviderEventIngestor from "./ProviderEventIngestor.ts";
+import { settleRunlessWorkflowAuthorRequest } from "./t3team-workflowAuthorGate.ts";
 import {
   ProviderAdapterEventStreamError,
   ProviderAdapterV2RuntimePolicy,
@@ -1456,6 +1457,13 @@ export const layerWithOptions = (
                         sessionKey(entry.runtime.providerSessionId),
                       );
                       if (current?.runtime !== entry.runtime) return;
+                      // t3team: a hidden author thread's runless approval is declined, never
+                      // persisted as answerable (t3team-workflowAuthorGate.ts).
+                      if (
+                        yield* settleRunlessWorkflowAuthorRequest(entry.runtime, event, threadId)
+                      ) {
+                        return;
+                      }
                       yield* providerEventIngestor
                         .ingestNormalized({
                           providerSessionId: entry.runtime.providerSessionId,

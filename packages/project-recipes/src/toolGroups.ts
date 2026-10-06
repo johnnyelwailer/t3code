@@ -116,7 +116,7 @@ export const PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID = {
   // arbitrary orchestration code, optionally with a corrected `source`) — a caller that already
   // holds `thread.handoff` could reach the same effect via `run` again, so a narrower group for
   // `resume` alone would not reduce the actual blast radius, only add friction to the intended
-  // run -> observe -> fix -> resume recovery loop (see the t3team_orchestration_resume description).
+  // run -> observe -> fix -> resume recovery loop (see the t3_orchestration_resume description).
   "t3team.orchestration.status": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
   "t3team.orchestration.resume": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
   // `pause` / `stop` only ever act on the caller's OWN runs (scoped by launch thread) and can

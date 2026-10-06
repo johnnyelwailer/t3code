@@ -23,7 +23,7 @@ export interface BrokerForwarder {
 export function startBrokerForwarder(input: {
   /** wss://… of the broker's client stream for this session. */
   readonly streamUrl: string;
-  /** Called per connection, so every stream carries a live Entra token. */
+  /** Called per connection, so every stream carries a live access token. */
   readonly accessToken: () => Promise<string>;
   readonly onError?: (message: string) => void;
 }): Promise<BrokerForwarder> {

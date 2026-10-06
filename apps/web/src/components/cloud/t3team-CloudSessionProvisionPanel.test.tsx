@@ -10,10 +10,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  CloudSessionProvisionPanel,
-  DEFAULT_CLOUD_SESSION_DURATION_SECONDS,
-} from "./t3team-CloudSessionProvisionPanel";
+import { CloudSessionProvisionPanel } from "./t3team-CloudSessionProvisionPanel";
 
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
@@ -71,6 +68,22 @@ function expandHistory(node: HTMLDivElement) {
 }
 
 describe("CloudSessionProvisionPanel", () => {
+  it("says why the list could not load instead of waiting on skeletons", () => {
+    const node = render(
+      <CloudSessionProvisionPanel
+        sessions={[]}
+        loading
+        loadError="The authenticated token is missing required scope: relay:write."
+        onCreate={() => {}}
+        onSessionAction={() => {}}
+      />,
+    );
+    expect(node.textContent).toContain(
+      "Could not load your cloud sessions: The authenticated token is missing required scope: relay:write.",
+    );
+    expect(node.textContent).not.toContain("No active cloud sessions.");
+  });
+
   it("surfaces active sessions with row actions and parks finished ones in history", () => {
     const onCreate = vi.fn();
     const node = render(
@@ -277,7 +290,7 @@ describe("CloudSessionProvisionPanel", () => {
     act(() => {
       startButtons[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(onCreate).toHaveBeenCalledWith(DEFAULT_CLOUD_SESSION_DURATION_SECONDS);
+    expect(onCreate).toHaveBeenCalledTimes(1);
     // Finished sessions still sit in the collapsed history.
     expect(node.textContent).toContain("History · 1");
   });

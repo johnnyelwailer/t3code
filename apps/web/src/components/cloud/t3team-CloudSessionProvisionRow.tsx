@@ -13,6 +13,7 @@ import {
   formatDuration,
   presentCloudSession,
 } from "./t3team-cloudSessionProvisionPresentation";
+import { cloudSessionDisplayName } from "./t3team-cloudSessionDisplayName";
 
 /**
  * One provisioning session rendered as a list row, plus the skeleton rows the
@@ -135,7 +136,7 @@ export function CloudSessionRow({
             />
           </span>
           <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="truncate font-medium text-sm">{presentation.title}</div>
+            <div className="truncate font-medium text-sm">{cloudSessionDisplayName(session)}</div>
             {/* The detail truncates; the tooltip carries the full sentence. */}
             <Tooltip>
               <TooltipTrigger
@@ -148,6 +149,7 @@ export function CloudSessionRow({
                   />
                 }
               >
+                {presentation.title} ·{" "}
                 {presentation.liveElapsed ? (
                   <CloudSessionLiveDetail
                     detail={presentation.detail}
@@ -157,7 +159,9 @@ export function CloudSessionRow({
                   presentation.detail
                 )}
               </TooltipTrigger>
-              <TooltipPopup>{presentation.detail}</TooltipPopup>
+              <TooltipPopup>
+                {presentation.title} · {presentation.detail}
+              </TooltipPopup>
             </Tooltip>
             {presentation.progress === null ? null : (
               <CloudSessionProgressBar progress={presentation.progress} />

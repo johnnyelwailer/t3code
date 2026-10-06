@@ -6,10 +6,10 @@
  * verbatim into the digest; bodies above it reach the recipient as the SUBJECT
  * (sender-provided summary or an auto-generated one) plus a marker carrying
  * the message id. The full body stays in the durable mailbox
- * (t3team-actorMailbox.ts) and is retrievable with `t3team_read_message`.
+ * (t3team-actorMailbox.ts) and is retrievable with `t3_read_message`.
  *
  * The cap is ~1 KB: the measured recipient threads dereferenced pointers ~1:1
- * (58 `t3team_read_message` calls against 48 deliveries), and each
+ * (58 `t3_read_message` calls against 48 deliveries), and each
  * dereference costs a tool turn plus a full context re-prefill — more than
  * the bytes the body would have cost inlined. With the per-turn batch cap of
  * 10, the worst-case digest stays around 10–15 KB.
@@ -17,7 +17,7 @@
 
 /**
  * Bodies at or under this many characters are inlined into the inter-agent
- * digest instead of arriving as a subject + t3team_read_message pointer.
+ * digest instead of arriving as a subject + t3_read_message pointer.
  * Distribution-tunable via `T3TEAM_ACTOR_MESSAGE_INLINE_MAX_CHARS`.
  */
 export const T3TEAM_ACTOR_MESSAGE_INLINE_MAX_CHARS = 1000;
@@ -96,7 +96,7 @@ export function autoSummarizeActorMessage(
  * Inline-or-pointer policy for a delivered body: at or under the inline cap
  * the body passes through verbatim; above it the SUBJECT (sender-provided or
  * auto-derived) plus a marker line naming the message id so the recipient can
- * retrieve the full text with `t3team_read_message`.
+ * retrieve the full text with `t3_read_message`.
  */
 export function summarizeActorMessageForDelivery(
   text: string,
@@ -114,6 +114,6 @@ export function summarizeActorMessageForDelivery(
       : autoSummarizeActorMessage(text);
   return (
     `${head}\n…[body NOT loaded — ${text.length} chars total; message id ${messageId} — ` +
-    "call t3team_read_message with this message id to read the full text]"
+    "call t3_read_message with this message id to read the full text]"
   );
 }

@@ -71,6 +71,8 @@ const hintForStatus = (row: WorkflowRun): string => {
         : "Sleeping on a timer; the scheduler wakes it automatically.";
     case "watching":
       return "Parked waiting on a watched signal event; it resumes automatically when the event is delivered.";
+    case "authoring":
+      return "The orchestration is still being written; it has not started. Wait for it, or replace it.";
     case "queued":
       return "Queued for engine capacity; it starts automatically once a slot frees up.";
     case "running":
@@ -103,7 +105,7 @@ const toStatusResult = (row: WorkflowRun): WorkflowStatusToolResult => ({
 
 const notFoundHint = (runId: string) =>
   `No orchestration run found for runId '${runId}'. Omit runId to list the most recent runs, or ` +
-  "double-check the runId returned by t3team.orchestration.run.";
+  "double-check the runId returned by t3_orchestration_run.";
 
 /** Over-fetch factor for list mode: rows are filtered to the calling thread after the query. */
 const RECENT_RUNS_SCAN_LIMIT = 50;

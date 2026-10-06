@@ -1,14 +1,15 @@
 import type { CloudSession, CloudSessionFailedError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import * as Random from "effect/Random";
 
 import type * as VcsProcess from "../vcs/VcsProcess.ts";
 import {
   cloudSessionDurationSeconds,
   cloudSessionElapsedSeconds,
   deriveCloudSessionPhase,
+  deriveMachineStage,
 } from "./t3team-cloudSessionPhase.ts";
 import { environmentIdFromSteps } from "./t3team-cloudSessionEnvironmentStep.ts";
+import { sessionNameFromRunName } from "./t3team-cloudSessionName.ts";
 import {
   cachedFailureReason,
   cloudSessionFailureReason,
@@ -29,16 +30,6 @@ import {
  * Actions runs (and a dispatch that has not surfaced yet) into the
  * user-visible `CloudSession` the contract defines.
  */
-
-/**
- * A correlation tag for one dispatch. Random rather than time-based: two
- * clients dispatching in the same millisecond must not collide, which is the
- * whole failure this exists to prevent.
- */
-export const makeSessionTag = Effect.map(
-  Random.nextIntBetween(0, Number.MAX_SAFE_INTEGER),
-  (value) => `s${value.toString(36)}`,
-);
 
 /**
  * The gh executor the projection runs through: one invocation, already
@@ -82,6 +73,8 @@ const isRunSettled = (run: WorkflowRunSummary): boolean => run.status === "compl
 
 /** `session.yml` appends this to `run-name` in broker mode; the run list shows nothing else of it. */
 const BROKER_RUN_NAME_MARKER = "· broker";
+/** session.yml marks a run that is inside a project machine (#562). */
+const MACHINE_RUN_NAME_MARKER = "· machine";
 
 /**
  * Project one provisioning run into the `CloudSession` the client renders.
@@ -121,11 +114,17 @@ export const projectCloudSession = (
     // `undefined`, and the client then correlates from the relay instead.
     const environmentId = phase === "ready" ? environmentIdFromSteps(steps) : undefined;
     const settled = sessionRun.status === "completed";
+    const projectMachine = sessionRun.name.includes(MACHINE_RUN_NAME_MARKER);
+    const machineStage =
+      projectMachine && phase === "preparing" ? deriveMachineStage(steps) : undefined;
+    const name = sessionNameFromRunName(sessionRun.name);
     return {
       sessionId: String(sessionRun.id),
       providerKind: "github_actions",
       phase,
       elapsedSeconds: cloudSessionElapsedSeconds(sessionRun, nowMs),
+      ...(name !== undefined ? { name } : {}),
+      ...(sessionRun.createdAt !== "" ? { startedAt: sessionRun.createdAt } : {}),
       // The workflow owns the hold duration, so the server does not invent a
       // remainder it cannot actually know.
       remainingSeconds: null,
@@ -134,6 +133,8 @@ export const projectCloudSession = (
       detailsUrl: sessionRun.htmlUrl === "" ? null : sessionRun.htmlUrl,
       ...(environmentId !== undefined ? { environmentId } : {}),
       transport: sessionRun.name.includes(BROKER_RUN_NAME_MARKER) ? "nexi_broker" : "t3_connect",
+      ...(projectMachine ? { projectMachine: true } : {}),
+      ...(machineStage !== undefined ? { machineStage } : {}),
       // Only a settled run has a real "how long did it run" figure; a live
       // session would be reporting its age, not its duration.
       ...(settled ? { durationSeconds: cloudSessionDurationSeconds(sessionRun) } : {}),

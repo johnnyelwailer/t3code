@@ -23,7 +23,7 @@ Part of the [pack migration guide](../t3team-pack-migration-orchestration-v2.md)
   `notification {source: {kind: "background_task"}, outcome: "updated", summary: "N messages from
 «…»"}`. Text starts `[Inter-agent digest: N message(s)]` with one `[from «title» · thread … · id
 … · urgency …]` block per message (`apps/server/src/t3team-actorReactionFraming.ts`); long
-  bodies arrive as subject plus a `t3team_read_message` pointer.
+  bodies arrive as subject plus a `t3_read_message` pointer.
 - Injected guidance changed: the standing protocol (first digest per process,
   `ACTOR_STANDING_INSTRUCTION` in `apps/server/src/t3team-actorReactionInput.ts`) and the child
   steering line (`buildHumanSteeringInstruction` in `t3team-actorSteeringContext.ts`) now say not
@@ -40,10 +40,10 @@ Part of the [pack migration guide](../t3team-pack-migration-orchestration-v2.md)
   must keep that prefix. Imported V1 history (event ids `migration:v1:`) never lifts a hold.
 - Messages to a recipient that is later deleted are retired (`state: "failed"`); messages to an
   archived recipient wait until it is unarchived. `queued` is not a delivery guarantee.
-- `t3team_read_message {message_id}` reads only messages delivered to the calling thread, from
-  the mailbox: `{ok, messageId, fromThreadId, createdAt, charCount, text}`. `t3team_children
+- `t3_read_message {message_id}` reads only messages delivered to the calling thread, from
+  the mailbox: `{ok, messageId, fromThreadId, createdAt, charCount, text}`. `t3_task_ops
 op: "drain"` delivers the caller's pending mail now when idle, else reports `queued` / `held`.
-- Silence watches (`t3team_children op: "watch"`) live in `t3team_thread_silence_watches` and
+- Silence watches (`t3_task_ops op: "watch"`) live in `t3team_thread_silence_watches` and
   notify through the mailbox (ids `t3team-silence:…`). "Stopped" = run ended `failed` /
   `interrupted` / `cancelled`, or the thread was deleted or settled; a run that `completed` closes
   the watch silently; a thread cannot watch itself; watches open at upgrade are not carried over;
@@ -57,27 +57,72 @@ op: "drain"` delivers the caller's pending mail now when idle, else reports `que
 | `t3team_send_message`                                                               | `t3_thread_send` with `mode: "mailbox"` (3.4)                                                                                                          |
 | `t3team_rename_thread`                                                              | `t3_thread_update {threadId, action: "rename", title}`                                                                                                 |
 | `t3team_models`                                                                     | `orchestrator_capabilities` (`providers[].providerInstanceId`, `providers[].models[].id` / `options`, `inheritedProviderInstanceId`, `inheritedModel`) |
-| `t3team_children` ops `list`, `status`, `wait`, `stop`, `close`                     | 3.3                                                                                                                                                    |
-| `t3team_workflow_run`, `t3team_workflow_status`, `t3team_workflow_resume` (aliases) | `t3team_orchestration_run`, `_status`, `_resume` (same parameters)                                                                                     |
+| `t3_task_ops` (was `t3team_children`) ops `list`, `status`, `wait`, `stop`, `close` | 3.3                                                                                                                                                    |
+| `t3team_workflow_run`, `t3team_workflow_status`, `t3team_workflow_resume` (aliases) | `t3_orchestration_run`, `_status`, `_resume` (same parameters)                                                                                         |
 
-Kept (`apps/server/src/mcp/toolkits/t3team/tools.ts`): `t3team_provider_usage`,
-`t3team_children`, `t3team_search_thread`, `t3team_search_source`, `t3team_read_message`,
-`t3team_orchestration_{run,status,resume,pause,stop}`, `t3team_ask_user`, `t3team_show_widget`,
-`t3team_help`, `t3team_recipe_list`, `t3team_recipe_validate`.
+Kept (`apps/server/src/mcp/toolkits/t3team/tools.ts`): `t3_provider_usage`,
+`t3_task_ops`, `t3_search_thread`, `t3_search_source`, `t3_read_message`,
+`t3_orchestration_{run,status,resume,pause,stop}`, `t3_ask_user`, `t3_show_widget`,
+`t3_recipe_list`, `t3_recipe_validate`. `t3team_help` is gone (fork #350): its topics live in
+the tool descriptions and the orchestration author's generated reference.
+
+### 3.5.1 Tool-name unification: `t3team_*` → `t3_*`
+
+The agent-facing names drop the `t3team_` prefix; `t3team_children` becomes `t3_task_ops`. It
+keeps the same ops-bag shape and the ops that survived 3.3 (`watch`, `unwatch`, `sweep`, `drain`,
+`environments`, `help`). Parameters, results, scope rules and handlers are unchanged. Only the
+registered name moved; broker ids (`t3team.thread.children`, …) and internal code names are not
+renamed.
+
+| Old name (dispatch alias only) | New name                  |
+| ------------------------------ | ------------------------- |
+| `t3team_children`              | `t3_task_ops`             |
+| `t3team_orchestration_run`     | `t3_orchestration_run`    |
+| `t3team_orchestration_status`  | `t3_orchestration_status` |
+| `t3team_orchestration_resume`  | `t3_orchestration_resume` |
+| `t3team_orchestration_pause`   | `t3_orchestration_pause`  |
+| `t3team_orchestration_stop`    | `t3_orchestration_stop`   |
+| `t3team_provider_usage`        | `t3_provider_usage`       |
+| `t3team_search_thread`         | `t3_search_thread`        |
+| `t3team_search_source`         | `t3_search_source`        |
+| `t3team_read_message`          | `t3_read_message`         |
+| `t3team_ask_user`              | `t3_ask_user`             |
+| `t3team_show_widget`           | `t3_show_widget`          |
+| `t3team_recipe_list`           | `t3_recipe_list`          |
+| `t3team_recipe_validate`       | `t3_recipe_validate`      |
+
+Already on the target surface and unchanged: `delegate_task`, `t3_thread_send`,
+`t3_thread_update`, `orchestrator_capabilities`, `link_pull_request`, `unlink_pull_request`,
+`list_thread_pull_requests`, `preview_*`, `device_*`. `t3team_thread_skill_metadata` (a driver-only
+read path, not an agent tool) keeps its name.
+
+**Alias window.** The old names are not registered tools and are never advertised: the `tools/list`
+a model sees contains only the new names (no extra definitions in context). The alias table
+(`apps/server/src/mcp/toolkits/t3team/t3team-mcpToolAliases.ts`) is applied at dispatch: the
+transport's protocol adapter (`t3team-mcpToolAliasProtocol.ts`, wired in `McpHttpServer.ts`)
+rewrites a `tools/call` carrying an old name to the replacement before the handler lookup, so the
+handler, the `orchestration` capability gate, the author scope and the result are identical, and one
+`MCP tool 'x' is deprecated; use 'y'` line is logged. Shipped distributions, V1-imported history
+replays and existing recipes/workflows keep working for one release cycle. The workflow-author
+approval gate also accepts the old names of its two tools (`t3_recipe_validate`,
+`t3_orchestration_run`). Remove the alias table, the adapter wrapper and the extra approval-gate
+entries one release after this lands. In-repo prompts, docs and recipes ship only the new names.
 
 Behaviour changes:
 
-- Every `t3team_*` tool except `t3team_help` requires the `orchestration` MCP capability: `This MCP
+- Every `t3team_*` tool requires the `orchestration` MCP capability: `This MCP
 credential does not grant orchestration capabilities.`
-  (`apps/server/src/mcp/toolkits/t3team/handlers.ts`).
-- `t3team_ask_user` (parameters unchanged) is a pending V2 runtime request `t3team-ask:<uuid>`
+  (`apps/server/src/mcp/toolkits/t3team/handlers.ts`). The hidden orchestration author's
+  credential resolves with NO capabilities and reaches only `t3_recipe_validate` and
+  `t3_orchestration_run` (`apps/server/src/t3team-workflowAuthorMcpScope.ts`).
+- `t3_ask_user` (parameters unchanged) is a pending V2 runtime request `t3team-ask:<uuid>`
   (`kind: "user_input"`, `responseCapability: {type: "message"}`) on the calling thread's active
-  run, plus a `user_input_request` turn item. Outside an active turn it fails (`t3team_ask_user can
+  run, plus a `user_input_request` turn item. Outside an active turn it fails (`t3_ask_user can
 only be called during an active turn.`). `context` is prepended to `question`. Answers come
   through upstream `runtime-request.respond {requestId, answers: {[questionId]: string |
 string[]}}` (multi-select joined with `•`), dismissal through `thread.user-input.dismiss`;
   Resume is refused while it is open (`apps/server/src/mcp/toolkits/t3team/t3team-askUserWriter.ts`).
-- `t3team_search_thread`, `t3team_read_message`, `t3team_search_source` scan V2 messages (roles
+- `t3_search_thread`, `t3_read_message`, `t3_search_source` scan V2 messages (roles
   `user` / `assistant` / `system`, no `actor`) and tool turn items (activity `kind` = V2 turn-item
   type, e.g. `command_execution`, `dynamic_tool`); `search_source` follows `fork` lineage
   (`apps/server/src/t3team-toolBrokerThreadReads.ts`). `t3team.view.read`: `latestTurnId` →
@@ -85,8 +130,9 @@ string[]}}` (multi-select joined with `•`), dismissal through `thread.user-inp
 - The `[host] memory pressure` line in tool results is advisory only ("do not start new children or
   parallel work; finish in-flight work and end the turn"); `delegate_task` carries it as a result
   note; no turn is held (`apps/server/src/t3team-resourcePressureToolLine.ts`).
-- `t3team_help("model-selection")` points at `orchestrator_capabilities` and `delegate_task`
-  (`apps/server/src/t3team-workflowManualModelSelection.ts`).
+- Model selection guidance points at `orchestrator_capabilities` and `delegate_task` (tool
+  descriptions); the orchestration author gets the live catalog in its kickoff
+  (`apps/server/src/t3team-workflowAuthorCatalog.ts`).
 
 Broker tool ids `t3team.thread.rename`, `t3team.runtime.models`, `t3team.thread.start_child` are
 gone from the catalog (`packages/project-context/src/t3teamToolCatalogImplemented.ts`), the recipe

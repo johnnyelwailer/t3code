@@ -12,6 +12,7 @@ import { useProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboard
 import { getT3TeamMainContentHeaderClassName } from "~/t3team/t3team-mainContentHeader";
 import { ProjectBindingRepairBanner } from "~/t3team/t3team-ProjectBindingRepairBanner";
 import { ProjectDashboardBacklogView } from "~/t3team/t3team-ProjectDashboardBacklogView";
+import { ProjectDashboardModeTabs } from "~/t3team/t3team-ProjectDashboardModeTabs";
 import { ProjectDashboardMyWorkView } from "~/t3team/t3team-ProjectDashboardMyWorkView";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
@@ -30,13 +31,19 @@ export function ProjectDashboard({
   onManageRepositories: (projectId: string) => void;
   onProjectUpdated: (project: ProjectShellProject) => void;
 }) {
-  const { state: dashboardState } = useProjectDashboardModeState(project.id);
+  // One state, one setter: the header tabs write the same persisted mode (and `?projectView=`)
+  // that picks the body below, so the URL, the tabs and the rendered view cannot disagree.
+  const { state: dashboardState, setState: setDashboardState } = useProjectDashboardModeState(
+    project.id,
+  );
   const dashboardMode = dashboardState.dashboardMode;
   const { state: myWorkState } = useProjectDashboardMyWorkState(project.id);
-  // The digest lens spans the full pane; the other My Work lenses keep the centered column.
+  // Every lens is a centered column so switching lenses does not jump the width; the digest's
+  // two lanes get a wider cap, and it grows with its content (min-h-full) so the bottom padding
+  // survives a tall digest instead of being cut by a fixed h-full box.
   const myWorkContentClassName =
     myWorkState.lens === "digest"
-      ? "flex h-full min-h-0 w-full flex-col p-4 sm:p-6"
+      ? "mx-auto flex min-h-full w-full max-w-[96rem] flex-col p-4 pb-6 sm:p-6"
       : "mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col p-4 sm:p-6";
 
   return (
@@ -68,6 +75,10 @@ export function ProjectDashboard({
             </MenuPopup>
           </Menu>
         </div>
+        <ProjectDashboardModeTabs
+          mode={dashboardMode}
+          onModeChange={(nextMode) => setDashboardState({ dashboardMode: nextMode })}
+        />
       </header>
 
       <ProjectBindingRepairBanner project={project} onProjectUpdated={onProjectUpdated} />

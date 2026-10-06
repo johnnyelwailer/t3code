@@ -8,6 +8,7 @@ import * as Path from "effect/Path";
 import { describe, expect, it } from "vite-plus/test";
 
 import { listProjectRecipesForAgent } from "./t3team-recipeAgentList.ts";
+import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 
 // Temp workspaces live under `__fixtures__` (not the OS tmpdir) so a typed `recipe.ts`'s
 // `import("@t3team/sdk")` resolves via the monorepo's node_modules chain, the same way
@@ -28,7 +29,7 @@ const writeTypedRecipe = Effect.fn("writeTypedRecipe")(function* (input: {
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const recipeRoot = path.join(input.workspaceRoot, ".t3team/recipes", input.recipeId);
+  const recipeRoot = path.join(input.workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes`, input.recipeId);
   yield* fileSystem.makeDirectory(recipeRoot, { recursive: true });
   yield* fileSystem.writeFileString(
     path.join(recipeRoot, `${input.recipeId}.workflow.ts`),
@@ -62,7 +63,7 @@ const writeLegacyRecipe = Effect.fn("writeLegacyRecipe")(function* (input: {
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const recipeRoot = path.join(input.workspaceRoot, ".t3team/recipes", input.recipeId);
+  const recipeRoot = path.join(input.workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes`, input.recipeId);
   yield* fileSystem.makeDirectory(recipeRoot, { recursive: true });
   yield* fileSystem.writeFileString(path.join(recipeRoot, "prompt.md"), "Do the thing.");
   yield* fileSystem.writeFileString(
@@ -85,7 +86,7 @@ const writeBrokenRecipe = Effect.fn("writeBrokenRecipe")(function* (input: {
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const recipeRoot = path.join(input.workspaceRoot, ".t3team/recipes", input.recipeId);
+  const recipeRoot = path.join(input.workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes`, input.recipeId);
   yield* fileSystem.makeDirectory(recipeRoot, { recursive: true });
   yield* fileSystem.writeFileString(path.join(recipeRoot, "recipe.json"), "{ not valid json ");
 });

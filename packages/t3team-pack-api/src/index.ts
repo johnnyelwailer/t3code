@@ -1,9 +1,11 @@
+import type { AccountDefinition } from "./account.ts";
 import type { CompletionWakeRendererDefinition } from "./completion-wake.ts";
 import type { PackProviderDriverDefinition } from "./provider-driver.ts";
 
 export * from "./provider-driver.ts";
 export * from "./provider-orchestration.ts";
 export * from "./completion-wake.ts";
+export * from "./account.ts";
 
 export type PackAssetResolver = (relativePath: string, mimeType: string) => Promise<string>;
 
@@ -175,6 +177,8 @@ export type PackActivationContext = {
   ) => void;
   readonly defineModelPolicy: (definition: ModelPolicyDefinition) => void;
   readonly defineCompletionWakeRenderer: (definition: CompletionWakeRendererDefinition) => void;
+  /** An account the app signs the user in to; see `AccountDefinition`. */
+  readonly defineAccount: (definition: AccountDefinition) => void;
   readonly resolveAssetDataUrl: PackAssetResolver;
 };
 

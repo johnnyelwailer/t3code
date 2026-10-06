@@ -3,6 +3,7 @@ import type {
   EnvironmentId,
   ProjectScript,
   ResolvedKeybindingsConfig,
+  ScopedProjectRef,
   ThreadId,
 } from "@t3tools/contracts";
 import { AlertTriangleIcon, XIcon } from "lucide-react";
@@ -45,6 +46,8 @@ export interface ThreadDetailsPanelProps extends Pick<
   threadId: ThreadId;
   draftId?: DraftId;
   activeProjectName: string | undefined;
+  /** t3team: the thread's project, so a new cloud session can run in its machine. */
+  activeProjectRef?: ScopedProjectRef | null;
   activeProjectScripts: ReadonlyArray<ProjectScript> | undefined;
   preferredScriptId: string | null;
   keybindings: ResolvedKeybindingsConfig;
@@ -87,7 +90,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
   // shown as a static label because there is nothing to pick.
   const canPickEnvironment = props.availableEnvironments.length > 1;
   // t3team: the "Run on" menu's cloud entries, as on the composer strip.
-  const cloudSessions = useT3TeamRunOnCloudSessionProps();
+  const cloudSessions = useT3TeamRunOnCloudSessionProps(props.activeProjectRef ?? null);
   const showEnvironment =
     cloudSessions.available ||
     shouldShowEnvironmentIndicator({

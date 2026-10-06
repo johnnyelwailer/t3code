@@ -21,6 +21,7 @@ import {
   MenuTrigger,
 } from "~/t3team/components/ui/t3team-menu";
 import { selectBoundProjects } from "~/t3team/t3team-AllProjectsMyWorkView";
+import { readScopeFooterActiveEntry } from "~/t3team/t3team-scopeRouteSync.logic";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
 
 type ProjectView = "my-work" | "backlog";
@@ -59,12 +60,10 @@ export function T3TeamSidebarWorkNavItems() {
   const scopedProjectId = useT3TeamSidebarProjectScope((state) => state.scopedProjectId);
   const { allProjects } = useProjectStore();
   const backlogProjects = useMemo(() => selectBoundProjects(allProjects), [allProjects]);
+  // A primitive selection, so only a change of board re-renders the row, not every navigation.
   const activeView = useLocation({
-    select: (location): ProjectView | null => {
-      if (location.pathname.startsWith("/t3team/my-work")) return "my-work";
-      const view = (location.search as { projectView?: unknown }).projectView;
-      return view === "my-work" || view === "backlog" ? view : null;
-    },
+    select: (location) =>
+      readScopeFooterActiveEntry(location.pathname, location.search as Record<string, unknown>),
   });
 
   const openProjectView = useCallback(

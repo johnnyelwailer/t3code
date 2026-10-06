@@ -13,6 +13,9 @@
  *   `t3team-mcpToolInputSchema.test.ts`.
  * - the tool-level description ({@link T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION}), used by
  *   the same live toolkit and catalog entry.
+ * - the orchestration author agent's kickoff (`apps/server/src/t3team-workflowAuthorPrompt.ts`),
+ *   which appends THIS constant verbatim — bodies calling `thread.showWidget` directly bypass the
+ *   MCP tool catalog, so the author is handed the same text the tool parameter carries.
  *
  * All surfaces import these constants instead of copy-pasting the guidance, so there
  * is exactly one place to change it.

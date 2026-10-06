@@ -9,6 +9,7 @@ import { createQueryable } from "@t3tools/project-context";
 
 import { discoverProjectRecipes } from "./t3team-projectRecipeDiscovery.js";
 import { makeBrokerLayer } from "./t3team-toolBrokerTestUtils.ts";
+import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 
 const makeTempWorkspace = Effect.fn("makeTempWorkspace")(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
@@ -28,7 +29,7 @@ const writeRecipe = Effect.fn("writeRecipe")(function* (input: {
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const recipeRoot = path.join(input.workspaceRoot, ".t3team/recipes", input.recipeId);
+  const recipeRoot = path.join(input.workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes`, input.recipeId);
   yield* fileSystem.makeDirectory(recipeRoot, { recursive: true });
   yield* fileSystem.writeFileString(path.join(recipeRoot, "recipe.json"), input.recipeJson);
   yield* fileSystem.writeFileString(path.join(recipeRoot, "prompt.md"), input.prompt);

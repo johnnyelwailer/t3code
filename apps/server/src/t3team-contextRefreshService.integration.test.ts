@@ -3,6 +3,7 @@
 import { assert, it } from "@effect/vitest";
 import { ThreadId } from "@t3tools/contracts";
 import { T3TEAM_CONTEXT_AVAILABILITY_FULL } from "@t3tools/project-context/t3teamContextAvailability";
+import { T3TEAM_PROJECT_CONTEXT_ROOT } from "@t3tools/project-context/t3teamContextPaths";
 import type { IntegrationProvider } from "@t3tools/integrations-core";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -49,7 +50,9 @@ it.effect("refreshes a work-item bundle server-side without browser sync", () =>
     assert.equal(entrypoint.availability, T3TEAM_CONTEXT_AVAILABILITY_FULL);
     assert.equal(entrypoint.key, "AC-91");
     assert.isTrue(NodeFS.existsSync(manifestPath));
-    assert.isTrue(NodeFS.existsSync(NodePath.join(root, ".t3team/context/.sync-commit.json")));
+    assert.isTrue(
+      NodeFS.existsSync(NodePath.join(root, `${T3TEAM_PROJECT_CONTEXT_ROOT}/.sync-commit.json`)),
+    );
 
     const cached = yield* service.refreshWorkItem(input);
     assert.equal(cached.status, "already_synced");

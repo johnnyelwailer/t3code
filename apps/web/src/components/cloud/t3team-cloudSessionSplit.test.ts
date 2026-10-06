@@ -81,7 +81,7 @@ describe("splitCloudSessions", () => {
 });
 
 describe("runOnCloudSessions", () => {
-  it("keeps provisioning and ready sessions plus the most recent terminal, in order", () => {
+  it("keeps provisioning and ready sessions; an older failure is no longer news", () => {
     const result = runOnCloudSessions([
       session("ready1", "ready"),
       session("prep1", "preparing"),
@@ -90,20 +90,19 @@ describe("runOnCloudSessions", () => {
       session("queued1", "queued"),
       session("stopped1", "stopped"),
     ]);
-    // ready1 stays (a connectable row, not a vanishing one); the most recent
-    // terminal (failed2, newest-first) is kept so a failure is not forgotten.
-    expect(result.map((item) => item.sessionId)).toEqual(["ready1", "prep1", "failed2", "queued1"]);
+    // ready1 stays (a connectable row, not a vanishing one); failed2 is not the newest session.
+    expect(result.map((item) => item.sessionId)).toEqual(["ready1", "prep1", "queued1"]);
   });
 
-  it("includes ready sessions even when none have failed", () => {
-    const result = runOnCloudSessions([session("ready1", "ready"), session("prep1", "preparing")]);
-    expect(result.map((item) => item.sessionId)).toEqual(["ready1", "prep1"]);
+  it("surfaces the newest session when it failed, until it is dismissed", () => {
+    const sessions = [session("failed1", "failed"), session("stop1", "stopped")];
+    expect(runOnCloudSessions(sessions).map((item) => item.sessionId)).toEqual(["failed1"]);
+    expect(runOnCloudSessions(sessions, new Set(["failed1"]))).toEqual([]);
   });
 
-  it("keeps a lone terminal session (the most recent outcome) so it is not forgotten", () => {
-    expect(runOnCloudSessions([session("stop1", "stopped")])).toEqual([
-      session("stop1", "stopped"),
-    ]);
+  it("never surfaces what the user ended: a cancel or a normal stop", () => {
+    expect(runOnCloudSessions([session("cancel1", "cancelled")])).toEqual([]);
+    expect(runOnCloudSessions([session("stop1", "stopped")])).toEqual([]);
   });
 
   it("returns an empty list for an empty input", () => {
