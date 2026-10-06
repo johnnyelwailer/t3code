@@ -12,15 +12,15 @@ import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
 import { JiraSignInPanel } from "~/t3team/components/t3team-JiraSignInPanel";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
+import { readMyWorkDigestArrangementApi } from "~/t3team/backend/t3team-myworkDigestArrangementApi";
+import { useBackend } from "~/t3team/backend/t3team-index";
+import { toDigestProjectEntries } from "~/t3team/mywork-digest/t3team-digestProjectEntries";
 import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
 import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
 import { useT3TeamBetaFlags } from "~/t3team/t3team-betaFlags";
 import { ProjectMyWorkLoadingState } from "~/t3team/t3team-projectMyWorkContentState";
-import {
-  buildHeuristicDigestPlan,
-  resolveDigestPlan,
-} from "~/t3team/t3team-projectMyWorkDigestPlan";
+import { buildDigestPlan } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import { filterDigestTickets, hasActiveDigestFilters } from "~/t3team/t3team-projectMyWork";
 import type { DigestFilterState } from "~/t3team/t3team-projectMyWorkDigestTypes";
 import type { ProjectShellProject } from "@t3tools/project-context";
@@ -43,11 +43,21 @@ export function ProjectMyWorkDigestContent({
       ? (ticketId: string) => onOpenTicket(project.id, ticketId)
       : undefined;
   const projects = useMemo(() => [project], [project]);
+  const arrangementApi = readMyWorkDigestArrangementApi(useBackend());
   const { graph, status, error, viewerUnresolved, sessionExpired, updatedAt, reload } =
     useMyWorkDigestGraph({
       projects,
       scope: "project",
     });
+  const resetArrangement = arrangementApi
+    ? async () => {
+        await arrangementApi.resetMyWorkDigestArrangement({
+          scope: "project",
+          projects: toDigestProjectEntries(projects),
+        });
+        reload();
+      }
+    : undefined;
   // The My Work filter bar (search, status category, hidden types, priority, status) shapes the
   // digest the same way it shapes the legacy lenses: keep only the tickets that match, and drop
   // the agent activity that belongs to tickets the filter hid, so no lane orphans a filtered row.
@@ -80,11 +90,7 @@ export function ProjectMyWorkDigestContent({
     if (!effectiveGraph) {
       return null;
     }
-    return resolveDigestPlan(
-      buildHeuristicDigestPlan(effectiveGraph, nowMs),
-      effectiveGraph,
-      nowMs,
-    );
+    return buildDigestPlan(effectiveGraph, nowMs);
   }, [effectiveGraph, nowMs]);
 
   // A failed fetch (backend still starting, timeout) is not terminal: the poller retries with
@@ -142,6 +148,7 @@ export function ProjectMyWorkDigestContent({
       nowMs={nowMs}
       burndownVariant={flags.digestBurndownVariant}
       onOpenTicket={openTicketInApp}
+      onResetArrangement={resetArrangement}
       {...(updatedAt !== undefined ? { updatedAtMs: updatedAt } : {})}
     />
   );

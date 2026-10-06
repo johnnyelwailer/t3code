@@ -1,6 +1,7 @@
 import { digestLaneLayout } from "~/t3team/t3team-projectMyWorkDigestLaneLayout";
 import { digestShownTicketIds } from "~/t3team/t3team-projectMyWorkDigestGroups";
 import { DashboardWidget } from "~/t3team/t3team-dashboardWidgetRegistry";
+import { DigestArrangementBar } from "~/t3team/t3team-ProjectMyWorkDigestArrangementBar";
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import {
   ProjectMyWorkDigestHeader,
@@ -15,6 +16,7 @@ export function ProjectMyWorkDigestView({
   onOpenTicket,
   burndownVariant = "off",
   updatedAtMs,
+  onResetArrangement,
 }: {
   plan: ResolvedDigestPlan;
   graph: DigestGraph;
@@ -22,6 +24,8 @@ export function ProjectMyWorkDigestView({
   onOpenTicket?: ((ticketId: string) => void) | undefined;
   burndownVariant?: DigestBurndownVariant;
   updatedAtMs?: number;
+  /** Clears an agent-made arrangement for this scope (back to the default). */
+  onResetArrangement?: (() => Promise<void>) | undefined;
 }) {
   const ticketsById = new Map(graph.tickets.map((ticket) => [ticket.id, ticket]));
   const lane = { graph, ticketsById, nowMs, onOpenTicket };
@@ -33,10 +37,18 @@ export function ProjectMyWorkDigestView({
       {...(updatedAtMs !== undefined ? { updatedAtMs } : {})}
     />
   );
+  const arranged = graph.arrangement ? (
+    <DigestArrangementBar
+      arrangement={graph.arrangement}
+      nowMs={nowMs}
+      onReset={onResetArrangement}
+    />
+  ) : null;
   if (plan.sections.length === 0) {
     return (
       <div className="@container/digest space-y-8">
         {header}
+        {arranged}
         <T3SurfacePanel
           tone="dashed"
           className="px-6 py-10 text-center text-sm text-muted-foreground"
@@ -66,6 +78,7 @@ export function ProjectMyWorkDigestView({
   return (
     <div className="@container/digest space-y-8">
       {header}
+      {arranged}
       {lanesEmpty ? (
         <T3SurfacePanel
           tone="dashed"

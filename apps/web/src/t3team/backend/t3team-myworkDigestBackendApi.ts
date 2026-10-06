@@ -1,3 +1,4 @@
+import type { T3TeamMyWorkDigestPlan } from "@t3tools/contracts";
 /**
  * Client half of the My Work Digest graph endpoint
  * (`POST /api/t3team/mywork-digest/graph/poll`).
@@ -52,6 +53,8 @@ export type MyWorkDigestTicketRef = {
 
 export type MyWorkDigestPayload = {
   readonly scope: MyWorkDigestScope;
+  /** The arrangement an agent stored for this scope; absent means the default. */
+  readonly arrangement?: T3TeamMyWorkDigestPlan;
   /**
    * The viewer as the server resolved them; fills in when the client has no cached name.
    * `unresolved` means a project had no Jira identity (stale or missing token).

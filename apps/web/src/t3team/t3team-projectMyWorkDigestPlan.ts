@@ -133,6 +133,15 @@ export function buildHeuristicDigestPlan(
   };
 }
 
+/** The plan a digest shows: the arrangement an agent stored for this scope, else the default. */
+export function buildDigestPlan(graph: DigestGraph, nowMs: number): ResolvedDigestPlan {
+  return resolveDigestPlan(
+    graph.arrangement ?? buildHeuristicDigestPlan(graph, nowMs),
+    graph,
+    nowMs,
+  );
+}
+
 export function resolveDigestPlan(
   plan: DigestPlan,
   graph: DigestGraph,

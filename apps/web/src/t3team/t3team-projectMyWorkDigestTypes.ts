@@ -160,6 +160,8 @@ export type DigestGraph = {
   readonly dependencies?: readonly DigestDependency[];
   readonly transitions: readonly DigestTransition[];
   readonly blockers: readonly DigestBlocker[];
+  /** The arrangement an agent stored for this scope (the arrange-my-work recipe); absent = default. */
+  readonly arrangement?: DigestPlan;
 };
 
 export type DigestFacet = "decision" | "claim" | "changeRequest" | "moved" | "stalled";
