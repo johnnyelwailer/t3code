@@ -18,7 +18,7 @@ import type { T3TeamDigestProjectSource } from "./t3team-myworkDigestTypes.ts";
 
 type DigestPrEntry = T3TeamDigestProjectSource["prEntries"][number];
 
-const VIEWER_PR_LIMIT = "50";
+const VIEWER_PR_LIMIT = "100";
 const SEARCH_FIELDS = "number,title,repository,updatedAt,isDraft,author";
 
 const decodeHits = Schema.decodeUnknownOption(

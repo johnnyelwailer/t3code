@@ -62,10 +62,11 @@ export function digestReviewRequests(
   const byId = new Map<string, DigestReviewRequest>();
   projects.forEach((data, position) => {
     for (const pr of data.changeRequests) {
-      if (pr.viewerReviewRequested !== true || pr.viewerAuthored === true || byId.has(pr.id))
-        continue;
+      if (pr.viewerReviewRequested !== true || pr.viewerAuthored === true) continue;
       const ticketId =
         pr.workItemKey !== undefined ? resolveTicketId(position, { issueKey: pr.workItemKey }) : "";
+      // One PR reaches every project whose key it names; keep the copy that found its ticket.
+      if (byId.has(pr.id) && (ticketId === "" || byId.get(pr.id)?.ticketId !== undefined)) continue;
       byId.set(pr.id, {
         id: pr.id,
         projectId: projectIdAt(position),

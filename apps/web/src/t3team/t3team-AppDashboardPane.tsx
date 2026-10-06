@@ -83,6 +83,7 @@ export function AppDashboardPane({
           }
           aside={
             <DigestPrAside
+              projectId={project.id}
               fallback={
                 <ProjectDashboardKickoffAside
                   project={project}

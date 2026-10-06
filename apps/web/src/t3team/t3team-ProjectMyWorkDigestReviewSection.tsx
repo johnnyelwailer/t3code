@@ -50,39 +50,44 @@ export function DigestReviewSection({
               number: review.number,
             });
           };
+          // The PR is the row's link; the ticket key sits beside it as its own button, never a
+          // link inside a link.
           return (
-            <a
+            <div
               key={review.id}
-              href={digestPrUrl(review)}
-              target="_blank"
-              rel="noreferrer"
-              onClick={openPullRequest}
-              className="block min-w-0 px-3 py-2 hover:bg-accent/30"
+              className="flex min-w-0 items-start gap-2 px-3 py-2 hover:bg-accent/30"
             >
-              <p className="line-clamp-2 break-words text-sm font-medium leading-5">
-                {review.title}
-              </p>
-              <p className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                <span className="truncate font-mono">
-                  {review.repo}#{review.number}
-                </span>
-                <span className={review.author ? "text-warning" : undefined}>
-                  {review.author ? `${review.author} waiting` : "waiting"}{" "}
-                  {formatDigestAgo(nowMs, review.updatedAt)}
-                </span>
-                {review.workItemKey ? (
-                  <span
-                    role={review.ticketId ? "link" : undefined}
-                    className={
-                      review.ticketId ? "font-mono text-foreground hover:underline" : "font-mono"
-                    }
-                    onClick={openTicket}
-                  >
-                    {review.workItemKey}
+              <a
+                href={digestPrUrl(review)}
+                target="_blank"
+                rel="noreferrer"
+                onClick={openPullRequest}
+                className="block min-w-0 flex-1"
+              >
+                <p className="line-clamp-2 break-words text-sm font-medium leading-5">
+                  {review.title}
+                </p>
+                <p className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                  <span className="truncate font-mono">
+                    {review.repo}#{review.number}
                   </span>
-                ) : null}
-              </p>
-            </a>
+                  <span className={review.author ? "text-warning" : undefined}>
+                    {review.author ? `${review.author} waiting` : "waiting"}{" "}
+                    {formatDigestAgo(nowMs, review.updatedAt)}
+                  </span>
+                </p>
+              </a>
+              {review.workItemKey ? (
+                <button
+                  type="button"
+                  disabled={!review.ticketId}
+                  onClick={openTicket}
+                  className="shrink-0 font-mono text-xs text-muted-foreground enabled:text-foreground enabled:hover:underline"
+                >
+                  {review.workItemKey}
+                </button>
+              ) : null}
+            </div>
           );
         })}
       </T3SurfacePanel>

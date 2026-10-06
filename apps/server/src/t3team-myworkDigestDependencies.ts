@@ -8,6 +8,7 @@
  * reverse lookup over every issue in the project.
  */
 
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
@@ -52,7 +53,35 @@ function toOther(issue: MirrorIssue): T3TeamDigestDependency["other"] {
   };
 }
 
+/**
+ * Links and siblings move at Jira's pace, not the digest poll's: one read per project and minute.
+ * The reverse "blocks" lookup is a json_each scan over the project's mirror, so it must not run on
+ * every poll of every project.
+ */
+const DEPENDENCY_FRESH_MS = 60_000;
+const recentReads = new Map<
+  string,
+  { readonly atMs: number; readonly result: T3TeamDigestDependency[] }
+>();
+
 export function readDigestDependencies(input: {
+  readonly identity: T3TeamBacklogCacheIdentity;
+  readonly assigned: ReadonlyArray<BacklogResourceRef>;
+}) {
+  return Effect.gen(function* () {
+    const nowMs = yield* Clock.currentTimeMillis;
+    const keys = input.assigned.map((issue) => issue.id).join(",");
+    const cacheKey = `${input.identity.provider}|${input.identity.accountId}|${input.identity.externalProjectId}|${keys}`;
+    const recent = recentReads.get(cacheKey);
+    if (recent !== undefined && nowMs - recent.atMs < DEPENDENCY_FRESH_MS) return recent.result;
+    const result = yield* readDependenciesFromMirror(input);
+    recentReads.set(cacheKey, { atMs: nowMs, result });
+    if (recentReads.size > 64) recentReads.delete(recentReads.keys().next().value!);
+    return result;
+  });
+}
+
+function readDependenciesFromMirror(input: {
   readonly identity: T3TeamBacklogCacheIdentity;
   /** The viewer's own tickets (not their parents). */
   readonly assigned: ReadonlyArray<BacklogResourceRef>;

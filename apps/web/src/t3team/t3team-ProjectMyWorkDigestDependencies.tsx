@@ -63,7 +63,8 @@ export function DigestDependencyLine({
     const byPerson = new Map<string, DigestDependency>();
     for (const dependency of live) {
       const person = dependency.other.assignee ?? "";
-      if (dependency.relation !== relation || person === graph.viewer.name) continue;
+      const isViewer = person.trim().toLowerCase() === graph.viewer.name.trim().toLowerCase();
+      if (dependency.relation !== relation || isViewer) continue;
       if (!byPerson.has(person)) byPerson.set(person, dependency);
     }
     const people = [...byPerson.values()];
