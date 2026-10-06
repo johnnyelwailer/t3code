@@ -1,6 +1,5 @@
 import type { CloudSession, CloudSessionFailedError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import * as Random from "effect/Random";
 
 import type * as VcsProcess from "../vcs/VcsProcess.ts";
 import {
@@ -10,6 +9,7 @@ import {
   deriveMachineStage,
 } from "./t3team-cloudSessionPhase.ts";
 import { environmentIdFromSteps } from "./t3team-cloudSessionEnvironmentStep.ts";
+import { sessionNameFromRunName } from "./t3team-cloudSessionName.ts";
 import {
   cachedFailureReason,
   cloudSessionFailureReason,
@@ -30,16 +30,6 @@ import {
  * Actions runs (and a dispatch that has not surfaced yet) into the
  * user-visible `CloudSession` the contract defines.
  */
-
-/**
- * A correlation tag for one dispatch. Random rather than time-based: two
- * clients dispatching in the same millisecond must not collide, which is the
- * whole failure this exists to prevent.
- */
-export const makeSessionTag = Effect.map(
-  Random.nextIntBetween(0, Number.MAX_SAFE_INTEGER),
-  (value) => `s${value.toString(36)}`,
-);
 
 /**
  * The gh executor the projection runs through: one invocation, already
@@ -127,11 +117,14 @@ export const projectCloudSession = (
     const projectMachine = sessionRun.name.includes(MACHINE_RUN_NAME_MARKER);
     const machineStage =
       projectMachine && phase === "preparing" ? deriveMachineStage(steps) : undefined;
+    const name = sessionNameFromRunName(sessionRun.name);
     return {
       sessionId: String(sessionRun.id),
       providerKind: "github_actions",
       phase,
       elapsedSeconds: cloudSessionElapsedSeconds(sessionRun, nowMs),
+      ...(name !== undefined ? { name } : {}),
+      ...(sessionRun.createdAt !== "" ? { startedAt: sessionRun.createdAt } : {}),
       // The workflow owns the hold duration, so the server does not invent a
       // remainder it cannot actually know.
       remainingSeconds: null,

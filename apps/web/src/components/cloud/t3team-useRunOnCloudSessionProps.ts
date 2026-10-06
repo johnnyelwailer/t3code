@@ -6,6 +6,7 @@ import { type ComponentProps, useCallback, useMemo } from "react";
 import { useCloudSessionController } from "~/cloud/t3team-useCloudSessionController";
 import type { BranchToolbarEnvironmentSelector } from "~/components/BranchToolbarEnvironmentSelector";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
+import { useEnvironments } from "~/state/environments";
 import { runOnCloudSessions } from "./t3team-cloudSessionSplit";
 
 const DISMISSED_FAILURES_KEY = "t3code:cloud-session-dismissed-failures";
@@ -23,6 +24,7 @@ type CloudSelectorProps = Pick<
   | "onCloudMenuOpenChange"
   | "onSetupCloudSessions"
   | "cloudSessionProject"
+  | "connectedEnvironmentIds"
 >;
 
 /**
@@ -77,6 +79,17 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
     [cloudSessionProject, onCreate],
   );
   // Unconfigured: the entry leaves for the Connections settings, where provisioning lives.
+  // Every environment connected here, whatever its project: a cloud machine connected for another
+  // project is listed as unavailable for this thread rather than as one to connect.
+  const { environments } = useEnvironments();
+  const connectedKey = environments
+    .filter((environment) => environment.connection.phase === "connected")
+    .map((environment) => environment.environmentId)
+    .join("\u0000");
+  const connectedEnvironmentIds = useMemo(
+    () => new Set(connectedKey === "" ? [] : connectedKey.split("\u0000")),
+    [connectedKey],
+  );
   const onSetupCloudSessions = useCallback(() => {
     void navigate({ to: "/settings/connections" });
   }, [navigate]);
@@ -87,6 +100,7 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
         : configured
           ? {
               pendingCloudSessions,
+              connectedEnvironmentIds,
               onCreateCloudSession,
               cloudSessionCreatePending: createPending,
               ...(cloudSessionProject ? { cloudSessionProject } : {}),
@@ -99,6 +113,7 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
       available,
       cloudSessionProject,
       configured,
+      connectedEnvironmentIds,
       createPending,
       onCloudMenuOpenChange,
       onCreateCloudSession,

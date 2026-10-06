@@ -2,11 +2,10 @@ import { ThreadDetailsSelectControl } from "./chat/ThreadDetailsControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
-import { CloudIcon, ScaleIcon, SettingsIcon, XIcon } from "lucide-react";
+import { CloudIcon, ScaleIcon, SettingsIcon } from "lucide-react";
 import { memo, useEffect, useMemo, useState } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
-import { dedupeRunOnEnvironments } from "./BranchToolbar.logic";
 import { cn } from "../lib/utils";
 import {
   THREAD_DETAILS_PANEL_ICON_CLASS,
@@ -14,7 +13,8 @@ import {
 } from "./chat/threadDetailsPanelStyles";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useComposerMenuProps } from "./chat/composerEventScope";
-import { presentCloudSession } from "./cloud/t3team-cloudSessionProvisionPresentation";
+import { RunOnCloudRow } from "./cloud/t3team-RunOnCloudRow";
+import { runOnRows } from "./cloud/t3team-runOnCloudRows";
 import { CloudSessionMachineHint } from "./cloud/t3team-CloudSessionMachineHint";
 import {
   Select,
@@ -22,7 +22,6 @@ import {
   SelectGroupLabel,
   SelectItem,
   SelectPopup,
-  SelectSeparator,
   SelectValue,
 } from "./ui/select";
 
@@ -44,12 +43,15 @@ export interface BranchToolbarEnvironmentSelectorProps {
   /**
    * Cloud sessions worth showing under "Cloud" while they are not ready: the
    * ones still provisioning (read-only, so the machine you just asked for is
-   * visible where you pick a machine) and the most recent failed one, with
-   * its failure reason. A ready session is deliberately absent: it has joined
-   * `availableEnvironments` by then and listing it twice would be a lie about
-   * how many machines exist.
+   * visible where you pick a machine), ready ones, and the most recent failed one, with
+   * its failure reason. t3team: each is listed once, by name (`t3team-runOnCloudRows.ts`).
    */
   pendingCloudSessions?: readonly CloudSession[];
+  /**
+   * t3team: every environment connected on this client, whatever its project. A cloud machine
+   * connected without this thread's project is shown as unavailable, not as one to connect.
+   */
+  connectedEnvironmentIds?: ReadonlySet<string>;
   /**
    * Present when the server has a cloud provider configured: the menu offers a
    * one-click "New cloud session". Absent hides the action item entirely.
@@ -98,6 +100,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   onEnvironmentChange,
   displayMode = "toolbar",
   pendingCloudSessions,
+  connectedEnvironmentIds,
   onCreateCloudSession,
   cloudSessionCreatePending = false,
   cloudSessionProject,
@@ -112,13 +115,27 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   // with neither an environment picker nor any cloud affordance.
   const hasCloudAffordance =
     onCreateCloudSession !== undefined || onSetupCloudSessions !== undefined;
-  const runOnEnvironments = useMemo(
-    () => dedupeRunOnEnvironments(availableEnvironments, environmentId),
-    [availableEnvironments, environmentId],
+  // t3team: one list — the machines, then one row per cloud session (connected or not).
+  const { machines: runOnEnvironments, cloud: cloudRows } = useMemo(
+    () =>
+      runOnRows(
+        availableEnvironments,
+        pendingCloudSessions ?? [],
+        environmentId,
+        connectedEnvironmentIds,
+      ),
+    [availableEnvironments, connectedEnvironmentIds, environmentId, pendingCloudSessions],
+  );
+  const connectedCloudEnvironments = useMemo(
+    () => cloudRows.flatMap((row) => (row.environment === null ? [] : [row.environment])),
+    [cloudRows],
   );
   const activeEnvironment = useMemo(
-    () => runOnEnvironments.find((env) => env.environmentId === environmentId) ?? null,
-    [runOnEnvironments, environmentId],
+    () =>
+      [...runOnEnvironments, ...connectedCloudEnvironments].find(
+        (env) => env.environmentId === environmentId,
+      ) ?? null,
+    [connectedCloudEnvironments, runOnEnvironments, environmentId],
   );
 
   // The menu's open state is controlled on purpose: the "New cloud session"
@@ -127,34 +144,35 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   // polling, and the just-created session appears in the open list.
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // t3team: one entry per cloud machine. A ready session already connected here IS an environment
-  // row (selectable like any machine), so it is not listed a second time as a session.
-  const connectedEnvironmentIds = useMemo(
-    () => new Set<string>(runOnEnvironments.map((env) => env.environmentId)),
-    [runOnEnvironments],
-  );
-  const cloudSessionRows = useMemo(
-    () =>
-      (pendingCloudSessions ?? []).filter(
-        (session) =>
-          !(
-            session.phase === "ready" &&
-            session.environmentId !== undefined &&
-            connectedEnvironmentIds.has(session.environmentId)
-          ),
-      ),
-    [connectedEnvironmentIds, pendingCloudSessions],
+  const projectEnvironmentIds = useMemo(
+    () => new Set<string>(availableEnvironments.map((env) => env.environmentId)),
+    [availableEnvironments],
   );
   // Clicking a ready machine connects it, then runs the thread there: once its environment
-  // registers, it is selected and the menu closes. Until then the row says it is connecting.
+  // registers for this project, it is selected and the menu closes. Until then the row says it
+  // is connecting; a machine that connects without this project stops there, shown unavailable.
   const [selectWhenConnected, setSelectWhenConnected] = useState<string | null>(null);
+  // The machine the user just tried that turned out not to have this project: it stays listed,
+  // saying why. Other projects' machines are not listed at all — nothing here can run on them.
+  const [refusedEnvironmentId, setRefusedEnvironmentId] = useState<string | null>(null);
   useEffect(() => {
-    if (selectWhenConnected === null || !connectedEnvironmentIds.has(selectWhenConnected)) return;
-    setSelectWhenConnected(null);
-    onEnvironmentChange?.(selectWhenConnected as EnvironmentId);
-    setMenuOpen(false);
-    onCloudMenuOpenChange?.(false);
-  }, [connectedEnvironmentIds, onCloudMenuOpenChange, onEnvironmentChange, selectWhenConnected]);
+    if (selectWhenConnected === null) return;
+    if (projectEnvironmentIds.has(selectWhenConnected)) {
+      setSelectWhenConnected(null);
+      onEnvironmentChange?.(selectWhenConnected as EnvironmentId);
+      setMenuOpen(false);
+      onCloudMenuOpenChange?.(false);
+    } else if (connectedEnvironmentIds?.has(selectWhenConnected)) {
+      setRefusedEnvironmentId(selectWhenConnected);
+      setSelectWhenConnected(null);
+    }
+  }, [
+    connectedEnvironmentIds,
+    onCloudMenuOpenChange,
+    onEnvironmentChange,
+    projectEnvironmentIds,
+    selectWhenConnected,
+  ]);
 
   const environmentItems = useMemo(
     () => [
@@ -162,7 +180,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
         ? [{ value: "auto", label: autoEnvironmentLabel ?? "Auto balance" }]
         : []),
       ...(onEnvironmentChange !== undefined
-        ? runOnEnvironments.map((env) => ({
+        ? [...runOnEnvironments, ...connectedCloudEnvironments].map((env) => ({
             value: env.environmentId,
             label: env.label,
           }))
@@ -176,6 +194,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
     ],
     [
       runOnEnvironments,
+      connectedCloudEnvironments,
       autoEnvironmentLabel,
       onAutoEnvironment,
       onEnvironmentChange,
@@ -321,78 +340,30 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                   <span className="truncate">{env.label}</span>
                 </div>
               ))}
-        </SelectGroup>
-        {onCreateCloudSession && (
-          <>
-            <SelectSeparator />
-            <SelectGroup>
-              <SelectGroupLabel>Cloud</SelectGroupLabel>
-              {cloudSessionRows.map((cloudSession) => {
-                const presentation = presentCloudSession(cloudSession);
-                const isReady = cloudSession.phase === "ready";
-                const connecting =
-                  selectWhenConnected !== null &&
-                  selectWhenConnected === cloudSession.environmentId;
-                const rowClasses =
-                  "flex w-full items-start gap-1.5 px-2 py-1.5 text-muted-foreground text-xs";
-                // A ready machine is a real connectable row (it must not vanish
-                // the moment it comes up). A still-provisioning one is
-                // read-only: it cannot run anything yet, and a disabled item
-                // would still read as a choice.
-                return isReady ? (
-                  <button
-                    key={cloudSession.sessionId}
-                    type="button"
-                    disabled={connecting}
-                    onClick={() => {
-                      onCloudSessionAction?.(cloudSession);
-                      if (cloudSession.environmentId !== undefined) {
-                        setSelectWhenConnected(cloudSession.environmentId);
+          {onCreateCloudSession && (
+            <>
+              {cloudRows
+                .filter(
+                  (row) => !row.unavailable || row.session.environmentId === refusedEnvironmentId,
+                )
+                .map((row) => (
+                  <RunOnCloudRow
+                    key={row.session.sessionId}
+                    row={row}
+                    selectable={onEnvironmentChange !== undefined}
+                    connecting={
+                      selectWhenConnected !== null &&
+                      selectWhenConnected === row.session.environmentId
+                    }
+                    onConnect={(session) => {
+                      onCloudSessionAction?.(session);
+                      if (session.environmentId !== undefined) {
+                        setSelectWhenConnected(session.environmentId);
                       }
                     }}
-                    className={cn(
-                      rowClasses,
-                      connecting
-                        ? "cursor-default"
-                        : "cursor-pointer text-foreground hover:bg-muted",
-                    )}
-                  >
-                    <EnvironmentMachineIcon
-                      kind="cloud"
-                      className={cn("mt-0.5 size-3 shrink-0", connecting && "animate-pulse")}
-                    />
-                    <CloudRowText
-                      title={connecting ? "Connecting…" : presentation.title}
-                      detail={
-                        connecting
-                          ? "It is selected for this thread once connected"
-                          : presentation.detail
-                      }
-                    />
-                  </button>
-                ) : (
-                  <div key={cloudSession.sessionId} className={rowClasses}>
-                    <EnvironmentMachineIcon
-                      kind="cloud"
-                      className={cn(
-                        "mt-0.5 size-3 shrink-0",
-                        presentation.tone === "working" && "animate-pulse",
-                      )}
-                    />
-                    <CloudRowText title={presentation.title} detail={presentation.detail} />
-                    {cloudSession.phase === "failed" && onDismissCloudSession ? (
-                      <button
-                        type="button"
-                        aria-label="Dismiss"
-                        onClick={() => onDismissCloudSession(cloudSession)}
-                        className="-mr-1 shrink-0 cursor-pointer rounded-sm p-0.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                      >
-                        <XIcon className="size-3" aria-hidden="true" />
-                      </button>
-                    ) : null}
-                  </div>
-                );
-              })}
+                    onDismiss={onDismissCloudSession}
+                  />
+                ))}
               {/* Mouse-only on purpose: dispatching a VM is a real cost, so this
                   row is outside the arrow-key focus order (finding: one Enter
                   must not provision a machine). */}
@@ -430,34 +401,18 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                   ) : null}
                 </span>
               </button>
-            </SelectGroup>
-          </>
-        )}
-        {onSetupCloudSessions && (
-          <>
-            <SelectSeparator />
-            <SelectGroup>
-              <SelectGroupLabel>Cloud</SelectGroupLabel>
-              <SelectItem value={SETUP_CLOUD_SESSIONS_SELECT_VALUE}>
-                <span className="inline-flex items-center gap-1.5">
-                  <SettingsIcon className="size-3" aria-hidden="true" />
-                  Set up cloud sessions
-                </span>
-              </SelectItem>
-            </SelectGroup>
-          </>
-        )}
+            </>
+          )}
+          {onSetupCloudSessions && (
+            <SelectItem value={SETUP_CLOUD_SESSIONS_SELECT_VALUE}>
+              <span className="inline-flex items-center gap-1.5">
+                <SettingsIcon className="size-3" aria-hidden="true" />
+                Set up cloud sessions
+              </span>
+            </SelectItem>
+          )}
+        </SelectGroup>
       </SelectPopup>
     </Select>
   );
 });
-
-/** A cloud row's title over its detail, so a narrow menu truncates the detail, never the title. */
-function CloudRowText({ title, detail }: { readonly title: string; readonly detail: string }) {
-  return (
-    <span className="flex min-w-0 flex-1 flex-col items-start text-left">
-      <span className="max-w-full truncate">{title}</span>
-      <span className="max-w-full truncate opacity-70">{detail}</span>
-    </span>
-  );
-}

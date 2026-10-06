@@ -23,7 +23,8 @@ import { dispatchAndDiscoverSession } from "./t3team-CloudSessionDispatch.ts";
 import { sessionWorkspaceName } from "./t3team-cloudSessionMachineNames.ts";
 import { dispatchCredentialHandoff } from "./t3team-CloudSessionMintGate.ts";
 import { makePayloadIssueCleanup } from "./t3team-CloudSessionPayloadCleanup.ts";
-import { makeSessionTag, projectCloudSession } from "./t3team-CloudSessionProjection.ts";
+import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
+import { makeSessionTag } from "./t3team-cloudSessionName.ts";
 import { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
 import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
 
@@ -131,12 +132,13 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       // "newest run we had not seen" instead is wrong under concurrency — two
       // users dispatching in the same second can each be handed the other's
       // session, and then cancelling yours kills theirs.
-      const sessionTag = yield* makeSessionTag;
-
+      //
       // Project machine (#562), resolved before any side effect; null means a plain session. Its
       // repository token reaches the session only as a broker-held secret, so it needs the broker.
       const machine =
         input.projectId === undefined ? null : yield* machines.resolve(input.projectId);
+      // The caller's name for it, else its repository's (t3team-cloudSessionName.ts).
+      const sessionTag = yield* makeSessionTag(input.name ?? machine?.repository.name ?? null);
       if (machine !== null && !broker.enabled) {
         return yield* new CloudSessionFailedError({
           reason: "machine_unavailable",

@@ -620,7 +620,8 @@ export const BranchToolbar = memo(function BranchToolbar({
   // The same machine can reach the catalog under two environment ids (its T3
   // Connect identity and a relay id minted when a cloud session's relay link
   // was published). The Run-on menus must not list it twice; the dedupe is
-  // scoped to these menus so no other surface's environment list changes.
+  // scoped to these menus so no other surface's environment list changes. The Run-on selector
+  // takes the full list: it de-duplicates itself, and must see every cloud machine.
   const runOnEnvironments = useMemo(
     () =>
       availableEnvironments ? dedupeRunOnEnvironments(availableEnvironments, environmentId) : null,
@@ -684,13 +685,13 @@ export const BranchToolbar = memo(function BranchToolbar({
         <div className="contents @3xl/composer-surface:hidden">
           {/* t3team: cloud sessions keep their Run-on entry in the narrow strip too; the compact
               selector below then leaves the environment to it. */}
-          {cloudSessions.available && runOnEnvironments ? (
+          {cloudSessions.available && availableEnvironments ? (
             <BranchToolbarEnvironmentSelector
               autoEnvironmentLabel={autoEnvironmentLabel}
               onAutoEnvironment={onAutoEnvironment}
               envLocked={envLocked}
               environmentId={environmentId}
-              availableEnvironments={runOnEnvironments}
+              availableEnvironments={availableEnvironments}
               {...(showEnvironmentPicker && onEnvironmentChange ? { onEnvironmentChange } : {})}
               {...cloudSessions.selectorProps}
             />
@@ -723,14 +724,14 @@ export const BranchToolbar = memo(function BranchToolbar({
             composerControlsHostRef ? "shrink" : "flex-1",
           )}
         >
-          {showRunOnSelector && runOnEnvironments && (
+          {showRunOnSelector && availableEnvironments && (
             <>
               <BranchToolbarEnvironmentSelector
                 autoEnvironmentLabel={autoEnvironmentLabel}
                 onAutoEnvironment={onAutoEnvironment}
                 envLocked={envLocked}
                 environmentId={environmentId}
-                availableEnvironments={runOnEnvironments}
+                availableEnvironments={availableEnvironments}
                 {...(showEnvironmentPicker && onEnvironmentChange ? { onEnvironmentChange } : {})}
                 {...cloudSessions.selectorProps}
               />
