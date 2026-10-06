@@ -1,10 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
 import { createCloudSessionAtoms } from "@t3tools/client-runtime/state/cloud-sessions";
 import type { CloudSession } from "@t3tools/contracts";
-import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 
+import { cloudSessionFailureDescription } from "../cloud/t3team-cloudSessionToast";
 import { connectionAtomRuntime } from "../connection/runtime";
 import { primaryEnvironmentIdAtom } from "./primaryEnvironment";
 
@@ -61,7 +61,7 @@ export const cloudSessionListAtom = Atom.make<CloudSessionListState>((get) => {
   if (Option.isNone(value)) {
     // A list that failed before it ever loaded must say so; skeletons would wait forever.
     return AsyncResult.isFailure(result)
-      ? { ...LOADING, loading: false, loadError: listErrorMessage(result.cause) }
+      ? { ...LOADING, loading: false, loadError: cloudSessionFailureDescription(result) }
       : LOADING;
   }
   return {
@@ -79,15 +79,4 @@ export function useCloudSessions(): CloudSessionListState {
 
 export function usePrimaryEnvironmentId() {
   return useAtomValue(primaryEnvironmentIdAtom);
-}
-
-function listErrorMessage(cause: Cause.Cause<unknown>): string {
-  const error = Cause.squash(cause);
-  return typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string" &&
-    error.message !== ""
-    ? error.message
-    : "The server did not answer.";
 }
