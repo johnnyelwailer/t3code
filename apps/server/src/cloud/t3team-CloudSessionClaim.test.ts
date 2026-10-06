@@ -2,12 +2,8 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 
-import {
-  claimedSessions,
-  isClaimed,
-  makeClaimLedger,
-  standbyPoolKey,
-} from "./t3team-CloudSessionClaim.ts";
+import { claimedSessions, isClaimed, makeClaimLedger } from "./t3team-CloudSessionClaim.ts";
+import { standbyPoolKey } from "./t3team-cloudSessionMachineNames.ts";
 
 const repoRef = {
   host: "ghe.test",

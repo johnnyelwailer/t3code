@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 
 import type { CloudSessionMachine } from "./t3team-CloudSessionMachine.ts";
-import type { MachineRepository } from "./t3team-cloudSessionMachineNames.ts";
+import { standbyPoolKey } from "./t3team-cloudSessionMachineNames.ts";
 import type { CloudSessionRepoRef } from "./t3team-githubActionsSessionClient.ts";
 import type { BrokerSession } from "./t3team-NexiBrokerClient.ts";
 import type { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
@@ -19,14 +19,6 @@ import type { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
  * run list: the broker's list of this user's sessions shows it once it is up, and until then this
  * server remembers its own claims (the ledger).
  */
-
-/** The project's pool: `<owner>.<repo>`, lower case — the prefix of its prebuilt image tags. */
-export function standbyPoolKey(repository: Pick<MachineRepository, "owner" | "name">): string {
-  return `${repository.owner}/${repository.name}`
-    .toLowerCase()
-    .replace(/[^a-z0-9_.-]/g, ".")
-    .slice(0, 100);
-}
 
 /** A claim that has not shown up in the broker's list after this is reported as failed. */
 const CLAIM_GRACE_MS = 12 * 60_000;

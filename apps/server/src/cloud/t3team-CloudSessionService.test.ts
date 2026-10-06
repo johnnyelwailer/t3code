@@ -440,6 +440,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       pair: () => Effect.die("unused"),
       claimStandby: () => Effect.succeed(null),
       sessions: Effect.succeed([]),
+      reportInterest: () => Effect.void,
     });
   const providersWith = (
     execute: ReturnType<typeof makeGithubMock>["execute"],
@@ -571,6 +572,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
         pair: () => Effect.die("unused"),
         claimStandby: (claim) => Effect.sync(() => (claims.push(claim), "777")),
         sessions: Effect.succeed([]),
+        reportInterest: () => Effect.void,
       });
       const session = yield* create(providersWith(execute, broker, machines), ProjectId.make("p1"));
       assert.equal(session.sessionId, "777");

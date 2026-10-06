@@ -20,7 +20,7 @@ import { resolveFleetConfig, workflowHistoryUrl } from "./t3team-CloudSessionFle
 import { makeFailureReasonCache } from "./t3team-cloudSessionFailureReason.ts";
 import { ConnectCredentialMinter } from "./t3team-ConnectCredentialMinter.ts";
 import { dispatchAndDiscoverSession } from "./t3team-CloudSessionDispatch.ts";
-import { sessionWorkspaceName } from "./t3team-cloudSessionMachineNames.ts";
+import { sessionWorkspaceName, standbyPoolKey } from "./t3team-cloudSessionMachineNames.ts";
 import { dispatchCredentialHandoff } from "./t3team-CloudSessionMintGate.ts";
 import { makePayloadIssueCleanup } from "./t3team-CloudSessionPayloadCleanup.ts";
 import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
@@ -171,6 +171,8 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       // A warm standby of the project, when the broker has one idle: seconds instead of minutes.
       const workspace = sessionWorkspaceName(login, machine?.repository ?? null);
       if (machine !== null) {
+        // The project is in use: the broker warms its next machine now, not at the next report.
+        yield* broker.reportInterest([standbyPoolKey(machine.repository)]).pipe(Effect.ignore);
         const nowMs = yield* Clock.currentTimeMillis;
         const claimedRun = yield* claimStandby({
           broker,
@@ -215,6 +217,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
                   GIT_AUTHOR_EMAIL: machine.author.email,
                 }
               : undefined,
+            machine ? standbyPoolKey(machine.repository) : undefined,
           )
         : null;
 

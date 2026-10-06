@@ -37,7 +37,13 @@ export class NexiBrokerService extends Context.Service<
     readonly requestGrant: (
       gheLogin: string,
       secrets?: Readonly<Record<string, string>>,
+      /** The project a machine session is for: it counts toward that project's warm pool. */
+      poolKey?: string,
     ) => Effect.Effect<string, CloudSessionFailedError>;
+    /** Reports the projects this user has here, so the broker keeps them warm (#562 option B). */
+    readonly reportInterest: (
+      pools: ReadonlyArray<string>,
+    ) => Effect.Effect<void, CloudSessionFailedError>;
     readonly attach: (
       input: CloudSessionAttachInput,
     ) => Effect.Effect<CloudSessionAttachResult, CloudSessionFailedError>;
@@ -88,6 +94,7 @@ const disabled: NexiBrokerService["Service"] = {
   attach: () => Effect.fail(notEnabled),
   pair: () => Effect.fail(notEnabled),
   claimStandby: () => Effect.succeed(null),
+  reportInterest: () => Effect.void,
   sessions: Effect.succeed([]),
 };
 
@@ -164,6 +171,7 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
     attach,
     pair: client.mintPairing,
     claimStandby: client.claimStandby,
+    reportInterest: client.reportInterest,
     sessions: client.listSessions,
   } satisfies NexiBrokerService["Service"];
 });

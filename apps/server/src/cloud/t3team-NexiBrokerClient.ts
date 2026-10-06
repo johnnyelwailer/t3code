@@ -74,10 +74,18 @@ export const makeNexiBrokerClient = Effect.fn("cloud.broker.client.make")(functi
 
   return {
     /** A grant for the next dispatch, redeemable only by a run the given GHE login dispatched. */
-    requestGrant: (gheLogin: string, secrets?: Readonly<Record<string, string>>) =>
+    requestGrant: (
+      gheLogin: string,
+      secrets?: Readonly<Record<string, string>>,
+      poolKey?: string,
+    ) =>
       call(
         HttpClientRequest.post(`${config.url}/v1/grants`).pipe(
-          HttpClientRequest.bodyJsonUnsafe({ gheLogin, ...(secrets ? { secrets } : {}) }),
+          HttpClientRequest.bodyJsonUnsafe({
+            gheLogin,
+            ...(secrets ? { secrets } : {}),
+            ...(poolKey ? { poolKey } : {}),
+          }),
         ),
         GrantResponse,
         "the session grant",
@@ -115,6 +123,15 @@ export const makeNexiBrokerClient = Effect.fn("cloud.broker.client.make")(functi
           Effect.mapError(() => failed("The Nexi broker answered a claim unexpectedly.")),
         );
       }),
+    /** The projects this user has here, for the broker's warm-pool demand (#562 option B). */
+    reportInterest: (pools: ReadonlyArray<string>) =>
+      call(
+        HttpClientRequest.post(`${config.url}/v1/pools/interest`).pipe(
+          HttpClientRequest.bodyJsonUnsafe({ pools }),
+        ),
+        Schema.Struct({ ok: Schema.Boolean }),
+        "the project report",
+      ).pipe(Effect.asVoid),
     mintPairing: (runId: string) =>
       call(
         HttpClientRequest.post(`${config.url}/v1/sessions/${encodeURIComponent(runId)}/pairing`),
