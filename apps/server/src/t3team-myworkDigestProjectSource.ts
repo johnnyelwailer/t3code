@@ -31,6 +31,7 @@ import type {
   T3TeamMyWorkDigestProjectInput,
 } from "./t3team-myworkDigestTypes.ts";
 import { readDigestDependencies } from "./t3team-myworkDigestDependencies.ts";
+import { withProfileNames } from "./t3team-myworkDigestPeopleNames.ts";
 import { readDigestViewerTickets } from "./t3team-myworkDigestViewer.ts";
 
 const DIGEST_TRANSITION_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
@@ -164,7 +165,7 @@ export function loadDigestProjectSource(
       })),
       claims,
       decisions,
-      prEntries: reviewRead.entries,
+      prEntries: yield* withProfileNames(reviewRead.entries),
       transitions,
       ...(burndownTransitions.length > 0 ? { burndownTransitions } : {}),
       ...(viewerName !== undefined ? { viewerName } : {}),
