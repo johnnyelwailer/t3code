@@ -39,7 +39,7 @@ export function RunOnCloudRow(props: {
       </SelectItem>
     );
   }
-  if (session.phase === "ready" && row.environment === null && !row.unavailable) {
+  if (session.phase === "ready" && row.environment === null && (!row.unavailable || connecting)) {
     return (
       <button
         type="button"

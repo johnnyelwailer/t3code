@@ -3,7 +3,7 @@ import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { CloudIcon, ScaleIcon, SettingsIcon } from "lucide-react";
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
 import { cn } from "../lib/utils";
@@ -91,6 +91,9 @@ export interface BranchToolbarEnvironmentSelectorProps {
   onCloudMenuOpenChange?: (open: boolean) => void;
 }
 
+/** t3team: how long a clicked cloud machine gets to connect and register this thread's project. */
+const CONNECT_AND_SYNC_DEADLINE_MS = 60_000;
+
 export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvironmentSelector({
   autoEnvironmentLabel,
   onAutoEnvironment,
@@ -144,9 +147,13 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   // polling, and the just-created session appears in the open list.
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Keyed by the ids, not the list: the list is rebuilt on every connection-state change.
+  const projectEnvironmentKey = availableEnvironments
+    .map((env) => env.environmentId)
+    .join("\u0000");
   const projectEnvironmentIds = useMemo(
-    () => new Set<string>(availableEnvironments.map((env) => env.environmentId)),
-    [availableEnvironments],
+    () => new Set<string>(projectEnvironmentKey.split("\u0000")),
+    [projectEnvironmentKey],
   );
   // Clicking a ready machine connects it, then runs the thread there: once its environment
   // registers for this project, it is selected and the menu closes. Until then the row says it
@@ -156,23 +163,28 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   // saying why. Other projects' machines are not listed at all — nothing here can run on them.
   const [refusedEnvironmentId, setRefusedEnvironmentId] = useState<string | null>(null);
   useEffect(() => {
+    if (selectWhenConnected === null || !projectEnvironmentIds.has(selectWhenConnected)) return;
+    setSelectWhenConnected(null);
+    onEnvironmentChange?.(selectWhenConnected as EnvironmentId);
+    setMenuOpen(false);
+    onCloudMenuOpenChange?.(false);
+  }, [onCloudMenuOpenChange, onEnvironmentChange, projectEnvironmentIds, selectWhenConnected]);
+  // One deadline per click, read against the latest state: a fresh machine registers its project
+  // seconds after it connects, so the attempt gets the whole window. Connected by then but still
+  // without this project: refused, saying why. Never connected: the row is clickable again.
+  const connectedRef = useRef(connectedEnvironmentIds);
+  useEffect(() => {
+    connectedRef.current = connectedEnvironmentIds;
+  }, [connectedEnvironmentIds]);
+  useEffect(() => {
     if (selectWhenConnected === null) return;
-    if (projectEnvironmentIds.has(selectWhenConnected)) {
-      setSelectWhenConnected(null);
-      onEnvironmentChange?.(selectWhenConnected as EnvironmentId);
-      setMenuOpen(false);
-      onCloudMenuOpenChange?.(false);
-    } else if (connectedEnvironmentIds?.has(selectWhenConnected)) {
-      setRefusedEnvironmentId(selectWhenConnected);
-      setSelectWhenConnected(null);
-    }
-  }, [
-    connectedEnvironmentIds,
-    onCloudMenuOpenChange,
-    onEnvironmentChange,
-    projectEnvironmentIds,
-    selectWhenConnected,
-  ]);
+    const environment = selectWhenConnected;
+    const timer = setTimeout(() => {
+      if (connectedRef.current?.has(environment)) setRefusedEnvironmentId(environment);
+      setSelectWhenConnected((current) => (current === environment ? null : current));
+    }, CONNECT_AND_SYNC_DEADLINE_MS);
+    return () => clearTimeout(timer);
+  }, [selectWhenConnected]);
 
   const environmentItems = useMemo(
     () => [
@@ -344,7 +356,10 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             <>
               {cloudRows
                 .filter(
-                  (row) => !row.unavailable || row.session.environmentId === refusedEnvironmentId,
+                  (row) =>
+                    !row.unavailable ||
+                    row.session.environmentId === refusedEnvironmentId ||
+                    row.session.environmentId === selectWhenConnected,
                 )
                 .map((row) => (
                   <RunOnCloudRow
