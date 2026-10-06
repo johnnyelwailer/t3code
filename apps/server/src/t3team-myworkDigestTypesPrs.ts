@@ -1,5 +1,12 @@
 /** The digest's pull-request wire types, split from `t3team-myworkDigestTypes.ts`. */
 
+/** A person on a PR as the digest shows them: GitHub's own avatar where the host gave one. */
+export type T3TeamDigestPerson = {
+  readonly name: string;
+  readonly login: string;
+  readonly avatarUrl?: string;
+};
+
 /** Mirrors the web `DigestChangeRequest.state` union one-to-one. */
 export type T3TeamDigestChangeRequestState =
   | "draft"
@@ -26,7 +33,12 @@ export type T3TeamDigestChangeRequest = {
   readonly viewerReviewRequested?: boolean;
   /** Who opened it — the person a review request keeps waiting. */
   readonly authorLogin?: string;
+  readonly author?: T3TeamDigestPerson;
   /** Open PRs only, off the cached detail/activity reads. */
-  readonly reviewers?: ReadonlyArray<{ readonly name: string; readonly login: string }>;
+  readonly reviewers?: ReadonlyArray<T3TeamDigestPerson>;
   readonly unhandledReviewThreads?: ReadonlyArray<{ readonly lastCommentAt?: string }>;
+  /** Everyone but the author who already commented or reviewed. */
+  readonly engaged?: ReadonlyArray<T3TeamDigestPerson>;
+  readonly additions?: number;
+  readonly deletions?: number;
 };

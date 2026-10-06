@@ -75,13 +75,27 @@ export function digestReviewRequests(
         number: pr.number,
         title: pr.title ?? `${pr.repo}#${pr.number}`,
         updatedAt: pr.updatedAt,
-        ...(pr.authorLogin !== undefined ? { author: pr.authorLogin } : {}),
+        ...(pr.author !== undefined
+          ? { author: pr.author }
+          : pr.authorLogin !== undefined
+            ? { author: { name: pr.authorLogin, login: pr.authorLogin } }
+            : {}),
+        ...(pr.reviewers !== undefined ? { reviewers: pr.reviewers } : {}),
+        ...(pr.engaged !== undefined ? { engaged: pr.engaged } : {}),
+        ...(pr.additions !== undefined ? { additions: pr.additions } : {}),
+        ...(pr.deletions !== undefined ? { deletions: pr.deletions } : {}),
         ...(pr.workItemKey !== undefined ? { workItemKey: pr.workItemKey } : {}),
         ...(ticketId !== "" ? { ticketId } : {}),
       });
     }
   });
-  return [...byId.values()].toSorted((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  // Nobody on it yet comes first — someone else already reviewing makes a PR less urgent for the
+  // viewer — then not yet read (unknown), then already covered; within each, the longest waiting.
+  const coverage = (review: DigestReviewRequest) =>
+    review.engaged === undefined ? 1 : review.engaged.length > 0 ? 2 : 0;
+  return [...byId.values()].toSorted(
+    (a, b) => coverage(a) - coverage(b) || Date.parse(a.updatedAt) - Date.parse(b.updatedAt),
+  );
 }
 
 /** Who each of the viewer's tickets hangs together with, on the ticket ids the rows use. */

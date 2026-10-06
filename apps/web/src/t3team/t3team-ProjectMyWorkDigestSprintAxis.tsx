@@ -17,6 +17,9 @@ function sprintHours(graph: DigestGraph): { total: number; remaining: number } |
     (ticket) =>
       (ticket.assignee ?? "").trim().toLowerCase() === viewer &&
       ticket.sprintState?.toLowerCase() === "active" &&
+      // The sprint the header names, when both sides know it; tickets in another active sprint
+      // are not this axis's work.
+      (!graph.sprint || !ticket.sprintName || ticket.sprintName === graph.sprint.name) &&
       (ticket.timeOriginalEstimateSeconds ?? 0) > 0,
   );
   if (mine.length === 0) return null;
@@ -76,7 +79,9 @@ export function DigestSprintAxis({ graph, nowMs }: { graph: DigestGraph; nowMs: 
   const remaining = points.at(-1)?.remaining ?? total;
 
   const x = (at: number) => Math.min(100, Math.max(0, ((at - start) / (end - start)) * 100));
-  const y = (value: number) => (total > 0 ? 3 + (1 - value / total) * (H - 6) : H - 3);
+  // Clamped: a remaining estimate above the original (re-estimated work) pins to the top.
+  const y = (value: number) =>
+    total > 0 ? 3 + (1 - Math.min(1, Math.max(0, value / total))) * (H - 6) : H - 3;
   // Ticket moves (the changelog history) are steps; hours have no history yet, only the scope at
   // the start and what is left now, so they draw as a slope between the two.
   const steps = points.flatMap((point, index) => {

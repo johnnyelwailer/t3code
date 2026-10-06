@@ -114,6 +114,10 @@ export function assembleMyWorkDigestChangeRequests(
       ...(entry.viewerAuthored !== undefined ? { viewerAuthored: entry.viewerAuthored } : {}),
       ...(entry.viewerReviewRequested ? { viewerReviewRequested: true } : {}),
       ...(entry.authorLogin !== undefined ? { authorLogin: entry.authorLogin } : {}),
+      ...(entry.author !== undefined ? { author: entry.author } : {}),
+      ...(entry.engaged !== undefined ? { engaged: entry.engaged } : {}),
+      ...(entry.additions !== undefined ? { additions: entry.additions } : {}),
+      ...(entry.deletions !== undefined ? { deletions: entry.deletions } : {}),
       ...(entry.reviewers !== undefined ? { reviewers: entry.reviewers } : {}),
       ...(entry.unhandledReviewThreads !== undefined
         ? { unhandledReviewThreads: entry.unhandledReviewThreads }

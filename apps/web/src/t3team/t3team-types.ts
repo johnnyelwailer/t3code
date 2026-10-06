@@ -144,6 +144,8 @@ export type ProjectTicket = {
   status: string;
   priority?: string;
   assignee?: string;
+  /** The assignee's Jira face (a public avatar URL). */
+  assigneeAvatarUrl?: string;
   assigneeAccountId?: string;
   /** Jira reporter — the digest surfaces it for bugs, where who hit the problem matters. */
   reporter?: string;

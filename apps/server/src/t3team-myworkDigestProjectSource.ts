@@ -15,6 +15,7 @@ import { kickDigestMirrorSync, readDigestJiraSyncedAtMs } from "./t3team-myworkD
 import { toDigestPrEntries } from "./t3team-myworkDigestPr.ts";
 import { loadDigestPrEntries, loadDigestViewerPrEntries } from "./t3team-myworkDigestPrCache.ts";
 import { viewerPrsForProject } from "./t3team-myworkDigestViewerPrs.ts";
+import { enrichDigestReviewEntries } from "./t3team-myworkDigestReviewEnrich.ts";
 import {
   readDigestEstimateUnit,
   type DigestThreadRow,
@@ -76,7 +77,6 @@ export function loadDigestProjectSource(
     });
     const { read: prRead, pending: projectPrsPending } = yield* loadDigestPrEntries(appProjectId);
     const viewerPrs = yield* loadDigestViewerPrEntries();
-    const pending = projectPrsPending || viewerPrs.pending;
     const jiraSyncedAtMs = yield* readDigestJiraSyncedAtMs(project);
     const dependencies = yield* readDigestDependencies({ identity, assigned: viewer.assigned });
 
@@ -126,6 +126,16 @@ export function loadDigestProjectSource(
         askedAt: run.updatedAt,
       }));
 
+    const reviewRead = yield* enrichDigestReviewEntries(
+      viewerPrsForProject({
+        viewerEntries: viewerPrs.read,
+        projectEntries: toDigestPrEntries(prRead),
+        ticketDisplayIds: tickets.map((ticket) => ticket.displayId),
+      }),
+      appProjectId,
+    );
+    const pending = projectPrsPending || viewerPrs.pending || reviewRead.pending;
+
     const source: T3TeamDigestProjectSource = {
       input: project,
       tickets,
@@ -135,11 +145,7 @@ export function loadDigestProjectSource(
       })),
       claims,
       decisions,
-      prEntries: viewerPrsForProject({
-        viewerEntries: viewerPrs.read,
-        projectEntries: toDigestPrEntries(prRead),
-        ticketDisplayIds: tickets.map((ticket) => ticket.displayId),
-      }),
+      prEntries: reviewRead.entries,
       transitions: transitions.map((row) => ({
         ticketRef: {
           issueId: row.issueId,

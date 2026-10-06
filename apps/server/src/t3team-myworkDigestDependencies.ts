@@ -27,6 +27,7 @@ export type T3TeamDigestDependency = {
     readonly title: string;
     readonly status: string;
     readonly assignee?: string;
+    readonly assigneeAvatarUrl?: string;
     readonly url?: string;
   };
 };
@@ -36,6 +37,7 @@ type MirrorIssue = BacklogResourceRef & {
   readonly parentId?: string;
   readonly status?: string;
   readonly assignee?: string;
+  readonly assigneeAvatarUrl?: string;
   readonly url?: string;
   readonly links?: ReadonlyArray<{ readonly outward: string; readonly key: string }>;
 };
@@ -49,6 +51,7 @@ function toOther(issue: MirrorIssue): T3TeamDigestDependency["other"] {
     title: issue.title ?? "",
     status: issue.status ?? "",
     ...(issue.assignee ? { assignee: issue.assignee } : {}),
+    ...(issue.assigneeAvatarUrl ? { assigneeAvatarUrl: issue.assigneeAvatarUrl } : {}),
     ...(issue.url ? { url: issue.url } : {}),
   };
 }

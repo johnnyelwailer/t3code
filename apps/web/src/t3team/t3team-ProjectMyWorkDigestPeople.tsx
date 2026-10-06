@@ -2,7 +2,12 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import { WorkItemPersonAvatar } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
 
-type PersonSlot = { readonly role: string; readonly name: string; readonly isViewer: boolean };
+type PersonSlot = {
+  readonly role: string;
+  readonly name: string;
+  readonly avatarUrl?: string;
+  readonly isViewer: boolean;
+};
 
 /**
  * The people a ticket is about, as small avatars in the row's right cluster: the assignee
@@ -21,6 +26,7 @@ export function DigestPeoplePills({
     slots.push({
       role: "Assignee",
       name: ticket.assignee,
+      ...(ticket.assigneeAvatarUrl ? { avatarUrl: ticket.assigneeAvatarUrl } : {}),
       isViewer: ticket.assignee === viewerName,
     });
   if (
@@ -43,7 +49,10 @@ export function DigestPeoplePills({
             render={
               <span aria-label={`${slot.role}: ${slot.name}`}>
                 <WorkItemPersonAvatar
-                  person={{ displayName: slot.name }}
+                  person={{
+                    displayName: slot.name,
+                    ...(slot.avatarUrl ? { avatarUrl: slot.avatarUrl } : {}),
+                  }}
                   size="sm"
                   isCurrentUser={slot.isViewer}
                 />
