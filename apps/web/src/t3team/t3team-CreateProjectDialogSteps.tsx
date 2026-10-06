@@ -4,6 +4,7 @@ import { Badge } from "~/t3team/components/ui/t3team-badge";
 import { ProjectAvatar } from "~/t3team/components/t3team-ProjectAvatar";
 import { Skeleton } from "~/t3team/components/ui/t3team-skeleton";
 import type { ExistingProjectMatch } from "~/t3team/hooks/t3team-useExistingProjectForExternalProject";
+import { accountSiteHost, dedupeAccountsBySite } from "~/t3team/t3team-accountSiteDisplay";
 
 export function AccountStep({
   accounts,
@@ -29,7 +30,7 @@ export function AccountStep({
           ? ["account-1", "account-2", "account-3"].map((key) => (
               <Skeleton key={key} shape="card" className="h-14 w-full" />
             ))
-          : accounts.map((account) => (
+          : dedupeAccountsBySite(accounts).map((account) => (
               <button
                 key={account.id}
                 type="button"
@@ -37,7 +38,14 @@ export function AccountStep({
                 aria-pressed={selectedAccount?.id === account.id}
                 className={`flex w-full items-center justify-between rounded-md border p-3 text-left ${selectedAccount?.id === account.id ? "border-primary bg-primary/5" : "border-border"}`}
               >
-                <span className="text-sm font-medium">{account.label}</span>
+                <span className="flex min-w-0 flex-col">
+                  <span className="text-sm font-medium">{account.label}</span>
+                  {accountSiteHost(account) ? (
+                    <span className="truncate text-xs text-muted-foreground">
+                      {accountSiteHost(account)}
+                    </span>
+                  ) : null}
+                </span>
                 <span className="text-xs text-muted-foreground">{account.provider}</span>
               </button>
             ))}

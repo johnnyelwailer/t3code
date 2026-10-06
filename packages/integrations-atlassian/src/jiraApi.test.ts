@@ -337,3 +337,43 @@ describe("JiraApiClient", () => {
     ]);
   });
 });
+
+describe("JiraApiClient.searchProjects pagination", () => {
+  const makeClient = () =>
+    new JiraApiClient({
+      kind: "basic",
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+  const project = (n: number) => ({ id: String(n), key: `P${n}`, name: `Project ${n}` });
+
+  it("walks startAt until the last page so >100 projects are not truncated", async () => {
+    const all = Array.from({ length: 250 }, (_, i) => project(i));
+    const fetchMock = vi.fn(async (url: string) => {
+      const startAt = Number(new URL(url).searchParams.get("startAt"));
+      const values = all.slice(startAt, startAt + 100);
+      return Response.json({ values, total: all.length, isLast: startAt + 100 >= all.length });
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await makeClient().searchProjects();
+
+    expect(result.values).toHaveLength(250);
+    expect(new Set(result.values.map((p) => p.id)).size).toBe(250);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("stops on an empty page even if the server never reports isLast", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      const startAt = Number(new URL(url).searchParams.get("startAt"));
+      return Response.json({ values: startAt === 0 ? [project(1)] : [], total: 999 });
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await makeClient().searchProjects();
+
+    expect(result.values).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
