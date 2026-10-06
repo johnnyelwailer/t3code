@@ -34,6 +34,8 @@ type ResizableRightSidebarLayoutProps = {
   mobileDefaultPanel?: "main" | "aside";
   mobileMainLabel?: string;
   mobileAsideLabel?: string;
+  /** Changes whenever the caller opens something in the aside (a PR, a thread): the drawer rises. */
+  mobileAsideRequest?: object | null;
 };
 
 export function ResizableRightSidebarLayout({
@@ -50,6 +52,7 @@ export function ResizableRightSidebarLayout({
   mobileDefaultPanel = "main",
   mobileMainLabel,
   mobileAsideLabel,
+  mobileAsideRequest,
 }: ResizableRightSidebarLayoutProps) {
   const isDesktop = useMediaQuery("lg");
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -83,10 +86,9 @@ export function ResizableRightSidebarLayout({
   );
 
   useEffect(() => {
-    if (!isDesktop) {
-      setMobilePanel(mobileDefaultPanel);
-    }
-  }, [isDesktop, mobileDefaultPanel]);
+    if (mobileAsideRequest) setMobilePanel("aside");
+    else if (!isDesktop) setMobilePanel(mobileDefaultPanel);
+  }, [isDesktop, mobileDefaultPanel, mobileAsideRequest]);
 
   const handleResizePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {

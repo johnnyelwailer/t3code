@@ -1,9 +1,13 @@
+import { ChevronUpIcon } from "lucide-react";
 import type { ReactNode } from "react";
+
+import { Sheet, SheetPopup, SheetTitle } from "~/components/ui/sheet";
 import { cn } from "~/lib/utils";
 
 type MobilePanel = "main" | "aside";
 
 type T3TeamMobilePanelLayoutProps = {
+  /** `aside` means the drawer is open over the main view. */
   activePanel: MobilePanel;
   onActivePanelChange: (panel: MobilePanel) => void;
   main: ReactNode;
@@ -15,6 +19,12 @@ type T3TeamMobilePanelLayoutProps = {
   asideLabel?: string | undefined;
 };
 
+/**
+ * Where the aside cannot sit beside the main view, the main view keeps the whole screen and the
+ * aside (agent, chat, an opened PR or ticket) lives in a bottom drawer: a slim bar to pull it up,
+ * and it rises by itself when the caller opens a detail (`activePanel` = `aside`). Kept mounted so
+ * a half-written prompt or a scrolled detail survives closing it.
+ */
 export function T3TeamMobilePanelLayout({
   activePanel,
   onActivePanelChange,
@@ -26,46 +36,36 @@ export function T3TeamMobilePanelLayout({
   mainLabel = "Content",
   asideLabel = "Agent",
 }: T3TeamMobilePanelLayoutProps) {
+  const open = activePanel === "aside";
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", className)}>
-      <div className="border-b border-border/70 bg-background/95 px-3 py-2 supports-[backdrop-filter]:bg-background/80 supports-[backdrop-filter]:backdrop-blur">
-        <div className="inline-flex w-full rounded-lg border border-border/70 bg-muted/40 p-1">
+      <div className={cn("min-h-0 flex-1 overflow-hidden", mainClassName)} aria-label={mainLabel}>
+        {main}
+      </div>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => onActivePanelChange("aside")}
+        className="flex shrink-0 items-center justify-center gap-1.5 border-t border-border/70 bg-background/95 py-2 text-sm font-medium text-muted-foreground hover:text-foreground supports-[backdrop-filter]:bg-background/80 supports-[backdrop-filter]:backdrop-blur"
+      >
+        <ChevronUpIcon aria-hidden className="size-4" />
+        {asideLabel}
+      </button>
+      <Sheet open={open} onOpenChange={(next) => onActivePanelChange(next ? "aside" : "main")}>
+        <SheetPopup side="bottom" keepMounted showCloseButton={false} className="h-[85dvh]">
+          <SheetTitle className="sr-only">{asideLabel}</SheetTitle>
+          {/* The aside brings its own header controls, so no corner X; the handle, Escape or a tap outside close it. */}
           <button
             type="button"
-            aria-pressed={activePanel === "main"}
-            className={cn(
-              "flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              activePanel === "main"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
+            aria-label={`Close ${asideLabel}`}
             onClick={() => onActivePanelChange("main")}
+            className="mx-auto flex h-5 w-16 shrink-0 items-center justify-center"
           >
-            {mainLabel}
+            <span className="h-1 w-10 rounded-full bg-muted-foreground/30" />
           </button>
-          <button
-            type="button"
-            aria-pressed={activePanel === "aside"}
-            className={cn(
-              "flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              activePanel === "aside"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-            onClick={() => onActivePanelChange("aside")}
-          >
-            {asideLabel}
-          </button>
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-hidden">
-        {activePanel === "main" ? (
-          <div className={cn("h-full min-h-0 overflow-hidden", mainClassName)}>{main}</div>
-        ) : (
-          <div className={cn("h-full min-h-0 overflow-hidden", asideClassName)}>{aside}</div>
-        )}
-      </div>
+          <div className={cn("min-h-0 flex-1 overflow-hidden", asideClassName)}>{aside}</div>
+        </SheetPopup>
+      </Sheet>
     </div>
   );
 }
