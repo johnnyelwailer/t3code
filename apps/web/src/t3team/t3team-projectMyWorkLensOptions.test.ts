@@ -59,6 +59,12 @@ describe("open work by default in the list lens", () => {
     expect(filterProjectMyWorkTickets({ ...input, hideDone: true }).map((t) => t.id)).toEqual([
       "open",
     ]);
+    // A search looks for a specific ticket, finished or not.
+    expect(
+      filterProjectMyWorkTickets({ ...input, hideDone: true, query: done.ref.displayId }).map(
+        (t) => t.id,
+      ),
+    ).toEqual(["done"]);
     expect(
       filterProjectMyWorkTickets(input)
         .map((t) => t.id)
