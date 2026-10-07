@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { readScopeFooterActiveEntry, resolveScopeRouteTarget } from "./t3team-scopeRouteSync.logic";
+import {
+  readScopeFooterActiveEntry,
+  resolveScopeRouteTarget,
+  scopeProjectSearch,
+} from "./t3team-scopeRouteSync.logic";
 
 const target = (pathname: string, search: Record<string, unknown>, scopeProjectId: string | null) =>
   resolveScopeRouteTarget({ pathname, search, scopeProjectId });
@@ -50,6 +54,52 @@ describe("resolveScopeRouteTarget", () => {
         scopeMemberProjectIds: ["live-1", "stored-1"],
       }),
     ).toBeNull();
+  });
+
+  it("carries an active lens from all-projects onto the picked project", () => {
+    expect(target("/t3team/my-work", { myWorkLens: "board" }, "b")).toEqual({
+      to: "/t3team/projects/$projectId",
+      params: { projectId: "b" },
+      search: { projectView: "my-work", myWorkLens: "board" },
+    });
+  });
+
+  it("carries an active lens from a project back to all-projects", () => {
+    expect(
+      target("/t3team/projects/a", { projectView: "my-work", myWorkLens: "hierarchy" }, null),
+    ).toEqual({
+      to: "/t3team/my-work",
+      search: { myWorkLens: "hierarchy" },
+    });
+  });
+
+  it("carries the lens when the scope moves between projects, backlog included", () => {
+    expect(
+      target("/t3team/projects/a", { projectView: "my-work", myWorkLens: "digest" }, "b"),
+    ).toEqual({
+      to: "/t3team/projects/$projectId",
+      params: { projectId: "b" },
+      search: { projectView: "my-work", myWorkLens: "digest" },
+    });
+    expect(
+      target("/t3team/projects/a", { projectView: "backlog", myWorkLens: "board" }, null),
+    ).toEqual({
+      to: "/t3team/my-work",
+      search: { myWorkLens: "board" },
+    });
+  });
+
+  it("omits the lens when the URL does not name one, so saved state still wins", () => {
+    expect(target("/t3team/my-work", { myWorkLens: "bogus" }, "b")).toEqual({
+      to: "/t3team/projects/$projectId",
+      params: { projectId: "b" },
+      search: { projectView: "my-work" },
+    });
+    expect(scopeProjectSearch("my-work", undefined)).toEqual({ projectView: "my-work" });
+    expect(scopeProjectSearch("my-work", "hierarchy")).toEqual({
+      projectView: "my-work",
+      myWorkLens: "hierarchy",
+    });
   });
 
   it("never yanks the user off a thread, ticket, draft, embedded chat or non-team page", () => {
