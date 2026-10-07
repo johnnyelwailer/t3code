@@ -388,6 +388,11 @@ import {
   T3TeamSubscribeThreadArtifactsInput,
   T3TeamThreadArtifactsStreamEvent,
 } from "./t3team-threadArtifacts.ts";
+import {
+  T3TeamSubscribePackDocumentsInput,
+  T3TeamPackDocumentsStreamEvent,
+  T3TeamPackDocumentsError,
+} from "./t3team-packDocuments.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
 
 export const WS_METHODS = {
@@ -615,6 +620,7 @@ export const WS_METHODS = {
   // t3team: fork side streams (capability-gated by `capabilities.t3team`).
   t3teamSubscribeThreadFacts: "t3team.subscribeThreadFacts",
   t3teamSubscribeThreadArtifacts: "t3team.subscribeThreadArtifacts",
+  t3teamSubscribePackDocuments: "t3team.subscribePackDocuments",
   // t3team: "stop including sub-runs" (capability-gated by `capabilities.t3team.stopCascade`).
   t3teamStopThreadCascade: "t3team.stopThreadCascade",
 } as const;
@@ -1753,6 +1759,13 @@ const WsT3TeamSubscribeThreadArtifactsRpc = Rpc.make(WS_METHODS.t3teamSubscribeT
   stream: true,
 });
 
+const WsT3TeamSubscribePackDocumentsRpc = Rpc.make(WS_METHODS.t3teamSubscribePackDocuments, {
+  payload: T3TeamSubscribePackDocumentsInput,
+  success: T3TeamPackDocumentsStreamEvent,
+  error: Schema.Union([EnvironmentAuthorizationError, T3TeamPackDocumentsError]),
+  stream: true,
+});
+
 const WsSubscribeTerminalEventsRpc = Rpc.make(WS_METHODS.subscribeTerminalEvents, {
   payload: Schema.Struct({}),
   success: TerminalEvent,
@@ -2144,5 +2157,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationNoteComposingRpc,
   WsT3TeamSubscribeThreadFactsRpc,
   WsT3TeamSubscribeThreadArtifactsRpc,
+  WsT3TeamSubscribePackDocumentsRpc,
   WsT3TeamStopThreadCascadeRpc,
 ).middleware(RpcScopeAuthorization);

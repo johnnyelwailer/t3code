@@ -5,7 +5,7 @@
  * `scripts/t3team-distributionPackPlugin.ts`), so the single-file server carries the distribution's
  * provider, driver, theme, profiles and policies with no distribution tree at runtime. This file is
  * the source-run shape: it is what dev and tests import when no distribution was compiled in. It
- * exports the same four values as the inlined module so `t3team-distribution-bootstrap.ts` has one
+ * exports the same values as the inlined module so `t3team-distribution-bootstrap.ts` has one
  * code path regardless of how the value arrived.
  */
 import type { PackActivate } from "@t3team/pack-api";
@@ -107,3 +107,9 @@ export const distributionAssets: Readonly<Record<string, string>> = {};
 export const distributionTheme: DistributionTheme | undefined = dist.theme;
 /** Distribution branding (product name, icon, home dir), or `undefined` when no distribution. */
 export const distributionBranding: DistributionBranding | undefined = dist.branding;
+
+/** Collection metadata statically bundled with the distribution. */
+export const distributionPersistence: ReadonlyArray<{
+  readonly packId: string;
+  readonly modules: ReadonlyArray<unknown>;
+}> = [];
