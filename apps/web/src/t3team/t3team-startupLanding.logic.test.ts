@@ -34,7 +34,7 @@ const ready = (graph: DigestGraph | null) =>
 const probeFor = (
   boundProjects: ReadonlyArray<unknown> | null,
   digest: Parameters<typeof deriveStartupMyWorkProbe>[0]["digest"],
-  lens: "digest" | "list" = "digest",
+  lens: "digest" | "board" = "digest",
 ) => deriveStartupMyWorkProbe({ boundProjects, digest, lens, nowMs: DIGEST_FIXTURE_NOW_MS });
 
 const decide = (probe: StartupMyWorkProbe, timedOut = false) =>
@@ -49,12 +49,12 @@ describe("startup landing", () => {
   it("keeps the draft landing when Jira is bound but My Work has nothing to show", () => {
     expect(buildDigestPlan(emptyGraph, DIGEST_FIXTURE_NOW_MS).sections).toHaveLength(0);
     expect(decide(probeFor(["p"], ready(emptyGraph)))).toBe("default");
-    expect(decide(probeFor(["p"], ready(emptyGraph), "list"))).toBe("default");
+    expect(decide(probeFor(["p"], ready(emptyGraph), "board"))).toBe("default");
   });
 
   it("opens My Work when it has items, by the user's own lens", () => {
     expect(decide(probeFor(["p"], ready(digestFixtureGraph)))).toBe("my-work");
-    expect(decide(probeFor(["p"], ready(digestFixtureGraph), "list"))).toBe("my-work");
+    expect(decide(probeFor(["p"], ready(digestFixtureGraph), "board"))).toBe("my-work");
   });
 
   it("waits, without painting, while projects or the digest are loading", () => {

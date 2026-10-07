@@ -4,7 +4,7 @@
  * The rule: at least one project bound to a work source (the same `selectBoundProjects` set the
  * All-projects My Work view renders) AND My Work would show at least one item. "An item" is what
  * the user's own lens would render: a digest section for the digest lens (the digest's own empty
- * state is `plan.sections.length === 0`), an assigned ticket for the list/hierarchy/board lenses.
+ * state is `plan.sections.length === 0`), an assigned ticket for the hierarchy/board lenses.
  *
  * Everything that is not a confident "yes" — still loading past the deadline, a failed or retrying
  * fetch, an expired Jira session — falls back to the existing landing, so a slow Jira never blocks
