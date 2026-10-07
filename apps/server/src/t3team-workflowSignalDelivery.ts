@@ -2,30 +2,31 @@
  * The signal delivery port (GHE #332, design 42 §6) — the ONE path a source event takes to the
  * runs that are parked on it.
  *
- * Reuses the existing resume path, verbatim: `registry.getRun(runId).resume(correlationId,
- * payload)` is the same closure the reactor uses for `askUser` / `askAgent` and the scheduler
- * uses for `waitUntil` — appending the resolved journal entry and driving the run forward. No
- * parallel resume mechanism.
+ * Reuses the existing resume path: the run controller the registry holds is the same one the
+ * reactor resumes for `askUser` / `askAgent` and the scheduler for `waitUntil` — it appends the
+ * resolved journal entry and drives the run forward. No parallel resume mechanism.
  *
- * Fan-out: a delivery targets every `watching` run parked on the EXACT tuple
+ * Fan-out: a delivery targets every `watching` run whose park waits on the EXACT tuple
  * `(instance, signal, key)` — the instance columns matter because two different instances may
- * emit the same `(signal, key)`. A run parked on the tuple but not registered this uptime
- * (never rehydrated: its source or state is gone) is orphaned (marked failed), mirroring the
- * scheduler's `orphanSleepingRun` — otherwise the event is dropped and the row parks forever,
- * re-flagged on every later event. While boot rehydration is still in flight the "no
- * controller yet" state is TRANSIENT: the port leaves the run parked and the next event
- * retries it (GHE #332 review — the reconciler waits on the rehydrate gate before it starts any
- * source, and this flag is the safety net if that ordering is ever bypassed).
+ * emit the same `(signal, key)`. A park is a single `signal.wait` or a `waitForAny` over several
+ * branches; `t3team-workflowSignalWatchMatch.ts` is the one matching rule for both and builds the
+ * reply (the payload, or the `{ index, reply }` winner of the branch that matched).
  *
- * At-least-once delivery (GHE #332 review): a failed resume FAILS the emit, so the source's
- * poller holds its durable cursor and re-emits the transition next tick; the engine's
- * argsHash/correlation journal dedup keeps the redelivered event from re-firing external
- * effects on an already-woken run.
+ * Each matched run is woken by `t3team-workflowSignalWake.ts`, through the controller's `offer`:
+ * it waits out a drive already in flight and re-reads the row, so two branches of one any-wait
+ * firing together cannot both answer it — the first is journaled as the winner (first write
+ * wins), the second answers whatever the run waits on next.
  *
- * Durable bridge: when NO run is parked on the tuple, the event is written to the durable
- * inbox (`workflow_signal_inbox`); a later `signal.wait` drain takes it (first-wins). This is
- * the "event landed between two suspensions" guarantee — the restart window itself is bridged
- * by the source's durable cursor + catch-up sweep, not by this port.
+ * Durable bridge: the event is written to the durable inbox (`workflow_signal_inbox`) when NO run
+ * is parked on the tuple, or when a matched run turned out not to wait on it any more (it lost a
+ * race to another branch and moved on). A later wait's drain takes it (first-wins) — the "event
+ * landed between two suspensions" guarantee. The inbox is shared by tuple, not per run: when one
+ * run took the event and another declined it, the bridged copy may reach the first run's next
+ * wait too. That errs towards at-least-once, never towards a lost event. The restart window
+ * itself is bridged by the source's durable cursor + catch-up sweep, not by this port.
+ *
+ * At-least-once delivery (GHE #332 review): a failed wake FAILS the emit, so the source's poller
+ * holds its durable cursor and re-emits the transition next tick.
  *
  * Split like the reconciler: `makeSignalDeliveryPort` is the plain, service-free core (unit
  * testable with fake repos/registries); the Effect `Live` layer wires the real services.
@@ -37,7 +38,6 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
-import { PersistenceSqlError } from "./persistence/Errors.ts";
 import type { ProjectionRepositoryError } from "./persistence/Errors.ts";
 import {
   T3TeamWorkflowEngineRegistry,
@@ -51,6 +51,8 @@ import {
   T3TeamWorkflowSignalRehydrateGate,
   T3TeamWorkflowSignalRehydrateGateLive,
 } from "./t3team-workflowSignalRehydrateGate.ts";
+import { wakeParkedSignalRun } from "./t3team-workflowSignalWake.ts";
+import { answerParkedWatch, type SignalTuple } from "./t3team-workflowSignalWatchMatch.ts";
 
 export interface SignalDeliveryInput {
   readonly sourceName: string;
@@ -63,7 +65,7 @@ export interface SignalDeliveryInput {
 
 /** WorkflowSignalDeliveryShape - the delivery port API a started source's `ctx.emit` is wired to. */
 export interface WorkflowSignalDeliveryShape {
-  /** Deliver one event to every parked run on the tuple; to the durable inbox when none is.
+  /** Deliver one event to every run parked on the tuple; to the durable inbox when none took it.
    * Returns the number of runs woken (0 when the event went to the inbox instead). */
   readonly emit: (input: SignalDeliveryInput) => Effect.Effect<number, ProjectionRepositoryError>;
 }
@@ -80,7 +82,7 @@ export class T3TeamWorkflowSignalDelivery extends Context.Service<
  * fakes and no database.
  */
 export function makeSignalDeliveryPort(deps: {
-  readonly repo: Pick<WorkflowRunRepositoryShape, "listByStatus" | "clearPending">;
+  readonly repo: Pick<WorkflowRunRepositoryShape, "listByStatus" | "clearPending" | "getById">;
   readonly store: Pick<WorkflowSignalStoreShape, "insertInboxEntry">;
   readonly registry: Pick<T3TeamWorkflowEngineRegistryShape, "getRun">;
   /** The boot-rehydration gate; absent in tests/pre-gate hosts, where "no controller" means
@@ -93,74 +95,40 @@ export function makeSignalDeliveryPort(deps: {
   const nowIso = deps.nowIso ?? (() => DateTime.formatIso(DateTime.nowUnsafe()));
   const emit: ReturnType<typeof makeSignalDeliveryPort>["emit"] = Effect.fn("workflowSignal.emit")(
     function* (input) {
+      const tuple: SignalTuple = {
+        sourceName: input.sourceName,
+        paramsHash: input.paramsHash,
+        signalName: input.signalName,
+        key: input.key,
+      };
       const watching = yield* deps.repo.listByStatus({ status: "watching" });
-      const parked = watching.filter(
-        (run) =>
-          run.watchSourceName === input.sourceName &&
-          run.watchParamsHash === input.paramsHash &&
-          run.watchSignalName === input.signalName &&
-          run.watchSignalKey === input.key &&
-          run.pendingCorrelationId !== null,
-      );
-      if (parked.length === 0) {
-        // No run is parked on this tuple right now: bridge it durably instead of dropping it.
+      const parked = watching.flatMap((run) => {
+        const answer = answerParkedWatch(run, tuple, input.payload);
+        return answer === undefined ? [] : [{ run, answer }];
+      });
+      let woken = 0;
+      let bridge = parked.length === 0;
+      for (const { run, answer } of parked) {
+        const outcome = yield* wakeParkedSignalRun({
+          run,
+          answer,
+          tuple,
+          payload: input.payload,
+          repo: deps.repo,
+          registry: deps.registry,
+          isRehydrateInFlight: deps.isRehydrateInFlight,
+          nowIso,
+        });
+        if (outcome === "woken") woken += 1;
+        if (outcome === "unclaimed") bridge = true;
+      }
+      if (bridge) {
+        // Nobody took it: bridge it durably for the next wait on the tuple instead of dropping it.
         yield* deps.store.insertInboxEntry({
-          sourceName: input.sourceName,
-          paramsHash: input.paramsHash,
-          signalName: input.signalName,
-          key: input.key,
+          ...tuple,
           payload: input.payload,
           createdAt: nowIso(),
         });
-        return 0;
-      }
-      // Fan out to every parked run on the exact tuple. A run without a registered controller
-      // this uptime is orphaned (failed) rather than parked forever — the scheduler's own
-      // loop-safety rule, applied to the event wake source. While boot rehydration is still in
-      // flight the absence is transient: leave the run parked; the next event retries it.
-      let woken = 0;
-      for (const run of parked) {
-        const controller = deps.registry.getRun(run.runId);
-        if (controller === undefined) {
-          if (deps.isRehydrateInFlight?.() === true) {
-            yield* Effect.logWarning(
-              "signal delivery: parked run not rehydrated yet; leaving it parked, retrying on the next event",
-              {
-                runId: run.runId,
-                sourceName: input.sourceName,
-                signalName: input.signalName,
-              },
-            );
-            continue;
-          }
-          yield* Effect.logWarning(
-            "signal delivery orphaned a parked run with no registered controller",
-            { runId: run.runId, sourceName: input.sourceName, signalName: input.signalName },
-          );
-          yield* deps.repo.clearPending({
-            runId: run.runId,
-            status: "failed",
-            updatedAt: nowIso(),
-            failureReason:
-              "This run's watched event arrived, but the run could not be restored (its source or state was gone).",
-            failureStep: "signal.wait",
-          });
-          continue;
-        }
-        // At-least-once: a failed resume FAILS the emit so the source's poller holds its
-        // durable cursor and re-emits next tick. The engine's journal dedup (argsHash /
-        // correlation replay) keeps the redelivery from re-firing effects on a run that the
-        // first attempt already woke.
-        yield* Effect.tryPromise({
-          try: () => controller.resume(run.pendingCorrelationId!, input.payload),
-          catch: (cause) =>
-            new PersistenceSqlError({
-              operation: "workflowSignal.resume",
-              detail: `delivery resume failed for run ${run.runId}: ${String(cause)}`,
-              cause: cause instanceof Error ? cause : new Error(String(cause)),
-            }),
-        });
-        woken += 1;
       }
       return woken;
     },

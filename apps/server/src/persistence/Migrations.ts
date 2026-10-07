@@ -151,6 +151,8 @@ import Migration0102 from "./Migrations/t3team-078_SkillDelegationMetadata.ts";
 // rather than taking upstream's numbers, which this fork already uses — see the rule above.
 import Migration0103 from "./Migrations/057_ScheduledTaskWebhooks.ts";
 import Migration0104 from "./Migrations/058_WebhookRelayDeliveries.ts";
+// Any-wait signal parks: the branch list a `waitForAny` run is parked on.
+import Migration0105 from "./Migrations/t3team-079_WorkflowRunWatchAny.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -268,6 +270,7 @@ export const migrationEntries = [
   // Upstream 057/058 live at 103/104 in this fork's ledger; see the import comment.
   [103, "ScheduledTaskWebhooks", Migration0103],
   [104, "WebhookRelayDeliveries", Migration0104],
+  [105, "WorkflowRunWatchAny", Migration0105],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
