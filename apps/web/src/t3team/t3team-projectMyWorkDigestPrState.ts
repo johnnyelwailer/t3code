@@ -33,4 +33,3 @@ export const DIGEST_PR_ACTION_RING: Partial<Record<DigestPrStateVariant, string>
 const PR_RANK = { error: 0, warning: 1, success: 2, secondary: 2, outline: 2 } as const;
 export const digestPrRank = (pr: DigestChangeRequest) =>
   pr.state === "draft" ? 3 : PR_RANK[DIGEST_PR_STATE[pr.state].variant];
-

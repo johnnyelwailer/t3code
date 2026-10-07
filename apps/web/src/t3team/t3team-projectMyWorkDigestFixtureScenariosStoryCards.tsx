@@ -1,7 +1,12 @@
 import { createProjectBacklogTestTicket as createTicket } from "~/t3team/t3team-projectBacklogTestUtils";
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import type { ProjectTicket } from "~/t3team/t3team-types";
-import { P, ago, digestFixtureGraph, iesTickets } from "~/t3team/t3team-projectMyWorkDigestFixtures";
+import {
+  P,
+  ago,
+  digestFixtureGraph,
+  iesTickets,
+} from "~/t3team/t3team-projectMyWorkDigestFixtures";
 import type { ProjectMyWorkDigestFixtureScenario } from "~/t3team/t3team-projectMyWorkDigestFixtureScenarios";
 
 const child = (
