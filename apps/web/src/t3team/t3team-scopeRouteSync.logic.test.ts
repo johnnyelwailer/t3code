@@ -52,6 +52,60 @@ describe("resolveScopeRouteTarget", () => {
     ).toBeNull();
   });
 
+  it("carries an explicit myWorkLens onto the picked project and back to all-projects", () => {
+    expect(target("/t3team/my-work", { myWorkLens: "board" }, "b")).toEqual({
+      to: "/t3team/projects/$projectId",
+      params: { projectId: "b" },
+      search: { projectView: "my-work", myWorkLens: "board" },
+    });
+    expect(
+      target("/t3team/projects/a", { projectView: "my-work", myWorkLens: "hierarchy" }, "b"),
+    ).toEqual({
+      to: "/t3team/projects/$projectId",
+      params: { projectId: "b" },
+      search: { projectView: "my-work", myWorkLens: "hierarchy" },
+    });
+    expect(
+      target("/t3team/projects/a", { projectView: "backlog", myWorkLens: "board" }, "b"),
+    ).toEqual({
+      to: "/t3team/projects/$projectId",
+      params: { projectId: "b" },
+      search: { projectView: "backlog", myWorkLens: "board" },
+    });
+    expect(
+      target("/t3team/projects/a", { projectView: "backlog", myWorkLens: "digest" }, null),
+    ).toEqual({
+      to: "/t3team/my-work",
+      search: { myWorkLens: "digest" },
+    });
+    expect(
+      target("/t3team/projects/a", { projectView: "my-work", myWorkLens: "board" }, null),
+    ).toEqual({
+      to: "/t3team/my-work",
+      search: { myWorkLens: "board" },
+    });
+  });
+
+  it("does not invent a lens from legacy view params, so a persisted lens still wins", () => {
+    expect(
+      target("/t3team/my-work", { myWorkView: "kanban", myWorkGroup: "hierarchy" }, "b"),
+    ).toEqual({
+      to: "/t3team/projects/$projectId",
+      params: { projectId: "b" },
+      search: { projectView: "my-work" },
+    });
+    expect(
+      target("/t3team/projects/a", { projectView: "my-work", myWorkView: "kanban" }, null),
+    ).toEqual({
+      to: "/t3team/my-work",
+    });
+    expect(target("/t3team/my-work", { myWorkLens: "nope" }, "b")).toEqual({
+      to: "/t3team/projects/$projectId",
+      params: { projectId: "b" },
+      search: { projectView: "my-work" },
+    });
+  });
+
   it("never yanks the user off a thread, ticket, draft, embedded chat or non-team page", () => {
     expect(target("/t3team/projects/a/threads/t1", {}, "b")).toBeNull();
     expect(target("/t3team/projects/a/tickets/T-1", {}, "b")).toBeNull();

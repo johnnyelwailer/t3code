@@ -45,28 +45,31 @@ describe("useT3TeamScopeRouteSync", () => {
     root = createRoot(container);
   });
 
-  it("re-targets the my-work board to the picked project", async () => {
-    locate("/t3team/my-work");
+  it("re-targets the my-work board to the picked project and keeps the URL lens", async () => {
+    locate("/t3team/my-work", { myWorkLens: "board" });
     await render(null, null);
     await render("key-b", "proj-b");
     expect(router.navigate).toHaveBeenCalledExactlyOnceWith({
       to: "/t3team/projects/$projectId",
       params: { projectId: "proj-b" },
-      search: { projectView: "my-work" },
+      search: { projectView: "my-work", myWorkLens: "board" },
     });
   });
 
   it("keeps the backlog board and returns to all-projects my-work on All", async () => {
-    locate("/t3team/projects/proj-a", { projectView: "backlog" });
+    locate("/t3team/projects/proj-a", { projectView: "backlog", myWorkLens: "hierarchy" });
     await render("key-a", "proj-a");
     await render("key-b", "proj-b");
     expect(router.navigate).toHaveBeenLastCalledWith({
       to: "/t3team/projects/$projectId",
       params: { projectId: "proj-b" },
-      search: { projectView: "backlog" },
+      search: { projectView: "backlog", myWorkLens: "hierarchy" },
     });
     await render(null, null);
-    expect(router.navigate).toHaveBeenLastCalledWith({ to: "/t3team/my-work" });
+    expect(router.navigate).toHaveBeenLastCalledWith({
+      to: "/t3team/my-work",
+      search: { myWorkLens: "hierarchy" },
+    });
   });
 
   it("does not navigate for a scope restored at startup", async () => {

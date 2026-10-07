@@ -191,14 +191,8 @@ export function AllProjectsMyWorkView({
 
   return (
     <ScrollArea className="h-full min-h-0 flex-1">
-      <div
-        className={
-          lens === "digest"
-            ? // The digest spans the full pane width; the legacy sections keep the centered column.
-              "flex w-full flex-col gap-8 p-4 sm:p-6"
-            : "mx-auto flex w-full max-w-6xl flex-col gap-8 p-4 sm:p-6"
-        }
-      >
+      {/* Same 96rem column as a single project's digest, list, board, and backlog. */}
+      <div className="mx-auto flex w-full max-w-[96rem] flex-col gap-8 p-4 sm:p-6">
         <div>
           <ProjectMyWorkViewSwitch
             lens={lens}

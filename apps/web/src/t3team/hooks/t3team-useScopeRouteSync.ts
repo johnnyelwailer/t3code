@@ -5,7 +5,8 @@ import { resolveScopeRouteTarget } from "~/t3team/t3team-scopeRouteSync.logic";
 
 /**
  * Carries a CHANGE of the sidebar project scope onto the active board route: picking a project
- * while looking at "My work" or "Backlog" must show that project's board, not the old one.
+ * while looking at "My work" or "Backlog" must show that project's board, not the old one. An
+ * explicit `myWorkLens` on the current URL is copied onto the next board, both ways.
  *
  * Fires only on a change after mount (a persisted scope restored at startup is not a pick), and
  * only from the board routes — a thread, ticket or draft stays put so the pick never yanks the user

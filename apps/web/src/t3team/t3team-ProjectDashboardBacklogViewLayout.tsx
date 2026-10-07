@@ -8,7 +8,8 @@ import { BacklogBoardScopeNotice } from "~/t3team/t3team-BacklogBoardScopeNotice
  * Presentational shell for the dashboard backlog view, split from
  * t3team-ProjectDashboardBacklogView.tsx (controller) to keep that file under
  * the additive-guard LOC cap: scrollable page layout for regular view modes,
- * fixed full-height layout for immersive ones.
+ * fixed full-height layout for immersive ones. Both sit in the same 96rem
+ * column as the project's digest, list, and board.
  */
 export function ProjectDashboardBacklogViewLayout({
   overview,
@@ -30,7 +31,7 @@ export function ProjectDashboardBacklogViewLayout({
   if (!isImmersiveView) {
     return (
       <ScrollArea className="min-h-0 flex-1">
-        <div className="mx-auto flex w-full max-w-6xl flex-col space-y-2 p-4 sm:p-6">
+        <div className="mx-auto flex w-full max-w-[96rem] flex-col space-y-2 p-4 sm:p-6">
           {overview}
           {notice}
           {error ? <T3TeamErrorState error={error} variant="inline" /> : null}
@@ -41,7 +42,7 @@ export function ProjectDashboardBacklogViewLayout({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="mx-auto flex min-h-0 w-full max-w-[96rem] flex-1 flex-col overflow-hidden">
       <div className="shrink-0 px-4 pt-4 sm:px-6 sm:pt-6">{overview}</div>
       {notice ? <div className="shrink-0 px-4 pt-2 sm:px-6">{notice}</div> : null}
       {error ? (

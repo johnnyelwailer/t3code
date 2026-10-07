@@ -145,7 +145,7 @@ export function AllProjectsMyWorkSection({
             void navigate({
               to: "/t3team/projects/$projectId",
               params: { projectId: project.id },
-              search: { projectView: "my-work" },
+              search: { projectView: "my-work", myWorkLens: lens },
             });
           }}
         >

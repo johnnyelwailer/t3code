@@ -1,13 +1,26 @@
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
+import {
+  parseRouteEnum,
+  projectMyWorkLensValues,
+  type ProjectMyWorkLens,
+} from "~/t3team/t3team-projectDashboardMyWorkStateShared";
 import { parseT3TeamRouteSearch, parseT3TeamViewFromPath } from "~/t3team/t3team-routeState";
+
+type ScopeProjectSearch = {
+  readonly projectView: ProjectDashboardMode;
+  readonly myWorkLens?: ProjectMyWorkLens;
+};
 
 /** A navigation target in the shape `router.navigate` / the footer entries use. */
 export type ScopeRouteTarget =
-  | { readonly to: "/t3team/my-work" }
+  | {
+      readonly to: "/t3team/my-work";
+      readonly search?: { readonly myWorkLens: ProjectMyWorkLens };
+    }
   | {
       readonly to: "/t3team/projects/$projectId";
       readonly params: { readonly projectId: string };
-      readonly search: { readonly projectView: ProjectDashboardMode };
+      readonly search: ScopeProjectSearch;
     };
 
 type ScopeRouteSurface = { readonly mode: ProjectDashboardMode; readonly projectId: string | null };
@@ -44,6 +57,30 @@ export function readScopeFooterActiveEntry(
 }
 
 /**
+ * The lens named by `myWorkLens` on the current URL, if any.
+ *
+ * Only the explicit param counts. A legacy URL that mirrors view state (`myWorkView` / `myWorkGroup`
+ * without `myWorkLens`) says nothing about the lens, so it is not forwarded — the destination keeps
+ * its persisted lens. An explicit `myWorkLens` wins over that persisted lens once it is on the URL.
+ */
+function readExplicitMyWorkLens(rawSearch: Record<string, unknown>): ProjectMyWorkLens | undefined {
+  return parseRouteEnum(rawSearch.myWorkLens, projectMyWorkLensValues);
+}
+
+function projectScopeSearch(
+  projectView: ProjectDashboardMode,
+  myWorkLens: ProjectMyWorkLens | undefined,
+): ScopeProjectSearch {
+  return myWorkLens === undefined ? { projectView } : { projectView, myWorkLens };
+}
+
+function allProjectsScopeTarget(myWorkLens: ProjectMyWorkLens | undefined): ScopeRouteTarget {
+  return myWorkLens === undefined
+    ? { to: "/t3team/my-work" }
+    : { to: "/t3team/my-work", search: { myWorkLens } };
+}
+
+/**
  * Where the active route must go after the sidebar scope changed to `scopeProjectId` (`null` =
  * all projects), or `null` to stay put.
  *
@@ -52,6 +89,8 @@ export function readScopeFooterActiveEntry(
  * "All projects" lands on all-projects my-work. `scopeProjectId` is the scoped group's
  * representative id, which the route layer remaps onto the stored project — the same id the footer
  * navigates with.
+ *
+ * The active lens travels with the scope, in both directions, via `myWorkLens`.
  */
 export function resolveScopeRouteTarget(input: {
   readonly pathname: string;
@@ -64,8 +103,9 @@ export function resolveScopeRouteTarget(input: {
   if (surface === null) {
     return null;
   }
+  const myWorkLens = readExplicitMyWorkLens(input.search);
   if (input.scopeProjectId === null) {
-    return surface.projectId === null ? null : { to: "/t3team/my-work" };
+    return surface.projectId === null ? null : allProjectsScopeTarget(myWorkLens);
   }
   if (
     surface.projectId === input.scopeProjectId ||
@@ -76,6 +116,6 @@ export function resolveScopeRouteTarget(input: {
   return {
     to: "/t3team/projects/$projectId",
     params: { projectId: input.scopeProjectId },
-    search: { projectView: surface.mode },
+    search: projectScopeSearch(surface.mode, myWorkLens),
   };
 }
