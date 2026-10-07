@@ -3,7 +3,7 @@
  *
  * `T3CODE_KICKOFF_RECIPE=<recipe id>` names a pack recipe. Once the server's welcome names a
  * bootstrap thread, the first message the user types there launches the recipe's workflow on that
- * thread, with the thread's own model and modes and `{ projectId, firstMessage }` as arguments.
+ * thread, with the thread's own model and modes and `{ firstMessage }` as its argument.
  * The recipe decides from the message whether it has work to do; the user's own turn never waits
  * on it, and its agent steps run in child threads. A host that starts a server for one project (a
  * cloud session of a project with no machine) uses this to set the machine up only when the task
@@ -61,7 +61,7 @@ export const launchKickoffRecipe = Effect.fn("launchKickoffRecipe")(function* (i
     threadId: input.threadId,
     recipePath: input.recipe.recipeRoot,
     workflowPath: path.join(input.recipe.recipeRoot, "workflow.ts"),
-    args: { projectId: thread.projectId, firstMessage: input.firstMessage },
+    args: { firstMessage: input.firstMessage },
     modelSelection: thread.modelSelection,
     runtimeMode: thread.runtimeMode,
     interactionMode: thread.interactionMode,
