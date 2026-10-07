@@ -17,21 +17,26 @@ const details = {
 
 type Listener = (...args: unknown[]) => void;
 
-function fakeWindow(url = details.url) {
+function fakeWindow(url = "") {
   const windowListeners = new Map<string, Listener>();
   const contentsListeners = new Map<string, Listener>();
   let openHandler: ((details: { url: string }) => unknown) | undefined;
-  const window = {
+  let currentUrl = url;
+  const raw = {
     isDestroyed: () => false,
     isMinimized: () => true,
     restore: vi.fn(),
     show: vi.fn(),
     focus: vi.fn(),
     getNormalBounds: () => ({ x: 0, y: 0, width: 1500, height: 950 }),
-    loadURL: vi.fn(() => Promise.resolve()),
+    loadURL: vi.fn((next: string) => {
+      currentUrl = next;
+      return Promise.resolve();
+    }),
     on: (event: string, listener: Listener) => windowListeners.set(event, listener),
     webContents: {
-      getURL: () => url,
+      getURL: () => currentUrl,
+      reload: vi.fn(),
       setWindowOpenHandler: (handler: typeof openHandler) => {
         openHandler = handler;
       },
@@ -39,9 +44,10 @@ function fakeWindow(url = details.url) {
     },
   };
   return {
-    window: window as unknown as Electron.BrowserWindow,
-    raw: window,
+    window: raw as unknown as Electron.BrowserWindow,
+    raw,
     emitClosed: () => windowListeners.get("closed")?.(),
+    crash: (reason: string) => contentsListeners.get("render-process-gone")?.({}, { reason }),
     navigate: (target: string) => {
       const event = { preventDefault: vi.fn() };
       contentsListeners.get("will-navigate")?.(event, target);
@@ -53,83 +59,112 @@ function fakeWindow(url = details.url) {
 
 function make() {
   const openExternal = vi.fn();
+  const created: Array<ReturnType<typeof fakeWindow>> = [];
+  const createOptions: Electron.BrowserWindowConstructorOptions[] = [];
+  let clock = 0;
   const windows = makeDetachedSurfaceWindows({
     applicationUrl,
     preloadPath: "/preload.js",
     backgroundColor: () => "#000000",
+    createWindow: (options) => {
+      createOptions.push(options);
+      const next = fakeWindow();
+      created.push(next);
+      return next.window;
+    },
     openExternal,
+    logWarning: vi.fn(),
+    now: () => clock,
   });
-  return { windows, openExternal };
+  const prepare = vi.fn();
+  const opener = fakeWindow("t3code://app/#/pull-requests").window;
+  return {
+    windows,
+    openExternal,
+    created,
+    createOptions,
+    prepare,
+    open: (openDetails = details) => windows.handleWindowOpen(openDetails, opener, prepare),
+    tick: (ms: number) => {
+      clock += ms;
+    },
+  };
 }
 
 describe("makeDetachedSurfaceWindows", () => {
   it("leaves requests that are not detached surfaces to the caller", () => {
-    const { windows } = make();
-    const opener = fakeWindow().window;
-    expect(windows.handleWindowOpen({ url: "https://github.com", frameName: "" }, opener)).toBe(
-      null,
-    );
-    expect(
-      windows.handleWindowOpen({ url: details.url, frameName: "atlassian-oauth" }, opener),
-    ).toBe(null);
+    const { open, created } = make();
+    expect(open({ url: "https://github.com", frameName: "" })).toBe(null);
+    expect(open({ url: details.url, frameName: "atlassian-oauth" })).toBe(null);
+    expect(created).toHaveLength(0);
   });
 
-  it("allows a new surface as an independent app window sized like its opener", () => {
-    const { windows } = make();
-    const response = windows.handleWindowOpen(details, fakeWindow().window);
-    expect(response).toMatchObject({
-      action: "allow",
-      outlivesOpener: true,
-      overrideBrowserWindowOptions: {
-        width: 1500,
-        height: 950,
-        titleBarStyle: "default",
-        fullscreenable: true,
-        webPreferences: { preload: "/preload.js", sandbox: true, contextIsolation: true },
-      },
+  it("denies the request and makes the window itself, so the requester gets no handle on it", () => {
+    const { open, created, createOptions, prepare, windows } = make();
+    expect(open()).toEqual({ action: "deny" });
+    expect(created).toHaveLength(1);
+    const window = created[0]!;
+    expect(window.raw.loadURL).toHaveBeenCalledWith(details.url);
+    expect(windows.isDetached(window.window)).toBe(true);
+    expect(prepare).toHaveBeenCalledWith(window.window);
+    expect(createOptions[0]).toMatchObject({
+      width: 1500,
+      height: 950,
+      titleBarStyle: "default",
+      fullscreenable: true,
+      webPreferences: { preload: "/preload.js", sandbox: true, contextIsolation: true },
     });
-    expect(response?.action === "allow" && response.overrideBrowserWindowOptions?.parent).toBe(
-      undefined,
-    );
+    expect(createOptions[0]?.parent).toBe(undefined);
   });
 
   it("brings an open surface forward on the newly asked view instead of opening another", () => {
-    const { windows } = make();
-    const existing = fakeWindow(`${details.url}&file=old.ts`);
-    windows.adopt(existing.window, details);
-    expect(windows.isDetached(existing.window)).toBe(true);
+    const { open, created } = make();
+    open();
+    const window = created[0]!;
+    const summary = {
+      ...details,
+      url: `t3code://app/#${detachedSurfacePath({ ...request, params: {} })}`,
+    };
+    expect(open(summary)).toEqual({ action: "deny" });
+    expect(created).toHaveLength(1);
+    expect(window.raw.loadURL).toHaveBeenLastCalledWith(summary.url);
+    expect(window.raw.restore).toHaveBeenCalled();
+    expect(window.raw.focus).toHaveBeenCalled();
 
-    expect(windows.handleWindowOpen(details, fakeWindow().window)).toEqual({ action: "deny" });
-    expect(existing.raw.loadURL).toHaveBeenCalledWith(details.url);
-    expect(existing.raw.restore).toHaveBeenCalled();
-    expect(existing.raw.focus).toHaveBeenCalled();
-
-    existing.emitClosed();
-    expect(windows.handleWindowOpen(details, fakeWindow().window)?.action).toBe("allow");
+    window.emitClosed();
+    open();
+    expect(created).toHaveLength(2);
   });
 
-  it("sends links out of a detached window to the system browser", () => {
-    const { windows, openExternal } = make();
-    const adopted = fakeWindow();
-    windows.adopt(adopted.window, details);
+  it("sends links out of a detached window to the system browser and keeps it on its surface", () => {
+    const { open, created, openExternal } = make();
+    open();
+    const window = created[0]!;
 
-    expect(adopted.openFromInside("https://github.com/acme/app/pull/12")).toEqual({
+    expect(window.openFromInside("https://github.com/acme/app/pull/12")).toEqual({
       action: "deny",
     });
     expect(openExternal).toHaveBeenCalledWith("https://github.com/acme/app/pull/12");
 
-    expect(adopted.navigate("https://example.com")).toHaveBeenCalled();
-    expect(adopted.navigate("evil://app/t3team-detached/pull-request")).toHaveBeenCalled();
-    expect(adopted.navigate("data:text/html,hi")).toHaveBeenCalled();
+    expect(window.navigate("https://example.com")).toHaveBeenCalled();
+    expect(window.navigate("evil://app/#/t3team-detached/pull-request")).toHaveBeenCalled();
+    expect(window.navigate("data:text/html,hi")).toHaveBeenCalled();
+    expect(window.navigate("t3code://app/#/settings")).toHaveBeenCalled();
     expect(
-      adopted.navigate("t3code://app/t3team-detached/pull-request?tab=summary"),
+      window.navigate("t3code://app/#/t3team-detached/pull-request?tab=summary"),
     ).not.toHaveBeenCalled();
   });
 
-  it("does not adopt windows that are not detached surfaces", () => {
-    const { windows } = make();
-    const popup = fakeWindow("https://auth.atlassian.com");
-    windows.adopt(popup.window, { url: "https://auth.atlassian.com", frameName: "oauth" });
-    expect(windows.isDetached(popup.window)).toBe(false);
+  it("reloads a crashed renderer, but not forever", () => {
+    const { open, created, tick } = make();
+    open();
+    const window = created[0]!;
+    window.crash("clean-exit");
+    expect(window.raw.webContents.reload).not.toHaveBeenCalled();
+    for (let attempt = 0; attempt < 5; attempt += 1) window.crash("crashed");
+    expect(window.raw.webContents.reload).toHaveBeenCalledTimes(3);
+    tick(61_000);
+    window.crash("crashed");
+    expect(window.raw.webContents.reload).toHaveBeenCalledTimes(4);
   });
 });

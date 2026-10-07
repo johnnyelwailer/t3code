@@ -1,4 +1,4 @@
-import { createFileRoute, useLocation, useRouter } from "@tanstack/react-router";
+import { createFileRoute, redirect, useLocation, useRouter } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";
 
 import { DetachedSurfaceRouteView } from "~/t3team/detached/t3team-DetachedSurfaceRouteView";
@@ -14,6 +14,16 @@ import { DetachedSurfaceRouteView } from "~/t3team/detached/t3team-DetachedSurfa
  * turn `number=12` into a number).
  */
 export const Route = createFileRoute("/t3team-detached/$kind")({
+  // Signed out (an expired session, a link opened in another browser), the page goes to sign-in
+  // like every other authenticated route, rather than mounting a panel whose every read fails.
+  beforeLoad: ({ context }) => {
+    if (
+      context.authGateState.status !== "authenticated" &&
+      context.authGateState.status !== "hosted-static"
+    ) {
+      throw redirect({ to: "/pair", replace: true });
+    }
+  },
   component: DetachedSurfaceRoute,
 });
 
@@ -27,8 +37,10 @@ function DetachedSurfaceRoute() {
   );
   const onParamsChange = useCallback(
     (patch: Readonly<Record<string, string | undefined>>) => {
-      const location = router.state.location;
-      const current = new URLSearchParams(location.searchStr);
+      // The history's location, not the router state's: the state only catches up once the
+      // router has loaded, and a second write before then would start from a stale search.
+      const location = router.history.location;
+      const current = new URLSearchParams(location.search);
       const next = new URLSearchParams(current);
       for (const [name, value] of Object.entries(patch)) {
         if (value === undefined) next.delete(name);

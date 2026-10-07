@@ -60,12 +60,21 @@ export function PullRequestDetachedSurfaceView({
   const urlViewKey = surface === null ? null : viewKey(surface.view);
   const expectedViewKey = useRef(urlViewKey);
   const generation = useRef(0);
+  // The panel reports its Code tab before the diff has focused the requested file, so its first
+  // report says "no file". Writing that would drop the file from the URL until the diff loads —
+  // and for good if it fails to — so it waits for the file the URL asked for.
+  const opensOnFile = (view: PullRequestDetailViewState | undefined) =>
+    view?.tab === "code" && view.file !== null;
+  const awaitingRequestedFile = useRef(opensOnFile(surface?.view));
   if (urlViewKey !== expectedViewKey.current) {
     expectedViewKey.current = urlViewKey;
     generation.current += 1;
+    awaitingRequestedFile.current = opensOnFile(surface?.view);
   }
   const onViewChange = useCallback(
     (view: PullRequestDetailViewState) => {
+      if (awaitingRequestedFile.current && view.tab === "code" && view.file === null) return;
+      awaitingRequestedFile.current = false;
       const reported = viewKey(view);
       if (reported === expectedViewKey.current) return;
       expectedViewKey.current = reported;

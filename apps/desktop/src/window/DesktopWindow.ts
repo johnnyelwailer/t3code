@@ -376,10 +376,14 @@ export const make = Effect.gen(function* () {
     preloadPath: environment.preloadPath,
     backgroundColor: () =>
       getInitialWindowBackgroundColor(Electron.nativeTheme.shouldUseDarkColors),
+    createWindow: (options) => new Electron.BrowserWindow(options),
     openExternal: (url) => {
       if (Option.isSome(ElectronShell.parseSafeExternalUrl(url))) {
         void runPromise(electronShell.openExternal(url));
       }
+    },
+    logWarning: (message, details) => {
+      runFork(logWindowWarning(message, details));
     },
   });
   const withoutDetached = (window: Option.Option<Electron.BrowserWindow>) =>
@@ -393,6 +397,49 @@ export const make = Effect.gen(function* () {
   );
   const focusedAnyWindow = electronWindow.focusedMainOrFirst.pipe(Effect.flatMap(withoutSplash));
   const focusedMainWindow = focusedAnyWindow.pipe(Effect.flatMap(withoutDetached));
+
+  // Shared by the main window and detached-surface windows: a window that can take focus can
+  // receive the quit and close accelerators, so each one needs the same guards.
+  const installShortcutGuards = (window: Electron.BrowserWindow): void => {
+    // Electron's windowMenu close role owns CmdOrCtrl+W. Holding the
+    // close-terminal shortcut can outlive the terminal that handled its first
+    // press, so reject repeats before they reach the native window accelerator.
+    // Deliberate presses still flow through the renderer or native menu.
+    // Intercept the quit accelerator before the native menu sees it and apply
+    // the configured direct, hold, or double-press behavior.
+    const quitShortcutHandler = makeQuitShortcutHandler({
+      platform: environment.platform,
+      getMode: () =>
+        runPromise(
+          Effect.map(
+            clientSettings.get,
+            Option.match({
+              onNone: () => DEFAULT_CLIENT_SETTINGS.confirmQuit,
+              onSome: (settings) => settings.confirmQuit,
+            }),
+          ),
+        ),
+      notify: (hint) => {
+        if (!window.isDestroyed()) {
+          window.webContents.send(QUIT_SHORTCUT_CHANNEL, hint);
+        }
+      },
+      // Keep the transparent window focused until the physical shortcut is
+      // released so its remaining repeats cannot reach the next app.
+      concealWindow: () => concealPendingQuitWindow(window),
+      quit: () => {
+        void runPromise(electronApp.quit);
+      },
+    });
+    window.webContents.on("before-input-event", (event, input) => {
+      quitShortcutHandler(event, input);
+      if (input.type !== "keyDown" || !input.isAutoRepeat) return;
+      const modifier = environment.platform === "darwin" ? input.meta : input.control;
+      if (modifier && !input.alt && !input.shift && input.key.toLowerCase() === "w") {
+        event.preventDefault();
+      }
+    });
+  };
 
   const createWindow = Effect.fn("desktop.window.createWindow")(function* (): Effect.fn.Return<
     Electron.BrowserWindow,
@@ -637,7 +684,14 @@ export const make = Effect.gen(function* () {
     });
 
     window.webContents.setWindowOpenHandler(({ url, frameName }) => {
-      const detachedSurface = detachedSurfaceWindows.handleWindowOpen({ url, frameName }, window);
+      const detachedSurface = detachedSurfaceWindows.handleWindowOpen(
+        { url, frameName },
+        window,
+        (created) => {
+          installContextMenu(created, created.webContents);
+          installShortcutGuards(created);
+        },
+      );
       if (detachedSurface !== null) return detachedSurface;
       if (isAtlassianOAuthPopupRequest({ url, frameName })) {
         return {
@@ -662,9 +716,6 @@ export const make = Effect.gen(function* () {
       }
       return { action: "deny" };
     });
-    window.webContents.on("did-create-window", (created, details) => {
-      detachedSurfaceWindows.adopt(created, details);
-    });
     window.webContents.on("will-navigate", (event, url) => {
       if (
         isSameOriginRendererNavigation({
@@ -681,44 +732,7 @@ export const make = Effect.gen(function* () {
       }
     });
 
-    // Electron's windowMenu close role owns CmdOrCtrl+W. Holding the
-    // close-terminal shortcut can outlive the terminal that handled its first
-    // press, so reject repeats before they reach the native window accelerator.
-    // Deliberate presses still flow through the renderer or native menu.
-    // Intercept the quit accelerator before the native menu sees it and apply
-    // the configured direct, hold, or double-press behavior.
-    const quitShortcutHandler = makeQuitShortcutHandler({
-      platform: environment.platform,
-      getMode: () =>
-        runPromise(
-          Effect.map(
-            clientSettings.get,
-            Option.match({
-              onNone: () => DEFAULT_CLIENT_SETTINGS.confirmQuit,
-              onSome: (settings) => settings.confirmQuit,
-            }),
-          ),
-        ),
-      notify: (hint) => {
-        if (!window.isDestroyed()) {
-          window.webContents.send(QUIT_SHORTCUT_CHANNEL, hint);
-        }
-      },
-      // Keep the transparent window focused until the physical shortcut is
-      // released so its remaining repeats cannot reach the next app.
-      concealWindow: () => concealPendingQuitWindow(window),
-      quit: () => {
-        void runPromise(electronApp.quit);
-      },
-    });
-    window.webContents.on("before-input-event", (event, input) => {
-      quitShortcutHandler(event, input);
-      if (input.type !== "keyDown" || !input.isAutoRepeat) return;
-      const modifier = environment.platform === "darwin" ? input.meta : input.control;
-      if (modifier && !input.alt && !input.shift && input.key.toLowerCase() === "w") {
-        event.preventDefault();
-      }
-    });
+    installShortcutGuards(window);
     window.webContents.on("input-event", (_event, input) => {
       if (input.type === "gestureScrollEnd") window.webContents.send(TRACKPAD_SCROLL_END_CHANNEL);
     });
