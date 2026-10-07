@@ -82,7 +82,13 @@ it.layer(TestLayer)("Pack documents", (it) => {
       yield* b.put("items", "shared", { owner: "b2" });
       yield* a.put("items", "shared", { owner: "a" });
       const collected = yield* Fiber.join(events);
-      assert.strictEqual(collected.length, 2);
+      // Pack B's write must not reach pack A's stream: the only live event is A's own upsert.
+      assert.deepStrictEqual(
+        collected.map((event) =>
+          event.type === "upsert" ? { type: event.type, doc: event.doc.doc } : { type: event.type },
+        ),
+        [{ type: "snapshot" }, { type: "upsert", doc: { owner: "a" } }],
+      );
       assert.deepStrictEqual((yield* b.get("items", "shared"))?.doc, { owner: "b2" });
       assert.deepStrictEqual((yield* a.get("items", "shared"))?.doc, { owner: "a" });
       assert.strictEqual((yield* Effect.exit(service.forPack("unknown")))._tag, "Failure");

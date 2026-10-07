@@ -5,7 +5,7 @@ import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import { expect, it } from "vite-plus/test";
 import { mergePackCollectionsDefinitions } from "@t3team/pack-api";
-import { distributionPersistenceModule } from "./t3team-distributionPersistenceModule.ts";
+import { distributionPersistenceModule } from "../scripts/t3team-distributionPersistenceModule.ts";
 
 const metadata = { items: { maxDocBytes: 64, retention: "keep" }, quotaBytes: 1024 };
 const manifest = {
