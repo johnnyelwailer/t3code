@@ -1,127 +1,162 @@
-import { ProjectId } from "@t3tools/contracts";
-import { useState, type MouseEvent } from "react";
+import { useId, useState } from "react";
 
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
-import { DigestKicker } from "~/t3team/t3team-ProjectMyWorkDigestChips";
-import { openDigestPullRequest } from "~/t3team/t3team-digestPrAsideStore";
-import { digestPrUrl } from "~/t3team/t3team-projectMyWorkDigestFacts";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
+import { DigestKicker, digestStatusDotClassName } from "~/t3team/t3team-ProjectMyWorkDigestChips";
+import { DigestPrChip, DigestPrChips } from "~/t3team/t3team-ProjectMyWorkDigestPrChips";
 import type {
+  DigestChangeRequest,
   DigestGraph,
   DigestSection,
   DigestYesterdayMerged,
-  DigestYesterdayMoved,
 } from "~/t3team/t3team-projectMyWorkDigestPlan";
+import { digestRepoLabeler } from "~/t3team/t3team-projectMyWorkDigestRepoLabels";
+import {
+  digestYesterdayRecap,
+  digestYesterdaySummaryText,
+  isDigestMorning,
+  type DigestYesterdayWorkItem,
+} from "~/t3team/t3team-projectMyWorkDigestYesterdayRecap";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
-/** Rows each list shows before "Show all": yesterday is context, not a worklist. */
-const VISIBLE_ROWS = 6;
+// A merged PR in the shape the digest's PR chip reads; no project means no in-app aside.
+const asChangeRequest = (pr: DigestYesterdayMerged): DigestChangeRequest => ({
+  id: pr.id,
+  ticketId: pr.ticketId ?? "",
+  title: pr.title,
+  ...(pr.projectId !== "" ? { projectId: pr.projectId } : {}),
+  ...(pr.host !== undefined ? { host: pr.host } : {}),
+  repo: pr.repo,
+  number: pr.number,
+  state: "merged",
+  reviewers: [],
+  updatedAt: pr.mergedAt,
+});
 
-const rowClassName =
-  "flex min-w-0 items-baseline gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent/30";
-const verbClassName = "w-14 shrink-0 text-2xs uppercase tracking-wide text-muted-foreground";
+const lineClassName = "min-w-0 space-y-1 px-3 py-1.5 text-xs";
 
-function MergedRow({ pr }: { pr: DigestYesterdayMerged }) {
-  const open = (event: MouseEvent) => {
-    // A modified click keeps the browser's own "open in a new tab"; a plain one reads in the aside.
-    if (event.metaKey || event.ctrlKey || pr.projectId === "") return;
-    event.preventDefault();
-    openDigestPullRequest({
-      projectId: ProjectId.make(pr.projectId),
-      ...(pr.host !== undefined ? { host: pr.host } : {}),
-      repository: pr.repo,
-      number: pr.number,
-    });
-  };
+/** One work item: key and title, where it ended up, then the PRs merged for it as chips. */
+function WorkItemLine({
+  item,
+  repoLabel,
+  onOpenTicket,
+}: {
+  item: DigestYesterdayWorkItem;
+  repoLabel: (repo: string) => string;
+  onOpenTicket?: ((ticketId: string) => void) | undefined;
+}) {
+  const { ticketId } = item;
   return (
-    <a
-      href={digestPrUrl(pr)}
-      target="_blank"
-      rel="noreferrer"
-      onClick={open}
-      className={rowClassName}
-    >
-      <span className={verbClassName}>Merged</span>
-      <span className="shrink-0 font-mono text-muted-foreground">
-        {pr.repo.split("/").at(-1)}#{pr.number}
-      </span>
-      <span className="min-w-0 flex-1 truncate">{pr.title}</span>
-    </a>
+    <li className={lineClassName}>
+      <div className="flex min-w-0 items-baseline gap-2">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                disabled={!onOpenTicket || ticketId === undefined}
+                onClick={() => (ticketId !== undefined ? onOpenTicket?.(ticketId) : undefined)}
+                className="flex min-w-0 flex-1 items-baseline gap-2 text-left enabled:hover:text-foreground"
+              >
+                <span className="shrink-0 font-mono text-muted-foreground">{item.key}</span>
+                <span className="min-w-0 truncate">{item.title}</span>
+              </button>
+            }
+          />
+          <TooltipPopup side="top" className="max-w-sm">
+            {item.key} · {item.title}
+            {item.outcome?.from !== undefined ? ` · ${item.outcome.from} → ${item.outcome.to}` : ""}
+          </TooltipPopup>
+        </Tooltip>
+        {item.outcome ? (
+          <span className="inline-flex shrink-0 items-center gap-1 text-2xs text-muted-foreground">
+            <span aria-hidden="true" className={digestStatusDotClassName(item.outcome.to)} />→{" "}
+            {item.outcome.to}
+          </span>
+        ) : null}
+      </div>
+      {item.merged.length > 0 ? (
+        <DigestPrChips prs={item.merged.map(asChangeRequest)} repoLabel={repoLabel} />
+      ) : null}
+    </li>
   );
 }
 
-function MovedRow({
-  move,
-  ticket,
-  onOpenTicket,
+/** A merged PR that names no work item: the chip, then its title. */
+function LoosePrLine({
+  pr,
+  repoLabel,
 }: {
-  move: DigestYesterdayMoved;
-  ticket: ProjectTicket;
-  onOpenTicket?: ((ticketId: string) => void) | undefined;
+  pr: DigestYesterdayMerged;
+  repoLabel: (repo: string) => string;
 }) {
   return (
-    <button
-      type="button"
-      disabled={!onOpenTicket}
-      onClick={() => onOpenTicket?.(ticket.id)}
-      className={`${rowClassName} w-full`}
-    >
-      <span className={verbClassName}>{move.to !== undefined ? "Moved" : "Updated"}</span>
-      <span className="shrink-0 font-mono text-muted-foreground">{ticket.ref.displayId}</span>
-      <span className="min-w-0 flex-1 truncate">{ticket.ref.title}</span>
-      {move.from !== undefined && move.to !== undefined ? (
-        <span className="shrink-0 text-2xs text-muted-foreground">
-          {move.from} → {move.to}
-        </span>
-      ) : null}
-    </button>
+    <li className="flex min-w-0 items-center gap-2 px-3 py-1.5 text-xs">
+      <DigestPrChip pr={asChangeRequest(pr)} repoLabel={repoLabel} />
+      <span className="min-w-0 flex-1 truncate">{pr.title}</span>
+    </li>
   );
 }
 
 /**
- * The `my-work.yesterday` widget: what the viewer merged and which of their tickets moved on their
- * previous working day. Reads the graph itself (`content: "none"`), so the section lists nothing.
+ * The `my-work.yesterday` widget: what the viewer finished on their previous working day, one
+ * line per work item with its outcome and merged PRs, under a one-line summary. Before noon it
+ * opens expanded; later it starts folded to the summary. Reads the graph itself
+ * (`content: "none"`), so the section lists nothing.
  */
 export function DigestYesterdayWidget({
   section,
   graph,
   ticketsById,
+  nowMs,
   onOpenTicket,
 }: {
   section: DigestSection;
   graph: DigestGraph;
   ticketsById: ReadonlyMap<string, ProjectTicket>;
+  nowMs: number;
   onOpenTicket?: ((ticketId: string) => void) | undefined;
 }) {
-  const [showAll, setShowAll] = useState(false);
-  const merged = graph.yesterday?.merged ?? [];
-  const moved = (graph.yesterday?.moved ?? []).flatMap((move) => {
-    const ticket = ticketsById.get(move.ticketId);
-    return ticket ? [{ move, ticket }] : [];
-  });
-  const total = merged.length + moved.length;
-  if (total === 0) return null;
-  const limit = showAll ? Number.POSITIVE_INFINITY : VISIBLE_ROWS;
+  const [expanded, setExpanded] = useState(() => isDigestMorning(nowMs));
+  const listId = useId();
+  const recap = digestYesterdayRecap(graph.yesterday, ticketsById);
+  if (recap.items.length + recap.loosePrs.length === 0) return null;
+  const repoLabel = digestRepoLabeler((graph.yesterday?.merged ?? []).map((pr) => pr.repo));
   return (
     <section className="space-y-2">
-      <DigestKicker count={total}>{section.heading}</DigestKicker>
-      {section.hint ? <p className="text-xs text-muted-foreground">{section.hint}</p> : null}
-      <T3SurfacePanel tone="muted" className="divide-y divide-border/60">
-        {merged.slice(0, limit).map((pr) => (
-          <MergedRow key={pr.id} pr={pr} />
-        ))}
-        {moved.slice(0, limit).map(({ move, ticket }) => (
-          <MovedRow key={ticket.id} move={move} ticket={ticket} onOpenTicket={onOpenTicket} />
-        ))}
-        {merged.length > VISIBLE_ROWS || moved.length > VISIBLE_ROWS ? (
+      <DigestKicker
+        right={
           <button
             type="button"
-            onClick={() => setShowAll((value) => !value)}
-            className="w-full px-3 py-1.5 text-left text-2xs text-muted-foreground hover:bg-accent/30"
+            aria-expanded={expanded}
+            aria-controls={listId}
+            onClick={() => setExpanded((value) => !value)}
+            className="text-2xs text-muted-foreground hover:text-foreground"
           >
-            {showAll ? "Show fewer" : "Show all"}
+            {expanded ? "Hide" : "Show"}
           </button>
-        ) : null}
-      </T3SurfacePanel>
+        }
+      >
+        {section.heading}
+      </DigestKicker>
+      <p className="text-xs text-foreground/80">{digestYesterdaySummaryText(recap.summary)}</p>
+      <div id={listId} hidden={!expanded}>
+        <T3SurfacePanel tone="muted">
+          <ul className="divide-y divide-border/60">
+            {recap.items.map((item) => (
+              <WorkItemLine
+                key={item.id}
+                item={item}
+                repoLabel={repoLabel}
+                onOpenTicket={onOpenTicket}
+              />
+            ))}
+            {recap.loosePrs.map((pr) => (
+              <LoosePrLine key={pr.id} pr={pr} repoLabel={repoLabel} />
+            ))}
+          </ul>
+        </T3SurfacePanel>
+      </div>
     </section>
   );
 }
