@@ -7,7 +7,8 @@
  * The payload carries what a policy needs to decide "launch or not" without a second read:
  * `isCrossRepository` + `authorAssociation` say whether a head comes from a stranger's fork,
  * `viewerAuthored` says whose it is. A host that cannot say `authorAssociation` omits it, which a
- * policy must read as "unknown", never as "trusted".
+ * policy must read as "unknown", never as "trusted". `authorAssociation` is GitHub's raw enum, so a
+ * `select` on it is GitHub-only today.
  */
 
 import * as Schema from "effect/Schema";
@@ -27,7 +28,11 @@ export const ViewerChangeRequestPayload = Schema.Struct({
   isDraft: Schema.Boolean,
   /** The head lives in another repository (a fork). Unknown is reported as `true`. */
   isCrossRepository: Schema.Boolean,
-  /** The author's standing on the repository (OWNER, MEMBER, CONTRIBUTOR, NONE, …), if the host says. */
+  /**
+   * The author's standing on the repository, if the host says. This is GitHub's raw enum (OWNER,
+   * MEMBER, COLLABORATOR, CONTRIBUTOR, FIRST_TIME_CONTRIBUTOR, NONE, …): a `select` on it is
+   * GitHub-only today, and other hosts omit it.
+   */
   authorAssociation: Schema.optional(Schema.String),
   viewerAuthored: Schema.Boolean,
 });

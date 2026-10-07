@@ -20,7 +20,8 @@ import type { T3TeamDigestProjectSource } from "./t3team-myworkDigestTypes.ts";
 
 type DigestPrEntry = T3TeamDigestProjectSource["prEntries"][number];
 
-const VIEWER_PR_LIMIT = 100;
+/** gh's own ceiling on a search; a host past it is read in part and is reported as truncated. */
+const VIEWER_PR_LIMIT = 1000;
 const SEARCH_FIELDS = "number,title,repository,updatedAt,isDraft,author";
 
 const decodeHits = Schema.decodeUnknownOption(
@@ -56,8 +57,12 @@ export function readSignedInHosts(
   );
 }
 
-/** One search's answer. A search that failed, or hit the limit, did not see every PR. */
-type SearchRead = { readonly entries: DigestPrEntry[]; readonly complete: boolean };
+/** One search's answer. `failed`: it did not answer; `truncated`: it answered but hit the limit. */
+type SearchRead = {
+  readonly entries: DigestPrEntry[];
+  readonly failed: boolean;
+  readonly truncated: boolean;
+};
 
 function searchHost(
   gh: GitHubCli.GitHubCli["Service"],
@@ -82,7 +87,8 @@ function searchHost(
       Effect.map((decoded): SearchRead => {
         const hits = decoded?._tag === "Some" ? decoded.value : undefined;
         return {
-          complete: hits !== undefined && hits.length < VIEWER_PR_LIMIT,
+          failed: hits === undefined,
+          truncated: hits !== undefined && hits.length >= VIEWER_PR_LIMIT,
           entries: (hits ?? []).map((hit) => ({
             host,
             repository: hit.repository.nameWithOwner,
@@ -105,8 +111,12 @@ function searchHost(
 /** What one read of the viewer's PRs saw, and which hosts it could not see all of. */
 export interface ViewerPrRead {
   readonly entries: DigestPrEntry[];
+  /** Hosts gh is signed in to right now. A host that drops out is gone, not empty. */
+  readonly signedInHosts: ReadonlyArray<string>;
   /** Hosts whose search failed or was cut off. `"*"` when gh could not even list its hosts. */
   readonly incompleteHosts: ReadonlyArray<string>;
+  /** The subset of `incompleteHosts` that answered but hit the limit, so are read in part. */
+  readonly truncatedHosts: ReadonlyArray<string>;
 }
 
 /** Every signed-in host's open PRs the viewer wrote or is asked to review, each PR once. */
@@ -128,10 +138,16 @@ export function loadViewerPrRead(): Effect.Effect<ViewerPrRead, never, GitHubCli
       const key = `${entry.host}:${entry.repository}#${entry.number}`;
       if (!byKey.has(key)) byKey.set(key, entry);
     }
-    const incomplete = new Set(perSearch.filter(({ read }) => !read.complete).map((s) => s.host));
+    const hostsWhere = (test: (read: SearchRead) => boolean) =>
+      new Set(perSearch.filter(({ read }) => test(read)).map((s) => s.host));
+    const failed = hostsWhere((read) => read.failed);
+    // A host with one failed search is blind, not merely cut off, whatever its other search did.
+    const truncated = [...hostsWhere((read) => read.truncated)].filter((h) => !failed.has(h));
     return {
       entries: [...byKey.values()],
-      incompleteHosts: signedIn.ok ? [...incomplete] : ["*"],
+      signedInHosts: signedIn.hosts,
+      incompleteHosts: signedIn.ok ? [...new Set([...failed, ...truncated])] : ["*"],
+      truncatedHosts: signedIn.ok ? truncated : [],
     };
   });
 }

@@ -3,14 +3,14 @@
  * cursor), what this poll saw, and which events the difference is. The poller
  * (t3team-workflowSignalSourceScmViewer.ts) only does the reads and the delivery.
  *
- * Four rules keep a trigger from becoming a flood:
+ * Five rules keep a trigger from becoming a flood:
  *   • No cursor — missing, unreadable, or a version this code does not know — is a BASELINE: the
  *     poll records what it sees and emits nothing, so a lost cursor never replays a backlog.
  *   • A baseline taken while a host could not be read to the end (`pending`) is not finished for
- *     that host: it stays silent until one complete read of it, so PRs the failure or the 100-row
- *     cut-off hid are absorbed rather than launched when they surface.
+ *     that host: it stays silent until it settles (t3team-workflowSignalScmViewerPending.ts), so
+ *     PRs the failure or the search limit hid are absorbed rather than launched when they surface.
  *   • An entry the read did not return is forgotten only when its host was read to the end. A host
- *     that failed or was cut off (`incompleteHosts`) keeps its entries, or its recovery would
+ *     that failed, was cut off, or signed out keeps its entries untouched, or its recovery would
  *     look like every PR being opened at once.
  *   • Detail is read only where an event could result (a new entry, a new review request, an
  *     authored PR that moved), so a quiet poll costs the searches and nothing else.
@@ -20,6 +20,7 @@ import type { ScmViewerChangeRequestUpdatedPayload } from "@t3team/sdk";
 import type { PullRequestDetail } from "@t3tools/contracts";
 
 import type { ViewerPrRead } from "./t3team-myworkViewerPrLoader.ts";
+import { blindHostsOf, isSilent, nextPending } from "./t3team-workflowSignalScmViewerPending.ts";
 
 export type ViewerPrEntry = ViewerPrRead["entries"][number];
 export type ViewerReason = ScmViewerChangeRequestUpdatedPayload["reason"];
@@ -40,6 +41,8 @@ export interface ViewerCursor {
   readonly v: 1;
   /** Hosts (or `"*"`: all) whose baseline was taken blind and is still being completed. */
   readonly pending?: ReadonlyArray<string>;
+  /** Over-limit hosts' read signatures, for settling `pending` (see the Pending module). */
+  readonly stable?: Readonly<Record<string, string>>;
   readonly entries: Readonly<Record<string, CursorEntry>>;
 }
 
@@ -73,10 +76,6 @@ export function parseViewerCursor(raw: string | null): ViewerCursor | null {
     return null;
   }
 }
-
-/** Whether `host` is still being baselined, so this poll learns its PRs but emits nothing. */
-const isSilent = (prev: ViewerCursor | null, host: string): boolean =>
-  prev === null || (prev.pending ?? []).some((h) => h === "*" || h === host);
 
 /** The entries whose detail this poll must read. A baseline only learns authored PRs' heads. */
 export function entriesNeedingDetail(
@@ -191,14 +190,10 @@ export function settleViewerPoll(
             : (before?.scope ?? "unknown"),
     };
   }
-  const blind = new Set(read.incompleteHosts);
+  // A host the read cannot vouch for (failed, cut off, signed out) keeps what it had.
+  const blind = blindHostsOf(read);
   for (const [key, before] of Object.entries(prev?.entries ?? {})) {
-    if (!(key in entries) && (blind.has("*") || blind.has(before.host))) entries[key] = before;
+    if (!(key in entries) && blind(before.host)) entries[key] = before;
   }
-  // Still blind where the baseline was blind; a complete read of a host settles it.
-  const blindNow = (host: string) => blind.has("*") || blind.has(host);
-  const was = prev?.pending ?? [];
-  const pending =
-    prev === null || was.includes("*") ? [...read.incompleteHosts] : was.filter(blindNow);
-  return { cursor: { v: 1, ...(pending.length > 0 ? { pending } : {}), entries }, events };
+  return { cursor: { v: 1, ...nextPending(prev, read), entries }, events };
 }

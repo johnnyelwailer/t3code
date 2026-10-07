@@ -158,7 +158,13 @@ export function makeWorkflowSignalSourceCatalog(input: {
 
   const viewerPollMs = input.viewerPollMs ?? WORKFLOW_VIEWER_SIGNAL_POLL_MS;
   const sharedViewerRead = shareViewerPrRead(
-    input.readViewerPrs ?? Effect.succeed({ entries: [], incompleteHosts: ["*"] }),
+    input.readViewerPrs ??
+      Effect.succeed({
+        entries: [],
+        signedInHosts: [],
+        incompleteHosts: ["*"],
+        truncatedHosts: [],
+      }),
     viewerPollMs / 2,
   );
   const scmViewerHost: WorkflowSignalSourceHost = {

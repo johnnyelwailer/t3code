@@ -47,9 +47,16 @@ const detailOf = (number: number, over: Partial<PullRequestDetail> = {}): PullRe
     ...over,
   }) as unknown as PullRequestDetail;
 
-const read = (entries: ViewerPrEntry[], incompleteHosts: string[] = []): ViewerPrRead => ({
+const read = (
+  entries: ViewerPrEntry[],
+  incompleteHosts: string[] = [],
+  over: Partial<ViewerPrRead> = {},
+): ViewerPrRead => ({
   entries,
+  signedInHosts: ["github.com", "ghe.example"],
   incompleteHosts,
+  truncatedHosts: [],
+  ...over,
 });
 
 const detailsFor = (...details: PullRequestDetail[]) =>
@@ -207,6 +214,97 @@ describe("a baseline taken while a host could not be read", () => {
     expect(first.cursor.pending).toEqual(["*"]);
     const back = settleViewerPoll(first.cursor, read([entry(1), entry(2)]), new Map());
     expect(back.events).toEqual([]);
+  });
+});
+
+describe("a host over the search limit", () => {
+  const overLimit = (entries: ViewerPrEntry[]) =>
+    read(entries, ["github.com"], { truncatedHosts: ["github.com"] });
+
+  it("settles once its read holds still for two polls, then emits only what arrives", () => {
+    const hundred = Array.from({ length: 100 }, (_, i) => entry(i + 1, { viewerAuthored: false }));
+    const first = settleViewerPoll(null, overLimit(hundred), new Map());
+    expect(first.cursor.pending).toEqual(["github.com"]);
+    // A changed read is not yet stable: still silent, still pending.
+    const shifted = [...hundred.slice(1), entry(900, { viewerAuthored: false })];
+    const second = settleViewerPoll(first.cursor, overLimit(shifted), new Map());
+    expect(second.events).toEqual([]);
+    expect(second.cursor.pending).toEqual(["github.com"]);
+    // The same read again: settled (still silent for this poll), pending cleared.
+    const third = settleViewerPoll(second.cursor, overLimit(shifted), new Map());
+    expect(third.events).toEqual([]);
+    expect(third.cursor.pending).toBeUndefined();
+    // Then a genuinely new PR is emitted, one event, no flood.
+    const fresh = entry(500, { viewerAuthored: false, viewerReviewRequested: true });
+    const fourth = settleViewerPoll(
+      third.cursor,
+      overLimit([...shifted, fresh]),
+      detailsFor(detailOf(500)),
+    );
+    expect(fourth.events.map((e) => [e.payload.changeRequest.number, e.payload.reason])).toEqual([
+      [500, "review-requested"],
+    ]);
+  });
+
+  it("emits a new PR on the very next poll after a lost cursor with 100 PRs open", () => {
+    const hundred = Array.from({ length: 100 }, (_, i) => entry(i + 1));
+    const baseline = settleViewerPoll(
+      null,
+      read(hundred),
+      detailsFor(...hundred.map((e) => detailOf(e.number))),
+    );
+    expect(baseline.cursor.pending).toBeUndefined();
+    const next = settleViewerPoll(
+      baseline.cursor,
+      read([...hundred, entry(500)]),
+      detailsFor(detailOf(500)),
+    );
+    expect(next.events.map((e) => [e.payload.changeRequest.number, e.payload.reason])).toEqual([
+      [500, "opened"],
+    ]);
+  });
+
+  it("never settles a FAILING host by repeating an empty read", () => {
+    const failing = read([], ["github.com"]);
+    const first = settleViewerPoll(null, failing, new Map());
+    const second = settleViewerPoll(first.cursor, failing, new Map());
+    expect(second.cursor.pending).toEqual(["github.com"]);
+    expect(second.cursor.stable).toBeUndefined();
+  });
+});
+
+describe("a host that signs out and back in", () => {
+  it("keeps its entries untouched and emits nothing when it returns", () => {
+    const five = [1, 2, 3, 4, 5].map((n) => entry(n));
+    const cursor = baselineOf(five, ...five.map((e) => detailOf(e.number)));
+    const loggedOut = settleViewerPoll(
+      cursor,
+      read([], [], { signedInHosts: ["ghe.example"] }),
+      new Map(),
+    );
+    expect(loggedOut.events).toEqual([]);
+    expect(Object.keys(loggedOut.cursor.entries)).toHaveLength(5);
+    expect(loggedOut.cursor.entries).toEqual(cursor.entries);
+    const loggedIn = settleViewerPoll(loggedOut.cursor, read(five), new Map());
+    expect(loggedIn.events).toEqual([]);
+  });
+
+  it("resumes diffing where it left off: a push made while signed out is one `pushed`", () => {
+    const cursor = baselineOf([entry(1)], detailOf(1));
+    const out = settleViewerPoll(cursor, read([], [], { signedInHosts: [] }), new Map());
+    const moved = entry(1, { updatedAt: "2026-10-07T15:00:00Z" });
+    const back = settleViewerPoll(
+      out.cursor,
+      read([moved]),
+      detailsFor(detailOf(1, { headSha: "h9" })),
+    );
+    expect(back.events.map((e) => e.payload.reason)).toEqual(["pushed"]);
+  });
+
+  it("stays pending while signed out, so a blind baseline is not settled by an absence", () => {
+    const first = settleViewerPoll(null, read([], ["github.com"]), new Map());
+    const out = settleViewerPoll(first.cursor, read([], [], { signedInHosts: [] }), new Map());
+    expect(out.cursor.pending).toEqual(["github.com"]);
   });
 });
 

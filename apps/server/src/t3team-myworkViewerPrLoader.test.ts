@@ -54,9 +54,21 @@ describe("loadViewerPrRead", () => {
     }),
   );
 
+  it.effect("reads a host with 100 PRs to the end (the old limit is no longer a cut-off)", () =>
+    Effect.gen(function* () {
+      const hundred = Array.from({ length: 100 }, (_, i) => hit(i + 1));
+      const gh = fakeGh(["github.com"], { "github.com": { author: hundred } });
+      const result = yield* run(loadViewerPrRead(), gh);
+      expect(result.entries).toHaveLength(100);
+      expect(result.incompleteHosts).toEqual([]);
+      expect(result.truncatedHosts).toEqual([]);
+      expect(result.signedInHosts).toEqual(["github.com"]);
+    }),
+  );
+
   it.effect("names a host whose search failed, or filled the page, as incomplete", () =>
     Effect.gen(function* () {
-      const full = Array.from({ length: 100 }, (_, i) => hit(i + 1));
+      const full = Array.from({ length: 1000 }, (_, i) => hit(i + 1));
       const gh = fakeGh(["ok.example", "down.example", "big.example"], {
         "ok.example": { author: [hit(1)] },
         "down.example": { fail: true },
@@ -64,6 +76,8 @@ describe("loadViewerPrRead", () => {
       });
       const result = yield* run(loadViewerPrRead(), gh);
       expect([...result.incompleteHosts].toSorted()).toEqual(["big.example", "down.example"]);
+      // Only the host that answered but hit the limit counts as read in part.
+      expect(result.truncatedHosts).toEqual(["big.example"]);
       expect(result.entries.some((e) => e.host === "ok.example")).toBe(true);
     }),
   );
@@ -71,7 +85,12 @@ describe("loadViewerPrRead", () => {
   it.effect("reports every host incomplete when gh cannot list its hosts", () =>
     Effect.gen(function* () {
       const gh = { execute: () => Effect.fail("no gh") } as never;
-      expect(yield* run(loadViewerPrRead(), gh)).toEqual({ entries: [], incompleteHosts: ["*"] });
+      expect(yield* run(loadViewerPrRead(), gh)).toEqual({
+        entries: [],
+        signedInHosts: [],
+        incompleteHosts: ["*"],
+        truncatedHosts: [],
+      });
     }),
   );
 });

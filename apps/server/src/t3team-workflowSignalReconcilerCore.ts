@@ -59,6 +59,15 @@ const EMITS_BY_SOURCE: Readonly<Record<string, ReadonlySet<string>>> = Object.fr
   ).map(([name, signals]) => [name, new Set(signals)]),
 );
 
+/**
+ * Sources whose events may never be drained (they fire for every matching change whether or not a
+ * run is waiting, and the trigger runner that drains them is optional), so their UNDELIVERED inbox
+ * slots are bounded: dropped past the inbox TTL, and past the newest `UNDRAINED_INBOX_CAP`.
+ * Stale events must not later launch work, and the table must not grow without limit.
+ */
+const BOUNDED_INBOX_SOURCES = ["scm.viewer.change-requests"] as const;
+export const UNDRAINED_INBOX_CAP = 1_000;
+
 /** The reconciler's returned controller (the live-set state + operations). */
 export type ReconcilerCore = {
   readonly reconcile: () => Promise<void>;
@@ -185,6 +194,15 @@ export function makeReconcilerCore(input: {
     await Effect.runPromise(
       input.store.deleteDeliveredInboxEntriesOlderThan(input.inboxCutoffIso()),
     );
+    for (const sourceName of BOUNDED_INBOX_SOURCES) {
+      await Effect.runPromise(
+        input.store.pruneUndeliveredInboxEntries({
+          sourceName,
+          olderThanIso: input.inboxCutoffIso(),
+          keepNewest: UNDRAINED_INBOX_CAP,
+        }),
+      );
+    }
   };
 
   const stopAll = async (): Promise<void> => {
