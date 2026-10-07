@@ -17,7 +17,7 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
-import { readDistributionWebEntries } from "@t3team/packs/distribution-web";
+import { packWebImportProblem, readDistributionWebEntries } from "@t3team/packs/distribution-web";
 import type { Plugin } from "vite-plus";
 
 const SPECIFIER = "@t3code/distribution-web";
@@ -60,6 +60,9 @@ export function t3teamDistributionWebPlugin(paths: {
   const dir = process.env.T3CODE_DISTRIBUTION?.trim();
   const entries = dir ? readDistributionWebEntries(canonical(dir)) : [];
   const packDirs = [...new Set(entries.map((entry) => canonical(entry.packDir)))];
+  // Module ids are realpaths, as the pack dirs are; a symlinked checkout makes the configured
+  // stylesheet path differ from its id, so match either spelling.
+  const stylesheets = new Set([paths.stylesheet, canonical(paths.stylesheet)]);
   const inPackDir = (importer: string) => {
     const path = importer.split("?")[0] ?? importer;
     return packDirs.some((packDir) => path.startsWith(packDir + NodePath.sep));
@@ -70,14 +73,17 @@ export function t3teamDistributionWebPlugin(paths: {
     resolveId(source, importer) {
       if (source === SPECIFIER) return dir ? VIRTUAL_ID : null;
       if (source === PACK_UI) return paths.packUiImplementation;
-      if (!importer || !isBareSpecifier(source) || !inPackDir(importer)) return null;
+      if (!importer || !inPackDir(importer)) return null;
+      const problem = packWebImportProblem(source);
+      if (problem !== null) throw new Error(`[t3code/distribution-web] ${importer}: ${problem}`);
+      if (!isBareSpecifier(source)) return null;
       return this.resolve(source, paths.appModule, { skipSelf: true });
     },
     load(id) {
       return id === VIRTUAL_ID ? distributionModule(entries) : null;
     },
     transform(code, id) {
-      if (packDirs.length === 0 || id.split("?")[0] !== paths.stylesheet) return null;
+      if (packDirs.length === 0 || !stylesheets.has(id.split("?")[0] ?? id)) return null;
       return `${code}\n${packDirs.map((packDir) => `@source ${JSON.stringify(packDir)};`).join("\n")}\n`;
     },
   };
