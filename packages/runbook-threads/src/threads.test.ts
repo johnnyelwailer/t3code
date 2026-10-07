@@ -106,9 +106,9 @@ describe("@runbook/threads contracts", () => {
     expect(() => granted.thread?.showView({ ...view, viewId: "draft" })).toThrow("<packId>.<name>");
     // The host's own views are refused HERE, inside the body, as a catchable error — not later in
     // the host's one-way broker, where nobody awaits the send.
-    expect(() =>
-      granted.thread?.showView({ ...view, viewId: "t3team.workflow.decision" }),
-    ).toThrow("host view");
+    expect(() => granted.thread?.showView({ ...view, viewId: "t3team.workflow.decision" })).toThrow(
+      "host view",
+    );
     expect(granted.broker.sent).toHaveLength(0);
 
     granted.thread?.showView(view);
