@@ -1,6 +1,6 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { ExternalLink, Maximize2, XIcon } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { useAgentContext } from "~/t3team/hooks/t3team-useAgentContext";
@@ -8,6 +8,7 @@ import { useWorkItemDetailViewModel } from "~/t3team/hooks/t3team-useWorkItemDet
 import { useDigestTicketChatActions } from "~/t3team/t3team-digestTicketChatContext";
 import { DigestTicketAsideChat } from "~/t3team/t3team-DigestTicketAsideChat";
 import { ToggleGroup } from "~/t3team/t3team-ToggleGroup";
+import { latestLiveTicketThreadId } from "~/t3team/t3team-ticketLookup";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { buildWorkItemDetailMainProps } from "~/t3team/workitem/t3team-buildWorkItemDetailMainProps";
 import { WorkItemBreadcrumb } from "~/t3team/workitem/t3team-WorkItemBreadcrumb";
@@ -39,9 +40,17 @@ export function DigestTicketAside({
   const chatActions = useDigestTicketChatActions();
   // Details first; Chat is the ticket page's own agent panel, with this ticket as its context.
   const [tab, setTab] = useState<"details" | "chat">("details");
+  // The ticket's live thread is its chat here, as on the ticket page: the Chat tab shows it, and the
+  // view model attaches the ticket's context to it. A thread started from the tab becomes it.
+  const ticketThreadId = useMemo(
+    () => latestLiveTicketThreadId(projectThreads, ticket.ticketId),
+    [projectThreads, ticket.ticketId],
+  );
   const view = useWorkItemDetailViewModel({
     project,
     ticketId: ticket.ticketId,
+    // Only on the Chat tab: binding a thread also marks it embedded, which reading Details must not.
+    ...(tab === "chat" && ticketThreadId !== undefined ? { activeThreadId: ticketThreadId } : {}),
     projectThreads,
     onRememberEmbeddedThread,
   });

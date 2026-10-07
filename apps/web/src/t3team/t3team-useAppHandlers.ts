@@ -150,18 +150,18 @@ export function useAppHandlers({
     [backend, onOpenTicket, store],
   );
 
-  // A chat started from a ticket shown beside My Work stays on My Work: the new ticket thread opens
-  // in the dashboard aside instead of navigating to the ticket page.
+  // A chat started from a ticket shown beside My Work stays where it is: no navigation. The new
+  // thread is the ticket's live thread, which that aside's Chat tab then shows (with the ticket's
+  // context attached) on a project dashboard and on the all-projects home alike.
   const handleCreateTicketKickoffThreadBeside = useCallback(
     (input: TicketKickoffThreadInput) =>
       createTicketKickoffThread({
         backend,
-        onOpenTicket: (projectId, _ticketId, threadId) =>
-          onOpenDashboard?.(projectId, "my-work", threadId ?? null),
+        onOpenTicket: undefined,
         store,
         threadInput: input,
       }),
-    [backend, onOpenDashboard, store],
+    [backend, store],
   );
 
   const handleCreateProjectKickoffThread = useCallback(

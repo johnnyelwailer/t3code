@@ -65,63 +65,63 @@ export function AppContentPane({
   return (
     <T3TeamInlineRecipeLaunchProvider>
       <DigestTicketChatProvider value={ticketChatActions}>
-      <SidebarInset className="h-full min-h-0 overflow-hidden">
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <AppMainContent
-            view={resolvedView}
-            activeDashboardMode={activeDashboardMode}
-            selectedProjectId={scopeProjectId ?? store.selectedProjectId}
-            projects={store.projects}
-            allProjects={store.allProjects}
-            reopenInitialSetup={reopenInitialSetup}
-            shouldInsetDesktopHeader={shouldInsetDesktopHeader}
-            getThreadsForProject={store.getThreadsForProject}
-            onOpenTicket={onOpenTicket}
-            onOpenThread={onOpenThread}
-            onOpenFullThread={onOpenFullThread}
-            onOpenEmbeddedThread={onOpenEmbeddedThread}
-            {...(onCloseEmbeddedThread ? { onCloseEmbeddedThread } : {})}
-            onKickoffProjectThread={onKickoffProjectThread}
-            onKickoffTicketThread={onKickoffTicketThread}
-            onThreadKickoffConsumed={onThreadKickoffConsumed}
-            onThreadDisplayModeChange={onThreadDisplayModeChange}
-            onBackToDashboard={onBackToDashboard}
-            onCreate={onCreate}
-            onInlineProjectCreated={(project) => {
-              store.addProject(project);
-              onBackToDashboard(project.id);
-            }}
-            renderDashboard={(project) => (
-              <ProjectDashboard
-                project={project}
-                tickets={[]}
-                shouldInsetDesktopHeader={shouldInsetDesktopHeader}
-                onOpenTicket={onOpenTicket}
-                onManageRepositories={onManageRepositories}
-                onProjectUpdated={(next) => store.updateProject(next.id, next)}
-              />
-            )}
-            renderTicketDetail={(project, ticketId, activeThreadId) => (
-              <TicketDetailView
-                project={project}
-                ticketId={ticketId}
-                shouldInsetDesktopHeader={shouldInsetDesktopHeader}
-                {...(activeThreadId ? { activeThreadId } : {})}
-                projectThreads={store.getThreadsForProject(project.id)}
-                onOpenTicket={onOpenTicket}
-                onOpenThread={onOpenThread}
-                onOpenFullThread={onOpenFullThread}
-                onKickoffThread={onKickoffTicketThread}
-                onThreadKickoffConsumed={onThreadKickoffConsumed}
-                onRememberEmbeddedThread={(threadId) =>
-                  onThreadDisplayModeChange(threadId, "embedded")
-                }
-                onBack={() => onBackToDashboard(project.id)}
-              />
-            )}
-          />
-        </div>
-      </SidebarInset>
+        <SidebarInset className="h-full min-h-0 overflow-hidden">
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <AppMainContent
+              view={resolvedView}
+              activeDashboardMode={activeDashboardMode}
+              selectedProjectId={scopeProjectId ?? store.selectedProjectId}
+              projects={store.projects}
+              allProjects={store.allProjects}
+              reopenInitialSetup={reopenInitialSetup}
+              shouldInsetDesktopHeader={shouldInsetDesktopHeader}
+              getThreadsForProject={store.getThreadsForProject}
+              onOpenTicket={onOpenTicket}
+              onOpenThread={onOpenThread}
+              onOpenFullThread={onOpenFullThread}
+              onOpenEmbeddedThread={onOpenEmbeddedThread}
+              {...(onCloseEmbeddedThread ? { onCloseEmbeddedThread } : {})}
+              onKickoffProjectThread={onKickoffProjectThread}
+              onKickoffTicketThread={onKickoffTicketThread}
+              onThreadKickoffConsumed={onThreadKickoffConsumed}
+              onThreadDisplayModeChange={onThreadDisplayModeChange}
+              onBackToDashboard={onBackToDashboard}
+              onCreate={onCreate}
+              onInlineProjectCreated={(project) => {
+                store.addProject(project);
+                onBackToDashboard(project.id);
+              }}
+              renderDashboard={(project) => (
+                <ProjectDashboard
+                  project={project}
+                  tickets={[]}
+                  shouldInsetDesktopHeader={shouldInsetDesktopHeader}
+                  onOpenTicket={onOpenTicket}
+                  onManageRepositories={onManageRepositories}
+                  onProjectUpdated={(next) => store.updateProject(next.id, next)}
+                />
+              )}
+              renderTicketDetail={(project, ticketId, activeThreadId) => (
+                <TicketDetailView
+                  project={project}
+                  ticketId={ticketId}
+                  shouldInsetDesktopHeader={shouldInsetDesktopHeader}
+                  {...(activeThreadId ? { activeThreadId } : {})}
+                  projectThreads={store.getThreadsForProject(project.id)}
+                  onOpenTicket={onOpenTicket}
+                  onOpenThread={onOpenThread}
+                  onOpenFullThread={onOpenFullThread}
+                  onKickoffThread={onKickoffTicketThread}
+                  onThreadKickoffConsumed={onThreadKickoffConsumed}
+                  onRememberEmbeddedThread={(threadId) =>
+                    onThreadDisplayModeChange(threadId, "embedded")
+                  }
+                  onBack={() => onBackToDashboard(project.id)}
+                />
+              )}
+            />
+          </div>
+        </SidebarInset>
       </DigestTicketChatProvider>
     </T3TeamInlineRecipeLaunchProvider>
   );
