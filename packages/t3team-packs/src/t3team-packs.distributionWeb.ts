@@ -28,7 +28,7 @@ const readJson = (path: string): unknown => {
 
 /**
  * Absolute pack directories of the distribution, in `packs[]` order. An entry may name the
- * distribution itself or a sibling pack next to it (`"../explainer"`, the layout distributions
+ * distribution itself or a sibling pack next to it (`"../standup"`, the layout distributions
  * use), never anything further out: the packs a build compiles in stay inside the folder that
  * holds the distribution.
  */
