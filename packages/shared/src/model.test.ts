@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   DEFAULT_MODEL,
+  type CustomModelSetting,
   ProviderDriverKind,
   ProviderInstanceId,
   type ModelCapabilities,
@@ -15,6 +16,9 @@ import {
   getModelSelectionBooleanOptionValue,
   getModelSelectionStringOptionValue,
   getProviderOptionDescriptors,
+  readCustomModelEntries,
+  readCustomModelSlugs,
+  toCustomModelSetting,
   getProviderOptionBooleanSelectionValue,
   getProviderOptionStringSelectionValue,
   isClaudeUltrathinkPrompt,
@@ -78,7 +82,10 @@ describe("normalizeModelSlug", () => {
     expect(normalizeModelSlug("gpt-5")).toBe("gpt-5.4");
     expect(normalizeModelSlug("gpt-5-codex")).toBe("gpt-5.3-codex");
     expect(normalizeModelSlug("5.3")).toBe("gpt-5.3-codex");
-    expect(normalizeModelSlug("sonnet", claude)).toBe("claude-sonnet-5");
+    // Claude aliases come from the provider's remote model manifest, not this
+    // table, so only the fork-specific fable aliases expand here.
+    expect(normalizeModelSlug("fable", claude)).toBe("claude-fable-5-1");
+    expect(normalizeModelSlug("sonnet", claude)).toBe("sonnet");
   });
 
   it("returns null for empty or missing values", () => {
@@ -100,6 +107,24 @@ describe("resolveModelSlugForProvider", () => {
     expect(resolveModelSlugForProvider(ProviderDriverKind.make("grok"), undefined)).toBe(
       "grok-build",
     );
+    expect(resolveModelSlugForProvider(ProviderDriverKind.make("claudeAgent"), undefined)).toBe(
+      "claude-sonnet-5",
+    );
+    expect(resolveModelSlugForProvider(ProviderDriverKind.make("cursor"), undefined)).toBe("auto");
+    expect(resolveModelSlugForProvider(ProviderDriverKind.make("opencode"), undefined)).toBe(
+      "openai/gpt-5",
+    );
+  });
+
+  it("applies the provider default when the model is blank", () => {
+    expect(resolveModelSlugForProvider(ProviderDriverKind.make("cursor"), "   ")).toBe("auto");
+    expect(resolveModelSlugForProvider(ProviderDriverKind.make("cursor"), null)).toBe("auto");
+  });
+
+  it("still expands aliases before falling back to the provider default", () => {
+    expect(resolveModelSlugForProvider(ProviderDriverKind.make("codex"), " 5.3 ")).toBe(
+      "gpt-5.3-codex",
+    );
   });
 
   it("preserves normalized unknown models", () => {
@@ -113,7 +138,11 @@ describe("resolveSelectableModel", () => {
   it("resolves exact slugs, labels, and aliases", () => {
     const options = [
       { slug: "gpt-5.3-codex", name: "GPT-5.3 Codex" },
-      { slug: "claude-sonnet-5", name: "Claude Sonnet 5" },
+      {
+        slug: "claude-sonnet-5",
+        name: "Claude Sonnet 5",
+        aliases: ["sonnet", "Sonnet"],
+      },
     ];
     expect(resolveSelectableModel(ProviderDriverKind.make("codex"), "gpt-5.3-codex", options)).toBe(
       "gpt-5.3-codex",
@@ -121,9 +150,20 @@ describe("resolveSelectableModel", () => {
     expect(resolveSelectableModel(ProviderDriverKind.make("codex"), "gpt-5.3 codex", options)).toBe(
       "gpt-5.3-codex",
     );
+    // Manifest-supplied aliases are the current path for short Claude names.
     expect(resolveSelectableModel(ProviderDriverKind.make("claudeAgent"), "sonnet", options)).toBe(
       "claude-sonnet-5",
     );
+    expect(resolveSelectableModel(ProviderDriverKind.make("claudeAgent"), "SONNET", options)).toBe(
+      "claude-sonnet-5",
+    );
+  });
+
+  it("returns null when the value matches no option", () => {
+    const options = [{ slug: "gpt-5.3-codex", name: "GPT-5.3 Codex" }];
+    expect(resolveSelectableModel(ProviderDriverKind.make("codex"), "  ", options)).toBeNull();
+    expect(resolveSelectableModel(ProviderDriverKind.make("codex"), "opus", options)).toBeNull();
+    expect(resolveSelectableModel(ProviderDriverKind.make("codex"), null, options)).toBeNull();
   });
 });
 
@@ -292,5 +332,79 @@ describe("applyClaudePromptEffortPrefix", () => {
     expect(applyClaudePromptEffortPrefix("/home/theo/app.ts crashed on load", "ultrathink")).toBe(
       "Ultrathink:\n/home/theo/app.ts crashed on load",
     );
+  });
+});
+
+describe("readCustomModelEntries", () => {
+  const capabilities: ModelCapabilities = {
+    optionDescriptors: [
+      {
+        id: "effort",
+        label: "Reasoning",
+        type: "select",
+        options: [{ id: "high", label: "High", isDefault: true }],
+        currentValue: "high",
+      },
+    ],
+  };
+
+  it("resolves bare slugs and entries, trimming and deduplicating on slug", () => {
+    expect(
+      readCustomModelEntries([
+        " bare ",
+        { slug: "named", name: " Named ", capabilities },
+        "bare",
+        { slug: "named", name: "Second" },
+        "",
+        { name: "no slug" },
+        42,
+      ]),
+    ).toEqual([
+      { slug: "bare", name: "bare", capabilities: null },
+      { slug: "named", name: "Named", capabilities },
+    ]);
+  });
+
+  it("drops unparseable capabilities but keeps the entry", () => {
+    expect(
+      readCustomModelEntries([{ slug: "x", capabilities: { optionDescriptors: "nope" } }]),
+    ).toEqual([{ slug: "x", name: "x", capabilities: null }]);
+    expect(readCustomModelEntries("not a list")).toEqual([]);
+  });
+
+  it("writes the compact stored shape back", () => {
+    expect(toCustomModelSetting({ slug: "x", name: "x", capabilities: null })).toBe("x");
+    expect(
+      toCustomModelSetting({ slug: "x", name: "x", capabilities: { optionDescriptors: [] } }),
+    ).toBe("x");
+    expect(toCustomModelSetting({ slug: "x", name: "X", capabilities })).toEqual({
+      slug: "x",
+      name: "X",
+      capabilities,
+    });
+    expect(toCustomModelSetting({ slug: "x", name: "X", capabilities: null })).toEqual({
+      slug: "x",
+      name: "X",
+    });
+  });
+
+  it("round-trips entries through the stored shape", () => {
+    const stored: CustomModelSetting[] = ["bare", { slug: "named", name: "Named", capabilities }];
+    expect(readCustomModelEntries(stored).map(toCustomModelSetting)).toEqual(stored);
+  });
+
+  it("exposes slugs in stored order and skips malformed lists", () => {
+    expect(readCustomModelSlugs([" b ", { slug: "a" }, "a", { name: "no slug" }])).toEqual([
+      "b",
+      "a",
+    ]);
+    expect(readCustomModelSlugs(undefined)).toEqual([]);
+    expect(readCustomModelSlugs([null, 7])).toEqual([]);
+  });
+
+  it("keeps an entry whose capabilities carry descriptors without a name", () => {
+    expect(readCustomModelEntries([{ slug: "caps-only", capabilities }])).toEqual([
+      { slug: "caps-only", name: "caps-only", capabilities },
+    ]);
   });
 });
