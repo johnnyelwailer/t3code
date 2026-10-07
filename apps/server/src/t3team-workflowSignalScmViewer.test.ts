@@ -151,7 +151,9 @@ describe("viewer change-request cursor diff", () => {
   it("remembers an unlinked repository and stops asking about it", () => {
     const cursor = baselineOf([]);
     const stranger = entry(9);
-    const refused = new Map<string, DetailOutcome>([[viewerEntryKey(stranger), { kind: "unlinked" }]]);
+    const refused = new Map<string, DetailOutcome>([
+      [viewerEntryKey(stranger), { kind: "unlinked" }],
+    ]);
     const settled = settleViewerPoll(cursor, read([stranger]), refused);
     expect(settled.events).toEqual([]);
     const later = { ...stranger, updatedAt: "2026-10-07T13:00:00Z" };

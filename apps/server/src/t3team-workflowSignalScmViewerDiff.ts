@@ -184,7 +184,11 @@ export function settleViewerPoll(
       authored: entry.viewerAuthored === true,
       headSha: detail?.headSha ?? before?.headSha ?? null,
       scope:
-        outcome?.kind === "unlinked" ? "unlinked" : detail ? "linked" : (before?.scope ?? "unknown"),
+        outcome?.kind === "unlinked"
+          ? "unlinked"
+          : detail
+            ? "linked"
+            : (before?.scope ?? "unknown"),
     };
   }
   const blind = new Set(read.incompleteHosts);

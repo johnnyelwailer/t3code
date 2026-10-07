@@ -46,16 +46,22 @@ export function shareViewerPrRead(
   read: Effect.Effect<ViewerPrRead>,
   ttlMs: number,
 ): () => Promise<ViewerPrRead> {
-  let last: { readonly at: number; readonly value: Promise<ViewerPrRead> } | undefined;
+  let last: { readonly at: number; readonly value: ViewerPrRead } | undefined;
+  let inflight: Promise<ViewerPrRead> | undefined;
   return () =>
     Effect.runPromise(
-      Effect.map(Clock.currentTimeMillis, (now) => {
-        if (last === undefined || now - last.at >= ttlMs) {
-          last = { at: now, value: Effect.runPromise(read) };
-        }
-        return last.value;
+      Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+        if (last !== undefined && now - last.at < ttlMs) return last.value;
+        inflight ??= Effect.runPromise(read).finally(() => {
+          inflight = undefined;
+        });
+        const pending = inflight;
+        const value = yield* Effect.promise(() => pending);
+        last = { at: now, value };
+        return value;
       }),
-    ).then((value) => value);
+    );
 }
 
 export function startScmViewerSignalInstance(input: {
