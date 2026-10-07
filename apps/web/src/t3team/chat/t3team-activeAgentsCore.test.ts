@@ -66,7 +66,7 @@ describe("mergeActiveAgentsAndChildren (GHE #201)", () => {
       "agent:a-run",
       "agent:a-wait",
     ]);
-    expect(entries[0]).toMatchObject({ source: "child", statusLabel: "Working" });
+    expect(entries[0]).toMatchObject({ source: "child", statusLabel: "Running" });
     expect(entries[2]).toMatchObject({ source: "subagent", statusLabel: "Waiting" });
   });
 

@@ -1,5 +1,7 @@
 import type { RuntimeSubagent } from "@t3tools/client-runtime/state/subagentRuntime";
+import type { ProviderDriverKind } from "@t3tools/contracts";
 import { useSyncExternalStore } from "react";
+import { resolveSubRunStatusLabel } from "~/t3team/chat/t3team-AgentsPanelForkSection.logic";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
 /**
@@ -26,6 +28,13 @@ export interface ActiveAgentEntry {
   readonly activityKey: string;
   /** GHE #201 follow-up: this agent's dot state (textures the indicator dot). */
   readonly dotState: DotState;
+  /** Driver mark for the chip. Absent when the child has no provider instance. */
+  readonly provider?: {
+    readonly driverKind: ProviderDriverKind;
+    readonly displayName: string;
+    readonly iconDataUrl?: string | undefined;
+    readonly acpRegistryIconUrl?: string | undefined;
+  };
 }
 
 /**
@@ -63,19 +72,22 @@ function subagentStatusLabel(agent: RuntimeSubagent): string {
 export function mergeActiveAgentsAndChildren({
   childThreads,
   subagents,
+  activityLabelsEnabled = true,
 }: {
   childThreads: readonly ProjectThread[];
   subagents: readonly RuntimeSubagent[];
+  activityLabelsEnabled?: boolean;
 }): readonly ActiveAgentEntry[] {
   const entries: ActiveAgentEntry[] = [];
   for (const thread of childThreads) {
     if (thread.status !== "running") continue;
+    const statusLabel = resolveSubRunStatusLabel(thread, { activityLabelsEnabled });
     entries.push({
       id: `child:${thread.id}`,
       source: "child",
       title: thread.title,
-      statusLabel: thread.activityLabel ?? "Working",
-      activityKey: `${thread.childStatusUpdatedAt ?? ""}|${thread.lastMessageAt}|${thread.activityLabel ?? ""}`,
+      statusLabel,
+      activityKey: `${thread.childStatusUpdatedAt ?? ""}|${thread.lastMessageAt}|${thread.activityLabel ?? ""}|${statusLabel}`,
       dotState: deriveDotState({ label: thread.activityLabel }),
     });
   }
