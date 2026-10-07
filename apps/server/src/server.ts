@@ -259,7 +259,7 @@ import {
   T3TeamThreadSilenceWatchReactorLive,
 } from "./t3team-threadSilenceWatchReactorLive.ts";
 import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
-import { T3TeamStartupRecipeLive } from "./t3team-startupRecipe.ts";
+import { T3TeamKickoffRecipeLive } from "./t3team-kickoffRecipe.ts";
 import { T3TeamWorkflowSignalDeliveryLive } from "./t3team-workflowSignalDelivery.ts";
 import { T3TeamWorkflowSignalReconcilerLive } from "./t3team-workflowSignalReconciler.ts";
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
@@ -1417,8 +1417,8 @@ const layerMakeServer = Layer.unwrap(
       T3TeamThreadSilenceWatchReactorLive,
       T3TeamThreadTransientTurnRetryLive,
       T3TeamWorkflowEngineRehydrateLive,
-      // t3team: a recipe this server starts on its bootstrap thread (T3CODE_STARTUP_RECIPE).
-      T3TeamStartupRecipeLive,
+      // t3team: a recipe the first user message on the bootstrap thread starts (T3CODE_KICKOFF_RECIPE).
+      T3TeamKickoffRecipeLive,
       layerCloudDesiredLinkReconcile,
       HeapSnapshot.layer,
     );

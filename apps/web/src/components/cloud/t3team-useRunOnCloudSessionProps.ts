@@ -8,14 +8,11 @@ import { useServerConfig } from "~/t3team/t3team-serverState";
 import type { BranchToolbarEnvironmentSelector } from "~/components/BranchToolbarEnvironmentSelector";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useEnvironments } from "~/state/environments";
-import { declinedMachineSetupKey } from "./t3team-cloudSessionMachineChoice";
 import { runOnCloudSessions } from "./t3team-cloudSessionSplit";
 
 const DISMISSED_FAILURES_KEY = "t3code:cloud-session-dismissed-failures";
 const DISMISSED_FAILURES_LIMIT = 20;
 const DismissedFailuresSchema = Schema.Array(Schema.String);
-/** Projects whose "Set one up?" was answered No: New cloud session starts plain without asking. */
-const DECLINED_MACHINE_SETUP_KEY = "t3code:cloud-session-declined-machine-setup";
 
 type SelectorProps = ComponentProps<typeof BranchToolbarEnvironmentSelector>;
 type CloudSelectorProps = Pick<
@@ -23,8 +20,6 @@ type CloudSelectorProps = Pick<
   | "pendingCloudSessions"
   | "onCreateCloudSession"
   | "onSetupProjectMachine"
-  | "onDeclineProjectMachine"
-  | "projectMachineDeclined"
   | "cloudSessionCreatePending"
   | "cloudSessionSetupPending"
   | "onCloudSessionAction"
@@ -93,19 +88,6 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
     () => onCreate(cloudSessionProject?.projectId, { machineSetup: true }),
     [cloudSessionProject, onCreate],
   );
-  const [declinedSetups, setDeclinedSetups] = useLocalStorage(
-    DECLINED_MACHINE_SETUP_KEY,
-    [] as ReadonlyArray<string>,
-    DismissedFailuresSchema,
-  );
-  const declinedKey = cloudSessionProject ? declinedMachineSetupKey(cloudSessionProject) : null;
-  const projectMachineDeclined = declinedKey !== null && declinedSetups.includes(declinedKey);
-  const onDeclineProjectMachine = useCallback(() => {
-    if (declinedKey !== null) {
-      setDeclinedSetups((current) => [declinedKey, ...current.filter((key) => key !== declinedKey)]);
-    }
-    onCreate(cloudSessionProject?.projectId);
-  }, [cloudSessionProject, declinedKey, onCreate, setDeclinedSetups]);
   // Unconfigured: the entry leaves for the Connections settings, where provisioning lives.
   // Every environment connected here, whatever its project: a cloud machine connected for another
   // project is listed as unavailable for this thread rather than as one to connect.
@@ -139,9 +121,7 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
               connectedEnvironmentIds,
               cloudEnvironmentIds,
               onCreateCloudSession,
-              ...(machineSetupEnabled && cloudSessionProject
-                ? { onSetupProjectMachine, onDeclineProjectMachine, projectMachineDeclined }
-                : {}),
+              ...(machineSetupEnabled && cloudSessionProject ? { onSetupProjectMachine } : {}),
               cloudSessionCreatePending: createPending,
               cloudSessionSetupPending: createPendingSetup,
               ...(cloudSessionProject ? { cloudSessionProject } : {}),
@@ -162,8 +142,6 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
       machineSetupEnabled,
       onCreateCloudSession,
       onSetupProjectMachine,
-      onDeclineProjectMachine,
-      projectMachineDeclined,
       onDismissCloudSession,
       onSessionAction,
       onSetupCloudSessions,

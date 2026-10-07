@@ -60,14 +60,10 @@ export interface BranchToolbarEnvironmentSelectorProps {
    */
   onCreateCloudSession?: () => void;
   /**
-   * "Yes" to "Set one up?", asked once by New cloud session when the project has no machine:
-   * starts the setup session. Absent when the flag is off, and then nothing is asked.
+   * New cloud session for a project with no machine: starts a session that sets one up on its own
+   * thread. Absent when the flag is off, and then such a project starts a plain session.
    */
   onSetupProjectMachine?: () => void;
-  /** "No" to the same question: remembered for the project, then a plain session starts. */
-  onDeclineProjectMachine?: () => void;
-  /** The user already said "No" for this project, so New cloud session starts without asking. */
-  projectMachineDeclined?: boolean;
   /**
    * t3team: a create is on its way to the server (resolving the machine, dispatching), which takes
    * seconds before the session's own row exists; the create row shows it at once and stops a
@@ -120,8 +116,6 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   cloudEnvironmentIds,
   onCreateCloudSession,
   onSetupProjectMachine,
-  onDeclineProjectMachine,
-  projectMachineDeclined = false,
   cloudSessionCreatePending = false,
   cloudSessionSetupPending = false,
   cloudSessionProject,
@@ -407,8 +401,6 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                 setupPending={cloudSessionSetupPending}
                 onCreate={() => onCreateCloudSession?.()}
                 onSetup={onSetupProjectMachine}
-                onDecline={onDeclineProjectMachine}
-                declined={projectMachineDeclined}
               />
             </>
           )}

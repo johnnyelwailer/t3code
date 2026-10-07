@@ -25,39 +25,24 @@ const rejected: ProjectMachineDiscovery = {
 };
 
 describe("cloudSessionMachineChoice", () => {
-  it("asks once when the project has no machine and setup is on", () => {
-    expect(
-      cloudSessionMachineChoice({ discovery: none, setupEnabled: true, declined: false }),
-    ).toBe("ask");
+  it("sets a machine up when the project has none and setup is on", () => {
+    expect(cloudSessionMachineChoice({ discovery: none, setupEnabled: true })).toBe("setup");
   });
 
-  it("starts a plain session after a No, and whenever setup is off", () => {
-    expect(cloudSessionMachineChoice({ discovery: none, setupEnabled: true, declined: true })).toBe(
-      "start",
-    );
-    expect(
-      cloudSessionMachineChoice({ discovery: none, setupEnabled: false, declined: false }),
-    ).toBe("start");
+  it("starts a plain session when setup is off", () => {
+    expect(cloudSessionMachineChoice({ discovery: none, setupEnabled: false })).toBe("start");
   });
 
-  it("starts in the machine when one is defined, without asking", () => {
-    expect(
-      cloudSessionMachineChoice({ discovery: detected, setupEnabled: true, declined: false }),
-    ).toBe("start");
+  it("starts in the machine when one is defined", () => {
+    expect(cloudSessionMachineChoice({ discovery: detected, setupEnabled: true })).toBe("start");
   });
 
   it("refuses to start while a committed definition is rejected, flag or not", () => {
-    expect(
-      cloudSessionMachineChoice({ discovery: rejected, setupEnabled: true, declined: true }),
-    ).toBe("fix");
-    expect(
-      cloudSessionMachineChoice({ discovery: rejected, setupEnabled: false, declined: false }),
-    ).toBe("fix");
+    expect(cloudSessionMachineChoice({ discovery: rejected, setupEnabled: true })).toBe("fix");
+    expect(cloudSessionMachineChoice({ discovery: rejected, setupEnabled: false })).toBe("fix");
   });
 
   it("leaves the decision to the server while discovery has not answered", () => {
-    expect(
-      cloudSessionMachineChoice({ discovery: null, setupEnabled: true, declined: false }),
-    ).toBe("start");
+    expect(cloudSessionMachineChoice({ discovery: null, setupEnabled: true })).toBe("start");
   });
 });
