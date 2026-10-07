@@ -392,6 +392,8 @@ import {
   T3TeamSubscribePackDocumentsInput,
   T3TeamPackDocumentsStreamEvent,
   T3TeamPackDocumentsError,
+  T3TeamPackStorePutInput,
+  T3TeamPackStorePutResult,
 } from "./t3team-packDocuments.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
 
@@ -621,6 +623,7 @@ export const WS_METHODS = {
   t3teamSubscribeThreadFacts: "t3team.subscribeThreadFacts",
   t3teamSubscribeThreadArtifacts: "t3team.subscribeThreadArtifacts",
   t3teamSubscribePackDocuments: "t3team.subscribePackDocuments",
+  t3teamPackStorePut: "t3team.packStore.put",
   // t3team: "stop including sub-runs" (capability-gated by `capabilities.t3team.stopCascade`).
   t3teamStopThreadCascade: "t3team.stopThreadCascade",
 } as const;
@@ -1766,6 +1769,12 @@ const WsT3TeamSubscribePackDocumentsRpc = Rpc.make(WS_METHODS.t3teamSubscribePac
   stream: true,
 });
 
+const WsT3TeamPackStorePutRpc = Rpc.make(WS_METHODS.t3teamPackStorePut, {
+  payload: T3TeamPackStorePutInput,
+  success: T3TeamPackStorePutResult,
+  error: Schema.Union([EnvironmentAuthorizationError, T3TeamPackDocumentsError]),
+});
+
 const WsSubscribeTerminalEventsRpc = Rpc.make(WS_METHODS.subscribeTerminalEvents, {
   payload: Schema.Struct({}),
   success: TerminalEvent,
@@ -2158,5 +2167,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsT3TeamSubscribeThreadFactsRpc,
   WsT3TeamSubscribeThreadArtifactsRpc,
   WsT3TeamSubscribePackDocumentsRpc,
+  WsT3TeamPackStorePutRpc,
   WsT3TeamStopThreadCascadeRpc,
 ).middleware(RpcScopeAuthorization);

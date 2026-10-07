@@ -2208,6 +2208,22 @@ const layerWsRpc = (
                   ),
             { "rpc.aggregate": "t3team" },
           ),
+        [WS_METHODS.t3teamPackStorePut]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.t3teamPackStorePut,
+            packDocuments === undefined
+              ? Effect.fail(
+                  new T3TeamPackDocumentsError({ message: "The pack store is unavailable." }),
+                )
+              : packDocuments
+                  .putFromView(input)
+                  .pipe(
+                    Effect.mapError(
+                      (cause) => new T3TeamPackDocumentsError({ message: cause.message }),
+                    ),
+                  ),
+            { "rpc.aggregate": "t3team" },
+          ),
         [WS_METHODS.t3teamStopThreadCascade]: (input) =>
           observeRpcEffect(
             WS_METHODS.t3teamStopThreadCascade,

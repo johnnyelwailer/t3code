@@ -21,6 +21,14 @@ const decodeRows = (rows: ReadonlyArray<unknown>) =>
       })),
     ),
   );
+const RemovedRow = Schema.Struct({
+  collection: Schema.String,
+  key: Schema.String,
+  bytes: Schema.Number,
+});
+export const decodeRemovedRows = Schema.decodeUnknownEffect(Schema.Array(RemovedRow));
+export const removedColumns = `collection, doc_key AS "key", byte_size AS "bytes"`;
+
 export interface DocumentWrite {
   readonly json: string;
   readonly bytes: number;
@@ -28,22 +36,28 @@ export interface DocumentWrite {
   readonly expiresAt: string | null;
 }
 
-/** SQL methods always close over the owning pack; callers cannot override it. */
+/**
+ * SQL methods always close over the owning pack; callers cannot override it. Reads take the
+ * current time because an expired row is invisible from the moment it expires, not from the
+ * retention pass that later deletes it.
+ */
 export function packDocumentQueries(sql: SqlClient.SqlClient, packId: string) {
-  const get = (collection: string, key: string) =>
+  const live = (now: string) => sql`(expires_at IS NULL OR expires_at > ${now})`;
+  const get = (collection: string, key: string, now: string) =>
     sql`SELECT ${sql.literal(columns)} FROM t3team_pack_documents
-      WHERE pack_id = ${packId} AND collection = ${collection} AND doc_key = ${key}`.pipe(
+      WHERE pack_id = ${packId} AND collection = ${collection} AND doc_key = ${key}
+      AND ${live(now)}`.pipe(
       Effect.flatMap(decodeRows),
       Effect.map((rows) => rows[0] ?? null),
     );
   const list = (
     collection: string,
-    options: { prefix?: string; key?: string; after?: string; limit?: number },
+    now: string,
+    options: { prefix?: string; after?: string; limit?: number },
   ) =>
     sql`SELECT ${sql.literal(columns)} FROM t3team_pack_documents
-      WHERE pack_id = ${packId} AND collection = ${collection}
+      WHERE pack_id = ${packId} AND collection = ${collection} AND ${live(now)}
       AND substr(doc_key, 1, ${options.prefix?.length ?? 0}) = ${options.prefix ?? ""}
-      AND (${options.key ?? null} IS NULL OR doc_key = ${options.key ?? null})
       AND (${options.after ?? null} IS NULL OR doc_key > ${options.after ?? null})
       ORDER BY doc_key COLLATE BINARY LIMIT ${options.limit ?? -1}`.pipe(
       Effect.flatMap(decodeRows),
@@ -66,5 +80,24 @@ export function packDocumentQueries(sql: SqlClient.SqlClient, packId: string) {
       Effect.flatMap(decodeRows),
       Effect.map((rows) => rows[0] ?? null),
     );
-  return { get, list, insert, update };
+  /** Writes first drop an expired row, so an expired document behaves exactly like a missing one. */
+  const purgeExpired = (collection: string, key: string, now: string) =>
+    sql`DELETE FROM t3team_pack_documents
+      WHERE pack_id = ${packId} AND collection = ${collection} AND doc_key = ${key}
+      AND expires_at IS NOT NULL AND expires_at <= ${now}
+      RETURNING ${sql.literal(removedColumns)}`.pipe(Effect.flatMap(decodeRemovedRows));
+  const remove = (collection: string, target: { key: string } | { prefix: string }) => {
+    const prefix = "prefix" in target ? target.prefix : null;
+    const key = "key" in target ? target.key : null;
+    return sql`DELETE FROM t3team_pack_documents
+      WHERE pack_id = ${packId} AND collection = ${collection}
+      AND (${key} IS NULL OR doc_key = ${key})
+      AND (${prefix} IS NULL OR substr(doc_key, 1, ${prefix?.length ?? 0}) = ${prefix ?? ""})
+      RETURNING ${sql.literal(removedColumns)}`.pipe(Effect.flatMap(decodeRemovedRows));
+  };
+  const touch = (collection: string, key: string, now: string) =>
+    sql`UPDATE t3team_pack_documents SET last_read_at = ${now}
+      WHERE pack_id = ${packId} AND collection = ${collection} AND doc_key = ${key}
+      AND ${live(now)}`.pipe(Effect.asVoid);
+  return { get, list, insert, update, purgeExpired, remove, touch };
 }

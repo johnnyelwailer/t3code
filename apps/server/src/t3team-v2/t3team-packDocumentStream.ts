@@ -4,44 +4,34 @@ import type {
   T3TeamSubscribePackDocumentsInput,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import * as PubSub from "effect/PubSub";
 import * as Stream from "effect/Stream";
+import type { PackDocumentHub } from "./t3team-packDocumentHub.ts";
 
-export type PackDocumentChange = Exclude<
-  T3TeamPackDocumentsStreamEvent,
-  { readonly type: "snapshot" }
->;
-
-/** Subscribe first: writes during the snapshot read are buffered and delivered afterwards. */
+/**
+ * Subscribe first: writes during the snapshot read are buffered and delivered afterwards. A
+ * subscriber that overflowed its buffer gets a fresh snapshot, which the client treats as a reset.
+ */
 export function packDocumentStream<E>(
-  changes: PubSub.PubSub<PackDocumentChange>,
+  hub: PackDocumentHub,
   input: T3TeamSubscribePackDocumentsInput,
   snapshot: Effect.Effect<ReadonlyArray<T3TeamPackDocument>, E>,
 ): Stream.Stream<T3TeamPackDocumentsStreamEvent, E> {
+  const snapshotEvent = snapshot.pipe(
+    Effect.map((documents): T3TeamPackDocumentsStreamEvent => ({
+      type: "snapshot",
+      packId: input.packId,
+      collection: input.collection,
+      documents,
+    })),
+  );
   return Stream.unwrap(
     Effect.gen(function* () {
-      const subscription = yield* PubSub.subscribe(changes);
-      const documents = yield* snapshot;
-      const live = Stream.fromSubscription(subscription).pipe(
-        Stream.filter((event) => {
-          const key = event.type === "upsert" ? event.doc.key : event.key;
-          return (
-            event.packId === input.packId &&
-            event.collection === input.collection &&
-            (input.key === undefined || key === input.key) &&
-            key.startsWith(input.prefix ?? "")
-          );
-        }),
+      const queue = yield* hub.subscribe(input);
+      const first = yield* snapshotEvent;
+      const live = Stream.fromQueue(queue).pipe(
+        Stream.mapEffect((item) => (item.type === "resync" ? snapshotEvent : Effect.succeed(item))),
       );
-      return Stream.concat(
-        Stream.succeed<T3TeamPackDocumentsStreamEvent>({
-          type: "snapshot",
-          packId: input.packId,
-          collection: input.collection,
-          documents,
-        }),
-        live,
-      );
+      return Stream.concat(Stream.succeed(first), live);
     }),
   );
 }
