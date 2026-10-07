@@ -28,6 +28,11 @@ import { projectDomainEventForWire } from "./WireProjection.ts";
 
 import * as CommandReceiptStore from "./CommandReceiptStore.ts";
 import * as EffectOutbox from "./EffectOutbox.ts";
+import {
+  describePersistenceStorageExhausted,
+  rewritePersistenceFailureCause,
+} from "./persistenceStorageError.ts";
+
 import * as EventStore from "./EventStore.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProjectStore from "./ProjectStore.ts";
@@ -45,6 +50,8 @@ export class EventSinkWriteError extends Schema.TaggedError<EventSinkWriteError>
   },
 ) {
   override get message(): string {
+    const storage = describePersistenceStorageExhausted(this.cause);
+    if (storage !== undefined) return storage;
     return `Failed to write ${this.eventCount} orchestration V2 event(s).`;
   }
 }
@@ -759,85 +766,88 @@ const layerBase: Layer.Layer<
       );
     };
 
+    const asWriteError = (input: {
+      readonly eventCount: number;
+      readonly commandId?: CommandId;
+      readonly cause: unknown;
+    }) =>
+      new EventSinkWriteError({
+        eventCount: input.eventCount,
+        ...(input.commandId === undefined ? {} : { commandId: input.commandId }),
+        cause: rewritePersistenceFailureCause(input.cause),
+      });
+
     return EventSinkV2.of({
       write: (input) =>
         writeEffect({ ...input, effects: [] }).pipe(
-          Effect.mapError(
-            (cause) =>
-              new EventSinkWriteError({
-                eventCount: input.events.length,
-                ...(input.commandId === undefined ? {} : { commandId: input.commandId }),
-                cause,
-              }),
+          Effect.mapError((cause) =>
+            asWriteError({
+              eventCount: input.events.length,
+              ...(input.commandId === undefined ? {} : { commandId: input.commandId }),
+              cause,
+            }),
           ),
         ),
       writeWithEffects: (input) =>
         writeEffect(input).pipe(
-          Effect.mapError(
-            (cause) =>
-              new EventSinkWriteError({
-                eventCount: input.events.length,
-                ...(input.commandId === undefined ? {} : { commandId: input.commandId }),
-                cause,
-              }),
+          Effect.mapError((cause) =>
+            asWriteError({
+              eventCount: input.events.length,
+              ...(input.commandId === undefined ? {} : { commandId: input.commandId }),
+              cause,
+            }),
           ),
         ),
       writeIfRunCurrent: (input) =>
         writeIfRunCurrentEffect(input).pipe(
-          Effect.mapError(
-            (cause) =>
-              new EventSinkWriteError({
-                eventCount: input.events.length,
-                ...(input.commandId === undefined ? {} : { commandId: input.commandId }),
-                cause,
-              }),
+          Effect.mapError((cause) =>
+            asWriteError({
+              eventCount: input.events.length,
+              ...(input.commandId === undefined ? {} : { commandId: input.commandId }),
+              cause,
+            }),
           ),
         ),
       writeIfProviderThreadOwner: (input) =>
         writeIfProviderThreadOwnerEffect(input).pipe(
-          Effect.mapError(
-            (cause) =>
-              new EventSinkWriteError({
-                eventCount: input.events.length,
-                ...(input.commandId === undefined ? {} : { commandId: input.commandId }),
-                cause,
-              }),
+          Effect.mapError((cause) =>
+            asWriteError({
+              eventCount: input.events.length,
+              ...(input.commandId === undefined ? {} : { commandId: input.commandId }),
+              cause,
+            }),
           ),
         ),
       commitCommand: (input) =>
         commitCommandEffect(input).pipe(
-          Effect.mapError(
-            (cause) =>
-              new EventSinkWriteError({
-                commandId: input.commandId,
-                eventCount: input.events.length,
-                cause,
-              }),
+          Effect.mapError((cause) =>
+            asWriteError({
+              commandId: input.commandId,
+              eventCount: input.events.length,
+              cause,
+            }),
           ),
         ),
       commitRejectedCommand: (input) =>
         commitRejectedCommandEffect(input).pipe(
-          Effect.mapError(
-            (cause) =>
-              new EventSinkWriteError({
-                commandId: input.commandId,
-                eventCount: 0,
-                cause,
-              }),
+          Effect.mapError((cause) =>
+            asWriteError({
+              commandId: input.commandId,
+              eventCount: 0,
+              cause,
+            }),
           ),
         ),
       commitProjectCommand: (input) =>
         commitProjectCommandEffect(input).pipe(
-          Effect.mapError(
-            (cause) =>
-              new EventSinkWriteError({ commandId: input.commandId, eventCount: 1, cause }),
+          Effect.mapError((cause) =>
+            asWriteError({ commandId: input.commandId, eventCount: 1, cause }),
           ),
         ),
       commitRejectedProjectCommand: (input) =>
         commitRejectedProjectCommandEffect(input).pipe(
-          Effect.mapError(
-            (cause) =>
-              new EventSinkWriteError({ commandId: input.commandId, eventCount: 0, cause }),
+          Effect.mapError((cause) =>
+            asWriteError({ commandId: input.commandId, eventCount: 0, cause }),
           ),
         ),
       stream: (input) =>
