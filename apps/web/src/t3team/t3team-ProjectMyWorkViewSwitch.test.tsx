@@ -126,6 +126,20 @@ describe("My work view switch Backlog segment", () => {
   it("is absent without a backlog (the digest fixture keeps its three lenses)", async () => {
     await render(<ProjectMyWorkViewSwitch lens="board" onLensChange={() => {}} />);
     expect(container.querySelector('[data-segment="backlog"]')).toBeNull();
-    expect(container.querySelectorAll("button")).toHaveLength(3);
+    expect(container.querySelectorAll('[role="group"] button')).toHaveLength(3);
+  });
+
+  it("offers the same lenses from one compact control", async () => {
+    const onLensChange = vi.fn();
+    await render(<ProjectMyWorkViewSwitch lens="digest" onLensChange={onLensChange} />);
+    const trigger = container.querySelector<HTMLButtonElement>('[aria-label="My Work view"]');
+    expect(trigger?.textContent).toContain("Digest");
+
+    await act(async () => trigger?.click());
+    const list = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (item) => item.textContent === "List",
+    );
+    await act(async () => list?.click());
+    expect(onLensChange).toHaveBeenCalledExactlyOnceWith("hierarchy");
   });
 });

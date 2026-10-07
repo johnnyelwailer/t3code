@@ -6,7 +6,6 @@ import { ScrollArea } from "~/t3team/components/ui/t3team-scroll-area";
 import { SidebarTrigger } from "~/t3team/components/ui/t3team-sidebar";
 import { t3SurfaceBackdrops } from "~/t3team/components/ui/t3team-surface";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/t3team/components/ui/t3team-menu";
-import { AppProjectIcon } from "~/t3team/t3team-AppStatusBits";
 import { useProjectDashboardViewTab } from "~/t3team/hooks/t3team-useProjectDashboardViewTab";
 import { getT3TeamMainContentHeaderClassName } from "~/t3team/t3team-mainContentHeader";
 import { ProjectBindingRepairBanner } from "~/t3team/t3team-ProjectBindingRepairBanner";
@@ -58,7 +57,6 @@ export function ProjectDashboard({
         })}
       >
         <SidebarTrigger className="size-7 shrink-0 md:hidden" />
-        <AppProjectIcon project={project} />
         <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
           <h2 className="min-w-0 truncate text-sm font-medium" title={project.title}>
             {project.title}

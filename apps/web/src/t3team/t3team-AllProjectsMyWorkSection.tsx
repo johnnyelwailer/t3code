@@ -19,6 +19,8 @@
 import { useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronRightIcon } from "lucide-react";
+
+import { InlineButton } from "~/components/ui/button";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { useProjectMyWork } from "~/t3team/hooks/t3team-useProjectMyWork";
@@ -160,9 +162,14 @@ export function AllProjectsMyWorkSection({
       {sessionExpired ? (
         <JiraSessionExpiredPanel onSignedIn={reload} />
       ) : error ? (
-        <p className="text-destructive text-xs">
-          {humanizeT3TeamBackendError(error).title}
-          <span className="sr-only"> {error}</span>
+        <p className="flex flex-wrap items-center gap-x-2 text-destructive text-xs">
+          <span>
+            {humanizeT3TeamBackendError(error).title}
+            <span className="sr-only"> {error}</span>
+          </span>
+          <InlineButton tone="destructive" onClick={() => reload()}>
+            Retry
+          </InlineButton>
         </p>
       ) : lens === "board" ? (
         <AllProjectsMyWorkBoard

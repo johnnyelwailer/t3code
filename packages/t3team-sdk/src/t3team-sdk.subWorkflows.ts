@@ -130,6 +130,7 @@ export function buildWorkflowPrimitives(opts: {
     onLog: options.onLog ?? (() => {}),
     hostUuid: runtime.hostUuid,
     nowIso: opts.nowIso,
+    ...(options.abortSignal === undefined ? {} : { abortSignal: options.abortSignal }),
     ...(options.onCompositionBranchFailed === undefined
       ? {}
       : { onCompositionBranchFailed: options.onCompositionBranchFailed }),

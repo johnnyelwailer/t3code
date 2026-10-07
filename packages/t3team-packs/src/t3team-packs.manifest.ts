@@ -55,6 +55,7 @@ export const WorkspacePackManifest = Schema.Struct({
     recipes: Schema.optional(Schema.Array(PackModuleRef)),
     views: Schema.optional(Schema.Array(PackModuleRef)),
     profiles: Schema.optional(Schema.Array(PackModuleRef)),
+    /** Default-exported collection metadata; requires the store:v1 capability. */
     persistence: Schema.optional(Schema.Array(PackModuleRef)),
     projectSyncProviders: Schema.optional(Schema.Array(PackModuleRef)),
     artifactRenderers: Schema.optional(Schema.Array(PackModuleRef)),

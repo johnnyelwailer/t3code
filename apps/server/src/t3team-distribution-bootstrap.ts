@@ -36,10 +36,12 @@ import {
 import {
   activateDistribution,
   distributionAssets,
+  distributionPersistence,
   distributionTheme,
   type DistributionTheme,
 } from "@t3code/distribution";
 
+import { registerCompiledPackPersistence } from "./t3team-compiledPackPersistence.ts";
 import { setPackAccounts } from "./account/t3team-packAccounts.ts";
 import { setDistributionModelPolicy } from "./t3team-configuredDefaultModelSelection.ts";
 import { packAiProvidersToInstanceConfigMap } from "./t3team-pack-aiProvider.ts";
@@ -88,6 +90,7 @@ const resolveThemeBrand = (
 };
 
 export const activateCompiledInDistribution = async (): Promise<void> => {
+  registerCompiledPackPersistence(distributionPersistence);
   if (!activateDistribution && !distributionTheme) return;
 
   const providers: AgentProviderDefinition[] = [];

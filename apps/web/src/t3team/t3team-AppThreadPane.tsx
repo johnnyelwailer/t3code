@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 import { PanelRightOpenIcon } from "lucide-react";
-import { useCanGoBack } from "@tanstack/react-router";
+import { useCanGoBack, useNavigate } from "@tanstack/react-router";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { ThreadId } from "@t3tools/contracts";
@@ -8,6 +8,7 @@ import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useRightPanelStore } from "~/rightPanelStore";
 import { ThreadChatView } from "~/t3team/chat/t3team-ThreadChatView";
 import { Button } from "~/t3team/components/ui/t3team-button";
+import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import type { ProjectThread, ViewState } from "~/t3team/t3team-types";
 import { navigateBackWithFallback } from "~/t3team/t3team-historyBack";
 import { useFinalizePromotedDraft } from "~/t3team/t3team-useFinalizePromotedDraft";
@@ -35,6 +36,8 @@ export function AppThreadPane({
   onBackToDashboard: (projectId: string) => void;
 }) {
   const canGoBack = useCanGoBack();
+  const navigate = useNavigate();
+  const { selectStandaloneThread } = useProjectStore();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const canOpenEmbedded = Boolean(resolvedThread?.ticketId || resolvedThread?.dashboardMode);
   // Upstream retires the draft behind a promoted thread on its own thread
@@ -70,6 +73,24 @@ export function AppThreadPane({
   }, [embeddedThreadId, onCloseEmbeddedThread, primaryEnvironmentId, view.threadId]);
 
   const handleBack = useCallback(() => {
+    // Subagent threads must return to their parent. Relying on history.back alone
+    // fails when the child was opened via ChatView's upstream
+    // `/$environmentId/$threadId` path: the Team route bridge used to push the
+    // Team URL on top, so Back landed on the upstream URL and the bridge
+    // immediately re-opened the same child (refresh-but-stay). Replace the
+    // child entry with the parent so Back always leaves the subagent.
+    const parentThreadId = resolvedThread?.parentThreadId;
+    if (parentThreadId) {
+      selectStandaloneThread(view.projectId, parentThreadId);
+      void navigate({
+        to: "/t3team/projects/$projectId/threads/$threadId",
+        params: { projectId: view.projectId, threadId: parentThreadId },
+        search: (current: Record<string, unknown>) => current,
+        replace: true,
+      });
+      return;
+    }
+
     navigateBackWithFallback({
       canGoBack,
       onFallback: () => {
@@ -81,7 +102,16 @@ export function AppThreadPane({
         onBackToDashboard(view.projectId);
       },
     });
-  }, [canGoBack, onBackToDashboard, onOpenTicket, resolvedThread?.ticketId, view.projectId]);
+  }, [
+    canGoBack,
+    navigate,
+    onBackToDashboard,
+    onOpenTicket,
+    resolvedThread?.parentThreadId,
+    resolvedThread?.ticketId,
+    selectStandaloneThread,
+    view.projectId,
+  ]);
 
   const parentChat = (
     <ThreadChatView

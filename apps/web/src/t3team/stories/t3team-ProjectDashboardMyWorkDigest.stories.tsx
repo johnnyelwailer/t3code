@@ -15,6 +15,11 @@ import {
   allProjectsAgentScenario,
   allProjectsHeuristicScenario,
 } from "~/t3team/t3team-projectMyWorkDigestFixtureScenariosAllProjects";
+import { storyCardAttentionScenario } from "~/t3team/t3team-projectMyWorkDigestFixtureScenariosStoryCards";
+import {
+  digestFixtureOffsetToLocalHour,
+  yesterdayRecapScenario,
+} from "~/t3team/t3team-projectMyWorkDigestFixtureScenariosYesterday";
 
 const meta = {
   title: "T3Team/Project Dashboard/My Work Digest",
@@ -71,6 +76,49 @@ export const ProjectWorkflowFailed: Story = createStory(
   errorArrangementScenario,
   "Heuristic fallback stays up.",
 );
+export const StoryCardAttention: Story = createStory(
+  storyCardAttentionScenario,
+  "Story cards in three tiers: the viewer's rows and PRs, adjacent active work and blocks as pills, done and others' to-do folded into one count.",
+);
+export const StoryCardAttentionNarrow: Story = {
+  ...StoryCardAttention,
+  decorators: [
+    (Story) => (
+      <div style={{ width: 380 }}>
+        <Story />
+      </div>
+    ),
+  ],
+};
+const narrow: Story["decorators"] = [
+  (Story) => (
+    <div style={{ width: 380 }}>
+      <Story />
+    </div>
+  ),
+];
+export const YesterdayMorning: Story = {
+  args: { scenario: yesterdayRecapScenario, nowOffsetHours: digestFixtureOffsetToLocalHour(9) },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "9:00 local: Yesterday leads the digest, above To review — one line per work item, its outcome and merged PRs, under a one-line summary. An updated-only ticket is left out.",
+      },
+    },
+  },
+};
+export const YesterdayMorningNarrow: Story = { ...YesterdayMorning, decorators: narrow };
+export const YesterdayAfternoon: Story = {
+  args: { scenario: yesterdayRecapScenario, nowOffsetHours: digestFixtureOffsetToLocalHour(15) },
+  parameters: {
+    docs: {
+      description: {
+        story: "15:00 local: Yesterday is history — in the footer, folded to its summary line.",
+      },
+    },
+  },
+};
 export const ProjectEmpty: Story = createStory(emptyGraphScenario, "Nothing assigned.");
 export const SprintBurndownChart: Story = {
   args: { scenario: heuristicArrangementScenario, nowOffsetHours: 0, burndownVariant: "chart" },

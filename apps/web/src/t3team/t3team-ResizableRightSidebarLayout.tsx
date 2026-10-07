@@ -19,12 +19,15 @@ import {
   type ResizableRightSidebarDragState,
 } from "~/t3team/t3team-ResizableRightSidebarLayoutShared";
 import { ResizableRightSidebarAside } from "./t3team-ResizableRightSidebarAside";
+import { useAsideReveal } from "./t3team-useAsideReveal";
 
 type ResizableRightSidebarLayoutProps = {
   main: ReactNode;
   aside: ReactNode;
   storageKey: string;
   collapsedStorageKey?: string;
+  /** Start collapsed until the user opens the aside; see `mobileAsideRequest` for the reveal. */
+  defaultCollapsed?: boolean;
   className?: string;
   mainClassName?: string;
   asideClassName?: string;
@@ -34,8 +37,13 @@ type ResizableRightSidebarLayoutProps = {
   mobileDefaultPanel?: "main" | "aside";
   mobileMainLabel?: string;
   mobileAsideLabel?: string;
-  /** Changes whenever the caller opens something in the aside (a PR, a thread): the drawer rises. */
+  /**
+   * Changes whenever the caller opens something in the aside (a PR, a thread): the drawer rises,
+   * and a collapsed desktop aside opens for it until it is closed again (null).
+   */
   mobileAsideRequest?: object | null;
+  /** The thread embedded in the aside, if any: a newly shown thread reveals a collapsed aside. */
+  asideThreadKey?: string | null;
 };
 
 export function ResizableRightSidebarLayout({
@@ -43,6 +51,7 @@ export function ResizableRightSidebarLayout({
   aside,
   storageKey,
   collapsedStorageKey,
+  defaultCollapsed,
   className,
   mainClassName,
   asideClassName,
@@ -53,20 +62,30 @@ export function ResizableRightSidebarLayout({
   mobileMainLabel,
   mobileAsideLabel,
   mobileAsideRequest,
+  asideThreadKey,
 }: ResizableRightSidebarLayoutProps) {
   const isDesktop = useMediaQuery("lg");
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [mobilePanel, setMobilePanel] = useState<"main" | "aside">(mobileDefaultPanel);
   const widthStorageKey = `${storageKey}:width`;
+  const resolvedCollapsedStorageKey = collapsedStorageKey ?? `${storageKey}:collapsed`;
   const { asideWidth, setAsideWidth, isCollapsed, setCollapsedState } = useStoredRightSidebarState({
     widthStorageKey,
-    collapsedStorageKey: collapsedStorageKey ?? `${storageKey}:collapsed`,
+    collapsedStorageKey: resolvedCollapsedStorageKey,
     defaultAsideWidth,
+    ...(defaultCollapsed !== undefined ? { defaultCollapsed } : {}),
+  });
+  const { asideCollapsed, toggleCollapsed } = useAsideReveal({
+    scopeKey: resolvedCollapsedStorageKey,
+    itemRequest: mobileAsideRequest,
+    threadKey: asideThreadKey,
+    isCollapsed,
+    setCollapsedState,
   });
   // Side by side only while both panes get their minimum; a narrower pane switches to the
   // one-at-a-time tabs instead of squeezing the main content into a sliver.
   const pane = useElementFitsWidth(minMainWidth + minAsideWidth);
-  const showTabs = !isDesktop || (!isCollapsed && !pane.fits);
+  const showTabs = !isDesktop || (!asideCollapsed && !pane.fits);
   const measurePane = pane.ref;
   const setContainerNode = useCallback(
     (node: HTMLDivElement | null) => {
@@ -92,7 +111,7 @@ export function ResizableRightSidebarLayout({
 
   const handleResizePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
-      if (!isDesktop || event.button !== 0 || !containerRef.current || isCollapsed) {
+      if (!isDesktop || event.button !== 0 || !containerRef.current || asideCollapsed) {
         return;
       }
 
@@ -110,7 +129,7 @@ export function ResizableRightSidebarLayout({
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
     },
-    [asideWidth, isCollapsed, isDesktop],
+    [asideWidth, asideCollapsed, isDesktop],
   );
 
   const handleResizePointerMove = useCallback(
@@ -202,12 +221,12 @@ export function ResizableRightSidebarLayout({
         aside={aside}
         asideClassName={asideClassName}
         asideWidth={asideWidth}
-        isCollapsed={isCollapsed}
+        isCollapsed={asideCollapsed}
         onResizePointerCancel={handleResizePointerCancel}
         onResizePointerDown={handleResizePointerDown}
         onResizePointerMove={handleResizePointerMove}
         onResizePointerUp={handleResizePointerUp}
-        onToggleCollapsed={() => setCollapsedState(!isCollapsed)}
+        onToggleCollapsed={toggleCollapsed}
       />
     </div>
   );

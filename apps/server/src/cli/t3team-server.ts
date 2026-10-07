@@ -28,6 +28,8 @@ import {
   loadPackCompletionWakeRenderer,
   setPackCompletionWakeRenderer,
 } from "../t3team-pack-completionWakeRenderer.ts";
+import { loadPackPersistence } from "../t3team-packPersistence.ts";
+import { registerPackCollections } from "../t3team-packDocumentConfig.ts";
 import { setPackAppearanceOverlay } from "../t3team-pack-appearanceOverlay.ts";
 import {
   loadPackSetupProfileOverlay,
@@ -76,6 +78,20 @@ export const runT3TeamServerCommand = (
       inspectConfiguredWorkspacePacks(Option.getOrUndefined(workspacePacksDir)),
     );
     if (packDiagnostic.enabled) {
+      yield* Effect.tryPromise({
+        try: () => loadPackPersistence(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        Effect.tap((collections) =>
+          Effect.try({
+            try: () => registerPackCollections(collections),
+            catch: (cause) => new WorkspacePackLoadError({ cause }),
+          }),
+        ),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack persistence loading failed", { cause }),
+        ),
+      );
       // Pack recipe roots (Epic 16 §Recipe Sources And Precedence). Pure resolution — the recipes
       // themselves load lazily through the shared discovery pipeline on each discover request.
       const recipeSources = loadPackRecipeSources(packDiagnostic);

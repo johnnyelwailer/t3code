@@ -5,7 +5,12 @@ import type {
 import type { ProviderAdapterV2HistoricalContext } from "./ProviderAdapter.ts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { historyCost, renderHistory, selectHistory } from "./ContextHandoffBudget.ts";
+import {
+  fitHistoryWithMiddleTruncate,
+  historyCost,
+  renderHistory,
+  selectHistory,
+} from "./ContextHandoffBudget.ts";
 
 /** Persist before/after injection: an ambiguous pending delivery requires a fresh native thread. */
 export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextHandoffs")(
@@ -35,7 +40,7 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
         (handoff) =>
           `Context handoff (${handoff.strategy === "fork_delta_summary" ? "merge_back / fork_delta_summary" : handoff.strategy}):\n${
             handoff.history?.coverage ??
-            `From thread ${handoff.threadId}, runs ${handoff.coveredRunOrdinals.from}-${handoff.coveredRunOrdinals.to}. Recover history with t3_thread_read, view=activity; paginate with afterPosition, and use itemId/textOffset for long items.`
+            `From thread ${handoff.threadId}, runs ${handoff.coveredRunOrdinals.from}-${handoff.coveredRunOrdinals.to}. Recover history with t3_thread_search / t3_search_thread, or t3_thread_read view=activity; paginate with afterPosition, and use itemId/textOffset for long items.`
           }`,
       )
       .join("\n");
@@ -44,7 +49,8 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
     // its activity includes the original handoff/fork source references.
     if (historyCost([], coverage) > Math.min(4_000, budget / 2)) {
       const strategies = Array.from(new Set(pending.map((handoff) => handoff.strategy)));
-      coverage = `Context handoff (${strategies.join(", ")}). ${pending.length} handoff records; detailed coverage references omitted. Recover history with t3_thread_read({threadId:"${input.providerThread.appThreadId ?? pending[0]!.threadId}",view:"activity",limit:20,maxCharsPerItem:4000}); paginate with afterPosition=nextPosition. Follow fork/handoff source references in activity. For long items use itemId and textOffset=nextTextOffset until null.`;
+      const threadId = input.providerThread.appThreadId ?? pending[0]!.threadId;
+      coverage = `Context handoff (${strategies.join(", ")}). ${pending.length} handoff records; detailed coverage references omitted. Recover with t3_thread_search({query:"…"}) / t3_search_thread({query:"…"}), or t3_thread_read({threadId:"${threadId}",view:"activity",limit:20,maxCharsPerItem:4000}); paginate with afterPosition=nextPosition. Follow fork/handoff source references in activity. For long items use itemId and textOffset=nextTextOffset until null.`;
     }
     const seen = new Set(input.alreadyDeliveredItemIds);
     const messages = pending
@@ -64,15 +70,26 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
       oldContext && historyCost([], `${coverage}\n${oldContext}`) + 512 <= budget
         ? `${coverage}\n${oldContext}`
         : coverage;
-    const selected = selectHistory({
+    const omittedItems = pending.reduce(
+      (sum, handoff) => sum + (handoff.history?.omittedItems ?? 0),
+      0,
+    );
+    let selected = selectHistory({
       messages,
       coverage: fullCoverage,
-      omittedItems: pending.reduce((sum, handoff) => sum + (handoff.history?.omittedItems ?? 0), 0),
+      omittedItems,
       budget,
     });
+    // Upstream hard-fails when the selected pack still exceeds the budget. Only then
+    // fall back to middle-truncate + search/read recall (not on every handoff).
     if (historyCost(selected.messages, selected.context) > budget) {
       if (input.deferInline) return { context: "", delivered: Effect.void };
-      return yield* new ContextHandoffBudgetError();
+      selected = fitHistoryWithMiddleTruncate({
+        messages,
+        omittedItems,
+        budget,
+        threadId: String(input.providerThread.appThreadId ?? pending[0]!.threadId),
+      });
     }
     const omittedItemIds = new Set(selected.omittedItemIds);
     const persist = (status: "pending" | "injected" | "inline") =>

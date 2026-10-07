@@ -10,12 +10,25 @@ import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 
 import { useRightPanelStore, selectThreadRightPanelState } from "~/rightPanelStore";
 
-vi.mock("@tanstack/react-router", () => ({ useCanGoBack: () => false }));
+const navigate = vi.fn();
+const selectStandaloneThread = vi.fn();
+let capturedOnBack: (() => void) | undefined;
+
+vi.mock("@tanstack/react-router", () => ({
+  useCanGoBack: () => true,
+  useNavigate: () => navigate,
+}));
 vi.mock("~/state/environments", () => ({
   usePrimaryEnvironmentId: () => "env-1",
 }));
+vi.mock("~/t3team/hooks/t3team-useProjectStore", () => ({
+  useProjectStore: () => ({ selectStandaloneThread }),
+}));
 vi.mock("~/t3team/chat/t3team-ThreadChatView", () => ({
-  ThreadChatView: ({ threadId }: { threadId: string }) => <div>chat:{threadId}</div>,
+  ThreadChatView: ({ threadId, onBack }: { threadId: string; onBack?: () => void }) => {
+    capturedOnBack = onBack;
+    return <div>chat:{threadId}</div>;
+  },
 }));
 
 import { AppThreadPane } from "./t3team-AppThreadPane";
@@ -44,6 +57,9 @@ function mountWithEffects(node: ReactNode): Root {
 
 beforeEach(() => {
   useRightPanelStore.setState({ byThreadKey: {} });
+  navigate.mockReset();
+  selectStandaloneThread.mockReset();
+  capturedOnBack = undefined;
 });
 
 describe("AppThreadPane (side chat)", () => {
@@ -117,5 +133,58 @@ describe("AppThreadPane (side chat)", () => {
 
     expect(closeSpy).not.toHaveBeenCalled();
     expect(useRightPanelStore.getState().byThreadKey[scopedThreadKey(PARENT_REF)]).toBeUndefined();
+  });
+
+  it("Back on a subagent replaces onto the parent instead of history.back", () => {
+    const historyBack = vi.fn();
+    const originalWindow = globalThis.window;
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: { history: { back: historyBack } },
+    });
+
+    try {
+      const root = mountWithEffects(
+        <AppThreadPane
+          view={{
+            type: "thread",
+            projectId: "project-1",
+            threadId: "child-thread",
+          }}
+          {...baseProps}
+          resolvedThread={{
+            id: "child-thread",
+            projectId: "project-1",
+            title: "Child",
+            status: "idle",
+            createdAt: "2026-10-07T00:00:00.000Z",
+            lastMessageAt: "2026-10-07T00:00:00.000Z",
+            parentThreadId: "parent-thread",
+          }}
+          onCloseEmbeddedThread={() => {}}
+        />,
+      );
+
+      expect(capturedOnBack).toBeTypeOf("function");
+      act(() => {
+        capturedOnBack?.();
+      });
+      act(() => root.unmount());
+    } finally {
+      Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: originalWindow,
+      });
+    }
+
+    expect(historyBack).not.toHaveBeenCalled();
+    expect(selectStandaloneThread).toHaveBeenCalledWith("project-1", "parent-thread");
+    expect(navigate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "/t3team/projects/$projectId/threads/$threadId",
+        params: { projectId: "project-1", threadId: "parent-thread" },
+        replace: true,
+      }),
+    );
   });
 });

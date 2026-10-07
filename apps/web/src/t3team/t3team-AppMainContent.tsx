@@ -10,7 +10,7 @@ import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeS
 import type { ProjectThreadDisplayMode, ProjectThread, ViewState } from "~/t3team/t3team-types";
 import { AppDashboardPane } from "~/t3team/t3team-AppDashboardPane";
 import { AppMainContentHomeBrowser } from "~/t3team/t3team-AppMainContentHomeBrowser";
-import { AllProjectsMyWorkView } from "~/t3team/t3team-AllProjectsMyWorkView";
+import { AllProjectsMyWorkPane } from "~/t3team/t3team-AllProjectsMyWorkPane";
 import { AppDraftPane } from "~/t3team/t3team-AppDraftPane";
 import { AppThreadPane } from "~/t3team/t3team-AppThreadPane";
 import { useT3TeamScratchHomeChat } from "~/t3team/t3team-useScratchHomeChat";
@@ -112,6 +112,14 @@ export function AppMainContent({
     />
   );
 
+  const allProjectsMyWork = (
+    <AllProjectsMyWorkPane
+      onOpenTicket={onOpenTicket}
+      getThreadsForProject={getThreadsForProject}
+      onRememberEmbeddedThread={(threadId) => onThreadDisplayModeChange(threadId, "embedded")}
+    />
+  );
+
   const { threadProject, resolvedThread, viewProject } = useAppMainContentThreadResolution({
     view,
     allProjects,
@@ -123,6 +131,8 @@ export function AppMainContent({
     if (homeProject) {
       return (
         <AppDashboardPane
+          // One instance per project: a detail, reveal or collapse state never carries over.
+          key={homeProject.id}
           activeDashboardMode={activeDashboardMode}
           project={homeProject}
           projectThreads={getThreadsForProject(homeProject.id)}
@@ -148,7 +158,7 @@ export function AppMainContent({
         hasRouteView: false,
       })
     ) {
-      return <AllProjectsMyWorkView onOpenTicket={onOpenTicket} />;
+      return allProjectsMyWork;
     }
     if (projectsLoading && !reopenInitialSetup) {
       return (
@@ -164,7 +174,7 @@ export function AppMainContent({
   // Like a draft, this resolves no project — its subject is the viewer, not a project — so it has
   // to be handled before any project lookup.
   if (view.type === "all-my-work") {
-    return <AllProjectsMyWorkView onOpenTicket={onOpenTicket} />;
+    return allProjectsMyWork;
   }
 
   // A draft has no project or thread of its own yet, so it resolves nothing
@@ -197,6 +207,7 @@ export function AppMainContent({
   if (view.type === "dashboard") {
     return (
       <AppDashboardPane
+        key={project.id}
         activeDashboardMode={activeDashboardMode}
         project={project}
         projectThreads={getThreadsForProject(project.id)}
