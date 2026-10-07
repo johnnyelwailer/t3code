@@ -230,6 +230,12 @@ export interface ProviderChangeRequestStat {
 export interface ProviderChangeRequestDetail extends ProviderChangeRequest {
   /** The head commit, where the host's detail read reports it. */
   readonly headSha?: string | null;
+  /** The base commit, where the host's detail read reports it. */
+  readonly baseSha?: string | null;
+  /** True only when the host says the head belongs to another repository. */
+  readonly isCrossRepository?: boolean;
+  /** The author's standing on the repository, as the host words it. */
+  readonly authorAssociation?: string | null;
   readonly body: string;
   readonly changedFiles: number;
   readonly mergedAt: string | null;
