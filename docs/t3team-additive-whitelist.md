@@ -314,6 +314,7 @@ window title and the DMG background the desktop build rasterizes.
 - `apps/web/src/components/auth/AuthSurfaceShell.tsx` — connect masthead uses the pack display name.
 - `apps/web/src/components/auth/PairingRouteSurface.tsx` — pairing eyebrows use the pack display name.
 - `apps/desktop/src/window/DesktopApplicationMenu.ts` — update dialog names the active product.
+- `apps/web/src/components/preview/PreviewPanel.tsx` — desktop-only preview notice names the active product.
 
 ## PR #344 main-repository port onto orchestration V2 (2026-10-05)
 
