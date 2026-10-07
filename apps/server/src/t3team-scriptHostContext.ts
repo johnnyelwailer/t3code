@@ -25,7 +25,7 @@ import {
   type T3TeamPackDocumentStoreError,
 } from "./t3team-v2/t3team-packDocumentStore.ts";
 
-export const CHANGE_REQUEST_READ_TOOL_GROUP = "integration.read";
+const CHANGE_REQUEST_READ_TOOL_GROUP = "integration.read";
 
 export interface ScriptHostRunInput {
   readonly projectId: ProjectId;
@@ -43,7 +43,7 @@ export class T3TeamScriptHost extends Context.Service<
 const withoutTrailingSeparator = (path: string) => path.trim().replace(/[\\/]+$/, "");
 
 /** The pack whose registered recipe root is exactly `recipePath`, if any. */
-export function packIdForRecipePath(
+function packIdForRecipePath(
   recipePath: string | null | undefined,
   sources: ReadonlyArray<PackRecipeSource> = getPackRecipeSources().sources,
 ): string | undefined {
@@ -70,7 +70,7 @@ function toScriptPackStore(
   };
 }
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const packStore = yield* T3TeamPackDocumentStore;
   const collections = yield* PackDocumentCollections;
   const pullRequests = yield* PullRequestService;
