@@ -49,7 +49,8 @@ export async function handleBrokerNotifyVerb(core: BrokerCore, s: BrokerSend): P
     const attachment = workflowWidgetAttachment({
       widgetId: deps.newId(),
       title: p.widget.title,
-      widgetCode: p.widget.widgetCode,
+      ...(p.widget.widgetCode === undefined ? {} : { widgetCode: p.widget.widgetCode }),
+      ...(p.widget.intent === undefined ? {} : { intent: p.widget.intent }),
       ...(p.widget.format === undefined ? {} : { format: p.widget.format }),
       ...(p.widget.loadingMessages === undefined
         ? {}

@@ -146,10 +146,15 @@ export interface AgentOpts<
   readonly capabilities: Capabilities;
 }
 
-/** Sandboxed inline widget shown in a thread. HTML/SVG must be a fragment. */
+/** Sandboxed inline widget shown in a thread. HTML/SVG must be a fragment.
+ * Prefer `intent` (builder authors the body); pass `widgetCode` to skip the builder
+ * (required for deterministic workflow replay). `format: "html"` shims onto upstream HTML render. */
 export interface ShowWidgetInput {
   readonly title: string;
-  readonly widgetCode: string;
+  /** Raw fragment; skips the builder. Provide this or `intent`. */
+  readonly widgetCode?: string;
+  /** Preferred: describe what to show; builder authors widgetCode. */
+  readonly intent?: string;
   readonly format?: "html" | "svg";
   readonly loadingMessages?: ReadonlyArray<string>;
 }
