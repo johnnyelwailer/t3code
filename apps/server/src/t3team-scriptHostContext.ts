@@ -22,6 +22,7 @@ import type { PackDocumentStore } from "./t3team-v2/t3team-packDocumentApi.ts";
 import {
   PackDocumentCollections,
   T3TeamPackDocumentStore,
+  type T3TeamPackDocumentStoreError,
 } from "./t3team-v2/t3team-packDocumentStore.ts";
 
 export const CHANGE_REQUEST_READ_TOOL_GROUP = "integration.read";
@@ -52,9 +53,12 @@ export function packIdForRecipePath(
 }
 
 /** Promise view of one pack's store; binding is per call, so nothing is held between calls. */
-function toScriptPackStore(bind: Effect.Effect<PackDocumentStore, unknown>): ScriptPackStore {
-  const run = <A>(use: (store: PackDocumentStore) => Effect.Effect<A, unknown>) =>
-    Effect.runPromise(Effect.flatMap(bind, use));
+function toScriptPackStore(
+  bind: Effect.Effect<PackDocumentStore, T3TeamPackDocumentStoreError>,
+): ScriptPackStore {
+  const run = <A>(
+    use: (store: PackDocumentStore) => Effect.Effect<A, T3TeamPackDocumentStoreError>,
+  ) => Effect.runPromise(Effect.flatMap(bind, use));
   return {
     get: (collection, key) => run((store) => store.get(collection, key)),
     list: (collection, options) => run((store) => store.list(collection, options)),

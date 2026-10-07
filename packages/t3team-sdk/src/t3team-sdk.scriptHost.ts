@@ -132,6 +132,15 @@ export class ChangeRequestScopeError extends Error {
   }
 }
 
+/** A change-request read the script itself got wrong: a bad number or a cursor it did not get back. */
+export class ChangeRequestInputError extends Error {
+  readonly _tag = "ChangeRequestInputError" as const;
+  constructor(message: string) {
+    super(message);
+    this.name = "ChangeRequestInputError";
+  }
+}
+
 /** The per-run host members spread into `ScriptHandlerCtx`. */
 export interface ScriptHostContext {
   readonly store?: ScriptPackStore;

@@ -21,6 +21,7 @@ import {
 import { createModelSelection } from "@t3tools/shared/model";
 import { defineCollections } from "@t3team/pack-api";
 import {
+  ChangeRequestInputError,
   ChangeRequestScopeError,
   defineScript,
   type ChangeRequestDiffPage,
@@ -250,7 +251,7 @@ it.layer(TestLayer)("script host context", (it) => {
           (error: unknown) => error,
         ),
       );
-      assert.instanceOf(invalid, RangeError);
+      assert.instanceOf(invalid, ChangeRequestInputError);
     }),
   );
 

@@ -198,6 +198,7 @@ export {
   CHANGE_REQUEST_DIFF_DEFAULT_PAGE_SIZE,
   CHANGE_REQUEST_DIFF_MAX_PAGE_CHARS,
   CHANGE_REQUEST_DIFF_MAX_PAGE_SIZE,
+  ChangeRequestInputError,
   ChangeRequestScopeError,
   type ChangeRequestDetail,
   type ChangeRequestDiffOptions,

@@ -13,6 +13,7 @@ import {
   type ChangeRequestDiffPage,
   type ChangeRequestReader,
   type ChangeRequestRef,
+  ChangeRequestInputError,
   ChangeRequestScopeError,
 } from "@t3team/sdk";
 import * as Effect from "effect/Effect";
@@ -66,7 +67,9 @@ export function makeChangeRequestReader(
   const resolve = (ref: ChangeRequestRef) =>
     Effect.gen(function* () {
       if (!Number.isInteger(ref.number) || ref.number <= 0) {
-        return yield* Effect.fail(new RangeError(`Invalid change request number: ${ref.number}`));
+        return yield* Effect.fail(
+          new ChangeRequestInputError(`Invalid change request number: ${ref.number}`),
+        );
       }
       const repository = ref.repository.trim().toLowerCase();
       const host = ref.host?.trim().toLowerCase();
@@ -96,7 +99,9 @@ export function makeChangeRequestReader(
         Effect.gen(function* () {
           const position = decodeDiffCursor(options.cursor);
           if (position === null) {
-            return yield* Effect.fail(new RangeError("Invalid change request diff cursor."));
+            return yield* Effect.fail(
+              new ChangeRequestInputError("Invalid change request diff cursor."),
+            );
           }
           const target = yield* resolve(ref);
           const slice = yield* pullRequests.diff({
