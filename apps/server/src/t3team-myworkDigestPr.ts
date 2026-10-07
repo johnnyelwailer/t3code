@@ -9,6 +9,7 @@
  */
 
 import { ProjectId, type PullRequestListEntry } from "@t3tools/contracts";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
@@ -21,7 +22,8 @@ import {
 } from "./t3team-myworkDigestPrEnrich.ts";
 import {
   isRateLimitedFailure,
-  RATE_LIMITED_CHANGE_REQUEST_NOTE,
+  resolveDigestListing,
+  type DigestListingMemory,
 } from "./t3team-myworkDigestRateLimited.ts";
 
 export {
@@ -95,11 +97,8 @@ export function toDigestPrEntries(
   });
 }
 
-// The last listing each project read successfully. A listing the host's rate limit refused serves
-// it instead of an empty one, so the digest keeps its PR chips (drafts included) and says so in
-// `note`, rather than every card dropping its PRs until the quota resets. Any other failure
-// (signed out, revoked token, lost access) does not fall back.
-const lastGoodListing = new Map<string, readonly PullRequestListEntry[]>();
+// The last clean listing per app project, for `resolveDigestListing`.
+const lastGoodListing: DigestListingMemory<PullRequestListEntry> = new Map();
 
 export function loadPrEntries(
   appProjectId: string | undefined,
@@ -108,30 +107,33 @@ export function loadPrEntries(
     if (appProjectId === undefined) return undefined;
     const service = yield* PullRequestService;
 
-    let entries: readonly PullRequestListEntry[] = [];
-    let note: string | undefined;
-    let stale = false;
     const listRead = yield* service
       .list({ state: "all", projectId: ProjectId.make(appProjectId), limit: DIGEST_PR_LIMIT })
       .pipe(Effect.result);
-    if (listRead._tag === "Success") {
-      entries = listRead.success.entries;
-      lastGoodListing.set(appProjectId, entries);
-    } else {
-      const lastGood = isRateLimitedFailure(listRead.failure)
-        ? lastGoodListing.get(appProjectId)
-        : undefined;
-      entries = lastGood ?? [];
-      stale = lastGood !== undefined;
-      note =
-        lastGood !== undefined
-          ? RATE_LIMITED_CHANGE_REQUEST_NOTE
-          : listRead.failure instanceof Error
-            ? listRead.failure.message
-            : "Change requests unavailable.";
-    }
-    if (entries.length === 0) return { entries, ...(note !== undefined ? { note } : {}) };
+    const { entries, stale, note } = resolveDigestListing({
+      memory: lastGoodListing,
+      projectId: appProjectId,
+      nowMs: yield* Clock.currentTimeMillis,
+      read:
+        listRead._tag === "Success"
+          ? {
+              _tag: "Success",
+              entries: listRead.success.entries,
+              hadErrors: listRead.success.errors.length > 0,
+            }
+          : {
+              _tag: "Failure",
+              rateLimited: isRateLimitedFailure(listRead.failure),
+              message:
+                listRead.failure instanceof Error
+                  ? listRead.failure.message
+                  : "Change requests unavailable.",
+            },
+    });
     const staleField = stale ? { stale: true } : {};
+    if (entries.length === 0) {
+      return { entries, ...(note !== undefined ? { note } : {}), ...staleField };
+    }
 
     // Enrich only the freshest OPEN rows: those are the chips that show
     // faces and comment counts. Bounded and parallel through the service's

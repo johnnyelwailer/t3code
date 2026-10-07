@@ -25,7 +25,6 @@ function DigestAutoStatus({
   changeRequestNote?: string | undefined;
   nowMs: number;
 }) {
-  if (jiraSyncedAt === undefined && updatedAtMs === undefined) return null;
   // PRs that may be old or missing (the host rate-limited the read): said here, beside the sync.
   const prNotice = changeRequestNote ? (
     <span className="inline-flex items-center gap-1.5 text-warning" title={changeRequestNote}>
@@ -33,6 +32,7 @@ function DigestAutoStatus({
       PRs may be out of date
     </span>
   ) : null;
+  if (jiraSyncedAt === undefined && updatedAtMs === undefined) return prNotice;
   const stale = jiraSyncedAt !== undefined && nowMs - Date.parse(jiraSyncedAt) > JIRA_SYNC_STALE_MS;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
