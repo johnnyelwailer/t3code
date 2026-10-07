@@ -118,16 +118,22 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
     }
   };
 
+  // Hold the replay slot for one drive. `resuming` is set and cleared INSIDE the tracked work, so
+  // "no drive in flight" always implies "slot free" — `offer` relies on that.
+  const held = <T>(drive: () => Promise<T>): Promise<T> =>
+    tracked(async () => {
+      resuming = true;
+      try {
+        return await drive();
+      } finally {
+        resuming = false;
+      }
+    });
   // One replay drive at a time: a concurrent resume/redrive is settling — never double-drive.
   const exclusive = async (drive: () => Promise<unknown>): Promise<void> => {
     if (registry.getRun(runId) === undefined) return;
     if (resuming) return;
-    resuming = true;
-    try {
-      await tracked(drive);
-    } finally {
-      resuming = false;
-    }
+    await held(drive);
   };
   const funnel = {
     runId,
@@ -162,23 +168,18 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
     // two offers woken by the same settled drive could both claim the slot.
     while (inFlight.size > 0) await Promise.allSettled([...inFlight]);
     if (cancelled || registry.getRun(runId) === undefined) return false;
-    resuming = true;
-    try {
-      return await tracked(async () => {
-        const target = await decide();
-        if (target === undefined) return false;
-        return await resumeWorkflowRunHost({
-          ...funnel,
-          correlationId: target.correlationId,
-          reply: target.reply,
-          appendReply,
-          retryResolvedReply: config.retryResolvedReply,
-          onReplyJournaled: config.onReplyJournaled,
-        });
+    return await held(async () => {
+      const target = await decide();
+      if (target === undefined) return false;
+      return await resumeWorkflowRunHost({
+        ...funnel,
+        correlationId: target.correlationId,
+        reply: target.reply,
+        appendReply,
+        retryResolvedReply: config.retryResolvedReply,
+        onReplyJournaled: config.onReplyJournaled,
       });
-    } finally {
-      resuming = false;
-    }
+    });
   };
 
   const fail = async (error: unknown): Promise<void> => {

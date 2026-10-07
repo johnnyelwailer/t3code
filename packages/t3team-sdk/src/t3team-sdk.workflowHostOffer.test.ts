@@ -95,6 +95,26 @@ describe("workflow host offer", () => {
     expect(run.onFailed).not.toHaveBeenCalled();
   });
 
+  it("lets two offers woken by the same drive claim the slot one after the other", async () => {
+    const run = makeHost("offer-two", "recordActive");
+    expect(await run.host.start()).toBe("suspended");
+    const resumed = run.host.resume(run.parkedOn()!, checks);
+    const decided: string[] = [];
+    const answer = (reply: unknown) => async () => {
+      decided.push(run.parkedOn()!);
+      return { correlationId: run.parkedOn()!, reply };
+    };
+    const offers = [run.host.offer(answer(checks)), run.host.offer(answer(merged))];
+    run.release();
+    await resumed;
+
+    expect(await Promise.all(offers)).toEqual([true, true]);
+    expect(new Set(decided).size).toBe(2); // each decided against its own, later park
+    expect(run.onCompleted.mock.calls[0]?.[0]).toMatchObject({
+      result: { ended: "scm.change-request.merged", seen: ["checks:success", "checks:success"] },
+    });
+  });
+
   it("waits out the launch drive before deciding", async () => {
     const run = makeHost("offer-after-start", "recordRunning");
     const started = run.host.start(); // held at recordRunning: nothing journaled yet
