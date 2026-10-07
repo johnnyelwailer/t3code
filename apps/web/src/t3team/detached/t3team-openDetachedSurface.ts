@@ -35,8 +35,7 @@ export function openDetachedSurface(request: DetachedSurfaceRequest): void {
  * "detach" control (there is nowhere further to detach to) and any chrome that assumes a shell.
  */
 export function isDetachedSurfaceWindow(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    isDetachedSurfacePath(appRoutePathname(new URL(window.location.href)))
-  );
+  // A page without a location (a test renderer, say) is not a detached surface.
+  const href = typeof window === "undefined" ? undefined : window.location?.href;
+  return typeof href === "string" && isDetachedSurfacePath(appRoutePathname(new URL(href)));
 }
