@@ -49,6 +49,7 @@ export const RPC_REQUIRED_SCOPES = {
   // t3team: fork thread facts/artifacts side streams are thread reads like subscribeThread.
   [WS_METHODS.t3teamSubscribeThreadFacts]: AuthOrchestrationReadScope,
   [WS_METHODS.t3teamSubscribeThreadArtifacts]: AuthOrchestrationReadScope,
+  [WS_METHODS.t3teamSubscribePackDocuments]: AuthOrchestrationReadScope,
   // t3team: "stop including sub-runs" interrupts runs, like interrupting one thread.
   [WS_METHODS.t3teamStopThreadCascade]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverProbe]: AuthOrchestrationReadScope,

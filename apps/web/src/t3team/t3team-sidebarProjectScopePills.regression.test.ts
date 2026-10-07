@@ -30,4 +30,8 @@ describe("Sidebar project scope pills regression guard", () => {
       /<T3TeamSidebarProjectScopePills[\s\S]*?activeScopeKey=\{projectScopeKey\}[\s\S]*?onSelectScope=\{setProjectScopeKey\}/,
     );
   });
+
+  it("keeps the header project icon out of the row while the pills are on", () => {
+    expect(source).toMatch(/projectScope=\{\s*projectScopePillsEnabled \? null :/);
+  });
 });

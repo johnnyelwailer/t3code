@@ -8,7 +8,9 @@ import {
   type DigestPlan,
 } from "./t3team-projectMyWorkDigestPlan";
 
-const NOW = Date.parse("2026-10-06T08:00:00.000Z");
+// Local wall-clock times: the default placement follows the viewer's own morning.
+const MORNING = new Date(2026, 9, 6, 9, 0).getTime();
+const NOW = new Date(2026, 9, 6, 15, 0).getTime();
 const withYesterday: DigestGraph["yesterday"] = {
   merged: [
     {
@@ -53,7 +55,19 @@ const agentPlan = (sections: DigestPlan["sections"]): DigestPlan => ({
 });
 
 describe("the yesterday section of the plan", () => {
-  it("is in the footer of the heuristic plan, as history rather than an ask", () => {
+  it("leads the heuristic plan before noon, above the reviews owed", () => {
+    const withReview = {
+      ...graph(withYesterday),
+      reviewRequests: [{ id: "r1" }] as unknown as NonNullable<DigestGraph["reviewRequests"]>,
+    };
+    const plan = buildHeuristicDigestPlan(withReview, MORNING);
+    expect(plan.sections.map((s) => [s.id, s.placement])).toEqual([
+      ["yesterday", "side"],
+      ["to-review", "side"],
+    ]);
+  });
+
+  it("is in the footer of the heuristic plan after noon, as history rather than an ask", () => {
     const plan = buildHeuristicDigestPlan(graph(withYesterday), NOW);
     expect(plan.sections).toEqual([
       expect.objectContaining({
@@ -77,9 +91,33 @@ describe("the yesterday section of the plan", () => {
     expect(resolveDigestPlan(arranged, graph(), NOW).sections).toEqual([]);
   });
 
-  it("trails in the footer of an arrangement made before it existed", () => {
-    const resolved = resolveDigestPlan(agentPlan([]), graph(withYesterday), NOW);
+  it("trails in the footer of an arrangement made before it existed, even in the morning", () => {
+    const resolved = resolveDigestPlan(agentPlan([]), graph(withYesterday), MORNING);
     expect(resolved.sections.map((s) => [s.id, s.placement])).toEqual([["yesterday", "footer"]]);
+  });
+
+  it("keeps an arrangement's footer placement in the morning", () => {
+    const arranged = agentPlan([yesterdaySection("footer")]);
+    const kept = resolveDigestPlan(arranged, graph(withYesterday), MORNING);
+    expect(kept.sections.map((s) => [s.id, s.placement])).toEqual([["yesterday", "footer"]]);
+  });
+
+  it("is absent when Jira merely updated tickets", () => {
+    const updatedOnly = { merged: [], moved: [{ ticketId: "t", at: "2026-10-05T10:00:00Z" }] };
+    expect(buildHeuristicDigestPlan(graph(updatedOnly), MORNING).sections).toEqual([]);
+  });
+
+  it("is absent when a filter hid every ticket that moved and nothing was merged", () => {
+    // The status filter narrows `tickets`, not `yesterday`: the moves are there, their tickets are not.
+    const movedHidden = {
+      merged: [],
+      moved: [
+        { ticketId: "t-hidden", from: "Code Review", to: "Done", at: "2026-10-05T10:00:00Z" },
+      ],
+    };
+    expect(buildHeuristicDigestPlan(graph(movedHidden), MORNING).sections).toEqual([]);
+    const arranged = agentPlan([yesterdaySection("side")]);
+    expect(resolveDigestPlan(arranged, graph(movedHidden), MORNING).sections).toEqual([]);
   });
 
   it("does not double up on the default plan", () => {

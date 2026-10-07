@@ -13,6 +13,7 @@
  * Each section is a read-only slice built on the fetch-only hook (see
  * `t3team-AllProjectsMyWorkSection.tsx` for why it does NOT reuse `ProjectDashboardMyWorkView`).
  */
+import { closeDigestPullRequest, openDigestTicket } from "~/t3team/t3team-digestPrAsideStore";
 import { useCallback, useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
@@ -167,8 +168,6 @@ export function AllProjectsMyWorkView({
         </T3SurfacePanel>
       );
     }
-    // TODO(digest-nav): rows open the ticket URL today; route through onOpenTicket once the digest
-    // rows accept an in-app handler.
     return (
       <ProjectMyWorkDigestView
         plan={digestPlan}
@@ -177,11 +176,20 @@ export function AllProjectsMyWorkView({
         burndownVariant={flags.digestBurndownVariant}
         {...(digestUpdatedAt !== undefined ? { updatedAtMs: digestUpdatedAt } : {})}
         onOpenTicket={
-          // Beta flag: rows open the ticket in-app (each ticket knows its project).
+          // Beta flag: rows open the ticket in-app, beside the digest (each ticket knows its
+          // project); the full page is one click from there.
           flags.digestRowNavigation === "in-app"
             ? (ticketId: string) => {
                 const ticket = digestGraph.tickets.find((entry) => entry.id === ticketId);
-                if (ticket) onOpenTicket(ticket.projectId, ticketId);
+                if (!ticket) return;
+                openDigestTicket({
+                  projectId: ticket.projectId,
+                  ticketId,
+                  openFullPage: (shownTicketId) => {
+                    closeDigestPullRequest();
+                    onOpenTicket(ticket.projectId, shownTicketId);
+                  },
+                });
               }
             : undefined
         }

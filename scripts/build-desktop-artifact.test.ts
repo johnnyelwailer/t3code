@@ -80,6 +80,10 @@ import {
   bundlesWslRuntime,
   STAGE_INSTALL_ARGS,
   ancestorNodeModulesPaths,
+  resolveRepoEsbuildPackageBin,
+  resolveRepoEsbuildBinary,
+  pickFirstSpawnableEsbuildBinary,
+  isPnpmNodeWrappedBinShim,
   copyDirectoryPreservingSymlinks,
   LinuxBrowserSecretHostError,
   stageBrowserSecret,
@@ -2819,6 +2823,105 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 // own node_modules holds the sidecar externals and must be ignored, but any
 // node_modules *above* it would let Node's parent walk satisfy an import that is
 // missing from the package, so the probe refuses to run in that case.
+
+const BROKEN_PNPM_ESBUILD_SHIM = `#!/bin/sh
+basedir=$(dirname "$(echo "$0" | sed -e 's,\\\\,/,g')")
+if [ -z "$NODE_PATH" ]; then
+  export NODE_PATH="/tmp/fake"
+fi
+if [ -x "$basedir/node" ]; then
+  exec "$basedir/node"  "$basedir/../esbuild/bin/esbuild" "$@"
+elif command -v node >/dev/null 2>&1; then
+  exec node  "$basedir/../esbuild/bin/esbuild" "$@"
+else
+  exec node  "$basedir/../esbuild/bin/esbuild" "$@"
+fi
+# cmd-shim-target=/tmp/fake/esbuild/bin/esbuild
+`;
+
+const GOOD_PNPM_ESBUILD_SHIM = `#!/bin/sh
+basedir=$(dirname "$(echo "$0" | sed -e 's,\\\\,/,g')")
+exec "$basedir/../esbuild/bin/esbuild"   "$@"
+exit $?
+# cmd-shim-target=/tmp/fake/esbuild/bin/esbuild
+`;
+
+it("detects pnpm cmd-shims that wrap esbuild with node", async () => {
+  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-esbuild-shim-"));
+  try {
+    const broken = NodePath.join(root, "broken-esbuild");
+    const good = NodePath.join(root, "good-esbuild");
+    const nativeLike = NodePath.join(root, "native-esbuild");
+    NodeFS.writeFileSync(broken, BROKEN_PNPM_ESBUILD_SHIM, { mode: 0o755 });
+    NodeFS.writeFileSync(good, GOOD_PNPM_ESBUILD_SHIM, { mode: 0o755 });
+    // Mach-O/ELF magic — not a shebang, so not a node-wrapped shim.
+    NodeFS.writeFileSync(nativeLike, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0x00, 0x00]));
+    assert.isTrue(await isPnpmNodeWrappedBinShim(broken));
+    assert.isFalse(await isPnpmNodeWrappedBinShim(good));
+    assert.isFalse(await isPnpmNodeWrappedBinShim(nativeLike));
+  } finally {
+    NodeFS.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+it("resolves esbuild via the package bin, skipping a node-wrapped .bin shim", async () => {
+  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-esbuild-resolve-"));
+  try {
+    const webPkg = NodePath.join(root, "apps", "web");
+    const esbuildPkg = NodePath.join(root, "node_modules", "esbuild");
+    const brokenShimDir = NodePath.join(root, "node_modules", ".pnpm", "node_modules", ".bin");
+    NodeFS.mkdirSync(webPkg, { recursive: true });
+    NodeFS.mkdirSync(NodePath.join(esbuildPkg, "bin"), { recursive: true });
+    NodeFS.mkdirSync(brokenShimDir, { recursive: true });
+    NodeFS.writeFileSync(
+      NodePath.join(webPkg, "package.json"),
+      JSON.stringify({ name: "web", dependencies: { esbuild: "0.0.0" } }),
+    );
+    NodeFS.writeFileSync(
+      NodePath.join(root, "package.json"),
+      JSON.stringify({ name: "root", private: true }),
+    );
+    NodeFS.writeFileSync(
+      NodePath.join(esbuildPkg, "package.json"),
+      JSON.stringify({ name: "esbuild", bin: { esbuild: "bin/esbuild" } }),
+    );
+    const packageBin = NodePath.join(esbuildPkg, "bin", "esbuild");
+    // Simulate postinstall native binary (not valid JS).
+    NodeFS.writeFileSync(packageBin, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0x01, 0x02]), {
+      mode: 0o755,
+    });
+    NodeFS.writeFileSync(NodePath.join(brokenShimDir, "esbuild"), BROKEN_PNPM_ESBUILD_SHIM, {
+      mode: 0o755,
+    });
+    // Also plant a broken root .bin shim — must still prefer the package bin.
+    NodeFS.mkdirSync(NodePath.join(root, "node_modules", ".bin"), { recursive: true });
+    NodeFS.writeFileSync(
+      NodePath.join(root, "node_modules", ".bin", "esbuild"),
+      BROKEN_PNPM_ESBUILD_SHIM,
+      { mode: 0o755 },
+    );
+
+    assert.equal(resolveRepoEsbuildPackageBin(root), packageBin);
+    assert.equal(await resolveRepoEsbuildBinary(root), packageBin);
+  } finally {
+    NodeFS.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+it("skips a leading node-wrapped shim and picks the next spawnable esbuild", async () => {
+  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-esbuild-fallback-"));
+  try {
+    const brokenShim = NodePath.join(root, "broken-esbuild");
+    const goodShim = NodePath.join(root, "good-esbuild");
+    NodeFS.writeFileSync(brokenShim, BROKEN_PNPM_ESBUILD_SHIM, { mode: 0o755 });
+    NodeFS.writeFileSync(goodShim, GOOD_PNPM_ESBUILD_SHIM, { mode: 0o755 });
+    assert.equal(await pickFirstSpawnableEsbuildBinary([brokenShim, goodShim]), goodShim);
+    assert.isUndefined(await pickFirstSpawnableEsbuildBinary([brokenShim]));
+  } finally {
+    NodeFS.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 it("lists ancestor node_modules, nearest first, excluding the start directory", () => {
   assert.deepStrictEqual(ancestorNodeModulesPaths("C:\\tmp\\probe\\app", "\\"), [
     "C:\\tmp\\probe\\node_modules",

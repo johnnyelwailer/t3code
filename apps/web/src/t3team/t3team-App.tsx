@@ -73,6 +73,7 @@ export function App({
     handleCreateThread,
     handleCreateProjectKickoffThread,
     handleCreateTicketKickoffThread,
+    handleCreateTicketKickoffThreadBeside,
     handleCreateTicketThreadFromSidebar,
     handleThreadKickoffConsumed,
     handleDeleteProject,
@@ -171,6 +172,7 @@ export function App({
         {...(onCloseEmbeddedThread ? { onCloseEmbeddedThread } : {})}
         onKickoffProjectThread={handleCreateProjectKickoffThread}
         onKickoffTicketThread={handleCreateTicketKickoffThread}
+        onKickoffTicketThreadBeside={handleCreateTicketKickoffThreadBeside}
         onThreadKickoffConsumed={handleThreadKickoffConsumed}
         onThreadDisplayModeChange={store.updateThreadDisplayMode}
         onBackToDashboard={handleSelectProject}

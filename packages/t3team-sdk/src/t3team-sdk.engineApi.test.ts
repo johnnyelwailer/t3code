@@ -7,6 +7,8 @@ import {
   getScripts,
   getThread,
   phase,
+  parallel,
+  pipeline,
   withBodyApi,
 } from "./t3team-sdk.index.ts";
 
@@ -72,5 +74,30 @@ describe("imported engine API", () => {
     withBodyApi({ ...surface(), scripts: undefined }, () => {
       expect(() => getScripts()).toThrow(/capability-gated/);
     });
+  });
+});
+
+it("forwards composition options through the imported SDK API", async () => {
+  const { createWorkflowPrimitives } = await import("@runbook/core/composition");
+  const primitives = createWorkflowPrimitives({
+    callPrimitive: async (call) => call.exec(),
+    runBlackBoxed: async (fn) => fn(),
+    sleep: async () => {},
+    spent: () => 0,
+    hostNow: () => 0,
+    budgetTotal: 0,
+    onPhase: () => {},
+    onLog: () => {},
+    hostUuid: () => "id",
+    nowIso: () => "now",
+  });
+  await withBodyApi(primitives, async () => {
+    const results = await parallel([async () => 1, async () => "two"] as const, { concurrency: 1 });
+    const typed: [number | null, string | null] = results;
+    expect(typed).toEqual([1, "two"]);
+    expect(await pipeline([1, 2], (prev: number) => prev + 1, { concurrency: 1 })).toEqual([2, 3]);
+    expect(await pipeline([1, 2], async (prev: number) => prev + 1, { concurrency: 1 })).toEqual([
+      2, 3,
+    ]);
   });
 });

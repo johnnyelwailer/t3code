@@ -2205,6 +2205,107 @@ export function ancestorNodeModulesPaths(
   return paths;
 }
 
+/**
+ * Resolves esbuild's package `bin/esbuild` via Node module resolution.
+ *
+ * Prefer this over pnpm's `node_modules/.bin/esbuild` shims. Those shims can be
+ * baked as `exec node <target>` while the published target is still a JS
+ * placeholder; esbuild's postinstall then replaces the target with a native
+ * Mach-O/ELF binary. Spawning the stale shim feeds the native binary to Node
+ * and fails with `SyntaxError: Invalid or unexpected token` — the failure mode
+ * seen on a fresh macOS `pnpm install` during `esbuild @t3team/pack-api`.
+ *
+ * The package bin itself is safe to spawn directly on POSIX (shebang JS before
+ * postinstall; native binary after). On Windows the package bin stays JS, so
+ * callers should invoke it via `node` / `process.execPath`.
+ */
+export function resolveRepoEsbuildPackageBin(repoRoot: string): string | undefined {
+  const roots = [
+    NodePath.join(repoRoot, "apps", "web", "package.json"),
+    NodePath.join(repoRoot, "package.json"),
+  ];
+  for (const from of roots) {
+    // createRequire does not require the file to exist; skipping missing roots
+    // prevents resolution from walking out of a fixture (or empty tree) into an
+    // unrelated ancestor node_modules.
+    if (!NodeFS.existsSync(from)) continue;
+    try {
+      const req = NodeModule.createRequire(from);
+      const packageJsonPath = req.resolve("esbuild/package.json");
+      return NodePath.join(NodePath.dirname(packageJsonPath), "bin", "esbuild");
+    } catch {
+      // Try the next resolution root.
+    }
+  }
+  return undefined;
+}
+
+/**
+ * True when `candidate` is a pnpm/cmd-shim shell script that wraps the target
+ * with `node`. Those shims break after esbuild's postinstall swaps in a native
+ * binary. Symlinks and native binaries return false.
+ */
+export async function isPnpmNodeWrappedBinShim(candidate: string): Promise<boolean> {
+  try {
+    const fh = await NodeFSP.open(candidate, "r");
+    try {
+      const buf = Buffer.alloc(1024);
+      const { bytesRead } = await fh.read(buf, 0, 1024, 0);
+      const head = buf.subarray(0, bytesRead).toString("utf8");
+      if (!head.startsWith("#!")) return false;
+      // Matches `exec node …`, `exec node.exe …`, and `exec "$basedir/node" …`.
+      return /\bexec\s+(?:"\$basedir\/node(?:\.exe)?"|node(?:\.exe)?)\b/.test(head);
+    } finally {
+      await fh.close();
+    }
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Picks the first existing esbuild path that is safe to spawn, skipping pnpm
+ * cmd-shims that wrap the target with `node`. Exported for unit tests.
+ */
+export async function pickFirstSpawnableEsbuildBinary(
+  candidates: ReadonlyArray<string>,
+): Promise<string | undefined> {
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    if (seen.has(candidate)) continue;
+    seen.add(candidate);
+    try {
+      await NodeFSP.access(candidate);
+    } catch {
+      continue;
+    }
+    if (await isPnpmNodeWrappedBinShim(candidate)) {
+      continue;
+    }
+    return candidate;
+  }
+  return undefined;
+}
+
+/**
+ * Locates an esbuild binary safe to spawn for packaging `@t3team/pack-api`.
+ * Prefers the package bin (via createRequire), then `.bin` candidates that are
+ * not node-wrapped cmd-shims.
+ */
+export async function resolveRepoEsbuildBinary(repoRoot: string): Promise<string> {
+  const fromPackage = resolveRepoEsbuildPackageBin(repoRoot);
+  const candidates = [
+    ...(fromPackage !== undefined ? [fromPackage] : []),
+    NodePath.join(repoRoot, "node_modules", ".bin", "esbuild"),
+    NodePath.join(repoRoot, "node_modules", ".pnpm", "node_modules", ".bin", "esbuild"),
+  ];
+  const picked = await pickFirstSpawnableEsbuildBinary(candidates);
+  if (picked !== undefined) return picked;
+  throw new Error(
+    `esbuild not found (or only node-wrapped pnpm shims were present). Looked in:\n  ${candidates.join("\n  ")}\nRun a dependency install in ${repoRoot} first.`,
+  );
+}
+
 const NativeMarkerManifest = Schema.Struct({
   dependencies: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   optionalDependencies: Schema.optional(Schema.Record(Schema.String, Schema.String)),
@@ -4398,42 +4499,28 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   // from inside the asar or from Resources/packs/.
   yield* Effect.log("[desktop-artifact] Compiling @t3team/pack-api for packaging...");
   const packApiDir = path.join(stageAppDir, "node_modules", "@t3team", "pack-api");
-  // esbuild is a TRANSITIVE dependency, so pnpm does not always link it into
-  // the repo-root .bin — where it lands depends on the pnpm version and the
-  // hoisting settings that produced node_modules. Probing both known locations
-  // is platform-independent and survives a re-install; keying off hostPlatform
-  // did not, and a fresh macOS install failed the packaging step with
-  // `spawn .../node_modules/.bin/esbuild ENOENT`.
-  const esbuildCandidates = [
-    path.join(repoRoot, "node_modules", ".bin", "esbuild"),
-    path.join(repoRoot, "node_modules", ".pnpm", "node_modules", ".bin", "esbuild"),
-  ];
-  let repoEsbuild: string | undefined;
-  for (const candidate of esbuildCandidates) {
-    const found = yield* Effect.tryPromise(() => NodeFSP.access(candidate)).pipe(
-      Effect.as(true),
-      Effect.orElseSucceed(() => false),
-    );
-    if (found) {
-      repoEsbuild = candidate;
-      break;
-    }
-  }
-  if (repoEsbuild === undefined) {
-    return yield* Effect.die(
-      new Error(
-        `esbuild not found. Looked in:\n  ${esbuildCandidates.join("\n  ")}\nRun a dependency install in ${repoRoot} first.`,
-      ),
-    );
-  }
-  const esbuildCommand = yield* resolveSpawnCommand(repoEsbuild, [
+  // Resolve the package bin (not pnpm's .bin shim). Fresh macOS pnpm installs
+  // can leave a cmd-shim that does `exec node <target>` after esbuild's
+  // postinstall swapped in a native Mach-O — spawning that shim throws
+  // SyntaxError during this step. See resolveRepoEsbuildBinary.
+  const repoEsbuild = yield* Effect.tryPromise(() => resolveRepoEsbuildBinary(repoRoot)).pipe(
+    Effect.catch((cause) => Effect.die(cause instanceof Error ? cause : new Error(String(cause)))),
+  );
+  const esbuildArgs = [
     path.join(packApiDir, "src", "index.ts"),
     "--bundle",
     "--format=esm",
     "--platform=node",
     "--target=node22",
     `--outfile=${path.join(packApiDir, "index.mjs")}`,
-  ]);
+  ] as const;
+  // Windows keeps a JS package bin (no shebang exec). POSIX can spawn the
+  // package bin directly whether it is still the JS placeholder or the native
+  // postinstall binary.
+  const esbuildCommand =
+    hostPlatform === "win32"
+      ? yield* resolveSpawnCommand(process.execPath, [repoEsbuild, ...esbuildArgs])
+      : yield* resolveSpawnCommand(repoEsbuild, [...esbuildArgs]);
   yield* runCommand(
     ChildProcess.make(esbuildCommand.command, esbuildCommand.args, {
       shell: esbuildCommand.shell,
