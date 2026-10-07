@@ -88,17 +88,33 @@ describe("the yesterday recap", () => {
   });
 
   it("summarises merged PRs, done tickets and tickets handed to review or test", () => {
-    expect(recap.summary).toEqual({ merged: 4, done: 1, review: 1, moved: 3 });
-    expect(digestYesterdaySummaryText(recap.summary)).toBe(
-      "4 PRs merged · 1 done · 1 to review/test",
+    expect(recap.summary).toEqual({ merged: 4, done: 1, review: 0, test: 1, moved: 3 });
+    expect(digestYesterdaySummaryText(recap.summary)).toBe("4 PRs merged · 1 done · 1 to test");
+  });
+
+  it("tells a ticket ready for review from one past it, in test", () => {
+    const moves = (to: string) => ({
+      merged: [],
+      moved: [{ ticketId: "t-alarm", from: "In Progress", to, at: "2026-10-05T10:00:00Z" }],
+    });
+    expect(digestYesterdayRecap(moves("Code Review"), ticketsById).summary).toMatchObject({
+      review: 1,
+      test: 0,
+    });
+    expect(digestYesterdayRecap(moves("QA"), ticketsById).summary).toMatchObject({
+      review: 0,
+      test: 1,
+    });
+    expect(digestYesterdaySummaryText({ merged: 2, done: 0, review: 1, test: 1, moved: 2 })).toBe(
+      "2 PRs merged · 1 to review · 1 to test",
     );
   });
 
   it("falls back to a move count when nothing landed in a counted lane", () => {
-    expect(digestYesterdaySummaryText({ merged: 0, done: 0, review: 0, moved: 1 })).toBe(
+    expect(digestYesterdaySummaryText({ merged: 0, done: 0, review: 0, test: 0, moved: 1 })).toBe(
       "1 ticket moved",
     );
-    expect(digestYesterdaySummaryText({ merged: 1, done: 0, review: 0, moved: 0 })).toBe(
+    expect(digestYesterdaySummaryText({ merged: 1, done: 0, review: 0, test: 0, moved: 0 })).toBe(
       "1 PR merged",
     );
   });
@@ -107,7 +123,7 @@ describe("the yesterday recap", () => {
     expect(digestYesterdayRecap(undefined, ticketsById)).toEqual({
       items: [],
       loosePrs: [],
-      summary: { merged: 0, done: 0, review: 0, moved: 0 },
+      summary: { merged: 0, done: 0, review: 0, test: 0, moved: 0 },
     });
   });
 });

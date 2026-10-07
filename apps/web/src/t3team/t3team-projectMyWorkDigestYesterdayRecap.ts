@@ -1,4 +1,5 @@
 import { getProjectTicketKanbanLane } from "~/t3team/t3team-projectTicketStatus";
+import { normalizeProjectTicketStatus } from "~/t3team/t3team-projectTicketStatusKeywords";
 import { digestTitleWithoutKey } from "~/t3team/t3team-projectMyWorkDigestFacts";
 import type {
   DigestYesterday,
@@ -23,7 +24,10 @@ export type DigestYesterdayWorkItem = {
 export type DigestYesterdaySummary = {
   readonly merged: number;
   readonly done: number;
+  /** Moved to a review status: ready for someone to review. */
   readonly review: number;
+  /** Moved to a test/QA status: past review, merged at least. */
+  readonly test: number;
   readonly moved: number;
 };
 
@@ -43,6 +47,14 @@ type Draft = {
 };
 
 const atMs = (iso: string) => Date.parse(iso) || 0;
+
+// The kanban's review lane holds both "Code Review" and "In Test"; the recap tells them apart,
+// because a ticket in test is past review.
+function outcomeLane(status: string) {
+  const lane = getProjectTicketKanbanLane(status);
+  if (lane !== "review") return lane;
+  return normalizeProjectTicketStatus(status).includes("review") ? "review" : "test";
+}
 
 /**
  * Yesterday, grouped by work item instead of by event: one entry per ticket with its last status
@@ -104,9 +116,7 @@ export function digestYesterdayRecap(
       lastAtMs: Math.max(...times),
     };
   });
-  const lanes = items.flatMap((item) =>
-    item.outcome ? [getProjectTicketKanbanLane(item.outcome.to)] : [],
-  );
+  const lanes = items.flatMap((item) => (item.outcome ? [outcomeLane(item.outcome.to)] : []));
   return {
     items: items.toSorted((a, b) => b.lastAtMs - a.lastAtMs),
     loosePrs: loosePrs.toSorted((a, b) => atMs(b.mergedAt) - atMs(a.mergedAt)),
@@ -114,17 +124,19 @@ export function digestYesterdayRecap(
       merged: yesterday?.merged.length ?? 0,
       done: lanes.filter((lane) => lane === "done").length,
       review: lanes.filter((lane) => lane === "review").length,
+      test: lanes.filter((lane) => lane === "test").length,
       moved: lanes.length,
     },
   };
 }
 
-/** "6 PRs merged · 3 done · 1 to review/test"; other moves only count when nothing else did. */
+/** "6 PRs merged · 3 done · 1 to review · 1 to test"; other moves count only when nothing else did. */
 export function digestYesterdaySummaryText(summary: DigestYesterdaySummary): string {
   const parts = [
     summary.merged > 0 ? `${summary.merged} PR${summary.merged === 1 ? "" : "s"} merged` : null,
     summary.done > 0 ? `${summary.done} done` : null,
-    summary.review > 0 ? `${summary.review} to review/test` : null,
+    summary.review > 0 ? `${summary.review} to review` : null,
+    summary.test > 0 ? `${summary.test} to test` : null,
   ].filter((part) => part !== null);
   if (parts.length > 0) return parts.join(" · ");
   return `${summary.moved} ticket${summary.moved === 1 ? "" : "s"} moved`;

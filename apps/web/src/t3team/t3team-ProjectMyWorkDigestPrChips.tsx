@@ -77,9 +77,12 @@ export function DigestReviewerStack({
 export function DigestPrChip({
   pr,
   repoLabel = (repo) => repo,
+  showState = true,
 }: {
   pr: DigestChangeRequest;
   repoLabel?: (repo: string) => string;
+  /** Off where every chip shares one state (a list of merged PRs): the badge would only repeat. */
+  showState?: boolean;
 }) {
   const state = DIGEST_PR_STATE[pr.state];
   const open = (event: MouseEvent) => {
@@ -114,9 +117,11 @@ export function DigestPrChip({
                 {digestTitleWithoutKey(pr.title, pr.ticketId)}
               </span>
             ) : null}
-            <Badge size="sm" variant={state.variant}>
-              {state.label}
-            </Badge>
+            {showState ? (
+              <Badge size="sm" variant={state.variant}>
+                {state.label}
+              </Badge>
+            ) : null}
             {pr.additions !== undefined && pr.deletions !== undefined ? (
               <span className="hidden -translate-y-px font-mono text-3xs leading-none tabular-nums @md/prs:inline">
                 <span className="text-success">+{pr.additions}</span>{" "}
@@ -151,9 +156,11 @@ const SHOWN_PRS = 3;
 export function DigestPrChips({
   prs,
   repoLabel,
+  showState = true,
 }: {
   prs: readonly DigestChangeRequest[];
   repoLabel?: (repo: string) => string;
+  showState?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   if (prs.length === 0) return null;
@@ -163,7 +170,12 @@ export function DigestPrChips({
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
       {shown.map((pr) => (
-        <DigestPrChip key={pr.id} pr={pr} {...(repoLabel ? { repoLabel } : {})} />
+        <DigestPrChip
+          key={pr.id}
+          pr={pr}
+          showState={showState}
+          {...(repoLabel ? { repoLabel } : {})}
+        />
       ))}
       {hidden > 0 ? (
         <button

@@ -19,7 +19,8 @@ import {
 } from "~/t3team/t3team-projectMyWorkDigestYesterdayRecap";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
-// A merged PR in the shape the digest's PR chip reads; no project means no in-app aside.
+// A merged PR in the shape the digest's PR chip reads; no project means no in-app aside. Every
+// recap PR is merged, so the chips leave the state badge off.
 const asChangeRequest = (pr: DigestYesterdayMerged): DigestChangeRequest => ({
   id: pr.id,
   ticketId: pr.ticketId ?? "",
@@ -88,7 +89,11 @@ function WorkItemLine({
         ) : null}
       </div>
       {item.merged.length > 0 ? (
-        <DigestPrChips prs={item.merged.map(asChangeRequest)} repoLabel={repoLabel} />
+        <DigestPrChips
+          prs={item.merged.map(asChangeRequest)}
+          repoLabel={repoLabel}
+          showState={false}
+        />
       ) : null}
     </li>
   );
@@ -104,7 +109,7 @@ function LoosePrLine({
 }) {
   return (
     <li className="flex min-w-0 items-center gap-2 px-3 py-1.5 text-xs">
-      <DigestPrChip pr={asChangeRequest(pr)} repoLabel={repoLabel} />
+      <DigestPrChip pr={asChangeRequest(pr)} repoLabel={repoLabel} showState={false} />
       <span className="min-w-0 flex-1 truncate">{pr.title}</span>
     </li>
   );
