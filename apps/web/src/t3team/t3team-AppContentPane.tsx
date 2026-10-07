@@ -1,7 +1,9 @@
+import { useMemo } from "react";
 import { SidebarInset, useSidebar } from "~/t3team/components/ui/t3team-sidebar";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import { useT3TeamScopeTeamProjectId } from "~/t3team/hooks/t3team-useScopeTeamProjectId";
 import { AppMainContent } from "~/t3team/t3team-AppMainContent";
+import { DigestTicketChatProvider } from "~/t3team/t3team-digestTicketChatContext";
 import { T3TeamInlineRecipeLaunchProvider } from "~/t3team/t3team-inlineRecipeLaunch";
 import { ProjectDashboard } from "~/t3team/t3team-ProjectDashboard";
 import { TicketDetailView } from "~/t3team/t3team-TicketDetailView";
@@ -21,6 +23,7 @@ export function AppContentPane({
   onCloseEmbeddedThread,
   onKickoffProjectThread,
   onKickoffTicketThread,
+  onKickoffTicketThreadBeside,
   onThreadKickoffConsumed,
   onThreadDisplayModeChange,
   onBackToDashboard,
@@ -38,6 +41,7 @@ export function AppContentPane({
   onCloseEmbeddedThread?: () => void;
   onKickoffProjectThread: Parameters<typeof AppMainContent>[0]["onKickoffProjectThread"];
   onKickoffTicketThread: Parameters<typeof AppMainContent>[0]["onKickoffTicketThread"];
+  onKickoffTicketThreadBeside: Parameters<typeof AppMainContent>[0]["onKickoffTicketThread"];
   onThreadKickoffConsumed: (threadId: string) => void;
   onThreadDisplayModeChange: (threadId: string, displayMode: ProjectThreadDisplayMode) => void;
   onBackToDashboard: (projectId: string) => void;
@@ -48,9 +52,19 @@ export function AppContentPane({
   // The sidebar's project scope is the "current project" for the home composer; without a scope
   // the store's own selection applies.
   const scopeProjectId = useT3TeamScopeTeamProjectId(store);
+  const ticketChatActions = useMemo(
+    () => ({
+      onKickoffThread: onKickoffTicketThreadBeside,
+      onOpenThread,
+      onOpenFullThread,
+      onThreadKickoffConsumed,
+    }),
+    [onKickoffTicketThreadBeside, onOpenThread, onOpenFullThread, onThreadKickoffConsumed],
+  );
 
   return (
     <T3TeamInlineRecipeLaunchProvider>
+      <DigestTicketChatProvider value={ticketChatActions}>
       <SidebarInset className="h-full min-h-0 overflow-hidden">
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <AppMainContent
@@ -108,6 +122,7 @@ export function AppContentPane({
           />
         </div>
       </SidebarInset>
+      </DigestTicketChatProvider>
     </T3TeamInlineRecipeLaunchProvider>
   );
 }

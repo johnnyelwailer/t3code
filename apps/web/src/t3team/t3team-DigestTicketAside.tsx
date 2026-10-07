@@ -1,10 +1,13 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { ExternalLink, Maximize2, XIcon } from "lucide-react";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { useAgentContext } from "~/t3team/hooks/t3team-useAgentContext";
 import { useWorkItemDetailViewModel } from "~/t3team/hooks/t3team-useWorkItemDetailViewModel";
+import { useDigestTicketChatActions } from "~/t3team/t3team-digestTicketChatContext";
+import { DigestTicketAsideChat } from "~/t3team/t3team-DigestTicketAsideChat";
+import { ToggleGroup } from "~/t3team/t3team-ToggleGroup";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { buildWorkItemDetailMainProps } from "~/t3team/workitem/t3team-buildWorkItemDetailMainProps";
 import { WorkItemBreadcrumb } from "~/t3team/workitem/t3team-WorkItemBreadcrumb";
@@ -33,6 +36,9 @@ export function DigestTicketAside({
   onRememberEmbeddedThread: (threadId: string) => void;
 }) {
   const { showAgentContextMenu } = useAgentContext();
+  const chatActions = useDigestTicketChatActions();
+  // Details first; Chat is the ticket page's own agent panel, with this ticket as its context.
+  const [tab, setTab] = useState<"details" | "chat">("details");
   const view = useWorkItemDetailViewModel({
     project,
     ticketId: ticket.ticketId,
@@ -58,6 +64,16 @@ export function DigestTicketAside({
           onOpenParent={openTicket}
           className="min-w-0 flex-1"
         />
+        {chatActions ? (
+          <ToggleGroup
+            value={tab}
+            onChange={(value) => setTab(value === "chat" ? "chat" : "details")}
+            options={[
+              { value: "details", label: "Details" },
+              { value: "chat", label: "Chat" },
+            ]}
+          />
+        ) : null}
         {ticket.openFullPage ? (
           <Button
             size="icon-xs"
@@ -92,6 +108,11 @@ export function DigestTicketAside({
       </div>
       {/* A flex column, as on the ticket page: the detail layout's own scroll area fills it and
           scrolls, instead of growing with its content and being clipped. */}
+      {chatActions && tab === "chat" ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <DigestTicketAsideChat project={project} view={view} actions={chatActions} />
+        </div>
+      ) : (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <WorkItemDetailMain
           {...buildWorkItemDetailMainProps({
@@ -102,6 +123,7 @@ export function DigestTicketAside({
           })}
         />
       </div>
+      )}
     </div>
   );
 }
