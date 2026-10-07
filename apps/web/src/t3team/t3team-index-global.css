@@ -8,7 +8,7 @@
 @import "./t3team-index-aciLead.css";
 @import "./t3team-index-setupWelcome.css";
 @import "./t3team-statusOrb.css";
-@import "./t3team-index-prExplainer.css";
+@import "./pr-explainer/t3team-explainer.css";
 
 /* Jira rich-text (ADF) lists: nested markers cycle like .chat-markdown's. */
 @utility t3team-adf-bullets {

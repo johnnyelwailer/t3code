@@ -126,7 +126,10 @@ function withoutPlugin(plugins: PluginOption[], name: string): PluginOption[] {
 }
 
 const config: StorybookConfig = {
-  stories: [`${srcDir}/t3team/stories/**/*.stories.tsx`],
+  stories: [
+    `${srcDir}/t3team/stories/**/*.stories.tsx`,
+    `${srcDir}/t3team/pr-explainer/stories/**/*.stories.tsx`,
+  ],
   staticDirs: packDir ? [{ from: packDir, to: "/pack" }] : [],
   framework: {
     name: "@storybook/react-vite",

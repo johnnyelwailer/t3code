@@ -457,6 +457,7 @@
     ".github/agents/**",
     ".github/skills/t3code-runtime-investigation/SKILL.md",
     ".t3team-additive-guard.json",
+    "apps/web/src/t3team/pr-explainer/README.md",
     "apps/server/src/mcp/toolkits/t3team/handlers.ts",
     "apps/server/src/mcp/toolkits/t3team/tools.ts",
     "apps/server/src/orchestration/ThreadPlanStaleness.test.ts",
