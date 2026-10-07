@@ -1,3 +1,4 @@
+// @effect-diagnostics globalTimers:off -- one macrotask lets Node report an unhandled rejection before the assertion.
 import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";

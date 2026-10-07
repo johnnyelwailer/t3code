@@ -203,22 +203,21 @@ describe("a pack message view in the timeline", () => {
     document.body.append(container);
     const root = createRoot(container);
     mounted.push({ root, container });
-    const renderRow = (workflowRunStatus: "running" | "completed") =>
+    const renderRow = (activeWorkflowInputMessageId: string | null) =>
       act(async () =>
         root.render(
           <T3TeamSystemTimelineRow
             message={entry.message}
             threadRef={null}
-            activeWorkflowInputMessageId={null}
-            workflowRunStatus={workflowRunStatus}
+            activeWorkflowInputMessageId={activeWorkflowInputMessageId}
           />,
         ),
       );
-    await renderRow("running");
+    await renderRow(null);
     const rendersAfterCrash = crashingRenders;
 
-    // The run finishes: the row re-renders, its attachment unchanged.
-    await renderRow("completed");
+    // Another row becomes the active ask: this row re-renders, its attachment unchanged.
+    await renderRow("message-elsewhere");
 
     expect(container.textContent).toContain("This view (crashy.card) could not be shown.");
     expect(crashingRenders).toBe(rendersAfterCrash);

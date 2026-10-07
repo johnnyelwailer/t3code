@@ -1,3 +1,4 @@
+// @effect-diagnostics globalConsole:off -- refusal/delivery log in the one-way Promise broker path, outside any Effect runtime.
 /**
  * The broker side of `Thread.showView`: post a registered view into a thread as a
  * `{ kind: "view" }` attachment, keyed so a re-post updates the same row in place.
