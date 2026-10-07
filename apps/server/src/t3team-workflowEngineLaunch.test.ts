@@ -18,6 +18,7 @@ import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
+import { formatWorkflowOutput } from "./t3team-workflowCompletionMessage.ts";
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
@@ -100,9 +101,7 @@ describe("launchWorkflowRecipe — real launch path", () => {
     expect(completionMessage).toMatchObject({
       threadId: launchThreadId,
       messageId: `t3team-wf-result:${runId}`,
-      // formatWorkflowOutput deliberately prefers the readable `summary` field
-      // over a raw JSON dump of the full output record.
-      text: "Low risk; well tested.",
+      text: formatWorkflowOutput(completed),
     });
 
     // Step activities: every primitive emitted a `t3team.recipe.workflow.step` entry on the

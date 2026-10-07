@@ -23,6 +23,10 @@
       "types": "./src/t3team-threadAwaitingParent.ts",
       "import": "./src/t3team-threadAwaitingParent.ts"
     },
+    "./t3team-workflowOutputData": {
+      "types": "./src/t3team-workflowOutputData.ts",
+      "import": "./src/t3team-workflowOutputData.ts"
+    },
     "./t3team-workflowOutputText": {
       "types": "./src/t3team-workflowOutputText.ts",
       "import": "./src/t3team-workflowOutputText.ts"
