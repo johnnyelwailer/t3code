@@ -53,7 +53,7 @@ import {
 } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 import { draftToolContext, findDraftArtifact } from "./t3team-workflowHostDraft.fixtures.ts";
-import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
+import { makeT3TeamWorkflowHostToolClient } from "./t3team-workflowHostTools.ts";
 import {
   makeFakeWorkflowHost,
   makeFakeWorkflowHostLayer,
@@ -137,7 +137,7 @@ const parkProbe = Effect.fn("parkProbe")(function* (input: {
 
   const hostToolGrant = input.granted ? { toolGroups: ["mutation.draft"] } : undefined;
   const hostToolClient = input.granted
-    ? makeT3TeamWorkflowHostDraftToolClient({
+    ? makeT3TeamWorkflowHostToolClient({
         broker,
         launchThreadId: runThreadId,
         allowedToolGroups: ["mutation.draft"],

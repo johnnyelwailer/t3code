@@ -1,0 +1,199 @@
+/**
+ * Publish named files from a checkout as a change request: switch to (or create) the branch from
+ * the current HEAD, commit ONLY the listed paths with the user's own git identity, push the branch
+ * to origin, and open the change request through the source-control provider of the repository's
+ * host (`GitManager.openChangeRequest`). Re-running is safe: an open change request for the branch
+ * is pushed to and returned, never duplicated.
+ *
+ * Transports — the `t3team.change_request.publish` broker tool and a workflow body's `getTools()`
+ * — only decode, call {@link T3TeamChangeRequestPublisher.publish}, and map these errors.
+ *
+ * @module t3team-changeRequestPublisher
+ */
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+
+import * as GitManager from "./git/GitManager.ts";
+import { changeRequestPathsProblem } from "./t3team-changeRequestPaths.ts";
+import {
+  ChangeRequestBranchDivergedError,
+  ChangeRequestNotSignedInError,
+  ChangeRequestNothingToCommitError,
+  type ChangeRequestPublishError,
+  type ChangeRequestPublishInput,
+  ChangeRequestPublishInputError,
+  type ChangeRequestPublishResult,
+  ChangeRequestPushRejectedError,
+  isSignInFailure,
+} from "./t3team-changeRequestPublishErrors.ts";
+import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
+import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
+
+export class T3TeamChangeRequestPublisher extends Context.Service<
+  T3TeamChangeRequestPublisher,
+  {
+    readonly publish: (
+      input: ChangeRequestPublishInput,
+    ) => Effect.Effect<ChangeRequestPublishResult, ChangeRequestPublishError>;
+  }
+>()("t3team/changeRequest/T3TeamChangeRequestPublisher") {}
+
+const REMOTE_NAME = "origin";
+
+const make = Effect.gen(function* () {
+  const git = yield* GitVcsDriver.GitVcsDriver;
+  const gitManager = yield* GitManager.GitManager;
+  const workspacePaths = yield* WorkspacePaths.WorkspacePaths;
+
+  const succeeds = (operation: string, cwd: string, args: ReadonlyArray<string>) =>
+    git
+      .execute({ operation, cwd, args, allowNonZeroExit: true, timeoutMs: 10_000 })
+      .pipe(Effect.map((result) => result.exitCode === 0));
+
+  const requireText = (field: string, value: string) =>
+    value.trim().length > 0
+      ? Effect.succeed(value.trim())
+      : Effect.fail(new ChangeRequestPublishInputError({ field, problem: "it is empty." }));
+
+  // Fast-forwards an existing branch onto HEAD (keeping working-tree changes), or creates it there.
+  const switchToBranch = Effect.fn("T3TeamChangeRequestPublisher.switchToBranch")(function* (
+    root: string,
+    branch: string,
+  ) {
+    const operation = "T3TeamChangeRequestPublisher.switchToBranch";
+    if (
+      !(yield* succeeds(operation, root, [
+        "show-ref",
+        "--verify",
+        "--quiet",
+        `refs/heads/${branch}`,
+      ]))
+    ) {
+      yield* git.createRef({ cwd: root, refName: branch, switchRef: true });
+      return;
+    }
+    if (
+      !(yield* succeeds(operation, root, [
+        "merge-base",
+        "--is-ancestor",
+        `refs/heads/${branch}`,
+        "HEAD",
+      ]))
+    ) {
+      return yield* new ChangeRequestBranchDivergedError({ branch });
+    }
+    yield* git.execute({ operation, cwd: root, args: ["checkout", "-B", branch, "--"] });
+  });
+
+  const publish = Effect.fn("T3TeamChangeRequestPublisher.publish")(function* (
+    input: ChangeRequestPublishInput,
+  ) {
+    const branch = yield* requireText("branch", input.branch);
+    const commitMessage = yield* requireText("commitMessage", input.commitMessage);
+    const title = yield* requireText("title", input.title);
+    const pathsProblem = changeRequestPathsProblem(input.paths);
+    if (pathsProblem !== undefined) {
+      return yield* new ChangeRequestPublishInputError({ field: "paths", problem: pathsProblem });
+    }
+
+    const root = (yield* git.execute({
+      operation: "T3TeamChangeRequestPublisher.root",
+      cwd: input.cwd,
+      args: ["rev-parse", "--show-toplevel"],
+    })).stdout.trim();
+    const paths: string[] = [];
+    for (const relativePath of input.paths) {
+      const resolved = yield* workspacePaths.resolveRelativePathWithinRoot({
+        workspaceRoot: root,
+        relativePath,
+      });
+      if (!paths.includes(resolved.relativePath)) paths.push(resolved.relativePath);
+    }
+    if (
+      !(yield* succeeds("T3TeamChangeRequestPublisher.branchName", root, [
+        "check-ref-format",
+        "--branch",
+        branch,
+      ]))
+    ) {
+      return yield* new ChangeRequestPublishInputError({
+        field: "branch",
+        problem: `'${branch}' is not a valid branch name.`,
+      });
+    }
+
+    // A path git cannot stage (no such file, or ignored) is the caller's to fix, named by git.
+    const stageable = yield* git.execute({
+      operation: "T3TeamChangeRequestPublisher.stageable",
+      cwd: root,
+      args: ["--literal-pathspecs", "add", "--dry-run", "-A", "--", ...paths],
+      allowNonZeroExit: true,
+    });
+    if (stageable.exitCode !== 0) {
+      const said = stageable.stderr.trim().split("\n")[0] ?? "";
+      return yield* new ChangeRequestPublishInputError({ field: "paths", problem: said });
+    }
+    // Read on a temporary index, so a refusal below leaves the checkout untouched.
+    const changes = yield* git.prepareCommitContext(root, paths);
+    const onBranch = (yield* git.statusDetails(root)).branch === branch;
+    if (changes === null && !onBranch) {
+      return yield* new ChangeRequestNothingToCommitError({ branch });
+    }
+    if (!onBranch) yield* switchToBranch(root, branch);
+    if (changes !== null) {
+      const [subject = "", ...rest] = commitMessage.split("\n");
+      yield* git.commit(root, subject.trim(), rest.join("\n"), { stage: { filePaths: paths } });
+    }
+
+    yield* git.pushCurrentBranch(root, branch, { remoteName: REMOTE_NAME }).pipe(
+      Effect.catchTags({
+        GitCommandError: (cause) =>
+          Effect.fail(
+            cause.reason === "authentication_failed"
+              ? new ChangeRequestNotSignedInError({
+                  step: "push",
+                  host: REMOTE_NAME,
+                  detail:
+                    "Git has no working credential for it: sign in through a credential helper or add an SSH key, then run again.",
+                })
+              : new ChangeRequestPushRejectedError({ branch, remoteName: REMOTE_NAME, cause }),
+          ),
+      }),
+    );
+    const { commitSha } = yield* git.resolveCommit({ cwd: root, revision: "HEAD" });
+    const opened = yield* gitManager
+      .openChangeRequest({
+        cwd: root,
+        branch,
+        baseBranch: input.base?.trim() || undefined,
+        title,
+        body: input.body,
+        draft: input.draft,
+      })
+      .pipe(
+        Effect.mapError((error) =>
+          error._tag === "SourceControlProviderError" && isSignInFailure(error)
+            ? new ChangeRequestNotSignedInError({
+                step: "open",
+                host: error.provider,
+                detail: error.detail,
+              })
+            : error,
+        ),
+      );
+    return {
+      url: opened.url,
+      number: opened.number,
+      repository: opened.repository,
+      provider: opened.provider,
+      branch,
+      commit: commitSha,
+      projectId: input.projectId,
+    } satisfies ChangeRequestPublishResult;
+  });
+
+  return T3TeamChangeRequestPublisher.of({ publish });
+});
+
+export const layer = Layer.effect(T3TeamChangeRequestPublisher, make);

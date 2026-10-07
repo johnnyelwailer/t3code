@@ -107,6 +107,9 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
         ...(deps.workflowTools.workflowControlToolsForThread
           ? { workflowControlTools: deps.workflowTools.workflowControlToolsForThread(threadId) }
           : {}),
+        ...(deps.changeRequestToolsForThread
+          ? { changeRequestTools: deps.changeRequestToolsForThread(threadId) }
+          : {}),
       });
       return withPressureLines(binding, deps.resourcePressure);
     });

@@ -27,7 +27,7 @@ import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { launchPreparedWorkflow } from "./t3team-workflowEphemeralLaunch.ts";
 import { T3TeamWorkflowHost, toWorkflowHostPort } from "./t3team-workflowHost.ts";
-import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
+import { makeT3TeamWorkflowHostToolClient } from "./t3team-workflowHostTools.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { T3TeamWorkflowSignalReconciler } from "./t3team-workflowSignalReconciler.ts";
 
@@ -83,8 +83,9 @@ export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* 
   // resolve to an empty record and the engine keeps its `scripts: {}` default.
   const scripts = yield* resolveRecipeWorkflowScripts({ recipePath, workflowPath });
 
-  // The body's `getTools()` bridge to the broker's host tools, bound to THIS thread so a proposal
-  // lands where the recipe was launched. Scope comes from the RECIPE MODULE, never from a caller
+  // The body's `getTools()` bridge to the broker's host tools (work-item drafts, change-request
+  // publishing), bound to THIS thread so a proposal lands where the recipe was launched and a publish
+  // runs in its checkout. Scope comes from the RECIPE MODULE, never from a caller
   // (a caller that omitted it would be handed unrestricted scope); unresolvable ⇒ no bridge at
   // all, and the resolved scope is what is persisted as the grant, so a restart restores this.
   const hostToolScope = yield* resolveRecipeHostToolScope({ recipePath, workflowPath });
@@ -98,7 +99,7 @@ export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* 
     hostToolScope.kind === "granted" ? { toolGroups: hostToolScope.toolGroups } : undefined;
   const hostToolClient =
     hostToolScope.kind === "granted"
-      ? makeT3TeamWorkflowHostDraftToolClient({
+      ? makeT3TeamWorkflowHostToolClient({
           broker: toolBroker,
           launchThreadId: threadId,
           allowedToolGroups: hostToolScope.toolGroups,

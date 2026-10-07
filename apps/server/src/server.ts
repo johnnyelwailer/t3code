@@ -266,6 +266,7 @@ import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistr
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 import { T3TeamWorkflowSchedulerSweepLive } from "./t3team-workflowSchedulerSweepLive.ts";
 import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
+import * as T3TeamChangeRequestPublisher from "./t3team-changeRequestPublisher.ts";
 import * as HtmlRender from "./htmlRender/HtmlRender.ts";
 import * as PreviewBrowser from "./htmlRender/PreviewBrowser.ts";
 import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
@@ -638,6 +639,14 @@ const T3TeamToolBrokerLayerLive = T3TeamToolBrokerLive.pipe(
   // Same HtmlRender + PreviewBrowser pair the MCP html_render toolkit uses.
   Layer.provide(HtmlRender.layer),
   Layer.provide(PreviewBrowser.layer),
+  // t3team: `t3team.change_request.publish` commits, pushes and opens the change request through
+  // the same git stack the Git panel uses (memoized layer references).
+  Layer.provide(
+    T3TeamChangeRequestPublisher.layer.pipe(
+      Layer.provide(layerGit),
+      Layer.provide(WorkspacePaths.layer),
+    ),
+  ),
 );
 
 // Webhook URLs go through the relay only when the managed tunnel it forwards

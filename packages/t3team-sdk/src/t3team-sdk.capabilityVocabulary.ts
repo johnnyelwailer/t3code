@@ -33,6 +33,7 @@ export const TOOL_GROUP_IDS = [
   "view.state",
   "artifact.rw",
   "mutation.draft",
+  "mutation.change_request",
   "thread.handoff",
   "ui.render",
 ] as const;

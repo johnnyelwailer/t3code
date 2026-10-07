@@ -73,6 +73,7 @@ import * as ServerSettings from "../serverSettings.ts";
 import type { GitManagerServiceError } from "@t3tools/contracts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
+import type * as SourceControlProvider from "../sourceControl/SourceControlProvider.ts";
 import { detectPrTemplate } from "../sourceControl/PrTemplateDetection.ts";
 import type { ChangeRequest } from "@t3tools/contracts";
 
@@ -96,6 +97,28 @@ export type GitBranchPullRequest = NonNullable<VcsStatusResult["pr"]> & {
   readonly closedAt?: string | null;
   readonly mergedAt?: string | null;
 };
+
+export interface GitOpenChangeRequestInput {
+  readonly cwd: string;
+  /** The pushed head branch. */
+  readonly branch: string;
+  /** Target branch; the repository's default branch when absent. */
+  readonly baseBranch?: string | undefined;
+  readonly title: string;
+  readonly body: string;
+  readonly draft?: boolean | undefined;
+}
+
+export interface GitOpenChangeRequestResult {
+  readonly status: "created" | "opened_existing";
+  readonly provider: SourceControlProviderKind;
+  /** `owner/name` of the repository the change request targets, when the remote URL names one. */
+  readonly repository: string | null;
+  readonly url: string;
+  readonly number: number;
+  readonly baseBranch: string;
+  readonly headBranch: string;
+}
 
 interface SourceControlTextGenerationSettings {
   readonly modelSelection: ModelSelection;
@@ -137,6 +160,10 @@ export class GitManager extends Context.Service<
       input: GitRunStackedActionInput,
       options?: GitRunStackedActionOptions,
     ) => Effect.Effect<GitRunStackedActionResult, GitManagerServiceError>;
+    /** Open a change request for an already pushed branch, or return the one already open for it. */
+    readonly openChangeRequest: (
+      input: GitOpenChangeRequestInput,
+    ) => Effect.Effect<GitOpenChangeRequestResult, GitManagerServiceError>;
   }
 >()("t3/git/GitManager") {}
 
@@ -1826,6 +1853,10 @@ export const make = Effect.gen(function* () {
       }
     }
 
+    return yield* resolveDefaultBaseBranch(cwd);
+  });
+
+  const resolveDefaultBaseBranch = Effect.fn("resolveDefaultBaseBranch")(function* (cwd: string) {
     const defaultFromProvider = yield* sourceControlProvider(cwd).pipe(
       Effect.flatMap((provider) => provider.getDefaultBranch({ cwd })),
       Effect.orElseSucceed(() => null),
@@ -2034,6 +2065,44 @@ export const make = Effect.gen(function* () {
     };
   });
 
+  // Providers read the body from a file, so it goes through a temp file that is always removed.
+  const createChangeRequestWithBody = Effect.fn("createChangeRequestWithBody")(function* (input: {
+    readonly provider: SourceControlProvider.SourceControlProvider["Service"];
+    readonly cwd: string;
+    readonly operation: string;
+    readonly baseBranch: string;
+    readonly headSelector: string;
+    readonly title: string;
+    readonly body: string;
+    readonly draft?: boolean | undefined;
+  }) {
+    const bodyFile = path.join(
+      tempDir,
+      `t3code-pr-body-${process.pid}-${yield* randomUUIDv4(input.cwd)}.md`,
+    );
+    yield* fileSystem.writeFileString(bodyFile, input.body).pipe(
+      Effect.mapError(
+        (cause) =>
+          new GitManagerError({
+            operation: input.operation,
+            cwd: input.cwd,
+            detail: "Failed to write pull request body temp file.",
+            cause,
+          }),
+      ),
+    );
+    yield* input.provider
+      .createChangeRequest({
+        cwd: input.cwd,
+        baseRefName: input.baseBranch,
+        headSelector: input.headSelector,
+        title: input.title,
+        bodyFile,
+        ...(input.draft === true ? { draft: true } : {}),
+      })
+      .pipe(Effect.ensuring(fileSystem.remove(bodyFile).pipe(Effect.ignore)));
+  });
+
   const runPrStep = Effect.fn("runPrStep")(function* (
     settings: SourceControlTextGenerationSettings,
     cwd: string,
@@ -2102,35 +2171,20 @@ export const make = Effect.gen(function* () {
       modelSelection: settings.modelSelection,
     });
 
-    const bodyFile = path.join(
-      tempDir,
-      `t3code-pr-body-${process.pid}-${yield* randomUUIDv4(cwd)}.md`,
-    );
-    yield* fileSystem.writeFileString(bodyFile, generated.body).pipe(
-      Effect.mapError(
-        (cause) =>
-          new GitManagerError({
-            operation: "runPrStep",
-            cwd,
-            detail: "Failed to write pull request body temp file.",
-            cause,
-          }),
-      ),
-    );
     yield* emit({
       kind: "phase_started",
       phase: "pr",
       label: `Creating ${terms.singular}...`,
     });
-    yield* provider
-      .createChangeRequest({
-        cwd,
-        baseRefName: baseBranch,
-        headSelector: headContext.preferredHeadSelector,
-        title: generated.title,
-        bodyFile,
-      })
-      .pipe(Effect.ensuring(fileSystem.remove(bodyFile).pipe(Effect.ignore)));
+    yield* createChangeRequestWithBody({
+      provider,
+      cwd,
+      operation: "runPrStep",
+      baseBranch,
+      headSelector: headContext.preferredHeadSelector,
+      title: generated.title,
+      body: generated.body,
+    });
 
     const created = yield* findOpenPr(cwd, headContext);
     if (!created) {
@@ -2879,6 +2933,54 @@ export const make = Effect.gen(function* () {
     },
   );
 
+  const openChangeRequest: GitManager["Service"]["openChangeRequest"] = Effect.fn(
+    "openChangeRequest",
+  )(function* (input) {
+    const { cwd } = input;
+    const provider = yield* sourceControlProvider(cwd);
+    const headContext = yield* resolveBranchHeadContext(cwd, {
+      branch: input.branch,
+      upstreamRef: null,
+    });
+    const target = yield* resolveRemoteRepositoryContext(cwd, "origin");
+    const opened = (status: GitOpenChangeRequestResult["status"], pr: OpenPrInfo) =>
+      ({
+        status,
+        provider: provider.kind,
+        repository: target.repositoryNameWithOwner,
+        url: pr.url,
+        number: pr.number,
+        baseBranch: pr.baseRefName,
+        headBranch: pr.headRefName,
+      }) satisfies GitOpenChangeRequestResult;
+
+    const existing = yield* findOpenPr(cwd, headContext);
+    if (existing) return opened("opened_existing", existing);
+
+    yield* createChangeRequestWithBody({
+      provider,
+      cwd,
+      operation: "openChangeRequest",
+      baseBranch: input.baseBranch ?? (yield* resolveDefaultBaseBranch(cwd)),
+      headSelector: headContext.preferredHeadSelector,
+      title: input.title,
+      body: input.body,
+      draft: input.draft,
+    });
+    // The branch's cached status still says "no change request"; the next read must ask again.
+    yield* invalidateStatus(cwd);
+    const created = yield* findOpenPr(cwd, headContext);
+    if (!created) {
+      const terms = getChangeRequestTerminologyForKind(provider.kind);
+      return yield* new GitManagerError({
+        operation: "openChangeRequest",
+        cwd,
+        detail: `The ${terms.singular} for '${headContext.headBranch}' was created, but the host does not list it yet. Run again to fetch it.`,
+      });
+    }
+    return opened("created", created);
+  });
+
   return GitManager.of({
     createWorktree,
     localStatus,
@@ -2891,6 +2993,7 @@ export const make = Effect.gen(function* () {
     resolvePullRequest,
     preparePullRequestThread,
     runStackedAction,
+    openChangeRequest,
   });
 });
 
