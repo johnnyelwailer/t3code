@@ -90,6 +90,20 @@ export const TakeOpenSignalInboxEntryInput = Schema.Struct({
 });
 export type TakeOpenSignalInboxEntryInput = typeof TakeOpenSignalInboxEntryInput.Type;
 
+/** An any-wait drain: the awaited tuples of every branch, in branch order. */
+export const TakeFirstOpenSignalInboxEntryInput = Schema.Struct({
+  tuples: Schema.Array(
+    Schema.Struct({
+      sourceName: Schema.String,
+      paramsHash: Schema.String,
+      signalName: Schema.String,
+      key: Schema.String,
+    }),
+  ),
+  deliveredAt: IsoDateTime,
+});
+export type TakeFirstOpenSignalInboxEntryInput = typeof TakeFirstOpenSignalInboxEntryInput.Type;
+
 /** The durable per-instance cursor (instance key = `source:paramsHash`). */
 export const SignalCursor = Schema.Struct({
   instanceKey: Schema.String,
@@ -124,6 +138,11 @@ export interface WorkflowSignalStoreShape {
    * `None` when none is open (first-wins — a second take for the same tuple gets nothing). */
   readonly takeOpenInboxEntry: (
     input: TakeOpenSignalInboxEntryInput,
+  ) => Effect.Effect<Option.Option<SignalInboxEntry>, ProjectionRepositoryError>;
+  /** The any-wait take: atomically take the OLDEST open slot matching ANY of `tuples` — the event
+   * that landed first wins, whichever branch it belongs to. `None` for an empty tuple list. */
+  readonly takeFirstOpenInboxEntry: (
+    input: TakeFirstOpenSignalInboxEntryInput,
   ) => Effect.Effect<Option.Option<SignalInboxEntry>, ProjectionRepositoryError>;
   /** GC: drop delivered slots older than the cutoff (the inbox is a bridge, not a log). */
   readonly deleteDeliveredInboxEntriesOlderThan: (
@@ -280,6 +299,40 @@ const makeWorkflowSignalStore = Effect.gen(function* () {
       `,
   });
 
+  // The same first-wins take across several tuples, oldest slot first. Never called with an empty
+  // list: `sql.or([])` renders `1=1`, which would take ANY open slot.
+  const takeFirstOpenInboxEntryRow = SqlSchema.findOneOption({
+    Request: TakeFirstOpenSignalInboxEntryInput,
+    Result: SignalInboxDbRow,
+    execute: ({ tuples, deliveredAt }) =>
+      sql`
+        UPDATE workflow_signal_inbox
+        SET delivered = 1, delivered_at = ${deliveredAt}
+        WHERE id = (
+          SELECT id FROM workflow_signal_inbox
+          WHERE delivered = 0
+            AND ${sql.or(
+              tuples.map(
+                (tuple) =>
+                  sql`(source_name = ${tuple.sourceName} AND params_hash = ${tuple.paramsHash} AND signal_name = ${tuple.signalName} AND key = ${tuple.key})`,
+              ),
+            )}
+          ORDER BY id ASC
+          LIMIT 1
+        )
+        RETURNING
+          id,
+          source_name AS "sourceName",
+          params_hash AS "paramsHash",
+          signal_name AS "signalName",
+          key,
+          payload_json AS "payload",
+          delivered,
+          created_at AS "createdAt",
+          delivered_at AS "deliveredAt"
+      `,
+  });
+
   const deleteDeliveredInboxEntriesOlderThanRow = SqlSchema.void({
     Request: Schema.Struct({ cutoffIso: Schema.String }),
     execute: ({ cutoffIso }) =>
@@ -351,6 +404,15 @@ const makeWorkflowSignalStore = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("WorkflowSignalStore.takeOpenInboxEntry:query")),
     );
 
+  const takeFirstOpenInboxEntry: WorkflowSignalStoreShape["takeFirstOpenInboxEntry"] = (input) =>
+    input.tuples.length === 0
+      ? Effect.succeed(Option.none())
+      : takeFirstOpenInboxEntryRow(input).pipe(
+          Effect.mapError(
+            toPersistenceSqlError("WorkflowSignalStore.takeFirstOpenInboxEntry:query"),
+          ),
+        );
+
   const deleteDeliveredInboxEntriesOlderThan: WorkflowSignalStoreShape["deleteDeliveredInboxEntriesOlderThan"] =
     (cutoffIso) =>
       deleteDeliveredInboxEntriesOlderThanRow({ cutoffIso }).pipe(
@@ -376,6 +438,7 @@ const makeWorkflowSignalStore = Effect.gen(function* () {
     purgeTerminalRegistrations,
     insertInboxEntry,
     takeOpenInboxEntry,
+    takeFirstOpenInboxEntry,
     deleteDeliveredInboxEntriesOlderThan,
     getCursor,
     upsertCursor,

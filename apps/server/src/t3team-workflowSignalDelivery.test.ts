@@ -19,6 +19,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { assertInstanceOf } from "@effect/vitest/utils";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import { PersistenceSqlError } from "./persistence/Errors.ts";
 import type { ClearWorkflowRunPendingInput, WorkflowRun } from "./persistence/WorkflowRuns.ts";
@@ -105,6 +106,7 @@ describe("makeSignalDeliveryPort", () => {
           listByStatus: () =>
             Effect.succeed([parkedA, parkedB, parkedOtherSignal, parkedOtherInstance]),
           clearPending: () => Effect.succeed(undefined),
+          getById: () => Effect.succeed(Option.none()),
         },
         store: {
           insertInboxEntry: (input) => {
@@ -150,6 +152,7 @@ describe("makeSignalDeliveryPort", () => {
         repo: {
           listByStatus: () => Effect.succeed([parkedElsewhere]),
           clearPending: () => Effect.succeed(undefined),
+          getById: () => Effect.succeed(Option.none()),
         },
         store: {
           insertInboxEntry: (input) => {
@@ -197,6 +200,7 @@ describe("makeSignalDeliveryPort", () => {
               cleared.push(input);
               return Effect.succeed(undefined);
             },
+            getById: () => Effect.succeed(Option.none()),
           },
           store: { insertInboxEntry: () => Effect.succeed(1) },
           registry: { getRun: () => undefined },
@@ -238,6 +242,7 @@ describe("makeSignalDeliveryPort", () => {
             cleared.push(input);
             return Effect.succeed(undefined);
           },
+          getById: () => Effect.succeed(Option.none()),
         },
         store: { insertInboxEntry: () => Effect.succeed(1) },
         registry: { getRun: () => undefined },
@@ -267,6 +272,7 @@ describe("makeSignalDeliveryPort", () => {
           repo: {
             listByStatus: () => Effect.succeed([parked]),
             clearPending: () => Effect.succeed(undefined),
+          getById: () => Effect.succeed(Option.none()),
           },
           store: { insertInboxEntry: () => Effect.succeed(1) },
           registry: {
