@@ -375,6 +375,7 @@
     "packages/project-context/package.json",
     "packages/project-context/src/index.ts",
     "packages/project-context/src/t3teamContextPaths.ts",
+    "packages/project-context/src/t3teamFeatureFlags.ts",
     "packages/project-context/src/t3teamToolCatalog.test.ts",
     "packages/project-context/src/t3teamToolCatalog.ts",
     "packages/project-context/src/t3teamToolCatalogImplemented.ts",
