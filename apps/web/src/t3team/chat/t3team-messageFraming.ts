@@ -44,7 +44,8 @@ export function t3teamOptimisticMessage<
 /**
  * The message as its bubble shows it: a fork send that appended context (work items) to the
  * provider prompt records the person's own words as ext `displayText`, so the bubble shows those
- * instead of the prompt with the context dump. Copy and rollback keep reading `message.text`.
+ * instead of the prompt with the context dump. Copy writes that stored initiating string;
+ * rollback still reads `message.text`.
  */
 export function t3teamDisplayedUserMessage<
   M extends { readonly text: string; readonly t3teamExt?: T3TeamMessageExt | undefined },

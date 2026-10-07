@@ -313,3 +313,4 @@ Owner-approved 2026-10-05. Exact paths; each is upstream orchestration V2 surfac
 - `apps/server/src/orchestration-v2/ThreadTitleRegenerationService.test.ts` — upstream orchestration V2 surface, integrated via PR #344: ProjectRow fixture gains `mainRepository: null`.
 - `apps/server/src/project/ProjectService.ts` — upstream orchestration V2 surface, integrated via PR #344: forwards `mainRepository` on project meta updates.
 - `packages/contracts/src/applicationEvent.ts` — upstream orchestration V2 surface, integrated via PR #344: project meta-updated payload gains optional `mainRepository`.
+- `apps/mobile/src/features/threads/ThreadFeed.tsx` — user-message hover copy uses the shared initiating-prompt string, and stays hidden for system triggers and tool continuations.

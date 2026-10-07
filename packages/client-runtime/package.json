@@ -35,6 +35,10 @@
       "types": "./src/userMessage.ts",
       "default": "./src/userMessage.ts"
     },
+    "./t3team-runPromptCopy": {
+      "types": "./src/t3team-runPromptCopy.ts",
+      "default": "./src/t3team-runPromptCopy.ts"
+    },
     "./secret-request": {
       "types": "./src/secretRequest.ts",
       "default": "./src/secretRequest.ts"
