@@ -1,0 +1,110 @@
+/*
+ * PR explainer player motion. Every animation here is bounded — a fixed number of runs per step —
+ * so nothing repaints forever on a high-refresh display. Flow dots and pulses also pause off
+ * screen through `observeVisibleAnimation` (`--visible-animation-state`), and reduced motion
+ * turns all of it off except the step clock, which is a plain linear fill. Declared as
+ * utilities so shadcn/no-unknown-classes knows them (imported by t3team-index-global.css).
+ */
+
+/* The step clock: the rail's active segment fills over one step; its end advances the tour. */
+@utility t3team-pxp-clock {
+  transform-origin: left center;
+  animation: t3team-pxp-fill var(--pxp-step-ms, 6500ms) linear forwards;
+  animation-play-state: var(--pxp-clock-state, paused);
+}
+
+@keyframes t3team-pxp-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@utility t3team-pxp-caption-in {
+  animation: t3team-pxp-caption-in 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes t3team-pxp-caption-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@utility t3team-pxp-enter {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: t3team-pxp-enter 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes t3team-pxp-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+}
+
+/* The part this step is about: two soft pulses, then it stays outlined. */
+@utility t3team-pxp-pulse {
+  animation: t3team-pxp-pulse 900ms ease-in-out 2;
+  animation-play-state: var(--visible-animation-state, running);
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes t3team-pxp-pulse {
+  50% {
+    stroke-width: 5;
+    stroke-opacity: 0.45;
+  }
+}
+
+/* Dots along the active path: a round-capped dash pattern that slides a few times. */
+@utility t3team-pxp-flow {
+  stroke-dasharray: 0 14;
+  stroke-linecap: round;
+  stroke-width: 4;
+  animation: t3team-pxp-flow 1100ms linear 5;
+  animation-play-state: var(--visible-animation-state, running);
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes t3team-pxp-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+@utility t3team-pxp-fade {
+  transition: opacity 360ms ease-out;
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+@utility t3team-pxp-stream-in {
+  animation: t3team-pxp-caption-in 360ms ease-out both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}

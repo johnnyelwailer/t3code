@@ -51,6 +51,7 @@ export * from "./threadPullRequest.ts";
 export * from "./threadSearch.ts";
 export * from "./threadTitle.ts";
 export * from "./t3team-orchestrationExt.ts";
+export * from "./t3team-prExplainer.ts";
 export * from "./t3team-threadFacts.ts";
 export * from "./t3team-threadArtifacts.ts";
 export * from "./t3team-environmentCapabilities.ts";
