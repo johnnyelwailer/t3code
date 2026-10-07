@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ExternalProject, IntegrationAccount } from "@t3tools/integrations-core";
 
 import { useBackend } from "~/t3team/backend/t3team-BackendContext";
@@ -9,14 +9,38 @@ import {
   ATLASSIAN_ACCOUNTS_CACHE_KEY,
   atlassianProjectsCacheKey,
   buildJiraCatalog,
+  loadJiraCatalogAccount,
   type JiraCatalogProject,
+  type JiraCatalogSiteFailure,
 } from "./t3team-jiraProjectCatalog.logic";
 
 const EMPTY_CATALOG: ReadonlyArray<JiraCatalogProject> = [];
+const EMPTY_FAILURES: ReadonlyArray<JiraCatalogSiteFailure> = [];
 /** A remount inside this window reuses the cached lists instead of asking Jira again. */
 const LIVE_REFRESH_MIN_INTERVAL_MS = 5 * 60_000;
 
 let lastLiveRefreshAt = 0;
+
+/** Tests start from a cold catalog. A live refresh inside the interval would otherwise skip. */
+export function resetJiraCatalogLiveRefreshForTests(): void {
+  lastLiveRefreshAt = 0;
+}
+
+export interface JiraProjectCatalog {
+  readonly projects: ReadonlyArray<JiraCatalogProject>;
+  readonly siteFailures: ReadonlyArray<JiraCatalogSiteFailure>;
+  /** Re-reads one site. Does not wait out the catalog-wide refresh interval. */
+  readonly retrySite: (accountId: string) => void;
+}
+
+function readCachedProjects(
+  account: Pick<IntegrationAccount, "provider" | "id">,
+): ReadonlyArray<ExternalProject> | null {
+  return (
+    readIntegrationCache<ReadonlyArray<ExternalProject>>(atlassianProjectsCacheKey(account))
+      ?.value ?? null
+  );
+}
 
 function readCachedCatalog(): ReadonlyArray<JiraCatalogProject> {
   const accounts =
@@ -24,49 +48,50 @@ function readCachedCatalog(): ReadonlyArray<JiraCatalogProject> {
     [];
   const byAccount = new Map<string, ReadonlyArray<ExternalProject>>();
   for (const account of accounts) {
-    const cached = readIntegrationCache<ReadonlyArray<ExternalProject>>(
-      atlassianProjectsCacheKey(account),
-    )?.value;
+    const cached = readCachedProjects(account);
     if (cached) byAccount.set(account.id, cached);
   }
   return buildJiraCatalog(accounts, byAccount);
 }
 
-async function fetchLiveCatalog(backend: BackendApi): Promise<ReadonlyArray<JiraCatalogProject>> {
+async function fetchLiveCatalog(backend: BackendApi): Promise<{
+  readonly catalog: ReadonlyArray<JiraCatalogProject>;
+  readonly siteFailures: ReadonlyArray<JiraCatalogSiteFailure>;
+}> {
   const accounts = await backend.atlassian.listAccounts();
   writeIntegrationCache(ATLASSIAN_ACCOUNTS_CACHE_KEY, accounts);
   const byAccount = new Map<string, ReadonlyArray<ExternalProject>>();
+  const siteFailures: JiraCatalogSiteFailure[] = [];
   await Promise.all(
     accounts.map(async (account) => {
-      try {
-        const projects = await backend.atlassian.listProjects({
-          id: account.id,
-          provider: account.provider,
-        });
-        writeIntegrationCache(atlassianProjectsCacheKey(account), projects);
-        byAccount.set(account.id, projects);
-      } catch {
-        // One unreachable site must not hide the others; keep that site's cached list.
-        const cached = readIntegrationCache<ReadonlyArray<ExternalProject>>(
-          atlassianProjectsCacheKey(account),
-        )?.value;
-        if (cached) byAccount.set(account.id, cached);
+      const result = await loadJiraCatalogAccount({
+        account,
+        cachedProjects: readCachedProjects(account),
+        listProjects: () =>
+          backend.atlassian.listProjects({ id: account.id, provider: account.provider }),
+      });
+      if (result.failure === null && result.projects) {
+        writeIntegrationCache(atlassianProjectsCacheKey(account), result.projects);
       }
+      if (result.projects) byAccount.set(account.id, result.projects);
+      if (result.failure) siteFailures.push(result.failure);
     }),
   );
-  return buildJiraCatalog(accounts, byAccount);
+  return { catalog: buildJiraCatalog(accounts, byAccount), siteFailures };
 }
 
 /**
  * Every Jira project of every connected site, whether or not the app has it yet. Cached lists
- * render immediately; a live read (throttled) then refreshes them. Failures are swallowed — the
- * catalog is an enhancement of the scope pills and must never break the sidebar.
+ * render immediately; a live read (throttled) then refreshes them. One site failing is reported
+ * on `siteFailures` and does not drop the others.
  */
-export function useJiraProjectCatalog(): ReadonlyArray<JiraCatalogProject> {
+export function useJiraProjectCatalog(): JiraProjectCatalog {
   const backend = useBackend();
   const [catalog, setCatalog] = useState<ReadonlyArray<JiraCatalogProject>>(() =>
     readCachedCatalog(),
   );
+  const [siteFailures, setSiteFailures] =
+    useState<ReadonlyArray<JiraCatalogSiteFailure>>(EMPTY_FAILURES);
 
   useEffect(() => {
     if (!backend) return;
@@ -75,7 +100,9 @@ export function useJiraProjectCatalog(): ReadonlyArray<JiraCatalogProject> {
     void fetchLiveCatalog(backend)
       .then((live) => {
         lastLiveRefreshAt = Date.now();
-        if (!cancelled) setCatalog(live);
+        if (cancelled) return;
+        setCatalog(live.catalog);
+        setSiteFailures(live.siteFailures);
       })
       .catch(() => undefined);
     return () => {
@@ -83,5 +110,37 @@ export function useJiraProjectCatalog(): ReadonlyArray<JiraCatalogProject> {
     };
   }, [backend]);
 
-  return catalog.length === 0 ? EMPTY_CATALOG : catalog;
+  const retrySite = useCallback(
+    (accountId: string) => {
+      if (!backend) return;
+      const account = (
+        readIntegrationCache<ReadonlyArray<IntegrationAccount>>(ATLASSIAN_ACCOUNTS_CACHE_KEY)
+          ?.value ?? []
+      ).find((entry) => entry.id === accountId);
+      if (!account) return;
+      void loadJiraCatalogAccount({
+        account,
+        cachedProjects: readCachedProjects(account),
+        listProjects: () =>
+          backend.atlassian.listProjects({ id: account.id, provider: account.provider }),
+      }).then((result) => {
+        if (result.failure === null && result.projects) {
+          writeIntegrationCache(atlassianProjectsCacheKey(account), result.projects);
+        }
+        setCatalog(readCachedCatalog());
+        setSiteFailures((current) =>
+          result.failure
+            ? [...current.filter((failure) => failure.accountId !== accountId), result.failure]
+            : current.filter((failure) => failure.accountId !== accountId),
+        );
+      });
+    },
+    [backend],
+  );
+
+  return {
+    projects: catalog.length === 0 ? EMPTY_CATALOG : catalog,
+    siteFailures,
+    retrySite,
+  };
 }
