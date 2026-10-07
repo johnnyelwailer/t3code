@@ -20,6 +20,7 @@ const MAX_TTL_MS = 100 * 365 * 24 * 60 * 60 * 1000;
 
 interface BoundPack {
   readonly packId: string;
+  readonly quotaBytes: number;
   readonly query: ReturnType<typeof packDocumentQueries>;
   readonly write: ReturnType<typeof packDocumentWriter>;
   readonly validate: (
@@ -29,7 +30,7 @@ interface BoundPack {
 }
 
 /** Every write first purges an expired row for its key, publishing that removal. */
-export function packDocumentWrites({ packId, query, write, validate }: BoundPack) {
+export function packDocumentWrites({ packId, quotaBytes, query, write, validate }: BoundPack) {
   const prepare = Effect.fnUntraced(function* (collection: string, key: string) {
     const definition = yield* validate(collection, key);
     const time = yield* DateTime.now;
@@ -60,7 +61,7 @@ export function packDocumentWrites({ packId, query, write, validate }: BoundPack
     collection: string,
     key: string,
     doc: unknown,
-    options: { ifVersion?: number; ttlMs?: number } = {},
+    options: { ifVersion?: number; ttlMs?: number; capAtQuota?: boolean } = {},
   ) =>
     write(
       "put",
@@ -75,6 +76,13 @@ export function packDocumentWrites({ packId, query, write, validate }: BoundPack
           return yield* refuse("put", "InvalidInput", "Invalid TTL");
         const { definition, time, now, purged } = yield* prepare(collection, key);
         const encoded = yield* encodeDocument(doc, definition.maxDocBytes);
+        if (options.capAtQuota === true) {
+          // Inside the write transaction, so concurrent writes cannot both squeeze under the cap.
+          const { total, current } = yield* query.usage(collection, key, now);
+          const growth = encoded.bytes - current;
+          if (growth > 0 && total + growth > quotaBytes)
+            return yield* refuse("put", "QuotaExceeded", `${total + growth} > ${quotaBytes} bytes`);
+        }
         const expiresAt =
           ttlMs === undefined ? null : DateTime.formatIso(DateTime.addDuration(time, ttlMs));
         const value = { ...encoded, now, expiresAt };

@@ -10,6 +10,7 @@ const PackDocumentRefusal = Schema.Literals([
   "NotViewWritable",
   "InvalidInput",
   "DocumentTooLarge",
+  "QuotaExceeded",
 ]);
 type PackDocumentRefusal = typeof PackDocumentRefusal.Type;
 const refusalMessages: Record<PackDocumentRefusal, string> = {
@@ -18,6 +19,7 @@ const refusalMessages: Record<PackDocumentRefusal, string> = {
   NotViewWritable: "This collection is not writable from views.",
   InvalidInput: "The pack document request is invalid.",
   DocumentTooLarge: "The document exceeds the collection's byte limit.",
+  QuotaExceeded: "The pack's storage quota is full.",
 };
 
 export class T3TeamPackDocumentStoreError extends Schema.TaggedError<T3TeamPackDocumentStoreError>()(
