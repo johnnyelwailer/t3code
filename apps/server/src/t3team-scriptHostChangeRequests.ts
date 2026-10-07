@@ -30,10 +30,7 @@ import {
 type PullRequests = PullRequestService["Service"];
 
 /** The small, provider-neutral projection a script journals; no page-only UI state. */
-function toChangeRequestDetail(
-  detail: PullRequestDetail,
-  host: string,
-): ChangeRequestDetail {
+function toChangeRequestDetail(detail: PullRequestDetail, host: string): ChangeRequestDetail {
   return {
     provider: detail.provider,
     host,
