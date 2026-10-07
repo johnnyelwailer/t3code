@@ -14,6 +14,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef } from "@legendapp/list/react";
 
 import { activateMessageViewPacks } from "~/t3team/chat/t3team-messageViewRegistry";
+import { T3TeamSystemTimelineRow } from "~/t3team/chat/t3team-SystemTimelineRow";
 import { buildT3TeamMessagesTimelineTestProps } from "~/t3team/chat/t3team-messagesTimelineTestProps";
 import { decorateT3TeamTimelineEntries } from "~/t3team/chat/t3team-timelineArtifacts";
 
@@ -56,7 +57,9 @@ globalThis.ResizeObserver ??= class ResizeObserver {
   disconnect() {}
 };
 
+let crashingRenders = 0;
 const Crashing = (): ReactNode => {
+  crashingRenders += 1;
   throw new Error("view bug");
 };
 
@@ -70,7 +73,7 @@ beforeAll(async () => {
         context.registerView({
           slot: "message.view",
           id: "crashy.card",
-          props: Schema.Struct({}),
+          props: Schema.Struct({ cardId: Schema.String }),
           component: Crashing,
         }),
       ),
@@ -88,26 +91,32 @@ afterEach(async () => {
   }
 });
 
-async function mountArtifacts(artifacts: ReadonlyArray<T3TeamThreadArtifact>): Promise<string> {
+async function mountTimeline() {
   const { MessagesTimeline } = await import("~/components/chat/MessagesTimeline");
-  const timelineEntries = decorateT3TeamTimelineEntries({
-    entries: [],
-    artifacts,
-    contextByMessageId: new Map(),
-  });
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   mounted.push({ root, container });
-  await act(async () => {
-    root.render(
-      <MessagesTimeline
-        {...buildT3TeamMessagesTimelineTestProps()}
-        timelineEntries={timelineEntries}
-      />,
-    );
-  });
-  return container.textContent ?? "";
+  return async (artifacts: ReadonlyArray<T3TeamThreadArtifact>): Promise<string> => {
+    const timelineEntries = decorateT3TeamTimelineEntries({
+      entries: [],
+      artifacts,
+      contextByMessageId: new Map(),
+    });
+    await act(async () => {
+      root.render(
+        <MessagesTimeline
+          {...buildT3TeamMessagesTimelineTestProps()}
+          timelineEntries={timelineEntries}
+        />,
+      );
+    });
+    return container.textContent ?? "";
+  };
+}
+
+async function mountArtifacts(artifacts: ReadonlyArray<T3TeamThreadArtifact>): Promise<string> {
+  return (await mountTimeline())(artifacts);
 }
 
 const notes = { day: "Mon", notes: ["Shipped the view registry"] };
@@ -160,7 +169,7 @@ describe("a pack message view in the timeline", () => {
       ...artifact,
       payload: {
         ...(artifact.payload as object),
-        attachments: [{ kind: "view", miniappId: "crashy.card", props: {} }],
+        attachments: [{ kind: "view", miniappId: "crashy.card", props: { cardId: "c1" } }],
       },
     };
 
@@ -171,5 +180,47 @@ describe("a pack message view in the timeline", () => {
 
     expect(text).toContain("This view (crashy.card) could not be shown.");
     expect(text).toContain("Standup · Mon");
+  });
+
+  it("keeps a crashed view down when its row re-renders with the same attachment", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const artifact = standupShowViewArtifact({ threadId: "thread-1", key: "crash", props: {} });
+    const [entry] = decorateT3TeamTimelineEntries({
+      entries: [],
+      artifacts: [
+        {
+          ...artifact,
+          payload: {
+            ...(artifact.payload as object),
+            attachments: [{ kind: "view", miniappId: "crashy.card", props: { cardId: "c1" } }],
+          },
+        },
+      ],
+      contextByMessageId: new Map(),
+    });
+    if (entry?.kind !== "message") throw new Error("expected a message row");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    mounted.push({ root, container });
+    const renderRow = (workflowRunStatus: "running" | "completed") =>
+      act(async () =>
+        root.render(
+          <T3TeamSystemTimelineRow
+            message={entry.message}
+            threadRef={null}
+            activeWorkflowInputMessageId={null}
+            workflowRunStatus={workflowRunStatus}
+          />,
+        ),
+      );
+    await renderRow("running");
+    const rendersAfterCrash = crashingRenders;
+
+    // The run finishes: the row re-renders, its attachment unchanged.
+    await renderRow("completed");
+
+    expect(container.textContent).toContain("This view (crashy.card) could not be shown.");
+    expect(crashingRenders).toBe(rendersAfterCrash);
   });
 });

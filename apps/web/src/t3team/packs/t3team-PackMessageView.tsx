@@ -50,7 +50,7 @@ export function bindPackMessageView<P>(
   registration: MessageViewRegistration<P>,
 ): MessageViewEntry<PackViewContext>["bind"] {
   const decode = Schema.decodeUnknownOption(registration.props);
-  return (raw) =>
+  const bindDecoded = (raw: unknown) =>
     Option.match(decode(raw), {
       onNone: () => null,
       onSome: (value) => (context: PackViewContext) => (
@@ -63,4 +63,16 @@ export function bindPackMessageView<P>(
         />
       ),
     });
+  // One decode per attachment props object. The timeline asks about a row several times per
+  // render, and an unchanged artifact keeps its props object; a fresh decode each time would hand
+  // the view new props on every unrelated update and reset its error boundary (`resetKeys`).
+  const bound = new WeakMap<object, ReturnType<typeof bindDecoded>>();
+  return (raw) => {
+    if (typeof raw !== "object" || raw === null) return bindDecoded(raw);
+    const cached = bound.get(raw);
+    if (cached !== undefined) return cached;
+    const result = bindDecoded(raw);
+    bound.set(raw, result);
+    return result;
+  };
 }
