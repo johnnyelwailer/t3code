@@ -53,6 +53,8 @@ export const WorkspacePackManifest = Schema.Struct({
     tools: Schema.optional(Schema.Array(PackModuleRef)),
     workflows: Schema.optional(Schema.Array(PackModuleRef)),
     recipes: Schema.optional(Schema.Array(PackModuleRef)),
+    // Read at build time: each entry is a web module compiled into the host web app, gated by
+    // the `view:v1` capability (`t3team-packs.distributionWeb.ts`).
     views: Schema.optional(Schema.Array(PackModuleRef)),
     profiles: Schema.optional(Schema.Array(PackModuleRef)),
     /** Default-exported collection metadata; requires the store:v1 capability. */

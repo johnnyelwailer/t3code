@@ -1,3 +1,4 @@
+import * as NodeURL from "node:url";
 import * as NodeZlib from "node:zlib";
 
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
@@ -14,6 +15,7 @@ import { DEV_PROXIED_PATH_PREFIXES } from "@t3tools/shared/devProxy";
 import { loadRepoEnv } from "../../scripts/lib/public-config";
 import { thirdPartyLicensesPlugin } from "../../scripts/lib/third-party-licenses";
 import { tailwindPlugins } from "./vite/tailwind";
+import { t3teamDistributionWebPlugin } from "./scripts/t3team-distributionWebPlugin";
 
 const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
@@ -195,6 +197,14 @@ export default defineConfig(() => {
   return {
     assetsInclude: ["**/*.wasm"],
     plugins: [
+      // t3team: the distribution's pack web modules (`@t3code/distribution-web`); a no-op without one.
+      t3teamDistributionWebPlugin({
+        packUiImplementation: NodeURL.fileURLToPath(
+          new URL("./src/t3team/packs/t3team-packUiImpl.ts", import.meta.url),
+        ),
+        stylesheet: NodeURL.fileURLToPath(new URL("./src/index.css", import.meta.url)),
+        appModule: NodeURL.fileURLToPath(new URL("./src/main.tsx", import.meta.url)),
+      }),
       devCompressionPlugin(),
       thirdPartyLicensesPlugin({
         bundleName: "web",

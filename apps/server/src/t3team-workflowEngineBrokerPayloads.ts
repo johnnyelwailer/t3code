@@ -58,6 +58,8 @@ export interface ThreadMessagePayload {
     readonly format?: "html" | "svg";
     readonly loadingMessages?: ReadonlyArray<string>;
   };
+  /** `Thread.showView` (`@runbook/threads`); handled by t3team-workflowEngineBrokerShowView.ts. */
+  readonly view?: import("@t3team/sdk").ShowViewInput;
 }
 export interface UserInputPayload {
   readonly threadId: string;

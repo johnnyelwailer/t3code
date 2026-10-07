@@ -9,6 +9,7 @@
  *   • `"script"`   → `scripts.*` is bound at all      (t3team-sdk.bodyRunner.ts)
  *   • `"user"`     → `askUser` / `notifyUser` / `showWidget` on a thread
  *                                                     (t3team-sdk.threadPrimitives.ts)
+ *   • `"ui.render"` → `showView` on a thread           (@runbook/threads primitives.ts)
  *   • `"schedule"` → `waitUntil`                       (t3team-sdk.schedulePrimitive.ts)
  *                  → `retry` (its backoff IS a waitUntil) (t3team-sdk.retryPrimitive.ts)
  *   • `"source:<name>"` → `getSignalSource(<built-in source>)` (t3team-sdk.signalPrimitive.ts)
@@ -173,6 +174,8 @@ function scanCallSites(
         const verb = callee.name.text;
         if (USER_VERBS.has(verb) && !declared.has("user")) {
           into.push(missing(ts, sf, callee, "user", `\`${verb}(…)\``));
+        } else if (verb === "showView" && !declared.has("ui.render")) {
+          into.push(missing(ts, sf, callee, "ui.render", "`showView(…)`"));
         } else {
           const chain = memberChain(ts, callee);
           const isToolTree =

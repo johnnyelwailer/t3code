@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/t3team-packs.index.ts",
       "import": "./src/t3team-packs.index.ts"
+    },
+    "./distribution-web": {
+      "types": "./src/t3team-packs.distributionWeb.ts",
+      "import": "./src/t3team-packs.distributionWeb.ts"
     }
   },
   "scripts": {
