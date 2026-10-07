@@ -132,6 +132,8 @@ export function buildWorkflowGlobals(opts: {
     // `getSignalSource` (design 42) binds a durable source instance; gated by the
     // `"source:<name>"` capability per source.
     getSignalSource: opts.signals.getSignalSource,
+    // `waitForAny` parks on several `handle.on(...)` branches; each carries its source's gate.
+    waitForAny: opts.signals.waitForAny,
     // The built-in signal-source declarations (design 42 §7): the loader blanks every import in
     // a body, so `ScmChangeRequestWatch` & co. resolve from this surface, exactly like
     // `defineWorkflow` and the error classes.

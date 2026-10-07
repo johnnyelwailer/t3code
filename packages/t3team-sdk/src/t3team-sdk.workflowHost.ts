@@ -27,6 +27,7 @@ import type {
 export type {
   CreateWorkflowRunHostConfig,
   WorkflowHostLifecycle,
+  WorkflowHostOfferTarget,
   WorkflowHostPendingAsk,
   WorkflowHostRedriveOptions,
   WorkflowHostRegisteredRun,
@@ -58,6 +59,18 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
 
   let cancelled = false;
   let resuming = false;
+  // Every drive of this run that is still settling — start, resume, redrive, offer. Only `offer`
+  // reads it: it waits these out where `resume`/`redrive` would be dropped.
+  const inFlight = new Set<Promise<unknown>>();
+  const tracked = async <T>(work: () => Promise<T>): Promise<T> => {
+    const running = work();
+    inFlight.add(running);
+    try {
+      return await running;
+    } finally {
+      inFlight.delete(running);
+    }
+  };
 
   const settle = async (
     result: WorkflowRunResult<unknown> | SuspendedResult | AbortedResult,
@@ -86,7 +99,8 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
     return (await repair(error)) ?? false;
   };
 
-  const start = async (): Promise<WorkflowLaunchStatus> => {
+  const start = (): Promise<WorkflowLaunchStatus> => tracked(launch);
+  const launch = async (): Promise<WorkflowLaunchStatus> => {
     if (!config.lifecycleAlreadyRunning) await lifecycle?.recordRunning();
     try {
       return await settle(await startWorkflow(ref, args, { ...driveOptions(runOptions), runId }));
@@ -105,12 +119,12 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
   };
 
   // One replay drive at a time: a concurrent resume/redrive is settling — never double-drive.
-  const exclusive = async (drive: () => Promise<void>): Promise<void> => {
+  const exclusive = async (drive: () => Promise<unknown>): Promise<void> => {
     if (registry.getRun(runId) === undefined) return;
     if (resuming) return;
     resuming = true;
     try {
-      await drive();
+      await tracked(drive);
     } finally {
       resuming = false;
     }
@@ -143,6 +157,30 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
   const redrive = (opts?: WorkflowHostRedriveOptions): Promise<void> =>
     exclusive(() => redriveWorkflowRunHost({ ...funnel, refire: opts?.refire }));
 
+  const offer: WorkflowRunHost["offer"] = async (decide) => {
+    // The wait and the claim below must stay in ONE synchronous segment after the last await, or
+    // two offers woken by the same settled drive could both claim the slot.
+    while (inFlight.size > 0) await Promise.allSettled([...inFlight]);
+    if (cancelled || registry.getRun(runId) === undefined) return false;
+    resuming = true;
+    try {
+      return await tracked(async () => {
+        const target = await decide();
+        if (target === undefined) return false;
+        return await resumeWorkflowRunHost({
+          ...funnel,
+          correlationId: target.correlationId,
+          reply: target.reply,
+          appendReply,
+          retryResolvedReply: config.retryResolvedReply,
+          onReplyJournaled: config.onReplyJournaled,
+        });
+      });
+    } finally {
+      resuming = false;
+    }
+  };
+
   const fail = async (error: unknown): Promise<void> => {
     if (cancelled) return;
     if (registry.getRun(runId) === undefined) return;
@@ -153,8 +191,8 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
     cancelled = true;
   };
 
-  registry.registerRun(runId, { resume, redrive, cancel, fail });
+  registry.registerRun(runId, { resume, redrive, offer, cancel, fail });
   registry.registerOwnership?.(runId, runOptions.launchThreadId);
 
-  return { start, resume, redrive, fail, cancel, isCancelled: () => cancelled, settle };
+  return { start, resume, redrive, offer, fail, cancel, isCancelled: () => cancelled, settle };
 }

@@ -107,6 +107,7 @@ export {
   workflow,
 } from "./t3team-sdk.engineApi.ts";
 export type { Watermark, WatermarkOptions, WatermarkState } from "@runbook/core/watermark";
+export { waitForAny, type SignalAnyHit, type WaitForAny } from "./t3team-sdk.signalAny.ts";
 export { emit } from "./t3team-sdk.emit.ts";
 // Signal sources (design 42): the shared signal/source vocabulary + built-in Tier A/B
 // catalog declarations. `defineSignalSource` (the effectful producer half) lives on the
@@ -121,11 +122,13 @@ export {
 } from "./t3team-sdk.signal.ts";
 export type {
   Signal,
+  SignalBranch,
   SignalEmit,
   SignalSourceContext,
   SignalSourceHandle,
   SignalSourceInstance,
   SignalSourceRef,
+  SignalOn,
   SignalWaitFor,
 } from "./t3team-sdk.signal.ts";
 export {
@@ -162,6 +165,7 @@ export { createWorkflowHostRegistry, createWorkflowRunHost } from "./t3team-sdk.
 export type {
   CreateWorkflowRunHostConfig,
   WorkflowHostLifecycle,
+  WorkflowHostOfferTarget,
   WorkflowHostPendingAsk,
   WorkflowHostRedriveOptions,
   WorkflowHostRegisteredRun,
