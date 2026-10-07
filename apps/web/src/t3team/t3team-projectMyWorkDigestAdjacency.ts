@@ -55,12 +55,14 @@ export function isDigestAdjacentActive(item: DigestAdjacentItem, viewerName: str
 
 /**
  * The work around the viewer's rows in one story card. `siblings` are the story's children not on
- * screen anywhere; `dependencies` are the digest's links, of which only those on `rowIds` count.
+ * screen anywhere; `dependencies` are the digest's links, of which only those on `rowIds` count —
+ * plus blocks on `storyId`, since the story is the card's header, not a row with its own line.
  * A same-story link adds a sibling the tickets list lacks; a ticket on screen (`hiddenKeys`) is
  * never repeated as a sibling, but a block is kept — the relation is the news, not the ticket.
  */
 export function digestStoryAdjacency(input: {
   readonly rowIds: ReadonlySet<string>;
+  readonly storyId?: string;
   readonly siblings: readonly ProjectTicket[];
   readonly dependencies: readonly DigestDependency[];
   readonly hiddenKeys: ReadonlySet<string>;
@@ -88,9 +90,10 @@ export function digestStoryAdjacency(input: {
     });
   }
   for (const dependency of input.dependencies) {
-    if (!input.rowIds.has(dependency.ticketId)) continue;
     const { other } = dependency;
     const isBlock = dependency.relation !== "same-story";
+    const onStory = isBlock && dependency.ticketId === input.storyId;
+    if (!input.rowIds.has(dependency.ticketId) && !onStory) continue;
     if (!isBlock && input.hiddenKeys.has(other.key)) continue;
     const ticketId = idByKey.get(other.key);
     const viewerTicketKey = input.ticketsById.get(dependency.ticketId)?.ref.displayId;
@@ -123,8 +126,7 @@ export function digestStoryAdjacency(input: {
   const quiet = items
     .filter((item) => !isDigestAdjacentActive(item, input.viewerName))
     .toSorted(
-      (a, b) =>
-        Number(a.lane === "done") - Number(b.lane === "done") || a.key.localeCompare(b.key),
+      (a, b) => Number(a.lane === "done") - Number(b.lane === "done") || a.key.localeCompare(b.key),
     );
   return { active, quiet };
 }

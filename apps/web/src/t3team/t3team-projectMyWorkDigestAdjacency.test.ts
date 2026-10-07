@@ -118,4 +118,41 @@ describe("digestStoryAdjacency", () => {
     ]);
     expect(keys(active)).toEqual(["IES-20097", "IES-700"]);
   });
+
+  it("keeps blocks on the story itself, which heads the card instead of being a row", () => {
+    const story = createTicket({
+      id: "id-STORY",
+      status: "In Progress",
+      ref: { displayId: "STORY" },
+    });
+    const { active } = digestStoryAdjacency({
+      rowIds: new Set([mine.id]),
+      storyId: story.id,
+      siblings: [],
+      dependencies: [
+        {
+          ticketId: story.id,
+          relation: "waits-on-you",
+          other: { key: "IES-950", title: "Rollout", status: "To Do" },
+        },
+        {
+          ticketId: story.id,
+          relation: "you-wait-on",
+          other: { key: "IES-850", title: "Platform", status: "In Progress" },
+        },
+        {
+          ticketId: story.id,
+          relation: "same-story",
+          other: { key: "IES-750", title: "Not a sibling of the rows", status: "In Progress" },
+        },
+      ],
+      hiddenKeys: new Set([mine.ref.displayId, "STORY"]),
+      ticketsById: new Map([mine, story].map((t) => [t.id, t])),
+      viewerName: "Philip",
+    });
+    expect(active.map((item) => [item.key, item.relation, item.viewerTicketKey])).toEqual([
+      ["IES-850", "blocks-you", "STORY"],
+      ["IES-950", "waits-on-you", "STORY"],
+    ]);
+  });
 });

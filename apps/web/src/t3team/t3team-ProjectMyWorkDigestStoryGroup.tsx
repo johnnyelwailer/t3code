@@ -40,17 +40,20 @@ export function DigestStoryGroupHeader({
   story,
   graph,
   nowMs,
+  showPrs = true,
   onOpenTicket,
 }: {
   story: ProjectTicket;
   graph: DigestGraph;
   nowMs: number;
+  showPrs?: boolean | undefined;
   onOpenTicket?: ((ticketId: string) => void) | undefined;
 }) {
   const progress = digestStoryProgress(graph, story.id);
   // PRs named after the story itself (the usual case once work is split into subtasks): they are
-  // the viewer's work as much as a subtask's, so they stay on the card instead of disappearing.
-  const storyPrs = digestPrsFor(graph, story.id);
+  // the viewer's work as much as a subtask's, so they stay on the card instead of disappearing —
+  // unless the story is also a row somewhere, which carries them already.
+  const storyPrs = showPrs ? digestPrsFor(graph, story.id) : [];
   const claims = graph.claims.filter((c) => c.ticketId === story.id);
   const onAnchorClick = (e: MouseEvent) => {
     e.stopPropagation();
@@ -61,46 +64,46 @@ export function DigestStoryGroupHeader({
   };
   return (
     <div className="border-b border-border/60 bg-muted/40">
-    <div
-      className="flex min-w-0 cursor-pointer flex-nowrap items-center gap-2 overflow-hidden px-3 py-1.5 text-xs"
-      onClick={() =>
-        onOpenTicket ? onOpenTicket(story.id) : window.open(story.ref.url, "_blank", "noopener")
-      }
-    >
-      <JiraIssueTypeIcon
-        issueType={story.issueType}
-        issueTypeIconUrl={story.issueTypeIconUrl}
-        className="size-3.5 shrink-0"
-      />
-      <a
-        href={story.ref.url}
-        className="shrink-0 font-mono text-2xs text-muted-foreground hover:text-foreground hover:underline"
-        onClick={onAnchorClick}
+      <div
+        className="flex min-w-0 cursor-pointer flex-nowrap items-center gap-2 overflow-hidden px-3 py-1.5 text-xs"
+        onClick={() =>
+          onOpenTicket ? onOpenTicket(story.id) : window.open(story.ref.url, "_blank", "noopener")
+        }
       >
-        {story.ref.displayId}
-      </a>
-      <a
-        href={story.ref.url}
-        className="min-w-0 flex-1 truncate font-medium hover:underline"
-        onClick={onAnchorClick}
-      >
-        {story.ref.title}
-      </a>
-      <DigestProjectChip graph={graph} projectId={story.projectId} />
-      <span className="flex shrink-0 items-center gap-2">
-        {progress ? <DigestStoryProgress done={progress.done} total={progress.total} /> : null}
-        <DigestAgentDots claims={claims} nowMs={nowMs} />
-        <DigestStatusDot status={story.status} />
-      </span>
-    </div>
-    {storyPrs.length > 0 ? (
-      <div className="@container/prs flex flex-wrap items-center gap-x-2 gap-y-1 px-3 pb-1.5">
-        <DigestPrChips
-          prs={storyPrs}
-          repoLabel={digestRepoLabeler(graph.changeRequests.map((pr) => pr.repo))}
+        <JiraIssueTypeIcon
+          issueType={story.issueType}
+          issueTypeIconUrl={story.issueTypeIconUrl}
+          className="size-3.5 shrink-0"
         />
+        <a
+          href={story.ref.url}
+          className="shrink-0 font-mono text-2xs text-muted-foreground hover:text-foreground hover:underline"
+          onClick={onAnchorClick}
+        >
+          {story.ref.displayId}
+        </a>
+        <a
+          href={story.ref.url}
+          className="min-w-0 flex-1 truncate font-medium hover:underline"
+          onClick={onAnchorClick}
+        >
+          {story.ref.title}
+        </a>
+        <DigestProjectChip graph={graph} projectId={story.projectId} />
+        <span className="flex shrink-0 items-center gap-2">
+          {progress ? <DigestStoryProgress done={progress.done} total={progress.total} /> : null}
+          <DigestAgentDots claims={claims} nowMs={nowMs} />
+          <DigestStatusDot status={story.status} />
+        </span>
       </div>
-    ) : null}
+      {storyPrs.length > 0 ? (
+        <div className="@container/prs flex flex-wrap items-center gap-x-2 gap-y-1 px-3 pb-1.5">
+          <DigestPrChips
+            prs={storyPrs}
+            repoLabel={digestRepoLabeler(graph.changeRequests.map((pr) => pr.repo))}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -115,6 +118,7 @@ export function DigestStoryGroup({
   graph,
   nowMs,
   adjacency,
+  showStoryPrs,
   onOpenTicket,
   children,
 }: {
@@ -122,6 +126,7 @@ export function DigestStoryGroup({
   graph: DigestGraph;
   nowMs: number;
   adjacency?: DigestStoryAdjacency | undefined;
+  showStoryPrs?: boolean | undefined;
   onOpenTicket?: ((ticketId: string) => void) | undefined;
   children: ReactNode;
 }) {
@@ -132,6 +137,7 @@ export function DigestStoryGroup({
           story={story}
           graph={graph}
           nowMs={nowMs}
+          showPrs={showStoryPrs}
           onOpenTicket={onOpenTicket}
         />
       ) : null}

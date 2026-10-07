@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from "react";
+import { useId, useState, type MouseEvent, type ReactNode } from "react";
 
 import { cn } from "~/t3team/lib/t3team-utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
@@ -44,36 +44,47 @@ function DigestAdjacentPill({
   };
   const lead = LEAD[item.relation];
   const note = relationNote(item);
+  const pill = {
+    onClick: open,
+    "aria-label": `${item.key} · ${item.status}`,
+    className: cn(
+      PILL,
+      item.relation === "blocks-you"
+        ? "bg-warning/10 text-warning ring-warning/40 hover:ring-warning/70"
+        : "bg-background/70 text-muted-foreground ring-border/50 hover:text-foreground hover:ring-border",
+    ),
+  };
+  const content: ReactNode = (
+    <>
+      {lead ? <span className="shrink-0 text-3xs leading-none">{lead}</span> : null}
+      <span className="shrink-0 font-mono text-3xs leading-none">{item.key}</span>
+      <span aria-hidden="true" className={digestStatusDotClassName(item.status)} />
+      {item.assignee ? (
+        <WorkItemPersonAvatar
+          person={{
+            displayName: item.assignee,
+            ...(item.assigneeAvatarUrl ? { avatarUrl: item.assigneeAvatarUrl } : {}),
+          }}
+          size="sm"
+        />
+      ) : null}
+    </>
+  );
   return (
     <Tooltip>
       <TooltipTrigger
         render={
-          <a
-            href={item.url}
-            target="_blank"
-            rel="noreferrer"
-            onClick={open}
-            aria-label={`${item.key} · ${item.status}`}
-            className={cn(
-              PILL,
-              item.relation === "blocks-you"
-                ? "bg-warning/10 text-warning ring-warning/40 hover:ring-warning/70"
-                : "bg-background/70 text-muted-foreground ring-border/50 hover:text-foreground hover:ring-border",
-            )}
-          >
-            {lead ? <span className="shrink-0 text-3xs leading-none">{lead}</span> : null}
-            <span className="shrink-0 font-mono text-3xs leading-none">{item.key}</span>
-            <span aria-hidden="true" className={digestStatusDotClassName(item.status)} />
-            {item.assignee ? (
-              <WorkItemPersonAvatar
-                person={{
-                  displayName: item.assignee,
-                  ...(item.assigneeAvatarUrl ? { avatarUrl: item.assigneeAvatarUrl } : {}),
-                }}
-                size="sm"
-              />
-            ) : null}
-          </a>
+          // Without a URL the pill is still a control (it opens the ticket in the app), so it
+          // stays a button rather than an anchor that cannot take focus.
+          item.url ? (
+            <a href={item.url} target="_blank" rel="noreferrer" {...pill}>
+              {content}
+            </a>
+          ) : (
+            <button type="button" {...pill}>
+              {content}
+            </button>
+          )
         }
       />
       <TooltipPopup side="top" className="max-w-sm">
@@ -102,11 +113,15 @@ export function DigestAdjacentWork({
   onOpenTicket?: ((ticketId: string) => void) | undefined;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const listId = useId();
   const { active, quiet } = adjacency;
   if (active.length === 0 && quiet.length === 0) return null;
   const shown = expanded ? [...active, ...quiet] : active;
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1 border-t border-border/50 bg-muted/20 px-3 py-1.5">
+    <div
+      id={listId}
+      className="flex min-w-0 flex-wrap items-center gap-1 border-t border-border/50 bg-muted/20 px-3 py-1.5"
+    >
       {shown.map((item) => (
         <DigestAdjacentPill key={item.key} item={item} onOpenTicket={onOpenTicket} />
       ))}
@@ -114,6 +129,7 @@ export function DigestAdjacentWork({
         <button
           type="button"
           aria-expanded={expanded}
+          aria-controls={listId}
           className={cn(
             PILL,
             "text-muted-foreground ring-transparent hover:text-foreground hover:ring-border/50",
