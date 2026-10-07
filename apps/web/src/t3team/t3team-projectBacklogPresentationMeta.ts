@@ -3,7 +3,7 @@ import type {
   ProjectBacklogViewMode,
 } from "~/t3team/t3team-projectBacklogPresentation";
 
-/** Table and planning-space fill the dashboard content area edge-to-edge. */
+/** Table and planning-space fill the scope column's height instead of a padded card. */
 export function isProjectBacklogImmersiveViewMode(viewMode: ProjectBacklogViewMode): boolean {
   return viewMode === "table" || viewMode === "planning-space";
 }
