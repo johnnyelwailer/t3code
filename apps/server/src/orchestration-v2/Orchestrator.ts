@@ -3685,6 +3685,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       | "nodes"
       | "thread"
       | "turnItems"
+      | "runtimeRequests"
     >;
     readonly modelSelection: ModelSelection;
     readonly targetRunId: OrchestrationV2Run["id"];

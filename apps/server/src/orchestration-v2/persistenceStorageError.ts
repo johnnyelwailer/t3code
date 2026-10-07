@@ -10,7 +10,7 @@ const STORAGE_EXHAUSTED_PATTERN =
 export const PERSISTENCE_STORAGE_EXHAUSTED_MESSAGE =
   "Can't update thread state — disk may be full (SQLite could not open or write the database, often when creating WAL files). Free disk space, then retry Stop or restart the app.";
 
-export function persistenceFailureText(cause: unknown): string {
+function persistenceFailureText(cause: unknown): string {
   if (typeof cause === "string") return cause;
   if (cause instanceof Error) {
     const nested =
