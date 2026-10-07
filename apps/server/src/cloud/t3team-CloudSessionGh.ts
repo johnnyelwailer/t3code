@@ -1,52 +1,66 @@
 /**
- * The gh-execution half of a cloud session: how the service drives `gh` for the
- * session workflow — running a single invocation, listing one login's runs, and
- * resolving the caller's login. Kept apart from `CloudSessionService` so that
- * file stays focused on the list/create/cancel orchestration.
+ * The GitHub-request half of a cloud session: how the service drives the fleet
+ * repository's API for the session workflow — running a single request, listing
+ * one login's runs, and resolving the caller's login. Kept apart from
+ * `CloudSessionService` so that file stays focused on the list/create/cancel
+ * orchestration.
  *
- * Everything here inherits the user's existing `gh` login (same host, same
- * keyring token as dispatch) — no credential of its own.
+ * Everything here goes through `GitHubApi`, so it inherits the user's existing
+ * credential for the fleet host — no credential of its own, and the same
+ * rate-limit pause and API base URL (GitHub Enterprise included) as every other
+ * GitHub read on the server.
  */
 import { CloudSessionFailedError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import type * as GitHubCli from "../sourceControl/GitHubCli.ts";
+import type * as GitHubApi from "../sourceControl/GitHubApi.ts";
 import {
-  currentLoginInvocation,
-  listRunsInvocation,
-  parseLogin,
-  parseRunsResponse,
+  currentLoginRequest,
+  listRunsRequest,
   type CloudSessionRepoRef,
-  type GhInvocation,
+  type GitHubActionsRequest,
+  type GitHubActionsResponse,
 } from "./t3team-githubActionsSessionClient.ts";
+import { parseLogin, parseRunsResponse } from "./t3team-githubActionsSessionParse.ts";
 import { toCloudSessionFailure } from "./t3team-CloudSessionErrors.ts";
 
 /** Recent runs worth considering; also the window `cancel` checks membership against. */
 const RUN_HISTORY_LIMIT = 100;
 
-/** `gh` is a child process on a network call; give it more room than a local command. */
-const GH_TIMEOUT_MS = 30_000;
+/** A session request is a network call on the user's behalf; it may spend the GraphQL reserve. */
+const ALLOW_RESERVE = true;
 
 /**
- * Bundle the three gh operations a cloud session needs, bound to one `gh`
- * executor and one fleet repo. `listRunsFor` and `resolveLogin` are the two
+ * Bundle the three GitHub operations a cloud session needs, bound to one API
+ * client and one fleet repo. `listRunsFor` and `resolveLogin` are the two
  * pieces that make per-user isolation work: the list is always scoped to the
  * login that `resolveLogin` returns.
  */
-export function makeSessionGh(
-  github: GitHubCli.GitHubCli["Service"],
-  repoRef: CloudSessionRepoRef,
-  cwd: string,
-) {
-  /** Run one `gh` invocation, mapping its errors to user-visible session failures. */
-  const run = (invocation: GhInvocation) =>
-    github
-      .execute({
-        cwd,
-        args: invocation.args,
-        timeoutMs: GH_TIMEOUT_MS,
-        ...(invocation.stdin === undefined ? {} : { stdin: invocation.stdin }),
-      })
-      .pipe(Effect.mapError(toCloudSessionFailure));
+export function makeSessionGh(api: GitHubApi.GitHubApi["Service"], repoRef: CloudSessionRepoRef) {
+  /** Run one request, mapping its errors to user-visible session failures. */
+  const run = (
+    request: GitHubActionsRequest,
+  ): Effect.Effect<GitHubActionsResponse, CloudSessionFailedError> =>
+    (request.kind === "graphql"
+      ? api
+          .graphql({
+            host: repoRef.host,
+            operation: request.operation,
+            query: request.query,
+            ...(request.variables === undefined ? {} : { variables: request.variables }),
+            allowReserve: ALLOW_RESERVE,
+          })
+          .pipe(Effect.map((body) => ({ body, truncated: false })))
+      : api
+          .rest({
+            host: repoRef.host,
+            operation: request.operation,
+            path: request.path,
+            ...(request.method === undefined ? {} : { method: request.method }),
+            ...(request.body === undefined ? {} : { body: request.body }),
+            allowReserve: ALLOW_RESERVE,
+          })
+          .pipe(Effect.map((response) => ({ body: response.body, truncated: response.truncated })))
+    ).pipe(Effect.mapError(toCloudSessionFailure));
 
   /**
    * Runs of the session workflow, scoped to one login — the endpoint is scoped
@@ -58,10 +72,10 @@ export function makeSessionGh(
    * and let a pre-existing run be mistaken for a freshly dispatched one.
    */
   const listRunsFor = (login: string) =>
-    run(listRunsInvocation(repoRef, RUN_HISTORY_LIMIT, login)).pipe(
+    run(listRunsRequest(repoRef, RUN_HISTORY_LIMIT, login)).pipe(
       Effect.flatMap((result) => {
-        const parsed = parseRunsResponse(result.stdout);
-        if (parsed === null || result.stdoutTruncated) {
+        const parsed = parseRunsResponse(result.body);
+        if (parsed === null || result.truncated) {
           return Effect.fail(
             new CloudSessionFailedError({
               reason: "unreachable",
@@ -74,14 +88,14 @@ export function makeSessionGh(
     );
 
   /**
-   * Resolve the GitHub login the current `gh` credential is signed in as — the
-   * same identity dispatch uses. Every list/cancel is scoped to this login,
-   * which is the whole per-user isolation. If it cannot be resolved we fail
-   * closed: returning a list we could not scope would leak other users' sessions.
+   * Resolve the GitHub login the fleet host's credential belongs to — the same
+   * identity dispatch uses. Every list/cancel is scoped to this login, which is
+   * the whole per-user isolation. If it cannot be resolved we fail closed:
+   * returning a list we could not scope would leak other users' sessions.
    */
   const resolveLogin = Effect.gen(function* () {
-    const result = yield* run(currentLoginInvocation(repoRef));
-    const login = parseLogin(result.stdout);
+    const result = yield* run(currentLoginRequest(repoRef));
+    const login = parseLogin(result.body);
     if (login === null) {
       return yield* new CloudSessionFailedError({
         reason: "unauthorized",

@@ -5,15 +5,14 @@ import {
   type CloudSessionListResult,
 } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
-import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
-import * as GitHubCli from "../sourceControl/GitHubCli.ts";
+import * as GitHubApi from "../sourceControl/GitHubApi.ts";
 import * as CliTokenManager from "./CliTokenManager.ts";
-import { cancelRunInvocation } from "./t3team-githubActionsSessionClient.ts";
+import { cancelRunRequest } from "./t3team-githubActionsSessionClient.ts";
 import { isSessionCredentialIssueEnabled } from "./t3team-CloudSessionCredential.ts";
 import { makeSessionGh } from "./t3team-CloudSessionGh.ts";
 import { resolveFleetConfig, workflowHistoryUrl } from "./t3team-CloudSessionFleet.ts";
@@ -74,7 +73,7 @@ export class CloudSessionService extends Context.Service<
 >()("t3/cloud/t3team-CloudSessionService/CloudSessionService") {}
 
 const make = Effect.fn("cloud.session_service.make")(function* () {
-  const github = yield* GitHubCli.GitHubCli;
+  const api = yield* GitHubApi.GitHubApi;
   const cloudCli = yield* CliTokenManager.CloudCliTokenManager;
   const minter = yield* ConnectCredentialMinter;
   const broker = yield* NexiBrokerService;
@@ -82,12 +81,9 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
   const handoffEnabled = yield* isSessionCredentialIssueEnabled();
   const { repoRef, machineLabel } = yield* resolveFleetConfig();
 
-  // `gh` needs a cwd; irrelevant for `gh api --hostname`, but the process starts somewhere.
-  const cwd = yield* Config.String("HOME").pipe(Config.withDefault("/"));
-
-  // The gh-execution half (run / listRunsFor / resolveLogin) lives in
+  // The GitHub-request half (run / listRunsFor / resolveLogin) lives in
   // `t3team-CloudSessionGh`; here we only orchestrate list/create/cancel on top.
-  const gh = makeSessionGh(github, repoRef, cwd);
+  const gh = makeSessionGh(api, repoRef);
   const payloadCleanup = yield* makePayloadIssueCleanup(repoRef, gh.run);
   const failureReasons = makeFailureReasonCache();
   const claims = yield* makeClaimLedger();
@@ -284,7 +280,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
               (session) => session.runId === input.sessionId,
             )));
       if (claimedHere) {
-        return yield* gh.run(cancelRunInvocation(repoRef, runId)).pipe(Effect.asVoid);
+        return yield* gh.run(cancelRunRequest(repoRef, runId)).pipe(Effect.asVoid);
       }
       if (sessionRun === undefined) {
         return yield* new CloudSessionFailedError({
@@ -293,10 +289,10 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
         });
       }
       // Already over (an earlier stop, or its time ran out): stopping is done, not an error.
-      // GitHub refuses to cancel a completed run, which used to surface as "GitHub CLI failed".
+      // GitHub refuses to cancel a completed run, which used to surface as a provider refusal.
       if (sessionRun.status === "completed") return;
 
-      yield* gh.run(cancelRunInvocation(repoRef, runId)).pipe(
+      yield* gh.run(cancelRunRequest(repoRef, runId)).pipe(
         Effect.asVoid,
         // It can end between the listing and the cancel; only a run still going is a failure.
         Effect.catch((error) =>

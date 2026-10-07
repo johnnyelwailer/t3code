@@ -55,6 +55,7 @@
     "apps/server/src/mcp/toolkits/orchestrator/tools.ts",
     "apps/server/src/mcp/toolkits/t3team/handlers.ts",
     "apps/server/src/mcp/toolkits/t3team/tools.ts",
+    "apps/server/src/observability/RpcInstrumentation.ts",
     "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts",
     "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts",
     "apps/server/src/orchestration-v2/Adapters/OpenCodeAdapterV2.ts",
