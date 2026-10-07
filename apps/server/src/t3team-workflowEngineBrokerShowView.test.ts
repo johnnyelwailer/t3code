@@ -1,16 +1,24 @@
 import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { createWorkflowEngineBroker } from "./t3team-workflowEngineBroker.ts";
-import { workflowShowViewProblem } from "./t3team-workflowEngineBrokerShowView.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import type { WorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
 import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 
 const ignore = { resolve: () => {}, reject: () => {} };
 
 function makeBroker() {
   const fake = makeFakeWorkflowHost();
+  const steps: Array<Parameters<WorkflowStepActivityEmitter["emitSent"]>[0]> = [];
+  const stepActivities: WorkflowStepActivityEmitter = {
+    emitSent: async (step) => {
+      steps.push(step);
+    },
+    emitResolved: async () => {},
+    emitRun: async () => {},
+  };
   let id = 0;
   const broker = createWorkflowEngineBroker({
     runId: "run-view",
@@ -22,6 +30,7 @@ function makeBroker() {
     host: fake.host,
     newId: () => `id-${++id}`,
     nowIso: () => "2026-01-01T00:00:00.000Z",
+    stepActivities,
   });
   const showView = (correlationId: string, view: Record<string, unknown>) =>
     broker.send(
@@ -32,8 +41,12 @@ function makeBroker() {
       },
       ignore,
     );
-  return { fake, showView };
+  return { fake, steps, showView };
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("Thread.showView on the workflow broker", () => {
   it("posts a view attachment under one message id per thread and key", async () => {
@@ -61,24 +74,28 @@ describe("Thread.showView on the workflow broker", () => {
     ]);
   });
 
-  it("refuses a host view and a malformed input without posting", async () => {
-    const { fake, showView } = makeBroker();
+  // showView is one-way: the SDK dispatch does `void call.fire(...)` and nobody awaits the send.
+  // A rejection there used to be an unhandled rejection, which crashes the server process.
+  it("refuses a host or malformed view without rejecting, posting, or an unhandled rejection", async () => {
+    const { fake, steps, showView } = makeBroker();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      // Fired exactly as `handlesDispatch.sendOneWay` fires it: not awaited, not caught.
+      void showView("run-view:1", { key: "k", viewId: "t3team.workflow.decision", props: {} });
+      void showView("run-view:2", { key: "k", viewId: "nonamespace", props: {} });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
 
-    await expect(
-      showView("run-view:1", { key: "k", viewId: "t3team.workflow.decision", props: {} }),
-    ).rejects.toThrow(/host view/);
-    await expect(
-      showView("run-view:2", { key: "k", viewId: "nonamespace", props: {} }),
-    ).rejects.toThrow(/<packId>\.<name>/);
-
+    expect(unhandled).toEqual([]);
     expect(fake.messages()).toEqual([]);
-  });
-
-  it("states each refusal reason", () => {
-    expect(workflowShowViewProblem({ key: "a b", viewId: "p.v", props: {} })).toMatch(/key/);
-    expect(
-      workflowShowViewProblem({ key: "k", viewId: "p.v", props: { big: "x".repeat(17_000) } }),
-    ).toMatch(/bytes/);
-    expect(workflowShowViewProblem({ key: "k", viewId: "p.v", props: { ok: 1 } })).toBeNull();
+    expect(steps.map((step) => step.detail)).toEqual([
+      expect.stringMatching(/^View not shown: .*host view/),
+      expect.stringMatching(/^View not shown: .*<packId>\.<name>/),
+    ]);
   });
 });

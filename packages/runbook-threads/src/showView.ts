@@ -8,6 +8,12 @@ import type { ShowViewInput } from "./types.ts";
 const VIEW_ID = /^[A-Za-z0-9][A-Za-z0-9_-]*(\.[A-Za-z0-9][A-Za-z0-9_-]*)+$/;
 const VIEW_KEY = /^[A-Za-z0-9:/@#._-]{1,256}$/;
 const MAX_VIEW_ID_LENGTH = 128;
+/**
+ * Namespaces a workflow may not post into. `t3team.*` are the host's own views (the decision card,
+ * the run's shape card): their props are host state, posted by their own verbs (`askUser`, the run
+ * itself), so a body must not be able to forge one.
+ */
+const RESERVED_VIEW_NAMESPACES: ReadonlySet<string> = new Set(["t3team"]);
 /** Props are ids and small values for the view to look things up by, not content. */
 export const SHOW_VIEW_MAX_PROPS_BYTES = 16 * 1024;
 
@@ -29,6 +35,9 @@ export function showViewInputProblem(input: ShowViewInput): string | null {
   }
   if (!VIEW_ID.test(input.viewId)) {
     return `viewId "${input.viewId}" must look like "<packId>.<name>"`;
+  }
+  if (RESERVED_VIEW_NAMESPACES.has(showViewNamespace(input.viewId))) {
+    return `viewId "${input.viewId}" is a host view; a workflow cannot post it`;
   }
   if (typeof input.key !== "string" || !VIEW_KEY.test(input.key)) {
     return "key must be 1-256 characters of [A-Za-z0-9:/@#._-]";

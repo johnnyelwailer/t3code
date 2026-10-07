@@ -7,28 +7,18 @@
  * identical re-upsert, and a changed one keeps the row's position. The web timeline renders the
  * attachment through the `message.view` registry (`t3team-messageViewRegistry.ts`).
  *
- * The run is not trusted: the input is re-checked here with the same rules the primitive applies,
- * and the host's own `t3team.*` views are refused — they are posted by their own verbs (`askUser`
- * draws the decision card, the run draws its shape card) and their props are host state.
+ * The run is not trusted, so the input is re-checked here with the rules the primitive applies
+ * at the call site (including the reserved host `t3team.*` namespace). `showView` is ONE-WAY: the
+ * SDK fires it without awaiting, so this handler must never reject — a rejection here is an
+ * unhandled rejection that takes the server down. A refused or failed post is logged and shown as
+ * the step's detail instead.
  */
-import { showViewInputProblem, showViewNamespace, type ShowViewInput } from "@t3team/sdk";
+import { showViewInputProblem, type ShowViewInput } from "@t3team/sdk";
 
 import type { BrokerCore, BrokerSend } from "./t3team-workflowEngineBrokerContext.ts";
 
-/** The namespace of the host's own message views (`t3team.workflow.decision`, …). */
-const HOST_VIEW_NAMESPACE = "t3team";
-
 const workflowViewMessageId = (threadId: string, key: string) =>
   `t3team-wf-view:${threadId}:${key}`;
-
-/** Why the host refuses to show `view`, or `null` when it may. */
-export function workflowShowViewProblem(view: ShowViewInput): string | null {
-  const problem = showViewInputProblem(view);
-  if (problem !== null) return problem;
-  return showViewNamespace(view.viewId) === HOST_VIEW_NAMESPACE
-    ? `viewId "${view.viewId}" is a host view; a workflow cannot post it`
-    : null;
-}
 
 export async function handleBrokerShowView(
   core: BrokerCore,
@@ -37,23 +27,32 @@ export async function handleBrokerShowView(
 ): Promise<void> {
   const { deps, enqueueOneWay, runPrimitive, step } = core;
   const { threadId, view } = input;
-  const problem = workflowShowViewProblem(view);
-  if (problem !== null) throw new Error(`Invalid workflow view: ${problem}`);
+  const problem = showViewInputProblem(view);
+  if (problem !== null) {
+    console.warn(`[t3team-workflow] run ${deps.runId} showView refused: ${problem}`);
+    step(s.correlationId, s.kind, "completed", `View not shown: ${problem}`, threadId);
+    return;
+  }
   step(s.correlationId, s.kind, "completed", `Showed ${view.viewId}`, threadId);
-  await runPrimitive(() =>
-    enqueueOneWay(() =>
-      deps.host.postMessage({
-        threadId,
-        messageId: workflowViewMessageId(threadId, view.key),
-        role: "system",
-        text: "",
-        ext: {
-          author: { kind: "system", workflowRunId: deps.runId },
-          visibleToUser: true,
-          visibleToAgent: false,
-          attachments: [{ kind: "view", miniappId: view.viewId, props: { ...view.props } }],
-        },
-      }),
-    ),
-  );
+  try {
+    await runPrimitive(() =>
+      enqueueOneWay(() =>
+        deps.host.postMessage({
+          threadId,
+          messageId: workflowViewMessageId(threadId, view.key),
+          role: "system",
+          text: "",
+          ext: {
+            author: { kind: "system", workflowRunId: deps.runId },
+            visibleToUser: true,
+            visibleToAgent: false,
+            attachments: [{ kind: "view", miniappId: view.viewId, props: { ...view.props } }],
+          },
+        }),
+      ),
+    );
+  } catch (error) {
+    // `runPrimitive` refuses once the run was stopped; a one-way verb has nobody to tell.
+    console.warn(`[t3team-workflow] run ${deps.runId} showView not posted:`, error);
+  }
 }
