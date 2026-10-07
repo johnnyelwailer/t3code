@@ -102,6 +102,19 @@ describe("resolveScopeRouteTarget", () => {
     });
   });
 
+  it("does not invent a lens from legacy view params, so a persisted lens still wins", () => {
+    expect(
+      target("/t3team/my-work", { myWorkView: "kanban", myWorkGroup: "hierarchy" }, "b"),
+    ).toEqual({
+      to: "/t3team/projects/$projectId",
+      params: { projectId: "b" },
+      search: { projectView: "my-work" },
+    });
+    expect(
+      target("/t3team/projects/a", { projectView: "my-work", myWorkView: "kanban" }, null),
+    ).toEqual({ to: "/t3team/my-work" });
+  });
+
   it("never yanks the user off a thread, ticket, draft, embedded chat or non-team page", () => {
     expect(target("/t3team/projects/a/threads/t1", {}, "b")).toBeNull();
     expect(target("/t3team/projects/a/tickets/T-1", {}, "b")).toBeNull();
