@@ -5,6 +5,7 @@ import { T3TeamChildThreadMetadata } from "../../../t3team-childThreadMetadata.t
 import { T3TEAM_MCP_SERVER_NAME, T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import { mayCallT3TeamBrokerTool } from "../../../t3team-workflowAuthorMcpScope.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
+import * as McpToolAccess from "../../McpToolAccess.ts";
 import { t3TeamAskUser, type T3TeamAskUserOption } from "./t3team-askUser.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP, T3TeamMcpToolError, T3TeamToolkit } from "./tools.ts";
 
@@ -97,28 +98,67 @@ const threadSkillMetadata = Effect.fn("T3TeamMcpToolkit.threadSkillMetadata")(fu
   return { skills: [...(rows[0]?.skills ?? [])] };
 });
 
-export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
-  t3_provider_usage: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_provider_usage, input),
-  t3_search_thread: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_search_thread, input),
-  t3_search_source: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_search_source, input),
-  t3_read_message: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_read_message, input),
-  t3_ask_user: (input) => askUser(input),
-  t3_task_ops: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_task_ops, input),
-  t3_orchestration_run: (input) =>
+/**
+ * Every t3team tool declares `readsAsCaller`: the t3_ surface is closed to MCP
+ * clients that signed in from outside a thread, which is exactly what that
+ * declaration checks. The capability gate above (`requireOrchestrationScope`,
+ * `mayCallT3TeamBrokerTool`) then runs inside the handler, because the hidden
+ * workflow-author thread is deliberately admitted with NO capabilities for its
+ * own tools only — a rule none of upstream's declarations expresses.
+ *
+ * The mutating tools (t3_ask_user, t3_task_ops, t3_orchestration_*,
+ * t3_show_widget, t3_mywork_arrange) would read as `actsAsCaller` upstream
+ * (its delegate_task does). That additionally demands a live caller run and
+ * `ThreadManagementService` in each tool's `dependencies`; adopting it is a
+ * behaviour change, tracked separately rather than made during the upstream
+ * merge.
+ */
+export const T3TeamToolkitHandlersLive = McpToolAccess.toLayer(T3TeamToolkit, {
+  t3_provider_usage: McpToolAccess.readsAsCaller((input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_provider_usage, input),
+  ),
+  t3_search_thread: McpToolAccess.readsAsCaller((input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_search_thread, input),
+  ),
+  t3_search_source: McpToolAccess.readsAsCaller((input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_search_source, input),
+  ),
+  t3_read_message: McpToolAccess.readsAsCaller((input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_read_message, input),
+  ),
+  t3_ask_user: McpToolAccess.readsAsCaller((input) => askUser(input)),
+  t3_task_ops: McpToolAccess.readsAsCaller((input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_task_ops, input),
+  ),
+  t3_orchestration_run: McpToolAccess.readsAsCaller((input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_run, input),
-  t3_orchestration_status: (input) =>
+  ),
+  t3_orchestration_status: McpToolAccess.readsAsCaller((input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_status, input),
-  t3_orchestration_resume: (input) =>
+  ),
+  t3_orchestration_resume: McpToolAccess.readsAsCaller((input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_resume, input),
-  t3_orchestration_pause: (input) =>
+  ),
+  t3_orchestration_pause: McpToolAccess.readsAsCaller((input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_pause, input),
-  t3_orchestration_stop: (input) =>
+  ),
+  t3_orchestration_stop: McpToolAccess.readsAsCaller((input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_stop, input),
-  t3_show_widget: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_show_widget, input),
-  t3_recipe_list: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_list, input),
-  t3_recipe_validate: (input) =>
+  ),
+  t3_show_widget: McpToolAccess.readsAsCaller((input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_show_widget, input),
+  ),
+  t3_recipe_list: McpToolAccess.readsAsCaller((input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_list, input),
+  ),
+  t3_recipe_validate: McpToolAccess.readsAsCaller((input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_validate, input),
-  t3_mywork_digest: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_mywork_digest, input),
-  t3_mywork_arrange: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_mywork_arrange, input),
-  t3team_thread_skill_metadata: (input) => threadSkillMetadata(input),
-});
+  ),
+  t3_mywork_digest: McpToolAccess.readsAsCaller((input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_mywork_digest, input),
+  ),
+  t3_mywork_arrange: McpToolAccess.readsAsCaller((input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_mywork_arrange, input),
+  ),
+  t3team_thread_skill_metadata: McpToolAccess.readsAsCaller((input) => threadSkillMetadata(input)),
+} satisfies McpToolAccess.Handlers<typeof T3TeamToolkit.tools>);

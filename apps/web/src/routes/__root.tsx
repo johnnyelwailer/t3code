@@ -191,6 +191,7 @@ function RootRouteView() {
     pathname === "/pair" ||
     pathname === "/connect" ||
     pathname.startsWith("/connect/") ||
+    pathname === "/connect-agent" ||
     isAtlassianOAuthCallbackPath(pathname)
   ) {
     return (
