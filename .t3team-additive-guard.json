@@ -61,6 +61,8 @@
     "apps/server/src/orchestration-v2/Adapters/CursorAdapterV2.test.ts",
     "apps/server/src/orchestration-v2/Adapters/CursorAdapterV2.ts",
     "apps/server/src/orchestration-v2/Adapters/OpenCodeAdapterV2.ts",
+    "apps/server/src/orchestration-v2/CommandPolicy.test.ts",
+    "apps/server/src/orchestration-v2/CommandPolicy.ts",
     "apps/server/src/orchestration-v2/ContextHandoffBudget.test.ts",
     "apps/server/src/orchestration-v2/ContextHandoffBudget.ts",
     "apps/server/src/orchestration-v2/ContextHandoffDelivery.ts",
