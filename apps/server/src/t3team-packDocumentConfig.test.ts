@@ -20,3 +20,25 @@ it("repeated compiled activation is idempotent and conflicting registration is a
   expect(configuredPackCollections()).toBe(prior);
   expect(configuredPackCollections().has("would-partially-register")).toBe(false);
 });
+
+it("a runtime pack overrides the compiled definition of the same pack and keeps the others", () => {
+  const compiled = { items: { maxDocBytes: 64, retention: "keep" as const }, quotaBytes: 1024 };
+  const runtime = { ...compiled, quotaBytes: 4096 };
+  registerCompiledPackPersistence([
+    { packId: "override-test", modules: [compiled] },
+    { packId: "override-test-compiled-only", modules: [compiled] },
+  ]);
+  registerPackCollections(
+    new Map([
+      ["override-test", runtime],
+      ["override-test-runtime-only", runtime],
+    ]),
+    "runtime",
+  );
+  expect(configuredPackCollections().get("override-test")).toEqual(runtime);
+  expect(configuredPackCollections().get("override-test-compiled-only")).toEqual(compiled);
+  expect(configuredPackCollections().get("override-test-runtime-only")).toEqual(runtime);
+  // A later compiled activation is still the baseline: it never replaces the runtime override.
+  registerCompiledPackPersistence([{ packId: "override-test", modules: [compiled] }]);
+  expect(configuredPackCollections().get("override-test")).toEqual(runtime);
+});
