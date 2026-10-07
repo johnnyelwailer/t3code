@@ -102,6 +102,11 @@ export const CloudSessionSchema = Schema.Struct({
   transport: Schema.optional(CloudSessionTransportSchema),
   /** True when the session runs inside a project machine (its devcontainer); absent means not. */
   projectMachine: Schema.optional(Schema.Boolean),
+  /**
+   * True when the session checked the project out on the host so an agent can write its machine
+   * definition. Absent means not.
+   */
+  machineSetup: Schema.optional(Schema.Boolean),
   /** A project-machine session's milestone, present only while `phase` is `preparing`. */
   machineStage: Schema.optional(CloudSessionMachineStageSchema),
 });
@@ -132,6 +137,11 @@ export const CloudSessionCreateInputSchema = Schema.Struct({
    * session, exactly as without a project.
    */
   projectId: Schema.optional(ProjectId),
+  /**
+   * Start a host checkout of the project so an agent can write its machine definition.
+   * Refused when the flag is off, or when the project already has a definition.
+   */
+  machineSetup: Schema.optional(Schema.Boolean),
   /** What to call the machine; defaults to the project's repository name, else none. */
   name: Schema.optional(Schema.String),
 });

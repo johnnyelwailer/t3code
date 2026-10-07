@@ -77,7 +77,7 @@ export function useCloudSessionController() {
     register: registerRelayEnvironment,
   });
 
-  const { onCreate, createPending } = useCloudSessionCreate({
+  const { onCreate, createPending, createPendingSetup } = useCloudSessionCreate({
     environmentId,
     relayDiscovered,
     serverSessions,
@@ -157,6 +157,7 @@ export function useCloudSessionController() {
     configured,
     historyUrl,
     createPending,
+    createPendingSetup,
     pendingSessionId,
     pendingKind,
     pendingLabel,

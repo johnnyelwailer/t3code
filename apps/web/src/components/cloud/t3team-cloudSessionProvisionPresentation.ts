@@ -100,6 +100,12 @@ function preparingWords(session: CloudSession): {
   readonly detail: string;
 } {
   const elapsed = formatDuration(session.elapsedSeconds);
+  if (session.machineSetup === true) {
+    return {
+      title: "Checking out the project",
+      detail: `The setup agent will write its machine here · ${elapsed}`,
+    };
+  }
   if (session.projectMachine !== true) {
     return {
       title: "Building the workspace",
@@ -177,9 +183,11 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
       return {
         title: "Ready",
         detail:
-          session.remainingSeconds === null
-            ? session.machineLabel
-            : `${session.machineLabel} · ${formatDuration(session.remainingSeconds)} left`,
+          session.machineSetup === true
+            ? "Open it and ask to set up this project's machine."
+            : session.remainingSeconds === null
+              ? session.machineLabel
+              : `${session.machineLabel} · ${formatDuration(session.remainingSeconds)} left`,
         tone: "ready",
         progress: null,
         actionLabel: "Connect",

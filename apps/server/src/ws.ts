@@ -148,6 +148,7 @@ import {
   threadReplayEncodedBytes,
   THREAD_RESUME_MAX_REPLAY_EVENTS,
 } from "./orchestration-v2/ThreadStream.ts";
+import { isMachineSetupEnabled } from "./cloud/t3team-machineSetupFlag.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import { isNexiStateDirSelectedAtStartup } from "@t3tools/project-context/t3teamProjectStateDir";
 import {
@@ -1816,6 +1817,7 @@ const layerWsRpc = (
             // Runtime feature flags (env NEXI_FF_MAIN_REPOSITORY / NEXI_FF_NEXI_STATE_DIR,
             // default on): project main repository, and the `.nexi` state dir name.
             mainRepository: isMainRepositoryEnabled(),
+            machineSetup: isMachineSetupEnabled(),
             nexiStateDir: isNexiStateDirSelectedAtStartup(),
           };
         });

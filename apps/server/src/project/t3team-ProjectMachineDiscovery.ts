@@ -49,6 +49,8 @@ export class ProjectMachineDiscovery extends Context.Service<
       {
         readonly discovery: Discovery;
         readonly source: ProjectMachineSource | null;
+        /** Checkouts that were scanned, own repository first. Empty when the project has none. */
+        readonly checkouts: ReadonlyArray<{ readonly repository: string; readonly root: string }>;
       },
       ProjectMachineDiscoveryError
     >;
@@ -121,8 +123,9 @@ const make = Effect.gen(function* () {
           message: "That project does not exist on this environment.",
         });
       }
+      const roots = yield* checkouts(project.value.workspaceRoot);
       const scans = yield* Effect.forEach(
-        yield* checkouts(project.value.workspaceRoot),
+        roots,
         (checkout) =>
           scanCheckout(checkout).pipe(
             Effect.map((scan) => ({
@@ -145,6 +148,7 @@ const make = Effect.gen(function* () {
           rejected: scans.flatMap((scan) => scan.rejected),
         } satisfies Discovery,
         source: sources[0] ?? null,
+        checkouts: roots,
       };
     }).pipe(
       Effect.provideService(FileSystem.FileSystem, fileSystem),

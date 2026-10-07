@@ -11,6 +11,12 @@ export const FEATURE_FLAG_DEFINITIONS = {
     requiresRestart: true,
     description: "Store project state in .nexi. Changes apply on the next server start.",
   },
+  MACHINE_SETUP: {
+    defaultEnabled: false,
+    requiresRestart: false,
+    description:
+      "Offer to set up a project machine when a project has none. Changes apply immediately.",
+  },
 } as const;
 
 export type FeatureFlagKey = keyof typeof FEATURE_FLAG_DEFINITIONS;

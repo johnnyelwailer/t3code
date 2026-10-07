@@ -15,7 +15,10 @@ import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import { RunOnCloudRow } from "./cloud/t3team-RunOnCloudRow";
 import { runOnRows } from "./cloud/t3team-runOnCloudRows";
-import { CloudSessionMachineHint } from "./cloud/t3team-CloudSessionMachineHint";
+import {
+  CloudSessionMachineHint,
+  ProjectMachineSetupButton,
+} from "./cloud/t3team-CloudSessionMachineHint";
 import {
   Select,
   SelectGroup,
@@ -60,11 +63,18 @@ export interface BranchToolbarEnvironmentSelectorProps {
    */
   onCreateCloudSession?: () => void;
   /**
+   * Starts a host checkout so an agent can write this project's machine. Shown only when the
+   * project has no definition. Absent when the flag is off.
+   */
+  onSetupProjectMachine?: () => void;
+  /**
    * t3team: a create is on its way to the server (resolving the machine, dispatching), which takes
    * seconds before the session's own row exists; the create row shows it at once and stops a
    * second click from starting a second machine.
    */
   cloudSessionCreatePending?: boolean;
+  /** True only while a "Set up a machine" create is the one in flight. */
+  cloudSessionSetupPending?: boolean;
   /**
    * The project "New cloud session" starts for, when it lives on the environment sessions are
    * created on: the item then says which machine (devcontainer) the session will run in.
@@ -108,7 +118,9 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   connectedEnvironmentIds,
   cloudEnvironmentIds,
   onCreateCloudSession,
+  onSetupProjectMachine,
   cloudSessionCreatePending = false,
+  cloudSessionSetupPending = false,
   cloudSessionProject,
   onSetupCloudSessions,
   onCloudSessionAction,
@@ -404,15 +416,17 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                 <CloudIcon
                   className={cn(
                     "mt-0.5 size-3 shrink-0 self-start",
-                    cloudSessionCreatePending && "animate-pulse",
+                    cloudSessionCreatePending && !cloudSessionSetupPending && "animate-pulse",
                   )}
                   aria-hidden="true"
                 />
                 <span className="flex min-w-0 flex-col items-start text-left">
                   <span>
-                    {cloudSessionCreatePending ? "Requesting a machine…" : "New cloud session"}
+                    {cloudSessionCreatePending && !cloudSessionSetupPending
+                      ? "Requesting a machine…"
+                      : "New cloud session"}
                   </span>
-                  {cloudSessionCreatePending ? (
+                  {cloudSessionCreatePending && !cloudSessionSetupPending ? (
                     <span className="max-w-full truncate text-muted-foreground text-xs">
                       Asking the fleet; this takes a few seconds
                     </span>
@@ -423,6 +437,14 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                   ) : null}
                 </span>
               </button>
+              {onSetupProjectMachine && cloudSessionProject ? (
+                <ProjectMachineSetupButton
+                  {...cloudSessionProject}
+                  pending={cloudSessionSetupPending === true}
+                  disabled={cloudSessionCreatePending}
+                  onSetup={onSetupProjectMachine}
+                />
+              ) : null}
             </>
           )}
           {onSetupCloudSessions && (

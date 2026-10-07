@@ -673,6 +673,11 @@ export const ServerConfig = Schema.Struct({
    */
   mainRepository: Schema.optionalKey(Schema.Boolean),
   /**
+   * Whether "Set up a machine" is offered for a project that has no machine definition.
+   * Runtime feature flag (env `NEXI_FF_MACHINE_SETUP`, default off); absent on older servers.
+   */
+  machineSetup: Schema.optionalKey(Schema.Boolean),
+  /**
    * Whether this server names the project state dir `.nexi` instead of `.t3team`. Runtime
    * feature flag (env `NEXI_FF_NEXI_STATE_DIR`, default on); absent on older servers.
    */

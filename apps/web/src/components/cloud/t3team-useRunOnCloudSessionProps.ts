@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { type ComponentProps, useCallback, useMemo } from "react";
 
 import { useCloudSessionController } from "~/cloud/t3team-useCloudSessionController";
+import { useServerConfig } from "~/t3team/t3team-serverState";
 import type { BranchToolbarEnvironmentSelector } from "~/components/BranchToolbarEnvironmentSelector";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useEnvironments } from "~/state/environments";
@@ -18,7 +19,9 @@ type CloudSelectorProps = Pick<
   SelectorProps,
   | "pendingCloudSessions"
   | "onCreateCloudSession"
+  | "onSetupProjectMachine"
   | "cloudSessionCreatePending"
+  | "cloudSessionSetupPending"
   | "onCloudSessionAction"
   | "onDismissCloudSession"
   | "onCloudMenuOpenChange"
@@ -44,7 +47,8 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
 } {
   const cloudSessions = useCloudSessionController();
   const navigate = useNavigate();
-  const { available, configured, sessions, onCreate, createPending } = cloudSessions;
+  const { available, configured, sessions, onCreate, createPending, createPendingSetup } =
+    cloudSessions;
   const { primaryEnvironmentId } = cloudSessions;
   const { onSessionAction, onCloudMenuOpenChange } = cloudSessions;
   // A failure surfaced in the menu stays dismissed once the user closed it (kept per browser; the
@@ -77,6 +81,11 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
   );
   const onCreateCloudSession = useCallback(
     () => onCreate(cloudSessionProject?.projectId),
+    [cloudSessionProject, onCreate],
+  );
+  const machineSetupEnabled = useServerConfig()?.machineSetup === true;
+  const onSetupProjectMachine = useCallback(
+    () => onCreate(cloudSessionProject?.projectId, { machineSetup: true }),
     [cloudSessionProject, onCreate],
   );
   // Unconfigured: the entry leaves for the Connections settings, where provisioning lives.
@@ -112,7 +121,11 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
               connectedEnvironmentIds,
               cloudEnvironmentIds,
               onCreateCloudSession,
+              ...(machineSetupEnabled && cloudSessionProject
+                ? { onSetupProjectMachine }
+                : {}),
               cloudSessionCreatePending: createPending,
+              cloudSessionSetupPending: createPendingSetup,
               ...(cloudSessionProject ? { cloudSessionProject } : {}),
               onCloudSessionAction: onSessionAction,
               onDismissCloudSession,
@@ -126,8 +139,11 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
       connectedEnvironmentIds,
       cloudEnvironmentIds,
       createPending,
+      createPendingSetup,
       onCloudMenuOpenChange,
+      machineSetupEnabled,
       onCreateCloudSession,
+      onSetupProjectMachine,
       onDismissCloudSession,
       onSessionAction,
       onSetupCloudSessions,
