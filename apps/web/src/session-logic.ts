@@ -572,6 +572,12 @@ export interface TimelineEntriesInput {
   readonly attempts?: ReadonlyArray<OrchestrationV2RunAttempt>;
   readonly nodes?: ReadonlyArray<OrchestrationV2ExecutionNode>;
   readonly plans?: ReadonlyArray<OrchestrationV2PlanArtifact>;
+  /**
+   * User-message ids whose stored text is a wake (notification or delegated
+   * completion), not an initiating prompt. Scheduled prompts and inter-agent
+   * messages are left out of this set.
+   */
+  readonly triggerMessageIds?: ReadonlySet<string>;
 }
 
 export interface TimelineEntriesProjection {
@@ -680,6 +686,9 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
         createdAt,
         updatedAt: DateTime.formatIso(item.updatedAt),
         ...(item.type === "user_message" ? { inputIntent: item.inputIntent } : {}),
+        ...(item.type === "user_message" && input.triggerMessageIds?.has(item.messageId)
+          ? { promptTrigger: true as const }
+          : {}),
       };
       committedMessageIds.add(message.id);
       entries.push({
@@ -909,6 +918,18 @@ export function isStreamingTurnItemTextUpdate(
   return Equal.equals(previousMetadata, nextMetadata);
 }
 
+function sameTriggerMessageIds(
+  left: ReadonlySet<string> | undefined,
+  right: ReadonlySet<string> | undefined,
+): boolean {
+  if (left === right) return true;
+  if (left === undefined || right === undefined || left.size !== right.size) return false;
+  for (const id of left) {
+    if (!right.has(id)) return false;
+  }
+  return true;
+}
+
 function reuseTimelineEntries(
   input: TimelineEntriesInput,
   previous: TimelineEntriesProjection,
@@ -921,7 +942,8 @@ function reuseTimelineEntries(
     !shallow(input.attachmentUrlById, before.attachmentUrlById) ||
     !shallow(input.attempts, before.attempts) ||
     !shallow(input.nodes, before.nodes) ||
-    !shallow(input.plans, before.plans)
+    !shallow(input.plans, before.plans) ||
+    !sameTriggerMessageIds(input.triggerMessageIds, before.triggerMessageIds)
   ) {
     return null;
   }
@@ -1008,6 +1030,7 @@ export function deriveTimelineEntriesFromVisibleTurnItemsWithState(
       if (entry.kind !== "message" || entry.projectedItem === undefined) return entry;
       const before = previousMessages.get(entry.id);
       if (before?.projectedItem !== entry.projectedItem) return entry;
+      if (before.message.promptTrigger !== entry.message.promptTrigger) return entry;
       return before.attempt === entry.attempt ? before : { ...entry, message: before.message };
     }),
   };

@@ -27,6 +27,7 @@ import { shouldUseRestingComposerLayout } from "../composerFooterLayout";
 import { useComposerFocusState } from "./useComposerFocusState";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef } from "@legendapp/list/react";
+import type { ChatMessage } from "~/types";
 
 const activityTestState = vi.hoisted(() => ({
   expanded: false,
@@ -1390,6 +1391,50 @@ describe("MessagesTimeline", () => {
     expect(agentMarkup).toContain('data-user-message-attribution="agent"');
     expect(agentMarkup).toContain("Sent by another agent");
     expect(userMarkup).not.toContain("Sent by another agent");
+    expect(agentMarkup).toContain('aria-label="Copy message"');
+  });
+
+  it("shows the copy control for stored initiating prompts and hides it for triggers", async () => {
+    const { MessagesTimeline } = await import("./MessagesTimeline");
+    const markupFor = (message: Partial<ChatMessage>) => {
+      const entry = buildUserTimelineEntry("Review the diff");
+      return renderToStaticMarkup(
+        <MessagesTimeline
+          {...buildProps()}
+          timelineEntries={[{ ...entry, message: { ...entry.message, ...message } }]}
+        />,
+      );
+    };
+
+    expect(
+      markupFor({
+        createdBy: "agent",
+        creationSource: "mcp",
+        text: "Fix the auth regression",
+      }),
+    ).toContain('aria-label="Copy message"');
+    expect(
+      markupFor({
+        createdBy: "agent",
+        creationSource: "provider",
+        text: "Look at the failing test",
+      }),
+    ).toContain('aria-label="Copy message"');
+    expect(
+      markupFor({
+        createdBy: "agent",
+        creationSource: "server",
+        text: "Continue where you left off.",
+      }),
+    ).not.toContain('aria-label="Copy message"');
+    expect(
+      markupFor({
+        createdBy: "agent",
+        creationSource: "provider",
+        promptTrigger: true,
+        text: "Background task completed.",
+      }),
+    ).not.toContain('aria-label="Copy message"');
   });
 
   it("keeps a subagent parent-thread link at the top of an empty timeline", async () => {

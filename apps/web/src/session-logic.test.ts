@@ -448,6 +448,110 @@ describe("V2 session presentation", () => {
     }
   });
 
+  it("marks a wake user message so the copy control can stay hidden", () => {
+    const now = DateTime.makeUnsafe("2026-06-20T00:00:00.000Z");
+    const threadId = ThreadId.make("thread-wake");
+    const runId = RunId.make("run-wake");
+    const wakeId = MessageId.make("message-wake");
+    const briefId = MessageId.make("message-brief");
+    const item = (messageId: MessageId, text: string): OrchestrationV2TurnItem => ({
+      id: TurnItemId.make(`item-${messageId}`),
+      threadId,
+      runId,
+      nodeId: null,
+      providerThreadId: null,
+      providerTurnId: null,
+      nativeItemRef: null,
+      parentItemId: null,
+      ordinal: 0,
+      status: "completed",
+      title: null,
+      startedAt: now,
+      completedAt: now,
+      updatedAt: now,
+      type: "user_message",
+      messageId,
+      inputIntent: "turn_start",
+      text,
+      attachments: [],
+      createdBy: "agent",
+      creationSource: "provider",
+    });
+    const entries = deriveTimelineEntriesFromVisibleTurnItems({
+      visibleTurnItems: [
+        item(wakeId, "Background task completed."),
+        item(briefId, "Fix the bug."),
+      ].map((turnItem, position) => ({
+        position,
+        visibility: "local" as const,
+        sourceThreadId: threadId,
+        sourceItemId: turnItem.id,
+        item: turnItem,
+      })),
+      optimisticMessages: [],
+      triggerMessageIds: new Set([wakeId]),
+    });
+    const messages = entries.flatMap((entry) => (entry.kind === "message" ? [entry.message] : []));
+    expect(messages.find((message) => message.id === wakeId)?.promptTrigger).toBe(true);
+    expect(messages.find((message) => message.id === briefId)?.promptTrigger).toBeUndefined();
+  });
+
+  it("stamps a wake when its trigger id arrives without a new turn item", () => {
+    const now = DateTime.makeUnsafe("2026-06-20T00:00:00.000Z");
+    const threadId = ThreadId.make("thread-wake-late");
+    const runId = RunId.make("run-wake-late");
+    const wakeId = MessageId.make("message-wake-late");
+    const item = (messageId: MessageId, text: string): OrchestrationV2TurnItem => ({
+      id: TurnItemId.make(`item-${messageId}`),
+      threadId,
+      runId,
+      nodeId: null,
+      providerThreadId: null,
+      providerTurnId: null,
+      nativeItemRef: null,
+      parentItemId: null,
+      ordinal: 0,
+      status: "completed",
+      title: null,
+      startedAt: now,
+      completedAt: now,
+      updatedAt: now,
+      type: "user_message",
+      messageId,
+      inputIntent: "turn_start",
+      text,
+      attachments: [],
+      createdBy: "agent",
+      creationSource: "provider",
+    });
+    const visibleTurnItems = [item(wakeId, "Background task completed.")].map((turnItem) => ({
+      position: 0,
+      visibility: "local" as const,
+      sourceThreadId: threadId,
+      sourceItemId: turnItem.id,
+      item: turnItem,
+    }));
+    const input = { visibleTurnItems, optimisticMessages: [] };
+    const first = deriveTimelineEntriesFromVisibleTurnItemsWithState(input);
+    const second = deriveTimelineEntriesFromVisibleTurnItemsWithState(
+      { ...input, triggerMessageIds: new Set([wakeId]) },
+      first,
+    );
+    const third = deriveTimelineEntriesFromVisibleTurnItemsWithState(
+      { ...input, triggerMessageIds: new Set([wakeId]) },
+      second,
+    );
+    const promptTrigger = (projection: typeof second) =>
+      projection.entries.flatMap((entry) =>
+        entry.kind === "message" && entry.message.id === wakeId
+          ? [entry.message.promptTrigger]
+          : [],
+      )[0];
+    expect(promptTrigger(first)).toBeUndefined();
+    expect(promptTrigger(second)).toBe(true);
+    expect(third.entries).toBe(second.entries);
+  });
+
   it.each(["pending", "running", "completed"] as const)(
     "keeps %s task progress available to the composer and out of the timeline",
     (stepStatus) => {

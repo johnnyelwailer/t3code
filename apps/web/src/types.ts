@@ -106,6 +106,11 @@ export interface ChatMessage {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly inputIntent?: OrchestrationV2UserMessageInputIntent | undefined;
+  /**
+   * The row is a system trigger or tool continuation. Its stored text is a
+   * wake, not an initiating prompt, so the copy control stays hidden.
+   */
+  readonly promptTrigger?: boolean | undefined;
   /** t3team: the fork message ext, read from the message's context record (t3team-messageFraming). */
   readonly t3teamExt?: T3TeamMessageExt | undefined;
 }

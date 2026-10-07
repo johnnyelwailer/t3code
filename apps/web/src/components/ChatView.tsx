@@ -178,6 +178,7 @@ import {
   collapseExpandedComposerCursor,
   parseStandaloneComposerSlashCommand,
 } from "../composer-logic";
+import { collectPromptTriggerMessageIds } from "./chat/initiatingRunPrompt";
 import {
   derivePendingApprovals,
   derivePendingUserInputs,
@@ -3943,6 +3944,7 @@ export default function ChatView(props: ChatViewProps) {
               attempts: serverProjection.attempts,
               nodes: serverProjection.nodes,
               plans: serverProjection.plans,
+              triggerMessageIds: collectPromptTriggerMessageIds(serverProjection.messages),
             }),
       },
       previous?.threadKey === activeThreadKey ? previous.projection : null,

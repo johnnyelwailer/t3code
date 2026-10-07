@@ -79,7 +79,6 @@ import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-mes
 import { Link } from "@tanstack/react-router";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
 import { notificationChildThreadId } from "@t3tools/client-runtime/state/thread-execution";
-import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
 import {
   resolveWorkEntryToolPresentation,
   resolveViewedImageAsset,
@@ -219,6 +218,7 @@ import {
   rememberTimelinePosition,
   timelineContentOverflowsViewport,
 } from "./timelineScrollAnchoring";
+import { initiatingRunPromptText } from "./initiatingRunPrompt";
 import { MessageCopyButton } from "./MessageCopyButton";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { inferEntryKindFromPath } from "../../pierre-icons";
@@ -2269,6 +2269,9 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     (attachment) => !isImageAttachment(attachment) && !isFileAttachment(attachment),
   );
   const userMessage = resolveUserMessagePresentation(row.message);
+  // The hover control writes the stored initiating prompt, not the bubble's
+  // display text and not the provider request built around it.
+  const promptText = initiatingRunPromptText(row.message);
   // t3team: a send with appended work-item context shows the person's own words (ext displayText).
   const resolvedContext = useMemo(
     () => resolveUserMessageContext(t3teamDisplayedUserMessage(row.message)),
@@ -2575,18 +2578,12 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             {typeof revertTurnCount === "number" && (
               <RevertUserMessageButton turnCount={revertTurnCount} messageId={row.message.id} />
             )}
-            {resolvedContext.text && (
+            {promptText !== null && (
               <MessageCopyButton
-                // Structured paste needs the canonical links to retain their positions.
-                text={
-                  contextClipboardFragment
-                    ? resolvedContext.text
-                    : replaceComposerContextReferences(
-                        resolvedContext.text,
-                        (reference) => reference.label,
-                      )
-                }
-                {...(contextClipboardFragment
+                // The original stored string, with structured context beside it
+                // when this message still carries those links.
+                text={promptText}
+                {...(contextClipboardFragment && promptText === resolvedContext.text
                   ? {
                       extraFlavors: { [COMPOSER_CONTEXT_CLIPBOARD_MIME]: contextClipboardFragment },
                     }
