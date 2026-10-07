@@ -1,4 +1,8 @@
-import { parseWorkflowOutputData } from "@t3tools/shared/t3team-workflowOutputData";
+import {
+  asTruncatedWorkflowOutput,
+  describeTruncatedWorkflowOutput,
+  parseWorkflowOutputData,
+} from "@t3tools/shared/t3team-workflowOutputData";
 import {
   renderWorkflowRecordAsDisplayText,
   renderWorkflowValueAsDisplayText,
@@ -10,14 +14,12 @@ export function workflowCompletionDisplayText(messageId: string, text: string): 
   const framed = parseWorkflowOutputData(text);
   if (framed !== undefined) {
     const output = framed.output;
-    // A preview is incomplete data: show its explicit truncation marker rather than a verdict.
-    if (
-      output !== null &&
-      typeof output === "object" &&
-      "truncated" in output &&
-      output.truncated === true
-    )
-      return text;
+    // A preview is incomplete data: say so, and keep the retained JSON text in a monospaced block
+    // (backticks escaped again here, so a forged preview cannot close the fence).
+    const truncated = asTruncatedWorkflowOutput(output);
+    if (truncated !== undefined) {
+      return `${describeTruncatedWorkflowOutput(truncated)}\n\n\`\`\`json\n${truncated.outputPreview.replaceAll("`", "\\u0060")}\n\`\`\``;
+    }
     return renderWorkflowValueAsDisplayText(output, { emptyFallback: "Orchestration completed." });
   }
   const trimmed = text.trim();

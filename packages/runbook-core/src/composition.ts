@@ -7,7 +7,7 @@
  */
 
 import { createArtifactEmitter, type ArtifactInput, type ArtifactRecord } from "./artifacts.ts";
-import { WorkflowError } from "./errors.ts";
+import { WorkflowAborted, WorkflowError } from "./errors.ts";
 import { WorkflowSuspended } from "./handles.ts";
 import type { WorkflowReference } from "./engineTypes.ts";
 import type { PrimitiveCall } from "./runtimeTypes.ts";
@@ -140,6 +140,12 @@ export interface WorkflowPrimitivesDeps<
    * in this codebase — a lost report must never turn a swallowed rejection into a hard failure.
    */
   readonly onCompositionBranchFailed?: (failure: CompositionBranchFailure) => void | Promise<void>;
+  /**
+   * The run's first-class abort signal. Black-boxed branches skip the seat's per-primitive abort
+   * check, so the bounded pool consults it before launching each queued branch and raises
+   * {@link WorkflowAborted} — the same error the seat throws — instead of starting more work.
+   */
+  readonly abortSignal?: AbortSignal | undefined;
 }
 
 /**
@@ -152,7 +158,8 @@ export interface WorkflowPrimitivesDeps<
  * suspension is not a rejection, and every real error still takes the reporting path below.
  */
 function rethrowIfSuspension(reason: unknown): void {
-  if (reason instanceof WorkflowSuspended) throw reason;
+  // An abort is a control signal for the same reason: it settles the run, it is not a branch result.
+  if (reason instanceof WorkflowSuspended || reason instanceof WorkflowAborted) throw reason;
 }
 
 /** Await the optional branch-failure hook, swallowing whatever IT throws — see the field's doc. */
@@ -171,6 +178,7 @@ async function reportCompositionBranchFailure(
 async function runCompositionPool<R>(
   count: number,
   concurrency: number | undefined,
+  abortSignal: AbortSignal | undefined,
   run: (index: number) => Promise<R>,
 ): Promise<R[]> {
   const results: R[] = [];
@@ -180,6 +188,7 @@ async function runCompositionPool<R>(
     while (!stopped && next < count) {
       const index = next++;
       try {
+        if (abortSignal?.aborted === true) throw new WorkflowAborted();
         results[index] = await run(index);
       } catch (reason) {
         stopped = true;
@@ -191,58 +200,95 @@ async function runCompositionPool<R>(
   return results;
 }
 
-function compositionConcurrency(options: CompositionOptions | undefined): number | undefined {
-  const concurrency = options?.concurrency;
-  if (concurrency !== undefined && (!Number.isInteger(concurrency) || concurrency < 1)) {
+const COMPOSITION_OPTION_KEYS: ReadonlySet<string> = new Set(["concurrency"]);
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/** Validate an options argument; every misuse throws the same TypeError/WorkflowError family. */
+function compositionConcurrency(options: unknown): number | undefined {
+  if (options === undefined) return undefined;
+  if (!isPlainObject(options)) {
+    throw new TypeError("Composition options must be an object such as { concurrency: 2 }.");
+  }
+  for (const key of Object.keys(options)) {
+    if (!COMPOSITION_OPTION_KEYS.has(key)) {
+      throw new TypeError(
+        `Unknown composition option '${key}'; supported options: ${[...COMPOSITION_OPTION_KEYS].join(", ")}.`,
+      );
+    }
+  }
+  const { concurrency } = options;
+  if (
+    concurrency !== undefined &&
+    (!Number.isInteger(concurrency) || (concurrency as number) < 1)
+  ) {
     throw new WorkflowError("Composition concurrency must be a positive finite integer.");
   }
-  return concurrency;
+  return concurrency as number | undefined;
 }
 
 export function createWorkflowPrimitives<
   Ref extends WorkflowReference = WorkflowReference,
   Opts = unknown,
 >(deps: WorkflowPrimitivesDeps<Ref, Opts>): WorkflowPrimitives<Ref, Opts> {
-  const parallel = <R>(
-    thunks: ReadonlyArray<() => Promise<R>>,
+  // Both compositions are async so every misuse (bad options, bad stages) REJECTS the same way.
+  // Inputs are snapshotted at call time: a caller mutating the array later must not change which
+  // branches run once the bounded pool starts them lazily.
+  const parallel = async <R>(
+    thunkInput: ReadonlyArray<() => Promise<R>>,
     options?: CompositionOptions,
   ): Promise<Array<R | null>> => {
     const concurrency = compositionConcurrency(options);
+    const thunks = [...thunkInput];
     return deps.callPrimitive<Array<R | null>>({
       kind: "parallel",
       refId: "parallel",
       args: { thunkCount: thunks.length, ...(concurrency === undefined ? {} : { concurrency }) },
       exec: () =>
         deps.runBlackBoxed(() =>
-          runCompositionPool<R | null>(thunks.length, concurrency, async (index) => {
-            try {
-              return await thunks[index]!();
-            } catch (reason) {
-              rethrowIfSuspension(reason);
-              await reportCompositionBranchFailure(deps, {
-                compositionKind: "parallel",
-                index,
-                total: thunks.length,
-                error: describeRejectionReason(reason),
-              });
-              return null;
-            }
-          }),
+          runCompositionPool<R | null>(
+            thunks.length,
+            concurrency,
+            deps.abortSignal,
+            async (index) => {
+              try {
+                return await thunks[index]!();
+              } catch (reason) {
+                rethrowIfSuspension(reason);
+                await reportCompositionBranchFailure(deps, {
+                  compositionKind: "parallel",
+                  index,
+                  total: thunks.length,
+                  error: describeRejectionReason(reason),
+                });
+                return null;
+              }
+            },
+          ),
         ),
       decodeRecorded: (recorded) => recorded as Array<R | null>,
     });
   };
 
-  const pipeline = (
-    items: ReadonlyArray<unknown>,
+  const pipeline = async (
+    itemInput: ReadonlyArray<unknown>,
     ...stagesAndOptions: PipelineStages
   ): Promise<unknown[]> => {
-    const last = stagesAndOptions.at(-1);
-    const options = typeof last === "object" && last !== null ? last : undefined;
-    const concurrency = compositionConcurrency(options);
-    const stages = (
-      options === undefined ? stagesAndOptions : stagesAndOptions.slice(0, -1)
-    ) as PipelineStage[];
+    // A trailing plain object is the options bag; any other trailing non-function is a mistake.
+    const last: unknown = stagesAndOptions.at(-1);
+    const hasOptions = isPlainObject(last);
+    const concurrency = compositionConcurrency(hasOptions ? last : undefined);
+    const stages = (hasOptions ? stagesAndOptions.slice(0, -1) : stagesAndOptions) as unknown[];
+    if (!stages.every((stage) => typeof stage === "function")) {
+      throw new TypeError(
+        "pipeline() stages must be functions, optionally followed by one options object such as { concurrency: 2 }.",
+      );
+    }
+    const items = [...itemInput];
     return deps.callPrimitive<unknown[]>({
       kind: "pipeline",
       refId: "pipeline",
@@ -253,12 +299,12 @@ export function createWorkflowPrimitives<
       },
       exec: () =>
         deps.runBlackBoxed(() =>
-          runCompositionPool(items.length, concurrency, async (index) => {
+          runCompositionPool(items.length, concurrency, deps.abortSignal, async (index) => {
             const item = items[index];
             let stageIndex = 0;
             try {
               let prev: unknown = item;
-              for (const stage of stages) {
+              for (const stage of stages as PipelineStage[]) {
                 prev = await stage(prev, item, index);
                 stageIndex += 1;
               }

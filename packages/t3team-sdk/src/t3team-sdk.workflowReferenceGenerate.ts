@@ -167,7 +167,7 @@ export function generateWorkflowAuthorReference(): string {
     "",
     "## Store-backed idempotent branches",
     "`parallel` and `pipeline` journal one composition result, not per-branch checkpoints. A crash before that result commits re-runs the branches. When the host supplies a script-accessible store, read each branch's progress there first, skip completed work, then persist its result. This SDK does not provide a store API; the script uses its host's store. Make the work idempotent; for example, process a repository only when its stored status is not done. This also applies to each item's pipeline chain.",
-    "Body counters (`blackboxSeq`, any `let`) reset on replay. Budgets that must survive resume belong in that host-provided store: use its atomic `increment` operation from a script when available, rather than an in-memory counter. `getBudget().total` is currently 0; do not treat it as a durable call budget.",
+    "A variable you declare in the body (any `let`) starts from its initial value again when a run resumes or replays, so do not count work in memory. Budgets that must survive resume belong in a durable store: once the pack store ships, use its atomic `increment` operation from a script instead of an in-memory counter. `getBudget().total` is currently 0; do not treat it as a durable call budget.",
     "",
     "## Examples",
     ...examples,

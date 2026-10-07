@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { createWorkflowPrimitives, type WorkflowPrimitivesDeps } from "./composition.ts";
 import { createDurableRuntime } from "./durableRuntime.ts";
 import type { JournalEntry } from "./journalReader.ts";
+import { WorkflowAborted } from "./errors.ts";
 import { WorkflowSuspended } from "./handles.ts";
 import type { PrimitiveCall } from "./runtimeTypes.ts";
 
@@ -113,12 +114,91 @@ describe("composition concurrency", () => {
     expect(await primitives.pipeline([1, 2], { concurrency: 1 })).toEqual([1, 2]);
   });
 
-  it("validates the cap before any branch runs", () => {
+  it("rejects an invalid cap before any branch runs", async () => {
     const primitives = createWorkflowPrimitives(deps);
     for (const concurrency of [0, -1, 1.5, Infinity, NaN]) {
-      expect(() => primitives.parallel([], { concurrency })).toThrow("positive finite integer");
-      expect(() => primitives.pipeline([], { concurrency })).toThrow("positive finite integer");
+      await expect(primitives.parallel([], { concurrency })).rejects.toThrow(
+        "positive finite integer",
+      );
+      await expect(primitives.pipeline([], { concurrency })).rejects.toThrow(
+        "positive finite integer",
+      );
     }
+  });
+
+  it("rejects non-object options, unknown keys and non-function stages instead of ignoring them", async () => {
+    const primitives = createWorkflowPrimitives(deps);
+    const ran: number[] = [];
+    const thunk = async () => ran.push(1);
+    await expect(primitives.parallel([thunk], 3 as never)).rejects.toThrow(TypeError);
+    await expect(primitives.parallel([thunk], [] as never)).rejects.toThrow(/must be an object/);
+    await expect(primitives.parallel([thunk], { concurency: 2 } as never)).rejects.toThrow(
+      /Unknown composition option 'concurency'/,
+    );
+    // Typos in the pipeline options bag must not run unbounded, nor be treated as a no-op stage.
+    await expect(primitives.pipeline([1], { concurency: 2 } as never)).rejects.toThrow(
+      /Unknown composition option/,
+    );
+    await expect(primitives.pipeline([1], { x: 1 } as never)).rejects.toThrow(TypeError);
+    await expect(primitives.pipeline([1], thunk, 3 as never)).rejects.toThrow(/stages must be/);
+    await expect(primitives.pipeline([1], thunk, [] as never)).rejects.toThrow(/stages must be/);
+    expect(ran).toEqual([]);
+  });
+
+  it.each(kinds)("%s stops launching queued branches once the run is aborted", async (kind) => {
+    const controller = new AbortController();
+    const primitives = createWorkflowPrimitives({ ...deps, abortSignal: controller.signal });
+    const starts: number[] = [];
+    const branch = async (index: number) => {
+      starts.push(index);
+      if (index === 0) controller.abort();
+      return index;
+    };
+    const run =
+      kind === "parallel"
+        ? primitives.parallel(
+            [0, 1, 2, 3].map((i) => () => branch(i)),
+            { concurrency: 1 },
+          )
+        : primitives.pipeline([0, 1, 2, 3], async (_prev, _item, index) => branch(index), {
+            concurrency: 1,
+          });
+    await expect(run).rejects.toBeInstanceOf(WorkflowAborted);
+    expect(starts).toEqual([0]);
+  });
+
+  it("does not swallow an abort raised inside a branch as a null result", async () => {
+    const primitives = createWorkflowPrimitives(deps);
+    await expect(
+      primitives.parallel([
+        async () => {
+          throw new WorkflowAborted();
+        },
+      ]),
+    ).rejects.toBeInstanceOf(WorkflowAborted);
+  });
+
+  it.each(kinds)("%s snapshots its inputs at call time", async (kind) => {
+    const primitives = createWorkflowPrimitives(deps);
+    const gate = Promise.withResolvers<void>();
+    const thunks: Array<() => Promise<number>> = [
+      async () => {
+        await gate.promise;
+        return 0;
+      },
+      async () => 1,
+    ];
+    const items = [0, 1];
+    const run =
+      kind === "parallel"
+        ? primitives.parallel(thunks, { concurrency: 1 })
+        : primitives.pipeline(items, async (_prev, item) => item, { concurrency: 1 });
+    thunks[1] = async () => 99;
+    items[1] = 99;
+    thunks.push(async () => 100);
+    items.push(100);
+    gate.resolve();
+    expect(await run).toEqual([0, 1]);
   });
 
   it("keeps failure reports and stops queued work on suspension", async () => {
