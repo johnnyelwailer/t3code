@@ -170,3 +170,20 @@ export function translateUpstreamPath(
     },
   };
 }
+
+/**
+ * Options for applying a bridge translation. Always replace so Back cannot land
+ * on the transient upstream path that this bridge just translated away.
+ */
+export function buildUpstreamBridgeNavigation(
+  translation: Exclude<UpstreamRouteTranslation, { kind: "ignore" }>,
+):
+  | (Exclude<UpstreamRouteTranslation, { kind: "ignore" | "unhandled" }>["target"] & {
+      readonly replace: true;
+    })
+  | { readonly to: "/t3team"; readonly replace: true } {
+  if (translation.kind === "unhandled") {
+    return { to: "/t3team", replace: true };
+  }
+  return { ...translation.target, replace: true };
+}
