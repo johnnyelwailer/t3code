@@ -76,6 +76,13 @@ describe("distribution desktop brand", () => {
       "Pack Product (Alpha)",
     );
     assert.equal(
+      resolveDesktopWindowTitle({
+        displayName: "Pack Product (Dev)",
+        documentTitle: "Pack Product",
+      }),
+      "Pack Product (Dev)",
+    );
+    assert.equal(
       resolveDesktopWindowTitle({ displayName: "T3 Code (Dev)", documentTitle: undefined }),
       "T3 Code (Dev)",
     );

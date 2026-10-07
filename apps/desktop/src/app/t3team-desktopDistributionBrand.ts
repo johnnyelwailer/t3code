@@ -95,6 +95,8 @@ export function resolveDesktopWindowTitle(input: {
   readonly documentTitle: string | undefined;
 }): string {
   const next = input.documentTitle?.trim() ?? "";
+  // A bare pack name is the staged display name without its stage; keep the stage.
+  if (input.displayName.startsWith(`${next} (`)) return input.displayName;
   if (next.length > 0 && !VENDOR_WINDOW_TITLE.test(next)) return next;
   return input.displayName;
 }
