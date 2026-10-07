@@ -112,7 +112,11 @@ it.layer(TestLayer)("Pack document view writes and removal", (it) => {
         ),
       );
       assert.strictEqual(error.message, "The pack does not declare this collection.");
-      assert.include(JSON.stringify(logged), "t3team.packDocuments.subscribe-failed");
+      assert.isTrue(
+        logged.some((message) =>
+          [message].flat().includes("t3team.packDocuments.subscribe-failed"),
+        ),
+      );
     }),
   );
 });
