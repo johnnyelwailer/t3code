@@ -30,7 +30,7 @@ export class T3TeamPackDocumentStore extends Context.Service<
       input: T3TeamSubscribePackDocumentsInput,
     ) => Stream.Stream<T3TeamPackDocumentsStreamEvent, T3TeamPackDocumentStoreError>;
   }
->()("t3/t3team-v2/T3TeamPackDocumentStore") {}
+>()("t3/t3team-v2/t3team-packDocumentStore/T3TeamPackDocumentStore") {}
 
 export const PackDocumentCollections = Context.Reference<
   ReadonlyMap<string, PackCollectionsDefinition>

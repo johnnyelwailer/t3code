@@ -128,9 +128,15 @@ it.layer(TestLayer)("Pack documents", (it) => {
           store.put("items", "invalid", {}, { ifVersion: -1 }),
           store.list("items", { limit: 0 }),
           store.increment("items", "invalid", "n", Infinity),
-        ] as ReadonlyArray<Effect.Effect<unknown, unknown>>)
+        ] as ReadonlyArray<Effect.Effect<unknown, Store.T3TeamPackDocumentStoreError>>)
           assert.strictEqual((yield* Effect.exit(effect))._tag, "Failure");
         assert.isNull(yield* store.get("items", "invalid"));
+        yield* store.put("items", "null-counter", null);
+        assert.strictEqual(
+          (yield* Effect.exit(store.increment("items", "null-counter", "n", 1)))._tag,
+          "Failure",
+        );
+        assert.strictEqual((yield* store.get("items", "null-counter"))?.doc, null);
         yield* store.put("items", "string-counter", { n: "one" });
         assert.strictEqual(
           (yield* Effect.exit(store.increment("items", "string-counter", "n", 1)))._tag,

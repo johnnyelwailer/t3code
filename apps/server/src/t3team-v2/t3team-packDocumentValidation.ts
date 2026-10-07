@@ -34,6 +34,9 @@ export const encodeDocument = Effect.fnUntraced(function* (doc: unknown, maxByte
   const json = yield* encodeJson(value);
   const bytes = new TextEncoder().encode(json).byteLength;
   if (bytes > maxBytes)
-    return yield* Effect.fail(new Error("Document exceeds collection byte limit"));
+    return yield* new T3TeamPackDocumentStoreError({
+      operation: "encodeDocument",
+      cause: new Error("Document exceeds collection byte limit"),
+    });
   return { json, bytes };
 });

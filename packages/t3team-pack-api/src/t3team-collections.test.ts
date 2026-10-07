@@ -72,7 +72,7 @@ describe("pack collection definitions", () => {
     { ...definition.items, viewWritable: undefined },
     { ...definition.items, sql: "select 1" },
     { ...definition.items, maxDocBytes: () => 100 },
-    new Date(),
+    new Map(),
   ])("rejects invalid collection data %#", (items) => {
     expect(() => decodePackCollectionsDefinition({ items, quotaBytes: 1000 })).toThrow();
   });

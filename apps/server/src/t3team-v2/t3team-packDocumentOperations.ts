@@ -1,11 +1,11 @@
 import type { PackCollectionsDefinition } from "@t3team/pack-api";
-import type { T3TeamPackDocument } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import * as PubSub from "effect/PubSub";
+import type * as PubSub from "effect/PubSub";
 import type * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { PackDocumentStore } from "./t3team-packDocumentApi.ts";
+import { packDocumentWriter } from "./t3team-packDocumentCommit.ts";
 import { incrementPackDocument } from "./t3team-packDocumentCounter.ts";
 import { packDocumentQueries } from "./t3team-packDocumentQueries.ts";
 import type { PackDocumentChange } from "./t3team-packDocumentStream.ts";
@@ -15,6 +15,7 @@ import {
   decodePrefix,
   encodeDocument,
   mapPackDocumentError,
+  T3TeamPackDocumentStoreError,
 } from "./t3team-packDocumentValidation.ts";
 export const bindPackDocumentStore = Effect.fnUntraced(
   function* (
@@ -30,26 +31,7 @@ export const bindPackDocumentStore = Effect.fnUntraced(
       if (key !== undefined) yield* decodeKey(key);
       return definition;
     });
-    const publish = (collection: string, doc: T3TeamPackDocument) =>
-      PubSub.publish(changes, { type: "upsert", packId, collection, doc });
-    const write = <A>(
-      operation: string,
-      effect: Effect.Effect<
-        { value: A; doc: T3TeamPackDocument | null; collection: string },
-        unknown
-      >,
-    ) =>
-      lock
-        .withPermits(1)(
-          sql.withTransaction(effect).pipe(
-            Effect.tap((result) =>
-              result.doc ? publish(result.collection, result.doc) : Effect.void,
-            ),
-            Effect.map((result) => result.value),
-            Effect.uninterruptible,
-          ),
-        )
-        .pipe(Effect.mapError(mapPackDocumentError(operation)));
+    const write = packDocumentWriter(sql, changes, lock, packId);
     const get = (collection: string, key: string) =>
       validate(collection, key).pipe(
         Effect.andThen(query.get(collection, key)),
@@ -67,7 +49,10 @@ export const bindPackDocumentStore = Effect.fnUntraced(
           options.limit !== undefined &&
           (!Number.isSafeInteger(options.limit) || options.limit < 1)
         )
-          return yield* Effect.fail(new Error("Invalid list limit"));
+          return yield* new T3TeamPackDocumentStoreError({
+            operation: "list",
+            cause: new Error("Invalid list limit"),
+          });
         return yield* query.list(collection, options);
       },
       Effect.mapError(mapPackDocumentError("list")),
@@ -85,7 +70,11 @@ export const bindPackDocumentStore = Effect.fnUntraced(
             expiresAt: null,
           });
           const winner = inserted ?? (yield* query.get(collection, key));
-          if (!winner) return yield* Effect.fail(new Error("Insert winner missing"));
+          if (!winner)
+            return yield* new T3TeamPackDocumentStoreError({
+              operation: "insertOrGet",
+              cause: new Error("Insert winner missing"),
+            });
           return {
             collection,
             doc: inserted,
@@ -107,12 +96,18 @@ export const bindPackDocumentStore = Effect.fnUntraced(
             options.ifVersion !== undefined &&
             (!Number.isSafeInteger(options.ifVersion) || options.ifVersion < 0)
           )
-            return yield* Effect.fail(new Error("Invalid version"));
+            return yield* new T3TeamPackDocumentStoreError({
+              operation: "put",
+              cause: new Error("Invalid version"),
+            });
           if (
             options.ttlMs !== undefined &&
             (!Number.isSafeInteger(options.ttlMs) || options.ttlMs < 1)
           )
-            return yield* Effect.fail(new Error("Invalid TTL"));
+            return yield* new T3TeamPackDocumentStoreError({
+              operation: "put",
+              cause: new Error("Invalid TTL"),
+            });
           const encoded = yield* encodeDocument(doc, definition.maxDocBytes);
           const time = yield* DateTime.now;
           const value = {
