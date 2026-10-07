@@ -10,6 +10,7 @@ import {
   MenuPopup,
   MenuTrigger,
 } from "~/t3team/components/ui/t3team-menu";
+import { ProjectMyWorkViewSwitchCompact } from "~/t3team/t3team-ProjectMyWorkViewSwitchCompact";
 
 export type ProjectMyWorkLens = "digest" | "hierarchy" | "board";
 
@@ -151,28 +152,36 @@ export function ProjectMyWorkViewSwitch({
     (backlog?.kind === "select" && backlog.active) ||
     (planning?.kind === "select" && planning.active);
   return (
-    <div
-      className="inline-flex shrink-0 items-center gap-0.5 rounded-lg bg-input/40 p-0.5"
-      role="group"
-      aria-label="My Work view switch"
-    >
-      {LENSES.map(({ value, label, Icon }) => {
-        const active = !backlogActive && lens === value;
-        return (
-          <button
-            key={value}
-            type="button"
-            data-segment={value}
-            aria-pressed={active}
-            onClick={() => onLensChange(value)}
-            className={segmentClassName(active)}
-          >
-            <SegmentLabel Icon={Icon} label={label} />
-          </button>
-        );
-      })}
-      {backlog ? <BacklogSegment segment="backlog" behavior={backlog} /> : null}
-      {planning ? <BacklogSegment segment="planning" behavior={planning} /> : null}
-    </div>
+    <>
+      <ProjectMyWorkViewSwitchCompact
+        lens={lens}
+        onLensChange={onLensChange}
+        {...(backlog ? { backlog } : {})}
+        {...(planning ? { planning } : {})}
+      />
+      <div
+        className="hidden shrink-0 items-center gap-0.5 rounded-lg bg-input/40 p-0.5 sm:inline-flex"
+        role="group"
+        aria-label="My Work view switch"
+      >
+        {LENSES.map(({ value, label, Icon }) => {
+          const active = !backlogActive && lens === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              data-segment={value}
+              aria-pressed={active}
+              onClick={() => onLensChange(value)}
+              className={segmentClassName(active)}
+            >
+              <SegmentLabel Icon={Icon} label={label} />
+            </button>
+          );
+        })}
+        {backlog ? <BacklogSegment segment="backlog" behavior={backlog} /> : null}
+        {planning ? <BacklogSegment segment="planning" behavior={planning} /> : null}
+      </div>
+    </>
   );
 }

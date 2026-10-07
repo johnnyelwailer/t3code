@@ -231,6 +231,36 @@ describe("checkCursorProviderStatus", () => {
     }),
   );
 
+  it.effect("treats retryable catalog NetworkError as warning without clearing auth", () =>
+    Effect.gen(function* () {
+      const networkError = Object.assign(new Error("Network request failed"), {
+        name: "NetworkError",
+        isRetryable: true,
+      });
+      const provider = yield* checkCursorProviderStatus(baseCursorSettings, {
+        CURSOR_API_KEY: "test-cursor-key",
+      }).pipe(
+        Effect.provide(
+          CursorSdkCatalog.layerTest(() =>
+            Effect.fail(
+              new CursorSdkCatalog.CursorSdkCatalogError({
+                authenticationFailure: false,
+                cause: networkError,
+              }),
+            ),
+          ),
+        ),
+      );
+
+      expect(provider).toMatchObject({
+        status: "warning",
+        auth: { status: "unknown" },
+        message:
+          "Cursor API is temporarily unreachable (catalog probe). Sign-in is still saved; retrying.",
+      });
+    }),
+  );
+
   it.effect("requires a Cursor API key without probing any external Cursor binary", () =>
     Effect.gen(function* () {
       const provider = yield* checkCursorProviderStatus(baseCursorSettings).pipe(

@@ -82,6 +82,7 @@ export function digestFacetsFor(
 import { DIGEST_BUCKETS } from "./t3team-projectMyWorkDigestBuckets";
 import {
   DIGEST_YESTERDAY_WIDGET_ID,
+  digestYesterdayPlacement,
   digestYesterdaySection,
   isDigestGraphSectionLive,
 } from "./t3team-projectMyWorkDigestYesterdaySection";
@@ -135,12 +136,16 @@ export function buildHeuristicDigestPlan(
           : { ticketId: ticket.id };
       }),
   })).filter((section) => section.items.length > 0);
+  const yesterday = digestYesterdaySection(graph, digestYesterdayPlacement(nowMs));
+  const leads = yesterday.some((section) => section.placement === "side");
   return {
     producer: "heuristic",
     producedAt: new Date(nowMs).toISOString(),
     sections:
       onlyTicketIds === undefined
-        ? [...reviewSections(graph), ...sections, ...digestYesterdaySection(graph)]
+        ? leads
+          ? [...yesterday, ...reviewSections(graph), ...sections]
+          : [...reviewSections(graph), ...sections, ...yesterday]
         : sections,
   };
 }
@@ -178,7 +183,7 @@ export function resolveDigestPlan(
         : section.items.length > 0;
     });
   // An arrangement made before Yesterday existed has no place for it: it trails in the footer,
-  // like a ticket the arrangement has not seen.
+  // like a ticket the arrangement has not seen — the arrangement owns the top of the digest.
   const hasYesterdayWidget = sections.some((s) => s.widget === DIGEST_YESTERDAY_WIDGET_ID);
   const unseen = new Set(
     graph.tickets
@@ -195,7 +200,7 @@ export function resolveDigestPlan(
     sections: [
       ...sections,
       ...trailing,
-      ...(hasYesterdayWidget ? [] : digestYesterdaySection(graph)),
+      ...(hasYesterdayWidget ? [] : digestYesterdaySection(graph, "footer")),
     ],
     droppedTicketIds,
     newSinceTicketIds: [...unseen],

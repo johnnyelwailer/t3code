@@ -69,6 +69,21 @@ it("does not split a surrogate pair at the truncation boundary", () => {
   assert.notMatch(failure.message.slice(0, -1), /[\uD800-\uDBFF]$/u);
 });
 
+it("maps connection_stalled causes to an actionable Cursor stall message", () => {
+  assert.equal(
+    makeProviderFailure({
+      cause: { code: "connection_stalled", message: "Connection stalled repeatedly" },
+    }).message,
+    "Cursor connection stalled repeatedly. Retry the turn; if it keeps failing, check network stability and Cursor status.",
+  );
+  assert.equal(
+    makeProviderFailure({
+      cause: { message: "Connection stalled after 16m" },
+    }).message,
+    "Cursor connection stalled repeatedly. Retry the turn; if it keeps failing, check network stability and Cursor status.",
+  );
+});
+
 it("does not expose arbitrary cause messages and preserves explicit messages", () => {
   const cause = new Error("Adapter failed", {
     cause: new Error("Session expired. Sign in again."),

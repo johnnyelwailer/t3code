@@ -2,6 +2,7 @@ import { ProjectId } from "@t3tools/contracts";
 import { useState, type MouseEvent } from "react";
 
 import { Badge } from "~/t3team/components/ui/t3team-badge";
+import { cn } from "~/t3team/lib/t3team-utils";
 import { openDigestPullRequest } from "~/t3team/t3team-digestPrAsideStore";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import {
@@ -10,28 +11,12 @@ import {
   digestTitleWithoutKey,
 } from "~/t3team/t3team-projectMyWorkDigestFacts";
 import type { DigestChangeRequest, DigestReviewer } from "~/t3team/t3team-projectMyWorkDigestPlan";
+import {
+  DIGEST_PR_ACTION_RING,
+  DIGEST_PR_STATE,
+  digestPrRank,
+} from "~/t3team/t3team-projectMyWorkDigestPrState";
 import { WorkItemPersonAvatar } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
-
-/**
- * PR lifecycle states as the digest reads them. Tones follow the app's PR surface: a verdict the
- * viewer owes is amber, a negative verdict or broken CI is red, earned states are green, neutral
- * states stay quiet.
- */
-const PR_STATE: Record<
-  DigestChangeRequest["state"],
-  {
-    readonly label: string;
-    readonly variant: "error" | "warning" | "success" | "secondary" | "outline";
-  }
-> = {
-  draft: { label: "draft", variant: "secondary" },
-  open: { label: "open", variant: "secondary" },
-  "needs-you": { label: "your review", variant: "warning" },
-  "changes-requested": { label: "changes requested", variant: "error" },
-  "ci-failing": { label: "ci failing", variant: "error" },
-  approved: { label: "approved", variant: "success" },
-  merged: { label: "merged", variant: "outline" },
-};
 
 /**
  * Reviewer avatars only — the name lives in the tooltip, so the chip row carries no text that
@@ -92,11 +77,14 @@ export function DigestReviewerStack({
 export function DigestPrChip({
   pr,
   repoLabel = (repo) => repo,
+  showState = true,
 }: {
   pr: DigestChangeRequest;
   repoLabel?: (repo: string) => string;
+  /** Off where every chip shares one state (a list of merged PRs): the badge would only repeat. */
+  showState?: boolean;
 }) {
-  const state = PR_STATE[pr.state];
+  const state = DIGEST_PR_STATE[pr.state];
   const open = (event: MouseEvent) => {
     event.stopPropagation();
     if (pr.projectId === undefined || event.metaKey || event.ctrlKey) return;
@@ -115,7 +103,11 @@ export function DigestPrChip({
           <a
             href={digestPrUrl(pr)}
             onClick={open}
-            className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md bg-background/70 px-1.5 py-0.5 text-2xs text-muted-foreground ring-1 ring-border/50 hover:text-foreground hover:ring-border"
+            className={cn(
+              "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md bg-background/70 px-1.5 py-0.5 text-2xs text-muted-foreground ring-1 ring-border/50 hover:text-foreground hover:ring-border",
+              // A verdict or fix owed stands out from the quiet ones, not just its badge.
+              DIGEST_PR_ACTION_RING[state.variant],
+            )}
           >
             <span className="shrink-0 -translate-y-px font-mono text-3xs leading-none">
               {repoLabel(pr.repo)}#{pr.number}
@@ -125,9 +117,11 @@ export function DigestPrChip({
                 {digestTitleWithoutKey(pr.title, pr.ticketId)}
               </span>
             ) : null}
-            <Badge size="sm" variant={state.variant}>
-              {state.label}
-            </Badge>
+            {showState ? (
+              <Badge size="sm" variant={state.variant}>
+                {state.label}
+              </Badge>
+            ) : null}
             {pr.additions !== undefined && pr.deletions !== undefined ? (
               <span className="hidden -translate-y-px font-mono text-3xs leading-none tabular-nums @md/prs:inline">
                 <span className="text-success">+{pr.additions}</span>{" "}
@@ -158,23 +152,30 @@ export function DigestPrChip({
 
 const SHOWN_PRS = 3;
 
-/** A ticket's PRs, live ones first and drafts last; past three, the rest fold behind "+N". */
+/** A ticket's PRs, owed action first and drafts last; past three, the rest fold behind "+N". */
 export function DigestPrChips({
   prs,
   repoLabel,
+  showState = true,
 }: {
   prs: readonly DigestChangeRequest[];
   repoLabel?: (repo: string) => string;
+  showState?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   if (prs.length === 0) return null;
-  const ordered = prs.toSorted((a, b) => Number(a.state === "draft") - Number(b.state === "draft"));
+  const ordered = prs.toSorted((a, b) => digestPrRank(a) - digestPrRank(b));
   const shown = expanded ? ordered : ordered.slice(0, SHOWN_PRS);
   const hidden = ordered.length - shown.length;
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
       {shown.map((pr) => (
-        <DigestPrChip key={pr.id} pr={pr} {...(repoLabel ? { repoLabel } : {})} />
+        <DigestPrChip
+          key={pr.id}
+          pr={pr}
+          showState={showState}
+          {...(repoLabel ? { repoLabel } : {})}
+        />
       ))}
       {hidden > 0 ? (
         <button

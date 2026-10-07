@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 
+import { cn } from "~/t3team/lib/t3team-utils";
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
+import { getProjectTicketKanbanLane } from "~/t3team/t3team-projectTicketStatus";
+import { workItemStatusDotClassName } from "~/t3team/workitem/t3team-workItemFieldTokens";
 
 export function formatDigestAgo(nowMs: number, iso: string): string {
   const minutes = Math.max(0, Math.round((nowMs - Date.parse(iso)) / 60_000));
@@ -10,9 +13,23 @@ export function formatDigestAgo(nowMs: number, iso: string): string {
   return `${Math.round(hours / 24)} d`;
 }
 
+/**
+ * Dot colour by the status's lane: the work item view's category tones, plus a review tone of its
+ * own — "in review" and "in progress" ask different things of the viewer.
+ */
+const LANE_DOT: Record<ReturnType<typeof getProjectTicketKanbanLane>, string> = {
+  ...workItemStatusDotClassName,
+  review: "bg-violet-500",
+};
+
+export function digestStatusDotClassName(status: string): string {
+  return cn("size-1.5 shrink-0 rounded-full", LANE_DOT[getProjectTicketKanbanLane(status)]);
+}
+
 export function DigestStatusDot({ status }: { status: string }) {
   return (
-    <span className="inline-flex shrink-0 text-2xs leading-none text-muted-foreground">
+    <span className="inline-flex shrink-0 items-center gap-1 text-2xs leading-none text-muted-foreground">
+      <span aria-hidden="true" className={digestStatusDotClassName(status)} />
       {status}
     </span>
   );

@@ -106,6 +106,7 @@ export {
   withBodyApi,
   workflow,
 } from "./t3team-sdk.engineApi.ts";
+export type { CompositionOptions, PipelineStage, PipelineStages } from "@runbook/core/composition";
 export type { Watermark, WatermarkOptions, WatermarkState } from "@runbook/core/watermark";
 export { emit } from "./t3team-sdk.emit.ts";
 // Signal sources (design 42): the shared signal/source vocabulary + built-in Tier A/B

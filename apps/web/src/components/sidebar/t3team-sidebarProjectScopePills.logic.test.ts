@@ -103,7 +103,9 @@ describe("splitProjectScopePills", () => {
     expect(keys(result.overflow)).toEqual(["jira:x::1", "jira:x::2"]);
   });
 
-  it("draws nothing when there is no room", () => {
-    expect(splitProjectScopePills(groups, null, 0)).toEqual({ shown: [], overflow: [] });
+  it("lists every site behind +N when no disc fits", () => {
+    const result = splitProjectScopePills(groups, null, 0);
+    expect(keys(result.shown)).toEqual([]);
+    expect(keys(result.overflow)).toEqual(["a", "b", "c", "d", "e"]);
   });
 });

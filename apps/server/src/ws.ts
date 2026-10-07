@@ -22,6 +22,7 @@ import { subscribeChatGptHandoff } from "./provider/CodexChatGptHandoff.ts";
 import { subscribeCodexAuthCallback } from "./provider/CodexAuthCallback.ts";
 import {
   DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL,
+  T3TeamPackDocumentsError,
   AcpRegistryOperationError,
   CommandId,
   AuthAccessStreamError,
@@ -227,6 +228,7 @@ import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
 import { T3TeamActorMailbox } from "./t3team-actorMailboxService.ts";
 import { stopThreadCascade } from "./t3team-threadStopCascade.ts";
 import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
+import * as PackDocumentStore from "./t3team-v2/t3team-packDocumentStore.ts";
 import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import { isThreadResubscribeStaggerEnabled } from "./t3team-threadResubscribeStaggerFlag.ts";
 import { isResourcePressureEnabled } from "./t3team-resourcePressureFlag.ts";
@@ -1292,6 +1294,9 @@ const layerWsRpc = (
       const threadArtifacts = Option.getOrUndefined(
         yield* Effect.serviceOption(T3TeamThreadArtifactsStore),
       );
+      const packDocuments = Option.getOrUndefined(
+        yield* Effect.serviceOption(PackDocumentStore.T3TeamPackDocumentStore),
+      );
       // t3team: the inter-agent mailbox the stop cascade holds (optional, as above).
       const actorMailbox = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamActorMailbox));
       const crypto = yield* Crypto.Crypto;
@@ -2183,6 +2188,25 @@ const layerWsRpc = (
               ? Stream.make({ type: "snapshot" as const, threadId: input.threadId, artifacts: [] })
               : threadArtifacts.subscribe(input).pipe(Stream.orDie),
             { "rpc.aggregate": "t3team", "orchestration_v2.thread_id": input.threadId },
+          ),
+        [WS_METHODS.t3teamSubscribePackDocuments]: (input) =>
+          observeRpcStream(
+            WS_METHODS.t3teamSubscribePackDocuments,
+            packDocuments === undefined
+              ? Stream.make({
+                  type: "snapshot" as const,
+                  packId: input.packId,
+                  collection: input.collection,
+                  documents: [],
+                })
+              : packDocuments
+                  .subscribe(input)
+                  .pipe(
+                    Stream.mapError(
+                      (cause) => new T3TeamPackDocumentsError({ message: cause.message }),
+                    ),
+                  ),
+            { "rpc.aggregate": "t3team" },
           ),
         [WS_METHODS.t3teamStopThreadCascade]: (input) =>
           observeRpcEffect(

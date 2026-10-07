@@ -350,6 +350,7 @@ import {
   selectProjectGroupingSettings,
 } from "../logicalProject";
 import { buildDraftThreadRouteParams, buildThreadRouteParams } from "../threadRoutes";
+import { runT3TeamThreadNavigationOverride } from "~/t3team/t3team-threadNavigationOverride";
 import {
   isSameSidebarThreadRef,
   useSidebarPendingFileDropStore,
@@ -7281,9 +7282,13 @@ export default function ChatView(props: ChatViewProps) {
   }, [activeThread, environmentId, interruptThreadTurn, setThreadError]);
   const onOpenRelatedThread = useCallback(
     (threadId: ThreadId) => {
+      const threadRef = scopeThreadRef(environmentId, threadId);
+      // Team shell: stay on /t3team/... so Back is not trapped by the upstream
+      // route bridge re-translating `/$environmentId/$threadId` onto the child.
+      if (runT3TeamThreadNavigationOverride(threadRef)) return;
       void navigate({
         to: "/$environmentId/$threadId",
-        params: buildThreadRouteParams(scopeThreadRef(environmentId, threadId)),
+        params: buildThreadRouteParams(threadRef),
       });
     },
     [environmentId, navigate],

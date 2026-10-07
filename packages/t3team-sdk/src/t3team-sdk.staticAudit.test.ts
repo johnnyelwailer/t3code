@@ -244,3 +244,38 @@ describe("runtime-import rule is body-shape aware", () => {
     expect(findings[0]?.message).toContain("blanks every import");
   });
 });
+
+describe("composition options in static scans", () => {
+  const source = (concurrency: string) => ({
+    absolutePath: "/virtual/concurrency.workflow.ts",
+    sourceText: `import { parallel, pipeline, waitUntil } from "@t3team/sdk";
+export const meta = { name: "bounded", description: "Bounded work", capabilities: [] } as const;
+export default async function run() {
+  await parallel([async () => 1], { concurrency: ${concurrency} });
+  return await pipeline([1, 2], async (prev) => prev, { concurrency: 2 });
+}`,
+  });
+
+  it("accepts both options signatures without extra capabilities", () => {
+    expect(auditWorkflowSourceStatic(source("2"), { declared: new Set() })).toEqual([]);
+  });
+
+  it("typechecks sync and async pipeline stages with explicit input types", () => {
+    const typed = source("2");
+    typed.sourceText = typed.sourceText.replace(
+      "async (prev) => prev",
+      "(prev: number) => prev + 1, async (prev: number) => prev + 1",
+    );
+    expect(auditWorkflowSourceStatic(typed, { declared: new Set(), typecheck: true })).toEqual([]);
+  });
+
+  it("still scans expressions inside the options object", () => {
+    const findings = auditWorkflowSourceStatic(source("process.pid + await waitUntil(1)"), {
+      declared: new Set(),
+    });
+    expect(findings.map((f) => f.rule).sort()).toEqual([
+      "missing-capability",
+      "unjournaled-host-global",
+    ]);
+  });
+});

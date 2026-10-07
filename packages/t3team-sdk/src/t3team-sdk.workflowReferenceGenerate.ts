@@ -23,6 +23,7 @@ const INDEX_PATH = NodeURL.fileURLToPath(new URL("./t3team-sdk.index.ts", import
 /** The option/result types the bound API refers to; expanded member by member. */
 const REFERENCED_TYPES = [
   "WorkflowMeta",
+  "CompositionOptions",
   "AgentOpts",
   "AskOpts",
   "AskUserOpts",
@@ -162,7 +163,11 @@ export function generateWorkflowAuthorReference(): string {
     "- Module-level mutable state is rejected; keep per-run state inside the body.",
     "- The durable-suspension signal raised while `agent()`/`askAgent()`/`askUser()`/`waitUntil()` park the run is control flow, not an error: never catch or retry it. Retry only your own schema failures by re-asking.",
     '- Provider instance ids and model slugs are live runtime facts: read them with the models tool before writing `model: "<instanceId>/<slug>"`; prefer `effort` when you need a thinking tier, not a specific model.',
-    "- Return a structured object as the result (rendered as labelled lines); use `getThread().showWidget` for anything the user must see, `notifyUser` for a verdict line. Never forward a sub-agent's raw output verbatim.",
+    "- Return a structured object as the result (relayed as fenced JSON data); use `getThread().showWidget` for anything the user must see, `notifyUser` for a verdict line. Never forward a sub-agent's raw output verbatim.",
+    "",
+    "## Store-backed idempotent branches",
+    "`parallel` and `pipeline` journal one composition result, not per-branch checkpoints. A crash before that result commits re-runs the branches. When the host supplies a script-accessible store, read each branch's progress there first, skip completed work, then persist its result. This SDK does not provide a store API; the script uses its host's store. Make the work idempotent; for example, process a repository only when its stored status is not done. This also applies to each item's pipeline chain.",
+    "A variable you declare in the body (any `let`) starts from its initial value again when a run resumes or replays, so do not count work in memory. Budgets that must survive resume belong in a durable store: once the pack store ships, use its atomic `increment` operation from a script instead of an in-memory counter. `getBudget().total` is currently 0; do not treat it as a durable call budget.",
     "",
     "## Examples",
     ...examples,

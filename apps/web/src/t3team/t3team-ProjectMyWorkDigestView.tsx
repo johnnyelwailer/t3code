@@ -1,5 +1,8 @@
 import { digestLaneLayout } from "~/t3team/t3team-projectMyWorkDigestLaneLayout";
-import { digestShownTicketIds } from "~/t3team/t3team-projectMyWorkDigestGroups";
+import {
+  digestRowTicketIds,
+  digestShownTicketIds,
+} from "~/t3team/t3team-projectMyWorkDigestGroups";
 import { DashboardWidget } from "~/t3team/t3team-dashboardWidgetRegistry";
 import { DigestArrangementBar } from "~/t3team/t3team-ProjectMyWorkDigestArrangementBar";
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
@@ -77,6 +80,7 @@ export function ProjectMyWorkDigestView({
         : "";
   const lanes = digestLaneLayout({ side: side.length, main: main.length });
   const shownTicketIds = digestShownTicketIds([...side, ...main], graph);
+  const rowTicketIds = digestRowTicketIds([...side, ...main], graph);
   return (
     <div className="@container/digest space-y-8">
       {header}
@@ -106,6 +110,7 @@ export function ProjectMyWorkDigestView({
                   placement="main"
                   {...lane}
                   shownTicketIds={shownTicketIds}
+                  rowTicketIds={rowTicketIds}
                 />
               ))}
             </div>

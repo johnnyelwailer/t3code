@@ -33,6 +33,8 @@ import {
   isBareSpecifier,
 } from "./t3team-distributionImportResolver.ts";
 
+import { distributionPersistenceModule } from "./t3team-distributionPersistenceModule.ts";
+
 const VIRTUAL_ID = "\0@t3code/distribution";
 const SPECIFIER = "@t3code/distribution";
 
@@ -52,6 +54,7 @@ const MIME_BY_EXT: Record<string, string> = {
 
 type DistributionManifest = {
   readonly entry?: string;
+  readonly packs?: readonly string[];
   readonly assetsDir?: string;
   readonly theme?: string;
   readonly branding?: Record<string, string>;
@@ -118,6 +121,7 @@ const readTheme = (dir: string, themeRelPath: string): unknown => {
 };
 
 const stubModule = (): string =>
+  "export const distributionPersistence = [];\n" +
   "export const activateDistribution = undefined;\n" +
   "export const distributionAssets = {};\n" +
   "export const distributionTheme = undefined;\n" +
@@ -153,6 +157,7 @@ const distributionModule = (dir: string): string => {
   // The entry may export `activate` as the default or a named export — the runtime pack loader
   // accepts both (t3team-packs.activation.ts); the compiled-in path must accept the same.
   return (
+    distributionPersistenceModule(dir, manifest.packs) +
     `import * as __entry from ${JSON.stringify(entryUrl)};\n` +
     `export const activateDistribution = __entry.default ?? __entry.activate;\n` +
     `export const distributionAssets = ${JSON.stringify(assets)};\n` +

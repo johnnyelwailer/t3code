@@ -153,6 +153,8 @@ export type DigestGraph = {
   readonly viewer: { readonly name: string; readonly role: string; readonly lastVisitAt: string };
   /** When the oldest project's Jira tickets last matched Jira (ISO). */
   readonly jiraSyncedAt?: string;
+  /** Why change requests may be incomplete or old this round (e.g. the host is rate-limiting). */
+  readonly changeRequestNote?: string;
   readonly sprint?: DigestSprint;
   /** The viewer's personal burndown for the digest sprint, in the project's estimate unit. */
   readonly burndown?: {
