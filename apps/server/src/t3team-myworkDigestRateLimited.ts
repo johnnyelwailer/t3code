@@ -14,28 +14,32 @@ export function isRateLimitedFailure(error: unknown): boolean {
   return false;
 }
 
-/** The digest's note when it shows change requests from before the host paused reads. */
-export const RATE_LIMITED_CHANGE_REQUEST_NOTE =
-  "The code host is rate-limiting reads: pull requests are shown as of the last successful read.";
+/** The digest's note when some of a project's change requests could not be read this round. */
+export const INCOMPLETE_CHANGE_REQUEST_NOTE =
+  "Some repositories could not be read just now: their pull requests are shown as last seen.";
 
-/** How long a last good listing may stand in for a degraded read. */
+/** How long a repository's last seen rows may stand in for a read that missed it. */
 export const LAST_GOOD_LISTING_MAX_AGE_MS = 30 * 60 * 1000;
 
-type ListingEntry = { readonly repository: string };
+type ListingEntry = { readonly host: string; readonly repository: string };
+/** Per app project, the last rows each repository (host/owner/repo) returned, and when. */
 export type DigestListingMemory<E extends ListingEntry> = Map<
   string,
-  { readonly entries: readonly E[]; readonly at: number }
+  Map<string, { readonly entries: readonly E[]; readonly at: number }>
 >;
 
+const repositoryKey = (entry: ListingEntry) => `${entry.host}/${entry.repository}`;
+
 /**
- * The listing the digest shows for one project this round, and whether it is stale.
+ * The listing the digest shows for one project this round, and whether it may be incomplete.
  *
- * - A clean read (no per-repository errors) is shown and becomes the project's last good listing.
- * - A read that came back with per-repository errors (signed in, but some repositories could not be
- *   read — in practice the host rate-limiting) keeps its fresh rows and fills each repository that
- *   returned nothing from the last good listing. It never replaces the last good listing.
- * - A failed read falls back to the last good listing only when it failed on a rate limit.
- * A last good listing older than `LAST_GOOD_LISTING_MAX_AGE_MS` is not used.
+ * Every read refreshes the memory of each repository it returned rows for. A read that came back
+ * with per-repository errors (some repositories could not be read: a rate limit, a lost repo, a
+ * signed-out host) keeps its fresh rows, fills every remembered repository it returned nothing for,
+ * and is marked stale even when there was nothing to fill. A failed read is filled entirely from
+ * memory, but only when it failed on a rate limit. Memory older than
+ * `LAST_GOOD_LISTING_MAX_AGE_MS` is not used. A repository that is legitimately empty now can be
+ * refilled by a degraded read; that lasts at most the max age and is marked stale.
  */
 export function resolveDigestListing<E extends ListingEntry>(input: {
   readonly memory: DigestListingMemory<E>;
@@ -46,28 +50,28 @@ export function resolveDigestListing<E extends ListingEntry>(input: {
     | { readonly _tag: "Failure"; readonly rateLimited: boolean; readonly message: string };
 }): { readonly entries: readonly E[]; readonly stale: boolean; readonly note?: string } {
   const { memory, projectId, nowMs, read } = input;
-  const remembered = memory.get(projectId);
-  const lastGood =
-    remembered !== undefined && nowMs - remembered.at <= LAST_GOOD_LISTING_MAX_AGE_MS
-      ? remembered.entries
-      : undefined;
+  const byRepository = memory.get(projectId) ?? new Map();
+  memory.set(projectId, byRepository);
+  const remembered = (except: ReadonlySet<string>) =>
+    [...byRepository.entries()]
+      .filter(([key, seen]) => !except.has(key) && nowMs - seen.at <= LAST_GOOD_LISTING_MAX_AGE_MS)
+      .flatMap(([, seen]) => seen.entries);
   if (read._tag === "Success") {
-    if (!read.hadErrors) {
-      memory.set(projectId, { entries: read.entries, at: nowMs });
-      return { entries: read.entries, stale: false };
+    const fresh = new Map<string, E[]>();
+    for (const entry of read.entries) {
+      const key = repositoryKey(entry);
+      fresh.set(key, [...(fresh.get(key) ?? []), entry]);
     }
-    const freshRepositories = new Set(read.entries.map((entry) => entry.repository));
-    const filled = (lastGood ?? []).filter((entry) => !freshRepositories.has(entry.repository));
-    return filled.length > 0
-      ? {
-          entries: [...read.entries, ...filled],
-          stale: true,
-          note: RATE_LIMITED_CHANGE_REQUEST_NOTE,
-        }
-      : { entries: read.entries, stale: false };
+    for (const [key, entries] of fresh) byRepository.set(key, { entries, at: nowMs });
+    if (!read.hadErrors) return { entries: read.entries, stale: false };
+    return {
+      entries: [...read.entries, ...remembered(new Set(fresh.keys()))],
+      stale: true,
+      note: INCOMPLETE_CHANGE_REQUEST_NOTE,
+    };
   }
-  if (read.rateLimited && lastGood !== undefined) {
-    return { entries: lastGood, stale: true, note: RATE_LIMITED_CHANGE_REQUEST_NOTE };
+  if (read.rateLimited) {
+    return { entries: remembered(new Set()), stale: true, note: INCOMPLETE_CHANGE_REQUEST_NOTE };
   }
   return { entries: [], stale: false, note: read.message };
 }

@@ -29,7 +29,7 @@ function DigestAutoStatus({
   const prNotice = changeRequestNote ? (
     <span className="inline-flex items-center gap-1.5 text-warning" title={changeRequestNote}>
       <span className="size-1.5 rounded-full bg-warning" aria-hidden />
-      PRs may be out of date
+      Some PRs may be out of date
     </span>
   ) : null;
   if (jiraSyncedAt === undefined && updatedAtMs === undefined) return prNotice;
