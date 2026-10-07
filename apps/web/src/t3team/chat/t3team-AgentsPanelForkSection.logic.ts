@@ -59,7 +59,7 @@ export const SUB_RUN_STATUS_LABEL: Record<ProjectThread["status"], string> = {
   idle: "Idle",
   running: "Running",
   completed: "Completed",
-  error: "Error",
+  error: "Failed",
 };
 
 /**
@@ -79,39 +79,69 @@ export const SUB_RUN_WAITING_LABEL = "Waiting";
  * t3team-SidebarSubRunRow). Listed rows have no thinking/writing word: that needs the
  * thread's turn items, which only the open thread loads.
  */
+const SHELL_WORD: Record<string, string> = {
+  preparing: "Starting",
+  starting: "Starting",
+  queued: "Queued",
+  running: "Running",
+  waiting: "Waiting",
+  failed: "Failed",
+  interrupted: "Stopped",
+  cancelled: "Stopped",
+  rolled_back: "Stopped",
+  completed: "Completed",
+  idle: "Idle",
+};
+
+/**
+ * Live status text for a sub-run row. Question and plan-approval outrank the
+ * shell. The shell word (anchored in `mapLiveThreadToProjectThread`) is
+ * Starting, Queued, Running — or the live activity phrase — Waiting, Failed,
+ * Stopped, or Completed. A finished run whose coarse status collapsed to idle
+ * still says Completed.
+ */
 export function resolveSubRunStatusLabel(
   thread: Pick<
     ProjectThread,
-    "status" | "activityLabel" | "pendingUserInput" | "waitingOnChildren" | "awaitingParent"
+    | "status"
+    | "shellStatus"
+    | "activityLabel"
+    | "pendingUserInput"
+    | "waitingOnChildren"
+    | "awaitingParent"
   >,
   options: { readonly activityLabelsEnabled: boolean },
 ): string {
-  // A question docked in this thread's composer outranks the run state: the
-  // parent's next action is to look at that question (the row click jumps to
-  // the child's thread, where the panel sits).
   if (thread.pendingUserInput === true) {
     return "Question awaiting answer";
   }
-  // A plan-mode child that presented its plan and stopped: the turn IS
-  // completed, but the parent owes this child a decision (same surface,
-  // same navigation as the pending question above — the amber pending
-  // treatment, never a separate indicator system).
   if (thread.awaitingParent === true) {
     return "Plan awaiting approval";
   }
-  // Own work settled but child work is still live. Own live work (running) and a
-  // failed row (error) keep their own word, mirroring the server primitive's precedence.
-  if (
-    thread.waitingOnChildren === true &&
-    thread.status !== "running" &&
-    thread.status !== "error"
-  ) {
+  const shell = thread.shellStatus;
+  if (shell === "preparing" || shell === "starting") return "Starting";
+  if (shell === "queued") return "Queued";
+  const shellSettled =
+    shell === "waiting" ||
+    shell === "failed" ||
+    shell === "interrupted" ||
+    shell === "cancelled" ||
+    shell === "rolled_back" ||
+    shell === "completed";
+  const liveRunning = shell === "running" || (thread.status === "running" && !shellSettled);
+  const failed = shell === "failed" || shell === "interrupted" || thread.status === "error";
+  if (liveRunning) {
+    return resolveActivityPillDisplay({
+      label: "Running",
+      activityLabel: options.activityLabelsEnabled ? (thread.activityLabel ?? null) : null,
+    });
+  }
+  if (shell === "waiting" || (thread.waitingOnChildren === true && !failed)) {
     return SUB_RUN_WAITING_LABEL;
   }
-  const label = SUB_RUN_STATUS_LABEL[thread.status];
-  if (thread.status !== "running") return label;
-  return resolveActivityPillDisplay({
-    label,
-    activityLabel: options.activityLabelsEnabled ? (thread.activityLabel ?? null) : null,
-  });
+  if (shell !== undefined && shell !== "idle") {
+    return SHELL_WORD[shell] ?? SUB_RUN_STATUS_LABEL[thread.status];
+  }
+  if (thread.status === "error") return "Failed";
+  return SUB_RUN_STATUS_LABEL[thread.status];
 }

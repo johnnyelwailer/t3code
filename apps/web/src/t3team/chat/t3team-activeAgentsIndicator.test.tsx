@@ -26,56 +26,20 @@ const ENTRIES: readonly ActiveAgentEntry[] = [
   },
 ];
 
-/**
- * Regression: the dots of the working-row active-agents indicator must NOT
- * carry a native hover tooltip. The working row already renders the status
- * word + live step label right next to the dots, and hovering a dot flips
- * that label to the agent's live status — a second tooltip was redundant.
- * The accessible name (aria-label) and the click-to-open-agents-panel
- * behavior are kept.
- */
 describe("T3TeamActiveAgentsIndicator", () => {
-  it("renders no hover tooltip (no title attribute) on the dot group", () => {
+  it("renders a chip per agent with its status and a hover of title plus status", () => {
     const markup = renderToStaticMarkup(
       <T3TeamActiveAgentsIndicator entries={ENTRIES} onOpenAgents={() => {}} />,
     );
-    expect(markup).not.toContain('title="');
-    // The accessible name still carries the same info for screen readers.
-    expect(markup).toContain('aria-label="2 active agents — open agents"');
-    // One dot per entry, each with its own accessible name.
-    expect(markup).toContain('aria-label="Child A — Editing code"');
-    expect(markup).toContain('aria-label="Sub B — Running tests"');
+    expect(markup).toContain('aria-label="2 active agents"');
+    expect(markup).toContain('title="Child A — Editing code"');
+    expect(markup).toContain('title="Sub B — Running tests"');
+    expect(markup).toContain("Editing code");
+    expect(markup).toContain("Running tests");
+    expect(markup).toContain("data-sub-run-driver");
   });
 
-  it("still opens the agents panel on click of the dot group", () => {
-    const onOpenAgents = vi.fn();
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    let root: Root;
-    act(() => {
-      root = createRoot(container);
-      root.render(<T3TeamActiveAgentsIndicator entries={ENTRIES} onOpenAgents={onOpenAgents} />);
-    });
-    const group = container.querySelector<HTMLElement>('[role="button"]');
-    expect(group).not.toBeNull();
-    expect(group!.getAttribute("title")).toBeNull();
-    act(() => {
-      group!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    expect(onOpenAgents).toHaveBeenCalledTimes(1);
-    act(() => root.unmount());
-    container.remove();
-  });
-
-  it("stamps each dot with its entry's dotState (state-texture hook)", () => {
-    const markup = renderToStaticMarkup(
-      <T3TeamActiveAgentsIndicator entries={ENTRIES} onOpenAgents={() => {}} />,
-    );
-    expect(markup).toContain('data-t3team-state="writing"');
-    expect(markup).toContain('data-t3team-state="working"');
-  });
-
-  it("opens the clicked agent when onOpenAgent is provided (per-dot open)", () => {
+  it("opens the clicked child and does not open the whole group", () => {
     const onOpenAgents = vi.fn();
     const onOpenAgent = vi.fn();
     const container = document.createElement("div");
@@ -91,16 +55,23 @@ describe("T3TeamActiveAgentsIndicator", () => {
         />,
       );
     });
-    const dots = container.querySelectorAll<HTMLElement>(".t3team-aci-cell");
-    expect(dots.length).toBe(2);
+    const chips = container.querySelectorAll<HTMLButtonElement>(".t3team-aci-cell");
+    expect(chips.length).toBe(2);
     act(() => {
-      dots[1]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      chips[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(onOpenAgent).toHaveBeenCalledTimes(1);
-    expect(onOpenAgent).toHaveBeenCalledWith(ENTRIES[1]);
-    expect(onOpenAgents).toHaveBeenCalledTimes(0);
-    act(() => root.unmount());
+    expect(onOpenAgent).toHaveBeenCalledWith(ENTRIES[0]);
+    expect(onOpenAgents).not.toHaveBeenCalled();
+    act(() => root!.unmount());
     container.remove();
+  });
+
+  it("stamps each chip with its entry's dotState", () => {
+    const markup = renderToStaticMarkup(
+      <T3TeamActiveAgentsIndicator entries={ENTRIES} onOpenAgents={() => {}} />,
+    );
+    expect(markup).toContain('data-t3team-state="writing"');
+    expect(markup).toContain('data-t3team-state="working"');
   });
 });
 

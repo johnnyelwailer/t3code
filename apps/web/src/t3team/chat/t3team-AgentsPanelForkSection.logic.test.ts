@@ -208,7 +208,7 @@ describe("resolveSubRunStatusLabel (GHE #40 panel/sidebar seam)", () => {
     for (const [status, label] of [
       ["idle", "Idle"],
       ["completed", "Completed"],
-      ["error", "Error"],
+      ["error", "Failed"],
     ] as const) {
       const thread = createThread({
         status,
@@ -277,7 +277,7 @@ describe("resolveSubRunStatusLabel (GHE #40 panel/sidebar seam)", () => {
     const running = createThread({ status: "running", waitingOnChildren: true });
     expect(resolveSubRunStatusLabel(running, { activityLabelsEnabled: true })).not.toBe("Waiting");
     const errored = createThread({ status: "error", waitingOnChildren: true });
-    expect(resolveSubRunStatusLabel(errored, { activityLabelsEnabled: true })).toBe("Error");
+    expect(resolveSubRunStatusLabel(errored, { activityLabelsEnabled: true })).toBe("Failed");
     // A docked question still outranks waiting.
     const both = createThread({
       status: "completed",
@@ -293,5 +293,64 @@ describe("resolveSubRunStatusLabel (GHE #40 panel/sidebar seam)", () => {
         activityLabelsEnabled: true,
       }),
     ).toBe("Completed");
+  });
+
+  it("reads the child shell: Starting, Queued, Waiting, Failed, Stopped, Completed", () => {
+    const label = (
+      shellStatus: ProjectThread["shellStatus"],
+      status: ProjectThread["status"] = "idle",
+    ) =>
+      resolveSubRunStatusLabel(
+        createThread(shellStatus === undefined ? { status } : { status, shellStatus }),
+        { activityLabelsEnabled: true },
+      );
+    expect(label("starting", "running")).toBe("Starting");
+    expect(label("preparing", "running")).toBe("Starting");
+    expect(label("queued", "running")).toBe("Queued");
+    expect(label("waiting", "running")).toBe("Waiting");
+    expect(label("failed", "error")).toBe("Failed");
+    expect(label("cancelled")).toBe("Stopped");
+    expect(label("interrupted")).toBe("Stopped");
+    // A finished run whose coarse status collapsed to idle still says Completed.
+    expect(label("completed", "idle")).toBe("Completed");
+    expect(label("running", "running")).toBe("Running");
+  });
+
+  it("lets a question and a plan approval outrank the shell word", () => {
+    expect(
+      resolveSubRunStatusLabel(
+        createThread({ status: "running", shellStatus: "running", pendingUserInput: true }),
+        { activityLabelsEnabled: true },
+      ),
+    ).toBe("Question awaiting answer");
+    expect(
+      resolveSubRunStatusLabel(
+        createThread({ status: "idle", shellStatus: "completed", awaitingParent: true }),
+        { activityLabelsEnabled: true },
+      ),
+    ).toBe("Plan awaiting approval");
+  });
+
+  it("shows the live activity phrase only while the shell is running", () => {
+    expect(
+      resolveSubRunStatusLabel(
+        createThread({
+          status: "running",
+          shellStatus: "running",
+          activityLabel: "Editing the router",
+        }),
+        { activityLabelsEnabled: true },
+      ),
+    ).toBe("Editing the router");
+    expect(
+      resolveSubRunStatusLabel(
+        createThread({
+          status: "running",
+          shellStatus: "queued",
+          activityLabel: "Editing the router",
+        }),
+        { activityLabelsEnabled: true },
+      ),
+    ).toBe("Queued");
   });
 });

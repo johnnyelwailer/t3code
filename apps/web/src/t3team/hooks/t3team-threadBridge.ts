@@ -57,6 +57,10 @@ export function mapLiveThreadToProjectThread(
         : runState === "running"
           ? "running"
           : "idle",
+    // Coarse `status` collapses a finished run to idle. Keep the shell's own
+    // runtime word here so a sub-run can still say Completed, Starting, Queued,
+    // or Stopped. Absence of a runtime reads as idle.
+    shellStatus: thread.runtime?.status ?? "idle",
     // The REAL settle state: sub-run rosters' "Settled (N)" fold keys off this, never off
     // `status !== "running"` — a fresh terminal child is not settled.
     settled: thread.settledOverride === "settled",

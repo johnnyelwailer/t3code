@@ -79,6 +79,10 @@ describe("mapLiveThreadToProjectThread (V2 shell)", () => {
     expect(map({ runtime: runtime("waiting") }).status).toBe("running");
     expect(map({ runtime: runtime("failed") }).status).toBe("error");
     expect(map({ runtime: runtime("completed") }).status).toBe("idle");
+    expect(map({ runtime: runtime("completed") }).shellStatus).toBe("completed");
+    expect(map({ runtime: runtime("starting") }).shellStatus).toBe("starting");
+    expect(map({ runtime: runtime("queued") }).shellStatus).toBe("queued");
+    expect(map({ runtime: runtime("cancelled") }).shellStatus).toBe("cancelled");
     expect(map({ runtime: null }).status).toBe("idle");
     expect(map({ runtime: runtime("running"), archivedAt: UPDATED_AT }).status).toBe("completed");
   });

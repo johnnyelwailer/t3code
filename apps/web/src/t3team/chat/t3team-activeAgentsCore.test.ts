@@ -66,7 +66,7 @@ describe("mergeActiveAgentsAndChildren (GHE #201)", () => {
       "agent:a-run",
       "agent:a-wait",
     ]);
-    expect(entries[0]).toMatchObject({ source: "child", statusLabel: "Working" });
+    expect(entries[0]).toMatchObject({ source: "child", statusLabel: "Running" });
     expect(entries[2]).toMatchObject({ source: "subagent", statusLabel: "Waiting" });
   });
 
@@ -84,6 +84,21 @@ describe("mergeActiveAgentsAndChildren (GHE #201)", () => {
       "bash",
       "Working",
     ]);
+  });
+
+  it("includes a child that is waiting on agents, with the Waiting label", () => {
+    const entries = mergeActiveAgentsAndChildren({
+      childThreads: [
+        child({
+          id: "c-wait",
+          status: "idle",
+          title: "Parked parent",
+          waitingOnChildren: true,
+        }),
+      ],
+      subagents: [],
+    });
+    expect(entries.map((entry) => entry.statusLabel)).toEqual(["Waiting"]);
   });
 
   it("returns the stable empty array when nothing is active", () => {

@@ -5,6 +5,7 @@ import type {
   ProjectRecipeLaunchSource,
   RecipeSurface,
 } from "@t3tools/project-recipes";
+import type { OrchestrationV2RunStatus } from "@t3tools/contracts";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
 
 export type T3TeamThreadToolId = T3TeamToolId;
@@ -48,6 +49,11 @@ export type ProjectThread = {
   selectedToolIds?: ReadonlyArray<T3TeamThreadToolId>;
   kickoffWorkflow?: T3TeamKickoffWorkflow;
   status: "idle" | "running" | "completed" | "error";
+  /**
+   * The live shell's runtime status. Coarse `status` still collapses a finished
+   * run to idle; sub-run labels read this so that run says Completed.
+   */
+  shellStatus?: OrchestrationV2RunStatus | "idle";
   /**
    * GHE #304 follow-up: the thread's REAL settle state — shell
    * `settledOverride === "settled"` (a `thread.settled` event fired: user
@@ -122,60 +128,7 @@ export type ThreadMessage = {
   createdAt: string;
 };
 
-export type ProjectTicket = {
-  id: string;
-  projectId: string;
-  parentId?: string;
-  description?: string;
-  ref: {
-    provider: string;
-    kind: string;
-    id: string;
-    displayId: string;
-    title: string;
-    type?: string;
-    issueTypeIconUrl?: string;
-    url: string;
-    projectId: string;
-  };
-  issueType?: string;
-  issueTypeIsSubtask?: boolean;
-  issueTypeIconUrl?: string;
-  status: string;
-  priority?: string;
-  assignee?: string;
-  /** The assignee's Jira face (a public avatar URL). */
-  assigneeAvatarUrl?: string;
-  assigneeAccountId?: string;
-  /** Jira reporter — the digest surfaces it for bugs, where who hit the problem matters. */
-  reporter?: string;
-  estimateValue?: number;
-  timeOriginalEstimateSeconds?: number;
-  timeRemainingEstimateSeconds?: number;
-  aggregateTimeOriginalEstimateSeconds?: number;
-  aggregateTimeRemainingEstimateSeconds?: number;
-  subtaskCount?: number;
-  sprintId?: string;
-  sprintName?: string;
-  sprintState?: string;
-  sprintBoardId?: string;
-  sprintGoal?: string;
-  sprintStartDate?: string;
-  sprintEndDate?: string;
-  sprintCompleteDate?: string;
-  updatedAt: string;
-  labels?: ReadonlyArray<string>;
-  /** Position in the provider's board order (Jira Rank); set for backlog tickets only. */
-  boardRank?: number;
-};
-
-export type ProjectBacklogSubtaskCreateInput = {
-  readonly summary: string;
-  readonly description?: string;
-  readonly estimateHours?: number;
-  readonly issueTypeId?: string;
-  readonly assigneeAccountId?: string | null;
-};
+export type { ProjectBacklogSubtaskCreateInput, ProjectTicket } from "./t3team-projectTicketModel";
 
 export type ViewState =
   // "My work" across every bound project, reached from the Work lens when the sidebar's project

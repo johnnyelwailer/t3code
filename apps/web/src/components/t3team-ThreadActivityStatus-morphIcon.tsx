@@ -20,6 +20,7 @@ export function ThreadActivityMorphIcon({
   spin = false,
   instant = false,
   size = "md",
+  className,
 }: {
   solid: boolean;
   pulse?: boolean;
@@ -31,6 +32,8 @@ export function ThreadActivityMorphIcon({
    *  sub-run rows, which render the SAME ring so child and parent read as
    *  one status language. */
   size?: "md" | "sm";
+  /** Replaces the size class when a row needs a different glyph box. */
+  className?: string;
 }) {
   const ref = useRef<SVGSVGElement | null>(null);
   useEffect(() => {
@@ -59,7 +62,11 @@ export function ThreadActivityMorphIcon({
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden
-      className={cn(size === "sm" ? "size-3" : "size-4", "shrink-0", pulse && "t3team-icon-pulse")}
+      className={cn(
+        className ?? (size === "sm" ? "size-3" : "size-4"),
+        "shrink-0",
+        pulse && "t3team-icon-pulse",
+      )}
     >
       <circle
         cx="12"

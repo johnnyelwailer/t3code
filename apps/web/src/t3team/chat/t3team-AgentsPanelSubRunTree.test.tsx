@@ -15,10 +15,20 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 const settingsState = vi.hoisted(() => ({
   activityLabelsEnabled: true,
 }));
+const routeState = vi.hoisted(() => ({ threadId: undefined as string | undefined }));
 
 vi.mock("~/hooks/useSettings", () => ({
   usePrimarySettings: (selector?: (settings: Record<string, unknown>) => unknown) =>
     selector ? selector({ t3teamActivityLabelsEnabled: settingsState.activityLabelsEnabled }) : {},
+}));
+
+vi.mock("@tanstack/react-router", () => ({
+  useParams: () => ({ threadId: routeState.threadId }),
+}));
+
+vi.mock("~/state/entities", () => ({
+  useThreadShells: () => [],
+  useServerConfigs: () => new Map(),
 }));
 
 import type { ProjectThread } from "~/t3team/t3team-types";
@@ -56,15 +66,23 @@ function render(nodes: SubRunNode[]) {
  * (lucide icons carry none); the settled CircleCheckIcon and the CircleAlertIcon
  * are size-3 too and have a bare circle.
  */
+function statusRoots(): Element[] {
+  return Array.from(container!.querySelectorAll("button svg")).filter(
+    (svg) => svg.closest("[data-sub-run-driver]") === null,
+  );
+}
+
 function ringSvg(): SVGSVGElement | null {
   return (
-    Array.from(container!.querySelectorAll("button svg circle"))
+    statusRoots()
+      .flatMap((svg) => Array.from(svg.querySelectorAll("circle")))
       .find((circle) => (circle as SVGCircleElement).style.strokeDasharray !== "")
       ?.closest("svg") ?? null
   );
 }
 
 afterEach(() => {
+  routeState.threadId = undefined;
   if (root) {
     act(() => root!.unmount());
     root = null;
@@ -79,8 +97,7 @@ describe("T3TeamAgentsPanelSubRunTree status language (GHE #254)", () => {
     // The awaiting label replaces the live state word in the row text…
     expect(container!.textContent).toContain("Question awaiting answer");
     // …and the amber question-mark glyph outranks the lifecycle icon.
-    const svgs = Array.from(container!.querySelectorAll("button svg")) as SVGSVGElement[];
-    const questionSvg = svgs.find((svg) =>
+    const questionSvg = (statusRoots() as SVGSVGElement[]).find((svg) =>
       svg.className.baseVal.includes("text-warning-foreground"),
     );
     expect(questionSvg, "amber question-mark icon present").toBeTruthy();
@@ -92,8 +109,7 @@ describe("T3TeamAgentsPanelSubRunTree status language (GHE #254)", () => {
     // question mark + the awaiting label — never a second indicator system.
     render([node(createThread({ status: "completed", awaitingParent: true }))]);
     expect(container!.textContent).toContain("Plan awaiting approval");
-    const svgs = Array.from(container!.querySelectorAll("button svg")) as SVGSVGElement[];
-    const pendingSvg = svgs.find((svg) =>
+    const pendingSvg = (statusRoots() as SVGSVGElement[]).find((svg) =>
       svg.className.baseVal.includes("text-warning-foreground"),
     );
     expect(pendingSvg, "amber pending icon present").toBeTruthy();
@@ -154,7 +170,7 @@ describe("T3TeamAgentsPanelSubRunTree status language (GHE #254)", () => {
       node(createThread({ id: "set-err", status: "error", settled: true })),
     ]);
     // Fresh terminal children: visible rows, full-size glyphs — NO fold for them
-    const allSvgs = () => Array.from(container!.querySelectorAll("button svg")) as SVGSVGElement[];
+    const allSvgs = () => statusRoots() as SVGSVGElement[];
     const alert = (svgs: SVGSVGElement[]) =>
       svgs.find((svg) => svg.querySelector("circle") && svg.querySelector("line"))!;
     const check = (svgs: SVGSVGElement[]) =>
@@ -175,8 +191,11 @@ describe("T3TeamAgentsPanelSubRunTree status language (GHE #254)", () => {
     expect(foldSvgs.length).toBe(2);
     expect(alert(foldSvgs)!.className.baseVal).toContain("size-2.5");
     expect(alert(foldSvgs)!.className.baseVal).toContain("text-destructive");
-    expect(check(foldSvgs)!.className.baseVal).toContain("size-2.5");
-    expect(check(foldSvgs)!.className.baseVal).toContain("text-success");
+    const done = check(foldSvgs)!;
+    expect(done.className.baseVal).toContain("size-2.5");
+    expect((done.querySelector("circle") as SVGCircleElement).style.strokeDasharray).toContain(
+      "62.83",
+    );
     expect(container!.querySelector(".size-1\\.5")).toBeNull();
   });
 });
@@ -215,5 +234,21 @@ describe("T3TeamAgentsPanelSubRunTree live status text (GHE #40 seam)", () => {
     expect(statusText()).toBe("Running");
     // the running dot/icon language from GHE #254 is unchanged
     expect(ringSvg(), "running sub-run still carries the pulsing ring").toBeTruthy();
+  });
+
+  it("a finished unsettled run says Completed and draws the solid ring", () => {
+    render([node(createThread({ status: "idle", shellStatus: "completed", title: "Finished" }))]);
+    expect(statusText()).toBe("Completed");
+    const circle = ringSvg()?.querySelector("circle") as SVGCircleElement | null;
+    expect(circle?.style.strokeDasharray).toContain("62.83");
+  });
+
+  it("marks the open child with aria-current", () => {
+    routeState.threadId = "child-1";
+    render([node(createThread({ id: "child-1", title: "Open child" }))]);
+    const row = Array.from(container!.querySelectorAll("button")).find((button) =>
+      (button.textContent ?? "").includes("Open child"),
+    );
+    expect(row?.getAttribute("aria-current")).toBe("page");
   });
 });

@@ -1,43 +1,49 @@
 /**
- * GHE #254: the sub-run status icon — the SAME status language as the parent
- * card (ThreadActivityMorphIcon, sm variant) and the sidebar sub-run rows
- * (t3team-SidebarSubRunRow): the morphing ring while running, a check when
- * done, an alert icon on error, a faded static ring when idle. Previously
- * the sub-run tree rendered a plain colored dot for every state, so a
- * running child looked identical to an idle one.
- *
- * Lives in its own file so t3team-AgentsPanelSubRunTree.tsx stays under the
- * additive guard's 200-LOC ceiling.
+ * Sub-run status glyph: one ThreadActivityMorphIcon (solid when the run
+ * completed, a spin when the activity phrase changes). A docked question and
+ * an error keep their own glyphs.
  */
-import { CircleAlertIcon, CircleCheckIcon, CircleQuestionMarkIcon } from "lucide-react";
+import { CircleAlertIcon, CircleQuestionMarkIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { cn } from "~/lib/utils";
 import { ThreadActivityMorphIcon } from "~/components/t3team-ThreadActivityStatus";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
+function usePhraseSpinTick(phrase: string): number {
+  const previous = useRef(phrase);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (previous.current === phrase) return;
+    previous.current = phrase;
+    setTick((value) => value + 1);
+  }, [phrase]);
+  return tick;
+}
+
 export function SubRunStatusIcon({
   status,
+  shellStatus,
   pendingUserInput = false,
   awaitingParent = false,
+  activityLabel,
   className,
 }: {
   status: ProjectThread["status"];
-  /**
-   * A question is docked in this child's composer — the amber question mark
-   * outranks the lifecycle glyph, because the parent's next action is to
-   * look at that question, not the child's run state.
-   */
+  shellStatus?: ProjectThread["shellStatus"];
   pendingUserInput?: boolean;
-  /**
-   * A plan-mode child presented its plan and stopped: the SAME amber pending
-   * treatment as a docked question (one indicator system), because the
-   * parent's next action is likewise to look at the child's plan.
-   */
   awaitingParent?: boolean;
+  activityLabel?: string | null;
   /** Optional size override (the fold list renders smaller glyphs). */
   className?: string;
 }) {
   const iconClass = className ?? "size-3";
+  const livePhrase =
+    shellStatus === "running" ||
+    (status === "running" && shellStatus !== "waiting" && shellStatus !== "failed")
+      ? (activityLabel ?? "")
+      : "";
+  const spinTick = usePhraseSpinTick(livePhrase);
   if (pendingUserInput || awaitingParent) {
     return (
       <CircleQuestionMarkIcon
@@ -46,24 +52,42 @@ export function SubRunStatusIcon({
       />
     );
   }
-  if (status === "running") {
-    return (
-      <span className={cn("shrink-0 text-info-foreground", className)}>
-        <ThreadActivityMorphIcon solid={false} size="sm" pulse />
-      </span>
-    );
-  }
-  if (status === "completed") {
-    return <CircleCheckIcon aria-hidden className={cn("shrink-0 text-success", iconClass)} />;
-  }
-  if (status === "error") {
+  if (shellStatus === "failed" || status === "error") {
     return <CircleAlertIcon aria-hidden className={cn("shrink-0 text-destructive", iconClass)} />;
   }
-  // GHE #254: idle keeps the SAME ring, faded + static, so every state reads
-  // at the ring's size instead of a shrunk dot.
+  const completed =
+    shellStatus === "completed" || (shellStatus === undefined && status === "completed");
+  const live =
+    shellStatus === "running" ||
+    shellStatus === "starting" ||
+    shellStatus === "preparing" ||
+    (status === "running" &&
+      shellStatus !== "waiting" &&
+      shellStatus !== "queued" &&
+      shellStatus !== "completed" &&
+      shellStatus !== "interrupted" &&
+      shellStatus !== "cancelled" &&
+      shellStatus !== "rolled_back");
   return (
-    <span className={cn("shrink-0 text-muted-foreground/40", className)}>
-      <ThreadActivityMorphIcon solid={false} size="sm" />
+    <span
+      className={cn(
+        "inline-flex shrink-0",
+        completed
+          ? "text-muted-foreground/70"
+          : live
+            ? "text-info-foreground"
+            : "text-muted-foreground/40",
+        className,
+      )}
+    >
+      <ThreadActivityMorphIcon
+        solid={completed}
+        pulse={live}
+        spin={live}
+        spinTick={spinTick}
+        size="sm"
+        {...(className !== undefined ? { className } : {})}
+      />
     </span>
   );
 }

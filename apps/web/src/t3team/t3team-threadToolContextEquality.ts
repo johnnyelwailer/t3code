@@ -106,6 +106,7 @@ export function projectThreadsEqual(left: ProjectThread, right: ProjectThread): 
     left.kickoffInteractionMode === right.kickoffInteractionMode &&
     kickoffWorkflowEqual(left.kickoffWorkflow, right.kickoffWorkflow) &&
     left.status === right.status &&
+    left.shellStatus === right.shellStatus &&
     // GHE #304 follow-up: the real settle state must diff through the equality
     // gate or a thread settling in the background would not move out of the
     // visible sub-run roster into the "Settled (N)" fold.
