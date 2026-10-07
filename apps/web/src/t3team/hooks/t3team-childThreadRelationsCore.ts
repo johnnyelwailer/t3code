@@ -78,7 +78,7 @@ export function computeChildThreadRelationsSignature(
   return threads
     .map(
       (thread) =>
-        `${thread.id}:${thread.parentThreadId ?? ""}:${thread.status}:${thread.title}:${thread.lastMessageAt}:${thread.ticketId ?? ""}:${thread.ticketDisplayId ?? ""}:${thread.settled === true}:${thread.pendingUserInput === true}:${thread.retention ?? ""}:${thread.activityLabel ?? ""}`,
+        `${thread.id}:${thread.parentThreadId ?? ""}:${thread.status}:${thread.shellRunStatus ?? ""}:${thread.providerInstanceId ?? ""}:${thread.title}:${thread.lastMessageAt}:${thread.ticketId ?? ""}:${thread.ticketDisplayId ?? ""}:${thread.settled === true}:${thread.pendingUserInput === true}:${thread.retention ?? ""}:${thread.activityLabel ?? ""}`,
     )
     .sort()
     .join("|");

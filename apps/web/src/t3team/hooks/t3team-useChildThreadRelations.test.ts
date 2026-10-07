@@ -228,6 +228,8 @@ describe("computeChildThreadRelationsSignature", () => {
       { ...base, settled: true },
       { ...base, pendingUserInput: true },
       { ...base, activityLabel: "running the tests" },
+      { ...base, shellRunStatus: "completed" as const },
+      { ...base, providerInstanceId: "provider-1" },
       { ...base, retention: "ephemeral" as const },
     ]) {
       expect(computeChildThreadRelationsSignature([changed])).not.toBe(signature);

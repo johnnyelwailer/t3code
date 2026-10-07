@@ -9,7 +9,7 @@
  */
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { type EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { useCallback, useMemo, type ReactNode } from "react";
 
 import { buildThreadRouteParams } from "~/threadRoutes";
@@ -36,6 +36,7 @@ export function useT3TeamThreadSubRuns(
     [childThreadsByParentId, threadId],
   );
   const navigate = useNavigate();
+  const { threadId: openThreadId } = useParams({ strict: false });
   const openThread = useCallback<SubRunOpenCallback>(
     (input) => {
       const threadRef = scopeThreadRef(environmentId, ThreadId.make(input.threadId));
@@ -50,8 +51,14 @@ export function useT3TeamThreadSubRuns(
         ? { childThreadIds: NO_CHILDREN, tree: null }
         : {
             childThreadIds: new Set(nodes.map((node) => node.thread.id)),
-            tree: <T3TeamAgentsPanelSubRunTree nodes={nodes} onOpen={openThread} />,
+            tree: (
+              <T3TeamAgentsPanelSubRunTree
+                nodes={nodes}
+                openThreadId={openThreadId}
+                onOpen={openThread}
+              />
+            ),
           },
-    [nodes, openThread],
+    [nodes, openThread, openThreadId],
   );
 }

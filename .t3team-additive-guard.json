@@ -238,6 +238,7 @@
     "apps/web/src/components/chat/ProviderStatusBanner.tsx",
     "apps/web/src/components/chat/ThreadDetailsPanel.tsx",
     "apps/web/src/components/chat/ThreadErrorBanner.tsx",
+    "apps/web/src/components/chat/ThreadRelationshipsControl.agents.test.tsx",
     "apps/web/src/components/chat/ThreadRelationshipsControl.tsx",
     "apps/web/src/components/chat/useComposerFocusState.test.tsx",
     "apps/web/src/components/cloud/CloudEnvironmentConnectList.tsx",
