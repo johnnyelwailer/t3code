@@ -298,7 +298,7 @@ export function truncateMiddleText(text: string, maxLength: number): string {
   return `${text.slice(0, head)}${MIDDLE_OMISSION_MARKER}${text.slice(text.length - tail)}`;
 }
 
-export function handoffRecallCoverage(threadId: string): string {
+function handoffRecallCoverage(threadId: string): string {
   return [
     `Provider context handoff (budget overflow; middle-truncated). Thread: ${threadId}.`,
     `Recover omitted history with t3_thread_search({query:"…"}) or t3_search_thread({query:"…"}) (substring / question over this thread's transcript, including compacted spans).`,
@@ -334,7 +334,7 @@ export function fitHistoryWithMiddleTruncate(input: {
     selectHistory({
       messages,
       coverage,
-      omittedItems: input.omittedItems,
+      omittedItems: input.omittedItems ?? 0,
       budget: effectiveBudget,
     });
 
