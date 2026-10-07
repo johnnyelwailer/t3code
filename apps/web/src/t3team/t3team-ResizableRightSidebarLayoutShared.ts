@@ -15,13 +15,16 @@ export function clampRightSidebarWidth(value: number, min: number, max: number):
   return Math.max(min, Math.min(max, value));
 }
 
-export function readStoredRightSidebarCollapsedState(storageKey: string): boolean {
+export function readStoredRightSidebarCollapsedState(
+  storageKey: string,
+  defaultCollapsed = false,
+): boolean {
   try {
     const stored = getLocalStorageItem(storageKey, Schema.Boolean);
-    return stored ?? false;
+    return stored ?? defaultCollapsed;
   } catch {
     if (typeof window === "undefined") {
-      return false;
+      return defaultCollapsed;
     }
 
     const legacyValue = window.localStorage.getItem(storageKey);
@@ -33,7 +36,7 @@ export function readStoredRightSidebarCollapsedState(storageKey: string): boolea
       setLocalStorageItem(storageKey, false, Schema.Boolean);
       return false;
     }
-    return false;
+    return defaultCollapsed;
   }
 }
 
@@ -42,17 +45,22 @@ export function useStoredRightSidebarState(input: {
   readonly widthStorageKey: string;
   readonly collapsedStorageKey: string;
   readonly defaultAsideWidth: number;
+  /** Collapsed until the user opens it once; afterwards their choice is stored. */
+  readonly defaultCollapsed?: boolean;
 }) {
-  const { widthStorageKey, collapsedStorageKey, defaultAsideWidth } = input;
+  const { widthStorageKey, collapsedStorageKey, defaultAsideWidth, defaultCollapsed } = input;
   const [asideWidth, setAsideWidth] = useState(defaultAsideWidth);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  // Read on the first render, not in the effect: a collapsed aside must not flash open on mount.
+  const [isCollapsed, setIsCollapsed] = useState(() =>
+    readStoredRightSidebarCollapsedState(collapsedStorageKey, defaultCollapsed),
+  );
   useEffect(() => {
     const storedWidth = getLocalStorageItem(widthStorageKey, Schema.Finite);
     if (storedWidth !== null) {
       setAsideWidth(storedWidth);
     }
-    setIsCollapsed(readStoredRightSidebarCollapsedState(collapsedStorageKey));
-  }, [collapsedStorageKey, widthStorageKey]);
+    setIsCollapsed(readStoredRightSidebarCollapsedState(collapsedStorageKey, defaultCollapsed));
+  }, [collapsedStorageKey, defaultCollapsed, widthStorageKey]);
   const setCollapsedState = useCallback(
     (nextCollapsed: boolean) => {
       runT3TeamViewTransition(() => {

@@ -128,6 +128,8 @@ export type T3TeamDigestProjectData = {
   readonly burndown?: T3TeamDigestBurndown;
   /** Set when the PR host could not be read this round (the list degrades, it does not fail). */
   readonly changeRequestNote?: string;
+  /** The PRs are the last good read, shown while the host rate-limits reads. */
+  readonly changeRequestsStale?: boolean;
   /** When the project's Jira tickets last matched Jira (ISO); absent before any sync. */
   readonly jiraSyncedAt?: string;
   /** Who the viewer's tickets hang together with (Jira links, same story). */
@@ -218,6 +220,7 @@ export type T3TeamDigestProjectSource = {
   }>;
   /** Set when the PR host could not be read this round; carried to the payload. */
   readonly changeRequestNote?: string;
+  readonly changeRequestsStale?: boolean;
   readonly jiraSyncedAt?: string;
   /** Who the viewer's tickets hang together with (Jira links, same story). */
   readonly dependencies?: ReadonlyArray<T3TeamDigestDependency>;

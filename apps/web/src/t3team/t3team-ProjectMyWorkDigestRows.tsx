@@ -84,12 +84,15 @@ export function DigestItemRow({
   graph,
   nowMs,
   onOpenTicket,
+  dependencies = true,
 }: {
   ticket: ProjectTicket;
   why?: string | undefined;
   graph: DigestGraph;
   nowMs: number;
   onOpenTicket?: ((ticketId: string) => void) | undefined;
+  /** Off inside a story card, whose adjacent-work pills carry the blocks and the people. */
+  dependencies?: boolean;
 }) {
   const action = digestActionLine(graph, ticket.id);
   const actions = digestItemActions(graph, ticket.id, nowMs);
@@ -178,7 +181,7 @@ export function DigestItemRow({
         <DigestChips graph={graph} ticketId={ticket.id} nowMs={nowMs} claims={claims} />
         {hasPrs || action || why || !dots ? null : <span className="inline-flex">{dots}</span>}
       </div>
-      <DigestDependencyLine graph={graph} ticketId={ticket.id} />
+      {dependencies ? <DigestDependencyLine graph={graph} ticketId={ticket.id} /> : null}
       <DigestItemActions actions={actions} />
     </div>
   );

@@ -176,6 +176,11 @@ export function payloadToDigestGraph(input: {
   });
 
   const jiraSyncedAt = oldestJiraSync(input.payload.projects);
+  // Only a stale read (the host rate-limited it) is worth a header notice; other notes describe
+  // hosts that cannot be browsed at all, which the PR lanes already show by being empty.
+  const changeRequestNote = input.payload.projects.find(
+    (data) => data.changeRequestsStale === true,
+  )?.changeRequestNote;
   const projectIdAt = (at: number) => projects[at]?.id ?? "";
   const joins = [input.payload.projects, resolveTicketId] as const;
   const changeRequests = digestTicketChangeRequests(...joins, projectIdAt, lastVisitMs);
@@ -186,6 +191,7 @@ export function payloadToDigestGraph(input: {
     scope: input.payload.scope,
     projects,
     ...(jiraSyncedAt !== undefined ? { jiraSyncedAt } : {}),
+    ...(changeRequestNote !== undefined ? { changeRequestNote } : {}),
     viewer: input.viewer,
     ...(sprint !== undefined ? { sprint } : {}),
     ...(burndown !== undefined ? { burndown } : {}),

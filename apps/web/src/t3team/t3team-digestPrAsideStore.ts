@@ -23,12 +23,14 @@ export const useDigestPrAsideStore = create<DigestPrAsideStore>(() => ({
   ticket: null,
 }));
 
+// A fresh object per open: clicking the item already shown is a new request, so an aside the user
+// collapsed in the meantime opens for it again.
 export function openDigestPullRequest(pullRequest: PullRequestRef) {
-  useDigestPrAsideStore.setState({ pullRequest, ticket: null });
+  useDigestPrAsideStore.setState({ pullRequest: { ...pullRequest }, ticket: null });
 }
 
 export function openDigestTicket(ticket: DigestAsideTicket) {
-  useDigestPrAsideStore.setState({ ticket, pullRequest: null });
+  useDigestPrAsideStore.setState({ ticket: { ...ticket }, pullRequest: null });
 }
 
 /** Closes whatever detail the aside shows; the quick starts come back. */

@@ -4,6 +4,8 @@ import {
   boundCatalogEntryKeys,
   buildJiraCatalog,
   jiraCatalogEntryKey,
+  jiraCatalogSiteFailure,
+  loadJiraCatalogAccount,
   unaddedCatalogProjects,
 } from "./t3team-jiraProjectCatalog.logic";
 
@@ -79,5 +81,46 @@ describe("unaddedCatalogProjects", () => {
       jiraCatalogEntryKey("acc-b", "1"),
       jiraCatalogEntryKey("acc-a", "2"),
     ]);
+  });
+});
+
+describe("loadJiraCatalogAccount", () => {
+  const cached = [project("9", "OLD", "Cached")];
+
+  it("names the site and keeps its cached projects when the fetch fails", async () => {
+    const result = await loadJiraCatalogAccount({
+      account: b,
+      cachedProjects: cached,
+      listProjects: () => Promise.reject(new Error("site down")),
+    });
+    expect(result.projects).toEqual(cached);
+    expect(result.failure).toEqual(jiraCatalogSiteFailure(b, new Error("site down")));
+    expect(result.failure?.label).toBe("one-atlas-nofl.atlassian.net");
+    expect(result.failure?.error).toBe("site down");
+  });
+
+  it("reports a site that has no cache, with a fallback message for a non-Error throw", async () => {
+    const result = await loadJiraCatalogAccount({
+      account: account("acc-c", ""),
+      cachedProjects: null,
+      listProjects: () => Promise.reject("nope"),
+    });
+    expect(result.projects).toBeNull();
+    expect(result.failure).toMatchObject({
+      accountId: "acc-c",
+      label: "Philip Jonientz",
+      error: "nope",
+    });
+  });
+
+  it("clears the failure when the site answers", async () => {
+    const live = [project("1", "NEX", "Nex")];
+    const result = await loadJiraCatalogAccount({
+      account: a,
+      cachedProjects: cached,
+      listProjects: () => Promise.resolve(live),
+    });
+    expect(result.failure).toBeNull();
+    expect(result.projects).toEqual(live);
   });
 });

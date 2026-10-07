@@ -79,8 +79,9 @@ export function AppDashboardPane({
   useEffect(() => {
     if (activeThreadId !== null) closeDigestPullRequest();
   }, [activeThreadId]);
+  // A detail belongs to the screen it was opened on: leaving the dashboard closes it.
+  useEffect(() => closeDigestPullRequest, []);
   const recipeRequest = useDigestRecipeLaunchStore((state) => state.request);
-
   return (
     <T3TeamDashboardRecipeViewProvider>
       <T3TeamDashboardRecipeActionProvider>
@@ -89,11 +90,16 @@ export function AppDashboardPane({
             storageKey="t3team_dashboard_right_sidebar"
             collapsedStorageKey={getProjectDashboardRightSidebarCollapsedStorageKey({
               projectId: project.id,
-              dashboardMode: activeDashboardMode,
-              embeddedThreadId: activeThreadId,
             })}
+            // Detail first: the dashboard owns the width until something is opened beside it (a
+            // thread, a PR, a ticket, a staged recipe), which reveals the aside on its own.
+            defaultCollapsed
             minAsideWidth={22 * 16}
             defaultAsideWidth={24 * 16}
+            // The digest reflows down to one column, so it needs less than a page view: at 36rem a
+            // 1280px window with the left sidebar open (a ~1040px pane) still fits the aside
+            // beside it, instead of falling back to the bottom drawer on an ordinary laptop.
+            minMainWidth={36 * 16}
             mobileDefaultPanel={activeThread ? "aside" : "main"}
             mobileMainLabel={activeDashboardMode === "backlog" ? "Backlog" : "My work"}
             mobileAsideLabel={
@@ -106,6 +112,7 @@ export function AppDashboardPane({
                     : "Agent"
             }
             mobileAsideRequest={openedPullRequest ?? openedTicket ?? recipeRequest}
+            asideThreadKey={activeThreadId}
             main={
               <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
                 {renderDashboard(project)}
