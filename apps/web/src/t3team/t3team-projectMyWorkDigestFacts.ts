@@ -117,33 +117,43 @@ export function digestItemActions(
     });
     return scope ? { label, recipe, scope } : { label, recipe };
   };
+  // With several PRs on one ticket every PR-scoped action names its PR; "Review PR" alone left
+  // the owner guessing which of them a click would open or hand to the agent.
+  const named = (label: string, pr: DigestChangeRequest) =>
+    prs.length > 1 ? `${label} #${pr.number}` : label;
   const reReview = prs.find((pr) => pr.state === "changes-requested");
   if (reReview) {
-    actions.push(onPr("Handle comments", "pr-handle-comments", reReview), {
-      label: "Open PR",
+    actions.push(onPr(named("Handle comments", reReview), "pr-handle-comments", reReview), {
+      label: named("Open PR", reReview),
       href: digestPrUrl(reReview),
     });
     return actions;
   }
-  const yours = prs.find((pr) => pr.state === "needs-you");
-  if (yours) {
-    actions.push(
-      { label: "Review PR", href: digestPrUrl(yours) },
-      onPr("Review with agent", "pr-review", yours),
-    );
+  const yours = prs.filter((pr) => pr.state === "needs-you");
+  if (yours.length > 0) {
+    for (const pr of yours) {
+      actions.push(
+        { label: prs.length > 1 ? `Review #${pr.number}` : "Review PR", href: digestPrUrl(pr) },
+        onPr(
+          prs.length > 1 ? `Review #${pr.number} with agent` : "Review with agent",
+          "pr-review",
+          pr,
+        ),
+      );
+    }
     return actions;
   }
   const failing = prs.find((pr) => pr.state === "ci-failing");
   if (failing) {
     actions.push(
-      { label: "View CI", href: digestPrUrl(failing) },
-      onPr("Fix checks", "pr-fix-ci", failing),
+      { label: named("View CI", failing), href: digestPrUrl(failing) },
+      onPr(named("Fix checks", failing), "pr-fix-ci", failing),
     );
     return actions;
   }
   const commented = prs.find((pr) => (pr.unhandledComments ?? 0) > 0);
   if (commented) {
-    actions.push(onPr("Handle comments", "pr-handle-comments", commented));
+    actions.push(onPr(named("Handle comments", commented), "pr-handle-comments", commented));
     return actions;
   }
   const stale = graph.claims.some(

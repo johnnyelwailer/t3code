@@ -149,6 +149,41 @@ export class JiraApiClient {
     };
   }
 
+  /**
+   * An OAuth client talks to `api.atlassian.com`, but Jira still hands out some asset URLs on the
+   * site itself — the built-in issue-type icons (`<site>/images/icons/issuetypes/epic.svg`). The
+   * bearer token is not valid there, and those files are public, so they are fetched without it.
+   * Only the connection's own site and its static `/images/` tree qualify, and redirects are
+   * refused (the asset route is unauthenticated, so a redirect must not steer the fetch elsewhere).
+   * The token never leaves the gateway.
+   */
+  private isOAuthSiteUrl(url: string): boolean {
+    if (this.auth.kind !== "oauth" || !this.auth.siteUrl) return false;
+    try {
+      const parsed = new URL(url);
+      return (
+        parsed.origin === new URL(this.auth.siteUrl).origin &&
+        parsed.pathname.startsWith("/images/")
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  private async fetchPublicSiteAsset(url: string): Promise<Response> {
+    const path = new URL(url).pathname;
+    let response: Response;
+    try {
+      response = await fetchWithJiraTimeout(url, { headers: { Accept: "*/*" }, redirect: "error" });
+    } catch (cause) {
+      throw new AtlassianNetworkError({ cause, path });
+    }
+    if (!response.ok) {
+      throw new AtlassianApiError({ status: response.status, message: "Asset fetch failed", path });
+    }
+    return response;
+  }
+
   private async fetchResponse(
     pathOrUrl: string,
     init?: RequestInit,
@@ -292,9 +327,9 @@ export class JiraApiClient {
   }
 
   async downloadAsset(url: string): Promise<{ bytes: Uint8Array; mimeType?: string }> {
-    const { response } = await this.fetchResponse(url, undefined, {
-      accept: "*/*",
-    });
+    const response = this.isOAuthSiteUrl(url)
+      ? await this.fetchPublicSiteAsset(url)
+      : (await this.fetchResponse(url, undefined, { accept: "*/*" })).response;
     const bytes = new Uint8Array(await response.arrayBuffer());
     const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim();
     return {

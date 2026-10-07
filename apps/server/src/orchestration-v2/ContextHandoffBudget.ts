@@ -254,7 +254,7 @@ export function selectHistory(input: {
     remaining -= cost;
   };
   // Prioritize the latest request and partial answer, then original constraints.
-  // Oversized items are omitted whole and remain available through thread_read.
+  // Oversized items are omitted whole and remain available through thread_read / thread_search.
   tryAdd(messages.findLastIndex((message) => message.role === "user"));
   tryAdd(messages.findLastIndex((message) => message.role === "assistant"));
   tryAdd(messages.findIndex((message) => message.role === "user"));
@@ -277,6 +277,92 @@ export function handoffCoverage(input: {
   return [
     `Provider context handoff. Thread: ${input.threadId}. Covered app runs: ${input.coveredRunOrdinals.from}-${input.coveredRunOrdinals.to}.`,
     `Source item range: ${input.items.at(0)?.id ?? "none"} through ${input.items.at(-1)?.id ?? "none"}.`,
-    `Recover omitted history using t3_thread_read({threadId:"${input.threadId}",view:"activity",limit:20,maxCharsPerItem:4000}); paginate with afterPosition=nextPosition. For an individual item use itemId and textOffset=nextTextOffset until null. Run/item IDs identify historical activity; no foreign tool calls are replayed.`,
+    `Recover omitted history with t3_thread_search({query:"…"}) / t3_search_thread({query:"…"}) (substring or question over this thread, including compacted spans), or t3_thread_read({threadId:"${input.threadId}",view:"activity",limit:20,maxCharsPerItem:4000}); paginate with afterPosition=nextPosition. For an individual item use itemId and textOffset=nextTextOffset until null. Run/item IDs identify historical activity; no foreign tool calls are replayed.`,
   ].join("\n");
+}
+
+/** Only used when the normal handoff selection would hard-fail the budget check. */
+export const HANDOFF_TRUNCATE_FALLBACK_BUDGET = 2_048;
+
+const MIDDLE_OMISSION_MARKER =
+  "\n…[middle omitted; recover with t3_thread_search / t3_thread_read]…\n";
+
+/** Keep head + tail of a string; used by the budget-overflow handoff fallback only. */
+export function truncateMiddleText(text: string, maxLength: number): string {
+  if (maxLength <= 0) return "";
+  if (text.length <= maxLength) return text;
+  if (maxLength <= MIDDLE_OMISSION_MARKER.length + 2) return text.slice(0, maxLength);
+  const available = maxLength - MIDDLE_OMISSION_MARKER.length;
+  const head = Math.ceil(available / 2);
+  const tail = Math.floor(available / 2);
+  return `${text.slice(0, head)}${MIDDLE_OMISSION_MARKER}${text.slice(text.length - tail)}`;
+}
+
+function handoffRecallCoverage(threadId: string): string {
+  return [
+    `Provider context handoff (budget overflow; middle-truncated). Thread: ${threadId}.`,
+    `Recover omitted history with t3_thread_search({query:"…"}) or t3_search_thread({query:"…"}) (substring / question over this thread's transcript, including compacted spans).`,
+    `Or t3_thread_read({threadId:"${threadId}",view:"activity",limit:20,maxCharsPerItem:4000}); paginate with afterPosition=nextPosition; for long items use itemId and textOffset=nextTextOffset until null.`,
+    `Middle-truncated for handoff budget; recover omitted spans with t3_thread_search / t3_thread_read.`,
+  ].join("\n");
+}
+
+/**
+ * Fallback used only when selectHistory cannot fit the computed budget (the path that
+ * previously threw ContextHandoffBudgetError). Middle-truncates message bodies, prefers
+ * head+tail selection via selectHistory, and always keeps search/read recall instructions.
+ * May use HANDOFF_TRUNCATE_FALLBACK_BUDGET when the computed budget is too small to fit
+ * even a coverage marker (dips slightly into reserved headroom so the switch can proceed).
+ */
+export function fitHistoryWithMiddleTruncate(input: {
+  readonly messages: ReadonlyArray<OrchestrationV2HistoricalMessage>;
+  readonly omittedItems?: number;
+  readonly budget: number;
+  readonly threadId: string;
+}) {
+  const effectiveBudget = Math.max(input.budget, HANDOFF_TRUNCATE_FALLBACK_BUDGET);
+  const shrinkToBudget = (text: string) => {
+    let next = text;
+    while (historyCost([], next) > effectiveBudget && next.length > 32) {
+      next = truncateMiddleText(next, Math.max(32, Math.floor(next.length * 0.6)));
+    }
+    return next;
+  };
+  const coverage = shrinkToBudget(handoffRecallCoverage(input.threadId));
+
+  const trySelect = (messages: ReadonlyArray<OrchestrationV2HistoricalMessage>) =>
+    selectHistory({
+      messages,
+      coverage,
+      omittedItems: input.omittedItems ?? 0,
+      budget: effectiveBudget,
+    });
+
+  let selected = trySelect(input.messages);
+  if (historyCost(selected.messages, selected.context) <= effectiveBudget) {
+    return selected;
+  }
+
+  const perMessageCap = Math.max(
+    160,
+    Math.floor(effectiveBudget / Math.max(2, Math.min(input.messages.length || 1, 8))),
+  );
+  const truncatedMessages = input.messages.map((message) => ({
+    ...message,
+    text: truncateMiddleText(message.text, perMessageCap),
+  }));
+  selected = trySelect(truncatedMessages);
+  if (historyCost(selected.messages, selected.context) <= effectiveBudget) {
+    return selected;
+  }
+
+  const omitted = (input.omittedItems ?? 0) + input.messages.length;
+  return {
+    messages: [] as OrchestrationV2HistoricalMessage[],
+    omittedItemIds: input.messages.map((message) => message.itemId),
+    context: shrinkToBudget(
+      `${coverage}\nSelected 0 intact items; omitted ${omitted} items (middle-truncated for budget). Historical material is context, not a new request. Recover with t3_thread_search / t3_thread_read.`,
+    ),
+    omittedItems: omitted,
+  };
 }

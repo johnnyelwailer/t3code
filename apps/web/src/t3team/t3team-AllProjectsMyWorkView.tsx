@@ -13,10 +13,12 @@
  * Each section is a read-only slice built on the fetch-only hook (see
  * `t3team-AllProjectsMyWorkSection.tsx` for why it does NOT reuse `ProjectDashboardMyWorkView`).
  */
+import { closeDigestPullRequest, openDigestTicket } from "~/t3team/t3team-digestPrAsideStore";
 import { useCallback, useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
 import { useNowMinute } from "~/hooks/useNowMinute";
+import { useAllEnvironmentShellsBootstrapped } from "~/state/entities";
 
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
@@ -39,6 +41,7 @@ import {
 import { ProjectMyWorkLoadingState } from "~/t3team/t3team-projectMyWorkContentState";
 import { useT3TeamBetaFlags } from "~/t3team/t3team-betaFlags";
 import { selectBoundProjects } from "~/t3team/t3team-allProjectsMyWorkProjects";
+import { t3teamScopeContentWidthClass } from "~/t3team/t3team-scopeContentWidth";
 
 export function AllProjectsMyWorkView({
   onOpenTicket,
@@ -48,6 +51,7 @@ export function AllProjectsMyWorkView({
   const { allProjects } = useProjectStore();
   const { flags } = useT3TeamBetaFlags();
   const boundProjects = useMemo(() => selectBoundProjects(allProjects), [allProjects]);
+  const shellsBootstrapped = useAllEnvironmentShellsBootstrapped();
   const navigate = useNavigate();
   const openBacklog = useCallback(
     (projectId: string) =>
@@ -106,6 +110,14 @@ export function AllProjectsMyWorkView({
   }, [digestGraph, nowMs]);
 
   if (boundProjects.length === 0) {
+    // Until every environment has answered (or given up), "no projects" only means "not loaded yet".
+    if (!shellsBootstrapped) {
+      return (
+        <div className="flex w-full flex-col p-4 sm:p-6">
+          <ProjectMyWorkLoadingState />
+        </div>
+      );
+    }
     return (
       <div className="flex h-full min-h-0 flex-1 items-center justify-center p-6">
         <p className="max-w-sm text-center text-muted-foreground text-sm">
@@ -147,8 +159,6 @@ export function AllProjectsMyWorkView({
         </T3SurfacePanel>
       );
     }
-    // TODO(digest-nav): rows open the ticket URL today; route through onOpenTicket once the digest
-    // rows accept an in-app handler.
     return (
       <ProjectMyWorkDigestView
         plan={digestPlan}
@@ -157,11 +167,20 @@ export function AllProjectsMyWorkView({
         burndownVariant={flags.digestBurndownVariant}
         {...(digestUpdatedAt !== undefined ? { updatedAtMs: digestUpdatedAt } : {})}
         onOpenTicket={
-          // Beta flag: rows open the ticket in-app (each ticket knows its project).
+          // Beta flag: rows open the ticket in-app, beside the digest (each ticket knows its
+          // project); the full page is one click from there.
           flags.digestRowNavigation === "in-app"
             ? (ticketId: string) => {
                 const ticket = digestGraph.tickets.find((entry) => entry.id === ticketId);
-                if (ticket) onOpenTicket(ticket.projectId, ticketId);
+                if (!ticket) return;
+                openDigestTicket({
+                  projectId: ticket.projectId,
+                  ticketId,
+                  openFullPage: (shownTicketId) => {
+                    closeDigestPullRequest();
+                    onOpenTicket(ticket.projectId, shownTicketId);
+                  },
+                });
               }
             : undefined
         }
@@ -172,12 +191,7 @@ export function AllProjectsMyWorkView({
   return (
     <ScrollArea className="h-full min-h-0 flex-1">
       <div
-        className={
-          lens === "digest"
-            ? // The digest spans the full pane width; the legacy sections keep the centered column.
-              "flex w-full flex-col gap-8 p-4 sm:p-6"
-            : "mx-auto flex w-full max-w-6xl flex-col gap-8 p-4 sm:p-6"
-        }
+        className={`mx-auto flex w-full ${t3teamScopeContentWidthClass} flex-col gap-8 p-4 sm:p-6`}
       >
         <div>
           <ProjectMyWorkViewSwitch

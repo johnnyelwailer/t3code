@@ -39,6 +39,59 @@ describe("JiraApiClient", () => {
     );
   });
 
+  it("fetches an OAuth site's public issue-type icon without sending the bearer token", async () => {
+    const fetchMock = vi.fn(
+      async () => new Response("<svg/>", { headers: { "content-type": "image/svg+xml" } }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const client = new JiraApiClient({
+      kind: "oauth",
+      cloudId: "cloud-123",
+      siteUrl: "https://test.atlassian.net",
+      accessToken: "access-token",
+    });
+
+    const asset = await client.downloadAsset(
+      "https://test.atlassian.net/images/icons/issuetypes/epic.svg",
+    );
+
+    expect(asset.mimeType).toBe("image/svg+xml");
+    const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
+    expect(JSON.stringify(init.headers)).not.toContain("access-token");
+    // The asset route is unauthenticated: a redirect must not steer the server elsewhere.
+    expect(init.redirect).toBe("error");
+  });
+
+  it("does not treat a non-icon path on the OAuth site as a public asset", async () => {
+    globalThis.fetch = vi.fn() as unknown as typeof fetch;
+    const client = new JiraApiClient({
+      kind: "oauth",
+      cloudId: "cloud-123",
+      siteUrl: "https://test.atlassian.net",
+      accessToken: "access-token",
+    });
+
+    await expect(
+      client.downloadAsset("https://test.atlassian.net/secure/attachment/1/x.png"),
+    ).rejects.toThrow(/outside the authenticated origin/);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("still refuses an OAuth asset on any origin other than the gateway or its own site", async () => {
+    globalThis.fetch = vi.fn() as unknown as typeof fetch;
+    const client = new JiraApiClient({
+      kind: "oauth",
+      cloudId: "cloud-123",
+      siteUrl: "https://test.atlassian.net",
+      accessToken: "access-token",
+    });
+
+    await expect(client.downloadAsset("https://evil.example/x.svg")).rejects.toThrow(
+      /outside the authenticated origin/,
+    );
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
   it("lists a board's quick filters", async () => {
     const fetchMock = vi.fn(async () =>
       Response.json({

@@ -10,6 +10,7 @@
  */
 import * as Layer from "effect/Layer";
 
+import * as PackDocumentStore from "./t3team-packDocumentStore.ts";
 import * as ThreadArtifactsStore from "./t3team-threadArtifactsStore.ts";
 import * as ThreadFactsStore from "./t3team-threadFactsStore.ts";
 import * as ThreadLineage from "./t3team-threadLineage.ts";
@@ -17,6 +18,7 @@ import * as ThreadMessageRecorder from "./t3team-threadMessageRecorder.ts";
 
 export const T3TeamV2FoundationLive = Layer.mergeAll(
   ThreadFactsStore.layer,
+  PackDocumentStore.layer,
   ThreadArtifactsStore.layer,
   ThreadMessageRecorder.layer,
   ThreadLineage.layer,

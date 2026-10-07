@@ -6,6 +6,7 @@ export * from "./provider-driver.ts";
 export * from "./provider-orchestration.ts";
 export * from "./completion-wake.ts";
 export * from "./account.ts";
+export * from "./t3team-collections.ts";
 
 export type PackAssetResolver = (relativePath: string, mimeType: string) => Promise<string>;
 

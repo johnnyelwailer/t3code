@@ -22,6 +22,8 @@ export type UpstreamRouteTranslation =
 // this shell, so the shell must not translate them — swallowing them breaks terminal-less login.
 const PASSTHROUGH_PREFIXES = [
   "/t3team",
+  // Detached surfaces render bare in a window of their own (t3team-detachedSurface).
+  "/t3team-detached",
   "/settings",
   // The first-run wizard renders outside the Team shell and is owned by
   // FirstRunGate's own navigation. Translating /welcome away makes the gate
@@ -169,4 +171,21 @@ export function translateUpstreamPath(
       params: { projectId, threadId: threadPath.threadId },
     },
   };
+}
+
+/**
+ * Options for applying a bridge translation. Always replace so Back cannot land
+ * on the transient upstream path that this bridge just translated away.
+ */
+export function buildUpstreamBridgeNavigation(
+  translation: Exclude<UpstreamRouteTranslation, { kind: "ignore" }>,
+):
+  | (Exclude<UpstreamRouteTranslation, { kind: "ignore" | "unhandled" }>["target"] & {
+      readonly replace: true;
+    })
+  | { readonly to: "/t3team"; readonly replace: true } {
+  if (translation.kind === "unhandled") {
+    return { to: "/t3team", replace: true };
+  }
+  return { ...translation.target, replace: true };
 }

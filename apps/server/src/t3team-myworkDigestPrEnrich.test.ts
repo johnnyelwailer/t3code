@@ -1,5 +1,6 @@
 import { ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 
 import { enrichPr } from "./t3team-myworkDigestPrEnrich.ts";
@@ -45,6 +46,11 @@ function service() {
   } as never;
 }
 
+class RateLimitPaused extends Data.TaggedError("RateLimitPaused") {}
+class SignedOut extends Data.TaggedError("PullRequestUnavailableError")<{
+  readonly reason: "cli-unauthenticated";
+}> {}
+
 describe("enrichPr", () => {
   it.effect("names only other humans as reviewers and engaged, with the host's avatars", () =>
     Effect.gen(function* () {
@@ -63,6 +69,28 @@ describe("enrichPr", () => {
         { name: "BOB", login: "bob", avatarUrl: "https://avatars/bob" },
       ]);
       expect(enrichment?.engaged?.map((person) => person.login)).toEqual(["carol"]);
+    }),
+  );
+
+  it.effect("keeps the last good enrichment only while the host is rate-limiting", () =>
+    Effect.gen(function* () {
+      const ref = { projectId: ProjectId.make("p"), repository: "org/rate-limited", number: 7 };
+      const good = yield* enrichPr(service(), ref);
+      // The host's rate limit paused: both reads fail.
+      const paused = {
+        detail: () => Effect.fail(new RateLimitPaused()),
+        activity: () => Effect.fail(new RateLimitPaused()),
+      } as never;
+      const degraded = yield* enrichPr(paused, ref);
+      expect(degraded).toEqual(good);
+      // A PR never read successfully still degrades to nothing, not to another PR's data.
+      expect(yield* enrichPr(paused, { ...ref, number: 8 })).toBeUndefined();
+      // Signed out (or a revoked token, a lost repo) is not a rate limit: no stale data.
+      const signedOut = {
+        detail: () => Effect.fail(new SignedOut({ reason: "cli-unauthenticated" })),
+        activity: () => Effect.fail(new SignedOut({ reason: "cli-unauthenticated" })),
+      } as never;
+      expect(yield* enrichPr(signedOut, ref)).toBeUndefined();
     }),
   );
 });

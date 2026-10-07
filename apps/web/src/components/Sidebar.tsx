@@ -63,7 +63,6 @@ import {
   AlarmClockOffIcon,
   ArrowRightLeftIcon,
   CheckIcon,
-  ChevronRightIcon,
   CircleAlertIcon,
   CircleCheckIcon,
   CircleDashedIcon,
@@ -83,7 +82,6 @@ import {
   XIcon,
 } from "lucide-react";
 import {
-  Fragment,
   memo,
   useCallback,
   useEffect,
@@ -168,7 +166,7 @@ import {
 } from "../threadRoutes";
 import { formatRelativeTimeLabel, parseTimestampDate } from "../timestampFormat";
 import type { SidebarThreadSummary } from "../types";
-import { compactSidebarTimeLabel, SidebarSubRunRow } from "./t3team-SidebarSubRunRow";
+import { compactSidebarTimeLabel } from "./t3team-SidebarSubRunRow";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { cn } from "~/lib/utils";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
@@ -274,19 +272,12 @@ import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarT
 // plus the child-thread relation hook used to hide sub-runbook children and chip their parent.
 import {
   InboxHeader,
-  InboxSubRunsChip,
   InboxThreadAttribution,
   InboxWorkItemSection,
 } from "~/t3team/components/t3team-InboxSlots";
 import { runT3TeamThreadNavigationOverride } from "~/t3team/t3team-threadNavigationOverride";
 import { useT3TeamSidebarThreadMeta } from "~/t3team/hooks/t3team-useChildThreadRelations";
 import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
-import { useExpandedSubRunsStore } from "~/t3team/hooks/t3team-useExpandedSubRuns";
-import {
-  partitionSubRunThreads,
-  sortFoldedSubRunThreads,
-} from "~/t3team/components/t3team-projectSidebarThreadTree";
-import type { ProjectThread } from "~/t3team/t3team-types";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
 import { useT3TeamScopeRouteSync } from "~/t3team/hooks/t3team-useScopeRouteSync";
 import { useT3TeamSidebarRowFacts } from "~/t3team/hooks/t3team-useSidebarRowFacts";
@@ -2190,8 +2181,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               )}
               {/* t3team: compact work-item attribution; renders null when there is none. */}
               <InboxThreadAttribution threadId={thread.id} />
-              {/* t3team: "N sub-runs" chip on a parent thread; renders null when it has none. */}
-              <InboxSubRunsChip threadId={thread.id} />
               {terminalStatusIcon}
               {prBadge}
               {diff ? (
@@ -2396,13 +2385,12 @@ export default function Sidebar() {
   const projects = useProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
-  // t3team: sub-runbook children are filtered out of the row list below and
-  // surfaced instead as a "N sub-runs" chip on their parent (InboxSubRunsChip).
+  // t3team: sub-runbook children stay out of this list (childThreadIds). They
+  // are opened from the thread's lineage rows, not as sidebar rows.
   // useT3TeamSidebarThreadMeta is the consolidated hook: one useProjectStore()
-  // call that computes ChildThreadRelations AND mirrors attributionByThreadId +
-  // subRunCountsByParentId to t3team-sidebarThreadDataStore. Per-row slots
-  // (InboxSubRunsChip, InboxThreadAttribution) read those maps with narrow
-  // Zustand selectors — no per-row useProjectStore subscriptions, memo intact.
+  // call that computes ChildThreadRelations AND mirrors attributionByThreadId
+  // to t3team-sidebarThreadDataStore. InboxThreadAttribution reads that map
+  // with a narrow Zustand selector — no per-row useProjectStore subscriptions.
   const { childThreadIds, childThreadsByParentId } = useT3TeamSidebarThreadMeta();
   // t3team: mirror the relation for chrome outside this component (the sub-run tree) —
   // see t3team-childThreadRelationsStore.ts for why this is a mirror rather than a second
@@ -2413,19 +2401,9 @@ export default function Sidebar() {
   useEffect(() => {
     mirrorChildThreadsByParentId(childThreadsByParentId);
   }, [childThreadsByParentId, mirrorChildThreadsByParentId]);
-  // t3team: which parents currently have their "N sub-runs" chip expanded
-  // (InboxSubRunsChip toggles this); persisted to localStorage so a parent
-  // the user opened stays open across reload (see t3team-useExpandedSubRuns.ts).
-  const expandedSubRunParentIds = useExpandedSubRunsStore((store) => store.expandedParentIds);
-  // GHE #304: which parents' sub-run "Settled (N)" fold row is expanded.
-  // Presentation-only, not persisted — a fresh expand starts folded.
-  const [foldedSubRunParentIds, setFoldedSubRunParentIds] = useState<Set<string>>(new Set());
-  // t3team: a parent whose children started running does NOT auto-expand —
-  // the sub-runs chip stays collapsed by default; the user opens it when they
-  // want to look (manual toggle is persisted across reload).
-  // t3team: children are hidden from the flat row lists above (childThreadIds
-  // filter) but still live in `threads` — this map recovers each child's
-  // environmentId for navigation when its parent's row is expanded.
+  // t3team: children are hidden from the flat row lists (childThreadIds
+  // filter) but still live in `threads` — delete cascades recover each
+  // child's environmentId from this map.
   const threadShellById = useMemo(() => new Map(threads.map((t) => [t.id, t] as const)), [threads]);
   // t3team: sub-run child rows reuse handleThreadContextMenu below, whose
   // lookup (threadByKeyRef) is built from the filtered row list and so never
@@ -2879,10 +2857,10 @@ export default function Sidebar() {
     // memo exactly at the next wake boundary.
     void snoozeWakeTick;
     const preciseNow = new Date().toISOString();
-    // Subagent child threads live in the parent's Agents surface, not the
-    // sidebar roster (v2 models them as real threads with lineage).
-    // t3team: app-owned sub-run children additionally fold under their parent's
-    // "N sub-runs" chip instead of appearing as flat sibling rows.
+    // Subagent child threads live in the parent's lineage, not the sidebar
+    // roster (v2 models them as real threads with lineage).
+    // t3team: app-owned children stay filtered here too, so they do not come
+    // back as ordinary rows.
     const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys).filter(
       (thread) => !childThreadIds.has(thread.id),
     );
@@ -5082,136 +5060,139 @@ export default function Sidebar() {
               searchFieldRef={headerSearchRef}
               hasProjects={projectGroups.length > 0}
               projectScope={
-                <Combobox
-                  items={projectScopeItems}
-                  filteredItems={filteredProjectScopeItems}
-                  autoHighlight
-                  itemToStringLabel={(item) => item.label}
-                  isItemEqualToValue={(a, b) => a.value === b.value}
-                  open={projectScopeMenuState.open}
-                  onOpenChange={(open) => {
-                    if (open) suppressNextScopeChangeRef.current = false;
-                    dispatchProjectScopeMenu({ type: "open-changed", open });
-                  }}
-                  onItemHighlighted={(item) => {
-                    highlightedProjectScopeKeyRef.current = item?.value ?? null;
-                  }}
-                  value={selectedProjectScopeItem}
-                  onValueChange={(item) => {
-                    if (suppressNextScopeChangeRef.current) {
-                      suppressNextScopeChangeRef.current = false;
-                      return;
-                    }
-                    if (!item) return;
-                    setProjectScopeKey(item.value === "all" ? null : item.value);
-                  }}
-                >
-                  <ComboboxTrigger
-                    render={
-                      <SidebarHeaderIconButton
-                        label={
-                          scopedProjectGroup
-                            ? `Filter threads by project: ${scopedProjectGroup.displayName}`
-                            : "Filter threads by project"
+                projectScopePillsEnabled ? null : (
+                  <Combobox
+                    items={projectScopeItems}
+                    filteredItems={filteredProjectScopeItems}
+                    autoHighlight
+                    itemToStringLabel={(item) => item.label}
+                    isItemEqualToValue={(a, b) => a.value === b.value}
+                    open={projectScopeMenuState.open}
+                    onOpenChange={(open) => {
+                      if (open) suppressNextScopeChangeRef.current = false;
+                      dispatchProjectScopeMenu({ type: "open-changed", open });
+                    }}
+                    onItemHighlighted={(item) => {
+                      highlightedProjectScopeKeyRef.current = item?.value ?? null;
+                    }}
+                    value={selectedProjectScopeItem}
+                    onValueChange={(item) => {
+                      if (suppressNextScopeChangeRef.current) {
+                        suppressNextScopeChangeRef.current = false;
+                        return;
+                      }
+                      if (!item) return;
+                      setProjectScopeKey(item.value === "all" ? null : item.value);
+                    }}
+                  >
+                    <ComboboxTrigger
+                      render={
+                        <SidebarHeaderIconButton
+                          label={
+                            scopedProjectGroup
+                              ? `Filter threads by project: ${scopedProjectGroup.displayName}`
+                              : "Filter threads by project"
+                          }
+                        />
+                      }
+                    >
+                      {scopedProjectGroup ? (
+                        // Wrapped so the button's direct-child svg color rule cannot override
+                        // a project's own icon color.
+                        <span className="flex shrink-0">
+                          <ProjectFavicon project={scopedProjectGroup} className="size-4" />
+                        </span>
+                      ) : (
+                        <FolderIcon className="size-4" />
+                      )}
+                    </ComboboxTrigger>
+                    <ComboboxPopup
+                      align="start"
+                      // Anchored to the search field, not the 28px trigger: the
+                      // popup opens under the field, is at least as wide as it,
+                      // and grows to fit project names up to a cap, past which
+                      // the rows truncate.
+                      anchor={headerSearchRef}
+                      className="max-w-[min(18rem,var(--available-width))] overflow-hidden"
+                    >
+                      <ComboboxSearchInput
+                        aria-label="Search projects"
+                        placeholder="Search projects..."
+                        value={projectScopeMenuState.query}
+                        onKeyDown={(event) => {
+                          if (
+                            event.defaultPrevented ||
+                            event.nativeEvent.isComposing ||
+                            event.ctrlKey ||
+                            event.altKey ||
+                            event.metaKey ||
+                            (event.key !== "ContextMenu" &&
+                              !(event.shiftKey && event.key === "F10"))
+                          ) {
+                            return;
+                          }
+                          // Combobox items use virtual focus: keyboard events
+                          // stay on this input, not on the highlighted option.
+                          const scopeKey = highlightedProjectScopeKeyRef.current;
+                          const project = scopeKey ? projectGroupByScopeKey.get(scopeKey) : null;
+                          if (project) handleProjectSettings(event, project);
+                        }}
+                        onChange={(event) =>
+                          dispatchProjectScopeMenu({
+                            type: "query-changed",
+                            query: event.target.value,
+                          })
                         }
                       />
-                    }
-                  >
-                    {scopedProjectGroup ? (
-                      // Wrapped so the button's direct-child svg color rule cannot override
-                      // a project's own icon color.
-                      <span className="flex shrink-0">
-                        <ProjectFavicon project={scopedProjectGroup} className="size-4" />
-                      </span>
-                    ) : (
-                      <FolderIcon className="size-4" />
-                    )}
-                  </ComboboxTrigger>
-                  <ComboboxPopup
-                    align="start"
-                    // Anchored to the search field, not the 28px trigger: the
-                    // popup opens under the field, is at least as wide as it,
-                    // and grows to fit project names up to a cap, past which
-                    // the rows truncate.
-                    anchor={headerSearchRef}
-                    className="max-w-[min(18rem,var(--available-width))] overflow-hidden"
-                  >
-                    <ComboboxSearchInput
-                      aria-label="Search projects"
-                      placeholder="Search projects..."
-                      value={projectScopeMenuState.query}
-                      onKeyDown={(event) => {
-                        if (
-                          event.defaultPrevented ||
-                          event.nativeEvent.isComposing ||
-                          event.ctrlKey ||
-                          event.altKey ||
-                          event.metaKey ||
-                          (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10"))
-                        ) {
-                          return;
-                        }
-                        // Combobox items use virtual focus: keyboard events
-                        // stay on this input, not on the highlighted option.
-                        const scopeKey = highlightedProjectScopeKeyRef.current;
-                        const project = scopeKey ? projectGroupByScopeKey.get(scopeKey) : null;
-                        if (project) handleProjectSettings(event, project);
-                      }}
-                      onChange={(event) =>
-                        dispatchProjectScopeMenu({
-                          type: "query-changed",
-                          query: event.target.value,
-                        })
-                      }
-                    />
-                    <ComboboxEmpty>No matching projects.</ComboboxEmpty>
-                    <ComboboxList>
-                      {(item: (typeof projectScopeItems)[number]) => {
-                        const project = projectGroupByScopeKey.get(item.value) ?? null;
-                        return (
-                          <ComboboxItem
-                            key={item.value}
-                            hideIndicator
-                            value={item}
-                            onContextMenu={(event) => {
-                              if (project) handleProjectSettings(event, project);
-                            }}
-                          >
-                            {project ? (
-                              <ProjectFavicon project={project} className="size-4 shrink-0" />
-                            ) : (
-                              <FolderIcon className="size-4 shrink-0" />
-                            )}
-                            <span className="min-w-0 flex-1 truncate text-sm">{item.label}</span>
-                            {project && showProjectEnvironments ? (
-                              <ProjectEnvironmentBadge
-                                group={project}
-                                primaryEnvironmentId={primaryEnvironmentId}
-                                machineByEnvironmentId={environmentMachineById}
-                              />
-                            ) : null}
-                            {project ? (
-                              <Button
-                                size="icon-xs"
-                                variant="ghost-muted"
-                                tabIndex={-1}
-                                aria-hidden="true"
-                                title={`Project settings for ${project.displayName}`}
-                                className="ml-auto"
-                                onPointerDown={(event) => event.stopPropagation()}
-                                onClick={(event) => {
-                                  void handleProjectSettings(event, project);
-                                }}
-                              >
-                                <SettingsIcon className="size-3.5" />
-                              </Button>
-                            ) : null}
-                          </ComboboxItem>
-                        );
-                      }}
-                    </ComboboxList>
-                  </ComboboxPopup>
-                </Combobox>
+                      <ComboboxEmpty>No matching projects.</ComboboxEmpty>
+                      <ComboboxList>
+                        {(item: (typeof projectScopeItems)[number]) => {
+                          const project = projectGroupByScopeKey.get(item.value) ?? null;
+                          return (
+                            <ComboboxItem
+                              key={item.value}
+                              hideIndicator
+                              value={item}
+                              onContextMenu={(event) => {
+                                if (project) handleProjectSettings(event, project);
+                              }}
+                            >
+                              {project ? (
+                                <ProjectFavicon project={project} className="size-4 shrink-0" />
+                              ) : (
+                                <FolderIcon className="size-4 shrink-0" />
+                              )}
+                              <span className="min-w-0 flex-1 truncate text-sm">{item.label}</span>
+                              {project && showProjectEnvironments ? (
+                                <ProjectEnvironmentBadge
+                                  group={project}
+                                  primaryEnvironmentId={primaryEnvironmentId}
+                                  machineByEnvironmentId={environmentMachineById}
+                                />
+                              ) : null}
+                              {project ? (
+                                <Button
+                                  size="icon-xs"
+                                  variant="ghost-muted"
+                                  tabIndex={-1}
+                                  aria-hidden="true"
+                                  title={`Project settings for ${project.displayName}`}
+                                  className="ml-auto"
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  onClick={(event) => {
+                                    void handleProjectSettings(event, project);
+                                  }}
+                                >
+                                  <SettingsIcon className="size-3.5" />
+                                </Button>
+                              ) : null}
+                            </ComboboxItem>
+                          );
+                        }}
+                      </ComboboxList>
+                    </ComboboxPopup>
+                  </Combobox>
+                )
               }
               onNewProject={openAddProjectCommandPalette}
               onNewThread={handleNewThreadClick}
@@ -5231,9 +5212,9 @@ export default function Sidebar() {
               activeSearchResultIndex={activeSearchResultIndex}
               onClearSearch={clearThreadSearch}
             />
-            {/* t3team: one-click recent-project pills under the search row; the
-                header's project button stays as the "more" picker. Lost in the
-                2026-09-18 upstream sync, which replaced the old header. */}
+            {/* t3team: one-click project pills under the search row. While they are
+                on, the header project icon stays out — sites that do not fit a disc
+                are the +N pill. Lost in the 2026-09-18 upstream sync. */}
             {projectScopePillsEnabled && projectGroups.length > 0 ? (
               <T3TeamSidebarProjectScopePills
                 groups={projectGroups}
@@ -5470,97 +5451,6 @@ export default function Sidebar() {
                           />
                         );
                       };
-                      // t3team: compact sub-run rows for a parent thread, rendered only
-                      // while its "N sub-runs" chip is expanded (InboxSubRunsChip).
-                      // Navigation reuses navigateToThread — the child's environmentId
-                      // is recovered from the still-live thread shell, falling back to
-                      // the parent's when a shell hasn't hydrated yet (same environment
-                      // in practice, since sub-runbooks never cross environments).
-                      const renderSubRunRows = (
-                        parentThread: EnvironmentThreadShell,
-                      ): ReactNode[] => {
-                        if (!expandedSubRunParentIds.has(parentThread.id)) return [];
-                        const allChildren = childThreadsByParentId.get(parentThread.id);
-                        if (!allChildren || allChildren.length === 0) return [];
-                        // GHE #304 (state-accurate fold): the visible list shows every
-                        // sub-run that has NOT actually settled — running children with
-                        // their live label AND terminal-but-not-yet-settled children
-                        // with their true terminal status (a fresh completed/failed/
-                        // stopped child is roster content, not "settled"). ONLY
-                        // threads whose shell carries settledOverride === "settled"
-                        // (real thread.settled event: user/auto settle or the 48h
-                        // child-settle TTL sweep) collapse into the ONE dim
-                        // "Settled (N)" fold row, expandable into the same compact
-                        // rows, oldest first.
-                        const { running, folded } = partitionSubRunThreads(allChildren);
-                        const foldOpen = foldedSubRunParentIds.has(parentThread.id);
-                        const foldedThreads = foldOpen ? sortFoldedSubRunThreads(folded) : [];
-                        const childRefFor = (child: ProjectThread) =>
-                          scopeThreadRef(
-                            threadShellById.get(child.id as ThreadId)?.environmentId ??
-                              parentThread.environmentId,
-                            child.id as ThreadId,
-                          );
-                        const rows: ReactNode[] = running.map((child) => {
-                          const childRef = childRefFor(child);
-                          return (
-                            <SidebarSubRunRow
-                              key={`sub-run:${child.id}`}
-                              child={child}
-                              childRef={childRef}
-                              isActive={routeThreadKey === scopedThreadKey(childRef)}
-                              onNavigate={() => navigateToThread(childRef)}
-                              onContextMenu={handleThreadContextMenu}
-                            />
-                          );
-                        });
-                        if (folded.length > 0) {
-                          rows.push(
-                            <li
-                              key={`sub-run-settled:${parentThread.id}`}
-                              role="presentation"
-                              className="list-none"
-                            >
-                              <button
-                                type="button"
-                                aria-expanded={foldOpen}
-                                onClick={() =>
-                                  setFoldedSubRunParentIds((prev) => {
-                                    const next = new Set(prev);
-                                    if (next.has(parentThread.id)) next.delete(parentThread.id);
-                                    else next.add(parentThread.id);
-                                    return next;
-                                  })
-                                }
-                                className="flex h-7 w-full items-center gap-1 rounded-md ps-4 text-left text-xs text-muted-foreground/60 hover:bg-sidebar-row-hover hover:text-muted-foreground/90"
-                              >
-                                <ChevronRightIcon
-                                  aria-hidden
-                                  className={cn(
-                                    "size-3 shrink-0 transition-transform motion-reduce:transition-none",
-                                    foldOpen && "rotate-90",
-                                  )}
-                                />
-                                <span>Settled ({folded.length})</span>
-                              </button>
-                            </li>,
-                          );
-                          for (const child of foldedThreads) {
-                            const childRef = childRefFor(child);
-                            rows.push(
-                              <SidebarSubRunRow
-                                key={`sub-run-folded:${child.id}`}
-                                child={child}
-                                childRef={childRef}
-                                isActive={routeThreadKey === scopedThreadKey(childRef)}
-                                onNavigate={() => navigateToThread(childRef)}
-                                onContextMenu={handleThreadContextMenu}
-                              />,
-                            );
-                          }
-                        }
-                        return rows;
-                      };
                       const renderThreadRow = (
                         thread: EnvironmentThreadShell,
                         section: SidebarSection,
@@ -5584,24 +5474,6 @@ export default function Sidebar() {
                           </SortableThreadRow>
                         );
                       };
-                      // t3team: a parent row followed by its expanded sub-run rows (not
-                      // sortable themselves; they ride along under the parent).
-                      const renderThreadRowWithChildren = (
-                        thread: EnvironmentThreadShell,
-                        section: SidebarSection,
-                      ): ReactNode => {
-                        const subRunRows = renderSubRunRows(thread);
-                        if (subRunRows.length === 0) return renderThreadRow(thread, section);
-                        const threadKey = scopedThreadKey(
-                          scopeThreadRef(thread.environmentId, thread.id),
-                        );
-                        return (
-                          <Fragment key={`${threadKey}:with-sub-runs`}>
-                            {renderThreadRow(thread, section)}
-                            {subRunRows}
-                          </Fragment>
-                        );
-                      };
                       const from = isContextDrag ? null : (dragState?.activeSection ?? null);
                       const items: ReactNode[] = [
                         <SidebarDraftBlock
@@ -5621,9 +5493,7 @@ export default function Sidebar() {
                       ];
                       for (const item of sidebarListItems) {
                         if (item.kind === "thread") {
-                          items.push(
-                            renderThreadRowWithChildren(threadByKey.get(item.key)!, item.section),
-                          );
+                          items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
                           continue;
                         }
                         switch (item.marker) {

@@ -27,6 +27,7 @@ import { shouldUseRestingComposerLayout } from "../composerFooterLayout";
 import { useComposerFocusState } from "./useComposerFocusState";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef } from "@legendapp/list/react";
+import type { ChatMessage } from "../../types";
 
 const activityTestState = vi.hoisted(() => ({
   expanded: false,
@@ -1649,6 +1650,40 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("SubmitButton");
     expect(markup).not.toContain("&lt;element_context");
     expect(markup).not.toContain("<element_context");
+  });
+
+  it("shows copy for stored prompts and hides it for triggers", () => {
+    const markupFor = (message: Partial<ChatMessage>) => {
+      const entry = buildUserTimelineEntry("Review the auth path");
+      return renderToStaticMarkup(
+        <MessagesTimeline
+          {...buildProps()}
+          timelineEntries={[{ ...entry, message: { ...entry.message, ...message } }]}
+        />,
+      );
+    };
+
+    expect(markupFor({})).toContain('aria-label="Copy message"');
+    expect(
+      markupFor({
+        createdBy: "agent",
+        creationSource: "mcp",
+        senderThreadId: ThreadId.make("thread-parent"),
+      }),
+    ).toContain('aria-label="Copy message"');
+    expect(markupFor({ createdBy: "agent", creationSource: "provider" })).not.toContain(
+      'aria-label="Copy message"',
+    );
+    expect(
+      markupFor({
+        createdBy: "agent",
+        creationSource: "server",
+        text: "Continue where you left off.",
+      }),
+    ).not.toContain('aria-label="Copy message"');
+    expect(markupFor({ createdBy: "system", creationSource: "server" })).not.toContain(
+      'aria-label="Copy message"',
+    );
   });
 
   it("keeps the copy button for collapsed long user messages", () => {
