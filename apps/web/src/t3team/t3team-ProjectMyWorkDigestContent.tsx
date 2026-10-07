@@ -12,18 +12,17 @@ import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
 import { JiraSignInPanel } from "~/t3team/components/t3team-JiraSignInPanel";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
-import { readMyWorkDigestArrangementApi } from "~/t3team/backend/t3team-myworkDigestArrangementApi";
-import { useBackend } from "~/t3team/backend/t3team-index";
-import { toastManager } from "~/components/ui/toast";
+import { useDigestArrangementReset } from "~/t3team/mywork-digest/t3team-useDigestArrangementReset";
+import { applyDigestFilters } from "~/t3team/mywork-digest/t3team-digestGraphFilter";
 import { closeDigestPullRequest, openDigestTicket } from "~/t3team/t3team-digestPrAsideStore";
-import { toDigestProjectEntries } from "~/t3team/mywork-digest/t3team-digestProjectEntries";
 import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
 import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
 import { useT3TeamBetaFlags } from "~/t3team/t3team-betaFlags";
-import { ProjectMyWorkLoadingState } from "~/t3team/t3team-projectMyWorkContentState";
+import { MyWorkLoadingAnimation } from "~/t3team/t3team-MyWorkLoadingAnimation";
+import { resolveMyWorkDigestRenderState } from "~/t3team/t3team-myWorkDigestRenderState";
 import { buildDigestPlan } from "~/t3team/t3team-projectMyWorkDigestPlan";
-import { filterDigestTickets, hasActiveDigestFilters } from "~/t3team/t3team-projectMyWork";
+import { hasActiveDigestFilters } from "~/t3team/t3team-projectMyWork";
 import type { DigestFilterState } from "~/t3team/t3team-projectMyWorkDigestTypes";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
@@ -50,54 +49,13 @@ export function ProjectMyWorkDigestContent({
       },
     });
   const projects = useMemo(() => [project], [project]);
-  const arrangementApi = readMyWorkDigestArrangementApi(useBackend());
-  const { graph, status, error, viewerUnresolved, sessionExpired, updatedAt, reload } =
-    useMyWorkDigestGraph({
-      projects,
-      scope: "project",
-    });
-  const resetArrangement = arrangementApi
-    ? async () => {
-        try {
-          await arrangementApi.resetMyWorkDigestArrangement({
-            scope: "project",
-            projects: toDigestProjectEntries(projects),
-          });
-          reload();
-        } catch (error) {
-          toastManager.add({
-            type: "error",
-            title: "Could not go back to the default arrangement.",
-            description: error instanceof Error ? error.message : undefined,
-          });
-        }
-      }
-    : undefined;
-  // The My Work filter bar (search, status category, hidden types, priority, status) shapes the
-  // digest the same way it shapes the legacy lenses: keep only the tickets that match, and drop
-  // the agent activity that belongs to tickets the filter hid, so no lane orphans a filtered row.
-  const effectiveGraph = useMemo(() => {
-    if (!graph || !digestFilters) return graph;
-    const tickets = filterDigestTickets({
-      tickets: graph.tickets,
-      query: digestFilters.query,
-      statusCategory: digestFilters.statusCategory,
-      excludedTypeKeys: digestFilters.excludedTypeKeys,
-      selectedPriority: digestFilters.selectedPriority,
-      selectedStatus: digestFilters.selectedStatus,
-    });
-    if (tickets.length === graph.tickets.length) return graph;
-    const kept = new Set(tickets.map((ticket) => ticket.id));
-    return {
-      ...graph,
-      tickets,
-      claims: graph.claims.filter((claim) => kept.has(claim.ticketId)),
-      decisions: graph.decisions.filter((decision) => kept.has(decision.ticketId)),
-      changeRequests: graph.changeRequests.filter((request) => kept.has(request.ticketId)),
-      blockers: graph.blockers.filter((blocker) => kept.has(blocker.ticketId)),
-      transitions: graph.transitions.filter((transition) => kept.has(transition.ticketId)),
-    };
-  }, [graph, digestFilters]);
+  const { graph, status, error, viewerUnresolved, sessionExpired, updatedAt, reload, freshness, refreshing } =
+    useMyWorkDigestGraph({ projects, scope: "project" });
+  const resetArrangement = useDigestArrangementReset({ scope: "project", projects, reload });
+  const effectiveGraph = useMemo(
+    () => applyDigestFilters(graph, digestFilters),
+    [graph, digestFilters],
+  );
   // Minute-granular clock shared with the rest of the app: stable within a render, re-plans on tick.
   // useNowMinute yields UTC wall-clock text without a zone suffix; parse it as UTC.
   const nowMs = Date.parse(`${useNowMinute()}Z`);
@@ -108,24 +66,34 @@ export function ProjectMyWorkDigestContent({
     return buildDigestPlan(effectiveGraph, nowMs);
   }, [effectiveGraph, nowMs]);
 
+  // The project is given, so its scope is known from the first render: only the round's own
+  // freshness decides whether an empty answer is "nothing" or "not yet".
+  const renderState = resolveMyWorkDigestRenderState({
+    status,
+    freshness,
+    sessionExpired,
+    viewerUnresolved,
+    hasGraph: effectiveGraph !== null,
+    ticketCount: graph?.tickets.length ?? 0,
+  });
   // A failed fetch (backend still starting, timeout) is not terminal: the poller retries with
   // backoff and this recovers on its own, so it renders as "retrying" — never a raw error.
-  if (status === "retrying" && !graph) {
+  if (renderState === "retrying") {
     return <ProjectMyWorkDigestRetryState />;
   }
-  if (status === "loading" && !graph) {
-    return <ProjectMyWorkLoadingState />;
+  if (renderState === "loading") {
+    return <MyWorkLoadingAnimation />;
   }
-  if (sessionExpired) {
+  if (renderState === "session-expired") {
     return <JiraSessionExpiredPanel onSignedIn={reload} />;
   }
-  if (status === "error") {
+  if (renderState === "error") {
     return <ProjectMyWorkDigestErrorState error={error} onRetry={reload} />;
   }
-  if (viewerUnresolved && (graph?.tickets.length ?? 0) === 0) {
+  if (renderState === "sign-in") {
     return <JiraSignInPanel heading="Sign in to Jira to load your work." onSignedIn={reload} />;
   }
-  if (!effectiveGraph || !plan) {
+  if (renderState === "empty" || !effectiveGraph || !plan) {
     return (
       <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
         Nothing needs you
@@ -164,6 +132,8 @@ export function ProjectMyWorkDigestContent({
       burndownVariant={flags.digestBurndownVariant}
       onOpenTicket={openTicketInApp}
       onResetArrangement={resetArrangement}
+      refreshing={refreshing}
+      emptyStateAllowed={freshness === "fresh"}
       {...(updatedAt !== undefined ? { updatedAtMs: updatedAt } : {})}
     />
   );

@@ -29,7 +29,16 @@ const emptyGraph: DigestGraph = {
 };
 
 const ready = (graph: DigestGraph | null) =>
-  ({ graph, status: graph ? "ready" : "loading", sessionExpired: false }) as const;
+  ({
+    graph,
+    status: graph ? "ready" : "loading",
+    sessionExpired: false,
+    freshness: "fresh",
+  }) as const;
+
+/** A graph painted from the persisted cache: the server has not answered for this scope yet. */
+const cached = (graph: DigestGraph) =>
+  ({ graph, status: "ready", sessionExpired: false, freshness: "cached" }) as const;
 
 const probeFor = (
   boundProjects: ReadonlyArray<unknown> | null,
@@ -71,13 +80,32 @@ describe("startup landing", () => {
 
   it("falls back at once when the digest fails or the Jira session expired", () => {
     for (const status of ["retrying", "error"] as const) {
-      expect(decide(probeFor(["p"], { graph: null, status, sessionExpired: false }))).toBe(
-        "default",
-      );
+      expect(
+        decide(probeFor(["p"], { graph: null, status, sessionExpired: false, freshness: "cached" })),
+      ).toBe("default");
     }
-    expect(decide(probeFor(["p"], { graph: null, status: "loading", sessionExpired: true }))).toBe(
-      "default",
-    );
+    expect(
+      decide(
+        probeFor(["p"], {
+          graph: null,
+          status: "loading",
+          sessionExpired: true,
+          freshness: "cached",
+        }),
+      ),
+    ).toBe("default");
+  });
+
+  it("opens My Work straight from the persisted cache when it already has items", () => {
+    // The cold-start payoff: the redirect happens before the first round answers, and My Work
+    // paints the same cached graph.
+    expect(decide(probeFor(["p"], cached(digestFixtureGraph)))).toBe("my-work");
+  });
+
+  it("waits out an EMPTY cached graph instead of landing on last session's answer", () => {
+    expect(decide(probeFor(["p"], cached(emptyGraph)))).toBe("wait");
+    // Still bounded: the deadline falls back like any other slow round.
+    expect(decide(probeFor(["p"], cached(emptyGraph)), true)).toBe("default");
   });
 
   it("never redirects a landing that is not eligible", () => {
