@@ -5,7 +5,11 @@ import * as NodePath from "node:path";
 
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { readDistributionWebEntries } from "./t3team-packs.distributionWeb.ts";
+import {
+  packWebImportProblem,
+  readDistributionPackDirs,
+  readDistributionWebEntries,
+} from "./t3team-packs.distributionWeb.ts";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -95,5 +99,31 @@ describe("readDistributionWebEntries", () => {
     });
 
     expect(() => readDistributionWebEntries(NodePath.join(root, "dist"))).toThrow(/listed twice/);
+  });
+
+  it("keeps packs[] to the distribution and its sibling packs", () => {
+    const root = tree({
+      "packs/dist/distribution.json": {},
+      "packs/dist/pack.json": manifest("d"),
+    });
+    const dist = NodePath.join(root, "packs/dist");
+    const withPacks = (packs: string[]) => {
+      NodeFS.writeFileSync(NodePath.join(dist, "distribution.json"), JSON.stringify({ packs }));
+      return () => readDistributionPackDirs(dist);
+    };
+
+    expect(withPacks([".", "../sibling"])()).toEqual([dist, NodePath.join(root, "packs/sibling")]);
+    for (const escape of ["../../x", "..", "/etc", "../sibling/../../x"]) {
+      expect(withPacks([escape])).toThrow(/must be the distribution or a sibling pack/);
+    }
+  });
+});
+
+describe("packWebImportProblem", () => {
+  it("refuses the host app's path aliases and allows packages", () => {
+    expect(packWebImportProblem("~/components/ui/button")).toMatch(/host app alias/);
+    expect(packWebImportProblem("@/lib/utils")).toMatch(/host app alias/);
+    expect(packWebImportProblem("@t3team/pack-ui")).toBeNull();
+    expect(packWebImportProblem("effect/Schema")).toBeNull();
   });
 });

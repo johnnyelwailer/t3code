@@ -11,6 +11,7 @@ import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
 import { resolvePackAssetPath } from "./t3team-packs.assetPath.ts";
+import { isWithinCanonicalRoot } from "./t3team-packs.pathCanonical.ts";
 import { decodeWorkspacePackManifest } from "./t3team-packs.manifest.ts";
 
 const fail = (message: string): never => {
@@ -25,7 +26,12 @@ const readJson = (path: string): unknown => {
   }
 };
 
-/** Absolute pack directories of the distribution, in `packs[]` order. */
+/**
+ * Absolute pack directories of the distribution, in `packs[]` order. An entry may name the
+ * distribution itself or a sibling pack next to it (`"../explainer"`, the layout distributions
+ * use), never anything further out: the packs a build compiles in stay inside the folder that
+ * holds the distribution.
+ */
 export function readDistributionPackDirs(distributionDir: string): ReadonlyArray<string> {
   const manifest = readJson(NodePath.join(distributionDir, "distribution.json")) as {
     readonly packs?: unknown;
@@ -34,7 +40,28 @@ export function readDistributionPackDirs(distributionDir: string): ReadonlyArray
   if (!Array.isArray(manifest.packs) || !manifest.packs.every((dir) => typeof dir === "string")) {
     return fail(`distribution.json "packs" must be an array of pack directories`);
   }
-  return manifest.packs.map((dir: string) => NodePath.resolve(distributionDir, dir));
+  const packsRoot = NodePath.dirname(NodePath.resolve(distributionDir));
+  return manifest.packs.map((dir: string) => {
+    const packDir = NodePath.resolve(distributionDir, dir);
+    if (
+      NodePath.isAbsolute(dir) ||
+      packDir === packsRoot ||
+      !isWithinCanonicalRoot(packsRoot, packDir)
+    ) {
+      fail(`distribution.json "packs" entry "${dir}" must be the distribution or a sibling pack`);
+    }
+    return packDir;
+  });
+}
+
+/**
+ * Why a pack web module may not import `source`, or `null`. The app's path aliases (`~/…`, `@/…`)
+ * would make host internals importable; a pack reaches the host only through `@t3team/pack-ui`.
+ */
+export function packWebImportProblem(source: string): string | null {
+  return source === "~" || source.startsWith("~/") || source.startsWith("@/")
+    ? `"${source}" is a host app alias; a pack imports the host only through @t3team/pack-ui`
+    : null;
 }
 
 /** One pack web entry to compile in. */
