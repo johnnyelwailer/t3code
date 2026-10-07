@@ -1049,8 +1049,16 @@ type ScriptHandlerCtx = {
     exists(rel: string):    Promise<boolean>;
   };
   callTool: <I, R>(ref: ToolRef<I, R>, args: I) => Promise<R>;   // typed cross-tool dispatch
+  store?: ScriptPackStore;              // the recipe's own pack store, iff the pack has store:v1
+  changeRequests?: ChangeRequestReader; // detail/diff of the run project's linked repositories,
+                                        // iff the recipe declares integration.read
 };
 ```
+
+`store` and `changeRequests` are host-built per run (`apps/server/src/t3team-scriptHost*.ts`).
+Neither takes a pack id or a provider URL: the store is bound to the recipe's pack, and a
+change request outside the project's linked repositories is refused with
+`ChangeRequestScopeError`.
 
 Scripts can call tools (`ctx.callTool`) so the line between "a tool that does
 project-specific work" and "a script that uses host tools" is the registration shape,
