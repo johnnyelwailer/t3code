@@ -70,6 +70,20 @@ describe("mergeActiveAgentsAndChildren (GHE #201)", () => {
     expect(entries[2]).toMatchObject({ source: "subagent", statusLabel: "Waiting" });
   });
 
+  it("keeps children that are spinning up or waiting on their own agents", () => {
+    const entries = mergeActiveAgentsAndChildren({
+      childThreads: [
+        child({ id: "c-wait", status: "idle", waitingOnChildren: true }),
+        child({ id: "c-queued", status: "idle", shellRunStatus: "queued" }),
+        child({ id: "c-done", status: "idle", shellRunStatus: "completed" }),
+        child({ id: "c-failed", status: "idle", shellRunStatus: "failed" }),
+      ],
+      subagents: [],
+    });
+    expect(entries.map((entry) => entry.id)).toEqual(["child:c-wait", "child:c-queued"]);
+    expect(entries[0]).toMatchObject({ dotState: "waiting" });
+  });
+
   it("prefers the live subagent label (progress > lastToolName > Working)", () => {
     const entries = mergeActiveAgentsAndChildren({
       childThreads: [],

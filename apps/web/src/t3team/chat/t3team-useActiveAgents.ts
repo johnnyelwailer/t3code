@@ -3,7 +3,7 @@ import { projectedSubagentsToRuntime } from "@t3tools/client-runtime/state/subag
 import { useMemo } from "react";
 
 import { usePrimarySettings } from "~/hooks/useSettings";
-import { useServerConfigs, useThreadShells } from "~/state/entities";
+import { useServerConfigs } from "~/state/entities";
 import {
   type ActiveAgentEntry,
   EMPTY_ACTIVE_AGENTS,
@@ -53,7 +53,6 @@ export function useT3TeamActiveAgents(input: {
   const activityLabelsEnabled = usePrimarySettings(
     (settings) => settings.t3teamActivityLabelsEnabled,
   );
-  const shells = useThreadShells();
   const configs = useServerConfigs();
   const children = useT3TeamChildThreadRelationsStore((state) =>
     threadId === null ? undefined : state.childThreadsByParentId.get(threadId),
@@ -73,9 +72,8 @@ export function useT3TeamActiveAgents(input: {
     if (merged.length === 0) return merged;
     return merged.map((entry) => {
       if (entry.source === "child") {
-        const childId = entry.id.slice("child:".length);
-        const shell = shells.find((candidate) => candidate.id === childId);
-        const provider = findProvider(configs, shell?.providerInstanceId);
+        const child = childThreads.find((thread) => `child:${thread.id}` === entry.id);
+        const provider = findProvider(configs, child?.providerInstanceId);
         const mark = providerMark(provider);
         return mark ? { ...entry, provider: mark } : entry;
       }
@@ -84,5 +82,5 @@ export function useT3TeamActiveAgents(input: {
       const mark = providerMark(provider, agent?.driver);
       return mark ? { ...entry, provider: mark } : entry;
     });
-  }, [activityLabelsEnabled, childThreads, configs, shells, subagents]);
+  }, [activityLabelsEnabled, childThreads, configs, subagents]);
 }

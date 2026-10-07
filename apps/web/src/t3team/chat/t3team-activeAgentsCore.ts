@@ -69,6 +69,20 @@ function subagentStatusLabel(agent: RuntimeSubagent): string {
   return agent.progress ?? agent.lastToolName ?? "Working";
 }
 
+/** A child still owes the parent work: running, spinning up, or waiting on its own agents. */
+function childIsActive(thread: ProjectThread): boolean {
+  if (thread.status === "error" || thread.shellRunStatus === "failed") return false;
+  if (thread.status === "running" || thread.waitingOnChildren === true) return true;
+  const shell = thread.shellRunStatus;
+  return (
+    shell === "preparing" ||
+    shell === "starting" ||
+    shell === "queued" ||
+    shell === "running" ||
+    shell === "waiting"
+  );
+}
+
 export function mergeActiveAgentsAndChildren({
   childThreads,
   subagents,
@@ -80,7 +94,7 @@ export function mergeActiveAgentsAndChildren({
 }): readonly ActiveAgentEntry[] {
   const entries: ActiveAgentEntry[] = [];
   for (const thread of childThreads) {
-    if (thread.status !== "running") continue;
+    if (!childIsActive(thread)) continue;
     const statusLabel = resolveSubRunStatusLabel(thread, { activityLabelsEnabled });
     entries.push({
       id: `child:${thread.id}`,
@@ -88,7 +102,11 @@ export function mergeActiveAgentsAndChildren({
       title: thread.title,
       statusLabel,
       activityKey: `${thread.childStatusUpdatedAt ?? ""}|${thread.lastMessageAt}|${thread.activityLabel ?? ""}|${statusLabel}`,
-      dotState: deriveDotState({ label: thread.activityLabel }),
+      dotState: deriveDotState({
+        label: statusLabel,
+        status:
+          thread.shellRunStatus === "waiting" || thread.waitingOnChildren ? "waiting" : undefined,
+      }),
     });
   }
   const pushSubagent = (agent: RuntimeSubagent) => {
