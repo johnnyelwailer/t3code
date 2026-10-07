@@ -19,6 +19,10 @@ import {
   toDigestPerson,
   type PrEnrichment,
 } from "./t3team-myworkDigestPrEnrich.ts";
+import {
+  isRateLimitedFailure,
+  RATE_LIMITED_CHANGE_REQUEST_NOTE,
+} from "./t3team-myworkDigestRateLimited.ts";
 
 export {
   digestEnrichmentFields,
@@ -38,6 +42,8 @@ const DIGEST_PR_ENRICH_LIMIT = 8;
 export type PrReadResult = {
   readonly entries: readonly PullRequestListEntry[];
   readonly note?: string;
+  /** The entries are the last good listing, served while the host rate-limits reads. */
+  readonly stale?: boolean;
   readonly enrichments?: Record<string, PrEnrichment>;
 };
 
@@ -89,6 +95,12 @@ export function toDigestPrEntries(
   });
 }
 
+// The last listing each project read successfully. A listing the host's rate limit refused serves
+// it instead of an empty one, so the digest keeps its PR chips (drafts included) and says so in
+// `note`, rather than every card dropping its PRs until the quota resets. Any other failure
+// (signed out, revoked token, lost access) does not fall back.
+const lastGoodListing = new Map<string, readonly PullRequestListEntry[]>();
+
 export function loadPrEntries(
   appProjectId: string | undefined,
 ): Effect.Effect<PrReadResult | undefined, never, PullRequestService> {
@@ -98,18 +110,28 @@ export function loadPrEntries(
 
     let entries: readonly PullRequestListEntry[] = [];
     let note: string | undefined;
+    let stale = false;
     const listRead = yield* service
       .list({ state: "all", projectId: ProjectId.make(appProjectId), limit: DIGEST_PR_LIMIT })
       .pipe(Effect.result);
     if (listRead._tag === "Success") {
       entries = listRead.success.entries;
+      lastGoodListing.set(appProjectId, entries);
     } else {
+      const lastGood = isRateLimitedFailure(listRead.failure)
+        ? lastGoodListing.get(appProjectId)
+        : undefined;
+      entries = lastGood ?? [];
+      stale = lastGood !== undefined;
       note =
-        listRead.failure instanceof Error
-          ? listRead.failure.message
-          : "Change requests unavailable.";
+        lastGood !== undefined
+          ? RATE_LIMITED_CHANGE_REQUEST_NOTE
+          : listRead.failure instanceof Error
+            ? listRead.failure.message
+            : "Change requests unavailable.";
     }
     if (entries.length === 0) return { entries, ...(note !== undefined ? { note } : {}) };
+    const staleField = stale ? { stale: true } : {};
 
     // Enrich only the freshest OPEN rows: those are the chips that show
     // faces and comment counts. Bounded and parallel through the service's
@@ -130,6 +152,7 @@ export function loadPrEntries(
     return {
       entries,
       ...(note !== undefined ? { note } : {}),
+      ...staleField,
       ...(Object.keys(enrichments).length > 0 ? { enrichments } : {}),
     };
   });
