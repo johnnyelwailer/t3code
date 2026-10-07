@@ -37,7 +37,7 @@ export const conceptExplainer: T3TeamExplainer = {
         {
           id: "c1-md",
           type: "markdown",
-          text: "The **orchestrator** turns each command into events.\n\n- It reads only state it already holds.\n- It never calls a provider or the disk.\n\nThat keeps every decision *replayable*. <b>Raw HTML</b> shows as text.",
+          text: "The **orchestrator** turns each command into events.\n\n- It reads only state it already holds.\n- It never calls a provider or the disk.\n\nThat keeps every decision *replayable*. Inline <b>HTML</b> such as <kbd>Esc</kbd> or <code>x</code> is formatted too.",
         },
         {
           id: "c1-img",

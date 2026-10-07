@@ -17,6 +17,7 @@ import {
 } from "./t3team-ExplainerHeader";
 import { Skeleton, cn } from "./t3team-explainerHostKit";
 import { ExplainerRail } from "./t3team-ExplainerRail";
+import { ExplainerVerticalRail } from "./t3team-ExplainerVerticalRail";
 import { ExplainerStepView } from "./t3team-ExplainerStep";
 import { explainerStepLabel } from "./t3team-explainerStepKind";
 import { partitionExplainerThreads } from "./t3team-explainerThreads";
@@ -24,6 +25,7 @@ import { useExplainerApi } from "./t3team-useExplainerApi";
 import { useExplainerAskController } from "./t3team-useExplainerAskController";
 import { useExplainerInView } from "./t3team-useExplainerInView";
 import { useExplainerPlayer } from "./t3team-useExplainerPlayer";
+import { useExplainerWide } from "./t3team-useExplainerWide";
 
 export interface ExplainerPlayerProps extends ExplainerHost {
   readonly explainer: T3TeamExplainer;
@@ -55,8 +57,10 @@ export function ExplainerPlayer(props: ExplainerPlayerProps) {
   const rootRef = useRef<HTMLElement>(null);
   const streaming = status.kind === "generating";
   const inView = useExplainerInView(rootRef);
+  const wide = useExplainerWide(rootRef);
   const player = useExplainerPlayer({
     stepCount: explainer.steps.length,
+    vertical: wide,
     streaming,
     inView,
     ...(props.initialStep === undefined ? {} : { initialIndex: props.initialStep }),
@@ -140,39 +144,51 @@ export function ExplainerPlayer(props: ExplainerPlayerProps) {
           currentHeadSha={currentHeadSha}
           onRegenerate={props.onRegenerate}
         />
-        {failedEmpty ? null : (
-          <ExplainerRail steps={explainer.steps} pending={pending} player={player} />
-        )}
-        <div className="sr-only" aria-live="polite">
-          {step
-            ? `Step ${player.index + 1} of ${explainer.steps.length}, ${explainerStepLabel(step)}: ${step.caption}`
-            : ""}
-        </div>
         <div
-          hidden={failedEmpty}
-          className="min-h-40"
-          onPointerEnter={() => hold("hover", true)}
-          onPointerLeave={() => hold("hover", false)}
-          onFocus={onFocus}
-          onBlur={onBlur}
+          className={
+            wide && !failedEmpty
+              ? "grid grid-cols-[minmax(11rem,15rem)_minmax(0,1fr)] gap-x-5"
+              : "contents"
+          }
         >
-          {step ? (
-            <ExplainerStepView
-              key={step.id}
-              step={step}
-              stepIndex={player.index}
-              stepCount={explainer.steps.length}
-            />
+          {failedEmpty ? null : wide ? (
+            <ExplainerVerticalRail steps={explainer.steps} pending={pending} player={player} />
           ) : (
-            <div className="space-y-2" aria-hidden>
-              <Skeleton className="h-5 w-3/4" />
-              <Skeleton className="h-28 w-full" />
-            </div>
+            <ExplainerRail steps={explainer.steps} pending={pending} player={player} />
           )}
+          <div className={wide ? "@container flex min-w-0 flex-col gap-3" : "contents"}>
+            <div className="sr-only" aria-live="polite">
+              {step
+                ? `Step ${player.index + 1} of ${explainer.steps.length}, ${explainerStepLabel(step)}: ${step.caption}`
+                : ""}
+            </div>
+            <div
+              hidden={failedEmpty}
+              className="min-h-40"
+              onPointerEnter={() => hold("hover", true)}
+              onPointerLeave={() => hold("hover", false)}
+              onFocus={onFocus}
+              onBlur={onBlur}
+            >
+              {step ? (
+                <ExplainerStepView
+                  key={step.id}
+                  step={step}
+                  stepIndex={player.index}
+                  stepCount={explainer.steps.length}
+                />
+              ) : (
+                <div className="space-y-2" aria-hidden>
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-28 w-full" />
+                </div>
+              )}
+            </div>
+            {failedEmpty ? null : (
+              <ExplainerControls player={player} stepCount={explainer.steps.length} />
+            )}
+          </div>
         </div>
-        {failedEmpty ? null : (
-          <ExplainerControls player={player} stepCount={explainer.steps.length} />
-        )}
         <ExplainerOutdatedThreads threads={outdated} />
         {ask.chip && !ask.open ? (
           <ExplainerSelectionChip top={ask.chip.top} left={ask.chip.left} onOpen={ask.openChip} />

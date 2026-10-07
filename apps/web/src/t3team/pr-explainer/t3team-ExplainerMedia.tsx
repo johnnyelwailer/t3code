@@ -29,14 +29,16 @@ export function ExplainerMediaMissing({ alt }: { alt: string }) {
 
 function Caption({ text }: { text: string | undefined }) {
   return text ? (
-    <figcaption className="mt-1 line-clamp-2 text-2xs text-muted-foreground">{text}</figcaption>
+    <figcaption className="mt-1 line-clamp-2 text-center text-2xs text-muted-foreground">
+      {text}
+    </figcaption>
   ) : null;
 }
 
 export function ExplainerImageBlock({ block }: { block: T3TeamExplainerImageBlock }) {
   const url = useExplainerMediaUrl(block.src);
   return (
-    <figure className="min-w-0">
+    <figure className="mx-auto w-fit max-w-full min-w-0">
       {url ? (
         <img
           src={url}

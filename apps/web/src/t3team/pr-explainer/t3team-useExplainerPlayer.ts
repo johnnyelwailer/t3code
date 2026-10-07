@@ -17,6 +17,11 @@ function isTypingTarget(target: EventTarget | null) {
   );
 }
 
+/** Whether focus is in the step rail, so ↑/↓ never take the page's scroll from the content. */
+function inRail(target: EventTarget | null) {
+  return target instanceof Element && target.closest("[data-xp-rail]") !== null;
+}
+
 /**
  * The player's state: the current step, autoplay, speed, and the holds that pause it. The step
  * clock is a timer here — the rail's fill only draws it — so it runs at any width. It counts
@@ -33,6 +38,8 @@ export function useExplainerPlayer(input: {
   readonly inView?: boolean;
   /** One step at 1×. */
   readonly stepMs?: number;
+  /** The rail is a vertical list: ↑/↓ step through it while focus is in the rail. */
+  readonly vertical?: boolean;
 }) {
   const { stepCount, streaming = false, inView = true } = input;
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
@@ -102,13 +109,15 @@ export function useExplainerPlayer(input: {
     setPlaying(!playing);
   }, [atEnd, go, last, playing, streaming]);
 
-  /** ←/→/Home/End. Returns whether it moved, so the caller can keep focus in the player. */
+  /** ←/→/Home/End (and ↑/↓ in a vertical rail). Returns whether it moved, so the caller can keep focus in the player. */
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLElement>) => {
       if (event.defaultPrevented || isTypingTarget(event.target)) return false;
       if (event.altKey || event.metaKey || event.ctrlKey) return false;
       if (event.key === "ArrowRight") go(index + 1);
       else if (event.key === "ArrowLeft") go(index - 1);
+      else if (input.vertical && event.key === "ArrowDown" && inRail(event.target)) go(index + 1);
+      else if (input.vertical && event.key === "ArrowUp" && inRail(event.target)) go(index - 1);
       else if (event.key === "Home") go(0);
       else if (event.key === "End") go(last);
       else return false;
@@ -116,7 +125,7 @@ export function useExplainerPlayer(input: {
       event.preventDefault();
       return true;
     },
-    [go, index, last],
+    [go, index, input.vertical, last],
   );
 
   return {

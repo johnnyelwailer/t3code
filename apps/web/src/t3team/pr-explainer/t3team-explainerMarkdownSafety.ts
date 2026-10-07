@@ -11,7 +11,8 @@ const SAFE_IMAGE = /^data:image\/(?:png|jpeg|webp);base64,/;
 /**
  * A remark plugin for model-written markdown: an image the explainer did not inline becomes its
  * alt text, so rendering never makes the reader's browser fetch a URL a model chose. Link
- * references to images are dropped the same way. Raw HTML is already shown as text.
+ * references to images are dropped the same way. Raw HTML is handled by
+ * `remarkExplainerInlineHtml`.
  */
 export function remarkExplainerSafeImages() {
   return (tree: MarkdownNode) => {
