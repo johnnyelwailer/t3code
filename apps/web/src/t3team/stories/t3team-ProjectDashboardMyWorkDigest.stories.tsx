@@ -15,6 +15,7 @@ import {
   allProjectsAgentScenario,
   allProjectsHeuristicScenario,
 } from "~/t3team/t3team-projectMyWorkDigestFixtureScenariosAllProjects";
+import { storyCardAttentionScenario } from "~/t3team/t3team-projectMyWorkDigestFixtureScenariosStoryCards";
 
 const meta = {
   title: "T3Team/Project Dashboard/My Work Digest",
@@ -71,6 +72,20 @@ export const ProjectWorkflowFailed: Story = createStory(
   errorArrangementScenario,
   "Heuristic fallback stays up.",
 );
+export const StoryCardAttention: Story = createStory(
+  storyCardAttentionScenario,
+  "Story cards in three tiers: the viewer's rows and PRs, adjacent active work and blocks as pills, done and others' to-do folded into one count.",
+);
+export const StoryCardAttentionNarrow: Story = {
+  ...StoryCardAttention,
+  decorators: [
+    (Story) => (
+      <div style={{ width: 380 }}>
+        <Story />
+      </div>
+    ),
+  ],
+};
 export const ProjectEmpty: Story = createStory(emptyGraphScenario, "Nothing assigned.");
 export const SprintBurndownChart: Story = {
   args: { scenario: heuristicArrangementScenario, nowOffsetHours: 0, burndownVariant: "chart" },

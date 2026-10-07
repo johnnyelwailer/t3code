@@ -1,3 +1,7 @@
+import {
+  digestStoryAdjacency,
+  type DigestStoryAdjacency,
+} from "~/t3team/t3team-projectMyWorkDigestAdjacency";
 import type { DigestGraph, DigestSection } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import { buildProjectTicketHierarchy } from "~/t3team/t3team-ticketHierarchy";
 import type { ProjectTicket } from "~/t3team/t3team-types";
@@ -6,7 +10,11 @@ type DigestStoryGroupModel = {
   parent: ProjectTicket | null;
   items: DigestSection["items"];
   otherChildren: ProjectTicket[];
+  /** The work around the group's rows, in attention tiers; empty for parentless groups. */
+  adjacency: DigestStoryAdjacency;
 };
+
+const NO_ADJACENCY: DigestStoryAdjacency = { active: [], quiet: [] };
 
 /**
  * Every ticket the open lanes put on screen: each item, and the story heading its group. A
@@ -41,7 +49,12 @@ export function groupByParent(
     const parentId = hierarchy.parentByChildId.get(item.ticketId) ?? null;
     const parent = parentId ? (ticketsById.get(parentId) ?? null) : null;
     const key = parent?.id ?? null;
-    const group = groups.get(key) ?? { parent, items: [], otherChildren: [] };
+    const group = groups.get(key) ?? {
+      parent,
+      items: [],
+      otherChildren: [],
+      adjacency: NO_ADJACENCY,
+    };
     groups.set(key, { ...group, items: [...group.items, item] });
   }
   // A story that is itself in the section AND heads a group shows once, as that group's header —
@@ -57,6 +70,20 @@ export function groupByParent(
     group.otherChildren = (hierarchy.childrenByParentId.get(group.parent.id) ?? []).filter(
       (child) => !active.has(child.id) && !shownElsewhere.has(child.id),
     );
+    const hiddenKeys = new Set(
+      [...shownElsewhere, ...active, group.parent.id].flatMap((id) => {
+        const key = ticketsById.get(id)?.ref.displayId;
+        return key ? [key] : [];
+      }),
+    );
+    group.adjacency = digestStoryAdjacency({
+      rowIds: active,
+      siblings: group.otherChildren,
+      dependencies: graph.dependencies ?? [],
+      hiddenKeys,
+      ticketsById,
+      viewerName: graph.viewer.name,
+    });
   }
   return [...groups.values()];
 }

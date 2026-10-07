@@ -93,8 +93,7 @@ export function MainSection({
               story={group.parent}
               graph={graph}
               nowMs={nowMs}
-              otherChildren={group.otherChildren}
-              viewerName={graph.viewer.name}
+              adjacency={group.adjacency}
               onOpenTicket={onOpenTicket}
             >
               {group.items.map((item) => {
@@ -108,6 +107,7 @@ export function MainSection({
                     graph={graph}
                     nowMs={nowMs}
                     onOpenTicket={onOpenTicket}
+                    dependencies={false}
                   />
                 );
               })}
