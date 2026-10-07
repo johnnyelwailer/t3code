@@ -314,3 +314,34 @@ Owner-approved 2026-10-05. Exact paths; each is upstream orchestration V2 surfac
 - `apps/server/src/project/ProjectService.ts` — upstream orchestration V2 surface, integrated via PR #344: forwards `mainRepository` on project meta updates.
 - `packages/contracts/src/applicationEvent.ts` — upstream orchestration V2 surface, integrated via PR #344: project meta-updated payload gains optional `mainRepository`.
 - `apps/mobile/src/features/threads/ThreadFeed.tsx` — user-message hover copy uses the shared initiating-prompt string, and stays hidden for system triggers and tool continuations.
+
+## MCP tool-access declarations + MCP OAuth port (2026-10-07)
+
+Three upstream commits cherry-picked onto the fork: `2f85686d9d` (#16335, every T3 MCP tool
+declares who may call it), `2c8be5893e` (#16336, outside agents sign in to the T3 MCP server with
+OAuth) and `10f39eb9ac` (#16718, hosted agents like ChatGPT can sign in). Every entry below is
+upstream's own file, carrying upstream's own change; the fork edits none of them beyond the
+cherry-picked content and the three conflict resolutions recorded in the port log.
+
+Modified upstream files — each gains the `McpToolAccess` access declaration (#16335) or the OAuth
+client-authenticator seam (#16336):
+
+- `apps/server/src/mcp/threadAccess.ts` — `readWritableThread`/`readMutationCaller`/`readFullAccessCaller` collapse into `loadCaller` + `assertLiveCaller`/`assertFullAccess`, which the declarations call.
+- `apps/server/src/mcp/McpInvocationContext.ts`, `…/McpInvocationContext.test.ts` — the invocation scope gains the OAuth client ceiling.
+- `apps/server/src/mcp/ThreadMetadataMcpService.ts`, `…/ThreadMetadataMcpService.test.ts` — the per-tool caller checks move into the declarations.
+- `apps/server/src/mcp/McpDeviceToolkit.test.ts`, `…/McpHttpServer.test.ts`, `…/OrchestratorMcpService.test.ts`, `…/toolkits/core.test.ts` — register handlers through `McpToolAccess.HandlersLayer` and the new testkit.
+- `apps/server/src/mcp/toolkits/{attachment,device,environment,html,orchestrator,preview,previewControls,project,pullRequests,thread,worktree}/{handlers,tools}.ts` and their tests — every tool declares its access and widens `failure:` to include `OrchestratorMcpFailure`.
+- `apps/server/src/orchestration-v2/ThreadMessageIntake.ts` — threads a dispatch-mode limit through intake.
+- `apps/server/src/auth/EnvironmentAuth.ts`, `apps/server/src/auth/SessionStore.ts` — MCP OAuth session kind and client records.
+- `packages/contracts/src/environmentHttp.ts`, `packages/shared/src/devProxy.ts` — the `/.well-known/oauth-*` discovery routes and their dev proxy entries.
+- `oxlint-plugin-t3code/index.ts` — registers the new `no-raw-mcp-registration` rule.
+- `docs/internals/environment-auth.md`, `docs/orchestration-v2/orchestrator-mcp-server.md` — upstream's own documentation for the above.
+
+New unprefixed upstream files (upstream's modules, taken verbatim):
+
+- `apps/server/src/mcp/McpToolAccess.ts`, `…/McpToolAccess.testkit.ts`, `…/McpToolAccess.test.ts`, `…/McpToolAccess.race.test.ts`
+- `apps/server/src/mcp/toolkits/environment/handlers.test.ts`
+- `apps/server/src/orchestration-v2/DispatchModeLimit.ts`, `…/DispatchModeLimit.test.ts`
+- `apps/server/src/auth/McpOAuth.ts`, `…/McpOAuth.test.ts`, `…/mcpOAuthHtml.ts`, `…/mcpOAuthHttp.ts`
+- `apps/web/src/components/auth/ConnectAgentSurface.tsx`, `apps/web/src/routes/connect-agent.tsx`
+- `oxlint-plugin-t3code/rules/no-raw-mcp-registration.ts`, `…/no-raw-mcp-registration.test.ts`
