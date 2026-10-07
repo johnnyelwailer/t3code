@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { selectBoundProjects } from "~/t3team/t3team-AllProjectsMyWorkView";
+import { selectBoundProjects } from "~/t3team/t3team-allProjectsMyWorkProjects";
 import {
   parseT3TeamViewFromPath,
   resolveT3TeamRouteSearchTarget,
