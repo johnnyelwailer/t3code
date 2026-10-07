@@ -21,7 +21,7 @@
  * a restored run with no recorded retries gets the full 3-attempt budget.
  */
 
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Effect from "effect/Effect";
 
 export default Effect.gen(function* () {

@@ -161,6 +161,7 @@ function pullRequestServiceLayer(
     list: () => Effect.die("not used"),
     listStats: () => Effect.die("not used"),
     checks: () => Effect.die("not used"),
+    watchFingerprint: () => Effect.die("not used"),
     summary: () => Effect.die("not used"),
     subscribeMerges: Effect.die("not used"),
     subscribeRefreshes: Stream.empty,

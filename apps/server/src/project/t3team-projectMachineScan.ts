@@ -147,7 +147,7 @@ export const scanCheckout = Effect.fn("projectMachine.scanCheckout")(function* (
         ],
         rejected: [],
       } satisfies ProjectMachineScan;
-    }).pipe(Effect.catchTag("Rejected", rejectedAt(PROJECT_MACHINE_FILE_PATH)));
+    }).pipe(Effect.catchTags({ Rejected: rejectedAt(PROJECT_MACHINE_FILE_PATH) }));
   }
 
   const nested = yield* fileSystem
@@ -184,7 +184,7 @@ export const scanCheckout = Effect.fn("projectMachine.scanCheckout")(function* (
               })),
             ),
       ),
-      Effect.catchTag("Rejected", rejectedAt(devcontainerPath)),
+      Effect.catchTags({ Rejected: rejectedAt(devcontainerPath) }),
     ),
   );
   return {

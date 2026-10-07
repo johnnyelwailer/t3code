@@ -26,6 +26,20 @@ export function lastT3TeamMirrorSyncKickMs(mapKey: string): number | undefined {
   return lastKickedMsByKey.get(mapKey);
 }
 
+/** Last successful walk (epoch ms) per key: when the mirror last matched Jira. */
+const lastWalkedMsByKey = new Map<string, number>();
+
+/** Record a successful walk started at `walkStartMs`; returns it for the loop's own lookback. */
+export function recordT3TeamMirrorWalkSuccess(mapKey: string, walkStartMs: number): number {
+  lastWalkedMsByKey.set(mapKey, walkStartMs);
+  return walkStartMs;
+}
+
+/** When this process last finished a walk for the key, or `undefined` before the first one. */
+export function lastT3TeamMirrorWalkMs(mapKey: string): number | undefined {
+  return lastWalkedMsByKey.get(mapKey);
+}
+
 /** Forget all kick history (e.g. when every active loop is being stopped). */
 export function clearT3TeamMirrorSyncKickHistory(): void {
   lastKickedMsByKey.clear();

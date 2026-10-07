@@ -8,13 +8,14 @@
 import type { ThreadId as ThreadIdType } from "@t3tools/contracts";
 import type * as Effect from "effect/Effect";
 
-import type { ProviderRegistryShape } from "./provider/Services/ProviderRegistry.ts";
+import type { ProviderRegistry } from "./provider/ProviderRegistry.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
 import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 import type { ResourcePressureMonitorShape } from "./t3team-resourcePressureMonitor.ts";
 import type { T3TeamThreadToolContextStoreShape } from "./t3team-threadToolContextStore.ts";
 import type { T3TeamToolCallResult, T3TeamTurnToolContext } from "./t3team-toolBroker.ts";
 import type { ReadMessageMailboxEntry } from "./t3team-toolBrokerBindingReadMessage.ts";
+import type { T3TeamMyWorkToolHandlers } from "./t3team-toolBrokerBindingMyWork.ts";
 import type { T3TeamRecipeToolHandlers } from "./t3team-toolBrokerBindingRecipes.ts";
 import type { T3TeamThreadReads } from "./t3team-toolBrokerThreadReads.ts";
 import type { makeT3TeamShowWidget } from "./t3team-toolBrokerWidgetShow.ts";
@@ -29,7 +30,7 @@ export interface BindSessionDeps {
   readonly contextStore: T3TeamThreadToolContextStoreShape;
   readonly genericThreadToolIds: readonly string[];
   readonly reads: T3TeamThreadReads;
-  readonly providerRegistry: ProviderRegistryShape | undefined;
+  readonly providerRegistry: ProviderRegistry["Service"] | undefined;
   readonly usageLimitSources: UsageLimitSources["Service"] | undefined;
   readonly resourcePressure: ResourcePressureMonitorShape | undefined;
   readonly contextRefresh: T3TeamContextRefreshServiceShape;
@@ -53,6 +54,8 @@ export interface BindSessionDeps {
     toolArgs: unknown,
     callerThreadId: ThreadIdType,
   ) => Effect.Effect<T3TeamToolCallResult>;
+  /** My Work digest/arrangement tools; absent when the runtime lacks the digest's services. */
+  readonly myWorkTools: T3TeamMyWorkToolHandlers | undefined;
   readonly recipeToolsForThread: (threadId: ThreadIdType) => T3TeamRecipeToolHandlers;
   readonly workflowTools: {
     readonly workflowRunToolsForThread?:

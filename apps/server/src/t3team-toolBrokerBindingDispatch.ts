@@ -22,6 +22,11 @@ import {
   isT3TeamRecipeTool,
   type T3TeamRecipeToolHandlers,
 } from "./t3team-toolBrokerBindingRecipes.ts";
+import {
+  callT3TeamMyWorkTool,
+  isT3TeamMyWorkTool,
+  type T3TeamMyWorkToolHandlers,
+} from "./t3team-toolBrokerBindingMyWork.ts";
 import type { T3TeamWorkflowRunToolHandlers } from "./t3team-toolBrokerWorkflowRunTools.ts";
 import type { T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
 import type { T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
@@ -46,6 +51,7 @@ export function dispatchT3TeamToolCall(input: {
   setBacklogAssigneeFilter?: (mode: "current-user") => Effect.Effect<unknown, string>;
   refreshContextBundle?: T3TeamContextRefreshServiceShape;
   recipeTools?: T3TeamRecipeToolHandlers;
+  myWorkTools?: T3TeamMyWorkToolHandlers;
   workflowRunTools?: T3TeamWorkflowRunToolHandlers;
   workflowStatusTools?: T3TeamWorkflowStatusToolHandlers;
   workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
@@ -81,6 +87,15 @@ export function dispatchT3TeamToolCall(input: {
       scopeLabel: input.scopeLabel,
       toolArgs,
       ...(input.recipeTools ? { recipeTools: input.recipeTools } : {}),
+    });
+  }
+  if (isT3TeamMyWorkTool(tool)) {
+    return callT3TeamMyWorkTool({
+      tool,
+      scopeLabel: input.scopeLabel,
+      toolArgs,
+      ...(input.threadId ? { threadId: input.threadId } : {}),
+      ...(input.myWorkTools ? { myWorkTools: input.myWorkTools } : {}),
     });
   }
   const workflowToolCall = tryDispatchWorkflowToolCall({

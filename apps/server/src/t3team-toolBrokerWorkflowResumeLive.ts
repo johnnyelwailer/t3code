@@ -12,10 +12,10 @@ import * as Option from "effect/Option";
 import type * as Path from "effect/Path";
 
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
-import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
-import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
-import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
+import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
+import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
+import { ProviderRegistry } from "./provider/ProviderRegistry.ts";
 import type { WorkflowResumeToolDeps } from "./t3team-toolBrokerWorkflowResumeActions.ts";
 import {
   makeWorkflowResumeToolHandlers,

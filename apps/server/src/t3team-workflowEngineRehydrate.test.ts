@@ -34,19 +34,19 @@ import * as Option from "effect/Option";
 import { afterAll } from "vite-plus/test";
 
 import { ServerConfig } from "./config.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
-import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
-import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
+import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import {
   buildRunningWorkflowRunRow,
   makeWorkflowRunLifecycle,
 } from "./t3team-workflowEngineDurability.ts";
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import { rehydrateSuspendedWorkflowRuns } from "./t3team-workflowEngineRehydrate.ts";
-import { WorkflowSignalStoreLive } from "./persistence/Layers/WorkflowSignalStore.ts";
-import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
+import { WorkflowSignalStoreLive } from "./persistence/WorkflowSignalStore.ts";
+import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import { setWorkflowEphemeralConcurrencyPolicy } from "./t3team-workflowEphemeralConcurrencyPolicy.ts";
 import {

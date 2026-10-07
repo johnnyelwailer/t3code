@@ -11,7 +11,8 @@ import type {
 } from "~/t3team/backend/t3team-myworkDigestBackendApi";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { clearCachedDigestGraphsForTests } from "./t3team-digestGraphCache";
-import { digestSprintGoals, payloadToDigestGraph } from "./t3team-digestGraphMappers";
+import { payloadToDigestGraph } from "./t3team-digestGraphMappers";
+import { digestSprintGoals } from "./t3team-digestGraphHelpers";
 import { useMyWorkDigestGraph } from "./t3team-useMyWorkDigestGraph";
 import { createRecordingOrchestrationApi } from "~/t3team/backend/t3team-orchestrationApi.testSupport";
 
@@ -441,6 +442,35 @@ describe("useMyWorkDigestGraph", () => {
     expect(latest.result?.graph?.viewer.lastVisitAt).toBe("2026-09-13T00:00:00.000Z");
     // The owner storage rule: localStorage in My Work holds view preferences only.
     expect(window.localStorage.getItem("t3team.mywork-digest.last-visit.project")).toBeNull();
+  });
+
+  it("keeps its in-flight answer when the project list re-renders with the same projects", async () => {
+    // The live project store rebuilds its project objects on every snapshot. A new array for the
+    // same scope used to restart the poller and drop the answer in flight, so at startup the
+    // digest sat empty until a remount.
+    let release: () => void = () => {};
+    let calls = 0;
+    const { latest, projectsRef, rerender } = await mountWith(async () => {
+      calls += 1;
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return { unchanged: false, fingerprint: "fp", value: createDigestPayload() };
+    }, [createProject({ id: "p1", externalProjectId: "IES" })]);
+    await vi.waitFor(() => {
+      expect(calls).toBe(1);
+    });
+    expect(latest.result?.status).toBe("loading");
+
+    projectsRef.projects = [createProject({ id: "p1", externalProjectId: "IES" })];
+    await rerender();
+    await act(async () => release());
+
+    await vi.waitFor(() => {
+      expect(latest.result?.status).toBe("ready");
+    });
+    expect(latest.result?.graph?.tickets).toHaveLength(2);
+    expect(calls).toBe(1);
   });
 
   it("invalidates and refetches when the project scope changes", async () => {

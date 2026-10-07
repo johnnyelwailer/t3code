@@ -3,7 +3,7 @@ import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts"
 import { listImplementedT3TeamToolCatalogEntries } from "@t3tools/project-context/t3teamToolCatalog";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { McpSchema, McpServer } from "effect/unstable/ai";
+import { McpSchema, McpServer } from "effect/ai";
 
 import { T3TeamChildThreadMetadata } from "../../../t3team-childThreadMetadata.ts";
 import { T3TeamToolBroker, type T3TeamToolBinding } from "../../../t3team-toolBroker.ts";
@@ -28,9 +28,13 @@ it("maps or explicitly policy-excludes every canonical implemented tool", () => 
 const threadId = ThreadId.make("thread-t3team-mcp-test");
 const invocation: McpInvocationContext.McpInvocationScope = {
   environmentId: EnvironmentId.make("environment-t3team-mcp-test"),
-  threadId,
-  providerSessionId: "provider-session-t3team-mcp-test",
-  providerInstanceId: ProviderInstanceId.make("pack-test"),
+  requestNamespace: "provider-session-t3team-mcp-test",
+  thread: {
+    threadId,
+    providerSessionId: "provider-session-t3team-mcp-test",
+    providerInstanceId: ProviderInstanceId.make("pack-test"),
+  },
+  client: undefined,
   capabilities: new Set(["orchestration"]),
   issuedAt: 1,
 };

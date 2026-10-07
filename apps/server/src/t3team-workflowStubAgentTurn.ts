@@ -132,7 +132,7 @@ export function makeWorkflowStubProvider(
       },
     },
   });
-  const registryLayer = ProviderAdapterRegistry.makeLayerEffect(
+  const registryLayer = ProviderAdapterRegistry.layerFromAdaptersEffect(
     Effect.gen(function* () {
       const requests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
       return [

@@ -11,7 +11,7 @@
 
 import { type T3TeamDraftMutationStatus, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import { HttpRouter } from "effect/unstable/http";
+import { HttpRouter } from "effect/http";
 
 import {
   errorResponse,

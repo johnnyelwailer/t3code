@@ -11,7 +11,7 @@
 
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import type { T3TeamBacklogCacheIdentity } from "./t3team-atlassian-backlog-cacheShared.ts";
 
@@ -53,7 +53,7 @@ const ensureDigestTransitionTable = Effect.fn("t3team.digestStatusTransitions.en
  * nothing. A first sight of an issue records nothing: we never saw its
  * previous status, and pretending "To Do" → "Done" would be wrong.
  */
-export const captureDigestStatusTransitions = Effect.fn("t3team.digestStatusTransitions.capture")(
+const captureDigestStatusTransitions = Effect.fn("t3team.digestStatusTransitions.capture")(
   function* (
     identity: T3TeamBacklogCacheIdentity,
     next: ReadonlyArray<DigestTransitionCaptureEntry>,
@@ -107,6 +107,31 @@ export const captureDigestStatusTransitions = Effect.fn("t3team.digestStatusTran
   `;
   },
 );
+
+/**
+ * Capture for any writer of mirror rows: call it BEFORE the upsert overwrites
+ * the previous statuses. Every path that writes `t3team_atlassian_backlog_issues`
+ * must call it, or status changes that path delivers never reach the digest.
+ * A capture failure never blocks the upsert itself.
+ */
+export function captureDigestStatusTransitionsOf(
+  identity: T3TeamBacklogCacheIdentity,
+  items: ReadonlyArray<{ readonly id: string }>,
+) {
+  return captureDigestStatusTransitions(
+    identity,
+    items.flatMap((item) => {
+      const { status, displayId } = item as { readonly status?: unknown; displayId?: unknown };
+      return typeof status === "string"
+        ? [{ issueId: item.id, issueKey: typeof displayId === "string" ? displayId : null, status }]
+        : [];
+    }),
+  ).pipe(
+    Effect.catchCause((cause) =>
+      Effect.logWarning("t3team: digest status transition capture failed", { cause }),
+    ),
+  );
+}
 
 export type DigestTransitionRead = {
   readonly issueId: string;

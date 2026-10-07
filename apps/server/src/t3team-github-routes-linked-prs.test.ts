@@ -1,7 +1,7 @@
 import { describe, expect, vi } from "vite-plus/test";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/process";
 import { VcsProcessExitError } from "@t3tools/contracts";
 
 import type { VcsProcessOutput, VcsProcessShape } from "./t3team-vcsProcessShape.ts";

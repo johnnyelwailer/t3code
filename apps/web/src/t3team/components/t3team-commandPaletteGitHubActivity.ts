@@ -1,5 +1,5 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { useEffect, useState } from "react";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { sourceControlEnvironment } from "~/state/sourceControl";

@@ -43,10 +43,10 @@ import {
   T3TeamWorkflowEngineRegistry,
   type T3TeamWorkflowEngineRegistryShape,
 } from "./t3team-workflowEngineRegistry.ts";
-import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
-import type { WorkflowRunRepositoryShape } from "./persistence/Services/WorkflowRuns.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
-import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
+import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
+import type { WorkflowRunRepositoryShape } from "./persistence/WorkflowRuns.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 import {
   T3TeamWorkflowSignalRehydrateGate,
   T3TeamWorkflowSignalRehydrateGateLive,

@@ -5,6 +5,7 @@ import {
   readJiraEstimateValue,
   readJiraSubtaskCount,
   readJiraTimeTracking,
+  withJiraAssigneeAccountIds,
 } from "./planning.ts";
 
 describe("jira planning helpers", () => {
@@ -42,6 +43,18 @@ describe("jira planning helpers", () => {
       8,
     );
     expect(readJiraSubtaskCount(issue)).toBe(2);
+  });
+
+  it("stamps each normalized item with its issue's assignee accountId, 1:1 by position", () => {
+    const issue = (key: string, assignee: unknown) =>
+      ({ id: key, key, self: "", fields: { assignee } }) as never;
+
+    expect(
+      withJiraAssigneeAccountIds(
+        [issue("A-1", { accountId: "viewer-1" }), issue("A-2", null)],
+        [{ id: "A-1" }, { id: "A-2" }],
+      ),
+    ).toEqual([{ id: "A-1", assigneeAccountId: "viewer-1" }, { id: "A-2" }]);
   });
 
   it("reads Jira time tracking fields when they are present", () => {

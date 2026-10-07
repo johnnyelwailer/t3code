@@ -8,6 +8,7 @@ import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import { readProjectIdFromView } from "~/t3team/t3team-types";
 import { resolveViewStoredProject } from "~/t3team/t3team-appMainContentResolution";
 import { AppOverlays } from "~/t3team/t3team-AppOverlays";
+import { resolveManageRepositoriesProject } from "~/t3team/t3team-manageRepositoriesProject";
 import { T3TeamLeftSidebarDesktopToggle } from "~/t3team/t3team-LeftSidebarDesktopToggle";
 import { useAppHandlers } from "~/t3team/t3team-useAppHandlers";
 import {
@@ -58,9 +59,10 @@ export function App({
   );
   const activeDashboardMode = dashboardMode ?? "my-work";
   const selectedProjectId = readProjectIdFromView(resolvedView ?? null) ?? store.selectedProjectId;
-  const manageRepositoriesProject = manageRepositoriesProjectId
-    ? (store.projects.find((candidate) => candidate.id === manageRepositoriesProjectId) ?? null)
-    : null;
+  const manageRepositoriesProject = resolveManageRepositoriesProject(
+    store,
+    manageRepositoriesProjectId,
+  );
   const {
     handleSelectProject,
     handleSelectProjectDashboardMode,
@@ -71,6 +73,7 @@ export function App({
     handleCreateThread,
     handleCreateProjectKickoffThread,
     handleCreateTicketKickoffThread,
+    handleCreateTicketKickoffThreadBeside,
     handleCreateTicketThreadFromSidebar,
     handleThreadKickoffConsumed,
     handleDeleteProject,
@@ -169,6 +172,7 @@ export function App({
         {...(onCloseEmbeddedThread ? { onCloseEmbeddedThread } : {})}
         onKickoffProjectThread={handleCreateProjectKickoffThread}
         onKickoffTicketThread={handleCreateTicketKickoffThread}
+        onKickoffTicketThreadBeside={handleCreateTicketKickoffThreadBeside}
         onThreadKickoffConsumed={handleThreadKickoffConsumed}
         onThreadDisplayModeChange={store.updateThreadDisplayMode}
         onBackToDashboard={handleSelectProject}

@@ -8,13 +8,13 @@ import {
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
-import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "../persistence/Sqlite.ts";
 import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import type { ProviderAdapterV2Shape } from "../orchestration-v2/ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
-import { makeOrchestratorV2ReplayLayerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
+import { layerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
 import * as ThreadLineage from "./t3team-threadLineage.ts";
 import * as ThreadMessageRecorder from "./t3team-threadMessageRecorder.ts";
 
@@ -43,11 +43,10 @@ export const makeT3TeamV2TestLayer = (
   return Layer.mergeAll(
     database,
     ProjectionStore.layer.pipe(Layer.provide(database)),
-    makeOrchestratorV2ReplayLayerWithRegistry(
-      { name },
-      ProviderAdapterRegistry.makeLayer([adapter]),
-      { databaseLayer: database, runEffectWorker: false },
-    ).pipe(Layer.provide(overrides)),
+    layerWithRegistry({ name }, ProviderAdapterRegistry.layerFromAdapters([adapter]), {
+      databaseLayer: database,
+      runEffectWorker: false,
+    }).pipe(Layer.provide(overrides)),
     ThreadMessageRecorder.layer.pipe(Layer.provide(database)),
     ThreadLineage.layer.pipe(Layer.provide(database)),
   );

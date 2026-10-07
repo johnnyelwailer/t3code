@@ -12,11 +12,8 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
-import type {
-  WorkflowRun,
-  WorkflowRunRepositoryShape,
-} from "./persistence/Services/WorkflowRuns.ts";
-import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
+import type { WorkflowRun, WorkflowRunRepositoryShape } from "./persistence/WorkflowRuns.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 import type {
   ResumeWorkflowHandlerArgs,
   WorkflowResumeToolValue,

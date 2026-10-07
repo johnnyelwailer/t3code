@@ -20,7 +20,7 @@
  * same `tools/list` response — it was collateral damage in #209 while having no guard of its own.
  */
 import { describe, expect, it } from "vite-plus/test";
-import * as Tool from "effect/unstable/ai/Tool";
+import * as Tool from "effect/ai/Tool";
 
 import { PreviewToolkit } from "../preview/tools.ts";
 import { T3TeamShowWidgetTool, T3TeamToolkit } from "./tools.ts";

@@ -4,7 +4,7 @@ import * as NodeBuffer from "node:buffer";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 
 import { T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
 import type {

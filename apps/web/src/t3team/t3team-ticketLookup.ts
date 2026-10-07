@@ -40,3 +40,18 @@ export function matchesProjectThreadTicket(
     (candidate) => candidate === thread.ticketId || candidate === thread.ticketDisplayId,
   );
 }
+
+/**
+ * The ticket's live thread: its newest thread that is not settled, if any. A ticket shown beside
+ * My Work uses it as its chat, the way the ticket page uses its embedded thread.
+ */
+export function latestLiveTicketThreadId(
+  threads: ReadonlyArray<
+    Pick<ProjectThread, "id" | "ticketId" | "ticketDisplayId" | "createdAt" | "settled">
+  >,
+  ticketId: string,
+): string | undefined {
+  return threads
+    .filter((thread) => thread.settled !== true && matchesProjectThreadTicket(thread, ticketId))
+    .toSorted((left, right) => right.createdAt.localeCompare(left.createdAt))[0]?.id;
+}

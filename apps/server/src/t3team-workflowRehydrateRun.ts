@@ -22,11 +22,8 @@
 import type { AnyScriptRef, JournalStore } from "@t3team/sdk";
 import * as Effect from "effect/Effect";
 
-import type {
-  WorkflowRun,
-  WorkflowRunRepositoryShape,
-} from "./persistence/Services/WorkflowRuns.ts";
-import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
+import type { WorkflowRun, WorkflowRunRepositoryShape } from "./persistence/WorkflowRuns.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import { makeWorkflowRunLifecycle } from "./t3team-workflowEngineDurability.ts";
 import {

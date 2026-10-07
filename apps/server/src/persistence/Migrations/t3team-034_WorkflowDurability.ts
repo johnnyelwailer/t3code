@@ -16,7 +16,7 @@
  * Single-instance only — no distributed locks (Epic 25 §Out of scope).
  */
 
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Effect from "effect/Effect";
 
 export default Effect.gen(function* () {

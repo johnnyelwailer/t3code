@@ -22,7 +22,7 @@
  */
 import type { ProviderJobControlInput } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import { HttpRouter } from "effect/unstable/http";
+import { HttpRouter } from "effect/http";
 
 import { controlThreadJobs } from "./t3team-providerJobControl.ts";
 import {
@@ -77,19 +77,20 @@ export const t3teamThreadJobsRouteLayer = HttpRouter.add(
       // Capability signal, not a failure: the runtime keeps no controllable
       // jobs (or the kill switch is off). The client hides its affordances
       // on this, so the route answers 200 with the flag instead of 5xx.
-      Effect.catchTag("ProviderJobControlUnsupportedError", () =>
-        Effect.succeed(okJson({ supported: false })),
-      ),
+      Effect.catchTags({
+        ProviderJobControlUnsupportedError: () => Effect.succeed(okJson({ supported: false })),
+      }),
       // No live session: its job registry died with it, so nothing to list
       // or cancel. Routed through the shared T3TeamAtlassianError mapping
       // below (4xx) instead of a raw 5xx.
-      Effect.catchTag("ProviderJobControlNoSessionError", () =>
-        Effect.fail(
-          new T3TeamAtlassianError({
-            message: "No active provider session for this thread; its jobs are gone with it.",
-          }),
-        ),
-      ),
+      Effect.catchTags({
+        ProviderJobControlNoSessionError: () =>
+          Effect.fail(
+            new T3TeamAtlassianError({
+              message: "No active provider session for this thread; its jobs are gone with it.",
+            }),
+          ),
+      }),
     );
   }).pipe(
     Effect.mapError((cause) => {

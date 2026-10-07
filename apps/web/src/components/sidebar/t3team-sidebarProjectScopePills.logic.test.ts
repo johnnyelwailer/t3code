@@ -5,6 +5,7 @@ import {
   projectScopeDiscCapacity,
   projectScopeDiscDepth,
   selectProjectScopePillGroups,
+  splitProjectScopePills,
 } from "./t3team-sidebarProjectScopePills.logic";
 
 const groups = ["a", "b", "c", "d", "e"].map((projectKey) => ({ projectKey }));
@@ -67,5 +68,42 @@ describe("projectScopeCastShadow", () => {
   it("gets blurrier and fainter further down, never vanishing", () => {
     expect(projectScopeCastShadow(1)).toBe("0 0 6.5px 1.5px rgba(0,0,0,0.14)");
     expect(projectScopeCastShadow(6)).toBe("0 0 19px 4px rgba(0,0,0,0.04)");
+  });
+});
+
+describe("splitProjectScopePills", () => {
+  const keys = (items: ReadonlyArray<{ projectKey: string }>) => items.map((i) => i.projectKey);
+
+  it("shows everything with no overflow when it fits", () => {
+    const result = splitProjectScopePills(groups, null, 5);
+    expect(keys(result.shown)).toEqual(["a", "b", "c", "d", "e"]);
+    expect(result.overflow).toEqual([]);
+  });
+
+  it("reserves one slot for the +N disc and lists the rest in order", () => {
+    const result = splitProjectScopePills(groups, null, 3);
+    expect(keys(result.shown)).toEqual(["a", "b"]);
+    expect(keys(result.overflow)).toEqual(["c", "d", "e"]);
+  });
+
+  it("keeps the active scope visible instead of overflowing it", () => {
+    const result = splitProjectScopePills(groups, "e", 3);
+    expect(keys(result.shown)).toEqual(["a", "e"]);
+    expect(keys(result.overflow)).toEqual(["b", "c", "d"]);
+  });
+
+  it("mixes app and add items by list order", () => {
+    const mixed = [
+      { projectKey: "app-1" },
+      { projectKey: "jira:x::1" },
+      { projectKey: "jira:x::2" },
+    ];
+    const result = splitProjectScopePills(mixed, null, 2);
+    expect(keys(result.shown)).toEqual(["app-1"]);
+    expect(keys(result.overflow)).toEqual(["jira:x::1", "jira:x::2"]);
+  });
+
+  it("draws nothing when there is no room", () => {
+    expect(splitProjectScopePills(groups, null, 0)).toEqual({ shown: [], overflow: [] });
   });
 });

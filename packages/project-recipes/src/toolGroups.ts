@@ -132,6 +132,8 @@ export const PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID = {
   "t3team.thread.create_context_bound": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
   "t3team.thread.children": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
   "t3team.widget.show": PROJECT_RECIPE_VIEW_STATE_TOOL_GROUP.id,
+  "t3team.mywork.digest.read": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
+  "t3team.mywork.arrange": PROJECT_RECIPE_VIEW_STATE_TOOL_GROUP.id,
 } as const satisfies Readonly<Record<string, ProjectRecipeToolGroupId>>;
 
 export function isProjectRecipeToolGroupId(value: string): value is ProjectRecipeToolGroupId {

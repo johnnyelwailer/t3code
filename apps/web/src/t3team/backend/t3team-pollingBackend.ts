@@ -1,6 +1,7 @@
 import type { ResourcePage } from "@t3tools/project-context";
 
 import type { AtlassianBacklogResponse, BackendApi } from "./t3team-types";
+import type { T3TeamMyWorkPage } from "./t3team-myWorkPage";
 import { postJson } from "./t3team-t3BackendHttp";
 
 type T3TeamPollEnvelope = { readonly enabled: true; readonly knownFingerprint?: string };
@@ -16,6 +17,8 @@ export type T3TeamPollResult<T> =
       readonly fingerprint: string;
       readonly value: T;
     };
+
+export type { T3TeamMyWorkPage };
 
 export type T3TeamPollingBackend = BackendApi & {
   readonly atlassian: BackendApi["atlassian"] & {
@@ -39,7 +42,7 @@ export type T3TeamPollingBackend = BackendApi & {
       readonly account: PollAccountRef;
       readonly externalProjectId: string;
       readonly knownFingerprint?: string;
-    }) => Promise<T3TeamPollResult<ResourcePage>>;
+    }) => Promise<T3TeamPollResult<T3TeamMyWorkPage>>;
   };
 };
 
@@ -137,7 +140,7 @@ export function createAtlassianPollingBackendApi(httpBaseUrl: string) {
           readonly externalProjectId: string;
           readonly poll: T3TeamPollEnvelope;
         },
-        T3TeamPollResult<ResourcePage>
+        T3TeamPollResult<T3TeamMyWorkPage>
       >(
         httpBaseUrl,
         "/api/t3team/atlassian/my-work/poll",

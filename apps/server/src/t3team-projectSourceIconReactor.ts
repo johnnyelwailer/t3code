@@ -27,9 +27,9 @@ import * as Option from "effect/Option";
 import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 
-import { ProjectionProjectSourceBindingRepositoryLive } from "./persistence/Layers/t3team-ProjectionProjectSourceBindings.ts";
-import { OrchestrationEventStore } from "./persistence/Services/OrchestrationEventStore.ts";
-import { ProjectionProjectSourceBindingRepository } from "./persistence/Services/t3team-ProjectionProjectSourceBindings.ts";
+import { ProjectionProjectSourceBindingRepositoryLive } from "./persistence/t3team-ProjectionProjectSourceBindings.ts";
+import { OrchestrationEventStore } from "./persistence/OrchestrationEventStore.ts";
+import { ProjectionProjectSourceBindingRepository } from "./persistence/t3team-ProjectionProjectSourceBindings.ts";
 import { ProjectService } from "./project/ProjectService.ts";
 import {
   ingestFlagEnabled,

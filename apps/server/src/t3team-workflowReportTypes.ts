@@ -22,7 +22,7 @@ import type { ProjectRecipeWorkflowStepActivityPayload } from "@t3tools/project-
 import type { WorkflowRunIntent } from "@t3team/sdk/tools/t3teamWorkflow";
 import * as Schema from "effect/Schema";
 
-import type { WorkflowRun } from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowRun } from "./persistence/WorkflowRuns.ts";
 
 /** Who has to resolve what the report found. The engine's existing routing vocabulary. */
 export const WorkflowReportRecipient = Schema.Literals(["agent", "user"]);

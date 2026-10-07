@@ -15,7 +15,7 @@ import * as Effect from "effect/Effect";
 import { afterEach } from "vite-plus/test";
 
 import * as ServerConfig from "./config.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { replaceAtlassianAuths } from "./t3team-atlassian-auth-store.ts";
 import { writeCachedT3TeamAtlassianBacklog } from "./t3team-atlassian-backlog-cache.ts";
 import {

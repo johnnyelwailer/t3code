@@ -21,7 +21,7 @@ import { type ProjectId, readT3TeamMessageExtContext } from "@t3tools/contracts"
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import {
   launchScenarioWorkflow,

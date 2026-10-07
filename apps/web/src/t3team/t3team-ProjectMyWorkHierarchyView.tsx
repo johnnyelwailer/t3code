@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import type { AgentContextCapabilities } from "~/t3team/t3team-agentContext";
@@ -6,21 +6,15 @@ import {
   DraggableTicketWorkItemCard,
   DraggableTicketWorkItemRow,
 } from "~/t3team/t3team-DraggableTicketWorkItems";
-import { compareProjectBacklogTickets } from "~/t3team/t3team-projectBacklogUtils";
 import type { ProjectBacklogTicketContext } from "~/t3team/t3team-projectBacklogPresentation";
+import {
+  buildSubtreeLastTouchedById,
+  DEFAULT_PROJECT_MY_WORK_HIERARCHY_ORDER,
+  getOrderedHierarchySiblings,
+  type ProjectMyWorkHierarchyOrder,
+} from "~/t3team/t3team-projectMyWorkHierarchyOrder";
 import type { ProjectTicketHierarchy } from "~/t3team/t3team-ticketHierarchy";
 import type { ProjectTicket } from "~/t3team/t3team-types";
-
-function sortTickets(tickets: readonly ProjectTicket[], matchedTicketIds: ReadonlySet<string>) {
-  return tickets.toSorted((left, right) => {
-    const matchedDelta =
-      Number(matchedTicketIds.has(right.id)) - Number(matchedTicketIds.has(left.id));
-    if (matchedDelta !== 0) {
-      return matchedDelta;
-    }
-    return compareProjectBacklogTickets(left, right);
-  });
-}
 
 export function ProjectMyWorkHierarchyView({
   projectId,
@@ -28,6 +22,8 @@ export function ProjectMyWorkHierarchyView({
   hierarchy,
   contextByTicketId,
   matchedTicketIds,
+  sortBy = DEFAULT_PROJECT_MY_WORK_HIERARCHY_ORDER.sortBy,
+  sortDirection = DEFAULT_PROJECT_MY_WORK_HIERARCHY_ORDER.sortDirection,
   jiraLastCheckedAt,
   onTicketContextMenu,
   getTicketAgentContext,
@@ -39,6 +35,9 @@ export function ProjectMyWorkHierarchyView({
   hierarchy: ProjectTicketHierarchy;
   contextByTicketId: ReadonlyMap<string, ProjectBacklogTicketContext>;
   matchedTicketIds: ReadonlySet<string>;
+  /** Orders every sibling group; defaults to most recently touched first. */
+  sortBy?: ProjectMyWorkHierarchyOrder["sortBy"];
+  sortDirection?: ProjectMyWorkHierarchyOrder["sortDirection"];
   jiraLastCheckedAt?: number;
   onTicketContextMenu: (event: React.MouseEvent, ticket: ProjectTicket) => void;
   getTicketAgentContext: (ticket: ProjectTicket) => AgentContextCapabilities | null;
@@ -49,11 +48,17 @@ export function ProjectMyWorkHierarchyView({
     compact?: boolean,
   ) => ReactNode;
 }) {
+  const lastTouchedById = useMemo(() => buildSubtreeLastTouchedById(hierarchy), [hierarchy]);
+  const orderedSiblings = (parentId: string | null) =>
+    getOrderedHierarchySiblings({
+      hierarchy,
+      parentId,
+      order: { sortBy, sortDirection },
+      lastTouchedById,
+    });
+
   function renderListBranch(parentId: string | null, depth: number): ReactNode {
-    const siblings = sortTickets(
-      parentId ? (hierarchy.childrenByParentId.get(parentId) ?? []) : hierarchy.roots,
-      matchedTicketIds,
-    );
+    const siblings = orderedSiblings(parentId);
 
     if (siblings.length === 0) {
       return null;
@@ -88,10 +93,7 @@ export function ProjectMyWorkHierarchyView({
   }
 
   function renderCardBranch(parentId: string | null, depth: number): ReactNode {
-    const siblings = sortTickets(
-      parentId ? (hierarchy.childrenByParentId.get(parentId) ?? []) : hierarchy.roots,
-      matchedTicketIds,
-    );
+    const siblings = orderedSiblings(parentId);
 
     if (siblings.length === 0) {
       return null;

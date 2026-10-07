@@ -5,7 +5,7 @@ import {
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { HttpServerRequest } from "effect/unstable/http";
+import { HttpServerRequest } from "effect/http";
 
 import { NexiBrokerService } from "./cloud/t3team-NexiBrokerService.ts";
 import { credentialRoute } from "./t3team-credentialRoute.ts";

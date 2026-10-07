@@ -21,7 +21,7 @@ import type { OrchestrationV2ProviderFailure } from "@t3tools/contracts";
 import {
   isTransientGatewayErrorText,
   retryDirectiveSeconds,
-} from "../provider/Layers/t3team-claude-gateway-retry.ts";
+} from "../provider/t3team-claude-gateway-retry.ts";
 
 const NEVER_TRANSIENT_CODES: ReadonlySet<string> = new Set(["interrupt_no_terminal"]);
 

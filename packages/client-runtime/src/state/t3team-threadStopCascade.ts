@@ -1,5 +1,5 @@
 import { type T3TeamEnvironmentCapabilities, type ThreadId, WS_METHODS } from "@t3tools/contracts";
-import type { Atom } from "effect/unstable/reactivity";
+import type { Atom } from "effect/reactivity";
 
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 import { type EnvironmentThreadShell, threadRuntimeIsActive } from "./models.ts";

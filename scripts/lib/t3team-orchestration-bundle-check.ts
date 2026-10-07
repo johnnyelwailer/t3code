@@ -14,7 +14,7 @@ import * as NodeURL from "node:url";
 
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import { ChildProcess } from "effect/unstable/process";
+import { ChildProcess } from "effect/process";
 
 import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";

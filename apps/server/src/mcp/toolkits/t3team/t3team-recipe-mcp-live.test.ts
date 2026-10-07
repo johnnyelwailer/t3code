@@ -12,9 +12,9 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { HttpServer } from "effect/unstable/http";
-import * as NetAddress from "effect/unstable/net/NetAddress";
-import { McpSchema, McpServer } from "effect/unstable/ai";
+import { HttpServer } from "effect/http";
+import * as NetAddress from "effect/net/NetAddress";
+import { McpSchema, McpServer } from "effect/ai";
 
 import * as ServerEnvironment from "../../../environment/ServerEnvironment.ts";
 import {
@@ -127,8 +127,8 @@ it.effect(
 
       // This is exactly what McpHttpServer's auth middleware does: registry.resolve(bearer).
       const scope = yield* registry.resolve(token);
-      expect(scope?.threadId).toBe(threadId);
-      expect(scope?.providerInstanceId).toBe(providerInstanceId);
+      expect(scope?.thread?.threadId).toBe(threadId);
+      expect(scope?.thread?.providerInstanceId).toBe(providerInstanceId);
 
       const rejected = yield* registry.resolve("not-a-real-token");
       expect(rejected).toBeUndefined();
@@ -154,9 +154,13 @@ it.effect(
         .pipe(
           Effect.provideService(McpInvocationContext.McpInvocationContext, {
             environmentId,
-            threadId,
-            providerSessionId: "provider-session-recipe-mcp-live",
-            providerInstanceId,
+            requestNamespace: "provider-session-recipe-mcp-live",
+            thread: {
+              threadId,
+              providerSessionId: "provider-session-recipe-mcp-live",
+              providerInstanceId,
+            },
+            client: undefined,
             capabilities: new Set<McpInvocationContext.McpCapability>(["orchestration"]),
             issuedAt: 1,
           }),
@@ -187,9 +191,13 @@ it.effect(
         .pipe(
           Effect.provideService(McpInvocationContext.McpInvocationContext, {
             environmentId,
-            threadId,
-            providerSessionId: "provider-session-recipe-mcp-live",
-            providerInstanceId,
+            requestNamespace: "provider-session-recipe-mcp-live",
+            thread: {
+              threadId,
+              providerSessionId: "provider-session-recipe-mcp-live",
+              providerInstanceId,
+            },
+            client: undefined,
             capabilities: new Set<McpInvocationContext.McpCapability>(["orchestration"]),
             issuedAt: 1,
           }),

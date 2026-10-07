@@ -20,7 +20,7 @@ import { CommandId, MessageId, ThreadId } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { STOP_CASCADE_COMMAND_PREFIX } from "./t3team-actorMessageReactor.ts";

@@ -28,6 +28,7 @@ import * as IdAllocator from "../IdAllocator.ts";
 import { ProviderAdapterV2RuntimePolicy } from "../ProviderAdapter.ts";
 import {
   cursorMcpServers,
+  cursorRunResultFailure,
   cursorRuntimeAgentPolicy,
   cursorSdkModelSelection,
   makeCursorAgentOptions,
@@ -39,6 +40,23 @@ import { isCursorCancellationError, loggedCursorAgentOptions } from "./CursorAge
 const decodeCursorSettings = Schema.decodeEffect(CursorSettings);
 
 describe("CursorAdapterV2", () => {
+  it("surfaces Cursor connection_stalled run errors instead of the opaque default", () => {
+    const failure = cursorRunResultFailure({
+      message: "Connection stalled repeatedly",
+      code: "connection_stalled",
+    });
+    assert.deepEqual(failure, {
+      message: "Connection stalled repeatedly",
+      code: "connection_stalled",
+      retryable: true,
+    });
+  });
+
+  it("keeps string Cursor run errors", () => {
+    assert.deepEqual(cursorRunResultFailure("search failed"), { message: "search failed" });
+    assert.deepEqual(cursorRunResultFailure(null), {});
+  });
+
   it.effect.each([
     { status: "finished", model: undefined },
     { status: "cancelled", model: "claude-opus-4-6" },
@@ -359,6 +377,22 @@ describe("CursorAdapterV2", () => {
         numFiles: 0,
       };
       const updates: ReadonlyArray<InteractionUpdate> = [
+        ...(["tool-call-started", "tool-call-completed"] as const).map((type) => ({
+          type,
+          modelCallId: "native-model-call",
+          callId: "mcp-weather",
+          toolCall: {
+            type: "mcp" as const,
+            args: {
+              providerIdentifier: "weather",
+              toolName: "get_weather",
+              args: { city: "Berlin" },
+            },
+            ...(type === "tool-call-completed"
+              ? { result: { status: "success" as const, value: { content: [], isError: false } } }
+              : {}),
+          },
+        })),
         {
           type: "tool-call-completed",
           modelCallId: "native-model-call",
@@ -428,6 +462,26 @@ describe("CursorAdapterV2", () => {
             type: "ls",
             args: { path: path.join(workspace, "missing") },
             result: { status: "error", error: "ENOENT" },
+          },
+        },
+        {
+          type: "tool-call-completed",
+          modelCallId: "native-model-call",
+          callId: "grep-failed",
+          toolCall: {
+            type: "grep",
+            args: { pattern: "TODO", path: "src" },
+            result: { status: "error", error: "search failed" },
+          },
+        },
+        {
+          type: "tool-call-completed",
+          modelCallId: "native-model-call",
+          callId: "glob-failed",
+          toolCall: {
+            type: "glob",
+            args: { globPattern: "*.ts" },
+            result: { status: "error", error: "search failed" },
           },
         },
         {
@@ -605,6 +659,30 @@ describe("CursorAdapterV2", () => {
         Stream.takeUntil((event) => event.type === "turn.terminal"),
         Stream.runCollect,
       );
+      const mcpItems = events.flatMap((event) =>
+        event.type === "turn_item.updated" &&
+        event.turnItem.type === "dynamic_tool" &&
+        event.turnItem.toolName === "mcp__weather__get_weather"
+          ? [event.turnItem]
+          : [],
+      );
+      assert.deepEqual(
+        mcpItems.map((item) => item.status),
+        ["running", "completed"],
+      );
+      for (const item of mcpItems) {
+        assert.equal(item.title, "get weather");
+        assert.deepEqual(item.toolSource, {
+          key: "mcp:weather",
+          name: "weather",
+          kind: "integration",
+        });
+        assert.deepEqual(item.input, {
+          providerIdentifier: "weather",
+          toolName: "get_weather",
+          args: { city: "Berlin" },
+        });
+      }
       const fileSearchItems = events.flatMap((event) =>
         event.type === "turn_item.updated" &&
         event.turnItem.type === "file_search" &&
@@ -648,7 +726,17 @@ describe("CursorAdapterV2", () => {
           {
             pattern: path.join(workspace, "missing"),
             status: "failed",
-            results: undefined,
+            results: [{ fileName: path.join(workspace, "missing"), preview: "ENOENT" }],
+          },
+          {
+            pattern: "TODO",
+            status: "failed",
+            results: [{ fileName: "src", preview: "search failed" }],
+          },
+          {
+            pattern: "*.ts",
+            status: "failed",
+            results: [{ fileName: ".", preview: "search failed" }],
           },
           {
             pattern: "src/a.ts, src/b.ts",
@@ -667,7 +755,7 @@ describe("CursorAdapterV2", () => {
           {
             pattern: "src/a.ts",
             status: "failed",
-            results: undefined,
+            results: [{ fileName: "src/a.ts", preview: "lint failed" }],
           },
         ],
       );

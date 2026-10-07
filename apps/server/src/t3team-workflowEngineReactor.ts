@@ -32,7 +32,7 @@ import {
   isTerminalRunStatus,
   ThreadManagementService,
 } from "./orchestration-v2/ThreadManagementService.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import * as Scheduler from "./scheduling/Scheduler.ts";
 import { forkParked } from "./serverActivation.ts";
 import { isUserStopCommandId } from "./t3team-actorMessageReactor.ts";

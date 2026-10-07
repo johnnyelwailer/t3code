@@ -21,13 +21,13 @@ import * as IdAllocator from "../orchestration-v2/IdAllocator.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ThreadCommandExecutor from "../orchestration-v2/ThreadCommandExecutor.ts";
 import * as TurnItemPositionStore from "../orchestration-v2/TurnItemPositionStore.ts";
-import { OrchestrationV2EventSinkLayerLive } from "../orchestration-v2/runtimeLayer.ts";
+import { layerEventSink } from "../orchestration-v2/runtimeLayer.ts";
 
 /** The orchestrator's own thread lock (same reference `Orchestrator.layer` provides). */
 const T3TeamThreadLockLayer = ThreadCommandExecutor.layer;
 
 /** The runtime's shared event sink (same reference the V2 runtime layer provides). */
-export const T3TeamEventSinkLayer = OrchestrationV2EventSinkLayerLive;
+export const T3TeamEventSinkLayer = layerEventSink;
 
 /**
  * Everything a fork writer needs to append V2 events under the thread lock:

@@ -16,8 +16,6 @@ import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  ChevronsDownUpIcon,
-  ChevronsUpDownIcon,
   Columns2Icon,
   EllipsisIcon,
   ExternalLinkIcon,
@@ -31,6 +29,7 @@ import {
   TextWrapIcon,
   TriangleAlertIcon,
 } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from "lucide";
 import { useAtomRefresh } from "@effect/atom-react";
 import * as Schema from "effect/Schema";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -72,6 +71,7 @@ import { DiffCommentAnnotation } from "../diffs/DiffCommentAnnotation";
 import { useCodeViewFileReveal } from "../diffs/useCodeViewFileReveal";
 import { StyledDiffCodeView } from "../diffs/StyledDiffCodeView";
 import { Button } from "../ui/button";
+import { MorphIcon } from "~/components/MorphIcon";
 import { Checkbox } from "../ui/checkbox";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import {
@@ -100,6 +100,7 @@ import {
 } from "./pullRequestDiff.logic";
 import { PullRequestDiffStat, PullRequestMetaLine } from "./pullRequestPresentation";
 import { DiffExplorerFileTree } from "./t3team-DiffExplorerFileTree";
+import { useElementFitsWidth } from "~/t3team/t3team-ResizableRightSidebarLayoutShared";
 import {
   diffExplorerFileInfo,
   markAllFilesViewed,
@@ -273,11 +274,19 @@ function PullRequestCodeTab({
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(settings.diffIgnoreWhitespace);
   // The file tree is the diff explorer's primary navigation, so it starts open: a reader lands
   // here to pick which changed file to look at first.
-  const [fileTreeOpen, setFileTreeOpen] = useLocalStorage(
+  const [storedFileTreeOpen, setStoredFileTreeOpen] = useLocalStorage(
     PULL_REQUEST_FILE_TREE_STORAGE_KEY,
     true,
     Schema.Boolean,
   );
+  // Too narrow for the tree beside the diff (a drawer, a phone, a slim aside): it starts closed
+  // and opens over the diff instead, closing again once a file is picked. The stored preference
+  // is the wide layout's alone.
+  const treeRow = useElementFitsWidth(50 * 16);
+  const [overlayTreeOpen, setOverlayTreeOpen] = useState(false);
+  const treeAsOverlay = !treeRow.fits;
+  const fileTreeOpen = treeAsOverlay ? overlayTreeOpen : storedFileTreeOpen;
+  const setFileTreeOpen = treeAsOverlay ? setOverlayTreeOpen : setStoredFileTreeOpen;
   const [selectedLines, setSelectedLines] = useState<{
     id: string;
     range: SelectedLineRange;
@@ -794,6 +803,7 @@ function PullRequestCodeTab({
   const handleTreeSelect = useCallback(
     (key: string) => {
       setSelectedKey(key);
+      setOverlayTreeOpen(false);
       if (diffMode === "all") {
         const item = items.find((candidate) => candidate.id === key);
         if (item !== undefined && item.collapsed === true) toggleFile(key);
@@ -960,11 +970,7 @@ function PullRequestCodeTab({
             toggleFile(item.id);
           }}
         >
-          {collapsed ? (
-            <ChevronRightIcon className="size-4" />
-          ) : (
-            <ChevronDownIcon className="size-4" />
-          )}
+          <MorphIcon className="size-4" icon={collapsed ? ChevronRight : ChevronDown} />
         </Button>
       );
     },
@@ -1244,7 +1250,8 @@ function PullRequestCodeTab({
   const scopeLabel = selectedCommit ? selectedCommit.messageHeadline : "All commits";
   const toolbar = (
     <div className="flex h-10 min-h-10 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-background px-4 text-xs text-muted-foreground">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
+      {/* Clipped, so on a narrow pane the counts give way instead of sliding under the controls. */}
+      <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
         {/* A host that reports no commits has nothing to scope by, and a dropdown whose only
             entry is the scope already showing is a control that does nothing. */}
         {orderedCommits.length > 0 ? (
@@ -1300,7 +1307,7 @@ function PullRequestCodeTab({
         ) : null}
         {/* One count, and the caveats as icons that carry their own words. Spelled out they
             competed for a strip this narrow and every one of them truncated to nothing. */}
-        <PullRequestMetaLine className="shrink-0">
+        <PullRequestMetaLine className="min-w-0">
           <span className="shrink-0 tabular-nums">
             {files.length} {files.length === 1 ? "file" : "files"}
             {nextCursor === null ? "" : "+"}
@@ -1469,11 +1476,10 @@ function PullRequestCodeTab({
                 />
               }
             >
-              {allFilesCollapsed ? (
-                <ChevronsUpDownIcon className="size-3.5" />
-              ) : (
-                <ChevronsDownUpIcon className="size-3.5" />
-              )}
+              <MorphIcon
+                className="size-3.5"
+                icon={allFilesCollapsed ? ChevronsUpDown : ChevronsDownUp}
+              />
             </TooltipTrigger>
             <TooltipPopup side="top">
               {allFilesCollapsed ? "Expand all files" : "Collapse all files"}
@@ -1800,7 +1806,7 @@ function PullRequestCodeTab({
           </Collapsible>
         </div>
       ) : null}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div ref={treeRow.ref} className="relative flex min-h-0 flex-1 overflow-hidden">
         {/* Relative wrapper so the review overlay floats over the diff rather than pushing it
             up; the viewer inside still owns its own scrolling. */}
         <div
@@ -1860,8 +1866,22 @@ function PullRequestCodeTab({
             unsafeCSSExtra={REPLACE_FILE_COUNTS_CSS}
           />
         </div>
+        {fileTreeOpen && treeAsOverlay ? (
+          <button
+            type="button"
+            aria-label="Hide file tree"
+            className="absolute inset-0 z-20 bg-background/60"
+            onClick={() => setOverlayTreeOpen(false)}
+          />
+        ) : null}
         {fileTreeOpen ? (
-          <div className="flex min-h-0 w-[min(20rem,40%)] min-w-56 shrink-0">
+          <div
+            className={
+              treeAsOverlay
+                ? "absolute inset-y-0 right-0 z-20 flex min-h-0 w-[min(20rem,85%)] shadow-lg"
+                : "flex min-h-0 w-[min(20rem,40%)] min-w-56 shrink-0"
+            }
+          >
             <DiffExplorerFileTree
               files={explorerFiles}
               selectedKey={activeKey}

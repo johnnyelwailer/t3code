@@ -97,9 +97,7 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
 
     const firstAccount = entries[0]?.account.id;
     const viewerDisplayName = () =>
-      input.viewer?.name?.trim() !== ""
-        ? (input.viewer?.name as string)
-        : (readCachedAtlassianCurrentUserDisplayName(firstAccount) ?? "");
+      input.viewer?.name?.trim() || readCachedAtlassianCurrentUserDisplayName(firstAccount) || "";
 
     try {
       const result = await pollFn({
@@ -108,6 +106,8 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
         // The server's burndown join needs the Jira display name the mirror
         // assigns to; the cached name is the same one the chip wears.
         viewer: { name: viewerDisplayName() },
+        // "Yesterday" is the viewer's previous working day, in the viewer's zone.
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         ...(fingerprintRef.current !== undefined
           ? { knownFingerprint: fingerprintRef.current }
           : {}),
@@ -116,7 +116,7 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
 
       if (result.unchanged) {
         fingerprintRef.current = result.fingerprint;
-        pendingRetry.update(undefined, () => void loadRef.current(scope, entries));
+        pendingRetry.update(undefined, () => void loadRef.current(scope, entriesRef.current));
         return;
       }
 
@@ -126,7 +126,7 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
         // carries), so it is authoritative for the `isMine` join; the client's cached name is
         // only a fallback for a payload that could not resolve one.
         name: result.value.viewer?.name || viewerDisplayName() || "",
-        role: input.viewer?.role?.trim() !== "" ? (input.viewer?.role as string) : "",
+        role: input.viewer?.role?.trim() || "",
         // The server's visit receipt: the previous changed round is the cutoff.
         lastVisitAt: result.value.viewer?.lastVisitAt ?? LAST_VISIT_EPOCH,
       };
@@ -147,7 +147,7 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
       writeCachedDigestGraph(digestScopeSignature(scope, entries), nextGraph, unresolved);
       // Change requests still being read server-side: pick them up in a moment, not a poll later.
       const crPending = result.value.changeRequestsPending === true;
-      pendingRetry.update(crPending, () => void loadRef.current(scope, entries));
+      pendingRetry.update(crPending, () => void loadRef.current(scope, entriesRef.current));
       setViewerUnresolved(unresolved);
       setSessionExpired(false);
       setGraph(nextGraph);
@@ -172,11 +172,18 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
   // The poller reads the latest loader through a ref (fresh backend/viewer on
   // every tick) while its subscription restarts only when scope or entries change.
   const loadRef = useRef(load);
+  const entriesRef = useRef(entries);
   useEffect(() => {
     loadRef.current = load;
+    entriesRef.current = entries;
   });
 
+  // Keyed on the scope SIGNATURE, not the `entries` array: the project store rebuilds its project
+  // objects on every live snapshot, and restarting the poller on each of those bumped the
+  // generation and dropped the in-flight answer — at startup, often every answer, so the digest
+  // sat empty until a remount.
   useEffect(() => {
+    const entries = entriesRef.current;
     if (!enabled || entries.length === 0) return;
     // A new scope: no fingerprint, no freshness, and any in-flight result from
     // the previous scope is dropped by the generation bump.
@@ -188,7 +195,8 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
       intervalMs: ATLASSIAN_RESOURCES_POLL_INTERVAL_MS,
       maxAgeMs: ATLASSIAN_RESOURCES_CACHE_MAX_AGE_MS,
       getUpdatedAt: () => lastCheckedAtRef.current,
-      poll: () => loadRef.current(scope, entries),
+      // Same signature, but names can change underneath: send the latest entries each tick.
+      poll: () => loadRef.current(scope, entriesRef.current),
     });
     return () => {
       poller.dispose();
@@ -196,7 +204,7 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
       // Unmount or scope change: results still in flight must not land.
       generationRef.current += 1;
     };
-  }, [enabled, entries, scope]);
+  }, [enabled, resetSignature, scope]);
 
   // Nothing to load for an empty scope: report "ready" without touching state.
   const idle = enabled && entries.length === 0;

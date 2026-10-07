@@ -2,7 +2,7 @@ import { EnvironmentId } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import * as HttpClient from "effect/unstable/http/HttpClient";
+import * as HttpClient from "effect/http/HttpClient";
 
 import { bootstrapRemoteBearerSession } from "../authorization/remote.ts";
 import * as RemoteEnvironmentAuthorization from "../authorization/service.ts";
@@ -94,8 +94,9 @@ export const makeBrokerResolver = Effect.fn("clientRuntime.connection.broker.mak
       const access = yield* bootstrapRemoteBearerSession({
         httpBaseUrl: attached.httpBaseUrl,
         credential: pairingCredential,
-        // No scopes = the pairing credential's own (server default); an empty `scope` is invalid OAuth.
-        ...(presentation.scopes.length > 0 ? { scopes: presentation.scopes } : {}),
+        // The pairing credential's own scopes (no `scope` asked): the session's server may be an
+        // older build whose standard scopes are narrower than this client's, and asking for more
+        // than the grant holds is refused. The session's server decides what its pairing grants.
         clientMetadata: presentation.metadata,
       }).pipe(
         Effect.mapError((error) => mapRemoteEnvironmentError(error)),

@@ -1,6 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import * as Option from "effect/Option";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/process";
 
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as GitHubSourceControlProvider from "./GitHubSourceControlProvider.ts";

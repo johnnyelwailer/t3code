@@ -14,7 +14,8 @@ import { T3TEAM_MCP_CANONICAL_TOOL_MAP, T3TeamMcpToolError, T3TeamToolkit } from
  */
 const requireOrchestrationScope = McpInvocationContext.McpInvocationContext.pipe(
   Effect.filterOrFail(
-    (invocation) => invocation.capabilities.has("orchestration"),
+    (invocation): invocation is McpInvocationContext.McpThreadInvocationScope =>
+      invocation.capabilities.has("orchestration") && invocation.thread !== undefined,
     () =>
       new T3TeamMcpToolError({
         message: "This MCP credential does not grant orchestration capabilities.",
@@ -29,7 +30,8 @@ const callBroker = Effect.fn("T3TeamMcpToolkit.callBroker")(function* (
   // The hidden orchestration author holds no capabilities and reaches only its own tools.
   const invocation = yield* McpInvocationContext.McpInvocationContext.pipe(
     Effect.filterOrFail(
-      (scope) => mayCallT3TeamBrokerTool(scope, tool),
+      (scope): scope is McpInvocationContext.McpThreadInvocationScope =>
+        scope.thread !== undefined && mayCallT3TeamBrokerTool(scope, tool),
       () =>
         new T3TeamMcpToolError({
           message: "This MCP credential does not grant orchestration capabilities.",
@@ -37,7 +39,7 @@ const callBroker = Effect.fn("T3TeamMcpToolkit.callBroker")(function* (
     ),
   );
   const broker = yield* T3TeamToolBroker;
-  const binding = yield* broker.bindSession({ threadId: invocation.threadId });
+  const binding = yield* broker.bindSession({ threadId: invocation.thread.threadId });
   if (!binding) {
     return yield* new T3TeamMcpToolError({
       message: "T3Team tools are unavailable for this thread.",
@@ -66,7 +68,7 @@ const askUser = Effect.fn("T3TeamMcpToolkit.askUser")(function* (input: {
   readonly allowFreeText?: boolean | undefined;
 }) {
   const invocation = yield* requireOrchestrationScope;
-  return yield* t3TeamAskUser(input, invocation.threadId);
+  return yield* t3TeamAskUser(input, invocation.thread.threadId);
 });
 
 // Skills-as-subagents Phase 1 read path: the child's driver asks its OWN thread for the
@@ -81,7 +83,7 @@ const threadSkillMetadata = Effect.fn("T3TeamMcpToolkit.threadSkillMetadata")(fu
   const threadId =
     typeof input.threadId === "string" && input.threadId.length > 0
       ? input.threadId
-      : invocation.threadId;
+      : invocation.thread.threadId;
   const store = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamChildThreadMetadata));
   if (store === undefined) return { skills: [] };
   const rows = yield* store.listByChildThreadIds([threadId]).pipe(
@@ -116,5 +118,7 @@ export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
   t3_recipe_list: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_list, input),
   t3_recipe_validate: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_validate, input),
+  t3_mywork_digest: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_mywork_digest, input),
+  t3_mywork_arrange: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_mywork_arrange, input),
   t3team_thread_skill_metadata: (input) => threadSkillMetadata(input),
 });

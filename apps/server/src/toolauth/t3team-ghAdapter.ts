@@ -54,7 +54,15 @@ export function ghAdapter(hostname: string): ToolAuthAdapter {
     // anyway) — while still starting gh's device-code polling. The device
     // URL is on the card; the user opens it on their own schedule.
     // (GH_NO_BROWSER is NOT a gh variable — verified absent from the binary.)
-    spawnEnv: { GH_BROWSER: "/usr/bin/true" },
+    //
+    // VERIFIED against gh 2.101.0 in a pty that answers nothing (as ours does): without the two
+    // variables below gh never prints the code. It first writes terminal queries (`ESC]11;?` for
+    // the background colour, `ESC[6n` for the cursor) and blocks on the reply, then asks
+    // "Authenticate Git with your GitHub credentials? (Y/n)" and blocks again — the card sat on
+    // "Starting…" forever. `NO_COLOR` drops the colour query and `GH_PROMPT_DISABLED` the prompt;
+    // gh then prints "! One-time code (0749-5FAA) copied to clipboard" and the device URL, and
+    // polls on its own (no Enter needed).
+    spawnEnv: { GH_BROWSER: "/usr/bin/true", GH_PROMPT_DISABLED: "1", NO_COLOR: "1" },
     match: {
       // VERIFIED: gh prints "Press Enter to open https://nexplore.ghe.com/login/device
       // in your browser..." — the URL ends at the next space.
