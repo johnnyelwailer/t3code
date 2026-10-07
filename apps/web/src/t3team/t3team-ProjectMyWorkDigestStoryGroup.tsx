@@ -9,6 +9,9 @@ import type { ProjectTicket } from "~/t3team/t3team-types";
 import { DigestAdjacentWork } from "~/t3team/t3team-ProjectMyWorkDigestAdjacentPills";
 import { DigestAgentDots } from "~/t3team/t3team-ProjectMyWorkDigestAgentDots";
 import { DigestProjectChip, DigestStatusDot } from "~/t3team/t3team-ProjectMyWorkDigestRows";
+import { DigestPrChips } from "~/t3team/t3team-ProjectMyWorkDigestPrChips";
+import { digestPrsFor } from "~/t3team/t3team-projectMyWorkDigestFacts";
+import { digestRepoLabeler } from "~/t3team/t3team-projectMyWorkDigestRepoLabels";
 
 /**
  * A story's task progress as a compact fraction plus a 40px track. The fraction is the number
@@ -45,6 +48,9 @@ export function DigestStoryGroupHeader({
   onOpenTicket?: ((ticketId: string) => void) | undefined;
 }) {
   const progress = digestStoryProgress(graph, story.id);
+  // PRs named after the story itself (the usual case once work is split into subtasks): they are
+  // the viewer's work as much as a subtask's, so they stay on the card instead of disappearing.
+  const storyPrs = digestPrsFor(graph, story.id);
   const claims = graph.claims.filter((c) => c.ticketId === story.id);
   const onAnchorClick = (e: MouseEvent) => {
     e.stopPropagation();
@@ -54,8 +60,9 @@ export function DigestStoryGroupHeader({
     }
   };
   return (
+    <div className="border-b border-border/60 bg-muted/40">
     <div
-      className="flex min-w-0 cursor-pointer flex-nowrap items-center gap-2 overflow-hidden border-b border-border/60 bg-muted/40 px-3 py-1.5 text-xs"
+      className="flex min-w-0 cursor-pointer flex-nowrap items-center gap-2 overflow-hidden px-3 py-1.5 text-xs"
       onClick={() =>
         onOpenTicket ? onOpenTicket(story.id) : window.open(story.ref.url, "_blank", "noopener")
       }
@@ -85,6 +92,15 @@ export function DigestStoryGroupHeader({
         <DigestAgentDots claims={claims} nowMs={nowMs} />
         <DigestStatusDot status={story.status} />
       </span>
+    </div>
+    {storyPrs.length > 0 ? (
+      <div className="@container/prs flex flex-wrap items-center gap-x-2 gap-y-1 px-3 pb-1.5">
+        <DigestPrChips
+          prs={storyPrs}
+          repoLabel={digestRepoLabeler(graph.changeRequests.map((pr) => pr.repo))}
+        />
+      </div>
+    ) : null}
     </div>
   );
 }
