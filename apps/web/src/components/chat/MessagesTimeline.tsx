@@ -75,11 +75,11 @@ import {
 } from "./BackgroundJobsIndicator";
 import { useAtomValue } from "@effect/atom-react";
 import { environmentThreadDetails } from "../../state/threads";
+import { resolveRunInitiatingPrompt } from "@t3tools/client-runtime/t3team-runPromptCopy";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import { Link } from "@tanstack/react-router";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
 import { notificationChildThreadId } from "@t3tools/client-runtime/state/thread-execution";
-import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
 import {
   resolveWorkEntryToolPresentation,
   resolveViewedImageAsset,
@@ -2269,6 +2269,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     (attachment) => !isImageAttachment(attachment) && !isFileAttachment(attachment),
   );
   const userMessage = resolveUserMessagePresentation(row.message);
+  const initiatingPrompt = resolveRunInitiatingPrompt(row.message);
   // t3team: a send with appended work-item context shows the person's own words (ext displayText).
   const resolvedContext = useMemo(
     () => resolveUserMessageContext(t3teamDisplayedUserMessage(row.message)),
@@ -2575,18 +2576,13 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             {typeof revertTurnCount === "number" && (
               <RevertUserMessageButton turnCount={revertTurnCount} messageId={row.message.id} />
             )}
-            {resolvedContext.text && (
+            {initiatingPrompt !== null && (
               <MessageCopyButton
-                // Structured paste needs the canonical links to retain their positions.
-                text={
-                  contextClipboardFragment
-                    ? resolvedContext.text
-                    : replaceComposerContextReferences(
-                        resolvedContext.text,
-                        (reference) => reference.label,
-                      )
-                }
-                {...(contextClipboardFragment
+                // Plain text is the stored initiating string. Structured paste still rides
+                // beside it when that string is the message the context records belong to.
+                text={initiatingPrompt}
+                {...(contextClipboardFragment &&
+                (initiatingPrompt === resolvedContext.text || initiatingPrompt === row.message.text)
                   ? {
                       extraFlavors: { [COMPOSER_CONTEXT_CLIPBOARD_MIME]: contextClipboardFragment },
                     }

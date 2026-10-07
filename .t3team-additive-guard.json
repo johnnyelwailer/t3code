@@ -28,6 +28,7 @@
     "apps/desktop/tsconfig.json",
     "apps/desktop/vite.config.ts",
     "apps/mobile/src/connection/platform.ts",
+    "apps/mobile/src/features/threads/ThreadFeed.tsx",
     "apps/mobile/src/lib/threadActivity.ts",
     "apps/server/package.json",
     "apps/server/scripts/cli.ts",
