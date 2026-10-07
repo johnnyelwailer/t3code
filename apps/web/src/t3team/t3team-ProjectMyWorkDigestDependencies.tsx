@@ -56,8 +56,8 @@ function DependencyPerson({ dependency }: { dependency: DigestDependency }) {
 }
 
 /**
- * The people a ticket hangs together with, one line: who waits on it, whom it waits on, who else
- * is on the story. Finished work drops out — it no longer holds anyone up.
+ * The people a ticket hangs together with, one line: who waits on it and whom it waits on.
+ * Finished work drops out — it no longer holds anyone up.
  */
 export function DigestDependencyLine({
   graph,
@@ -66,14 +66,17 @@ export function DigestDependencyLine({
   graph: DigestGraph;
   ticketId: string;
 }) {
+  // Blocking links only. "Same story" named a person without saying on what, which read as noise;
+  // story cards show their siblings as pills (key, status, owner) instead.
   const live = (graph.dependencies ?? []).filter(
     (dependency) =>
       dependency.ticketId === ticketId &&
+      dependency.relation !== "same-story" &&
       getProjectTicketKanbanLane(dependency.other.status) !== "done",
   );
   if (live.length === 0) return null;
-  // One chip per person per relation, and never the viewer: "same story: Philip" says nothing.
-  const relations = (["waits-on-you", "you-wait-on", "same-story"] as const).flatMap((relation) => {
+  // One chip per person per relation, and never the viewer.
+  const relations = (["waits-on-you", "you-wait-on"] as const).flatMap((relation) => {
     const byPerson = new Map<string, DigestDependency>();
     for (const dependency of live) {
       const person = dependency.other.assignee ?? "";
