@@ -1,6 +1,6 @@
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { detachedSurfacePath } from "@t3tools/shared/t3team-detachedSurface";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   pullRequestDetachedSurfaceFromParams,
@@ -21,7 +21,10 @@ const surface = {
 function roundTrip(title: string | null) {
   const request = pullRequestDetachedSurfaceRequest({ ...surface, title });
   const url = new URL(detachedSurfacePath(request), "t3code://app");
-  return { request, parsed: pullRequestDetachedSurfaceFromParams(Object.fromEntries(url.searchParams)) };
+  return {
+    request,
+    parsed: pullRequestDetachedSurfaceFromParams(Object.fromEntries(url.searchParams)),
+  };
 }
 
 describe("pull request detached surface", () => {

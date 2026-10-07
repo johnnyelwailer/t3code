@@ -18,10 +18,9 @@ export interface DetachedSurfaceViewProps {
   readonly onParamsChange: (patch: Readonly<Record<string, string | undefined>>) => void;
 }
 
-const DETACHED_SURFACE_VIEWS: Readonly<Record<string, ComponentType<DetachedSurfaceViewProps>>> =
-  {
-    [PULL_REQUEST_DETACHED_SURFACE_KIND]: PullRequestDetachedSurfaceView,
-  };
+const DETACHED_SURFACE_VIEWS: Readonly<Record<string, ComponentType<DetachedSurfaceViewProps>>> = {
+  [PULL_REQUEST_DETACHED_SURFACE_KIND]: PullRequestDetachedSurfaceView,
+};
 
 export function detachedSurfaceView(
   kind: string,

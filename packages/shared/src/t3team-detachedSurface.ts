@@ -2,11 +2,15 @@
  * A detached surface: one panel of the app opened by itself, in a window of its own on the
  * desktop and in a browser tab on the web, so it can take a whole screen (or a second one).
  *
- * The surface is addressed by an ordinary same-origin URL — `/t3team/detached/<kind>?…` — so
+ * The surface is addressed by an ordinary same-origin URL — `/t3team-detached/<kind>?…` — so
  * both shells open it the same way: the renderer calls `window.open`, the browser makes a tab,
  * and the desktop's window-open handler recognises the URL and the window name and makes an
  * app window instead of handing it to the system browser (which cannot load the app's own
  * scheme, and is why the old "Open in new tab" never opened anything on the desktop).
+ *
+ * The desktop renderer routes by hash (`t3code://app/#/route?query`), the web build by path, so
+ * a detached-surface URL takes whichever form the opening app routes by; {@link appRoutePathname}
+ * reads the route back out of either.
  *
  * Both the renderer and the desktop main process read this module, so the two cannot disagree
  * about what a detached-surface request looks like.
@@ -15,7 +19,7 @@
  */
 
 /** Where the app serves detached surfaces. The kind follows as the next path segment. */
-export const DETACHED_SURFACE_PATH_PREFIX = "/t3team/detached/";
+export const DETACHED_SURFACE_PATH_PREFIX = "/t3team-detached/";
 
 /**
  * The `window.open` target every detached surface uses. The desktop keys its windows by it, so
@@ -63,6 +67,29 @@ export function detachedSurfacePath(request: DetachedSurfaceRequest): string {
   return `${DETACHED_SURFACE_PATH_PREFIX}${request.kind}${query === "" ? "" : `?${query}`}`;
 }
 
+/**
+ * The absolute URL that renders the requested surface in the app at `appUrl`: the route in the
+ * hash when the app routes by hash (the desktop renderer), in the path otherwise.
+ */
+export function detachedSurfaceUrl(
+  appUrl: string,
+  request: DetachedSurfaceRequest,
+  routing: "hash" | "path",
+): string {
+  const path = detachedSurfacePath(request);
+  return new URL(routing === "hash" ? `/#${path}` : path, appUrl).href;
+}
+
+/** The route an app URL addresses: the hash route when it has one (`#/…`), the path otherwise. */
+export function appRoutePathname(url: URL): string {
+  if (url.hash.startsWith("#/")) {
+    const route = url.hash.slice(1);
+    const queryAt = route.indexOf("?");
+    return queryAt === -1 ? route : route.slice(0, queryAt);
+  }
+  return url.pathname;
+}
+
 /** The `window.open` target for a request; see {@link DETACHED_SURFACE_WINDOW_NAME_PREFIX}. */
 export function detachedSurfaceWindowName(
   request: Pick<DetachedSurfaceRequest, "kind" | "key">,
@@ -92,10 +119,26 @@ export function isDetachedSurfaceWindowRequest(input: {
   readonly frameName: string;
 }): boolean {
   if (!input.frameName.startsWith(DETACHED_SURFACE_WINDOW_NAME_PREFIX)) return false;
+  return (
+    isSameApplicationOrigin(input.applicationUrl, input.url) &&
+    isDetachedSurfacePath(appRoutePathname(new URL(input.url)))
+  );
+}
+
+/**
+ * Whether a URL belongs to the application's origin. Compared by scheme and host, not `origin`:
+ * the desktop serves the app from its own scheme (`t3code://app`), and a URL on a scheme that is
+ * not special has the opaque origin `"null"` — which every other such URL (`data:`, any custom
+ * scheme) shares, so comparing origins would let all of them through.
+ */
+export function isSameApplicationOrigin(applicationUrl: string, url: string): boolean {
   try {
-    const url = new URL(input.url);
+    const application = new URL(applicationUrl);
+    const candidate = new URL(url);
     return (
-      url.origin === new URL(input.applicationUrl).origin && isDetachedSurfacePath(url.pathname)
+      candidate.protocol === application.protocol &&
+      candidate.host === application.host &&
+      candidate.host !== ""
     );
   } catch {
     return false;

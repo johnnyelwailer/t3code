@@ -7,7 +7,8 @@
  * the system browser; the new page is same-origin, so it is already signed in.
  */
 import {
-  detachedSurfacePath,
+  appRoutePathname,
+  detachedSurfaceUrl,
   detachedSurfaceWindowName,
   isDetachedSurfacePath,
   type DetachedSurfaceRequest,
@@ -21,10 +22,11 @@ export type { DetachedSurfaceRequest } from "@t3tools/shared/t3team-detachedSurf
 export const DETACH_SURFACE_LABEL = isElectron ? "Open in new window" : "Open in new tab";
 
 export function openDetachedSurface(request: DetachedSurfaceRequest): void {
-  const url = new URL(detachedSurfacePath(request), window.location.origin);
+  // The desktop renderer routes by hash (main.tsx), so its detached page must too.
+  const url = detachedSurfaceUrl(window.location.href, request, isElectron ? "hash" : "path");
   // `noopener` keeps the new page out of this one's process and history: it is its own app,
   // and a crash or a heavy diff over there must not take this window with it.
-  window.open(url.href, detachedSurfaceWindowName(request), "noopener");
+  window.open(url, detachedSurfaceWindowName(request), "noopener");
 }
 
 /**
@@ -33,5 +35,8 @@ export function openDetachedSurface(request: DetachedSurfaceRequest): void {
  * "detach" control (there is nowhere further to detach to) and any chrome that assumes a shell.
  */
 export function isDetachedSurfaceWindow(): boolean {
-  return typeof window !== "undefined" && isDetachedSurfacePath(window.location.pathname);
+  return (
+    typeof window !== "undefined" &&
+    isDetachedSurfacePath(appRoutePathname(new URL(window.location.href)))
+  );
 }

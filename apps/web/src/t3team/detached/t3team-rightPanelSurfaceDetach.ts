@@ -17,7 +17,8 @@ export function detachedSurfaceRequestForRightPanelSurface(
 ): DetachedSurfaceRequest | null {
   switch (surface.kind) {
     case "pull-request": {
-      const environmentId = (surface.environmentId as EnvironmentId | undefined) ?? panelEnvironmentId;
+      const environmentId =
+        (surface.environmentId as EnvironmentId | undefined) ?? panelEnvironmentId;
       if (environmentId === null) return null;
       return pullRequestDetachedSurfaceRequest({
         environmentId,

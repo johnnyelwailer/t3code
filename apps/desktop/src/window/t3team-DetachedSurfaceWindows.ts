@@ -8,7 +8,10 @@
  * window, so it is neither held above it nor closed with it. Each surface has one window: asking
  * again for a surface that is already open brings its window forward, on the newly asked view.
  */
-import { isDetachedSurfaceWindowRequest } from "@t3tools/shared/t3team-detachedSurface";
+import {
+  isDetachedSurfaceWindowRequest,
+  isSameApplicationOrigin,
+} from "@t3tools/shared/t3team-detachedSurface";
 import type * as Electron from "electron";
 
 const DETACHED_WINDOW_MIN_WIDTH = 480;
@@ -52,13 +55,7 @@ export function makeDetachedSurfaceWindows(input: {
       frameName: details.frameName,
     });
 
-  const isSameOrigin = (url: string) => {
-    try {
-      return new URL(url).origin === new URL(input.applicationUrl).origin;
-    } catch {
-      return false;
-    }
-  };
+  const isSameOrigin = (url: string) => isSameApplicationOrigin(input.applicationUrl, url);
 
   const reveal = (window: Electron.BrowserWindow) => {
     if (window.isMinimized()) window.restore();
@@ -111,7 +108,8 @@ export function makeDetachedSurfaceWindows(input: {
       detached.add(window);
       windowsByName.set(details.frameName, window);
       window.on("closed", () => {
-        if (windowsByName.get(details.frameName) === window) windowsByName.delete(details.frameName);
+        if (windowsByName.get(details.frameName) === window)
+          windowsByName.delete(details.frameName);
       });
       const contents = window.webContents;
       // Links out of a detached surface go where the main window's go: the system browser. Without

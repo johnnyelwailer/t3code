@@ -4,7 +4,7 @@ import { useCallback, useMemo } from "react";
 import { DetachedSurfaceRouteView } from "~/t3team/detached/t3team-DetachedSurfaceRouteView";
 
 /**
- * A detached surface (`@t3tools/shared/t3team-detachedSurface`). `t3team_` keeps it out of the
+ * A detached surface (`@t3tools/shared/t3team-detachedSurface`). A top-level route, outside the
  * Team shell's layout: the root renders this page bare, in a window or tab of its own.
  *
  * The search is read as the raw query string rather than declared with `validateSearch`. The
@@ -13,7 +13,7 @@ import { DetachedSurfaceRouteView } from "~/t3team/detached/t3team-DetachedSurfa
  * app sees. Raw reading also keeps values the strings they were written as (the router would
  * turn `number=12` into a number).
  */
-export const Route = createFileRoute("/t3team_/detached/$kind")({
+export const Route = createFileRoute("/t3team-detached/$kind")({
   component: DetachedSurfaceRoute,
 });
 
@@ -28,14 +28,17 @@ function DetachedSurfaceRoute() {
   const onParamsChange = useCallback(
     (patch: Readonly<Record<string, string | undefined>>) => {
       const location = router.state.location;
-      const next = new URLSearchParams(location.searchStr);
+      const current = new URLSearchParams(location.searchStr);
+      const next = new URLSearchParams(current);
       for (const [name, value] of Object.entries(patch)) {
         if (value === undefined) next.delete(name);
         else next.set(name, value);
       }
+      // Compared in one encoding: the router's own serialization of the same search can differ
+      // (spaces, slashes), and a mismatch there is not a change.
       const query = next.toString();
-      const href = `${location.pathname}${query === "" ? "" : `?${query}`}`;
-      if (href !== location.href) router.history.replace(href);
+      if (query === current.toString()) return;
+      router.history.replace(`${location.pathname}${query === "" ? "" : `?${query}`}`);
     },
     [router],
   );

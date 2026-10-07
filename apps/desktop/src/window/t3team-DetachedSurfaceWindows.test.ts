@@ -3,14 +3,15 @@ import {
   detachedSurfaceWindowName,
 } from "@t3tools/shared/t3team-detachedSurface";
 import type * as Electron from "electron";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { makeDetachedSurfaceWindows } from "./t3team-DetachedSurfaceWindows.ts";
 
 const applicationUrl = "t3code://app/";
 const request = { kind: "pull-request", key: "acme/app#12", params: { tab: "code" }, title: "PR" };
+// The desktop renderer routes by hash, so its detached-surface URLs carry the route there.
 const details = {
-  url: `t3code://app${detachedSurfacePath(request)}`,
+  url: `t3code://app/#${detachedSurfacePath(request)}`,
   frameName: detachedSurfaceWindowName(request),
 };
 
@@ -118,8 +119,11 @@ describe("makeDetachedSurfaceWindows", () => {
     expect(openExternal).toHaveBeenCalledWith("https://github.com/acme/app/pull/12");
 
     expect(adopted.navigate("https://example.com")).toHaveBeenCalled();
-    expect(adopted.navigate("t3code://app/t3team/detached/pull-request?tab=summary")).not
-      .toHaveBeenCalled();
+    expect(adopted.navigate("evil://app/t3team-detached/pull-request")).toHaveBeenCalled();
+    expect(adopted.navigate("data:text/html,hi")).toHaveBeenCalled();
+    expect(
+      adopted.navigate("t3code://app/t3team-detached/pull-request?tab=summary"),
+    ).not.toHaveBeenCalled();
   });
 
   it("does not adopt windows that are not detached surfaces", () => {
