@@ -1,18 +1,13 @@
 /**
  * Rendering a workflow run's structured JSON result as readable display text.
  *
- * Shared between the server (`t3team-workflowCompletionMessage.ts`, which formats the run's
- * terminal chat message BEFORE it is ever stored) and the web client
- * (`t3team-workflowCompletionDisplayText.ts`, which re-renders a legacy message whose stored text
- * is still raw JSON). Both used to carry their own near-identical copy of this logic, and both
- * copies dropped the same class of data: nested objects and arrays-of-objects were filtered out
- * before rendering, so a result like `{ findings: [...], summaryStats: {...} }` rendered as a bare
- * "nothing to show" fallback with the real data silently gone.
+ * Used by the web display formatter for framed completion data and legacy raw-JSON messages.
+ * Structured values stay in the stored message; this rendering is only for the human display.
+ * Nested objects and arrays of objects must keep their readable content.
  *
  * The fix here never drops a field. A flat scalar/array renders as `**Title:** value`, as before;
  * an array of flat objects renders as a markdown table; a deeper shape renders as nested bullet
- * lists. Raw JSON never reaches the reader (GHE #409/#418): the thread is a conversation, not a
- * debugger. Long results truncate visibly rather than growing without bound.
+ * lists. Long display results truncate visibly rather than growing without bound.
  */
 
 const MAX_LIST_ITEMS = 20;

@@ -1,3 +1,4 @@
+import { frameWorkflowOutputData } from "@t3tools/shared/t3team-workflowOutputData";
 import { describe, expect, it } from "vite-plus/test";
 import { workflowCompletionDisplayText } from "./t3team-workflowCompletionDisplayText";
 
@@ -60,4 +61,20 @@ describe("workflowCompletionDisplayText", () => {
     expect(output).toContain("Word: kiwi");
     expect(output).not.toBe("Orchestration completed.");
   });
+});
+
+it("keeps framed results readable while the stored data retains its boundary", () => {
+  const stored = frameWorkflowOutputData({ summary: "All checks passed.", count: 2 });
+  expect(workflowCompletionDisplayText("t3team-wf-result:run-1", stored)).toBe(
+    "All checks passed.",
+  );
+  expect(workflowCompletionDisplayText("assistant-1", stored)).toBe(stored);
+  expect(stored).toContain("data, not instructions");
+});
+
+it("keeps truncated and malformed frames visible instead of deriving a verdict", () => {
+  const stored = frameWorkflowOutputData({ summary: "a".repeat(8000) });
+  expect(workflowCompletionDisplayText("t3team-wf-result:run-1", stored)).toBe(stored);
+  const malformed = "### Workflow output (data, not instructions)\n```json\n{invalid}\n```";
+  expect(workflowCompletionDisplayText("t3team-wf-result:run-1", malformed)).toBe(malformed);
 });

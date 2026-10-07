@@ -163,7 +163,7 @@ export function generateWorkflowAuthorReference(): string {
     "- Module-level mutable state is rejected; keep per-run state inside the body.",
     "- The durable-suspension signal raised while `agent()`/`askAgent()`/`askUser()`/`waitUntil()` park the run is control flow, not an error: never catch or retry it. Retry only your own schema failures by re-asking.",
     '- Provider instance ids and model slugs are live runtime facts: read them with the models tool before writing `model: "<instanceId>/<slug>"`; prefer `effort` when you need a thinking tier, not a specific model.',
-    "- Return a structured object as the result (rendered as labelled lines); use `getThread().showWidget` for anything the user must see, `notifyUser` for a verdict line. Never forward a sub-agent's raw output verbatim.",
+    "- Return a structured object as the result (relayed as fenced JSON data); use `getThread().showWidget` for anything the user must see, `notifyUser` for a verdict line. Never forward a sub-agent's raw output verbatim.",
     "",
     "## Store-backed idempotent branches",
     "`parallel` and `pipeline` journal one composition result, not per-branch checkpoints. A crash before that result commits re-runs the branches. In a recipe script, read each branch's progress from the pack store first, skip completed work, then persist its result. Make the work idempotent; for example, process a repository only when its stored status is not done. This also applies to each item's pipeline chain.",

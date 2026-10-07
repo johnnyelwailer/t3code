@@ -1,15 +1,25 @@
-import { renderWorkflowRecordAsDisplayText } from "@t3tools/shared/t3team-workflowOutputText";
+import { parseWorkflowOutputData } from "@t3tools/shared/t3team-workflowOutputData";
+import {
+  renderWorkflowRecordAsDisplayText,
+  renderWorkflowValueAsDisplayText,
+} from "@t3tools/shared/t3team-workflowOutputText";
 
-/**
- * Re-renders a `t3team-wf-result:<runId>` message whose stored text is still raw JSON — a legacy
- * shape (older clients, or a message written before `formatWorkflowOutput` humanized the result
- * server-side; see `t3team-workflowCompletionMessage.ts`). The rich rendering itself
- * (never dropping a nested field, truncating visibly) lives in the shared
- * `renderWorkflowRecordAsDisplayText`, used by both this client re-render and the server's own
- * pre-storage formatting.
- */
+/** Render stored data for people; the stored text remains framed for the launch agent. */
 export function workflowCompletionDisplayText(messageId: string, text: string): string {
   if (!messageId.startsWith("t3team-wf-result:")) return text;
+  const framed = parseWorkflowOutputData(text);
+  if (framed !== undefined) {
+    const output = framed.output;
+    // A preview is incomplete data: show its explicit truncation marker rather than a verdict.
+    if (
+      output !== null &&
+      typeof output === "object" &&
+      "truncated" in output &&
+      output.truncated === true
+    )
+      return text;
+    return renderWorkflowValueAsDisplayText(output, { emptyFallback: "Orchestration completed." });
+  }
   const trimmed = text.trim();
   if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return text;
 
