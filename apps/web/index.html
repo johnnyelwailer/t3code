@@ -487,6 +487,40 @@
         </div>
       </div>
     </div>
+    <script>
+      // Pack descriptor title. The static title above stays the vendor fallback
+      // until this returns labels.appName or productName.
+      (() => {
+        const applyPackName = (name) => {
+          if (typeof name !== "string") return;
+          const trimmed = name.trim();
+          if (!trimmed) return;
+          document.title = trimmed;
+          document.documentElement.dataset.bootAppName = trimmed;
+          const card = document.getElementById("boot-shell-card");
+          if (card) card.setAttribute("aria-label", `${trimmed} splash screen`);
+          const logo = document.getElementById("boot-shell-logo");
+          if (logo) logo.alt = trimmed;
+        };
+        const appearanceName = (appearance) => {
+          if (!appearance || typeof appearance !== "object") return "";
+          const labels = appearance.labels;
+          const fromLabel =
+            labels && typeof labels === "object" && typeof labels.appName === "string"
+              ? labels.appName.trim()
+              : "";
+          if (fromLabel) return fromLabel;
+          return typeof appearance.productName === "string" ? appearance.productName.trim() : "";
+        };
+        fetch("/.well-known/t3/environment")
+          .then((response) => (response.ok ? response.json() : null))
+          .then((descriptor) => {
+            if (!descriptor || typeof descriptor !== "object") return;
+            applyPackName(appearanceName(descriptor.appearance));
+          })
+          .catch(() => undefined);
+      })();
+    </script>
     <script type="module" src="/src/bootstrap.ts"></script>
   </body>
 </html>

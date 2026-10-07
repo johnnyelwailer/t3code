@@ -2,8 +2,10 @@ import * as NodePath from "@effect/platform-node/NodePath";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopConfig from "./DesktopConfig.ts";
@@ -37,6 +39,36 @@ const makeEnvironment = (
   overrides: Partial<DesktopEnvironment.MakeDesktopEnvironmentInput> = {},
   env: Record<string, string | undefined> = {},
 ) => DesktopEnvironment.DesktopEnvironment.pipe(Effect.provide(layerEnvironment(overrides, env)));
+
+describe("resolveDistributionProductName", () => {
+  it("prefers branding.productName, then the theme label, then the theme product name", () => {
+    assert.equal(
+      DesktopEnvironment.resolveDistributionProductName({
+        manifest: { branding: { productName: "Pack Product" } },
+        theme: { labels: { appName: "Theme Label" }, productName: "Theme Product" },
+      }),
+      "Pack Product",
+    );
+    assert.equal(
+      DesktopEnvironment.resolveDistributionProductName({
+        manifest: {},
+        theme: { labels: { appName: "Theme Label" }, productName: "Theme Product" },
+      }),
+      "Theme Label",
+    );
+    assert.equal(
+      DesktopEnvironment.resolveDistributionProductName({
+        manifest: {},
+        theme: { productName: "Theme Product" },
+      }),
+      "Theme Product",
+    );
+    assert.equal(
+      DesktopEnvironment.resolveDistributionProductName({ manifest: {}, theme: {} }),
+      undefined,
+    );
+  });
+});
 
 describe("DesktopEnvironment", () => {
   it.effect("derives state paths and development identity inside Effect", () =>
@@ -179,6 +211,74 @@ describe("DesktopEnvironment", () => {
 
       assert.equal(environment.appUserModelId, "com.t3tools.t3code.dev.local");
     }),
+  );
+
+  it.effect("uses the distribution product name as the window title", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-distro-brand-" });
+        yield* fs.writeFileString(
+          path.join(dir, "distribution.json"),
+          `${JSON.stringify({
+            branding: { productName: "Pack Product" },
+            theme: "theme.json",
+          })}\n`,
+        );
+        yield* fs.writeFileString(
+          path.join(dir, "theme.json"),
+          `${JSON.stringify({ labels: { appName: "Theme Label" } })}\n`,
+        );
+        const environment = yield* makeEnvironment(
+          {},
+          {
+            T3CODE_DISTRIBUTION: dir,
+            VITE_DEV_SERVER_URL: "http://localhost:5173",
+          },
+        );
+
+        assert.equal(environment.displayName, "Pack Product");
+        assert.equal(environment.branding.baseName, "Pack Product");
+        assert.equal(environment.branding.displayName, "Pack Product");
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("keeps the vendor window title when no distribution is active", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment(
+        {},
+        { VITE_DEV_SERVER_URL: "http://localhost:5173" },
+      );
+      assert.equal(environment.displayName, "T3 Code (Dev)");
+      assert.equal(environment.branding.baseName, "T3 Code");
+    }),
+  );
+
+  it.effect("lets packaged branding win over a distribution directory", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const resourcesDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-packaged-brand-" });
+        const distributionDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-distro-brand-" });
+        yield* fs.writeFileString(
+          path.join(resourcesDir, "desktop-branding.json"),
+          `${JSON.stringify({ baseName: "Packaged Name", displayName: "Packaged Name" })}\n`,
+        );
+        yield* fs.writeFileString(
+          path.join(distributionDir, "distribution.json"),
+          `${JSON.stringify({ branding: { productName: "Env Name" } })}\n`,
+        );
+        const environment = yield* makeEnvironment(
+          { isPackaged: true, resourcesPath: resourcesDir },
+          { T3CODE_DISTRIBUTION: distributionDir },
+        );
+        assert.equal(environment.displayName, "Packaged Name");
+        assert.equal(environment.branding.baseName, "Packaged Name");
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
   );
 
   it.effect("resolves picker defaults without nullish sentinels", () =>

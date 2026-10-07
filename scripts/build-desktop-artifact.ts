@@ -2658,14 +2658,48 @@ function stageMacIcons(stageResourcesDir: string, sourcePng: string, verbose: bo
   });
 }
 
+/**
+ * Installer background override. An explicit path wins. Otherwise
+ * `branding.dmgBackground` in the active distribution's `distribution.json`
+ * (relative to that directory) replaces the vendor SVG. Undefined keeps the
+ * staged `dmg/dmg-background-<channel>.svg` in this repo.
+ */
+export function resolveDesktopDmgBackgroundOverride(input: {
+  readonly explicitPath: string | undefined;
+  readonly distributionDir: string | undefined;
+  readonly manifestRaw: string | undefined;
+}): string | undefined {
+  const explicit = input.explicitPath?.trim();
+  if (explicit) return explicit;
+  const distributionDir = input.distributionDir?.trim();
+  const raw = input.manifestRaw?.trim();
+  if (!distributionDir || !raw) return undefined;
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+  const branding =
+    typeof manifest === "object" && manifest !== null && "branding" in manifest
+      ? (manifest as { branding?: { dmgBackground?: unknown } }).branding
+      : undefined;
+  const relative = branding?.dmgBackground;
+  if (typeof relative !== "string" || relative.trim().length === 0) return undefined;
+  const trimmed = relative.trim();
+  return NodePath.isAbsolute(trimmed) ? trimmed : NodePath.join(distributionDir, trimmed);
+}
+
 export const stageDesktopDmgBackground = Effect.fn("stageDesktopDmgBackground")(function* (
   stageResourcesDir: string,
   channel: "latest" | "nightly",
   verbose: boolean,
+  sourceOverride?: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const sourcePath = path.join(stageResourcesDir, "dmg", `dmg-background-${channel}.svg`);
+  const sourcePath =
+    sourceOverride?.trim() || path.join(stageResourcesDir, "dmg", `dmg-background-${channel}.svg`);
   if (!(yield* fs.exists(sourcePath))) {
     return yield* new DesktopDmgBackgroundSourceMissingError({ channel, sourcePath });
   }
@@ -4124,10 +4158,24 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     }
   }
   if (options.platform === "mac" && options.target === "dmg") {
+    const distributionDir = process.env.T3CODE_DISTRIBUTION?.trim();
+    const manifestPath = distributionDir
+      ? path.join(distributionDir, "distribution.json")
+      : undefined;
+    const manifestRaw =
+      manifestPath !== undefined &&
+      (yield* fs.exists(manifestPath).pipe(Effect.orElseSucceed(() => false)))
+        ? yield* fs.readFileString(manifestPath).pipe(Effect.orElseSucceed(() => ""))
+        : undefined;
     yield* stageDesktopDmgBackground(
       stageResourcesDir,
       resolveDesktopUpdateChannel(appVersion),
       options.verbose,
+      resolveDesktopDmgBackgroundOverride({
+        explicitPath: process.env.T3CODE_DESKTOP_DMG_BACKGROUND,
+        distributionDir,
+        manifestRaw,
+      }),
     );
   }
   // On Windows the server tree ships in the server.asar sidecar instead of

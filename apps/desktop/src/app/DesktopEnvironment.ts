@@ -151,6 +151,63 @@ export function resolveDesktopAppBranding(input: {
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readTrimmedString(record: unknown, key: string): string | undefined {
+  if (!isRecord(record)) return undefined;
+  const value = record[key];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+/**
+ * Distribution product name for the desktop window title. `branding.productName`
+ * wins; the theme's `labels.appName`, then its `productName`, are the fallback
+ * when the manifest does not name a product. Undefined keeps the vendor title.
+ */
+export function resolveDistributionProductName(input: {
+  readonly manifest: unknown;
+  readonly theme?: unknown;
+}): string | undefined {
+  const brandingName = readTrimmedString(
+    isRecord(input.manifest) ? input.manifest.branding : undefined,
+    "productName",
+  );
+  if (brandingName) return brandingName;
+  const label = readTrimmedString(
+    isRecord(input.theme) ? input.theme.labels : undefined,
+    "appName",
+  );
+  if (label) return label;
+  return readTrimmedString(input.theme, "productName");
+}
+
+function readDistributionProductName(
+  distributionDir: string,
+  joinPath: (left: string, right: string) => string,
+  isAbsolute: (value: string) => boolean,
+): string | undefined {
+  try {
+    const manifestPath = joinPath(distributionDir, "distribution.json");
+    if (!NodeFS.existsSync(manifestPath)) return undefined;
+    const manifest = JSON.parse(NodeFS.readFileSync(manifestPath, "utf8")) as unknown;
+    const themeRelative = readTrimmedString(manifest, "theme");
+    let theme: unknown;
+    if (themeRelative) {
+      const themePath = isAbsolute(themeRelative)
+        ? themeRelative
+        : joinPath(distributionDir, themeRelative);
+      if (NodeFS.existsSync(themePath)) {
+        theme = JSON.parse(NodeFS.readFileSync(themePath, "utf8"));
+      }
+    }
+    return resolveDistributionProductName({ manifest, theme });
+  } catch {
+    return undefined;
+  }
+}
+
 function normalizeDesktopArch(arch: string): DesktopRuntimeArch {
   if (arch === "arm64") return "arm64";
   if (arch === "x64") return "x64";
@@ -215,7 +272,15 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const packagedBranding = input.isPackaged
     ? readPackagedDesktopBranding(input.resourcesPath)
     : undefined;
-  const displayName = packagedBranding?.displayName?.trim() || branding.displayName;
+  const packagedDisplayName = packagedBranding?.displayName?.trim() || undefined;
+  const packagedBaseName = packagedBranding?.baseName?.trim() || undefined;
+  const distributionDir = Option.getOrUndefined(config.distributionDir);
+  const distributionProductName =
+    packagedDisplayName || distributionDir === undefined
+      ? undefined
+      : readDistributionProductName(distributionDir, path.join, path.isAbsolute);
+  const resolvedProductName = packagedDisplayName || distributionProductName;
+  const displayName = resolvedProductName || branding.displayName;
   const stateDir = resolveDesktopStateDir({
     baseDir,
     isDevelopment,
@@ -285,10 +350,12 @@ const make = Effect.fn("desktop.environment.make")(function* (
     otlpProtocol: config.otlpProtocol,
     branding: {
       ...branding,
-      ...(packagedBranding?.baseName?.trim() ? { baseName: packagedBranding.baseName.trim() } : {}),
-      ...(packagedBranding?.displayName?.trim()
-        ? { displayName: packagedBranding.displayName.trim() }
-        : {}),
+      ...(packagedBaseName
+        ? { baseName: packagedBaseName }
+        : distributionProductName
+          ? { baseName: distributionProductName }
+          : {}),
+      ...(resolvedProductName ? { displayName: resolvedProductName } : {}),
     },
     displayName,
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>

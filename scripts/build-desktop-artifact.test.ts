@@ -73,6 +73,7 @@ import {
   resolveMockUpdateServerUrl,
   resolvePackageManagerUserAgent,
   stageLinuxIconSize,
+  resolveDesktopDmgBackgroundOverride,
   stageDesktopDmgBackground,
   stageResourceMonitor,
   stageLinuxCaptureHelper,
@@ -2230,6 +2231,55 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       );
     });
   });
+
+  it("resolves a distribution DMG background override", () => {
+    assert.equal(
+      resolveDesktopDmgBackgroundOverride({
+        explicitPath: " /distro/background.svg ",
+        distributionDir: "/distro",
+        manifestRaw: JSON.stringify({ branding: { dmgBackground: "other.svg" } }),
+      }),
+      "/distro/background.svg",
+    );
+    assert.equal(
+      resolveDesktopDmgBackgroundOverride({
+        explicitPath: undefined,
+        distributionDir: "/distro",
+        manifestRaw: JSON.stringify({ branding: { dmgBackground: "branding/background.svg" } }),
+      }),
+      NodePath.join("/distro", "branding/background.svg"),
+    );
+    assert.equal(
+      resolveDesktopDmgBackgroundOverride({
+        explicitPath: undefined,
+        distributionDir: undefined,
+        manifestRaw: undefined,
+      }),
+      undefined,
+    );
+  });
+
+  it.effect("rasterizes an overridden DMG background instead of the vendor svg", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const stageResourcesDir = yield* fs.makeTempDirectoryScoped({
+          prefix: "t3code-dmg-background-override-",
+        });
+        const overridePath = path.join(stageResourcesDir, "distro-background.svg");
+        yield* fs.writeFileString(overridePath, '<svg xmlns="http://www.w3.org/2000/svg"/>');
+        const commands: Array<{ readonly command: string; readonly args: ReadonlyArray<string> }> =
+          [];
+
+        yield* stageDesktopDmgBackground(stageResourcesDir, "latest", false, overridePath).pipe(
+          Effect.provide(iconResizeSpawnerLayer(commands, [0, 0])),
+        );
+
+        assert.equal(commands[0]?.args.at(-3), overridePath);
+      }),
+    ),
+  );
 
   it.effect("rasterizes staged DMG backgrounds at standard and Retina sizes", () =>
     Effect.scoped(

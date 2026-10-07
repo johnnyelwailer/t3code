@@ -1,6 +1,13 @@
+/** Vendor name until the boot script stores a pack label on the document element. */
+function bootAppName(): string {
+  const fromPack = document.documentElement.dataset.bootAppName?.trim();
+  return fromPack || "T3 Code";
+}
+
 /** Shows startup failures before React can replace the boot splash. */
 export function showBootError(error: unknown) {
-  console.error("T3 Code failed to start.", error);
+  const appName = bootAppName();
+  console.error(`${appName} failed to start.`, error);
   const bootShell = document.getElementById("boot-shell");
   if (!bootShell) return;
 
@@ -9,7 +16,7 @@ export function showBootError(error: unknown) {
   content.setAttribute("role", "alert");
 
   const message = document.createElement("p");
-  message.textContent = "T3 Code could not load.";
+  message.textContent = `${appName} could not load.`;
   content.append(message);
 
   if (import.meta.env.DEV && error instanceof Error) {

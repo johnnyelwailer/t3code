@@ -14,7 +14,7 @@ import {
 import { Check, Copy } from "lucide";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
-import { APP_BASE_NAME, APP_DISPLAY_NAME, APP_STAGE_LABEL, APP_VERSION } from "../branding";
+import { APP_DISPLAY_NAME, APP_STAGE_LABEL, APP_VERSION } from "../branding";
 import { resolveServerBackedAppDisplayName } from "../branding.logic";
 import { AppSidebarLayout } from "../components/AppSidebarLayout";
 import { CommandPalette } from "../components/CommandPalette";
@@ -70,7 +70,7 @@ import { useUpstreamRouteBridge } from "../t3team/t3team-useUpstreamRouteBridge"
 import { T3TeamPackAppearanceDefaultsSync } from "../t3team/t3team-PackAppearanceDefaultsSync";
 import { T3TeamPackAppearanceSync } from "../t3team/t3team-PackAppearanceSync";
 import { CloudSessionSignInDialogHost } from "../cloud/t3team-CloudSessionSignInDialogHost";
-import { useT3TeamPackAppearance } from "../t3team/t3team-packAppearance";
+import { usePackAppBaseName, usePackAppDisplayName } from "../t3team/t3team-packAppName";
 // Registers the composing heartbeat with the composer draft store's sink (side effect only).
 import "../t3team/chat/t3team-threadComposingSignal";
 import { isLocalEnvironmentDisabled } from "../localEnvironment";
@@ -141,17 +141,21 @@ export const Route = createRootRoute({
 });
 
 function RootRouteNotFoundView() {
+  const appName = usePackAppDisplayName();
   return (
-    <main className="flex min-h-0 min-w-0 flex-1 items-center justify-center p-6">
-      <div className="flex max-w-sm flex-col items-center gap-4 text-center">
-        <h1 className="text-lg font-medium text-foreground">Page not found</h1>
-        <p className="text-sm text-muted-foreground">
-          This link doesn't point to a page in {APP_DISPLAY_NAME}. Go home to choose a project or
-          start a thread.
-        </p>
-        <Button render={<Link to="/" replace />}>Go home</Button>
-      </div>
-    </main>
+    <>
+      <DocumentBrandSync />
+      <main className="flex min-h-0 min-w-0 flex-1 items-center justify-center p-6">
+        <div className="flex max-w-sm flex-col items-center gap-4 text-center">
+          <h1 className="text-lg font-medium text-foreground">Page not found</h1>
+          <p className="text-sm text-muted-foreground">
+            This link doesn't point to a page in {appName}. Go home to choose a project or start a
+            thread.
+          </p>
+          <Button render={<Link to="/" replace />}>Go home</Button>
+        </div>
+      </main>
+    </>
   );
 }
 
@@ -194,7 +198,7 @@ function RootRouteView() {
   ) {
     return (
       <>
-        <DocumentTitleSync />
+        <DocumentBrandSync />
         <Outlet />
       </>
     );
@@ -206,16 +210,15 @@ function RootRouteView() {
     return (
       <ToastProvider>
         <AnchoredToastProvider>
-          <DocumentTitleSync />
+          <DocumentBrandSync />
           <ContrastAppearanceSync />
           <EnvironmentThemeSync />
           <GlassAppearanceSync />
           <FontAppearanceSync />
           <ProviderAuthCallbackCoordinator />
-          {/* t3team: the wizard page short-circuits the main tree, so the pack syncs
-              mount here too — otherwise a first-run user sees generic branding in
-              the very wizard they are completing. */}
-          <T3TeamPackAppearanceSync />
+          {/* t3team: the wizard page short-circuits the main tree, so appearance
+              defaults mount here too — otherwise a first-run user never receives
+              the pack's starting settings. DocumentBrandSync covers the title. */}
           <T3TeamPackAppearanceDefaultsSync />
           <CustomSnoozeDialogHost />
           <CloudSessionSignInDialogHost />
@@ -232,7 +235,7 @@ function RootRouteView() {
   if (authGateState.status !== "authenticated" && authGateState.status !== "hosted-static") {
     return (
       <>
-        <DocumentTitleSync />
+        <DocumentBrandSync />
         <Outlet />
       </>
     );
@@ -257,20 +260,18 @@ function RootRouteView() {
   return (
     <ToastProvider>
       <AnchoredToastProvider>
-        <DocumentTitleSync />
+        <DocumentBrandSync />
         <ContrastAppearanceSync />
         <EnvironmentThemeSync />
         <GlassAppearanceSync />
         <FontAppearanceSync />
         <ProviderAuthCallbackCoordinator />
         <ChatGptWelcomeCoordinator />
-        {/* t3team: pack appearance sync must run OUTSIDE the first-run gate — the
-            gate holds back its children on a fresh install, and the pack is what
-            brands the onboarding surface itself (title, theme tokens, provider
-            pins). Premerge baseline mounted these at this level; nesting them in
+        {/* t3team: pack appearance defaults must run OUTSIDE the first-run gate —
+            the gate holds back its children on a fresh install. DocumentBrandSync
+            (title + theme) sits at this level for the same reason: nesting it in
             the gate's children made fresh homes render generic "T3 Code" until
             onboarding finished. */}
-        <T3TeamPackAppearanceSync />
         <T3TeamPackAppearanceDefaultsSync />
         <FirstRunGate
           enabled={primaryEnvironmentAuthenticated}
@@ -384,13 +385,22 @@ function FontAppearanceSync() {
   return null;
 }
 
+/** Title plus pack appearance, on every branch that owns document.title. */
+function DocumentBrandSync() {
+  return (
+    <>
+      <DocumentTitleSync />
+      <T3TeamPackAppearanceSync />
+    </>
+  );
+}
+
 function DocumentTitleSync() {
   const primaryServerVersion =
     useAtomValue(primaryServerConfigAtom)?.environment.serverVersion ?? null;
-  const packAppName = useT3TeamPackAppearance()?.labels?.appName;
   const title = resolveServerBackedAppDisplayName({
-    baseName: packAppName ?? APP_BASE_NAME,
-    fallbackDisplayName: packAppName ?? APP_DISPLAY_NAME,
+    baseName: usePackAppBaseName(),
+    fallbackDisplayName: usePackAppDisplayName(),
     fallbackStageLabel: APP_STAGE_LABEL,
     primaryServerVersion,
   });
@@ -432,36 +442,40 @@ function HostedStaticEnvironmentBootstrap() {
 
 function RootRouteErrorView({ error }: ErrorComponentProps) {
   const router = useRouter();
+  const appName = usePackAppDisplayName();
   const message = errorMessage(error);
   // Router pathname rather than window.location: desktop uses hash history, where the window path is always "/".
   const pathname = useLocation({ select: (location) => location.pathname });
-  const report = useMemo(() => errorReport(error, pathname), [error, pathname]);
+  const report = useMemo(() => errorReport(error, pathname, appName), [appName, error, pathname]);
 
   return (
-    <StandalonePage tone="error">
-      <StandalonePageHeader
-        eyebrow={APP_DISPLAY_NAME}
-        title="Something went wrong."
-        description={message}
-      />
+    <>
+      <DocumentBrandSync />
+      <StandalonePage tone="error">
+        <StandalonePageHeader
+          eyebrow={appName}
+          title="Something went wrong."
+          description={message}
+        />
 
-      <div className="mt-5 flex flex-wrap gap-2">
-        <Button size="sm" onClick={() => void router.invalidate()}>
-          Try again
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
-          Reload app
-        </Button>
-        <CopyErrorButton report={report} />
-      </div>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => void router.invalidate()}>
+            Try again
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
+            Reload app
+          </Button>
+          <CopyErrorButton report={report} />
+        </div>
 
-      <div className="mt-5 overflow-hidden rounded-lg border border-border/70 bg-background/55">
-        <p className="px-3 py-1.5 text-xs font-medium text-muted-foreground">Error report</p>
-        <pre className="max-h-64 overflow-auto border-t border-border/70 bg-background/80 px-3 py-2 text-xs whitespace-pre-wrap text-foreground/85">
-          {report}
-        </pre>
-      </div>
-    </StandalonePage>
+        <div className="mt-5 overflow-hidden rounded-lg border border-border/70 bg-background/55">
+          <p className="px-3 py-1.5 text-xs font-medium text-muted-foreground">Error report</p>
+          <pre className="max-h-64 overflow-auto border-t border-border/70 bg-background/80 px-3 py-2 text-xs whitespace-pre-wrap text-foreground/85">
+            {report}
+          </pre>
+        </div>
+      </StandalonePage>
+    </>
   );
 }
 
@@ -512,9 +526,9 @@ const MAX_ERROR_CAUSE_DEPTH = 5;
  * and any cause chain. Takes the pathname only so tokens in the query never
  * land on the clipboard.
  */
-function errorReport(error: unknown, pathname: string): string {
+function errorReport(error: unknown, pathname: string, appName = APP_DISPLAY_NAME): string {
   const lines = [
-    `${APP_DISPLAY_NAME} ${APP_VERSION}`,
+    `${appName} ${APP_VERSION}`,
     `Path: ${pathname}`,
     `Time: ${new Date().toISOString()}`,
     "",
