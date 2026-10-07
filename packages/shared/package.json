@@ -19,6 +19,10 @@
       "types": "./src/t3team-threadRunStatus.ts",
       "import": "./src/t3team-threadRunStatus.ts"
     },
+    "./t3team-detachedSurface": {
+      "types": "./src/t3team-detachedSurface.ts",
+      "import": "./src/t3team-detachedSurface.ts"
+    },
     "./t3team-threadAwaitingParent": {
       "types": "./src/t3team-threadAwaitingParent.ts",
       "import": "./src/t3team-threadAwaitingParent.ts"

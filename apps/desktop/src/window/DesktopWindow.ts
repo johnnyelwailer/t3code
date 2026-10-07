@@ -31,6 +31,7 @@ import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts";
 import { makeQuitShortcutHandler } from "./QuitHold.ts";
+import { makeDetachedSurfaceWindows } from "./t3team-DetachedSurfaceWindows.ts";
 
 import {
   ATLASSIAN_OAUTH_POPUP_HEIGHT,
@@ -368,8 +369,30 @@ export const make = Effect.gen(function* () {
       ),
     );
 
-  const currentMainWindow = electronWindow.currentMainOrFirst.pipe(Effect.flatMap(withoutSplash));
-  const focusedMainWindow = electronWindow.focusedMainOrFirst.pipe(Effect.flatMap(withoutSplash));
+  // t3team: detached-surface windows are second views onto the app, never its main window —
+  // a dock click, a menu action or the activation broker must reach the real one.
+  const detachedSurfaceWindows = makeDetachedSurfaceWindows({
+    applicationUrl: getDesktopUrl(environment.isDevelopment),
+    preloadPath: environment.preloadPath,
+    backgroundColor: () =>
+      getInitialWindowBackgroundColor(Electron.nativeTheme.shouldUseDarkColors),
+    openExternal: (url) => {
+      if (Option.isSome(ElectronShell.parseSafeExternalUrl(url))) {
+        void runPromise(electronShell.openExternal(url));
+      }
+    },
+  });
+  const withoutDetached = (window: Option.Option<Electron.BrowserWindow>) =>
+    Option.isSome(window) && detachedSurfaceWindows.isDetached(window.value)
+      ? electronWindow.main
+      : Effect.succeed(window);
+
+  const currentMainWindow = electronWindow.currentMainOrFirst.pipe(
+    Effect.flatMap(withoutSplash),
+    Effect.flatMap(withoutDetached),
+  );
+  const focusedAnyWindow = electronWindow.focusedMainOrFirst.pipe(Effect.flatMap(withoutSplash));
+  const focusedMainWindow = focusedAnyWindow.pipe(Effect.flatMap(withoutDetached));
 
   const createWindow = Effect.fn("desktop.window.createWindow")(function* (): Effect.fn.Return<
     Electron.BrowserWindow,
@@ -614,6 +637,8 @@ export const make = Effect.gen(function* () {
     });
 
     window.webContents.setWindowOpenHandler(({ url, frameName }) => {
+      const detachedSurface = detachedSurfaceWindows.handleWindowOpen({ url, frameName }, window);
+      if (detachedSurface !== null) return detachedSurface;
       if (isAtlassianOAuthPopupRequest({ url, frameName })) {
         return {
           action: "allow",
@@ -636,6 +661,9 @@ export const make = Effect.gen(function* () {
         void runPromise(electronShell.openExternal(url));
       }
       return { action: "deny" };
+    });
+    window.webContents.on("did-create-window", (created, details) => {
+      detachedSurfaceWindows.adopt(created, details);
     });
     window.webContents.on("will-navigate", (event, url) => {
       if (
@@ -1036,7 +1064,7 @@ export const make = Effect.gen(function* () {
     }),
     zoomMain: Effect.fn("desktop.window.zoomMain")(function* (direction) {
       yield* Effect.annotateCurrentSpan({ direction });
-      const window = yield* focusedMainWindow;
+      const window = yield* focusedAnyWindow;
       if (Option.isNone(window) || window.value.isDestroyed()) {
         return;
       }
@@ -1045,7 +1073,15 @@ export const make = Effect.gen(function* () {
       webContents.setZoomLevel(
         direction === "reset" ? 0 : webContents.getZoomLevel() + (direction === "in" ? 0.5 : -0.5),
       );
-      if (environment.platform === "darwin") syncMacosWindowButtons(window.value);
+      // Chromium keeps zoom per origin, so zooming a detached surface zooms the main window too;
+      // it is the main window whose custom-placed window buttons need re-seating (a detached
+      // window has native ones).
+      const buttonsWindow = detachedSurfaceWindows.isDetached(window.value)
+        ? yield* electronWindow.main
+        : window;
+      if (environment.platform === "darwin" && Option.isSome(buttonsWindow)) {
+        if (!buttonsWindow.value.isDestroyed()) syncMacosWindowButtons(buttonsWindow.value);
+      }
       // Chromium pushes the new level down to embedded guests, which would zoom
       // the previewed page along with the app UI. The preview browser keeps its
       // own zoom, so put each guest back where the preview left it.
@@ -1054,7 +1090,14 @@ export const make = Effect.gen(function* () {
     syncAppearance: Effect.gen(function* () {
       const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
       yield* electronWindow.syncAllAppearance((window) =>
-        syncWindowAppearance(window, shouldUseDarkColors, environment.platform),
+        detachedSurfaceWindows.isDetached(window)
+          ? Effect.sync(() => {
+              // A native title bar has no overlay to recolour (setting one throws).
+              if (!window.isDestroyed()) {
+                window.setBackgroundColor(getInitialWindowBackgroundColor(shouldUseDarkColors));
+              }
+            })
+          : syncWindowAppearance(window, shouldUseDarkColors, environment.platform),
       );
     }).pipe(Effect.withSpan("desktop.window.syncAppearance")),
   });

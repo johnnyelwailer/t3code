@@ -10,7 +10,6 @@ import type {
   PullRequestReviewThread,
   PullRequestThreadCommentsResult,
 } from "@t3tools/contracts";
-import { setPairingTokenOnUrl } from "@t3tools/shared/remote";
 import { areAllDiffFilesCollapsed } from "~/lib/diffCollapse";
 import {
   ChevronDownIcon,
@@ -18,12 +17,12 @@ import {
   ChevronRightIcon,
   Columns2Icon,
   EllipsisIcon,
-  ExternalLinkIcon,
   InfoIcon,
   LinkIcon,
   MessageSquareOffIcon,
   PanelRightCloseIcon,
   PanelRightIcon,
+  PictureInPicture2Icon,
   PilcrowIcon,
   Rows3Icon,
   TextWrapIcon,
@@ -34,12 +33,16 @@ import { useAtomRefresh } from "@effect/atom-react";
 import * as Schema from "effect/Schema";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { createServerPairingCredential } from "~/environments/primary/auth";
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
 import { useTheme } from "~/hooks/useTheme";
-import { readLocalApi } from "~/localApi";
+import {
+  DETACH_SURFACE_LABEL,
+  isDetachedSurfaceWindow,
+  openDetachedSurface,
+} from "~/t3team/detached/t3team-openDetachedSurface";
+import { pullRequestDetachedSurfaceRequest } from "./t3team-pullRequestDetachedSurface.logic";
 import { pullRequestFindingKey, type PullRequestFinding } from "./pullRequestDetail.logic";
 import { canEditPullRequestComment } from "./pullRequestEditing.logic";
 import { orderDiffFiles } from "./pullRequestFileOrder.logic";
@@ -707,31 +710,17 @@ function PullRequestCodeTab({
   useEffect(() => {
     onActiveFileChange?.(activePath);
   }, [activePath, onActiveFileChange]);
-  // Hand the current view to another window. Inside the desktop shell the system browser keeps
-  // its own cookie jar, so the URL carries a short-lived pairing credential that the app
-  // exchanges on load (the same bootstrap flow as device pairing) and then strips from the
-  // address bar; the handoff arrives logged in. A plain tab shares the same-origin session, so
-  // it just opens the current URL as-is.
-  const openInNewWindow = async () => {
-    const currentUrl = window.location.href;
-    let url = currentUrl;
-    if (window.desktopBridge) {
-      // The system browser keeps its own cookie jar. Best effort: carry a short-lived pairing
-      // credential, so the app can exchange it on load and arrive logged in. When one cannot be
-      // minted (the backend is busy, or the session lacks the scope for it), the plain URL still
-      // opens — the browser simply shows the app's own sign-in instead.
-      try {
-        const credential = await createServerPairingCredential({ label: "Diff viewer" });
-        url = setPairingTokenOnUrl(new URL(currentUrl), credential.credential).toString();
-      } catch {
-        // Opening unauthenticated is a working fallback; no error needed here.
-      }
-    }
-    try {
-      await readLocalApi()?.shell.openExternal(url);
-    } catch {
-      toastManager.add({ type: "error", title: "Could not open the link" });
-    }
+  // Hand this pull request's Code tab, on the file in focus, to a window (desktop) or tab (web)
+  // of its own, where it can take the whole screen. See t3team-openDetachedSurface.
+  const openInNewWindow = () => {
+    openDetachedSurface(
+      pullRequestDetachedSurfaceRequest({
+        environmentId,
+        reference,
+        view: { tab: "code", file: activePath },
+        title: detail.title,
+      }),
+    );
   };
   // Focus mode shows a single file to the viewer; the focused file is forced open, since
   // collapsing the one file on screen would just leave a blank pane.
@@ -1647,16 +1636,14 @@ function PullRequestCodeTab({
                   <span className="min-w-0 flex-1">Copy link</span>
                 </span>
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  void openInNewWindow();
-                }}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <ExternalLinkIcon aria-hidden className="size-3.5 shrink-0" />
-                  <span className="min-w-0 flex-1">Open in new tab</span>
-                </span>
-              </DropdownMenuItem>
+              {isDetachedSurfaceWindow() ? null : (
+                <DropdownMenuItem onClick={openInNewWindow}>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <PictureInPicture2Icon aria-hidden className="size-3.5 shrink-0" />
+                    <span className="min-w-0 flex-1">{DETACH_SURFACE_LABEL}</span>
+                  </span>
+                </DropdownMenuItem>
+              )}
             </MenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>

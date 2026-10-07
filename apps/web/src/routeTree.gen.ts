@@ -37,6 +37,7 @@ import { Route as SettingsAppearanceRouteImport } from './routes/settings.appear
 import { Route as ProjectsProjectKeyRouteImport } from './routes/projects.$projectKey'
 import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
 import { Route as ChatPullRequestsRouteImport } from './routes/_chat.pull-requests'
+import { Route as T3teamDetachedKindRouteImport } from './routes/t3team_.detached.$kind'
 import { Route as T3teamProjectsProjectIdRouteImport } from './routes/t3team.projects.$projectId'
 import { Route as T3teamDraftsDraftIdRouteImport } from './routes/t3team.drafts.$draftId'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
@@ -184,6 +185,11 @@ const ChatPullRequestsRoute = ChatPullRequestsRouteImport.update({
   path: '/pull-requests',
   getParentRoute: () => ChatRoute,
 } as any)
+const T3teamDetachedKindRoute = T3teamDetachedKindRouteImport.update({
+  id: '/t3team_/detached/$kind',
+  path: '/t3team/detached/$kind',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const T3teamProjectsProjectIdRoute = T3teamProjectsProjectIdRouteImport.update({
   id: '/projects/$projectId',
   path: '/projects/$projectId',
@@ -250,6 +256,7 @@ export interface FileRoutesByFullPath {
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/t3team/drafts/$draftId': typeof T3teamDraftsDraftIdRoute
   '/t3team/projects/$projectId': typeof T3teamProjectsProjectIdRouteWithChildren
+  '/t3team/detached/$kind': typeof T3teamDetachedKindRoute
   '/t3team/projects/$projectId/threads/$threadId': typeof T3teamProjectsProjectIdThreadsThreadIdRoute
   '/t3team/projects/$projectId/tickets/$ticketId': typeof T3teamProjectsProjectIdTicketsTicketIdRoute
 }
@@ -285,6 +292,7 @@ export interface FileRoutesByTo {
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/t3team/drafts/$draftId': typeof T3teamDraftsDraftIdRoute
   '/t3team/projects/$projectId': typeof T3teamProjectsProjectIdRouteWithChildren
+  '/t3team/detached/$kind': typeof T3teamDetachedKindRoute
   '/t3team/projects/$projectId/threads/$threadId': typeof T3teamProjectsProjectIdThreadsThreadIdRoute
   '/t3team/projects/$projectId/tickets/$ticketId': typeof T3teamProjectsProjectIdTicketsTicketIdRoute
 }
@@ -322,6 +330,7 @@ export interface FileRoutesById {
   '/_chat/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/t3team/drafts/$draftId': typeof T3teamDraftsDraftIdRoute
   '/t3team/projects/$projectId': typeof T3teamProjectsProjectIdRouteWithChildren
+  '/t3team_/detached/$kind': typeof T3teamDetachedKindRoute
   '/t3team/projects/$projectId/threads/$threadId': typeof T3teamProjectsProjectIdThreadsThreadIdRoute
   '/t3team/projects/$projectId/tickets/$ticketId': typeof T3teamProjectsProjectIdTicketsTicketIdRoute
 }
@@ -359,6 +368,7 @@ export interface FileRouteTypes {
     | '/draft/$draftId'
     | '/t3team/drafts/$draftId'
     | '/t3team/projects/$projectId'
+    | '/t3team/detached/$kind'
     | '/t3team/projects/$projectId/threads/$threadId'
     | '/t3team/projects/$projectId/tickets/$ticketId'
   fileRoutesByTo: FileRoutesByTo
@@ -394,6 +404,7 @@ export interface FileRouteTypes {
     | '/draft/$draftId'
     | '/t3team/drafts/$draftId'
     | '/t3team/projects/$projectId'
+    | '/t3team/detached/$kind'
     | '/t3team/projects/$projectId/threads/$threadId'
     | '/t3team/projects/$projectId/tickets/$ticketId'
   id:
@@ -430,6 +441,7 @@ export interface FileRouteTypes {
     | '/_chat/draft/$draftId'
     | '/t3team/drafts/$draftId'
     | '/t3team/projects/$projectId'
+    | '/t3team_/detached/$kind'
     | '/t3team/projects/$projectId/threads/$threadId'
     | '/t3team/projects/$projectId/tickets/$ticketId'
   fileRoutesById: FileRoutesById
@@ -444,6 +456,7 @@ export interface RootRouteChildren {
   WelcomeRoute: typeof WelcomeRoute
   OauthCallbackRoute: typeof OauthCallbackRoute
   ProjectsProjectKeyRoute: typeof ProjectsProjectKeyRoute
+  T3teamDetachedKindRoute: typeof T3teamDetachedKindRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -644,6 +657,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatPullRequestsRouteImport
       parentRoute: typeof ChatRoute
     }
+    '/t3team_/detached/$kind': {
+      id: '/t3team_/detached/$kind'
+      path: '/t3team/detached/$kind'
+      fullPath: '/t3team/detached/$kind'
+      preLoaderRoute: typeof T3teamDetachedKindRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/t3team/projects/$projectId': {
       id: '/t3team/projects/$projectId'
       path: '/projects/$projectId'
@@ -790,6 +810,7 @@ const rootRouteChildren: RootRouteChildren = {
   WelcomeRoute: WelcomeRoute,
   OauthCallbackRoute: OauthCallbackRoute,
   ProjectsProjectKeyRoute: ProjectsProjectKeyRoute,
+  T3teamDetachedKindRoute: T3teamDetachedKindRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
