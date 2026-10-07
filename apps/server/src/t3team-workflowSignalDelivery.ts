@@ -124,7 +124,11 @@ export function makeSignalDeliveryPort(deps: {
       }
       if (bridge) {
         // Nobody took it: bridge it durably for the next wait on the tuple instead of dropping it.
-        yield* deps.store.insertInboxEntry({ ...tuple, payload: input.payload, createdAt: nowIso() });
+        yield* deps.store.insertInboxEntry({
+          ...tuple,
+          payload: input.payload,
+          createdAt: nowIso(),
+        });
       }
       return woken;
     },

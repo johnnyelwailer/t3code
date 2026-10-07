@@ -65,7 +65,8 @@ function makeHost(runId: string, gated: "recordRunning" | "recordActive") {
     sinks: { onCompleted, onFailed },
   });
   /** The any-wait the run is parked on right now: the newest one the broker saw fire. */
-  const parkedOn = () => broker.sent.filter((e) => e.kind === "signal.waitAny").at(-1)?.correlationId;
+  const parkedOn = () =>
+    broker.sent.filter((e) => e.kind === "signal.waitAny").at(-1)?.correlationId;
   return { host, registry, release, parkedOn, onCompleted, onFailed };
 }
 
@@ -116,7 +117,9 @@ describe("workflow host offer", () => {
     expect(run.registry.getRun("offer-declined")).toBeDefined();
     // A wait that is already settled is not answered twice either.
     await run.host.resume(parked, checks);
-    expect(await run.host.offer(async () => ({ correlationId: parked, reply: merged }))).toBe(false);
+    expect(await run.host.offer(async () => ({ correlationId: parked, reply: merged }))).toBe(
+      false,
+    );
   });
 
   it("does not decide at all once the in-flight drive finished the run", async () => {

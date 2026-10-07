@@ -78,12 +78,18 @@ describe("waitForAny through the durable engine", () => {
 
     // The checks branch (index 2) lands first.
     const reply = anyWinner(2, checksPayload);
-    expect(await appendResolvedEntry({ runsRoot, runId: result.runId, correlationId: first, reply }))
-      .toBe(true);
+    expect(
+      await appendResolvedEntry({ runsRoot, runId: result.runId, correlationId: first, reply }),
+    ).toBe(true);
     // A losing branch firing later cannot take the settled wait over.
     const late = anyWinner(1, closedPayload);
     expect(
-      await appendResolvedEntry({ runsRoot, runId: result.runId, correlationId: first, reply: late }),
+      await appendResolvedEntry({
+        runsRoot,
+        runId: result.runId,
+        correlationId: first,
+        reply: late,
+      }),
     ).toBe(false);
 
     result = await resumeWorkflow(result.runId, workflow, args, base);

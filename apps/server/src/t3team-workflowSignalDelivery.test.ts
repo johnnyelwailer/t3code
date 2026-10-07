@@ -272,7 +272,7 @@ describe("makeSignalDeliveryPort", () => {
           repo: {
             listByStatus: () => Effect.succeed([parked]),
             clearPending: () => Effect.succeed(undefined),
-          getById: () => Effect.succeed(Option.none()),
+            getById: () => Effect.succeed(Option.none()),
           },
           store: { insertInboxEntry: () => Effect.succeed(1) },
           registry: {

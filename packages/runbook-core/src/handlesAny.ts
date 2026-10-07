@@ -85,7 +85,10 @@ export function decodeAnyWinner(
  * the run (the latch arms on the composite's single correlationId) until the host resolves it.
  * The branch list is validated before any seq is taken, so a refused call journals nothing.
  */
-export async function awaitAny<R>(dispatch: HandleDispatch, call: AnyAskCall<R>): Promise<AnyHit<R>> {
+export async function awaitAny<R>(
+  dispatch: HandleDispatch,
+  call: AnyAskCall<R>,
+): Promise<AnyHit<R>> {
   if (call.branches.length === 0) {
     throw new WorkflowError(`'${call.kind}' needs at least one branch.`);
   }

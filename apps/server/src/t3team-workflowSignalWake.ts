@@ -83,13 +83,15 @@ export const wakeParkedSignalRun = Effect.fn("workflowSignal.wake")(function* (i
   }
   const decide = () =>
     Effect.runPromise(
-      repo.getById({ runId: run.runId }).pipe(
-        Effect.map((row) =>
-          Option.isSome(row) && row.value.status === "watching"
-            ? answerParkedWatch(row.value, tuple, payload)
-            : undefined,
+      repo
+        .getById({ runId: run.runId })
+        .pipe(
+          Effect.map((row) =>
+            Option.isSome(row) && row.value.status === "watching"
+              ? answerParkedWatch(row.value, tuple, payload)
+              : undefined,
+          ),
         ),
-      ),
     );
   const accepted = yield* Effect.tryPromise({ try: () => offer(decide), catch: failed });
   return (accepted ? "woken" : "unclaimed") satisfies SignalWakeOutcome;

@@ -134,7 +134,12 @@ describe("@runbook/core any-of ask", () => {
     controller.abort();
     const runtime = drive(log, { abortSignal: controller.signal });
     await expect(
-      awaitAny(runtime.handles, { kind: KIND, refId: "any", branches: BRANCHES, fire: broker.fire }),
+      awaitAny(runtime.handles, {
+        kind: KIND,
+        refId: "any",
+        branches: BRANCHES,
+        fire: broker.fire,
+      }),
     ).rejects.toBeInstanceOf(WorkflowAborted);
     expect(runtime.currentSeq()).toBe(0);
     expect(log.wires).toEqual([]);
@@ -154,7 +159,12 @@ describe("@runbook/core any-of ask", () => {
     expect(caught).toBeInstanceOf(WorkflowSuspended);
     const lines = log.wires.length;
     await expect(
-      awaitAny(runtime.handles, { kind: KIND, refId: "any", branches: BRANCHES, fire: broker.fire }),
+      awaitAny(runtime.handles, {
+        kind: KIND,
+        refId: "any",
+        branches: BRANCHES,
+        fire: broker.fire,
+      }),
     ).rejects.toBe(caught);
     expect(log.wires).toHaveLength(lines);
     expect(broker.fired).toEqual([ANY_ID]);
