@@ -4,11 +4,11 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
-import * as PubSub from "effect/PubSub";
 import * as Stream from "effect/Stream";
 import { layerMemory } from "../persistence/Sqlite.ts";
 import * as Store from "./t3team-packDocumentStore.ts";
-import { packDocumentStream, type PackDocumentChange } from "./t3team-packDocumentStream.ts";
+import { makePackDocumentHub } from "./t3team-packDocumentHub.ts";
+import { packDocumentStream } from "./t3team-packDocumentStream.ts";
 import { collectAfterSnapshot } from "./t3team-v2Streams.testkit.ts";
 
 const config = defineCollections({
@@ -132,6 +132,7 @@ it.layer(TestLayer)("Pack documents", (it) => {
           store.put("items", "invalid", undefined),
           store.put("items", "invalid", "😀".repeat(100)),
           store.put("items", "invalid", {}, { ifVersion: -1 }),
+          store.put("items", "invalid", {}, { ttlMs: Number.MAX_SAFE_INTEGER }),
           store.list("items", { limit: 0 }),
           store.increment("items", "invalid", "n", Infinity),
         ] as ReadonlyArray<Effect.Effect<unknown, Store.T3TeamPackDocumentStoreError>>)
@@ -154,7 +155,7 @@ it.layer(TestLayer)("Pack documents", (it) => {
 
 it.effect("buffers a write made while the snapshot is blocked", () =>
   Effect.gen(function* () {
-    const changes = yield* PubSub.unbounded<PackDocumentChange>();
+    const hub = yield* makePackDocumentHub();
     const reading = yield* Deferred.make<void>();
     const release = yield* Deferred.make<void>();
     const doc = {
@@ -168,12 +169,12 @@ it.effect("buffers a write made while the snapshot is blocked", () =>
       Effect.as([]),
     );
     const collector = yield* packDocumentStream(
-      changes,
+      hub,
       { packId: "pack-a", collection: "items" },
       snapshot,
     ).pipe(Stream.take(2), Stream.runCollect, Effect.forkScoped);
     yield* Deferred.await(reading);
-    yield* PubSub.publish(changes, { type: "upsert", packId: "pack-a", collection: "items", doc });
+    yield* hub.publish([{ type: "upsert", packId: "pack-a", collection: "items", doc }]);
     yield* Deferred.succeed(release, undefined);
     assert.deepStrictEqual(yield* Fiber.join(collector), [
       { type: "snapshot", packId: "pack-a", collection: "items", documents: [] },

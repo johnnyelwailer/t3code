@@ -1,40 +1,45 @@
 import type { PackCollectionsDefinition } from "@t3team/pack-api";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import type * as PubSub from "effect/PubSub";
 import type * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { PackDocumentStore } from "./t3team-packDocumentApi.ts";
 import { packDocumentWriter } from "./t3team-packDocumentCommit.ts";
-import { incrementPackDocument } from "./t3team-packDocumentCounter.ts";
+import type { PackDocumentHub } from "./t3team-packDocumentHub.ts";
 import { packDocumentQueries } from "./t3team-packDocumentQueries.ts";
-import type { PackDocumentChange } from "./t3team-packDocumentStream.ts";
+import { packDocumentWrites } from "./t3team-packDocumentWrites.ts";
 import {
   collectionDefinition,
   decodeKey,
   decodePrefix,
-  encodeDocument,
   mapPackDocumentError,
-  T3TeamPackDocumentStoreError,
+  refuse,
 } from "./t3team-packDocumentValidation.ts";
+
+const nowIso = DateTime.now.pipe(Effect.map(DateTime.formatIso));
+
 export const bindPackDocumentStore = Effect.fnUntraced(
   function* (
     packId: string,
     config: PackCollectionsDefinition,
-    changes: PubSub.PubSub<PackDocumentChange>,
+    hub: PackDocumentHub,
     lock: Semaphore.Semaphore,
   ) {
     const sql = yield* SqlClient.SqlClient;
     const query = packDocumentQueries(sql, packId);
-    const validate = Effect.fnUntraced(function* (collection: string, key?: string) {
-      const definition = yield* Effect.try(() => collectionDefinition(config, collection));
-      if (key !== undefined) yield* decodeKey(key);
-      return definition;
-    });
-    const write = packDocumentWriter(sql, changes, lock, packId);
+    const validate = Effect.fnUntraced(
+      function* (collection: string, key?: string) {
+        const definition = yield* collectionDefinition(config, collection);
+        if (key !== undefined) yield* decodeKey(key);
+        return definition;
+      },
+      Effect.mapError(mapPackDocumentError("validate")),
+    );
+    const write = packDocumentWriter(sql, hub, lock);
     const get = (collection: string, key: string) =>
       validate(collection, key).pipe(
-        Effect.andThen(query.get(collection, key)),
+        Effect.andThen(nowIso),
+        Effect.flatMap((now) => query.get(collection, key, now)),
         Effect.mapError(mapPackDocumentError("get")),
       );
     const list = Effect.fnUntraced(
@@ -49,95 +54,20 @@ export const bindPackDocumentStore = Effect.fnUntraced(
           options.limit !== undefined &&
           (!Number.isSafeInteger(options.limit) || options.limit < 1)
         )
-          return yield* new T3TeamPackDocumentStoreError({
-            operation: "list",
-            cause: new Error("Invalid list limit"),
-          });
-        return yield* query.list(collection, options);
+          return yield* refuse("list", "InvalidInput", "Invalid list limit");
+        return yield* query.list(collection, yield* nowIso, options);
       },
       Effect.mapError(mapPackDocumentError("list")),
     );
-    const insertOrGet = (collection: string, key: string, doc: unknown) =>
-      write(
-        "insertOrGet",
-        Effect.gen(function* () {
-          const definition = yield* validate(collection, key);
-          const encoded = yield* encodeDocument(doc, definition.maxDocBytes);
-          const now = DateTime.formatIso(yield* DateTime.now);
-          const inserted = yield* query.insert(collection, key, {
-            ...encoded,
-            now,
-            expiresAt: null,
-          });
-          const winner = inserted ?? (yield* query.get(collection, key));
-          if (!winner)
-            return yield* new T3TeamPackDocumentStoreError({
-              operation: "insertOrGet",
-              cause: new Error("Insert winner missing"),
-            });
-          return {
-            collection,
-            doc: inserted,
-            value: { doc: winner, inserted: inserted !== null },
-          };
-        }),
+    /** Marks a live document as read, which is what `afterUnreadDays` and the quota order use. */
+    const touch = (collection: string, key: string) =>
+      validate(collection, key).pipe(
+        Effect.andThen(nowIso),
+        Effect.flatMap((now) => query.touch(collection, key, now)),
+        Effect.mapError(mapPackDocumentError("touch")),
       );
-    const put = (
-      collection: string,
-      key: string,
-      doc: unknown,
-      options: { ifVersion?: number; ttlMs?: number } = {},
-    ) =>
-      write(
-        "put",
-        Effect.gen(function* () {
-          const definition = yield* validate(collection, key);
-          if (
-            options.ifVersion !== undefined &&
-            (!Number.isSafeInteger(options.ifVersion) || options.ifVersion < 0)
-          )
-            return yield* new T3TeamPackDocumentStoreError({
-              operation: "put",
-              cause: new Error("Invalid version"),
-            });
-          if (
-            options.ttlMs !== undefined &&
-            (!Number.isSafeInteger(options.ttlMs) || options.ttlMs < 1)
-          )
-            return yield* new T3TeamPackDocumentStoreError({
-              operation: "put",
-              cause: new Error("Invalid TTL"),
-            });
-          const encoded = yield* encodeDocument(doc, definition.maxDocBytes);
-          const time = yield* DateTime.now;
-          const value = {
-            ...encoded,
-            now: DateTime.formatIso(time),
-            expiresAt:
-              options.ttlMs === undefined
-                ? null
-                : DateTime.formatIso(DateTime.addDuration(time, options.ttlMs)),
-          };
-          const result =
-            options.ifVersion === 0
-              ? yield* query.insert(collection, key, value)
-              : ((yield* query.update(collection, key, value, options.ifVersion)) ??
-                (options.ifVersion === undefined
-                  ? yield* query.insert(collection, key, value)
-                  : null));
-          return { collection, doc: result, value: result };
-        }),
-      );
-    const increment = (collection: string, key: string, field: string, by: number) =>
-      write(
-        "increment",
-        validate(collection, key).pipe(
-          Effect.flatMap((definition) =>
-            incrementPackDocument(query, collection, key, field, by, definition.maxDocBytes),
-          ),
-        ),
-      );
-    return { get, list, insertOrGet, put, increment } satisfies PackDocumentStore;
+    const writes = packDocumentWrites({ packId, query, write, validate });
+    return { get, list, touch, ...writes } satisfies PackDocumentStore;
   },
   Effect.mapError(mapPackDocumentError("forPack")),
 );
