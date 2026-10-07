@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { DigestSprintAxis } from "~/t3team/t3team-ProjectMyWorkDigestSprintAxis";
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import {
@@ -27,10 +28,19 @@ function DigestAutoStatus({
 }) {
   // PRs that may be old or missing (the host rate-limited the read): said here, beside the sync.
   const prNotice = changeRequestNote ? (
-    <span className="inline-flex items-center gap-1.5 text-warning" title={changeRequestNote}>
-      <span className="size-1.5 rounded-full bg-warning" aria-hidden />
-      Some PRs may be out of date
-    </span>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span className="inline-flex items-center gap-1.5 text-warning">
+            <span className="size-1.5 rounded-full bg-warning" aria-hidden />
+            Some PRs may be out of date
+          </span>
+        }
+      />
+      <TooltipPopup side="top" className="max-w-xs">
+        {changeRequestNote}
+      </TooltipPopup>
+    </Tooltip>
   ) : null;
   if (jiraSyncedAt === undefined && updatedAtMs === undefined) return prNotice;
   const stale = jiraSyncedAt !== undefined && nowMs - Date.parse(jiraSyncedAt) > JIRA_SYNC_STALE_MS;
