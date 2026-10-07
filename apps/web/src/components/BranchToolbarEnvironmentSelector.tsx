@@ -2,7 +2,7 @@ import { ThreadDetailsSelectControl } from "./chat/ThreadDetailsControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
-import { CloudIcon, ScaleIcon, SettingsIcon } from "lucide-react";
+import { ScaleIcon, SettingsIcon } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
@@ -15,10 +15,7 @@ import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import { RunOnCloudRow } from "./cloud/t3team-RunOnCloudRow";
 import { runOnRows } from "./cloud/t3team-runOnCloudRows";
-import {
-  CloudSessionMachineHint,
-  ProjectMachineSetupButton,
-} from "./cloud/t3team-CloudSessionMachineHint";
+import { NewCloudSessionItem } from "./cloud/t3team-NewCloudSessionItem";
 import {
   Select,
   SelectGroup,
@@ -63,10 +60,14 @@ export interface BranchToolbarEnvironmentSelectorProps {
    */
   onCreateCloudSession?: () => void;
   /**
-   * Starts a host checkout so an agent can write this project's machine. Shown only when the
-   * project has no definition. Absent when the flag is off.
+   * "Yes" to "Set one up?", asked once by New cloud session when the project has no machine:
+   * starts the setup session. Absent when the flag is off, and then nothing is asked.
    */
   onSetupProjectMachine?: () => void;
+  /** "No" to the same question: remembered for the project, then a plain session starts. */
+  onDeclineProjectMachine?: () => void;
+  /** The user already said "No" for this project, so New cloud session starts without asking. */
+  projectMachineDeclined?: boolean;
   /**
    * t3team: a create is on its way to the server (resolving the machine, dispatching), which takes
    * seconds before the session's own row exists; the create row shows it at once and stops a
@@ -119,6 +120,8 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   cloudEnvironmentIds,
   onCreateCloudSession,
   onSetupProjectMachine,
+  onDeclineProjectMachine,
+  projectMachineDeclined = false,
   cloudSessionCreatePending = false,
   cloudSessionSetupPending = false,
   cloudSessionProject,
@@ -398,53 +401,15 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                     onDismiss={onDismissCloudSession}
                   />
                 ))}
-              {/* Mouse-only on purpose: dispatching a VM is a real cost, so this
-                  row is outside the arrow-key focus order (finding: one Enter
-                  must not provision a machine). */}
-              <button
-                type="button"
-                disabled={cloudSessionCreatePending}
-                aria-busy={cloudSessionCreatePending}
-                onClick={() => onCreateCloudSession?.()}
-                className={cn(
-                  "flex w-full items-start gap-1.5 rounded-sm px-2 py-1.5 text-foreground sm:text-sm",
-                  cloudSessionCreatePending
-                    ? "cursor-default text-muted-foreground"
-                    : "cursor-pointer hover:bg-muted",
-                )}
-              >
-                <CloudIcon
-                  className={cn(
-                    "mt-0.5 size-3 shrink-0 self-start",
-                    cloudSessionCreatePending && !cloudSessionSetupPending && "animate-pulse",
-                  )}
-                  aria-hidden="true"
-                />
-                <span className="flex min-w-0 flex-col items-start text-left">
-                  <span>
-                    {cloudSessionCreatePending && !cloudSessionSetupPending
-                      ? "Requesting a machine…"
-                      : "New cloud session"}
-                  </span>
-                  {cloudSessionCreatePending && !cloudSessionSetupPending ? (
-                    <span className="max-w-full truncate text-muted-foreground text-xs">
-                      Asking the fleet; this takes a few seconds
-                    </span>
-                  ) : cloudSessionProject ? (
-                    <span className="max-w-full truncate text-muted-foreground text-xs">
-                      <CloudSessionMachineHint {...cloudSessionProject} />
-                    </span>
-                  ) : null}
-                </span>
-              </button>
-              {onSetupProjectMachine && cloudSessionProject ? (
-                <ProjectMachineSetupButton
-                  {...cloudSessionProject}
-                  pending={cloudSessionSetupPending === true}
-                  disabled={cloudSessionCreatePending}
-                  onSetup={onSetupProjectMachine}
-                />
-              ) : null}
+              <NewCloudSessionItem
+                project={cloudSessionProject}
+                pending={cloudSessionCreatePending}
+                setupPending={cloudSessionSetupPending}
+                onCreate={() => onCreateCloudSession?.()}
+                onSetup={onSetupProjectMachine}
+                onDecline={onDeclineProjectMachine}
+                declined={projectMachineDeclined}
+              />
             </>
           )}
           {onSetupCloudSessions && (

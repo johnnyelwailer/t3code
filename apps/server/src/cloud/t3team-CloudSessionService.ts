@@ -191,7 +191,10 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       }
 
       // A warm standby of the project, when the broker has one idle: seconds instead of minutes.
-      const workspace = sessionWorkspaceName(login, machine?.repository ?? setup?.repository ?? null);
+      const workspace = sessionWorkspaceName(
+        login,
+        machine?.repository ?? setup?.repository ?? null,
+      );
       if (machine !== null) {
         // The project is in use: the broker warms its next machine now, not at the next report.
         yield* broker.reportInterest([standbyPoolKey(machine.repository)]).pipe(Effect.ignore);

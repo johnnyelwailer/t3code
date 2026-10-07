@@ -233,7 +233,9 @@ const make = Effect.gen(function* () {
       .resolveDefault(projectId)
       .pipe(Effect.mapError((error) => unavailable(error.message)));
     if (found.source !== null) {
-      return yield* unavailable("This project already has a machine. Start a cloud session to use it.");
+      return yield* unavailable(
+        "This project already has a machine. Start a cloud session to use it.",
+      );
     }
     const broken = found.discovery.rejected[0];
     if (broken !== undefined) {
@@ -246,11 +248,15 @@ const make = Effect.gen(function* () {
     const origin = yield* git(checkout.root, "machine.origin", ["remote", "get-url", "origin"]);
     const repository = origin.ok ? machineRepositoryFromRemote(origin.stdout) : null;
     if (repository === null) {
-      return yield* unavailable("This project has no origin remote a cloud session can clone over https.");
+      return yield* unavailable(
+        "This project has no origin remote a cloud session can clone over https.",
+      );
     }
     const commit = yield* pinnedCommit(checkout.root);
     if (commit === null) {
-      return yield* unavailable("Push this project's branch so the setup machine can check it out.");
+      return yield* unavailable(
+        "Push this project's branch so the setup machine can check it out.",
+      );
     }
     const creds = yield* credentials(checkout.root, repository);
     return { repository, commit, ...creds } satisfies CloudSessionSetup;

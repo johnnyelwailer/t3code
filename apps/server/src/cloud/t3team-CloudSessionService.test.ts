@@ -595,13 +595,12 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       });
       const broker = brokerMock(() => Effect.succeed("g"));
       yield* runPastDiscoveryPoll(
-        create(
-          providersWith(execute, broker, machines),
-          ProjectId.make("p1"),
-          { machineSetup: true },
-        ),
+        create(providersWith(execute, broker, machines), ProjectId.make("p1"), {
+          machineSetup: true,
+        }),
       );
-      const dispatch = calls.find((call) => call.args.join(" ").includes("/dispatches"))?.stdin ?? "";
+      const dispatch =
+        calls.find((call) => call.args.join(" ").includes("/dispatches"))?.stdin ?? "";
       assert.include(dispatch, '"machine_setup":"true"');
       assert.include(dispatch, '"machine_repository":"https://nexplore.ghe.com/acme/api.git"');
       assert.notInclude(dispatch, "machine_devcontainer");
