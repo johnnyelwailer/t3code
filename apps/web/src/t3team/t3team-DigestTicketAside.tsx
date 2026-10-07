@@ -1,5 +1,5 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { ExternalLink, Maximize2, XIcon } from "lucide-react";
+import { ExternalLink, Maximize2, MessageSquarePlus, XIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 import { Button } from "~/t3team/components/ui/t3team-button";
@@ -42,10 +42,13 @@ export function DigestTicketAside({
   const [tab, setTab] = useState<"details" | "chat">("details");
   // The ticket's live thread is its chat here, as on the ticket page: the Chat tab shows it, and the
   // view model attaches the ticket's context to it. A thread started from the tab becomes it.
-  const ticketThreadId = useMemo(
+  const liveThreadId = useMemo(
     () => latestLiveTicketThreadId(projectThreads, ticket.ticketId),
     [projectThreads, ticket.ticketId],
   );
+  // "New chat" steps away from the live thread: the composer shows until a newer thread exists.
+  const [setAsideThreadId, setSetAsideThreadId] = useState<string | undefined>(undefined);
+  const ticketThreadId = liveThreadId === setAsideThreadId ? undefined : liveThreadId;
   const view = useWorkItemDetailViewModel({
     project,
     ticketId: ticket.ticketId,
@@ -82,6 +85,17 @@ export function DigestTicketAside({
               { value: "chat", label: "Chat" },
             ]}
           />
+        ) : null}
+        {chatActions && tab === "chat" && ticketThreadId !== undefined ? (
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            onClick={() => setSetAsideThreadId(ticketThreadId)}
+            aria-label="New chat"
+            title="New chat"
+          >
+            <MessageSquarePlus className="size-3.5" />
+          </Button>
         ) : null}
         {ticket.openFullPage ? (
           <Button
@@ -122,16 +136,16 @@ export function DigestTicketAside({
           <DigestTicketAsideChat project={project} view={view} actions={chatActions} />
         </div>
       ) : (
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <WorkItemDetailMain
-          {...buildWorkItemDetailMainProps({
-            view,
-            project,
-            onOpenTicket: openTicket,
-            showAgentContextMenu,
-          })}
-        />
-      </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <WorkItemDetailMain
+            {...buildWorkItemDetailMainProps({
+              view,
+              project,
+              onOpenTicket: openTicket,
+              showAgentContextMenu,
+            })}
+          />
+        </div>
       )}
     </div>
   );
