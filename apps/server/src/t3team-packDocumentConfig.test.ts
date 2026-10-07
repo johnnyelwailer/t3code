@@ -15,6 +15,7 @@ it("repeated compiled activation is idempotent and conflicting registration is a
         ["would-partially-register", definition],
         ["compiled-config-test", { ...definition, quotaBytes: 2048 }],
       ]),
+      "compiled",
     ),
   ).toThrow("Duplicate");
   expect(configuredPackCollections()).toBe(prior);
