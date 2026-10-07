@@ -260,6 +260,15 @@ export default async function run() {
     expect(auditWorkflowSourceStatic(source("2"), { declared: new Set() })).toEqual([]);
   });
 
+  it("typechecks sync and async pipeline stages with explicit input types", () => {
+    const typed = source("2");
+    typed.sourceText = typed.sourceText.replace(
+      "async (prev) => prev",
+      "(prev: number) => prev + 1, async (prev: number) => prev + 1",
+    );
+    expect(auditWorkflowSourceStatic(typed, { declared: new Set(), typecheck: true })).toEqual([]);
+  });
+
   it("still scans expressions inside the options object", () => {
     const findings = auditWorkflowSourceStatic(source("process.pid + await waitUntil(1)"), {
       declared: new Set(),
