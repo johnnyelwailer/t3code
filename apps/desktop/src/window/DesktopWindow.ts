@@ -31,6 +31,7 @@ import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts";
 import { makeQuitShortcutHandler } from "./QuitHold.ts";
+import { resolveDesktopWindowTitle } from "../app/t3team-desktopDistributionBrand.ts";
 
 import {
   ATLASSIAN_OAUTH_POPUP_HEIGHT,
@@ -695,9 +696,14 @@ export const make = Effect.gen(function* () {
       if (input.type === "gestureScrollEnd") window.webContents.send(TRACKPAD_SCROLL_END_CHANNEL);
     });
 
-    window.on("page-title-updated", (event) => {
+    window.on("page-title-updated", (event, title) => {
       event.preventDefault();
-      window.setTitle(environment.displayName);
+      window.setTitle(
+        resolveDesktopWindowTitle({
+          displayName: environment.displayName,
+          documentTitle: title,
+        }),
+      );
     });
     window.on("resize", scheduleBoundsPersist);
     window.on("move", scheduleBoundsPersist);
@@ -772,7 +778,15 @@ export const make = Effect.gen(function* () {
       }
       clearDevelopmentLoadRetry();
       developmentLoadRetryIndex = 0;
-      window.setTitle(environment.displayName);
+      window.setTitle(
+        resolveDesktopWindowTitle({
+          displayName: environment.displayName,
+          documentTitle:
+            typeof window.webContents.getTitle === "function"
+              ? window.webContents.getTitle()
+              : undefined,
+        }),
+      );
       if (environment.platform === "darwin") syncMacosWindowButtons(window);
     });
     window.webContents.on(

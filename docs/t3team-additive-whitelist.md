@@ -302,6 +302,19 @@ existing `docs/t3team-mvp/**` and `.claude/**` entries.
 - Additive `.test`, `.browser`, `.stories`, and `*Fixtures` files use a higher LOC ceiling because they are validation/demo artifacts rather than shipped runtime surfaces.
 - Remove entries when no longer needed.
 
+## Pack-configurable vendor branding (2026-10-07)
+
+Distribution appearance (`labels.appName`, product name, brand mark) has to reach the
+surfaces that still spelled the vendor name before a session existed, plus the desktop
+window title and the DMG background the desktop build rasterizes.
+
+- `apps/web/index.html` — boot splash title, label, and mark follow the pack descriptor when one is served.
+- `apps/web/src/lib/bootError.ts` — startup failure copy uses the same boot product name.
+- `apps/web/src/routes/_chat.index.tsx` — hosted empty state uses the pack product name.
+- `apps/web/src/components/auth/AuthSurfaceShell.tsx` — connect masthead uses the pack display name.
+- `apps/web/src/components/auth/PairingRouteSurface.tsx` — pairing eyebrows use the pack display name.
+- `apps/desktop/src/window/DesktopApplicationMenu.ts` — update dialog names the active product.
+
 ## PR #344 main-repository port onto orchestration V2 (2026-10-05)
 
 Owner-approved 2026-10-05. Exact paths; each is upstream orchestration V2 surface, integrated via PR #344:

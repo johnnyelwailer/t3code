@@ -70,6 +70,7 @@ import { useUpstreamRouteBridge } from "../t3team/t3team-useUpstreamRouteBridge"
 import { T3TeamPackAppearanceDefaultsSync } from "../t3team/t3team-PackAppearanceDefaultsSync";
 import { T3TeamPackAppearanceSync } from "../t3team/t3team-PackAppearanceSync";
 import { CloudSessionSignInDialogHost } from "../cloud/t3team-CloudSessionSignInDialogHost";
+import { t3teamPackProductName, useT3TeamAppDisplayName } from "../t3team/t3team-appBrandName";
 import { useT3TeamPackAppearance } from "../t3team/t3team-packAppearance";
 // Registers the composing heartbeat with the composer draft store's sink (side effect only).
 import "../t3team/chat/t3team-threadComposingSignal";
@@ -141,13 +142,14 @@ export const Route = createRootRoute({
 });
 
 function RootRouteNotFoundView() {
+  const appName = useT3TeamAppDisplayName();
   return (
     <main className="flex min-h-0 min-w-0 flex-1 items-center justify-center p-6">
       <div className="flex max-w-sm flex-col items-center gap-4 text-center">
         <h1 className="text-lg font-medium text-foreground">Page not found</h1>
         <p className="text-sm text-muted-foreground">
-          This link doesn't point to a page in {APP_DISPLAY_NAME}. Go home to choose a project or
-          start a thread.
+          This link doesn't point to a page in {appName}. Go home to choose a project or start a
+          thread.
         </p>
         <Button render={<Link to="/" replace />}>Go home</Button>
       </div>
@@ -195,6 +197,8 @@ function RootRouteView() {
     return (
       <>
         <DocumentTitleSync />
+        <T3TeamPackAppearanceSync />
+        <T3TeamPackAppearanceDefaultsSync />
         <Outlet />
       </>
     );
@@ -233,6 +237,8 @@ function RootRouteView() {
     return (
       <>
         <DocumentTitleSync />
+        <T3TeamPackAppearanceSync />
+        <T3TeamPackAppearanceDefaultsSync />
         <Outlet />
       </>
     );
@@ -387,7 +393,7 @@ function FontAppearanceSync() {
 function DocumentTitleSync() {
   const primaryServerVersion =
     useAtomValue(primaryServerConfigAtom)?.environment.serverVersion ?? null;
-  const packAppName = useT3TeamPackAppearance()?.labels?.appName;
+  const packAppName = t3teamPackProductName(useT3TeamPackAppearance());
   const title = resolveServerBackedAppDisplayName({
     baseName: packAppName ?? APP_BASE_NAME,
     fallbackDisplayName: packAppName ?? APP_DISPLAY_NAME,
@@ -432,18 +438,15 @@ function HostedStaticEnvironmentBootstrap() {
 
 function RootRouteErrorView({ error }: ErrorComponentProps) {
   const router = useRouter();
+  const appName = useT3TeamAppDisplayName();
   const message = errorMessage(error);
   // Router pathname rather than window.location: desktop uses hash history, where the window path is always "/".
   const pathname = useLocation({ select: (location) => location.pathname });
-  const report = useMemo(() => errorReport(error, pathname), [error, pathname]);
+  const report = useMemo(() => errorReport(error, pathname, appName), [appName, error, pathname]);
 
   return (
     <StandalonePage tone="error">
-      <StandalonePageHeader
-        eyebrow={APP_DISPLAY_NAME}
-        title="Something went wrong."
-        description={message}
-      />
+      <StandalonePageHeader eyebrow={appName} title="Something went wrong." description={message} />
 
       <div className="mt-5 flex flex-wrap gap-2">
         <Button size="sm" onClick={() => void router.invalidate()}>
@@ -512,9 +515,9 @@ const MAX_ERROR_CAUSE_DEPTH = 5;
  * and any cause chain. Takes the pathname only so tokens in the query never
  * land on the clipboard.
  */
-function errorReport(error: unknown, pathname: string): string {
+function errorReport(error: unknown, pathname: string, appName: string): string {
   const lines = [
-    `${APP_DISPLAY_NAME} ${APP_VERSION}`,
+    `${appName} ${APP_VERSION}`,
     `Path: ${pathname}`,
     `Time: ${new Date().toISOString()}`,
     "",
