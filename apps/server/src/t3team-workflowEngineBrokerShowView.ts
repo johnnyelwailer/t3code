@@ -18,7 +18,7 @@ import type { BrokerCore, BrokerSend } from "./t3team-workflowEngineBrokerContex
 /** The namespace of the host's own message views (`t3team.workflow.decision`, …). */
 const HOST_VIEW_NAMESPACE = "t3team";
 
-export const workflowViewMessageId = (threadId: string, key: string) =>
+const workflowViewMessageId = (threadId: string, key: string) =>
   `t3team-wf-view:${threadId}:${key}`;
 
 /** Why the host refuses to show `view`, or `null` when it may. */
