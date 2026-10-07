@@ -23,6 +23,7 @@ const INDEX_PATH = NodeURL.fileURLToPath(new URL("./t3team-sdk.index.ts", import
 /** The option/result types the bound API refers to; expanded member by member. */
 const REFERENCED_TYPES = [
   "WorkflowMeta",
+  "CompositionOptions",
   "AgentOpts",
   "AskOpts",
   "AskUserOpts",
@@ -163,6 +164,10 @@ export function generateWorkflowAuthorReference(): string {
     "- The durable-suspension signal raised while `agent()`/`askAgent()`/`askUser()`/`waitUntil()` park the run is control flow, not an error: never catch or retry it. Retry only your own schema failures by re-asking.",
     '- Provider instance ids and model slugs are live runtime facts: read them with the models tool before writing `model: "<instanceId>/<slug>"`; prefer `effort` when you need a thinking tier, not a specific model.',
     "- Return a structured object as the result (rendered as labelled lines); use `getThread().showWidget` for anything the user must see, `notifyUser` for a verdict line. Never forward a sub-agent's raw output verbatim.",
+    "",
+    "## Store-backed idempotent branches",
+    "`parallel` and `pipeline` journal one composition result, not per-branch checkpoints. A crash before that result commits re-runs the branches. In a recipe script, read each branch's progress from the pack store first, skip completed work, then persist its result. Make the work idempotent; for example, process a repository only when its stored status is not done. This also applies to each item's pipeline chain.",
+    "Body counters (`blackboxSeq`, any `let`) reset on replay. Budgets that must survive resume belong in the store: use `increment` in the script, rather than an in-memory counter. `getBudget().total` is currently 0; do not treat it as a durable call budget.",
     "",
     "## Examples",
     ...examples,

@@ -12,7 +12,18 @@ import { WorkflowSuspended } from "./handles.ts";
 import type { WorkflowReference } from "./engineTypes.ts";
 import type { PrimitiveCall } from "./runtimeTypes.ts";
 
-export type PipelineStage = (prev: unknown, item: unknown, index: number) => Promise<unknown>;
+/** Limit active branches; omission keeps the existing unbounded fan-out. */
+export interface CompositionOptions {
+  /** A positive finite integer. Recorded in the composition's journal arguments. */
+  readonly concurrency?: number;
+}
+
+export type PipelineStages = PipelineStage[] | [...PipelineStage[], CompositionOptions];
+
+/** Stage values are workflow-defined; retain explicitly typed callbacks at this untyped boundary. */
+export type PipelineStage = {
+  stage(prev: unknown, item: unknown, index: number): unknown;
+}["stage"];
 
 export interface WorkflowBudget {
   readonly total: number;
@@ -71,10 +82,13 @@ export interface WorkflowPrimitives<
   Ref extends WorkflowReference = WorkflowReference,
   Opts = unknown,
 > {
-  readonly parallel: <R>(thunks: ReadonlyArray<() => Promise<R>>) => Promise<Array<R | null>>;
+  readonly parallel: <R>(
+    thunks: ReadonlyArray<() => Promise<R>>,
+    options?: CompositionOptions,
+  ) => Promise<Array<R | null>>;
   readonly pipeline: (
     items: ReadonlyArray<unknown>,
-    ...stages: PipelineStage[]
+    ...stages: PipelineStages
   ) => Promise<unknown[]>;
   /**
    * `opts` is opaque at this host-neutral layer — it is handed straight to `runSubWorkflow`
@@ -153,77 +167,119 @@ async function reportCompositionBranchFailure(
   }
 }
 
+/** FIFO workers share one cursor and write results at the original input index. */
+async function runCompositionPool<R>(
+  count: number,
+  concurrency: number | undefined,
+  run: (index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  let next = 0;
+  let stopped = false;
+  const worker = async () => {
+    while (!stopped && next < count) {
+      const index = next++;
+      try {
+        results[index] = await run(index);
+      } catch (reason) {
+        stopped = true;
+        throw reason;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency ?? count, count) }, worker));
+  return results;
+}
+
+function compositionConcurrency(options: CompositionOptions | undefined): number | undefined {
+  const concurrency = options?.concurrency;
+  if (concurrency !== undefined && (!Number.isInteger(concurrency) || concurrency < 1)) {
+    throw new WorkflowError("Composition concurrency must be a positive finite integer.");
+  }
+  return concurrency;
+}
+
 export function createWorkflowPrimitives<
   Ref extends WorkflowReference = WorkflowReference,
   Opts = unknown,
 >(deps: WorkflowPrimitivesDeps<Ref, Opts>): WorkflowPrimitives<Ref, Opts> {
-  const parallel = <R>(thunks: ReadonlyArray<() => Promise<R>>): Promise<Array<R | null>> =>
-    deps.callPrimitive<Array<R | null>>({
+  const parallel = <R>(
+    thunks: ReadonlyArray<() => Promise<R>>,
+    options?: CompositionOptions,
+  ): Promise<Array<R | null>> => {
+    const concurrency = compositionConcurrency(options);
+    return deps.callPrimitive<Array<R | null>>({
       kind: "parallel",
       refId: "parallel",
-      args: { thunkCount: thunks.length },
+      args: { thunkCount: thunks.length, ...(concurrency === undefined ? {} : { concurrency }) },
       exec: () =>
         deps.runBlackBoxed(() =>
-          Promise.all(
-            thunks.map((thunk, index) =>
-              Promise.resolve()
-                .then(thunk)
-                .then(
-                  (value) => value,
-                  async (reason) => {
-                    rethrowIfSuspension(reason);
-                    await reportCompositionBranchFailure(deps, {
-                      compositionKind: "parallel",
-                      index,
-                      total: thunks.length,
-                      error: describeRejectionReason(reason),
-                    });
-                    return null;
-                  },
-                ),
-            ),
-          ),
+          runCompositionPool<R | null>(thunks.length, concurrency, async (index) => {
+            try {
+              return await thunks[index]!();
+            } catch (reason) {
+              rethrowIfSuspension(reason);
+              await reportCompositionBranchFailure(deps, {
+                compositionKind: "parallel",
+                index,
+                total: thunks.length,
+                error: describeRejectionReason(reason),
+              });
+              return null;
+            }
+          }),
         ),
       decodeRecorded: (recorded) => recorded as Array<R | null>,
     });
+  };
 
   const pipeline = (
     items: ReadonlyArray<unknown>,
-    ...stages: PipelineStage[]
-  ): Promise<unknown[]> =>
-    deps.callPrimitive<unknown[]>({
+    ...stagesAndOptions: PipelineStages
+  ): Promise<unknown[]> => {
+    const last = stagesAndOptions.at(-1);
+    const options = typeof last === "object" && last !== null ? last : undefined;
+    const concurrency = compositionConcurrency(options);
+    const stages = (
+      options === undefined ? stagesAndOptions : stagesAndOptions.slice(0, -1)
+    ) as PipelineStage[];
+    return deps.callPrimitive<unknown[]>({
       kind: "pipeline",
       refId: "pipeline",
-      args: { itemCount: items.length, stageCount: stages.length },
+      args: {
+        itemCount: items.length,
+        stageCount: stages.length,
+        ...(concurrency === undefined ? {} : { concurrency }),
+      },
       exec: () =>
         deps.runBlackBoxed(() =>
-          Promise.all(
-            items.map(async (item, index) => {
-              let stageIndex = 0;
-              try {
-                let prev: unknown = item;
-                for (const stage of stages) {
-                  prev = await stage(prev, item, index);
-                  stageIndex += 1;
-                }
-                return prev;
-              } catch (reason) {
-                rethrowIfSuspension(reason);
-                await reportCompositionBranchFailure(deps, {
-                  compositionKind: "pipeline",
-                  index,
-                  total: items.length,
-                  stageIndex,
-                  stageTotal: stages.length,
-                  error: describeRejectionReason(reason),
-                });
-                return null;
+          runCompositionPool(items.length, concurrency, async (index) => {
+            const item = items[index];
+            let stageIndex = 0;
+            try {
+              let prev: unknown = item;
+              for (const stage of stages) {
+                prev = await stage(prev, item, index);
+                stageIndex += 1;
               }
-            }),
-          ),
+              return prev;
+            } catch (reason) {
+              rethrowIfSuspension(reason);
+              await reportCompositionBranchFailure(deps, {
+                compositionKind: "pipeline",
+                index,
+                total: items.length,
+                stageIndex,
+                stageTotal: stages.length,
+                error: describeRejectionReason(reason),
+              });
+              return null;
+            }
+          }),
         ),
       decodeRecorded: (recorded) => recorded as unknown[],
     });
+  };
 
   /**
    * Runs a sub-workflow INLINE, in this run's own journal sequence — deliberately NOT through
