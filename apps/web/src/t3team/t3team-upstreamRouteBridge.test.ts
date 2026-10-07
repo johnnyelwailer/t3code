@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  buildUpstreamBridgeNavigation,
   isT3TeamShellPath,
   isTeamShellEnvironment,
   translateUpstreamPath,
@@ -128,5 +129,30 @@ describe("translateUpstreamPath", () => {
     for (const pathname of ["/threads", "/a/b/c", "/local/thread/extra"]) {
       expect(translateUpstreamPath(pathname, deps("p1"))).toEqual({ kind: "unhandled" });
     }
+  });
+});
+
+describe("buildUpstreamBridgeNavigation", () => {
+  it("always replaces so Back cannot re-enter the upstream thread path", () => {
+    expect(
+      buildUpstreamBridgeNavigation({
+        kind: "target",
+        target: {
+          to: "/t3team/projects/$projectId/threads/$threadId",
+          params: { projectId: "project-3", threadId: "thread-7" },
+        },
+      }),
+    ).toEqual({
+      to: "/t3team/projects/$projectId/threads/$threadId",
+      params: { projectId: "project-3", threadId: "thread-7" },
+      replace: true,
+    });
+  });
+
+  it("replaces unhandled upstream paths onto the team dashboard", () => {
+    expect(buildUpstreamBridgeNavigation({ kind: "unhandled" })).toEqual({
+      to: "/t3team",
+      replace: true,
+    });
   });
 });
