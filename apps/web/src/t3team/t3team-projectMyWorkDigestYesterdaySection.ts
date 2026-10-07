@@ -2,21 +2,22 @@ import type {
   DigestGraph,
   DigestPlacement,
   DigestSection,
-  DigestYesterday,
 } from "./t3team-projectMyWorkDigestTypes";
-import { isDigestMorning } from "./t3team-projectMyWorkDigestYesterdayRecap";
+import { digestYesterdayRecap, isDigestMorning } from "./t3team-projectMyWorkDigestYesterdayRecap";
 
 /** The `graph` widget that lists what the viewer merged and moved in the previous working day. */
 export const DIGEST_YESTERDAY_WIDGET_ID = "my-work.yesterday";
 
-export function hasDigestYesterday(
-  yesterday: DigestYesterday | undefined,
-): yesterday is DigestYesterday {
-  // A move without a target status is a bare update: it says nothing, so it alone is no recap.
-  return (
-    yesterday !== undefined &&
-    (yesterday.merged.length > 0 || yesterday.moved.some((move) => move.to !== undefined))
-  );
+/**
+ * Whether the widget would list anything: the same recap it renders, over the tickets the graph
+ * holds. A bare update, or a move of a ticket the graph does not hold (a status filter hid it), is
+ * no recap, so the section drops instead of reserving an empty lane.
+ */
+export function hasDigestYesterday(graph: DigestGraph): boolean {
+  if (graph.yesterday === undefined) return false;
+  const ticketsById = new Map(graph.tickets.map((ticket) => [ticket.id, ticket]));
+  const recap = digestYesterdayRecap(graph.yesterday, ticketsById);
+  return recap.items.length + recap.loosePrs.length > 0;
 }
 
 /**
@@ -35,7 +36,7 @@ export function digestYesterdaySection(
   graph: DigestGraph,
   placement: DigestPlacement,
 ): DigestSection[] {
-  if (!hasDigestYesterday(graph.yesterday)) return [];
+  if (!hasDigestYesterday(graph)) return [];
   return [
     {
       id: "yesterday",
@@ -54,5 +55,5 @@ export function digestYesterdaySection(
  * the plan drops the section instead of leaving an empty frame.
  */
 export function isDigestGraphSectionLive(section: DigestSection, graph: DigestGraph): boolean {
-  return section.widget === DIGEST_YESTERDAY_WIDGET_ID && hasDigestYesterday(graph.yesterday);
+  return section.widget === DIGEST_YESTERDAY_WIDGET_ID && hasDigestYesterday(graph);
 }

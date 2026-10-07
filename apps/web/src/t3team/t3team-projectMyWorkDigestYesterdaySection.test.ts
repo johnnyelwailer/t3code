@@ -107,6 +107,19 @@ describe("the yesterday section of the plan", () => {
     expect(buildHeuristicDigestPlan(graph(updatedOnly), MORNING).sections).toEqual([]);
   });
 
+  it("is absent when a filter hid every ticket that moved and nothing was merged", () => {
+    // The status filter narrows `tickets`, not `yesterday`: the moves are there, their tickets are not.
+    const movedHidden = {
+      merged: [],
+      moved: [
+        { ticketId: "t-hidden", from: "Code Review", to: "Done", at: "2026-10-05T10:00:00Z" },
+      ],
+    };
+    expect(buildHeuristicDigestPlan(graph(movedHidden), MORNING).sections).toEqual([]);
+    const arranged = agentPlan([yesterdaySection("side")]);
+    expect(resolveDigestPlan(arranged, graph(movedHidden), MORNING).sections).toEqual([]);
+  });
+
   it("does not double up on the default plan", () => {
     expect(buildDigestPlan(graph(withYesterday), NOW).sections.map((s) => s.id)).toEqual([
       "yesterday",

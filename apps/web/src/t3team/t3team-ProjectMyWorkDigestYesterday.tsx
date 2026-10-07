@@ -34,6 +34,7 @@ const asChangeRequest = (pr: DigestYesterdayMerged): DigestChangeRequest => ({
 });
 
 const lineClassName = "min-w-0 space-y-1 px-3 py-1.5 text-xs";
+const titleClassName = "flex min-w-0 flex-1 items-baseline gap-2 text-left";
 
 /** One work item: key and title, where it ended up, then the PRs merged for it as chips. */
 function WorkItemLine({
@@ -46,21 +47,32 @@ function WorkItemLine({
   onOpenTicket?: ((ticketId: string) => void) | undefined;
 }) {
   const { ticketId } = item;
+  const label = (
+    <>
+      <span className="shrink-0 font-mono text-muted-foreground">{item.key}</span>
+      <span className="min-w-0 truncate">{item.title}</span>
+    </>
+  );
   return (
     <li className={lineClassName}>
       <div className="flex min-w-0 items-baseline gap-2">
         <Tooltip>
           <TooltipTrigger
             render={
-              <button
-                type="button"
-                disabled={!onOpenTicket || ticketId === undefined}
-                onClick={() => (ticketId !== undefined ? onOpenTicket?.(ticketId) : undefined)}
-                className="flex min-w-0 flex-1 items-baseline gap-2 text-left enabled:hover:text-foreground"
-              >
-                <span className="shrink-0 font-mono text-muted-foreground">{item.key}</span>
-                <span className="min-w-0 truncate">{item.title}</span>
-              </button>
+              onOpenTicket && ticketId !== undefined ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenTicket(ticketId)}
+                  className={`${titleClassName} hover:text-foreground`}
+                >
+                  {label}
+                </button>
+              ) : (
+                // Not openable, but still focusable so the tooltip reaches keyboard users too.
+                <span tabIndex={0} className={titleClassName}>
+                  {label}
+                </span>
+              )
             }
           />
           <TooltipPopup side="top" className="max-w-sm">
@@ -130,6 +142,7 @@ export function DigestYesterdayWidget({
             type="button"
             aria-expanded={expanded}
             aria-controls={listId}
+            aria-label={expanded ? "Hide yesterday" : "Show yesterday"}
             onClick={() => setExpanded((value) => !value)}
             className="text-2xs text-muted-foreground hover:text-foreground"
           >
