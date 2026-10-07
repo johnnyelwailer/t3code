@@ -14,6 +14,7 @@ import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish
 import type { ResourcePressureMonitorShape } from "./t3team-resourcePressureMonitor.ts";
 import type { T3TeamThreadToolContextStoreShape } from "./t3team-threadToolContextStore.ts";
 import type { T3TeamToolCallResult, T3TeamTurnToolContext } from "./t3team-toolBroker.ts";
+import type { T3TeamChangeRequestToolHandlers } from "./t3team-toolBrokerBindingChangeRequest.ts";
 import type { ReadMessageMailboxEntry } from "./t3team-toolBrokerBindingReadMessage.ts";
 import type { T3TeamMyWorkToolHandlers } from "./t3team-toolBrokerBindingMyWork.ts";
 import type { T3TeamRecipeToolHandlers } from "./t3team-toolBrokerBindingRecipes.ts";
@@ -71,4 +72,8 @@ export interface BindSessionDeps {
       | ((threadId: ThreadIdType) => T3TeamWorkflowControlToolHandlers)
       | undefined;
   };
+  /** `t3team.change_request.publish`, bound to the thread's checkout; absent without git. */
+  readonly changeRequestToolsForThread?:
+    | ((threadId: ThreadIdType) => T3TeamChangeRequestToolHandlers)
+    | undefined;
 }

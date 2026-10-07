@@ -42,6 +42,8 @@ const TOOL_GROUP_CATALOG_KINDS: Record<string, string> = {
   // View-state writes (the digest arrangement, widgets, view filters): a recipe that arranges or
   // shapes a view declares this group.
   "view.state": "view-state",
+  // Publishing a change request: off by default, so only a recipe declaring the group adds it.
+  "mutation.change_request": "mutation",
 };
 
 export function resolveT3TeamWorkflowGrantedToolIds(

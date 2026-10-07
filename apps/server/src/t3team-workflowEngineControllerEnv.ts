@@ -21,7 +21,7 @@ import {
 } from "./t3team-workflowEngineCompositionFailure.ts";
 import { createWorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
 import { toWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
-import { t3teamWorkflowHostToolRunOptions } from "./t3team-workflowHostDraftTools.ts";
+import { t3teamWorkflowHostToolRunOptions } from "./t3team-workflowHostTools.ts";
 
 import type { WorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
 import type { LaunchWorkflowRecipeInput } from "./t3team-workflowEngineLaunchTypes.ts";

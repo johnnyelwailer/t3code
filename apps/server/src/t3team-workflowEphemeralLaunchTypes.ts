@@ -54,7 +54,7 @@ export interface PreparedWorkflowLaunchInput {
   readonly args: unknown;
   /** The launching recipe's private scripts (recipe launches only; Epic 25 §Scripts). */
   readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
-  /** Per-run bridge to the broker's work-item draft tools (t3team-workflowHostDraftTools.ts). */
+  /** Per-run bridge to the broker's host tools (t3team-workflowHostTools.ts). */
   readonly hostToolClient?: LaunchWorkflowRecipeInput["hostToolClient"];
   /** The same grant in persistable form; recorded on the run row so boot rehydration restores
    * this bridge and its scope rather than inferring one (migration 047). */

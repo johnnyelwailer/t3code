@@ -120,5 +120,7 @@ export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_validate, input),
   t3_mywork_digest: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_mywork_digest, input),
   t3_mywork_arrange: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_mywork_arrange, input),
+  t3_change_request_publish: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_change_request_publish, input),
   t3team_thread_skill_metadata: (input) => threadSkillMetadata(input),
 });

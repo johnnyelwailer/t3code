@@ -36,7 +36,7 @@ import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts
 import { T3TeamWorkflowHost, toWorkflowHostPort } from "./t3team-workflowHost.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
-import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
+import { makeT3TeamWorkflowHostToolClient } from "./t3team-workflowHostTools.ts";
 import { resolveRecipeHostToolScope } from "./t3team-recipeWorkflowToolScope.ts";
 import { T3TeamWorkflowSignalReconciler } from "./t3team-workflowSignalReconciler.ts";
 import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
@@ -145,8 +145,9 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
       workflowPath,
     });
 
-    // The body's `getTools()` bridge to the broker's work-item DRAFT tools, bound to THIS thread so
-    // a proposal lands where the user launched it. Scope comes from the RECIPE MODULE, never from
+    // The body's `getTools()` bridge to the broker's host tools (work-item drafts, change-request
+    // publishing), bound to THIS thread so a proposal lands where the user launched it and a
+    // publish runs in its checkout. Scope comes from the RECIPE MODULE, never from
     // the client-supplied `input.launch.allowedToolGroups` (a caller that omitted it would be
     // handed unrestricted scope); unresolvable ⇒ no bridge at all, and the resolved scope is what
     // is persisted as the grant, so a restart restores this rather than the request.
@@ -164,7 +165,7 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
       hostToolScope.kind === "granted" ? { toolGroups: hostToolScope.toolGroups } : undefined;
     const hostToolClient =
       hostToolScope.kind === "granted"
-        ? makeT3TeamWorkflowHostDraftToolClient({
+        ? makeT3TeamWorkflowHostToolClient({
             broker: toolBroker,
             launchThreadId: threadIdInput,
             allowedToolGroups: hostToolScope.toolGroups,
