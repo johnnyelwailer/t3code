@@ -2287,6 +2287,41 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ),
   );
 
+  it.effect("rasterizes a distribution DMG background instead of the vendor SVG", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const stageResourcesDir = yield* fs.makeTempDirectoryScoped({
+          prefix: "t3code-dmg-background-override-",
+        });
+        const overridePath = path.join(stageResourcesDir, "distro-background.svg");
+        yield* fs.writeFileString(overridePath, '<svg xmlns="http://www.w3.org/2000/svg"/>');
+        const dmgDir = path.join(stageResourcesDir, "dmg");
+        yield* fs.makeDirectory(dmgDir, { recursive: true });
+        yield* fs.writeFileString(
+          path.join(dmgDir, "dmg-background-latest.svg"),
+          '<svg xmlns="http://www.w3.org/2000/svg"/>',
+        );
+        const previous = process.env.T3CODE_DESKTOP_DMG_BACKGROUND;
+        process.env.T3CODE_DESKTOP_DMG_BACKGROUND = overridePath;
+        const commands: Array<{ readonly command: string; readonly args: ReadonlyArray<string> }> =
+          [];
+        yield* stageDesktopDmgBackground(stageResourcesDir, "latest", false).pipe(
+          Effect.provide(iconResizeSpawnerLayer(commands, [0, 0])),
+          Effect.ensuring(
+            Effect.sync(() => {
+              if (previous !== undefined) process.env.T3CODE_DESKTOP_DMG_BACKGROUND = previous;
+              else delete process.env.T3CODE_DESKTOP_DMG_BACKGROUND;
+            }),
+          ),
+        );
+        assert.equal(commands[0]?.args.at(-3), overridePath);
+        assert.notEqual(commands[0]?.args.at(-3), path.join(dmgDir, "dmg-background-latest.svg"));
+      }),
+    ),
+  );
+
   it.effect("fails clearly when the selected DMG background source is missing", () =>
     Effect.scoped(
       Effect.gen(function* () {

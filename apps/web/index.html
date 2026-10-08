@@ -478,6 +478,44 @@
       }
     </style>
     <title>T3 Code (Alpha)</title>
+    <script>
+      (() => {
+        const VENDOR_NAME = "T3 Code";
+        const applyPackBrand = (name, mark) => {
+          if (name) {
+            if (document.title.includes(VENDOR_NAME)) {
+              document.title = document.title.replace(VENDOR_NAME, name);
+            }
+            document.documentElement.dataset.t3teamBootAppName = name;
+            const card = document.getElementById("boot-shell-card");
+            if (card) card.setAttribute("aria-label", name + " splash screen");
+            const logo = document.getElementById("boot-shell-logo");
+            if (logo) logo.alt = name;
+          }
+          const splashLogo = document.getElementById("boot-shell-logo");
+          if (splashLogo && mark) splashLogo.src = mark;
+        };
+        return fetch("/.well-known/t3/environment")
+          .then((response) => (response.ok ? response.json() : null))
+          .then((descriptor) => {
+            const appearance = descriptor && descriptor.appearance;
+            if (!appearance || typeof appearance !== "object") return;
+            const labels = appearance.labels;
+            const labelName =
+              labels && typeof labels.appName === "string" ? labels.appName.trim() : "";
+            const productName =
+              typeof appearance.productName === "string" ? appearance.productName.trim() : "";
+            const name = labelName || productName;
+            const brand = appearance.brand;
+            const mark =
+              brand && typeof brand.mark === "string" && brand.mark.startsWith("data:image/")
+                ? brand.mark
+                : "";
+            applyPackBrand(name, mark);
+          })
+          .catch(() => undefined);
+      })();
+    </script>
   </head>
   <body>
     <div id="root">

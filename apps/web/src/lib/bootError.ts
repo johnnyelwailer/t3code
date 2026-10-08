@@ -1,6 +1,13 @@
+function bootProductName(): string {
+  if (typeof document === "undefined") return "T3 Code";
+  const name = document.documentElement.dataset.t3teamBootAppName?.trim();
+  return name || "T3 Code";
+}
+
 /** Shows startup failures before React can replace the boot splash. */
 export function showBootError(error: unknown) {
-  console.error("T3 Code failed to start.", error);
+  const appName = bootProductName();
+  console.error(`${appName} failed to start.`, error);
   const bootShell = document.getElementById("boot-shell");
   if (!bootShell) return;
 
@@ -9,7 +16,7 @@ export function showBootError(error: unknown) {
   content.setAttribute("role", "alert");
 
   const message = document.createElement("p");
-  message.textContent = "T3 Code could not load.";
+  message.textContent = `${appName} could not load.`;
   content.append(message);
 
   if (import.meta.env.DEV && error instanceof Error) {

@@ -28,6 +28,7 @@ import serverPackageJson from "../apps/server/package.json" with { type: "json" 
 
 import { applyWebBrandAssets } from "./apply-web-brand-assets.ts";
 import { applyDistributionWebIcons } from "./lib/t3team-distributionWebIcons.ts";
+import { resolveDmgBackgroundOverride } from "./lib/t3team-dmgBackground.ts";
 import {
   BRAND_ASSET_PATHS,
   resolveWebAssetBrandForChannel,
@@ -2767,7 +2768,19 @@ export const stageDesktopDmgBackground = Effect.fn("stageDesktopDmgBackground")(
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const sourcePath = path.join(stageResourcesDir, "dmg", `dmg-background-${channel}.svg`);
+  const vendorSourcePath = path.join(stageResourcesDir, "dmg", `dmg-background-${channel}.svg`);
+  const overridePath = resolveDmgBackgroundOverride({
+    env: process.env,
+    channel,
+    readFile: (filePath) => {
+      try {
+        return NodeFS.readFileSync(filePath, "utf8");
+      } catch {
+        return undefined;
+      }
+    },
+  });
+  const sourcePath = overridePath ?? vendorSourcePath;
   if (!(yield* fs.exists(sourcePath))) {
     return yield* new DesktopDmgBackgroundSourceMissingError({ channel, sourcePath });
   }

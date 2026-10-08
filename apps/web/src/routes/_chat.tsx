@@ -26,8 +26,10 @@ import { readThreadShells } from "../state/entities";
 import { translateUpstreamPath } from "../t3team/t3team-upstreamRouteBridge";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { primaryEnvironmentIdAtom } from "../state/primaryEnvironment";
+import { useT3TeamAppBaseName } from "~/t3team/t3team-appBrandName";
 
 function ChatRouteGlobalShortcuts() {
+  const appName = useT3TeamAppBaseName();
   const clearSelection = useThreadSelectionStore((state) => state.clearSelection);
   const selectedThreadKeysSize = useThreadSelectionStore((state) => state.selectedThreadKeys.size);
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread, routeThreadRef } =
@@ -115,7 +117,7 @@ function ChatRouteGlobalShortcuts() {
             stackedThreadToast({
               type: "info",
               title: "Preview is desktop-only",
-              description: "Open T3 Code in the desktop app to use the in-app preview.",
+              description: `Open ${appName} in the desktop app to use the in-app preview.`,
             }),
           );
           return;
@@ -157,6 +159,7 @@ function ChatRouteGlobalShortcuts() {
   }, [
     activeDraftThread,
     activeThread,
+    appName,
     clearSelection,
     handleNewThread,
     keybindings,

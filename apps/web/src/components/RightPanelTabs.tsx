@@ -1,4 +1,5 @@
 import { pullRequestHostOf, type SourceControlProviderKind } from "@t3tools/contracts";
+import { useT3TeamAppBaseName } from "~/t3team/t3team-appBrandName";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { useProjects, useServerConfigs, useThreadShells } from "~/state/entities";
 import {
@@ -157,7 +158,6 @@ export function shouldOpenDefaultBrowserProfileFromMenuClick(
 }
 
 const SURFACE_DISABLED_REASONS = {
-  browser: "Browser previews are only available in the T3 Code desktop app.",
   terminal: "Terminal surfaces are only available from a project thread.",
   files: "Files are only available when a project is open.",
   diff: "Diff is only available for server threads in Git repositories.",
@@ -801,6 +801,7 @@ function PullRequestSurfaceIcon({
 }
 
 export function RightPanelTabs(props: RightPanelTabsProps) {
+  const appName = useT3TeamAppBaseName();
   const ownsDesktopTitleBar = isElectron && props.mode === "inline";
   const browserProfiles = useBrowserDefaults().profiles;
   const { resolvedTheme } = useTheme();
@@ -858,7 +859,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       icon: Globe2,
       shortcut: "B",
       available: props.browserAvailable,
-      disabledReason: SURFACE_DISABLED_REASONS.browser,
+      disabledReason: `Browser previews are only available in the ${appName} desktop app.`,
       onClick: props.onAddBrowser,
     },
     {

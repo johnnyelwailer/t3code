@@ -6,7 +6,7 @@ import { App as T3TeamApp } from "~/t3team/t3team-App";
 import { T3TeamAddLocalWorkspaceProvider } from "~/t3team/components/t3team-addLocalWorkspaceContext";
 import { openCommandPalette } from "~/commandPaletteBus";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { APP_DISPLAY_NAME } from "~/t3team/t3team-branding";
+import { useT3TeamAppDisplayName } from "~/t3team/t3team-appBrandName";
 import { recordT3TeamThreadDebug } from "~/t3team/chat/t3team-threadDebug";
 import {
   parseT3TeamRouteSearch,
@@ -44,6 +44,7 @@ function buildRouteSearch(
 }
 
 export function T3TeamRouteSurface() {
+  const appName = useT3TeamAppDisplayName();
   const [backend] = useState(() => createT3Backend(resolveWsBaseUrl()));
   const { authGateState } = RootRoute.useRouteContext();
   const authenticated =
@@ -104,7 +105,7 @@ export function T3TeamRouteSurface() {
         <div className="w-full max-w-xl rounded-lg border border-border/70 bg-card/30 p-8 shadow-sm/5">
           <h2 className="text-xl font-semibold">Authentication required</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            This environment requires pairing before opening {APP_DISPLAY_NAME} threads.
+            This environment requires pairing before opening {appName} threads.
           </p>
           <div className="mt-6 flex items-center gap-2">
             <button
