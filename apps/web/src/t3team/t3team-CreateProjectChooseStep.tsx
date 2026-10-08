@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
 import { JiraProjectPicker } from "~/t3team/components/t3team-JiraProjectPicker";
-import { DialogDescription, DialogHeader, DialogTitle } from "~/t3team/components/ui/t3team-dialog";
 import type { CatalogRow } from "~/t3team/hooks/t3team-createProjectCatalogRows";
 import type { JiraCatalogState } from "~/t3team/hooks/t3team-useJiraProjectCatalogState";
+import { CalmNotice } from "~/t3team/t3team-CalmNotice";
 
 export type CreateProjectChooseStepProps = {
   catalogState: Pick<JiraCatalogState, "catalog" | "loading" | "connected" | "error" | "refresh">;
@@ -21,20 +21,13 @@ export function CreateProjectChooseStep(props: CreateProjectChooseStepProps) {
   const needsConnect = catalogState.connected === false && catalogState.catalog.length === 0;
 
   return (
-    <>
-      <DialogHeader>
-        <DialogTitle>Add a Jira project</DialogTitle>
-        <DialogDescription>
-          {props.notice ??
-            (needsConnect
-              ? "Connect Jira to choose a project."
-              : "Pick one — you can link repositories next.")}
-        </DialogDescription>
-      </DialogHeader>
+    <div className="flex min-h-0 flex-1 flex-col gap-3 pt-4">
+      {props.notice ? <CalmNotice compact headline={props.notice} className="px-1" /> : null}
       {needsConnect ? (
         props.connectPanel
       ) : (
         <JiraProjectPicker
+          roomy
           catalog={catalogState.catalog}
           boundProjectIds={props.boundProjectIds}
           loading={catalogState.loading}
@@ -43,6 +36,6 @@ export function CreateProjectChooseStep(props: CreateProjectChooseStepProps) {
           onChoose={props.onChoose}
         />
       )}
-    </>
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ShieldAlert } from "lucide-react";
 import { Skeleton } from "~/t3team/components/ui/t3team-skeleton";
+import { PullRequestCopyableCode } from "~/components/pullRequest/PullRequestCopyableCode";
 import { PickerSearchInput } from "~/t3team/components/t3team-PickerSearchInput";
 import { PickerSection as Section } from "~/t3team/components/t3team-PickerSection";
 import {
@@ -13,6 +14,7 @@ import {
   type RepositoryPickerEntry,
 } from "~/t3team/components/t3team-RepositoryPickerRow";
 import type { GitHubDiscoveryState } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
+import { CalmNotice } from "~/t3team/t3team-CalmNotice";
 
 const BROWSE_LIMIT = 30;
 const SEARCH_LIMIT = 60;
@@ -79,7 +81,6 @@ export function RepositoryPicker({
   }
 
   const signedIn = discovery.authStatus === "authenticated";
-  const hosts = [...new Set(discovery.authenticatedHosts.map((entry) => entry.host))];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -88,11 +89,7 @@ export function RepositoryPicker({
           value={query}
           onChange={setQuery}
           label="Search repositories"
-          placeholder={
-            hosts.length > 1
-              ? `Search repositories on ${hosts.length} hosts, or paste a URL`
-              : "Search repositories, or paste a URL"
-          }
+          placeholder="Search repositories"
         />
         <RepositoryPickerStatus
           discovery={discovery}
@@ -111,14 +108,22 @@ export function RepositoryPicker({
         ) : null}
 
         {!loading && !signedIn ? (
-          <div className="m-3 flex gap-3 rounded-lg border border-border/60 bg-muted/35 p-3 text-xs text-muted-foreground">
-            <ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" />
-            <span>
-              Sign in with <code className="font-mono">gh auth login</code> (add{" "}
-              <code className="font-mono">--hostname your.ghe.host</code> for Enterprise), then
-              refresh. You can still paste a repository URL above.
-            </span>
-          </div>
+          <CalmNotice
+            compact
+            icon={ShieldAlert}
+            headline="Not signed in to GitHub"
+            detail="Add --hostname your.ghe.host for Enterprise. You can still paste a URL above."
+            primaryAction={{ label: "Recheck", onClick: () => discovery.refresh() }}
+            className="m-3"
+          >
+            <PullRequestCopyableCode
+              value="gh auth login"
+              target="the GitHub sign-in command"
+              copyLabel="Copy command"
+              copiedLabel="Command copied"
+              className="font-mono text-2xs"
+            />
+          </CalmNotice>
         ) : null}
 
         {pastedUrl && !linked.has(pastedUrl) && !entries.has(pastedUrl) ? (

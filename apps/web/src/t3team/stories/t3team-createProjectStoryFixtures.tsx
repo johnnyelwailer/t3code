@@ -9,7 +9,8 @@ import {
 import type { GitHubDiscoveryState } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
 import type { OAuthState } from "~/t3team/hooks/t3team-useAtlassianOAuth";
 import { CreateProjectConnectView } from "~/t3team/t3team-CreateProjectConnectPanel";
-import { JiraProjectDialogShell } from "~/t3team/t3team-JiraProjectDialogShell";
+import { CreateProjectPage } from "~/t3team/t3team-CreateProjectPage";
+import type { CreateProjectPageHeaderEntry } from "~/t3team/t3team-CreateProjectPageHeader";
 import type { CreateProjectChooseStepProps } from "~/t3team/t3team-CreateProjectChooseStep";
 import type { CreateProjectSetupStepProps } from "~/t3team/t3team-CreateProjectSetupStep";
 
@@ -117,35 +118,47 @@ export const discovery = (over: Partial<GitHubDiscoveryState> = {}): GitHubDisco
   } as GitHubDiscoveryState;
 };
 
+export const setupEntry: CreateProjectPageHeaderEntry = {
+  ...nexploreProjects[0]!,
+  siteHost: null,
+};
+
 export const setupProps = (
   over: Partial<CreateProjectSetupStepProps> = {},
 ): CreateProjectSetupStepProps => ({
-  entry: { ...nexploreProjects[0]!, siteHost: null },
   discovery: discovery(),
   linkedRepositoryUrls: [],
   onToggleRepository: () => {},
   onLinkRepositories: () => {},
-  profileId: "product-partner",
-  customProfile: undefined,
-  packProfiles: undefined,
-  onProfileChange: () => {},
-  onCustomProfileChange: () => {},
-  submitState: { kind: "idle" },
-  onBack: () => {},
-  onCreate: () => {},
   ...over,
 });
 
 /**
- * The real dialog frame over an app-coloured page, so the glass dialog and its blurred backdrop
- * read as they do in the app (in either theme) rather than over Storybook's bare canvas.
+ * The real full-page frame, so the backdrop art and header read as they do in the app (in either
+ * theme) rather than over Storybook's bare canvas.
  */
-export function StoryFrame({ children }: { children: ReactNode }) {
+export function StoryFrame({
+  children,
+  entry = null,
+  footer,
+  dismissible = true,
+}: {
+  children: ReactNode;
+  entry?: CreateProjectPageHeaderEntry | null;
+  footer?: ReactNode;
+  dismissible?: boolean;
+}) {
   return (
-    <>
-      <div aria-hidden className="fixed inset-0 bg-background" />
-      <JiraProjectDialogShell onClose={() => {}}>{children}</JiraProjectDialogShell>
-    </>
+    <div className="h-screen">
+      <CreateProjectPage
+        entry={entry}
+        onClose={() => {}}
+        dismissible={dismissible}
+        {...(footer ? { footer } : {})}
+      >
+        {children}
+      </CreateProjectPage>
+    </div>
   );
 }
 
@@ -203,11 +216,11 @@ export function ConnectFrame({
   );
 }
 
-/** Types into the dialog's search box the way a person would (React-controlled input). */
-export async function typeInDialogSearch(value: string) {
+/** Types into the page's search box the way a person would (React-controlled input). */
+export async function typeInPageSearch(value: string) {
   await new Promise((resolve) => setTimeout(resolve, 400));
   const input = document.querySelector<HTMLInputElement>(
-    '[data-slot="dialog-popup"] input[aria-label^="Search"]',
+    '[data-testid="create-project-page"] input[aria-label^="Search"]',
   );
   if (!input) return;
   const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;

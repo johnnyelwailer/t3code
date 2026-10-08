@@ -13,12 +13,15 @@ export function JiraProjectPickerRow({
   row,
   showSite,
   selected = false,
+  roomy = false,
   onChoose,
 }: {
   row: CatalogRow;
   showSite: boolean;
   /** For pickers that pick first and confirm later (repair), marks the current choice. */
   selected?: boolean;
+  /** Taller row with a larger avatar, for the full-page add-project screen. */
+  roomy?: boolean;
   onChoose: (row: CatalogRow) => void;
 }) {
   const { entry, existingProjectId } = row;
@@ -30,7 +33,8 @@ export function JiraProjectPickerRow({
         onClick={() => onChoose(row)}
         aria-current={selected ? "true" : undefined}
         className={cn(
-          "group flex w-full items-center gap-3 rounded-lg px-2.5 py-1.5 text-left text-foreground transition-colors hover:bg-accent/50 focus-visible:outline-2 focus-visible:outline-ring",
+          "group flex w-full items-center gap-3 rounded-lg text-left text-foreground transition-colors hover:bg-accent/50 focus-visible:outline-2 focus-visible:outline-ring",
+          roomy ? "px-3 py-2.5" : "px-2.5 py-1.5",
           selected && "bg-accent/60",
         )}
       >
@@ -38,10 +42,16 @@ export function JiraProjectPickerRow({
           title={entry.title}
           projectKey={entry.key}
           iconUrl={entry.iconUrl}
-          className="size-5 shrink-0 rounded-sm"
+          className={roomy ? "size-8 shrink-0 rounded-md" : "size-5 shrink-0 rounded-sm"}
         />
         <span className="flex min-w-0 flex-1 items-baseline gap-2">
-          <span className={cn("truncate text-sm font-medium", added && "text-muted-foreground")}>
+          <span
+            className={cn(
+              "truncate font-medium",
+              roomy ? "text-sm sm:text-base" : "text-sm",
+              added && "text-muted-foreground",
+            )}
+          >
             {entry.title}
           </span>
           {entry.key ? (

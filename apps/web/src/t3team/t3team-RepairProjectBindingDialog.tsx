@@ -1,15 +1,10 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
 
-import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { JiraProjectPicker } from "~/t3team/components/t3team-JiraProjectPicker";
 import { Button } from "~/t3team/components/ui/t3team-button";
-import {
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/t3team/components/ui/t3team-dialog";
+import { DialogFooter, DialogHeader, DialogTitle } from "~/t3team/components/ui/t3team-dialog";
 import { useRepairProjectBinding } from "~/t3team/hooks/t3team-useRepairProjectBinding";
+import { CalmError } from "~/t3team/t3team-CalmError";
 import { CreateProjectConnectPanel } from "~/t3team/t3team-CreateProjectConnectPanel";
 import { JiraProjectDialogShell } from "~/t3team/t3team-JiraProjectDialogShell";
 
@@ -45,10 +40,6 @@ export function RepairProjectBindingDialog({
     <JiraProjectDialogShell onClose={onClose} dismissible={!repair.confirming}>
       <DialogHeader>
         <DialogTitle>Repair project binding</DialogTitle>
-        <DialogDescription>
-          This project's Jira connection is broken or missing. Choose the Jira project it should
-          read from.
-        </DialogDescription>
       </DialogHeader>
 
       {needsConnect ? (
@@ -69,11 +60,7 @@ export function RepairProjectBindingDialog({
 
       {repair.confirmError ? (
         <div className="px-5 pb-3">
-          <T3TeamErrorState
-            error={repair.confirmError}
-            action="repairing the project binding"
-            variant="inline"
-          />
+          <CalmError compact error={repair.confirmError} action="repairing the project binding" />
         </div>
       ) : null}
 

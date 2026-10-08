@@ -4,12 +4,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { CreateProjectChooseStep } from "./t3team-CreateProjectChooseStep";
+import { CreateProjectPage } from "./t3team-CreateProjectPage";
+import { CreateProjectSetupFooter } from "./t3team-CreateProjectSetupFooter";
 import { CreateProjectSetupStep } from "./t3team-CreateProjectSetupStep";
-import { JiraProjectDialogShell } from "./t3team-JiraProjectDialogShell";
 import {
   chooseProps,
   catalogState,
   repositoryCatalog,
+  setupEntry,
   setupProps,
 } from "./stories/t3team-createProjectStoryFixtures";
 
@@ -18,18 +20,62 @@ import {
 let root: Root | null = null;
 let host: HTMLElement | null = null;
 
-function show(node: ReactNode, onClose: () => void = () => {}, dismissible = true) {
+function show(
+  node: ReactNode,
+  options: {
+    onClose?: () => void;
+    dismissible?: boolean;
+    entry?: typeof setupEntry | null;
+    footer?: ReactNode;
+  } = {},
+) {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
   act(() => {
     root!.render(
-      <JiraProjectDialogShell onClose={onClose} dismissible={dismissible}>
+      <CreateProjectPage
+        entry={options.entry ?? null}
+        onClose={options.onClose ?? (() => {})}
+        dismissible={options.dismissible ?? true}
+        {...(options.footer ? { footer: options.footer } : {})}
+      >
         {node}
-      </JiraProjectDialogShell>,
+      </CreateProjectPage>,
     );
   });
 }
+
+function showSetupScreen({
+  onClose = () => {},
+  creating = false,
+  error = null as unknown,
+  onCreate = () => {},
+  onBack = () => {},
+  onToggleRepository = () => {},
+}: {
+  onClose?: () => void;
+  creating?: boolean;
+  error?: unknown;
+  onCreate?: () => void;
+  onBack?: () => void;
+  onToggleRepository?: (url: string) => void;
+} = {}) {
+  show(createElement(CreateProjectSetupStep, setupProps({ onToggleRepository })), {
+    onClose,
+    entry: setupEntry,
+    dismissible: !creating,
+    footer: createElement(CreateProjectSetupFooter, {
+      projectTitle: setupEntry.title,
+      creating,
+      error,
+      onBack,
+      onCreate,
+    }),
+  });
+}
+
+const page = () => document.querySelector('[data-testid="create-project-page"]')!;
 
 const buttonByText = (text: string) =>
   [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
@@ -43,14 +89,13 @@ afterEach(() => {
   host = null;
 });
 
-describe("add-project dialog, set-up screen", () => {
+describe("add-project page, set-up screen", () => {
   it("names the project and offers Add project and Change project", () => {
     const onCreate = vi.fn();
     const onBack = vi.fn();
-    show(createElement(CreateProjectSetupStep, setupProps({ onCreate, onBack })));
+    showSetupScreen({ onCreate, onBack });
 
-    const dialog = document.querySelector('[role="dialog"]')!;
-    expect(dialog.textContent).toContain("IES NG");
+    expect(page().textContent).toContain("IES NG");
     act(() => buttonByText("Add project")!.click());
     act(() => buttonByText("Change project")!.click());
     expect(onCreate).toHaveBeenCalledTimes(1);
@@ -59,7 +104,7 @@ describe("add-project dialog, set-up screen", () => {
 
   it("links a repository with one click on its row", () => {
     const onToggleRepository = vi.fn();
-    show(createElement(CreateProjectSetupStep, setupProps({ onToggleRepository })));
+    showSetupScreen({ onToggleRepository });
 
     const row = document.querySelector<HTMLButtonElement>('[role="checkbox"]')!;
     act(() => row.click());
@@ -69,53 +114,24 @@ describe("add-project dialog, set-up screen", () => {
     );
   });
 
-  it("counts what is linked", () => {
-    show(
-      createElement(
-        CreateProjectSetupStep,
-        setupProps({ linkedRepositoryUrls: [repositoryCatalog[5]!.url] }),
-      ),
-    );
-    expect(document.querySelector('[role="dialog"]')!.textContent).toContain("1 linked");
-  });
-
   it("locks the form while the project is being created", () => {
-    show(
-      createElement(CreateProjectSetupStep, setupProps({ submitState: { kind: "creating" } })),
-      undefined,
-      false,
-    );
+    showSetupScreen({ creating: true });
 
     const add = buttonByText("Adding")!;
     expect(add.disabled).toBe(true);
     expect(buttonByText("Change project")!.disabled).toBe(true);
-    expect(document.querySelector('[role="dialog"]')!.textContent).toContain(
-      "keep this window open",
-    );
   });
 
   it("keeps the form and offers a retry after a failure", () => {
-    show(
-      createElement(
-        CreateProjectSetupStep,
-        setupProps({
-          linkedRepositoryUrls: [repositoryCatalog[5]!.url],
-          submitState: { kind: "error", error: new Error("boom") },
-        }),
-      ),
-    );
+    showSetupScreen({ error: new Error("boom") });
 
     expect(buttonByText("Try again")!.disabled).toBe(false);
-    expect(document.querySelector('[role="dialog"]')!.textContent).toContain("1 linked");
+    expect(page().textContent).toContain("Couldn't add IES NG");
   });
 
-  it("does not let Esc close the dialog while creating", () => {
+  it("does not let Esc close the page while creating", () => {
     const onClose = vi.fn();
-    show(
-      createElement(CreateProjectSetupStep, setupProps({ submitState: { kind: "creating" } })),
-      onClose,
-      false,
-    );
+    showSetupScreen({ creating: true, onClose });
     act(() => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
@@ -124,7 +140,7 @@ describe("add-project dialog, set-up screen", () => {
 
   it("closes on Esc when idle", () => {
     const onClose = vi.fn();
-    show(createElement(CreateProjectSetupStep, setupProps()), onClose);
+    showSetupScreen({ onClose });
     act(() => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
@@ -132,7 +148,7 @@ describe("add-project dialog, set-up screen", () => {
   });
 });
 
-describe("add-project dialog, choose screen", () => {
+describe("add-project page, choose screen", () => {
   it("shows the connect panel instead of a list when no site is connected", () => {
     show(
       createElement(
@@ -143,9 +159,7 @@ describe("add-project dialog, choose screen", () => {
         }),
       ),
     );
-    const text = document.querySelector('[role="dialog"]')!.textContent;
-    expect(text).toContain("connect-panel");
-    expect(text).toContain("Connect Jira to choose a project.");
+    expect(page().textContent).toContain("connect-panel");
     expect(document.querySelector("input")).toBeNull();
   });
 
@@ -159,7 +173,7 @@ describe("add-project dialog, choose screen", () => {
         }),
       ),
     );
-    expect(document.querySelector('[role="dialog"]')!.textContent).not.toContain("connect-panel");
+    expect(page().textContent).not.toContain("connect-panel");
   });
 
   it("explains a deep link to a project that is gone", () => {
@@ -169,6 +183,6 @@ describe("add-project dialog, choose screen", () => {
         chooseProps({ notice: "That project is no longer available — pick another." }),
       ),
     );
-    expect(document.querySelector('[role="dialog"]')!.textContent).toContain("no longer available");
+    expect(page().textContent).toContain("no longer available");
   });
 });

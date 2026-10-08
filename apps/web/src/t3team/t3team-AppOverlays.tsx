@@ -2,14 +2,10 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { T3TeamCommandPalette } from "~/t3team/components/t3team-CommandPalette";
 import { ManageProjectRepositoriesDialog } from "~/t3team/t3team-ManageProjectRepositoriesDialog";
-import { CreateProjectRoute } from "~/t3team/t3team-CreateProjectRoute";
 import type { ProjectTicket, ProjectThread, ThreadSortOrder } from "~/t3team/t3team-types";
 
 type AppOverlaysProps = {
-  showCreate: boolean;
   setShowCreate: (open: boolean) => void;
-  onProjectCreated?: (project: ProjectShellProject) => void;
-  addProject: (project: ProjectShellProject) => void;
   projects: ReadonlyArray<ProjectShellProject>;
   threads: ReadonlyArray<ProjectThread>;
   threadSortOrder: ThreadSortOrder;
@@ -26,10 +22,7 @@ type AppOverlaysProps = {
 };
 
 export function AppOverlays({
-  showCreate,
   setShowCreate,
-  onProjectCreated,
-  addProject,
   projects,
   threads,
   threadSortOrder,
@@ -46,16 +39,6 @@ export function AppOverlays({
 }: AppOverlaysProps) {
   return (
     <>
-      {showCreate ? (
-        <CreateProjectRoute
-          onCreated={(project) => {
-            addProject(project);
-            if (onProjectCreated) onProjectCreated(project);
-            else setShowCreate(false);
-          }}
-        />
-      ) : null}
-
       <T3TeamCommandPalette
         open={showSearchPalette}
         onOpenChange={setShowSearchPalette}

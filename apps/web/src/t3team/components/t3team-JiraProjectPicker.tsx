@@ -3,7 +3,6 @@ import { RefreshCw } from "lucide-react";
 
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { Skeleton } from "~/t3team/components/ui/t3team-skeleton";
-import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { JiraProjectPickerRow } from "~/t3team/components/t3team-JiraProjectPickerRow";
 import { PickerSearchInput } from "~/t3team/components/t3team-PickerSearchInput";
 import { PickerSection } from "~/t3team/components/t3team-PickerSection";
@@ -13,6 +12,7 @@ import {
   type CatalogRow,
 } from "~/t3team/hooks/t3team-createProjectCatalogRows";
 import type { JiraCatalogProject } from "~/t3team/hooks/t3team-jiraProjectCatalog.logic";
+import { CalmError } from "~/t3team/t3team-CalmError";
 
 /**
  * One search box over every project on every connected Jira site — there is no site step, the
@@ -27,6 +27,7 @@ export function JiraProjectPicker({
   selectedEntryKey,
   onRefresh,
   onChoose,
+  roomy = false,
 }: {
   catalog: ReadonlyArray<JiraCatalogProject>;
   boundProjectIds: ReadonlyMap<string, string>;
@@ -35,6 +36,8 @@ export function JiraProjectPicker({
   selectedEntryKey?: string | null;
   onRefresh: () => void;
   onChoose: (row: CatalogRow) => void;
+  /** Taller rows with a larger avatar, for the full-page add-project screen. */
+  roomy?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const rows = useMemo(
@@ -43,7 +46,6 @@ export function JiraProjectPicker({
   );
   const showSite = spansMultipleSites(catalog);
   const sites = [...new Set(catalog.map((entry) => entry.siteHost ?? "Jira"))];
-  const siteCount = sites.length;
   const noResults = rows.available.length === 0 && rows.added.length === 0;
   const row = (entry: CatalogRow) => (
     <JiraProjectPickerRow
@@ -51,6 +53,7 @@ export function JiraProjectPicker({
       row={entry}
       showSite={showSite}
       selected={entry.entry.entryKey === selectedEntryKey}
+      roomy={roomy}
       onChoose={onChoose}
     />
   );
@@ -62,9 +65,7 @@ export function JiraProjectPicker({
           value={query}
           onChange={setQuery}
           label="Search Jira projects"
-          placeholder={
-            siteCount > 1 ? `Search projects on ${siteCount} Jira sites` : "Search Jira projects"
-          }
+          placeholder="Search projects"
         />
         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
@@ -97,9 +98,13 @@ export function JiraProjectPicker({
         ) : null}
 
         {error && catalog.length === 0 ? (
-          <div className="p-3">
-            <T3TeamErrorState error={error} action="loading Jira projects" onRetry={onRefresh} />
-          </div>
+          <CalmError
+            error={error}
+            action="loading Jira projects"
+            headline="Couldn't reach Jira"
+            retryLabel="Retry"
+            onRetry={onRefresh}
+          />
         ) : null}
 
         {rows.available.length > 0 ? (

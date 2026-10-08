@@ -1,22 +1,48 @@
 import type { Meta, StoryObj } from "@storybook/react";
 
+import type { CreateProjectPageHeaderEntry } from "~/t3team/t3team-CreateProjectPageHeader";
+import { CreateProjectSetupFooter } from "~/t3team/t3team-CreateProjectSetupFooter";
 import { CreateProjectSetupStep } from "~/t3team/t3team-CreateProjectSetupStep";
 import {
   StoryFrame,
   discovery,
   repositoryCatalog,
+  setupEntry,
   setupProps,
-  typeInDialogSearch,
+  typeInPageSearch,
   useLinkedState,
 } from "./t3team-createProjectStoryFixtures";
 
 const linkedByDefault = [repositoryCatalog[5]!.url];
 
-/** Wraps the step so row clicks really link and unlink, like the live dialog. */
-function Interactive(args: React.ComponentProps<typeof CreateProjectSetupStep>) {
+type SetupStoryArgs = React.ComponentProps<typeof CreateProjectSetupStep> & {
+  entry?: CreateProjectPageHeaderEntry;
+  creating?: boolean;
+  error?: unknown;
+};
+
+/** Wraps the step so row clicks really link and unlink, like the live page. */
+function Interactive({
+  entry = setupEntry,
+  creating = false,
+  error = null,
+  ...args
+}: SetupStoryArgs) {
   const linked = useLinkedState(args.linkedRepositoryUrls);
   return (
-    <StoryFrame>
+    <StoryFrame
+      entry={entry}
+      dismissible={!creating}
+      footer={
+        <CreateProjectSetupFooter
+          projectTitle={entry.title}
+          creating={creating}
+          error={error}
+          onBack={() => {}}
+          onCreate={() => {}}
+        />
+      }
+    >
       <CreateProjectSetupStep {...args} {...linked} />
     </StoryFrame>
   );
@@ -26,7 +52,7 @@ const meta = {
   title: "T3Team/Create Project/Setup",
   parameters: { layout: "fullscreen" },
   render: (args) => <Interactive {...args} />,
-} satisfies Meta<typeof CreateProjectSetupStep>;
+} satisfies Meta<typeof Interactive>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
@@ -38,14 +64,12 @@ export const LinkedAndSuggested: Story = {
 };
 
 export const MultiSiteHeader: Story = {
-  args: setupProps({
-    entry: { ...setupProps().entry, siteHost: "nexplore.atlassian.net" },
-  }),
+  args: { ...setupProps(), entry: { ...setupEntry, siteHost: "nexplore.atlassian.net" } },
 };
 
 export const PickerSearching: Story = {
   args: setupProps(),
-  play: () => typeInDialogSearch("ies"),
+  play: () => typeInPageSearch("ies"),
 };
 
 export const GitHubSignedOut: Story = {
@@ -59,15 +83,12 @@ export const PickerLoading: Story = {
 };
 
 export const Creating: Story = {
-  args: setupProps({
-    linkedRepositoryUrls: linkedByDefault,
-    submitState: { kind: "creating" },
-  }),
+  args: { ...setupProps({ linkedRepositoryUrls: linkedByDefault }), creating: true },
 };
 
 export const CreateFailed: Story = {
-  args: setupProps({
-    linkedRepositoryUrls: linkedByDefault,
-    submitState: { kind: "error", error: new Error("This project is already added") },
-  }),
+  args: {
+    ...setupProps({ linkedRepositoryUrls: linkedByDefault }),
+    error: new Error("This project is already added"),
+  },
 };

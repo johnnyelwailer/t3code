@@ -1,15 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useSearch } from "@tanstack/react-router";
 
 import type { ProjectShellProject } from "@t3tools/project-context";
-import type { T3TeamProfile } from "@t3tools/t3team-skill-packs";
 
 import { useProjects } from "~/state/entities";
-import { useT3TeamPackSetupProfiles } from "~/t3team/t3team-packSetupProfiles";
-import {
-  useT3TeamProjectSetupProfile,
-  writeT3TeamProjectSetupProfile,
-} from "~/t3team/t3team-projectSetupProfile";
+import { useT3TeamProjectSetupProfile } from "~/t3team/t3team-projectSetupProfile";
 import { parseT3TeamRouteSearch } from "~/t3team/t3team-routeState";
 
 import { mapBoundProjectIds } from "./t3team-createProjectCatalogRows";
@@ -35,9 +30,9 @@ export function useCreateProjectFlow(onCreated: (project: ProjectShellProject) =
   const boundProjectIds = useMemo(() => mapBoundProjectIds(appProjects), [appProjects]);
   const navigation = useCreateProjectNavigation(projectKey);
   const selection = useLinkedRepositorySelection(projectKey);
-  const [customProfile, setCustomProfile] = useState<T3TeamProfile | undefined>(undefined);
+  // Working style is never asked per project: new projects simply inherit whatever profile is
+  // current (see t3team-workProfileChooser.ts).
   const setupProfileId = useT3TeamProjectSetupProfile();
-  const packProfiles = useT3TeamPackSetupProfiles();
   const { state: submitState, submit } = useCreateProjectSubmit(projectKey);
 
   const entry = projectKey
@@ -61,7 +56,6 @@ export function useCreateProjectFlow(onCreated: (project: ProjectShellProject) =
       entry,
       linkedRepositoryUrls: selection.linkedRepositoryUrls,
       setupProfileId,
-      customProfile,
     });
     if (project) navigation.leaveThen(() => onCreated(project));
   };
@@ -84,13 +78,6 @@ export function useCreateProjectFlow(onCreated: (project: ProjectShellProject) =
     boundProjectIds,
     navigation,
     selection,
-    profile: {
-      setupProfileId,
-      customProfile,
-      packProfiles,
-      onProfileChange: writeT3TeamProjectSetupProfile,
-      onCustomProfileChange: setCustomProfile,
-    },
     submitState,
     creating: submitState.kind === "creating",
     create,

@@ -8,6 +8,7 @@ import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import { readProjectIdFromView } from "~/t3team/t3team-types";
 import { resolveViewStoredProject } from "~/t3team/t3team-appMainContentResolution";
 import { AppOverlays } from "~/t3team/t3team-AppOverlays";
+import { CreateProjectRoute } from "~/t3team/t3team-CreateProjectRoute";
 import { resolveManageRepositoriesProject } from "~/t3team/t3team-manageRepositoriesProject";
 import { T3TeamLeftSidebarDesktopToggle } from "~/t3team/t3team-LeftSidebarDesktopToggle";
 import { useAppHandlers } from "~/t3team/t3team-useAppHandlers";
@@ -159,30 +160,38 @@ export function App({
       </Sidebar>
       <T3TeamLeftSidebarDesktopToggle />
 
-      <AppContentPane
-        activeDashboardMode={activeDashboardMode}
-        resolvedView={resolvedView}
-        store={store}
-        reopenInitialSetup={reopenInitialSetup ?? false}
-        onCreate={() => setShowCreate(true)}
-        onOpenTicket={handleSelectTicket}
-        onOpenThread={handleSelectThread}
-        onOpenFullThread={handleOpenFullThread}
-        onOpenEmbeddedThread={handleOpenEmbeddedThread}
-        {...(onCloseEmbeddedThread ? { onCloseEmbeddedThread } : {})}
-        onKickoffProjectThread={handleCreateProjectKickoffThread}
-        onKickoffTicketThread={handleCreateTicketKickoffThread}
-        onKickoffTicketThreadBeside={handleCreateTicketKickoffThreadBeside}
-        onThreadKickoffConsumed={handleThreadKickoffConsumed}
-        onThreadDisplayModeChange={store.updateThreadDisplayMode}
-        onBackToDashboard={handleSelectProject}
-        onManageRepositories={setManageRepositoriesProjectId}
-      />
+      {showCreate ? (
+        <CreateProjectRoute
+          onCreated={(project) => {
+            store.addProject(project);
+            if (onProjectCreated) onProjectCreated(project);
+            else setShowCreate(false);
+          }}
+        />
+      ) : (
+        <AppContentPane
+          activeDashboardMode={activeDashboardMode}
+          resolvedView={resolvedView}
+          store={store}
+          reopenInitialSetup={reopenInitialSetup ?? false}
+          onCreate={() => setShowCreate(true)}
+          onOpenTicket={handleSelectTicket}
+          onOpenThread={handleSelectThread}
+          onOpenFullThread={handleOpenFullThread}
+          onOpenEmbeddedThread={handleOpenEmbeddedThread}
+          {...(onCloseEmbeddedThread ? { onCloseEmbeddedThread } : {})}
+          onKickoffProjectThread={handleCreateProjectKickoffThread}
+          onKickoffTicketThread={handleCreateTicketKickoffThread}
+          onKickoffTicketThreadBeside={handleCreateTicketKickoffThreadBeside}
+          onThreadKickoffConsumed={handleThreadKickoffConsumed}
+          onThreadDisplayModeChange={store.updateThreadDisplayMode}
+          onBackToDashboard={handleSelectProject}
+          onManageRepositories={setManageRepositoriesProjectId}
+        />
+      )}
 
       <AppOverlays
-        showCreate={showCreate}
         setShowCreate={setShowCreate}
-        addProject={store.addProject}
         projects={store.projects}
         threads={store.threads}
         threadSortOrder={sidebarState.threadSortOrder}
@@ -195,7 +204,6 @@ export function App({
         manageRepositoriesProject={manageRepositoriesProject}
         setManageRepositoriesProjectId={setManageRepositoriesProjectId}
         updateProject={store.updateProject}
-        {...(onProjectCreated ? { onProjectCreated } : {})}
         {...(onOpenSettings ? { onOpenSettings } : {})}
       />
     </SidebarProvider>

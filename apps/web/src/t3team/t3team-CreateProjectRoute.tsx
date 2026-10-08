@@ -11,7 +11,8 @@ import {
 import { spansMultipleSites } from "~/t3team/hooks/t3team-createProjectCatalogRows";
 import { CreateProjectChooseStep } from "~/t3team/t3team-CreateProjectChooseStep";
 import { CreateProjectConnectPanel } from "~/t3team/t3team-CreateProjectConnectPanel";
-import { JiraProjectDialogShell } from "~/t3team/t3team-JiraProjectDialogShell";
+import { CreateProjectPage } from "~/t3team/t3team-CreateProjectPage";
+import { CreateProjectSetupFooter } from "~/t3team/t3team-CreateProjectSetupFooter";
 import { CreateProjectSetupStep } from "~/t3team/t3team-CreateProjectSetupStep";
 
 /** Repository discovery only runs while the set-up screen is on, so it lives in its own component. */
@@ -22,7 +23,7 @@ function SetupScreen({
   flow: CreateProjectFlow;
   entry: NonNullable<CreateProjectFlow["entry"]>;
 }) {
-  const { selection, profile } = flow;
+  const { selection } = flow;
   const discovery = useGitHubRepositoryDiscovery({
     enabled: true,
     projectKey: entry.key,
@@ -32,28 +33,16 @@ function SetupScreen({
 
   return (
     <CreateProjectSetupStep
-      entry={{
-        ...entry,
-        siteHost: spansMultipleSites(flow.catalogState.catalog) ? entry.siteHost : null,
-      }}
       discovery={discovery}
       linkedRepositoryUrls={selection.linkedRepositoryUrls}
       onToggleRepository={selection.toggleRepository}
       onLinkRepositories={selection.linkRepositories}
-      profileId={profile.setupProfileId}
-      customProfile={profile.customProfile}
-      packProfiles={profile.packProfiles}
-      onProfileChange={profile.onProfileChange}
-      onCustomProfileChange={profile.onCustomProfileChange}
-      submitState={flow.submitState}
-      onBack={flow.navigation.backToChoose}
-      onCreate={() => void flow.create()}
     />
   );
 }
 
 /**
- * `/t3team/new`: the add-a-Jira-project dialog, as a route. Which screen shows is the URL
+ * `/t3team/new`: the add-a-Jira-project page, as a route. Which screen shows is the URL
  * (`?project=` set → set up, otherwise choose), so Back, reload and deep links all work.
  */
 export function CreateProjectRoute({
@@ -68,13 +57,38 @@ export function CreateProjectRoute({
   const lastEntryRef = useRef(entry);
   if (entry) lastEntryRef.current = entry;
   const shownEntry = entry ?? (flow.creating ? lastEntryRef.current : null);
+  const dismissible = !flow.creating;
 
   return (
-    <JiraProjectDialogShell onClose={navigation.close} dismissible={!flow.creating}>
+    <CreateProjectPage
+      entry={
+        shownEntry
+          ? {
+              title: shownEntry.title,
+              key: shownEntry.key,
+              iconUrl: shownEntry.iconUrl,
+              siteHost: spansMultipleSites(catalogState.catalog) ? shownEntry.siteHost : null,
+            }
+          : null
+      }
+      onClose={navigation.close}
+      dismissible={dismissible}
+      footer={
+        shownEntry ? (
+          <CreateProjectSetupFooter
+            projectTitle={shownEntry.title}
+            creating={flow.creating}
+            error={flow.submitState.kind === "error" ? flow.submitState.error : null}
+            onBack={navigation.backToChoose}
+            onCreate={() => void flow.create()}
+          />
+        ) : null
+      }
+    >
       {shownEntry ? (
         <SetupScreen flow={flow} entry={shownEntry} />
       ) : flow.resolvingProject || flow.openingExisting ? (
-        <div className="space-y-3 p-5">
+        <div className="space-y-3 pt-4">
           <Skeleton className="h-9 w-64" />
           <Skeleton className="h-9 w-full" />
           <Skeleton className="h-64 w-full" />
@@ -94,6 +108,6 @@ export function CreateProjectRoute({
           }
         />
       )}
-    </JiraProjectDialogShell>
+    </CreateProjectPage>
   );
 }

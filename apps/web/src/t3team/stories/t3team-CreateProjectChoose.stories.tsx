@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 
 import { CreateProjectChooseStep } from "~/t3team/t3team-CreateProjectChooseStep";
-import { JiraProjectDialogShell } from "~/t3team/t3team-JiraProjectDialogShell";
 import { T3TeamSetupWelcomeSurface } from "~/t3team/t3team-SetupWelcomeSurface";
 import {
   ConnectFrame,
@@ -10,7 +9,7 @@ import {
   chooseProps,
   connectFixture,
   nexploreProjects,
-  typeInDialogSearch,
+  typeInPageSearch,
 } from "./t3team-createProjectStoryFixtures";
 
 const meta = {
@@ -34,12 +33,12 @@ export const OneSite: Story = {
 
 export const Searching: Story = {
   args: chooseProps(),
-  play: () => typeInDialogSearch("mob"),
+  play: () => typeInPageSearch("mob"),
 };
 
 export const NoResults: Story = {
   args: chooseProps(),
-  play: () => typeInDialogSearch("zzzz"),
+  play: () => typeInPageSearch("zzzz"),
 };
 
 export const Loading: Story = {
@@ -93,7 +92,7 @@ export const NotConnectedTokenFallback: Story = {
   }),
 };
 
-/** First run: the same dialog opens over the welcome surface, no separate inline copy. */
+/** First run: the same full-page flow opens over the welcome surface, no separate inline copy. */
 export const FirstRunOverWelcome: Story = {
   args: chooseProps(),
   render: (args) => (
@@ -101,9 +100,9 @@ export const FirstRunOverWelcome: Story = {
       <div className="flex h-screen flex-col bg-background">
         <T3TeamSetupWelcomeSurface onCreate={() => {}} />
       </div>
-      <JiraProjectDialogShell onClose={() => {}}>
+      <StoryFrame>
         <CreateProjectChooseStep {...args} />
-      </JiraProjectDialogShell>
+      </StoryFrame>
     </>
   ),
 };

@@ -112,7 +112,6 @@ describe("AppMainContent", () => {
         onThreadDisplayModeChange={() => {}}
         onBackToDashboard={() => {}}
         onCreate={() => {}}
-        onInlineProjectCreated={() => {}}
         renderDashboard={() => null}
         renderTicketDetail={() => null}
       />,

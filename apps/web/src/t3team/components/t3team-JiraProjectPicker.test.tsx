@@ -130,7 +130,8 @@ describe("JiraProjectPicker", () => {
 
   it("offers a retry when loading failed and there is nothing cached", () => {
     const { host } = render({ catalog: [], error: new Error("boom") });
-    expect(host.textContent?.toLowerCase()).toContain("try again");
+    expect(host.textContent?.toLowerCase()).toContain("couldn't reach jira");
+    expect(host.textContent?.toLowerCase()).toContain("retry");
   });
 
   it("marks the current choice for pick-then-confirm callers", () => {
