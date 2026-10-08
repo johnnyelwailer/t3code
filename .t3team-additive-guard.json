@@ -155,6 +155,8 @@
     "apps/server/src/project/RepositoryIdentityResolver.ts",
     "apps/server/src/provider/CursorProvider.test.ts",
     "apps/server/src/provider/CursorProvider.ts",
+    "apps/server/src/provider/Drivers/CursorDriver.test.ts",
+    "apps/server/src/provider/Drivers/CursorDriver.ts",
     "apps/server/src/provider/Drivers/OpenCodeDriver.ts",
     "apps/server/src/provider/Drivers/instanceIdentity.ts",
     "apps/server/src/provider/Errors.ts",

@@ -90,7 +90,12 @@ it.layer(layerTest)("CursorDriver", (it) => {
           instanceId: ProviderInstanceId.make("cursor-browser-persisted"),
           displayName: "Personal Cursor",
           enabled: true,
-          environment: [{ name: "CURSOR_API_KEY", value: "", sensitive: true }],
+          environment: [
+            { name: "CURSOR_API_KEY", value: "", sensitive: true },
+            // Makes the usage reader's credential lookup platform-independent.
+            { name: "AGENT_CLI_CREDENTIAL_STORE", value: "memory", sensitive: false },
+            { name: "CURSOR_AUTH_TOKEN", value: "", sensitive: true },
+          ],
           config: CursorDriver.defaultConfig(),
         };
         const openedKeys: Array<string | undefined> = [];
@@ -129,6 +134,13 @@ it.layer(layerTest)("CursorDriver", (it) => {
             email: "cursor@example.com",
           },
           setup: { canAuthenticate: true, canInstall: false },
+          // The sign-in key does not stand in for a CLI login, so Limits still look for one.
+          usageLimits: {
+            unavailable: {
+              reason: "unsupported",
+              message: "Cursor usage requires a CLI login or CURSOR_AUTH_TOKEN.",
+            },
+          },
         });
         const threadId = ThreadId.make("cursor-browser-thread");
         const modelSelection = { instanceId: input.instanceId, model: "auto" };
@@ -159,6 +171,39 @@ it.layer(layerTest)("CursorDriver", (it) => {
         expect(openedKeys).toEqual(["instance-browser-key"]);
         expect(closed).toBe(1);
       }).pipe(Effect.scoped),
+  );
+
+  it.effect("keeps an explicit API key's account out of the CLI login's Limits", () =>
+    Effect.gen(function* () {
+      const me = vi.spyOn(Cursor, "me").mockResolvedValue({
+        apiKeyName: "Configured",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        userEmail: "cursor@example.com",
+      });
+      const models = vi
+        .spyOn(Cursor.models, "list")
+        .mockResolvedValue([{ id: "auto", displayName: "Auto" }]);
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          me.mockRestore();
+          models.mockRestore();
+        }),
+      );
+      const instance = yield* CursorDriver.create({
+        instanceId: ProviderInstanceId.make("cursor-explicit-key"),
+        displayName: "Cursor key",
+        enabled: true,
+        environment: [
+          { name: "CURSOR_API_KEY", value: "configured-key", sensitive: true },
+          { name: "AGENT_CLI_CREDENTIAL_STORE", value: "memory", sensitive: false },
+          { name: "CURSOR_AUTH_TOKEN", value: "", sensitive: true },
+        ],
+        config: CursorDriver.defaultConfig(),
+      });
+      const snapshot = yield* instance.snapshot.refresh;
+      expect(snapshot.auth).toMatchObject({ status: "authenticated", type: "api-key" });
+      expect(snapshot.usageLimits?.unavailable).toEqual({ reason: "unsupported" });
+    }).pipe(Effect.scoped),
   );
 
   it.effect("keeps the bundled SDK manual-only without probing or updating cursor-agent", () =>
