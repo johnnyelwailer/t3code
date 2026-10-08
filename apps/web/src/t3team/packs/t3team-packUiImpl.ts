@@ -3,28 +3,46 @@
  * distribution web plugin for pack files, `tsconfig` paths inside this app), so a pack gets the
  * app's own primitives — one copy of each — and nothing else of the app.
  *
+ * Every export is typed as the contract types it, not as the host component it is: pack code in
+ * this app is checked against exactly what a pack outside it sees.
+ *
  * Imports the contract by its `/contract` subpath: importing `@t3team/pack-ui` here would resolve
  * back to this file.
  */
-import type { PackUiHostKit } from "@t3team/pack-ui/contract";
-
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { Skeleton } from "~/components/ui/skeleton";
-
-import { PackMarkdown } from "./t3team-PackMarkdown";
-import { usePackDocument, usePackDocuments } from "./t3team-packDocuments";
+import { hostKit } from "./t3team-packUiHostKit";
 
 export * from "@t3team/pack-ui/contract";
 
-const hostKit = {
-  Button,
+export const {
+  cn,
+  Alert,
+  AlertTitle,
+  AlertDescription,
   Badge,
+  Button,
+  Popover,
+  PopoverTrigger,
+  PopoverPopup,
   Skeleton,
-  Markdown: PackMarkdown,
+  Spinner,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  Textarea,
+  Tooltip,
+  TooltipTrigger,
+  TooltipPopup,
+  Markdown,
+  WidgetFrame,
+  Icon,
+  useMediaQuery,
+  useReducedMotion,
+  observeVisibleAnimation,
+  useVisibleAnimation,
+  useNavigation,
   usePackDocument,
   usePackDocuments,
-} satisfies PackUiHostKit;
-
-export const { Markdown } = hostKit;
-export { Badge, Button, Skeleton, usePackDocument, usePackDocuments };
+} = hostKit;
