@@ -38,11 +38,7 @@ import {
 } from "~/t3team/backend/t3team-thread-jobsBackend";
 import { resolveHttpBaseUrl } from "~/t3team/backend/t3team-t3BackendHttp";
 import { resolveWsBaseUrl } from "~/t3team/t3team-route-surface-wsUrl";
-import {
-  EMPTY_ACTIVE_AGENTS,
-  formatActiveAgentLabel,
-  type ActiveAgentEntry,
-} from "~/t3team/chat/t3team-activeAgentsCore";
+import { EMPTY_ACTIVE_AGENTS, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
 import { T3TeamActiveAgentsIndicator } from "~/t3team/chat/t3team-activeAgentsIndicator";
 import { WorkingLeadText } from "~/t3team/chat/t3team-workingLeadText";
 import { T3TeamActiveAgentsStepLabel } from "~/t3team/chat/t3team-activeAgentsStepLabel";
@@ -75,11 +71,11 @@ import {
 } from "./BackgroundJobsIndicator";
 import { useAtomValue } from "@effect/atom-react";
 import { environmentThreadDetails } from "../../state/threads";
+import { resolveRunInitiatingPrompt } from "@t3tools/client-runtime/t3team-runPromptCopy";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import { Link } from "@tanstack/react-router";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
 import { notificationChildThreadId } from "@t3tools/client-runtime/state/thread-execution";
-import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
 import {
   liveThoughtLine,
   resolveWorkEntryToolPresentation,
@@ -2333,6 +2329,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     (attachment) => !isImageAttachment(attachment) && !isFileAttachment(attachment),
   );
   const userMessage = resolveUserMessagePresentation(row.message);
+  const initiatingPrompt = resolveRunInitiatingPrompt(row.message);
   // t3team: a send with appended work-item context shows the person's own words (ext displayText).
   const resolvedContext = useMemo(
     () => resolveUserMessageContext(t3teamDisplayedUserMessage(row.message)),
@@ -2639,18 +2636,13 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             {typeof revertTurnCount === "number" && (
               <RevertUserMessageButton turnCount={revertTurnCount} messageId={row.message.id} />
             )}
-            {resolvedContext.text && (
+            {initiatingPrompt !== null && (
               <MessageCopyButton
-                // Structured paste needs the canonical links to retain their positions.
-                text={
-                  contextClipboardFragment
-                    ? resolvedContext.text
-                    : replaceComposerContextReferences(
-                        resolvedContext.text,
-                        (reference) => reference.label,
-                      )
-                }
-                {...(contextClipboardFragment
+                // Plain text is the stored initiating string. Structured paste still rides
+                // beside it when that string is the message the context records belong to.
+                text={initiatingPrompt}
+                {...(contextClipboardFragment &&
+                (initiatingPrompt === resolvedContext.text || initiatingPrompt === row.message.text)
                   ? {
                       extraFlavors: { [COMPOSER_CONTEXT_CLIPBOARD_MIME]: contextClipboardFragment },
                     }
@@ -3815,6 +3807,7 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
     );
   }
   const hasActiveAgents = activeAgents.length > 0;
+  const waitingForAgents = !isWorking && hasActiveAgents;
   // A backgrounded bash job outlives its turn, so the row can be here for
   // the job alone. Then the status line has nothing true to say — there is
   // no active turn and no agent — and the job line IS the row. Rendering it
@@ -3833,14 +3826,6 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
       </div>
     );
   }
-  // GHE #201: main turn idle but agents active — the row leads with the
-  // count instead of a (nonexistent) timer, and the label defaults to the
-  // most recent agent's live status.
-  const idleAgentSummary = (() => {
-    if (isWorking || !hasActiveAgents) return null;
-    const last = activeAgents[activeAgents.length - 1];
-    return last ? formatActiveAgentLabel(last.title, last.statusLabel) : null;
-  })();
   // GHE #236/#208/#40: the shared resolver (same seam as the sidebar) picks
   // the lead word: the LLM activity label REPLACES the deterministic state
   // word, which replaces the base word. The base word: a turn STARTS
@@ -3888,54 +3873,48 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
               ellipsize (the .t3team-aci-lead clamp) instead of hard-clipping
               at the row wrapper's overflow-x-clip. The row stays one line,
               no wrap, no second line. */}
-          <span className="flex min-w-0 items-center">
-            {!isWorking && hasActiveAgents ? (
-              <span className="min-w-0 truncate">
-                {activeAgents.length} active agent{activeAgents.length === 1 ? "" : "s"}
+          {waitingForAgents ? null : (
+            <span className="flex min-w-0 items-center">
+              {/* GHE #236 follow-up: no leading dot pulses — the status
+                  text alone leads the row; child chips on the right carry
+                  each agent's driver and status word. */}
+              {/* The shimmer paint lives on the LEAF text spans inside
+                  WorkingLeadText (background-clip: text cannot reach text
+                  in nested animated spans through this wrapper — P0).
+                  This span is pure layout: the last-resort clamp. FLEX, not
+                  block — a block here lays the inline-block slot out in a
+                  line box whose strut overhangs the slot baseline, and the
+                  inflated 29px box makes the status text ride ~3px above
+                  the chips (measured on the GHE #201 alignment story).
+                  text-overflow is dead CSS on a flex container; the SLOT
+                  (.t3team-aci-lead) owns overflow + ellipsis. */}
+              <span className="flex min-w-0 items-center overflow-hidden">
+                {row.createdAt ? (
+                  <>
+                    <WorkingLeadText
+                      stateWord={shownLeadWord}
+                      createdAt={row.createdAt}
+                      liveState={liveState}
+                      shimmer
+                    />
+                  </>
+                ) : (
+                  <span className="t3team-label-shimmer">{`${shownLeadWord}...`}</span>
+                )}
               </span>
-            ) : (
-              <>
-                {/* GHE #236 follow-up: no leading dot pulses — the status
-                    text alone leads the row; the child-agent living dots on
-                    the right (T3TeamActiveAgentsIndicator) carry the live
-                    texture. */}
-                {/* The shimmer paint lives on the LEAF text spans inside
-                    WorkingLeadText (background-clip: text cannot reach text
-                    in nested animated spans through this wrapper — P0).
-                    This span is pure layout: the last-resort clamp. FLEX, not
-                    block — a block here lays the inline-block slot out in a
-                    line box whose strut overhangs the slot baseline, and the
-                    inflated 29px box makes the status text ride ~3px above
-                    the dots (measured on the GHE #201 alignment story).
-                    text-overflow is dead CSS on a flex container; the SLOT
-                    (.t3team-aci-lead) owns overflow + ellipsis. */}
-                <span className="flex min-w-0 items-center overflow-hidden">
-                  {row.createdAt ? (
-                    <>
-                      <WorkingLeadText
-                        stateWord={shownLeadWord}
-                        createdAt={row.createdAt}
-                        liveState={liveState}
-                        shimmer
-                      />
-                    </>
-                  ) : (
-                    <span className="t3team-label-shimmer">{`${shownLeadWord}...`}</span>
-                  )}
-                </span>
-              </>
-            )}
-          </span>
+            </span>
+          )}
           {hasActiveAgents ? (
             <T3TeamActiveAgentsIndicator
               entries={activeAgents}
               onOpenAgents={onOpenAgents}
               onOpenAgent={onOpenAgent}
+              className={waitingForAgents ? "ml-auto" : undefined}
             />
           ) : null}
-          {hasActiveAgents ? (
-            <T3TeamActiveAgentsStepLabel label={workingStepLabel ?? idleAgentSummary} />
-          ) : workingStepLabel ? (
+          {hasActiveAgents && isWorking ? (
+            <T3TeamActiveAgentsStepLabel label={workingStepLabel} />
+          ) : !hasActiveAgents && workingStepLabel ? (
             // GHE #208 follow-up: the step label is the PRIMARY shrink
             // point — with shrink-100 it surrenders nearly all the row's
             // overflow, so a narrow panel truncates (then vanishes) the

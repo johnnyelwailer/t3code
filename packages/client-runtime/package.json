@@ -39,6 +39,10 @@
       "types": "./src/userMessage.ts",
       "default": "./src/userMessage.ts"
     },
+    "./t3team-runPromptCopy": {
+      "types": "./src/t3team-runPromptCopy.ts",
+      "default": "./src/t3team-runPromptCopy.ts"
+    },
     "./secret-request": {
       "types": "./src/secretRequest.ts",
       "default": "./src/secretRequest.ts"
@@ -278,6 +282,10 @@
     "./state/thread-artifacts": {
       "types": "./src/state/t3team-threadArtifacts.ts",
       "default": "./src/state/t3team-threadArtifacts.ts"
+    },
+    "./state/pack-documents": {
+      "types": "./src/state/t3team-packDocuments.ts",
+      "default": "./src/state/t3team-packDocuments.ts"
     },
     "./state/message-framing": {
       "types": "./src/state/t3team-messageFraming.ts",

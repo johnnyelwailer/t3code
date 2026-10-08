@@ -54,6 +54,7 @@ export * from "./threadTitle.ts";
 export * from "./t3team-orchestrationExt.ts";
 export * from "./t3team-threadFacts.ts";
 export * from "./t3team-threadArtifacts.ts";
+export * from "./t3team-packDocuments.ts";
 export * from "./t3team-environmentCapabilities.ts";
 export * from "./t3team-threadStopCascade.ts";
 export * from "./providerJobControl.ts";

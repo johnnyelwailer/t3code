@@ -28,6 +28,7 @@ import * as IdAllocator from "../IdAllocator.ts";
 import { ProviderAdapterV2RuntimePolicy } from "../ProviderAdapter.ts";
 import {
   cursorMcpServers,
+  cursorRunResultFailure,
   cursorRuntimeAgentPolicy,
   cursorSdkModelSelection,
   makeCursorAgentOptions,
@@ -39,6 +40,23 @@ import { isCursorCancellationError, loggedCursorAgentOptions } from "./CursorAge
 const decodeCursorSettings = Schema.decodeEffect(CursorSettings);
 
 describe("CursorAdapterV2", () => {
+  it("surfaces Cursor connection_stalled run errors instead of the opaque default", () => {
+    const failure = cursorRunResultFailure({
+      message: "Connection stalled repeatedly",
+      code: "connection_stalled",
+    });
+    assert.deepEqual(failure, {
+      message: "Connection stalled repeatedly",
+      code: "connection_stalled",
+      retryable: true,
+    });
+  });
+
+  it("keeps string Cursor run errors", () => {
+    assert.deepEqual(cursorRunResultFailure("search failed"), { message: "search failed" });
+    assert.deepEqual(cursorRunResultFailure(null), {});
+  });
+
   it.effect.each([
     { status: "finished", model: undefined, lateModel: undefined },
     { status: "cancelled", model: "claude-opus-4-6", lateModel: undefined },

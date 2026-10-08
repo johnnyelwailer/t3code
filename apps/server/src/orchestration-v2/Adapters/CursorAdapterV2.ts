@@ -81,6 +81,45 @@ export const CURSOR_DRIVER_KIND = CursorAgentSdk.CURSOR_PROVIDER;
 export const CURSOR_DEFAULT_INSTANCE_ID = defaultInstanceIdForDriver(CURSOR_DRIVER_KIND);
 const DEFAULT_CURSOR_SETTINGS = Schema.decodeSync(CursorSettings)({});
 
+/** Pull message/code off Cursor SDK run errors so the UI is not stuck on the opaque default. */
+export function cursorRunResultFailure(error: unknown): {
+  readonly message?: string;
+  readonly code?: string | null;
+  readonly retryable?: boolean | null;
+} {
+  if (typeof error === "string") {
+    const message = error.trim();
+    return message.length > 0 ? { message } : {};
+  }
+  if (typeof error !== "object" || error === null) {
+    return {};
+  }
+  try {
+    const record = error as Record<string, unknown>;
+    const message =
+      typeof record.message === "string" && record.message.trim().length > 0
+        ? record.message.trim()
+        : undefined;
+    const code =
+      typeof record.code === "string" && record.code.trim().length > 0
+        ? record.code.trim()
+        : undefined;
+    const retryable =
+      code === "connection_stalled"
+        ? true
+        : typeof record.retryable === "boolean"
+          ? record.retryable
+          : undefined;
+    return {
+      ...(message === undefined ? {} : { message }),
+      ...(code === undefined ? {} : { code }),
+      ...(retryable === undefined ? {} : { retryable }),
+    };
+  } catch {
+    return {};
+  }
+}
+
 export const CursorProviderCapabilitiesV2 = {
   sessions: {
     supportsMultipleProviderThreadsPerSession: false,
@@ -2298,14 +2337,21 @@ export function makeCursorAdapterV2(
                       status,
                       ...(status === "failed"
                         ? {
-                            failure: makeProviderFailure({
-                              cause:
-                                transportFailure ?? (result as { readonly error?: unknown }).error,
-                              class:
+                            failure: (() => {
+                              const runError = (result as { readonly error?: unknown }).error;
+                              const fromRun =
                                 transportFailure === undefined
-                                  ? "provider_error"
-                                  : "transport_error",
-                            }),
+                                  ? cursorRunResultFailure(runError)
+                                  : {};
+                              return makeProviderFailure({
+                                cause: transportFailure ?? runError,
+                                ...fromRun,
+                                class:
+                                  transportFailure === undefined
+                                    ? "provider_error"
+                                    : "transport_error",
+                              });
+                            })(),
                           }
                         : {}),
                     });

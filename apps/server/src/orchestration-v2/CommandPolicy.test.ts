@@ -6,6 +6,8 @@ import {
   ProviderInstanceId,
   ProviderSessionId,
   ProviderThreadId,
+  ProviderTurnId,
+  RunAttemptId,
   RunId,
   ThreadId,
 } from "@t3tools/contracts";
@@ -19,6 +21,8 @@ import * as CommandPolicy from "./CommandPolicy.ts";
 const commandId = CommandId.make("command-policy-test");
 const threadId = ThreadId.make("command-policy-thread");
 const activeRunId = RunId.make("command-policy-active-run");
+const activeAttemptId = RunAttemptId.make("command-policy-attempt");
+const runningProviderTurnId = ProviderTurnId.make("command-policy-provider-turn");
 
 const baseCapabilities: OrchestrationV2ProviderCapabilities = CodexProviderCapabilitiesV2;
 
@@ -116,6 +120,110 @@ it.each(["preparing", "starting"] as const)(
     );
   },
 );
+
+const nexploreTurns = capabilities((current) => ({
+  ...current,
+  turns: {
+    ...current.turns,
+    supportsActiveSteering: true,
+    supportsInterrupt: true,
+    supportsQueuedMessages: false,
+    supportsSteeringByInterruptRestart: false,
+  },
+}));
+
+const runningTurn = {
+  id: runningProviderTurnId,
+  runAttemptId: activeAttemptId,
+  status: "running",
+};
+
+it("steers a Nexplore send during a running turn instead of rejecting the queue", () => {
+  assert.deepEqual(
+    CommandPolicy.redirectUnsupportedQueue({
+      activeRun: { id: activeRunId, status: "running", activeAttemptId },
+      providerTurns: [runningTurn],
+      capabilities: nexploreTurns,
+      allowInterruptRestart: true,
+    }),
+    {
+      type: "steer_active",
+      targetRunId: activeRunId,
+      providerTurnId: runningProviderTurnId,
+    },
+  );
+});
+
+it("leaves providers that already queue on the queued-message path", () => {
+  assert.equal(
+    CommandPolicy.redirectUnsupportedQueue({
+      activeRun: { id: activeRunId, status: "running", activeAttemptId },
+      providerTurns: [runningTurn],
+      capabilities: baseCapabilities,
+      allowInterruptRestart: true,
+    }),
+    undefined,
+  );
+});
+
+it("restarts when a provider can neither queue nor steer", () => {
+  assert.deepEqual(
+    CommandPolicy.redirectUnsupportedQueue({
+      activeRun: { id: activeRunId, status: "running", activeAttemptId },
+      providerTurns: [runningTurn],
+      capabilities: capabilities((current) => ({
+        ...current,
+        turns: {
+          ...current.turns,
+          supportsActiveSteering: false,
+          supportsInterrupt: true,
+          supportsQueuedMessages: false,
+          supportsSteeringByInterruptRestart: true,
+        },
+      })),
+      allowInterruptRestart: true,
+    }),
+    {
+      type: "restart_active",
+      targetRunId: activeRunId,
+      interruptProviderTurnId: runningProviderTurnId,
+    },
+  );
+});
+
+it("does not interrupt a notification when queue and steering are both unavailable", () => {
+  const restartOnly = capabilities((current) => ({
+    ...current,
+    turns: {
+      ...current.turns,
+      supportsActiveSteering: false,
+      supportsInterrupt: true,
+      supportsQueuedMessages: false,
+      supportsSteeringByInterruptRestart: true,
+    },
+  }));
+  assert.equal(
+    CommandPolicy.redirectUnsupportedQueue({
+      activeRun: { id: activeRunId, status: "running", activeAttemptId },
+      providerTurns: [runningTurn],
+      capabilities: restartOnly,
+      allowInterruptRestart: false,
+    }),
+    undefined,
+  );
+});
+
+it("keeps the queued-message rejection when the run is not yet steerable", () => {
+  assert.equal(
+    CommandPolicy.redirectUnsupportedQueue({
+      activeRun: { id: activeRunId, status: "preparing", activeAttemptId: null },
+      providerTurns: [],
+      capabilities: nexploreTurns,
+      allowInterruptRestart: true,
+    }),
+    undefined,
+  );
+});
 
 it("targets the latest active run for explicit steer and restart intent", () => {
   const projection = dispatchProjection(baseCapabilities);

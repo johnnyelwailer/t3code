@@ -20,6 +20,7 @@ import { Route as ChatRouteImport } from './routes/_chat'
 import { Route as ChatIndexRouteImport } from './routes/_chat.index'
 import { Route as T3teamNewRouteImport } from './routes/t3team.new'
 import { Route as T3teamMyWorkRouteImport } from './routes/t3team.my-work'
+import { Route as T3teamDetachedKindRouteImport } from './routes/t3team-detached.$kind'
 import { Route as SettingsStorageRouteImport } from './routes/settings.storage'
 import { Route as SettingsSourceControlRouteImport } from './routes/settings.source-control'
 import { Route as SettingsSnapShotRouteImport } from './routes/settings.snap-shot'
@@ -98,6 +99,11 @@ const T3teamMyWorkRoute = T3teamMyWorkRouteImport.update({
   id: '/my-work',
   path: '/my-work',
   getParentRoute: () => T3teamRoute,
+} as any)
+const T3teamDetachedKindRoute = T3teamDetachedKindRouteImport.update({
+  id: '/t3team-detached/$kind',
+  path: '/t3team-detached/$kind',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsStorageRoute = SettingsStorageRouteImport.update({
   id: '/storage',
@@ -251,6 +257,7 @@ export interface FileRoutesByFullPath {
   '/settings/snap-shot': typeof SettingsSnapShotRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/settings/storage': typeof SettingsStorageRoute
+  '/t3team-detached/$kind': typeof T3teamDetachedKindRoute
   '/t3team/my-work': typeof T3teamMyWorkRoute
   '/t3team/new': typeof T3teamNewRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
@@ -286,6 +293,7 @@ export interface FileRoutesByTo {
   '/settings/snap-shot': typeof SettingsSnapShotRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/settings/storage': typeof SettingsStorageRoute
+  '/t3team-detached/$kind': typeof T3teamDetachedKindRoute
   '/t3team/my-work': typeof T3teamMyWorkRoute
   '/t3team/new': typeof T3teamNewRoute
   '/': typeof ChatIndexRoute
@@ -324,6 +332,7 @@ export interface FileRoutesById {
   '/settings/snap-shot': typeof SettingsSnapShotRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/settings/storage': typeof SettingsStorageRoute
+  '/t3team-detached/$kind': typeof T3teamDetachedKindRoute
   '/t3team/my-work': typeof T3teamMyWorkRoute
   '/t3team/new': typeof T3teamNewRoute
   '/_chat/': typeof ChatIndexRoute
@@ -363,6 +372,7 @@ export interface FileRouteTypes {
     | '/settings/snap-shot'
     | '/settings/source-control'
     | '/settings/storage'
+    | '/t3team-detached/$kind'
     | '/t3team/my-work'
     | '/t3team/new'
     | '/$environmentId/$threadId'
@@ -398,6 +408,7 @@ export interface FileRouteTypes {
     | '/settings/snap-shot'
     | '/settings/source-control'
     | '/settings/storage'
+    | '/t3team-detached/$kind'
     | '/t3team/my-work'
     | '/t3team/new'
     | '/'
@@ -435,6 +446,7 @@ export interface FileRouteTypes {
     | '/settings/snap-shot'
     | '/settings/source-control'
     | '/settings/storage'
+    | '/t3team-detached/$kind'
     | '/t3team/my-work'
     | '/t3team/new'
     | '/_chat/'
@@ -457,6 +469,7 @@ export interface RootRouteChildren {
   WelcomeRoute: typeof WelcomeRoute
   OauthCallbackRoute: typeof OauthCallbackRoute
   ProjectsProjectKeyRoute: typeof ProjectsProjectKeyRoute
+  T3teamDetachedKindRoute: typeof T3teamDetachedKindRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -537,6 +550,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/t3team/my-work'
       preLoaderRoute: typeof T3teamMyWorkRouteImport
       parentRoute: typeof T3teamRoute
+    }
+    '/t3team-detached/$kind': {
+      id: '/t3team-detached/$kind'
+      path: '/t3team-detached/$kind'
+      fullPath: '/t3team-detached/$kind'
+      preLoaderRoute: typeof T3teamDetachedKindRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/settings/storage': {
       id: '/settings/storage'
@@ -811,6 +831,7 @@ const rootRouteChildren: RootRouteChildren = {
   WelcomeRoute: WelcomeRoute,
   OauthCallbackRoute: OauthCallbackRoute,
   ProjectsProjectKeyRoute: ProjectsProjectKeyRoute,
+  T3teamDetachedKindRoute: T3teamDetachedKindRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

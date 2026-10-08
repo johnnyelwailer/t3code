@@ -173,6 +173,7 @@ export function loadDigestProjectSource(
       sprints,
       nowIso: ctx.nowIso,
       ...(prRead?.note !== undefined ? { changeRequestNote: prRead.note } : {}),
+      ...(prRead?.stale === true ? { changeRequestsStale: true } : {}),
       ...(jiraSyncedAtMs !== undefined ? { jiraSyncedAt: millisToIso(jiraSyncedAtMs) } : {}),
       ...(dependencies.length > 0 ? { dependencies } : {}),
       ...(yesterdayRead.yesterday !== undefined ? { yesterday: yesterdayRead.yesterday } : {}),

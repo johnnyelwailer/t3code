@@ -6,38 +6,12 @@ import {
 } from "./t3team-rightSidebarPersistence";
 
 describe("t3team right sidebar persistence", () => {
-  it("scopes dashboard collapse state by project, mode, and embedded thread instance", () => {
-    expect(
-      getProjectDashboardRightSidebarCollapsedStorageKey({
-        projectId: "project-1",
-        dashboardMode: "backlog",
-      }),
-    ).toBe("t3team:right-sidebar:dashboard:v1:project-1:backlog:__root__");
-
-    expect(
-      getProjectDashboardRightSidebarCollapsedStorageKey({
-        projectId: "project-1",
-        dashboardMode: "backlog",
-        embeddedThreadId: "thread-1",
-      }),
-    ).not.toBe(
-      getProjectDashboardRightSidebarCollapsedStorageKey({
-        projectId: "project-1",
-        dashboardMode: "backlog",
-        embeddedThreadId: "thread-2",
-      }),
+  it("keeps one dashboard collapse state per project, across modes and threads", () => {
+    expect(getProjectDashboardRightSidebarCollapsedStorageKey({ projectId: "project-1" })).toBe(
+      "t3team:right-sidebar:dashboard:v2:project-1",
     );
-
-    expect(
-      getProjectDashboardRightSidebarCollapsedStorageKey({
-        projectId: "project-1",
-        dashboardMode: "backlog",
-      }),
-    ).not.toBe(
-      getProjectDashboardRightSidebarCollapsedStorageKey({
-        projectId: "project-1",
-        dashboardMode: "my-work",
-      }),
+    expect(getProjectDashboardRightSidebarCollapsedStorageKey({ projectId: "project-1" })).not.toBe(
+      getProjectDashboardRightSidebarCollapsedStorageKey({ projectId: "project-2" }),
     );
   });
 

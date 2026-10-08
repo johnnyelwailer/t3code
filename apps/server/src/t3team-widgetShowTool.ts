@@ -1,18 +1,19 @@
 /**
- * Effectful orchestration for `t3team.widget.show`: validate input, persist the widget body
- * as a durable Epic 08 rich artifact (format html, via the content-addressed blob store),
- * register the widget's capability allowlist, then record a `widget` thread artifact (U0
- * artifacts side store, `t3team.subscribeThreadArtifacts`) so the timeline renders it inline.
+ * Effectful orchestration for `t3team.widget.show`: validate input, optionally run the
+ * intent→builder seam, persist the widget body, and for `format: "html"` shim-publish through
+ * upstream HtmlRender (one HTML renderer). Other formats stay on the widget tier.
  * V2 messages carry no rich payload, so the artifact — not a message — is the carrier.
  */
 
 import { ThreadId } from "@t3tools/contracts";
+import type { HtmlRenderReference } from "@t3tools/shared/htmlRender";
 import type * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
 import type * as SqlClient from "effect/sql/SqlClient";
 
+import type { HtmlRender } from "./htmlRender/HtmlRender.ts";
 import type { WorkspacePaths } from "./workspace/WorkspacePaths.ts";
 import { writeT3TeamContextCasFile } from "./t3team-context-blob-store.ts";
 import { ensureT3TeamContextCacheTables } from "./t3team-context-cache-tables.ts";
@@ -20,11 +21,15 @@ import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
 import type { T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import type { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsStore.ts";
+import { authorWidgetFromIntent, shouldBypassBuilder } from "./t3team-widgetBuilder.ts";
 import type { T3TeamWidgetRegistryShape } from "./t3team-widgetRegistry.ts";
 import {
   buildT3TeamWidgetArtifactRelativePath,
   buildT3TeamWidgetAttachment,
   parseT3TeamWidgetShowInput,
+  T3TEAM_WIDGET_HTML_RENDER_DEFAULT_HEIGHT,
+  wrapWidgetHtmlFragmentForHtmlRender,
+  type T3TeamWidgetShowInput,
 } from "./t3team-widgetShowCore.ts";
 
 export type T3TeamWidgetPersistenceServices =
@@ -48,7 +53,62 @@ export interface T3TeamWidgetShowDeps {
   /** Services the CAS persistence path needs (SqlClient, FileSystem, Path, ...), captured by
    * the broker layer at build time. Persistence is skipped when they are unavailable. */
   readonly persistenceContext: Context.Context<T3TeamWidgetPersistenceServices> | undefined;
+  /**
+   * Upstream HtmlRender service for the html-format shim. Optional: when absent or publish
+   * fails, the widget degrades to the legacy inline/srcdoc path (still succeeds).
+   */
+  readonly htmlRender: HtmlRender["Service"] | undefined;
 }
+
+const resolveWidgetCode = (
+  parsed: T3TeamWidgetShowInput,
+): Effect.Effect<T3TeamWidgetShowInput, string> =>
+  Effect.gen(function* () {
+    if (shouldBypassBuilder(parsed)) {
+      return parsed;
+    }
+    if (parsed.intent === undefined) {
+      return yield* Effect.fail("Provide intent (preferred) or widget_code (raw bypass).");
+    }
+    const authored = yield* authorWidgetFromIntent({
+      intent: parsed.intent,
+      title: parsed.title,
+      format: parsed.format,
+    });
+    return {
+      ...parsed,
+      widgetCode: authored.widgetCode,
+      format: authored.format,
+    } satisfies T3TeamWidgetShowInput;
+  });
+
+const publishHtmlShim = (input: {
+  readonly threadId: string;
+  readonly parsed: T3TeamWidgetShowInput;
+  readonly htmlRender: HtmlRender["Service"];
+}): Effect.Effect<HtmlRenderReference | undefined> =>
+  Effect.gen(function* () {
+    const wrapped = wrapWidgetHtmlFragmentForHtmlRender(input.parsed.widgetCode);
+    const published = yield* input.htmlRender
+      .publish({
+        threadId: ThreadId.make(input.threadId),
+        html: wrapped,
+        title: input.parsed.title,
+        height: T3TEAM_WIDGET_HTML_RENDER_DEFAULT_HEIGHT,
+      })
+      .pipe(Effect.result);
+    if (published._tag === "Success") {
+      return published.success;
+    }
+    yield* Effect.logWarning(
+      "t3team.widget.show HtmlRender shim publish failed; using srcdoc path",
+      {
+        threadId: input.threadId,
+        cause: published.failure,
+      },
+    );
+    return undefined;
+  });
 
 export function callT3TeamWidgetShowTool(input: {
   readonly toolArgs: unknown;
@@ -56,10 +116,16 @@ export function callT3TeamWidgetShowTool(input: {
 }): Effect.Effect<T3TeamToolCallResult> {
   const { toolArgs, deps } = input;
   return Effect.gen(function* () {
-    const parsed = parseT3TeamWidgetShowInput(toolArgs);
-    if ("error" in parsed) {
-      return errorResult(parsed.error);
+    const parsedOrError = parseT3TeamWidgetShowInput(toolArgs);
+    if ("error" in parsedOrError) {
+      return errorResult(parsedOrError.error);
     }
+
+    const resolved = yield* resolveWidgetCode(parsedOrError).pipe(Effect.result);
+    if (resolved._tag === "Failure") {
+      return errorResult(resolved.failure);
+    }
+    const parsed = resolved.success;
 
     const widgetId = t3teamRandomUUID();
 
@@ -93,10 +159,21 @@ export function callT3TeamWidgetShowTool(input: {
       }
     }
 
+    // html format → upstream HtmlRender publish (shim). svg and others stay on widget tier.
+    let htmlRenderRef: HtmlRenderReference | undefined;
+    if (parsed.format === "html" && deps.htmlRender) {
+      htmlRenderRef = yield* publishHtmlShim({
+        threadId: deps.threadId,
+        parsed,
+        htmlRender: deps.htmlRender,
+      });
+    }
+
     const attachment = buildT3TeamWidgetAttachment({
       widgetId,
       parsed,
       artifactRelativePath,
+      htmlRender: htmlRenderRef,
     });
     const recorded = yield* deps
       .recordArtifact({
@@ -125,7 +202,10 @@ export function callT3TeamWidgetShowTool(input: {
       title: parsed.title,
       format: parsed.format,
       ...(artifactRelativePath ? { artifactPath: artifactRelativePath } : {}),
+      ...(htmlRenderRef ? { htmlRender: htmlRenderRef } : {}),
+      ...(parsed.intent !== undefined ? { intent: parsed.intent } : {}),
       allowedTools: parsed.tools,
+      htmlShimmed: parsed.format === "html" && htmlRenderRef !== undefined,
     });
   });
 }

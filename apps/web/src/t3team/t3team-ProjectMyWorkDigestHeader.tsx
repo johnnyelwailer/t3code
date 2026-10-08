@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { DigestSprintAxis } from "~/t3team/t3team-ProjectMyWorkDigestSprintAxis";
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import {
@@ -17,23 +18,44 @@ const JIRA_SYNC_STALE_MS = 60 * 60 * 1000;
 function DigestAutoStatus({
   updatedAtMs,
   jiraSyncedAt,
+  changeRequestNote,
   nowMs,
 }: {
   updatedAtMs: number | undefined;
   jiraSyncedAt: string | undefined;
+  changeRequestNote?: string | undefined;
   nowMs: number;
 }) {
-  if (jiraSyncedAt === undefined && updatedAtMs === undefined) return null;
+  // PRs that may be old or missing (the host rate-limited the read): said here, beside the sync.
+  const prNotice = changeRequestNote ? (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span className="inline-flex items-center gap-1.5 text-warning">
+            <span className="size-1.5 rounded-full bg-warning" aria-hidden />
+            Some PRs may be out of date
+          </span>
+        }
+      />
+      <TooltipPopup side="top" className="max-w-xs">
+        {changeRequestNote}
+      </TooltipPopup>
+    </Tooltip>
+  ) : null;
+  if (jiraSyncedAt === undefined && updatedAtMs === undefined) return prNotice;
   const stale = jiraSyncedAt !== undefined && nowMs - Date.parse(jiraSyncedAt) > JIRA_SYNC_STALE_MS;
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <span
-        className={`size-1.5 rounded-full ${stale ? "bg-warning" : "bg-success"}`}
-        aria-hidden
-      />
-      {jiraSyncedAt !== undefined
-        ? `Jira synced ${formatDigestAgo(nowMs, jiraSyncedAt)} ago`
-        : `auto · updated ${formatDigestAgo(nowMs, new Date(updatedAtMs ?? nowMs).toISOString())} ago`}
+    <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+      <span className="inline-flex items-center gap-1.5">
+        <span
+          className={`size-1.5 rounded-full ${stale ? "bg-warning" : "bg-success"}`}
+          aria-hidden
+        />
+        {jiraSyncedAt !== undefined
+          ? `Jira synced ${formatDigestAgo(nowMs, jiraSyncedAt)} ago`
+          : `auto · updated ${formatDigestAgo(nowMs, new Date(updatedAtMs ?? nowMs).toISOString())} ago`}
+      </span>
+      {prNotice}
     </span>
   );
 }
@@ -84,6 +106,7 @@ export function ProjectMyWorkDigestHeader({
           <DigestAutoStatus
             updatedAtMs={updatedAtMs}
             jiraSyncedAt={graph.jiraSyncedAt}
+            changeRequestNote={graph.changeRequestNote}
             nowMs={nowMs}
           />
         </div>
@@ -117,6 +140,7 @@ export function ProjectMyWorkDigestHeader({
           <DigestAutoStatus
             updatedAtMs={updatedAtMs}
             jiraSyncedAt={graph.jiraSyncedAt}
+            changeRequestNote={graph.changeRequestNote}
             nowMs={nowMs}
           />
         </div>

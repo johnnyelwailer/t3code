@@ -31,6 +31,7 @@ import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts";
 import { makeQuitShortcutHandler } from "./QuitHold.ts";
+import { makeDetachedSurfaceWindows } from "./t3team-DetachedSurfaceWindows.ts";
 
 import {
   ATLASSIAN_OAUTH_POPUP_HEIGHT,
@@ -368,8 +369,77 @@ export const make = Effect.gen(function* () {
       ),
     );
 
-  const currentMainWindow = electronWindow.currentMainOrFirst.pipe(Effect.flatMap(withoutSplash));
-  const focusedMainWindow = electronWindow.focusedMainOrFirst.pipe(Effect.flatMap(withoutSplash));
+  // t3team: detached-surface windows are second views onto the app, never its main window —
+  // a dock click, a menu action or the activation broker must reach the real one.
+  const detachedSurfaceWindows = makeDetachedSurfaceWindows({
+    applicationUrl: getDesktopUrl(environment.isDevelopment),
+    preloadPath: environment.preloadPath,
+    backgroundColor: () =>
+      getInitialWindowBackgroundColor(Electron.nativeTheme.shouldUseDarkColors),
+    createWindow: (options) => new Electron.BrowserWindow(options),
+    openExternal: (url) => {
+      if (Option.isSome(ElectronShell.parseSafeExternalUrl(url))) {
+        void runPromise(electronShell.openExternal(url));
+      }
+    },
+    logWarning: (message, details) => {
+      runFork(logWindowWarning(message, details));
+    },
+  });
+  const withoutDetached = (window: Option.Option<Electron.BrowserWindow>) =>
+    Option.isSome(window) && detachedSurfaceWindows.isDetached(window.value)
+      ? electronWindow.main
+      : Effect.succeed(window);
+
+  const currentMainWindow = electronWindow.currentMainOrFirst.pipe(
+    Effect.flatMap(withoutSplash),
+    Effect.flatMap(withoutDetached),
+  );
+  const focusedAnyWindow = electronWindow.focusedMainOrFirst.pipe(Effect.flatMap(withoutSplash));
+  const focusedMainWindow = focusedAnyWindow.pipe(Effect.flatMap(withoutDetached));
+
+  // Shared by the main window and detached-surface windows: a window that can take focus can
+  // receive the quit and close accelerators, so each one needs the same guards.
+  const installShortcutGuards = (window: Electron.BrowserWindow): void => {
+    // Electron's windowMenu close role owns CmdOrCtrl+W. Holding the
+    // close-terminal shortcut can outlive the terminal that handled its first
+    // press, so reject repeats before they reach the native window accelerator.
+    // Deliberate presses still flow through the renderer or native menu.
+    // Intercept the quit accelerator before the native menu sees it and apply
+    // the configured direct, hold, or double-press behavior.
+    const quitShortcutHandler = makeQuitShortcutHandler({
+      platform: environment.platform,
+      getMode: () =>
+        runPromise(
+          Effect.map(
+            clientSettings.get,
+            Option.match({
+              onNone: () => DEFAULT_CLIENT_SETTINGS.confirmQuit,
+              onSome: (settings) => settings.confirmQuit,
+            }),
+          ),
+        ),
+      notify: (hint) => {
+        if (!window.isDestroyed()) {
+          window.webContents.send(QUIT_SHORTCUT_CHANNEL, hint);
+        }
+      },
+      // Keep the transparent window focused until the physical shortcut is
+      // released so its remaining repeats cannot reach the next app.
+      concealWindow: () => concealPendingQuitWindow(window),
+      quit: () => {
+        void runPromise(electronApp.quit);
+      },
+    });
+    window.webContents.on("before-input-event", (event, input) => {
+      quitShortcutHandler(event, input);
+      if (input.type !== "keyDown" || !input.isAutoRepeat) return;
+      const modifier = environment.platform === "darwin" ? input.meta : input.control;
+      if (modifier && !input.alt && !input.shift && input.key.toLowerCase() === "w") {
+        event.preventDefault();
+      }
+    });
+  };
 
   const createWindow = Effect.fn("desktop.window.createWindow")(function* (): Effect.fn.Return<
     Electron.BrowserWindow,
@@ -614,6 +684,15 @@ export const make = Effect.gen(function* () {
     });
 
     window.webContents.setWindowOpenHandler(({ url, frameName }) => {
+      const detachedSurface = detachedSurfaceWindows.handleWindowOpen(
+        { url, frameName },
+        window,
+        (created) => {
+          installContextMenu(created, created.webContents);
+          installShortcutGuards(created);
+        },
+      );
+      if (detachedSurface !== null) return detachedSurface;
       if (isAtlassianOAuthPopupRequest({ url, frameName })) {
         return {
           action: "allow",
@@ -653,44 +732,7 @@ export const make = Effect.gen(function* () {
       }
     });
 
-    // Electron's windowMenu close role owns CmdOrCtrl+W. Holding the
-    // close-terminal shortcut can outlive the terminal that handled its first
-    // press, so reject repeats before they reach the native window accelerator.
-    // Deliberate presses still flow through the renderer or native menu.
-    // Intercept the quit accelerator before the native menu sees it and apply
-    // the configured direct, hold, or double-press behavior.
-    const quitShortcutHandler = makeQuitShortcutHandler({
-      platform: environment.platform,
-      getMode: () =>
-        runPromise(
-          Effect.map(
-            clientSettings.get,
-            Option.match({
-              onNone: () => DEFAULT_CLIENT_SETTINGS.confirmQuit,
-              onSome: (settings) => settings.confirmQuit,
-            }),
-          ),
-        ),
-      notify: (hint) => {
-        if (!window.isDestroyed()) {
-          window.webContents.send(QUIT_SHORTCUT_CHANNEL, hint);
-        }
-      },
-      // Keep the transparent window focused until the physical shortcut is
-      // released so its remaining repeats cannot reach the next app.
-      concealWindow: () => concealPendingQuitWindow(window),
-      quit: () => {
-        void runPromise(electronApp.quit);
-      },
-    });
-    window.webContents.on("before-input-event", (event, input) => {
-      quitShortcutHandler(event, input);
-      if (input.type !== "keyDown" || !input.isAutoRepeat) return;
-      const modifier = environment.platform === "darwin" ? input.meta : input.control;
-      if (modifier && !input.alt && !input.shift && input.key.toLowerCase() === "w") {
-        event.preventDefault();
-      }
-    });
+    installShortcutGuards(window);
     window.webContents.on("input-event", (_event, input) => {
       if (input.type === "gestureScrollEnd") window.webContents.send(TRACKPAD_SCROLL_END_CHANNEL);
     });
@@ -1036,7 +1078,7 @@ export const make = Effect.gen(function* () {
     }),
     zoomMain: Effect.fn("desktop.window.zoomMain")(function* (direction) {
       yield* Effect.annotateCurrentSpan({ direction });
-      const window = yield* focusedMainWindow;
+      const window = yield* focusedAnyWindow;
       if (Option.isNone(window) || window.value.isDestroyed()) {
         return;
       }
@@ -1045,7 +1087,15 @@ export const make = Effect.gen(function* () {
       webContents.setZoomLevel(
         direction === "reset" ? 0 : webContents.getZoomLevel() + (direction === "in" ? 0.5 : -0.5),
       );
-      if (environment.platform === "darwin") syncMacosWindowButtons(window.value);
+      // Chromium keeps zoom per origin, so zooming a detached surface zooms the main window too;
+      // it is the main window whose custom-placed window buttons need re-seating (a detached
+      // window has native ones).
+      const buttonsWindow = detachedSurfaceWindows.isDetached(window.value)
+        ? yield* electronWindow.main
+        : window;
+      if (environment.platform === "darwin" && Option.isSome(buttonsWindow)) {
+        if (!buttonsWindow.value.isDestroyed()) syncMacosWindowButtons(buttonsWindow.value);
+      }
       // Chromium pushes the new level down to embedded guests, which would zoom
       // the previewed page along with the app UI. The preview browser keeps its
       // own zoom, so put each guest back where the preview left it.
@@ -1054,7 +1104,14 @@ export const make = Effect.gen(function* () {
     syncAppearance: Effect.gen(function* () {
       const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
       yield* electronWindow.syncAllAppearance((window) =>
-        syncWindowAppearance(window, shouldUseDarkColors, environment.platform),
+        detachedSurfaceWindows.isDetached(window)
+          ? Effect.sync(() => {
+              // A native title bar has no overlay to recolour (setting one throws).
+              if (!window.isDestroyed()) {
+                window.setBackgroundColor(getInitialWindowBackgroundColor(shouldUseDarkColors));
+              }
+            })
+          : syncWindowAppearance(window, shouldUseDarkColors, environment.platform),
       );
     }).pipe(Effect.withSpan("desktop.window.syncAppearance")),
   });

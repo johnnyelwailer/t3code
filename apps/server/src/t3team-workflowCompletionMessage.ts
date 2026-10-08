@@ -1,6 +1,6 @@
 // @effect-diagnostics globalConsole:off -- fire-and-forget delivery failure log in a plain Promise path, outside any Effect runtime.
 import type { T3TeamMessageAttachment } from "@t3tools/contracts";
-import { renderWorkflowValueAsDisplayText } from "@t3tools/shared/t3team-workflowOutputText";
+import { frameWorkflowOutputData } from "@t3tools/shared/t3team-workflowOutputData";
 
 import { workflowCompletionDraftRef } from "./t3team-workflowCompletionDraftRef.ts";
 import { workflowStepDetailSnippet } from "./t3team-workflowEngineStepActivities.ts";
@@ -8,16 +8,9 @@ import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 
 type TerminalHost = Pick<WorkflowHostPort, "postMessage">;
 
-/**
- * Formats a run's output as the terminal chat message's text — BEFORE it is ever stored (see
- * `postTerminalMessage` below). The rich record rendering (never dropping a nested field,
- * truncating visibly) lives in the shared `renderWorkflowRecordAsDisplayText`, also used by the
- * web client's `t3team-workflowCompletionDisplayText.ts` for re-rendering legacy raw-JSON text.
- */
+/** Relay the run's structured output as bounded data, preserving the instruction boundary. */
 export function formatWorkflowOutput(output: unknown): string {
-  // Arrays and deep objects render as tables / nested bullets — a run's structured result never
-  // reaches the thread as raw JSON (GHE #418).
-  return renderWorkflowValueAsDisplayText(output, { emptyFallback: "Workflow completed." });
+  return frameWorkflowOutputData(output);
 }
 
 /**
@@ -72,7 +65,7 @@ export async function deliverWorkflowCompletion(input: {
   readonly host: TerminalHost;
 }): Promise<void> {
   // A run that proposed a draft also carries a card ref (see t3team-workflowCompletionDraftRef.ts).
-  // The TEXT is unchanged either way: a client that renders no card still reads the same summary.
+  // Clients without a card still receive the framed result as text.
   const draftRef = workflowCompletionDraftRef(input.output, input.projectId);
   await postTerminalMessage({
     launchThreadId: input.launchThreadId,

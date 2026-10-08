@@ -33,6 +33,17 @@ function causeMessage(cause: unknown): string | undefined {
         continue;
       }
       if (typeof cause !== "object") break;
+      {
+        const record = cause as Record<string, unknown>;
+        const code = typeof record.code === "string" ? record.code : undefined;
+        const message = typeof record.message === "string" ? record.message : undefined;
+        if (
+          code === "connection_stalled" ||
+          (message != null && /connection stalled/i.test(message))
+        ) {
+          return "Cursor connection stalled repeatedly. Retry the turn; if it keeps failing, check network stability and Cursor status.";
+        }
+      }
       switch ((cause as Record<string, unknown>)._tag) {
         case "ContextHandoffBudgetError":
           return new ContextHandoffBudgetError().message;

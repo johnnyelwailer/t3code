@@ -8,6 +8,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import type { PullRequestService } from "./pullRequest/PullRequestService.ts";
+import { isRateLimitedFailure } from "./t3team-myworkDigestRateLimited.ts";
 import type { T3TeamDigestPerson } from "./t3team-myworkDigestTypesPrs.ts";
 
 export type PrEnrichment = {
@@ -87,7 +88,27 @@ function mapUnhandledThreads(activity: {
     });
 }
 
-/** One PR's detail + activity through the shared cached reads; undefined when unreadable. */
+// The last enrichment each PR read successfully, keyed by app project + host/repo#number. The shared
+// reads expire after a minute and fail outright while the host's rate limit is paused; serving the
+// last good enrichment then keeps names, faces and sizes on the digest instead of dropping every row
+// back to bare logins until the quota resets. Only a rate limit falls back (see
+// `isRateLimitedFailure`). Bounded: the oldest entry goes first.
+const LAST_GOOD_CAPACITY = 500;
+const lastGoodEnrichment = new Map<string, PrEnrichment>();
+
+function rememberEnrichment(key: string, enrichment: PrEnrichment) {
+  lastGoodEnrichment.delete(key);
+  lastGoodEnrichment.set(key, enrichment);
+  if (lastGoodEnrichment.size > LAST_GOOD_CAPACITY) {
+    const oldest = lastGoodEnrichment.keys().next().value;
+    if (oldest !== undefined) lastGoodEnrichment.delete(oldest);
+  }
+}
+
+/**
+ * One PR's detail + activity through the shared cached reads; when unreadable, the last enrichment
+ * read for it this session, else undefined.
+ */
 export function enrichPr(
   service: PullRequestService["Service"],
   ref: {
@@ -97,6 +118,7 @@ export function enrichPr(
     readonly number: number;
   },
 ) {
+  const key = `${ref.projectId}:${ref.host ?? ""}/${ref.repository}#${ref.number}`;
   return Effect.all([service.detail(ref), service.activity(ref)], { concurrency: 2 }).pipe(
     Effect.map(([detail, activity]): PrEnrichment => {
       const withAvatar = avatarsByLogin([
@@ -118,7 +140,12 @@ export function enrichPr(
         body: typeof detail.body === "string" ? detail.body : "",
       };
     }),
-    Effect.catch(() => Effect.succeed<PrEnrichment | undefined>(undefined)),
+    Effect.tap((enrichment) => Effect.sync(() => rememberEnrichment(key, enrichment))),
+    Effect.catch((error) =>
+      Effect.succeed<PrEnrichment | undefined>(
+        isRateLimitedFailure(error) ? lastGoodEnrichment.get(key) : undefined,
+      ),
+    ),
   );
 }
 

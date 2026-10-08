@@ -36,6 +36,8 @@ export interface WorkflowPrimitivesDeps {
   /** Live observation of a `parallel()`/`pipeline()` branch that rejected — see the generic
    * `WorkflowPrimitivesDeps.onCompositionBranchFailed` this forwards to. */
   readonly onCompositionBranchFailed?: (failure: CompositionBranchFailure) => void | Promise<void>;
+  /** The run's abort signal; the bounded composition pool stops launching branches once it fires. */
+  readonly abortSignal?: AbortSignal | undefined;
 }
 
 export function createWorkflowPrimitives(deps: WorkflowPrimitivesDeps): WorkflowPrimitives {
@@ -57,5 +59,6 @@ export function createWorkflowPrimitives(deps: WorkflowPrimitivesDeps): Workflow
     ...(deps.onCompositionBranchFailed === undefined
       ? {}
       : { onCompositionBranchFailed: deps.onCompositionBranchFailed }),
+    ...(deps.abortSignal === undefined ? {} : { abortSignal: deps.abortSignal }),
   });
 }

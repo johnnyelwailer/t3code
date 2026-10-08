@@ -20,7 +20,10 @@ const state = vi.hoisted(() => ({
   command: vi.fn().mockResolvedValue({ _tag: "Success" }),
 }));
 
-vi.mock("@tanstack/react-router", () => ({ useNavigate: () => state.navigate }));
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => state.navigate,
+  useParams: () => ({ threadId: undefined }),
+}));
 vi.mock("../../state/entities", () => ({
   useThreadProjection: () => ({ projection: state.projection }),
   useThreadShells: () => state.shells,

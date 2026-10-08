@@ -12,6 +12,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as SqlClient from "effect/sql/SqlClient";
 
+import * as HtmlRender from "./htmlRender/HtmlRender.ts";
 import { WorkspacePaths } from "./workspace/WorkspacePaths.ts";
 import type { T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 import { errorResult } from "./t3team-toolBrokerHelpers.ts";
@@ -26,6 +27,7 @@ export interface T3TeamWidgetShowRuntime {
   readonly registry: T3TeamWidgetRegistryShape | undefined;
   readonly artifacts: T3TeamThreadArtifactsStore["Service"] | undefined;
   readonly persistenceContext: Context.Context<T3TeamWidgetPersistenceServices> | undefined;
+  readonly htmlRender: HtmlRender.HtmlRender["Service"] | undefined;
 }
 
 /** Capture the widget pipeline's optional services from the ambient layer context. */
@@ -36,6 +38,7 @@ const captureT3TeamWidgetShowRuntime = Effect.fnUntraced(function* () {
   const path = Option.getOrUndefined(yield* Effect.serviceOption(Path.Path));
   const sqlClient = Option.getOrUndefined(yield* Effect.serviceOption(SqlClient.SqlClient));
   const workspacePaths = Option.getOrUndefined(yield* Effect.serviceOption(WorkspacePaths));
+  const htmlRender = Option.getOrUndefined(yield* Effect.serviceOption(HtmlRender.HtmlRender));
 
   // The CAS artifact write needs all four services; persistence degrades to an inline-only
   // widget when any is missing in this runtime.
@@ -49,7 +52,7 @@ const captureT3TeamWidgetShowRuntime = Effect.fnUntraced(function* () {
         )
       : undefined;
 
-  return { registry, artifacts, persistenceContext } satisfies T3TeamWidgetShowRuntime;
+  return { registry, artifacts, persistenceContext, htmlRender } satisfies T3TeamWidgetShowRuntime;
 });
 
 /** One-shot binder: capture the runtime once at layer build, then mint per-thread callbacks. */
@@ -89,6 +92,7 @@ export function makeT3TeamShowWidget<TLoadError>(input: {
           registry,
           recordArtifact: artifacts.upsert,
           persistenceContext: input.runtime.persistenceContext,
+          htmlRender: input.runtime.htmlRender,
         },
       });
     });

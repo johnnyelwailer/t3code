@@ -71,7 +71,8 @@ export type EnvironmentSubscriptionRpcTag =
   | typeof WS_METHODS.terminalObserve
   | typeof WS_METHODS.subscribeToolAuth
   | typeof WS_METHODS.t3teamSubscribeThreadFacts
-  | typeof WS_METHODS.t3teamSubscribeThreadArtifacts;
+  | typeof WS_METHODS.t3teamSubscribeThreadArtifacts
+  | typeof WS_METHODS.t3teamSubscribePackDocuments;
 
 export type EnvironmentStreamCommandRpcTag =
   | typeof WS_METHODS.chatGptHandoffSubscribe

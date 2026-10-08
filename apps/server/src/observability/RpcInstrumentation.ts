@@ -33,6 +33,8 @@ const RPC_AGGREGATES = {
   [WS_METHODS.orchestrationNoteComposing]: "orchestration",
   [WS_METHODS.t3teamSubscribeThreadFacts]: "t3team",
   [WS_METHODS.t3teamSubscribeThreadArtifacts]: "t3team",
+  [WS_METHODS.t3teamSubscribePackDocuments]: "t3team",
+  [WS_METHODS.t3teamPackStorePut]: "t3team",
   [WS_METHODS.t3teamStopThreadCascade]: "t3team",
   [WS_METHODS.serverProbe]: "server",
   [WS_METHODS.serverGetConfig]: "server",

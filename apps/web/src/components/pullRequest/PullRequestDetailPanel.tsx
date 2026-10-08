@@ -182,6 +182,8 @@ import {
   summarizePullRequestChecks,
 } from "./pullRequestPresentation";
 import { PullRequestGlyph } from "./pullRequestIcons";
+import { pullRequestDetachedSurfaceRequest } from "./t3team-pullRequestDetachedSurface.logic";
+import { DetachSurfaceButton } from "~/t3team/detached/t3team-DetachSurfaceButton";
 
 type DetailTab = PullRequestDetailTab;
 
@@ -2727,6 +2729,17 @@ export function PullRequestDetailPanel({
                 </Button>
               </div>
             ) : null}
+            <DetachSurfaceButton
+              className={cn(tab === "code" && "ml-auto")}
+              request={() =>
+                pullRequestDetachedSurfaceRequest({
+                  environmentId,
+                  reference,
+                  view: { tab, file: tab === "code" ? activeFile : null },
+                  title: detail.title,
+                })
+              }
+            />
           </nav>
         ) : null}
       </div>

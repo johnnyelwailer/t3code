@@ -10,6 +10,7 @@ import * as Haptics from "expo-haptics";
 import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
 import { useViewabilityAmount, type LegendListRef } from "@legendapp/list/react-native";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { resolveRunInitiatingPrompt } from "@t3tools/client-runtime/t3team-runPromptCopy";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
 import {
@@ -1674,6 +1675,7 @@ function renderFeedEntry(
     const { message } = entry;
     const isUser = message.role === "user";
     const presentation = resolveUserMessagePresentation(message);
+    const initiatingPrompt = isUser ? resolveRunInitiatingPrompt(message) : null;
     const renderedText = renderAssistantCitationsAsText(presentation.text);
     const styles = isUser ? markdownStyles.user : markdownStyles.assistant;
     const timestampLabel = formatMessageTime(isUser ? message.createdAt : message.updatedAt);
@@ -1856,14 +1858,14 @@ function renderFeedEntry(
                 <SymbolView name="pencil" size={14} tintColor={iconSubtleColor} />
               </Pressable>
             ) : null}
-            {presentation.text.trim().length > 0 ? (
+            {initiatingPrompt !== null ? (
               <CopyTextButton
                 accessibilityLabel="Copy message"
-                text={presentation.text}
+                text={initiatingPrompt}
                 onCopy={
-                  message.context
+                  message.context && initiatingPrompt === message.text
                     ? () =>
-                        writeComposerContextClipboard(message.text, {
+                        writeComposerContextClipboard(initiatingPrompt, {
                           version: 1,
                           source: { environmentId: props.environmentId, messageId: message.id },
                           records: message.context!.records,

@@ -82,6 +82,11 @@ import { previewBridge } from "./preview/previewBridge";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
 import { resolvePullRequestState } from "./pullRequest/pullRequestPresentation";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
+import {
+  DETACH_SURFACE_LABEL,
+  openDetachedSurface,
+} from "~/t3team/detached/t3team-openDetachedSurface";
+import { detachedSurfaceRequestForRightPanelSurface } from "~/t3team/detached/t3team-rightPanelSurfaceDetach";
 
 interface RightPanelTabsProps {
   mode: PreviewPanelMode;
@@ -193,6 +198,7 @@ type TabContextMenuAction =
   | "rename"
   | "copy-path"
   | "toggle-mute"
+  | "detach"
   | "close"
   | "close-others"
   | "close-to-right"
@@ -981,6 +987,12 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           }),
         });
       }
+      // t3team: a tab whose surface can stand alone moves into a window (or tab) of its own.
+      const detachRequest = detachedSurfaceRequestForRightPanelSurface(
+        surface,
+        props.environmentId,
+      );
+      if (detachRequest !== null) items.push({ id: "detach", label: DETACH_SURFACE_LABEL });
       items.push(
         { id: "close", label: "Close" },
         {
@@ -1022,6 +1034,9 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           }
           break;
         }
+        case "detach":
+          if (detachRequest !== null) openDetachedSurface(detachRequest);
+          break;
         case "close":
           props.onCloseSurface(surface);
           break;

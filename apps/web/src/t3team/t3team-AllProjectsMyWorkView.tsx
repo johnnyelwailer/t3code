@@ -13,6 +13,7 @@
  * Each section is a read-only slice built on the fetch-only hook (see
  * `t3team-AllProjectsMyWorkSection.tsx` for why it does NOT reuse `ProjectDashboardMyWorkView`).
  */
+import { closeDigestPullRequest, openDigestTicket } from "~/t3team/t3team-digestPrAsideStore";
 import { useCallback, useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
@@ -39,17 +40,8 @@ import {
 } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 import { ProjectMyWorkLoadingState } from "~/t3team/t3team-projectMyWorkContentState";
 import { useT3TeamBetaFlags } from "~/t3team/t3team-betaFlags";
-import type { ProjectShellProject } from "@t3tools/project-context";
-
-/**
- * Projects whose work items can be fetched at all: a local-only project has no external work
- * source, so a "my work" section for it would always be empty.
- */
-export function selectBoundProjects(
-  projects: ReadonlyArray<ProjectShellProject>,
-): ReadonlyArray<ProjectShellProject> {
-  return projects.filter((project) => project.source && project.source.provider !== "local");
-}
+import { selectBoundProjects } from "~/t3team/t3team-allProjectsMyWorkProjects";
+import { t3teamScopeContentWidthClass } from "~/t3team/t3team-scopeContentWidth";
 
 export function AllProjectsMyWorkView({
   onOpenTicket,
@@ -167,8 +159,6 @@ export function AllProjectsMyWorkView({
         </T3SurfacePanel>
       );
     }
-    // TODO(digest-nav): rows open the ticket URL today; route through onOpenTicket once the digest
-    // rows accept an in-app handler.
     return (
       <ProjectMyWorkDigestView
         plan={digestPlan}
@@ -177,11 +167,20 @@ export function AllProjectsMyWorkView({
         burndownVariant={flags.digestBurndownVariant}
         {...(digestUpdatedAt !== undefined ? { updatedAtMs: digestUpdatedAt } : {})}
         onOpenTicket={
-          // Beta flag: rows open the ticket in-app (each ticket knows its project).
+          // Beta flag: rows open the ticket in-app, beside the digest (each ticket knows its
+          // project); the full page is one click from there.
           flags.digestRowNavigation === "in-app"
             ? (ticketId: string) => {
                 const ticket = digestGraph.tickets.find((entry) => entry.id === ticketId);
-                if (ticket) onOpenTicket(ticket.projectId, ticketId);
+                if (!ticket) return;
+                openDigestTicket({
+                  projectId: ticket.projectId,
+                  ticketId,
+                  openFullPage: (shownTicketId) => {
+                    closeDigestPullRequest();
+                    onOpenTicket(ticket.projectId, shownTicketId);
+                  },
+                });
               }
             : undefined
         }
@@ -192,12 +191,7 @@ export function AllProjectsMyWorkView({
   return (
     <ScrollArea className="h-full min-h-0 flex-1">
       <div
-        className={
-          lens === "digest"
-            ? // The digest spans the full pane width; the legacy sections keep the centered column.
-              "flex w-full flex-col gap-8 p-4 sm:p-6"
-            : "mx-auto flex w-full max-w-6xl flex-col gap-8 p-4 sm:p-6"
-        }
+        className={`mx-auto flex w-full ${t3teamScopeContentWidthClass} flex-col gap-8 p-4 sm:p-6`}
       >
         <div>
           <ProjectMyWorkViewSwitch

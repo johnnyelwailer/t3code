@@ -1,5 +1,7 @@
 import type { RuntimeSubagent } from "@t3tools/client-runtime/state/subagentRuntime";
+import type { ProviderDriverKind } from "@t3tools/contracts";
 import { useSyncExternalStore } from "react";
+import { resolveSubRunStatusLabel } from "~/t3team/chat/t3team-AgentsPanelForkSection.logic";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
 /**
@@ -26,6 +28,13 @@ export interface ActiveAgentEntry {
   readonly activityKey: string;
   /** GHE #201 follow-up: this agent's dot state (textures the indicator dot). */
   readonly dotState: DotState;
+  /** Driver mark for the chip. Absent when the child has no provider instance. */
+  readonly provider?: {
+    readonly driverKind: ProviderDriverKind;
+    readonly displayName: string;
+    readonly iconDataUrl?: string | undefined;
+    readonly acpRegistryIconUrl?: string | undefined;
+  };
 }
 
 /**
@@ -60,23 +69,44 @@ function subagentStatusLabel(agent: RuntimeSubagent): string {
   return agent.progress ?? agent.lastToolName ?? "Working";
 }
 
+/** A child still owes the parent work: running, spinning up, or waiting on its own agents. */
+function childIsActive(thread: ProjectThread): boolean {
+  if (thread.status === "error" || thread.shellRunStatus === "failed") return false;
+  if (thread.status === "running" || thread.waitingOnChildren === true) return true;
+  const shell = thread.shellRunStatus;
+  return (
+    shell === "preparing" ||
+    shell === "starting" ||
+    shell === "queued" ||
+    shell === "running" ||
+    shell === "waiting"
+  );
+}
+
 export function mergeActiveAgentsAndChildren({
   childThreads,
   subagents,
+  activityLabelsEnabled = true,
 }: {
   childThreads: readonly ProjectThread[];
   subagents: readonly RuntimeSubagent[];
+  activityLabelsEnabled?: boolean;
 }): readonly ActiveAgentEntry[] {
   const entries: ActiveAgentEntry[] = [];
   for (const thread of childThreads) {
-    if (thread.status !== "running") continue;
+    if (!childIsActive(thread)) continue;
+    const statusLabel = resolveSubRunStatusLabel(thread, { activityLabelsEnabled });
     entries.push({
       id: `child:${thread.id}`,
       source: "child",
       title: thread.title,
-      statusLabel: thread.activityLabel ?? "Working",
-      activityKey: `${thread.childStatusUpdatedAt ?? ""}|${thread.lastMessageAt}|${thread.activityLabel ?? ""}`,
-      dotState: deriveDotState({ label: thread.activityLabel }),
+      statusLabel,
+      activityKey: `${thread.childStatusUpdatedAt ?? ""}|${thread.lastMessageAt}|${thread.activityLabel ?? ""}|${statusLabel}`,
+      dotState: deriveDotState({
+        label: statusLabel,
+        status:
+          thread.shellRunStatus === "waiting" || thread.waitingOnChildren ? "waiting" : undefined,
+      }),
     });
   }
   const pushSubagent = (agent: RuntimeSubagent) => {

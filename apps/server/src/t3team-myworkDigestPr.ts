@@ -9,6 +9,7 @@
  */
 
 import { ProjectId, type PullRequestListEntry } from "@t3tools/contracts";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
@@ -19,6 +20,11 @@ import {
   toDigestPerson,
   type PrEnrichment,
 } from "./t3team-myworkDigestPrEnrich.ts";
+import {
+  isRateLimitedFailure,
+  resolveDigestListing,
+  type DigestListingMemory,
+} from "./t3team-myworkDigestRateLimited.ts";
 
 export {
   digestEnrichmentFields,
@@ -38,6 +44,8 @@ const DIGEST_PR_ENRICH_LIMIT = 8;
 export type PrReadResult = {
   readonly entries: readonly PullRequestListEntry[];
   readonly note?: string;
+  /** The entries are the last good listing, served while the host rate-limits reads. */
+  readonly stale?: boolean;
   readonly enrichments?: Record<string, PrEnrichment>;
 };
 
@@ -89,6 +97,9 @@ export function toDigestPrEntries(
   });
 }
 
+// The last clean listing per app project, for `resolveDigestListing`.
+const lastGoodListing: DigestListingMemory<PullRequestListEntry> = new Map();
+
 export function loadPrEntries(
   appProjectId: string | undefined,
 ): Effect.Effect<PrReadResult | undefined, never, PullRequestService> {
@@ -96,20 +107,33 @@ export function loadPrEntries(
     if (appProjectId === undefined) return undefined;
     const service = yield* PullRequestService;
 
-    let entries: readonly PullRequestListEntry[] = [];
-    let note: string | undefined;
     const listRead = yield* service
       .list({ state: "all", projectId: ProjectId.make(appProjectId), limit: DIGEST_PR_LIMIT })
       .pipe(Effect.result);
-    if (listRead._tag === "Success") {
-      entries = listRead.success.entries;
-    } else {
-      note =
-        listRead.failure instanceof Error
-          ? listRead.failure.message
-          : "Change requests unavailable.";
+    const { entries, stale, note } = resolveDigestListing({
+      memory: lastGoodListing,
+      projectId: appProjectId,
+      nowMs: yield* Clock.currentTimeMillis,
+      read:
+        listRead._tag === "Success"
+          ? {
+              _tag: "Success",
+              entries: listRead.success.entries,
+              hadErrors: listRead.success.errors.length > 0,
+            }
+          : {
+              _tag: "Failure",
+              rateLimited: isRateLimitedFailure(listRead.failure),
+              message:
+                listRead.failure instanceof Error
+                  ? listRead.failure.message
+                  : "Change requests unavailable.",
+            },
+    });
+    const staleField = stale ? { stale: true } : {};
+    if (entries.length === 0) {
+      return { entries, ...(note !== undefined ? { note } : {}), ...staleField };
     }
-    if (entries.length === 0) return { entries, ...(note !== undefined ? { note } : {}) };
 
     // Enrich only the freshest OPEN rows: those are the chips that show
     // faces and comment counts. Bounded and parallel through the service's
@@ -130,6 +154,7 @@ export function loadPrEntries(
     return {
       entries,
       ...(note !== undefined ? { note } : {}),
+      ...staleField,
       ...(Object.keys(enrichments).length > 0 ? { enrichments } : {}),
     };
   });

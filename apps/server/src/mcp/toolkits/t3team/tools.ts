@@ -383,11 +383,21 @@ export const T3TeamShowWidgetTool = Tool.make("t3_show_widget", {
       description:
         "Short snake_case identifier for this widget (e.g. 'q4_revenue_chart'). Used as the artifact name.",
     }),
+    intent: Schema.optional(Schema.String).annotate({
+      description:
+        "Preferred default: describe what to show. A builder subagent authors the widget (theme/icon contract) and html output goes through the upstream HTML render shim. Omit when passing widget_code.",
+    }),
     // The full authoring contract rides the property annotation: it is the text the model reads
     // while writing the widget body, and it is the single source of truth for the theme-token,
     // icon-sprite, layout and CSP rules (never hard-code light or dark palette colors).
-    widget_code: Schema.String.annotate({ description: T3TEAM_WIDGET_AUTHORING_GUIDANCE }),
-    format: Schema.optional(Schema.Literals(["html", "svg"])),
+    // Optional when `intent` is provided; required to skip the builder (deterministic workflows).
+    widget_code: Schema.optional(Schema.String).annotate({
+      description: T3TEAM_WIDGET_AUTHORING_GUIDANCE,
+    }),
+    format: Schema.optional(Schema.Literals(["html", "svg"])).annotate({
+      description:
+        "html is shimmed onto upstream html_render storage/theme; svg stays on the widget tier.",
+    }),
     loading_messages: Schema.optional(Schema.Array(Schema.String)),
     capabilities: Schema.optional(
       Schema.Struct({ tools: Schema.optional(Schema.Array(Schema.String)) }),
