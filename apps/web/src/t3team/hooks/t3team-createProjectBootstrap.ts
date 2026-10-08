@@ -10,7 +10,7 @@ import type { ProjectWorkspaceBootstrapMainRepository } from "~/t3team/backend/t
 export type LinkedRepositoryReference = {
   readonly url: string;
   readonly localPath?: string;
-  readonly status?: "cloned" | "updated" | "failed";
+  readonly status?: LinkedRepositorySyncResult["status"];
   readonly error?: string;
 };
 

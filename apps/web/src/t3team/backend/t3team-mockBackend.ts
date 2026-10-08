@@ -116,6 +116,7 @@ export function createMockBackend(): BackendApi {
           status: "cloned" as const,
         })),
       }),
+      readLinkedRepositoryStatus: async () => ({ linkedRepositories: [] }),
       setMainRepository: async () => {
         throw new Error("Main repositories are not available in the mock backend.");
       },

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Check, Lock } from "lucide-react";
 import { cn } from "~/lib/utils";
 
@@ -15,11 +16,14 @@ export function RepositoryPickerRow({
   linked,
   showHost,
   onToggle,
+  status,
 }: {
   entry: RepositoryPickerEntry;
   linked: boolean;
   showHost: boolean;
   onToggle: (url: string) => void;
+  /** Rendered under the row, aligned with the repository name. */
+  status?: ReactNode;
 }) {
   const slash = entry.name.indexOf("/");
   const owner = slash < 0 ? "" : entry.name.slice(0, slash + 1);
@@ -63,6 +67,7 @@ export function RepositoryPickerRow({
           </span>
         ) : null}
       </button>
+      {status ? <div className="pr-2.5 pb-1 pl-10">{status}</div> : null}
     </li>
   );
 }

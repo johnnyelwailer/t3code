@@ -17,6 +17,8 @@ import {
   readMainRepositoryFromProject,
 } from "~/t3team/hooks/t3team-projectMainRepository";
 import { saveProjectRepositories } from "~/t3team/hooks/t3team-saveProjectRepositories";
+import { useLinkedRepositorySyncStatus } from "~/t3team/hooks/t3team-useLinkedRepositorySyncStatus";
+import { LinkedRepositorySyncStatusLine } from "~/t3team/components/t3team-LinkedRepositorySyncStatusLine";
 import { useGitHubRepositoryDiscovery } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
 import { useServerConfig } from "~/t3team/t3team-serverState";
 
@@ -34,11 +36,22 @@ export function ManageProjectRepositoriesDialog({
   const [linkedRepositoryUrls, setLinkedRepositoryUrls] = useState(currentUrls);
   const [saveError, setSaveError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
+  // Saving returns before clones finish; the dialog stays open to show their progress.
+  const [saved, setSaved] = useState<{
+    urls: ReadonlyArray<string>;
+    main: string | null;
+  } | null>(null);
+  const syncStatus = useLinkedRepositorySyncStatus({
+    workspaceRoot: project.workspace?.rootPath,
+    enabled: true,
+  });
   const mainRepositoryEnabled = useServerConfig()?.mainRepository === true;
   // An adopted workspace repository is the project workspace itself, not a linked repository.
   const currentMain = readMainRepositoryFromProject(project);
   const initialMainUrl = currentMain?.status === "adopted" ? null : (currentMain?.url ?? null);
   const [mainRepositoryUrl, setMainRepositoryUrl] = useState<string | null>(initialMainUrl);
+  const unchangedSinceSave =
+    saved !== null && saved.urls === linkedRepositoryUrls && saved.main === mainRepositoryUrl;
 
   const discovery = useGitHubRepositoryDiscovery({
     enabled: true,
@@ -80,12 +93,15 @@ export function ManageProjectRepositoriesDialog({
         backend,
         project,
         linkedRepositoryUrls,
+        // Show clone progress while the save waits on the chosen main repository's clone.
+        onSaved: () => syncStatus.refresh(),
         ...(mainRepositoryEnabled && mainRepositoryUrl !== initialMainUrl
           ? { mainRepositoryUrl }
           : {}),
       });
       onProjectUpdated(nextProject);
-      onClose();
+      setSaved({ urls: linkedRepositoryUrls, main: mainRepositoryUrl });
+      syncStatus.refresh();
     } catch (error) {
       setSaveError(error);
     } finally {
@@ -122,6 +138,9 @@ export function ManageProjectRepositoriesDialog({
           linkedUrls={linkedRepositoryUrls}
           onToggle={toggleRepository}
           onLinkMany={linkRepositories}
+          renderLinkedStatus={(url) => (
+            <LinkedRepositorySyncStatusLine entry={syncStatus.byUrl.get(url)} />
+          )}
         />
 
         {mainRepositoryEnabled && linkedRepositoryUrls.length > 0 ? (
@@ -148,14 +167,22 @@ export function ManageProjectRepositoriesDialog({
 
         <footer className="flex items-center justify-between gap-2 border-t border-border bg-card px-5 py-3.5">
           <span className="text-xs text-muted-foreground">
-            {linkedRepositoryUrls.length} linked{dirty ? " · unsaved changes" : ""}
+            {linkedRepositoryUrls.length} linked
+            {unchangedSinceSave
+              ? " · saved, repositories sync in the background"
+              : dirty
+                ? " · unsaved changes"
+                : ""}
           </span>
           <div className="flex items-center gap-2">
             <Button variant="ghost" onClick={onClose} disabled={saving}>
-              Cancel
+              {saved === null ? "Cancel" : "Close"}
             </Button>
-            <Button onClick={() => void saveLinkedRepositories()} disabled={saving || !dirty}>
-              {saving ? "Saving..." : "Save"}
+            <Button
+              onClick={() => void saveLinkedRepositories()}
+              disabled={saving || !dirty || unchangedSinceSave}
+            >
+              {saving ? "Saving..." : unchangedSinceSave ? "Saved" : "Save"}
             </Button>
           </div>
         </footer>
