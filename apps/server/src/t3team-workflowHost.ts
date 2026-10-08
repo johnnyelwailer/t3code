@@ -98,6 +98,12 @@ const make = Effect.gen(function* () {
   const createThread = (input: WorkflowHostCreateThreadInput) =>
     Effect.gen(function* () {
       const threadId = ThreadId.make(input.threadId);
+      // An opted-in child works in its launch thread's checkout, as a delegated task does, so a
+      // recipe run on a worktree thread fixes that worktree rather than the project root.
+      const parent =
+        input.parentThreadId === undefined || input.inheritCheckout !== true
+          ? null
+          : yield* threads.getThreadShell(ThreadId.make(input.parentThreadId));
       // Deterministic: the engine re-fires a spawn only when its journal says it never landed,
       // and a receipt makes a duplicate a no-op rather than a second thread.
       yield* threads.dispatch({
@@ -109,8 +115,8 @@ const make = Effect.gen(function* () {
         modelSelection: input.modelSelection,
         runtimeMode: input.runtimeMode,
         interactionMode: input.interactionMode,
-        branch: null,
-        worktreePath: null,
+        branch: parent?.branch ?? null,
+        worktreePath: parent?.worktreePath ?? null,
         createdBy: "system",
         creationSource: "server",
       });

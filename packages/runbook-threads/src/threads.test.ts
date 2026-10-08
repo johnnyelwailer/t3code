@@ -147,6 +147,41 @@ describe("@runbook/threads contracts", () => {
     expect(broker.sent).toHaveLength(1);
   });
 
+  it("carries an opted-in checkout to the host and leaves the default off the payload", () => {
+    const dispatch = {
+      send: async () => "run-1:1",
+      sendOneWay: (call: Parameters<HandleDispatch["sendOneWay"]>[0]) => {
+        void call.fire("run-1:1", { resolve: () => {}, reject: () => {} });
+        return "run-1:1";
+      },
+      awaitResolution: async <R>() => undefined as R,
+    } satisfies HandleDispatch;
+    const broker = createMockBroker(() => ({ kind: "defer" }));
+    const primitives = createThreadPrimitives({
+      dispatch,
+      broker,
+      capabilities: new Set(["user"]),
+      launchThreadId: "launch-thread",
+      defaultModel: undefined,
+    });
+
+    primitives.spawnThread({ capabilities: "inherit", checkout: "launch-thread" });
+    primitives.spawnThread({ capabilities: "inherit", checkout: "project" });
+    primitives.spawnThread({ capabilities: "inherit" });
+    void primitives.agent("Fix the lint error", {
+      capabilities: "inherit",
+      checkout: "launch-thread",
+    });
+
+    const creates = broker.sent.filter((entry) => entry.kind === "thread.create");
+    expect(creates.map((entry) => (entry.payload as { checkout?: string }).checkout)).toEqual([
+      "launch-thread",
+      undefined,
+      undefined,
+      "launch-thread",
+    ]);
+  });
+
   it("routes a child askUser to the host launch thread", async () => {
     const replies = new Map<string, unknown>();
     let nextId = 0;
