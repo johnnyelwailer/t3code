@@ -8,6 +8,7 @@ import {
   replaceFeatureFlagDatabaseValues,
 } from "@t3tools/project-context/t3teamFeatureFlags";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
+import { isMachineSetupEnabled } from "./cloud/t3team-machineSetupFlag.ts";
 import {
   PROJECT_STATE_DIR,
   resolveProjectStateDirName,
@@ -41,7 +42,16 @@ describe("feature flag layering", () => {
     expect(isMainRepositoryEnabled(() => "yes")).toBe(true);
   });
 
-  test("registers both Admin switches and freezes state-dir selection for this process", () => {
+  test("MACHINE_SETUP is off by default, on from the DB, and the env wins either way", () => {
+    expect(isMachineSetupEnabled(noEnv)).toBe(false);
+    replaceFeatureFlagDatabaseValues(new Map([["MACHINE_SETUP", true]]));
+    expect(isMachineSetupEnabled(noEnv)).toBe(true);
+    expect(isMachineSetupEnabled(() => "0")).toBe(false);
+    replaceFeatureFlagDatabaseValues(new Map());
+    expect(isMachineSetupEnabled(() => "1")).toBe(true);
+  });
+
+  test("registers the Admin switches and freezes state-dir selection for this process", () => {
     const startup = PROJECT_STATE_DIR;
     replaceFeatureFlagDatabaseValues(new Map());
     expect(resolveProjectStateDirName(noEnv)).toBe(".nexi");
@@ -61,6 +71,7 @@ describe("feature flag layering", () => {
         requiresRestart: true,
         description: expect.stringContaining("next server start"),
       }),
+      expect.objectContaining({ key: "MACHINE_SETUP", requiresRestart: false }),
     ]);
   });
 });

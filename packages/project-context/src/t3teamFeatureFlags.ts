@@ -15,7 +15,7 @@ export const FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: false,
     requiresRestart: false,
     description:
-      "Offer to set up a project machine when a project has none. Changes apply immediately.",
+      "Set up a project machine from the first message of a cloud session for a project that has none. Changes apply immediately.",
   },
 } as const;
 

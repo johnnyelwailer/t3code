@@ -125,7 +125,8 @@ export function useCloudSessionController() {
         // "Start another": a fresh session at the remembered duration. The
         // record carries no requested hold (the runs API omits dispatch
         // inputs), so replaying the ended session's own is not possible.
-        onCreate();
+        // A setup session offers none: its record carries no project either.
+        if (session.machineSetup !== true) onCreate();
         return;
       }
       cancelRun(session, "cancel", "Cancelling that session…");
