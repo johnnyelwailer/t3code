@@ -160,6 +160,20 @@ export const repairLinkedCheckout = Effect.fn("repairLinkedCheckout")(function* 
   yield* cloneLinkedCheckoutAtomically(input);
 });
 
+/** The checkout's `origin` remote URL, or `undefined` when it has none. Local; no network. */
+export const readLinkedCheckoutOrigin = Effect.fn("readLinkedCheckoutOrigin")(function* (
+  directory: string,
+) {
+  const result = yield* git(
+    "origin",
+    directory,
+    ["remote", "get-url", "origin"],
+    INSPECT_TIMEOUT_MS,
+  );
+  const url = result.stdout.trim();
+  return result.exitCode === 0 && url.length > 0 ? url : undefined;
+});
+
 export const fetchLinkedCheckout = Effect.fn("fetchLinkedCheckout")(function* (directory: string) {
   const result = yield* git(
     "fetch",

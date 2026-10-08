@@ -40,7 +40,7 @@ export type PlannedLinkedRepository = {
   readonly entry: LinkedRepositoryBootstrapResult;
   /** A sync of this checkout is already queued or running. */
   readonly phase?: LinkedRepositorySyncPhase;
-  /** Queue a background clone/fetch for this checkout. */
+  /** Queue (or join) a background clone/fetch for this checkout. */
   readonly request: boolean;
 };
 
@@ -89,7 +89,9 @@ export const planLinkedRepositoriesForBootstrap = Effect.fn("planLinkedRepositor
       planned.push({
         entry,
         ...(phase ? { phase } : {}),
-        request: !phase && (input.refresh || !recentlySettled),
+        // A running sync is still requested: that registers this manifest for its outcome
+        // (the sync service deduplicates the work).
+        request: phase !== undefined || input.refresh || !recentlySettled,
       });
     }
     return planned;

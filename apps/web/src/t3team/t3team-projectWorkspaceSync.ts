@@ -25,10 +25,13 @@ import {
 
 export { getProjectWorkspaceSyncStatus, retainProjectWorkspaceSync };
 
-/** The bootstrap inputs each workspace was last bootstrapped with. Context syncs re-run whenever
- * tickets or visible context change (every few seconds while a project is open); bootstrapping
- * — scaffolding and queueing linked-repository syncs — only needs to re-run when these change. */
-const bootstrappedKeyByWorkspaceRoot = new Map<string, string>();
+/** The bootstrap inputs each workspace was last bootstrapped with, and when. Context syncs re-run
+ * whenever tickets or visible context change (every few seconds while a project is open);
+ * bootstrapping — scaffolding and queueing linked-repository syncs — re-runs when these inputs
+ * change, or after `BOOTSTRAP_REFRESH_MS` so the server can requeue syncs a restart dropped and
+ * apply its own (throttled) refetch. The bootstrap itself never waits on git. */
+const BOOTSTRAP_REFRESH_MS = 10 * 60_000;
+const bootstrappedByWorkspaceRoot = new Map<string, { key: string; atMs: number }>();
 
 const buildBootstrapKey = (linkedRepositoryUrls: ReadonlyArray<string>, setupProfileId: string) =>
   JSON.stringify({ setupProfileId, linkedRepositoryUrls: [...linkedRepositoryUrls].toSorted() });
@@ -117,16 +120,17 @@ async function runProjectWorkspaceSync(input: {
   }
   const setupProfileId = resolveT3TeamProjectSetupProfileId(input.setupProfileId);
   const bootstrapKey = buildBootstrapKey(input.linkedRepositoryUrls, setupProfileId);
+  const previous = bootstrappedByWorkspaceRoot.get(workspaceRoot);
   if (
     input.ensureBootstrap !== false &&
-    bootstrappedKeyByWorkspaceRoot.get(workspaceRoot) !== bootstrapKey
+    (previous?.key !== bootstrapKey || Date.now() - previous.atMs >= BOOTSTRAP_REFRESH_MS)
   ) {
     await input.backend.projectWorkspace.bootstrapWorkspace({
       workspaceRoot,
       linkedRepositoryUrls: input.linkedRepositoryUrls,
       setupProfileId,
     });
-    bootstrappedKeyByWorkspaceRoot.set(workspaceRoot, bootstrapKey);
+    bootstrappedByWorkspaceRoot.set(workspaceRoot, { key: bootstrapKey, atMs: Date.now() });
   }
   await input.backend.projectWorkspace.writeContextFiles({
     workspaceRoot,
@@ -179,6 +183,6 @@ export function syncProjectWorkspaceContext(input: {
 }
 
 export function resetProjectWorkspaceSyncStateForTests(): void {
-  bootstrappedKeyByWorkspaceRoot.clear();
+  bootstrappedByWorkspaceRoot.clear();
   resetProjectWorkspaceSyncQueueForTests();
 }

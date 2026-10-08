@@ -38,6 +38,12 @@ export function repositoryLookupCandidates(value: string): ReadonlyArray<string>
   return [...candidates];
 }
 
+/** Two spellings of one repository (https vs ssh, with or without `.git`). */
+export function isSameRepository(left: string, right: string): boolean {
+  const candidates = new Set(repositoryLookupCandidates(left));
+  return repositoryLookupCandidates(right).some((candidate) => candidates.has(candidate));
+}
+
 export function findLinkedRepository(
   linkedRepositories: ReadonlyArray<LinkedRepositoryBootstrapResult>,
   repoFullName: string,

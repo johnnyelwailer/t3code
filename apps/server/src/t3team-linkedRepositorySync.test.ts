@@ -19,6 +19,7 @@ import {
 import { bootstrapWorkspaceReferences } from "./t3team-project-repository-routesReferences.ts";
 import { readLinkedRepositoryStatus } from "./t3team-project-repository-routesStatus.ts";
 import {
+  deriveReferenceDirectoryName,
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
   REFERENCES_DIR_NAME,
@@ -260,6 +261,29 @@ describe("T3TeamLinkedRepositorySync", () => {
       const [entry] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot)).linkedRepositories;
       expect(entry?.status).toBe("cloned");
       expect(harness.counts.clone).toBe(1);
+    }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
+  });
+
+  it.live("never reports a checkout of a different repository as ready", () => {
+    const harness = makeHarness();
+    const wanted = makeOrigin(harness.root, "wanted");
+    const other = makeOrigin(harness.root, "other");
+    return Effect.gen(function* () {
+      const referencesRoot = NodePath.join(
+        harness.workspaceRoot,
+        HIDDEN_T3TEAM_DIR,
+        REFERENCES_DIR_NAME,
+      );
+      const localPath = NodePath.join(referencesRoot, `01-${deriveReferenceDirectoryName(wanted)}`);
+      NodeFS.mkdirSync(referencesRoot, { recursive: true });
+      git(harness.root, "clone", "-q", other, localPath);
+      const first = yield* bootstrap(harness.workspaceRoot, [wanted], true);
+      expect(first.linkedRepositories[0]?.localPath).toBe(localPath);
+      yield* settleAll([localPath]);
+      const [entry] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot)).linkedRepositories;
+      expect(entry?.status).toBe("failed");
+      expect(entry?.error).toContain("different repository");
+      expect(harness.counts.fetch).toBe(0);
     }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
   });
 });

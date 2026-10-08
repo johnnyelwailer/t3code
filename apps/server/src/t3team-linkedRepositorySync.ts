@@ -19,12 +19,17 @@ import * as Path from "effect/Path";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 
-import { SourceControlRepositoryService } from "./sourceControl/SourceControlRepositoryService.ts";
+import {
+  redactUrlCredentials,
+  SourceControlRepositoryService,
+} from "./sourceControl/SourceControlRepositoryService.ts";
+import { isSameRepository } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 import {
   cloneLinkedCheckoutAtomically,
   describeSyncError,
   fetchLinkedCheckout,
   inspectLinkedCheckout,
+  readLinkedCheckoutOrigin,
   repairLinkedCheckout,
 } from "./t3team-linkedRepositoryCheckout.ts";
 import { recordLinkedRepositoryOutcome } from "./t3team-linkedRepositoryManifestEntry.ts";
@@ -89,6 +94,14 @@ const make = Effect.gen(function* () {
         yield* cloneLinkedCheckoutAtomically({ url: job.url, directory: localPath });
         return { status: "cloned" } as const;
       }
+      // A path derived from another repository's URL (same slug) must not be reported as this one.
+      const origin = yield* readLinkedCheckoutOrigin(localPath);
+      if (origin !== undefined && !isSameRepository(origin, job.url)) {
+        return {
+          status: "failed",
+          error: `Reference path already holds a different repository (${redactUrlCredentials(origin)}).`,
+        } as const;
+      }
       job.phase = "updating";
       if (state === "broken") yield* repairLinkedCheckout({ url: job.url, directory: localPath });
       yield* fetchLinkedCheckout(localPath);
@@ -111,7 +124,15 @@ const make = Effect.gen(function* () {
       const syncedAt = DateTime.formatIso(yield* DateTime.now);
       for (const [referencesRoot, urls] of job.requesters) {
         for (const url of urls) {
-          const entry: LinkedRepositoryBootstrapResult = { url, localPath, ...outcome, syncedAt };
+          const entry: LinkedRepositoryBootstrapResult = isSameRepository(url, job.url)
+            ? { url, localPath, ...outcome, syncedAt }
+            : {
+                url,
+                localPath,
+                status: "failed",
+                error: "Another linked repository already uses this reference path.",
+                syncedAt,
+              };
           yield* withManifestLock(recordLinkedRepositoryOutcome(referencesRoot, entry)).pipe(
             Effect.catchCause((cause) =>
               Effect.logWarning("Failed to record linked repository sync outcome.", cause),
