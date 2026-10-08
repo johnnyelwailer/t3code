@@ -19,20 +19,9 @@ import * as Path from "effect/Path";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 
-import {
-  redactUrlCredentials,
-  SourceControlRepositoryService,
-} from "./sourceControl/SourceControlRepositoryService.ts";
+import { SourceControlRepositoryService } from "./sourceControl/SourceControlRepositoryService.ts";
 import { isSameRepository } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
-import {
-  cloneLinkedCheckoutAtomically,
-  describeSyncError,
-  fetchLinkedCheckout,
-  inspectLinkedCheckout,
-  readLinkedCheckoutOrigin,
-  recloneLinkedCheckout,
-  repairLinkedCheckout,
-} from "./t3team-linkedRepositoryCheckout.ts";
+import { syncLinkedCheckout } from "./t3team-linkedRepositorySyncJob.ts";
 import { recordLinkedRepositoryOutcome } from "./t3team-linkedRepositoryManifestEntry.ts";
 import type {
   LinkedRepositoryBootstrapResult,
@@ -85,52 +74,7 @@ const make = Effect.gen(function* () {
   const jobs = new Map<string, Job>();
 
   const sync = (job: Job, localPath: string) =>
-    Effect.gen(function* () {
-      const state = yield* inspectLinkedCheckout(localPath);
-      if (state === "foreign") {
-        return {
-          status: "failed",
-          error: "Reference path already exists but is not a git repository.",
-        } as const;
-      }
-      if (state === "missing") {
-        job.phase = "cloning";
-        yield* cloneLinkedCheckoutAtomically({ url: job.url, directory: localPath });
-        return { status: "cloned" } as const;
-      }
-      // Fail closed: only a checkout whose `origin` is this repository is ours to report on (a
-      // path derived from another repository's URL can share the slug). A broken checkout that
-      // cannot report one is never repaired in place: it is kept aside and this repository cloned.
-      const origin = yield* readLinkedCheckoutOrigin(localPath);
-      if (origin === undefined ? state === "valid" : !isSameRepository(origin, job.url)) {
-        return {
-          status: "failed",
-          error: origin
-            ? `Reference path already holds a different repository (${redactUrlCredentials(origin)}).`
-            : "Reference path holds a git repository without an origin remote.",
-        } as const;
-      }
-      if (origin === undefined) {
-        job.phase = "cloning";
-        yield* recloneLinkedCheckout({ url: job.url, directory: localPath });
-        return { status: "cloned" } as const;
-      }
-      job.phase = "updating";
-      if (state === "broken") yield* repairLinkedCheckout({ url: job.url, directory: localPath });
-      yield* fetchLinkedCheckout(localPath);
-      return { status: "updated" } as const;
-    }).pipe(
-      Effect.catch((cause) =>
-        // A failed refresh of a still-usable checkout keeps it usable; only the error is new.
-        inspectLinkedCheckout(localPath).pipe(
-          Effect.orElseSucceed(() => "broken" as const),
-          Effect.map((state) => ({
-            status: state === "valid" ? ("updated" as const) : ("failed" as const),
-            error: describeSyncError(cause),
-          })),
-        ),
-      ),
-    );
+    syncLinkedCheckout({ url: job.url, localPath, onPhase: (phase) => (job.phase = phase) });
 
   const record = (job: Job, localPath: string, outcome: Effect.Success<ReturnType<typeof sync>>) =>
     Effect.gen(function* () {
