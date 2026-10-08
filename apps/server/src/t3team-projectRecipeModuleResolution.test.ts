@@ -1,8 +1,14 @@
+// @effect-diagnostics nodeBuiltinImport:off - the tests build a pack directory on disk.
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   ensureProjectRecipeModuleResolution,
   isResolvableFromHost,
+  resolveFromHost,
 } from "./t3team-projectRecipeModuleResolution.ts";
 
 /**
@@ -49,5 +55,44 @@ describe("ensureProjectRecipeModuleResolution", () => {
       ensureProjectRecipeModuleResolution();
       ensureProjectRecipeModuleResolution();
     }).not.toThrow();
+  });
+});
+
+describe("resolveFromHost", () => {
+  const notInstalled = () => {
+    throw new Error("ERR_MODULE_NOT_FOUND");
+  };
+  const bundleDir = (files: ReadonlyArray<string>) => {
+    const dir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "host-modules-"));
+    for (const file of files) NodeFS.writeFileSync(NodePath.join(dir, file), "export {};\n");
+    return NodeURL.pathToFileURL(NodePath.join(dir, "server-abc123.mjs")).href;
+  };
+
+  it("prefers what the server's installation resolves", () => {
+    const hostUrl = bundleDir(["t3team-hostEffect.mjs"]);
+    expect(resolveFromHost("effect", hostUrl, () => "file:///installed/effect.js")).toBe(
+      "file:///installed/effect.js",
+    );
+  });
+
+  // A published bundle inlines effect and @t3team/sdk and installs neither: the recipe must land on
+  // the bundle's own entries, never on a second copy.
+  it("falls back to the bundle's host-module entries when the packages are not installed", () => {
+    const hostUrl = bundleDir(["t3team-hostEffect.mjs", "t3team-hostSdk.mjs"]);
+    const beside = (name: string) => new URL(name, hostUrl).href;
+    expect(resolveFromHost("effect", hostUrl, notInstalled)).toBe(beside("./t3team-hostEffect.mjs"));
+    expect(resolveFromHost("@t3team/sdk", hostUrl, notInstalled)).toBe(
+      beside("./t3team-hostSdk.mjs"),
+    );
+  });
+
+  it("rethrows when neither the installation nor the bundle has the module", () => {
+    expect(() => resolveFromHost("effect", bundleDir([]), notInstalled)).toThrow(
+      "ERR_MODULE_NOT_FOUND",
+    );
+    // subpaths have no bundle entry
+    expect(() =>
+      resolveFromHost("effect/Schema", bundleDir(["t3team-hostEffect.mjs"]), notInstalled),
+    ).toThrow("ERR_MODULE_NOT_FOUND");
   });
 });
