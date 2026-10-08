@@ -1,6 +1,6 @@
 function bootProductName(): string {
   if (typeof document === "undefined") return "T3 Code";
-  const name = document.documentElement.dataset.t3teamBootAppName?.trim();
+  const name = document.documentElement?.dataset?.t3teamBootAppName?.trim();
   return name || "T3 Code";
 }
 

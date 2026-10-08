@@ -5213,8 +5213,8 @@ export default function Sidebar() {
               onClearSearch={clearThreadSearch}
             />
             {/* t3team: one-click project pills under the search row. While they are
-                on, the header project icon stays out — sites that do not fit a disc
-                are the +N pill. Lost in the 2026-09-18 upstream sync. */}
+                on, the header project icon stays out — the row's last disc (+N, or a
+                search glyph when everything fits) is the searchable picker. Lost in the 2026-09-18 upstream sync. */}
             {projectScopePillsEnabled && projectGroups.length > 0 ? (
               <T3TeamSidebarProjectScopePills
                 groups={projectGroups}

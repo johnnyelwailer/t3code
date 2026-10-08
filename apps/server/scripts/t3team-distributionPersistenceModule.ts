@@ -1,7 +1,9 @@
 // @effect-diagnostics nodeBuiltinImport:off - build-time filesystem reader outside Effect runtime.
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
-import { decodeWorkspacePackManifest } from "@t3team/packs";
+// Relative, like the import below: vp loads this config from the repo root, where a filtered
+// install (CI's mobile lint) does not link `@t3team/packs`.
+import { decodeWorkspacePackManifest } from "../../../packages/t3team-packs/src/t3team-packs.manifest.ts";
 import { resolvePackAssetPath } from "../../../packages/t3team-packs/src/t3team-packs.assetPath.ts";
 
 /** Statically import collection modules so the executable needs no pack files at runtime. */

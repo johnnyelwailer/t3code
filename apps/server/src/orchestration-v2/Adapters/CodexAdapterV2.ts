@@ -922,6 +922,7 @@ function describeCodexGoal(goal: OrchestrationV2ProviderGoal): string {
 // Codex starts the next goal turn milliseconds after the last one completes.
 // A run waits this long for it before settling, in case Codex declines.
 const CODEX_GOAL_CONTINUATION_GRACE = "5 seconds";
+const CODEX_USAGE_LIMIT_READ_TIMEOUT = "3 seconds";
 
 const providerTurnsForThread = (
   providerTurns: ReadonlyArray<OrchestrationV2ProviderTurn>,
@@ -5216,22 +5217,68 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
           },
         );
 
+        // A reset already in the past (a cap cached from an earlier cycle) is unknown.
+        const upcomingResetAt = Effect.fnUntraced(function* (resetAt: string | null | undefined) {
+          if (resetAt == null) return null;
+          const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
+          return Date.parse(resetAt) > nowMs ? resetAt : null;
+        });
+        const knownUsageLimitResetAt = Effect.fnUntraced(function* () {
+          return yield* upcomingResetAt(codexUsageLimitResetAt(yield* Ref.get(rateLimitSnapshot)));
+        });
+        // The read is the whole account snapshot, so it replaces what notifications
+        // left behind, including a cap that has since been lifted.
+        const readRateLimits = client.request("account/rateLimits/read", null).pipe(
+          Effect.timeoutOption(CODEX_USAGE_LIMIT_READ_TIMEOUT),
+          Effect.flatMap(
+            Option.match({
+              onNone: () => Effect.void,
+              onSome: (read) => {
+                const snapshot = read.rateLimitsByLimitId?.codex ?? read.rateLimits;
+                return snapshot.limitId && snapshot.limitId !== "codex"
+                  ? Effect.void
+                  : Ref.set(rateLimitSnapshot, snapshot);
+              },
+            }),
+          ),
+          Effect.ignore,
+        );
+
         const emitRootTerminal = Effect.fnUntraced(function* (
           context: ActiveCodexTurnContext,
           event: CodexRootTerminalEvent,
         ) {
-          const current =
-            event.status === "failed" && event.failure.class === "usage_limit"
-              ? {
-                  ...event,
-                  failure: {
-                    ...event.failure,
-                    resetAt:
-                      event.failure.resetAt ??
-                      codexUsageLimitResetAt(yield* Ref.get(rateLimitSnapshot)),
-                  },
-                }
-              : event;
+          if (event.status !== "failed" || event.failure.class !== "usage_limit") {
+            return yield* settleRootTerminal(context, event);
+          }
+          const known =
+            (yield* upcomingResetAt(event.failure.resetAt)) ?? (yield* knownUsageLimitResetAt());
+          if (known !== null) {
+            return yield* settleRootTerminal(context, {
+              ...event,
+              failure: { ...event.failure, resetAt: known },
+            });
+          }
+          // Notifications never report a Business member's credit cap, so read the
+          // account before settling; recovery needs the reset on the terminal itself.
+          // Forked: terminals settle inside a notification handler, which cannot await
+          // a response.
+          yield* readRateLimits.pipe(
+            Effect.andThen(knownUsageLimitResetAt()),
+            Effect.flatMap((resetAt) =>
+              settleRootTerminal(context, {
+                ...event,
+                failure: { ...event.failure, resetAt },
+              }),
+            ),
+            Effect.forkIn(scope),
+          );
+        });
+
+        const settleRootTerminal = Effect.fnUntraced(function* (
+          context: ActiveCodexTurnContext,
+          current: CodexRootTerminalEvent,
+        ) {
           yield* emitProviderEvent(current);
           for (const turn of goalRuns.get(context.providerTurnId) ?? []) {
             goalRuns.delete(turn.providerTurnId);

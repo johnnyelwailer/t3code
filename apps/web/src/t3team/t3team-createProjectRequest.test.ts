@@ -12,12 +12,11 @@ describe("create-project request store", () => {
     store.setState({ requestId: 0, preselect: null });
   });
 
-  it("carries a preselect that survives the shell acknowledging the request", () => {
+  it("carries a preselect until the shell acknowledges the request", () => {
     requestT3TeamCreateProject({ accountId: "acc-a", externalProjectId: "10001" });
+    expect(store.getState().preselect).toEqual({ accountId: "acc-a", externalProjectId: "10001" });
     store.getState().clear();
     expect(store.getState().requestId).toBe(0);
-    expect(store.getState().preselect).toEqual({ accountId: "acc-a", externalProjectId: "10001" });
-    store.getState().consumePreselect();
     expect(store.getState().preselect).toBeNull();
   });
 
