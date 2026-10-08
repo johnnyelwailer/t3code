@@ -53,7 +53,7 @@ import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as CheckpointStore from "./checkpointing/CheckpointStore.ts";
 import * as AzureDevOpsCli from "./sourceControl/AzureDevOpsCli.ts";
 import * as BitbucketApi from "./sourceControl/BitbucketApi.ts";
-import * as GitHubCli from "./sourceControl/GitHubCli.ts";
+import * as GitHubApi from "./sourceControl/GitHubApi.ts";
 import * as GitLabCli from "./sourceControl/GitLabCli.ts";
 import * as ForgejoCli from "./sourceControl/ForgejoCli.ts";
 import * as TextGeneration from "./textGeneration/TextGeneration.ts";
@@ -381,7 +381,7 @@ const layerSourceControlProviderRegistry = SourceControlProviderRegistry.layer.p
     Layer.mergeAll(
       AzureDevOpsCli.layer,
       BitbucketApi.layer,
-      GitHubCli.layer,
+      GitHubApi.layerWithDependencies,
       GitLabCli.layer,
       ForgejoCli.layer,
     ),
@@ -814,8 +814,9 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   // given) for the signal sources and the fork routes/tools that read pull requests. It stays in
   // the registry's own step, as before: neither provides to the other.
   Layer.provideMerge(Layer.mergeAll(layerSourceControlProviderRegistry, layerPullRequestService)),
-  // Upstream split GitHubCli out of that step so the registry is built with it.
-  Layer.provideMerge(GitHubCli.layer),
+  // Upstream split the GitHub transport out of that step so the registry is built with it. It was
+  // GitHubCli.layer until #16967/#16982 renamed the service for the API it calls.
+  Layer.provideMerge(GitHubApi.layerWithDependencies),
   // t3team: PullRequestService reads ProjectService, which the OrchestrationApplication step above
   // cannot hand to a later step; the runtime's own layer reference memoizes to that instance.
   Layer.provideMerge(RuntimeLayer.layerProjectService),
@@ -1416,7 +1417,7 @@ const layerMakeServer = Layer.unwrap(
       StandbyInterestLive.pipe(
         Layer.provide(
           CloudSessionMachinesLayer.pipe(
-            Layer.provide(GitHubCli.layer),
+            Layer.provide(GitHubApi.layerWithDependencies),
             Layer.provide(ProjectMachineDiscoveryLayer),
           ),
         ),

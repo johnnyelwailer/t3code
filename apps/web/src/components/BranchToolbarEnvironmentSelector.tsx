@@ -1,4 +1,5 @@
-import { ThreadDetailsSelectControl } from "./chat/ThreadDetailsControl";
+import { ComposerSelectControl } from "./chat/ComposerControl";
+import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
@@ -281,28 +282,34 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       <Tooltip>
         <TooltipTrigger
           render={
-            <ThreadDetailsSelectControl
-              panel={displayMode === "panel"}
-              className="min-w-0 max-w-full"
-              aria-label="Run on"
-              data-composer-shortcut="composer.host"
-              data-composer-context-control
-            />
+            displayMode === "panel" ? (
+              <ThreadDetailsControl
+                part="select"
+                className="min-w-0 max-w-full"
+                aria-label="Run on"
+                data-composer-shortcut="composer.host"
+                data-composer-context-control
+              />
+            ) : (
+              <ComposerSelectControl
+                size="xs"
+                className="min-w-0 max-w-full"
+                aria-label="Run on"
+                data-composer-shortcut="composer.host"
+                data-composer-context-control
+              />
+            )
           }
         >
           {autoEnvironmentLabel ? (
             <ScaleIcon
-              className={
-                displayMode === "panel" ? THREAD_DETAILS_PANEL_ICON_CLASS : "size-3 shrink-0"
-              }
+              className={displayMode === "panel" ? THREAD_DETAILS_PANEL_ICON_CLASS : "size-3 shrink-0"}
               aria-hidden="true"
             />
           ) : (
             <EnvironmentMachineIcon
               kind={activeEnvironment?.machine ?? "server"}
-              className={
-                displayMode === "panel" ? THREAD_DETAILS_PANEL_ICON_CLASS : "size-3 shrink-0"
-              }
+              className={displayMode === "panel" ? THREAD_DETAILS_PANEL_ICON_CLASS : "size-3 shrink-0"}
             />
           )}
           <ComposerContextLabel displayMode={displayMode}>
@@ -318,11 +325,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       <SelectPopup
         alignItemWithTrigger={false}
         {...(displayMode === "toolbar" ? composerFloatingLayerProps : {})}
-        {...(displayMode === "panel"
-          ? {
-              className: "w-(--anchor-width)",
-            }
-          : {})}
+        {...(displayMode === "panel" ? { className: "w-(--anchor-width)" } : {})}
       >
         <SelectGroup>
           <SelectGroupLabel>Run on</SelectGroupLabel>
