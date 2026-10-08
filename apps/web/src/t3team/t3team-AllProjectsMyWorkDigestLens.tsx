@@ -54,9 +54,7 @@ export function AllProjectsMyWorkDigestLens({
     return <JiraSessionExpiredPanel onSignedIn={digest.reload} />;
   }
   if (renderState === "error") {
-    return (
-      <ProjectMyWorkDigestErrorState error={digest.error} onRetry={digest.reload} centered />
-    );
+    return <ProjectMyWorkDigestErrorState error={digest.error} onRetry={digest.reload} centered />;
   }
   if (renderState === "sign-in") {
     return (

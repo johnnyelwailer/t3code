@@ -13,10 +13,13 @@
  */
 import { T3TeamPackBrandImage } from "~/t3team/t3team-PackBrandImage";
 import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
-import {
-  MyWorkLoadingHeader,
-  MyWorkLoadingLanes,
-} from "~/t3team/t3team-MyWorkLoadingSkeletons";
+import { MyWorkLoadingHeader, MyWorkLoadingLanes } from "~/t3team/t3team-MyWorkLoadingSkeletons";
+
+const LOADABLE_ASSET = /^(data:|blob:|https?:|\/)/i;
+
+function isLoadableBrandAsset(src: string | undefined): boolean {
+  return src !== undefined && LOADABLE_ASSET.test(src);
+}
 
 /**
  * The pack's mark when a pack supplies one, a neutral duo-orb otherwise. Drawn in the theme's own
@@ -24,8 +27,11 @@ import {
  */
 function MyWorkLoadingMark() {
   const brand = useT3TeamPackAppearance()?.brand;
-  const packMark = <T3TeamPackBrandImage brand={brand} kind="mark" className="size-7" />;
-  if (brand?.mark || brand?.markDark) return packMark;
+  // The server inlines pack assets as data URLs; a pack-relative path it could not inline would
+  // render as a broken image on the very first thing the user sees, so that falls back too.
+  if (isLoadableBrandAsset(brand?.mark) || isLoadableBrandAsset(brand?.markDark)) {
+    return <T3TeamPackBrandImage brand={brand} kind="mark" className="size-7" />;
+  }
   return (
     <svg viewBox="0 0 28 28" className="size-7 text-primary" aria-hidden focusable="false">
       <circle cx="11" cy="14" r="7" fill="currentColor" opacity="0.85" />

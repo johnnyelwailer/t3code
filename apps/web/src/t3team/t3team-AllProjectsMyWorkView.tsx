@@ -106,10 +106,7 @@ export function AllProjectsMyWorkView({
           />
         </div>
         {lens === "digest" ? (
-          <AllProjectsMyWorkDigestLens
-            boundProjects={boundProjects}
-            onOpenTicket={onOpenTicket}
-          />
+          <AllProjectsMyWorkDigestLens boundProjects={boundProjects} onOpenTicket={onOpenTicket} />
         ) : (
           boundProjects.map((project) => (
             <AllProjectsMyWorkSection

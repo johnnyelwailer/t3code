@@ -130,9 +130,10 @@ describe("stored project hydration", () => {
   });
 
   it("hydrates once per page and publishes the result to every reader", async () => {
-    settingsHolder.get = async () => ({
-      t3teamStoredProjectsJson: JSON.stringify([makeProject("persisted")]),
-    }) as never;
+    settingsHolder.get = async () =>
+      ({
+        t3teamStoredProjectsJson: JSON.stringify([makeProject("persisted")]),
+      }) as never;
 
     const persistence = await import("./t3team-projectStorePersistence");
     const snapshot = await import("./t3team-storedProjectsSnapshot");

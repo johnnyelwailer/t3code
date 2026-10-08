@@ -81,7 +81,9 @@ describe("startup landing", () => {
   it("falls back at once when the digest fails or the Jira session expired", () => {
     for (const status of ["retrying", "error"] as const) {
       expect(
-        decide(probeFor(["p"], { graph: null, status, sessionExpired: false, freshness: "cached" })),
+        decide(
+          probeFor(["p"], { graph: null, status, sessionExpired: false, freshness: "cached" }),
+        ),
       ).toBe("default");
     }
     expect(

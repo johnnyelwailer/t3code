@@ -49,8 +49,17 @@ export function ProjectMyWorkDigestContent({
       },
     });
   const projects = useMemo(() => [project], [project]);
-  const { graph, status, error, viewerUnresolved, sessionExpired, updatedAt, reload, freshness, refreshing } =
-    useMyWorkDigestGraph({ projects, scope: "project" });
+  const {
+    graph,
+    status,
+    error,
+    viewerUnresolved,
+    sessionExpired,
+    updatedAt,
+    reload,
+    freshness,
+    refreshing,
+  } = useMyWorkDigestGraph({ projects, scope: "project" });
   const resetArrangement = useDigestArrangementReset({ scope: "project", projects, reload });
   const effectiveGraph = useMemo(
     () => applyDigestFilters(graph, digestFilters),
