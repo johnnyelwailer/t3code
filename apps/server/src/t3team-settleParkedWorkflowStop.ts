@@ -5,48 +5,46 @@
  * ephemeral recurring run that re-wakes its thread for a month must not make the thread
  * unsettleable.
  *
- * Runs here, at the user's command intake (ws.ts), before the orchestrator dispatch: the settle
- * guard runs under the thread lock and must stay read-only, while a stop writes the run row and
- * interrupts child threads (commands on other threads). Not applied to server-originated settles
- * (auto-settle, the child sweeper): work is never cancelled on a timer. A run that is actively
- * executing, or any other settle blocker, leaves everything untouched and the guard's refusal
- * explains what to do. A failed stop is logged; the guard then refuses with the run named.
+ * Runs at the user's command intake (ws.ts, wired in t3team-settleParkedWorkflowStopLive.ts),
+ * before the orchestrator dispatch: the settle guard runs under the thread lock and must stay
+ * read-only, while a stop writes the run row and interrupts child threads (commands on other
+ * threads). Not applied to server-originated settles (auto-settle, the child sweeper): work is
+ * never cancelled on a timer. A run that is actively executing, or any other settle blocker,
+ * leaves everything untouched and the guard's refusal explains what to do.
+ *
+ * The stop is narrow (`stopOnlyIf`: CAS first, in-memory cancel after), so a run the scheduler
+ * woke between the read and the stop is left running. The first failed stop ends the sequence; if
+ * the settle is then refused, the refusal says which runs were already stopped.
  */
-import type { CommandId, OrchestrationV2Command, ThreadId } from "@t3tools/contracts";
-import * as DateTime from "effect/DateTime";
+import type { CommandId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
-import * as SqlClient from "effect/sql/SqlClient";
 
-import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
-import {
-  ACTIVE_WORKFLOW_STATUSES,
-  makeChildSettleGuardChecks,
-  PARKED_WORKFLOW_STATUSES,
-} from "./t3team-childSettleGuards.ts";
+import { OrchestratorDispatchError } from "./orchestration-v2/Orchestrator.ts";
+import { userFacingDispatchErrorMessage } from "./orchestration-v2/UserFacingErrors.ts";
+import { PARKED_WORKFLOW_STATUSES } from "./t3team-childSettleGuards.ts";
 import { settleGuardInput, type T3TeamSettleGuardCheck } from "./t3team-v2/t3team-settleGuard.ts";
-import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
-import { T3TeamWorkflowHost } from "./t3team-workflowHost.ts";
 import { controlWorkflowRun, type WorkflowRunControlDeps } from "./t3team-workflowRunControl.ts";
-import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 
 export interface SettleParkedWorkflowStopDeps {
-  readonly control: Omit<WorkflowRunControlDeps, "stopOrigin">;
+  readonly control: Omit<WorkflowRunControlDeps, "stopOrigin" | "stopOnlyIf">;
   /** The settle guard with only actively executing own runs blocking. */
   readonly guardIgnoringParkedRuns: T3TeamSettleGuardCheck;
+}
+
+export interface SettleCommand {
+  readonly threadId: ThreadId;
+  readonly commandId: CommandId;
 }
 
 const parked = new Set<string>(PARKED_WORKFLOW_STATUSES);
 
 /** Stops the thread's parked runs when that alone would let a user settle through; returns the
- * ids of the runs it stopped. */
+ * ids of the runs it stopped (stopping at the first failure). */
 export const stopParkedWorkflowRunsForSettle = Effect.fn("stopParkedWorkflowRunsForSettle")(
-  function* (
-    deps: SettleParkedWorkflowStopDeps,
-    command: { readonly threadId: ThreadId; readonly commandId: CommandId },
-  ) {
+  function* (deps: SettleParkedWorkflowStopDeps, command: SettleCommand) {
     const input = settleGuardInput(command);
-    if (input.origin !== "user") return [];
+    const stopped: Array<string> = [];
+    if (input.origin !== "user") return stopped;
     const runs = yield* deps.control.repo
       .listLiveByLaunchThread({ launchThreadId: command.threadId })
       .pipe(
@@ -54,52 +52,52 @@ export const stopParkedWorkflowRunsForSettle = Effect.fn("stopParkedWorkflowRuns
           Effect.logWarning("settle could not list workflow runs", { error }).pipe(Effect.as([])),
         ),
       );
-    if (runs.length === 0 || runs.some((run) => !parked.has(run.status))) return [];
-    if ((yield* deps.guardIgnoringParkedRuns(input)) !== null) return [];
-    const stopped: Array<string> = [];
+    if (runs.length === 0 || runs.some((run) => !parked.has(run.status))) return stopped;
+    if ((yield* deps.guardIgnoringParkedRuns(input)) !== null) return stopped;
+    const control: WorkflowRunControlDeps = {
+      ...deps.control,
+      stopOrigin: "user",
+      stopOnlyIf: PARKED_WORKFLOW_STATUSES,
+    };
     for (const run of runs) {
-      yield* controlWorkflowRun({ ...deps.control, stopOrigin: "user" }, run, {
+      const failure = yield* controlWorkflowRun(control, run, {
         threadId: command.threadId,
         action: "stop",
-      }).pipe(
-        Effect.tap(() => Effect.sync(() => stopped.push(run.runId))),
-        Effect.catch((message) =>
-          Effect.logWarning("settle could not stop a parked workflow run", {
-            runId: run.runId,
-            message,
-          }),
-        ),
-      );
+      }).pipe(Effect.flip, Effect.option);
+      if (failure._tag === "Some") {
+        yield* Effect.logWarning("settle could not stop a parked workflow run", {
+          runId: run.runId,
+          message: failure.value,
+          alreadyStopped: stopped,
+        });
+        break;
+      }
+      stopped.push(run.runId);
     }
     return stopped;
   },
 );
 
-/** Resolves the engine services optionally (layers without the workflow engine settle as
- * before) and returns the pre-settle step for `thread.settle` commands. */
-export const makeSettleParkedWorkflowStop = Effect.gen(function* () {
-  const repo = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowRunRepository));
-  const registry = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamWorkflowEngineRegistry));
-  const scheduler = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamWorkflowScheduler));
-  const host = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamWorkflowHost));
-  const sql = Option.getOrUndefined(yield* Effect.serviceOption(SqlClient.SqlClient));
-  if (!repo || !registry || !scheduler || !host || !sql) {
-    return (_command: OrchestrationV2Command) => Effect.void;
-  }
-  const deps: SettleParkedWorkflowStopDeps = {
-    control: {
-      repo,
-      registry,
-      host,
-      rearmScheduler: () => scheduler.rearm(),
-      nowIso: () => DateTime.formatIso(DateTime.nowUnsafe()),
-    },
-    guardIgnoringParkedRuns: yield* makeChildSettleGuardChecks(ACTIVE_WORKFLOW_STATUSES).pipe(
-      Effect.provideService(SqlClient.SqlClient, sql),
-    ),
-  };
-  return (command: OrchestrationV2Command) =>
-    command.type === "thread.settle"
-      ? stopParkedWorkflowRunsForSettle(deps, command).pipe(Effect.asVoid)
-      : Effect.void;
-});
+/** Runs the parked-run stop, then `dispatch`. A settle refused after some runs were stopped
+ * says so, so the user is not left guessing why those runs are gone. */
+export const settleWithParkedWorkflowRunsStopped = <A, E, R>(
+  deps: SettleParkedWorkflowStopDeps,
+  command: SettleCommand,
+  dispatch: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | OrchestratorDispatchError, R> =>
+  Effect.gen(function* () {
+    const stopped = yield* stopParkedWorkflowRunsForSettle(deps, command);
+    if (stopped.length === 0) return yield* dispatch;
+    return yield* dispatch.pipe(
+      Effect.mapError(
+        (error) =>
+          new OrchestratorDispatchError({
+            commandId: command.commandId,
+            commandType: "thread.settle",
+            cause:
+              `${userFacingDispatchErrorMessage(error) ?? "The thread could not be settled."} ` +
+              `Parked workflow runs already stopped for this settle: ${stopped.join(", ")}.`,
+          }),
+      ),
+    );
+  });

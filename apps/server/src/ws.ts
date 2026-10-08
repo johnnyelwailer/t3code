@@ -228,7 +228,7 @@ import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
 import { T3TeamActorMailbox } from "./t3team-actorMailboxService.ts";
 import { stopThreadCascade } from "./t3team-threadStopCascade.ts";
-import { makeSettleParkedWorkflowStop } from "./t3team-settleParkedWorkflowStop.ts";
+import { makeSettleParkedWorkflowStop } from "./t3team-settleParkedWorkflowStopLive.ts";
 import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import * as PackDocumentStore from "./t3team-v2/t3team-packDocumentStore.ts";
 import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsStore.ts";
@@ -1916,15 +1916,14 @@ const layerWsRpc = (
                 // A retry also restarts the preparation work the launch owns.
                 (command.type === "prepared-run.retry"
                   ? threadLaunch.retryPreparation(command)
-                  : stopParkedWorkflowRunsBeforeSettle(command).pipe(
-                      Effect.andThen(
-                        ThreadMessageIntake.dispatchCommand(
-                          ThreadManagementService.withCreationProvenance(command, {
-                            createdBy: "user",
-                            creationSource:
-                              "creationSource" in command ? command.creationSource : "web",
-                          }),
-                        ),
+                  : stopParkedWorkflowRunsBeforeSettle(
+                      command,
+                      ThreadMessageIntake.dispatchCommand(
+                        ThreadManagementService.withCreationProvenance(command, {
+                          createdBy: "user",
+                          creationSource:
+                            "creationSource" in command ? command.creationSource : "web",
+                        }),
                       ),
                     )
                 ).pipe(Effect.provide(intakeContext)),
