@@ -23,6 +23,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/sql/SqlClient";
 
+import { ThreadLaunchService } from "./orchestration-v2/ThreadLaunchService.ts";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { STOP_CASCADE_COMMAND_PREFIX } from "./t3team-actorMessageReactor.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
@@ -34,17 +35,21 @@ import { T3TeamThreadWorkflowAsk } from "./t3team-v2/t3team-threadWorkflowAsk.ts
 import { syncWorkflowAskMirrors } from "./t3team-workflowHostAskMirror.ts";
 import { workflowChildCheckout } from "./t3team-workflowHostChildCheckout.ts";
 import { makeHeldWorkflowMessages } from "./t3team-workflowHostHeld.ts";
+import { makeWorkflowHostLaunch } from "./t3team-workflowHostLaunch.ts";
 import { splitWorkflowMessage } from "./t3team-workflowHostMessages.ts";
 import type {
   WorkflowHostActivityInput,
   WorkflowHostActivityPayload,
   WorkflowHostCreateThreadInput,
   WorkflowHostInterruptInput,
+  WorkflowHostLaunchAnswer,
+  WorkflowHostLaunchedThreadInput,
+  WorkflowHostLaunchThreadInput,
   WorkflowHostMessageInput,
   WorkflowHostPort,
   WorkflowHostStartTurnInput,
 } from "./t3team-workflowHostPort.ts";
-import { failAs, T3TeamWorkflowHostError } from "./t3team-workflowHostFail.ts";
+import { failAs, failAsAnswer, T3TeamWorkflowHostError } from "./t3team-workflowHostFail.ts";
 import { readWorkflowRunFacts } from "./t3team-workflowHostRunFacts.ts";
 import { workflowPromptContext } from "./t3team-workflowTurnPrompt.ts";
 
@@ -64,6 +69,18 @@ export interface T3TeamWorkflowHostShape {
   readonly flushHeld: (threadId: string) => HostEffect;
   /** Threads with held messages (the reactor's sweep re-checks them). */
   readonly heldThreadIds: () => ReadonlyArray<string>;
+  readonly launchThread: (
+    input: WorkflowHostLaunchThreadInput,
+  ) => Effect.Effect<
+    WorkflowHostLaunchAnswer<{ readonly threadId: string; readonly created: boolean }>,
+    T3TeamWorkflowHostError
+  >;
+  readonly launchedThread: (
+    input: WorkflowHostLaunchedThreadInput,
+  ) => Effect.Effect<WorkflowHostLaunchAnswer<unknown>, T3TeamWorkflowHostError>;
+  readonly setRunFacts: (
+    input: Parameters<WorkflowHostPort["setRunFacts"]>[0],
+  ) => Effect.Effect<WorkflowHostLaunchAnswer<void>, T3TeamWorkflowHostError>;
 }
 
 export class T3TeamWorkflowHost extends Context.Service<
@@ -79,6 +96,11 @@ const make = Effect.gen(function* () {
   const lineage = yield* T3TeamThreadLineage;
   const workflowAsk = yield* T3TeamThreadWorkflowAsk;
   const sql = yield* SqlClient.SqlClient;
+  const launch = makeWorkflowHostLaunch({
+    threads,
+    launches: yield* Effect.serviceOption(ThreadLaunchService),
+    facts,
+  });
   const writeMessage = (input: WorkflowHostMessageInput) =>
     Effect.gen(function* () {
       const writes = splitWorkflowMessage(input);
@@ -200,6 +222,9 @@ const make = Effect.gen(function* () {
     syncRunFacts,
     flushHeld,
     heldThreadIds: held.heldThreadIds,
+    launchThread: (input) => launch.launchThread(input).pipe(failAsAnswer("launchThread")),
+    launchedThread: (input) => launch.launchedThread(input).pipe(failAsAnswer("launchedThread")),
+    setRunFacts: (input) => launch.setRunFacts(input).pipe(failAsAnswer("setRunFacts")),
   });
 });
 
@@ -214,4 +239,7 @@ export const toWorkflowHostPort = (host: T3TeamWorkflowHostShape): WorkflowHostP
   interrupt: (input) => Effect.runPromise(host.interrupt(input)),
   archiveThread: (threadId) => Effect.runPromise(host.archiveThread(threadId)),
   syncRunFacts: (launchThreadId) => Effect.runPromise(host.syncRunFacts(launchThreadId)),
+  launchThread: (input) => Effect.runPromise(host.launchThread(input)),
+  launchedThread: (input) => Effect.runPromise(host.launchedThread(input)),
+  setRunFacts: (input) => Effect.runPromise(host.setRunFacts(input)),
 });

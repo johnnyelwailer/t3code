@@ -45,6 +45,18 @@ export function recordingWorkflowHostPort(
     interrupt: record("interrupt"),
     archiveThread: record("archiveThread"),
     syncRunFacts: record("syncRunFacts"),
+    launchThread: (input) => {
+      capture.operations.push({ op: "launchThread", input });
+      return host.launchThread(input);
+    },
+    launchedThread: (input) => {
+      capture.operations.push({ op: "launchedThread", input });
+      return host.launchedThread(input);
+    },
+    setRunFacts: (input) => {
+      capture.operations.push({ op: "setRunFacts", input });
+      return host.setRunFacts(input);
+    },
   };
 }
 

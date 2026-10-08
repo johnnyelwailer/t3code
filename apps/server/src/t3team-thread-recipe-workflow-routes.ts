@@ -94,6 +94,11 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
       modelSelection,
       runtimeMode,
       interactionMode,
+      recipe: {
+        id: input.launch.recipeId,
+        version: input.launch.recipeVersion,
+        action: actionName,
+      },
     });
 
     return okJson({ ok: true, mode: "engine", runId: result.runId, status: result.status });

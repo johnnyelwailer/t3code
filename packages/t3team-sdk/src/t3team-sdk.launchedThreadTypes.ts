@@ -45,20 +45,22 @@ export interface LaunchedThreadPullRequest {
   readonly repository: string;
   readonly number: number;
   readonly url: string;
-  /** Null until the host's sync has read the pull request. */
+  /** The host's last synced read of the pull request; null until the first sync. */
   readonly snapshot: {
     readonly state: "open" | "closed" | "merged";
+    readonly title: string;
+    readonly headBranch: string;
+    readonly baseBranch: string;
     readonly isDraft: boolean;
+    readonly author: string | null;
     readonly checksState: string | null;
     readonly mergeability: string | null;
     readonly reviewDecision: string | null;
-    readonly updatedAt: string;
+    readonly updatedAt: string | null;
   } | null;
   readonly watching: boolean;
   /** The head commit the watch last read; null when not watching or not read yet. */
   readonly watchHeadSha: string | null;
-  /** Why the last watch ended, when the host recorded it. */
-  readonly watchEnded: { readonly reason: string; readonly by: string; readonly at: string } | null;
 }
 
 export interface LaunchedThreadState {
@@ -73,6 +75,8 @@ export interface LaunchedThreadState {
   readonly working: boolean;
   /** The agent asked the user something that is still open. */
   readonly pendingQuestion: boolean;
+  /** A tool call waits for the user's approval. */
+  readonly pendingApproval: boolean;
   readonly pullRequests: ReadonlyArray<LaunchedThreadPullRequest>;
 }
 

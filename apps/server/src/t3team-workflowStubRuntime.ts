@@ -23,6 +23,7 @@ import * as ThreadManagementService from "./orchestration-v2/ThreadManagementSer
 import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
 import { T3TeamWorkflowEngineReactorLayer } from "./t3team-workflowEngineReactor.ts";
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
+import { makeThreadLaunchFake } from "./t3team-threadLaunchFake.fixtures.ts";
 import * as T3TeamWorkflowHost from "./t3team-workflowHost.ts";
 import {
   makeWorkflowStubProvider,
@@ -46,7 +47,10 @@ export function makeWorkflowStubRuntime(options: {
     WorkflowJournalStoreLive,
     ProjectStore.layer,
   ).pipe(Layer.provide(database));
+  // `launchThread` creates top-level threads through ThreadLaunchService; the fake skips git.
+  const threadLaunch = makeThreadLaunchFake();
   const host = T3TeamWorkflowHost.layer.pipe(
+    Layer.provide(threadLaunch.layer.pipe(Layer.provideMerge(threads))),
     Layer.provide(Layer.mergeAll(threads, foundation, database)),
   );
   const core = Layer.mergeAll(
@@ -64,6 +68,8 @@ export function makeWorkflowStubRuntime(options: {
     turns: provider.turns,
     /** End a held turn (see `makeWorkflowStubProvider`). */
     settle: provider.settle,
+    /** Every `launchThread` that created a thread, in order. */
+    launches: threadLaunch.launches,
   };
 }
 

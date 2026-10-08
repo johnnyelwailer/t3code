@@ -92,3 +92,31 @@ export interface ModelResolvePayload {
 export interface WaitUntilPayload {
   readonly deadline: number;
 }
+
+/** `launchThread(opts)` as the SDK sends it (t3team-sdk.launchedThreads.ts). */
+export interface LaunchThreadPayload {
+  readonly key: string;
+  readonly title: string;
+  readonly message?: string;
+  readonly model?: import("@t3team/sdk").ModelOption;
+  readonly runtimeMode?: string;
+  readonly interactionMode?: string;
+  readonly workspace?: import("./t3team-workflowHostPort.ts").WorkflowHostLaunchWorkspace;
+}
+
+/** One verb on a launched thread, addressed by the id and key `launchThread` returned. */
+export type LaunchedThreadOpPayload = { readonly threadId: string; readonly key: string } & (
+  | { readonly op: "watch"; readonly url: string; readonly watching: boolean }
+  | { readonly op: "send"; readonly text: string }
+  | {
+      readonly op: "configure";
+      readonly model?: import("@t3team/sdk").ModelOption;
+      readonly runtimeMode?: string;
+    }
+  | { readonly op: "read" }
+  | { readonly op: "facts"; readonly extensions: Readonly<Record<string, unknown>> }
+);
+
+export interface RunFactsPayload {
+  readonly extensions: Readonly<Record<string, unknown>>;
+}

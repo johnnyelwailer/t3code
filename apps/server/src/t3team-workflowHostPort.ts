@@ -81,6 +81,60 @@ export interface WorkflowHostInterruptInput {
   readonly origin?: "user" | "system";
 }
 
+/** Where a launched thread works; `ThreadLaunchService`'s workspace strategies. */
+export type WorkflowHostLaunchWorkspace =
+  | { readonly type: "root" }
+  | {
+      readonly type: "worktree";
+      readonly baseRef: string;
+      readonly branch?: string;
+      readonly startFromOrigin?: boolean;
+    }
+  | { readonly type: "existing_worktree"; readonly worktreePath: string; readonly branch?: string };
+
+/** Who may address a launched thread: the project, the run's launch scope and the key. */
+export interface WorkflowHostLaunchedThreadOwner {
+  /** The calling run, recorded on the thread and on the messages it sends there. */
+  readonly runId: string;
+  readonly projectId: ProjectId;
+  readonly scope: string;
+  readonly key: string;
+}
+
+export interface WorkflowHostLaunchThreadInput extends WorkflowHostLaunchedThreadOwner {
+  readonly launchThreadId?: string;
+  readonly title: string;
+  /** Sent as the first message only when this call creates the thread. */
+  readonly message?: string;
+  readonly modelSelection: ModelSelection;
+  readonly runtimeMode: RuntimeMode;
+  readonly interactionMode: ProviderInteractionMode;
+  readonly workspace: WorkflowHostLaunchWorkspace;
+}
+
+export type WorkflowHostLaunchedThreadOp =
+  | { readonly op: "watch"; readonly url: string; readonly watching: boolean }
+  | { readonly op: "send"; readonly text: string }
+  | {
+      readonly op: "configure";
+      readonly modelSelection?: ModelSelection;
+      readonly runtimeMode?: RuntimeMode;
+    }
+  | { readonly op: "read" }
+  | { readonly op: "facts"; readonly extensions: Readonly<Record<string, unknown>> };
+
+export interface WorkflowHostLaunchedThreadInput extends WorkflowHostLaunchedThreadOwner {
+  readonly threadId: string;
+  /** The journaled request; stable across a re-fire, so each command it issues lands once. */
+  readonly requestId: string;
+  readonly op: WorkflowHostLaunchedThreadOp;
+}
+
+/** A host refusal the body sees as a `LaunchedThreadError`; anything thrown is a host failure. */
+export type WorkflowHostLaunchAnswer<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly error: string };
+
 export interface WorkflowHostPort {
   readonly createThread: (input: WorkflowHostCreateThreadInput) => Promise<void>;
   /** Queue a turn behind the thread's active run (starts at once on an idle thread). */
@@ -94,6 +148,19 @@ export interface WorkflowHostPort {
   readonly archiveThread: (threadId: string) => Promise<void>;
   /** Refresh the launch thread's workflow run facts (status pill, sleeping-until). */
   readonly syncRunFacts: (launchThreadId: string) => Promise<void>;
+  /** Launch or find a top-level thread by key (`launchThread`). */
+  readonly launchThread: (
+    input: WorkflowHostLaunchThreadInput,
+  ) => Promise<WorkflowHostLaunchAnswer<{ readonly threadId: string; readonly created: boolean }>>;
+  /** One verb on a thread this scope launched; refused for any other thread. */
+  readonly launchedThread: (
+    input: WorkflowHostLaunchedThreadInput,
+  ) => Promise<WorkflowHostLaunchAnswer<unknown>>;
+  /** Merge pack `extensions` facts on the run's launch thread; `t3team.*` keys are refused. */
+  readonly setRunFacts: (input: {
+    readonly launchThreadId: string;
+    readonly extensions: Readonly<Record<string, unknown>>;
+  }) => Promise<WorkflowHostLaunchAnswer<void>>;
 }
 
 /** The timeline activity envelope an activity artifact carries (`WorkflowHostActivityInput`). */

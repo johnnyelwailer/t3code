@@ -26,6 +26,7 @@ import { t3teamWorkflowHostToolRunOptions } from "./t3team-workflowHostTools.ts"
 
 import type { WorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
 import type { LaunchWorkflowRecipeInput } from "./t3team-workflowEngineLaunchTypes.ts";
+import { workflowLaunchScope } from "./t3team-workflowLaunchedThreadIds.ts";
 
 export interface WorkflowRunControllerEnv {
   readonly ref: WorkflowRef;
@@ -72,6 +73,7 @@ export function createWorkflowRunControllerEnv(
     runId: input.runId,
     ...(input.launchThreadId === undefined ? {} : { launchThreadId: input.launchThreadId }),
     projectId: input.projectId,
+    launchScope: workflowLaunchScope(input),
     modelSelection: input.modelSelection,
     runtimeMode: input.runtimeMode,
     interactionMode: input.interactionMode,
