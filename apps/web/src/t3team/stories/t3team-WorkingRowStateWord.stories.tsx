@@ -47,6 +47,7 @@ function Row({
         isPreparingWorktree: false,
         isCompacting: false,
         isRevertingCheckpoint: false,
+        awaitingUser: false,
         latestRunId: "turn-working-state-word" as RunId,
         workingStepLabel,
         activeAgents: [],
