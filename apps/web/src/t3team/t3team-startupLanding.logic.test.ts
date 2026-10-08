@@ -131,6 +131,10 @@ describe("startup landing session guard", () => {
     expect(isIndexBootUrl("https://app.t3.codes/", false)).toBe(true);
     expect(isIndexBootUrl("https://app.t3.codes/?x=1", false)).toBe(true);
     expect(isIndexBootUrl("https://app.t3.codes/settings", false)).toBe(false);
+    // `/` is bridged to the Team home, so a reload there is a cold start too.
+    expect(isIndexBootUrl("https://app.t3.codes/t3team", false)).toBe(true);
+    expect(isIndexBootUrl("https://app.t3.codes/t3team/my-work", false)).toBe(false);
+    expect(isIndexBootUrl("t3code://app/index.html#/t3team?x=1", true)).toBe(true);
     expect(isIndexBootUrl("https://app.t3.codes/env/thread", false)).toBe(false);
     // Desktop routes in the hash.
     expect(isIndexBootUrl("t3code://app/index.html", true)).toBe(true);
