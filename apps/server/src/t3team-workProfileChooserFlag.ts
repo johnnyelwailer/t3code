@@ -19,9 +19,6 @@
 
 import { readFeatureFlag } from "@t3tools/project-context/t3teamFeatureFlags";
 
-/** Environment override for the work-profile-chooser flag. */
-export const WORK_PROFILE_CHOOSER_FLAG_ENV = "NEXI_FF_WORK_PROFILE_CHOOSER";
-
 type ReadEnv = (key: string) => string | undefined;
 const processEnv: ReadEnv = (key) => process.env[key];
 
