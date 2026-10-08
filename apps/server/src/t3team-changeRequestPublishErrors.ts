@@ -28,7 +28,27 @@ export class ChangeRequestNothingToCommitError extends Schema.TaggedError<Change
   { branch: Schema.String },
 ) {
   override get message(): string {
-    return `Nothing to commit: none of the listed paths has changes, and the checkout is not on '${this.branch}' yet.`;
+    return `Nothing to commit: none of the listed paths has changes, and '${this.branch}' does not exist yet.`;
+  }
+}
+
+/** Moving the branch now would pull it out from under someone's work in progress. */
+export class ChangeRequestBranchBusyError extends Schema.TaggedError<ChangeRequestBranchBusyError>()(
+  "ChangeRequestBranchBusyError",
+  { branch: Schema.String, detail: Schema.String },
+) {
+  override get message(): string {
+    return `Branch '${this.branch}' is in use: ${this.detail} Finish or leave that first, or pick another branch name.`;
+  }
+}
+
+/** Whether the remote has the branch could not be read; guessing would fork the change request. */
+export class ChangeRequestRemoteUnreadableError extends Schema.TaggedError<ChangeRequestRemoteUnreadableError>()(
+  "ChangeRequestRemoteUnreadableError",
+  { branch: Schema.String, remoteName: Schema.String, detail: Schema.String },
+) {
+  override get message(): string {
+    return `Could not read '${this.branch}' from ${this.remoteName}: ${this.detail} Check the connection and the sign-in, then run again.`;
   }
 }
 
@@ -60,7 +80,7 @@ export interface ChangeRequestPublishInput {
   readonly branch: string;
   /** Target branch; the repository's default branch when absent. */
   readonly base?: string | undefined;
-  /** Repository-relative files to stage. Nothing else is committed. */
+  /** Repository-relative files; a directory commits everything under it. Nothing else is committed. */
   readonly paths: ReadonlyArray<string>;
   readonly commitMessage: string;
   readonly title: string;
@@ -82,6 +102,8 @@ export interface ChangeRequestPublishResult {
 export type ChangeRequestPublishError =
   | ChangeRequestPublishInputError
   | ChangeRequestNothingToCommitError
+  | ChangeRequestBranchBusyError
+  | ChangeRequestRemoteUnreadableError
   | ChangeRequestPushRejectedError
   | ChangeRequestNotSignedInError
   | WorkspacePaths.WorkspacePathOutsideRootError

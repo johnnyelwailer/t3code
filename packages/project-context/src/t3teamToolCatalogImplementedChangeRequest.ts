@@ -37,7 +37,8 @@ export const IMPLEMENTED_T3TEAM_CHANGE_REQUEST_TOOL_CATALOG = {
           type: "array",
           minItems: 1,
           items: { type: "string", minLength: 1 },
-          description: "Repository-relative files to commit. Nothing else is committed.",
+          description:
+            "Repository-relative files to commit; a directory commits everything under it. Nothing else is committed.",
         },
         commitMessage: {
           type: "string",

@@ -11,6 +11,7 @@ import {
 import type { PackRecipeSource } from "./t3team-packRecipeSources.ts";
 import {
   launchKickoffRecipe,
+  runsOfWorkflow,
   resolveKickoffRecipe,
   userMessageText,
 } from "./t3team-kickoffRecipe.ts";
@@ -64,6 +65,21 @@ describe("launchKickoffRecipe", () => {
       assert.deepStrictEqual(asked, [{ launchThreadId: "t1", includeEnded: true }]);
     }),
   );
+});
+
+describe("runsOfWorkflow", () => {
+  it("counts an ended run of the same workflow, and not a run of another one", () => {
+    const path = "/packs/a/workflow.ts";
+    const runs = [
+      { runId: "other", workflowPath: "/packs/b/workflow.ts" },
+      { runId: "same", workflowPath: path },
+    ];
+    assert.deepStrictEqual(
+      runsOfWorkflow(runs, path).map((run) => run.runId),
+      ["same"],
+    );
+    assert.deepStrictEqual(runsOfWorkflow([runs[0]!], path), []);
+  });
 });
 
 describe("userMessageText", () => {

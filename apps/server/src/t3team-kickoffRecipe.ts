@@ -45,6 +45,14 @@ export function resolveKickoffRecipe(
   return sources.find((source) => source.declaredId === id) ?? { kind: "missing", id };
 }
 
+/** The runs that ran `workflowPath`, whatever their status. */
+export function runsOfWorkflow<Run extends { readonly workflowPath: string }>(
+  runs: ReadonlyArray<Run>,
+  workflowPath: string,
+): ReadonlyArray<Run> {
+  return runs.filter((run) => run.workflowPath === workflowPath);
+}
+
 export const launchKickoffRecipe = Effect.fn("launchKickoffRecipe")(function* (input: {
   readonly threadId: ThreadId;
   readonly recipe: PackRecipeSource;
@@ -55,10 +63,10 @@ export const launchKickoffRecipe = Effect.fn("launchKickoffRecipe")(function* (i
   const workflowPath = path.join(input.recipe.recipeRoot, "workflow.ts");
   // A thread runs its kickoff once: after a restart, a live run continues and an ended one stays
   // ended. A run that started on another thread does not count, so does one of another recipe.
-  const earlier = (yield* runs.listLiveByLaunchThread({
-    launchThreadId: input.threadId,
-    includeEnded: true,
-  })).filter((run) => run.workflowPath === workflowPath);
+  const earlier = runsOfWorkflow(
+    yield* runs.listLiveByLaunchThread({ launchThreadId: input.threadId, includeEnded: true }),
+    workflowPath,
+  );
   if (earlier.length > 0) {
     yield* Effect.logInfo("kickoff recipe: the thread already ran it", {
       threadId: input.threadId,

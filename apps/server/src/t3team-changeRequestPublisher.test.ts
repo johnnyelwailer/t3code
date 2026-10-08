@@ -1,4 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off - builds a temp repository with a bare origin.
+import * as NodeChildProcess from "node:child_process";
 import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -262,6 +263,95 @@ it.layer(layerGit)("T3TeamChangeRequestPublisher", (it) => {
 
       expect(yield* git(repo, ["rev-parse", "HEAD"])).toBe(result.commit);
       expect(yield* git(repo, ["status", "--porcelain"])).toBe("");
+    }),
+  );
+
+  it.effect("refuses a branch checked out in another worktree, and leaves it where it was", () =>
+    Effect.gen(function* () {
+      const { repo, write } = yield* makeRepo;
+      const { publisher, opened } = yield* makePublisher();
+      const fs = yield* FileSystem.FileSystem;
+      const other = NodePath.join(yield* fs.makeTempDirectoryScoped(), "other");
+      yield* git(repo, ["worktree", "add", "-b", "machine/setup", other]);
+      const before = yield* git(repo, ["rev-parse", "machine/setup"]);
+      yield* write(".devcontainer/devcontainer.json", "{}\n");
+
+      const error = yield* Effect.flip(publisher.publish(publishInput(repo)));
+
+      expect(error._tag).toBe("ChangeRequestBranchBusyError");
+      expect(describeChangeRequestPublishError(error)).toContain("checked out in the worktree");
+      expect(yield* git(repo, ["rev-parse", "machine/setup"])).toBe(before);
+      expect(opened).toEqual([]);
+    }),
+  );
+
+  it.effect("refuses the checkout's own branch while a merge is in progress on it", () =>
+    Effect.gen(function* () {
+      const { repo, write } = yield* makeRepo;
+      const { publisher } = yield* makePublisher();
+      yield* git(repo, ["checkout", "-b", "side"]);
+      yield* write("README.md", "side\n");
+      yield* git(repo, ["commit", "-am", "side"]);
+      yield* git(repo, ["checkout", "-b", "machine/setup", "main"]);
+      yield* write("README.md", "mine\n");
+      yield* git(repo, ["commit", "-am", "mine"]);
+      yield* GitVcsDriver.GitVcsDriver.pipe(
+        Effect.flatMap((driver) =>
+          driver.execute({
+            operation: "test.git",
+            cwd: repo,
+            args: ["merge", "side"],
+            allowNonZeroExit: true,
+          }),
+        ),
+      );
+      yield* write(".devcontainer/devcontainer.json", "{}\n");
+
+      const error = yield* Effect.flip(publisher.publish(publishInput(repo)));
+
+      expect(error._tag).toBe("ChangeRequestBranchBusyError");
+      expect(describeChangeRequestPublishError(error)).toContain("a merge in progress");
+    }),
+  );
+
+  it.effect("a remote that cannot be read is reported, and no local branch is invented", () =>
+    Effect.gen(function* () {
+      const { repo, write } = yield* makeRepo;
+      const { publisher } = yield* makePublisher();
+      yield* git(repo, ["remote", "set-url", "origin", NodePath.join(repo, "no-such-origin")]);
+      yield* write(".devcontainer/devcontainer.json", "{}\n");
+
+      const error = yield* Effect.flip(publisher.publish(publishInput(repo)));
+
+      expect(error._tag).toBe("ChangeRequestRemoteUnreadableError");
+      expect(yield* git(repo, ["branch", "--list", "machine/setup"])).toBe("");
+    }),
+  );
+
+  it.effect("signs the commit when the user's config signs commits", () =>
+    Effect.gen(function* () {
+      const { repo, write } = yield* makeRepo;
+      const { publisher } = yield* makePublisher();
+      const fs = yield* FileSystem.FileSystem;
+      const key = NodePath.join(yield* fs.makeTempDirectoryScoped(), "key");
+      yield* Effect.promise(
+        () =>
+          new Promise<void>((resolve, reject) =>
+            NodeChildProcess.execFile(
+              "ssh-keygen",
+              ["-q", "-t", "ed25519", "-N", "", "-f", key],
+              (error) => (error ? reject(error) : resolve()),
+            ),
+          ),
+      );
+      yield* git(repo, ["config", "gpg.format", "ssh"]);
+      yield* git(repo, ["config", "user.signingkey", `${key}.pub`]);
+      yield* git(repo, ["config", "commit.gpgsign", "true"]);
+      yield* write(".devcontainer/devcontainer.json", "{}\n");
+
+      yield* publisher.publish(publishInput(repo));
+
+      expect(yield* git(repo, ["cat-file", "commit", "machine/setup"])).toContain("gpgsig");
     }),
   );
 
