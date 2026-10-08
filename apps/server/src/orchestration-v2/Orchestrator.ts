@@ -130,6 +130,7 @@ import { planThreadDeletion } from "./ThreadDeletion.ts";
 import { T3TeamSettleGuard, settleGuardInput } from "../t3team-v2/t3team-settleGuard.ts";
 import { keepsRenderedWakeText } from "../t3team-v2/t3team-delegatedCompletionWakeRenderer.ts";
 import { t3teamUserInputAnswerText } from "./t3team-userInputAnswerText.ts";
+import { visibleShellThreads } from "./t3team-hiddenShellThreads.ts";
 import { rewritePersistenceFailureCause } from "./persistenceStorageError.ts";
 
 export class OrchestratorDispatchError extends Schema.TaggedError<OrchestratorDispatchError>()(
@@ -11009,6 +11010,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         .pipe(Effect.mapError((cause) => new OrchestratorProjectionError({ threadId, cause }))),
     getShellSnapshot: (options) =>
       projectionStore.getShellSnapshot(options).pipe(
+        // t3team: host-machinery threads stay off the navigation shell (t3team-hiddenShellThreads.ts).
+        Effect.map((snapshot) => ({
+          ...snapshot,
+          threads: visibleShellThreads(snapshot.threads),
+          archivedThreads: visibleShellThreads(snapshot.archivedThreads),
+        })),
         Effect.mapError(
           (cause) =>
             new OrchestratorProjectionError({
