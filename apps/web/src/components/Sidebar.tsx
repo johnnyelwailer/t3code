@@ -1719,6 +1719,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     prBadgeShape?.kind === "stack" || pr || currentLinkedPr ? (
       <ThreadPullRequestBadgeControl
         render={<InlineButton />}
+        threadRef={threadRef}
         badge={prBadgeShape}
         pullRequests={thread.pullRequests}
         number={pr?.number ?? currentLinkedPr?.number}
