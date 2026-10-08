@@ -144,7 +144,6 @@ it.layer(makeT3TeamV2TestLayer("t3team-transient-retry"))("transient run retry o
 
   it.effect("leaves non-transient failures and unanswered stops alone", () =>
     Effect.gen(function* () {
-      const orchestrator = yield* Orchestrator.OrchestratorV2;
       const projections = yield* ProjectionStore.ProjectionStoreV2;
       for (const [name, failure] of [
         [
@@ -158,22 +157,6 @@ it.layer(makeT3TeamV2TestLayer("t3team-transient-retry"))("transient run retry o
         yield* handleTransientRunFailure(yield* liveDeps, { threadId, runId: failed.id });
         const { runs } = yield* projections.getThreadRecords(threadId, ["runs"]);
         assert.strictEqual(runs.length, 1, name);
-        // Upstream rejects a manual continuation of such a run, too.
-        const rejected = yield* Effect.exit(
-          orchestrator.dispatch({
-            type: "message.dispatch",
-            commandId: CommandId.make(`manual:${name}`),
-            threadId,
-            messageId: MessageId.make(`manual:${name}`),
-            text: "Continue where you left off.",
-            attachments: [],
-            manualContinuationOfRunId: failed.id,
-            dispatchMode: { type: "start_immediately" },
-            createdBy: "user",
-            creationSource: "web",
-          }),
-        );
-        assert.strictEqual(rejected._tag, "Failure", name);
       }
     }),
   );

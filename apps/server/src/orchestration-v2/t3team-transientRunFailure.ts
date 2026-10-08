@@ -4,12 +4,10 @@
  * transport failures such as the host turn-inactivity watchdog, and any
  * failure the provider itself marked `retryable`.
  *
- * Two consumers share this one rule so they cannot drift:
- * - `Orchestrator.ts` accepts `message.dispatch{manualContinuationOfRunId}`
- *   of such a failed run (upstream accepts only interrupted runs and usage
- *   limits) — the manual-continuation eligibility hook;
- * - the fork's session-level transient retry
- *   (`t3team-threadTransientTurnRetryReactor.ts`) re-runs it automatically.
+ * The fork's session-level transient retry
+ * (`t3team-threadTransientTurnRetryReactor.ts`) re-runs such a run
+ * automatically. A manual one-click continuation accepts every failed run, not
+ * only transient ones (`@t3tools/shared/t3team-manualContinuation`).
  *
  * Never transient: usage limits (upstream limit recovery owns them),
  * permission/validation errors, and a Stop the provider never acknowledged
