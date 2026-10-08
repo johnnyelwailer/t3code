@@ -87,7 +87,7 @@ export function CreateProjectRoute({
     >
       {shownEntry ? (
         <SetupScreen flow={flow} entry={shownEntry} />
-      ) : flow.resolvingProject || flow.openingExisting ? (
+      ) : flow.resolvingProject ? (
         <div className="space-y-3 pt-4">
           <Skeleton className="h-9 w-64" />
           <Skeleton className="h-9 w-full" />

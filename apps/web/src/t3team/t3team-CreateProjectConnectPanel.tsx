@@ -1,8 +1,8 @@
-import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import {
   useCreateProjectConnect,
   type CreateProjectConnect,
 } from "~/t3team/hooks/t3team-useCreateProjectConnect";
+import { CalmError } from "~/t3team/t3team-CalmError";
 import { ConnectAtlassianStep } from "~/t3team/t3team-ConnectAtlassianStep";
 import { CreateProjectDialogOAuthNotice } from "~/t3team/t3team-CreateProjectDialogOAuthNotice";
 
@@ -18,9 +18,7 @@ export function CreateProjectConnectView({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 pb-5">
       <CreateProjectDialogOAuthNotice oauth={connect.oauth} />
-      {connect.error ? (
-        <T3TeamErrorState error={connect.error} action="connecting Jira" variant="inline" />
-      ) : null}
+      {connect.error ? <CalmError compact error={connect.error} action="connecting Jira" /> : null}
       <ConnectAtlassianStep
         loading={false}
         oauthConfigured={connect.oauthConfigured}

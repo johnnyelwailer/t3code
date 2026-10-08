@@ -14,7 +14,7 @@ import { useJiraProjectCatalogState } from "./t3team-useJiraProjectCatalogState"
 import { useLinkedRepositorySelection } from "./t3team-useLinkedRepositorySelection";
 
 /**
- * All state of the add-a-Jira-project dialog, so the dialog component only has to draw it.
+ * All state of the add-a-Jira-project page, so the page component only has to draw it.
  *
  * Where the user is comes from the URL (`?project=`), what they have chosen so far lives here and
  * survives stepping back to the project list and forward again. Choosing a different project

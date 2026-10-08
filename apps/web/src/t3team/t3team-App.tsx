@@ -1,5 +1,10 @@
 import { useMemo, useState } from "react";
-import { Sidebar, SidebarProvider, SidebarRail } from "~/t3team/components/ui/t3team-sidebar";
+import {
+  Sidebar,
+  SidebarInset,
+  SidebarProvider,
+  SidebarRail,
+} from "~/t3team/components/ui/t3team-sidebar";
 import { AppContentPane } from "~/t3team/t3team-AppContentPane";
 import { AppSidebarLens } from "~/t3team/components/t3team-AppSidebarLens";
 import { useProjectSidebarState } from "~/t3team/hooks/t3team-useProjectSidebarState";
@@ -161,13 +166,15 @@ export function App({
       <T3TeamLeftSidebarDesktopToggle />
 
       {showCreate ? (
-        <CreateProjectRoute
-          onCreated={(project) => {
-            store.addProject(project);
-            if (onProjectCreated) onProjectCreated(project);
-            else setShowCreate(false);
-          }}
-        />
+        <SidebarInset className="h-full min-h-0 overflow-hidden">
+          <CreateProjectRoute
+            onCreated={(project) => {
+              store.addProject(project);
+              if (onProjectCreated) onProjectCreated(project);
+              else setShowCreate(false);
+            }}
+          />
+        </SidebarInset>
       ) : (
         <AppContentPane
           activeDashboardMode={activeDashboardMode}

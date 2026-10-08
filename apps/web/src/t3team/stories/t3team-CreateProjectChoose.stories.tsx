@@ -64,6 +64,24 @@ export const DeepLinkProjectGone: Story = {
   args: chooseProps({ notice: "That project is no longer available — pick another." }),
 };
 
+/** One site failed, the other loaded fine: the list is not replaced, just flagged. */
+export const OneSiteFailed: Story = {
+  args: chooseProps({
+    catalogState: catalogState({
+      catalog: nexploreProjects,
+      siteFailures: [
+        {
+          accountId: "site-acme",
+          provider: "atlassian",
+          siteHost: "acme.atlassian.net",
+          label: "acme.atlassian.net",
+          error: "Atlassian did not answer in time.",
+        },
+      ],
+    }),
+  }),
+};
+
 export const NotConnected: Story = {
   args: chooseProps({
     catalogState: catalogState({ catalog: [], connected: false }),

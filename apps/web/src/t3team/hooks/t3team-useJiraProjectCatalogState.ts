@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useBackend } from "~/t3team/backend/t3team-BackendContext";
 
-import type { JiraCatalogProject } from "./t3team-jiraProjectCatalog.logic";
+import type { JiraCatalogProject, JiraCatalogSiteFailure } from "./t3team-jiraProjectCatalog.logic";
 import {
   fetchLiveJiraCatalog,
   readCachedCatalog,
   readCachedJiraAccounts,
 } from "./t3team-useJiraProjectCatalog";
+
+const EMPTY_SITE_FAILURES: ReadonlyArray<JiraCatalogSiteFailure> = [];
 
 export type JiraCatalogState = {
   readonly catalog: ReadonlyArray<JiraCatalogProject>;
@@ -16,6 +18,9 @@ export type JiraCatalogState = {
   /** Whether at least one Jira site is connected; null until that is known. */
   readonly connected: boolean | null;
   readonly error: unknown;
+  /** Sites that failed to load on the last read; the catalog can still be non-empty (other sites,
+   * or this site's own cache) while some of these are present. */
+  readonly siteFailures: ReadonlyArray<JiraCatalogSiteFailure>;
   /** Re-reads every site now, e.g. right after a sign-in. */
   readonly refresh: () => Promise<void>;
 };
@@ -31,6 +36,7 @@ function initialSnapshot(liveReadStarts: boolean): Snapshot {
     loading: liveReadStarts,
     connected: readCachedJiraAccounts().length > 0 ? true : null,
     error: null,
+    siteFailures: EMPTY_SITE_FAILURES,
   };
 }
 
@@ -67,6 +73,7 @@ export function useJiraProjectCatalogState(): JiraCatalogState {
         loading: false,
         connected: live.accounts.length > 0,
         error: null,
+        siteFailures: live.siteFailures,
       });
     } catch (error) {
       if (!isCurrent()) return;

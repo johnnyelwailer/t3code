@@ -118,4 +118,27 @@ describe("useJiraProjectCatalogState", () => {
     const live = await fetchLiveJiraCatalog(backend);
     expect(live.catalog.map((entry) => entry.title)).toEqual(["Cached"]);
   });
+
+  it("surfaces a failed site on siteFailures without dropping the other site's projects", async () => {
+    const otherAccount: IntegrationAccount = { id: "site-b", provider: "atlassian", label: "Beta" };
+    backendRef.current = {
+      atlassian: {
+        listAccounts: async () => [account, otherAccount],
+        listProjects: async (target: { id: string }) => {
+          if (target.id === account.id) throw new Error("timeout");
+          return [project("2", "Fine")];
+        },
+      },
+    } as unknown as BackendApi;
+
+    const current = render();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(current.value!.error).toBeNull();
+    expect(current.value!.catalog.map((entry) => entry.title)).toEqual(["Fine"]);
+    expect(current.value!.siteFailures.map((failure) => failure.accountId)).toEqual([account.id]);
+  });
 });

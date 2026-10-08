@@ -65,6 +65,7 @@ export const catalogState = (
   loading: false,
   connected: true,
   error: null,
+  siteFailures: [],
   refresh: async () => {},
   ...over,
 });

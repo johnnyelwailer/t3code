@@ -60,6 +60,7 @@ export function readCachedCatalog(): ReadonlyArray<JiraCatalogProject> {
 }
 
 async function fetchLiveCatalog(backend: BackendApi): Promise<{
+  readonly accounts: ReadonlyArray<IntegrationAccount>;
   readonly catalog: ReadonlyArray<JiraCatalogProject>;
   readonly siteFailures: ReadonlyArray<JiraCatalogSiteFailure>;
 }> {
@@ -82,21 +83,25 @@ async function fetchLiveCatalog(backend: BackendApi): Promise<{
       if (result.failure) siteFailures.push(result.failure);
     }),
   );
-  return { catalog: buildJiraCatalog(accounts, byAccount), siteFailures };
+  return { accounts, catalog: buildJiraCatalog(accounts, byAccount), siteFailures };
 }
 
-/** The connected sites and every project on them; `accounts` is empty when Jira is not connected. */
+/**
+ * The connected sites and every project on them, plus any site that failed to load (kept even
+ * when one site's cached list means it is not empty, so a caller can still say "projects came
+ * from these; those others didn't load"). `accounts` is empty when Jira is not connected.
+ */
 export async function fetchLiveJiraCatalog(backend: BackendApi): Promise<{
   readonly accounts: ReadonlyArray<IntegrationAccount>;
   readonly catalog: ReadonlyArray<JiraCatalogProject>;
+  readonly siteFailures: ReadonlyArray<JiraCatalogSiteFailure>;
 }> {
-  const { catalog, siteFailures } = await fetchLiveCatalog(backend);
-  const accounts = readCachedJiraAccounts();
+  const { accounts, catalog, siteFailures } = await fetchLiveCatalog(backend);
   // Every site failing and nothing cached is "Jira is unreachable", not "there are no projects".
   if (accounts.length > 0 && siteFailures.length === accounts.length && catalog.length === 0) {
-    throw new Error(siteFailures[0]?.error ?? "Could not reach Jira.");
+    throw new Error(siteFailures[0]!.error);
   }
-  return { accounts, catalog };
+  return { accounts, catalog, siteFailures };
 }
 
 /**

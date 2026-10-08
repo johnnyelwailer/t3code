@@ -185,4 +185,27 @@ describe("add-project page, choose screen", () => {
     );
     expect(page().textContent).toContain("no longer available");
   });
+
+  it("flags a site that failed to load without hiding the rest of the catalog", () => {
+    show(
+      createElement(
+        CreateProjectChooseStep,
+        chooseProps({
+          catalogState: catalogState({
+            siteFailures: [
+              {
+                accountId: "site-acme",
+                provider: "atlassian",
+                siteHost: "acme.atlassian.net",
+                label: "acme.atlassian.net",
+                error: "timeout",
+              },
+            ],
+          }),
+        }),
+      ),
+    );
+    expect(page().textContent).toContain("Couldn't load acme.atlassian.net");
+    expect(page().textContent).toContain("IES NG");
+  });
 });
