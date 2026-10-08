@@ -19,6 +19,9 @@ export const PRIMITIVE_KINDS = [
   "thread.message",
   "user.input",
   "model.resolve",
+  "thread.launch",
+  "thread.launched",
+  "run.facts",
 ] as const;
 
 export type PrimitiveKind = (typeof PRIMITIVE_KINDS)[number];

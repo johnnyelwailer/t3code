@@ -62,7 +62,8 @@ export type EngineCapability =
   | "script"
   | "ui"
   | "workflow"
-  | "schedule";
+  | "schedule"
+  | "launch";
 
 /**
  * A per-source capability: `"source:<name>"` gates both `getSignalSource(source)` and

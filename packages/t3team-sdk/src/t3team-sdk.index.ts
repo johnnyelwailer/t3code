@@ -110,6 +110,20 @@ export {
 export type { CompositionOptions, PipelineStage, PipelineStages } from "@runbook/core/composition";
 export type { Watermark, WatermarkOptions, WatermarkState } from "@runbook/core/watermark";
 export { waitForAny, type SignalAnyHit, type WaitForAny } from "./t3team-sdk.signalAny.ts";
+export {
+  LaunchedThreadError,
+  launchThread,
+  setRunFacts,
+} from "./t3team-sdk.launchedThreads.ts";
+export type {
+  LaunchedThread,
+  LaunchedThreadPrimitives,
+  LaunchedThreadPullRequest,
+  LaunchedThreadRuntimeMode,
+  LaunchedThreadState,
+  LaunchedThreadWorkspace,
+  LaunchThreadOpts,
+} from "./t3team-sdk.launchedThreadTypes.ts";
 // The any-wait reply envelope a host journals for the winning branch.
 export { anyWinner, type AnyWinner } from "@runbook/core/handlesAny";
 export { emit } from "./t3team-sdk.emit.ts";

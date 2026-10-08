@@ -203,6 +203,9 @@ const RESOLVABLE_SENT_KINDS: ReadonlySet<string> = new Set([
   "user.input",
   "model.resolve",
   "wait.until",
+  "thread.launch",
+  "thread.launched",
+  "run.facts",
 ]);
 
 /** True when a journaled result decodes as a structurally valid `CheckpointRecord`. */

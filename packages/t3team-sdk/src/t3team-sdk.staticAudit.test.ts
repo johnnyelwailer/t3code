@@ -105,6 +105,32 @@ describe("static capability check", () => {
     expect(rules(withUser)).toEqual([]);
   });
 
+  it("gates an imported launchThread on the launch capability", () => {
+    const sourceText = (capabilities: string) =>
+      [
+        'import { launchThread } from "@t3team/sdk";',
+        `export const meta = { name: 'inline', capabilities: [${capabilities}] } as const;`,
+        "export default async function run() {",
+        "  await launchThread({ key: 'k', title: 't' });",
+        "}",
+      ].join("\n");
+    const absolutePath = NodePath.join(FIXTURES, "inline.workflow.ts");
+    const missing = auditWorkflowSourceStatic(
+      { absolutePath, sourceText: sourceText("") },
+      { declared: new Set() },
+    );
+    expect(missing.map((item) => [item.rule, item.construct])).toEqual([
+      ["missing-capability", "launchThread({ key: 'k', title: 't' })"],
+    ]);
+    expect(missing[0]?.message).toContain("'launch'");
+    expect(
+      auditWorkflowSourceStatic(
+        { absolutePath, sourceText: sourceText("'launch'") },
+        { declared: new Set(["launch"]) },
+      ),
+    ).toEqual([]);
+  });
+
   it("stays silent about a tools.* call whose group cannot be resolved", () => {
     const source = {
       absolutePath: NodePath.join(FIXTURES, "inline.workflow.ts"),
