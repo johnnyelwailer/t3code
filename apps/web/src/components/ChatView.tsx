@@ -25,10 +25,8 @@ import { useLoadBalancedEnvironment } from "../hooks/useLoadBalancedEnvironment"
 import { useScratchProject } from "../hooks/useScratchProject";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
-import {
-  latestExecutedRun,
-  latestRootProviderFailure,
-} from "@t3tools/shared/orchestrationV2ThreadError";
+import { latestExecutedRun } from "@t3tools/shared/orchestrationV2ThreadError";
+import { isManuallyContinuableRun } from "@t3tools/shared/t3team-manualContinuation";
 import type { UsageLimitSourceSnapshots } from "@t3tools/contracts";
 import {
   collectProviderUsageLimits,
@@ -2178,13 +2176,11 @@ export default function ChatView(props: ChatViewProps) {
   const resumableRunId = useMemo(() => {
     if (!isServerThread || serverProjection === null) return null;
     const run = latestExecutedRun(serverProjection.runs);
-    if (run?.status === "interrupted") return run.id;
-    return run?.status === "failed" &&
-      serverRuntime?.lastErrorClass === "usage_limit" &&
-      latestRootProviderFailure(run, serverProjection.turnItems)?.class === "usage_limit"
+    // Same rule the server's continuation check applies.
+    return run !== null && isManuallyContinuableRun(run, serverProjection.turnItems)
       ? run.id
       : null;
-  }, [isServerThread, serverProjection, serverRuntime?.lastErrorClass]);
+  }, [isServerThread, serverProjection]);
   const parentSubagentThreadId =
     activeThread?.lineage.relationshipToParent === "subagent"
       ? activeThread.lineage.parentThreadId

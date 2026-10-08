@@ -4,6 +4,7 @@ import {
   runRanAfter,
   usageLimitBlockedRun,
 } from "@t3tools/shared/orchestrationV2ThreadError";
+import { isManuallyContinuableRun } from "@t3tools/shared/t3team-manualContinuation";
 import { threadPullRequestsOf } from "@t3tools/shared/threadPullRequests";
 import {
   normalizeThreadPullRequestKey,
@@ -128,7 +129,6 @@ import {
 import { planThreadDeletion } from "./ThreadDeletion.ts";
 import { T3TeamSettleGuard, settleGuardInput } from "../t3team-v2/t3team-settleGuard.ts";
 import { keepsRenderedWakeText } from "../t3team-v2/t3team-delegatedCompletionWakeRenderer.ts";
-import { classifyTransientRunFailure } from "./t3team-transientRunFailure.ts";
 import { t3teamUserInputAnswerText } from "./t3team-userInputAnswerText.ts";
 import { rewritePersistenceFailureCause } from "./persistenceStorageError.ts";
 
@@ -4494,14 +4494,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       let projection = yield* getProjectionWithPendingEvents(command.threadId, events);
       if (command.manualContinuationOfRunId !== undefined) {
         const source = projection.runs.find((run) => run.id === command.manualContinuationOfRunId);
-        const limited = latestRootProviderFailure(source ?? null, projection.turnItems);
         if (
           command.dispatchMode.type !== "start_immediately" ||
           source === undefined ||
-          (source.status !== "interrupted" &&
-            !(source.status === "failed" && limited?.class === "usage_limit") &&
-            // t3team: transient failures (gateway 423/429/5xx, stalls) may be continued too.
-            !(source.status === "failed" && classifyTransientRunFailure(limited) !== null)) ||
+          // t3team: any failed run may be continued (a new run), not only usage limits.
+          !isManuallyContinuableRun(source, projection.turnItems) ||
           latestExecutedRun(projection.runs)?.id !== source.id ||
           projection.thread.archivedAt !== null ||
           projection.thread.deletedAt !== null ||
