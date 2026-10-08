@@ -26,9 +26,12 @@ export async function saveProjectRepositories(input: {
   let project = replaceLinkedRepositoryUrlsInProject(input.project, linkedRepositoryUrls);
   if (!backend || !project.workspace?.rootPath) return project;
 
+  // Returns at once: clones and fetches run in the background on the server; the dialog shows
+  // their progress through `readLinkedRepositoryStatus`.
   const bootstrap = await backend.projectWorkspace.bootstrapWorkspace({
     workspaceRoot: project.workspace.rootPath,
     linkedRepositoryUrls,
+    refreshLinkedRepositories: true,
   });
   project = applyWorkspaceBootstrapToProject(project, bootstrap);
   if (linkedRepositoryUrls.length === 0) {

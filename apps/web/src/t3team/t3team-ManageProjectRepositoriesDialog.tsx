@@ -20,6 +20,8 @@ import {
   readMainRepositoryFromProject,
 } from "~/t3team/hooks/t3team-projectMainRepository";
 import { saveProjectRepositories } from "~/t3team/hooks/t3team-saveProjectRepositories";
+import { useLinkedRepositorySyncStatus } from "~/t3team/hooks/t3team-useLinkedRepositorySyncStatus";
+import { LinkedRepositorySyncStatusLine } from "~/t3team/components/t3team-LinkedRepositorySyncStatusLine";
 import { useServerConfig } from "~/t3team/t3team-serverState";
 
 export function ManageProjectRepositoriesDialog({
@@ -40,11 +42,22 @@ export function ManageProjectRepositoriesDialog({
   const [newRepositoryUrl, setNewRepositoryUrl] = useState("");
   const [saveError, setSaveError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
+  // Saving returns before clones finish; the dialog stays open to show their progress.
+  const [saved, setSaved] = useState<{
+    urls: ReadonlyArray<string>;
+    main: string | null;
+  } | null>(null);
+  const syncStatus = useLinkedRepositorySyncStatus({
+    workspaceRoot: project.workspace?.rootPath,
+    enabled: true,
+  });
   const mainRepositoryEnabled = useServerConfig()?.mainRepository === true;
   // An adopted workspace repository is the project workspace itself, not a linked repository.
   const currentMain = readMainRepositoryFromProject(project);
   const initialMainUrl = currentMain?.status === "adopted" ? null : (currentMain?.url ?? null);
   const [mainRepositoryUrl, setMainRepositoryUrl] = useState<string | null>(initialMainUrl);
+  const unchangedSinceSave =
+    saved !== null && saved.urls === linkedRepositoryUrls && saved.main === mainRepositoryUrl;
 
   const addRepository = () => {
     const normalized = splitRepositoryInput(newRepositoryUrl);
@@ -77,7 +90,8 @@ export function ManageProjectRepositoriesDialog({
           : {}),
       });
       onProjectUpdated(nextProject);
-      onClose();
+      setSaved({ urls: linkedRepositoryUrls, main: mainRepositoryUrl });
+      syncStatus.refresh();
     } catch (error) {
       setSaveError(error);
     } finally {
@@ -127,7 +141,14 @@ export function ManageProjectRepositoriesDialog({
                       )
                     }
                     searchableRepositoryOptions={discoveredRepositoryUrls}
-                    helpText="Saving updates this project and refreshes workspace references."
+                    helpText={
+                      unchangedSinceSave
+                        ? "Saved. Repositories clone and update in the background — you can close this dialog."
+                        : "Saving updates this project and refreshes workspace references in the background."
+                    }
+                    renderRepositoryStatus={(url) => (
+                      <LinkedRepositorySyncStatusLine entry={syncStatus.byUrl.get(url)} />
+                    )}
                   />
                 </div>
               </T3SurfaceCardContent>
@@ -160,10 +181,13 @@ export function ManageProjectRepositoriesDialog({
         <footer className="border-t border-border bg-card px-4 py-3">
           <div className="flex items-center justify-between gap-2">
             <Button variant="outline" onClick={onClose} disabled={saving}>
-              Cancel
+              {saved === null ? "Cancel" : "Close"}
             </Button>
-            <Button onClick={() => void saveLinkedRepositories()} disabled={saving}>
-              {saving ? "Saving..." : "Save linked repositories"}
+            <Button
+              onClick={() => void saveLinkedRepositories()}
+              disabled={saving || unchangedSinceSave}
+            >
+              {saving ? "Saving..." : unchangedSinceSave ? "Saved" : "Save linked repositories"}
             </Button>
           </div>
         </footer>

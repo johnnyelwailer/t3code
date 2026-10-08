@@ -275,4 +275,34 @@ describe("syncProjectWorkspaceContext", () => {
     const finalFiles = backendHarness.writeContextFiles.mock.calls[1]?.[0].files ?? [];
     expect(finalFiles.some((file) => file.relativePath.endsWith("/proj-2.json"))).toBe(true);
   });
+
+  it("bootstraps only when the linked repositories change, not on every context sync", async () => {
+    const backendHarness = createBackendHarness();
+    const backend = {
+      projectWorkspace: {
+        bootstrapWorkspace: backendHarness.bootstrapWorkspace,
+        writeContextFiles: backendHarness.writeContextFiles,
+      },
+    } as unknown as BackendApi;
+    const sync = async (ticket: string, urls: ReadonlyArray<string>) => {
+      const pending = syncProjectWorkspaceContext({
+        backend,
+        project: createProject(),
+        linkedRepositoryUrls: urls,
+        projectTickets: [createTicket(ticket)],
+      });
+      await vi.advanceTimersByTimeAsync(150);
+      await pending;
+    };
+    const urls = ["https://github.com/example/project-alpha"];
+
+    await sync("PROJ-1", urls);
+    await sync("PROJ-2", urls);
+    await sync("PROJ-3", urls);
+    expect(backendHarness.bootstrapWorkspace).toHaveBeenCalledTimes(1);
+    expect(backendHarness.writeContextFiles).toHaveBeenCalledTimes(3);
+
+    await sync("PROJ-3", [...urls, "https://github.com/example/project-beta"]);
+    expect(backendHarness.bootstrapWorkspace).toHaveBeenCalledTimes(2);
+  });
 });

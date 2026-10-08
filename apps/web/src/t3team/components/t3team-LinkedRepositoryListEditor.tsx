@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { Input } from "~/t3team/components/ui/t3team-input";
 import { parseRepositoryLabel } from "~/t3team/components/t3team-linkedRepositories";
@@ -14,6 +14,7 @@ export function LinkedRepositoryListEditor({
   inputPlaceholder = "https://github.com/org/repo",
   emptyMessage = "No linked repositories yet.",
   helpText,
+  renderRepositoryStatus,
 }: {
   repositoryUrls: ReadonlyArray<string>;
   newRepositoryUrl: string;
@@ -25,6 +26,8 @@ export function LinkedRepositoryListEditor({
   inputPlaceholder?: string;
   emptyMessage?: string;
   helpText?: string;
+  /** Extra line under a repository's URL, e.g. its clone/sync state. */
+  renderRepositoryStatus?: (url: string) => ReactNode;
 }) {
   const [inputFocused, setInputFocused] = useState(false);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -130,6 +133,7 @@ export function LinkedRepositoryListEditor({
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{parseRepositoryLabel(url)}</div>
                 <div className="truncate text-xs text-muted-foreground">{url}</div>
+                {renderRepositoryStatus?.(url)}
               </div>
               <Button variant="ghost" size="xs" onClick={() => onRemoveRepository(url)}>
                 Remove

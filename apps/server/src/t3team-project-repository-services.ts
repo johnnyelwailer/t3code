@@ -1,18 +1,16 @@
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
-import { SourceControlRepositoryService } from "./sourceControl/SourceControlRepositoryService.ts";
 import type { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
+import { writeFileStringAtomically } from "./atomicWrite.ts";
 import { toAtlassianError } from "./t3team-atlassian-http.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import {
-  deriveReferenceDirectoryName,
   formatReferenceManifestJson,
   GITIGNORE_ENTRY,
   MANIFEST_FILE_NAME,
 } from "./t3team-project-repository-utils.ts";
 import type {
-  LinkedRepositoryBootstrapResult,
   MainRepositoryBootstrapResult,
   ReferenceManifestFile,
 } from "./t3team-project-repository-utils.ts";
@@ -104,81 +102,15 @@ export const detectMainRepository = Effect.fn("detectMainRepository")(function* 
   return mainRepository;
 });
 
-export const syncLinkedRepository = Effect.fn("syncLinkedRepository")(function* (input: {
-  readonly workspaceRoot: string;
-  readonly referencesRoot: string;
-  readonly url: string;
-  readonly index: number;
-  /** A clone recorded by an earlier bootstrap (possibly under another workspace's state dir,
-   * after a main-repository switch); reused instead of cloning again. */
-  readonly existingLocalPath?: string;
-}) {
-  const fileSystem = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const sourceControl = yield* SourceControlRepositoryService;
-  const vcsProcess = yield* VcsProcess;
-  const baseName = deriveReferenceDirectoryName(input.url);
-  const existingIsClone = input.existingLocalPath
-    ? yield* fileSystem
-        .exists(path.join(input.existingLocalPath, ".git"))
-        .pipe(Effect.orElseSucceed(() => false))
-    : false;
-  const localDirectory =
-    existingIsClone && input.existingLocalPath
-      ? input.existingLocalPath
-      : path.join(input.referencesRoot, `${String(input.index + 1).padStart(2, "0")}-${baseName}`);
-  const localGitDirectory = path.join(localDirectory, ".git");
-  const alreadyCloned = yield* fileSystem
-    .exists(localGitDirectory)
-    .pipe(Effect.orElseSucceed(() => false));
-
-  if (alreadyCloned) {
-    yield* vcsProcess
-      .run({
-        operation: "t3team.referenceRepository.fetch",
-        command: "git",
-        args: ["-C", localDirectory, "fetch", "--all", "--prune"],
-        cwd: input.workspaceRoot,
-        timeoutMs: 120_000,
-      })
-      .pipe(Effect.mapError(toAtlassianError("Failed to update linked repository reference.")));
-    return {
-      url: input.url,
-      localPath: localDirectory,
-      status: "updated",
-    } satisfies LinkedRepositoryBootstrapResult;
-  }
-
-  const targetExists = yield* fileSystem
-    .exists(localDirectory)
-    .pipe(Effect.orElseSucceed(() => false));
-  if (targetExists) {
-    return {
-      url: input.url,
-      localPath: localDirectory,
-      status: "failed",
-      error: "Reference path already exists but is not a git repository.",
-    } satisfies LinkedRepositoryBootstrapResult;
-  }
-
-  yield* sourceControl
-    .cloneRepository({ remoteUrl: input.url, destinationPath: localDirectory, protocol: "auto" })
-    .pipe(Effect.mapError(toAtlassianError("Failed to clone linked repository reference.")));
-  return {
-    url: input.url,
-    localPath: localDirectory,
-    status: "cloned",
-  } satisfies LinkedRepositoryBootstrapResult;
-});
-
 export const writeReferenceManifest = Effect.fn("writeReferenceManifest")(function* (
   referencesRoot: string,
   manifest: ReferenceManifestFile,
 ) {
-  const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const manifestPath = path.join(referencesRoot, MANIFEST_FILE_NAME);
-  yield* fileSystem
-    .writeFileString(manifestPath, formatReferenceManifestJson(manifest))
-    .pipe(Effect.mapError(toAtlassianError("Failed to write repository reference manifest.")));
+  // Atomic: background syncs and readers (start_child, machine discovery) read it concurrently.
+  yield* writeFileStringAtomically({
+    filePath: manifestPath,
+    contents: formatReferenceManifestJson(manifest),
+  }).pipe(Effect.mapError(toAtlassianError("Failed to write repository reference manifest.")));
 });

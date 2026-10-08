@@ -228,6 +228,7 @@ import {
   t3teamGitHubPullRequestContextRouteLayer,
 } from "./t3team-github-routes.ts";
 import { t3teamProjectWorkspaceBootstrapRouteLayer } from "./t3team-project-repository-routes.ts";
+import { T3TeamLinkedRepositorySyncLive } from "./t3team-linkedRepositorySync.ts";
 import { t3teamProjectMainRepositoryRouteLayer } from "./t3team-projectMainRepositoryRoute.ts";
 import { t3teamThreadToolContextRouteLayer } from "./t3team-thread-tool-context-routes.ts";
 import { t3teamThreadPlacementRouteLayer } from "./t3team-thread-placement-routes.ts";
@@ -1438,6 +1439,9 @@ const layerMakeServer = Layer.unwrap(
       // t3team: recipe scripts' `ctx.store` / `ctx.changeRequests`, for the recipe launch route
       // (served at this level, like the PR context route above) and boot rehydration.
       Layer.provide(T3TeamScriptHost.layer.pipe(Layer.provide(layerPullRequestService))),
+      // t3team: background linked-repository clones/fetches, shared by the workspace bootstrap and
+      // linked-repository status routes (served at this level, like the PR context route above).
+      Layer.provide(T3TeamLinkedRepositorySyncLive),
       Layer.provide(PullRequestProviderRegistry.layer),
       Layer.provideMerge(layerRuntimeServices),
       Layer.provideMerge(

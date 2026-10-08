@@ -25,6 +25,14 @@ import {
 
 export { getProjectWorkspaceSyncStatus, retainProjectWorkspaceSync };
 
+/** The bootstrap inputs each workspace was last bootstrapped with. Context syncs re-run whenever
+ * tickets or visible context change (every few seconds while a project is open); bootstrapping
+ * — scaffolding and queueing linked-repository syncs — only needs to re-run when these change. */
+const bootstrappedKeyByWorkspaceRoot = new Map<string, string>();
+
+const buildBootstrapKey = (linkedRepositoryUrls: ReadonlyArray<string>, setupProfileId: string) =>
+  JSON.stringify({ setupProfileId, linkedRepositoryUrls: [...linkedRepositoryUrls].toSorted() });
+
 function buildProjectWorkspaceSyncSignature(input: {
   project: ProjectShellProject;
   linkedRepositoryUrls: ReadonlyArray<string>;
@@ -108,12 +116,17 @@ async function runProjectWorkspaceSync(input: {
     return;
   }
   const setupProfileId = resolveT3TeamProjectSetupProfileId(input.setupProfileId);
-  if (input.ensureBootstrap !== false) {
+  const bootstrapKey = buildBootstrapKey(input.linkedRepositoryUrls, setupProfileId);
+  if (
+    input.ensureBootstrap !== false &&
+    bootstrappedKeyByWorkspaceRoot.get(workspaceRoot) !== bootstrapKey
+  ) {
     await input.backend.projectWorkspace.bootstrapWorkspace({
       workspaceRoot,
       linkedRepositoryUrls: input.linkedRepositoryUrls,
       setupProfileId,
     });
+    bootstrappedKeyByWorkspaceRoot.set(workspaceRoot, bootstrapKey);
   }
   await input.backend.projectWorkspace.writeContextFiles({
     workspaceRoot,
@@ -166,5 +179,6 @@ export function syncProjectWorkspaceContext(input: {
 }
 
 export function resetProjectWorkspaceSyncStateForTests(): void {
+  bootstrappedKeyByWorkspaceRoot.clear();
   resetProjectWorkspaceSyncQueueForTests();
 }

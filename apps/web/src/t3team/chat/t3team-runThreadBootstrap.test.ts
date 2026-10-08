@@ -47,6 +47,7 @@ function createBackend(): BackendApi {
         referencesRoot: "/tmp/project-alpha/.t3team/references",
         linkedRepositories: [],
       })),
+      readLinkedRepositoryStatus: vi.fn(async () => ({ linkedRepositories: [] })),
       setMainRepository: vi.fn(async () => {
         throw new Error("not used");
       }),

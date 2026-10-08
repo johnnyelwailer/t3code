@@ -1,7 +1,8 @@
 /**
  * Sub-logic for the project workspace bootstrap route (split out of
  * `t3team-project-repository-routes.ts`): the tolerant reference-manifest
- * decoder, the linked-repository sync loop, and the preserved-manifest read
+ * decoder, the linked-repository sync plan (no git: clones and fetches run in the background,
+ * see `t3team-linkedRepositorySync`), and the preserved-manifest read
  * that keeps entries alive across re-bootstraps (GHE #42) and across a
  * main-repository switch, whose new workspace reuses the clones recorded here.
  */
@@ -11,13 +12,13 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
-import { T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
 import {
   deriveReferenceDirectoryName,
+  isLinkedRepositoryReady,
   type LinkedRepositoryBootstrapResult,
+  type LinkedRepositorySyncPhase,
   type MainRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
-import { syncLinkedRepository } from "./t3team-project-repository-services.ts";
 import { findLinkedRepository } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 import { mainRepositoryFromManifestJson } from "./t3team-toolBrokerStartChildContext.ts";
 
@@ -31,46 +32,74 @@ const decodeReferenceManifestLinkedRepositories = Schema.decodeEffect(
   Schema.fromJsonString(ReferenceManifestLinkedRepositoriesJson),
 );
 
-export const syncLinkedRepositoriesForBootstrap = Effect.fn("syncLinkedRepositoriesForBootstrap")(
+/** How long a settled sync (success or failure) stands before a plain bootstrap refetches. */
+export const LINKED_REPOSITORY_REFETCH_INTERVAL_MS = 15 * 60_000;
+
+export type PlannedLinkedRepository = {
+  /** The manifest entry as persisted now; a background sync replaces it when it settles. */
+  readonly entry: LinkedRepositoryBootstrapResult;
+  /** A sync of this checkout is already queued or running. */
+  readonly phase?: LinkedRepositorySyncPhase;
+  /** Queue a background clone/fetch for this checkout. */
+  readonly request: boolean;
+};
+
+/** Decides each linked repository's checkout path and whether it needs a background sync —
+ * without running git. A recent sync is not repeated unless `refresh` (an explicit save). */
+export const planLinkedRepositoriesForBootstrap = Effect.fn("planLinkedRepositoriesForBootstrap")(
   function* (input: {
-    readonly workspaceRoot: string;
     readonly referencesRoot: string;
     readonly urls: ReadonlyArray<string>;
     readonly preserved: ReadonlyArray<LinkedRepositoryBootstrapResult>;
+    readonly refresh: boolean;
+    readonly phaseOf: (localPath: string) => LinkedRepositorySyncPhase | undefined;
+    readonly nowMs: number;
   }) {
+    const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const linkedRepositories: LinkedRepositoryBootstrapResult[] = [];
+    const planned: PlannedLinkedRepository[] = [];
     for (const [index, url] of input.urls.entries()) {
       const previous = findLinkedRepository(input.preserved, url);
-      const result = yield* syncLinkedRepository({
-        workspaceRoot: input.workspaceRoot,
-        referencesRoot: input.referencesRoot,
-        url,
-        index,
-        ...(previous && previous.status !== "failed" && previous.localPath
-          ? { existingLocalPath: previous.localPath }
-          : {}),
-      }).pipe(
-        Effect.catch((error) =>
-          Effect.succeed({
-            url,
-            localPath: path.join(
+      const previousIsClone = previous?.localPath
+        ? yield* fileSystem
+            .exists(path.join(previous.localPath, ".git"))
+            .pipe(Effect.orElseSucceed(() => false))
+        : false;
+      // A recorded clone is reused (possibly under another workspace's state dir, after a
+      // main-repository switch); a pending one keeps its path so its running sync is found.
+      const localPath =
+        previous?.localPath && (previousIsClone || previous.status === "pending")
+          ? previous.localPath
+          : path.join(
               input.referencesRoot,
               `${String(index + 1).padStart(2, "0")}-${deriveReferenceDirectoryName(url)}`,
-            ),
-            status: "failed",
-            error:
-              error instanceof T3TeamAtlassianError
-                ? error.message
-                : "Failed to sync linked repository reference.",
-          } satisfies LinkedRepositoryBootstrapResult),
-        ),
-      );
-      linkedRepositories.push(result);
+            );
+      const phase = input.phaseOf(localPath);
+      const syncedAtMs = previous?.syncedAt ? Date.parse(previous.syncedAt) : Number.NaN;
+      const recentlySettled =
+        previous?.localPath === localPath &&
+        input.nowMs - syncedAtMs < LINKED_REPOSITORY_REFETCH_INTERVAL_MS &&
+        (previous.status === "failed" || (isLinkedRepositoryReady(previous) && previousIsClone));
+      const entry: LinkedRepositoryBootstrapResult =
+        previous &&
+        previous.localPath === localPath &&
+        (previousIsClone || !isLinkedRepositoryReady(previous))
+          ? stripSyncState({ ...previous, url })
+          : { url, localPath, status: "pending" };
+      planned.push({
+        entry,
+        ...(phase ? { phase } : {}),
+        request: !phase && (input.refresh || !recentlySettled),
+      });
     }
-    return linkedRepositories;
+    return planned;
   },
 );
+
+const stripSyncState = ({
+  syncState: _syncState,
+  ...entry
+}: LinkedRepositoryBootstrapResult): LinkedRepositoryBootstrapResult => entry;
 
 /** Earlier manifest entries, each replaced by this bootstrap's result for the same repository;
  * repositories new to the manifest are appended. */

@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as EffectOption from "effect/Option";
@@ -31,8 +32,9 @@ import {
 } from "./t3team-project-repository-utils.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import { bootstrapWorkspaceReferences } from "./t3team-project-repository-routesReferences.ts";
+import { t3teamLinkedRepositoryStatusRouteLayer } from "./t3team-project-repository-routesStatus.ts";
 
-export const t3teamProjectWorkspaceBootstrapRouteLayer = HttpRouter.add(
+const bootstrapRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3team/project/workspace/bootstrap",
   Effect.gen(function* () {
@@ -145,10 +147,18 @@ export const t3teamProjectWorkspaceBootstrapRouteLayer = HttpRouter.add(
       workspaceRepositoryInitialized,
       detectedMainRepository: mainRepository,
       linkedRepositoryUrls: input.linkedRepositoryUrls,
+      ...(input.refreshLinkedRepositories ? { refreshLinkedRepositories: true } : {}),
     });
     return okJson(response);
   }).pipe(
     Effect.mapError((cause) => toT3TeamError(cause, "Failed to bootstrap project workspace.")),
     Effect.catch(errorResponse),
   ),
+);
+
+/** The bootstrap and linked-repository status routes. Both read `T3TeamLinkedRepositorySync`,
+ * provided once in `server.ts`: the status route reports the phases of the syncs bootstrap queued. */
+export const t3teamProjectWorkspaceBootstrapRouteLayer = Layer.mergeAll(
+  bootstrapRouteLayer,
+  t3teamLinkedRepositoryStatusRouteLayer,
 );
