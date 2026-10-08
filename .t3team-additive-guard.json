@@ -103,6 +103,7 @@
     "apps/server/src/orchestration-v2/DelegatedCompletionDelivery.test.ts",
     "apps/server/src/orchestration-v2/EventSink.ts",
     "apps/server/src/orchestration-v2/Orchestrator.ts",
+    "apps/server/src/orchestration-v2/testkit/ProviderSwitch.integration.test.ts",
     "apps/server/src/orchestration-v2/ProjectCommands.test.ts",
     "apps/server/src/orchestration-v2/ProjectCommands.ts",
     "apps/server/src/orchestration-v2/ProjectSettingsUpgrade.integration.test.ts",

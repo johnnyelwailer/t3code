@@ -4706,11 +4706,15 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               : yield* providerSessions
                   .get(providerSessionId)
                   .pipe(Effect.orElseSucceed(() => Option.none()));
-          if (Option.isNone(liveSession)) {
-            const runningTurn = projection.providerTurns.find(
-              (candidate) =>
-                candidate.runAttemptId === target.activeAttemptId && candidate.status === "running",
-            );
+          const runningTurn = projection.providerTurns.find(
+            (candidate) =>
+              candidate.runAttemptId === target.activeAttemptId && candidate.status === "running",
+          );
+          // Only a run that got under way can be a zombie. One that never started keeps the
+          // regular steer validation (maintenance commands, goal commands, not-running targets).
+          const underWay =
+            runningTurn !== undefined || target.status === "running" || target.status === "waiting";
+          if (Option.isNone(liveSession) && underWay) {
             yield* Effect.logWarning(
               "Steer/restart found no live provider session; settling zombie turn and starting a fresh run",
               {

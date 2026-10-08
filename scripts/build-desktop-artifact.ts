@@ -1722,12 +1722,10 @@ export function createStageWorkspaceConfig(input: {
   readonly allowBuilds?: Record<string, boolean>;
   readonly patchedDependencies?: Record<string, string>;
   readonly overrides?: Record<string, string>;
-  // The Windows server sidecar stage runs both the Windows primary and the
-  // WSL Linux backend from one dependency tree, so it needs win32 + linux
-  // natives (e.g. @yuuang/ffi-rs-linux-x64-gnu) — and a hoisted (physical,
-  // symlink-free) node_modules: the tree gets packed into server.asar and
-  // later extracted for WSL, and neither step can rely on pnpm's
-  // symlink/junction layout surviving the trip.
+  // The Windows server sidecar stage needs a hoisted (physical, symlink-free)
+  // node_modules: the tree gets packed into server.asar and later extracted,
+  // and neither step can rely on pnpm's symlink/junction layout surviving the
+  // trip. The WSL backend runs from the separate Linux CLI archive instead.
   readonly linuxServerBackend?: boolean;
   readonly linkWorkspacePackages?: boolean;
 }): StageWorkspaceConfig {
