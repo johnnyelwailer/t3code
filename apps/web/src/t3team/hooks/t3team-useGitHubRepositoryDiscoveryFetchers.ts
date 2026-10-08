@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import type { useBackend } from "~/t3team/backend/t3team-index";
 import { writeIntegrationCache } from "./t3team-integrationCache";
+import type { GitHubRepositoryCandidate } from "~/t3team/backend/t3team-githubBackendTypes";
 import {
   mergeGitHubDiscoveryResults,
   type GitHubAuthAccount,
@@ -23,6 +24,7 @@ export function useGitHubRepositoryDiscoveryFetchers({
   setGithubHost,
   setGithubAccount,
   setSuggestedUrls,
+  setCatalog,
 }: {
   backend: ReturnType<typeof useBackend>;
   discoveryCacheKey: string;
@@ -34,6 +36,8 @@ export function useGitHubRepositoryDiscoveryFetchers({
   setGithubHost: (host: string) => void;
   setGithubAccount: (account: string | undefined) => void;
   setSuggestedUrls: (urls: ReadonlyArray<string>) => void;
+  /** Every repository the signed-in accounts can see, across all hosts, for free-text search. */
+  setCatalog: (repositories: ReadonlyArray<GitHubRepositoryCandidate>) => void;
 }) {
   const discoverSuggestions = useCallback(
     async (host: string, account?: string) => {
@@ -58,6 +62,7 @@ export function useGitHubRepositoryDiscoveryFetchers({
         setGithubHost(response.host);
         setGithubAccount(response.account ?? account);
         setSuggestedUrls(response.suggestedRepositoryUrls);
+        setCatalog(response.repositories);
         setDiscoveryWarning(response.inboxWarning);
       } catch (error) {
         setSuggestedUrls([]);
@@ -79,6 +84,7 @@ export function useGitHubRepositoryDiscoveryFetchers({
       setGithubHost,
       setLoadingDiscovery,
       setSuggestedUrls,
+      setCatalog,
     ],
   );
 
@@ -155,6 +161,7 @@ export function useGitHubRepositoryDiscoveryFetchers({
         setGithubHost(merged.githubHost);
         setGithubAccount(nextAccount);
         setSuggestedUrls(merged.suggestedUrls);
+        setCatalog(responses.flatMap((response) => response.repositories ?? []));
         setDiscoveryWarning(nextWarning || undefined);
       } finally {
         setLoadingDiscovery(false);
@@ -171,6 +178,7 @@ export function useGitHubRepositoryDiscoveryFetchers({
       setGithubHost,
       setLoadingDiscovery,
       setSuggestedUrls,
+      setCatalog,
     ],
   );
 

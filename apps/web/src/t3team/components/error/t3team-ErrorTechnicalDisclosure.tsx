@@ -12,9 +12,12 @@ const COPY_CONFIRMATION_MS = 1500;
  */
 export function T3TeamErrorTechnicalDisclosure({
   technical,
+  label = "Technical details",
   compact = false,
 }: {
   readonly technical: string;
+  /** Overrides the toggle's wording, e.g. a calm notice's plain "Details". */
+  readonly label?: string;
   readonly compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -45,7 +48,7 @@ export function T3TeamErrorTechnicalDisclosure({
         ) : (
           <ChevronRight className="size-3" aria-hidden="true" />
         )}
-        Technical details
+        {label}
       </button>
 
       {open ? (
