@@ -14,7 +14,10 @@ const entry = { projectId: "p", repository: "o/r", number: 1, state: "merged" };
 function prLayer(list: () => Effect.Effect<{ entries: readonly PullRequestListEntry[] }>) {
   return Layer.succeed(
     PullRequestService,
-    PullRequestService.of({ list } as unknown as PullRequestService["Service"]),
+    PullRequestService.of({
+      // A clean listing reports no per-project errors.
+      list: () => list().pipe(Effect.map((read) => ({ errors: [], ...read }))),
+    } as unknown as PullRequestService["Service"]),
   );
 }
 

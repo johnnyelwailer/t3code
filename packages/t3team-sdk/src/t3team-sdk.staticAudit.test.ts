@@ -281,7 +281,8 @@ export default async function run() {
       "(prev: number) => prev + 1, async (prev: number) => prev + 1",
     );
     expect(auditWorkflowSourceStatic(typed, { declared: new Set(), typecheck: true })).toEqual([]);
-  });
+    // A cold typecheck parses the lib + effect declaration graph (~9s on CI runners).
+  }, 60_000);
 
   it("still scans expressions inside the options object", () => {
     const findings = auditWorkflowSourceStatic(source("process.pid + await waitUntil(1)"), {
