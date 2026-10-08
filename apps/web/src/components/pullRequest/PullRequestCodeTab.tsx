@@ -1248,12 +1248,11 @@ function PullRequestCodeTab({
   }, [commit, onSelectedCommitChange, selectedCommit]);
   const scopeLabel = selectedCommit ? selectedCommit.messageHeadline : "All commits";
   const toolbar = (
+    // The padding must not follow `compactToolbar`: the toolbar measures its own content box, so
+    // a padding that changed with the result would flip it back and forth at the threshold.
     <div
       ref={toolbarRoom.ref}
-      className={cn(
-        "flex h-10 min-h-10 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-background text-xs text-muted-foreground",
-        compactToolbar ? "px-2" : "px-4",
-      )}
+      className="flex h-10 min-h-10 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-background px-2 text-xs text-muted-foreground sm:px-4"
     >
       {/* Clipped, so on a narrow pane the counts give way instead of sliding under the controls. */}
       <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
