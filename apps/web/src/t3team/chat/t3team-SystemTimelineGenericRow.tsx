@@ -44,6 +44,7 @@ export function T3TeamSystemTimelineGenericRow({
               text={message.text}
               cwd={markdownCwd}
               threadRef={threadRef ?? undefined}
+              lineBreaks
             />
           </div>
         ) : null}
