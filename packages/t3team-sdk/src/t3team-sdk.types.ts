@@ -121,6 +121,8 @@ export interface ScriptHandlerCtx {
   readonly store?: ScriptHostContext["store"];
   /** Change requests of the run's project; present iff the recipe declares `integration.read`. */
   readonly changeRequests?: ScriptHostContext["changeRequests"];
+  /** The run's project and its repositories; present iff the recipe declares `integration.read`. */
+  readonly project?: ScriptHostContext["project"];
 }
 
 export type ToolRef<

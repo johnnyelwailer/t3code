@@ -4,6 +4,13 @@
  * entitled to it, so a script tests for presence rather than catching a refusal.
  */
 
+import type {
+  ChangeRequestBlobShas,
+  ChangeRequestFileAt,
+  ChangeRequestFileAtInput,
+  ScriptProject,
+} from "./t3team-sdk.scriptHostFiles.ts";
+
 /** One document of the calling pack's own store. `doc` is whatever JSON the pack wrote. */
 export interface ScriptPackDocument {
   readonly key: string;
@@ -71,6 +78,10 @@ export interface ChangeRequestDetail {
   readonly baseBranch: string;
   /** Null where the provider does not report it with the detail. */
   readonly headSha: string | null;
+  /** The commit the change is measured against; null where the provider does not report it. */
+  readonly baseSha: string | null;
+  /** True only when the host says the head lives in another repository. */
+  readonly isCrossRepository: boolean;
   /** The head's repository where the provider names it (a fork, for a cross-repository change). */
   readonly headRepository: string | null;
   readonly additions: number;
@@ -115,6 +126,13 @@ export interface ChangeRequestReader {
     ref: ChangeRequestRef,
     options?: ChangeRequestDiffOptions,
   ) => Promise<ChangeRequestDiffPage>;
+  /** One file of a linked repository at one pinned commit; bounded, typed for binary and missing. */
+  readonly fileAt: (input: ChangeRequestFileAtInput) => Promise<ChangeRequestFileAt>;
+  /** Git blob ids of `paths` at the head commit, to compare later and tell a cited file moved. */
+  readonly blobShas: (
+    ref: ChangeRequestRef,
+    paths: ReadonlyArray<string>,
+  ) => Promise<ChangeRequestBlobShas>;
 }
 
 export const CHANGE_REQUEST_DIFF_DEFAULT_PAGE_SIZE = 20;
@@ -145,4 +163,5 @@ export class ChangeRequestInputError extends Error {
 export interface ScriptHostContext {
   readonly store?: ScriptPackStore;
   readonly changeRequests?: ChangeRequestReader;
+  readonly project?: ScriptProject;
 }

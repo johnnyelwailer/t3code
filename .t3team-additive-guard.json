@@ -177,6 +177,8 @@
     "apps/server/src/pullRequest/GitHubPullRequestCli.test.ts",
     "apps/server/src/pullRequest/GitHubPullRequestCli.ts",
     "apps/server/src/pullRequest/GitHubPullRequestProvider.ts",
+    "apps/server/src/pullRequest/GitLabPullRequestCli.ts",
+    "apps/server/src/pullRequest/GitLabPullRequestProvider.ts",
     "apps/server/src/pullRequest/PullRequestProvider.ts",
     "apps/server/src/pullRequest/PullRequestService.test.ts",
     "apps/server/src/pullRequest/PullRequestService.ts",

@@ -223,6 +223,19 @@ export {
   type ScriptPackDocument,
   type ScriptPackStore,
 } from "./t3team-sdk.scriptHost.ts";
+export {
+  CHANGE_REQUEST_BLOB_SHAS_MAX_PATHS,
+  CHANGE_REQUEST_FILE_MAX_BYTES,
+  CHANGE_REQUEST_FILE_MAX_CHARS,
+  CHANGE_REQUEST_FILE_MAX_LINES,
+  ChangeRequestUnsupportedError,
+  type ChangeRequestBlobShas,
+  type ChangeRequestFileAt,
+  type ChangeRequestFileAtInput,
+  type ChangeRequestFileRevision,
+  type ScriptLinkedRepository,
+  type ScriptProject,
+} from "./t3team-sdk.scriptHostFiles.ts";
 
 export type {
   HandleKind,

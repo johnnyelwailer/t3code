@@ -6,8 +6,8 @@
  * Each member is present only when the run is entitled to it:
  *  - `store`: the recipe is a pack recipe (its directory is a registered pack recipe root) and that
  *    pack registered persistence, which requires `store:v1`. Bound to that pack id; never another.
- *  - `changeRequests`: the recipe's own declared tool groups include `integration.read`. Scoped to
- *    the run's project (t3team-scriptHostChangeRequests.ts).
+ *  - `changeRequests` and `project`: the recipe's own declared tool groups include
+ *    `integration.read`. Scoped to the run's project (t3team-scriptHostChangeRequests.ts).
  */
 import type { ProjectId } from "@t3tools/contracts";
 import type { ScriptHostContext, ScriptPackStore } from "@t3team/sdk";
@@ -18,6 +18,7 @@ import * as Layer from "effect/Layer";
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
 import { getPackRecipeSources, type PackRecipeSource } from "./t3team-packRecipeSources.ts";
 import { makeChangeRequestReader } from "./t3team-scriptHostChangeRequests.ts";
+import { makeProjectScope } from "./t3team-scriptHostFiles.ts";
 import type { PackDocumentStore } from "./t3team-v2/t3team-packDocumentApi.ts";
 import {
   PackDocumentCollections,
@@ -81,7 +82,10 @@ const make = Effect.gen(function* () {
     return {
       ...(hasStore ? { store: toScriptPackStore(packStore.forPack(packId)) } : {}),
       ...(readsChangeRequests
-        ? { changeRequests: makeChangeRequestReader(pullRequests, input.projectId) }
+        ? {
+            changeRequests: makeChangeRequestReader(pullRequests, input.projectId),
+            project: makeProjectScope(pullRequests, input.projectId),
+          }
         : {}),
     };
   };
