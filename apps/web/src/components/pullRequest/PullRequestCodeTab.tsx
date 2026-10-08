@@ -79,6 +79,7 @@ import { Checkbox } from "../ui/checkbox";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuRadioGroup,
@@ -104,6 +105,10 @@ import {
 import { PullRequestDiffStat, PullRequestMetaLine } from "./pullRequestPresentation";
 import { DiffExplorerFileTree } from "./t3team-DiffExplorerFileTree";
 import { useElementFitsWidth } from "~/t3team/t3team-ResizableRightSidebarLayoutShared";
+import {
+  PR_CODE_TOOLBAR_FULL_MIN_WIDTH,
+  prCodeTreeDockMinWidth,
+} from "./t3team-prCodeLayout.logic";
 import {
   diffExplorerFileInfo,
   markAllFilesViewed,
@@ -285,7 +290,12 @@ function PullRequestCodeTab({
   // Too narrow for the tree beside the diff (a drawer, a phone, a slim aside): it starts closed
   // and opens over the diff instead, closing again once a file is picked. The stored preference
   // is the wide layout's alone.
-  const treeRow = useElementFitsWidth(50 * 16);
+  // Measured on the row the tree shares with the diff, and a split diff needs more of it.
+  const treeRow = useElementFitsWidth(prCodeTreeDockMinWidth(diffLayout));
+  // Too narrow for every control inline: the secondary toggles move into View options so the
+  // tree toggle and the menu are never clipped off the right edge.
+  const toolbarRoom = useElementFitsWidth(PR_CODE_TOOLBAR_FULL_MIN_WIDTH);
+  const compactToolbar = !toolbarRoom.fits;
   const [overlayTreeOpen, setOverlayTreeOpen] = useState(false);
   const treeAsOverlay = !treeRow.fits;
   const fileTreeOpen = treeAsOverlay ? overlayTreeOpen : storedFileTreeOpen;
@@ -1238,7 +1248,12 @@ function PullRequestCodeTab({
   }, [commit, onSelectedCommitChange, selectedCommit]);
   const scopeLabel = selectedCommit ? selectedCommit.messageHeadline : "All commits";
   const toolbar = (
-    <div className="flex h-10 min-h-10 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-background px-4 text-xs text-muted-foreground">
+    // The padding must not follow `compactToolbar`: the toolbar measures its own content box, so
+    // a padding that changed with the result would flip it back and forth at the threshold.
+    <div
+      ref={toolbarRoom.ref}
+      className="flex h-10 min-h-10 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-background px-2 text-xs text-muted-foreground sm:px-4"
+    >
       {/* Clipped, so on a narrow pane the counts give way instead of sliding under the controls. */}
       <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
         {/* A host that reports no commits has nothing to scope by, and a dropdown whose only
@@ -1435,6 +1450,8 @@ function PullRequestCodeTab({
                 aria-label={
                   ignoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"
                 }
+                // Moved into View options while the toolbar is too narrow for it.
+                className={cn(compactToolbar && "hidden")}
                 variant="ghost"
                 size="sm"
                 pressed={ignoreWhitespace}
@@ -1461,6 +1478,7 @@ function PullRequestCodeTab({
                   size="icon-sm"
                   variant="ghost"
                   aria-label={allFilesCollapsed ? "Expand all files" : "Collapse all files"}
+                  className={cn(compactToolbar && "hidden")}
                   onClick={toggleAllFiles}
                 />
               }
@@ -1477,7 +1495,7 @@ function PullRequestCodeTab({
         ) : null}
         <ToggleGroup
           aria-label="Diff layout"
-          className="shrink-0"
+          className={cn("shrink-0", compactToolbar && "hidden")}
           variant="segmented"
           value={[diffLayout]}
           onValueChange={(value) => {
@@ -1499,6 +1517,7 @@ function PullRequestCodeTab({
             render={
               <Toggle
                 aria-label={wordWrap ? "Disable diff line wrapping" : "Enable diff line wrapping"}
+                className={cn(compactToolbar && "hidden")}
                 variant="ghost"
                 size="sm"
                 pressed={wordWrap}
@@ -1547,6 +1566,44 @@ function PullRequestCodeTab({
             <EllipsisIcon className="size-3.5" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
+            {compactToolbar ? (
+              // The toggles the narrow toolbar had no room for, so none of them is lost there.
+              <>
+                <MenuGroup>
+                  <MenuGroupLabel>Diff</MenuGroupLabel>
+                  <DropdownMenuCheckboxItem
+                    checked={ignoreWhitespace}
+                    onCheckedChange={(checked) => {
+                      setIgnoreWhitespace(Boolean(checked));
+                      setDraft(null);
+                      setSelectedLines(null);
+                    }}
+                  >
+                    Hide whitespace changes
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={wordWrap}
+                    onCheckedChange={(checked) => setWordWrap(Boolean(checked))}
+                  >
+                    Wrap long lines
+                  </DropdownMenuCheckboxItem>
+                  {fileKeys.length > 0 ? (
+                    <DropdownMenuItem onClick={toggleAllFiles}>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <MorphIcon
+                          className="size-3.5 shrink-0"
+                          icon={allFilesCollapsed ? ChevronsUpDown : ChevronsDownUp}
+                        />
+                        <span className="min-w-0 flex-1">
+                          {allFilesCollapsed ? "Expand all files" : "Collapse all files"}
+                        </span>
+                      </span>
+                    </DropdownMenuItem>
+                  ) : null}
+                </MenuGroup>
+                <MenuSeparator />
+              </>
+            ) : null}
             <MenuGroup>
               <MenuGroupLabel>View</MenuGroupLabel>
               <MenuRadioGroup
