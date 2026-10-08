@@ -759,7 +759,9 @@ export const BranchToolbar = memo(function BranchToolbar({
               environmentId={environmentId}
               availableEnvironments={availableEnvironments}
               showEnvironmentPicker={showEnvironmentPicker && !cloudSessions.available}
-              showEnvironmentIndicator={activeEnvironmentOption !== null && !cloudSessions.available}
+              showEnvironmentIndicator={
+                activeEnvironmentOption !== null && !cloudSessions.available
+              }
               onEnvironmentChange={onEnvironmentChange}
               effectiveEnvMode={effectiveEnvMode}
               activeWorktreePath={activeWorktreePath}
