@@ -31,6 +31,11 @@ export interface CodexRateLimitSnapshot {
   readonly rateLimitReachedType?: string | null;
   readonly primary?: CodexRateLimitWindow | null;
   readonly secondary?: CodexRateLimitWindow | null;
+  readonly individualLimit?: {
+    readonly remainingPercent: number;
+    readonly resetsAt: number;
+  } | null;
+  readonly spendControlReached?: boolean | null;
 }
 
 /** Structural view of the read response's `rateLimitResetCredits`. */
@@ -91,6 +96,23 @@ function codexRateLimitsToWindows(
       label: labelForKind(kind),
       usedPercent: clampPercent(window.usedPercent),
       windowDurationMins,
+      ...(resetsAt ? { resetsAt } : {}),
+    });
+  }
+  // Business/Enterprise spend control meters a member credit cap instead of
+  // primary/secondary. Codex labels it "Monthly credit limit" and reports no
+  // window length, so none is invented.
+  const individualLimit = snapshot.individualLimit;
+  if (individualLimit && Number.isFinite(individualLimit.remainingPercent)) {
+    const resetsAt = isoFromEpochSeconds(individualLimit.resetsAt);
+    windows.push({
+      id: "individual",
+      kind: "monthly",
+      label: "Monthly credit limit",
+      usedPercent:
+        snapshot.spendControlReached === true
+          ? 100
+          : clampPercent(100 - individualLimit.remainingPercent),
       ...(resetsAt ? { resetsAt } : {}),
     });
   }
@@ -182,6 +204,17 @@ export function mergeCodexRateLimits(
       : {}),
     ...(update.primary !== undefined ? { primary: update.primary } : {}),
     ...(update.secondary !== undefined ? { secondary: update.secondary } : {}),
+    // Business notifications send `individualLimit: null` after every turn while
+    // the cap is still set (a read right after returns it), so null means "not
+    // reported" here and keeps the last known cap.
+    ...(update.individualLimit != null
+      ? {
+          individualLimit: update.individualLimit,
+          spendControlReached: update.spendControlReached ?? null,
+        }
+      : update.spendControlReached != null
+        ? { spendControlReached: update.spendControlReached }
+        : {}),
   };
 }
 
