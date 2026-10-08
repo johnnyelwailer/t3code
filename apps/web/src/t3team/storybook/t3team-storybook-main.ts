@@ -125,8 +125,18 @@ function withoutPlugin(plugins: PluginOption[], name: string): PluginOption[] {
     );
 }
 
+// Pack stories: the pack-ui kit's own fixture pack, plus the packs of T3CODE_DISTRIBUTION, which
+// the launcher (t3team-storybook.mjs) resolves; this file loads as CommonJS and cannot.
+const packStoryDirs = new Set([
+  `${srcDir}/t3team/packs/t3team-kit-fixture-pack`,
+  ...(JSON.parse(process.env.T3TEAM_STORYBOOK_PACK_DIRS ?? "[]") as string[]),
+]);
+
 const config: StorybookConfig = {
-  stories: [`${srcDir}/t3team/stories/**/*.stories.tsx`],
+  stories: [
+    `${srcDir}/t3team/stories/**/*.stories.tsx`,
+    ...[...packStoryDirs].map((dir) => `${dir}/**/*.stories.tsx`),
+  ],
   staticDirs: packDir ? [{ from: packDir, to: "/pack" }] : [],
   framework: {
     name: "@storybook/react-vite",

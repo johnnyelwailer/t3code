@@ -599,7 +599,9 @@
     "scripts/lib/additive-guard-core.mjs",
     "scripts/lib/sync-upstream-core.mjs",
     "scripts/setup-git-hooks.mjs",
-    "t3team-additive-guard.mjs"
+    "t3team-additive-guard.mjs",
+    "apps/web/src/t3team/packs/t3team-kit-fixture-pack/distribution.json",
+    "apps/web/src/t3team/packs/t3team-kit-fixture-pack/pack.json"
   ],
   "baseRef": "upstream/main",
   "forkBaselineRef": "t3team/fork-baseline-20261006",
