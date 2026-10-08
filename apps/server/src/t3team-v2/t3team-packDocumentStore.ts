@@ -109,7 +109,9 @@ const make = Effect.gen(function* () {
       input.collection,
       input.key,
       input.doc,
-      input.ifVersion === undefined ? {} : { ifVersion: input.ifVersion },
+      input.ifVersion === undefined
+        ? { capAtQuota: true }
+        : { ifVersion: input.ifVersion, capAtQuota: true },
     );
   });
   const runRetention = packDocumentRetentionSweep(sql, configs, packDocumentWriter(sql, hub, lock));

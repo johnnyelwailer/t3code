@@ -18,7 +18,12 @@ export interface PackDocumentStore {
     collection: string,
     key: string,
     doc: unknown,
-    options?: { ifVersion?: number; ttlMs?: number },
+    /**
+     * `capAtQuota` refuses (`QuotaExceeded`) a write that would grow the pack past `quotaBytes`.
+     * Without it the quota is enforced by retention's eviction; view writes always set it, because
+     * views may write `keep` collections, which eviction never shrinks.
+     */
+    options?: { ifVersion?: number; ttlMs?: number; capAtQuota?: boolean },
   ) => Result<T3TeamPackDocument | null>;
   readonly increment: (
     collection: string,
