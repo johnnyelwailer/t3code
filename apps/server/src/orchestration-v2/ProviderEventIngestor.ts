@@ -4,6 +4,7 @@ import {
   OrchestrationV2DomainEvent,
   OrchestrationV2StoredEvent,
   type OrchestrationV2PlanArtifact,
+  type OrchestrationV2TurnItem,
   type OrchestrationV2Run,
   type OrchestrationV2ProviderTurn,
   type OrchestrationV2Subagent,
@@ -386,6 +387,68 @@ export const layer: Layer.Layer<
       },
     );
 
+    const planUpdatedEvent = (input: ProviderEventIngestInput, plan: OrchestrationV2PlanArtifact) =>
+      Effect.gen(function* () {
+        const occurredAt = yield* DateTime.now;
+        const previous =
+          plan.kind === "todo_list"
+            ? yield* projections.getPlan(plan.threadId, plan.id)
+            : undefined;
+        const payload =
+          plan.kind === "todo_list"
+            ? withPlanStepDurations(
+                plan,
+                previous?.kind === "todo_list" ? previous : undefined,
+                occurredAt,
+              )
+            : plan;
+        return yield* makeDomainEvent(input, {
+          type: "plan.updated",
+          threadId: plan.threadId,
+          payload,
+          runId: plan.runId,
+          nodeId: plan.nodeId,
+          occurredAt,
+        });
+      });
+
+    // Some drivers (the Nexplore pack) report a todo list only as a turn item.
+    // The composer reads plan artifacts, so mirror the item into its plan unless
+    // the provider already reported that plan with the same steps.
+    const planFromTodoListItem = (
+      input: ProviderEventIngestInput,
+      item: Extract<OrchestrationV2TurnItem, { readonly type: "todo_list" }>,
+    ) =>
+      Effect.gen(function* () {
+        if (item.nodeId === null) return [];
+        const previous = yield* projections.getPlan(item.threadId, item.planId);
+        if (
+          previous?.kind === "todo_list" &&
+          previous.explanation === item.explanation &&
+          previous.steps.length === item.steps.length &&
+          previous.steps.every(
+            (step, index) =>
+              step.text === item.steps[index]?.text && step.status === item.steps[index]?.status,
+          )
+        ) {
+          return [];
+        }
+        const completed =
+          item.steps.length > 0 && item.steps.every((step) => step.status === "completed");
+        return [
+          yield* planUpdatedEvent(input, {
+            id: item.planId,
+            threadId: item.threadId,
+            runId: item.runId,
+            nodeId: item.nodeId,
+            status: completed ? "completed" : "active",
+            kind: "todo_list",
+            steps: item.steps,
+            ...(item.explanation === undefined ? {} : { explanation: item.explanation }),
+          }),
+        ];
+      });
+
     const normalize: ProviderEventIngestorV2Shape["normalize"] = (input) =>
       Effect.gen(function* () {
         switch (input.event.type) {
@@ -460,16 +523,21 @@ export const layer: Layer.Layer<
                 nodeId: input.event.message.nodeId,
               }),
             ];
-          case "turn_item.updated":
+          case "turn_item.updated": {
+            const turnItem = input.event.turnItem;
             return [
               yield* makeDomainEvent(input, {
                 type: "turn-item.updated",
-                threadId: input.event.turnItem.threadId,
-                payload: input.event.turnItem,
-                runId: input.event.turnItem.runId,
-                nodeId: input.event.turnItem.nodeId,
+                threadId: turnItem.threadId,
+                payload: turnItem,
+                runId: turnItem.runId,
+                nodeId: turnItem.nodeId,
               }),
+              ...(turnItem.type === "todo_list"
+                ? yield* planFromTodoListItem(input, turnItem)
+                : []),
             ];
+          }
           case "runtime_request.updated":
             return [
               yield* makeDomainEvent(input, {
@@ -479,32 +547,8 @@ export const layer: Layer.Layer<
                 nodeId: input.event.runtimeRequest.nodeId,
               }),
             ];
-          case "plan.updated": {
-            const occurredAt = yield* DateTime.now;
-            const plan = input.event.plan;
-            const previous =
-              plan.kind === "todo_list"
-                ? yield* projections.getPlan(plan.threadId, plan.id)
-                : undefined;
-            const payload =
-              plan.kind === "todo_list"
-                ? withPlanStepDurations(
-                    plan,
-                    previous?.kind === "todo_list" ? previous : undefined,
-                    occurredAt,
-                  )
-                : plan;
-            return [
-              yield* makeDomainEvent(input, {
-                type: "plan.updated",
-                threadId: plan.threadId,
-                payload,
-                runId: plan.runId,
-                nodeId: plan.nodeId,
-                occurredAt,
-              }),
-            ];
-          }
+          case "plan.updated":
+            return [yield* planUpdatedEvent(input, input.event.plan)];
           case "turn.terminal":
             const dismissed = yield* dismissNativeUserInputs(input, input.event.providerTurnId);
             if (input.event.status !== "failed") {

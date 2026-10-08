@@ -111,6 +111,8 @@
     "apps/server/src/orchestration-v2/ProjectionStore.ts",
     "apps/server/src/orchestration-v2/ProviderAdapter.ts",
     "apps/server/src/orchestration-v2/ProviderContinuationService.ts",
+    "apps/server/src/orchestration-v2/ProviderEventIngestor.test.ts",
+    "apps/server/src/orchestration-v2/ProviderEventIngestor.ts",
     "apps/server/src/orchestration-v2/ProviderFailure.test.ts",
     "apps/server/src/orchestration-v2/ProviderFailure.ts",
     "apps/server/src/orchestration-v2/ProviderSessionManager.test.ts",
