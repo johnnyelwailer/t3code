@@ -2,27 +2,20 @@ import type { ScopedThreadRef } from "@t3tools/contracts";
 
 import type { ChatMessage } from "~/types";
 import type { ChatViewT3TeamExtensionProps } from "~/t3team/t3team-chatViewExtensions";
-import {
-  findActiveWorkflowInputMessageId,
-  getT3TeamWorkflowDecisionAttachment,
-} from "~/t3team/chat/t3team-messageDecisionCard";
+import { findActiveWorkflowInputMessageId } from "~/t3team/chat/t3team-messageDecisionCard";
 import type { T3TeamWorkflowDecisionAnswer } from "~/t3team/chat/t3team-workflowDecisionAnswers";
 import {
   getT3TeamRenderableAttachments,
   getT3TeamWidgetAttachments,
-  getT3TeamWorkflowCardAttachment,
 } from "~/t3team/chat/t3team-messageExtViews";
+import { findMessageView } from "~/t3team/chat/t3team-messageViewRegistry";
 import { T3TeamWidgetBlock } from "~/t3team/chat/t3team-widgetBlock";
 import { isT3TeamFullBleedWidgetRow } from "~/t3team/chat/t3team-fullBleedWidgetRow";
-import { getT3TeamWorkflowShapeAttachment } from "~/t3team/chat/t3team-messageShapeCard";
 import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
-import { T3TeamSystemTimelineShapeRow } from "~/t3team/chat/t3team-SystemTimelineShapeRow";
-import { T3TeamSystemTimelineDecisionRow } from "~/t3team/chat/t3team-SystemTimelineDecisionRow";
 import { T3TeamSystemTimelineGenericRow } from "~/t3team/chat/t3team-SystemTimelineGenericRow";
 import { T3TeamSystemTimelineNotificationBody } from "~/t3team/chat/t3team-SystemTimelineNotificationBody";
-import { workflowDecisionUnavailableMessage } from "~/t3team/chat/t3team-workflowDecisionAvailability";
 
-export function T3TeamSystemTimelineRow(props: {
+export interface T3TeamSystemTimelineRowProps {
   readonly message: ChatMessage;
   readonly threadRef: ScopedThreadRef | null;
   readonly markdownCwd?: string | undefined;
@@ -40,40 +33,10 @@ export function T3TeamSystemTimelineRow(props: {
   readonly dispatchWorkflowDecision?: ChatViewT3TeamExtensionProps["dispatchWorkflowDecision"];
   readonly onControlWorkflow?: ChatViewT3TeamExtensionProps["onControlWorkflow"];
   readonly onOpenThread?: ChatViewT3TeamExtensionProps["onOpenThread"];
-}) {
-  const {
-    message,
-    threadRef,
-    markdownCwd,
-    activeWorkflowInputMessageId,
-    workflowDecisionAnswers,
-    workflowRunOutcomeSummaries,
-    workflowStepRuns,
-    workflowRunStatus,
-    onSubmitRecipeCardAction,
-    dispatchWorkflowDecision,
-    onControlWorkflow,
-    onOpenThread,
-  } = props;
+}
 
-  const workflowCard = getT3TeamWorkflowCardAttachment(message);
-  const workflowDecision = getT3TeamWorkflowDecisionAttachment(message);
-  const decisionAnswer = workflowDecisionAnswers?.get(message.id);
-  const decisionUnavailableMessage = workflowDecisionUnavailableMessage(
-    workflowDecision,
-    workflowRunStatus,
-    workflowDecision?.workflowRunId
-      ? workflowStepRuns?.get(workflowDecision.workflowRunId)
-      : undefined,
-    decisionAnswer !== undefined,
-  );
-  const workflowShape = getT3TeamWorkflowShapeAttachment(message);
-  const genericAttachments = getT3TeamRenderableAttachments(message);
-  const widgetAttachments = getT3TeamWidgetAttachments(message);
-  const showMessageText =
-    message.text.length > 0 &&
-    !(workflowDecision && message.text.trim() === workflowDecision.question.trim()) &&
-    !workflowShape;
+export function T3TeamSystemTimelineRow(props: T3TeamSystemTimelineRowProps) {
+  const { message, threadRef, markdownCwd } = props;
 
   // A decision reply is always posted as a `role: "user"` message (see
   // `t3team-thread-recipe-workflow-routes-resolve.ts`), so it renders through `UserTimelineRow`,
@@ -84,38 +47,23 @@ export function T3TeamSystemTimelineRow(props: {
   // an echo of a chip. Both are matched to their ask by `t3teamExt.workflowReply.correlationId`
   // (see `t3team-workflowDecisionAnswers.ts`), which is also what tells the two cases apart.
 
-  if (workflowShape) {
-    const outcomeSummary =
-      workflowShape.workflowRunId !== undefined
-        ? workflowRunOutcomeSummaries?.get(workflowShape.workflowRunId)
-        : undefined;
-    return (
-      <T3TeamSystemTimelineShapeRow
-        workflowShape={workflowShape}
-        threadRef={threadRef}
-        {...(workflowStepRuns ? { workflowStepRuns } : {})}
-        {...(workflowRunStatus ? { workflowRunStatus } : {})}
-        {...(onControlWorkflow ? { onControlWorkflow } : {})}
-        {...(onOpenThread ? { onOpenThread } : {})}
-        {...(outcomeSummary ? { outcomeSummary } : {})}
-      />
+  // A registered view that owns the whole row: the host's workflow shape and decision cards
+  // (`t3team-hostMessageViews.tsx`), or a pack view posted with `Thread.showView`. A pack view's
+  // own layout decides its width (`isT3TeamFullBleedWidgetRow`), so it gets no card chrome here.
+  const rowView = findMessageView(message, "row");
+  if (rowView) {
+    const content = rowView.render({ threadRef, messageId: message.id, row: props });
+    return rowView.entry.owner.kind === "host" ? (
+      content
+    ) : (
+      <div className="w-full min-w-0">{content}</div>
     );
   }
 
-  if (workflowDecision) {
-    return (
-      <T3TeamSystemTimelineDecisionRow
-        message={message}
-        threadRef={threadRef}
-        workflowDecision={workflowDecision}
-        activeWorkflowInputMessageId={activeWorkflowInputMessageId}
-        decisionUnavailableMessage={decisionUnavailableMessage}
-        {...(decisionAnswer ? { answer: decisionAnswer } : {})}
-        {...(onSubmitRecipeCardAction ? { onSubmitRecipeCardAction } : {})}
-        {...(dispatchWorkflowDecision ? { dispatchWorkflowDecision } : {})}
-      />
-    );
-  }
+  const genericAttachments = getT3TeamRenderableAttachments(message);
+  const widgetAttachments = getT3TeamWidgetAttachments(message);
+  // Shape and decision rows returned above, so their echo of the message text is not a concern.
+  const showMessageText = message.text.length > 0;
 
   const trustedHistoricalHtml =
     message.t3teamExt?.author?.kind === "system" &&
@@ -157,7 +105,7 @@ export function T3TeamSystemTimelineRow(props: {
   const workflowNotification =
     message.t3teamExt?.author?.kind === "system" &&
     message.t3teamExt.author.workflowRunId !== undefined &&
-    !workflowCard &&
+    findMessageView(message, "card-body") === null &&
     genericAttachments.length === 0 &&
     widgetAttachments.length === 0;
   if (workflowNotification) {
@@ -170,15 +118,7 @@ export function T3TeamSystemTimelineRow(props: {
     ) : null;
   }
 
-  return (
-    <T3TeamSystemTimelineGenericRow
-      message={message}
-      threadRef={threadRef}
-      showMessageText={showMessageText}
-      {...(markdownCwd ? { markdownCwd } : {})}
-      {...(onSubmitRecipeCardAction ? { onSubmitRecipeCardAction } : {})}
-    />
-  );
+  return <T3TeamSystemTimelineGenericRow row={props} showMessageText={showMessageText} />;
 }
 
 export { findActiveWorkflowInputMessageId };

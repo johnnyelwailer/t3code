@@ -159,6 +159,19 @@ export interface ShowWidgetInput {
   readonly loadingMessages?: ReadonlyArray<string>;
 }
 
+/**
+ * A registered view posted into a thread (`Thread.showView`). The view's component is trusted
+ * host or pack code; `props` are untrusted data it decodes with its own schema, so pass ids and
+ * small values, never markup.
+ */
+export interface ShowViewInput {
+  /** Idempotency key within the thread: re-posting the same key updates the view in place. */
+  readonly key: string;
+  /** `<packId>.<name>`, as the pack registered it (`registerView({ slot: "message.view" })`). */
+  readonly viewId: string;
+  readonly props: Readonly<Record<string, unknown>>;
+}
+
 /** The one Thread type, shared by the ambient launching thread and any spawned one. */
 export interface Thread {
   /**
@@ -181,6 +194,9 @@ export interface Thread {
   /** Sandboxed inline HTML/SVG for the human (theme variables, host icon sprite). Requires `user`.
    * Fire-and-forget. */
   showWidget(input: ShowWidgetInput): void;
+  /** Post (or re-post, by `key`) a registered view into this thread. Requires `ui.render`.
+   * Fire-and-forget; a run without a thread (`getThread()` undefined) has nowhere to show it. */
+  showView(input: ShowViewInput): void;
   readonly id: ThreadRef;
 }
 

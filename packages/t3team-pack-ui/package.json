@@ -1,0 +1,28 @@
+{
+  "name": "@t3team/pack-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The host kit a pack's web module imports: view registration and host primitives. Types only; the host web app supplies the implementation.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/t3team-packUi.index.ts",
+      "import": "./src/t3team-packUi.index.ts"
+    },
+    "./contract": {
+      "types": "./src/t3team-packUi.contract.ts",
+      "import": "./src/t3team-packUi.contract.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@t3tools/contracts": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "~19.3.0",
+    "typescript": "catalog:"
+  }
+}

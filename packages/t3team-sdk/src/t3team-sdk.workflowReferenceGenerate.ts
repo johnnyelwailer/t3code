@@ -31,6 +31,7 @@ const REFERENCED_TYPES = [
   "SpawnThreadOpts",
   "Thread",
   "ShowWidgetInput",
+  "ShowViewInput",
   "ModelCascadeEntry",
   "AgentEffort",
   "WorkflowChildCapabilities",
