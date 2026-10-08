@@ -267,6 +267,7 @@ import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistr
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 import { T3TeamWorkflowSchedulerSweepLive } from "./t3team-workflowSchedulerSweepLive.ts";
 import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
+import * as T3TeamScriptHost from "./t3team-scriptHostContext.ts";
 import * as HtmlRender from "./htmlRender/HtmlRender.ts";
 import * as PreviewBrowser from "./htmlRender/PreviewBrowser.ts";
 import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
@@ -1434,6 +1435,9 @@ const layerMakeServer = Layer.unwrap(
       // so it is provided again here, ahead of the rest of this pipe. The pr-context route's
       // own project resolver also reads PullRequestProviderRegistry directly, same story.
       Layer.provide(layerPullRequestService),
+      // t3team: recipe scripts' `ctx.store` / `ctx.changeRequests`, for the recipe launch route
+      // (served at this level, like the PR context route above) and boot rehydration.
+      Layer.provide(T3TeamScriptHost.layer.pipe(Layer.provide(layerPullRequestService))),
       Layer.provide(PullRequestProviderRegistry.layer),
       Layer.provideMerge(layerRuntimeServices),
       Layer.provideMerge(

@@ -101,6 +101,7 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
       args: input.args,
       ...(input.scripts === undefined ? {} : { scripts: input.scripts }),
       ...(input.hostToolClient === undefined ? {} : { hostToolClient: input.hostToolClient }),
+      ...(input.scriptHost === undefined ? {} : { scriptHost: input.scriptHost }),
       runsRoot: `${input.workspaceRoot}/.t3team-runs`,
       launchThreadId: input.launchThreadId,
       projectId: input.projectId,

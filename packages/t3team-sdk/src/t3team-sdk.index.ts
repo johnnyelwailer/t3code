@@ -195,6 +195,21 @@ export {
   type WorkflowReferenceExample,
 } from "./t3team-sdk.workflowReferenceExamples.ts";
 export { normalizeCapabilities } from "./t3team-sdk.capabilityGating.ts";
+export {
+  CHANGE_REQUEST_DIFF_DEFAULT_PAGE_SIZE,
+  CHANGE_REQUEST_DIFF_MAX_PAGE_CHARS,
+  CHANGE_REQUEST_DIFF_MAX_PAGE_SIZE,
+  ChangeRequestInputError,
+  ChangeRequestScopeError,
+  type ChangeRequestDetail,
+  type ChangeRequestDiffOptions,
+  type ChangeRequestDiffPage,
+  type ChangeRequestReader,
+  type ChangeRequestRef,
+  type ScriptHostContext,
+  type ScriptPackDocument,
+  type ScriptPackStore,
+} from "./t3team-sdk.scriptHost.ts";
 
 export type {
   HandleKind,
