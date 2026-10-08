@@ -8,6 +8,7 @@ import {
   replaceFeatureFlagDatabaseValues,
 } from "@t3tools/project-context/t3teamFeatureFlags";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
+import { isWorkProfileChooserEnabled } from "./t3team-workProfileChooserFlag.ts";
 import {
   PROJECT_STATE_DIR,
   resolveProjectStateDirName,
@@ -39,6 +40,17 @@ describe("feature flag layering", () => {
     replaceFeatureFlagDatabaseValues(new Map());
     expect(isMainRepositoryEnabled(noEnv)).toBe(true);
     expect(isMainRepositoryEnabled(() => "yes")).toBe(true);
+  });
+
+  test("WORK_PROFILE_CHOOSER defaults off, env and DB can turn it on live", () => {
+    expect(isWorkProfileChooserEnabled(noEnv)).toBe(false);
+    expect(isWorkProfileChooserEnabled(() => "")).toBe(false);
+    expect(isWorkProfileChooserEnabled(() => "yes")).toBe(false);
+    expect(isWorkProfileChooserEnabled(() => "1")).toBe(true);
+    expect(isWorkProfileChooserEnabled(() => "TRUE")).toBe(true);
+    replaceFeatureFlagDatabaseValues(new Map([["WORK_PROFILE_CHOOSER", true]]));
+    expect(isWorkProfileChooserEnabled(noEnv)).toBe(true);
+    expect(isWorkProfileChooserEnabled(() => "off")).toBe(false);
   });
 
   test("registers both Admin switches and freezes state-dir selection for this process", () => {
