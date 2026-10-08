@@ -27,6 +27,7 @@ import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
 import { makeSessionTag } from "./t3team-cloudSessionName.ts";
 import { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
 import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
+import { isMachineSetupEnabled } from "./t3team-machineSetupFlag.ts";
 import {
   claimStandby,
   claimedSessions,
@@ -156,11 +157,32 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       //
       // Project machine (#562), resolved before any side effect; null means a plain session. Its
       // repository token reaches the session only as a broker-held secret, so it needs the broker.
+      const wantsSetup = input.machineSetup === true;
+      if (wantsSetup && !isMachineSetupEnabled()) {
+        return yield* new CloudSessionFailedError({
+          reason: "machine_unavailable",
+          message: "Setting up a project machine is turned off on this server.",
+        });
+      }
+      if (wantsSetup && input.projectId === undefined) {
+        return yield* new CloudSessionFailedError({
+          reason: "machine_unavailable",
+          message: "Set up a machine from a project.",
+        });
+      }
       const machine =
-        input.projectId === undefined ? null : yield* machines.resolve(input.projectId);
+        wantsSetup || input.projectId === undefined
+          ? null
+          : yield* machines.resolve(input.projectId);
+      const setup =
+        wantsSetup && input.projectId !== undefined
+          ? yield* machines.resolveSetup(input.projectId)
+          : null;
       // The caller's name for it, else its repository's (t3team-cloudSessionName.ts).
-      const sessionTag = yield* makeSessionTag(input.name ?? machine?.repository.name ?? null);
-      if (machine !== null && !broker.enabled) {
+      const sessionTag = yield* makeSessionTag(
+        input.name ?? machine?.repository.name ?? setup?.repository.name ?? null,
+      );
+      if ((machine !== null || setup !== null) && !broker.enabled) {
         return yield* new CloudSessionFailedError({
           reason: "machine_unavailable",
           message:
@@ -169,7 +191,10 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       }
 
       // A warm standby of the project, when the broker has one idle: seconds instead of minutes.
-      const workspace = sessionWorkspaceName(login, machine?.repository ?? null);
+      const workspace = sessionWorkspaceName(
+        login,
+        machine?.repository ?? setup?.repository ?? null,
+      );
       if (machine !== null) {
         // The project is in use: the broker warms its next machine now, not at the next report.
         yield* broker.reportInterest([standbyPoolKey(machine.repository)]).pipe(Effect.ignore);
@@ -207,17 +232,24 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
 
       // Broker mode: a grant only a run this login dispatched can redeem replaces the whole T3
       // Connect handoff. Fails with `broker_sign_in_required` before any dispatch when signed out.
+      const access = machine ?? setup;
       const brokerGrant = broker.enabled
         ? yield* broker.requestGrant(
             login,
-            machine
+            access
               ? {
-                  GIT_TOKEN: machine.token,
-                  GIT_AUTHOR_NAME: machine.author.name,
-                  GIT_AUTHOR_EMAIL: machine.author.email,
+                  GIT_TOKEN: access.token,
+                  GIT_AUTHOR_NAME: access.author.name,
+                  GIT_AUTHOR_EMAIL: access.author.email,
                 }
               : undefined,
             machine ? standbyPoolKey(machine.repository) : undefined,
+            machine && machine.teamSecretNames.length > 0
+              ? {
+                  repository: `${machine.repository.owner}/${machine.repository.name}`,
+                  names: machine.teamSecretNames,
+                }
+              : undefined,
           )
         : null;
 
@@ -249,6 +281,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
         discoveryAttempts: DISPATCH_DISCOVERY_ATTEMPTS,
         brokerGrant,
         machine,
+        setup,
         workspace,
       });
     });

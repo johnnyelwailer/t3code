@@ -262,12 +262,14 @@ import {
   T3TeamThreadSilenceWatchReactorLive,
 } from "./t3team-threadSilenceWatchReactorLive.ts";
 import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
+import { T3TeamKickoffRecipeLive } from "./t3team-kickoffRecipe.ts";
 import { T3TeamWorkflowSignalDeliveryLive } from "./t3team-workflowSignalDelivery.ts";
 import { T3TeamWorkflowSignalReconcilerLive } from "./t3team-workflowSignalReconciler.ts";
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 import { T3TeamWorkflowSchedulerSweepLive } from "./t3team-workflowSchedulerSweepLive.ts";
 import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
+import * as T3TeamChangeRequestPublisher from "./t3team-changeRequestPublisher.ts";
 import * as T3TeamScriptHost from "./t3team-scriptHostContext.ts";
 import * as HtmlRender from "./htmlRender/HtmlRender.ts";
 import * as PreviewBrowser from "./htmlRender/PreviewBrowser.ts";
@@ -641,6 +643,14 @@ const T3TeamToolBrokerLayerLive = T3TeamToolBrokerLive.pipe(
   // Same HtmlRender + PreviewBrowser pair the MCP html_render toolkit uses.
   Layer.provide(HtmlRender.layer),
   Layer.provide(PreviewBrowser.layer),
+  // t3team: `t3team.change_request.publish` commits, pushes and opens the change request through
+  // the same git stack the Git panel uses (memoized layer references).
+  Layer.provide(
+    T3TeamChangeRequestPublisher.layer.pipe(
+      Layer.provide(layerGit),
+      Layer.provide(WorkspacePaths.layer),
+    ),
+  ),
 );
 
 // Webhook URLs go through the relay only when the managed tunnel it forwards
@@ -1422,6 +1432,8 @@ const layerMakeServer = Layer.unwrap(
       T3TeamThreadSilenceWatchReactorLive,
       T3TeamThreadTransientTurnRetryLive,
       T3TeamWorkflowEngineRehydrateLive,
+      // t3team: a recipe the first user message on the bootstrap thread starts (T3CODE_KICKOFF_RECIPE).
+      T3TeamKickoffRecipeLive,
       layerCloudDesiredLinkReconcile,
       HeapSnapshot.layer,
     );

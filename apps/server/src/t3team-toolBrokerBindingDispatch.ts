@@ -35,6 +35,11 @@ import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshSe
 import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 import { resolveT3TeamCanonicalToolId } from "./t3team-toolBrokerLegacyToolIds.ts";
 import {
+  callT3TeamChangeRequestPublishTool,
+  T3TEAM_CHANGE_REQUEST_PUBLISH_TOOL_ID,
+  type T3TeamChangeRequestToolHandlers,
+} from "./t3team-toolBrokerBindingChangeRequest.ts";
+import {
   tryDispatchThreadScopedToolCall,
   tryDispatchWorkflowToolCall,
 } from "./t3team-toolBrokerBindingDispatchBranches.ts";
@@ -56,6 +61,7 @@ export function dispatchT3TeamToolCall(input: {
   workflowStatusTools?: T3TeamWorkflowStatusToolHandlers;
   workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
   workflowControlTools?: T3TeamWorkflowControlToolHandlers;
+  changeRequestTools?: T3TeamChangeRequestToolHandlers;
   showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   searchSourceThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   searchThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
@@ -109,6 +115,13 @@ export function dispatchT3TeamToolCall(input: {
   });
   if (workflowToolCall !== undefined) {
     return workflowToolCall;
+  }
+  if (tool === T3TEAM_CHANGE_REQUEST_PUBLISH_TOOL_ID) {
+    return callT3TeamChangeRequestPublishTool({
+      scopeLabel: input.scopeLabel,
+      toolArgs,
+      changeRequestTools: input.changeRequestTools,
+    });
   }
   const threadScopedToolCall = tryDispatchThreadScopedToolCall({
     tool,

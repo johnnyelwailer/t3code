@@ -41,8 +41,9 @@ export interface LaunchWorkflowRecipeInput {
   readonly args: unknown;
   /** The launching recipe's private scripts; bodies see them as `scripts.*` (Epic 25 §Scripts). */
   readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
-  /** Per-run bridge to the broker's work-item draft tools, built by the caller from the launch
-   * thread (t3team-workflowHostDraftTools.ts). Absent leaves those refs bound but uncallable. */
+  /** Per-run bridge to the broker's host tools (drafts, change-request publishing), built by the
+   * caller from the launch thread (t3team-workflowHostTools.ts). Absent leaves those refs bound
+   * but uncallable. */
   readonly hostToolClient?: T3TeamToolHandlerClient;
   /** The run's `ctx.store` / `ctx.changeRequests` for its scripts (t3team-scriptHostContext.ts). */
   readonly scriptHost?: ScriptHostContext;

@@ -28,12 +28,16 @@ const ClaimResponse = Schema.Struct({ sessionId: Schema.String });
 export interface StandbyClaim {
   readonly poolKey: string;
   readonly secrets: Readonly<Record<string, string>>;
+  /** The signed-in GHE login. The claim uses it as the team-secret workflow's actor. */
+  readonly gheLogin: string;
   readonly session: {
     readonly workspace: string;
     readonly repository: string;
     readonly commit: string;
     readonly devcontainer: string;
     readonly healthCheck: string;
+    /** Comma-separated team secret names. Absent when the machine lists none. */
+    readonly teamSecrets?: string;
   };
 }
 
@@ -78,6 +82,7 @@ export const makeNexiBrokerClient = Effect.fn("cloud.broker.client.make")(functi
       gheLogin: string,
       secrets?: Readonly<Record<string, string>>,
       poolKey?: string,
+      teamSecrets?: { readonly repository: string; readonly names: ReadonlyArray<string> },
     ) =>
       call(
         HttpClientRequest.post(`${config.url}/v1/grants`).pipe(
@@ -85,6 +90,7 @@ export const makeNexiBrokerClient = Effect.fn("cloud.broker.client.make")(functi
             gheLogin,
             ...(secrets ? { secrets } : {}),
             ...(poolKey ? { poolKey } : {}),
+            ...(teamSecrets ? { teamSecrets } : {}),
           }),
         ),
         GrantResponse,

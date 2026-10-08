@@ -5,6 +5,7 @@ export type ProjectRecipeToolClass =
   | "read"
   | "view-state"
   | "draft-mutation"
+  | "mutation"
   | "external-convenience";
 
 type ProjectRecipeToolGroup = {
@@ -51,6 +52,12 @@ export const PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP = defineToolGroup(
   "Tools that prepare visible drafts while leaving final commits to the user.",
   false,
 );
+export const PROJECT_RECIPE_MUTATION_CHANGE_REQUEST_TOOL_GROUP = defineToolGroup(
+  "mutation.change_request",
+  "mutation",
+  "Tools that commit listed files, push a branch, and open a change request on the repository's host.",
+  false,
+);
 export const PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP = defineToolGroup(
   "thread.handoff",
   "external-convenience",
@@ -69,6 +76,7 @@ export const PROJECT_RECIPE_TOOL_GROUPS = [
   PROJECT_RECIPE_VIEW_STATE_TOOL_GROUP,
   PROJECT_RECIPE_ARTIFACT_RW_TOOL_GROUP,
   PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP,
+  PROJECT_RECIPE_MUTATION_CHANGE_REQUEST_TOOL_GROUP,
   PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP,
   PROJECT_RECIPE_UI_RENDER_TOOL_GROUP,
 ] as const;
@@ -134,6 +142,7 @@ export const PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID = {
   "t3team.widget.show": PROJECT_RECIPE_VIEW_STATE_TOOL_GROUP.id,
   "t3team.mywork.digest.read": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.mywork.arrange": PROJECT_RECIPE_VIEW_STATE_TOOL_GROUP.id,
+  "t3team.change_request.publish": PROJECT_RECIPE_MUTATION_CHANGE_REQUEST_TOOL_GROUP.id,
 } as const satisfies Readonly<Record<string, ProjectRecipeToolGroupId>>;
 
 export function isProjectRecipeToolGroupId(value: string): value is ProjectRecipeToolGroupId {

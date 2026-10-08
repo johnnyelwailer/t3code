@@ -673,6 +673,11 @@ export const ServerConfig = Schema.Struct({
    */
   mainRepository: Schema.optionalKey(Schema.Boolean),
   /**
+   * Whether a cloud session for a project with no machine definition sets one up.
+   * Runtime feature flag (env `NEXI_FF_MACHINE_SETUP`, default off); absent on older servers.
+   */
+  machineSetup: Schema.optionalKey(Schema.Boolean),
+  /**
    * Whether the work profile chooser is offered (first-run setup surface, the add-project
    * wizard's profile step, the Settings default-profile picker). Runtime feature flag (env
    * `NEXI_FF_WORK_PROFILE_CHOOSER`, default OFF); absent on older servers, which clients must

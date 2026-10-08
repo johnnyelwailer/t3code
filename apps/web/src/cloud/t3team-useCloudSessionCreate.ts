@@ -25,24 +25,28 @@ export function useCloudSessionCreate(input: {
   const { environmentId, relayDiscovered, serverSessions } = input;
   const { setRelayIdsBefore, setLocalSession, refreshCloudSessionList } = input;
   const createSession = useAtomCommand(cloudSessionEnvironment.create, { reportFailure: false });
-  const [createPending, setCreatePending] = useState(false);
-  const latestRef = useRef<(projectId?: ProjectId) => void>(() => {});
+  const [pendingKind, setPendingKind] = useState<null | "session" | "setup">(null);
+  const createPending = pendingKind !== null;
+  const latestRef = useRef<
+    (projectId?: ProjectId, options?: { readonly machineSetup?: boolean }) => void
+  >(() => {});
 
   /** `projectId` (a project on the primary environment) runs the session in its machine. */
   const onCreate = useCallback(
-    (projectId?: ProjectId) => {
+    (projectId?: ProjectId, options?: { readonly machineSetup?: boolean }) => {
       if (environmentId === null || createPending) return;
       setRelayIdsBefore(
         new Set(
           [...relayDiscovered.values()].map((entry) => String(entry.environment.environmentId)),
         ),
       );
-      setCreatePending(true);
+      setPendingKind(options?.machineSetup ? "setup" : "session");
       void createSession({
         environmentId,
         input: {
           durationSeconds: CLOUD_SESSION_LIFETIME_SECONDS,
           ...(projectId ? { projectId } : {}),
+          ...(options?.machineSetup ? { machineSetup: true } : {}),
         },
       })
         .then((result) => {
@@ -53,10 +57,10 @@ export function useCloudSessionCreate(input: {
             });
             refreshCloudSessionList();
           } else {
-            reportCloudSessionCreateFailure(result, () => latestRef.current(projectId));
+            reportCloudSessionCreateFailure(result, () => latestRef.current(projectId, options));
           }
         })
-        .finally(() => setCreatePending(false));
+        .finally(() => setPendingKind(null));
     },
     [
       createPending,
@@ -73,5 +77,5 @@ export function useCloudSessionCreate(input: {
     latestRef.current = onCreate;
   }, [onCreate]);
 
-  return { onCreate, createPending };
+  return { onCreate, createPending, createPendingSetup: pendingKind === "setup" };
 }

@@ -22,6 +22,12 @@ export interface SignalWaitPayload {
   readonly key: string;
 }
 
+/** The `signal.waitAny` envelope payload: every branch, in branch order — the winner's index
+ * refers to this list. Each branch has the shape of a single `signal.wait`. */
+export interface SignalWaitAnyPayload {
+  readonly branches: ReadonlyArray<SignalWaitPayload>;
+}
+
 export interface ThreadCreatePayload {
   readonly threadId: string;
   readonly name?: string;

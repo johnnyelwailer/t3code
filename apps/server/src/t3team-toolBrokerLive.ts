@@ -21,6 +21,7 @@ import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
 import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts";
 import { T3TeamToolBroker, type T3TeamToolBrokerShape } from "./t3team-toolBroker.ts";
 import { createT3TeamPrelaunchToolBinding } from "./t3team-toolBrokerBinding.ts";
+import { makeChangeRequestToolsForThread } from "./t3team-toolBrokerChangeRequestLive.ts";
 import { makeManageChildrenHandler } from "./t3team-toolBrokerChildrenLive.ts";
 import { makeBindSession } from "./t3team-toolBrokerLiveSession.ts";
 import { makeMyWorkToolHandlers } from "./t3team-toolBrokerMyWorkLive.ts";
@@ -116,6 +117,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
       ...(providerRegistry ? { listProviders: () => providerRegistry.getProviders } : {}),
     }),
     workflowTools,
+    changeRequestToolsForThread: yield* makeChangeRequestToolsForThread(loadThreadProject),
   });
 
   const bindReadOnly: T3TeamToolBrokerShape["bindReadOnly"] = ({

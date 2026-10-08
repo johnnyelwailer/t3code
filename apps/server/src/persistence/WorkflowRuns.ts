@@ -73,6 +73,16 @@ export const WorkflowRunHostToolGrant = Schema.Struct({
 });
 export type WorkflowRunHostToolGrant = typeof WorkflowRunHostToolGrant.Type;
 
+/** One branch of an any-wait park (`waitForAny`): the same `(instance, signal, key)` a
+ * single-signal park records in the `watch_*` columns. */
+export const WorkflowRunWatchBranch = Schema.Struct({
+  source: Schema.String,
+  paramsHash: Schema.String,
+  signal: Schema.String,
+  key: Schema.String,
+});
+export type WorkflowRunWatchBranch = typeof WorkflowRunWatchBranch.Type;
+
 export const WorkflowRun = Schema.Struct({
   runId: Schema.String,
   /** Absolute path to the recipe's `.workflow.ts` — re-resolved to a WorkflowRef on boot. */
@@ -131,6 +141,10 @@ export const WorkflowRun = Schema.Struct({
   watchParamsHash: Schema.optional(Schema.NullOr(Schema.String)),
   watchSignalName: Schema.optional(Schema.NullOr(Schema.String)),
   watchSignalKey: Schema.optional(Schema.NullOr(Schema.String)),
+  /** Every branch of an any-wait park (migration 079), in branch order: the `signal.waitAny`
+   * correlation answers whichever lands first, replying `{ index, reply }`. The `watch_*` columns
+   * above then repeat branch 0. NULL for a single-signal park and for every other run. */
+  watchAny: Schema.optional(Schema.NullOr(Schema.Array(WorkflowRunWatchBranch))),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
@@ -165,6 +179,8 @@ const WORKFLOW_RUN_NON_TERMINAL_STATUSES = [
 
 export const ListLiveWorkflowRunsByLaunchThreadInput = Schema.Struct({
   launchThreadId: Schema.String,
+  /** Also the thread's completed, failed and cancelled runs. */
+  includeEnded: Schema.optional(Schema.Boolean),
 });
 export type ListLiveWorkflowRunsByLaunchThreadInput =
   typeof ListLiveWorkflowRunsByLaunchThreadInput.Type;
@@ -278,6 +294,8 @@ export const SetWorkflowRunWatchingInput = Schema.Struct({
   watchParamsHash: Schema.String,
   watchSignalName: Schema.String,
   watchSignalKey: Schema.String,
+  /** Present for an any-wait park: every branch, in branch order (see `WorkflowRun.watchAny`). */
+  watchAny: Schema.optional(Schema.Array(WorkflowRunWatchBranch)),
   updatedAt: IsoDateTime,
 });
 export type SetWorkflowRunWatchingInput = typeof SetWorkflowRunWatchingInput.Type;
@@ -318,7 +336,8 @@ export interface WorkflowRunRepositoryShape {
   readonly listRecent: (
     input: ListRecentWorkflowRunsInput,
   ) => Effect.Effect<ReadonlyArray<WorkflowRun>, ProjectionRepositoryError>;
-  /** This launch thread's non-terminal runs, ignoring how recently other threads updated. */
+  /** This launch thread's non-terminal runs (every run with `includeEnded`), ignoring how
+   * recently other threads updated. */
   readonly listLiveByLaunchThread: (
     input: ListLiveWorkflowRunsByLaunchThreadInput,
   ) => Effect.Effect<ReadonlyArray<WorkflowRun>, ProjectionRepositoryError>;
@@ -412,6 +431,14 @@ const WorkflowRunDbRow = WorkflowRun.mapFields(
     ),
     // `watch_signal_*` (migration 059) are plain nullable TEXT: no JSON round-trip, no decode
     // hazard — an unreadable value cannot exist, only a set or unset pair.
+    // `watch_any_json` decodes LENIENTLY to `null`, like `host_tool_grant`: one unreadable branch
+    // list must not abort the boot scan for every run. Such a row then reads as a single-signal
+    // park on branch 0, whose raw-payload reply the any-wait refuses loudly on resume.
+    watchAny: Schema.optional(
+      Schema.NullOr(Schema.fromJsonString(Schema.Array(WorkflowRunWatchBranch))).pipe(
+        Schema.catchDecoding(() => Effect.succeed(Option.some(null))),
+      ),
+    ),
   }),
 );
 
@@ -452,6 +479,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           watch_params_hash,
           watch_signal_name,
           watch_signal_key,
+          watch_any_json,
           created_at,
           updated_at
         )
@@ -477,6 +505,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           ${row.intent ? JSON.stringify(row.intent) : null},
           ${row.wakeAt},
           ${row.turnRetries ?? 0},
+          NULL,
           NULL,
           NULL,
           NULL,
@@ -510,6 +539,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           watch_params_hash = NULL,
           watch_signal_name = NULL,
           watch_signal_key = NULL,
+          watch_any_json = NULL,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at
       `,
@@ -546,6 +576,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           watch_params_hash AS "watchParamsHash",
           watch_signal_name AS "watchSignalName",
           watch_signal_key AS "watchSignalKey",
+          watch_any_json AS "watchAny",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM workflow_runs
@@ -584,6 +615,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           watch_params_hash AS "watchParamsHash",
           watch_signal_name AS "watchSignalName",
           watch_signal_key AS "watchSignalKey",
+          watch_any_json AS "watchAny",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM workflow_runs
@@ -625,6 +657,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           watch_params_hash AS "watchParamsHash",
           watch_signal_name AS "watchSignalName",
           watch_signal_key AS "watchSignalKey",
+          watch_any_json AS "watchAny",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM workflow_runs
@@ -636,7 +669,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
   const listLiveWorkflowRunsByLaunchThread = SqlSchema.findAll({
     Request: ListLiveWorkflowRunsByLaunchThreadInput,
     Result: WorkflowRunDbRow,
-    execute: ({ launchThreadId }) =>
+    execute: ({ launchThreadId, includeEnded }) =>
       sql`
         SELECT
           run_id AS "runId",
@@ -664,11 +697,12 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           watch_params_hash AS "watchParamsHash",
           watch_signal_name AS "watchSignalName",
           watch_signal_key AS "watchSignalKey",
+          watch_any_json AS "watchAny",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM workflow_runs
         WHERE launch_thread_id = ${launchThreadId}
-          AND ${sql.in("status", WORKFLOW_RUN_NON_TERMINAL_STATUSES)}
+          AND ${includeEnded === true ? sql`1 = 1` : sql.in("status", WORKFLOW_RUN_NON_TERMINAL_STATUSES)}
         ORDER BY updated_at DESC, run_id DESC
       `,
   });
@@ -734,6 +768,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
             watch_params_hash = NULL,
             watch_signal_name = NULL,
             watch_signal_key = NULL,
+            watch_any_json = NULL,
             updated_at = ${updatedAt}
         WHERE run_id = ${runId} AND ${sql.in("status", expectedStatuses)}
         RETURNING run_id AS "runId"
@@ -770,6 +805,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
             watch_params_hash = NULL,
             watch_signal_name = NULL,
             watch_signal_key = NULL,
+            watch_any_json = NULL,
             failure_reason = NULL,
             failure_step = NULL,
             updated_at = ${updatedAt}
@@ -795,6 +831,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
             watch_params_hash = NULL,
             watch_signal_name = NULL,
             watch_signal_key = NULL,
+            watch_any_json = NULL,
             updated_at = ${updatedAt}
         WHERE run_id = ${runId} AND status != 'cancelled'
       `,
@@ -832,6 +869,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
             watch_params_hash = NULL,
             watch_signal_name = NULL,
             watch_signal_key = NULL,
+            watch_any_json = NULL,
             updated_at = ${updatedAt}
         WHERE run_id = ${runId} AND status != 'cancelled'
       `,
@@ -849,6 +887,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       watchParamsHash,
       watchSignalName,
       watchSignalKey,
+      watchAny,
       updatedAt,
     }) =>
       sql`
@@ -862,6 +901,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
             watch_params_hash = ${watchParamsHash},
             watch_signal_name = ${watchSignalName},
             watch_signal_key = ${watchSignalKey},
+            watch_any_json = ${watchAny === undefined ? null : JSON.stringify(watchAny)},
             updated_at = ${updatedAt}
         WHERE run_id = ${runId} AND status != 'cancelled'
       `,

@@ -47,7 +47,7 @@ export const WORKFLOW_BOUND_GLOBAL_NAMES: ReadonlyArray<string> = Object.freeze(
         agent: inert,
       } as unknown as WorkflowThreadPrimitives,
       schedule: { waitUntil: inert } as unknown as SchedulePrimitives,
-      signals: { getSignalSource: inert } as unknown as SignalPrimitives,
+      signals: { getSignalSource: inert, waitForAny: inert } as unknown as SignalPrimitives,
       watermark: inert as unknown as WatermarkPrimitives["watermark"],
       reduce: { accumulate: inert, reducerState: inert } as unknown as ReducePrimitives,
       retry: { retry: inert } as unknown as RetryPrimitives,

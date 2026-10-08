@@ -131,6 +131,7 @@ export function makeWorkflowRunLifecycle(opts: {
           watchParamsHash: watch.paramsHash,
           watchSignalName: watch.watchSignalName,
           watchSignalKey: watch.watchSignalKey,
+          ...(watch.branches === undefined ? {} : { watchAny: watch.branches }),
           updatedAt: opts.nowIso(),
         }),
       ).then(() => {

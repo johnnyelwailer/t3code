@@ -94,12 +94,26 @@ function cloudSessionProgress(elapsedSeconds: number): number {
   return Math.min(1, Math.max(0, elapsedSeconds / CLOUD_SESSION_TYPICAL_TOTAL_SECONDS));
 }
 
+/**
+ * An ended session offers a fresh one, not a replay of itself. Not for a setup session: its record
+ * keeps no project, so "another" would start a plain session; the Run-on menu starts setup again.
+ */
+function startAnotherLabel(session: CloudSession): string | null {
+  return session.machineSetup === true ? null : "Start another";
+}
+
 /** A project machine's milestones read as its own; a plain session builds the workspace. */
 function preparingWords(session: CloudSession): {
   readonly title: string;
   readonly detail: string;
 } {
   const elapsed = formatDuration(session.elapsedSeconds);
+  if (session.machineSetup === true) {
+    return {
+      title: "Checking out the project",
+      detail: `So the project's machine can be set up here · ${elapsed}`,
+    };
+  }
   if (session.projectMachine !== true) {
     return {
       title: "Building the workspace",
@@ -177,9 +191,11 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
       return {
         title: "Ready",
         detail:
-          session.remainingSeconds === null
-            ? session.machineLabel
-            : `${session.machineLabel} · ${formatDuration(session.remainingSeconds)} left`,
+          session.machineSetup === true
+            ? "Open it and describe your task; it sets the machine up if the task needs one."
+            : session.remainingSeconds === null
+              ? session.machineLabel
+              : `${session.machineLabel} · ${formatDuration(session.remainingSeconds)} left`,
         tone: "ready",
         progress: null,
         actionLabel: "Connect",
@@ -192,7 +208,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         detail: session.failureReason ?? "The session stopped before it became reachable.",
         tone: "error",
         progress: null,
-        actionLabel: "Start another", // a fresh session, not a replay of this one
+        actionLabel: startAnotherLabel(session),
         secondaryActionLabel: null,
         liveElapsed: false,
       };
@@ -204,7 +220,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         }.`,
         tone: "idle",
         progress: null,
-        actionLabel: "Start another",
+        actionLabel: startAnotherLabel(session),
         secondaryActionLabel: null,
         liveElapsed: false,
       };
@@ -214,7 +230,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         detail: "Stopped by you.",
         tone: "idle",
         progress: null,
-        actionLabel: "Start another",
+        actionLabel: startAnotherLabel(session),
         secondaryActionLabel: null,
         liveElapsed: false,
       };

@@ -149,6 +149,7 @@ import {
   threadReplayEncodedBytes,
   THREAD_RESUME_MAX_REPLAY_EVENTS,
 } from "./orchestration-v2/ThreadStream.ts";
+import { isMachineSetupEnabled } from "./cloud/t3team-machineSetupFlag.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import { isWorkProfileChooserEnabled } from "./t3team-workProfileChooserFlag.ts";
 import { isNexiStateDirSelectedAtStartup } from "@t3tools/project-context/t3teamProjectStateDir";
@@ -1825,6 +1826,7 @@ const layerWsRpc = (
             // Runtime feature flags (env NEXI_FF_MAIN_REPOSITORY / NEXI_FF_NEXI_STATE_DIR,
             // default on): project main repository, and the `.nexi` state dir name.
             mainRepository: isMainRepositoryEnabled(),
+            machineSetup: isMachineSetupEnabled(),
             // Runtime feature flag (env NEXI_FF_WORK_PROFILE_CHOOSER, default off): the work
             // profile chooser. Off means clients use the developer profile everywhere.
             workProfileChooser: isWorkProfileChooserEnabled(),
