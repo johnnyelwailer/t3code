@@ -61,6 +61,11 @@ describe("feature flag layering", () => {
         requiresRestart: true,
         description: expect.stringContaining("next server start"),
       }),
+      expect.objectContaining({
+        key: "WORK_PROFILE_CHOOSER",
+        requiresRestart: false,
+        defaultEnabled: false,
+      }),
     ]);
   });
 });

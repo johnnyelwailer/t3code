@@ -3,6 +3,7 @@ import type { ExternalProject } from "@t3tools/integrations-core";
 import { ProjectAvatar } from "~/t3team/components/t3team-ProjectAvatar";
 import { listT3TeamProjectSetupCardOptions } from "~/t3team/t3team-ProjectSetupProfileCards";
 import { useT3TeamPackSetupProfiles } from "~/t3team/t3team-packSetupProfiles";
+import { useT3TeamWorkProfileChooserEnabled } from "~/t3team/t3team-workProfileChooser";
 import type { T3TeamProjectSetupProfileId } from "~/t3team/t3team-projectSetup";
 
 /**
@@ -55,9 +56,14 @@ export function CreatingStep({
 }) {
   const packProfiles = useT3TeamPackSetupProfiles();
   const title = projectTitle ?? "project";
-  const setupProfileTitle =
-    listT3TeamProjectSetupCardOptions(packProfiles).find((option) => option.id === setupProfileId)
-      ?.title ?? "Project Partner";
+  // Runtime feature flag (default off): with no chooser the user never picked a profile, so
+  // naming one here would describe a choice they were not offered.
+  const workProfileChooserEnabled = useT3TeamWorkProfileChooserEnabled();
+  const setupProfileTitle = workProfileChooserEnabled
+    ? (listT3TeamProjectSetupCardOptions(packProfiles).find(
+        (option) => option.id === setupProfileId,
+      )?.title ?? "Project Partner")
+    : undefined;
 
   return (
     <section className="flex min-h-[18rem] items-center justify-center px-2 py-6 sm:min-h-[22rem]">
@@ -69,15 +75,16 @@ export function CreatingStep({
           </div>
           <h3 className="text-base font-semibold">Creating {title}</h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            We&apos;re provisioning the workspace and tailoring it for the {setupProfileTitle}
-            profile.
+            {setupProfileTitle
+              ? `We're provisioning the workspace and tailoring it for the ${setupProfileTitle} profile.`
+              : "We're provisioning the workspace and tailoring it for your work."}
           </p>
         </div>
 
         <div className="mt-6 space-y-3 text-left">
           {[
             "Preparing the managed workspace",
-            `Applying the ${setupProfileTitle} setup`,
+            setupProfileTitle ? `Applying the ${setupProfileTitle} setup` : "Applying the setup",
             repositoryCount > 0
               ? `Linking ${repositoryCount} repository${repositoryCount === 1 ? "" : "ies"}`
               : "No repositories selected yet",
