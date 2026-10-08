@@ -5610,9 +5610,9 @@ export function makeClaudeAdapterV2(
               updatedAt,
             }),
           });
-          const promptUuid = claudePromptUuid(
+          const promptUuid = yield* claudePromptUuid(
             `${context.input.attemptId}:t3team-gateway-retry:${plan.attempt}`,
-          );
+          ).pipe(Effect.provideService(Crypto.Crypto, crypto));
           // Gate the turn on the re-drive prompt NOW, not after the wait: a wake turn the idle
           // CLI runs during the backoff (a background task finished) must not settle this turn.
           context.promptUuid = promptUuid;

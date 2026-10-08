@@ -309,6 +309,15 @@ describe("side chat (thread) tabs", () => {
     return renderToStaticMarkup(
       <RightPanelTabs
         mode="inline"
+        keybindings={DEFAULT_RESOLVED_KEYBINDINGS}
+        getShortcutContext={() => ({
+          terminalFocus: false,
+          terminalOpen: false,
+          previewFocus: false,
+          previewOpen: false,
+          isWeb: true,
+          isDesktop: false,
+        })}
         surfaces={[previewSurface, threadSurface]}
         environmentId={null}
         onAddBrowserInProfile={() => undefined}

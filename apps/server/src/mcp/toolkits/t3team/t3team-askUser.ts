@@ -12,6 +12,7 @@
  *
  * @module mcp/toolkits/t3team/t3team-askUser
  */
+// @effect-diagnostics nodeBuiltinImport:off -- Random id only; threading the Effect Crypto service through this MCP tool's fixed Declaration<> R would leak into handlers.ts and its test layer.
 import * as NodeCrypto from "node:crypto";
 
 import type { RuntimeRequestId, ThreadId } from "@t3tools/contracts";

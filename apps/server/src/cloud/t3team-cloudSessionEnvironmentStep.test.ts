@@ -1,7 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { ChildProcessSpawner } from "effect/process";
 
 import {
   ENVIRONMENT_STEP_PREFIX,
@@ -10,6 +9,7 @@ import {
 import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
 import type {
   CloudSessionRepoRef,
+  GitHubActionsResponse,
   WorkflowJobStep,
   WorkflowRunSummary,
 } from "./t3team-githubActionsSessionClient.ts";
@@ -56,12 +56,9 @@ const step = (name: string, status = "completed", conclusion: string | null = "s
 
 const project = (steps: readonly WorkflowJobStep[]) =>
   projectCloudSession(inProgressRun, Date.parse("2026-09-27T10:05:00Z"), "slim", repoRef, () =>
-    Effect.succeed({
-      exitCode: ChildProcessSpawner.ExitCode(0),
-      stdout: encodeGhJobs({ jobs: [{ steps: [...steps] }] }),
-      stderr: "",
-      stdoutTruncated: false,
-      stderrTruncated: false,
+    Effect.succeed<GitHubActionsResponse>({
+      body: encodeGhJobs({ jobs: [{ steps: [...steps] }] }),
+      truncated: false,
     }),
   );
 

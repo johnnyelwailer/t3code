@@ -1133,7 +1133,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
             args: [...durableWrite, "update-ref", input.checkpointRef, commitOid],
           });
         }).pipe(Effect.ensuring(cleanupTempIndex));
-      });
+      }).pipe(Effect.provideService(Crypto.Crypto, crypto));
 
       // Bounded self-heal: on a timed-out attempt, wait down the backoff
       // ladder and capture again from scratch. Any other failure — and the

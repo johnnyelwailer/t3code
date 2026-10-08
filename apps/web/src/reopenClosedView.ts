@@ -1,14 +1,21 @@
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 
 import type { OpenPreviewMutation } from "./browser/openFileInPreview";
 import type { ClosedView, ClosedViewEntry } from "./closedViewStore";
-import type { PullRequestListPreferences } from "./components/pullRequest/pullRequestListPreferences";
+import {
+  PullRequestListSort,
+  type PullRequestListPreferencePatch,
+} from "./components/pullRequest/pullRequestListPreferences";
 import { openPreviewSession } from "./components/preview/openPreviewSession";
+import type { PullRequestsSearch } from "./routes/_chat.pull-requests";
 import {
   type RightPanelSurface,
   type ThreadRightPanelState,
   useRightPanelStore,
 } from "./rightPanelStore";
+
+const isPullRequestListSort = Schema.is(PullRequestListSort);
 
 export interface ReopenOwnerState {
   /** False when the entry's environment is not in the catalog. */
@@ -57,31 +64,39 @@ export function planNextReopen(
   return { drop, restore: null };
 }
 
-type PullRequestsSearchLike = Partial<PullRequestListPreferences> & {
-  repository?: string;
-  number?: number;
-  selectedProjectId?: ProjectId;
-  selectedHost?: string;
-  selectedEnvironmentId?: EnvironmentId;
+type PullRequestsSearchLike = Omit<PullRequestListPreferencePatch, "labels" | "sort"> & {
+  repository?: string | undefined;
+  number?: number | undefined;
+  selectedProjectId?: ProjectId | undefined;
+  selectedHost?: string | undefined;
+  selectedEnvironmentId?: EnvironmentId | undefined;
+  // A navigate() not anchored to this route widens `previous` to every route's search schema;
+  // the backlog view's own `labels`/`sort` filters are shaped differently from the PR list's.
+  labels?: string | readonly string[] | undefined;
+  sort?: string | undefined;
 };
 
 /** Selects the restored pull request on the Pull Requests page, keeping the list filters. */
 export function pullRequestsSearchForRestore<S extends PullRequestsSearchLike>(
   previous: S,
   selected: RightPanelSurface | null,
-): S & PullRequestListPreferences {
+): PullRequestsSearch {
   const {
     repository: _repository,
     number: _number,
     selectedProjectId: _projectId,
     selectedHost: _host,
     selectedEnvironmentId: _environmentId,
+    labels: previousLabels,
+    sort: previousSort,
     ...filters
   } = previous;
   return {
     ...filters,
     involvement: previous.involvement ?? "all",
     state: previous.state ?? "open",
+    ...(Array.isArray(previousLabels) ? { labels: previousLabels } : {}),
+    ...(isPullRequestListSort(previousSort) ? { sort: previousSort } : {}),
     ...(selected?.kind === "pull-request"
       ? {
           repository: selected.repository,
@@ -93,7 +108,7 @@ export function pullRequestsSearchForRestore<S extends PullRequestsSearchLike>(
             : { selectedEnvironmentId: selected.environmentId as EnvironmentId }),
         }
       : {}),
-  } as S & PullRequestListPreferences;
+  } as PullRequestsSearch;
 }
 
 export async function reopenClosedView(
@@ -143,6 +158,9 @@ export async function reopenClosedView(
     case "pull-request":
       panels.openPullRequest(ref, surface);
       break;
+    case "thread":
+      // t3team: side-chat (thread) surfaces are not reopenable yet — open question for Phil
+      return false;
     default:
       panels.open(ref, surface.kind);
   }

@@ -4,6 +4,7 @@ import { useEffect, useMemo } from "react";
 
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 
 import { RightPanelTabs } from "~/components/RightPanelTabs";
 import { Button } from "~/components/ui/button";
@@ -145,6 +146,15 @@ function PanelDemo({ threadId, label }: { threadId: string; label: string }) {
         {state.isOpen ? (
           <RightPanelTabs
             mode="inline"
+            keybindings={DEFAULT_RESOLVED_KEYBINDINGS}
+            getShortcutContext={() => ({
+              terminalFocus: false,
+              terminalOpen: false,
+              previewFocus: false,
+              previewOpen: false,
+              isWeb: true,
+              isDesktop: false,
+            })}
             surfaces={state.surfaces}
             environmentId={null}
             onAddBrowserInProfile={() => undefined}
