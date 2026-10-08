@@ -10,6 +10,7 @@ import { resolveReviewSetupProfileSummary } from "~/t3team/t3team-createProjectR
 import { makeWorkspacePath } from "~/t3team/t3team-mock-adapter";
 import { T3TeamProjectSetupConfirmPreviewView } from "~/t3team/t3team-ProjectSetupConfirmPreviewView";
 import type { T3TeamProjectSetupProfileId } from "~/t3team/t3team-projectSetup";
+import { useT3TeamWorkProfileChooserEnabled } from "~/t3team/t3team-workProfileChooser";
 
 /**
  * Last step before creation. Which project this is now lives in the wizard frame's own heading
@@ -32,11 +33,11 @@ export function ReviewStep({
   projectTitle: string | undefined;
 }) {
   const packProfiles = useT3TeamPackSetupProfiles();
-  const profileSummary = resolveReviewSetupProfileSummary({
-    setupProfileId,
-    customProfile,
-    packProfiles,
-  });
+  // Runtime feature flag (default off): with no chooser there is no profile decision to review.
+  const workProfileChooserEnabled = useT3TeamWorkProfileChooserEnabled();
+  const profileSummary = workProfileChooserEnabled
+    ? resolveReviewSetupProfileSummary({ setupProfileId, customProfile, packProfiles })
+    : undefined;
   const workspacePath = useMemo(() => makeWorkspacePath(projectTitle ?? "Project"), [projectTitle]);
   const siteLabel = selectedAccount?.accountUrl
     ? (atlassianSiteHost(selectedAccount.accountUrl) ?? selectedAccount.accountUrl)

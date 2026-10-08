@@ -1,10 +1,22 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { IntegrationAccount } from "@t3tools/integrations-core";
 
 import { ReviewStep } from "./t3team-CreateProjectDialogReviewStep";
+
+// Naming the setup profile is chooser-on behaviour: with WORK_PROFILE_CHOOSER off there is no
+// profile decision to review, and the row is dropped (asserted separately below).
+vi.mock("~/t3team/t3team-workProfileChooser", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./t3team-workProfileChooser")>();
+  return {
+    ...actual,
+    useT3TeamWorkProfileChooserEnabled: () => workProfileChooserEnabled.current,
+  };
+});
+
+const workProfileChooserEnabled = { current: true };
 
 /**
  * The old review step rendered one line — "Turns on: <packs> · N starter recipes · N repos
@@ -31,6 +43,10 @@ async function renderReviewStep(props: Parameters<typeof ReviewStep>[0]) {
 }
 
 describe("ReviewStep", () => {
+  afterEach(() => {
+    workProfileChooserEnabled.current = true;
+  });
+
   it("names the selected setup profile and shows the workspace path", async () => {
     const host = await renderReviewStep({
       setupProfileId: "engineering-copilot",
@@ -72,5 +88,23 @@ describe("ReviewStep", () => {
     expect(host.textContent).toContain("My Team Partner");
     expect(host.textContent).toContain("A cloned starter, tuned for this team.");
     expect(host.textContent).toContain("mobile-checkout");
+  });
+
+  it("drops the setup-profile row when the work profile chooser is off", async () => {
+    workProfileChooserEnabled.current = false;
+    const host = await renderReviewStep({
+      setupProfileId: "engineering-copilot",
+      customProfile: undefined,
+      linkedRepositoryUrls: [],
+      selectedAccount: account,
+      projectTitle: "Nexi AI",
+    });
+
+    expect(host.textContent).not.toContain("Setup profile");
+    expect(host.textContent).not.toContain("Engineering Copilot");
+    // Everything the user did decide is still reviewed.
+    expect(host.textContent).toContain("nexwork.atlassian.net");
+    expect(host.textContent).toContain("t3team/projects/Nexi AI");
+    expect(host.textContent).toContain("None linked");
   });
 });

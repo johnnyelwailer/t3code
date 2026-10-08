@@ -2,14 +2,8 @@ import type { CreateProjectStep } from "~/t3team/hooks/t3team-useCreateProject";
 import { useCreateProject } from "~/t3team/hooks/t3team-useCreateProject";
 import { CreateProjectWizardFooter } from "~/t3team/t3team-CreateProjectWizardFooter";
 import { runT3TeamViewTransition } from "~/t3team/t3team-runViewTransition";
-
-const BACK_TARGET: Partial<Record<CreateProjectStep, CreateProjectStep>> = {
-  account: "source",
-  project: "account",
-  profile: "project",
-  repositories: "profile",
-  review: "repositories",
-};
+import { t3teamCreateProjectWizardStepNeighbour } from "~/t3team/t3team-createProjectWizardSteps";
+import { useT3TeamWorkProfileChooserEnabled } from "~/t3team/t3team-workProfileChooser";
 
 export function CreateProjectDialogFooter({
   setup,
@@ -26,8 +20,13 @@ export function CreateProjectDialogFooter({
   linkedRepositoryCount: number;
   onCreateProject: () => Promise<void>;
 }) {
-  const goTo = (step: CreateProjectStep) =>
-    runT3TeamViewTransition(() => setup.setStep(step), { types: ["t3team-wizard-forward"] });
+  // Runtime feature flag (default off): with no chooser the wizard has no `profile` step, so
+  // both directions have to route around it rather than through it.
+  const chooserEnabled = useT3TeamWorkProfileChooserEnabled();
+  const goTo = (step: CreateProjectStep | undefined) =>
+    runT3TeamViewTransition(() => (step ? setup.setStep(step) : undefined), {
+      types: ["t3team-wizard-forward"],
+    });
 
   return (
     <CreateProjectWizardFooter
@@ -40,7 +39,7 @@ export function CreateProjectDialogFooter({
       onBack={() => {
         runT3TeamViewTransition(
           () => {
-            const target = BACK_TARGET[setup.step];
+            const target = t3teamCreateProjectWizardStepNeighbour(setup.step, chooserEnabled, -1);
             if (target) setup.setStep(target);
           },
           { types: ["t3team-wizard-back"] },
@@ -51,7 +50,9 @@ export function CreateProjectDialogFooter({
           void setup.loadProjects(selectedAccount);
         }
       }}
-      onContinueProject={() => goTo("profile")}
+      onContinueProject={() =>
+        goTo(t3teamCreateProjectWizardStepNeighbour("project", chooserEnabled, 1))
+      }
       onContinueProfile={() => goTo("repositories")}
       // Skip and Continue land on the same step: skipping is just leaving with whatever (if
       // anything) is already linked, never a destructive clear of state the user entered.

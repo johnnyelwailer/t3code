@@ -12,35 +12,25 @@
  *
  * Each section is a read-only slice built on the fetch-only hook (see
  * `t3team-AllProjectsMyWorkSection.tsx` for why it does NOT reuse `ProjectDashboardMyWorkView`).
+ *
+ * The scoped project list comes from `useMyWorkBoundProjects` — the same hook the startup gate
+ * probes with, so the cold-start redirect lands on the digest cache the gate's own round filled.
  */
-import { closeDigestPullRequest, openDigestTicket } from "~/t3team/t3team-digestPrAsideStore";
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
-import { useNowMinute } from "~/hooks/useNowMinute";
-import { useAllEnvironmentShellsBootstrapped } from "~/state/entities";
-
-import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
-import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
-import { JiraSignInPanel } from "~/t3team/components/t3team-JiraSignInPanel";
 import { ScrollArea } from "~/components/ui/scroll-area";
-import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
+import { useMyWorkBoundProjects } from "~/t3team/t3team-myWorkBoundProjects";
 import { useProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboardMyWorkState";
 import { projectBacklogViewModes } from "~/t3team/t3team-projectBacklogPresentation";
 import { readPersistedProjectDashboardBacklogState } from "~/t3team/t3team-projectDashboardBacklogState";
-import { buildDigestPlan } from "~/t3team/t3team-projectMyWorkDigestPlan";
-import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
+import { AllProjectsMyWorkDigestLens } from "~/t3team/t3team-AllProjectsMyWorkDigestLens";
 import { AllProjectsMyWorkSection } from "~/t3team/t3team-AllProjectsMyWorkSection";
-import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
-import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
-import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
 import {
   ProjectMyWorkViewSwitch,
   type ProjectMyWorkLens,
 } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
-import { ProjectMyWorkLoadingState } from "~/t3team/t3team-projectMyWorkContentState";
-import { useT3TeamBetaFlags } from "~/t3team/t3team-betaFlags";
-import { selectBoundProjects } from "~/t3team/t3team-allProjectsMyWorkProjects";
+import { MyWorkLoadingAnimation } from "~/t3team/t3team-MyWorkLoadingAnimation";
 import { t3teamScopeContentWidthClass } from "~/t3team/t3team-scopeContentWidth";
 
 export function AllProjectsMyWorkView({
@@ -48,10 +38,7 @@ export function AllProjectsMyWorkView({
 }: {
   onOpenTicket: (projectId: string, ticketId: string) => void;
 }) {
-  const { allProjects } = useProjectStore();
-  const { flags } = useT3TeamBetaFlags();
-  const boundProjects = useMemo(() => selectBoundProjects(allProjects), [allProjects]);
-  const shellsBootstrapped = useAllEnvironmentShellsBootstrapped();
+  const boundProjects = useMyWorkBoundProjects();
   const navigate = useNavigate();
   const openBacklog = useCallback(
     (projectId: string) =>
@@ -85,39 +72,16 @@ export function AllProjectsMyWorkView({
     [setState],
   );
 
-  // The digest lens reads one server-aggregated graph across every bound project.
-  const {
-    graph: digestGraph,
-    status: digestStatus,
-    error: digestError,
-    viewerUnresolved,
-    sessionExpired: digestSessionExpired,
-    updatedAt: digestUpdatedAt,
-    reload: digestReload,
-  } = useMyWorkDigestGraph({
-    projects: boundProjects,
-    scope: "all",
-    enabled: lens === "digest",
-  });
-  // Minute-granular clock shared with the rest of the app: stable within a render, re-plans on tick.
-  // useNowMinute yields UTC wall-clock text without a zone suffix; parse it as UTC.
-  const nowMs = Date.parse(`${useNowMinute()}Z`);
-  const digestPlan = useMemo(() => {
-    if (!digestGraph) {
-      return null;
-    }
-    return buildDigestPlan(digestGraph, nowMs);
-  }, [digestGraph, nowMs]);
+  if (boundProjects === null) {
+    // The project list is still being assembled: "no projects" would be a guess, not an answer.
+    return (
+      <div className="flex w-full flex-col p-4 sm:p-6">
+        <MyWorkLoadingAnimation />
+      </div>
+    );
+  }
 
   if (boundProjects.length === 0) {
-    // Until every environment has answered (or given up), "no projects" only means "not loaded yet".
-    if (!shellsBootstrapped) {
-      return (
-        <div className="flex w-full flex-col p-4 sm:p-6">
-          <ProjectMyWorkLoadingState />
-        </div>
-      );
-    }
     return (
       <div className="flex h-full min-h-0 flex-1 items-center justify-center p-6">
         <p className="max-w-sm text-center text-muted-foreground text-sm">
@@ -127,66 +91,6 @@ export function AllProjectsMyWorkView({
       </div>
     );
   }
-
-  const renderDigest = () => {
-    // A failed fetch (backend still starting, timeout) is not terminal: the poller retries with
-    // backoff and this recovers on its own, so it renders as "retrying" — never a raw error.
-    if (digestStatus === "retrying" && !digestGraph) {
-      return <ProjectMyWorkDigestRetryState />;
-    }
-    // First paint shows a loading state instead of a misleading empty one.
-    if (digestStatus === "loading" && !digestGraph) {
-      return <ProjectMyWorkLoadingState />;
-    }
-    if (digestSessionExpired) {
-      return <JiraSessionExpiredPanel onSignedIn={digestReload} />;
-    }
-    if (digestStatus === "error") {
-      return <ProjectMyWorkDigestErrorState error={digestError} onRetry={digestReload} centered />;
-    }
-    if (viewerUnresolved && (digestGraph?.tickets.length ?? 0) === 0) {
-      return (
-        <JiraSignInPanel heading="Sign in to Jira to load your work." onSignedIn={digestReload} />
-      );
-    }
-    if (!digestGraph || !digestPlan) {
-      return (
-        <T3SurfacePanel
-          tone="dashed"
-          className="px-6 py-10 text-center text-sm text-muted-foreground"
-        >
-          Nothing needs you
-        </T3SurfacePanel>
-      );
-    }
-    return (
-      <ProjectMyWorkDigestView
-        plan={digestPlan}
-        graph={digestGraph}
-        nowMs={nowMs}
-        burndownVariant={flags.digestBurndownVariant}
-        {...(digestUpdatedAt !== undefined ? { updatedAtMs: digestUpdatedAt } : {})}
-        onOpenTicket={
-          // Beta flag: rows open the ticket in-app, beside the digest (each ticket knows its
-          // project); the full page is one click from there.
-          flags.digestRowNavigation === "in-app"
-            ? (ticketId: string) => {
-                const ticket = digestGraph.tickets.find((entry) => entry.id === ticketId);
-                if (!ticket) return;
-                openDigestTicket({
-                  projectId: ticket.projectId,
-                  ticketId,
-                  openFullPage: (shownTicketId) => {
-                    closeDigestPullRequest();
-                    onOpenTicket(ticket.projectId, shownTicketId);
-                  },
-                });
-              }
-            : undefined
-        }
-      />
-    );
-  };
 
   return (
     <ScrollArea className="h-full min-h-0 flex-1">
@@ -201,16 +105,18 @@ export function AllProjectsMyWorkView({
             planning={{ kind: "pick-project", projects: boundProjects, onPick: openPlanning }}
           />
         </div>
-        {lens === "digest"
-          ? renderDigest()
-          : boundProjects.map((project) => (
-              <AllProjectsMyWorkSection
-                key={project.id}
-                project={project}
-                lens={lens}
-                onOpenTicket={onOpenTicket}
-              />
-            ))}
+        {lens === "digest" ? (
+          <AllProjectsMyWorkDigestLens boundProjects={boundProjects} onOpenTicket={onOpenTicket} />
+        ) : (
+          boundProjects.map((project) => (
+            <AllProjectsMyWorkSection
+              key={project.id}
+              project={project}
+              lens={lens}
+              onOpenTicket={onOpenTicket}
+            />
+          ))
+        )}
       </div>
     </ScrollArea>
   );

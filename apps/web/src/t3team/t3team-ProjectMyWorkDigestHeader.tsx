@@ -1,64 +1,11 @@
-import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
+import { DigestAutoStatus } from "~/t3team/t3team-ProjectMyWorkDigestAutoStatus";
 import { DigestSprintAxis } from "~/t3team/t3team-ProjectMyWorkDigestSprintAxis";
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import {
   DigestBurndownChart,
   DigestBurndownSparkline,
 } from "~/t3team/t3team-ProjectMyWorkDigestBurndown";
-import { formatDigestAgo } from "~/t3team/t3team-ProjectMyWorkDigestChips";
 import { digestSprintProgress } from "~/t3team/t3team-projectMyWorkDigestSprintProgress";
-
-/**
- * The digest's data-source status: when Jira was last matched, not when this view fetched —
- * a fetch reads "just now" over a mirror days old. Amber once the sync is over an hour old.
- * Falls back to the fetch time only when the server reports no sync at all.
- */
-const JIRA_SYNC_STALE_MS = 60 * 60 * 1000;
-
-function DigestAutoStatus({
-  updatedAtMs,
-  jiraSyncedAt,
-  changeRequestNote,
-  nowMs,
-}: {
-  updatedAtMs: number | undefined;
-  jiraSyncedAt: string | undefined;
-  changeRequestNote?: string | undefined;
-  nowMs: number;
-}) {
-  // PRs that may be old or missing (the host rate-limited the read): said here, beside the sync.
-  const prNotice = changeRequestNote ? (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <span className="inline-flex items-center gap-1.5 text-warning">
-            <span className="size-1.5 rounded-full bg-warning" aria-hidden />
-            Some PRs may be out of date
-          </span>
-        }
-      />
-      <TooltipPopup side="top" className="max-w-xs">
-        {changeRequestNote}
-      </TooltipPopup>
-    </Tooltip>
-  ) : null;
-  if (jiraSyncedAt === undefined && updatedAtMs === undefined) return prNotice;
-  const stale = jiraSyncedAt !== undefined && nowMs - Date.parse(jiraSyncedAt) > JIRA_SYNC_STALE_MS;
-  return (
-    <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span className="inline-flex items-center gap-1.5">
-        <span
-          className={`size-1.5 rounded-full ${stale ? "bg-warning" : "bg-success"}`}
-          aria-hidden
-        />
-        {jiraSyncedAt !== undefined
-          ? `Jira synced ${formatDigestAgo(nowMs, jiraSyncedAt)} ago`
-          : `auto · updated ${formatDigestAgo(nowMs, new Date(updatedAtMs ?? nowMs).toISOString())} ago`}
-      </span>
-      {prNotice}
-    </span>
-  );
-}
 
 /**
  * How the sprint time axis is drawn: the 4px elapsed-time bar of today, the personal burndown
@@ -76,11 +23,14 @@ export function ProjectMyWorkDigestHeader({
   nowMs,
   burndownVariant = "off",
   updatedAtMs,
+  refreshing = false,
 }: {
   graph: DigestGraph;
   nowMs: number;
   burndownVariant?: DigestBurndownVariant;
   updatedAtMs?: number;
+  /** A revalidation is in flight over content already on screen; the status strip says so. */
+  refreshing?: boolean;
 }) {
   const sprint = graph.sprint;
   const scopeLabel =
@@ -108,6 +58,7 @@ export function ProjectMyWorkDigestHeader({
             jiraSyncedAt={graph.jiraSyncedAt}
             changeRequestNote={graph.changeRequestNote}
             nowMs={nowMs}
+            refreshing={refreshing}
           />
         </div>
       </header>
@@ -142,6 +93,7 @@ export function ProjectMyWorkDigestHeader({
             jiraSyncedAt={graph.jiraSyncedAt}
             changeRequestNote={graph.changeRequestNote}
             nowMs={nowMs}
+            refreshing={refreshing}
           />
         </div>
       </div>

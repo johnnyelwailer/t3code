@@ -6,10 +6,14 @@
 import * as Schema from "effect/Schema";
 import { Tool } from "effect/ai";
 
+import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { T3TeamMcpToolError } from "./t3team-mcpToolError.ts";
 import { mcpDescriptionOf } from "./t3team-mcpToolDescription.ts";
+
+/** Mirrors tools.ts: the access declaration in handlers.ts refuses with an OrchestratorMcpFailure. */
+const T3TeamToolFailure = Schema.Union([T3TeamMcpToolError, OrchestratorMcpFailure]);
 
 const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroker];
 
@@ -21,7 +25,7 @@ export const T3TeamMyWorkDigestTool = Tool.make("t3_mywork_digest", {
     }),
   }),
   success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
+  failure: T3TeamToolFailure,
   dependencies,
 });
 
@@ -65,6 +69,6 @@ export const T3TeamMyWorkArrangeTool = Tool.make("t3_mywork_arrange", {
     }),
   }),
   success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
+  failure: T3TeamToolFailure,
   dependencies,
 });
