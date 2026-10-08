@@ -229,6 +229,12 @@ export {
   type ScriptPackDocument,
   type ScriptPackStore,
 } from "./t3team-sdk.scriptHost.ts";
+export type {
+  ChangeRequestInvolvement,
+  ChangeRequestList,
+  ChangeRequestListEntry,
+  ChangeRequestListOptions,
+} from "./t3team-sdk.scriptHostList.ts";
 
 export type {
   HandleKind,
