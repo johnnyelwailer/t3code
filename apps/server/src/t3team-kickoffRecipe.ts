@@ -30,7 +30,7 @@ import { launchRecipeWorkflow } from "./t3team-recipeWorkflowLaunch.ts";
 import { loadThreadProjectContext } from "./t3team-thread-recipe-workflow-routes-shared.ts";
 import { T3TeamEventSinkLayer } from "./t3team-v2/t3team-v2Layers.ts";
 
-export const KICKOFF_RECIPE_ENV = "T3CODE_KICKOFF_RECIPE";
+const KICKOFF_RECIPE_ENV = "T3CODE_KICKOFF_RECIPE";
 
 /** The pack recipe the env names, or why there is none to launch. */
 export function resolveKickoffRecipe(
@@ -119,7 +119,7 @@ const bootstrapThread = Effect.gen(function* () {
 });
 
 /** Arms on the welcome, launches on the first typed user message on that thread. */
-export const T3TeamKickoffRecipe = Layer.effectDiscard(
+const T3TeamKickoffRecipe = Layer.effectDiscard(
   Effect.gen(function* () {
     const recipe = resolveKickoffRecipe(
       process.env[KICKOFF_RECIPE_ENV],

@@ -50,7 +50,7 @@ const sameTuple = (a: SignalTuple, b: SignalTuple): boolean =>
   a.key === b.key;
 
 /** Index of the first branch `tuple` matches, or -1. */
-export const branchIndexOf = (tuples: ReadonlyArray<SignalTuple>, tuple: SignalTuple): number =>
+const branchIndexOf = (tuples: ReadonlyArray<SignalTuple>, tuple: SignalTuple): number =>
   tuples.findIndex((candidate) => sameTuple(candidate, tuple));
 
 /** True for a `waitForAny` park (a branch list), false for a single `signal.wait` park. */

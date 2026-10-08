@@ -9,8 +9,6 @@
 
 import { readFeatureFlag } from "@t3tools/project-context/t3teamFeatureFlags";
 
-export const MACHINE_SETUP_FLAG_ENV = "NEXI_FF_MACHINE_SETUP";
-
 type ReadEnv = (key: string) => string | undefined;
 const processEnv: ReadEnv = (key) => process.env[key];
 
