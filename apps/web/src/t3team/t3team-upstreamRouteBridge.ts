@@ -39,6 +39,9 @@ const PASSTHROUGH_PREFIXES = [
   "/pair",
   "/connect",
   "/connect_",
+  // MCP OAuth approval page for outside agents (upstream #16336). Matching is exact-or-`prefix/`,
+  // so "/connect" does not cover it; translated away it lands on /t3team's pairing gate.
+  "/connect-agent",
 ] as const;
 
 export function isT3TeamShellPath(pathname: string): boolean {
