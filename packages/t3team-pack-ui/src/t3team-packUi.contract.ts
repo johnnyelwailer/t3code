@@ -7,9 +7,13 @@
  * and implemented by the host app, which aliases `@t3team/pack-ui` to its implementation, so there
  * is exactly one copy of each primitive and a pack never imports host internals.
  *
- * Variant and size names below are part of the contract: renaming one is a breaking change.
+ * Variant and size names are part of the contract: renaming one is a breaking change.
+ *
+ * A pack declares the versions it was written against in its manifest,
+ * `compatibility.hostCapabilities: ["pack-ui:1"]` (or a range, `"pack-ui:1-2"`); the host build
+ * refuses a pack web module that does not include the host's `PACK_UI_VERSION`.
  */
-import type { ButtonHTMLAttributes, ComponentType, HTMLAttributes } from "react";
+import type { ComponentType } from "react";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import type * as Schema from "effect/Schema";
 
@@ -56,52 +60,6 @@ export type WebActivate = (context: WebActivateContext) => void;
 /** The default export of a pack's web entry. */
 export const defineWebActivate = (activate: WebActivate): WebActivate => activate;
 
-// ── Host primitives ──────────────────────────────────────────────────────────────────────────
-// They own their look: pick a variant and size; layout belongs on the parent element.
-
-export type PackButtonVariant =
-  | "default"
-  | "secondary"
-  | "outline"
-  | "ghost"
-  | "ghost-muted"
-  | "destructive";
-export type PackButtonSize = "default" | "sm" | "xs" | "micro" | "icon-sm" | "icon-micro";
-export interface PackButtonProps extends Omit<
-  ButtonHTMLAttributes<HTMLButtonElement>,
-  "className" | "style"
-> {
-  readonly variant?: PackButtonVariant;
-  readonly size?: PackButtonSize;
-}
-
-export type PackBadgeVariant =
-  | "default"
-  | "secondary"
-  | "outline"
-  | "info"
-  | "success"
-  | "warning"
-  | "error";
-export interface PackBadgeProps extends Omit<
-  HTMLAttributes<HTMLSpanElement>,
-  "className" | "style"
-> {
-  readonly variant?: PackBadgeVariant;
-  readonly size?: "default" | "sm";
-}
-
-export interface PackSkeletonProps {
-  /** Width and height only: a skeleton's size is its content's. */
-  readonly className?: string;
-  readonly shape?: "block" | "card" | "pill";
-}
-
-/** Chat markdown. Raw HTML is shown as text, never parsed. */
-export interface PackMarkdownProps {
-  readonly text: string;
-}
-
 // ── Pack documents (the pack's own store) ────────────────────────────────────────────────────
 
 /** One stored document. `doc` is the pack's own JSON: decode it before use. */
@@ -119,17 +77,8 @@ export type PackDocumentState<V> =
   | { readonly status: "loading" }
   | { readonly status: "ready"; readonly value: V };
 
-/** Everything `@t3team/pack-ui` exports at runtime, as the host must implement it. */
-export interface PackUiHostKit {
-  readonly Button: ComponentType<PackButtonProps>;
-  readonly Badge: ComponentType<PackBadgeProps>;
-  readonly Skeleton: ComponentType<PackSkeletonProps>;
-  readonly Markdown: ComponentType<PackMarkdownProps>;
-  /** Live document `key` of the calling pack's `collection`; `null` when it does not exist. */
-  readonly usePackDocument: (collection: string, key: string) => PackDocumentState<PackDoc | null>;
-  /** Live documents of the calling pack's `collection`, optionally under a key prefix. */
-  readonly usePackDocuments: (
-    collection: string,
-    options?: { readonly prefix?: string },
-  ) => PackDocumentState<ReadonlyArray<PackDoc>>;
-}
+export * from "./t3team-packUi.primitives.ts";
+export * from "./t3team-packUi.overlays.ts";
+export * from "./t3team-packUi.icons.ts";
+export * from "./t3team-packUi.navigation.ts";
+export type { PackClassValue, PackUiHostKit } from "./t3team-packUi.hostKit.ts";

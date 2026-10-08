@@ -13,10 +13,15 @@
  *   • a pack file's other bare imports (`react`, `effect`) resolve from this app, never from a
  *     node_modules next to the pack;
  *   • the pack directories are added to Tailwind's sources, so their utility classes are built.
+ *
+ * And it holds packs to the kit: a pack whose declared `pack-ui` range excludes this app's
+ * `PACK_UI_VERSION` fails the build, and so does any pack-file import other than `react`,
+ * `effect`, `@t3team/pack-ui` and the pack's own files.
  */
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
+import { PACK_UI_VERSION } from "@t3team/pack-ui/contract";
 import { packWebImportProblem, readDistributionWebEntries } from "@t3team/packs/distribution-web";
 import type { Plugin } from "vite-plus";
 
@@ -58,23 +63,25 @@ export function t3teamDistributionWebPlugin(paths: {
   readonly appModule: string;
 }): Plugin {
   const dir = process.env.T3CODE_DISTRIBUTION?.trim();
-  const entries = dir ? readDistributionWebEntries(canonical(dir)) : [];
+  const entries = dir
+    ? readDistributionWebEntries(canonical(dir), { packUiVersion: PACK_UI_VERSION })
+    : [];
   const packDirs = [...new Set(entries.map((entry) => canonical(entry.packDir)))];
   // Module ids are realpaths, as the pack dirs are; a symlinked checkout makes the configured
   // stylesheet path differ from its id, so match either spelling.
   const stylesheets = new Set([paths.stylesheet, canonical(paths.stylesheet)]);
-  const inPackDir = (importer: string) => {
-    const path = importer.split("?")[0] ?? importer;
-    return packDirs.some((packDir) => path.startsWith(packDir + NodePath.sep));
-  };
+  const packDirOf = (importer: string) =>
+    packDirs.find((packDir) => importer.startsWith(packDir + NodePath.sep));
   return {
     name: "t3code-distribution-web",
     enforce: "pre",
     resolveId(source, importer) {
       if (source === SPECIFIER) return dir ? VIRTUAL_ID : null;
       if (source === PACK_UI) return paths.packUiImplementation;
-      if (!importer || !inPackDir(importer)) return null;
-      const problem = packWebImportProblem(source);
+      const importerPath = importer?.split("?")[0];
+      const packDir = importerPath === undefined ? undefined : packDirOf(importerPath);
+      if (importerPath === undefined || packDir === undefined) return null;
+      const problem = packWebImportProblem(source, { importer: importerPath, packDir });
       if (problem !== null) throw new Error(`[t3code/distribution-web] ${importer}: ${problem}`);
       if (!isBareSpecifier(source)) return null;
       return this.resolve(source, paths.appModule, { skipSelf: true });
