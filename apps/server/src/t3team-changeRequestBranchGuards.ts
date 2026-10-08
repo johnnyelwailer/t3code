@@ -4,7 +4,7 @@
  * `t3team-changeRequestCommit.ts` moves the branch with `update-ref`, which skips the checks
  * `git branch -f` and `git checkout` make. Those checks are made here instead: a branch checked out
  * in another worktree would show the new commit there as staged reversals, and a merge, cherry-pick,
- * revert or rebase in progress on it would fold the commit into the user's operation or drop it.
+ * revert, `git am` or rebase in progress on it would fold the commit into the user's operation or drop it.
  *
  * @module t3team-changeRequestBranchGuards
  */
@@ -48,20 +48,40 @@ export const makeAssertBranchFree = Effect.gen(function* () {
           return yield* busy(`this checkout is on it with ${what} in progress.`);
         }
       }
+      // `git am` keeps HEAD on the branch and leaves no marker ref, only its own directory.
+      const applying = yield* exec(["rev-parse", "--git-path", "rebase-apply/applying"]);
+      if (
+        yield* fs
+          .exists(path.resolve(root, applying.stdout.trim()))
+          .pipe(Effect.orElseSucceed(() => false))
+      ) {
+        return yield* busy("this checkout is on it with git am in progress.");
+      }
     }
-    // A rebase detaches HEAD, and writes the branch back when it finishes.
-    for (const directory of ["rebase-merge", "rebase-apply"]) {
-      const headName = (yield* exec([
-        "rev-parse",
-        "--git-path",
-        `${directory}/head-name`,
-      ])).stdout.trim();
-      const file = path.resolve(root, headName);
-      const rebasing = yield* fs.readFileString(file).pipe(
-        Effect.map((text) => text.trim()),
-        Effect.orElseSucceed(() => ""),
-      );
-      if (rebasing === ref) return yield* busy("this checkout is rebasing it.");
+    // A rebase detaches HEAD, so the worktree list shows no branch for it; each worktree's own
+    // rebase state names the branch it writes back when it finishes.
+    const paths = worktrees.stdout
+      .split("\0")
+      .filter((field) => field.startsWith("worktree "))
+      .map((field) => field.slice("worktree ".length));
+    for (const worktree of paths.length > 0 ? paths : [root]) {
+      for (const directory of ["rebase-merge", "rebase-apply"]) {
+        const headName = yield* git.execute({
+          operation: OPERATION,
+          cwd: worktree,
+          args: ["rev-parse", "--git-path", `${directory}/head-name`],
+          allowNonZeroExit: true,
+        });
+        const rewriting = yield* fs
+          .readFileString(path.resolve(worktree, headName.stdout.trim()))
+          .pipe(
+            Effect.map((text) => text.trim()),
+            Effect.orElseSucceed(() => ""),
+          );
+        if (rewriting === ref) {
+          return yield* busy(`the worktree at ${worktree} is rebasing it.`);
+        }
+      }
     }
   });
 });

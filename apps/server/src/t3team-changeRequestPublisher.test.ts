@@ -314,6 +314,37 @@ it.layer(layerGit)("T3TeamChangeRequestPublisher", (it) => {
     }),
   );
 
+  it.effect("refuses a branch another worktree is rebasing, though git lists it as detached", () =>
+    Effect.gen(function* () {
+      const { repo, write } = yield* makeRepo;
+      const { publisher } = yield* makePublisher();
+      const fs = yield* FileSystem.FileSystem;
+      const other = NodePath.join(yield* fs.makeTempDirectoryScoped(), "other");
+      yield* write("README.md", "main\n");
+      yield* git(repo, ["commit", "-am", "main moves"]);
+      yield* git(repo, ["worktree", "add", "-b", "machine/setup", other, "HEAD~1"]);
+      yield* fs.writeFileString(NodePath.join(other, "README.md"), "theirs\n");
+      yield* git(other, ["commit", "-am", "theirs"]);
+      yield* GitVcsDriver.GitVcsDriver.pipe(
+        Effect.flatMap((driver) =>
+          driver.execute({
+            operation: "test.git",
+            cwd: other,
+            args: ["rebase", "main"],
+            allowNonZeroExit: true,
+          }),
+        ),
+      );
+      const before = yield* git(repo, ["rev-parse", "machine/setup"]);
+      yield* write(".devcontainer/devcontainer.json", "{}\n");
+
+      const error = yield* Effect.flip(publisher.publish(publishInput(repo)));
+
+      expect(describeChangeRequestPublishError(error)).toContain("is rebasing it");
+      expect(yield* git(repo, ["rev-parse", "machine/setup"])).toBe(before);
+    }),
+  );
+
   it.effect("a remote that cannot be read is reported, and no local branch is invented", () =>
     Effect.gen(function* () {
       const { repo, write } = yield* makeRepo;

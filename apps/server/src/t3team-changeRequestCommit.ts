@@ -26,6 +26,8 @@ import { ChangeRequestRemoteUnreadableError } from "./t3team-changeRequestPublis
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 
 const OPERATION = "T3TeamChangeRequestCommit";
+// A server has no one at a terminal: a missing credential fails now instead of waiting on a prompt.
+const NO_PROMPT = { GIT_TERMINAL_PROMPT: "0" };
 
 /** Resolves its services once; the returned function commits, or returns null for no change. */
 export const makeCommitPathsOnBranch = Effect.gen(function* () {
@@ -63,16 +65,20 @@ export const makeCommitPathsOnBranch = Effect.gen(function* () {
         cwd: input.root,
         args: ["ls-remote", "--exit-code", "--heads", input.remoteName, ref],
         allowNonZeroExit: true,
+        env: NO_PROMPT,
       });
       if (listed.exitCode === 0) {
-        yield* run([
-          "fetch",
-          "--quiet",
-          "--no-tags",
-          "--no-write-fetch-head",
-          input.remoteName,
-          `+${ref}:${ref}`,
-        ]);
+        yield* run(
+          [
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            "--no-write-fetch-head",
+            input.remoteName,
+            `+${ref}:${ref}`,
+          ],
+          { env: NO_PROMPT },
+        );
         tip = yield* run(["rev-parse", "--verify", `${ref}^{commit}`]);
       } else if (listed.exitCode !== 2) {
         return yield* new ChangeRequestRemoteUnreadableError({
