@@ -23,6 +23,7 @@ import { t3teamRandomUUID } from "./t3team-random.ts";
 import { resolveRecipeHostToolScope } from "./t3team-recipeWorkflowToolScope.ts";
 import { resolveRecipeWorkflowScripts } from "./t3team-recipeWorkflowScripts.ts";
 import { loadThreadProjectContext } from "./t3team-thread-recipe-workflow-routes-shared.ts";
+import { T3TeamScriptHost } from "./t3team-scriptHostContext.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { launchPreparedWorkflow } from "./t3team-workflowEphemeralLaunch.ts";
@@ -57,6 +58,7 @@ export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* 
     yield* Effect.serviceOption(T3TeamWorkflowSignalReconciler),
   );
   const toolBroker = yield* T3TeamToolBroker;
+  const scriptHosts = yield* T3TeamScriptHost;
   const { recipePath, workflowPath, threadId } = input;
   const { project, thread } = yield* loadThreadProjectContext(threadId);
   const runId = t3teamRandomUUID();
@@ -106,6 +108,14 @@ export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* 
         })
       : undefined;
 
+  // `ctx.store` / `ctx.changeRequests` for the recipe's scripts, entitled by the same recipe
+  // declaration as the host tools (never the request) and by the recipe's pack.
+  const scriptHost = scriptHosts.forRun({
+    projectId: thread.projectId,
+    recipePath,
+    toolGroups: hostToolGrant?.toolGroups,
+  });
+
   // Shared launch-prep (spec D10): durable lifecycle row (origin 'recipe'), best-effort
   // play-as-shape preview, then the durable engine launch — the same funnel the ephemeral
   // `t3team.orchestration.run` tool drives through.
@@ -135,7 +145,7 @@ export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* 
       // during rehydration (a scriptless launch needs neither).
       ...(Object.keys(scripts).length === 0 || recipePath === undefined
         ? {}
-        : { scripts, recipePath }),
+        : { scripts, recipePath, scriptHost }),
       ...(hostToolClient === undefined || hostToolGrant === undefined
         ? {}
         : { hostToolClient, hostToolGrant }),

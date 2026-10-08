@@ -46,8 +46,10 @@ import {
   latestProviderTurnForAttempt,
   orchestrationV2RunWorkStartedAt,
   ProviderInstanceId,
+  ProviderInteractionMode,
   type ProviderSessionId,
   RunId,
+  RuntimeMode,
   ThreadLinkedPullRequest,
   ThreadId,
   type TurnItemId,
@@ -75,7 +77,11 @@ import {
   SHARED_WORKSPACE_RESTORE_MESSAGE,
 } from "./CheckpointRestoreSafety.ts";
 import { CheckpointServiceV2 } from "./CheckpointService.ts";
-import { CommandPolicyV2, resolveMessageDispatchIntent } from "./CommandPolicy.ts";
+import {
+  CommandPolicyV2,
+  redirectUnsupportedQueue,
+  resolveMessageDispatchIntent,
+} from "./CommandPolicy.ts";
 import { CommandReceiptStoreV2 } from "./CommandReceiptStore.ts";
 import { ContextHandoffServiceV2 } from "./ContextHandoffService.ts";
 import { notificationTurnItem } from "./Notification.ts";
@@ -86,6 +92,7 @@ import * as EffectOutbox from "./EffectOutbox.ts";
 import type { OrchestrationEffectRequestV2, PendingOrchestrationEffectV2 } from "./EffectOutbox.ts";
 import { IdAllocatorV2 } from "./IdAllocator.ts";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
+import { DispatchModeLimit, exceededDispatchModeLimit } from "./DispatchModeLimit.ts";
 import {
   applyToProjection,
   emptyProjection,
@@ -192,6 +199,22 @@ export class OrchestratorSubagentThreadReadOnlyError extends Schema.TaggedError<
   }
 }
 
+/** The command's thread runs above the modes its sender may touch (see `DispatchModeLimit`). */
+export class OrchestratorThreadAboveModeLimitError extends Schema.TaggedError<OrchestratorThreadAboveModeLimitError>()(
+  "OrchestratorThreadAboveModeLimitError",
+  {
+    commandId: CommandId,
+    threadId: ThreadId,
+    mode: Schema.Literals(["runtime", "interaction"]),
+    runtimeMode: RuntimeMode,
+    interactionMode: ProviderInteractionMode,
+  },
+) {
+  override get message(): string {
+    return `Thread ${this.threadId} now runs in ${this.runtimeMode}/${this.interactionMode} mode, above what this caller may change.`;
+  }
+}
+
 export class OrchestratorCommandPreviouslyRejectedError extends Schema.TaggedError<OrchestratorCommandPreviouslyRejectedError>()(
   "OrchestratorCommandPreviouslyRejectedError",
   {
@@ -241,6 +264,7 @@ export const OrchestratorV2Error = Schema.Union([
   OrchestratorCommandPreviouslyRejectedError,
   OrchestratorCommandIdConflictError,
   OrchestratorSubagentThreadReadOnlyError,
+  OrchestratorThreadAboveModeLimitError,
 ]);
 export type OrchestratorV2Error = typeof OrchestratorV2Error.Type;
 
@@ -3435,6 +3459,33 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     },
   );
 
+  /** Fails when a limited sender's command would touch a thread running above its limit. */
+  const refuseAboveDispatchModeLimit = Effect.fn("orchestrationV2.dispatch.refuseAboveModeLimit")(
+    function* (
+      command: OrchestrationV2ServerCommand,
+      threadId: ThreadId,
+      modes: {
+        readonly runtimeMode: RuntimeMode;
+        readonly interactionMode: ProviderInteractionMode;
+      },
+    ) {
+      const limit = yield* DispatchModeLimit;
+      const exceeded = limit === undefined ? undefined : exceededDispatchModeLimit(limit, modes);
+      if (limit === undefined || exceeded === undefined) return;
+      const refusal = {
+        threadId,
+        mode: exceeded,
+        runtimeMode: modes.runtimeMode,
+        interactionMode: modes.interactionMode,
+      };
+      if (limit.refused !== undefined) yield* Ref.set(limit.refused, refusal);
+      return yield* new OrchestratorThreadAboveModeLimitError({
+        commandId: command.commandId,
+        ...refusal,
+      });
+    },
+  );
+
   const dispatchThreadFork = Effect.fn("orchestrationV2.dispatch.threadFork")(function* (
     command: Extract<OrchestrationV2Command, { readonly type: "thread.fork" }>,
     events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
@@ -3465,6 +3516,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             }),
         ),
       );
+    // The source is not under this command's lock, so check the modes this
+    // command copies, not an earlier read the source's user could outrun.
+    yield* refuseAboveDispatchModeLimit(command, command.sourceThreadId, sourceProjection.thread);
 
     const sourceRun = runForSourcePoint(sourceProjection, command.sourcePoint);
 
@@ -3553,6 +3607,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             }),
         ),
       );
+    // The source is not under this command's lock, so check the modes this
+    // command copies, not an earlier read the source's user could outrun.
+    yield* refuseAboveDispatchModeLimit(command, command.sourceThreadId, sourceProjection.thread);
     const targetProjection = yield* projectionStore
       .getThreadRecords(command.targetThreadId, ["contextTransfers"])
       .pipe(
@@ -4649,11 +4706,15 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               : yield* providerSessions
                   .get(providerSessionId)
                   .pipe(Effect.orElseSucceed(() => Option.none()));
-          if (Option.isNone(liveSession)) {
-            const runningTurn = projection.providerTurns.find(
-              (candidate) =>
-                candidate.runAttemptId === target.activeAttemptId && candidate.status === "running",
-            );
+          const runningTurn = projection.providerTurns.find(
+            (candidate) =>
+              candidate.runAttemptId === target.activeAttemptId && candidate.status === "running",
+          );
+          // Only a run that got under way can be a zombie. One that never started keeps the
+          // regular steer validation (maintenance commands, goal commands, not-running targets).
+          const underWay =
+            runningTurn !== undefined || target.status === "running" || target.status === "waiting";
+          if (Option.isNone(liveSession) && underWay) {
             yield* Effect.logWarning(
               "Steer/restart found no live provider session; settling zombie turn and starting a fresh run",
               {
@@ -4913,6 +4974,49 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         const queuedCapabilities =
           selectedProviderSession?.capabilities ??
           (yield* queuedAdapter.getCapabilities().pipe(mapDispatchError(command)));
+        // Same-provider follow-ups only. A switch still has to queue on the
+        // selected provider, and that capability check stays below.
+        const queueRedirect =
+          activeRun.providerInstanceId === modelSelection.instanceId &&
+          !isNativeMaintenanceCommand(command) &&
+          !isGoalCommand(command)
+            ? redirectUnsupportedQueue({
+                activeRun,
+                providerTurns: projection.providerTurns,
+                capabilities: queuedCapabilities,
+                allowInterruptRestart:
+                  command.notification === undefined && delegatedCompletion === undefined,
+              })
+            : undefined;
+        if (queueRedirect !== undefined) {
+          yield* dispatchSteerIntoRun({
+            command,
+            events,
+            effects,
+            projection,
+            modelSelection:
+              delegatedCompletion === undefined
+                ? modelSelection
+                : (projection.runs.find((run) => run.id === queueRedirect.targetRunId)
+                    ?.modelSelection ?? modelSelection),
+            delegatedCompletion,
+            targetRunId: queueRedirect.targetRunId,
+            messageId: command.messageId,
+            text: dispatchText,
+            ...(command.context ? { context: command.context } : {}),
+            attachments: command.attachments,
+            createdBy: command.createdBy,
+            creationSource: command.creationSource,
+            ...(command.scheduledTaskId === undefined
+              ? {}
+              : { scheduledTaskId: command.scheduledTaskId }),
+            ...(command.senderThreadId === undefined
+              ? {}
+              : { senderThreadId: command.senderThreadId }),
+            forceRestart: queueRedirect.type === "restart_active",
+          });
+          return;
+        }
         yield* enforceCommandPolicy(command)(
           commandPolicy.ensureQueuedMessages({
             commandId: command.commandId,
@@ -10527,6 +10631,19 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       } satisfies OrchestratorV2DispatchResult;
     }
 
+    // A limited sender checked these modes before dispatching; the thread's
+    // user may have raised them since, and only here can they not change.
+    const limit = yield* DispatchModeLimit;
+    if (limit !== undefined) {
+      // A fork or merge-back source is not under this lock: its dispatch
+      // checks the copy it reads instead.
+      const threadId = commandThreadId(command);
+      const shell = yield* projectionStore
+        .getThreadShell(threadId)
+        .pipe(Effect.mapError((cause) => new OrchestratorProjectionError({ threadId, cause })));
+      if (shell !== null) yield* refuseAboveDispatchModeLimit(command, threadId, shell);
+    }
+
     const plan = yield* dispatchOnce(command).pipe(
       Effect.flatMap((planned) =>
         // A settle that finds the provider already ended everything, or a
@@ -10546,6 +10663,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ),
       Effect.catch((cause) =>
         Effect.gen(function* () {
+          // Refused like the check above: nothing recorded, so the same command
+          // can go through once the thread's user lowers it again.
+          if (cause._tag === "OrchestratorThreadAboveModeLimitError") return yield* cause;
           const rejectedAt = yield* DateTime.now;
           const receipt = yield* eventSink
             .commitRejectedCommand({

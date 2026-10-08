@@ -3,9 +3,11 @@
  * (`t3team-toolBrokerBindingChangeRequest.ts`), which also enforces that the tool is enabled on
  * the calling thread; the description comes from the catalog.
  */
+import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { Tool } from "effect/ai";
 
+import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { T3TeamMcpToolError } from "./t3team-mcpToolError.ts";
@@ -32,6 +34,11 @@ export const T3TeamChangeRequestPublishTool = Tool.make("t3_change_request_publi
     }),
   }),
   success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
-  dependencies: [McpInvocationContext.McpInvocationContext, T3TeamToolBroker],
+  // `McpToolAccess.actsAsCaller` refuses with `OrchestratorMcpFailure`, which needs ThreadManagementService.
+  failure: Schema.Union([T3TeamMcpToolError, OrchestratorMcpFailure]),
+  dependencies: [
+    McpInvocationContext.McpInvocationContext,
+    T3TeamToolBroker,
+    ThreadManagementService.ThreadManagementService,
+  ],
 });

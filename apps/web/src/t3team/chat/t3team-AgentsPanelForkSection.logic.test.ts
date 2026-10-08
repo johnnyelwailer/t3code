@@ -208,7 +208,7 @@ describe("resolveSubRunStatusLabel (GHE #40 panel/sidebar seam)", () => {
     for (const [status, label] of [
       ["idle", "Idle"],
       ["completed", "Completed"],
-      ["error", "Error"],
+      ["error", "Failed"],
     ] as const) {
       const thread = createThread({
         status,
@@ -277,7 +277,7 @@ describe("resolveSubRunStatusLabel (GHE #40 panel/sidebar seam)", () => {
     const running = createThread({ status: "running", waitingOnChildren: true });
     expect(resolveSubRunStatusLabel(running, { activityLabelsEnabled: true })).not.toBe("Waiting");
     const errored = createThread({ status: "error", waitingOnChildren: true });
-    expect(resolveSubRunStatusLabel(errored, { activityLabelsEnabled: true })).toBe("Error");
+    expect(resolveSubRunStatusLabel(errored, { activityLabelsEnabled: true })).toBe("Failed");
     // A docked question still outranks waiting.
     const both = createThread({
       status: "completed",
@@ -293,5 +293,48 @@ describe("resolveSubRunStatusLabel (GHE #40 panel/sidebar seam)", () => {
         activityLabelsEnabled: true,
       }),
     ).toBe("Completed");
+  });
+
+  it("uses the child shell words, and a finished unsettled run says Completed", () => {
+    expect(
+      resolveSubRunStatusLabel(createThread({ status: "running", shellRunStatus: "starting" }), {
+        activityLabelsEnabled: true,
+      }),
+    ).toBe("Starting");
+    expect(
+      resolveSubRunStatusLabel(createThread({ status: "running", shellRunStatus: "queued" }), {
+        activityLabelsEnabled: true,
+      }),
+    ).toBe("Queued");
+    expect(
+      resolveSubRunStatusLabel(createThread({ status: "running", shellRunStatus: "waiting" }), {
+        activityLabelsEnabled: true,
+      }),
+    ).toBe("Waiting");
+    expect(
+      resolveSubRunStatusLabel(createThread({ status: "error", shellRunStatus: "failed" }), {
+        activityLabelsEnabled: true,
+      }),
+    ).toBe("Failed");
+    expect(
+      resolveSubRunStatusLabel(createThread({ status: "idle", shellRunStatus: "interrupted" }), {
+        activityLabelsEnabled: true,
+      }),
+    ).toBe("Stopped");
+    expect(
+      resolveSubRunStatusLabel(createThread({ status: "idle", shellRunStatus: "completed" }), {
+        activityLabelsEnabled: true,
+      }),
+    ).toBe("Completed");
+    expect(
+      resolveSubRunStatusLabel(
+        createThread({
+          status: "running",
+          shellRunStatus: "starting",
+          pendingUserInput: true,
+        }),
+        { activityLabelsEnabled: true },
+      ),
+    ).toBe("Question awaiting answer");
   });
 });

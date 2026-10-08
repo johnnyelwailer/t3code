@@ -157,4 +157,39 @@ describe("digest story groups", () => {
       ["STORY", ["TASK"]],
     ]);
   });
+
+  it("keeps a story's PRs off its header when another section shows the story as a row", async () => {
+    const { digestRowTicketIds, groupByParent } =
+      await import("./t3team-projectMyWorkDigestGroups");
+    const withRef = (id: string, parentId?: string) =>
+      ({
+        ...ticket(id, "In Progress", "active"),
+        ref: { displayId: id, title: id, type: "Task", url: "" },
+        ...(parentId !== undefined ? { parentId } : {}),
+      }) as unknown as ProjectTicket;
+    const tickets = [withRef("STORY"), withRef("TASK", "STORY")];
+    const g = graph(tickets);
+    const byId = new Map(tickets.map((t) => [t.id, t]));
+    const section = (id: string, items: string[]) =>
+      ({
+        id,
+        kind: "items",
+        placement: "main",
+        heading: id,
+        items: items.map((ticketId) => ({ ticketId })),
+      }) as const;
+    // Story heads its own card: the row is folded into the header, which keeps the PRs.
+    const together = section("in-progress", ["STORY", "TASK"]);
+    const alone = groupByParent(together, g, byId, new Set(), digestRowTicketIds([together], g));
+    expect(alone.map((group) => [group.parent?.id, group.showStoryPrs])).toEqual([["STORY", true]]);
+    // Story is a row in "review", its task heads a card in "in-progress": the row has the PRs.
+    const review = section("review", ["STORY"]);
+    const work = section("in-progress", ["TASK"]);
+    const rows = digestRowTicketIds([review, work], g);
+    expect([...rows].toSorted()).toEqual(["STORY", "TASK"]);
+    const split = groupByParent(work, g, byId, new Set(), rows);
+    expect(split.map((group) => [group.parent?.id, group.showStoryPrs])).toEqual([
+      ["STORY", false],
+    ]);
+  });
 });

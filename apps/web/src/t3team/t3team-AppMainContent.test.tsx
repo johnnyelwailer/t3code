@@ -39,6 +39,11 @@ vi.mock("~/t3team/t3team-AppDraftPane", () => ({
   AppDraftPane: ({ draftId }: { draftId: string }) => <div>draft-pane:{draftId}</div>,
 }));
 
+// Same `?worker` chain: the all-projects pane's PR aside renders the diff viewer.
+vi.mock("~/t3team/t3team-AllProjectsMyWorkPane", () => ({
+  AllProjectsMyWorkPane: () => <div>all-projects-my-work</div>,
+}));
+
 vi.mock("~/t3team/t3team-AppMainContentHomeEmptyState", () => ({
   AppMainContentHomeEmptyState: ({ showAside }: { showAside: boolean }) => (
     <div>home-empty:{showAside ? "aside" : "no-aside"}</div>
@@ -112,7 +117,6 @@ describe("AppMainContent", () => {
         onThreadDisplayModeChange={() => {}}
         onBackToDashboard={() => {}}
         onCreate={() => {}}
-        onInlineProjectCreated={() => {}}
         renderDashboard={() => null}
         renderTicketDetail={() => null}
       />,
@@ -152,7 +156,6 @@ describe("AppMainContent", () => {
         onThreadDisplayModeChange={() => {}}
         onBackToDashboard={() => {}}
         onCreate={() => {}}
-        onInlineProjectCreated={() => {}}
         renderDashboard={(project) => <div>dashboard:{project.title}</div>}
         renderTicketDetail={(project, ticketId, activeThreadId) => (
           <div>
@@ -194,7 +197,6 @@ describe("AppMainContent", () => {
         onThreadDisplayModeChange={() => {}}
         onBackToDashboard={() => {}}
         onCreate={() => {}}
-        onInlineProjectCreated={() => {}}
         renderDashboard={(project) => <div>dashboard:{project.title}</div>}
         renderTicketDetail={(project, ticketId, activeThreadId) => (
           <div>
@@ -230,7 +232,6 @@ describe("AppMainContent", () => {
         onThreadDisplayModeChange={() => {}}
         onBackToDashboard={() => {}}
         onCreate={() => {}}
-        onInlineProjectCreated={() => {}}
         renderDashboard={(project) => <div>dashboard:{project.title}</div>}
         renderTicketDetail={(project, ticketId) => (
           <div>
@@ -265,7 +266,6 @@ describe("AppMainContent", () => {
         onThreadDisplayModeChange={() => {}}
         onBackToDashboard={() => {}}
         onCreate={() => {}}
-        onInlineProjectCreated={() => {}}
         renderDashboard={(project) => <div>dashboard:{project.title}</div>}
         renderTicketDetail={(project, ticketId, activeThreadId) => (
           <div>

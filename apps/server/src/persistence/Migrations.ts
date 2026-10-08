@@ -152,7 +152,7 @@ import Migration0102 from "./Migrations/t3team-078_SkillDelegationMetadata.ts";
 import Migration0103 from "./Migrations/057_ScheduledTaskWebhooks.ts";
 import Migration0104 from "./Migrations/058_WebhookRelayDeliveries.ts";
 // Any-wait signal parks: the branch list a `waitForAny` run is parked on.
-import Migration0105 from "./Migrations/t3team-079_WorkflowRunWatchAny.ts";
+import Migration0106 from "./Migrations/t3team-080_WorkflowRunWatchAny.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -164,6 +164,8 @@ import Migration0105 from "./Migrations/t3team-079_WorkflowRunWatchAny.ts";
  * Uses Migrator.fromRecord which parses the key format and
  * returns migrations sorted by ID.
  */
+import Migration0105 from "./Migrations/t3team-079_PackDocuments.ts";
+
 export const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
   [2, "OrchestrationCommandReceipts", Migration0002],
@@ -250,7 +252,7 @@ export const migrationEntries = [
   [83, "OrchestrationEventsTypeSequenceIndex", Migration0083],
   // Upstream 055/056 (orchestration V2) live at 84/85 in this fork's ledger; see the import comment.
   // Preserve this migration's schema. Future V2 schema changes need new migrations. A new
-  // migration must take an id ABOVE the highest id registered here (currently 104) — never one of
+  // migration must take an id ABOVE the highest id registered here (currently 106) — never one of
   // the gaps (88-89, 93-96): upgraded databases have recorded the maximum, and the Migrator skips
   // every id at or below it. Upstream's reconcileV2PreviewMigration stays a no-op on fork ledgers
   // (fork ids 53/54 are never named OrchestrationV2).
@@ -270,7 +272,8 @@ export const migrationEntries = [
   // Upstream 057/058 live at 103/104 in this fork's ledger; see the import comment.
   [103, "ScheduledTaskWebhooks", Migration0103],
   [104, "WebhookRelayDeliveries", Migration0104],
-  [105, "WorkflowRunWatchAny", Migration0105],
+  [105, "PackDocuments", Migration0105],
+  [106, "WorkflowRunWatchAny", Migration0106],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

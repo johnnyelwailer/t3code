@@ -89,6 +89,8 @@ describe("selectCliRuntimeExternalDependencies", () => {
         "@napi-rs/keyring",
         "@silvia-odwyer/photon-node",
         "node-pty",
+        // The server bundle imports it at runtime, so the server declares it directly.
+        "undici",
         // Externalized upstream; the fork's server declares it directly.
         "zod",
       ],

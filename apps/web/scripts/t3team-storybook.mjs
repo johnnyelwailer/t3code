@@ -8,6 +8,13 @@ const webRoot = NodePath.resolve(scriptDir, "..");
 const mode = process.argv[2] ?? "dev";
 const extraArgs = process.argv.slice(3);
 
+// A distribution's pack stories run against this host's kit:
+// T3CODE_DISTRIBUTION=<distribution dir> node scripts/t3team-storybook.mjs
+const distribution = process.env.T3CODE_DISTRIBUTION?.trim();
+const packDirs = distribution
+  ? (await import("@t3team/packs/distribution-web")).readDistributionPackDirs(distribution)
+  : [];
+
 const tempRoot = NodeFS.mkdtempSync(NodePath.join(webRoot, ".t3team-storybook-"));
 const configDir = tempRoot;
 const srcDir = NodePath.join(webRoot, "src");
@@ -45,6 +52,7 @@ try {
     env: {
       ...process.env,
       T3TEAM_STORYBOOK_SRC_DIR: srcDir,
+      T3TEAM_STORYBOOK_PACK_DIRS: JSON.stringify(packDirs),
     },
     stdio: "inherit",
   });

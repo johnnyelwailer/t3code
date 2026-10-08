@@ -6112,6 +6112,44 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                 },
               },
             },
+            // A stop with no known reset reads the account before settling; on
+            // Business the read is the only place the member credit cap appears.
+            ...(scenario.expectedClass === "usage_limit" &&
+            scenario.name !== "known-reset" &&
+            scenario.name !== "deferred-reset"
+              ? [
+                  {
+                    type: "expect_outbound" as const,
+                    label: "account/rateLimits/read",
+                    frame: { id: 4, method: "account/rateLimits/read", params: null },
+                  },
+                  {
+                    type: "emit_inbound" as const,
+                    label: "account/rateLimits/read",
+                    frame: {
+                      id: 4,
+                      result: {
+                        rateLimits:
+                          scenario.name === "usage"
+                            ? {
+                                limitId: "codex",
+                                primary: null,
+                                secondary: null,
+                                individualLimit: {
+                                  limit: "1000",
+                                  used: "1000",
+                                  remainingPercent: 0,
+                                  resetsAt: 2000100000,
+                                },
+                                spendControlReached: true,
+                                planType: "business",
+                              }
+                            : { limitId: "codex", primary: null, secondary: null },
+                      },
+                    },
+                  },
+                ]
+              : []),
             ...(scenario.name === "late-reset" ? [snapshot] : []),
             ...(scenario.name === "deferred-reset"
               ? [
@@ -6172,7 +6210,11 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         if (terminal?.status !== "failed") return;
         assert.equal(terminal.failure.class, scenario.expectedClass);
         assert.equal(terminal.threadDisposition, "reusable");
-        if (scenario.name === "known-reset" || scenario.name === "deferred-reset")
+        if (
+          scenario.name === "known-reset" ||
+          scenario.name === "deferred-reset" ||
+          scenario.name === "usage"
+        )
           assert.equal(terminal.failure.resetAt, resetAt);
         if (scenario.name === "matching-details")
           assert.equal(terminal.failure.message, "Detailed provider allowance explanation.");

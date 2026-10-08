@@ -109,30 +109,20 @@ export function TicketSidebarEntry({
   const workspaceRoot = project.workspace?.rootPath ?? null;
   const activeThreadId = readActiveThreadIdFromView(view);
 
-  const renderThreadBranch = (thread: ProjectThread): React.ReactNode => {
-    const childThreads = threadTree.childThreadsByParentId.get(thread.id) ?? [];
-
-    return (
-      <div key={thread.id}>
-        <ProjectSidebarThreadRowItem
-          thread={thread}
-          variant="issue"
-          isSelected={activeThreadId === thread.id}
-          workspacePath={workspaceRoot}
-          projectId={projectId}
-          onSelectThread={onSelectThread}
-          onDeleteThread={onDeleteThread}
-          onRenameThread={onRenameThread}
-          wrapWithMenuItem={false}
-        />
-        {childThreads.length > 0 ? (
-          <div className="mt-1 ml-2 space-y-1 pl-2">
-            {childThreads.map((childThread) => renderThreadBranch(childThread))}
-          </div>
-        ) : null}
-      </div>
-    );
-  };
+  const renderThreadBranch = (thread: ProjectThread): React.ReactNode => (
+    <ProjectSidebarThreadRowItem
+      key={thread.id}
+      thread={thread}
+      variant="issue"
+      isSelected={activeThreadId === thread.id}
+      workspacePath={workspaceRoot}
+      projectId={projectId}
+      onSelectThread={onSelectThread}
+      onDeleteThread={onDeleteThread}
+      onRenameThread={onRenameThread}
+      wrapWithMenuItem={false}
+    />
+  );
 
   return (
     <div

@@ -24,7 +24,7 @@ import * as Option from "effect/Option";
 import type { PullRequestService } from "./pullRequest/PullRequestService.ts";
 import { loadPrEntries, type PrReadResult } from "./t3team-myworkDigestPr.ts";
 import { loadViewerMergedPrEntries } from "./t3team-myworkDigestMergedPrs.ts";
-import { loadViewerPrEntries } from "./t3team-myworkDigestViewerPrs.ts";
+import { loadViewerPrEntries } from "./t3team-myworkViewerPrLoader.ts";
 import type { DigestYesterdayWindow } from "./t3team-myworkDigestYesterdayWindow.ts";
 
 /** How long a cold first read may hold the digest before it ships without change requests. */

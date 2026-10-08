@@ -67,6 +67,59 @@ export function boundCatalogEntryKeys(
   return keys;
 }
 
+/** A connected Jira site whose project list could not be read. */
+export interface JiraCatalogSiteFailure {
+  readonly accountId: string;
+  readonly provider: string;
+  readonly siteHost: string | null;
+  /** Host when we have one, otherwise the account label. */
+  readonly label: string;
+  readonly error: string;
+}
+
+function siteFailureMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  return "Could not load this Jira site";
+}
+
+/** The failure the pill row shows. The site stays named even when the fetch threw a non-Error. */
+export function jiraCatalogSiteFailure(
+  account: Pick<IntegrationAccount, "id" | "provider" | "label" | "accountUrl">,
+  error: unknown,
+): JiraCatalogSiteFailure {
+  const siteHost = accountSiteHost(account);
+  return {
+    accountId: account.id,
+    provider: account.provider,
+    siteHost,
+    label: siteHost ?? account.label,
+    error: siteFailureMessage(error),
+  };
+}
+
+/**
+ * One site's projects. A failure keeps that site's cached list (or nothing) and is reported;
+ * it never throws, so the other sites still load.
+ */
+export async function loadJiraCatalogAccount(input: {
+  account: Pick<IntegrationAccount, "id" | "provider" | "label" | "accountUrl">;
+  listProjects: () => Promise<ReadonlyArray<ExternalProject>>;
+  cachedProjects: ReadonlyArray<ExternalProject> | null;
+}): Promise<{
+  readonly projects: ReadonlyArray<ExternalProject> | null;
+  readonly failure: JiraCatalogSiteFailure | null;
+}> {
+  try {
+    return { projects: await input.listProjects(), failure: null };
+  } catch (error) {
+    return {
+      projects: input.cachedProjects,
+      failure: jiraCatalogSiteFailure(input.account, error),
+    };
+  }
+}
+
 /** Jira projects the app does not have yet. */
 export function unaddedCatalogProjects(
   catalog: ReadonlyArray<JiraCatalogProject>,

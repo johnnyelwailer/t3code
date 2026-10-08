@@ -16,6 +16,7 @@ import type {
   AbortedResult,
   AnyScriptRef,
   JournalStore,
+  ScriptHostContext,
   SuspendedResult,
   T3TeamToolHandlerClient,
   WorkflowRef,
@@ -44,6 +45,8 @@ export interface LaunchWorkflowRecipeInput {
    * caller from the launch thread (t3team-workflowHostTools.ts). Absent leaves those refs bound
    * but uncallable. */
   readonly hostToolClient?: T3TeamToolHandlerClient;
+  /** The run's `ctx.store` / `ctx.changeRequests` for its scripts (t3team-scriptHostContext.ts). */
+  readonly scriptHost?: ScriptHostContext;
   readonly runsRoot: string;
   /** The chat the user launched from; `undefined` for a headless run (`thread` is undefined). */
   readonly launchThreadId: string | undefined;

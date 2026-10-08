@@ -673,10 +673,18 @@ export const ServerConfig = Schema.Struct({
    */
   mainRepository: Schema.optionalKey(Schema.Boolean),
   /**
-   * Whether "Set up a machine" is offered for a project that has no machine definition.
+   * Whether a cloud session for a project with no machine definition sets one up.
    * Runtime feature flag (env `NEXI_FF_MACHINE_SETUP`, default off); absent on older servers.
    */
   machineSetup: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Whether the work profile chooser is offered (first-run setup surface, the add-project
+   * wizard's profile step, the Settings default-profile picker). Runtime feature flag (env
+   * `NEXI_FF_WORK_PROFILE_CHOOSER`, default OFF); absent on older servers, which clients must
+   * also treat as off. While off, clients use the developer profile and leave any stored
+   * profile choice untouched.
+   */
+  workProfileChooser: Schema.optionalKey(Schema.Boolean),
   /**
    * Whether this server names the project state dir `.nexi` instead of `.t3team`. Runtime
    * feature flag (env `NEXI_FF_NEXI_STATE_DIR`, default on); absent on older servers.

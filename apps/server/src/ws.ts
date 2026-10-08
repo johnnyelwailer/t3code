@@ -22,6 +22,7 @@ import { subscribeChatGptHandoff } from "./provider/CodexChatGptHandoff.ts";
 import { subscribeCodexAuthCallback } from "./provider/CodexAuthCallback.ts";
 import {
   DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL,
+  T3TeamPackDocumentsError,
   AcpRegistryOperationError,
   CommandId,
   AuthAccessStreamError,
@@ -150,6 +151,7 @@ import {
 } from "./orchestration-v2/ThreadStream.ts";
 import { isMachineSetupEnabled } from "./cloud/t3team-machineSetupFlag.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
+import { isWorkProfileChooserEnabled } from "./t3team-workProfileChooserFlag.ts";
 import { isNexiStateDirSelectedAtStartup } from "@t3tools/project-context/t3teamProjectStateDir";
 import {
   buildBoundedThreadProjection,
@@ -227,7 +229,9 @@ import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
 import { T3TeamActorMailbox } from "./t3team-actorMailboxService.ts";
 import { stopThreadCascade } from "./t3team-threadStopCascade.ts";
+import { makeSettleParkedWorkflowStop } from "./t3team-settleParkedWorkflowStopLive.ts";
 import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
+import * as PackDocumentStore from "./t3team-v2/t3team-packDocumentStore.ts";
 import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import { isThreadResubscribeStaggerEnabled } from "./t3team-threadResubscribeStaggerFlag.ts";
 import { isResourcePressureEnabled } from "./t3team-resourcePressureFlag.ts";
@@ -1293,8 +1297,13 @@ const layerWsRpc = (
       const threadArtifacts = Option.getOrUndefined(
         yield* Effect.serviceOption(T3TeamThreadArtifactsStore),
       );
+      const packDocuments = Option.getOrUndefined(
+        yield* Effect.serviceOption(PackDocumentStore.T3TeamPackDocumentStore),
+      );
       // t3team: the inter-agent mailbox the stop cascade holds (optional, as above).
       const actorMailbox = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamActorMailbox));
+      // t3team: a user's settle first stops the thread's parked workflow runs (outside the lock).
+      const stopParkedWorkflowRunsBeforeSettle = yield* makeSettleParkedWorkflowStop;
       const crypto = yield* Crypto.Crypto;
       const serverCommandId = (tag: string) =>
         crypto.randomUUIDv4.pipe(
@@ -1818,6 +1827,9 @@ const layerWsRpc = (
             // default on): project main repository, and the `.nexi` state dir name.
             mainRepository: isMainRepositoryEnabled(),
             machineSetup: isMachineSetupEnabled(),
+            // Runtime feature flag (env NEXI_FF_WORK_PROFILE_CHOOSER, default off): the work
+            // profile chooser. Off means clients use the developer profile everywhere.
+            workProfileChooser: isWorkProfileChooserEnabled(),
             nexiStateDir: isNexiStateDirSelectedAtStartup(),
           };
         });
@@ -1906,12 +1918,15 @@ const layerWsRpc = (
                 // A retry also restarts the preparation work the launch owns.
                 (command.type === "prepared-run.retry"
                   ? threadLaunch.retryPreparation(command)
-                  : ThreadMessageIntake.dispatchCommand(
-                      ThreadManagementService.withCreationProvenance(command, {
-                        createdBy: "user",
-                        creationSource:
-                          "creationSource" in command ? command.creationSource : "web",
-                      }),
+                  : stopParkedWorkflowRunsBeforeSettle(
+                      command,
+                      ThreadMessageIntake.dispatchCommand(
+                        ThreadManagementService.withCreationProvenance(command, {
+                          createdBy: "user",
+                          creationSource:
+                            "creationSource" in command ? command.creationSource : "web",
+                        }),
+                      ),
                     )
                 ).pipe(Effect.provide(intakeContext)),
               )
@@ -2185,6 +2200,41 @@ const layerWsRpc = (
               ? Stream.make({ type: "snapshot" as const, threadId: input.threadId, artifacts: [] })
               : threadArtifacts.subscribe(input).pipe(Stream.orDie),
             { "rpc.aggregate": "t3team", "orchestration_v2.thread_id": input.threadId },
+          ),
+        [WS_METHODS.t3teamSubscribePackDocuments]: (input) =>
+          observeRpcStream(
+            WS_METHODS.t3teamSubscribePackDocuments,
+            packDocuments === undefined
+              ? Stream.make({
+                  type: "snapshot" as const,
+                  packId: input.packId,
+                  collection: input.collection,
+                  documents: [],
+                })
+              : packDocuments
+                  .subscribe(input)
+                  .pipe(
+                    Stream.mapError(
+                      (cause) => new T3TeamPackDocumentsError({ message: cause.message }),
+                    ),
+                  ),
+            { "rpc.aggregate": "t3team" },
+          ),
+        [WS_METHODS.t3teamPackStorePut]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.t3teamPackStorePut,
+            packDocuments === undefined
+              ? Effect.fail(
+                  new T3TeamPackDocumentsError({ message: "The pack store is unavailable." }),
+                )
+              : packDocuments
+                  .putFromView(input)
+                  .pipe(
+                    Effect.mapError(
+                      (cause) => new T3TeamPackDocumentsError({ message: cause.message }),
+                    ),
+                  ),
+            { "rpc.aggregate": "t3team" },
           ),
         [WS_METHODS.t3teamStopThreadCascade]: (input) =>
           observeRpcEffect(

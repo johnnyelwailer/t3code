@@ -19,6 +19,14 @@ import { CloudSessionMachines, layer } from "./t3team-CloudSessionMachine.ts";
 
 const projectId = ProjectId.make("project-1");
 const DEVCONTAINER = { ".devcontainer/devcontainer.json": `{ "image": "node:24" }` };
+const MACHINE_WITH_SECRETS = JSON.stringify({
+  version: 1,
+  devcontainer: ".devcontainer/devcontainer.json",
+  secrets: [
+    { name: "NPM_TOKEN", scope: "team" },
+    { name: "MY_KEY", scope: "user" },
+  ],
+});
 
 const git = (cwd: string, ...args: Array<string>) =>
   NodeChildProcess.execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...args], {
@@ -192,14 +200,7 @@ describe("CloudSessionMachines.resolve", () => {
     Effect.gen(function* () {
       const root = checkout({
         ...DEVCONTAINER,
-        ".nexi/machine.json": JSON.stringify({
-          version: 1,
-          devcontainer: ".devcontainer/devcontainer.json",
-          secrets: [
-            { name: "NPM_TOKEN", scope: "team" },
-            { name: "MY_KEY", scope: "user" },
-          ],
-        }),
+        ".nexi/machine.json": MACHINE_WITH_SECRETS,
       });
       const machine = yield* resolveIn(root);
       expect(machine?.teamSecretNames).toEqual(["NPM_TOKEN"]);

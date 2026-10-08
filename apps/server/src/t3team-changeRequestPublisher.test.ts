@@ -378,6 +378,25 @@ it.layer(layerGit)("T3TeamChangeRequestPublisher", (it) => {
       yield* git(repo, ["config", "gpg.format", "ssh"]);
       yield* git(repo, ["config", "user.signingkey", `${key}.pub`]);
       yield* git(repo, ["config", "commit.gpgsign", "true"]);
+      // gitConfig.setup.ts pins commit.gpgsign=false through GIT_CONFIG_* env, which outranks repo
+      // config; append a later entry for this test so the user's config can win again.
+      yield* Effect.acquireRelease(
+        Effect.sync(() => {
+          const saved = { count: process.env.GIT_CONFIG_COUNT };
+          const index = Number(saved.count ?? "0");
+          process.env.GIT_CONFIG_COUNT = String(index + 1);
+          process.env[`GIT_CONFIG_KEY_${index}`] = "commit.gpgsign";
+          process.env[`GIT_CONFIG_VALUE_${index}`] = "true";
+          return { saved, index };
+        }),
+        ({ saved, index }) =>
+          Effect.sync(() => {
+            delete process.env[`GIT_CONFIG_KEY_${index}`];
+            delete process.env[`GIT_CONFIG_VALUE_${index}`];
+            if (saved.count === undefined) delete process.env.GIT_CONFIG_COUNT;
+            else process.env.GIT_CONFIG_COUNT = saved.count;
+          }),
+      );
       yield* write(".devcontainer/devcontainer.json", "{}\n");
 
       yield* publisher.publish(publishInput(repo));

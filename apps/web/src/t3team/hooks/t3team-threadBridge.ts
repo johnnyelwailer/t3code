@@ -60,6 +60,12 @@ export function mapLiveThreadToProjectThread(
     // The REAL settle state: sub-run rosters' "Settled (N)" fold keys off this, never off
     // `status !== "running"` — a fresh terminal child is not settled.
     settled: thread.settledOverride === "settled",
+    // The shell word the sub-run label reads. `runtime.status` is already the
+    // activity run when one exists, otherwise the latest run — including
+    // `completed` for a finished run that has not been archived (and so is
+    // not `status: "completed"` above).
+    shellRunStatus: thread.runtime?.status ?? "idle",
+    providerInstanceId: thread.providerInstanceId,
     waitingOnChildren: runState === "waiting",
     // A question docked in this thread's composer; drives the parent-side pending indicator.
     pendingUserInput: thread.hasPendingUserInput,

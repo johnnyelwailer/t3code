@@ -46,12 +46,14 @@ describe("launchKickoffRecipe", () => {
       const repository = {
         listLiveByLaunchThread: (input: { launchThreadId: string; includeEnded?: boolean }) => {
           asked.push(input);
-          return Effect.succeed([
+          const runs: ReadonlyArray<Partial<WorkflowRun>> = [
             { runId: "r0", workflowPath: "/packs/other/workflow.ts", status: "completed" },
             { runId: "r1", workflowPath: `${source.recipeRoot}/workflow.ts`, status: "completed" },
-          ] as Array<WorkflowRun>);
+          ];
+          return Effect.succeed(runs);
         },
       } as unknown as WorkflowRunRepositoryShape;
+      // @effect-diagnostics-next-line unsafeEffectTypeAssertion:off - The earlier run returns before any other service is reached.
       const result = yield* launchKickoffRecipe({
         threadId: ThreadId.make("t1"),
         recipe: source,

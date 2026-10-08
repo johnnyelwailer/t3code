@@ -19,9 +19,17 @@
       "types": "./src/t3team-threadRunStatus.ts",
       "import": "./src/t3team-threadRunStatus.ts"
     },
+    "./t3team-detachedSurface": {
+      "types": "./src/t3team-detachedSurface.ts",
+      "import": "./src/t3team-detachedSurface.ts"
+    },
     "./t3team-threadAwaitingParent": {
       "types": "./src/t3team-threadAwaitingParent.ts",
       "import": "./src/t3team-threadAwaitingParent.ts"
+    },
+    "./t3team-workflowOutputData": {
+      "types": "./src/t3team-workflowOutputData.ts",
+      "import": "./src/t3team-workflowOutputData.ts"
     },
     "./t3team-workflowOutputText": {
       "types": "./src/t3team-workflowOutputText.ts",

@@ -1,5 +1,10 @@
 import { useMemo, useState } from "react";
-import { Sidebar, SidebarProvider, SidebarRail } from "~/t3team/components/ui/t3team-sidebar";
+import {
+  Sidebar,
+  SidebarInset,
+  SidebarProvider,
+  SidebarRail,
+} from "~/t3team/components/ui/t3team-sidebar";
 import { AppContentPane } from "~/t3team/t3team-AppContentPane";
 import { AppSidebarLens } from "~/t3team/components/t3team-AppSidebarLens";
 import { useProjectSidebarState } from "~/t3team/hooks/t3team-useProjectSidebarState";
@@ -8,6 +13,7 @@ import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import { readProjectIdFromView } from "~/t3team/t3team-types";
 import { resolveViewStoredProject } from "~/t3team/t3team-appMainContentResolution";
 import { AppOverlays } from "~/t3team/t3team-AppOverlays";
+import { CreateProjectRoute } from "~/t3team/t3team-CreateProjectRoute";
 import { resolveManageRepositoriesProject } from "~/t3team/t3team-manageRepositoriesProject";
 import { T3TeamLeftSidebarDesktopToggle } from "~/t3team/t3team-LeftSidebarDesktopToggle";
 import { useAppHandlers } from "~/t3team/t3team-useAppHandlers";
@@ -73,6 +79,7 @@ export function App({
     handleCreateThread,
     handleCreateProjectKickoffThread,
     handleCreateTicketKickoffThread,
+    handleCreateTicketKickoffThreadBeside,
     handleCreateTicketThreadFromSidebar,
     handleThreadKickoffConsumed,
     handleDeleteProject,
@@ -158,29 +165,40 @@ export function App({
       </Sidebar>
       <T3TeamLeftSidebarDesktopToggle />
 
-      <AppContentPane
-        activeDashboardMode={activeDashboardMode}
-        resolvedView={resolvedView}
-        store={store}
-        reopenInitialSetup={reopenInitialSetup ?? false}
-        onCreate={() => setShowCreate(true)}
-        onOpenTicket={handleSelectTicket}
-        onOpenThread={handleSelectThread}
-        onOpenFullThread={handleOpenFullThread}
-        onOpenEmbeddedThread={handleOpenEmbeddedThread}
-        {...(onCloseEmbeddedThread ? { onCloseEmbeddedThread } : {})}
-        onKickoffProjectThread={handleCreateProjectKickoffThread}
-        onKickoffTicketThread={handleCreateTicketKickoffThread}
-        onThreadKickoffConsumed={handleThreadKickoffConsumed}
-        onThreadDisplayModeChange={store.updateThreadDisplayMode}
-        onBackToDashboard={handleSelectProject}
-        onManageRepositories={setManageRepositoriesProjectId}
-      />
+      {showCreate ? (
+        <SidebarInset className="h-full min-h-0 overflow-hidden">
+          <CreateProjectRoute
+            onCreated={(project) => {
+              store.addProject(project);
+              if (onProjectCreated) onProjectCreated(project);
+              else setShowCreate(false);
+            }}
+          />
+        </SidebarInset>
+      ) : (
+        <AppContentPane
+          activeDashboardMode={activeDashboardMode}
+          resolvedView={resolvedView}
+          store={store}
+          reopenInitialSetup={reopenInitialSetup ?? false}
+          onCreate={() => setShowCreate(true)}
+          onOpenTicket={handleSelectTicket}
+          onOpenThread={handleSelectThread}
+          onOpenFullThread={handleOpenFullThread}
+          onOpenEmbeddedThread={handleOpenEmbeddedThread}
+          {...(onCloseEmbeddedThread ? { onCloseEmbeddedThread } : {})}
+          onKickoffProjectThread={handleCreateProjectKickoffThread}
+          onKickoffTicketThread={handleCreateTicketKickoffThread}
+          onKickoffTicketThreadBeside={handleCreateTicketKickoffThreadBeside}
+          onThreadKickoffConsumed={handleThreadKickoffConsumed}
+          onThreadDisplayModeChange={store.updateThreadDisplayMode}
+          onBackToDashboard={handleSelectProject}
+          onManageRepositories={setManageRepositoriesProjectId}
+        />
+      )}
 
       <AppOverlays
-        showCreate={showCreate}
         setShowCreate={setShowCreate}
-        addProject={store.addProject}
         projects={store.projects}
         threads={store.threads}
         threadSortOrder={sidebarState.threadSortOrder}
@@ -193,7 +211,6 @@ export function App({
         manageRepositoriesProject={manageRepositoriesProject}
         setManageRepositoriesProjectId={setManageRepositoriesProjectId}
         updateProject={store.updateProject}
-        {...(onProjectCreated ? { onProjectCreated } : {})}
         {...(onOpenSettings ? { onOpenSettings } : {})}
       />
     </SidebarProvider>

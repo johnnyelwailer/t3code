@@ -26,28 +26,21 @@ const ENTRIES: readonly ActiveAgentEntry[] = [
   },
 ];
 
-/**
- * Regression: the dots of the working-row active-agents indicator must NOT
- * carry a native hover tooltip. The working row already renders the status
- * word + live step label right next to the dots, and hovering a dot flips
- * that label to the agent's live status — a second tooltip was redundant.
- * The accessible name (aria-label) and the click-to-open-agents-panel
- * behavior are kept.
- */
 describe("T3TeamActiveAgentsIndicator", () => {
-  it("renders no hover tooltip (no title attribute) on the dot group", () => {
+  it("renders one chip per agent with the status word and an accessible name", () => {
     const markup = renderToStaticMarkup(
       <T3TeamActiveAgentsIndicator entries={ENTRIES} onOpenAgents={() => {}} />,
     );
-    expect(markup).not.toContain('title="');
-    // The accessible name still carries the same info for screen readers.
-    expect(markup).toContain('aria-label="2 active agents — open agents"');
-    // One dot per entry, each with its own accessible name.
+    expect(markup).toContain('role="group"');
+    expect(markup).toContain('aria-label="2 active agents"');
+    expect(markup).toContain('data-t3team-agent-chip=""');
+    expect(markup).toContain("Editing code");
+    expect(markup).toContain("Running tests");
     expect(markup).toContain('aria-label="Child A — Editing code"');
     expect(markup).toContain('aria-label="Sub B — Running tests"');
   });
 
-  it("still opens the agents panel on click of the dot group", () => {
+  it("opens the agents panel when a chip is clicked and no per-chip opener is set", () => {
     const onOpenAgents = vi.fn();
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -56,18 +49,17 @@ describe("T3TeamActiveAgentsIndicator", () => {
       root = createRoot(container);
       root.render(<T3TeamActiveAgentsIndicator entries={ENTRIES} onOpenAgents={onOpenAgents} />);
     });
-    const group = container.querySelector<HTMLElement>('[role="button"]');
-    expect(group).not.toBeNull();
-    expect(group!.getAttribute("title")).toBeNull();
+    const chips = container.querySelectorAll<HTMLElement>("[data-t3team-agent-chip]");
+    expect(chips.length).toBe(2);
     act(() => {
-      group!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      chips[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(onOpenAgents).toHaveBeenCalledTimes(1);
     act(() => root.unmount());
     container.remove();
   });
 
-  it("stamps each dot with its entry's dotState (state-texture hook)", () => {
+  it("stamps each chip with its entry's dotState", () => {
     const markup = renderToStaticMarkup(
       <T3TeamActiveAgentsIndicator entries={ENTRIES} onOpenAgents={() => {}} />,
     );
@@ -75,7 +67,7 @@ describe("T3TeamActiveAgentsIndicator", () => {
     expect(markup).toContain('data-t3team-state="working"');
   });
 
-  it("opens the clicked agent when onOpenAgent is provided (per-dot open)", () => {
+  it("opens the clicked agent when onOpenAgent is provided", () => {
     const onOpenAgents = vi.fn();
     const onOpenAgent = vi.fn();
     const container = document.createElement("div");
@@ -91,10 +83,10 @@ describe("T3TeamActiveAgentsIndicator", () => {
         />,
       );
     });
-    const dots = container.querySelectorAll<HTMLElement>(".t3team-aci-cell");
-    expect(dots.length).toBe(2);
+    const chips = container.querySelectorAll<HTMLElement>("[data-t3team-agent-chip]");
+    expect(chips.length).toBe(2);
     act(() => {
-      dots[1]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      chips[1]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(onOpenAgent).toHaveBeenCalledTimes(1);
     expect(onOpenAgent).toHaveBeenCalledWith(ENTRIES[1]);

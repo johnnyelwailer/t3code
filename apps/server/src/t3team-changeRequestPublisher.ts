@@ -38,7 +38,7 @@ export class T3TeamChangeRequestPublisher extends Context.Service<
       input: ChangeRequestPublishInput,
     ) => Effect.Effect<ChangeRequestPublishResult, ChangeRequestPublishError>;
   }
->()("t3team/changeRequest/T3TeamChangeRequestPublisher") {}
+>()("t3/t3team-changeRequestPublisher/T3TeamChangeRequestPublisher") {}
 
 const REMOTE_NAME = "origin";
 

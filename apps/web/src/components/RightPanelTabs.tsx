@@ -1,4 +1,5 @@
 import { pullRequestHostOf, type SourceControlProviderKind } from "@t3tools/contracts";
+import { useT3TeamAppBaseName } from "~/t3team/t3team-appBrandName";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { useProjects, useServerConfigs, useThreadShells } from "~/state/entities";
 import {
@@ -79,6 +80,11 @@ import { previewBridge } from "./preview/previewBridge";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
 import { resolvePullRequestState } from "./pullRequest/pullRequestPresentation";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
+import {
+  DETACH_SURFACE_LABEL,
+  openDetachedSurface,
+} from "~/t3team/detached/t3team-openDetachedSurface";
+import { detachedSurfaceRequestForRightPanelSurface } from "~/t3team/detached/t3team-rightPanelSurfaceDetach";
 
 interface RightPanelTabsProps {
   mode: PreviewPanelMode;
@@ -152,7 +158,6 @@ export function shouldOpenDefaultBrowserProfileFromMenuClick(
 }
 
 const SURFACE_DISABLED_REASONS = {
-  browser: "Browser previews are only available in the T3 Code desktop app.",
   terminal: "Terminal surfaces are only available from a project thread.",
   files: "Files are only available when a project is open.",
   diff: "Diff is only available for server threads in Git repositories.",
@@ -188,6 +193,7 @@ type TabContextMenuAction =
   | "rename"
   | "copy-path"
   | "toggle-mute"
+  | "detach"
   | "close"
   | "close-others"
   | "close-to-right"
@@ -795,6 +801,7 @@ function PullRequestSurfaceIcon({
 }
 
 export function RightPanelTabs(props: RightPanelTabsProps) {
+  const appName = useT3TeamAppBaseName();
   const ownsDesktopTitleBar = isElectron && props.mode === "inline";
   const browserProfiles = useBrowserDefaults().profiles;
   const { resolvedTheme } = useTheme();
@@ -852,7 +859,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       icon: Globe2,
       shortcut: "B",
       available: props.browserAvailable,
-      disabledReason: SURFACE_DISABLED_REASONS.browser,
+      disabledReason: `Browser previews are only available in the ${appName} desktop app.`,
       onClick: props.onAddBrowser,
     },
     {
@@ -950,6 +957,12 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           }),
         });
       }
+      // t3team: a tab whose surface can stand alone moves into a window (or tab) of its own.
+      const detachRequest = detachedSurfaceRequestForRightPanelSurface(
+        surface,
+        props.environmentId,
+      );
+      if (detachRequest !== null) items.push({ id: "detach", label: DETACH_SURFACE_LABEL });
       items.push(
         { id: "close", label: "Close" },
         {
@@ -991,6 +1004,9 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           }
           break;
         }
+        case "detach":
+          if (detachRequest !== null) openDetachedSurface(detachRequest);
+          break;
         case "close":
           props.onCloseSurface(surface);
           break;

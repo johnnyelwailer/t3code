@@ -63,7 +63,14 @@ function buildRunContexts(opts: {
     callTool,
     ...(opts.options.t3team === undefined ? {} : { t3team: opts.options.t3team }),
   };
-  return { toolCtx: toolCtxRef, scriptCtx: { ...shared, callTool } };
+  const host = opts.options.scriptHost;
+  const scriptCtx: T.ScriptHandlerCtx = {
+    ...shared,
+    callTool,
+    ...(host?.store === undefined ? {} : { store: host.store }),
+    ...(host?.changeRequests === undefined ? {} : { changeRequests: host.changeRequests }),
+  };
+  return { toolCtx: toolCtxRef, scriptCtx };
 }
 
 export async function executeWorkflowBody(

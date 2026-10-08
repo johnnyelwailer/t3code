@@ -17,6 +17,16 @@ export const FEATURE_FLAG_DEFINITIONS = {
     description:
       "Set up a project machine from the first message of a cloud session for a project that has none. Changes apply immediately.",
   },
+  // Temporarily disabled 2026-10-07: the work profiles are too dev-focused (only the developer
+  // profile is actually tailored), so the chooser costs a setup step without changing the UX.
+  // Relanding is tracked in https://nexplore.ghe.com/hive/nx-nexi/issues/60 — turn it back on
+  // per process with `NEXI_FF_WORK_PROFILE_CHOOSER=1`.
+  WORK_PROFILE_CHOOSER: {
+    defaultEnabled: false,
+    requiresRestart: false,
+    description:
+      "Show the work profile chooser (first-run setup, add-project wizard, Settings). Off: everyone uses the developer profile.",
+  },
 } as const;
 
 export type FeatureFlagKey = keyof typeof FEATURE_FLAG_DEFINITIONS;

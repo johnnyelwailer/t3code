@@ -33,6 +33,7 @@ import {
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import { resolveWorkflowAgentModel } from "./t3team-workflowAgentModelPolicy.ts";
 import { makeT3TeamWorkflowHostToolClient } from "./t3team-workflowHostTools.ts";
+import type { T3TeamScriptHost } from "./t3team-scriptHostContext.ts";
 import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 
 /** Derived from the consumer rather than re-declared, so it cannot drift from the real broker. */
@@ -50,11 +51,22 @@ export type WorkflowRunRehydratorDeps = {
   /** Durable signal-source state (GHE #332); absent when the host did not wire it (tests).
    * Restored runs replay new `signal.wait`/`signal.register` verbs against it. */
   readonly signalStore?: WorkflowSignalStoreShape | undefined;
+  /** Rebuilds a restored run's `ctx.store` / `ctx.changeRequests` from its row; absent in tests
+   * that wire no script host, whose scripts then see neither. */
+  readonly scriptHost?: T3TeamScriptHost["Service"] | undefined;
 };
 
 export function makeWorkflowRunRehydrator(deps: WorkflowRunRehydratorDeps) {
   const { repo, store, registry, runsRoot, host, rearmScheduler, toolBroker, nowIso, signalStore } =
     deps;
+
+  // The same entitlement the launch used: the row's recipe and its persisted host-tool grant.
+  const scriptHostFor = (run: WorkflowRun) =>
+    deps.scriptHost?.forRun({
+      projectId: run.projectId,
+      recipePath: run.recipePath,
+      toolGroups: run.hostToolGrant?.toolGroups,
+    });
 
   const hostToolClientFor = (run: WorkflowRun) => {
     const grant = run.hostToolGrant;
@@ -84,12 +96,14 @@ export function makeWorkflowRunRehydrator(deps: WorkflowRunRehydratorDeps) {
     lifecycle: ReturnType<typeof lifecycleFor>,
   ) => {
     const hostToolClient = hostToolClientFor(run);
+    const scriptHost = Object.keys(scripts).length === 0 ? undefined : scriptHostFor(run);
     return {
       runId: run.runId,
       workflowPath: run.workflowPath,
       args: run.args,
       ...(Object.keys(scripts).length === 0 ? {} : { scripts }),
       ...(hostToolClient === undefined ? {} : { hostToolClient }),
+      ...(scriptHost === undefined ? {} : { scriptHost }),
       runsRoot,
       launchThreadId: run.launchThreadId ?? undefined,
       projectId: run.projectId,
