@@ -22,6 +22,7 @@ import { acquireDesktopTab, type AcquiredDesktopTab } from "./desktopTabLifetime
 import { resolveHostedBrowserWebviewWrapperStyle } from "./hostedBrowserWebviewStyle";
 import { usePreviewWebviewConfig } from "./previewWebviewConfigState";
 import { useBrowserViewportResize } from "./useBrowserViewportResize";
+import { usePreviewPanelResizing } from "./t3team-previewPanelResizeStore";
 import {
   INITIAL_WEBVIEW_CRASH_RECOVERY_STATE,
   planWebviewCrashRecovery,
@@ -209,6 +210,13 @@ export function HostedBrowserWebview(props: {
         };
   const containerSize = active && lastRect ? lastRect : hiddenSize;
   const deviceToolbarVisible = active && viewport._tag !== "fill" && !presentation.fitSourceContent;
+  // While the panel edge is dragged the visible guest keeps the scale it had at drag start; the
+  // slot rect still follows the panel, and the layout re-fits once when the drag ends. Hidden
+  // guests are not held: their offscreen layout is not the one they show when activated.
+  const anyPanelResizing = usePreviewPanelResizing();
+  const panelResizing = anyPanelResizing && active;
+  const [heldViewportScale, setHeldViewportScale] = useState<number | null>(null);
+  const heldScale = panelResizing ? (heldViewportScale ?? undefined) : undefined;
   const {
     activeDrag,
     commitViewportChange,
@@ -223,6 +231,7 @@ export function HostedBrowserWebview(props: {
     containerSize,
     deviceToolbarVisible,
     aspectRatio: lockedAspectRatio,
+    heldScale,
   });
   const fittedSourceViewport =
     presentation.fitSourceContent && lastRect
@@ -234,8 +243,15 @@ export function HostedBrowserWebview(props: {
       : null;
   const layout =
     fittedSourceViewport && lastRect
-      ? resolveBrowserViewportLayout(lastRect, fittedSourceViewport, normalizedZoomFactor)
+      ? resolveBrowserViewportLayout(
+          lastRect,
+          fittedSourceViewport,
+          normalizedZoomFactor,
+          heldScale,
+        )
       : viewportLayout;
+  const nextHeldViewportScale = panelResizing ? (heldViewportScale ?? layout.viewportScale) : null;
+  if (nextHeldViewportScale !== heldViewportScale) setHeldViewportScale(nextHeldViewportScale);
 
   const syncContentPresentation = useCallback(() => {
     const wrapper = wrapperRef.current;

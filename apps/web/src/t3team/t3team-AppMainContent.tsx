@@ -12,12 +12,13 @@ import { AppDashboardPane } from "~/t3team/t3team-AppDashboardPane";
 import { AppMainContentHomeBrowser } from "~/t3team/t3team-AppMainContentHomeBrowser";
 import { AllProjectsMyWorkPane } from "~/t3team/t3team-AllProjectsMyWorkPane";
 import { AppDraftPane } from "~/t3team/t3team-AppDraftPane";
+import {
+  T3TeamStartupMyWorkGate,
+  useStartupLandingEligible,
+} from "~/t3team/t3team-StartupMyWorkGate";
 import { AppThreadPane } from "~/t3team/t3team-AppThreadPane";
 import { useT3TeamScratchHomeChat } from "~/t3team/t3team-useScratchHomeChat";
-import {
-  opensAllProjectsMyWorkHome,
-  resolveWorkHomeProject,
-} from "~/t3team/t3team-appMainContentResolution";
+import { resolveWorkHomeProject } from "~/t3team/t3team-appMainContentResolution";
 import { resolveT3TeamSetupSurfaceReason } from "~/t3team/t3team-setupSurfaceReason";
 import { useAppMainContentThreadResolution } from "~/t3team/t3team-useAppMainContentThreadResolution";
 
@@ -72,6 +73,7 @@ export function AppMainContent({
   onThreadDisplayModeChange,
 }: MainContentProps) {
   const backendState = useBackendState();
+  const startupEligible = useStartupLandingEligible();
   // Project-less chats live in upstream's Scratch project ("No project").
   const { scratchProject, startScratch } = useT3TeamScratchHomeChat(allProjects);
   // Until the environments bootstrap, an empty list means "not loaded yet", not "first run":
@@ -145,26 +147,20 @@ export function AppMainContent({
         />
       );
     }
-    // Startup lands on your work when there is any; the new conversation is one click away.
-    if (
-      opensAllProjectsMyWorkHome({
-        allProjects,
-        selectedProjectId,
-        showInitialSetup,
-        hasRouteView: false,
-      })
-    ) {
-      return allProjectsMyWork;
-    }
-    if (projectsLoading && !reopenInitialSetup) {
-      return (
-        <div className="flex w-full flex-col p-4 sm:p-6">
-          <ProjectMyWorkLoadingState />
-        </div>
-      );
-    }
-
-    return homeBrowser;
+    // A cold start lands on My Work when it has something to show; otherwise the new conversation.
+    return (
+      <T3TeamStartupMyWorkGate
+        eligible={startupEligible && selectedProjectId === null && !reopenInitialSetup}
+      >
+        {projectsLoading && !reopenInitialSetup ? (
+          <div className="flex w-full flex-col p-4 sm:p-6">
+            <ProjectMyWorkLoadingState />
+          </div>
+        ) : (
+          homeBrowser
+        )}
+      </T3TeamStartupMyWorkGate>
+    );
   }
 
   // Like a draft, this resolves no project — its subject is the viewer, not a project — so it has

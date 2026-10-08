@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { ShieldAlert } from "lucide-react";
 import { Skeleton } from "~/t3team/components/ui/t3team-skeleton";
 import { PullRequestCopyableCode } from "~/components/pullRequest/PullRequestCopyableCode";
@@ -29,11 +29,14 @@ export function RepositoryPicker({
   linkedUrls,
   onToggle,
   onLinkMany,
+  renderLinkedStatus,
 }: {
   discovery: GitHubDiscoveryState;
   linkedUrls: ReadonlyArray<string>;
   onToggle: (url: string) => void;
   onLinkMany: (urls: ReadonlyArray<string>) => void;
+  /** Extra line under a linked repository, e.g. its clone/sync state. */
+  renderLinkedStatus?: (url: string) => ReactNode;
 }) {
   const [query, setQuery] = useState("");
   const loading = discovery.authStatus === "checking" || discovery.loadingAuth;
@@ -69,6 +72,7 @@ export function RepositoryPicker({
       linked={linked.has(entry.url)}
       showHost={withHost && showHost}
       onToggle={onToggle}
+      status={linked.has(entry.url) ? renderLinkedStatus?.(entry.url) : undefined}
     />
   );
   const otherByHost = new Map<string, RepositoryPickerEntry[]>();

@@ -111,7 +111,7 @@ const makeGithubMock = (
       return Effect.succeed(respond(joined, input.stdin));
     });
   const respond = (joined: string, stdin: string | undefined): VcsProcess.VcsProcessOutput => {
-    if (joined.includes("--jq")) {
+    if (joined.includes("--jq .login")) {
       // The identity-resolution call: `gh api --hostname … user --jq .login`
       // prints the bare login plus a trailing newline.
       return ghOut(`${login}\n`);

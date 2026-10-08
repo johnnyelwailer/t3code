@@ -76,7 +76,8 @@ export const SUB_RUN_WAITING_LABEL = "Waiting";
  * field, so the panel and the sidebar never disagree at this seam): the LLM activity
  * label REPLACES the stable status word while it flows (only while the
  * `t3teamActivityLabelsEnabled` flag is on — the caller gates the flag here, mirroring
- * t3team-SidebarSubRunRow). Listed rows have no thinking/writing word: that needs the
+ * t3team-SidebarSubRunRow); the server's `childStatus` summary backs it up when no
+ * label flows. Listed rows have no thinking/writing word: that needs the
  * thread's turn items, which only the open thread loads.
  */
 const LIVE_SHELL_WORDS = new Set(["preparing", "starting", "queued", "running"]);
@@ -87,6 +88,7 @@ export function resolveSubRunStatusLabel(
     | "status"
     | "shellRunStatus"
     | "activityLabel"
+    | "childStatus"
     | "pendingUserInput"
     | "waitingOnChildren"
     | "awaitingParent"
@@ -124,7 +126,12 @@ export function resolveSubRunStatusLabel(
   if (ownLive) {
     return resolveActivityPillDisplay({
       label: "Running",
-      activityLabel: options.activityLabelsEnabled ? (thread.activityLabel ?? null) : null,
+      // The live activity label wins; between labels (debounced, TTL-limited) the
+      // server's child-status summary of the child's recent work fills the gap
+      // instead of a bare "Running".
+      activityLabel: options.activityLabelsEnabled
+        ? (thread.activityLabel ?? thread.childStatus ?? null)
+        : null,
     });
   }
   if (ownFailed) return "Failed";

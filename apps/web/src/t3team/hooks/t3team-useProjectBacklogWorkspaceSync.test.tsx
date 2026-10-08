@@ -121,6 +121,7 @@ describe("useProjectBacklog workspace sync", () => {
           referencesRoot: "/tmp/project-1-backlog-sync-test/.t3team/references",
           linkedRepositories: [],
         })),
+        readLinkedRepositoryStatus: vi.fn(async () => ({ linkedRepositories: [] })),
         setMainRepository: vi.fn(async () => {
           throw new Error("not used");
         }),

@@ -161,6 +161,54 @@ describe("panel resize cleanup", () => {
     expect(setItem).toHaveBeenCalledExactlyOnceWith("test-panel-width", String(nextMax));
   });
 
+  it.each(["release", "cancel", "lost capture", "blur"])(
+    "reports an active drag until %s",
+    async (reason) => {
+      expect(result.resizing).toBe(false);
+      await act(() => result.handlers.onPointerDown(pointer()));
+      expect(result.resizing).toBe(true);
+      await act(() => result.handlers.onPointerMove(pointer(50)));
+      await act(() => frame?.(0));
+      expect(result.resizing).toBe(true);
+      await act(() => {
+        if (reason === "release") result.handlers.onPointerUp(pointer(50));
+        if (reason === "cancel") result.handlers.onPointerCancel(pointer());
+        if (reason === "lost capture") result.handlers.onLostPointerCapture(pointer());
+        if (reason === "blur") events.dispatchEvent(new Event("blur"));
+      });
+      expect(result.resizing).toBe(false);
+    },
+  );
+
+  it("ends a drag whose handle unmounted before release", async () => {
+    await act(() => {
+      result.handlers.onPointerDown(pointer());
+      result.handlers.onPointerMove(pointer(50));
+    });
+    await act(() => frame?.(0));
+    expect(result.resizing).toBe(true);
+    // The handle is gone (panel closed/maximized): only the window still sees the release.
+    await act(() => {
+      events.dispatchEvent(Object.assign(new Event("pointerup"), { pointerId: 1, clientX: 25 }));
+    });
+    expect(result.resizing).toBe(false);
+    expect(result.width).toBe(475);
+    expect(setItem).toHaveBeenCalledExactlyOnceWith("test-panel-width", "475");
+    expect(style.cursor).toBe("");
+    // A later grab starts a fresh drag instead of being swallowed by the stale one.
+    await act(() => result.handlers.onPointerDown(pointer()));
+    expect(result.resizing).toBe(true);
+  });
+
+  it("ignores window releases from other pointers", async () => {
+    await act(() => result.handlers.onPointerDown(pointer()));
+    await act(() => {
+      events.dispatchEvent(Object.assign(new Event("pointerup"), { pointerId: 2, clientX: 25 }));
+    });
+    expect(result.resizing).toBe(true);
+    expect(setItem).not.toHaveBeenCalled();
+  });
+
   it("handles release before any move event", async () => {
     await act(() => {
       result.handlers.onPointerDown(pointer());

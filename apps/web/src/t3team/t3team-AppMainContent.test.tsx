@@ -44,6 +44,12 @@ vi.mock("~/t3team/t3team-AllProjectsMyWorkPane", () => ({
   AllProjectsMyWorkPane: () => <div>all-projects-my-work</div>,
 }));
 
+// The cold-start gate has its own tests; here it shows what it wraps.
+vi.mock("~/t3team/t3team-StartupMyWorkGate", () => ({
+  T3TeamStartupMyWorkGate: ({ children }: { children: React.ReactNode }) => children,
+  useStartupLandingEligible: () => false,
+}));
+
 vi.mock("~/t3team/t3team-AppMainContentHomeEmptyState", () => ({
   AppMainContentHomeEmptyState: ({ showAside }: { showAside: boolean }) => (
     <div>home-empty:{showAside ? "aside" : "no-aside"}</div>
