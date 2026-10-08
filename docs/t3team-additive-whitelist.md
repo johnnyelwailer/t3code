@@ -22,12 +22,16 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20261006` → the 2026-10-06 upstream sync merge commit
+- Current: `t3team/fork-baseline-20261008` → the 2026-10-08 upstream sync merge commit
+  `7deceab97b` (114 upstream commits absorbed, `9ae9f2ba1f..04ad17425a`, in three merges: upstream
+  `365aa87982`, upstream `04ad17425a`, then fork main `0b3b3d67b3`). Grandfathered: upstream's tree
+  plus the conflict resolutions in those merges. Post-merge fixes on the sync branch stay measured.
+- Before that: `t3team/fork-baseline-20261006` → the 2026-10-06 upstream sync merge commit
   `ba03dadc53` (247 upstream commits absorbed, `db514607f4..9ae9f2ba1f`). Grandfathered:
   upstream's tree plus the conflict resolutions in that merge commit. The tag points at the
   merge itself, not the post-port tree, so the Effect/layout port and cutover fix that follow
   it on the sync branch are checked with full strictness.
-- Before that: `t3team/fork-baseline-20261003` → the 2026-10-03 upstream sync merge commit
+- Earlier: `t3team/fork-baseline-20261003` → the 2026-10-03 upstream sync merge commit
   `88992deee` (123 upstream commits absorbed, including the orchestration V2 rewrite).
 - Earlier: `t3team/fork-baseline-20260927` → fork commit `1fad6113ea` (the tree the
   2026-09-27 upstream sync lands on main). Grandfathered: the 391 absorbed upstream commits.
@@ -80,6 +84,7 @@ git push origin t3team/fork-baseline-YYYYMMDD
 | 2026-09-27 | `t3team/fork-baseline-20260908-postsync` | `t3team/fork-baseline-20260927` (`1fad6113ea`)          | The 2026-09-27 upstream sync (de251fc297, 391 commits). Against the old tag the guard flagged 5,017 new lines; 4,990 were upstream-identical files and the rest were reviewed fork resolutions (listed in the sync PR). |
 | 2026-10-03 | `t3team/fork-baseline-20260927`          | `t3team/fork-baseline-20261003` (`88992deee`)           | The 2026-10-03 upstream sync (orchestration V2 rewrite, 123 commits). Tag points at the merge commit so the post-merge V2 port stays measured.                                                                          |
 | 2026-10-06 | `t3team/fork-baseline-20261003`          | `t3team/fork-baseline-20261006` (`ba03dadc53`)          | The 2026-10-06 upstream sync (9ae9f2ba1f, 247 commits per johnnyelwailer/t3code#385). Tag points at the merge commit so the Effect/layout port + cutover fix stay measured.                                             |
+| 2026-10-08 | `t3team/fork-baseline-20261006`          | `t3team/fork-baseline-20261008` (`7deceab97b`)          | The 2026-10-08 upstream sync (04ad17425a, 114 commits since 9ae9f2ba1f, incl. the unpushed 10-07 batch). Tag points at the final merge commit (fork main 0b3b3d67b3 merged in) so post-merge fixes stay measured.       |
 
 Until the new tag is pushed, the guard fails loudly on CI (missing tag), never silently.
 
