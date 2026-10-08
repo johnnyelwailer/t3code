@@ -21,8 +21,8 @@ import { t3teamRandomHex } from "./t3team-random.ts";
 import { VcsProcess } from "./vcs/VcsProcess.ts";
 
 /** Generous: a first clone of a large repository legitimately takes many minutes. */
-export const LINKED_REPOSITORY_CLONE_TIMEOUT_MS = 30 * 60_000;
-export const LINKED_REPOSITORY_FETCH_TIMEOUT_MS = 10 * 60_000;
+const LINKED_REPOSITORY_CLONE_TIMEOUT_MS = 30 * 60_000;
+const LINKED_REPOSITORY_FETCH_TIMEOUT_MS = 10 * 60_000;
 const INSPECT_TIMEOUT_MS = 2 * 60_000;
 
 /** `missing`: nothing (or an empty directory) at the path. `valid`: a usable checkout. `broken`:
@@ -42,7 +42,7 @@ export const describeSyncError = (cause: unknown): string => {
 };
 
 /** A failed clone publication or fetch, described for the repository's status line (credentials redacted). */
-export class LinkedRepositorySyncError extends Data.TaggedError("LinkedRepositorySyncError")<{
+class LinkedRepositorySyncError extends Data.TaggedError("LinkedRepositorySyncError")<{
   readonly message: string;
 }> {}
 

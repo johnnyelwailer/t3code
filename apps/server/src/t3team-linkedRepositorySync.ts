@@ -29,7 +29,7 @@ import type {
 } from "./t3team-project-repository-utils.ts";
 import { VcsProcess } from "./vcs/VcsProcess.ts";
 
-export const LINKED_REPOSITORY_SYNC_CONCURRENCY = 3;
+const LINKED_REPOSITORY_SYNC_CONCURRENCY = 3;
 
 export type LinkedRepositorySyncRequest = {
   readonly referencesRoot: string;

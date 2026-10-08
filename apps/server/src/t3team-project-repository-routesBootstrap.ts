@@ -33,7 +33,7 @@ const decodeReferenceManifestLinkedRepositories = Schema.decodeEffect(
 );
 
 /** How long a settled sync (success or failure) stands before a plain bootstrap refetches. */
-export const LINKED_REPOSITORY_REFETCH_INTERVAL_MS = 15 * 60_000;
+const LINKED_REPOSITORY_REFETCH_INTERVAL_MS = 15 * 60_000;
 
 export type PlannedLinkedRepository = {
   /** The manifest entry as persisted now; a background sync replaces it when it settles. */
