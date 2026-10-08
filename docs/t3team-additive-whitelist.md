@@ -302,6 +302,17 @@ existing `docs/t3team-mvp/**` and `.claude/**` entries.
 - Additive `.test`, `.browser`, `.stories`, and `*Fixtures` files use a higher LOC ceiling because they are validation/demo artifacts rather than shipped runtime surfaces.
 - Remove entries when no longer needed.
 
+## Preview panel resize: row-based cap, scale held during drag (2026-10-08)
+
+The thread side panel stopped growing at 70% of the window even when the row had room, and
+device-viewport webviews rescaled on every frame of the drag.
+
+- `apps/web/src/hooks/usePreviewPanelInlineSize.ts` (+ `components/preview/PreviewPanelShell.test.ts`) — max width uses the measured row; the window fraction is only the unmeasured fallback.
+- `apps/web/src/hooks/useResizableWidth.ts` (+ test) — exposes `resizing` for the drag session.
+- `apps/web/src/hooks/useResizeDrag.ts` — a drag whose handle unmounts mid-drag (panel closed/maximized) ends on the window's pointer release instead of staying stuck.
+- `apps/web/src/components/preview/PreviewPanelShell.tsx` — publishes the drag to `browser/t3team-previewPanelResizeStore.ts`.
+- `apps/web/src/browser/browserViewportLayout.ts` (+ test), `useBrowserViewportResize.ts`, `HostedBrowserWebview.tsx` — hold the fit-to-panel scale while the panel is dragged; re-fit once on release.
+
 ## Pack-configurable vendor branding (2026-10-07)
 
 Distribution appearance (`labels.appName`, product name, brand mark) has to reach the

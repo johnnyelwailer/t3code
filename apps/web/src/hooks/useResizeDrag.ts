@@ -22,6 +22,7 @@ export function useResizeDrag<T extends HTMLElement>(
     width: number;
     moved: boolean;
     frame: number | null;
+    detach: () => void;
   } | null>(null);
 
   const flush = useCallback(() => {
@@ -40,6 +41,7 @@ export function useResizeDrag<T extends HTMLElement>(
       if (commit) flush();
       // Release can synchronously dispatch lostpointercapture.
       drag.current = null;
+      active.detach();
       try {
         if (active.target.hasPointerCapture(active.pointerId)) {
           active.target.releasePointerCapture(active.pointerId);
@@ -93,6 +95,16 @@ export function useResizeDrag<T extends HTMLElement>(
       }
       event.preventDefault();
       event.stopPropagation();
+      // If the handle unmounts mid-drag (panel closed or maximized), its capture is lost and its
+      // React handlers never fire again; the release still bubbles to the window, so end there.
+      const onWindowPointerEnd = (nativeEvent: globalThis.PointerEvent) => {
+        const active = drag.current;
+        if (!active || active.pointerId !== nativeEvent.pointerId) return;
+        if (nativeEvent.type === "pointerup") active.pendingX = nativeEvent.clientX;
+        finish();
+      };
+      window.addEventListener("pointerup", onWindowPointerEnd);
+      window.addEventListener("pointercancel", onWindowPointerEnd);
       drag.current = {
         session,
         target: event.currentTarget,
@@ -102,6 +114,10 @@ export function useResizeDrag<T extends HTMLElement>(
         width: session.width,
         moved: false,
         frame: null,
+        detach: () => {
+          window.removeEventListener("pointerup", onWindowPointerEnd);
+          window.removeEventListener("pointercancel", onWindowPointerEnd);
+        },
       };
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
