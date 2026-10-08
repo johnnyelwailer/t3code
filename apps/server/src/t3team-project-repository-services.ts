@@ -82,7 +82,8 @@ export const detectMainRepository = Effect.fn("detectMainRepository")(function* 
         args: ["rev-parse", "--verify", "--quiet", "HEAD"],
         cwd: input.workspaceRoot,
         allowNonZeroExit: true,
-        timeoutMs: 15_000,
+        // Local and normally instant; kept well under the client's 15s budget for the save.
+        timeoutMs: 5_000,
       })
       .pipe(Effect.orElseSucceed(() => undefined));
     if (!head || head.exitCode !== 0) return undefined;

@@ -45,7 +45,9 @@ export type LinkedRepositorySyncRequest = {
 type Job = {
   readonly url: string;
   phase: LinkedRepositorySyncPhase;
-  readonly manifests: Set<string>;
+  /** Every requester to record the outcome for: reference manifest → the URL it lists the
+   * checkout under (a joined request may spell the same repository differently). */
+  readonly requesters: Map<string, Set<string>>;
   readonly settled: Deferred.Deferred<void>;
 };
 
@@ -106,18 +108,16 @@ const make = Effect.gen(function* () {
 
   const record = (job: Job, localPath: string, outcome: Effect.Success<ReturnType<typeof sync>>) =>
     Effect.gen(function* () {
-      const entry: LinkedRepositoryBootstrapResult = {
-        url: job.url,
-        localPath,
-        ...outcome,
-        syncedAt: DateTime.formatIso(yield* DateTime.now),
-      };
-      for (const referencesRoot of job.manifests) {
-        yield* withManifestLock(recordLinkedRepositoryOutcome(referencesRoot, entry)).pipe(
-          Effect.catchCause((cause) =>
-            Effect.logWarning("Failed to record linked repository sync outcome.", cause),
-          ),
-        );
+      const syncedAt = DateTime.formatIso(yield* DateTime.now);
+      for (const [referencesRoot, urls] of job.requesters) {
+        for (const url of urls) {
+          const entry: LinkedRepositoryBootstrapResult = { url, localPath, ...outcome, syncedAt };
+          yield* withManifestLock(recordLinkedRepositoryOutcome(referencesRoot, entry)).pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning("Failed to record linked repository sync outcome.", cause),
+            ),
+          );
+        }
       }
     });
 
@@ -137,22 +137,27 @@ const make = Effect.gen(function* () {
         Effect.provide(context),
       );
 
+  // Uninterruptible: a registered job is always forked, so an aborted request cannot leave a
+  // job in the map that never runs (and blocks every later request for that checkout).
   const request = (input: LinkedRepositorySyncRequest) =>
-    Effect.suspend(() => {
-      const running = jobs.get(input.localPath);
-      if (running) {
-        running.manifests.add(input.referencesRoot);
-        return Effect.void;
-      }
-      const job: Job = {
-        url: input.url,
-        phase: "queued",
-        manifests: new Set([input.referencesRoot]),
-        settled: Deferred.makeUnsafe<void>(),
-      };
-      jobs.set(input.localPath, job);
-      return Effect.forkIn(run(job, input.localPath), scope).pipe(Effect.asVoid);
-    });
+    Effect.uninterruptible(
+      Effect.suspend(() => {
+        const running = jobs.get(input.localPath);
+        if (running) {
+          const urls = running.requesters.get(input.referencesRoot) ?? new Set<string>();
+          running.requesters.set(input.referencesRoot, urls.add(input.url));
+          return Effect.void;
+        }
+        const job: Job = {
+          url: input.url,
+          phase: "queued",
+          requesters: new Map([[input.referencesRoot, new Set([input.url])]]),
+          settled: Deferred.makeUnsafe<void>(),
+        };
+        jobs.set(input.localPath, job);
+        return Effect.forkIn(run(job, input.localPath), scope).pipe(Effect.asVoid);
+      }),
+    );
 
   return T3TeamLinkedRepositorySync.of({
     request,

@@ -85,6 +85,8 @@ export function ManageProjectRepositoriesDialog({
         backend,
         project,
         linkedRepositoryUrls,
+        // Show clone progress while the save waits on the chosen main repository's clone.
+        onSaved: () => syncStatus.refresh(),
         ...(mainRepositoryEnabled && mainRepositoryUrl !== initialMainUrl
           ? { mainRepositoryUrl }
           : {}),

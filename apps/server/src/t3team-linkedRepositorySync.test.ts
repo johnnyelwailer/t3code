@@ -18,6 +18,11 @@ import {
 } from "./t3team-linkedRepositorySync.ts";
 import { bootstrapWorkspaceReferences } from "./t3team-project-repository-routesReferences.ts";
 import { readLinkedRepositoryStatus } from "./t3team-project-repository-routesStatus.ts";
+import {
+  HIDDEN_T3TEAM_DIR,
+  MANIFEST_FILE_NAME,
+  REFERENCES_DIR_NAME,
+} from "./t3team-project-repository-utils.ts";
 import { VcsProcess } from "./vcs/VcsProcess.ts";
 
 const git = (cwd: string, ...args: string[]) =>
@@ -164,10 +169,15 @@ describe("T3TeamLinkedRepositorySync", () => {
       // An interrupted legacy clone: objects present, most of the work tree gone.
       NodeFS.rmSync(NodePath.join(localPath, "a.txt"));
       NodeFS.rmSync(NodePath.join(localPath, "b.txt"));
+      // A local edit and the index survive the repair: only missing files are written back.
+      NodeFS.writeFileSync(NodePath.join(localPath, "c.txt"), "edited\n");
+      NodeFS.rmSync(NodePath.join(localPath, ".git", "index"));
       yield* bootstrap(harness.workspaceRoot, [url], true);
       yield* settleAll([localPath]);
       expect(NodeFS.existsSync(NodePath.join(localPath, "a.txt"))).toBe(true);
       expect(NodeFS.existsSync(NodePath.join(localPath, "b.txt"))).toBe(true);
+      expect(NodeFS.readFileSync(NodePath.join(localPath, "c.txt"), "utf8")).toBe("edited\n");
+      expect(harness.counts.clone).toBe(1);
       const [entry] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot)).linkedRepositories;
       expect(entry?.status).toBe("updated");
       expect(entry?.error).toBeUndefined();
@@ -226,6 +236,30 @@ describe("T3TeamLinkedRepositorySync", () => {
       yield* bootstrap(harness.workspaceRoot, [url], true);
       yield* settleAll([first.linkedRepositories[0]!.localPath]);
       expect(harness.counts.fetch).toBe(before.fetch + 1);
+    }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
+  });
+
+  it.live("a status read re-queues a pending entry whose sync was lost to a restart", () => {
+    const harness = makeHarness();
+    const url = makeOrigin(harness.root, "orphan");
+    return Effect.gen(function* () {
+      const referencesRoot = NodePath.join(
+        harness.workspaceRoot,
+        HIDDEN_T3TEAM_DIR,
+        REFERENCES_DIR_NAME,
+      );
+      const localPath = NodePath.join(referencesRoot, "01-orphan");
+      NodeFS.mkdirSync(referencesRoot, { recursive: true });
+      NodeFS.writeFileSync(
+        NodePath.join(referencesRoot, MANIFEST_FILE_NAME),
+        `{"linkedRepositories":[{"url":"${url}","localPath":"${localPath}","status":"pending"}]}`,
+      );
+      const first = yield* readLinkedRepositoryStatus(harness.workspaceRoot);
+      expect(first.linkedRepositories[0]?.syncState).toBeDefined();
+      yield* settleAll([localPath]);
+      const [entry] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot)).linkedRepositories;
+      expect(entry?.status).toBe("cloned");
+      expect(harness.counts.clone).toBe(1);
     }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
   });
 });

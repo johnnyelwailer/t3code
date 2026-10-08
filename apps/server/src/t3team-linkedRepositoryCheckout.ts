@@ -130,24 +130,34 @@ export const cloneLinkedCheckoutAtomically = Effect.fn("cloneLinkedCheckoutAtomi
   },
 );
 
-/** Restores a broken checkout's work tree from its own objects; when that is not enough (no
- * resolvable HEAD), moves it aside and clones fresh. */
+/** Restores a broken checkout without discarding anything in it: a missing index is rebuilt from
+ * HEAD (`read-tree` leaves the work tree alone) and only MISSING tracked files are written back
+ * (`checkout-index -q` skips every file that exists, edited or not). When that is not enough (no
+ * resolvable HEAD), the checkout is moved aside — kept, never deleted — and cloned fresh. */
 export const repairLinkedCheckout = Effect.fn("repairLinkedCheckout")(function* (input: {
   readonly url: string;
   readonly directory: string;
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
-  const reset = yield* git(
-    "repair",
+  const path = yield* Path.Path;
+  const head = yield* git(
+    "head",
     input.directory,
-    ["reset", "--hard", "HEAD"],
+    ["rev-parse", "--verify", "--quiet", "HEAD"],
     INSPECT_TIMEOUT_MS,
   );
-  if (reset.exitCode === 0 && (yield* inspectLinkedCheckout(input.directory)) === "valid") return;
-  const aside = `${input.directory}.broken-${t3teamRandomHex(4)}`;
-  yield* fileSystem.rename(input.directory, aside);
+  if (head.exitCode === 0) {
+    const hasIndex = yield* fileSystem
+      .exists(path.join(input.directory, ".git", "index"))
+      .pipe(Effect.orElseSucceed(() => false));
+    if (!hasIndex) {
+      yield* git("readTree", input.directory, ["read-tree", "HEAD"], INSPECT_TIMEOUT_MS);
+    }
+    yield* git("restore", input.directory, ["checkout-index", "-a", "-q"], INSPECT_TIMEOUT_MS);
+    if ((yield* inspectLinkedCheckout(input.directory)) === "valid") return;
+  }
+  yield* fileSystem.rename(input.directory, `${input.directory}.broken-${t3teamRandomHex(4)}`);
   yield* cloneLinkedCheckoutAtomically(input);
-  yield* fileSystem.remove(aside, { recursive: true, force: true }).pipe(Effect.ignore);
 });
 
 export const fetchLinkedCheckout = Effect.fn("fetchLinkedCheckout")(function* (directory: string) {
