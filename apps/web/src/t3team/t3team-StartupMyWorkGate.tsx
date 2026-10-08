@@ -1,28 +1,27 @@
 /**
  * Cold-start gate on the index route: opens My Work when it has something to show, otherwise
- * renders `children` (the draft landing) unchanged. Nothing paints while it decides, so the draft
- * landing never flashes before a redirect; the wait is bounded so a slow Jira never blocks startup.
+ * renders `children` (the draft landing) unchanged. The draft landing never flashes before a
+ * redirect; the wait is bounded so a slow Jira never blocks startup.
  *
- * The probe reads the same inputs `AllProjectsMyWorkView` does — bound projects, the all-projects
- * digest graph, the resolved lens — and the digest hook caches its graph per scope, so My Work
- * paints from that cache right after the redirect instead of fetching again.
+ * While it decides it renders My Work's own loading animation — the same art My Work then shows
+ * for its first load, so the hand-off has nothing to jump between. (It used to render `null`,
+ * which left the window blank for up to two seconds.)
+ *
+ * The probe reads the same inputs `AllProjectsMyWorkView` does, through the SAME hook
+ * (`useMyWorkBoundProjects`): one hydration, one project list, therefore one digest scope
+ * signature — which is what makes My Work paint from this probe's cached graph after the redirect
+ * instead of fetching again.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { isElectron } from "~/env";
 import { useNowMinute } from "~/hooks/useNowMinute";
-import { useAllEnvironmentShellsBootstrapped, useProjects } from "~/state/entities";
 import { BackendProvider, createT3Backend } from "~/t3team/backend/t3team-index";
-import { hydrateStoredProjects } from "~/t3team/hooks/t3team-projectStorePersistence";
-import {
-  deriveLooseWorkspaceProjects,
-  loadStoredProjects,
-  reconcileStoredProjectsWithLive,
-} from "~/t3team/hooks/t3team-projectStoreUtils";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
-import { selectBoundProjects } from "~/t3team/t3team-allProjectsMyWorkProjects";
+import { MyWorkLoadingAnimation } from "~/t3team/t3team-MyWorkLoadingAnimation";
+import { useMyWorkBoundProjects } from "~/t3team/t3team-myWorkBoundProjects";
 import {
   getProjectDashboardMyWorkStorageKey,
   readPersistedProjectDashboardMyWorkState,
@@ -69,7 +68,7 @@ export function T3TeamStartupMyWorkGate({ children }: { readonly children: React
 
 function StartupMyWorkProbe({ onFallback }: { readonly onFallback: () => void }) {
   const navigate = useNavigate();
-  const boundProjects = useStartupBoundProjects();
+  const boundProjects = useMyWorkBoundProjects();
   const [lens] = useState(
     () =>
       resolveProjectDashboardMyWorkState({
@@ -108,34 +107,13 @@ function StartupMyWorkProbe({ onFallback }: { readonly onFallback: () => void })
     }
   }, [decision, navigate, onFallback]);
 
-  return null;
+  // The gap the animation fills: whichever way this lands, the next paint is My Work's first load
+  // or the draft landing, and neither should be preceded by a blank window.
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden p-4 sm:p-6">
+      <MyWorkLoadingAnimation />
+    </div>
+  );
 }
 
 const EMPTY_PROJECTS: ReadonlyArray<ProjectShellProject> = [];
-
-/** `AllProjectsMyWorkView`'s bound projects, or `null` until stored and live projects are loaded. */
-function useStartupBoundProjects(): ReadonlyArray<ProjectShellProject> | null {
-  const liveProjects = useProjects();
-  const bootstrapped = useAllEnvironmentShellsBootstrapped();
-  const [storedProjects, setStoredProjects] = useState<ProjectShellProject[] | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void hydrateStoredProjects()
-      .catch(() => loadStoredProjects())
-      .then((projects) => {
-        if (!cancelled) setStoredProjects(projects);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return useMemo(() => {
-    if (storedProjects === null || !bootstrapped) return null;
-    return selectBoundProjects([
-      ...reconcileStoredProjectsWithLive(storedProjects, liveProjects),
-      ...deriveLooseWorkspaceProjects(storedProjects, liveProjects),
-    ]);
-  }, [bootstrapped, liveProjects, storedProjects]);
-}

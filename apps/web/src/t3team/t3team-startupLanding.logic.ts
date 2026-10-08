@@ -41,7 +41,10 @@ export function decideStartupLanding(input: {
 export function deriveStartupMyWorkProbe(input: {
   /** `null` while the stored/live project lists are still loading. */
   readonly boundProjects: ReadonlyArray<unknown> | null;
-  readonly digest: Pick<UseMyWorkDigestGraphResult, "graph" | "status" | "sessionExpired">;
+  readonly digest: Pick<
+    UseMyWorkDigestGraphResult,
+    "graph" | "status" | "sessionExpired" | "freshness"
+  >;
   readonly lens: ProjectMyWorkLens;
   readonly nowMs: number;
 }): StartupMyWorkProbe {
@@ -54,11 +57,16 @@ export function deriveStartupMyWorkProbe(input: {
   });
   if (boundProjects.length === 0 || digest.sessionExpired) return settled(0);
   if (digest.graph !== null) {
-    return settled(
+    const itemCount =
       input.lens === "digest"
         ? buildDigestPlan(digest.graph, input.nowMs).sections.length
-        : digest.graph.tickets.length,
-    );
+        : digest.graph.tickets.length;
+    // A cached graph WITH items opens My Work at once — it paints from that same cache, and a
+    // fresh round cannot make the answer worse than "the landing". A cached graph with NOTHING in
+    // it is last session's answer: wait for the server rather than send the user to the landing
+    // on it, and fall back at the deadline like any other slow round.
+    if (digest.freshness === "fresh" || itemCount > 0) return settled(itemCount);
+    return { status: "pending" };
   }
   // A failing fetch renders a retry/error state, never items: do not wait it out.
   return digest.status === "loading" ? { status: "pending" } : settled(0);
