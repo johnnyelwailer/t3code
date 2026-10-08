@@ -7,6 +7,7 @@ import { BotIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { ProviderInstanceIcon } from "~/components/chat/ProviderInstanceIcon";
+import { cn } from "~/lib/utils";
 import { RollLabel } from "~/components/t3team-ThreadActivityStatus-rollLabel";
 import { usePrimarySettings } from "~/hooks/useSettings";
 import { formatRelativeTime } from "~/t3team/components/t3team-projectSidebarTimeLabels";
@@ -39,7 +40,14 @@ function useLivePhraseSpin(label: string, live: boolean): number {
   return tick;
 }
 
-function SubRunDriverMark({ instanceId }: { instanceId: string | undefined }) {
+/** Provider logo for one sub-run row; shared by the live rows and the settled fold. */
+export function SubRunDriverMark({
+  instanceId,
+  iconClassName = "size-3.5",
+}: {
+  instanceId: string | undefined;
+  iconClassName?: string;
+}) {
   const configs = useServerConfigs();
   const provider =
     instanceId === undefined
@@ -48,7 +56,7 @@ function SubRunDriverMark({ instanceId }: { instanceId: string | undefined }) {
           .flatMap((config) => config.providers)
           .find((entry) => entry.instanceId === instanceId);
   if (!provider) {
-    return <BotIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />;
+    return <BotIcon aria-hidden className={cn("shrink-0 text-muted-foreground", iconClassName)} />;
   }
   return (
     <ProviderInstanceIcon
@@ -56,7 +64,7 @@ function SubRunDriverMark({ instanceId }: { instanceId: string | undefined }) {
       displayName={provider.displayName ?? provider.driver}
       iconDataUrl={provider.iconDataUrl}
       acpRegistryIconUrl={provider.iconUrl}
-      iconClassName="size-3.5"
+      iconClassName={iconClassName}
       className="z-auto"
     />
   );
