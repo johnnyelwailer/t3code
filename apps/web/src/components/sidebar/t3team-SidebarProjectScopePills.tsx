@@ -31,10 +31,12 @@ type PillsProps = {
   groups: ReadonlyArray<SidebarProjectSnapshot>;
   activeScopeKey: string | null;
   onSelectScope: (scopeKey: string | null) => void;
-  onProjectContextMenu?: (
-    event: ReactMouseEvent<HTMLElement> | ReactKeyboardEvent<HTMLInputElement>,
-    projectGroup: SidebarProjectSnapshot,
-  ) => void;
+  onProjectContextMenu?:
+    | ((
+        event: ReactMouseEvent<HTMLElement> | ReactKeyboardEvent<HTMLInputElement>,
+        projectGroup: SidebarProjectSnapshot,
+      ) => void)
+    | undefined;
 };
 
 /**
@@ -76,7 +78,8 @@ function useMeasuredWidth(): [RefObject<HTMLDivElement | null>, number | null] {
 
 /**
  * One-click project scope: an "All" disc plus a stack of discs, as many as the row's width
- * fits; the rest sit behind a "+N" menu. App projects come first in the sidebar's own sort
+ * fits; the rest sit behind a "+N" disc that searches every project (a search disc when
+ * nothing overflows). App projects come first in the sidebar's own sort
  * order, then dashed "add" discs for Jira projects the app does not have yet. A site whose
  * project list failed stays visible beside the stack, with a retry.
  */
@@ -94,6 +97,7 @@ export function T3TeamSidebarProjectScopePillsView({
   onRetrySite?: (accountId: string) => void;
 }) {
   const [ref, width] = useMeasuredWidth();
+  const rowRef = useRef<HTMLDivElement | null>(null);
   const items = useMemo(() => buildScopePillItems(groups, addable), [groups, addable]);
   const empty: ReadonlyArray<ScopePillItem> = [];
   const { shown, overflow } =
@@ -104,6 +108,7 @@ export function T3TeamSidebarProjectScopePillsView({
   return (
     <TooltipProvider delay={300} closeDelay={0}>
       <div
+        ref={rowRef}
         role="group"
         aria-label="Project scope"
         // Left inset matches the search field's padding above. Failed sites sit outside the
@@ -117,6 +122,7 @@ export function T3TeamSidebarProjectScopePillsView({
             activeScopeKey={activeScopeKey}
             onSelectScope={onSelectScope}
             onProjectContextMenu={onProjectContextMenu}
+            pickerAnchor={rowRef}
           />
         </div>
         {siteFailures.map((failure) => (
