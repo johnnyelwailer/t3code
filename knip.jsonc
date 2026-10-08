@@ -12,6 +12,7 @@
     "apps/mobile/t3team-typecheck.mjs",
     "apps/server/__fixtures__/t3team-decisionBoolean.workflow.ts",
     "apps/server/__fixtures__/t3team-decisionForm.workflow.ts",
+    "apps/server/__fixtures__/t3team-hostChangeRequestTool.workflow.ts",
     "apps/server/__fixtures__/t3team-hostDraftTool.workflow.ts",
     "apps/server/__fixtures__/t3team-hostDraftToolUndeclared.workflow.ts",
     "apps/server/scripts/t3team-dev-entry.mjs",
