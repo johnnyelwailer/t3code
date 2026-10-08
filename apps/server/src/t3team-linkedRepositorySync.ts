@@ -30,6 +30,7 @@ import {
   fetchLinkedCheckout,
   inspectLinkedCheckout,
   readLinkedCheckoutOrigin,
+  recloneLinkedCheckout,
   repairLinkedCheckout,
 } from "./t3team-linkedRepositoryCheckout.ts";
 import { recordLinkedRepositoryOutcome } from "./t3team-linkedRepositoryManifestEntry.ts";
@@ -61,6 +62,9 @@ export class T3TeamLinkedRepositorySync extends Context.Service<
   {
     /** Queues a clone/fetch and returns at once; joins a sync of the same checkout in flight. */
     readonly request: (input: LinkedRepositorySyncRequest) => Effect.Effect<void>;
+    /** Like `request`, but at most once per checkout for this server's lifetime: re-queues a
+     * sync a restart dropped without letting repeated status polls turn into a fetch loop. */
+    readonly recover: (input: LinkedRepositorySyncRequest) => Effect.Effect<void>;
     /** The phase of the checkout's queued or running sync; `undefined` when idle. */
     readonly phase: (localPath: string) => LinkedRepositorySyncPhase | undefined;
     /** Resolves once the checkout's sync in flight (if any) has been recorded. */
@@ -95,8 +99,8 @@ const make = Effect.gen(function* () {
         return { status: "cloned" } as const;
       }
       // Fail closed: only a checkout whose `origin` is this repository is ours to report on (a
-      // path derived from another repository's URL can share the slug). A broken checkout may be
-      // unable to report one; its repair keeps the old tree aside and clones this repository.
+      // path derived from another repository's URL can share the slug). A broken checkout that
+      // cannot report one is never repaired in place: it is kept aside and this repository cloned.
       const origin = yield* readLinkedCheckoutOrigin(localPath);
       if (origin === undefined ? state === "valid" : !isSameRepository(origin, job.url)) {
         return {
@@ -105,6 +109,11 @@ const make = Effect.gen(function* () {
             ? `Reference path already holds a different repository (${redactUrlCredentials(origin)}).`
             : "Reference path holds a git repository without an origin remote.",
         } as const;
+      }
+      if (origin === undefined) {
+        job.phase = "cloning";
+        yield* recloneLinkedCheckout({ url: job.url, directory: localPath });
+        return { status: "cloned" } as const;
       }
       job.phase = "updating";
       if (state === "broken") yield* repairLinkedCheckout({ url: job.url, directory: localPath });
@@ -184,8 +193,15 @@ const make = Effect.gen(function* () {
       }),
     );
 
+  const recovered = new Set<string>();
   return T3TeamLinkedRepositorySync.of({
     request,
+    recover: (input) =>
+      Effect.suspend(() => {
+        if (recovered.has(input.localPath)) return Effect.void;
+        recovered.add(input.localPath);
+        return request(input);
+      }),
     phase: (localPath) => jobs.get(localPath)?.phase,
     awaitSettled: (localPath) =>
       Effect.suspend(() => {

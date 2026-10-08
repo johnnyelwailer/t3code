@@ -314,4 +314,30 @@ describe("T3TeamLinkedRepositorySync", () => {
       expect(entry?.error).toContain("without an origin");
     }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
   });
+
+  it.live("re-clones a broken checkout without an origin instead of repairing it in place", () => {
+    const harness = makeHarness();
+    const wanted = makeOrigin(harness.root, "wanted-two");
+    const other = makeOrigin(harness.root, "unrelated");
+    return Effect.gen(function* () {
+      const referencesRoot = NodePath.join(
+        harness.workspaceRoot,
+        HIDDEN_T3TEAM_DIR,
+        REFERENCES_DIR_NAME,
+      );
+      const localPath = NodePath.join(referencesRoot, `01-${deriveReferenceDirectoryName(wanted)}`);
+      NodeFS.mkdirSync(referencesRoot, { recursive: true });
+      git(harness.root, "clone", "-q", other, localPath);
+      git(localPath, "remote", "remove", "origin");
+      NodeFS.rmSync(NodePath.join(localPath, ".git", "index"));
+      yield* bootstrap(harness.workspaceRoot, [wanted], true);
+      yield* settleAll([localPath]);
+      const [entry] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot)).linkedRepositories;
+      expect(entry?.status).toBe("cloned");
+      expect(git(localPath, "remote", "get-url", "origin").stdout.trim()).toBe(wanted);
+      // The unrelated tree is kept aside, not deleted.
+      const aside = NodeFS.readdirSync(referencesRoot).filter((name) => name.includes(".broken-"));
+      expect(aside).toHaveLength(1);
+    }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
+  });
 });

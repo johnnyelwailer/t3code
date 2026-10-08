@@ -160,6 +160,15 @@ export const repairLinkedCheckout = Effect.fn("repairLinkedCheckout")(function* 
     yield* git("restore", input.directory, ["checkout-index", "-a", "-q"], INSPECT_TIMEOUT_MS);
     if ((yield* inspectLinkedCheckout(input.directory)) === "valid") return;
   }
+  yield* recloneLinkedCheckout(input);
+});
+
+/** Moves the checkout aside — kept, never deleted — and clones `url` fresh in its place. */
+export const recloneLinkedCheckout = Effect.fn("recloneLinkedCheckout")(function* (input: {
+  readonly url: string;
+  readonly directory: string;
+}) {
+  const fileSystem = yield* FileSystem.FileSystem;
   yield* fileSystem.rename(input.directory, `${input.directory}.broken-${t3teamRandomHex(4)}`);
   yield* cloneLinkedCheckoutAtomically(input);
 });

@@ -39,7 +39,7 @@ export const readLinkedRepositoryStatus = Effect.fn("readLinkedRepositoryStatus"
   // A `pending` entry with no job lost its sync to a server restart: queue it again (no git here).
   for (const entry of manifest.linkedRepositories) {
     if (entry.status === "pending" && !sync.phase(entry.localPath)) {
-      yield* sync.request({ referencesRoot, url: entry.url, localPath: entry.localPath });
+      yield* sync.recover({ referencesRoot, url: entry.url, localPath: entry.localPath });
     }
   }
   return {
