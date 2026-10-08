@@ -850,6 +850,16 @@ export const PullRequestDetail = Schema.Struct({
   headRepositoryNameWithOwner: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   /** The head commit, where the host reports it with the detail. */
   headSha: Schema.optional(TrimmedNonEmptyString),
+  /** The base commit the change is measured against, where the host reports it with the detail. */
+  baseSha: Schema.optional(TrimmedNonEmptyString),
+  /** The head lives in another repository (a fork). Absent where the host does not say. */
+  isCrossRepository: Schema.optional(Schema.Boolean),
+  /**
+   * The author's standing on the repository as the host words it (GitHub: OWNER, MEMBER,
+   * COLLABORATOR, CONTRIBUTOR, FIRST_TIME_CONTRIBUTOR, NONE, …). Absent where the host does not say,
+   * which is not the same as "none".
+   */
+  authorAssociation: Schema.optional(TrimmedNonEmptyString),
   baseBranch: TrimmedNonEmptyString,
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,

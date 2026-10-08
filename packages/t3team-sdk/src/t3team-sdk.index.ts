@@ -151,6 +151,19 @@ export {
   WorkItemUpdates,
   WorkItemUpdated,
 } from "./t3team-sdk.builtinSignals.ts";
+export {
+  ScmViewerChangeRequests,
+  ScmViewerChangeRequestsParams,
+  ScmViewerChangeRequestUpdated,
+  ScmViewerChangeRequestUpdatedPayload,
+  ViewerChangeRequestPayload,
+  ViewerChangeRequestReason,
+} from "./t3team-sdk.builtinSignalsViewer.ts";
+export type {
+  ScmViewerChangeRequestsParamsType,
+  ViewerChangeRequestPayloadType,
+  ViewerChangeRequestReasonType,
+} from "./t3team-sdk.builtinSignalsViewer.ts";
 export type {
   ChangeRequestChecksPayloadType,
   ChangeRequestPayloadType,

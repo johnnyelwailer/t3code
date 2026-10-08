@@ -129,6 +129,13 @@ export interface WorkflowSignalStoreShape {
   readonly deleteDeliveredInboxEntriesOlderThan: (
     cutoffIso: string,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
+  /** Bound a source's UNDELIVERED slots: drop those created before `olderThanIso` and all but
+   * the newest `keepNewest`. For a source whose events nobody may ever drain. */
+  readonly pruneUndeliveredInboxEntries: (input: {
+    readonly sourceName: string;
+    readonly olderThanIso: string;
+    readonly keepNewest: number;
+  }) => Effect.Effect<void, ProjectionRepositoryError>;
   readonly getCursor: (
     instanceKey: string,
   ) => Effect.Effect<Option.Option<SignalCursor>, ProjectionRepositoryError>;
@@ -289,6 +296,29 @@ const makeWorkflowSignalStore = Effect.gen(function* () {
       `,
   });
 
+  const pruneUndeliveredInboxEntriesRow = SqlSchema.void({
+    Request: Schema.Struct({
+      sourceName: Schema.String,
+      olderThanIso: Schema.String,
+      keepNewest: Schema.Number,
+    }),
+    execute: ({ sourceName, olderThanIso, keepNewest }) =>
+      sql`
+        DELETE FROM workflow_signal_inbox
+        WHERE source_name = ${sourceName}
+          AND delivered = 0
+          AND (
+            created_at < ${olderThanIso}
+            OR id NOT IN (
+              SELECT id FROM workflow_signal_inbox
+              WHERE source_name = ${sourceName} AND delivered = 0
+              ORDER BY id DESC
+              LIMIT ${keepNewest}
+            )
+          )
+      `,
+  });
+
   const getCursorRow = SqlSchema.findOneOption({
     Request: Schema.Struct({ instanceKey: Schema.String }),
     Result: SignalCursor,
@@ -359,6 +389,15 @@ const makeWorkflowSignalStore = Effect.gen(function* () {
         ),
       );
 
+  const pruneUndeliveredInboxEntries: WorkflowSignalStoreShape["pruneUndeliveredInboxEntries"] = (
+    input,
+  ) =>
+    pruneUndeliveredInboxEntriesRow(input).pipe(
+      Effect.mapError(
+        toPersistenceSqlError("WorkflowSignalStore.pruneUndeliveredInboxEntries:query"),
+      ),
+    );
+
   const getCursor: WorkflowSignalStoreShape["getCursor"] = (instanceKey) =>
     getCursorRow({ instanceKey }).pipe(
       Effect.mapError(toPersistenceSqlError("WorkflowSignalStore.getCursor:query")),
@@ -377,6 +416,7 @@ const makeWorkflowSignalStore = Effect.gen(function* () {
     insertInboxEntry,
     takeOpenInboxEntry,
     deleteDeliveredInboxEntriesOlderThan,
+    pruneUndeliveredInboxEntries,
     getCursor,
     upsertCursor,
   } satisfies WorkflowSignalStoreShape;
