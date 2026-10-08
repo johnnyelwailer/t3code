@@ -59,7 +59,7 @@ export const SUB_RUN_STATUS_LABEL: Record<ProjectThread["status"], string> = {
   idle: "Idle",
   running: "Running",
   completed: "Completed",
-  error: "Error",
+  error: "Failed",
 };
 
 /**
@@ -79,10 +79,17 @@ export const SUB_RUN_WAITING_LABEL = "Waiting";
  * t3team-SidebarSubRunRow). Listed rows have no thinking/writing word: that needs the
  * thread's turn items, which only the open thread loads.
  */
+const LIVE_SHELL_WORDS = new Set(["preparing", "starting", "queued", "running"]);
+
 export function resolveSubRunStatusLabel(
   thread: Pick<
     ProjectThread,
-    "status" | "activityLabel" | "pendingUserInput" | "waitingOnChildren" | "awaitingParent"
+    | "status"
+    | "shellRunStatus"
+    | "activityLabel"
+    | "pendingUserInput"
+    | "waitingOnChildren"
+    | "awaitingParent"
   >,
   options: { readonly activityLabelsEnabled: boolean },
 ): string {
@@ -99,19 +106,29 @@ export function resolveSubRunStatusLabel(
   if (thread.awaitingParent === true) {
     return "Plan awaiting approval";
   }
-  // Own work settled but child work is still live. Own live work (running) and a
-  // failed row (error) keep their own word, mirroring the server primitive's precedence.
-  if (
-    thread.waitingOnChildren === true &&
-    thread.status !== "running" &&
-    thread.status !== "error"
-  ) {
+  const shell = thread.shellRunStatus;
+  // Shell words outrank the collapsed ProjectThread.status. A finished run
+  // that is not archived (and so not `status: "completed"`) still says
+  // Completed, not Idle.
+  if (shell === "preparing" || shell === "starting") return "Starting";
+  if (shell === "queued") return "Queued";
+  if (shell === "waiting") return SUB_RUN_WAITING_LABEL;
+  const ownLive =
+    thread.status === "running" || (shell !== undefined && LIVE_SHELL_WORDS.has(shell));
+  const ownFailed = shell === "failed" || thread.status === "error";
+  // Own work settled but child work is still live. Own live work and a
+  // failed row keep their own word, mirroring the server primitive's precedence.
+  if (thread.waitingOnChildren === true && !ownLive && !ownFailed) {
     return SUB_RUN_WAITING_LABEL;
   }
-  const label = SUB_RUN_STATUS_LABEL[thread.status];
-  if (thread.status !== "running") return label;
-  return resolveActivityPillDisplay({
-    label,
-    activityLabel: options.activityLabelsEnabled ? (thread.activityLabel ?? null) : null,
-  });
+  if (ownLive) {
+    return resolveActivityPillDisplay({
+      label: "Running",
+      activityLabel: options.activityLabelsEnabled ? (thread.activityLabel ?? null) : null,
+    });
+  }
+  if (ownFailed) return "Failed";
+  if (shell === "interrupted" || shell === "cancelled") return "Stopped";
+  if (shell === "completed" || thread.status === "completed") return "Completed";
+  return SUB_RUN_STATUS_LABEL[thread.status];
 }

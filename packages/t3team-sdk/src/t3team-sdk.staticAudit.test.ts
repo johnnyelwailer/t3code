@@ -132,6 +132,20 @@ describe("static capability check", () => {
     expect(findings[0]?.construct).toBe("tools.t3team.orchestration.run");
   });
 
+  it("gates thread.showView on ui.render", () => {
+    const source = {
+      absolutePath: NodePath.join(FIXTURES, "inline.workflow.ts"),
+      sourceText: [
+        "export const meta = { name: 'inline', capabilities: ['user'] };",
+        "getThread()?.showView({ key: 'k', viewId: 'notes.card', props: {} });",
+        "return {};",
+      ].join("\n"),
+    };
+    const findings = auditWorkflowSourceStatic(source, { declared: new Set(["user"]) });
+    expect(findings.map((item) => item.message)).toEqual([expect.stringContaining("'ui.render'")]);
+    expect(auditWorkflowSourceStatic(source, { declared: new Set(["ui.render"]) })).toEqual([]);
+  });
+
   it("skips capability rules when the capability set is unknowable", () => {
     // No `meta` at all: prepareWorkflow throws, so the declared set stays undefined and only
     // determinism rules run. The validate path reports the meta failure separately.

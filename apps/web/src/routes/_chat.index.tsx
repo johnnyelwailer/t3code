@@ -21,6 +21,7 @@ import {
 import { useEnvironments } from "../state/environments";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { useT3TeamAppBaseName, useT3TeamAppDisplayName } from "~/t3team/t3team-appBrandName";
+import { T3TeamStartupMyWorkGate } from "~/t3team/t3team-StartupMyWorkGate";
 
 function ChatIndexRouteView() {
   const { authGateState } = Route.useRouteContext();
@@ -31,7 +32,11 @@ function ChatIndexRouteView() {
     if (environments.length === 0) return <HostedStaticOnboardingState />;
   }
 
-  return <IndexDraftLanding />;
+  return (
+    <T3TeamStartupMyWorkGate>
+      <IndexDraftLanding />
+    </T3TeamStartupMyWorkGate>
+  );
 }
 
 /**

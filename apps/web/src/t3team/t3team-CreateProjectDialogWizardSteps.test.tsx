@@ -19,6 +19,10 @@ import { CreateProjectDialog } from "./t3team-CreateProjectDialog";
  * each step in order, "Skip" on the repositories step reaches review leaving zero repos linked, the
  * review step's heading (real, unmocked) names the selected project, and creation still resolves
  * the correct external project id with an empty linked-repositories list.
+ *
+ * The profile step only exists while the WORK_PROFILE_CHOOSER flag is on, so the walk is run for
+ * both settings: on keeps the four-step path above, off must go project -> repositories directly
+ * and must still be able to walk back without landing on a step that no longer exists.
  */
 
 const { mockT3teamCreateProject, mockFinalizeCreatedProject } = vi.hoisted(() => ({
@@ -27,6 +31,12 @@ const { mockT3teamCreateProject, mockFinalizeCreatedProject } = vi.hoisted(() =>
 }));
 
 vi.mock("lucide-react", (importOriginal) => createLucideReactMock(importOriginal));
+
+const chooserEnabled = { current: true };
+vi.mock("~/t3team/t3team-workProfileChooser", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./t3team-workProfileChooser")>();
+  return { ...actual, useT3TeamWorkProfileChooserEnabled: () => chooserEnabled.current };
+});
 
 vi.mock("~/t3team/backend/t3team-index", () => ({
   useBackend: () => backendRef.current,
@@ -125,12 +135,14 @@ async function mountWizard() {
 
 describe("CreateProjectDialog split final step", () => {
   beforeEach(() => {
+    chooserEnabled.current = true;
     mockT3teamCreateProject.mockReset();
     mockFinalizeCreatedProject.mockReset();
     mockFinalizeCreatedProject.mockImplementation(async ({ project }) => project);
   });
 
   it("walks project -> profile -> repositories -> (skip) -> review and creates with zero repos", async () => {
+    chooserEnabled.current = true;
     const { host } = await mountWizard();
 
     await act(async () => {
@@ -175,5 +187,26 @@ describe("CreateProjectDialog split final step", () => {
     expect(createInput.externalProjectId).toBe("2");
     const raw = createInput.raw as { agentReferences: { linkedRepositories: unknown[] } };
     expect(raw.agentReferences.linkedRepositories).toEqual([]);
+  });
+
+  it("skips the profile step entirely when the work profile chooser is off", async () => {
+    chooserEnabled.current = false;
+    const { host } = await mountWizard();
+
+    await act(async () => {
+      findButtonByText(host, "IES - Sandbox (Scrum)").click();
+    });
+    await act(async () => {
+      findButtonByText(host, "Continue").click(); // project -> repositories, no profile step
+    });
+    expect(host.textContent).toContain("repositories-step");
+    expect(host.textContent).not.toContain("profile-step");
+
+    // Back from repositories lands on the project step, not on the step that no longer exists.
+    await act(async () => {
+      findButtonByText(host, "Back").click();
+    });
+    expect(host.textContent).toContain("IES - Sandbox (Scrum)");
+    expect(host.textContent).not.toContain("profile-step");
   });
 });

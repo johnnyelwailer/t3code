@@ -56,6 +56,8 @@ export interface PreparedWorkflowLaunchInput {
   readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
   /** Per-run bridge to the broker's work-item draft tools (t3team-workflowHostDraftTools.ts). */
   readonly hostToolClient?: LaunchWorkflowRecipeInput["hostToolClient"];
+  /** The run's script host members; rebuilt from the run row on rehydration, never persisted. */
+  readonly scriptHost?: LaunchWorkflowRecipeInput["scriptHost"];
   /** The same grant in persistable form; recorded on the run row so boot rehydration restores
    * this bridge and its scope rather than inferring one (migration 047). */
   readonly hostToolGrant?: WorkflowRun["hostToolGrant"];

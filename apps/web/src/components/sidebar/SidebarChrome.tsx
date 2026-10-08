@@ -249,14 +249,16 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
       <SidebarMenu className="flex-row items-center">
         {/* t3team: the Team shell's work surfaces, reachable from every route — including
             upstream-shell pages like /pull-requests or /settings. */}
-        <T3TeamSidebarWorkNavItems />
         {isOnUtilityPage ? (
-          <SidebarMenuItem className="min-w-0 flex-1">
-            <SidebarMenuButton onClick={handleBackClick}>
-              <ArrowLeftIcon />
-              <span>Back</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          <>
+            <T3TeamSidebarWorkNavItems />
+            <SidebarMenuItem className="min-w-0 flex-1">
+              <SidebarMenuButton onClick={handleBackClick}>
+                <ArrowLeftIcon />
+                <span>Back</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </>
         ) : (
           <>
             <SidebarUtilityItem
@@ -264,6 +266,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
               label="Settings"
               onClick={handleSettingsClick}
             />
+            <T3TeamSidebarWorkNavItems />
             {pullRequestsSupported ? (
               <SidebarUtilityItem
                 icon={<PullRequestGlyph.pullRequest />}

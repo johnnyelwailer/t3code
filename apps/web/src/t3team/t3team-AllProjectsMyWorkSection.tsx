@@ -37,6 +37,7 @@ import {
   type ProjectTicketHierarchy,
 } from "~/t3team/t3team-ticketHierarchy";
 import { buildProjectTicketKanbanColumns } from "~/t3team/t3team-projectTicketStatus";
+import { scopeProjectSearch } from "~/t3team/t3team-scopeRouteSync.logic";
 import type { ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
@@ -138,8 +139,7 @@ export function AllProjectsMyWorkSection({
   return (
     <section className="flex min-w-0 flex-col gap-2">
       <header className="flex min-w-0 items-center gap-2">
-        {/* The whole heading filters into the project's own My-work board — the roll-up is the
-            overview, the project view is where the work happens. */}
+        {/* The heading opens this project's My work on the lens the roll-up is showing. */}
         <button
           type="button"
           className="group/section-head flex min-w-0 cursor-pointer items-center gap-2 rounded-md text-left hover:text-foreground"
@@ -147,7 +147,7 @@ export function AllProjectsMyWorkSection({
             void navigate({
               to: "/t3team/projects/$projectId",
               params: { projectId: project.id },
-              search: { projectView: "my-work" },
+              search: scopeProjectSearch("my-work", lens),
             });
           }}
         >

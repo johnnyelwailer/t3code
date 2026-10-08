@@ -22,6 +22,8 @@ export type UpstreamRouteTranslation =
 // this shell, so the shell must not translate them — swallowing them breaks terminal-less login.
 const PASSTHROUGH_PREFIXES = [
   "/t3team",
+  // Detached surfaces render bare in a window of their own (t3team-detachedSurface).
+  "/t3team-detached",
   "/settings",
   // The first-run wizard renders outside the Team shell and is owned by
   // FirstRunGate's own navigation. Translating /welcome away makes the gate
@@ -37,6 +39,9 @@ const PASSTHROUGH_PREFIXES = [
   "/pair",
   "/connect",
   "/connect_",
+  // MCP OAuth approval page for outside agents (upstream #16336). Matching is exact-or-`prefix/`,
+  // so "/connect" does not cover it; translated away it lands on /t3team's pairing gate.
+  "/connect-agent",
 ] as const;
 
 export function isT3TeamShellPath(pathname: string): boolean {

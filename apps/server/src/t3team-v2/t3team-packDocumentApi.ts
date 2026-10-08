@@ -2,6 +2,7 @@ import type { T3TeamPackDocument } from "@t3tools/contracts";
 import type * as Effect from "effect/Effect";
 import type { T3TeamPackDocumentStoreError } from "./t3team-packDocumentValidation.ts";
 export type Result<A> = Effect.Effect<A, T3TeamPackDocumentStoreError>;
+/** One pack's documents. Expired documents read as missing; reads do not count as `touch`. */
 export interface PackDocumentStore {
   readonly get: (collection: string, key: string) => Result<T3TeamPackDocument | null>;
   readonly list: (
@@ -17,7 +18,12 @@ export interface PackDocumentStore {
     collection: string,
     key: string,
     doc: unknown,
-    options?: { ifVersion?: number; ttlMs?: number },
+    /**
+     * `capAtQuota` refuses (`QuotaExceeded`) a write that would grow the pack past `quotaBytes`.
+     * Without it the quota is enforced by retention's eviction; view writes always set it, because
+     * views may write `keep` collections, which eviction never shrinks.
+     */
+    options?: { ifVersion?: number; ttlMs?: number; capAtQuota?: boolean },
   ) => Result<T3TeamPackDocument | null>;
   readonly increment: (
     collection: string,
@@ -25,4 +31,11 @@ export interface PackDocumentStore {
     field: string,
     by: number,
   ) => Result<number>;
+  /** Removes one key or every key with a prefix; returns how many documents were removed. */
+  readonly remove: (
+    collection: string,
+    target: string | { readonly prefix: string },
+  ) => Result<number>;
+  /** Records a read for retention (`afterUnreadDays`, quota eviction order). */
+  readonly touch: (collection: string, key: string) => Result<void>;
 }

@@ -12,6 +12,7 @@ import { RepositoriesStep } from "~/t3team/t3team-CreateProjectRepositorySection
 import { ReviewStep } from "~/t3team/t3team-CreateProjectDialogReviewStep";
 import { CreatingStep } from "~/t3team/t3team-CreateProjectDialogConfirmStep";
 import { CreateProjectWizardStepTransition } from "~/t3team/t3team-CreateProjectWizardFrame";
+import { useT3TeamWorkProfileChooserEnabled } from "~/t3team/t3team-workProfileChooser";
 
 /**
  * Extracted from `t3team-CreateProjectDialog.tsx`: the per-step switch grew a `profile` and a
@@ -51,6 +52,9 @@ export function CreateProjectDialogStepBody(props: {
   onDiscoveredRepositoryUrlsChange: (urls: ReadonlyArray<string>) => void;
 }) {
   const { setup } = props;
+  // Runtime feature flag (default off): the navigation already routes around `profile`, and this
+  // keeps the step unrenderable even if some other path parks the wizard there.
+  const workProfileChooserEnabled = useT3TeamWorkProfileChooserEnabled();
 
   return (
     <CreateProjectWizardStepTransition step={setup.step}>
@@ -96,7 +100,7 @@ export function CreateProjectDialogStepBody(props: {
           onOpenExistingProject={props.onOpenExistingProject}
         />
       ) : null}
-      {setup.step === "profile" ? (
+      {setup.step === "profile" && workProfileChooserEnabled ? (
         <ProfileStep
           setupProfileId={props.setupProfileId}
           onSetupProfileChange={props.onSetupProfileChange}

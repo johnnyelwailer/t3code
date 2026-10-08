@@ -14,6 +14,7 @@ describe("@runbook/threads contracts", () => {
       askUser: async <R = string>(question: string) => `user:${question}` as R,
       notifyUser: () => {},
       showWidget: () => {},
+      showView: () => {},
     };
     const primitives: WorkflowThreadPrimitives = {
       thread,
@@ -75,6 +76,45 @@ describe("@runbook/threads contracts", () => {
     });
 
     expect(() => primitives.thread?.notifyUser("hello")).toThrow("'notifyUser'");
+  });
+
+  it("gates showView on ui.render and rejects bad input before anything is sent", () => {
+    const dispatch = {
+      send: async () => "run-1:1",
+      sendOneWay: (call: Parameters<HandleDispatch["sendOneWay"]>[0]) => {
+        void call.fire("run-1:1", { resolve: () => {}, reject: () => {} });
+        return "run-1:1";
+      },
+      awaitResolution: async <R>() => undefined as R,
+    } satisfies HandleDispatch;
+    const make = (capabilities: ReadonlyArray<string>) => {
+      const broker = createMockBroker(() => ({ kind: "defer" }));
+      const primitives = createThreadPrimitives({
+        dispatch,
+        broker,
+        capabilities: new Set(capabilities),
+        launchThreadId: "launch-thread",
+        defaultModel: undefined,
+      });
+      return { broker, thread: primitives.thread };
+    };
+    const view = { key: "run-1", viewId: "release-notes.draft", props: { draftId: "d1" } };
+
+    expect(() => make(["user"]).thread?.showView(view)).toThrow("'ui.render'");
+
+    const granted = make(["ui.render"]);
+    expect(() => granted.thread?.showView({ ...view, viewId: "draft" })).toThrow("<packId>.<name>");
+    // The host's own views are refused HERE, inside the body, as a catchable error — not later in
+    // the host's one-way broker, where nobody awaits the send.
+    expect(() => granted.thread?.showView({ ...view, viewId: "t3team.workflow.decision" })).toThrow(
+      "host view",
+    );
+    expect(granted.broker.sent).toHaveLength(0);
+
+    granted.thread?.showView(view);
+    expect(granted.broker.sent.map((entry) => entry.payload)).toEqual([
+      { threadId: "launch-thread", recipient: "user", text: "", view },
+    ]);
   });
 
   it("checks child grants before create and carries the resolved subset to the host", () => {

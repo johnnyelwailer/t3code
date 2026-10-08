@@ -150,6 +150,7 @@ import {
   THREAD_RESUME_MAX_REPLAY_EVENTS,
 } from "./orchestration-v2/ThreadStream.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
+import { isWorkProfileChooserEnabled } from "./t3team-workProfileChooserFlag.ts";
 import { isNexiStateDirSelectedAtStartup } from "@t3tools/project-context/t3teamProjectStateDir";
 import {
   buildBoundedThreadProjection,
@@ -1821,6 +1822,9 @@ const layerWsRpc = (
             // Runtime feature flags (env NEXI_FF_MAIN_REPOSITORY / NEXI_FF_NEXI_STATE_DIR,
             // default on): project main repository, and the `.nexi` state dir name.
             mainRepository: isMainRepositoryEnabled(),
+            // Runtime feature flag (env NEXI_FF_WORK_PROFILE_CHOOSER, default off): the work
+            // profile chooser. Off means clients use the developer profile everywhere.
+            workProfileChooser: isWorkProfileChooserEnabled(),
             nexiStateDir: isNexiStateDirSelectedAtStartup(),
           };
         });
@@ -2203,6 +2207,22 @@ const layerWsRpc = (
                   .subscribe(input)
                   .pipe(
                     Stream.mapError(
+                      (cause) => new T3TeamPackDocumentsError({ message: cause.message }),
+                    ),
+                  ),
+            { "rpc.aggregate": "t3team" },
+          ),
+        [WS_METHODS.t3teamPackStorePut]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.t3teamPackStorePut,
+            packDocuments === undefined
+              ? Effect.fail(
+                  new T3TeamPackDocumentsError({ message: "The pack store is unavailable." }),
+                )
+              : packDocuments
+                  .putFromView(input)
+                  .pipe(
+                    Effect.mapError(
                       (cause) => new T3TeamPackDocumentsError({ message: cause.message }),
                     ),
                   ),

@@ -164,6 +164,64 @@ export function resolveMessageDispatchIntent(
   return { type: "queue_after_active" };
 }
 
+/**
+ * Send during an active run when the provider cannot hold an app-owned queued
+ * turn. Steer into the running turn when that is supported; otherwise
+ * interrupt-and-restart. Returns undefined when neither is possible, so the
+ * caller keeps the queued-message rejection. Providers that already queue
+ * (`supportsQueuedMessages`) are left alone.
+ */
+export function redirectUnsupportedQueue(input: {
+  readonly activeRun: Pick<OrchestrationV2Run, "id" | "status" | "activeAttemptId">;
+  readonly providerTurns: ReadonlyArray<{
+    readonly id: ProviderTurnId;
+    readonly runAttemptId: OrchestrationV2Run["activeAttemptId"];
+    readonly status: string;
+  }>;
+  readonly capabilities: OrchestrationV2ProviderCapabilities;
+  /** Notifications and mailbox deliveries must not interrupt a live turn. */
+  readonly allowInterruptRestart: boolean;
+}):
+  | {
+      readonly type: "steer_active";
+      readonly targetRunId: RunId;
+      readonly providerTurnId: ProviderTurnId;
+    }
+  | {
+      readonly type: "restart_active";
+      readonly targetRunId: RunId;
+      readonly interruptProviderTurnId: ProviderTurnId;
+    }
+  | undefined {
+  if (input.capabilities.turns.supportsQueuedMessages) return undefined;
+  if (input.activeRun.status !== "running" || input.activeRun.activeAttemptId === null) {
+    return undefined;
+  }
+  const providerTurnId = input.providerTurns.find(
+    (turn) => turn.runAttemptId === input.activeRun.activeAttemptId && turn.status === "running",
+  )?.id;
+  if (providerTurnId === undefined) return undefined;
+  if (input.capabilities.turns.supportsActiveSteering) {
+    return {
+      type: "steer_active",
+      targetRunId: input.activeRun.id,
+      providerTurnId,
+    };
+  }
+  if (
+    input.allowInterruptRestart &&
+    input.capabilities.turns.supportsInterrupt &&
+    input.capabilities.turns.supportsSteeringByInterruptRestart
+  ) {
+    return {
+      type: "restart_active",
+      targetRunId: input.activeRun.id,
+      interruptProviderTurnId: providerTurnId,
+    };
+  }
+  return undefined;
+}
+
 interface CapabilityCheckInput {
   readonly commandId: CommandId;
   readonly threadId: ThreadId;

@@ -16,6 +16,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import * as GitHubCli from "./sourceControl/GitHubCli.ts";
+import { readSignedInHosts } from "./t3team-myworkViewerPrLoader.ts";
 import type { DigestYesterdayWindow } from "./t3team-myworkDigestYesterdayWindow.ts";
 import type { T3TeamDigestProjectSource } from "./t3team-myworkDigestTypes.ts";
 
@@ -35,9 +36,6 @@ const decodeHits = Schema.decodeUnknownOption(
       }),
     ),
   ),
-);
-const decodeHosts = Schema.decodeUnknownOption(
-  Schema.fromJsonString(Schema.Struct({ hosts: Schema.Record(Schema.String, Schema.Unknown) })),
 );
 
 const utcDate = (ms: number): string => DateTime.formatIso(DateTime.makeUnsafe(ms)).slice(0, 10);
@@ -101,11 +99,7 @@ export function loadViewerMergedPrEntries(
 ): Effect.Effect<DigestPrEntry[], never, GitHubCli.GitHubCli> {
   return Effect.gen(function* () {
     const gh = yield* GitHubCli.GitHubCli;
-    const status = yield* gh
-      .execute({ cwd: NodeOS.homedir(), args: ["auth", "status", "--json", "hosts"] })
-      .pipe(Effect.option);
-    const parsed = status._tag === "Some" ? decodeHosts(status.value.stdout) : undefined;
-    const hosts = parsed?._tag === "Some" ? Object.keys(parsed.value.hosts) : [];
+    const { hosts } = yield* readSignedInHosts(gh);
     const perHost = yield* Effect.all(
       hosts.map((host) => searchHost(gh, host, window)),
       { concurrency: 4 },
