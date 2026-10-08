@@ -11,6 +11,7 @@
  */
 import { distributionBranding } from "@t3code/distribution";
 import {
+  type AuthEnvironmentScope,
   AuthStandardClientScopes,
   ExecutionEnvironmentDescriptor,
   PortSchema,
@@ -52,6 +53,7 @@ import {
   renderTerminalQrCode,
   resolveHeadlessConnectionString,
 } from "../startupAccess.ts";
+import { authScopesFlag } from "./authScopes.ts";
 import { baseDirFlag, DurationFromString } from "./config.ts";
 
 const WELL_KNOWN_ENVIRONMENT_PATH = "/.well-known/t3/environment";
@@ -341,6 +343,8 @@ const makePairServerConfig = Effect.fn(function* (input: {
     startupPresentation: "headless",
     desktopBootstrapToken: undefined,
     desktopTelemetryFd: undefined,
+    desktopBrowserFd: undefined,
+    desktopBrowserControlFd: undefined,
     desktopTelemetryControlFd: undefined,
     resourceMonitorPath: undefined,
     autoBootstrapProjectFromCwd: false,
@@ -430,13 +434,14 @@ const resolveTailscalePairingBase = Effect.fn("pair.resolveTailscalePairingBase"
 
 const mintPairingLink = Effect.fn("pair.mintPairingLink")(function* (input: {
   readonly config: ServerConfig.ServerConfig["Service"];
+  readonly scopes: ReadonlyArray<AuthEnvironmentScope>;
   readonly ttl: Option.Option<Duration.Duration>;
   readonly label: Option.Option<string>;
 }) {
   return yield* Effect.gen(function* () {
     const environmentAuth = yield* EnvironmentAuth.EnvironmentAuth;
     return yield* environmentAuth.createPairingLink({
-      scopes: AuthStandardClientScopes,
+      scopes: input.scopes,
       subject: "one-time-token",
       label: Option.getOrElse(input.label, () => "t3 pair"),
       ...(Option.isSome(input.ttl) ? { ttl: input.ttl.value } : {}),
@@ -479,6 +484,7 @@ const tailscaleServePortFlag = Flag.Int("tailscale-serve-port").pipe(
 
 export const pairCommand = Command.make("pair", {
   baseDir: baseDirFlag,
+  scopes: authScopesFlag(AuthStandardClientScopes),
   ttl: ttlFlag,
   label: labelFlag,
   tailscale: tailscaleFlag,
@@ -520,7 +526,12 @@ export const pairCommand = Command.make("pair", {
       }
 
       const config = yield* makePairServerConfig({ target, logLevel });
-      const issued = yield* mintPairingLink({ config, ttl: flags.ttl, label: flags.label });
+      const issued = yield* mintPairingLink({
+        config,
+        scopes: flags.scopes,
+        ttl: flags.ttl,
+        label: flags.label,
+      });
       const pairingUrl = buildPairingUrl(pairingBaseUrl, issued.credential);
 
       yield* Console.log(

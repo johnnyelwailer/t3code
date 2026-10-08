@@ -69,7 +69,7 @@ it("GitHub discovery surfaces every authenticated host so a host picker can offe
     },
   );
   assert.deepStrictEqual(auth.accounts, [
-    { host: "github.com", account: Option.some("active-user"), active: true },
-    { host: "nexpore.ghe.com", account: Option.some("ghe-user"), active: false },
+    { host: "github.com", account: "active-user", active: true, authenticated: true },
+    { host: "nexpore.ghe.com", account: "ghe-user", active: false, authenticated: true },
   ]);
 });

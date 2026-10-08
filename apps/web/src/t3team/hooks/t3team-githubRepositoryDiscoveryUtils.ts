@@ -79,14 +79,18 @@ export function parseGitHubAuth(discovery: SourceControlDiscoveryResult): {
   const host = parseOptionString(github.auth.host);
   const account = parseOptionString(github.auth.account);
   const detail = parseOptionString(github.auth.detail);
-  const accounts: ReadonlyArray<GitHubAuthAccount> = (github.auth.accounts ?? []).map((entry) => {
-    const entryAccount = parseOptionString(entry.account);
-    return {
-      host: entry.host,
-      ...(entryAccount ? { account: entryAccount } : {}),
-      active: entry.active,
-    };
-  });
+  // Only signed-in logins can be offered as a host choice; the provider also reports the ones
+  // whose token was refused, which belong in Settings rather than in a repository picker.
+  const accounts: ReadonlyArray<GitHubAuthAccount> = (github.auth.accounts ?? [])
+    .filter((entry) => entry.authenticated)
+    .map((entry) => {
+      const entryAccount = parseOptionString(entry.account);
+      return {
+        host: entry.host,
+        ...(entryAccount ? { account: entryAccount } : {}),
+        active: entry.active,
+      };
+    });
   return {
     status: github.auth.status,
     ...(host ? { host } : {}),

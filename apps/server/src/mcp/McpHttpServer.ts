@@ -19,7 +19,6 @@ import packageJson from "../../package.json" with { type: "json" };
 import * as ServerConfig from "../config.ts";
 import * as DeviceService from "../device/DeviceService.ts";
 import * as HtmlRender from "../htmlRender/HtmlRender.ts";
-import * as PreviewBrowser from "../htmlRender/PreviewBrowser.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpToolAccess from "./McpToolAccess.ts";
@@ -240,7 +239,7 @@ type SnapshotMetadata = {
 };
 
 /**
- * Drops the accessibility tree, shortens page text, element names, identifiers,
+ * Keeps server ARIA refs, drops legacy object trees, shortens page text, names, identifiers,
  * and log strings, keeps only the newest log entries, and finally sheds
  * interactive elements until the JSON fits. Returns the bounded value, its
  * text, and notes on what is missing so the agent can reach for
@@ -249,7 +248,8 @@ type SnapshotMetadata = {
 const boundSnapshotMetadata = (metadata: SnapshotMetadata) => {
   const omitted: Array<string> = [];
   const { accessibilityTree, ...withoutTree } = metadata;
-  if (accessibilityTree !== undefined) {
+  const ariaTree = typeof accessibilityTree === "string" ? accessibilityTree : undefined;
+  if (accessibilityTree !== undefined && ariaTree === undefined) {
     omitted.push("accessibilityTree (use interactiveElements locators or preview_evaluate)");
   }
   const tail = <A>(entries: ReadonlyArray<A>, label: string) => {
@@ -312,8 +312,10 @@ const boundSnapshotMetadata = (metadata: SnapshotMetadata) => {
     actionTimeline: 0,
   };
   let visibleTextChars = Math.min(metadata.visibleText.length, MAX_SNAPSHOT_VISIBLE_TEXT_CHARS);
+  let ariaTreeChars = Math.min(ariaTree?.length ?? 0, 20_000);
   const value = () => ({
     ...bounded,
+    ...(ariaTree === undefined ? {} : { accessibilityTree: cutText(ariaTree, ariaTreeChars) }),
     visibleText: cutText(metadata.visibleText, visibleTextChars),
     ...lists,
   });
@@ -328,10 +330,14 @@ const boundSnapshotMetadata = (metadata: SnapshotMetadata) => {
         ? "visibleText"
         : lists.interactiveElements.length > 0
           ? "interactiveElements"
-          : undefined);
+          : ariaTreeChars > 0
+            ? "accessibilityTree"
+            : undefined);
     if (key === undefined) break;
     if (key === "visibleText") {
       visibleTextChars = Math.floor(visibleTextChars / 2);
+    } else if (key === "accessibilityTree") {
+      ariaTreeChars = Math.floor(ariaTreeChars / 2);
     } else {
       const keep = Math.floor(lists[key].length / 2);
       dropped[key] += lists[key].length - keep;
@@ -349,6 +355,9 @@ const boundSnapshotMetadata = (metadata: SnapshotMetadata) => {
     omitted.push(
       `visibleText after ${visibleTextChars} characters (use preview_evaluate for more)`,
     );
+  }
+  if (ariaTree !== undefined && ariaTreeChars < ariaTree.length) {
+    omitted.push(`accessibilityTree after ${ariaTreeChars} characters`);
   }
   for (const key of shedOrder) {
     if (dropped[key] > 0) {
@@ -769,7 +778,7 @@ const imageToolRegistration = <Tools extends Record<string, Tool.Any>, A, E, R, 
 export const layerHtmlToolkit = Layer.mergeAll(
   toolkitRegistration(HtmlRenderToolkit, HtmlHandlers.layerRender),
   imageToolRegistration(registerHtmlPreview(), HtmlHandlers.layerPreview),
-).pipe(Layer.provide(HtmlRender.layer), Layer.provide(PreviewBrowser.layer));
+).pipe(Layer.provide(HtmlRender.layer));
 
 const layerPreviewStandardToolkitRegistration = toolkitRegistration(
   PreviewStandardToolkit,
@@ -815,6 +824,11 @@ const layerAttachmentRegistration = toolkitRegistration(
   AttachmentHandlers.layer,
 );
 
+export const T3TeamToolkitRegistrationLive = toolkitRegistration(
+  T3TeamToolkit,
+  T3TeamToolkitHandlersLive,
+);
+
 export const layerPullRequestsToolkit = toolkitRegistration(
   PullRequestsToolkit,
   PullRequestsHandlers.layer,
@@ -823,11 +837,6 @@ export const layerPullRequestsToolkit = toolkitRegistration(
 const layerDeviceStandardToolkitRegistration = toolkitRegistration(
   DeviceStandardToolkit,
   DeviceHandlers.layerStandard,
-);
-
-export const T3TeamToolkitRegistrationLive = toolkitRegistration(
-  T3TeamToolkit,
-  T3TeamToolkitHandlersLive,
 );
 
 const layerDeviceScreenshotRegistration = imageToolRegistration(

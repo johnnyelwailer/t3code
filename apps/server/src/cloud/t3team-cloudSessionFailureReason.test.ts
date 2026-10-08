@@ -1,8 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import { ChildProcessSpawner } from "effect/process";
 
-import type * as VcsProcess from "../vcs/VcsProcess.ts";
 import { workflowHistoryUrl } from "./t3team-CloudSessionFleet.ts";
 import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
 import {
@@ -11,7 +9,7 @@ import {
 } from "./t3team-cloudSessionFailureReason.ts";
 import type {
   CloudSessionRepoRef,
-  GhInvocation,
+  GitHubActionsRequest,
   WorkflowRunSummary,
 } from "./t3team-githubActionsSessionClient.ts";
 
@@ -32,13 +30,7 @@ const failedRun: WorkflowRunSummary = {
   name: "nexi-session [s1]",
 };
 
-const ghOut = (stdout: string): VcsProcess.VcsProcessOutput => ({
-  exitCode: ChildProcessSpawner.ExitCode(0),
-  stdout,
-  stderr: "",
-  stdoutTruncated: false,
-  stderrTruncated: false,
-});
+const answer = (body: string) => ({ body, truncated: false });
 
 const JOBS_WITH_FAILED_STEP = JSON.stringify({
   jobs: [
@@ -56,13 +48,13 @@ const JOBS_WITH_FAILED_STEP = JSON.stringify({
   ],
 });
 
-/** A fake `gh` that answers every jobs read with `stdout` and counts the calls. */
-const fakeGh = (stdout: string) => {
-  const calls: GhInvocation[] = [];
-  const run = (invocation: GhInvocation) =>
+/** A fake host that answers every jobs read with `body` and counts the calls. */
+const fakeGh = (body: string) => {
+  const calls: GitHubActionsRequest[] = [];
+  const run = (request: GitHubActionsRequest) =>
     Effect.sync(() => {
-      calls.push(invocation);
-      return ghOut(stdout);
+      calls.push(request);
+      return answer(body);
     });
   return { calls, run };
 };

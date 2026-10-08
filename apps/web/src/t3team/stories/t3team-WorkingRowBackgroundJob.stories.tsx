@@ -47,6 +47,7 @@ function Row({
         isPreparingWorktree: false,
         isCompacting: false,
         isRevertingCheckpoint: false,
+        awaitingUser: false,
         latestRunId: "turn-background-job" as RunId,
         workingStepLabel,
         activeAgents: [],

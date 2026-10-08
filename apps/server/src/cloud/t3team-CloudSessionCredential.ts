@@ -3,12 +3,12 @@ import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import type * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as CliTokenManager from "./CliTokenManager.ts";
 import {
-  apiArgs,
+  repoApiPath,
   type CloudSessionRepoRef,
-  type GhInvocation,
+  type GitHubActionsRequest,
+  type GitHubActionsResponse,
 } from "./t3team-githubActionsSessionClient.ts";
 import { parseCreatedPayloadIssue } from "./t3team-CloudSessionPayloadCleanup.ts";
 
@@ -47,31 +47,28 @@ const PAYLOAD_ISSUE_TITLE_PREFIX = "nexi-session payload";
 export const payloadIssueTitle = (tag: string): string => `${PAYLOAD_ISSUE_TITLE_PREFIX} [${tag}]`;
 
 /**
- * Create the credential payload issue. The base64 credential rides on stdin
- * (`--input -`), never in argv, so it cannot surface in `ps` or a process
- * listing — the same hygiene the dispatch invocation in the client uses.
+ * Create the credential payload issue. The base64 credential rides in the request body, never in
+ * a URL or an argv, so it cannot surface in a trace or a process listing — the same hygiene the
+ * dispatch request in the client uses.
  */
-export function createPayloadIssueInvocation(
+export function createPayloadIssueRequest(
   ref: CloudSessionRepoRef,
   input: { readonly title: string; readonly body: string },
-): GhInvocation {
+): GitHubActionsRequest {
   return {
-    args: [
-      ...apiArgs(ref, `repos/${ref.owner}/${ref.repo}/issues`),
-      "--method",
-      "POST",
-      "--input",
-      "-",
-    ],
-    stdin: JSON.stringify({ title: input.title, body: input.body }),
+    kind: "rest",
+    operation: "cloudSession.createPayloadIssue",
+    method: "POST",
+    path: repoApiPath(ref, "issues"),
+    body: { title: input.title, body: input.body },
   };
 }
 
 /** Read the `number` from a `POST /issues` response (name the issue, never its body). */
-export function parseCreatedIssueNumber(stdout: string): number | null {
+export function parseCreatedIssueNumber(body: string): number | null {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(stdout);
+    parsed = JSON.parse(body);
   } catch {
     return null;
   }
@@ -107,13 +104,13 @@ export const sessionCredentialPayloadBody = (token: CliTokenManager.PersistedTok
   Buffer.from(JSON.stringify(token), "utf8").toString("base64");
 
 /**
- * The gh executor the handoff runs through: the service's error-mapped `run`,
- * so a gh failure already arrives as a `CloudSessionFailedError` and this
+ * The GitHub executor the handoff runs through: the service's error-mapped `run`,
+ * so a provider failure already arrives as a `CloudSessionFailedError` and this
  * module only gives it the right reason.
  */
 export type CredentialGhExecutor = (
-  invocation: GhInvocation,
-) => Effect.Effect<VcsProcess.VcsProcessOutput, CloudSessionFailedError>;
+  request: GitHubActionsRequest,
+) => Effect.Effect<GitHubActionsResponse, CloudSessionFailedError>;
 
 /**
  * Hand the creator's live credential to the session before dispatch. Resolves
@@ -122,8 +119,8 @@ export type CredentialGhExecutor = (
  *
  * - flag off  → no-op; the legacy secret path in `session.yml` takes over.
  * - no usable credential → `connect_sign_in_required`.
- * - issue write fails   → `payload_issue_failed` (any gh error collapses here,
- *   because the user's only next step is to retry).
+ * - issue write fails   → `payload_issue_failed` (any provider error collapses
+ *   here, because the user's only next step is to retry).
  */
 export const runCredentialHandoff = Effect.fn("cloud.session.credential_handoff")(
   function* (input: {
@@ -156,7 +153,7 @@ export const runCredentialHandoff = Effect.fn("cloud.session.credential_handoff"
     const body = sessionCredentialPayloadBody(credential.value);
     const result = yield* input
       .run(
-        createPayloadIssueInvocation(input.repoRef, {
+        createPayloadIssueRequest(input.repoRef, {
           title: payloadIssueTitle(input.sessionTag),
           body,
         }),
@@ -172,11 +169,11 @@ export const runCredentialHandoff = Effect.fn("cloud.session.credential_handoff"
       );
 
     // Log the issue number and nothing more: the number is safe, the body is not.
-    const issueNumber = parseCreatedIssueNumber(result.stdout);
+    const issueNumber = parseCreatedIssueNumber(result.body);
     if (issueNumber !== null) {
       yield* Effect.logInfo("Cloud session credential payload written to issue " + issueNumber);
     }
     // Handed back so the creator can delete the spent payload later.
-    return parseCreatedPayloadIssue(result.stdout);
+    return parseCreatedPayloadIssue(result.body);
   },
 );

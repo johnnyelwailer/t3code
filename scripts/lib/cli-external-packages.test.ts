@@ -89,6 +89,7 @@ describe("selectCliRuntimeExternalDependencies", () => {
         "@napi-rs/keyring",
         "@silvia-odwyer/photon-node",
         "node-pty",
+        "playwright-core",
         // Externalized upstream; the fork's server declares it directly.
         "zod",
       ],

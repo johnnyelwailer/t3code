@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off -- Plain sync sha256 hash; stored managed-file hashes must stay byte-identical, not become an Effect requiring Crypto.
 import * as NodeCrypto from "node:crypto";
 
 import { buildT3TeamProjectProfileManifest } from "@t3tools/t3team-skill-packs";

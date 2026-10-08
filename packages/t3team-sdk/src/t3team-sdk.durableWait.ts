@@ -5,6 +5,7 @@
  * there is no park to hand the deadline to, and `wait` stays the in-process timer it always was.
  */
 
+// @effect-diagnostics nodeBuiltinImport:off -- Plain Promise-based SDK primitive, not Effect code; no Effect runtime is available at this boundary.
 import * as NodeTimersPromises from "node:timers/promises";
 
 import type { DurableWorkflowRuntime } from "./t3team-sdk.durableRuntime.ts";

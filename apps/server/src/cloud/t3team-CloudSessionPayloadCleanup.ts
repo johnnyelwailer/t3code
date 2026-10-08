@@ -2,11 +2,11 @@ import type { CloudSession, CloudSessionFailedError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 
-import type * as VcsProcess from "../vcs/VcsProcess.ts";
 import {
-  apiArgs,
+  repoApiPath,
   type CloudSessionRepoRef,
-  type GhInvocation,
+  type GitHubActionsRequest,
+  type GitHubActionsResponse,
   sessionTagMarker,
   type WorkflowRunSummary,
 } from "./t3team-githubActionsSessionClient.ts";
@@ -16,7 +16,7 @@ import {
  *
  * The VM consumes the payload and closes + scrubs it, but it cannot delete it:
  * this GHE has no REST issue DELETE, and GraphQL `deleteIssue` needs repo admin,
- * which the job token never has. The creator's own `gh` login may, so once the
+ * which the job token never has. The creator's own credential may, so once the
  * session is past the point where the VM reads the payload (ready, or already
  * over) the creator's server deletes it. When that fails too, it falls back to
  * close + scrub — which also covers a run that ended before it ever read the
@@ -34,10 +34,10 @@ export const SCRUBBED_PAYLOAD_BODY =
   "Consumed by the session that seeded this payload (single-use). The credential has been removed from this issue.";
 
 /** Read `number` + `node_id` from a `POST /issues` response. */
-export function parseCreatedPayloadIssue(stdout: string): PayloadIssueRef | null {
+export function parseCreatedPayloadIssue(body: string): PayloadIssueRef | null {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(stdout);
+    parsed = JSON.parse(body);
   } catch {
     return null;
   }
@@ -48,34 +48,32 @@ export function parseCreatedPayloadIssue(stdout: string): PayloadIssueRef | null
     : null;
 }
 
-function deleteIssueInvocation(ref: CloudSessionRepoRef, nodeId: string): GhInvocation {
+function deleteIssueRequest(_ref: CloudSessionRepoRef, nodeId: string): GitHubActionsRequest {
   return {
-    args: [
-      ...apiArgs(ref, "graphql"),
-      "-f",
-      "query=mutation($issueId: ID!) { deleteIssue(input: {issueId: $issueId}) { clientMutationId } }",
-      "-f",
-      `issueId=${nodeId}`,
-    ],
+    kind: "graphql",
+    operation: "cloudSession.deletePayloadIssue",
+    query:
+      "mutation($issueId: ID!) { deleteIssue(input: {issueId: $issueId}) { clientMutationId } }",
+    variables: { issueId: nodeId },
   };
 }
 
-function closeAndScrubIssueInvocation(ref: CloudSessionRepoRef, issueNumber: number): GhInvocation {
+function closeAndScrubIssueRequest(
+  ref: CloudSessionRepoRef,
+  issueNumber: number,
+): GitHubActionsRequest {
   return {
-    args: [
-      ...apiArgs(ref, `repos/${ref.owner}/${ref.repo}/issues/${issueNumber}`),
-      "--method",
-      "PATCH",
-      "--input",
-      "-",
-    ],
-    stdin: JSON.stringify({ state: "closed", body: SCRUBBED_PAYLOAD_BODY }),
+    kind: "rest",
+    operation: "cloudSession.scrubPayloadIssue",
+    method: "PATCH",
+    path: repoApiPath(ref, `issues/${issueNumber}`),
+    body: { state: "closed", body: SCRUBBED_PAYLOAD_BODY },
   };
 }
 
 type GhExecutor = (
-  invocation: GhInvocation,
-) => Effect.Effect<VcsProcess.VcsProcessOutput, CloudSessionFailedError>;
+  request: GitHubActionsRequest,
+) => Effect.Effect<GitHubActionsResponse, CloudSessionFailedError>;
 
 /** Phases in which the VM has read its payload, or never will. */
 const PAYLOAD_SPENT_PHASES: ReadonlySet<CloudSession["phase"]> = new Set([
@@ -95,9 +93,9 @@ export const makePayloadIssueCleanup = (repoRef: CloudSessionRepoRef, run: GhExe
     const pending = yield* Ref.make(new Map<string, PayloadIssueRef>());
 
     const remove = (issue: PayloadIssueRef) =>
-      run(deleteIssueInvocation(repoRef, issue.nodeId)).pipe(
+      run(deleteIssueRequest(repoRef, issue.nodeId)).pipe(
         Effect.tap(() => Effect.logInfo("Deleted cloud session payload issue " + issue.number)),
-        Effect.catch(() => run(closeAndScrubIssueInvocation(repoRef, issue.number))),
+        Effect.catch(() => run(closeAndScrubIssueRequest(repoRef, issue.number))),
         Effect.asVoid,
         Effect.catch(() =>
           Effect.logWarning(

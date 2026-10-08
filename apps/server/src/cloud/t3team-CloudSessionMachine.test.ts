@@ -10,10 +10,11 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
 
 import { ProjectService } from "../project/ProjectService.ts";
 import * as ProjectMachineDiscovery from "../project/t3team-ProjectMachineDiscovery.ts";
-import * as GitHubCli from "../sourceControl/GitHubCli.ts";
+import * as GitHubApi from "../sourceControl/GitHubApi.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import { CloudSessionMachines, layer } from "./t3team-CloudSessionMachine.ts";
 
@@ -58,17 +59,23 @@ const resolveIn = (root: string, token = "ghp_user-token") => {
   const projects = Layer.mock(ProjectService)({
     getById: () => Effect.succeed(Option.some({ workspaceRoot: root } as unknown as Project)),
   });
-  const gh = Layer.mock(GitHubCli.GitHubCli)({
-    execute: (input) =>
-      input.args.join(" ") === "auth token --hostname nexplore.ghe.com" && token !== ""
-        ? Effect.succeed({ exitCode: 0, stdout: `${token}\n`, stderr: "" } as never)
-        : input.args.join(" ") === "api --hostname nexplore.ghe.com user" && token !== ""
-          ? Effect.succeed({
-              exitCode: 0,
-              stdout: JSON.stringify({ login: "pj", id: 7, name: "Philip J", email: null }),
-              stderr: "",
-            } as never)
-          : Effect.fail({ _tag: "GitHubCliError" } as never),
+  const unavailable = (host: string) =>
+    Effect.fail(new GitHubApi.GitHubApiAuthenticationError({ host, operation: "test" }) as never);
+  const gh = Layer.mock(GitHubApi.GitHubApi)({
+    credential: (host) =>
+      host === "nexplore.ghe.com" && token !== ""
+        ? Effect.succeed({ token: Redacted.make(token), fingerprint: "fp" } as never)
+        : unavailable(host),
+    rest: (input) =>
+      input.host === "nexplore.ghe.com" && input.path === "user" && token !== ""
+        ? Effect.succeed({
+            status: 200,
+            headers: {},
+            body: JSON.stringify({ login: "pj", id: 7, name: "Philip J", email: null }),
+            truncated: false,
+            invalidUtf8: false,
+          } as never)
+        : unavailable(input.host),
   });
   const dependencies = Layer.mergeAll(
     ProjectMachineDiscovery.layer.pipe(Layer.provide(projects)),

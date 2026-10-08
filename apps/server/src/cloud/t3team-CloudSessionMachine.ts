@@ -14,10 +14,11 @@ import { CloudSessionFailedError, type ProjectId } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 
 import { ProjectMachineDiscovery } from "../project/t3team-ProjectMachineDiscovery.ts";
-import * as GitHubCli from "../sourceControl/GitHubCli.ts";
+import * as GitHubApi from "../sourceControl/GitHubApi.ts";
 import { VcsProcess } from "../vcs/VcsProcess.ts";
 import {
   type MachineGitAuthor,
@@ -72,7 +73,7 @@ export class CloudSessionMachines extends Context.Service<
 const make = Effect.gen(function* () {
   const discovery = yield* ProjectMachineDiscovery;
   const vcs = yield* VcsProcess;
-  const github = yield* GitHubCli.GitHubCli;
+  const api = yield* GitHubApi.GitHubApi;
 
   const git = (cwd: string, operation: string, args: ReadonlyArray<string>) =>
     vcs
@@ -157,36 +158,26 @@ const make = Effect.gen(function* () {
       );
     }
 
-    // The user's own `gh` login for the repository host: the session clones and pushes as them.
-    const token = yield* github
-      .execute({
-        cwd: root,
-        args: ["auth", "token", "--hostname", repository.host],
-        timeoutMs: 15_000,
-      })
-      .pipe(
-        Effect.map((out) => out.stdout.trim()),
-        Effect.orElseSucceed(() => ""),
-      );
+    // The user's own credential for the repository host: the session clones and pushes as them.
+    const token = yield* api.credential(repository.host).pipe(
+      Effect.map(({ token: value }) => Redacted.value(value).trim()),
+      Effect.orElseSucceed(() => ""),
+    );
     if (token.length === 0) {
       return yield* new CloudSessionFailedError({
         reason: "repository_sign_in_required",
         message: `Sign in to ${repository.host} with gh (gh auth login --hostname ${repository.host}) so the session can clone ${repository.owner}/${repository.name}.`,
       });
     }
-    const profile = yield* github
-      .execute({
-        cwd: root,
-        args: ["api", "--hostname", repository.host, "user"],
-        timeoutMs: 15_000,
-      })
+    const profile = yield* api
+      .rest({ host: repository.host, operation: "cloudSession.machineViewer", path: "user" })
       .pipe(
-        Effect.flatMap((out) => decodeProfile(out.stdout)),
+        Effect.flatMap((response) => decodeProfile(response.body)),
         Effect.mapError(
           () =>
             new CloudSessionFailedError({
               reason: "repository_sign_in_required",
-              message: `Could not read your ${repository.host} profile with gh; sign in again (gh auth login --hostname ${repository.host}).`,
+              message: `Could not read your ${repository.host} profile; sign in again (gh auth login --hostname ${repository.host}).`,
             }),
         ),
       );

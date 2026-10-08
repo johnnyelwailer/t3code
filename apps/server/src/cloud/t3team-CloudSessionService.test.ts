@@ -11,10 +11,8 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
-import { ChildProcessSpawner } from "effect/process";
 
-import * as VcsProcess from "../vcs/VcsProcess.ts";
-import * as GitHubCli from "../sourceControl/GitHubCli.ts";
+import * as GitHubApi from "../sourceControl/GitHubApi.ts";
 import * as CliTokenManager from "./CliTokenManager.ts";
 import * as ConnectCredentialMinter from "./t3team-ConnectCredentialMinter.ts";
 import type { StandbyClaim } from "./t3team-NexiBrokerClient.ts";
@@ -28,15 +26,26 @@ const noMachines = Layer.mock(CloudSessionMachines)({
   resolve: () => Effect.die("these sessions have no project"),
 });
 
-const ghOut = (stdout: string): VcsProcess.VcsProcessOutput => ({
-  exitCode: ChildProcessSpawner.ExitCode(0),
-  stdout,
-  stderr: "",
-  stdoutTruncated: false,
-  stderrTruncated: false,
+const ghOut = (body: string): GitHubApi.GitHubRestResponse => ({
+  status: 200,
+  headers: {},
+  body,
+  truncated: false,
+  invalidUtf8: false,
 });
 
-/** JSON shapes the fake gh emits/consumes; encoded and decoded through effect/Schema. */
+/** One request the fake host saw: what the assertions match on. */
+type RecordedCall = {
+  readonly method: string;
+  readonly path: string;
+  /** The request body as sent, so an assertion can match the JSON the dispatch carried. */
+  readonly stdin: string | undefined;
+};
+
+/** Method and path in one string, the way the assertions below read a call. */
+const joinedOf = (call: RecordedCall) => `${call.method} ${call.path}`;
+
+/** JSON shapes the fake host emits/consumes; encoded and decoded through effect/Schema. */
 const GitHubIssueCreateJson = Schema.Struct({ number: Schema.Number });
 const encodeGitHubIssueCreate = Schema.encodeSync(Schema.fromJsonString(GitHubIssueCreateJson));
 const GhDispatchInputsJson = Schema.Struct({
@@ -73,9 +82,9 @@ const runPastDiscoveryPoll = <A, E>(create: Effect.Effect<A, E>) =>
   });
 
 /**
- * A stateful fake gh: records every call, captures the dispatch tag, and hands
+ * A stateful fake GitHub host: records every request, captures the dispatch tag, and hands
  * the tag back in the run list so the discovery poll finds our own run on the
- * first attempt. `login` is what the `user --jq .login` identity call returns;
+ * first attempt. `login` is what the `GET /user` identity call returns;
  * pass `""` to simulate an unresolvable identity.
  */
 const makeGithubMock = (
@@ -88,31 +97,36 @@ const makeGithubMock = (
 ) => {
   const login = options.login ?? "pj";
   let cancelAttempted = false;
-  const calls: Array<{ args: readonly string[]; stdin?: string | undefined }> = [];
+  const calls: Array<RecordedCall> = [];
   let tag: string | null = null;
-  const execute = (input: {
-    cwd: string;
-    args: readonly string[];
-    timeoutMs?: number;
-    stdin?: string;
-    maxOutputBytes?: number;
-  }): Effect.Effect<VcsProcess.VcsProcessOutput, GitHubCli.GitHubCliError> =>
+  const rest: GitHubApi.GitHubApi["Service"]["rest"] = (input) =>
     Effect.suspend(() => {
-      calls.push({ args: input.args, stdin: input.stdin });
-      const joined = input.args.join(" ");
+      const stdin = input.body === undefined ? undefined : JSON.stringify(input.body);
+      const call: RecordedCall = { method: input.method ?? "GET", path: input.path, stdin };
+      calls.push(call);
+      const joined = joinedOf(call);
       if (joined.includes("/cancel") && options.cancelFailsThenStatus !== undefined) {
         cancelAttempted = true;
         return Effect.fail(
-          new GitHubCli.GitHubCliCommandError({ command: "gh", cwd: "", cause: "HTTP 409" }),
+          new GitHubApi.GitHubApiResponseError({
+            host: input.host,
+            operation: input.operation,
+            status: 409,
+          }),
         );
       }
-      return Effect.succeed(respond(joined, input.stdin));
+      return Effect.succeed(respond(joined, stdin));
     });
-  const respond = (joined: string, stdin: string | undefined): VcsProcess.VcsProcessOutput => {
-    if (joined.includes("--jq")) {
-      // The identity-resolution call: `gh api --hostname … user --jq .login`
-      // prints the bare login plus a trailing newline.
-      return ghOut(`${login}\n`);
+  /** The payload-issue delete is the one GraphQL call a session makes. */
+  const graphql: GitHubApi.GitHubApi["Service"]["graphql"] = (input) =>
+    Effect.suspend(() => {
+      calls.push({ method: "GRAPHQL", path: input.operation, stdin: input.query });
+      return Effect.succeed("{}");
+    });
+  const respond = (joined: string, stdin: string | undefined): GitHubApi.GitHubRestResponse => {
+    if (joined === "GET user") {
+      // The identity-resolution call: `GET /user` answers the viewer's profile.
+      return ghOut(JSON.stringify({ login }));
     }
     if (joined.includes("repos/hive/nx-nexi/issues") && joined.includes("POST")) {
       return ghOut(encodeGitHubIssueCreate({ number: 42 }));
@@ -148,15 +162,15 @@ const makeGithubMock = (
     }
     return ghOut("{}");
   };
-  return { calls, execute };
+  return { calls, rest, graphql };
 };
 
 describe("CloudSessionService.create credential handoff", () => {
   it.effect("writes the payload issue, then dispatches, then resolves the session", () =>
     Effect.gen(function* () {
-      const { calls, execute } = makeGithubMock();
+      const { calls, rest, graphql } = makeGithubMock();
 
-      const ghMock = Layer.mock(GitHubCli.GitHubCli)({ execute });
+      const ghMock = Layer.mock(GitHubApi.GitHubApi)({ rest, graphql });
       const cloudCliMock = Layer.mock(CliTokenManager.CloudCliTokenManager)({
         getExisting: Effect.succeed(
           Option.some({
@@ -194,12 +208,12 @@ describe("CloudSessionService.create credential handoff", () => {
       );
 
       // The handoff ran first (payload issue), the dispatch second.
-      const joinedCalls = calls.map((call) => call.args.join(" "));
+      const joinedCalls = calls.map(joinedOf);
       assert.isTrue(joinedCalls.some((args) => args.includes("repos/hive/nx-nexi/issues")));
       assert.isTrue(joinedCalls.some((args) => args.includes("/dispatches")));
       // The payload issue body was base64 (not raw JSON) and carried the refresh token.
       const payloadCall = calls.find((call) =>
-        call.args.join(" ").includes("repos/hive/nx-nexi/issues"),
+        joinedOf(call).includes("repos/hive/nx-nexi/issues"),
       );
       const parsed = decodeGhPayloadIssue(payloadCall?.stdin ?? "{}");
       assert.match(parsed.title, /^nexi-session payload \[s[0-9a-z]+\]$/);
@@ -213,9 +227,9 @@ describe("CloudSessionService.create credential handoff", () => {
 
   it.effect("answers connect_sign_in_pending when the mint did not finish in time", () =>
     Effect.gen(function* () {
-      const { calls, execute } = makeGithubMock();
+      const { calls, rest, graphql } = makeGithubMock();
 
-      const ghMock = Layer.mock(GitHubCli.GitHubCli)({ execute });
+      const ghMock = Layer.mock(GitHubApi.GitHubApi)({ rest, graphql });
       // No usable credential, ever: the mint starts, times out (here: fails
       // immediately), and the handoff still fails with connect_sign_in_required.
       const cloudCliMock = Layer.mock(CliTokenManager.CloudCliTokenManager)({
@@ -264,15 +278,15 @@ describe("CloudSessionService.create credential handoff", () => {
       // The mint was attempted with the bounded create-side wait…
       assert.lengthOf(mintCalls, 1);
       // …and the dispatch never happened.
-      assert.isFalse(calls.some((call) => call.args.join(" ").includes("/dispatches")));
+      assert.isFalse(calls.some((call) => joinedOf(call).includes("/dispatches")));
     }),
   );
 
   it.effect("dispatches when the mint finishes within the bounded wait", () =>
     Effect.gen(function* () {
-      const { calls, execute } = makeGithubMock();
+      const { calls, rest, graphql } = makeGithubMock();
 
-      const ghMock = Layer.mock(GitHubCli.GitHubCli)({ execute });
+      const ghMock = Layer.mock(GitHubApi.GitHubApi)({ rest, graphql });
       // First read (the gate's check): no credential. After the mint "succeeds",
       // the handoff's read finds the freshly minted one.
       let reads = 0;
@@ -315,7 +329,7 @@ describe("CloudSessionService.create credential handoff", () => {
       // The mint ran, then the handoff delivered the fresh credential.
       assert.lengthOf(mintCalls, 1);
       const payloadCall = calls.find((call) =>
-        call.args.join(" ").includes("repos/hive/nx-nexi/issues"),
+        joinedOf(call).includes("repos/hive/nx-nexi/issues"),
       );
       assert.isNotNull(payloadCall);
       const parsed = yield* Schema.decodeUnknownEffect(
@@ -323,27 +337,22 @@ describe("CloudSessionService.create credential handoff", () => {
       )(payloadCall!.stdin ?? "{}");
       const decoded = Buffer.from(parsed.body, "base64").toString("utf8");
       assert.include(decoded, "fresh-rt");
-      assert.isTrue(calls.some((call) => call.args.join(" ").includes("/dispatches")));
+      assert.isTrue(calls.some((call) => joinedOf(call).includes("/dispatches")));
       assert.equal(session.phase, "stopped");
     }),
   );
 });
 
 /**
- * Provider layers for a service wired to a fake gh, mirroring the create test:
+ * Provider layers for a service wired to a fake GitHub host, mirroring the create test:
  * empty env → handoff flag ON, default fleet config. `getExisting` is `none`
  * because these tests never reach the credential handoff.
  */
 const providersFor = (
-  execute: (input: {
-    cwd: string;
-    args: readonly string[];
-    timeoutMs?: number;
-    stdin?: string;
-    maxOutputBytes?: number;
-  }) => Effect.Effect<VcsProcess.VcsProcessOutput, GitHubCli.GitHubCliError>,
+  rest: GitHubApi.GitHubApi["Service"]["rest"],
+  graphql: GitHubApi.GitHubApi["Service"]["graphql"],
 ) => {
-  const ghMock = Layer.mock(GitHubCli.GitHubCli)({ execute });
+  const ghMock = Layer.mock(GitHubApi.GitHubApi)({ rest, graphql });
   const cloudCliMock = Layer.mock(CliTokenManager.CloudCliTokenManager)({
     getExisting: Effect.succeed(Option.none()),
   });
@@ -367,8 +376,8 @@ const providersFor = (
 describe("CloudSessionService.list per-user isolation", () => {
   it.effect("scopes the list to the caller's login via the server-side actor filter", () =>
     Effect.gen(function* () {
-      const { calls, execute } = makeGithubMock();
-      const providers = providersFor(execute);
+      const { calls, rest, graphql } = makeGithubMock();
+      const providers = providersFor(rest, graphql);
       const full = Layer.mergeAll(
         CloudSessionService.layer.pipe(Layer.provide(providers)),
         providers,
@@ -380,11 +389,9 @@ describe("CloudSessionService.list per-user isolation", () => {
       );
 
       // It resolved the caller's login from the same gh identity before fetching…
-      assert.isTrue(
-        calls.some((c) => c.args.join(" ").includes("--jq") && c.args.join(" ").includes("user")),
-      );
+      assert.isTrue(calls.some((c) => joinedOf(c) === "GET user"));
       // …and the runs query carried that login as the server-side actor filter.
-      const runsArgs = calls.map((c) => c.args.join(" ")).find((a) => a.includes("/runs"));
+      const runsArgs = calls.map((c) => joinedOf(c)).find((a) => a.includes("/runs"));
       assert.isTrue(runsArgs !== undefined && runsArgs.includes("actor=pj"));
 
       // And the list still resolves to the caller's own session.
@@ -396,8 +403,8 @@ describe("CloudSessionService.list per-user isolation", () => {
 
   it.effect("fails closed when the caller's login cannot be resolved", () =>
     Effect.gen(function* () {
-      const { calls, execute } = makeGithubMock({ login: "" });
-      const providers = providersFor(execute);
+      const { calls, rest, graphql } = makeGithubMock({ login: "" });
+      const providers = providersFor(rest, graphql);
       const full = Layer.mergeAll(
         CloudSessionService.layer.pipe(Layer.provide(providers)),
         providers,
@@ -418,7 +425,7 @@ describe("CloudSessionService.list per-user isolation", () => {
         assert.equal(outcome.error.reason, "unauthorized");
       }
       // Fail-closed: no runs fetch happened at all.
-      assert.isFalse(calls.some((c) => c.args.join(" ").includes("/runs")));
+      assert.isFalse(calls.some((c) => joinedOf(c).includes("/runs")));
     }),
   );
 });
@@ -443,13 +450,14 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       reportInterest: () => Effect.void,
     });
   const providersWith = (
-    execute: ReturnType<typeof makeGithubMock>["execute"],
+    rest: ReturnType<typeof makeGithubMock>["rest"],
+    graphql: ReturnType<typeof makeGithubMock>["graphql"],
     broker: ReturnType<typeof brokerMock>,
     machines: Layer.Layer<CloudSessionMachines> = noMachines,
   ) =>
     Layer.mergeAll(
       machines,
-      Layer.mock(GitHubCli.GitHubCli)({ execute }),
+      Layer.mock(GitHubApi.GitHubApi)({ rest, graphql }),
       Layer.mock(CliTokenManager.CloudCliTokenManager)({
         getExisting: Effect.succeed(Option.none()),
       }),
@@ -471,20 +479,21 @@ describe("CloudSessionService.create over the Nexi broker", () => {
 
   it.effect("dispatches with a grant for the caller's login and skips the T3 Connect handoff", () =>
     Effect.gen(function* () {
-      const { calls, execute } = makeGithubMock();
+      const { calls, rest, graphql } = makeGithubMock();
       const grantedFor: string[] = [];
       const providers = providersWith(
-        execute,
+        rest,
+        graphql,
         brokerMock((login) => Effect.sync(() => (grantedFor.push(login), "grant-xyz"))),
       );
       yield* runPastDiscoveryPoll(create(providers));
       assert.deepEqual(grantedFor, ["pj"]);
-      const joined = calls.map((call) => call.args.join(" "));
+      const joined = calls.map(joinedOf);
       assert.isFalse(
         joined.some((args) => args.includes("repos/hive/nx-nexi/issues")),
         "no credential payload issue",
       );
-      const dispatch = calls.find((call) => call.args.join(" ").includes("/dispatches"));
+      const dispatch = calls.find((call) => joinedOf(call).includes("/dispatches"));
       assert.include(dispatch?.stdin ?? "", '"broker_grant":"grant-xyz"');
       // A plain session persists under the creator's own workspace, never the shared default.
       assert.include(dispatch?.stdin ?? "", '"workspace":"u-pj_"');
@@ -493,7 +502,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
 
   it.effect("a project machine's token rides with the grant, never in the dispatch inputs", () =>
     Effect.gen(function* () {
-      const { calls, execute } = makeGithubMock();
+      const { calls, rest, graphql } = makeGithubMock();
       const parked: Array<Readonly<Record<string, string>> | undefined> = [];
       const machines = Layer.mock(CloudSessionMachines)({
         resolve: () =>
@@ -515,7 +524,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
         Effect.sync(() => (parked.push(secrets), "g")),
       );
       yield* runPastDiscoveryPoll(
-        create(providersWith(execute, broker, machines), ProjectId.make("p1")),
+        create(providersWith(rest, graphql, broker, machines), ProjectId.make("p1")),
       );
       assert.deepEqual(parked, [
         {
@@ -524,7 +533,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
           GIT_AUTHOR_EMAIL: "pj@example.test",
         },
       ]);
-      const dispatch = calls.find((call) => call.args.join(" ").includes("/dispatches"))?.stdin;
+      const dispatch = calls.find((call) => joinedOf(call).includes("/dispatches"))?.stdin;
       for (const input of [
         '"machine_repository":"https://nexplore.ghe.com/acme/api.git"',
         `"machine_commit":"${"a".repeat(40)}"`,
@@ -537,16 +546,14 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       ]) {
         assert.include(dispatch ?? "", input);
       }
-      const everything = calls
-        .map((call) => `${call.args.join(" ")} ${call.stdin ?? ""}`)
-        .join("\n");
+      const everything = calls.map((call) => `${joinedOf(call)} ${call.stdin ?? ""}`).join("\n");
       assert.notInclude(everything, "ghp_never-an-input");
     }),
   );
 
   it.effect("a warm standby of the project is claimed instead of dispatching a session", () =>
     Effect.gen(function* () {
-      const { calls, execute } = makeGithubMock();
+      const { calls, rest, graphql } = makeGithubMock();
       const claims: Array<StandbyClaim> = [];
       const machines = Layer.mock(CloudSessionMachines)({
         resolve: () =>
@@ -574,7 +581,10 @@ describe("CloudSessionService.create over the Nexi broker", () => {
         sessions: Effect.succeed([]),
         reportInterest: () => Effect.void,
       });
-      const session = yield* create(providersWith(execute, broker, machines), ProjectId.make("p1"));
+      const session = yield* create(
+        providersWith(rest, graphql, broker, machines),
+        ProjectId.make("p1"),
+      );
       assert.equal(session.sessionId, "777");
       assert.equal(session.phase, "preparing");
       assert.equal(session.name, "API");
@@ -584,7 +594,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       );
       assert.equal(claims[0]?.secrets.GIT_TOKEN, "ghp_claimed");
       assert.isFalse(
-        calls.some((call) => call.args.join(" ").includes("/dispatches")),
+        calls.some((call) => joinedOf(call).includes("/dispatches")),
         "no dispatch",
       );
     }),
@@ -592,7 +602,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
 
   it.effect("signed out: fails with broker_sign_in_required before dispatching anything", () =>
     Effect.gen(function* () {
-      const { calls, execute } = makeGithubMock();
+      const { calls, rest, graphql } = makeGithubMock();
       const signedOut = new CloudSessionFailedError({
         reason: "broker_sign_in_required",
         message: "Sign in",
@@ -600,13 +610,14 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       const failure = yield* Effect.flip(
         create(
           providersWith(
-            execute,
+            rest,
+            graphql,
             brokerMock(() => Effect.fail(signedOut)),
           ),
         ),
       );
       assert.isTrue(isCloudSessionFailed(failure) && failure.reason === "broker_sign_in_required");
-      assert.isFalse(calls.some((call) => call.args.join(" ").includes("/dispatches")));
+      assert.isFalse(calls.some((call) => joinedOf(call).includes("/dispatches")));
     }),
   );
 });
@@ -614,13 +625,13 @@ describe("CloudSessionService.create over the Nexi broker", () => {
 describe("CloudSessionService.cancel", () => {
   const cancelSession = (runStatus: string, cancelFailsThenStatus?: string) =>
     Effect.gen(function* () {
-      const { calls, execute } = makeGithubMock({
+      const { calls, rest, graphql } = makeGithubMock({
         runStatus,
         ...(cancelFailsThenStatus !== undefined ? { cancelFailsThenStatus } : {}),
       });
       const providers = Layer.mergeAll(
         noMachines,
-        Layer.mock(GitHubCli.GitHubCli)({ execute }),
+        Layer.mock(GitHubApi.GitHubApi)({ rest, graphql }),
         Layer.mock(CliTokenManager.CloudCliTokenManager)({
           getExisting: Effect.succeed(Option.none()),
         }),
@@ -634,7 +645,7 @@ describe("CloudSessionService.cancel", () => {
         Effect.flatMap((svc) => svc.cancel({ sessionId: "999" })),
         Effect.provide(CloudSessionService.layer.pipe(Layer.provide(providers))),
       );
-      return calls.filter((call) => call.args.join(" ").includes("/cancel")).length;
+      return calls.filter((call) => joinedOf(call).includes("/cancel")).length;
     });
 
   it.effect("cancels a session that is still running", () =>

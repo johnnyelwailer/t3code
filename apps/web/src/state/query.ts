@@ -30,6 +30,13 @@ export function formatEnvironmentQueryError(cause: Cause.Cause<unknown>): string
 const selectQueryData = <A, E>(result: AsyncResult.AsyncResult<A, E>): A | null =>
   Option.getOrNull(AsyncResult.value(result));
 
+// Treats a Failure as no data, even when it carries a stale `previousSuccess`
+// value (AsyncResult's stale-while-revalidate default): a caller using this
+// selector wants to know a refresh failed, not keep rendering the last good
+// value as if nothing were wrong.
+const selectQueryDataOrNullOnError = <A, E>(result: AsyncResult.AsyncResult<A, E>): A | null =>
+  result._tag === "Failure" ? null : Option.getOrNull(AsyncResult.value(result));
+
 /**
  * Subscribe to only the DATA of an environment query.
  *
@@ -47,6 +54,16 @@ export function useEnvironmentQueryData<A, E>(
   return useAtomValue(
     (atom ?? EMPTY_ASYNC_RESULT_ATOM) as Atom.Atom<AsyncResult.AsyncResult<A, E>>,
     selectQueryData,
+  );
+}
+
+/** Like {@link useEnvironmentQueryData}, but a failed refresh reads as no data instead of stale data. */
+export function useEnvironmentQueryDataOrNullOnError<A, E>(
+  atom: Atom.Atom<AsyncResult.AsyncResult<A, E>> | null,
+): A | null {
+  return useAtomValue(
+    (atom ?? EMPTY_ASYNC_RESULT_ATOM) as Atom.Atom<AsyncResult.AsyncResult<A, E>>,
+    selectQueryDataOrNullOnError,
   );
 }
 

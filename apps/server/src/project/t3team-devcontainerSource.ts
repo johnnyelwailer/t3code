@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off -- Plain sync sha256 hash; the stable digest must stay byte-identical, not become an Effect requiring Crypto.
 /**
  * What a `devcontainer.json` builds from — the only part of the file a machine definition needs
  * to understand. Everything else (features, customizations, lifecycle commands) is left to the

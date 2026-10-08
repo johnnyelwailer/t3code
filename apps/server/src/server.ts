@@ -53,7 +53,7 @@ import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as CheckpointStore from "./checkpointing/CheckpointStore.ts";
 import * as AzureDevOpsCli from "./sourceControl/AzureDevOpsCli.ts";
 import * as BitbucketApi from "./sourceControl/BitbucketApi.ts";
-import * as GitHubCli from "./sourceControl/GitHubCli.ts";
+import * as GitHubApi from "./sourceControl/GitHubApi.ts";
 import * as GitLabCli from "./sourceControl/GitLabCli.ts";
 import * as ForgejoCli from "./sourceControl/ForgejoCli.ts";
 import * as TextGeneration from "./textGeneration/TextGeneration.ts";
@@ -66,6 +66,10 @@ import * as DeviceService from "./device/DeviceService.ts";
 import * as DeviceHubProxy from "./device/DeviceHubProxy.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
+import * as ServerBrowser from "./preview/ServerBrowser.ts";
+import * as DesktopBrowserChannel from "./preview/DesktopBrowserChannel.ts";
+import * as ServerBrowserStream from "./preview/ServerBrowserStream.ts";
+import * as PreviewBrowser from "./preview/PreviewBrowser.ts";
 import * as ProcessRunner from "./processRunner.ts";
 import * as GitManager from "./git/GitManager.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
@@ -268,7 +272,6 @@ import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 import { T3TeamWorkflowSchedulerSweepLive } from "./t3team-workflowSchedulerSweepLive.ts";
 import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
 import * as HtmlRender from "./htmlRender/HtmlRender.ts";
-import * as PreviewBrowser from "./htmlRender/PreviewBrowser.ts";
 import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
 import * as T3TeamWorkflowHost from "./t3team-workflowHost.ts";
 import { T3TeamChildThreadMetadataLive } from "./t3team-childThreadMetadata.ts";
@@ -379,7 +382,7 @@ const layerSourceControlProviderRegistry = SourceControlProviderRegistry.layer.p
     Layer.mergeAll(
       AzureDevOpsCli.layer,
       BitbucketApi.layer,
-      GitHubCli.layer,
+      GitHubApi.layerWithDependencies,
       GitLabCli.layer,
       ForgejoCli.layer,
     ),
@@ -813,10 +816,12 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   Layer.provideMerge(WorkflowSignalSourcesLive),
   // The asset route uses the registry's GitHub credential for private PR media.
   // t3team: PullRequestService is also exposed here (same memoized instance every consumer is
-  // given) for the signal sources and the fork routes/tools that read pull requests.
-  Layer.provideMerge(
-    Layer.mergeAll(layerSourceControlProviderRegistry, GitHubCli.layer, layerPullRequestService),
-  ),
+  // given) for the signal sources and the fork routes/tools that read pull requests. It stays in
+  // the registry's own step, as before: neither provides to the other.
+  Layer.provideMerge(Layer.mergeAll(layerSourceControlProviderRegistry, layerPullRequestService)),
+  // Upstream split the GitHub transport out of that step so the registry is built with it. It was
+  // GitHubCli.layer until #16967/#16982 renamed the service for the API it calls.
+  Layer.provideMerge(GitHubApi.layerWithDependencies),
   // t3team: PullRequestService reads ProjectService, which the OrchestrationApplication step above
   // cannot hand to a later step; the runtime's own layer reference memoizes to that instance.
   Layer.provideMerge(RuntimeLayer.layerProjectService),
@@ -937,6 +942,7 @@ const layerMakeRoutes = Layer.mergeAll(
     ServerHttp.layerAssetRoute,
     ServerHttp.layerAttachmentUploadRoute,
     DeviceHubProxy.layer,
+    ServerBrowserStream.routeLayer,
     ServerHttp.layerStaticAndDevRoute,
     Ws.layer,
   ),
@@ -1005,6 +1011,10 @@ const layerMakeRoutes = Layer.mergeAll(
   // Both transports consume the same service instance, so caches single-flight across clients
   // and mutations observed on WebSocket invalidate patches subsequently read over HTTP.
   Layer.provide(layerPullRequestService),
+  // The stream route and the WebSocket RPCs share one browser.
+  Layer.provide(ServerBrowser.layer.pipe(Layer.provide(DesktopBrowserChannel.layer))),
+  // Server browser tabs and HTML render previews install and run the same headless browser.
+  Layer.provide(PreviewBrowser.layer),
   Layer.provide(PreviewAutomationBroker.layer),
   Layer.provide(ServerSelfUpdate.layer.pipe(Layer.provide(layerDesktopAppUpdate))),
   Layer.provide(layerCommandReadiness),
@@ -1412,7 +1422,7 @@ const layerMakeServer = Layer.unwrap(
       StandbyInterestLive.pipe(
         Layer.provide(
           CloudSessionMachinesLayer.pipe(
-            Layer.provide(GitHubCli.layer),
+            Layer.provide(GitHubApi.layerWithDependencies),
             Layer.provide(ProjectMachineDiscoveryLayer),
           ),
         ),

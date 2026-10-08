@@ -12,7 +12,11 @@ import {
   selectHistory,
 } from "./ContextHandoffBudget.ts";
 
-/** Persist before/after injection: an ambiguous pending delivery requires a fresh native thread. */
+/**
+ * Persist before/after injection: an ambiguous pending delivery requires a fresh native thread.
+ * Run `unsent` when the provider refused the turn before reading the prompt, so that
+ * refusal does not leave an ambiguous marker behind.
+ */
 export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextHandoffs")(
   function* <InjectError = never, PersistError = never, BudgetError = never>(input: {
     readonly handoffs: ReadonlyArray<OrchestrationV2ContextHandoff>;
@@ -33,7 +37,7 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
         handoff.delivery.status === "pending",
     );
     if (pending.length === 0 || (input.deferInline && input.inject === undefined))
-      return { context: "", delivered: Effect.void };
+      return { context: "", delivered: Effect.void, unsent: Effect.void };
     const budget = typeof input.budget === "number" ? input.budget : yield* input.budget;
     let coverage = pending
       .map(
@@ -83,7 +87,7 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
     // Upstream hard-fails when the selected pack still exceeds the budget. Only then
     // fall back to middle-truncate + search/read recall (not on every handoff).
     if (historyCost(selected.messages, selected.context) > budget) {
-      if (input.deferInline) return { context: "", delivered: Effect.void };
+      if (input.deferInline) return { context: "", delivered: Effect.void, unsent: Effect.void };
       selected = fitHistoryWithMiddleTruncate({
         messages,
         omittedItems,
@@ -139,7 +143,7 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
       });
       if (injected) {
         yield* persist("injected");
-        return { context: "", delivered: Effect.void };
+        return { context: "", delivered: Effect.void, unsent: Effect.void };
       }
     } else {
       // Text-only delivery can also be accepted before a connection drops.
@@ -149,11 +153,12 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
       // Compaction APIs cannot accept an inline transcript. Keep it available
       // for the next ordinary turn when native injection is unsupported.
       yield* Effect.forEach(pending, input.persist, { discard: true });
-      return { context: "", delivered: Effect.void };
+      return { context: "", delivered: Effect.void, unsent: Effect.void };
     }
     return {
       context: renderHistory(selected.messages, selected.context),
       delivered: persist("inline"),
+      unsent: Effect.forEach(pending, input.persist, { discard: true }),
     };
   },
 );

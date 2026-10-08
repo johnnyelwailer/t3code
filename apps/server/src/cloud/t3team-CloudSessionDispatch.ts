@@ -2,12 +2,12 @@ import { CloudSessionFailedError, ORCHESTRATION_PROTOCOL_VERSION } from "@t3tool
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 
-import type * as VcsProcess from "../vcs/VcsProcess.ts";
 import {
-  dispatchSessionInvocation,
+  dispatchSessionRequest,
   sessionTagMarker,
   type CloudSessionRepoRef,
-  type GhInvocation,
+  type GitHubActionsRequest,
+  type GitHubActionsResponse,
   type WorkflowRunSummary,
 } from "./t3team-githubActionsSessionClient.ts";
 import { pendingCloudSession, projectCloudSession } from "./t3team-CloudSessionProjection.ts";
@@ -22,8 +22,8 @@ import type { CloudSessionMachine } from "./t3team-CloudSessionMachine.ts";
 const sessionServerRef = `protocol-${ORCHESTRATION_PROTOCOL_VERSION}`;
 
 type RunExecutor = (
-  invocation: GhInvocation,
-) => Effect.Effect<VcsProcess.VcsProcessOutput, CloudSessionFailedError>;
+  request: GitHubActionsRequest,
+) => Effect.Effect<GitHubActionsResponse, CloudSessionFailedError>;
 type ListRuns = Effect.Effect<ReadonlyArray<WorkflowRunSummary>, CloudSessionFailedError>;
 
 /**
@@ -55,7 +55,7 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
     const marker = sessionTagMarker(input.sessionTag);
 
     yield* input.run(
-      dispatchSessionInvocation(input.repoRef, {
+      dispatchSessionRequest(input.repoRef, {
         hold_minutes: String(Math.max(1, Math.round(input.durationSeconds / 60))),
         session_tag: input.sessionTag,
         workspace: input.workspace,

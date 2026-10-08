@@ -8,93 +8,72 @@
  * project, and a host that fails this round is skipped, never the digest.
  */
 
-import * as NodeOS from "node:os";
-
 import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
 
-import * as GitHubCli from "./sourceControl/GitHubCli.ts";
+import type * as GitHubApi from "./sourceControl/GitHubApi.ts";
+import type * as VcsProcess from "./vcs/VcsProcess.ts";
+import {
+  searchHitRepository,
+  searchPullRequests,
+  signedInGitHubHosts,
+  viewerLoginFor,
+} from "./t3team-githubViewerSearch.ts";
 import type { T3TeamDigestProjectSource } from "./t3team-myworkDigestTypes.ts";
 
 type DigestPrEntry = T3TeamDigestProjectSource["prEntries"][number];
 
-const VIEWER_PR_LIMIT = "100";
-const SEARCH_FIELDS = "number,title,repository,updatedAt,isDraft,author";
-
-const decodeHits = Schema.decodeUnknownOption(
-  Schema.fromJsonString(
-    Schema.Array(
-      Schema.Struct({
-        number: Schema.Number,
-        title: Schema.String,
-        repository: Schema.Struct({ nameWithOwner: Schema.String }),
-        updatedAt: Schema.String,
-        isDraft: Schema.Boolean,
-        author: Schema.optional(Schema.NullOr(Schema.Struct({ login: Schema.String }))),
-      }),
-    ),
-  ),
-);
-const decodeHosts = Schema.decodeUnknownOption(
-  Schema.fromJsonString(Schema.Struct({ hosts: Schema.Record(Schema.String, Schema.Unknown) })),
-);
+type ViewerRole = "author" | "review-requested";
 
 function searchHost(
-  gh: GitHubCli.GitHubCli["Service"],
   host: string,
-  role: "author" | "review-requested",
-): Effect.Effect<DigestPrEntry[]> {
-  return gh
-    .execute({
-      cwd: NodeOS.homedir(),
-      args: ["search", "prs", `--${role}`, "@me", "--state", "open"].concat([
-        "--limit",
-        VIEWER_PR_LIMIT,
-        "--json",
-        SEARCH_FIELDS,
-      ]),
-      env: { GH_HOST: host },
-      rateLimitHost: host,
-    })
-    .pipe(
-      Effect.map((output) => {
-        const hits = decodeHits(output.stdout);
-        return hits._tag === "Some" ? hits.value : [];
-      }),
-      Effect.orElseSucceed(() => []),
-      Effect.map((hits) =>
-        hits.map((hit) => ({
-          host,
-          repository: hit.repository.nameWithOwner,
-          number: hit.number,
-          title: hit.title,
-          // Search results carry no head branch; the title is where these name their ticket.
-          headBranch: "",
-          state: "open",
-          isDraft: hit.isDraft,
-          updatedAt: hit.updatedAt,
-          viewerReviewRequested: role === "review-requested",
-          viewerAuthored: role === "author",
-          ...(hit.author?.login ? { authorLogin: hit.author.login } : {}),
-        })),
-      ),
-    );
+  login: string,
+  role: ViewerRole,
+): Effect.Effect<DigestPrEntry[], never, GitHubApi.GitHubApi> {
+  return searchPullRequests({
+    host,
+    operation: `t3team.digest.viewerPrs.${role}`,
+    query: `is:pr is:open ${role}:${login}`,
+  }).pipe(
+    Effect.map((hits) =>
+      hits.map((hit) => ({
+        host,
+        repository: searchHitRepository(hit.repository_url),
+        number: hit.number,
+        title: hit.title,
+        // Search results carry no head branch; the title is where these name their ticket.
+        headBranch: "",
+        state: "open",
+        isDraft: hit.draft ?? false,
+        updatedAt: hit.updated_at,
+        viewerReviewRequested: role === "review-requested",
+        viewerAuthored: role === "author",
+        ...(hit.user?.login ? { authorLogin: hit.user.login } : {}),
+      })),
+    ),
+  );
 }
 
 /** Every signed-in host's open PRs the viewer wrote or is asked to review, each PR once. */
-export function loadViewerPrEntries(): Effect.Effect<DigestPrEntry[], never, GitHubCli.GitHubCli> {
+export function loadViewerPrEntries(): Effect.Effect<
+  DigestPrEntry[],
+  never,
+  GitHubApi.GitHubApi | VcsProcess.VcsProcess
+> {
   return Effect.gen(function* () {
-    const gh = yield* GitHubCli.GitHubCli;
-    const status = yield* gh
-      .execute({ cwd: NodeOS.homedir(), args: ["auth", "status", "--json", "hosts"] })
-      .pipe(Effect.option);
-    const parsed = status._tag === "Some" ? decodeHosts(status.value.stdout) : undefined;
-    const hosts = parsed?._tag === "Some" ? Object.keys(parsed.value.hosts) : [];
+    const hosts = yield* signedInGitHubHosts;
     const perHost = yield* Effect.all(
-      hosts.flatMap((host) => [
-        searchHost(gh, host, "author"),
-        searchHost(gh, host, "review-requested"),
-      ]),
+      hosts.map((host) =>
+        Effect.gen(function* () {
+          // Without the login there is nothing to search for, so the host sits this round out.
+          const login = yield* viewerLoginFor(host);
+          if (login === null) return [] as DigestPrEntry[];
+          const roles = yield* Effect.all(
+            (["author", "review-requested"] as const).map((role) => searchHost(host, login, role)),
+            { concurrency: 2 },
+          );
+          return roles.flat();
+        }),
+      ),
       { concurrency: 4 },
     );
     // A PR both yours and up for your review (a shared branch) is kept once, as yours.

@@ -1,7 +1,6 @@
 import type { CloudSession, CloudSessionFailedError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
-import type * as VcsProcess from "../vcs/VcsProcess.ts";
 import {
   cloudSessionDurationSeconds,
   cloudSessionElapsedSeconds,
@@ -17,13 +16,14 @@ import {
   recordFailureRead,
 } from "./t3team-cloudSessionFailureReason.ts";
 import {
-  jobStepsInvocation,
+  jobStepsRequest,
   type CloudSessionRepoRef,
-  type GhInvocation,
-  parseJobStepsResponse,
+  type GitHubActionsRequest,
+  type GitHubActionsResponse,
   type WorkflowJobStep,
   type WorkflowRunSummary,
 } from "./t3team-githubActionsSessionClient.ts";
+import { parseJobStepsResponse } from "./t3team-githubActionsSessionParse.ts";
 
 /**
  * Session identity and the run → session projection: turning raw GitHub
@@ -32,12 +32,12 @@ import {
  */
 
 /**
- * The gh executor the projection runs through: one invocation, already
+ * The GitHub executor the projection runs through: one request, already
  * error-mapped to `CloudSessionFailedError` by the service.
  */
 export type GhExecutor = (
-  invocation: GhInvocation,
-) => Effect.Effect<VcsProcess.VcsProcessOutput, CloudSessionFailedError>;
+  request: GitHubActionsRequest,
+) => Effect.Effect<GitHubActionsResponse, CloudSessionFailedError>;
 
 /**
  * The session to report while a dispatch's run is not visible yet. Under the
@@ -65,7 +65,7 @@ export function pendingCloudSession(
 }
 
 /**
- * Fetching steps costs one `gh` call per run, and only a moving run can change
+ * Fetching steps costs one API call per run, and only a moving run can change
  * phase from its steps — a settled run's phase comes from status/conclusion
  * alone. Skipping settled runs keeps a full list to a handful of calls.
  */
@@ -91,10 +91,8 @@ export const projectCloudSession = (
     // `null` means "we could not read the steps", which is NOT the same as
     // "there are no steps yet". Passing `[]` here would report `requested`
     // for a running session and march its phase backwards on one flaky poll.
-    const readSteps = run(jobStepsInvocation(repoRef, sessionRun.id)).pipe(
-      Effect.map((result) =>
-        result.stdoutTruncated ? null : parseJobStepsResponse(result.stdout),
-      ),
+    const readSteps = run(jobStepsRequest(repoRef, sessionRun.id)).pipe(
+      Effect.map((result) => (result.truncated ? null : parseJobStepsResponse(result.body))),
       // Progress detail is a nicety: a run whose steps cannot be read is
       // still a real session, so degrade to the run-level phase rather
       // than failing the whole list.
