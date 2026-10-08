@@ -99,13 +99,17 @@ export function listRunsInvocation(
     actor === undefined
       ? `per_page=${limit}`
       : `per_page=${limit}&actor=${encodeURIComponent(actor)}`;
-  return {
-    args: apiArgs(
-      ref,
-      `repos/${ref.owner}/${ref.repo}/actions/workflows/${ref.workflowFileName}/runs?${query}`,
-    ),
-  };
+  const path = `repos/${ref.owner}/${ref.repo}/actions/workflows/${ref.workflowFileName}/runs?${query}`;
+  return { args: ["api", "--hostname", ref.host, "--jq", RUN_FIELDS_JQ, path] };
 }
+
+/**
+ * Only the fields `toRun` reads. A full run carries the repository twice and runs to about 12 KB,
+ * so a hundred of them pass the 1 MB a `gh` call may print; the truncated list then fails as
+ * unreadable. These fields are about 300 bytes a run.
+ */
+export const RUN_FIELDS_JQ =
+  "{workflow_runs: [.workflow_runs[] | {id, status, conclusion, created_at, updated_at, html_url, name, display_title}]}";
 
 /**
  * Resolve the GitHub login the current `gh` credential is signed in as, on the
