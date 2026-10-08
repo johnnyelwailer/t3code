@@ -82,4 +82,14 @@ describe("pack-ui Markdown", () => {
     expect(container.querySelector("a")).toBeNull();
     expect(container.textContent).toContain("x");
   });
+
+  it("never resolves a reference to an unsafe definition that shares its label", async () => {
+    const container = await render(
+      ["[go][r]", "", "[r]: file:///etc/hosts", "[R]: https://example.com"].join("\n"),
+    );
+
+    expect(container.querySelector('a[href^="file:"]')).toBeNull();
+    expect(container.querySelector('a[href^="/"]')).toBeNull();
+    expect(container.querySelector("a")?.getAttribute("href")).toBe("https://example.com");
+  });
 });
