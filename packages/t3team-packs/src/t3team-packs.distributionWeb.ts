@@ -13,6 +13,9 @@ import * as NodePath from "node:path";
 import { resolvePackAssetPath } from "./t3team-packs.assetPath.ts";
 import { isWithinCanonicalRoot } from "./t3team-packs.pathCanonical.ts";
 import { decodeWorkspacePackManifest } from "./t3team-packs.manifest.ts";
+import { packUiCompatibilityProblem } from "./t3team-packs.webBoundary.ts";
+
+export { packUiCompatibilityProblem, packWebImportProblem } from "./t3team-packs.webBoundary.ts";
 
 const fail = (message: string): never => {
   throw new Error(`[t3code/distribution-web] ${message}`);
@@ -54,16 +57,6 @@ export function readDistributionPackDirs(distributionDir: string): ReadonlyArray
   });
 }
 
-/**
- * Why a pack web module may not import `source`, or `null`. The app's path aliases (`~/…`, `@/…`)
- * would make host internals importable; a pack reaches the host only through `@t3team/pack-ui`.
- */
-export function packWebImportProblem(source: string): string | null {
-  return source === "~" || source.startsWith("~/") || source.startsWith("@/")
-    ? `"${source}" is a host app alias; a pack imports the host only through @t3team/pack-ui`
-    : null;
-}
-
 /** One pack web entry to compile in. */
 export interface DistributionWebEntry {
   readonly packId: string;
@@ -71,9 +64,13 @@ export interface DistributionWebEntry {
   readonly entryPath: string;
 }
 
-/** The web entries of every pack the distribution compiles in. */
+/**
+ * The web entries of every pack the distribution compiles in. A pack with views must declare a
+ * `pack-ui` version range that includes the host's `packUiVersion`.
+ */
 export function readDistributionWebEntries(
   distributionDir: string,
+  host: { readonly packUiVersion: number },
 ): ReadonlyArray<DistributionWebEntry> {
   const entries: DistributionWebEntry[] = [];
   const packIds = new Set<string>();
@@ -91,6 +88,11 @@ export function readDistributionWebEntries(
     if (views.length > 0 && !manifest.capabilities.includes("view:v1")) {
       fail(`pack ${manifest.id} declares contents.views without the view:v1 capability`);
     }
+    const packUiProblem =
+      views.length > 0
+        ? packUiCompatibilityProblem(manifest.compatibility.hostCapabilities, host.packUiVersion)
+        : null;
+    if (packUiProblem !== null) fail(`pack ${manifest.id} ${packUiProblem}`);
     for (const view of views) {
       let entryPath: string;
       try {

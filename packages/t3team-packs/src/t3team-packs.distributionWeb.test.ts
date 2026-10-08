@@ -6,11 +6,11 @@ import * as NodePath from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
-  packWebImportProblem,
   readDistributionPackDirs,
   readDistributionWebEntries,
 } from "./t3team-packs.distributionWeb.ts";
 
+const HOST = { packUiVersion: 1 };
 const roots: string[] = [];
 afterEach(() => {
   for (const root of roots.splice(0)) NodeFS.rmSync(root, { recursive: true, force: true });
@@ -27,12 +27,15 @@ function tree(files: Record<string, unknown>): string {
   return root;
 }
 
-const manifest = (id: string, extra: { views?: unknown; capabilities?: string[] } = {}) => ({
+const manifest = (
+  id: string,
+  extra: { views?: unknown; capabilities?: string[]; hostCapabilities?: string[] } = {},
+) => ({
   id,
   version: "1.0.0",
   packApiVersion: 1,
   name: id,
-  compatibility: { t3teamCore: "0.x" },
+  compatibility: { t3teamCore: "0.x", hostCapabilities: extra.hostCapabilities ?? ["pack-ui:1"] },
   contents: extra.views === undefined ? {} : { views: extra.views },
   capabilities: extra.capabilities ?? [],
   hashes: {},
@@ -50,7 +53,7 @@ describe("readDistributionWebEntries", () => {
       "standup/web/index.ts": "export default () => {};",
     });
 
-    expect(readDistributionWebEntries(NodePath.join(root, "dist"))).toEqual([
+    expect(readDistributionWebEntries(NodePath.join(root, "dist"), HOST)).toEqual([
       {
         packId: "standup",
         packDir: NodePath.join(root, "standup"),
@@ -69,7 +72,7 @@ describe("readDistributionWebEntries", () => {
       "web.ts": "",
     });
 
-    expect(readDistributionWebEntries(root).map((entry) => entry.packId)).toEqual(["solo"]);
+    expect(readDistributionWebEntries(root, HOST).map((entry) => entry.packId)).toEqual(["solo"]);
   });
 
   it("fails the build for views without view:v1, a missing entry, or an escaping path", () => {
@@ -80,15 +83,15 @@ describe("readDistributionWebEntries", () => {
         "web.ts": "",
       });
 
-    expect(() => readDistributionWebEntries(withViews([{ id: "w", path: "web.ts" }], []))).toThrow(
-      /without the view:v1 capability/,
-    );
-    expect(() => readDistributionWebEntries(withViews([{ id: "w", path: "nope.ts" }]))).toThrow(
-      /view entry not found/,
-    );
-    expect(() => readDistributionWebEntries(withViews([{ id: "w", path: "../x.ts" }]))).toThrow(
-      /escapes its pack directory/,
-    );
+    expect(() =>
+      readDistributionWebEntries(withViews([{ id: "w", path: "web.ts" }], []), HOST),
+    ).toThrow(/without the view:v1 capability/);
+    expect(() =>
+      readDistributionWebEntries(withViews([{ id: "w", path: "nope.ts" }]), HOST),
+    ).toThrow(/view entry not found/);
+    expect(() =>
+      readDistributionWebEntries(withViews([{ id: "w", path: "../x.ts" }]), HOST),
+    ).toThrow(/escapes its pack directory/);
   });
 
   it("fails the build when two listed packs share an id", () => {
@@ -98,7 +101,9 @@ describe("readDistributionWebEntries", () => {
       "b/pack.json": manifest("same"),
     });
 
-    expect(() => readDistributionWebEntries(NodePath.join(root, "dist"))).toThrow(/listed twice/);
+    expect(() => readDistributionWebEntries(NodePath.join(root, "dist"), HOST)).toThrow(
+      /listed twice/,
+    );
   });
 
   it("keeps packs[] to the distribution and its sibling packs", () => {
@@ -117,13 +122,23 @@ describe("readDistributionWebEntries", () => {
       expect(withPacks([escape])).toThrow(/must be the distribution or a sibling pack/);
     }
   });
-});
 
-describe("packWebImportProblem", () => {
-  it("refuses the host app's path aliases and allows packages", () => {
-    expect(packWebImportProblem("~/components/ui/button")).toMatch(/host app alias/);
-    expect(packWebImportProblem("@/lib/utils")).toMatch(/host app alias/);
-    expect(packWebImportProblem("@t3team/pack-ui")).toBeNull();
-    expect(packWebImportProblem("effect/Schema")).toBeNull();
+  it("fails the build for a pack whose pack-ui range does not include the host's", () => {
+    const withPackUi = (hostCapabilities: string[]) =>
+      tree({
+        "distribution.json": {},
+        "pack.json": manifest("p", {
+          views: [{ id: "w", path: "web.ts" }],
+          capabilities: ["view:v1"],
+          hostCapabilities,
+        }),
+        "web.ts": "",
+      });
+
+    expect(() => readDistributionWebEntries(withPackUi(["pack-ui:2"]), HOST)).toThrow(
+      /pack p needs pack-ui:2, but this host provides pack-ui:1/,
+    );
+    expect(() => readDistributionWebEntries(withPackUi([]), HOST)).toThrow(/no pack-ui version/);
+    expect(readDistributionWebEntries(withPackUi(["pack-ui:1-2"]), HOST)).toHaveLength(1);
   });
 });

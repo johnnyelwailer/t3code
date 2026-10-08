@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 /** A real (realpath'd) distribution with one view pack, plus an app dir reached via a symlink. */
-function setup() {
+function setup(hostCapabilities: string[] = ["pack-ui:1"]) {
   const root = NodeFS.realpathSync(
     NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-dist-web-plugin-")),
   );
@@ -33,7 +33,7 @@ function setup() {
       version: "1.0.0",
       packApiVersion: 1,
       name: "Acme",
-      compatibility: { t3teamCore: "0.x" },
+      compatibility: { t3teamCore: "0.x", hostCapabilities },
       contents: { views: [{ id: "web", path: "web/index.ts" }] },
       capabilities: ["view:v1"],
       hashes: {},
@@ -82,5 +82,29 @@ describe("t3teamDistributionWebPlugin", () => {
     expect(
       resolveId.call({}, "~/components/ui/button", NodePath.join(root, "app/src/x.ts"), {}),
     ).toBeNull();
+  });
+
+  it("refuses everything but react, effect, @t3team/pack-ui and the pack's own files", () => {
+    const { root, plugin } = setup();
+    const resolveId = hook(plugin.resolveId);
+    const fromPack = NodePath.join(root, "dist/web/index.ts");
+
+    for (const [source, problem] of [
+      ["lucide-react", /not available to packs/],
+      ["@t3tools/contracts", /not available to packs/],
+      ["../../app/src/main.tsx", /outside the pack/],
+    ] as const) {
+      expect(() => resolveId.call({}, source, `${fromPack}?v=1`, {})).toThrow(problem);
+    }
+    expect(resolveId.call({}, "./card", fromPack, {})).toBeNull();
+    expect(resolveId.call({}, "@t3team/pack-ui", fromPack, {})).toBe(
+      NodePath.join(root, "checkout/src/packUiImpl.ts"),
+    );
+  });
+
+  it("fails the build for a pack written against another pack-ui version", () => {
+    expect(() => setup(["pack-ui:2"])).toThrow(
+      /pack acme needs pack-ui:2, but this host provides pack-ui:1/,
+    );
   });
 });
