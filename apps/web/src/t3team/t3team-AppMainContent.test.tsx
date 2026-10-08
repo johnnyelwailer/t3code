@@ -5,6 +5,15 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { AppMainContent } from "./t3team-AppMainContent";
 
 const useProjectWorkspaceAutoSyncMock = vi.fn();
+let shellsBootstrapped = true;
+
+vi.mock("~/state/entities", () => ({
+  useAllEnvironmentShellsBootstrapped: () => shellsBootstrapped,
+}));
+
+vi.mock("~/t3team/t3team-projectMyWorkContentState", () => ({
+  ProjectMyWorkLoadingState: () => <div>projects-loading</div>,
+}));
 
 vi.mock("~/t3team/backend/t3team-index", () => ({
   useBackendState: () => ({
@@ -28,6 +37,11 @@ vi.mock("~/t3team/t3team-AppThreadPane", () => ({
 // fails to load outside a browser environment (`self is not defined`).
 vi.mock("~/t3team/t3team-AppDraftPane", () => ({
   AppDraftPane: ({ draftId }: { draftId: string }) => <div>draft-pane:{draftId}</div>,
+}));
+
+// Same `?worker` chain: the all-projects pane's PR aside renders the diff viewer.
+vi.mock("~/t3team/t3team-AllProjectsMyWorkPane", () => ({
+  AllProjectsMyWorkPane: () => <div>all-projects-my-work</div>,
 }));
 
 vi.mock("~/t3team/t3team-AppMainContentHomeEmptyState", () => ({
@@ -81,6 +95,40 @@ const looseProjectThread = {
 describe("AppMainContent", () => {
   beforeEach(() => {
     useProjectWorkspaceAutoSyncMock.mockClear();
+    shellsBootstrapped = true;
+  });
+
+  const renderHome = () =>
+    renderToStaticMarkup(
+      <AppMainContent
+        view={null}
+        activeDashboardMode="my-work"
+        selectedProjectId={null}
+        projects={[]}
+        allProjects={[]}
+        getThreadsForProject={() => []}
+        onOpenTicket={() => {}}
+        onOpenThread={() => {}}
+        onOpenFullThread={() => {}}
+        onOpenEmbeddedThread={() => {}}
+        onKickoffProjectThread={() => {}}
+        onKickoffTicketThread={() => {}}
+        onThreadKickoffConsumed={() => {}}
+        onThreadDisplayModeChange={() => {}}
+        onBackToDashboard={() => {}}
+        onCreate={() => {}}
+        renderDashboard={() => null}
+        renderTicketDetail={() => null}
+      />,
+    );
+
+  it("shows a loading state, not first-run setup, before the environments have bootstrapped", () => {
+    shellsBootstrapped = false;
+    expect(renderHome()).toContain("projects-loading");
+  });
+
+  it("falls through to the home surface once bootstrapping confirms there are no projects", () => {
+    expect(renderHome()).not.toContain("projects-loading");
   });
 
   it("passes standalone thread routes to workspace auto-sync", () => {
@@ -108,7 +156,6 @@ describe("AppMainContent", () => {
         onThreadDisplayModeChange={() => {}}
         onBackToDashboard={() => {}}
         onCreate={() => {}}
-        onInlineProjectCreated={() => {}}
         renderDashboard={(project) => <div>dashboard:{project.title}</div>}
         renderTicketDetail={(project, ticketId, activeThreadId) => (
           <div>
@@ -150,7 +197,6 @@ describe("AppMainContent", () => {
         onThreadDisplayModeChange={() => {}}
         onBackToDashboard={() => {}}
         onCreate={() => {}}
-        onInlineProjectCreated={() => {}}
         renderDashboard={(project) => <div>dashboard:{project.title}</div>}
         renderTicketDetail={(project, ticketId, activeThreadId) => (
           <div>
@@ -186,7 +232,6 @@ describe("AppMainContent", () => {
         onThreadDisplayModeChange={() => {}}
         onBackToDashboard={() => {}}
         onCreate={() => {}}
-        onInlineProjectCreated={() => {}}
         renderDashboard={(project) => <div>dashboard:{project.title}</div>}
         renderTicketDetail={(project, ticketId) => (
           <div>
@@ -221,7 +266,6 @@ describe("AppMainContent", () => {
         onThreadDisplayModeChange={() => {}}
         onBackToDashboard={() => {}}
         onCreate={() => {}}
-        onInlineProjectCreated={() => {}}
         renderDashboard={(project) => <div>dashboard:{project.title}</div>}
         renderTicketDetail={(project, ticketId, activeThreadId) => (
           <div>

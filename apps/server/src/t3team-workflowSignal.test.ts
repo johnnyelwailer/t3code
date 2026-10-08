@@ -294,6 +294,7 @@ const makeFakes = () => {
     insertInboxEntry: () => Effect.succeed(0),
     takeOpenInboxEntry: () => Effect.succeed(Option.none()),
     deleteDeliveredInboxEntriesOlderThan: voidFx,
+    pruneUndeliveredInboxEntries: voidFx,
     getCursor: (key: string) =>
       Effect.succeed(
         cursors.has(key)

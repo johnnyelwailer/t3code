@@ -5,6 +5,7 @@ export { asNamedAttachments, renderAgentAttachments } from "./t3team-sdk.askAtta
 export { appendResolvedEntry, createHostBroker, createMockBroker } from "./t3team-sdk.broker.ts";
 export type { HandleDispatch } from "@runbook/core/handles";
 export { createThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
+export { showViewInputProblem, showViewNamespace } from "@runbook/threads/showView";
 export { hashArgs } from "./t3team-sdk.canonicalJson.ts";
 export {
   createDurableWorkflowRuntime,
@@ -106,6 +107,7 @@ export {
   withBodyApi,
   workflow,
 } from "./t3team-sdk.engineApi.ts";
+export type { CompositionOptions, PipelineStage, PipelineStages } from "@runbook/core/composition";
 export type { Watermark, WatermarkOptions, WatermarkState } from "@runbook/core/watermark";
 export { emit } from "./t3team-sdk.emit.ts";
 // Signal sources (design 42): the shared signal/source vocabulary + built-in Tier A/B
@@ -149,6 +151,19 @@ export {
   WorkItemUpdates,
   WorkItemUpdated,
 } from "./t3team-sdk.builtinSignals.ts";
+export {
+  ScmViewerChangeRequests,
+  ScmViewerChangeRequestsParams,
+  ScmViewerChangeRequestUpdated,
+  ScmViewerChangeRequestUpdatedPayload,
+  ViewerChangeRequestPayload,
+  ViewerChangeRequestReason,
+} from "./t3team-sdk.builtinSignalsViewer.ts";
+export type {
+  ScmViewerChangeRequestsParamsType,
+  ViewerChangeRequestPayloadType,
+  ViewerChangeRequestReasonType,
+} from "./t3team-sdk.builtinSignalsViewer.ts";
 export type {
   ChangeRequestChecksPayloadType,
   ChangeRequestPayloadType,
@@ -193,6 +208,21 @@ export {
   type WorkflowReferenceExample,
 } from "./t3team-sdk.workflowReferenceExamples.ts";
 export { normalizeCapabilities } from "./t3team-sdk.capabilityGating.ts";
+export {
+  CHANGE_REQUEST_DIFF_DEFAULT_PAGE_SIZE,
+  CHANGE_REQUEST_DIFF_MAX_PAGE_CHARS,
+  CHANGE_REQUEST_DIFF_MAX_PAGE_SIZE,
+  ChangeRequestInputError,
+  ChangeRequestScopeError,
+  type ChangeRequestDetail,
+  type ChangeRequestDiffOptions,
+  type ChangeRequestDiffPage,
+  type ChangeRequestReader,
+  type ChangeRequestRef,
+  type ScriptHostContext,
+  type ScriptPackDocument,
+  type ScriptPackStore,
+} from "./t3team-sdk.scriptHost.ts";
 
 export type {
   HandleKind,
@@ -221,6 +251,7 @@ export type {
   AskUserOpts,
   ModelCascade,
   ModelCascadeEntry,
+  ShowViewInput,
   SpawnThreadOpts,
   Thread,
   ThreadRef,

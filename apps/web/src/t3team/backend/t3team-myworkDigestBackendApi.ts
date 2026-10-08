@@ -122,6 +122,7 @@ export type MyWorkDigestPayload = {
     }>;
     readonly sprint?: DigestSprint;
     readonly changeRequestNote?: string;
+    readonly changeRequestsStale?: boolean;
     readonly jiraSyncedAt?: string;
     /** The previous working day: PRs the viewer merged, tickets of theirs that moved. */
     readonly yesterday?: {

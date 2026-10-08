@@ -45,6 +45,23 @@ describe("useT3TeamScopeRouteSync", () => {
     root = createRoot(container);
   });
 
+  it("carries the active lens onto the picked project and back to all-projects", async () => {
+    locate("/t3team/my-work", { myWorkLens: "board" });
+    await render(null, null);
+    await render("key-b", "proj-b");
+    expect(router.navigate).toHaveBeenLastCalledWith({
+      to: "/t3team/projects/$projectId",
+      params: { projectId: "proj-b" },
+      search: { projectView: "my-work", myWorkLens: "board" },
+    });
+    locate("/t3team/projects/proj-b", { projectView: "my-work", myWorkLens: "board" });
+    await render(null, null);
+    expect(router.navigate).toHaveBeenLastCalledWith({
+      to: "/t3team/my-work",
+      search: { myWorkLens: "board" },
+    });
+  });
+
   it("re-targets the my-work board to the picked project", async () => {
     locate("/t3team/my-work");
     await render(null, null);

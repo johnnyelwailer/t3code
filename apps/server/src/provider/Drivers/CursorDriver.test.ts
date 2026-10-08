@@ -94,6 +94,7 @@ it.layer(layerTest)("CursorDriver", (it) => {
             { name: "CURSOR_API_KEY", value: "", sensitive: true },
             // Makes the usage reader's credential lookup platform-independent.
             { name: "AGENT_CLI_CREDENTIAL_STORE", value: "memory", sensitive: false },
+            { name: "CURSOR_AUTH_TOKEN", value: "", sensitive: true },
           ],
           config: CursorDriver.defaultConfig(),
         };
@@ -195,6 +196,7 @@ it.layer(layerTest)("CursorDriver", (it) => {
         environment: [
           { name: "CURSOR_API_KEY", value: "configured-key", sensitive: true },
           { name: "AGENT_CLI_CREDENTIAL_STORE", value: "memory", sensitive: false },
+          { name: "CURSOR_AUTH_TOKEN", value: "", sensitive: true },
         ],
         config: CursorDriver.defaultConfig(),
       });

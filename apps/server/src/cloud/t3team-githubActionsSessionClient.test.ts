@@ -8,6 +8,7 @@ import {
   listRunsInvocation,
   parseJobStepsResponse,
   parseRunsResponse,
+  RUN_FIELDS_JQ,
   sessionTagMarker,
 } from "./t3team-githubActionsSessionClient.ts";
 
@@ -62,6 +63,49 @@ describe("invocations", () => {
     expect(listRunsInvocation(REF, 20).args.at(-1)).toBe(
       "repos/hive/nx-nexi/actions/workflows/session.yml/runs?per_page=20",
     );
+  });
+
+  it("asks gh for only the run fields it reads, so a full page stays far under the output cap", () => {
+    const args = listRunsInvocation(REF, 100, "pj").args;
+    expect(args[args.indexOf("--jq") + 1]).toBe(RUN_FIELDS_JQ);
+    for (const field of [
+      "id",
+      "status",
+      "conclusion",
+      "created_at",
+      "updated_at",
+      "html_url",
+      "name",
+      "display_title",
+    ]) {
+      expect(RUN_FIELDS_JQ).toMatch(new RegExp(`[{ ,]${field}[,}]`));
+    }
+    // The projection keeps the shape the parser reads.
+    const projected = {
+      workflow_runs: [
+        {
+          id: 7,
+          status: "in_progress",
+          conclusion: null,
+          created_at: "2026-10-08T10:00:30Z",
+          updated_at: "2026-10-08T10:00:33Z",
+          html_url: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/7",
+          name: "nexi-session [abc] · broker",
+          display_title: "nexi-session [abc] · broker",
+        },
+      ],
+    };
+    expect(parseRunsResponse(JSON.stringify(projected))).toEqual([
+      {
+        id: 7,
+        status: "in_progress",
+        conclusion: null,
+        createdAt: "2026-10-08T10:00:30Z",
+        updatedAt: "2026-10-08T10:00:33Z",
+        htmlUrl: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/7",
+        name: "nexi-session [abc] · broker",
+      },
+    ]);
   });
 
   it("cancels a run by id with POST and no body", () => {

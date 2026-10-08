@@ -444,6 +444,35 @@ describe("useMyWorkDigestGraph", () => {
     expect(window.localStorage.getItem("t3team.mywork-digest.last-visit.project")).toBeNull();
   });
 
+  it("keeps its in-flight answer when the project list re-renders with the same projects", async () => {
+    // The live project store rebuilds its project objects on every snapshot. A new array for the
+    // same scope used to restart the poller and drop the answer in flight, so at startup the
+    // digest sat empty until a remount.
+    let release: () => void = () => {};
+    let calls = 0;
+    const { latest, projectsRef, rerender } = await mountWith(async () => {
+      calls += 1;
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return { unchanged: false, fingerprint: "fp", value: createDigestPayload() };
+    }, [createProject({ id: "p1", externalProjectId: "IES" })]);
+    await vi.waitFor(() => {
+      expect(calls).toBe(1);
+    });
+    expect(latest.result?.status).toBe("loading");
+
+    projectsRef.projects = [createProject({ id: "p1", externalProjectId: "IES" })];
+    await rerender();
+    await act(async () => release());
+
+    await vi.waitFor(() => {
+      expect(latest.result?.status).toBe("ready");
+    });
+    expect(latest.result?.graph?.tickets).toHaveLength(2);
+    expect(calls).toBe(1);
+  });
+
   it("invalidates and refetches when the project scope changes", async () => {
     const calls: string[] = [];
     const payloadFor = (key: string) => ({

@@ -14,6 +14,8 @@ export type LaneProps = {
   onOpenTicket?: ((ticketId: string) => void) | undefined;
   /** Tickets the open lanes already show; story chips leave them out. */
   shownTicketIds?: ReadonlySet<string>;
+  /** Tickets the open lanes render as rows; a story among them keeps its PRs off its header. */
+  rowTicketIds?: ReadonlySet<string>;
 };
 
 export function SideSection({
@@ -56,13 +58,14 @@ export function MainSection({
   nowMs,
   onOpenTicket,
   shownTicketIds,
+  rowTicketIds,
 }: LaneProps & { section: DigestSection }) {
   return (
     <section className="space-y-2">
       <DigestKicker count={section.items.length}>{section.heading}</DigestKicker>
       {section.hint ? <p className="text-xs text-muted-foreground">{section.hint}</p> : null}
       <div className="grid grid-cols-1 items-start gap-3 @3xl/lane:grid-cols-2">
-        {groupByParent(section, graph, ticketsById, shownTicketIds).map((group) => {
+        {groupByParent(section, graph, ticketsById, shownTicketIds, rowTicketIds).map((group) => {
           if (!group.parent) {
             return (
               <T3SurfacePanel
@@ -93,8 +96,8 @@ export function MainSection({
               story={group.parent}
               graph={graph}
               nowMs={nowMs}
-              otherChildren={group.otherChildren}
-              viewerName={graph.viewer.name}
+              adjacency={group.adjacency}
+              showStoryPrs={group.showStoryPrs}
               onOpenTicket={onOpenTicket}
             >
               {group.items.map((item) => {
@@ -108,6 +111,7 @@ export function MainSection({
                     graph={graph}
                     nowMs={nowMs}
                     onOpenTicket={onOpenTicket}
+                    dependencies={false}
                   />
                 );
               })}

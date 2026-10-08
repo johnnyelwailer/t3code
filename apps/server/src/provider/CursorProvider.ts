@@ -246,6 +246,24 @@ export function buildCursorProviderSnapshot(input: {
   });
 }
 
+function isRetryableCursorNetworkFailure(cause: unknown): boolean {
+  let current: unknown = cause;
+  const seen = new Set<unknown>();
+  for (let depth = 0; depth < 8 && current != null && !seen.has(current); depth++) {
+    seen.add(current);
+    if (typeof current !== "object") break;
+    const record = current as Record<string, unknown>;
+    const name = typeof record.name === "string" ? record.name : undefined;
+    const message = typeof record.message === "string" ? record.message : undefined;
+    const isRetryable = record.isRetryable === true;
+    if (isRetryable && (name === "NetworkError" || message === "Network request failed")) {
+      return true;
+    }
+    current = record.cause;
+  }
+  return false;
+}
+
 export const checkCursorProviderStatus = Effect.fn("checkCursorProviderStatus")(function* (
   cursorSettings: CursorSettings,
   environment?: NodeJS.ProcessEnv,
@@ -297,6 +315,25 @@ export const checkCursorProviderStatus = Effect.fn("checkCursorProviderStatus")(
       cause: catalogResult.failure.cause,
     });
     const authenticationFailure = catalogResult.failure.authenticationFailure;
+    const retryableNetworkFailure = isRetryableCursorNetworkFailure(catalogResult.failure.cause);
+    // Keep credentials / avoid RED "signed out" flashing when api.cursor.com /v1/me
+    // briefly fails after a successful browser login. Auth is still present.
+    if (retryableNetworkFailure && !authenticationFailure) {
+      return buildServerProvider({
+        presentation: CURSOR_PRESENTATION,
+        enabled: cursorSettings.enabled,
+        checkedAt,
+        models: fallbackModels,
+        probe: {
+          installed: true,
+          version: null,
+          status: "warning",
+          auth: { status: "unknown" },
+          message:
+            "Cursor API is temporarily unreachable (catalog probe). Sign-in is still saved; retrying.",
+        },
+      });
+    }
     return buildServerProvider({
       presentation: CURSOR_PRESENTATION,
       enabled: cursorSettings.enabled,

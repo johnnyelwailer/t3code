@@ -18,11 +18,14 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import {
   contextUsageForHandoff,
+  fitHistoryWithMiddleTruncate,
   handoffBudget,
   historyCost,
   historyResponseItems,
   selectHistory,
+  truncateMiddleText,
   historicalMessage,
+  HANDOFF_TRUNCATE_FALLBACK_BUDGET,
 } from "./ContextHandoffBudget.ts";
 import { projectContextHandoffForWire } from "./WireProjection.ts";
 import { deliverContextHandoffs } from "./ContextHandoffDelivery.ts";
@@ -669,23 +672,65 @@ describe("handoff delivery", () => {
     }),
   );
 
-  it.effect("fails before delivery when even the coverage marker cannot fit", () =>
+  it.effect("when the budget would hard-fail, middle-truncates and keeps search/read recall", () =>
     Effect.gen(function* () {
       let calls = 0;
+      let captured: ProviderAdapterV2HistoricalContext | undefined;
       const result = yield* deliverContextHandoffs({
         handoffs: [handoff],
         providerThread,
         budget: 0,
         alreadyDeliveredItemIds: new Set(),
-        inject: () =>
+        inject: (history) =>
           Effect.sync(() => {
             calls++;
+            captured = history;
             return true;
           }),
         persist: () => Effect.void,
-      }).pipe(Effect.result);
-      assert.equal(result._tag, "Failure");
-      assert.equal(calls, 0);
+      });
+      assert.equal(result.context, "");
+      assert.equal(calls, 1);
+      assert.isDefined(captured);
+      assert.isAtMost(
+        historyCost(captured.messages, captured.context),
+        HANDOFF_TRUNCATE_FALLBACK_BUDGET,
+      );
+      assert.include(captured.context, "t3_thread_search");
+      assert.include(captured.context, "t3_thread_read");
+      assert.include(captured.context, "middle-truncated");
     }),
   );
+});
+
+describe("middle-truncate handoff fallback", () => {
+  it("keeps head and tail of oversized text", () => {
+    const text = `HEAD-${"x".repeat(200)}-TAIL`;
+    const truncated = truncateMiddleText(text, 80);
+    assert.isBelow(truncated.length, text.length);
+    assert.isAtMost(truncated.length, 80);
+    assert.include(truncated, "HEAD-");
+    assert.include(truncated, "-TAIL");
+    assert.include(truncated, "middle omitted");
+    assert.include(truncated, "t3_thread_search");
+  });
+
+  it("fits a zero budget using the emergency floor with search recall", () => {
+    const huge = [
+      message("item:a", "user", "START " + "a".repeat(50_000) + " END-A"),
+      message("item:b", "assistant", "MID " + "b".repeat(50_000) + " END-B"),
+      message("item:c", "user", "LATEST " + "c".repeat(50_000) + " END-C"),
+    ];
+    const selected = fitHistoryWithMiddleTruncate({
+      messages: huge,
+      budget: 0,
+      threadId: String(threadId),
+    });
+    assert.isAtMost(
+      historyCost(selected.messages, selected.context),
+      HANDOFF_TRUNCATE_FALLBACK_BUDGET,
+    );
+    assert.include(selected.context, "t3_thread_search");
+    assert.include(selected.context, "t3_thread_read");
+  });
 });

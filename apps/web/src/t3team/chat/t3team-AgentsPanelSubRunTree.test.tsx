@@ -16,6 +16,10 @@ const settingsState = vi.hoisted(() => ({
   activityLabelsEnabled: true,
 }));
 
+vi.mock("~/state/entities", () => ({
+  useServerConfigs: () => new Map(),
+}));
+
 vi.mock("~/hooks/useSettings", () => ({
   usePrimarySettings: (selector?: (settings: Record<string, unknown>) => unknown) =>
     selector ? selector({ t3teamActivityLabelsEnabled: settingsState.activityLabelsEnabled }) : {},

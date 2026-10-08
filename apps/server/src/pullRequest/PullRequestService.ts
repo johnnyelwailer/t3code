@@ -231,6 +231,16 @@ export class PullRequestService extends Context.Service<
     readonly subscribeRefreshes: Stream.Stream<number>;
     readonly refreshAfterTurn: (projectId: ProjectId) => Effect.Effect<void>;
     readonly detail: (input: PullRequestRef) => Effect.Effect<PullRequestDetail, PullRequestError>;
+    /**
+     * t3team: the repositories a project's change requests can be read from — its own remote and
+     * its linked repositories, on hosts this build can read — resolved exactly as a listing does.
+     */
+    readonly projectRepositories: (
+      projectId: ProjectId,
+    ) => Effect.Effect<
+      ReadonlyArray<{ readonly host: string; readonly repository: string }>,
+      PullRequestError
+    >;
     readonly preview: (
       input: PullRequestRef,
     ) => Effect.Effect<PullRequestPreview, PullRequestError>;
@@ -1828,6 +1838,13 @@ export const make = Effect.gen(function* () {
               ? {}
               : { headRepositoryNameWithOwner: changeRequest.headRepositoryNameWithOwner }),
             ...(changeRequest.headSha ? { headSha: changeRequest.headSha } : {}),
+            ...(changeRequest.baseSha ? { baseSha: changeRequest.baseSha } : {}),
+            ...(changeRequest.isCrossRepository === undefined
+              ? {}
+              : { isCrossRepository: changeRequest.isCrossRepository }),
+            ...(changeRequest.authorAssociation
+              ? { authorAssociation: changeRequest.authorAssociation }
+              : {}),
             baseBranch: changeRequest.baseBranch,
             createdAt: changeRequest.createdAt,
             updatedAt: changeRequest.updatedAt,
@@ -3475,6 +3492,12 @@ export const make = Effect.gen(function* () {
     ),
     refreshAfterTurn,
     detail: credentialCached(detail),
+    projectRepositories: (projectId) =>
+      listWorkspaceProjects({ projectId }).pipe(
+        Effect.map(({ supported }) =>
+          supported.map(({ host, repository }) => ({ host, repository })),
+        ),
+      ),
     checks: credentialCached((input) => Cache.get(checksCache, refCacheKey(input))),
     watchFingerprint: credentialCached((input) =>
       Cache.get(watchFingerprintCache, refCacheKey(input)),

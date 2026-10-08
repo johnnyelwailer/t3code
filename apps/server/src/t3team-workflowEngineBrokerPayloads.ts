@@ -53,10 +53,13 @@ export interface ThreadMessagePayload {
   readonly text: string;
   readonly widget?: {
     readonly title: string;
-    readonly widgetCode: string;
+    readonly widgetCode?: string;
+    readonly intent?: string;
     readonly format?: "html" | "svg";
     readonly loadingMessages?: ReadonlyArray<string>;
   };
+  /** `Thread.showView` (`@runbook/threads`); handled by t3team-workflowEngineBrokerShowView.ts. */
+  readonly view?: import("@t3team/sdk").ShowViewInput;
 }
 export interface UserInputPayload {
   readonly threadId: string;

@@ -151,6 +151,7 @@ import { T3TeamBetaSettings } from "./t3team-BetaSettings";
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
 import { DRIVER_OPTIONS, getDriverOption } from "./providerDriverMeta";
 import { T3TeamProjectSetupSetting } from "./t3team-ProjectSetupSetting";
+import { T3TeamAboutLicensesDescription } from "../../t3team/t3team-AboutLicensesDescription";
 import {
   buildProviderInstanceUpdatePatch,
   backgroundActivityOverrideSettings,
@@ -3442,7 +3443,7 @@ export function GeneralSettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("open-source-licenses")}
-          description="Notices for dependencies, assets, and optional tools used by T3 Code."
+          description={<T3TeamAboutLicensesDescription />}
           control={
             <Button
               render={<Link to="/settings/open-source-licenses" />}

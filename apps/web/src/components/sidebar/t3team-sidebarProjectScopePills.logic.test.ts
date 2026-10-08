@@ -74,10 +74,16 @@ describe("projectScopeCastShadow", () => {
 describe("splitProjectScopePills", () => {
   const keys = (items: ReadonlyArray<{ projectKey: string }>) => items.map((i) => i.projectKey);
 
-  it("shows everything with no overflow when it fits", () => {
-    const result = splitProjectScopePills(groups, null, 5);
+  it("shows everything with no overflow when it fits beside the picker disc", () => {
+    const result = splitProjectScopePills(groups, null, 6);
     expect(keys(result.shown)).toEqual(["a", "b", "c", "d", "e"]);
     expect(result.overflow).toEqual([]);
+  });
+
+  it("never hands the picker disc's slot to a project", () => {
+    const result = splitProjectScopePills(groups, null, 5);
+    expect(keys(result.shown)).toEqual(["a", "b", "c", "d"]);
+    expect(keys(result.overflow)).toEqual(["e"]);
   });
 
   it("reserves one slot for the +N disc and lists the rest in order", () => {
@@ -103,7 +109,9 @@ describe("splitProjectScopePills", () => {
     expect(keys(result.overflow)).toEqual(["jira:x::1", "jira:x::2"]);
   });
 
-  it("draws nothing when there is no room", () => {
-    expect(splitProjectScopePills(groups, null, 0)).toEqual({ shown: [], overflow: [] });
+  it("lists every site behind +N when no disc fits", () => {
+    const result = splitProjectScopePills(groups, null, 1);
+    expect(keys(result.shown)).toEqual([]);
+    expect(keys(result.overflow)).toEqual(["a", "b", "c", "d", "e"]);
   });
 });

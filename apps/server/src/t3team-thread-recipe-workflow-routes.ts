@@ -38,6 +38,7 @@ import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
 import { resolveRecipeHostToolScope } from "./t3team-recipeWorkflowToolScope.ts";
+import { T3TeamScriptHost } from "./t3team-scriptHostContext.ts";
 import { T3TeamWorkflowSignalReconciler } from "./t3team-workflowSignalReconciler.ts";
 import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
 
@@ -65,6 +66,7 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
       yield* Effect.serviceOption(T3TeamWorkflowSignalReconciler),
     );
     const toolBroker = yield* T3TeamToolBroker;
+    const scriptHosts = yield* T3TeamScriptHost;
     const input = yield* readJsonBody<LaunchProjectRecipeWorkflowRequest>();
 
     const threadIdInput = input.threadId?.trim() ?? "";
@@ -171,6 +173,14 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
           })
         : undefined;
 
+    // `ctx.store` / `ctx.changeRequests` for the recipe's scripts, entitled by the same recipe
+    // declaration as the host tools (never the request) and by the recipe's pack.
+    const scriptHost = scriptHosts.forRun({
+      projectId: thread.projectId,
+      recipePath,
+      toolGroups: hostToolGrant?.toolGroups,
+    });
+
     // Shared launch-prep (spec D10): durable lifecycle row (origin 'recipe'), best-effort
     // play-as-shape preview, then the durable engine launch — the same funnel the ephemeral
     // `t3team.orchestration.run` tool drives through.
@@ -198,7 +208,7 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
         args,
         // Persist the recipe dir alongside the resolved scripts so a restart can re-resolve
         // them during rehydration (a scriptless launch needs neither).
-        ...(Object.keys(scripts).length === 0 ? {} : { scripts, recipePath }),
+        ...(Object.keys(scripts).length === 0 ? {} : { scripts, recipePath, scriptHost }),
         ...(hostToolClient === undefined || hostToolGrant === undefined
           ? {}
           : { hostToolClient, hostToolGrant }),

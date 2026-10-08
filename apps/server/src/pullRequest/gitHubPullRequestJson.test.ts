@@ -359,6 +359,20 @@ describe("pull request detail decoding", () => {
     expect(armed({}).autoMergeEnabled).toBeUndefined();
   });
 
+  it("carries the base commit and the author's standing, and omits them when GitHub does not say", () => {
+    const raw = JSON.parse(detailJson) as Record<string, unknown>;
+    const read = (entry: Record<string, unknown>) =>
+      expectSuccess(decodePullRequestDetailJson(JSON.stringify({ ...raw, ...entry })));
+
+    expect(
+      read({ baseRefOid: " b4se ", authorAssociation: "FIRST_TIME_CONTRIBUTOR" }),
+    ).toMatchObject({ baseSha: "b4se", authorAssociation: "FIRST_TIME_CONTRIBUTOR" });
+    expect(read({ baseRefOid: null, authorAssociation: "" })).toMatchObject({
+      baseSha: null,
+      authorAssociation: null,
+    });
+  });
+
   it("shows a re-running check once, as the run that is happening now", () => {
     // What `statusCheckRollup` reports while a workflow is being re-run: the same check twice,
     // the finished run and the one that replaced it, with no id to tell them apart.

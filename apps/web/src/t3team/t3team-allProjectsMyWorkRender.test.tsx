@@ -24,8 +24,10 @@ const boundProject = {
   },
 };
 
-vi.mock("~/t3team/hooks/t3team-useProjectStore", () => ({
-  useProjectStore: () => ({ allProjects: [boundProject] }),
+// The scoped project list is hydrated asynchronously in the real app (see
+// t3team-myWorkBoundProjects); pin it to a settled list so this file tests rendering, not loading.
+vi.mock("~/t3team/t3team-myWorkBoundProjects", () => ({
+  useMyWorkBoundProjects: () => [boundProject],
 }));
 
 // The digest lens reads the server-aggregated graph through the backend; a bare static render has
@@ -34,7 +36,10 @@ vi.mock("~/t3team/mywork-digest/t3team-useMyWorkDigestGraph", () => ({
   useMyWorkDigestGraph: () => ({
     graph: null,
     status: "loading",
+    freshness: "cached",
+    refreshing: false,
     viewerUnresolved: false,
+    sessionExpired: false,
     reload: () => {},
   }),
 }));
