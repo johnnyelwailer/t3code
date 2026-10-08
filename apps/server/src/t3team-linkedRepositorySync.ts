@@ -51,7 +51,7 @@ export class T3TeamLinkedRepositorySync extends Context.Service<
   {
     /** Queues a clone/fetch and returns at once; joins a sync of the same checkout in flight. */
     readonly request: (input: LinkedRepositorySyncRequest) => Effect.Effect<void>;
-    /** Like `request`, but at most once per checkout for this server's lifetime: re-queues a
+    /** Like `request`, but at most once per manifest entry for this server's lifetime: re-queues a
      * sync a restart dropped without letting repeated status polls turn into a fetch loop. */
     readonly recover: (input: LinkedRepositorySyncRequest) => Effect.Effect<void>;
     /** The phase of the checkout's queued or running sync; `undefined` when idle. */
@@ -142,8 +142,10 @@ const make = Effect.gen(function* () {
     request,
     recover: (input) =>
       Effect.suspend(() => {
-        if (recovered.has(input.localPath)) return Effect.void;
-        recovered.add(input.localPath);
+        // Per requester, so each manifest listing the checkout is recovered (and joins one job).
+        const key = `${input.referencesRoot}\n${input.url}\n${input.localPath}`;
+        if (recovered.has(key)) return Effect.void;
+        recovered.add(key);
         return request(input);
       }),
     phase: (localPath) => jobs.get(localPath)?.phase,
