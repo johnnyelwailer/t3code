@@ -41,8 +41,8 @@ export const describeSyncError = (cause: unknown): string => {
   return "Failed to sync linked repository reference.";
 };
 
-/** A failed fetch, described for the repository's status line (credentials redacted). */
-export class LinkedRepositoryFetchError extends Data.TaggedError("LinkedRepositoryFetchError")<{
+/** A failed clone publication or fetch, described for the repository's status line (credentials redacted). */
+export class LinkedRepositorySyncError extends Data.TaggedError("LinkedRepositorySyncError")<{
   readonly message: string;
 }> {}
 
@@ -105,28 +105,32 @@ export const cloneLinkedCheckoutAtomically = Effect.fn("cloneLinkedCheckoutAtomi
     const parent = path.dirname(input.directory);
     const prefix = cloneTempPrefix(path.basename(input.directory));
     yield* fileSystem.makeDirectory(parent, { recursive: true });
+    // `missing` may be an empty directory: drop it now (non-recursive, so a non-empty one fails
+    // instead of being deleted). Publishing is a bare rename that never replaces anything.
+    if (yield* fileSystem.exists(input.directory)) yield* fileSystem.remove(input.directory);
     const siblings = yield* fileSystem.readDirectory(parent).pipe(Effect.orElseSucceed(() => []));
     for (const stale of siblings.filter((name) => name.startsWith(prefix))) {
       yield* fileSystem.remove(path.join(parent, stale), { recursive: true }).pipe(Effect.ignore);
     }
     const tempDirectory = path.join(parent, `${prefix}${t3teamRandomHex(4)}`);
+    const discardTemp = fileSystem
+      .remove(tempDirectory, { recursive: true, force: true })
+      .pipe(Effect.ignore);
     yield* sourceControl
       .cloneRepository(
         { remoteUrl: input.url, destinationPath: tempDirectory, protocol: "auto" },
         { timeoutMs: LINKED_REPOSITORY_CLONE_TIMEOUT_MS },
       )
-      .pipe(
-        Effect.onExit((exit) =>
-          Exit.isSuccess(exit)
-            ? Effect.void
-            : fileSystem
-                .remove(tempDirectory, { recursive: true, force: true })
-                .pipe(Effect.ignore),
-        ),
-      );
-    // `missing` may still be an empty directory; rename cannot replace a directory on every platform.
-    yield* fileSystem.remove(input.directory, { recursive: true, force: true }).pipe(Effect.ignore);
-    yield* fileSystem.rename(tempDirectory, input.directory);
+      .pipe(Effect.onExit((exit) => (Exit.isSuccess(exit) ? Effect.void : discardTemp)));
+    if (yield* fileSystem.exists(input.directory)) {
+      yield* discardTemp;
+      return yield* new LinkedRepositorySyncError({
+        message: "The reference path was created by something else while cloning.",
+      });
+    }
+    yield* fileSystem
+      .rename(tempDirectory, input.directory)
+      .pipe(Effect.tapError(() => discardTemp));
   },
 );
 
@@ -183,7 +187,7 @@ export const fetchLinkedCheckout = Effect.fn("fetchLinkedCheckout")(function* (d
   );
   if (result.exitCode !== 0) {
     const tail = result.stderr.trim().split(/\r?\n/).slice(-2).join(" ");
-    return yield* new LinkedRepositoryFetchError({
+    return yield* new LinkedRepositorySyncError({
       message: redactUrlCredentials(tail) || "git fetch failed.",
     });
   }

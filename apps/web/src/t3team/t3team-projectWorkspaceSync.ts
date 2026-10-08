@@ -55,6 +55,8 @@ function buildProjectWorkspaceSyncSignature(input: {
       ?.map((ticket) => `${ticket.id}:${ticket.ref.displayId}:${ticket.updatedAt}:${ticket.status}`)
       .toSorted(),
     visibleContext: input.visibleContext,
+    // Changes every refresh window, so an otherwise unchanged project still re-bootstraps.
+    bootstrapEpoch: Math.floor(Date.now() / BOOTSTRAP_REFRESH_MS),
   });
 }
 

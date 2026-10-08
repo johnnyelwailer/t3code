@@ -94,12 +94,16 @@ const make = Effect.gen(function* () {
         yield* cloneLinkedCheckoutAtomically({ url: job.url, directory: localPath });
         return { status: "cloned" } as const;
       }
-      // A path derived from another repository's URL (same slug) must not be reported as this one.
+      // Fail closed: only a checkout whose `origin` is this repository is ours to report on (a
+      // path derived from another repository's URL can share the slug). A broken checkout may be
+      // unable to report one; its repair keeps the old tree aside and clones this repository.
       const origin = yield* readLinkedCheckoutOrigin(localPath);
-      if (origin !== undefined && !isSameRepository(origin, job.url)) {
+      if (origin === undefined ? state === "valid" : !isSameRepository(origin, job.url)) {
         return {
           status: "failed",
-          error: `Reference path already holds a different repository (${redactUrlCredentials(origin)}).`,
+          error: origin
+            ? `Reference path already holds a different repository (${redactUrlCredentials(origin)}).`
+            : "Reference path holds a git repository without an origin remote.",
         } as const;
       }
       job.phase = "updating";

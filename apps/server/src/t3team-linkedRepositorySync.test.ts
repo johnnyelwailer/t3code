@@ -24,6 +24,7 @@ import {
   MANIFEST_FILE_NAME,
   REFERENCES_DIR_NAME,
 } from "./t3team-project-repository-utils.ts";
+import { isSameRepository } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 import { VcsProcess } from "./vcs/VcsProcess.ts";
 
 const git = (cwd: string, ...args: string[]) =>
@@ -284,6 +285,33 @@ describe("T3TeamLinkedRepositorySync", () => {
       expect(entry?.status).toBe("failed");
       expect(entry?.error).toContain("different repository");
       expect(harness.counts.fetch).toBe(0);
+    }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
+  });
+
+  it("compares repository identity across spellings but not across hosts", () => {
+    expect(isSameRepository("https://github.com/a/b.git", "git@github.com:a/b")).toBe(true);
+    expect(isSameRepository("https://github.com/a/b", "https://gitlab.com/a/b")).toBe(false);
+    expect(isSameRepository("a/b", "https://github.com/a/b")).toBe(true);
+  });
+
+  it.live("fails closed on a reference checkout without an origin remote", () => {
+    const harness = makeHarness();
+    const wanted = makeOrigin(harness.root, "remoteless");
+    return Effect.gen(function* () {
+      const referencesRoot = NodePath.join(
+        harness.workspaceRoot,
+        HIDDEN_T3TEAM_DIR,
+        REFERENCES_DIR_NAME,
+      );
+      const localPath = NodePath.join(referencesRoot, `01-${deriveReferenceDirectoryName(wanted)}`);
+      NodeFS.mkdirSync(referencesRoot, { recursive: true });
+      git(harness.root, "clone", "-q", wanted, localPath);
+      git(localPath, "remote", "remove", "origin");
+      yield* bootstrap(harness.workspaceRoot, [wanted], true);
+      yield* settleAll([localPath]);
+      const [entry] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot)).linkedRepositories;
+      expect(entry?.status).toBe("failed");
+      expect(entry?.error).toContain("without an origin");
     }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
   });
 });

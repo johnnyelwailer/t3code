@@ -38,8 +38,14 @@ export function repositoryLookupCandidates(value: string): ReadonlyArray<string>
   return [...candidates];
 }
 
-/** Two spellings of one repository (https vs ssh, with or without `.git`). */
+const HAS_HOST = /^(?:[a-z][a-z0-9+.-]*:\/\/|git@)/i;
+
+/** Two spellings of one repository (https vs ssh, with or without `.git`). When both name a
+ * host, hosts must match too: `github.com/a/b` and `gitlab.com/a/b` are different repositories. */
 export function isSameRepository(left: string, right: string): boolean {
+  if (HAS_HOST.test(left.trim()) && HAS_HOST.test(right.trim())) {
+    return repositoryLookupCandidates(left)[0] === repositoryLookupCandidates(right)[0];
+  }
   const candidates = new Set(repositoryLookupCandidates(left));
   return repositoryLookupCandidates(right).some((candidate) => candidates.has(candidate));
 }

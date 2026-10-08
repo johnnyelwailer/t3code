@@ -305,9 +305,10 @@ describe("syncProjectWorkspaceContext", () => {
     await sync("PROJ-3", [...urls, "https://github.com/example/project-beta"]);
     expect(backendHarness.bootstrapWorkspace).toHaveBeenCalledTimes(2);
 
-    // A periodic re-bootstrap lets the server requeue syncs a restart dropped.
+    // Unchanged inputs still re-bootstrap after the refresh window, so the server can requeue
+    // syncs a restart dropped.
     await vi.advanceTimersByTimeAsync(10 * 60_000);
-    await sync("PROJ-4", [...urls, "https://github.com/example/project-beta"]);
+    await sync("PROJ-3", [...urls, "https://github.com/example/project-beta"]);
     expect(backendHarness.bootstrapWorkspace).toHaveBeenCalledTimes(3);
   });
 });
