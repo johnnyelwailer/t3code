@@ -10,7 +10,8 @@
  * needs it.
  *
  * Reads the live event tail only: history is not a first message. Not launched when the thread
- * already has a live run, so a resumed session continues that run instead of starting another.
+ * already ran the recipe, live or ended, so a restarted server neither starts a second run beside
+ * a live one nor redoes a finished setup; `/machine-setup` runs it again on purpose.
  *
  * @module t3team-kickoffRecipe
  */
@@ -35,7 +36,10 @@ export const KICKOFF_RECIPE_ENV = "T3CODE_KICKOFF_RECIPE";
 export function resolveKickoffRecipe(
   recipeId: string | undefined,
   sources: ReadonlyArray<PackRecipeSource>,
-): { readonly kind: "none" } | { readonly kind: "missing"; readonly id: string } | PackRecipeSource {
+):
+  | { readonly kind: "none" }
+  | { readonly kind: "missing"; readonly id: string }
+  | PackRecipeSource {
   const id = recipeId?.trim() ?? "";
   if (id.length === 0) return { kind: "none" };
   return sources.find((source) => source.declaredId === id) ?? { kind: "missing", id };
@@ -47,20 +51,26 @@ export const launchKickoffRecipe = Effect.fn("launchKickoffRecipe")(function* (i
   readonly firstMessage: string;
 }) {
   const runs = yield* WorkflowRunRepository;
-  const live = yield* runs.listLiveByLaunchThread({ launchThreadId: input.threadId });
-  if (live.length > 0) {
-    yield* Effect.logInfo("kickoff recipe: the thread already has a live run", {
+  const path = yield* Path.Path;
+  const workflowPath = path.join(input.recipe.recipeRoot, "workflow.ts");
+  // A thread runs its kickoff once: after a restart, a live run continues and an ended one stays
+  // ended. A run that started on another thread does not count, so does one of another recipe.
+  const earlier = (yield* runs.listLiveByLaunchThread({
+    launchThreadId: input.threadId,
+    includeEnded: true,
+  })).filter((run) => run.workflowPath === workflowPath);
+  if (earlier.length > 0) {
+    yield* Effect.logInfo("kickoff recipe: the thread already ran it", {
       threadId: input.threadId,
-      runIds: live.map((run) => run.runId),
+      runIds: earlier.map((run) => run.runId),
     });
     return null;
   }
   const { thread } = yield* loadThreadProjectContext(input.threadId);
-  const path = yield* Path.Path;
   return yield* launchRecipeWorkflow({
     threadId: input.threadId,
     recipePath: input.recipe.recipeRoot,
-    workflowPath: path.join(input.recipe.recipeRoot, "workflow.ts"),
+    workflowPath,
     args: { firstMessage: input.firstMessage },
     modelSelection: thread.modelSelection,
     runtimeMode: thread.runtimeMode,
@@ -137,4 +147,6 @@ export const T3TeamKickoffRecipe = Layer.effectDiscard(
 );
 
 /** Production: the runtime's ONE event sink, by layer reference (t3team-v2Layers.ts). */
-export const T3TeamKickoffRecipeLive = T3TeamKickoffRecipe.pipe(Layer.provide(T3TeamEventSinkLayer));
+export const T3TeamKickoffRecipeLive = T3TeamKickoffRecipe.pipe(
+  Layer.provide(T3TeamEventSinkLayer),
+);

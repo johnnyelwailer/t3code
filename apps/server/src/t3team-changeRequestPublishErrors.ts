@@ -32,15 +32,6 @@ export class ChangeRequestNothingToCommitError extends Schema.TaggedError<Change
   }
 }
 
-export class ChangeRequestBranchDivergedError extends Schema.TaggedError<ChangeRequestBranchDivergedError>()(
-  "ChangeRequestBranchDivergedError",
-  { branch: Schema.String },
-) {
-  override get message(): string {
-    return `Branch '${this.branch}' already exists with history that diverges from the current HEAD. Pick a new branch name, or switch to '${this.branch}' first.`;
-  }
-}
-
 /** The push or the host call was refused for missing credentials: the fix is the user's sign-in. */
 export class ChangeRequestNotSignedInError extends Schema.TaggedError<ChangeRequestNotSignedInError>()(
   "ChangeRequestNotSignedInError",
@@ -91,7 +82,6 @@ export interface ChangeRequestPublishResult {
 export type ChangeRequestPublishError =
   | ChangeRequestPublishInputError
   | ChangeRequestNothingToCommitError
-  | ChangeRequestBranchDivergedError
   | ChangeRequestPushRejectedError
   | ChangeRequestNotSignedInError
   | WorkspacePaths.WorkspacePathOutsideRootError

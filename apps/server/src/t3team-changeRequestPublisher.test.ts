@@ -118,11 +118,13 @@ it.layer(layerGit)("T3TeamChangeRequestPublisher", (it) => {
         branch: "machine/setup",
         projectId,
       });
-      expect(yield* git(repo, ["branch", "--show-current"])).toBe("machine/setup");
-      expect(yield* git(repo, ["show", "--name-only", "--format=%s", "HEAD"])).toBe(
+      expect(yield* git(repo, ["branch", "--show-current"])).toBe("main");
+      expect(yield* git(repo, ["show", "--name-only", "--format=%s", "machine/setup"])).toBe(
         "chore: add machine setup\n\n.devcontainer/devcontainer.json",
       );
-      expect(yield* git(repo, ["status", "--porcelain"])).toBe("?? notes.txt");
+      expect(yield* git(repo, ["rev-parse", "machine/setup~1"])).toBe(
+        yield* git(repo, ["rev-parse", "main"]),
+      );
       expect(yield* git(repo, ["ls-remote", "origin", "refs/heads/machine/setup"])).toContain(
         result.commit,
       );
@@ -149,7 +151,7 @@ it.layer(layerGit)("T3TeamChangeRequestPublisher", (it) => {
       const second = yield* publisher.publish(publishInput(repo));
 
       expect(second).toEqual(first);
-      expect(yield* git(repo, ["rev-list", "--count", "HEAD"])).toBe("2");
+      expect(yield* git(repo, ["rev-list", "--count", "machine/setup"])).toBe("2");
       expect(opened).toHaveLength(2);
     }),
   );
@@ -193,19 +195,73 @@ it.layer(layerGit)("T3TeamChangeRequestPublisher", (it) => {
     }),
   );
 
-  it.effect("an existing branch with diverging history is refused", () =>
+  it.effect("leaves the checkout's branch, staged work and other changes as they were", () =>
+    Effect.gen(function* () {
+      const { repo, write } = yield* makeRepo;
+      const { publisher } = yield* makePublisher();
+      yield* write("feature.ts", "export const x = 1;\n");
+      yield* git(repo, ["add", "feature.ts"]);
+      yield* write("README.md", "hello, edited\n");
+      yield* write(".devcontainer/devcontainer.json", "{}\n");
+      const before = yield* git(repo, ["status", "--porcelain"]);
+
+      yield* publisher.publish(publishInput(repo));
+
+      expect(yield* git(repo, ["branch", "--show-current"])).toBe("main");
+      expect(yield* git(repo, ["status", "--porcelain"])).toBe(before);
+      expect(yield* git(repo, ["show", "--name-only", "--format=", "machine/setup"])).toBe(
+        ".devcontainer/devcontainer.json",
+      );
+    }),
+  );
+
+  it.effect("an update after the checkout moved on lands on the change request's branch", () =>
+    Effect.gen(function* () {
+      const { repo, write } = yield* makeRepo;
+      const { publisher } = yield* makePublisher();
+      yield* write(".devcontainer/devcontainer.json", "{}\n");
+      const first = yield* publisher.publish(publishInput(repo));
+      yield* git(repo, ["commit", "--allow-empty", "-m", "the user's own work"]);
+      yield* write(".devcontainer/devcontainer.json", '{ "image": "node" }\n');
+
+      const second = yield* publisher.publish(publishInput(repo));
+
+      expect(yield* git(repo, ["rev-parse", "machine/setup~1"])).toBe(first.commit);
+      expect(yield* git(repo, ["log", "--format=%s", "machine/setup"])).not.toContain(
+        "the user's own work",
+      );
+      expect(yield* git(repo, ["ls-remote", "origin", "refs/heads/machine/setup"])).toContain(
+        second.commit,
+      );
+    }),
+  );
+
+  it.effect("continues a branch only the remote has, instead of replacing it", () =>
+    Effect.gen(function* () {
+      const { repo, write } = yield* makeRepo;
+      const { publisher } = yield* makePublisher();
+      yield* write(".devcontainer/devcontainer.json", "{}\n");
+      const first = yield* publisher.publish(publishInput(repo));
+      yield* git(repo, ["branch", "-D", "machine/setup"]);
+      yield* write(".devcontainer/devcontainer.json", '{ "image": "node" }\n');
+
+      yield* publisher.publish(publishInput(repo));
+
+      expect(yield* git(repo, ["rev-parse", "machine/setup~1"])).toBe(first.commit);
+    }),
+  );
+
+  it.effect("on the branch itself, the committed paths do not read as staged afterwards", () =>
     Effect.gen(function* () {
       const { repo, write } = yield* makeRepo;
       const { publisher } = yield* makePublisher();
       yield* git(repo, ["checkout", "-b", "machine/setup"]);
-      yield* git(repo, ["commit", "--allow-empty", "-m", "elsewhere"]);
-      yield* git(repo, ["checkout", "main"]);
       yield* write(".devcontainer/devcontainer.json", "{}\n");
 
-      const error = yield* Effect.flip(publisher.publish(publishInput(repo)));
+      const result = yield* publisher.publish(publishInput(repo));
 
-      expect(error._tag).toBe("ChangeRequestBranchDivergedError");
-      expect(yield* git(repo, ["branch", "--show-current"])).toBe("main");
+      expect(yield* git(repo, ["rev-parse", "HEAD"])).toBe(result.commit);
+      expect(yield* git(repo, ["status", "--porcelain"])).toBe("");
     }),
   );
 
@@ -265,10 +321,15 @@ it.layer(layerGit)("T3TeamChangeRequestPublisher", (it) => {
     Effect.gen(function* () {
       const { repo, write } = yield* makeRepo;
       const { publisher, opened } = yield* makePublisher();
-      // origin already holds machine/setup at a commit the local branch will not contain.
-      yield* git(repo, ["commit", "--allow-empty", "-m", "remote only"]);
-      yield* git(repo, ["push", "origin", "HEAD:refs/heads/machine/setup"]);
-      yield* git(repo, ["reset", "--hard", "HEAD~1"]);
+      // origin refuses every update, the way a protected-branch policy does.
+      const fs = yield* FileSystem.FileSystem;
+      const hook = NodePath.join(
+        yield* git(repo, ["remote", "get-url", "origin"]),
+        "hooks",
+        "pre-receive",
+      );
+      yield* fs.writeFileString(hook, "#!/bin/sh\necho 'denied by policy' >&2\nexit 1\n");
+      yield* fs.chmod(hook, 0o755);
       yield* write(".devcontainer/devcontainer.json", "{}\n");
 
       const error = yield* Effect.flip(publisher.publish(publishInput(repo)));

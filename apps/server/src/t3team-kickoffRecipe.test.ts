@@ -1,6 +1,7 @@
 import { ThreadId } from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Path from "effect/Path";
 
 import {
   WorkflowRunRepository,
@@ -38,13 +39,16 @@ describe("resolveKickoffRecipe", () => {
 });
 
 describe("launchKickoffRecipe", () => {
-  it.effect("leaves a thread that already has a live run alone", () =>
+  it.effect("leaves a thread that already ran the recipe alone, even when that run ended", () =>
     Effect.gen(function* () {
-      const asked: Array<string> = [];
+      const asked: Array<unknown> = [];
       const repository = {
-        listLiveByLaunchThread: ({ launchThreadId }: { launchThreadId: string }) => {
-          asked.push(launchThreadId);
-          return Effect.succeed([{ runId: "r1" } as WorkflowRun]);
+        listLiveByLaunchThread: (input: { launchThreadId: string; includeEnded?: boolean }) => {
+          asked.push(input);
+          return Effect.succeed([
+            { runId: "r0", workflowPath: "/packs/other/workflow.ts", status: "completed" },
+            { runId: "r1", workflowPath: `${source.recipeRoot}/workflow.ts`, status: "completed" },
+          ] as Array<WorkflowRun>);
         },
       } as unknown as WorkflowRunRepositoryShape;
       const result = yield* launchKickoffRecipe({
@@ -52,11 +56,12 @@ describe("launchKickoffRecipe", () => {
         recipe: source,
         firstMessage: "run the tests",
       }).pipe(
-        // The launch's other services are never reached: the live run stops it first.
+        // The launch's other services are never reached: the earlier run stops it first.
         Effect.provideService(WorkflowRunRepository, repository),
+        Effect.provide(Path.layer),
       ) as Effect.Effect<unknown>;
       assert.isNull(result);
-      assert.deepStrictEqual(asked, ["t1"]);
+      assert.deepStrictEqual(asked, [{ launchThreadId: "t1", includeEnded: true }]);
     }),
   );
 });

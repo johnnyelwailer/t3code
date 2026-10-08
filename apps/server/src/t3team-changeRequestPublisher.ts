@@ -1,9 +1,10 @@
 /**
- * Publish named files from a checkout as a change request: switch to (or create) the branch from
- * the current HEAD, commit ONLY the listed paths with the user's own git identity, push the branch
- * to origin, and open the change request through the source-control provider of the repository's
- * host (`GitManager.openChangeRequest`). Re-running is safe: an open change request for the branch
- * is pushed to and returned, never duplicated.
+ * Publish named files from a checkout as a change request: commit ONLY the listed paths onto the
+ * branch with the user's own git identity, without switching the checkout or touching its index
+ * (`t3team-changeRequestCommit.ts`), push the branch to origin, and open the change request
+ * through the source-control provider of the repository's host (`GitManager.openChangeRequest`).
+ * Re-running is safe: it adds to the branch, and an open change request for the branch is pushed
+ * to and returned, never duplicated.
  *
  * Transports — the `t3team.change_request.publish` broker tool and a workflow body's `getTools()`
  * — only decode, call {@link T3TeamChangeRequestPublisher.publish}, and map these errors.
@@ -15,9 +16,9 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import * as GitManager from "./git/GitManager.ts";
+import { makeCommitPathsOnBranch } from "./t3team-changeRequestCommit.ts";
 import { changeRequestPathsProblem } from "./t3team-changeRequestPaths.ts";
 import {
-  ChangeRequestBranchDivergedError,
   ChangeRequestNotSignedInError,
   ChangeRequestNothingToCommitError,
   type ChangeRequestPublishError,
@@ -45,6 +46,7 @@ const make = Effect.gen(function* () {
   const git = yield* GitVcsDriver.GitVcsDriver;
   const gitManager = yield* GitManager.GitManager;
   const workspacePaths = yield* WorkspacePaths.WorkspacePaths;
+  const commitPathsOnBranch = yield* makeCommitPathsOnBranch;
 
   const succeeds = (operation: string, cwd: string, args: ReadonlyArray<string>) =>
     git
@@ -55,36 +57,6 @@ const make = Effect.gen(function* () {
     value.trim().length > 0
       ? Effect.succeed(value.trim())
       : Effect.fail(new ChangeRequestPublishInputError({ field, problem: "it is empty." }));
-
-  // Fast-forwards an existing branch onto HEAD (keeping working-tree changes), or creates it there.
-  const switchToBranch = Effect.fn("T3TeamChangeRequestPublisher.switchToBranch")(function* (
-    root: string,
-    branch: string,
-  ) {
-    const operation = "T3TeamChangeRequestPublisher.switchToBranch";
-    if (
-      !(yield* succeeds(operation, root, [
-        "show-ref",
-        "--verify",
-        "--quiet",
-        `refs/heads/${branch}`,
-      ]))
-    ) {
-      yield* git.createRef({ cwd: root, refName: branch, switchRef: true });
-      return;
-    }
-    if (
-      !(yield* succeeds(operation, root, [
-        "merge-base",
-        "--is-ancestor",
-        `refs/heads/${branch}`,
-        "HEAD",
-      ]))
-    ) {
-      return yield* new ChangeRequestBranchDivergedError({ branch });
-    }
-    yield* git.execute({ operation, cwd: root, args: ["checkout", "-B", branch, "--"] });
-  });
 
   const publish = Effect.fn("T3TeamChangeRequestPublisher.publish")(function* (
     input: ChangeRequestPublishInput,
@@ -134,34 +106,38 @@ const make = Effect.gen(function* () {
       const said = stageable.stderr.trim().split("\n")[0] ?? "";
       return yield* new ChangeRequestPublishInputError({ field: "paths", problem: said });
     }
-    // Read on a temporary index, so a refusal below leaves the checkout untouched.
-    const changes = yield* git.prepareCommitContext(root, paths);
-    const onBranch = (yield* git.statusDetails(root)).branch === branch;
-    if (changes === null && !onBranch) {
-      return yield* new ChangeRequestNothingToCommitError({ branch });
-    }
-    if (!onBranch) yield* switchToBranch(root, branch);
-    if (changes !== null) {
-      const [subject = "", ...rest] = commitMessage.split("\n");
-      yield* git.commit(root, subject.trim(), rest.join("\n"), { stage: { filePaths: paths } });
-    }
+    const committed = yield* commitPathsOnBranch({
+      root,
+      branch,
+      remoteName: REMOTE_NAME,
+      paths,
+      message: commitMessage,
+    });
+    if (committed === null) return yield* new ChangeRequestNothingToCommitError({ branch });
 
-    yield* git.pushCurrentBranch(root, branch, { remoteName: REMOTE_NAME }).pipe(
-      Effect.catchTags({
-        GitCommandError: (cause) =>
-          Effect.fail(
-            cause.reason === "authentication_failed"
-              ? new ChangeRequestNotSignedInError({
-                  step: "push",
-                  host: REMOTE_NAME,
-                  detail:
-                    "Git has no working credential for it: sign in through a credential helper or add an SSH key, then run again.",
-                })
-              : new ChangeRequestPushRejectedError({ branch, remoteName: REMOTE_NAME, cause }),
-          ),
-      }),
-    );
-    const { commitSha } = yield* git.resolveCommit({ cwd: root, revision: "HEAD" });
+    const ref = `refs/heads/${branch}`;
+    yield* git
+      .execute({
+        operation: "T3TeamChangeRequestPublisher.push",
+        cwd: root,
+        args: ["push", "-u", REMOTE_NAME, `${ref}:${ref}`],
+        timeoutMs: null,
+      })
+      .pipe(
+        Effect.catchTags({
+          GitCommandError: (cause) =>
+            Effect.fail(
+              cause.reason === "authentication_failed"
+                ? new ChangeRequestNotSignedInError({
+                    step: "push",
+                    host: REMOTE_NAME,
+                    detail:
+                      "Git has no working credential for it: sign in through a credential helper or add an SSH key, then run again.",
+                  })
+                : new ChangeRequestPushRejectedError({ branch, remoteName: REMOTE_NAME, cause }),
+            ),
+        }),
+      );
     const opened = yield* gitManager
       .openChangeRequest({
         cwd: root,
@@ -188,7 +164,7 @@ const make = Effect.gen(function* () {
       repository: opened.repository,
       provider: opened.provider,
       branch,
-      commit: commitSha,
+      commit: committed.commit,
       projectId: input.projectId,
     } satisfies ChangeRequestPublishResult;
   });

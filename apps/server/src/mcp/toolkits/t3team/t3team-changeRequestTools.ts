@@ -19,7 +19,7 @@ export const T3TeamChangeRequestPublishTool = Tool.make("t3_change_request_publi
       description: "Target branch. Omit for the repository's default branch.",
     }),
     paths: Schema.Array(Schema.String).annotate({
-      description: "Repository-relative files to commit. Nothing else is staged.",
+      description: "Repository-relative files to commit. Nothing else is committed.",
     }),
     commitMessage: Schema.String.annotate({
       description: "Commit message; the first line is the subject.",

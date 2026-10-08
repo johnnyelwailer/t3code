@@ -179,6 +179,8 @@ const WORKFLOW_RUN_NON_TERMINAL_STATUSES = [
 
 export const ListLiveWorkflowRunsByLaunchThreadInput = Schema.Struct({
   launchThreadId: Schema.String,
+  /** Also the thread's completed, failed and cancelled runs. */
+  includeEnded: Schema.optional(Schema.Boolean),
 });
 export type ListLiveWorkflowRunsByLaunchThreadInput =
   typeof ListLiveWorkflowRunsByLaunchThreadInput.Type;
@@ -334,7 +336,8 @@ export interface WorkflowRunRepositoryShape {
   readonly listRecent: (
     input: ListRecentWorkflowRunsInput,
   ) => Effect.Effect<ReadonlyArray<WorkflowRun>, ProjectionRepositoryError>;
-  /** This launch thread's non-terminal runs, ignoring how recently other threads updated. */
+  /** This launch thread's non-terminal runs (every run with `includeEnded`), ignoring how
+   * recently other threads updated. */
   readonly listLiveByLaunchThread: (
     input: ListLiveWorkflowRunsByLaunchThreadInput,
   ) => Effect.Effect<ReadonlyArray<WorkflowRun>, ProjectionRepositoryError>;
@@ -666,7 +669,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
   const listLiveWorkflowRunsByLaunchThread = SqlSchema.findAll({
     Request: ListLiveWorkflowRunsByLaunchThreadInput,
     Result: WorkflowRunDbRow,
-    execute: ({ launchThreadId }) =>
+    execute: ({ launchThreadId, includeEnded }) =>
       sql`
         SELECT
           run_id AS "runId",
@@ -699,7 +702,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           updated_at AS "updatedAt"
         FROM workflow_runs
         WHERE launch_thread_id = ${launchThreadId}
-          AND ${sql.in("status", WORKFLOW_RUN_NON_TERMINAL_STATUSES)}
+          AND ${includeEnded === true ? sql`1 = 1` : sql.in("status", WORKFLOW_RUN_NON_TERMINAL_STATUSES)}
         ORDER BY updated_at DESC, run_id DESC
       `,
   });
