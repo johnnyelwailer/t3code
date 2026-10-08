@@ -214,6 +214,11 @@ describe("T3TeamAgentsPanelSubRunTree live status text (GHE #40 seam)", () => {
     settingsState.activityLabelsEnabled = true;
   });
 
+  it("a running sub-run between LLM labels shows the child-status summary, not bare Running", () => {
+    render([node(createThread({ status: "running", childStatus: "Ran the web test suite" }))]);
+    expect(statusText()).toBe("Ran the web test suite");
+  });
+
   it("a running sub-run with neither falls back to the stable label; dots are untouched", () => {
     render([node(createThread({ status: "running" }))]);
     expect(statusText()).toBe("Running");
