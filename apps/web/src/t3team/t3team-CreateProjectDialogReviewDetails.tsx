@@ -24,7 +24,8 @@ export function CreateProjectDialogReviewDetails({
   workspacePath,
 }: {
   readonly siteLabel: string;
-  readonly profileSummary: ReviewSetupProfileSummary;
+  /** Omitted while the work profile chooser is off — nothing was chosen, so nothing is reviewed. */
+  readonly profileSummary: ReviewSetupProfileSummary | undefined;
   readonly linkedRepositoryUrls: ReadonlyArray<string>;
   readonly workspacePath: string;
 }) {
@@ -34,14 +35,16 @@ export function CreateProjectDialogReviewDetails({
     <>
       <WorkItemPropertyRow label="Jira site" value={siteLabel} />
 
-      <WorkItemPropertyRow label="Setup profile" value={profileSummary.title}>
-        <div className="space-y-0.5">
-          <div className="font-medium text-foreground">{profileSummary.title}</div>
-          {profileSummary.description ? (
-            <div className="text-muted-foreground">{profileSummary.description}</div>
-          ) : null}
-        </div>
-      </WorkItemPropertyRow>
+      {profileSummary ? (
+        <WorkItemPropertyRow label="Setup profile" value={profileSummary.title}>
+          <div className="space-y-0.5">
+            <div className="font-medium text-foreground">{profileSummary.title}</div>
+            {profileSummary.description ? (
+              <div className="text-muted-foreground">{profileSummary.description}</div>
+            ) : null}
+          </div>
+        </WorkItemPropertyRow>
+      ) : null}
 
       <WorkItemPropertyRow
         label="Repositories"

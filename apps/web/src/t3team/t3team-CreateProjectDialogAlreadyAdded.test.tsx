@@ -45,6 +45,13 @@ vi.mock("~/t3team/t3team-projectSetupProfile", () => ({
   readT3TeamProjectSetupProfile: () => "product-partner",
 }));
 
+// The `profile` step only exists while the WORK_PROFILE_CHOOSER flag is on; this walk is about
+// the step order, so it pins the flag on rather than inheriting whatever a server advertises.
+vi.mock("~/t3team/t3team-workProfileChooser", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./t3team-workProfileChooser")>();
+  return { ...actual, useT3TeamWorkProfileChooserEnabled: () => true };
+});
+
 vi.mock("~/t3team/t3team-CreateProjectDialogConfirmStep", () => ({
   ConfirmStepHeading: () => <div>confirm-step-heading</div>,
   CreatingStep: () => <div>creating-step</div>,
