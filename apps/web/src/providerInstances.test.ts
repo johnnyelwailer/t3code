@@ -21,12 +21,14 @@ function provider(input: {
   accentColor?: string;
   status?: ServerProvider["status"];
   models?: ServerProvider["models"];
+  configurationSource?: ServerProvider["configurationSource"];
 }): ServerProvider {
   return {
     instanceId: ProviderInstanceId.make(input.instanceId),
     driver: input.provider,
     ...(input.displayName ? { displayName: input.displayName } : {}),
     ...(input.accentColor ? { accentColor: input.accentColor } : {}),
+    ...(input.configurationSource ? { configurationSource: input.configurationSource } : {}),
     enabled: input.enabled ?? true,
     installed: true,
     version: null,
@@ -119,6 +121,160 @@ describe("applyProviderInstanceSettings", () => {
 
     expect(entry?.enabled).toBe(false);
   });
+
+  it.each(["constructor", "toString"])(
+    "treats a removed custom instance named %s as disabled",
+    (instanceId) => {
+      const entries = deriveProviderInstanceEntries([
+        provider({
+          provider: ProviderDriverKind.make("claudeAgent"),
+          instanceId,
+        }),
+      ]);
+      const [entry] = applyProviderInstanceSettings(entries, {
+        providerInstances: {},
+        providers: {} as never,
+      });
+
+      expect(entry?.enabled).toBe(false);
+    },
+  );
+
+  it("uses settings for a configured custom instance named constructor", () => {
+    const instanceId = ProviderInstanceId.make("constructor");
+    const entries = deriveProviderInstanceEntries([
+      provider({
+        provider: ProviderDriverKind.make("claudeAgent"),
+        instanceId,
+      }),
+    ]);
+    const [entry] = applyProviderInstanceSettings(entries, {
+      providerInstances: {
+        [instanceId]: {
+          driver: ProviderDriverKind.make("claudeAgent"),
+          enabled: false,
+        },
+      },
+      providers: {} as never,
+    });
+
+    expect(entry?.enabled).toBe(false);
+  });
+
+  it("preserves the snapshot default when a fork driver has no own settings entry", () => {
+    const driver = ProviderDriverKind.make("constructor");
+    const entries = deriveProviderInstanceEntries([
+      provider({
+        provider: driver,
+        instanceId: "constructor",
+      }),
+    ]);
+    const [entry] = applyProviderInstanceSettings(entries, {
+      providerInstances: {},
+      providers: {} as never,
+    });
+
+    expect(entry?.isDefault).toBe(true);
+    expect(entry?.enabled).toBe(true);
+  });
+
+  it("uses legacy settings for a built-in default instance", () => {
+    const entries = deriveProviderInstanceEntries([
+      provider({
+        provider: ProviderDriverKind.make("codex"),
+        instanceId: "codex",
+      }),
+    ]);
+    const [entry] = applyProviderInstanceSettings(entries, {
+      providerInstances: {},
+      providers: { codex: { enabled: false } } as never,
+    });
+
+    expect(entry?.enabled).toBe(false);
+  });
+
+  it("keeps a pack-configured non-default instance enabled when no settings entry exists", () => {
+    const entries = deriveProviderInstanceEntries([
+      provider({
+        provider: ProviderDriverKind.make("claudeAgent"),
+        instanceId: "claude_pack",
+        enabled: true,
+        configurationSource: "pack",
+      }),
+    ]);
+    const [entry] = applyProviderInstanceSettings(entries, {
+      providerInstances: {},
+      providers: {} as never,
+    });
+
+    expect(entry?.isDefault).toBe(false);
+    expect(entry?.enabled).toBe(true);
+  });
+
+  it("keeps a pack-configured non-default instance disabled when the snapshot reports it as such", () => {
+    const entries = deriveProviderInstanceEntries([
+      provider({
+        provider: ProviderDriverKind.make("claudeAgent"),
+        instanceId: "claude_pack",
+        enabled: false,
+        configurationSource: "pack",
+      }),
+    ]);
+    const [entry] = applyProviderInstanceSettings(entries, {
+      providerInstances: {},
+      providers: {} as never,
+    });
+
+    expect(entry?.isDefault).toBe(false);
+    expect(entry?.enabled).toBe(false);
+  });
+
+  it("lets an explicit settings entry override a pack-configured non-default instance", () => {
+    const instanceId = ProviderInstanceId.make("claude_pack");
+    const entries = deriveProviderInstanceEntries([
+      provider({
+        provider: ProviderDriverKind.make("claudeAgent"),
+        instanceId,
+        enabled: true,
+        configurationSource: "pack",
+      }),
+    ]);
+    const [entry] = applyProviderInstanceSettings(entries, {
+      providerInstances: {
+        [instanceId]: {
+          driver: ProviderDriverKind.make("claudeAgent"),
+          enabled: false,
+        },
+      },
+      providers: {} as never,
+    });
+
+    expect(entry?.enabled).toBe(false);
+  });
+
+  it.each(["constructor", "toString"])(
+    "falls back to the streamed enabled for a default instance when legacy providers has no own %s key",
+    (driverKind) => {
+      // Confirm the Object.hasOwn guard on the legacy `providers` map still
+      // preserves the fork's `entry.enabled` fallback for default instances
+      // when the settings author never wrote an own entry for that driver
+      // kind (and the key only resolves through Object.prototype).
+      const entries = deriveProviderInstanceEntries([
+        provider({
+          provider: ProviderDriverKind.make(driverKind),
+          instanceId: driverKind,
+          enabled: true,
+        }),
+      ]);
+      const [entry] = applyProviderInstanceSettings(entries, {
+        providerInstances: {},
+        providers: {} as never,
+      });
+
+      expect(entry?.isDefault).toBe(true);
+      expect(entry?.enabled).toBe(true);
+    },
+  );
 });
 
 describe("deriveProviderInstanceEntries", () => {

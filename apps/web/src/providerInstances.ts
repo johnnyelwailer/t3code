@@ -285,9 +285,22 @@ export function deriveProviderEntriesByEnvironment(
  * settings write, so picker visibility must follow settings rather than waiting
  * for probe reconciliation.
  *
- * Non-default instances only exist through `providerInstances`; if one is
- * absent there, its streamed snapshot is stale (for example immediately after
- * deletion) and is treated as disabled.
+ * Precedence:
+ *   1. An explicit `providerInstances[entry.instanceId]` entry — the
+ *      settings author has decided for this exact instance.
+ *   2. For default instances, a legacy `providers[entry.driverKind]`
+ *      entry — built-in drivers ship a per-kind toggle. Falls back to
+ *      the streamed `entry.enabled` when the legacy entry is absent or
+ *      omits `enabled`.
+ *   3. For non-default instances shipped via a configuration pack
+ *      (`entry.configurationSource === "pack"`), the streamed
+ *      `entry.enabled` — packs own their own enablement default.
+ *   4. Otherwise disabled — the instance is stale (for example deleted
+ *      just now and not yet removed from the wire).
+ *
+ * Both lookups use `Object.hasOwn` so an instance id or driver kind that
+ * collides with an inherited `Object.prototype` member does not inherit
+ * a phantom value from the settings object.
  */
 export function applyProviderInstanceSettings(
   entries: ReadonlyArray<ProviderInstanceEntry>,
@@ -298,11 +311,16 @@ export function applyProviderInstanceSettings(
   >;
 
   return entries.map((entry) => {
-    const explicitInstance = settings.providerInstances?.[entry.instanceId];
+    const explicitInstance = Object.hasOwn(settings.providerInstances, entry.instanceId)
+      ? settings.providerInstances[entry.instanceId]
+      : undefined;
+    const legacyProvider = Object.hasOwn(legacyProviders, entry.driverKind)
+      ? legacyProviders[entry.driverKind]
+      : undefined;
     const enabled = explicitInstance
       ? resolveProviderInstanceEnabled(explicitInstance)
       : entry.isDefault
-        ? (legacyProviders[entry.driverKind]?.enabled ?? entry.enabled)
+        ? (legacyProvider?.enabled ?? entry.enabled)
         : entry.configurationSource === "pack"
           ? entry.enabled
           : false;
@@ -346,7 +364,7 @@ export function sortProviderInstanceEntries(
  * Look up a single instance entry by exact `instanceId`. Missing snapshots
  * are not inferred from driver kind in UI routing code.
  */
-export function getProviderInstanceEntry(
+function getProviderInstanceEntry(
   providers: ReadonlyArray<ServerProvider>,
   instanceId: ProviderInstanceId,
 ): ProviderInstanceEntry | undefined {
