@@ -17,7 +17,7 @@ import { resolveWithinRoot } from "./t3team-projectRecipeDiscoveryShared.ts";
 /** Top-level entries a workspace never reads or writes: git internals, the runs scratch dir (it
  * holds other runs' ephemeral `workflow.ts`, which a failed-run resume re-baselines) and the
  * project's own `.t3` state. `.github/`, `.devcontainer/` and `.nexi/` stay writable. */
-export const WORKSPACE_RESERVED_ENTRIES: ReadonlyArray<string> = [".git", ".t3team-runs", ".t3"];
+const WORKSPACE_RESERVED_ENTRIES: ReadonlyArray<string> = [".git", ".t3team-runs", ".t3"];
 
 /** `resolveWithinRoot` plus the reserved-entry rule, judged on the RESOLVED path relative to the
  * root so `a/../.git/x` cannot slip past a prefix check on the raw string. */
