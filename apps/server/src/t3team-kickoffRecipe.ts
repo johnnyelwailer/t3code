@@ -10,8 +10,10 @@
  * needs it.
  *
  * Reads the live event tail only: history is not a first message. Not launched when the thread
- * already ran the recipe, live or ended, so a restarted server neither starts a second run beside
- * a live one nor redoes a finished setup; `/machine-setup` runs it again on purpose.
+ * already ran the recipe, live or ended, nor while a run of it is active elsewhere, so a restarted
+ * server starts no second run beside a live one. A finished setup of an earlier session does not
+ * block it (a session restores its predecessors' runs), and a restart may set up again on another
+ * thread; `/machine-setup` runs it again on purpose.
  *
  * @module t3team-kickoffRecipe
  */
@@ -53,8 +55,34 @@ export function runsOfWorkflow<Run extends { readonly workflowPath: string }>(
   return runs.filter((run) => run.workflowPath === workflowPath);
 }
 
-/** How many recent runs the once-per-environment check reads. */
-const RECENT_RUN_LIMIT = 200;
+/**
+ * Statuses of a run that is actively in progress. A run that is `paused`, `sleeping` or `watching`
+ * waits on something outside this session (an explicit resume, a clock, a signal) and must not
+ * keep a new session from setting up.
+ */
+const ACTIVE_STATUSES = ["authoring", "queued", "running", "suspended"] as const;
+
+/**
+ * The runs that stop a kickoff: any run of the recipe on this thread, ended or not, and a run of
+ * it still active elsewhere. A restart re-arms the kickoff and the next first message may come on
+ * another thread; an active run (one waiting on its question, say) must not be launched twice. An
+ * ended run on another thread does not count: a session restores the workspace of earlier
+ * sessions, and their finished setups must not stop this one from setting up.
+ */
+export function blockingKickoffRuns<
+  Run extends { readonly runId: string; readonly workflowPath: string; readonly status: string },
+>(
+  threadRuns: ReadonlyArray<Run>,
+  activeElsewhere: ReadonlyArray<Run>,
+  workflowPath: string,
+): ReadonlyArray<Run> {
+  const active: ReadonlyArray<string> = ACTIVE_STATUSES;
+  const blocking = runsOfWorkflow(
+    [...threadRuns, ...activeElsewhere.filter((run) => active.includes(run.status))],
+    workflowPath,
+  );
+  return [...new Map(blocking.map((run) => [run.runId, run])).values()];
+}
 
 export const launchKickoffRecipe = Effect.fn("launchKickoffRecipe")(function* (input: {
   readonly threadId: ThreadId;
@@ -64,21 +92,13 @@ export const launchKickoffRecipe = Effect.fn("launchKickoffRecipe")(function* (i
   const runs = yield* WorkflowRunRepository;
   const path = yield* Path.Path;
   const workflowPath = path.join(input.recipe.recipeRoot, "workflow.ts");
-  // An environment runs its kickoff once: after a restart, a live run continues and an ended one
-  // stays ended, even when the first message after the restart comes on another thread. A run of
-  // another recipe does not count. A cloud session has few runs, so the recent ones cover it.
-  const earlier = runsOfWorkflow(
-    [
-      ...(yield* runs.listLiveByLaunchThread({
-        launchThreadId: input.threadId,
-        includeEnded: true,
-      })),
-      ...(yield* runs.listRecent({ limit: RECENT_RUN_LIMIT })),
-    ],
+  const earlier = blockingKickoffRuns(
+    yield* runs.listLiveByLaunchThread({ launchThreadId: input.threadId, includeEnded: true }),
+    (yield* Effect.forEach(ACTIVE_STATUSES, (status) => runs.listByStatus({ status }))).flat(),
     workflowPath,
   );
   if (earlier.length > 0) {
-    yield* Effect.logInfo("kickoff recipe: the environment already ran it", {
+    yield* Effect.logInfo("kickoff recipe: it already ran or is running", {
       threadId: input.threadId,
       runIds: earlier.map((run) => run.runId),
     });
