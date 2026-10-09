@@ -30,6 +30,7 @@ const failedRun: WorkflowRunSummary = {
   updatedAt: "2026-09-28T10:02:00Z",
   htmlUrl: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/77",
   name: "nexi-session [s1]",
+  actor: "pj",
 };
 
 const ghOut = (stdout: string): VcsProcess.VcsProcessOutput => ({

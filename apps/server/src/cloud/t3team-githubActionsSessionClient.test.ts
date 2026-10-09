@@ -11,6 +11,7 @@ import {
   RUN_FIELDS_JQ,
   sessionTagMarker,
 } from "./t3team-githubActionsSessionClient.ts";
+import { sessionRunsForLogin } from "./t3team-cloudSessionRunOwnership.ts";
 
 const REF: CloudSessionRepoRef = {
   host: "nexplore.ghe.com",
@@ -129,6 +130,7 @@ describe("parseRunsResponse", () => {
             updated_at: "2026-09-12T21:35:59Z",
             html_url: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/248523362",
             name: "hive/nx-nexi [main] [c9f4a2]",
+            actor: { login: "pj" },
           },
         ],
       }),
@@ -142,6 +144,7 @@ describe("parseRunsResponse", () => {
         updatedAt: "2026-09-12T21:35:59Z",
         htmlUrl: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/248523362",
         name: "hive/nx-nexi [main] [c9f4a2]",
+        actor: "pj",
       },
     ]);
   });
@@ -195,6 +198,35 @@ describe("parseRunsResponse", () => {
       expect(parseRunsResponse(stdout)).toBeNull();
     },
   );
+});
+
+describe("sessionRunsForLogin", () => {
+  const run = (actor: string, name: string) =>
+    ({
+      id: 1,
+      status: "in_progress",
+      conclusion: null,
+      createdAt: "",
+      updatedAt: "",
+      htmlUrl: "",
+      name,
+      actor,
+    }) as const;
+
+  it("keeps only this login's runs, and never a warm standby", () => {
+    // GHE ignores actor= on the runs query (verified: actor=pj still returns
+    // github-actions[bot] standbys), so the filter is applied here.
+    const kept = sessionRunsForLogin(
+      [
+        run("pj", "nexi-session [mine]"),
+        run("github-actions[bot]", "nexi-session · broker · machine · standby pj.nexi-machine-qa"),
+        run("someone-else", "nexi-session [theirs]"),
+        run("pj", "nexi-session · broker · machine · standby pj.nexi-machine-qa"),
+      ],
+      "pj",
+    );
+    expect(kept.map((entry) => entry.name)).toEqual(["nexi-session [mine]"]);
+  });
 });
 
 describe("parseJobStepsResponse", () => {
