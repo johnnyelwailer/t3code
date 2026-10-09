@@ -92,10 +92,10 @@ describe("resolveFromHost", () => {
     expect(() => resolveFromHost("effect", bundleDir([]), notInstalled)).toThrow(
       "ERR_MODULE_NOT_FOUND",
     );
-    // subpaths have no bundle entry
+    // subpaths have no bundle entry, and the error says what to write instead
     expect(() =>
       resolveFromHost("effect/Schema", bundleDir(["t3team-hostEffect.mjs"]), notInstalled),
-    ).toThrow("ERR_MODULE_NOT_FOUND");
+    ).toThrow('recipe modules may import only the bare "effect"');
   });
 
   // The load-bearing claim of the published-bundle path: a recipe that lands on the host entry

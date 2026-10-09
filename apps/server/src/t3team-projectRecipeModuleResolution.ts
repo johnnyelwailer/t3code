@@ -62,6 +62,14 @@ export function resolveFromHost(
       const url = new URL(sibling, hostUrl);
       if (NodeFS.existsSync(NodeURL.fileURLToPath(url))) return url.href;
     }
+    const root = RESOLVABLE_PACKAGES.find((name) => specifier.startsWith(`${name}/`));
+    if (root !== undefined) {
+      // A subpath resolves from a development checkout but has no entry in a published bundle.
+      throw new Error(
+        `Cannot resolve "${specifier}" from the published server: recipe modules may import only the bare "${root}" there (subpaths are not bundled). Import { ... } from "${root}" instead.`,
+        { cause: error },
+      );
+    }
     throw error;
   }
 }
