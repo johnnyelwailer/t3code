@@ -19,9 +19,13 @@
  * Binding per call (not once at launch) also reads the thread's CURRENT tool context, like an agent
  * turn does, and re-applies the recipe's `allowedToolGroups` every time.
  *
- * Three gates apply, all pre-existing: the body must declare the group in `meta.capabilities`
- * (`assertToolGroupDeclared`), the id must be in the thread's tool context (`availableToolIdSet`),
- * and the recipe's `allowedToolGroups` filters what survives.
+ * Three gates apply: the body must declare the group in `meta.capabilities`
+ * (`assertToolGroupDeclared`), the id must be in the binding's `availableToolIdSet`, and the
+ * recipe's `allowedToolGroups` filters what survives. The second is the thread's synced tool
+ * context PLUS the run's own grant for the tool being called (`grantedToolIdsForCall`), because a
+ * run launched server-side (kickoff, trigger, `orchestration.run`) has no web client to have
+ * synced the group's tools into the thread. That widening is per call and per binding: the
+ * thread's stored context, and every agent turn on it, are unchanged.
  *
  * @module t3team-workflowHostTools
  */
@@ -29,6 +33,8 @@
 import { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+
+import { getProjectRecipeToolGroupForToolId } from "@t3tools/project-recipes";
 
 import {
   defineTool,
@@ -121,6 +127,23 @@ const T3TEAM_WORKFLOW_HOST_TOOL_REFS: ReadonlyArray<ToolRef<unknown, unknown>> =
   T3TEAM_WORKFLOW_HOST_TOOLS.map(hostToolRef);
 
 /**
+ * The tool ids this run's grant adds to the binding for ONE call: the called tool itself, and only
+ * when the recipe's `allowedToolGroups` NAMES that tool's group. The thread's synced tool context is
+ * built by whichever client last wrote it (the web unions the launching recipe's groups into it, a
+ * server launch never goes through the web), so the run's own grant must not depend on it. Nothing
+ * is added for an unscoped grant (`undefined`), an unclassified id, or a group the recipe lacks; the
+ * body's own `meta.capabilities` gate (`assertToolGroupDeclared`) has already run by the time a
+ * handler reaches this client.
+ */
+function grantedToolIdsForCall(
+  tool: string,
+  allowedToolGroups: ReadonlyArray<string> | undefined,
+): ReadonlyArray<string> {
+  const group = getProjectRecipeToolGroupForToolId(tool);
+  return group !== undefined && allowedToolGroups?.includes(group) === true ? [tool] : [];
+}
+
+/**
  * The per-run host bridge. `undefined` for a headless run: with no launch thread there is no
  * binding to reach, no checkout to publish from and nowhere a proposal could be reviewed, so the
  * refs stay bound but each call reports exactly that instead of acting into a void.
@@ -148,6 +171,7 @@ export function makeT3TeamWorkflowHostToolClient(input: {
         broker.bindSession({
           threadId: ThreadId.make(launchThreadId),
           ...(allowedToolGroups === undefined ? {} : { allowedToolGroups }),
+          grantedToolIds: grantedToolIdsForCall(tool, allowedToolGroups),
         }),
       );
       if (binding === undefined) {
