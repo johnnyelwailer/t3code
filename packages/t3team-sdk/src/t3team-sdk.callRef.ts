@@ -10,7 +10,15 @@
  */
 import type * as Schema from "effect/Schema";
 
+import { WorkflowSuspended } from "@runbook/core/handles";
+
 import { fromRun } from "./t3team-sdk.engineApi.ts";
+import {
+  CancelledError,
+  ReplayDriftError,
+  SubWorkflowCheckpointError,
+  WorkflowAborted,
+} from "./t3team-sdk.errors.ts";
 import { decodeWithSchema } from "./t3team-sdk.internal.ts";
 import type { WorkflowRef } from "./t3team-sdk.types.ts";
 
@@ -24,6 +32,13 @@ export interface CallRefOptions<O> {
   readonly fallback: () => O | Promise<O>;
   readonly onFallback?: (reason: string) => void;
 }
+
+const isEngineSignal = (error: unknown) =>
+  error instanceof WorkflowSuspended ||
+  error instanceof WorkflowAborted ||
+  error instanceof CancelledError ||
+  error instanceof ReplayDriftError ||
+  error instanceof SubWorkflowCheckpointError;
 
 type RunWorkflow = (ref: WorkflowRef<unknown, unknown>, args?: unknown) => Promise<unknown>;
 
@@ -57,6 +72,9 @@ export function createCallRef(runWorkflow: RunWorkflow) {
         input,
       );
     } catch (error) {
+      // The engine's own signals are not the reference failing: a suspension parks the run, an
+      // abort settles it, and journal drift must surface rather than hide behind a fallback.
+      if (isEngineSignal(error)) throw error;
       return await fallback(
         `the referenced workflow failed: ${error instanceof Error ? error.message : String(error)}`,
       );
