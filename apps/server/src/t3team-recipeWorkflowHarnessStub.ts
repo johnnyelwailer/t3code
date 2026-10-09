@@ -53,6 +53,10 @@ export function recordingWorkflowHostPort(
       capture.operations.push({ op: "launchedThread", input });
       return host.launchedThread(input);
     },
+    resolveRecipeConfig: (input) => {
+      capture.operations.push({ op: "resolveRecipeConfig", input });
+      return host.resolveRecipeConfig(input);
+    },
     setRunFacts: (input) => {
       capture.operations.push({ op: "setRunFacts", input });
       return host.setRunFacts(input);

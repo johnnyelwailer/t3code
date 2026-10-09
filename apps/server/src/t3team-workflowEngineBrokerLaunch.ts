@@ -16,6 +16,7 @@ import type { BrokerCore, BrokerSend } from "./t3team-workflowEngineBrokerContex
 import type {
   LaunchedThreadOpPayload,
   LaunchThreadPayload,
+  RecipeConfigQueryPayload,
   RunFactsPayload,
 } from "./t3team-workflowEngineBrokerPayloads.ts";
 import { withinRunModes } from "./t3team-workflowLaunchedThreadIds.ts";
@@ -24,7 +25,7 @@ import type {
   WorkflowHostLaunchedThreadOp,
 } from "./t3team-workflowHostPort.ts";
 
-const LAUNCH_KINDS = new Set(["thread.launch", "thread.launched", "run.facts"]);
+const LAUNCH_KINDS = new Set(["thread.launch", "thread.launched", "run.facts", "config.resolve"]);
 
 export const isBrokerLaunchVerb = (kind: string): boolean => LAUNCH_KINDS.has(kind);
 
@@ -47,6 +48,19 @@ export async function handleBrokerLaunchVerb(core: BrokerCore, ctx: BrokerSend):
         ? Promise.resolve(deps.modelSelection)
         : resolveWorkflowChildModel(deps.modelSelection, requested);
 
+    if (ctx.kind === "config.resolve") {
+      const p = ctx.payload as RecipeConfigQueryPayload;
+      if (deps.recipePath === undefined) {
+        return refused("getConfig() needs a recipe run; this run has no recipe.");
+      }
+      return host.resolveRecipeConfig({
+        projectId: deps.projectId,
+        recipePath: deps.recipePath,
+        ...(p.repository === undefined ? {} : { repository: p.repository }),
+        ...(p.caller === undefined ? {} : { caller: p.caller }),
+        ...(p.run === undefined ? {} : { run: p.run }),
+      });
+    }
     if (ctx.kind === "run.facts") {
       const p = ctx.payload as RunFactsPayload;
       if (deps.launchThreadId === undefined) {
@@ -120,5 +134,6 @@ function stepDetail(ctx: BrokerSend): string {
   const p = ctx.payload as { readonly key?: string; readonly op?: string; readonly title?: string };
   if (ctx.kind === "thread.launch") return `Launch thread — ${p.title ?? p.key ?? ""}`;
   if (ctx.kind === "run.facts") return "Update run facts";
+  if (ctx.kind === "config.resolve") return "Read recipe config";
   return `Launched thread ${p.key ?? ""} — ${p.op ?? ""}`;
 }

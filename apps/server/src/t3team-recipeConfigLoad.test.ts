@@ -1,4 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off - config fixtures are real files under __fixtures__.
+import * as NodeTimersPromises from "node:timers/promises";
 import * as NodeURL from "node:url";
 
 import { assert, it } from "@effect/vitest";
@@ -158,7 +159,7 @@ it.layer(NodeServices.layer)("recipe config loader", (it) => {
       const load = loadRecipeConfigLayers({ workspaceRoot, recipeId: "pr-watch", recipePath });
       const first = yield* load;
       assert.strictEqual(yield* load, first, "an unchanged config is served from the cache");
-      yield* Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 20)));
+      yield* Effect.promise(() => NodeTimersPromises.setTimeout(20));
       yield* write(
         "recipes/pr-watch.config.ts",
         `import { defineRecipeConfig } from "@t3team/sdk";\nexport default defineRecipeConfig("pr-watch", { defaults: { model: "b" } });`,
