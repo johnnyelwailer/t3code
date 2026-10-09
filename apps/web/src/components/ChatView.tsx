@@ -11083,6 +11083,10 @@ export default function ChatView(props: ChatViewProps) {
     onAddProjectScript: saveProjectScript,
     onUpdateProjectScript: updateProjectScript,
     onDeleteProjectScript: deleteProjectScript,
+    orchestration: {
+      dockItems: t3teamChat.dockItems,
+      onLocate: t3teamChat.onLocateWorkflowCard,
+    },
   };
   const panelToggleControlProps = {
     terminalAvailable: activeProject !== null,

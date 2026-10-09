@@ -32,6 +32,10 @@ import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkf
 import { RepairStatusStrip, RunStatusBanner } from "~/t3team/chat/t3team-workflowRunBanner";
 export { formatWorkflowStepDue } from "~/t3team/chat/t3team-workflowRunLabels";
 import {
+  WORKFLOW_AUTHORING_HEADLINE,
+  WORKFLOW_QUEUED_CAPACITY_DETAIL,
+} from "~/t3team/chat/t3team-workflowRunLabels";
+import {
   useT3TeamWorkflowShapeLiveState,
   workflowControlErrorMessage,
 } from "~/t3team/chat/t3team-workflowShapeLiveState";
@@ -71,7 +75,6 @@ export function T3TeamWorkflowShapeLiveCard({
     status,
     repair,
     liveLabel,
-    queued,
     canPause,
     canResume,
     isRetry,
@@ -90,9 +93,19 @@ export function T3TeamWorkflowShapeLiveCard({
 
   return (
     <div className="@container/workflow-live-card rounded-lg border border-primary/35 bg-background/65 px-4 py-3">
-      {queued ? (
+      {/*
+        Pre-run copy, split by actual state: only `queued` is genuinely capacity-parked, so only
+        it may say so. `authoring` is the hidden author writing the plan — it reads with the same
+        words as the sidebar pill (one shared source in `t3team-workflowRunLabels`), never the
+        capacity line, which was the lie this card used to tell for both.
+      */}
+      {status === "queued" ? (
         <div className="mb-2 text-xs font-medium text-muted-foreground">
-          Queued · starts when capacity is free
+          Queued · {WORKFLOW_QUEUED_CAPACITY_DETAIL}
+        </div>
+      ) : status === "authoring" ? (
+        <div className="mb-2 text-xs font-medium text-muted-foreground">
+          {WORKFLOW_AUTHORING_HEADLINE}
         </div>
       ) : null}
       <T3TeamWorkflowRunControlStatus
