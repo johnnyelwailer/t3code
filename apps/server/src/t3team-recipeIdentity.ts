@@ -14,7 +14,7 @@ import { importRecipeModuleRef } from "./t3team-projectRecipeDiscoveryModule.ts"
 const known = new Map<string, string>();
 const normalized = (path: string) => path.trim().replace(/[\\/]+$/, "");
 
-export const recipeIdForPath = (recipePath: string) =>
+const recipeIdForPath = (recipePath: string) =>
   Effect.gen(function* () {
     const key = normalized(recipePath);
     const cached = known.get(key);
