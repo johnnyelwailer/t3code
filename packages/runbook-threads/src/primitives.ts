@@ -185,6 +185,7 @@ export function createThreadPrimitives<Capabilities = WorkflowChildCapabilities>
               ...(opts.effort === undefined ? {} : { effort: opts.effort }),
               retention,
               capabilities,
+              ...(opts.checkout === "launch-thread" ? { checkout: opts.checkout } : {}),
             },
           },
           resolver,
@@ -203,6 +204,7 @@ export function createThreadPrimitives<Capabilities = WorkflowChildCapabilities>
       ...(opts.model === undefined ? {} : { model: opts.model }),
       ...(opts.models === undefined ? {} : { models: opts.models }),
       ...(opts.effort === undefined ? {} : { effort: opts.effort }),
+      ...(opts.checkout === undefined ? {} : { checkout: opts.checkout }),
     }).askAgent(withAgentStepContract(prompt), opts);
   };
 

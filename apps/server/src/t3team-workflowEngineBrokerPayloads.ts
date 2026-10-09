@@ -38,6 +38,8 @@ export interface ThreadCreatePayload {
   readonly effort?: import("@t3team/sdk").AgentEffort;
   /** Omitted is ephemeral, preserving one-shot agent() as a hidden child. */
   readonly retention?: "ephemeral" | "retained";
+  /** `launch-thread` puts the child in the launch thread's checkout; omitted is the project root. */
+  readonly checkout?: "project" | "launch-thread";
 }
 export interface ThreadTurnPayload {
   readonly threadId: string;

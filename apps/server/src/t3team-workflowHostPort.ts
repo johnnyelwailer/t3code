@@ -26,6 +26,11 @@ export interface WorkflowHostCreateThreadInput {
   readonly retention: "ephemeral" | "retained";
   /** The run's launch thread; the new thread is linked under it as a `subagent` child. */
   readonly parentThreadId?: string;
+  /**
+   * Work in the parent's branch and worktree instead of the project root. Opt-in per child
+   * (`agent(prompt, { checkout: "launch-thread" })`), so existing workflows keep the root.
+   */
+  readonly inheritCheckout?: boolean;
 }
 
 export interface WorkflowHostStartTurnInput {
