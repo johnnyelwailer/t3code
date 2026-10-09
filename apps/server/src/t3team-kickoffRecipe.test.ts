@@ -13,7 +13,7 @@ import {
   launchKickoffRecipe,
   runsOfWorkflow,
   resolveKickoffRecipe,
-  userMessageText,
+  typedUserMessage,
 } from "./t3team-kickoffRecipe.ts";
 
 const source: PackRecipeSource = {
@@ -40,18 +40,17 @@ describe("resolveKickoffRecipe", () => {
 });
 
 describe("launchKickoffRecipe", () => {
-  it.effect("leaves a thread that already ran the recipe alone, even when that run ended", () =>
+  const ranRecipe = (runs: ReadonlyArray<Partial<WorkflowRun>>) =>
     Effect.gen(function* () {
       const asked: Array<unknown> = [];
       const repository = {
         listLiveByLaunchThread: (input: { launchThreadId: string; includeEnded?: boolean }) => {
           asked.push(input);
-          const runs: ReadonlyArray<Partial<WorkflowRun>> = [
-            { runId: "r0", workflowPath: "/packs/other/workflow.ts", status: "completed" },
-            { runId: "r1", workflowPath: `${source.recipeRoot}/workflow.ts`, status: "completed" },
-          ];
-          return Effect.succeed(runs);
+          return Effect.succeed(
+            runs.filter((run) => (run as { launchThreadId?: string }).launchThreadId === "t1"),
+          );
         },
+        listRecent: () => Effect.succeed(runs),
       } as unknown as WorkflowRunRepositoryShape;
       // @effect-diagnostics-next-line unsafeEffectTypeAssertion:off - The earlier run returns before any other service is reached.
       const result = yield* launchKickoffRecipe({
@@ -63,8 +62,27 @@ describe("launchKickoffRecipe", () => {
         Effect.provideService(WorkflowRunRepository, repository),
         Effect.provide(Path.layer),
       ) as Effect.Effect<unknown>;
+      return { result, asked };
+    });
+  const mine = `${source.recipeRoot}/workflow.ts`;
+
+  it.effect("leaves a thread that already ran the recipe alone, even when that run ended", () =>
+    Effect.gen(function* () {
+      const { result, asked } = yield* ranRecipe([
+        { runId: "r0", workflowPath: "/packs/other/workflow.ts", status: "completed" },
+        { runId: "r1", workflowPath: mine, status: "completed", launchThreadId: "t1" } as never,
+      ]);
       assert.isNull(result);
       assert.deepStrictEqual(asked, [{ launchThreadId: "t1", includeEnded: true }]);
+    }),
+  );
+
+  it.effect("leaves a second thread alone when an earlier thread of the environment ran it", () =>
+    Effect.gen(function* () {
+      const { result } = yield* ranRecipe([
+        { runId: "r1", workflowPath: mine, status: "completed", launchThreadId: "t0" } as never,
+      ]);
+      assert.isNull(result);
     }),
   );
 });
@@ -84,24 +102,30 @@ describe("runsOfWorkflow", () => {
   });
 });
 
-describe("userMessageText", () => {
-  const thread = ThreadId.make("t1");
-  const message = (overrides: Record<string, unknown>) =>
+describe("typedUserMessage", () => {
+  const message = (overrides: Record<string, unknown>, threadId = "t1") =>
     ({
       event: {
         type: "message.updated",
-        threadId: "t1",
+        threadId,
         payload: { role: "user", createdBy: "user", text: "fix the build", ...overrides },
       },
     }) as never;
 
-  it("takes a message the user typed on the thread", () => {
-    assert.strictEqual(userMessageText(message({}), thread), "fix the build");
+  it("takes a message the user typed, from whichever thread it was typed on", () => {
+    assert.deepStrictEqual(typedUserMessage(message({})), {
+      threadId: "t1",
+      text: "fix the build",
+    });
+    assert.deepStrictEqual(typedUserMessage(message({}, "t2")), {
+      threadId: "t2",
+      text: "fix the build",
+    });
   });
 
-  it("ignores the agent, the system, and other threads", () => {
-    assert.isUndefined(userMessageText(message({ role: "assistant" }), thread));
-    assert.isUndefined(userMessageText(message({ createdBy: "system" }), thread));
-    assert.isUndefined(userMessageText(message({}), ThreadId.make("t2")));
+  it("ignores the agent, the system and other event types", () => {
+    assert.isUndefined(typedUserMessage(message({ role: "assistant" })));
+    assert.isUndefined(typedUserMessage(message({ createdBy: "system" })));
+    assert.isUndefined(typedUserMessage({ event: { type: "thread.created" } } as never));
   });
 });

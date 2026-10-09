@@ -53,6 +53,9 @@ export function runsOfWorkflow<Run extends { readonly workflowPath: string }>(
   return runs.filter((run) => run.workflowPath === workflowPath);
 }
 
+/** How many recent runs the once-per-environment check reads. */
+const RECENT_RUN_LIMIT = 200;
+
 export const launchKickoffRecipe = Effect.fn("launchKickoffRecipe")(function* (input: {
   readonly threadId: ThreadId;
   readonly recipe: PackRecipeSource;
@@ -61,14 +64,21 @@ export const launchKickoffRecipe = Effect.fn("launchKickoffRecipe")(function* (i
   const runs = yield* WorkflowRunRepository;
   const path = yield* Path.Path;
   const workflowPath = path.join(input.recipe.recipeRoot, "workflow.ts");
-  // A thread runs its kickoff once: after a restart, a live run continues and an ended one stays
-  // ended. A run that started on another thread does not count, so does one of another recipe.
+  // An environment runs its kickoff once: after a restart, a live run continues and an ended one
+  // stays ended, even when the first message after the restart comes on another thread. A run of
+  // another recipe does not count. A cloud session has few runs, so the recent ones cover it.
   const earlier = runsOfWorkflow(
-    yield* runs.listLiveByLaunchThread({ launchThreadId: input.threadId, includeEnded: true }),
+    [
+      ...(yield* runs.listLiveByLaunchThread({
+        launchThreadId: input.threadId,
+        includeEnded: true,
+      })),
+      ...(yield* runs.listRecent({ limit: RECENT_RUN_LIMIT })),
+    ],
     workflowPath,
   );
   if (earlier.length > 0) {
-    yield* Effect.logInfo("kickoff recipe: the thread already ran it", {
+    yield* Effect.logInfo("kickoff recipe: the environment already ran it", {
       threadId: input.threadId,
       runIds: earlier.map((run) => run.runId),
     });
@@ -86,21 +96,19 @@ export const launchKickoffRecipe = Effect.fn("launchKickoffRecipe")(function* (i
   });
 });
 
-/** The text of a message the user typed on `threadId`; undefined for anything else. */
-export function userMessageText(
-  { event }: Pick<OrchestrationV2StoredEvent, "event">,
-  threadId: ThreadId,
-): string | undefined {
+/** A message the user typed, and the thread it was typed on; undefined for anything else. */
+export function typedUserMessage({
+  event,
+}: Pick<OrchestrationV2StoredEvent, "event">): { threadId: ThreadId; text: string } | undefined {
   return event.type === "message.updated" &&
-    event.threadId === threadId &&
     event.payload.role === "user" &&
     event.payload.createdBy === "user"
-    ? event.payload.text
+    ? { threadId: event.threadId, text: event.payload.text }
     : undefined;
 }
 
-/** The first bootstrap thread a welcome names; the snapshot covers a welcome published earlier. */
-const bootstrapThread = Effect.gen(function* () {
+/** The first welcome: the server is up. The snapshot covers a welcome published earlier. */
+const serverWelcome = Effect.gen(function* () {
   const lifecycle = yield* ServerLifecycleEvents.ServerLifecycleEvents;
   const events = Stream.merge(
     lifecycle.stream,
@@ -108,17 +116,14 @@ const bootstrapThread = Effect.gen(function* () {
       Stream.flatMap((snapshot) => Stream.fromIterable(snapshot.events)),
     ),
   );
-  return yield* Stream.runHead(
-    events.pipe(
-      Stream.map((event) =>
-        event.type === "welcome" ? event.payload.bootstrapThreadId : undefined,
-      ),
-      Stream.filter((threadId): threadId is ThreadId => threadId !== undefined),
-    ),
-  );
+  return yield* Stream.runHead(events.pipe(Stream.filter((event) => event.type === "welcome")));
 });
 
-/** Arms on the welcome, launches on the first typed user message on that thread. */
+/**
+ * Arms on the welcome, launches on the first message the user types on any thread. A desktop
+ * starting a session from a draft creates a new thread in the environment instead of using its
+ * bootstrap thread, so the bootstrap thread alone would never see the first message.
+ */
 const T3TeamKickoffRecipe = Layer.effectDiscard(
   Effect.gen(function* () {
     const recipe = resolveKickoffRecipe(
@@ -135,16 +140,19 @@ const T3TeamKickoffRecipe = Layer.effectDiscard(
     // Fixed when the layer builds, so a message committed before the stream subscribes still counts.
     const bootSequence = yield* eventSink.latestSequence().pipe(Effect.orDie);
     yield* Effect.gen(function* () {
-      const threadId = yield* bootstrapThread;
-      if (Option.isNone(threadId)) return;
+      if (Option.isNone(yield* serverWelcome)) return;
       const first = yield* Stream.runHead(
         eventSink.stream({ afterSequence: bootSequence }).pipe(
-          Stream.map((stored) => userMessageText(stored, threadId.value)),
-          Stream.filter((text): text is string => text !== undefined),
+          Stream.map(typedUserMessage),
+          Stream.filter((message) => message !== undefined),
         ),
       );
       if (Option.isNone(first)) return;
-      yield* launchKickoffRecipe({ threadId: threadId.value, recipe, firstMessage: first.value });
+      yield* launchKickoffRecipe({
+        threadId: first.value.threadId,
+        recipe,
+        firstMessage: first.value.text,
+      });
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.logError("kickoff recipe: launch failed", { recipeId: recipe.declaredId, cause }),
