@@ -26,10 +26,14 @@ export function makeConfigGrammar(
     ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isParenthesizedExpression(node)
       ? unwrap(node.expression)
       : node;
+  /** The callee must be the SDK's own export, imported under its own name — not a lookalike. */
+  const isSdkImport = (name: string): boolean =>
+    imports[name]?.specifier === "@t3team/sdk" && imports[name]?.name === name;
   const isRefCall = (node: TsApi.Expression): boolean =>
     ts.isCallExpression(node) &&
     ts.isIdentifier(node.expression) &&
     REF_CALLS.has(node.expression.text) &&
+    isSdkImport(node.expression.text) &&
     node.arguments.length >= 1 &&
     node.arguments.every((argument) => ts.isStringLiteralLike(argument));
 
@@ -103,6 +107,10 @@ export function makeConfigGrammar(
 
   const checkSpec = (call: TsApi.CallExpression): void => {
     const [id, spec] = call.arguments;
+    // Every argument is evaluated on import, so a third one would run unchecked.
+    if (call.arguments.length !== 2) {
+      report(call, "defineRecipeConfig takes exactly two arguments: the recipe id and the object.");
+    }
     if (id === undefined || !ts.isStringLiteralLike(id)) {
       report(call, "defineRecipeConfig needs the recipe id as a string literal first.");
     } else {
@@ -138,5 +146,5 @@ export function makeConfigGrammar(
     }
   };
 
-  return { unwrap, isRefCall, checkSpec };
+  return { unwrap, isRefCall, isSdkImport, checkSpec };
 }

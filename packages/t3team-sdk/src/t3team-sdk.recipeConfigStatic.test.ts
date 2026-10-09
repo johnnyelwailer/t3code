@@ -90,4 +90,58 @@ describe("recipe config data-only check", () => {
     expect(noId.recipeId).toBeNull();
     expect(noId.diagnostics[0]?.message).toContain("recipe id");
   });
+
+  // Every argument of the export is evaluated on import, so none may go unchecked.
+  it("rejects code smuggled in as a third argument", () => {
+    const result = checkRecipeConfigSource(
+      "x.config.ts",
+      lines(
+        'import { defineRecipeConfig } from "@t3team/sdk";',
+        'export default defineRecipeConfig("x", {}, import("node:child_process"));',
+      ),
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "defineRecipeConfig takes exactly two arguments: the recipe id and the object.",
+    );
+  });
+
+  it("only trusts the SDK's own defineRecipeConfig, defineWorkflow and recipeAction", () => {
+    const aliased = checkRecipeConfigSource(
+      "x.config.ts",
+      lines(
+        'import { launchThread as defineWorkflow, defineRecipeConfig } from "@t3team/sdk";',
+        'export default defineRecipeConfig("x", { defaults: { w: defineWorkflow("./w.ts") } });',
+      ),
+    );
+    expect(aliased.diagnostics.length).toBeGreaterThan(0);
+    const local = checkRecipeConfigSource(
+      "x.config.ts",
+      lines(
+        'import { defineRecipeConfig } from "./not-the-sdk.ts";',
+        'export default defineRecipeConfig("x", {});',
+      ),
+    );
+    expect(local.diagnostics.length).toBeGreaterThan(0);
+  });
+
+  it("refuses file imports whose specifier a URL would resolve elsewhere", () => {
+    for (const specifier of [
+      "./%2e%2e/%2e%2e/outside.ts",
+      "./a.ts?x=1",
+      "./a.ts#x",
+      "./\\u002e\\u002e/outside.ts",
+      "./a\\b.ts",
+    ]) {
+      const result = checkRecipeConfigSource(
+        "x.config.ts",
+        lines(
+          'import { defineRecipeConfig } from "@t3team/sdk";',
+          `import policy from "${specifier}";`,
+          'export default defineRecipeConfig("x", { defaults: { policy } });',
+        ),
+      );
+      // The import is refused, so the setting that used it is unresolved too.
+      expect(result.diagnostics.map((diagnostic) => diagnostic.line)).toEqual([2, 3]);
+    }
+  });
 });

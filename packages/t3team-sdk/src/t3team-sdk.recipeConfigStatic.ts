@@ -56,7 +56,7 @@ export function checkRecipeConfigSource(
     diagnostics.push({ line: line + 1, column: character + 1, message });
   };
   const state = { imports, refConsts, keyLines, keyRefs, recipeId: null as string | null };
-  const { unwrap, isRefCall, checkSpec } = makeConfigGrammar(ts, sf, state, report);
+  const { unwrap, isRefCall, isSdkImport, checkSpec } = makeConfigGrammar(ts, sf, state, report);
   let exported = false;
   for (const statement of sf.statements) {
     if (ts.isImportDeclaration(statement)) {
@@ -67,6 +67,17 @@ export function checkRecipeConfigSource(
       }
       if (clause.isTypeOnly || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
       const specifier = statement.moduleSpecifier.text;
+      // Node resolves a specifier as a URL, so an escape (`%2e%2e`, `?`, `#`, `\`) could leave the
+      // state dir while the path check below still sees it inside.
+      // A source escape (`\u002e`) decodes to a different path than the raw text a loader reads.
+      const rawSpecifier = statement.moduleSpecifier.getText(sf).slice(1, -1);
+      if (rawSpecifier !== specifier || /[%?#\\]/.test(specifier)) {
+        report(
+          statement.moduleSpecifier,
+          `'${specifier}' has characters a file import cannot use.`,
+        );
+        continue;
+      }
       if (
         specifier !== "@t3team/sdk" &&
         !specifier.startsWith("./") &&
@@ -115,7 +126,8 @@ export function checkRecipeConfigSource(
       if (
         ts.isCallExpression(call) &&
         ts.isIdentifier(call.expression) &&
-        call.expression.text === "defineRecipeConfig"
+        call.expression.text === "defineRecipeConfig" &&
+        isSdkImport("defineRecipeConfig")
       ) {
         exported = true;
         checkSpec(call);
