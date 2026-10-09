@@ -166,9 +166,15 @@ const config: StorybookConfig = {
         tailwindcss(),
       ],
       resolve: {
-        alias: {
-          "~": srcDir,
-        },
+        alias: [
+          // The kanban zoom stories mount the real flat board: the server-advertised zoom flag
+          // is advertised for the Storybook build (stories have no live server to read it from).
+          {
+            find: /^~\/t3team\/t3team-useKanbanSemanticZoomFlag$/,
+            replacement: `${srcDir}/t3team/t3team-useKanbanSemanticZoomFlag.storyMock.ts`,
+          },
+          { find: "~", replacement: srcDir },
+        ],
       },
       server: {
         // The launcher passes `--host 127.0.0.1`; accept both loopback names so

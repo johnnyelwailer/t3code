@@ -19,6 +19,9 @@ describe("kanban column collapse layout", () => {
     expect(buildKanbanGridTemplateColumns(columns, new Set(["todo"]))).toBe(
       "2.75rem minmax(17rem, 1fr)",
     );
+    expect(buildKanbanGridTemplateColumns(columns, undefined, 6.75)).toBe(
+      "minmax(6.75rem, 1fr) minmax(6.75rem, 1fr)",
+    );
   });
 
   it("keeps a collapsed column in place but takes its cards out of the layout", () => {
