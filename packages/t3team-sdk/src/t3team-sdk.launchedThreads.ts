@@ -11,7 +11,8 @@
  * (a mode above the run's, a watch after the user's Stop) is journaled as an answer too and
  * thrown as a `LaunchedThreadError`, the same on every replay.
  *
- * Gated by the `"launch"` capability, checked at the call site like `"schedule"`.
+ * `launchThread` and `setRunFacts` are gated by the `"launch"` capability, checked at the call
+ * site like `"schedule"`.
  */
 import type { MessageBroker } from "./t3team-sdk.broker.ts";
 import { fromRun } from "./t3team-sdk.engineApi.ts";
@@ -60,7 +61,16 @@ export function createLaunchedThreadPrimitives(deps: {
       kind,
       refId,
       args: payload,
-      fire: (cid, resolver) => deps.broker.send({ correlationId: cid, kind, payload }, resolver),
+      fire: (cid, resolver, delivery) =>
+        deps.broker.send(
+          {
+            correlationId: cid,
+            kind,
+            payload,
+            ...(delivery?.redelivery === true ? { redelivery: true } : {}),
+          },
+          resolver,
+        ),
     });
     const answer = await deps.dispatch.awaitResolution<HostAnswer<T>>(correlationId, undefined);
     if (!answer.ok) throw new LaunchedThreadError(answer.error);
@@ -88,12 +98,16 @@ export function createLaunchedThreadPrimitives(deps: {
     });
   };
 
-  const launchThread = async (opts: LaunchThreadOpts): Promise<LaunchedThread> => {
+  const requireLaunch = (verb: string) => {
     if (!deps.capabilities.has("launch")) {
       throw new PermissionDeniedError(
-        "'launchThread' requires the 'launch' capability. Add 'launch' to this workflow's meta.capabilities.",
+        `'${verb}' requires the 'launch' capability. Add 'launch' to this workflow's meta.capabilities.`,
       );
     }
+  };
+
+  const launchThread = async (opts: LaunchThreadOpts): Promise<LaunchedThread> => {
+    requireLaunch("launchThread");
     if (typeof opts.key !== "string" || opts.key.trim().length === 0) {
       throw new LaunchedThreadError("launchThread needs a non-empty key.");
     }
@@ -105,8 +119,10 @@ export function createLaunchedThreadPrimitives(deps: {
     return handle(launched.threadId, opts.key.trim(), launched.created);
   };
 
-  const setRunFacts = (extensions: Readonly<Record<string, unknown>>) =>
-    ask<void>(RUN_FACTS_KIND, "run.facts", { extensions });
+  const setRunFacts = async (extensions: Readonly<Record<string, unknown>>) => {
+    requireLaunch("setRunFacts");
+    await ask<void>(RUN_FACTS_KIND, "run.facts", { extensions });
+  };
 
   return { launchThread, setRunFacts };
 }

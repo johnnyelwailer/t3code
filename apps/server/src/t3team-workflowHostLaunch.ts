@@ -37,9 +37,15 @@ import {
   reservedFactKey,
 } from "./t3team-workflowHostLaunchShared.ts";
 import { makeHostLaunchThread } from "./t3team-workflowHostLaunchThread.ts";
-import type {
-  WorkflowHostLaunchedThreadInput,
-} from "./t3team-workflowHostPort.ts";
+import { launchScopeFor } from "./t3team-recipeIdentity.ts";
+import { modesAbove } from "./t3team-workflowLaunchedThreadIds.ts";
+
+/** A run never hands work to a thread it could not have launched (a later, lower-mode run). */
+const aboveRun = (
+  shell: Pick<OrchestrationV2ThreadShell, "id" | "runtimeMode">,
+  run: { readonly runtimeMode: string },
+) => `Thread ${shell.id} runs at ${shell.runtimeMode}, above this run's ${run.runtimeMode}.`;
+import type { WorkflowHostLaunchedThreadInput } from "./t3team-workflowHostPort.ts";
 
 export function makeWorkflowHostLaunch(deps: {
   readonly threads: ThreadManagementService["Service"];
@@ -53,13 +59,14 @@ export function makeWorkflowHostLaunch(deps: {
   const owned = (input: WorkflowHostLaunchedThreadInput) =>
     Effect.gen(function* () {
       const threadId = ThreadId.make(input.threadId);
+      const scope = yield* launchScopeFor(input);
       const shell = yield* threads.getThreadShell(threadId);
       const launchedBy = (yield* facts.get(threadId))?.extensions?.[T3TEAM_LAUNCHED_BY_FACT_KEY] as
         | T3TeamLaunchedByFact
         | undefined;
       return shell !== null &&
         shell.projectId === input.projectId &&
-        launchedBy?.scope === input.scope &&
+        launchedBy?.scope === scope &&
         launchedBy.key === input.key
         ? shell
         : null;
@@ -101,8 +108,10 @@ export function makeWorkflowHostLaunch(deps: {
       const request = `${shell.id}:${input.requestId}`;
       switch (op.op) {
         case "watch":
+          if (op.watching && modesAbove(shell, input)) return yield* refuse(aboveRun(shell, input));
           return yield* watch(shell, op.url, op.watching, request);
         case "send":
+          if (modesAbove(shell, input)) return yield* refuse(aboveRun(shell, input));
           yield* threads.dispatch({
             type: "message.dispatch",
             commandId: CommandId.make(`t3team-wf:send:${request}`),

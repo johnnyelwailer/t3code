@@ -20,6 +20,7 @@ import type { ThreadManagementService } from "./orchestration-v2/ThreadManagemen
 import type { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import { answer, authorOf, refuse } from "./t3team-workflowHostLaunchShared.ts";
 import type { WorkflowHostLaunchThreadInput } from "./t3team-workflowHostPort.ts";
+import { launchScopeFor } from "./t3team-recipeIdentity.ts";
 import { launchedThreadIdentity } from "./t3team-workflowLaunchedThreadIds.ts";
 import { workflowPromptContext } from "./t3team-workflowTurnPrompt.ts";
 
@@ -32,7 +33,8 @@ export function makeHostLaunchThread(deps: {
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
   return (input: WorkflowHostLaunchThreadInput) =>
     Effect.gen(function* () {
-      const identity = launchedThreadIdentity(input);
+      const scope = yield* launchScopeFor(input);
+      const identity = launchedThreadIdentity({ ...input, scope });
       const threadId = ThreadId.make(identity.threadId);
       const existing = yield* threads.getThreadShell(threadId);
       if (existing !== null && existing.projectId !== input.projectId) {
@@ -46,8 +48,8 @@ export function makeHostLaunchThread(deps: {
           projectId: input.projectId,
           title: input.title,
           modelSelection: input.modelSelection,
-          runtimeMode: input.runtimeMode,
-          interactionMode: input.interactionMode,
+          runtimeMode: input.threadRuntimeMode,
+          interactionMode: input.threadInteractionMode,
           workspaceStrategy: input.workspace,
           ...(input.message === undefined
             ? {}
@@ -68,7 +70,7 @@ export function makeHostLaunchThread(deps: {
         runId: input.runId,
         launchThreadId:
           input.launchThreadId === undefined ? null : ThreadId.make(input.launchThreadId),
-        scope: input.scope,
+        scope,
         key: input.key,
         launchedAt: yield* nowIso,
       };

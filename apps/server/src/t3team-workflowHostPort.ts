@@ -89,15 +89,18 @@ export type WorkflowHostLaunchWorkspace =
       readonly baseRef: string;
       readonly branch?: string;
       readonly startFromOrigin?: boolean;
-    }
-  | { readonly type: "existing_worktree"; readonly worktreePath: string; readonly branch?: string };
+    };
 
 /** Who may address a launched thread: the project, the run's launch scope and the key. */
 export interface WorkflowHostLaunchedThreadOwner {
   /** The calling run, recorded on the thread and on the messages it sends there. */
   readonly runId: string;
   readonly projectId: ProjectId;
-  readonly scope: string;
+  /** The run's recipe; the host scopes keys by its declared id (`recipe:<id>`), else the run. */
+  readonly recipePath?: string;
+  /** The run's modes: a thread above them takes no message or watch from it. */
+  readonly runtimeMode: RuntimeMode;
+  readonly interactionMode: ProviderInteractionMode;
   readonly key: string;
 }
 
@@ -107,8 +110,9 @@ export interface WorkflowHostLaunchThreadInput extends WorkflowHostLaunchedThrea
   /** Sent as the first message only when this call creates the thread. */
   readonly message?: string;
   readonly modelSelection: ModelSelection;
-  readonly runtimeMode: RuntimeMode;
-  readonly interactionMode: ProviderInteractionMode;
+  /** The launched thread's modes, already checked against the run's. */
+  readonly threadRuntimeMode: RuntimeMode;
+  readonly threadInteractionMode: ProviderInteractionMode;
   readonly workspace: WorkflowHostLaunchWorkspace;
 }
 

@@ -40,7 +40,16 @@ const TestLayer = WorkflowHost.layer.pipe(
 
 const projectId = ProjectId.make("project:t3team-v2");
 const home = ThreadId.make("thread:recipe-home");
-const owner = { runId: "run-1", projectId, scope: "recipe:pr-watch" };
+// No recipe.ts behind these paths, so the scope falls back to the directory name.
+const recipePath = "/repo/.nexi/recipes/pr-watch";
+const scope = "recipe:pr-watch";
+const owner = {
+  runId: "run-1",
+  projectId,
+  recipePath,
+  runtimeMode: "full-access" as const,
+  interactionMode: "default" as const,
+};
 const key = "pr:github.com/acme/app#7";
 const url = "https://github.com/acme/app/pull/7";
 const launchInput = {
@@ -50,8 +59,8 @@ const launchInput = {
   title: "#7 Fix the thing",
   message: "You watch one PR.",
   modelSelection: testModelSelection,
-  runtimeMode: "approval-required" as const,
-  interactionMode: "default" as const,
+  threadRuntimeMode: "approval-required" as const,
+  threadInteractionMode: "default" as const,
   workspace: { type: "worktree" as const, baseRef: "fix", branch: "fix", startFromOrigin: true },
 };
 
@@ -70,7 +79,10 @@ it.layer(TestLayer)("workflow host launchThread", (it) => {
       launches.length = 0;
 
       const first = ok(yield* host.launchThread(launchInput));
-      assert.strictEqual(first.threadId, launchedThreadIdentity({ ...owner, key }).threadId);
+      assert.strictEqual(
+        first.threadId,
+        launchedThreadIdentity({ projectId, scope, key }).threadId,
+      );
       assert.isTrue(first.created);
       const again = ok(yield* host.launchThread({ ...launchInput, runId: "run-2", title: "x" }));
       assert.deepStrictEqual(again, { threadId: first.threadId, created: false });
@@ -78,7 +90,7 @@ it.layer(TestLayer)("workflow host launchThread", (it) => {
       assert.strictEqual(launches[0]?.initialMessage?.text, "You watch one PR.");
       assert.strictEqual(
         launches[0]?.commandId,
-        launchedThreadIdentity({ ...owner, key }).commandId,
+        launchedThreadIdentity({ projectId, scope, key }).commandId,
       );
 
       const shell = yield* threads.getThreadShell(ThreadId.make(first.threadId));
@@ -97,7 +109,9 @@ it.layer(TestLayer)("workflow host launchThread", (it) => {
       });
 
       // Another recipe's same key is another thread.
-      const other = ok(yield* host.launchThread({ ...launchInput, scope: "recipe:other" }));
+      const other = ok(
+        yield* host.launchThread({ ...launchInput, recipePath: "/repo/.nexi/recipes/other" }),
+      );
       assert.notStrictEqual(other.threadId, first.threadId);
     }),
   );
@@ -108,7 +122,12 @@ it.layer(TestLayer)("workflow host launchThread", (it) => {
       const { threadId } = ok(yield* host.launchThread(launchInput));
       const op = (
         op: Parameters<typeof host.launchedThread>[0]["op"],
-        overrides: Partial<typeof owner & { key: string; threadId: string }> = {},
+        overrides: Partial<{
+          key: string;
+          threadId: string;
+          recipePath: string;
+          projectId: ProjectId;
+        }> = {},
         requestId = `req-${op.op}`,
       ) => host.launchedThread({ ...owner, key, threadId, requestId, ...overrides, op });
 
@@ -134,7 +153,8 @@ it.layer(TestLayer)("workflow host launchThread", (it) => {
       // A different key, scope or thread is not this recipe's to drive.
       for (const overrides of [
         { key: "pr:other#1" },
-        { scope: "recipe:other" },
+        { recipePath: "/repo/.nexi/recipes/other" },
+        { projectId: ProjectId.make("project:other") },
         { threadId: home },
       ]) {
         const refused = yield* op({ op: "send", text: "hi" }, overrides);
@@ -151,6 +171,42 @@ it.layer(TestLayer)("workflow host launchThread", (it) => {
       assert.deepStrictEqual((yield* facts.get(home))?.extensions?.["acme.summary"], {
         watched: 1,
       });
+    }),
+  );
+
+  it.effect("a lower-mode run cannot hand work to a higher-mode thread of the same key", () =>
+    Effect.gen(function* () {
+      const host = yield* WorkflowHost.T3TeamWorkflowHost;
+      const key9 = "pr:github.com/acme/app#9";
+      const { threadId } = ok(
+        yield* host.launchThread({ ...launchInput, key: key9, threadRuntimeMode: "full-access" }),
+      );
+      const lower = {
+        ...owner,
+        runId: "run-supervised",
+        runtimeMode: "approval-required" as const,
+      };
+      const verb = (op: Parameters<typeof host.launchedThread>[0]["op"], requestId: string) =>
+        host.launchedThread({ ...lower, key: key9, threadId, requestId, op });
+      const sent = yield* verb({ op: "send", text: "fix it" }, "low-send");
+      assert.deepStrictEqual(sent, {
+        ok: false,
+        error: `Thread ${threadId} runs at full-access, above this run's approval-required.`,
+      });
+      assert.isFalse(
+        (yield* verb(
+          { op: "watch", url: "https://github.com/acme/app/pull/9", watching: true },
+          "low-watch",
+        )).ok,
+      );
+      // Reading and stopping a watch stay allowed: neither hands the thread work.
+      assert.isTrue((yield* verb({ op: "read" }, "low-read")).ok);
+      assert.isTrue(
+        (yield* verb(
+          { op: "watch", url: "https://github.com/acme/app/pull/9", watching: false },
+          "low-unwatch",
+        )).ok,
+      );
     }),
   );
 

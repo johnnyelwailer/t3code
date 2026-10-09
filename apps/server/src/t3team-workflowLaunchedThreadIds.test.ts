@@ -2,25 +2,11 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   launchedThreadIdentity,
+  modesAbove,
   withinRunModes,
-  workflowLaunchScope,
 } from "./t3team-workflowLaunchedThreadIds.ts";
 
 describe("launched thread identity", () => {
-  it("scopes keys to the recipe, so a project copy of a pack recipe keeps its threads", () => {
-    const pack = workflowLaunchScope({
-      runId: "r1",
-      recipePath: "/packs/nexplore/recipes/pr-watch/",
-    });
-    const project = workflowLaunchScope({
-      runId: "r2",
-      recipePath: "/repo/.nexi/recipes/pr-watch",
-    });
-    expect(pack).toBe("recipe:pr-watch");
-    expect(project).toBe(pack);
-    expect(workflowLaunchScope({ runId: "r3", recipePath: null })).toBe("run:r3");
-  });
-
   it("derives one stable id per project, scope and key", () => {
     const base = { projectId: "p1", scope: "recipe:pr-watch", key: "pr:github.com/a/b#1" };
     const id = launchedThreadIdentity(base);
@@ -48,5 +34,10 @@ describe("launched thread identity", () => {
       withinRunModes({ ...run, interactionMode: "plan" }, { interactionMode: "default" }),
     ).toHaveProperty("refused");
     expect(withinRunModes(run, { runtimeMode: "root" })).toHaveProperty("refused");
+    expect(withinRunModes(run, { runtimeMode: "constructor" })).toHaveProperty("refused");
+    expect(modesAbove({ runtimeMode: "full-access", interactionMode: "default" }, run)).toBe(true);
+    expect(modesAbove({ runtimeMode: "auto-accept-edits", interactionMode: "plan" }, run)).toBe(
+      false,
+    );
   });
 });

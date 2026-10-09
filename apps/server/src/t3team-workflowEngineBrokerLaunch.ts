@@ -10,6 +10,7 @@
 import type { ModelSelection } from "@t3tools/contracts";
 import type { ModelOption } from "@t3team/sdk";
 
+import { t3teamRandomUUID } from "./t3team-random.ts";
 import { resolveWorkflowChildModel } from "./t3team-workflowChildModel.ts";
 import type { BrokerCore, BrokerSend } from "./t3team-workflowEngineBrokerContext.ts";
 import type {
@@ -33,8 +34,14 @@ export async function handleBrokerLaunchVerb(core: BrokerCore, ctx: BrokerSend):
   const { deps } = core;
   const settle = async (): Promise<WorkflowHostLaunchAnswer<unknown>> => {
     const host = deps.host;
-    const scope = deps.launchScope ?? `run:${deps.runId}`;
-    const owner = { runId: deps.runId, projectId: deps.projectId, scope };
+    // The host derives the scope from the recipe (its declared id) or, without one, the run.
+    const owner = {
+      runId: deps.runId,
+      projectId: deps.projectId,
+      ...(deps.recipePath === undefined ? {} : { recipePath: deps.recipePath }),
+      runtimeMode: deps.runtimeMode,
+      interactionMode: deps.interactionMode,
+    };
     const model = (requested: ModelOption | undefined): Promise<ModelSelection> =>
       requested === undefined
         ? Promise.resolve(deps.modelSelection)
@@ -51,6 +58,15 @@ export async function handleBrokerLaunchVerb(core: BrokerCore, ctx: BrokerSend):
       const p = ctx.payload as LaunchThreadPayload;
       const modes = withinRunModes(deps, p);
       if ("refused" in modes) return refused(modes.refused);
+      if (
+        p.workspace !== undefined &&
+        p.workspace.type !== "root" &&
+        p.workspace.type !== "worktree"
+      ) {
+        return refused(
+          "launchThread starts in the project root or a new worktree, not an existing one.",
+        );
+      }
       return host.launchThread({
         ...owner,
         key: p.key,
@@ -58,8 +74,8 @@ export async function handleBrokerLaunchVerb(core: BrokerCore, ctx: BrokerSend):
         title: p.title,
         ...(p.message === undefined ? {} : { message: p.message }),
         modelSelection: await model(p.model),
-        runtimeMode: modes.runtimeMode,
-        interactionMode: modes.interactionMode,
+        threadRuntimeMode: modes.runtimeMode,
+        threadInteractionMode: modes.interactionMode,
         workspace: p.workspace ?? { type: "root" },
       });
     }
@@ -80,16 +96,19 @@ export async function handleBrokerLaunchVerb(core: BrokerCore, ctx: BrokerSend):
       ...owner,
       key: p.key,
       threadId: p.threadId,
-      requestId: ctx.correlationId,
+      // Inside parallel()/pipeline() the correlation restarts every pass, so it cannot key a
+      // command: a later pass's send would dedupe against the first one and vanish.
+      requestId: ctx.isLiveCompositionAsk
+        ? `${ctx.correlationId}:${t3teamRandomUUID()}`
+        : ctx.correlationId,
       op,
     });
   };
 
   await core.runPrimitive(() =>
     core.enqueue(async () => {
-      const answer = await settle().catch(
-        (error: unknown): WorkflowHostLaunchAnswer<never> =>
-          refused(error instanceof Error ? error.message : String(error)),
+      const answer = await settle().catch((error: unknown): WorkflowHostLaunchAnswer<never> =>
+        refused(error instanceof Error ? error.message : String(error)),
       );
       core.step(ctx.correlationId, ctx.kind, "completed", stepDetail(ctx));
       ctx.resolver.resolve(answer);

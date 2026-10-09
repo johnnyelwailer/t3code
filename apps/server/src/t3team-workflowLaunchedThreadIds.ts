@@ -2,25 +2,13 @@
  * Identity of the threads a workflow launches (`launchThread`). A thread id is derived from the
  * project, the run's launch scope and the author's key, so the same key reaches the same thread
  * on replay, in a later pass, after a restart and in a later run of the same recipe, with no
- * key → id table to keep. The scope is the recipe (its directory name, which is its id) for a
- * recipe run, so a project-local copy of a pack recipe keeps the same threads; a run without a
- * recipe gets its own scope.
+ * key → id table to keep. The scope is the recipe's declared id for a recipe run
+ * (t3team-recipeIdentity.ts), so a project-local copy of a pack recipe keeps the same threads; a
+ * run without a recipe gets its own scope.
  */
 import * as NodeCrypto from "node:crypto";
 
 import type { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
-
-export function workflowLaunchScope(input: {
-  readonly runId: string;
-  readonly recipePath?: string | null | undefined;
-}): string {
-  const recipe =
-    input.recipePath
-      ?.replace(/[\\/]+$/, "")
-      .split(/[\\/]/)
-      .pop() ?? "";
-  return recipe.length > 0 ? `recipe:${recipe}` : `run:${input.runId}`;
-}
 
 export function launchedThreadIdentity(input: {
   readonly projectId: string;
@@ -58,7 +46,10 @@ export function withinRunModes(
   const runtimeMode = (requested.runtimeMode ?? run.runtimeMode) as RuntimeMode;
   const interactionMode = (requested.interactionMode ??
     run.interactionMode) as ProviderInteractionMode;
-  if (RUNTIME_RANK[runtimeMode] === undefined || INTERACTION_RANK[interactionMode] === undefined) {
+  if (
+    !Object.hasOwn(RUNTIME_RANK, runtimeMode) ||
+    !Object.hasOwn(INTERACTION_RANK, interactionMode)
+  ) {
     return { refused: `Unknown mode ${runtimeMode}/${interactionMode}.` };
   }
   if (RUNTIME_RANK[runtimeMode] > RUNTIME_RANK[run.runtimeMode]) {
@@ -70,4 +61,15 @@ export function withinRunModes(
     };
   }
   return { runtimeMode, interactionMode };
+}
+
+/** Whether a thread's modes exceed a run's, so the run may not hand it work. */
+export function modesAbove(
+  thread: { readonly runtimeMode: RuntimeMode; readonly interactionMode: ProviderInteractionMode },
+  run: { readonly runtimeMode: RuntimeMode; readonly interactionMode: ProviderInteractionMode },
+): boolean {
+  return (
+    RUNTIME_RANK[thread.runtimeMode] > RUNTIME_RANK[run.runtimeMode] ||
+    INTERACTION_RANK[thread.interactionMode] > INTERACTION_RANK[run.interactionMode]
+  );
 }

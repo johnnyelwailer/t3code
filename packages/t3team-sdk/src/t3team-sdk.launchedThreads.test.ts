@@ -109,6 +109,31 @@ describe("launchThread", () => {
     expect(second.threads.size).toBe(0);
   });
 
+  it("RECOVERY: a launch recorded as sent but never answered is sent again on resume", async () => {
+    // The first host dies mid-request: it never settles `thread.launch`, so the run parks.
+    const dying = createMockBroker((envelope: MessageEnvelope): MockBrokerOutcome =>
+      envelope.kind === "thread.launch" ? { kind: "defer" } : { kind: "defer" },
+    );
+    const run = await startWorkflow(launchWorkflow, undefined, {
+      runsRoot,
+      tools: [],
+      broker: dying,
+      launchThreadId: "launch-thread",
+    });
+    expect("suspended" in run).toBe(true);
+    const recovered = launchHost();
+    const resumed = await resumeWorkflow(run.runId, launchWorkflow, undefined, {
+      runsRoot,
+      tools: [],
+      broker: recovered.broker,
+      launchThreadId: "launch-thread",
+    });
+    if ("suspended" in resumed) throw new Error("expected the resume to complete");
+    expect(resumed.result.id).toBe("launched:pr:github.com/acme/app#7");
+    expect(recovered.broker.sent[0]?.kind).toBe("thread.launch");
+    expect(recovered.broker.sent[0]?.redelivery).toBe(true);
+  });
+
   it("is refused without the launch capability", async () => {
     const { broker } = launchHost();
     await expect(

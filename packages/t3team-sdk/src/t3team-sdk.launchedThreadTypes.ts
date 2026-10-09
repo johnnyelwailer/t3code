@@ -10,7 +10,7 @@ export type LaunchedThreadRuntimeMode =
   | "auto"
   | "full-access";
 
-/** Where a launched thread works; the shapes `t3_thread_launch` takes. */
+/** Where a launched thread works: the project root, or a new worktree from `baseRef`. */
 export type LaunchedThreadWorkspace =
   | { readonly type: "root" }
   | {
@@ -18,8 +18,7 @@ export type LaunchedThreadWorkspace =
       readonly baseRef: string;
       readonly branch?: string;
       readonly startFromOrigin?: boolean;
-    }
-  | { readonly type: "existing_worktree"; readonly worktreePath: string; readonly branch?: string };
+    };
 
 export interface LaunchThreadOpts {
   /**
