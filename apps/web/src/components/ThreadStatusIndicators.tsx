@@ -475,7 +475,7 @@ function ThreadPullRequestMiniListItem({
  * The eye on a watched pull request in an interactive popup. Hover shows the crossed eye, and a
  * click stops the watch; the row loses the eye once the server records it.
  */
-function StopWatchingButton({
+export function StopWatchingButton({
   threadRef,
   link,
 }: {

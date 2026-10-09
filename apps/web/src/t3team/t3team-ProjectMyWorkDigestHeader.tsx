@@ -1,5 +1,6 @@
 import { DigestAutoStatus } from "~/t3team/t3team-ProjectMyWorkDigestAutoStatus";
 import { DigestSprintAxis } from "~/t3team/t3team-ProjectMyWorkDigestSprintAxis";
+import { PrWatchDigestStatus } from "~/t3team/t3team-PrWatchDigestStatus";
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import {
   DigestBurndownChart,
@@ -35,6 +36,8 @@ export function ProjectMyWorkDigestHeader({
   const sprint = graph.sprint;
   const scopeLabel =
     graph.scope === "all" ? `All projects · ${graph.projects.length}` : graph.projects[0]?.name;
+  // The watch count is per project: an all-projects digest has no single run to read.
+  const watchProjectId = graph.scope === "all" ? undefined : graph.projects[0]?.id;
   if (!sprint) {
     return (
       <header className="flex flex-wrap items-end justify-between gap-x-10 gap-y-2 border-b border-border/70 pb-4">
@@ -60,6 +63,7 @@ export function ProjectMyWorkDigestHeader({
             nowMs={nowMs}
             refreshing={refreshing}
           />
+          <PrWatchDigestStatus projectId={watchProjectId} />
         </div>
       </header>
     );
@@ -95,6 +99,7 @@ export function ProjectMyWorkDigestHeader({
             nowMs={nowMs}
             refreshing={refreshing}
           />
+          <PrWatchDigestStatus projectId={watchProjectId} />
         </div>
       </div>
       {burndownVariant !== "off" || datesKnown ? (
