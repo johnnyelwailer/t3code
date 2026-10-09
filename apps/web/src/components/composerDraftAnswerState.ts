@@ -2,6 +2,8 @@ export interface ComposerDraftAnswerState {
   readonly isComposerApprovalState: boolean;
   /** The pending question's in-progress custom answer, or `null` when no question is pending. */
   readonly activePendingCustomAnswer: string | null;
+  /** Whether the user has already selected an option on the active pending question. */
+  readonly activePendingHasOptionSelection: boolean;
   /** The composer's in-progress draft (the `prompt` state). */
   readonly draft: string;
   /** Whether the prompt editor is the focused element. */
@@ -12,18 +14,21 @@ export interface ComposerDraftAnswerState {
  * A docked pending question repurposes the prompt editor as the answer field —
  * but only once the user is actually answering it. While the user is still
  * focused in an in-progress draft and has not started the answer (no custom
- * answer typed yet), the editor keeps editing that draft, so the moment a
- * question docks the draft is not pulled from under the caret and the editor
- * is not re-mounted/rewritten.
+ * answer typed yet, no option chosen yet), the editor keeps editing that
+ * draft, so the moment a question docks the draft is not pulled from under
+ * the caret and the editor is not re-mounted/rewritten.
  *
  * The composer leaves this "draft" state when the user stops composing it: by
  * losing focus, emptying the draft, or starting the answer (a custom answer
- * gets typed / an option is chosen, which clears the editor).
+ * gets typed / an option is chosen, which clears the editor). Choosing an
+ * option is final: refocusing the editor shows the answer field, not the
+ * draft, so a keystroke can never land at the front of the draft.
  */
 export function isEditingComposerDraft(input: ComposerDraftAnswerState): boolean {
   if (input.isComposerApprovalState) return false;
   const answer = input.activePendingCustomAnswer;
   if (answer === null) return false;
+  if (input.activePendingHasOptionSelection) return false;
   return input.isComposerFocused && input.draft.trim() !== "" && answer === "";
 }
 

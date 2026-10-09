@@ -2619,6 +2619,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerDraftAnswerState = {
     isComposerApprovalState,
     activePendingCustomAnswer: activePendingProgress ? activePendingProgress.customAnswer : null,
+    activePendingHasOptionSelection: activePendingProgress
+      ? activePendingProgress.selectedOptionValues.length > 0
+      : false,
     draft: prompt,
     isComposerFocused,
   };
@@ -3367,9 +3370,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 sizeBytes: image.sizeBytes,
                 dataUrl,
                 type: image.type,
-                ...(image.source && "kind" in image.source
-                  ? { source: image.source }
-                  : {}),
+                ...(image.source && "kind" in image.source ? { source: image.source } : {}),
               });
             } catch {
               const existingPersisted = existingPersistedById.get(image.id);
@@ -3451,6 +3452,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         activePendingCustomAnswer: activePendingProgress
           ? activePendingProgress.customAnswer
           : null,
+        activePendingHasOptionSelection: activePendingProgress
+          ? activePendingProgress.selectedOptionValues.length > 0
+          : false,
         draft: prompt,
         isComposerFocused,
       });
@@ -3942,7 +3946,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   }, []);
 
   const submitComposer = useCallback(
-    async (event?: { preventDefault: () => void }, intent: ComposerSubmissionIntent = "foreground") => {
+    async (
+      event?: { preventDefault: () => void },
+      intent: ComposerSubmissionIntent = "foreground",
+    ) => {
       // A voice recording in flight must commit its audio attachment before
       // the send reads the composer refs: stop it, wait for the MediaRecorder
       // flush (onRecorded), then wait for the attachment to sync into the
@@ -5724,11 +5731,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
    * MediaRecorder flushes. It resolves the commit-pending promise, then
    * attaches the raw audio through the one write path.
    */
-  const handleVoiceRecorded = (recording: {
-    blob: Blob;
-    mimeType: string;
-    durationMs: number;
-  } | null) => {
+  const handleVoiceRecorded = (
+    recording: {
+      blob: Blob;
+      mimeType: string;
+      durationMs: number;
+    } | null,
+  ) => {
     commitResolveRef.current?.();
     commitResolveRef.current = null;
     commitPromiseRef.current = null;

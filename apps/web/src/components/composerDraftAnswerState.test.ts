@@ -10,6 +10,7 @@ function state(overrides: Partial<ComposerDraftAnswerState> = {}): ComposerDraft
   return {
     isComposerApprovalState: false,
     activePendingCustomAnswer: "", // a pending question is docked, no answer typed yet
+    activePendingHasOptionSelection: false,
     draft: "my in-progress draft",
     isComposerFocused: true,
     ...overrides,
@@ -41,6 +42,12 @@ describe("resolveComposerPromptEditorValue", () => {
     );
   });
 
+  it("shows the in-progress answer when an option has been chosen, even while still focused", () => {
+    expect(resolveComposerPromptEditorValue(state({ activePendingHasOptionSelection: true }))).toBe(
+      "",
+    );
+  });
+
   it("shows an empty editor in approval state regardless of the draft", () => {
     expect(resolveComposerPromptEditorValue(state({ isComposerApprovalState: true }))).toBe("");
   });
@@ -54,5 +61,6 @@ describe("isEditingComposerDraft", () => {
     expect(isEditingComposerDraft(state({ activePendingCustomAnswer: "x" }))).toBe(false);
     expect(isEditingComposerDraft(state({ activePendingCustomAnswer: null }))).toBe(false);
     expect(isEditingComposerDraft(state({ isComposerApprovalState: true }))).toBe(false);
+    expect(isEditingComposerDraft(state({ activePendingHasOptionSelection: true }))).toBe(false);
   });
 });

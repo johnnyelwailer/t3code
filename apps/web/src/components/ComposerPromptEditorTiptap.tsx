@@ -1044,7 +1044,18 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
     setIsEmpty(value.length === 0);
     const rootElement = editor.view.dom;
     const isFocused = Boolean(rootElement && document.activeElement === rootElement);
-    if (!initialSelection && previousSnapshot.value === value && !isFocused) return;
+    if (!initialSelection && previousSnapshot.value === value) {
+      // The content did not change, so there is nothing to rewrite. While the
+      // editor is focused, its live caret owns the selection — never pull it
+      // back to a stale cursor prop (a dock or an option click can leave the
+      // prop behind while the user keeps typing, and re-applying it would drop
+      // the caret to 0 and make subsequent keystrokes land at the front of
+      // the text). Re-sync the snapshot to where the caret actually is so the
+      // next controlled update starts from live state; unfocused, leave
+      // content and caret exactly where they are.
+      if (isFocused) readSnapshot();
+      return;
+    }
 
     isApplyingControlledUpdateRef.current = true;
     const pendingCitation =
@@ -1081,7 +1092,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
     queueMicrotask(() => {
       isApplyingControlledUpdateRef.current = false;
     });
-  }, [cursor, editor, richText, skillLabelFor, value]);
+  }, [cursor, editor, readSnapshot, richText, skillLabelFor, value]);
 
   const focusAt = useCallback(
     (nextCursor: number) => {
