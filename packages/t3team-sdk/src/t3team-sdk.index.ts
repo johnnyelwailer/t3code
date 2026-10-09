@@ -223,6 +223,11 @@ export type {
 export { extractMeta, prepareWorkflow } from "./t3team-sdk.loader.ts";
 // Load-time static audits (Epic 25 phase 25.5): determinism + capability, before any run.
 export { auditWorkflowSourceStatic, registryToolGroupResolver } from "./t3team-sdk.staticAudit.ts";
+export {
+  checkRecipeConfigSource,
+  type RecipeConfigDiagnostic,
+  type RecipeConfigStaticResult,
+} from "./t3team-sdk.recipeConfigStatic.ts";
 export { scanCapabilities } from "./t3team-sdk.capabilityScan.ts";
 export { scanDeterminism } from "./t3team-sdk.determinismScan.ts";
 export { formatFinding } from "./t3team-sdk.staticAuditTypes.ts";
