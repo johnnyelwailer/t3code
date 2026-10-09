@@ -277,6 +277,7 @@
     "apps/web/src/components/Sidebar.logic.ts",
     "apps/web/src/components/Sidebar.tsx",
     "apps/web/src/components/SidebarStageBackdrop.tsx",
+    "apps/web/src/components/ThreadRouteView.tsx",
     "apps/web/src/components/ThreadStatusIndicators.tsx",
     "apps/web/src/components/auth/AuthSurfaceShell.tsx",
     "apps/web/src/components/auth/PairingRouteSurface.tsx",

@@ -12,12 +12,7 @@ import { createMyWorkDigestBackendApi } from "./t3team-myworkDigestBackendApi";
 import { createMyWorkDigestArrangementApi } from "./t3team-myworkDigestArrangementApi";
 import { createPrimaryEnvironmentOrchestrationApi } from "./t3team-orchestrationApi";
 import { postJson, resolveHttpBaseUrl, resolveWsUrl } from "./t3team-t3BackendHttp";
-import type {
-  LaunchProjectRecipeWorkflowRequest,
-  LaunchProjectRecipeWorkflowResponse,
-  SubmitProjectRecipeCardActionRequest,
-  SubmitProjectRecipeCardActionResponse,
-} from "@t3tools/project-recipes";
+import { createThreadWorkflowApi } from "./t3team-threadWorkflowApi";
 
 export function createT3Backend(wsBaseUrl: string): BackendApi {
   const httpBaseUrl = resolveHttpBaseUrl(wsBaseUrl);
@@ -66,14 +61,6 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     );
   }
 
-  async function launchRecipeWorkflow(input: LaunchProjectRecipeWorkflowRequest) {
-    return postJson<LaunchProjectRecipeWorkflowRequest, LaunchProjectRecipeWorkflowResponse>(
-      httpBaseUrl,
-      "/api/t3team/thread/recipe-workflow/launch",
-      input,
-    );
-  }
-
   async function launchRecipeHeadless(
     input: Parameters<NonNullable<BackendApi["launchRecipeHeadless"]>>[0],
   ) {
@@ -85,35 +72,9 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     return { runId: response.runId, status: response.status };
   }
 
-  async function submitRecipeCardAction(input: SubmitProjectRecipeCardActionRequest) {
-    return postJson<SubmitProjectRecipeCardActionRequest, SubmitProjectRecipeCardActionResponse>(
-      httpBaseUrl,
-      "/api/t3team/thread/recipe-workflow/card-action",
-      input,
-    );
-  }
-
-  async function resolveWorkflowInput(input: {
-    threadId: string;
-    text: string;
-    messageId: string;
-    value?: unknown;
-    correlationId?: string;
-  }) {
-    await postJson<typeof input, { ok: true }>(
-      httpBaseUrl,
-      "/api/t3team/thread/workflow/resolve-input",
-      input,
-    );
-  }
-
-  async function controlWorkflow(input: Parameters<NonNullable<BackendApi["controlWorkflow"]>>[0]) {
-    return postJson<typeof input, Awaited<ReturnType<NonNullable<BackendApi["controlWorkflow"]>>>>(
-      httpBaseUrl,
-      "/api/t3team/thread/workflow/control",
-      input,
-    );
-  }
+  const threadWorkflow = createThreadWorkflowApi((routePath, body) =>
+    postJson(httpBaseUrl, routePath, body),
+  );
 
   const atlassian = {
     ...createAtlassianBackendApi(httpBaseUrl),
@@ -133,11 +94,8 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     connect,
     disconnect,
     orchestration: createPrimaryEnvironmentOrchestrationApi(),
-    launchRecipeWorkflow,
     launchRecipeHeadless,
-    submitRecipeCardAction,
-    resolveWorkflowInput,
-    controlWorkflow,
+    ...threadWorkflow,
     listThreadPlacements,
     syncThreadToolContext,
     atlassian,
