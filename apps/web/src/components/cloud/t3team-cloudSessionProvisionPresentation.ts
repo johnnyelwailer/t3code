@@ -173,11 +173,9 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
       return {
         title: "Ready",
         detail:
-          session.machineSetup === true
-            ? "describe your task"
-            : session.remainingSeconds === null
-              ? session.machineLabel
-              : `${session.machineLabel} · ${formatDuration(session.remainingSeconds)} left`,
+          session.remainingSeconds === null
+            ? session.machineLabel
+            : `${session.machineLabel} · ${formatDuration(session.remainingSeconds)} left`,
         tone: "ready",
         progress: null,
         actionLabel: "Connect",
