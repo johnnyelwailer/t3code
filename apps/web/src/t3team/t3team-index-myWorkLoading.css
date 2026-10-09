@@ -22,11 +22,22 @@
 @keyframes t3team-mywork-loading-rise {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes t3team-mywork-loading-mark-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
@@ -49,13 +60,18 @@
 
 /* One shot, not a loop: the placeholders rise in once, staggered by `--t3team-stagger`. */
 .t3team-mywork-loading-rise {
-  animation: t3team-mywork-loading-rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: t3team-mywork-loading-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
   animation-delay: var(--t3team-stagger, 0ms);
+}
+
+.t3team-mywork-loading-mark {
+  animation: t3team-mywork-loading-mark-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .t3team-mywork-loading-glow,
-  .t3team-mywork-loading-rise {
+  .t3team-mywork-loading-rise,
+  .t3team-mywork-loading-mark {
     animation: none;
   }
   .t3team-mywork-loading-glow {

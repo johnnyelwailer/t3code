@@ -686,6 +686,13 @@ export const ServerConfig = Schema.Struct({
    */
   workProfileChooser: Schema.optionalKey(Schema.Boolean),
   /**
+   * Whether My Work hosts its aside through `RightPanelTabs` on a fixed panel ref (PR / thread /
+   * browser tabs, Agent kickoff when empty). Runtime feature flag (env `NEXI_FF_MYWORK_RIGHT_PANEL`,
+   * default on); absent on older servers, which clients treat as on (legacy DigestPrAside remains
+   * available when the flag is explicitly off).
+   */
+  myWorkRightPanel: Schema.optionalKey(Schema.Boolean),
+  /**
    * Whether this server names the project state dir `.nexi` instead of `.t3team`. Runtime
    * feature flag (env `NEXI_FF_NEXI_STATE_DIR`, default on); absent on older servers.
    */

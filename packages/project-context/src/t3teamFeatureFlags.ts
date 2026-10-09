@@ -27,6 +27,12 @@ export const FEATURE_FLAG_DEFINITIONS = {
     description:
       "Show the work profile chooser (first-run setup, add-project wizard, Settings). Off: everyone uses the developer profile.",
   },
+  MYWORK_RIGHT_PANEL: {
+    defaultEnabled: true,
+    requiresRestart: false,
+    description:
+      "My Work aside uses RightPanelTabs (PR/thread/browser tabs) with Agent kickoff when empty. Off: legacy DigestPrAside swap.",
+  },
 } as const;
 
 export type FeatureFlagKey = keyof typeof FEATURE_FLAG_DEFINITIONS;

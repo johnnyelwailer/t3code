@@ -89,6 +89,11 @@ describe("feature flag layering", () => {
         requiresRestart: false,
         defaultEnabled: false,
       }),
+      expect.objectContaining({
+        key: "MYWORK_RIGHT_PANEL",
+        requiresRestart: false,
+        defaultEnabled: true,
+      }),
     ]);
   });
 });
