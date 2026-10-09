@@ -2,6 +2,9 @@ import {
   CommandId,
   type RunId,
   isProviderAvailable,
+  compactProviderUsageLine,
+  providerUsageCatalogLine,
+  providerUsageLabel,
   MessageId,
   type ModelSelection,
   NodeId,
@@ -1130,9 +1133,17 @@ const make = Effect.gen(function* () {
         orchestrationCapableInstanceIds.has(provider.instanceId),
       );
       if (constraints.length > 0) {
+        // A provider that cannot run a child (e.g. a rate-limit marking it
+        // unavailable) carries its current windows so the Conductor can re-pick.
+        const usageLine = compactProviderUsageLine(
+          providerUsageLabel(provider),
+          provider.usageLimits,
+        );
         return yield* failure(
           "provider_unavailable",
-          `Provider ${instanceId} cannot run a child task: ${constraints.join(" ")}`,
+          `Provider ${instanceId} cannot run a child task: ${constraints.join(" ")}${
+            usageLine === null ? "" : `; current windows: ${usageLine}`
+          }`,
         );
       }
 
@@ -1782,6 +1793,7 @@ const make = Effect.gen(function* () {
               constraints: [...constraints],
             };
           }),
+          providerUsage: providers.map((provider) => providerUsageCatalogLine(provider)),
           features: {
             appOwnedSubagents: true,
             asyncPolling: true,
@@ -1896,11 +1908,25 @@ const make = Effect.gen(function* () {
           ...prepared.notes,
           ...(childThreadId === null || replayed ? [] : yield* prepared.afterCreate(childThreadId)),
         ];
-        const withNotes = (taskResult: OrchestratorMcpDelegateTaskResult) =>
-          notes.length === 0 ? taskResult : { ...taskResult, notes };
+        const targetProvider = providers.find(
+          (provider) => provider.instanceId === target.modelSelection.instanceId,
+        );
+        const targetProviderUsage =
+          targetProvider === undefined
+            ? null
+            : compactProviderUsageLine(
+                providerUsageLabel(targetProvider),
+                targetProvider.usageLimits,
+              );
+        const withDelegation = (taskResult: OrchestratorMcpDelegateTaskResult) => {
+          const withNotesApplied = notes.length === 0 ? taskResult : { ...taskResult, notes };
+          return targetProviderUsage === null
+            ? withNotesApplied
+            : { ...withNotesApplied, providerUsage: targetProviderUsage };
+        };
 
         if (input.mode !== "wait") {
-          return withNotes(yield* readTask(scope, taskId, false, true));
+          return withDelegation(yield* readTask(scope, taskId, false, true));
         }
         const timeoutMs = Math.min(
           MAX_WAIT_TIMEOUT_MS,
@@ -1908,7 +1934,7 @@ const make = Effect.gen(function* () {
         );
         const waited = yield* waitForTask(scope, taskId, timeoutMs);
         if (Option.isSome(waited)) {
-          return withNotes(waited.value);
+          return withDelegation(waited.value);
         }
         // The blocking wait timed out, so it no longer owns delivery: upgrade
         // the task so a later terminal wakes the parent even mid-turn. Best
@@ -1949,7 +1975,7 @@ const make = Effect.gen(function* () {
               }),
             ),
           );
-        return withNotes(yield* readTask(scope, taskId, true, true));
+        return withDelegation(yield* readTask(scope, taskId, true, true));
       }),
     taskStatus: (callerScope, taskId) =>
       Effect.gen(function* () {

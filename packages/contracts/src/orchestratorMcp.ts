@@ -249,6 +249,17 @@ export const OrchestratorMcpDelegateTaskResult = Schema.Struct({
         "delegate_task only: how the host applied workspace and extension options (branch, worktree, setup script, adjusted options).",
     }),
   ),
+  /**
+   * The target instance's current window state at delegation time, in the
+   * same compact shape as the capabilities view. Omitted when the target has
+   * no window data. Surfaces in delegate_task results only (not task_status).
+   */
+  providerUsage: Schema.optional(
+    Schema.String.annotate({
+      description:
+        "delegate_task only: the target instance's current usage windows as one compact line, e.g. 'claudeAgent: session 42% · weekly 71% · severity: warning'.",
+    }),
+  ),
 });
 export type OrchestratorMcpDelegateTaskResult = typeof OrchestratorMcpDelegateTaskResult.Type;
 
@@ -539,6 +550,19 @@ export const OrchestratorMcpCapabilitiesResult = Schema.Struct({
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   providers: Schema.Array(OrchestratorMcpProviderCapability),
+  /**
+   * Compact per-instance usage view: one short line per instance built from
+   * the published `usageLimits` snapshots, e.g.
+   * `claudeAgent: session 42% (resets 18:00Z) · weekly 71% · severity: warning`,
+   * or an explicit `no usage data` marker. Omitted when the host has no
+   * provider registry snapshot.
+   */
+  providerUsage: Schema.optional(
+    Schema.Array(Schema.String).annotate({
+      description:
+        "Compact per-instance usage view built from published usageLimits snapshots: one short line per instance, or an explicit no-data marker.",
+    }),
+  ),
   features: Schema.Struct({
     appOwnedSubagents: Schema.Boolean,
     asyncPolling: Schema.Boolean,
