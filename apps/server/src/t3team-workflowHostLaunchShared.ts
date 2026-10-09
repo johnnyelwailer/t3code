@@ -22,7 +22,7 @@ export function refusalOf(error: unknown): string {
 export const authorOf = (runId: string) => ({ kind: "system", workflowRunId: runId }) as const;
 
 /** The first `t3team.*` key: those facts are the host's to write. */
-export const reservedFactKey = (extensions: Readonly<Record<string, unknown>>) =>
+const reservedFactKey = (extensions: Readonly<Record<string, unknown>>) =>
   Object.keys(extensions).find((key) => key.startsWith("t3team."));
 
 /** Facts ride the thread-facts stream to every client, so a workflow writes status, not data. */
