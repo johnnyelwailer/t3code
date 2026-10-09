@@ -134,7 +134,8 @@ describe("waitForAny through the durable engine", () => {
   });
 });
 
-describe("waitForAny static audit", () => {
+// Each audit builds a TypeScript program; that exceeds the 5s default on a loaded CI runner.
+describe("waitForAny static audit", { timeout: 60_000 }, () => {
   const audit = (sourceText: string) =>
     auditWorkflowSourceStatic(
       { absolutePath: "/fixtures/wait-any.workflow.ts", sourceText },

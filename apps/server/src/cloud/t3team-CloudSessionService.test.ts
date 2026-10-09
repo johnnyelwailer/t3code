@@ -55,6 +55,7 @@ const GhWorkflowRunsJson = Schema.Struct({
       updated_at: Schema.String,
       html_url: Schema.String,
       name: Schema.String,
+      actor: Schema.Struct({ login: Schema.String }),
     }),
   ),
 });
@@ -143,6 +144,7 @@ const makeGithubMock = (
               updated_at: "2026-09-14T12:00:01Z",
               html_url: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/999",
               name: `hive/nx-nexi [main] [${tag}]`,
+              actor: { login },
             },
           ],
         }),

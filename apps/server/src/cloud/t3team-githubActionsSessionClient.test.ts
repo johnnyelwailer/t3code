@@ -81,6 +81,8 @@ describe("invocations", () => {
     ]) {
       expect(RUN_FIELDS_JQ).toMatch(new RegExp(`[{ ,]${field}[,}]`));
     }
+    // The owner filter needs who started each run.
+    expect(RUN_FIELDS_JQ).toContain("actor: {login: .actor.login}");
     // The projection keeps the shape the parser reads.
     const projected = {
       workflow_runs: [
@@ -93,6 +95,7 @@ describe("invocations", () => {
           html_url: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/7",
           name: "nexi-session [abc] · broker",
           display_title: "nexi-session [abc] · broker",
+          actor: { login: "pj" },
         },
       ],
     };
@@ -105,6 +108,7 @@ describe("invocations", () => {
         updatedAt: "2026-10-08T10:00:33Z",
         htmlUrl: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/7",
         name: "nexi-session [abc] · broker",
+        actor: "pj",
       },
     ]);
   });

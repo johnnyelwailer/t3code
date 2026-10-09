@@ -103,7 +103,7 @@ export function listRunsInvocation(
  * unreadable. These fields are about 300 bytes a run.
  */
 export const RUN_FIELDS_JQ =
-  "{workflow_runs: [.workflow_runs[] | {id, status, conclusion, created_at, updated_at, html_url, name, display_title}]}";
+  "{workflow_runs: [.workflow_runs[] | {id, status, conclusion, created_at, updated_at, html_url, name, display_title, actor: {login: .actor.login}}]}";
 
 /**
  * Resolve the GitHub login the current `gh` credential is signed in as, on the
