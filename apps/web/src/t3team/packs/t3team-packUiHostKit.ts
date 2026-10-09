@@ -28,6 +28,7 @@ import { T3TeamWidgetBlock } from "~/t3team/chat/t3team-widgetBlock";
 import { PackIcon } from "./t3team-PackIcon";
 import { PackMarkdown } from "./t3team-PackMarkdown";
 import { usePackDocument, usePackDocuments } from "./t3team-packDocuments";
+import { launchRecipe } from "./t3team-packRecipeLaunch";
 import { usePackNavigation } from "./t3team-packUiNavigation";
 
 export const hostKit: PackUiHostKit = {
@@ -62,4 +63,5 @@ export const hostKit: PackUiHostKit = {
   useNavigation: usePackNavigation,
   usePackDocument,
   usePackDocuments,
+  launchRecipe,
 };

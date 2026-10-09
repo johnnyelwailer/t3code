@@ -38,7 +38,6 @@ export function renderMyWorkRightPanelSurface(input: {
   if (activeSurface === null) return null;
 
   if (activeSurface.kind === "pull-request") {
-    // The tab names its own server (the cast follows the pull-requests route's identical read).
     const panelEnvironmentId =
       (activeSurface.environmentId as EnvironmentId | undefined) ?? environmentId;
     if (panelEnvironmentId === null) return null;

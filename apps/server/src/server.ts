@@ -219,6 +219,11 @@ import {
   t3teamThreadRecipeWorkflowLaunchRouteLayer,
   t3teamThreadWorkflowResolveInputRouteLayer,
 } from "./t3team-thread-recipe-workflow-routes.ts";
+import { t3teamRecipeHeadlessLaunchRouteLayer } from "./t3team-recipeHeadlessLaunchRoutes.ts";
+import {
+  T3TeamRecipeTriggerRunner,
+  T3TeamRecipeTriggerRunnerLive,
+} from "./t3team-recipeTriggerRunner.ts";
 import { t3teamThreadDraftMutationStatusRouteLayer } from "./t3team-thread-draftMutation-status-route.ts";
 import { t3teamThreadJobsRouteLayer } from "./t3team-thread-jobs-route.ts";
 import { t3teamThreadWorkflowControlRouteLayer } from "./t3team-thread-workflow-control-route.ts";
@@ -616,6 +621,28 @@ const T3TeamProjectSourceIconReactorStartLive = Layer.effectDiscard(
 // single instance (layers memoize by reference).
 const T3TeamWorkflowHostLive = T3TeamWorkflowHost.layer.pipe(Layer.provide(T3TeamV2FoundationLive));
 
+// t3team: recipe triggers (S5b) — reconcile the per-project `trigger:<recipe>:<id>` signal
+// registrations, drain the signal inbox on a timer, and launch headless runs. One shared
+// runner per process; the engine chain below is the SAME singletons the tool broker and the
+// thread-bound launch use (layer references memoize). Defined after T3TeamWorkflowHostLive so
+// it can share that const instead of rebuilding the host layer.
+const T3TeamRecipeTriggerRunnerLayer = T3TeamRecipeTriggerRunnerLive.pipe(
+  Layer.provideMerge(WorkflowSignalSourcesLive),
+  Layer.provide(T3TeamWorkflowHostLive),
+  Layer.provide(T3TeamScriptHost.layer.pipe(Layer.provide(layerPullRequestService))),
+  Layer.provide(T3TeamV2FoundationLive),
+);
+
+// Start it the way upstream starts its own workers: one effectDiscard layer that parks the
+// timer loop and stops it on scope close.
+const T3TeamRecipeTriggerRunnerStartLive = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const runner = yield* T3TeamRecipeTriggerRunner;
+    yield* runner.start();
+    yield* Effect.addFinalizer(() => runner.stop());
+  }),
+).pipe(Layer.provide(T3TeamRecipeTriggerRunnerLayer));
+
 // The fork MCP tool broker and the in-memory stores it shares with the routes/reactors.
 const T3TeamToolBrokerLayerLive = T3TeamToolBrokerLive.pipe(
   Layer.provideMerge(T3TeamThreadToolContextStoreLive),
@@ -793,6 +820,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   ReplayMarkers.layer,
   T3TeamThreadToolContextEvictionReactorStartLive,
   T3TeamProjectSourceIconReactorStartLive,
+  T3TeamRecipeTriggerRunnerStartLive,
   // t3team: the ONE project-mutation source hook (binding table + keyed claim lock, critic C13).
   T3TeamProjectSourceBindingsLive,
   // t3team: shared V2 foundation (facts/artifacts side stores, run-less message + lineage writers).
@@ -992,6 +1020,7 @@ const layerMakeRoutes = Layer.mergeAll(
     t3teamProjectWorkspaceRefreshWorkItemContextRouteLayer,
     t3teamProjectWorkspaceRefreshWorkItemSliceContextRouteLayer,
     t3teamThreadRecipeWorkflowLaunchRouteLayer,
+    t3teamRecipeHeadlessLaunchRouteLayer,
     t3teamThreadWorkflowControlRouteLayer,
     t3teamThreadJobsRouteLayer,
     t3teamThreadDraftMutationStatusRouteLayer,

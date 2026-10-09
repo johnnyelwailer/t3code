@@ -43,6 +43,27 @@ export type PackClassValue =
   | PackClassValue[]
   | { readonly [className: string]: unknown };
 
+/** Input to pack-ui's `launchRecipe` (S5b): start a discovered recipe's workflow headlessly,
+ * with no thread — one surface button press becomes one run. */
+export interface PackRecipeLaunchInput {
+  /** The recipe to run: an id from this project's recipe library (pack or project-local). */
+  readonly recipeId: string;
+  /** One of that recipe's named actions; absent (or `"default"`) runs `defaultAction`. */
+  readonly action?: string;
+  /** The workflow's args, as the recipe's `Inputs` shape. */
+  readonly args?: Record<string, unknown>;
+  /** Where the launch was called from; the host resolves the project from it (no thread). */
+  readonly surfaceContext?: Record<string, unknown>;
+}
+
+/** The result of a headless recipe launch. */
+export interface PackRecipeLaunchResult {
+  /** The headless run's id (the `workflow_runs` record). */
+  readonly runId: string;
+  /** The run's status as admitted by the engine. */
+  readonly status: string;
+}
+
 export interface PackUiHostKit {
   // Styling: joins classes for a pack's own elements, resolving Tailwind conflicts.
   readonly cn: (...inputs: PackClassValue[]) => string;
@@ -102,4 +123,8 @@ export interface PackUiHostKit {
     collection: string,
     options?: { readonly prefix?: string },
   ) => PackDocumentState<ReadonlyArray<PackDoc>>;
+
+  // Headless launch (S5b): start a recipe's workflow with no thread. The host resolves the
+  // project from `surfaceContext` and the recipe through the project's unfiltered library.
+  readonly launchRecipe: (input: PackRecipeLaunchInput) => Promise<PackRecipeLaunchResult>;
 }

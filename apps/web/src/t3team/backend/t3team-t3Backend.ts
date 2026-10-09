@@ -74,6 +74,17 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     );
   }
 
+  async function launchRecipeHeadless(
+    input: Parameters<NonNullable<BackendApi["launchRecipeHeadless"]>>[0],
+  ) {
+    const response = await postJson<typeof input, { ok: true; runId: string; status: string }>(
+      httpBaseUrl,
+      "/api/t3team/recipe/launch-headless",
+      input,
+    );
+    return { runId: response.runId, status: response.status };
+  }
+
   async function submitRecipeCardAction(input: SubmitProjectRecipeCardActionRequest) {
     return postJson<SubmitProjectRecipeCardActionRequest, SubmitProjectRecipeCardActionResponse>(
       httpBaseUrl,
@@ -123,6 +134,7 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     disconnect,
     orchestration: createPrimaryEnvironmentOrchestrationApi(),
     launchRecipeWorkflow,
+    launchRecipeHeadless,
     submitRecipeCardAction,
     resolveWorkflowInput,
     controlWorkflow,

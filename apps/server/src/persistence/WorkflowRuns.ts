@@ -60,7 +60,7 @@ export type WorkflowRunPendingKind = typeof WorkflowRunPendingKind.Type;
 
 /** How the run was launched: from a discovered recipe, or agent-authored via
  * `t3team.orchestration.run` (ephemeral — no recipe on disk, source under `.t3team-runs/`). */
-export const WorkflowRunOrigin = Schema.Literals(["recipe", "ephemeral"]);
+export const WorkflowRunOrigin = Schema.Literals(["recipe", "ephemeral", "trigger"]);
 export type WorkflowRunOrigin = typeof WorkflowRunOrigin.Type;
 
 /**
@@ -98,7 +98,8 @@ export const WorkflowRun = Schema.Struct({
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   status: WorkflowRunStatus,
-  /** Launch origin — `recipe` (discovered recipe) or `ephemeral` (agent-authored, tool-launched). */
+  /** Launch origin — `recipe` (discovered recipe), `ephemeral` (agent-authored, tool-launched),
+   * or `trigger` (a recipe trigger fired it headless, no launch thread). */
   origin: WorkflowRunOrigin,
   /** The launching recipe's directory — rehydration re-resolves the recipe's private scripts
    * from it (`resolveRecipeWorkflowScripts`). NULL for ephemeral/scriptless (or pre-043) runs. */
