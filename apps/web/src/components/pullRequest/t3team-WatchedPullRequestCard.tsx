@@ -10,6 +10,23 @@ import type { WatchedPullRequestWatcher } from "~/state/t3team-watchedPullReques
 
 import { WatchedPullRequestCardRow } from "./t3team-WatchedPullRequestCardRow";
 
+function stop(event: { stopPropagation: () => void }) {
+  event.stopPropagation();
+}
+
+/**
+ * The popup portals out of the DOM, but React still bubbles its events to the row or link the
+ * trigger sits in (upstream notes the same on its stop button). Nothing inside a card may
+ * activate, rename or open the host row. No preventDefault: the buttons keep working.
+ */
+export const HOST_ROW_EVENT_GUARD = {
+  onClick: stop,
+  onPointerDown: stop,
+  onDoubleClick: stop,
+  onContextMenu: stop,
+  onKeyDown: stop,
+} as const;
+
 export function shortRepositoryLabel(repository: string): string {
   const slash = repository.lastIndexOf("/");
   return slash === -1 ? repository : repository.slice(slash + 1);
@@ -25,7 +42,11 @@ export function WatchedPullRequestCard({
   link: ThreadPullRequestLink;
 }) {
   return (
-    <div className="flex min-w-0 flex-col" data-testid="watched-pull-request-card">
+    <div
+      className="flex min-w-0 flex-col"
+      data-testid="watched-pull-request-card"
+      {...HOST_ROW_EVENT_GUARD}
+    >
       <div className="flex items-center gap-1.5 px-1 pb-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
         <EyeIcon aria-hidden className="size-3" />
         Watching

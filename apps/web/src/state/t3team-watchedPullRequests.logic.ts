@@ -116,27 +116,76 @@ export function isLiveShell(
   return shell.deletedAt === null && shell.archivedAt === null;
 }
 
+type WatcherCacheEntry = {
+  readonly shell: EnvironmentThreadShell;
+  readonly facts: T3TeamThreadFacts | undefined;
+  readonly link: ThreadPullRequestLink;
+  readonly watcher: WatchedPullRequestWatcher;
+};
+
+/**
+ * What the last derivation produced, so the next one reuses watcher objects and per-key arrays
+ * whose inputs did not change. Shells and facts tick often (every activity label); without this
+ * every indicator on screen would re-render on each tick.
+ */
+export type WatchedPullRequestsCache = {
+  readonly entries: ReadonlyMap<string, WatcherCacheEntry>;
+  readonly byKey: WatchedPullRequestsByKey;
+};
+
+function sameWatchers(
+  left: ReadonlyArray<WatchedPullRequestWatcher>,
+  right: ReadonlyArray<WatchedPullRequestWatcher>,
+): boolean {
+  return left.length === right.length && left.every((watcher, index) => watcher === right[index]);
+}
+
 /** Every watched open link in the environment, keyed by `threadPullRequestKeyOf`. */
 export function collectWatchedPullRequests(
   shells: ReadonlyArray<EnvironmentThreadShell>,
   facts: T3TeamThreadFactsByThreadId,
   environmentId: EnvironmentId,
-): WatchedPullRequestsByKey {
+  cache?: WatchedPullRequestsCache,
+): WatchedPullRequestsCache {
+  const entries = new Map<string, WatcherCacheEntry>();
   const byKey = new Map<string, Array<WatchedPullRequestWatcher>>();
   for (const shell of shells) {
     if (shell.environmentId !== environmentId || !isLiveShell(shell)) continue;
     for (const link of visibleThreadPullRequests(shell.pullRequests)) {
       if (!isWatchedOpenLink(link)) continue;
       const key = threadPullRequestKeyOf(link);
+      const entryKey = `${shell.id}\u0000${key}`;
+      const threadFacts = facts.get(shell.id);
+      const previous = cache?.entries.get(entryKey);
+      const watcher =
+        previous !== undefined &&
+        previous.shell === shell &&
+        previous.facts === threadFacts &&
+        previous.link === link
+          ? previous.watcher
+          : buildWatcher(shell, threadFacts, link);
+      entries.set(entryKey, { shell, facts: threadFacts, link, watcher });
       const watchers = byKey.get(key) ?? [];
-      watchers.push(buildWatcher(shell, facts.get(shell.id), link));
+      watchers.push(watcher);
       byKey.set(key, watchers);
     }
   }
-  for (const watchers of byKey.values()) {
-    watchers.sort((left, right) => TONE_RANK[right.tone] - TONE_RANK[left.tone]);
+  if (byKey.size === 0) {
+    return { entries, byKey: EMPTY_WATCHED_PULL_REQUESTS };
   }
-  return byKey.size === 0 ? EMPTY_WATCHED_PULL_REQUESTS : byKey;
+  let unchanged = cache !== undefined && cache.byKey.size === byKey.size;
+  const stable = new Map<string, ReadonlyArray<WatchedPullRequestWatcher>>();
+  for (const [key, watchers] of byKey) {
+    watchers.sort((left, right) => TONE_RANK[right.tone] - TONE_RANK[left.tone]);
+    const before = cache?.byKey.get(key);
+    if (before !== undefined && sameWatchers(before, watchers)) {
+      stable.set(key, before);
+    } else {
+      stable.set(key, watchers);
+      unchanged = false;
+    }
+  }
+  return { entries, byKey: unchanged && cache !== undefined ? cache.byKey : stable };
 }
 
 /** The one tone the indicator paints when several threads watch the same pull request. */

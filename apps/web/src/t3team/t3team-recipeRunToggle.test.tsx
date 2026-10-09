@@ -8,10 +8,20 @@ import { T3TeamRecipeRunFixture } from "~/state/t3team-recipeRun";
 import type { RecipeRunSnapshot } from "~/state/t3team-recipeRun.logic";
 import { BackendContext } from "~/t3team/backend/t3team-BackendContext";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
-import { FIXTURE_ENVIRONMENT_ID, RUN_NEEDS_YOU, RUN_OFF } from "~/t3team/t3team-prWatchFixtures";
+import {
+  FIXTURE_ENVIRONMENT_ID,
+  fixtureLink,
+  fixtureRun,
+  fixtureWatcher,
+  RUN_FAILED,
+  RUN_NEEDS_YOU,
+  RUN_OFF,
+} from "~/t3team/t3team-prWatchFixtures";
 import { T3TeamRecipeActionViewContext } from "~/t3team/t3team-recipeActionViewContext";
 import { RunToggle } from "~/t3team/t3team-recipeRunToggle";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
+import type { SidecarSectionHost } from "~/t3team/t3team-sidecarSectionHost";
+import { T3TeamSidecarSectionHostContext } from "~/t3team/t3team-sidecarSectionHostContext";
 
 const commands = vi.hoisted(() => ({ dispatched: [] as Array<{ label: string; input: unknown }> }));
 
@@ -61,18 +71,36 @@ const recipe: T3TeamSidecarRecipeQuickStart = {
 
 const roots: Array<{ root: ReturnType<typeof createRoot>; container: HTMLElement }> = [];
 
-async function render(run: RecipeRunSnapshot, backend: Partial<BackendApi>) {
+function fakeHost(launchQuickStart: SidecarSectionHost["launchQuickStart"]): SidecarSectionHost {
+  return {
+    placement: "sidecar.section",
+    surface: "project.dashboard.myWork",
+    projectId: "project-nexi",
+    stageKickoff: () => {},
+    launchRecipe: () => {},
+    launchQuickStart,
+    openThread: () => {},
+  };
+}
+
+async function render(
+  run: RecipeRunSnapshot,
+  backend: Partial<BackendApi>,
+  host: SidecarSectionHost | null = null,
+) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push({ root, container });
   const tree: ReactNode = (
     <BackendContext.Provider value={backend as BackendApi}>
-      <T3TeamRecipeActionViewContext.Provider value={recipe}>
-        <T3TeamRecipeRunFixture.Provider value={run}>
-          <RunToggle title="Watch my PRs" offDescription="babysits every open PR" />
-        </T3TeamRecipeRunFixture.Provider>
-      </T3TeamRecipeActionViewContext.Provider>
+      <T3TeamSidecarSectionHostContext.Provider value={host}>
+        <T3TeamRecipeActionViewContext.Provider value={recipe}>
+          <T3TeamRecipeRunFixture.Provider value={run}>
+            <RunToggle title="Watch my PRs" offDescription="babysits every open PR" />
+          </T3TeamRecipeRunFixture.Provider>
+        </T3TeamRecipeActionViewContext.Provider>
+      </T3TeamSidecarSectionHostContext.Provider>
     </BackendContext.Provider>
   );
   await act(async () => root.render(tree));
@@ -99,28 +127,24 @@ afterEach(async () => {
 });
 
 describe("RunToggle", () => {
-  it("launches the recipe's workflow when switched on", async () => {
-    const launchRecipeWorkflow = vi.fn<NonNullable<BackendApi["launchRecipeWorkflow"]>>(
-      async () => ({ ok: true, mode: "thread" as const }),
-    );
-    const container = await render(RUN_OFF, { launchRecipeWorkflow });
+  it("launches the recipe through the sidecar host when switched on", async () => {
+    const launchQuickStart = vi.fn<SidecarSectionHost["launchQuickStart"]>(async () => true);
+    const container = await render(RUN_OFF, {}, fakeHost(launchQuickStart));
     expect(stateOf(container)).toBe("off");
     expect(container.textContent).toContain("Off");
     expect(container.textContent).toContain("babysits every open PR");
 
     await click(switchOf(container));
 
-    expect(launchRecipeWorkflow).toHaveBeenCalledTimes(1);
-    const request = launchRecipeWorkflow.mock.calls[0]![0] as {
-      workspaceRoot: string;
-      launch: { recipeId: string; workflowPath?: string };
-    };
-    expect(request.workspaceRoot).toBe("/ws");
-    expect(request.launch).toMatchObject({
-      recipeId: "pr-watch",
-      workflowPath: recipe.workflow?.workflowPath,
-    });
+    expect(launchQuickStart).toHaveBeenCalledTimes(1);
+    expect(launchQuickStart.mock.calls[0]![0]).toBe(recipe);
     expect(stateOf(container)).toBe("starting");
+  });
+
+  it("stays off and never launches outside a sidecar section", async () => {
+    const container = await render(RUN_OFF, {});
+    await click(switchOf(container));
+    expect(stateOf(container)).toBe("off");
   });
 
   it("asks once, then stops the run and every watch it launched", async () => {
@@ -149,5 +173,35 @@ describe("RunToggle", () => {
       .map((c) => (c.input as { input: { number: number; watching: boolean } }).input);
     expect(unwatched.map((u) => u.number).sort((a, b) => a - b)).toEqual([377, 398, 412, 412]);
     expect(unwatched.every((u) => u.watching === false)).toBe(true);
+  });
+
+  it("releases the watches of a failed run without a control call, skipping ended ones", async () => {
+    const controlWorkflow = vi.fn(async () => ({ ok: true, status: "cancelled" as const }));
+    const merged = fixtureWatcher({
+      threadId: "thread-401",
+      link: fixtureLink({
+        repository: "hive/nx-nexi",
+        number: 401,
+        title: "Docs",
+        state: "merged",
+      }),
+    });
+    const run = fixtureRun({
+      status: "failed",
+      watchThreads: [...RUN_FAILED.watchThreads, merged],
+    });
+    const container = await render(run, { controlWorkflow });
+
+    await click(switchOf(container));
+    const stop = [...document.body.querySelectorAll("button")].find(
+      (b) => b.textContent === "Stop",
+    )!;
+    await click(stop);
+
+    expect(controlWorkflow).not.toHaveBeenCalled();
+    const unwatched = commands.dispatched
+      .filter((c) => c.label === "watch")
+      .map((c) => (c.input as { input: { number: number } }).input.number);
+    expect(unwatched).toEqual([412]);
   });
 });

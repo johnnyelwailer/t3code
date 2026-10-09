@@ -5,7 +5,7 @@
  * exist; the recipe's summary fact (`T3TeamRecipeSummaryFact`) fills in what the shells cannot
  * know: the watched total, any other counts, warnings, and the detail line.
  */
-import type { T3TeamRecipeSummaryFact } from "@t3tools/contracts";
+import { PR_WATCH_COUNT_ID, type T3TeamRecipeSummaryFact } from "@t3tools/contracts";
 
 import type { RecipeRunSnapshot } from "~/state/t3team-recipeRun.logic";
 import { isRunActive } from "~/state/t3team-recipeRun.logic";
@@ -40,9 +40,13 @@ export type RunToggleState = {
 
 export type RunTogglePending = "starting" | "stopping" | null;
 
-/** Summary count ids the card derives live from the run's threads (engine contract: a docked
- * `user_input` request, an active run). Parked is the recipe's own knowledge and stays summary-read. */
-const LIVE_BUCKETS: ReadonlySet<string> = new Set(["needs-you", "fixing", "parked"]);
+/** Count ids the card shows as its own buckets: two derived live from the run's threads (a docked
+ * `user_input` request, an active run), parked read from the summary. Other ids are extras. */
+const BUCKET_IDS: ReadonlySet<string> = new Set([
+  PR_WATCH_COUNT_ID.needsYou,
+  PR_WATCH_COUNT_ID.fixing,
+  PR_WATCH_COUNT_ID.parked,
+]);
 
 export function relativeMinutes(iso: string, nowMs: number): string {
   const minutes = Math.max(0, Math.floor((nowMs - Date.parse(iso)) / 60_000));
@@ -66,14 +70,14 @@ export function resolveRunCounts(
     live.filter(predicate).length;
   const hasLive = live.length > 0;
   return {
-    watched: summaryCount(summary, "watched") ?? live.length,
+    watched: summaryCount(summary, PR_WATCH_COUNT_ID.watched) ?? live.length,
     "needs-you": hasLive
       ? fromLive((w) => w.hasPendingUserInput)
-      : (summaryCount(summary, "needs-you") ?? 0),
+      : (summaryCount(summary, PR_WATCH_COUNT_ID.needsYou) ?? 0),
     fixing: hasLive
       ? fromLive((w) => w.tone === "working")
-      : (summaryCount(summary, "fixing") ?? 0),
-    parked: summaryCount(summary, "parked") ?? fromLive((w) => w.prWatch?.parked !== undefined),
+      : (summaryCount(summary, PR_WATCH_COUNT_ID.fixing) ?? 0),
+    parked: summaryCount(summary, PR_WATCH_COUNT_ID.parked) ?? 0,
   };
 }
 
@@ -95,8 +99,9 @@ export function resolveRunToggleState(input: {
   const active = isRunActive(status);
   const failed = status?.status === "failed";
 
-  // The first pass is still discovering: nothing watched yet, no thread to list.
-  const discovering = active && run.watchThreads.length === 0 && counts.watched === 0;
+  // The first pass is still discovering: no summary written yet, no thread to list. A run that
+  // wrote "0 watched" is a healthy run with nothing to watch, not a starting one.
+  const discovering = active && run.watchThreads.length === 0 && summary === null;
   if (pending === "starting" || discovering) {
     const activity = run.home?.activityLabel ?? "finding your PRs…";
     return {
@@ -133,7 +138,8 @@ export function resolveRunToggleState(input: {
   const needsYou = counts["needs-you"];
   // Counts the recipe alone knows ("unreadable"), after the live ones, in the recipe's order.
   const extras = (summary?.counts ?? []).filter(
-    (count) => count.id !== "watched" && !LIVE_BUCKETS.has(count.id) && count.value > 0,
+    (count) =>
+      count.id !== PR_WATCH_COUNT_ID.watched && !BUCKET_IDS.has(count.id) && count.value > 0,
   );
   if (failed) {
     line.push(countPart("watched", counts.watched, "PRs still watched"));

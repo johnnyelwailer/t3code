@@ -3,6 +3,7 @@
  * A config warning offers *Open config*; a sign-in warning shows the copyable `gh auth login`
  * command the server's inbox loader already names.
  */
+import { PR_WATCH_WARNING_KIND } from "@t3tools/contracts";
 import { ShieldAlertIcon, TriangleAlertIcon } from "lucide-react";
 
 import { PullRequestCopyableCode } from "~/components/pullRequest/PullRequestCopyableCode";
@@ -13,10 +14,10 @@ export function signInCommand(host: string): string {
   return `gh auth login --hostname ${host}`;
 }
 
-/** The host a sign-in warning names ("Not signed in to nexplore.ghe.com"); the summary carries no field for it yet. */
+/** The host a sign-in warning names: its `key` by contract, else the hostname in its text. */
 export function signInHostOf(warning: RunToggleWarning): string | null {
-  if (warning.kind !== "sign-in") return null;
-  return /\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/i.exec(warning.text)?.[0] ?? null;
+  if (warning.kind !== PR_WATCH_WARNING_KIND.signIn) return null;
+  return warning.key ?? /\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/i.exec(warning.text)?.[0] ?? null;
 }
 
 function WarningLine({
@@ -26,8 +27,8 @@ function WarningLine({
   warning: RunToggleWarning;
   onOpenConfig?: (() => void) | undefined;
 }) {
-  const Icon = warning.kind === "sign-in" ? ShieldAlertIcon : TriangleAlertIcon;
   const signInHost = signInHostOf(warning);
+  const Icon = signInHost ? ShieldAlertIcon : TriangleAlertIcon;
   return (
     <li
       className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
@@ -35,7 +36,7 @@ function WarningLine({
     >
       <Icon aria-hidden className="size-3.5 shrink-0 text-warning" />
       <span className="min-w-0 flex-1 text-xs leading-5 text-foreground">
-        {warning.key ? <span className="font-mono">{warning.key} </span> : null}
+        {warning.key && !signInHost ? <span className="font-mono">{warning.key} </span> : null}
         {warning.text}
         {warning.file ? (
           <span className="text-muted-foreground">
@@ -45,7 +46,7 @@ function WarningLine({
           </span>
         ) : null}
       </span>
-      {warning.kind === "config" && onOpenConfig ? (
+      {warning.kind === PR_WATCH_WARNING_KIND.config && onOpenConfig ? (
         <Button
           variant="outline"
           size="micro"

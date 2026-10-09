@@ -76,20 +76,26 @@ export function WatchedPullRequestCardRow({
   const { environmentId, threadId } = watcher.threadRef;
   const babysitter = watcher.recipeId !== null || watcher.prWatch !== null;
   const supervised = watcher.runtimeMode === "approval-required";
-  // What the thread is doing, else what it asks, else why it waits (doc 07 §2.4, §3.3).
+  // The question first when one is docked, else what the thread is doing, else why it waits
+  // (doc 07 §2.4, §3.3).
+  const note = watcher.prWatch?.note ?? null;
   const underline =
-    watcher.activityLabel ??
-    watcher.prWatch?.note ??
+    (watcher.hasPendingUserInput
+      ? (note ?? watcher.activityLabel)
+      : (watcher.activityLabel ?? note)) ??
     (watcher.prWatch?.parked ? `Parked · ${watcher.prWatch.parked.reason}` : null) ??
     (watcher.prWatch?.lastWake ? `Last wake: ${watcher.prWatch.lastWake.text}` : null);
   const chips = chipsOf(watcher);
+  // Ownership overrides and the stop cascade are the babysitter's (doc 07 §3.3); a thread of
+  // its own only has its watch to end.
   const showOwnershipAction =
-    ownershipActions === "always" || watcher.prWatch?.ownership?.verdict === "unsure";
+    babysitter &&
+    (ownershipActions === "always" || watcher.prWatch?.ownership?.verdict === "unsure");
 
   const leave = async () => {
     setLeaving(true);
     try {
-      if (cascadeSupported) {
+      if (babysitter && cascadeSupported) {
         await stopCascade({
           environmentId,
           input: { threadId, commandId: CommandId.make(randomUUID()) },

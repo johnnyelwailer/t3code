@@ -6,8 +6,6 @@
  */
 import { describe, expect, it } from "vite-plus/test";
 
-const INDICATOR = "WatchedPullRequestIndicator";
-
 /** Every component source under apps/web/src, keyed by its path relative to that directory. */
 const SOURCES: ReadonlyMap<string, string> = new Map(
   Object.entries(
@@ -38,23 +36,27 @@ const REQUIRED_MOUNTS = [
 ];
 
 /**
- * Row primitives that draw a pull request identity but carry no identity of their own, so each
- * caller has to mount the indicator beside them. (`DigestPrChip`, `ProjectMyWorkPrChip` and
- * `PullRequestLinkPreview` mount it inside themselves, so their callers need nothing.)
+ * Rendering one of these means drawing a pull request identity: the row-lines primitive, the
+ * mini-list item, or the lifecycle row glyph beside a number. `DigestPrChip`, `ProjectMyWorkPrChip`
+ * and `PullRequestLinkPreview` mount the indicator inside themselves, so their callers need
+ * nothing. (The bare `PullRequestGlyph` icons also decorate filters, settings and empty states,
+ * so they are not a marker.)
  */
-const PR_RENDERING_MARKERS = ["<PullRequestRowLines", "<ThreadPullRequestMiniListItem"];
+const PR_RENDERING_MARKERS = [
+  "<PullRequestRowLines",
+  "<ThreadPullRequestMiniListItem",
+  "<PullRequestRowGlyph",
+];
+const MOUNT = /<WatchedPullRequestIndicator\b/;
 
 /** Files that render a marker without mounting the indicator, and why that is right. */
 const EXEMPT = new Map<string, string>([
-  [
-    "components/ThreadStatusIndicators.tsx",
-    "upstream mini list: its eye is the stop button (doc 07 §3.3)",
-  ],
+  ["components/ThreadStatusIndicators.tsx", "upstream mini list: its eye is the stop button (doc 07 §3.3)"],
 ]);
 
 describe("watched pull request indicator mounts", () => {
   it("is mounted on every surface doc 07 §4 lists", () => {
-    const missing = REQUIRED_MOUNTS.filter((file) => !sourceOf(file).includes(`<${INDICATOR}`));
+    const missing = REQUIRED_MOUNTS.filter((file) => !MOUNT.test(sourceOf(file)));
     expect(missing).toEqual([]);
   });
 
@@ -62,7 +64,7 @@ describe("watched pull request indicator mounts", () => {
     const offenders = [...SOURCES].flatMap(([file, source]) => {
       if (EXEMPT.has(file)) return [];
       const rendersPullRequest = PR_RENDERING_MARKERS.some((marker) => source.includes(marker));
-      return rendersPullRequest && !source.includes(`<${INDICATOR}`) ? [file] : [];
+      return rendersPullRequest && !MOUNT.test(source) ? [file] : [];
     });
     expect(offenders).toEqual([]);
   });

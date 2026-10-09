@@ -27,6 +27,8 @@ export type RecipeRunHomeThread = {
   readonly threadRef: ScopedThreadRef;
   readonly title: string;
   readonly workflowRunStatus: OrchestrationWorkflowRunStatus | null;
+  /** When the host launched this run (`t3team.recipe.launchedAt`). */
+  readonly launchedAt: string;
   /** The run's live label while a pass runs ("finding your PRs on 3 repos…"). */
   readonly activityLabel: string | null;
   readonly summary: T3TeamRecipeSummaryFact | null;
@@ -70,6 +72,7 @@ export function collectRecipeRun(
   let home: {
     shell: EnvironmentThreadShell;
     status: OrchestrationWorkflowRunStatus | null;
+    launchedAt: string;
   } | null = null;
   const watchers: Array<WatchedPullRequestWatcher> = [];
   for (const shell of shells) {
@@ -84,13 +87,12 @@ export function collectRecipeRun(
     const launch = readT3TeamRecipeLaunchFact(threadFacts?.extensions);
     if (launch?.id === scope.recipeId) {
       const status = threadFacts?.workflowRunStatus ?? null;
-      // An active run wins over a finished one; among equals the newest thread wins.
+      // An active run wins over a finished one; among equals the latest launch wins.
       const outranks =
         home === null ||
         (isRunActive(status) && !isRunActive(home.status)) ||
-        (isRunActive(status) === isRunActive(home.status) &&
-          shell.updatedAt > home.shell.updatedAt);
-      if (outranks) home = { shell, status };
+        (isRunActive(status) === isRunActive(home.status) && launch.launchedAt > home.launchedAt);
+      if (outranks) home = { shell, status, launchedAt: launch.launchedAt };
       continue;
     }
     const launchedBy = readT3TeamLaunchedByFact(threadFacts?.extensions);
@@ -114,6 +116,7 @@ export function collectRecipeRun(
             threadRef: { environmentId: home.shell.environmentId, threadId: home.shell.id },
             title: home.shell.title,
             workflowRunStatus: home.status,
+            launchedAt: home.launchedAt,
             activityLabel: facts.get(home.shell.id)?.activityLabel ?? null,
             summary: readT3TeamRecipeSummaryFact(
               facts.get(home.shell.id)?.extensions,

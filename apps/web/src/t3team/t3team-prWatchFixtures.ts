@@ -236,6 +236,7 @@ export function fixtureRun(input: {
             },
             title: "Watch my PRs",
             workflowRunStatus: fixtureRunStatus(input.status),
+            launchedAt: "2026-10-08T09:00:00.000Z",
             activityLabel: input.activityLabel ?? null,
             summary: input.summary === null ? null : fixtureSummary(input.summary ?? {}),
           },

@@ -26,7 +26,7 @@ const KEY = "nexplore.ghe.com/hive/nx-nexi#412";
 
 describe("collectWatchedPullRequests", () => {
   it("keys every watched open link by the normalized pull request key", () => {
-    const byKey = collectWatchedPullRequests(
+    const { byKey } = collectWatchedPullRequests(
       [shell({ id: "t1", pullRequests: [open, merged, unwatched] })],
       new Map(),
       ENV,
@@ -37,7 +37,7 @@ describe("collectWatchedPullRequests", () => {
 
   it("matches the key case-insensitively on host and repository", () => {
     const shouting = { ...open, host: "NEXPLORE.ghe.com", repository: "Hive/NX-Nexi" };
-    const byKey = collectWatchedPullRequests(
+    const { byKey } = collectWatchedPullRequests(
       [shell({ id: "t1", pullRequests: [shouting] })],
       new Map(),
       ENV,
@@ -46,7 +46,7 @@ describe("collectWatchedPullRequests", () => {
   });
 
   it("ignores archived or deleted threads and other environments", () => {
-    const byKey = collectWatchedPullRequests(
+    const { byKey } = collectWatchedPullRequests(
       [
         shell({ id: "archived", pullRequests: [open], archivedAt: "2026-10-01T00:00:00.000Z" }),
         shell({ id: "deleted", pullRequests: [open], deletedAt: "2026-10-01T00:00:00.000Z" }),
@@ -59,7 +59,7 @@ describe("collectWatchedPullRequests", () => {
   });
 
   it("lists two watchers of one pull request, the one that needs you first", () => {
-    const byKey = collectWatchedPullRequests(
+    const { byKey } = collectWatchedPullRequests(
       [
         shell({ id: "quiet", pullRequests: [open] }),
         shell({ id: "asking", pullRequests: [open], hasPendingUserInput: true }),
@@ -74,7 +74,7 @@ describe("collectWatchedPullRequests", () => {
   });
 
   it("marks the babysitter's thread through its chip fact and carries the activity label", () => {
-    const byKey = collectWatchedPullRequests(
+    const { byKey } = collectWatchedPullRequests(
       [shell({ id: "t1", pullRequests: [open] })],
       new Map([
         facts("t1", {
@@ -91,7 +91,7 @@ describe("collectWatchedPullRequests", () => {
   });
 
   it("names the recipe whose run launched the watching thread", () => {
-    const byKey = collectWatchedPullRequests(
+    const { byKey } = collectWatchedPullRequests(
       [shell({ id: "t1", pullRequests: [open] })],
       new Map([
         facts("t1", {
@@ -112,12 +112,32 @@ describe("collectWatchedPullRequests", () => {
   });
 
   it("reads a malformed chip fact as no fact", () => {
-    const byKey = collectWatchedPullRequests(
+    const { byKey } = collectWatchedPullRequests(
       [shell({ id: "t1", pullRequests: [open] })],
       new Map([facts("t1", { extensions: { "nexplore.pr-watch.thread": "nope" } })]),
       ENV,
     );
     expect(byKey.get(KEY)![0]!.prWatch).toBeNull();
+  });
+});
+
+describe("collectWatchedPullRequests identity", () => {
+  it("keeps watcher objects and per-key arrays when their inputs did not change", () => {
+    const shells = [
+      shell({ id: "t1", pullRequests: [open] }),
+      shell({ id: "t2", pullRequests: [open] }),
+    ];
+    const first = collectWatchedPullRequests(shells, new Map(), ENV);
+    const second = collectWatchedPullRequests(shells, new Map(), ENV, first);
+    expect(second.byKey).toBe(first.byKey);
+    const third = collectWatchedPullRequests(
+      [shells[0]!, { ...shells[1]!, hasPendingUserInput: true }],
+      new Map(),
+      ENV,
+      second,
+    );
+    expect(third.byKey).not.toBe(first.byKey);
+    expect(third.byKey.get(KEY)![1]).toBe(first.byKey.get(KEY)![0]);
   });
 });
 

@@ -19,14 +19,17 @@ import {
   EMPTY_WATCHED_PULL_REQUESTS,
   NO_WATCHERS,
   type WatchedPullRequestsByKey,
+  type WatchedPullRequestsCache,
   type WatchedPullRequestWatcher,
 } from "./t3team-watchedPullRequests.logic";
 import { environmentThreadShells } from "./threads";
 
 const ALL_THREADS_INPUT = {};
 
-export const watchedPullRequestsByKeyAtom = Atom.family((environmentId: EnvironmentId) =>
-  Atom.make((get): WatchedPullRequestsByKey => {
+export const watchedPullRequestsByKeyAtom = Atom.family((environmentId: EnvironmentId) => {
+  // Last derivation per environment: watcher objects and per-key arrays survive unchanged ticks.
+  let cache: WatchedPullRequestsCache | undefined;
+  return Atom.make((get): WatchedPullRequestsByKey => {
     const supported =
       get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
         .threadPullRequestWatch === true;
@@ -38,9 +41,10 @@ export const watchedPullRequestsByKeyAtom = Atom.family((environmentId: Environm
       ),
       () => EMPTY_T3TEAM_THREAD_FACTS,
     );
-    return collectWatchedPullRequests(shells, facts, environmentId);
-  }).pipe(Atom.withLabel(`t3team-watched-pull-requests:${environmentId}`)),
-);
+    cache = collectWatchedPullRequests(shells, facts, environmentId, cache);
+    return cache.byKey;
+  }).pipe(Atom.withLabel(`t3team-watched-pull-requests:${environmentId}`));
+});
 
 const EMPTY_BY_KEY_ATOM = Atom.make(EMPTY_WATCHED_PULL_REQUESTS).pipe(
   Atom.withLabel("t3team-watched-pull-requests:none"),

@@ -20,6 +20,23 @@ export const NEXPLORE_PR_WATCH_SUMMARY_FACT_KEY = "nexplore.pr-watch.summary";
 /** The pr-watch recipe's chips on each watch thread. */
 export const NEXPLORE_PR_WATCH_THREAD_FACT_KEY = "nexplore.pr-watch.thread";
 
+/** Count ids the pr-watch pass writes into its `T3TeamRecipeSummaryFact.counts`. The card derives
+ * `needs-you` and `fixing` live from the run's threads and reads the others from the summary. */
+export const PR_WATCH_COUNT_ID = {
+  watched: "watched",
+  needsYou: "needs-you",
+  fixing: "fixing",
+  parked: "parked",
+  unreadable: "unreadable",
+} as const;
+
+/** Warning kinds the pr-watch pass writes. A `sign-in` warning names its host in `key`. */
+export const PR_WATCH_WARNING_KIND = {
+  fallback: "fallback",
+  config: "config",
+  signIn: "sign-in",
+} as const;
+
 export const PrWatchOwnershipVerdict = Schema.Literals(["own", "stake", "foreign", "unsure"]);
 export type PrWatchOwnershipVerdict = typeof PrWatchOwnershipVerdict.Type;
 

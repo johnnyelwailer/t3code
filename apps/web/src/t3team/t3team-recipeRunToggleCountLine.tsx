@@ -5,6 +5,7 @@
  */
 import type { ReactNode } from "react";
 
+import { HOST_ROW_EVENT_GUARD } from "~/components/pullRequest/t3team-WatchedPullRequestCard";
 import { WatchedPullRequestCardRow } from "~/components/pullRequest/t3team-WatchedPullRequestCardRow";
 import { WATCHED_TONE_TEXT_CLASS } from "~/components/pullRequest/t3team-watchedPullRequestEye";
 import { Button } from "~/components/ui/button";
@@ -67,19 +68,21 @@ function CountHover({
         {label}
       </PopoverTrigger>
       <PopoverPopup side="bottom" align="start" width="md" padding="compact">
-        <div className="px-1 pb-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {BUCKET_TITLE[part.bucket]}
+        <div {...HOST_ROW_EVENT_GUARD}>
+          <div className="px-1 pb-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {BUCKET_TITLE[part.bucket]}
+          </div>
+          <ul className="m-0 flex list-none flex-col gap-1 p-0">
+            {rows.map((watcher) => (
+              <WatchedPullRequestCardRow
+                key={watcher.threadRef.threadId}
+                watcher={watcher}
+                link={watcher.link}
+                ownershipActions="unsure-only"
+              />
+            ))}
+          </ul>
         </div>
-        <ul className="m-0 flex list-none flex-col gap-1 p-0">
-          {rows.map((watcher) => (
-            <WatchedPullRequestCardRow
-              key={watcher.threadRef.threadId}
-              watcher={watcher}
-              link={watcher.link}
-              ownershipActions="unsure-only"
-            />
-          ))}
-        </ul>
       </PopoverPopup>
     </Popover>
   );

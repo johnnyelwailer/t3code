@@ -41,6 +41,19 @@ describe("resolveRunToggleState", () => {
     expect(lineText(state)).toBe("Starting · finding your PRs on 3 repos…");
   });
 
+  it("reads a run with nothing to watch as on and quiet, not as starting", () => {
+    const state = resolve(
+      fixtureRun({ status: "sleeping", summary: { watched: 0, detail: null } }),
+    );
+    expect(state.kind).toBe("on");
+    expect(lineText(state)).toBe("0 PRs watched · all quiet");
+  });
+
+  it("reads parked from the summary only, never from a thread chip", () => {
+    const run = fixtureRun({ status: "sleeping", watchThreads: [WATCHER_412_FIXING] });
+    expect(resolveRunCounts(run).parked).toBe(0);
+  });
+
   it("shows starting on the local marker before the launch fact lands", () => {
     expect(resolve(RUN_OFF, "starting").kind).toBe("starting");
   });

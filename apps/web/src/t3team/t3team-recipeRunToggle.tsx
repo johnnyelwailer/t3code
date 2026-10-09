@@ -19,6 +19,7 @@ import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useRecipeRun } from "~/state/t3team-recipeRun";
 import { useRecipeActionViewRecipe } from "~/t3team/t3team-recipeActionViewContext";
 import { useRecipeRunToggleActions } from "~/t3team/t3team-recipeRunToggleActions";
+import { useSidecarSectionHost } from "~/t3team/t3team-sidecarSectionHostContext";
 import { RecipeRunToggleCountLine } from "~/t3team/t3team-recipeRunToggleCountLine";
 import { resolveRunToggleState, type RunToggleDotTone } from "~/t3team/t3team-recipeRunToggleState";
 import { RecipeRunToggleStopDialog } from "~/t3team/t3team-recipeRunToggleStopDialog";
@@ -67,7 +68,8 @@ export function RunToggle(props: {
     recipeId,
     configFile: props.configFile,
   });
-  const actions = useRecipeRunToggleActions({ recipe, environmentId, run, configPath });
+  const host = useSidecarSectionHost();
+  const actions = useRecipeRunToggleActions({ recipe, host, environmentId, run, configPath });
   const [confirmStop, setConfirmStop] = useState(false);
   const nowMinute = useNowMinute();
   const state = resolveRunToggleState({
@@ -80,7 +82,14 @@ export function RunToggle(props: {
     state.dot === "indigo" ? "needs-you" : state.dot === "amber" ? "attention" : "quiet";
 
   return (
-    <div className="min-w-0 space-y-1.5" data-testid="run-toggle" data-state={state.kind}>
+    <div
+      className="min-w-0 space-y-1.5"
+      data-testid="run-toggle"
+      data-state={state.kind}
+      // The card around this body stages a kickoff on click; a toggle card has no kickoff to
+      // stage, and the stop dialog's portal bubbles here too.
+      onClick={(event) => event.stopPropagation()}
+    >
       {/* The item kebab sits absolute at the card's top-right (t3team-sidecarSectionMenu); the
           head row keeps that width free, so the Switch and the kebab never overlap. */}
       <div className="flex min-w-0 items-center gap-2 pr-9">
