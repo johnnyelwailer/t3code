@@ -177,6 +177,8 @@ it.layer(TestLayer)("workflow host launchThread", (it) => {
       ok(yield* op({ op: "facts", extensions: { "acme.chip": "own" } }));
       const reserved = yield* op({ op: "facts", extensions: { "t3team.recipe": {} } });
       assert.isFalse(reserved.ok);
+      const bulky = yield* op({ op: "facts", extensions: { "acme.blob": "x".repeat(20_000) } });
+      assert.isFalse(bulky.ok);
 
       // A different key, scope or thread is not this recipe's to drive.
       for (const overrides of [

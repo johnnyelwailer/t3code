@@ -34,7 +34,7 @@ import {
   authorOf,
   refusalOf,
   refuse,
-  reservedFactKey,
+  factsRefusal,
 } from "./t3team-workflowHostLaunchShared.ts";
 import { makeHostLaunchThread } from "./t3team-workflowHostLaunchThread.ts";
 import { launchScopeFor } from "./t3team-recipeIdentity.ts";
@@ -146,8 +146,8 @@ export function makeWorkflowHostLaunch(deps: {
         case "read":
           return answer(launchedThreadState(shell));
         case "facts": {
-          const reserved = reservedFactKey(op.extensions);
-          if (reserved !== undefined) return yield* refuse(`Fact key ${reserved} is the host's.`);
+          const refusal = factsRefusal(op.extensions);
+          if (refusal !== undefined) return yield* refuse(refusal);
           yield* facts.upsert(shell.id, { extensions: { ...op.extensions } });
           return answer(undefined);
         }
@@ -159,8 +159,8 @@ export function makeWorkflowHostLaunch(deps: {
     readonly extensions: Readonly<Record<string, unknown>>;
   }) =>
     Effect.gen(function* () {
-      const reserved = reservedFactKey(input.extensions);
-      if (reserved !== undefined) return yield* refuse(`Fact key ${reserved} is the host's.`);
+      const refusal = factsRefusal(input.extensions);
+      if (refusal !== undefined) return yield* refuse(refusal);
       yield* facts.upsert(ThreadId.make(input.launchThreadId), {
         extensions: { ...input.extensions },
       });

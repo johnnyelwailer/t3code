@@ -24,3 +24,15 @@ export const authorOf = (runId: string) => ({ kind: "system", workflowRunId: run
 /** The first `t3team.*` key: those facts are the host's to write. */
 export const reservedFactKey = (extensions: Readonly<Record<string, unknown>>) =>
   Object.keys(extensions).find((key) => key.startsWith("t3team."));
+
+/** Facts ride the thread-facts stream to every client, so a workflow writes status, not data. */
+const MAX_FACT_BYTES = 16 * 1024;
+
+/** Why a workflow may not write these facts, or undefined when it may. */
+export const factsRefusal = (extensions: Readonly<Record<string, unknown>>) => {
+  const reserved = reservedFactKey(extensions);
+  if (reserved !== undefined) return `Fact key ${reserved} is the host's.`;
+  return JSON.stringify(extensions).length > MAX_FACT_BYTES
+    ? `Facts are limited to ${MAX_FACT_BYTES} bytes per call; keep status, not data.`
+    : undefined;
+};
