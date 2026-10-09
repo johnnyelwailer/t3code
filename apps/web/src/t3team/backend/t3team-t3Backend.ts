@@ -12,11 +12,10 @@ import { createMyWorkDigestBackendApi } from "./t3team-myworkDigestBackendApi";
 import { createMyWorkDigestArrangementApi } from "./t3team-myworkDigestArrangementApi";
 import { createPrimaryEnvironmentOrchestrationApi } from "./t3team-orchestrationApi";
 import { postJson, resolveHttpBaseUrl, resolveWsUrl } from "./t3team-t3BackendHttp";
+import { createThreadWorkflowApi } from "./t3team-threadWorkflowApi";
 import type {
   LaunchProjectRecipeWorkflowRequest,
   LaunchProjectRecipeWorkflowResponse,
-  SubmitProjectRecipeCardActionRequest,
-  SubmitProjectRecipeCardActionResponse,
 } from "@t3tools/project-recipes";
 
 export function createT3Backend(wsBaseUrl: string): BackendApi {
@@ -74,35 +73,7 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     );
   }
 
-  async function submitRecipeCardAction(input: SubmitProjectRecipeCardActionRequest) {
-    return postJson<SubmitProjectRecipeCardActionRequest, SubmitProjectRecipeCardActionResponse>(
-      httpBaseUrl,
-      "/api/t3team/thread/recipe-workflow/card-action",
-      input,
-    );
-  }
-
-  async function resolveWorkflowInput(input: {
-    threadId: string;
-    text: string;
-    messageId: string;
-    value?: unknown;
-    correlationId?: string;
-  }) {
-    await postJson<typeof input, { ok: true }>(
-      httpBaseUrl,
-      "/api/t3team/thread/workflow/resolve-input",
-      input,
-    );
-  }
-
-  async function controlWorkflow(input: Parameters<NonNullable<BackendApi["controlWorkflow"]>>[0]) {
-    return postJson<typeof input, Awaited<ReturnType<NonNullable<BackendApi["controlWorkflow"]>>>>(
-      httpBaseUrl,
-      "/api/t3team/thread/workflow/control",
-      input,
-    );
-  }
+  const threadWorkflow = createThreadWorkflowApi(() => ({ httpBaseUrl }));
 
   const atlassian = {
     ...createAtlassianBackendApi(httpBaseUrl),
@@ -123,9 +94,7 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     disconnect,
     orchestration: createPrimaryEnvironmentOrchestrationApi(),
     launchRecipeWorkflow,
-    submitRecipeCardAction,
-    resolveWorkflowInput,
-    controlWorkflow,
+    ...threadWorkflow,
     listThreadPlacements,
     syncThreadToolContext,
     atlassian,

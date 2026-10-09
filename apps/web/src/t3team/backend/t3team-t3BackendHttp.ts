@@ -41,6 +41,9 @@ export async function primaryServerAuthInit(): Promise<{
     : { credentials: "same-origin", headers: {} };
 }
 
+/** How a request authenticates; `postJson` defaults to {@link primaryServerAuthInit}. */
+export type BackendAuthInit = Awaited<ReturnType<typeof primaryServerAuthInit>>;
+
 /**
  * The server dropped the account's dead Jira refresh token and wants a fresh sign-in. The client
  * turns this into its "Your Jira session expired. Sign in again." state instead of a raw error.
@@ -97,6 +100,7 @@ async function requestJson<TResponse>(
   url: URL,
   init: { readonly method: "GET" | "POST"; readonly body?: string },
   timeoutMs: number,
+  resolveAuth: () => Promise<BackendAuthInit> = primaryServerAuthInit,
 ): Promise<TResponse> {
   const abortController = new AbortController();
   let didTimeout = false;
@@ -105,7 +109,7 @@ async function requestJson<TResponse>(
     abortController.abort();
   }, timeoutMs);
 
-  const auth = await primaryServerAuthInit();
+  const auth = await resolveAuth();
   const response = await fetch(url, {
     method: init.method,
     credentials: auth.credentials,
@@ -161,12 +165,13 @@ export async function postJson<TInput extends object, TResponse>(
   httpBaseUrl: string,
   routePath: string,
   body: TInput,
-  options?: { readonly timeoutMs?: number },
+  options?: { readonly timeoutMs?: number; readonly auth?: () => Promise<BackendAuthInit> },
 ): Promise<TResponse> {
   return requestJson<TResponse>(
     new URL(routePath, httpBaseUrl),
     { method: "POST", body: JSON.stringify(body) },
     options?.timeoutMs ?? BACKEND_POST_TIMEOUT_MS,
+    options?.auth,
   );
 }
 
