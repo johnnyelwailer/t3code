@@ -1,45 +1,21 @@
 /**
- * The app's `message.view` registry: the host's views, then every pack view the distribution
- * compiles in (`@t3code/distribution-web`), filled once, on the first lookup.
- *
- * The timeline asks it two questions: which registered view renders a message (`findMessageView`),
- * and whether an attachment is drawn by a view rather than by the generic attachment list
- * (`isMessageViewAttachment`).
- *
- * Module cycle, on purpose: host views render rows that themselves call
- * `getT3TeamRenderableAttachments`, which reads this registry. That is why the registry fills on
- * first use rather than at module load: nothing crosses the cycle while modules evaluate, so the
- * load order does not matter.
+ * The timeline's questions of the app's view registry (`t3team-appViewRegistry.ts`): which
+ * registered `message.view` renders a message (`findMessageView`), and whether an attachment is
+ * drawn by a view rather than by the generic attachment list (`isMessageViewAttachment`).
  */
 import type { T3TeamMessageAttachment } from "@t3tools/contracts";
-import { webActivations } from "@t3code/distribution-web";
 import type { ReactNode } from "react";
 
-import { activatePackWebModules, type PackWebActivation } from "~/t3team/packs/t3team-packWebHost";
-import {
-  createViewRegistry,
-  type MessageViewEntry,
-  type MessageViewPlacement,
-} from "~/t3team/packs/t3team-viewRegistry";
+import { activateAppViewPacks, appViewRegistry } from "~/t3team/packs/t3team-appViewRegistry";
+import type { PackWebActivation } from "~/t3team/packs/t3team-packWebHost";
+import type { MessageViewEntry, MessageViewPlacement } from "~/t3team/packs/t3team-viewRegistry";
 import type { ChatMessage } from "~/types";
 
-import { HOST_MESSAGE_VIEWS, type MessageViewRowContext } from "./t3team-hostMessageViews";
-
-const registry = createViewRegistry<MessageViewRowContext>();
-let filled = false;
-
-function filledRegistry(): typeof registry {
-  if (!filled) {
-    filled = true;
-    for (const entry of HOST_MESSAGE_VIEWS) registry.register(entry);
-    activatePackWebModules(registry, webActivations);
-  }
-  return registry;
-}
+import type { MessageViewRowContext } from "./t3team-hostMessageViews";
 
 /** Activate more pack web modules — for stories and tests, which have no distribution. */
 export function activateMessageViewPacks(activations: ReadonlyArray<PackWebActivation>): void {
-  activatePackWebModules(filledRegistry(), activations);
+  activateAppViewPacks(activations);
 }
 
 export interface ResolvedMessageView {
@@ -59,7 +35,7 @@ export function findMessageView(
     (attachment) => attachment.kind === "view",
   );
   if (views.length === 0) return null;
-  for (const entry of filledRegistry().list()) {
+  for (const entry of appViewRegistry().list("message.view")) {
     if (entry.placement !== placement) continue;
     for (const attachment of views) {
       if (attachment.miniappId !== entry.id) continue;
@@ -76,7 +52,7 @@ export function findMessageView(
  */
 export function isMessageViewAttachment(attachment: T3TeamMessageAttachment): boolean {
   if (attachment.kind !== "view") return false;
-  const entry = filledRegistry().get(attachment.miniappId);
+  const entry = appViewRegistry().get("message.view", attachment.miniappId);
   if (entry === undefined) return false;
   return entry.owner.kind === "host" || entry.bind(attachment.props) !== null;
 }

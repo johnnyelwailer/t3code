@@ -50,7 +50,9 @@ describe("the pack-ui kit fixture pack", () => {
   it("renders every primitive through its registered view", async () => {
     const registry = createViewRegistry<PackViewContext>();
     activatePackWebModule(registry, { packId: "kitfixture", activate: activateKitFixture });
-    const render = registry.get("kitfixture.showcase")?.bind({ title: "pack-ui:1" });
+    const render = registry
+      .get("message.view", "kitfixture.showcase")
+      ?.bind({ title: "pack-ui:1" });
     const container = document.createElement("div");
     document.body.append(container);
 
