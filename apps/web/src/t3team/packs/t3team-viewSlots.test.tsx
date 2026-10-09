@@ -17,6 +17,7 @@ import {
   listT3TeamSidecarSections,
 } from "~/t3team/t3team-sidecarSectionRegistry";
 
+import { changeRequestSummaryResetKeys } from "./t3team-ViewSlot";
 import { activateAppViewPacks } from "./t3team-appViewRegistry";
 import { ChangeRequestSummarySlot } from "./t3team-changeRequestSlots";
 import { usePackScope } from "./t3team-packScope";
@@ -175,5 +176,25 @@ describe("dashboard.widget and sidecar.section", () => {
     };
     render(<Notes host={host as never} props={{ n: 1 }} />);
     expect(container.querySelector("[data-fixture=notes]")?.textContent).toBe('project-1 {"n":1}');
+  });
+});
+
+describe("change request summary reset keys", () => {
+  const cr = {
+    host: "github",
+    repository: "o/r",
+    number: 1,
+    state: "open" as const,
+    headSha: "h",
+    baseSha: "b",
+    viewerAuthored: false,
+  };
+
+  it("changes with every fact a summary view reads", () => {
+    const base = changeRequestSummaryResetKeys(cr);
+    expect(changeRequestSummaryResetKeys({ ...cr })).toEqual(base);
+    expect(changeRequestSummaryResetKeys({ ...cr, baseSha: "b2" })).not.toEqual(base);
+    expect(changeRequestSummaryResetKeys({ ...cr, viewerAuthored: true })).not.toEqual(base);
+    expect(changeRequestSummaryResetKeys({ ...cr, headSha: "h2" })).not.toEqual(base);
   });
 });

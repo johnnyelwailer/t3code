@@ -66,6 +66,15 @@ export function hostDashboardWidgetViews(): ReadonlyArray<DashboardWidgetEntry> 
   });
 }
 
+/** The inputs a widget renders, as primitives, so a data refresh retries a failed widget. */
+export function dashboardWidgetResetKeys(
+  widgetId: string,
+  { section, placement }: Pick<DashboardWidgetProps, "section" | "placement">,
+) {
+  const ticketIds = section.items.map((item) => item.ticketId).join(",");
+  return [widgetId, placement, section.id, ticketIds, (section.reviewIds ?? []).join(",")];
+}
+
 /**
  * One placed widget, in its own error boundary. A widget id nobody registered, or a placement its
  * definition does not allow, renders nothing — an arrangement is data and must not be able to
@@ -76,7 +85,11 @@ export function DashboardWidget(props: DashboardWidgetProps) {
   const entry = appViewRegistry().get("dashboard.widget", widgetId);
   if (entry === undefined || !entry.definition.placements.includes(props.placement)) return null;
   return (
-    <ViewInstance owner={entry.owner} resetKeys={[widgetId, props.placement]} fallback={null}>
+    <ViewInstance
+      owner={entry.owner}
+      resetKeys={dashboardWidgetResetKeys(widgetId, props)}
+      fallback={null}
+    >
       <entry.component {...props} />
     </ViewInstance>
   );

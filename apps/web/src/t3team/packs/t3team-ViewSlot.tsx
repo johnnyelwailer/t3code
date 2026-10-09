@@ -15,6 +15,14 @@ type ViewSlotProps =
   | ({ readonly slot: "changeRequest.summary" } & ChangeRequestSummaryProps)
   | ({ readonly slot: "myWork.changeRequest" } & MyWorkChangeRequestProps);
 
+/** Every fact a summary view reads, so a throw over one of them recovers when it changes. */
+export function changeRequestSummaryResetKeys(
+  changeRequest: ChangeRequestSummaryProps["changeRequest"],
+) {
+  const { host, repository, number, state, headSha, baseSha, viewerAuthored } = changeRequest;
+  return [host, repository, number, state, headSha, baseSha, viewerAuthored];
+}
+
 export function ViewSlot(props: ViewSlotProps) {
   const registry = appViewRegistry();
   // The boundary retries when the change request changes, not on every render of the panel that
@@ -22,7 +30,7 @@ export function ViewSlot(props: ViewSlotProps) {
   const { host, repository, number } = props.changeRequest;
   if (props.slot === "changeRequest.summary") {
     const { changeRequest } = props;
-    const resetKeys = [host, repository, number, changeRequest.state, changeRequest.headSha];
+    const resetKeys = changeRequestSummaryResetKeys(changeRequest);
     const entries = registry.list(props.slot);
     if (entries.length === 0) return null;
     // The panel's own padding, applied only when there is something to pad.

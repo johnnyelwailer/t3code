@@ -16,16 +16,22 @@ import { hostSidecarSectionViews } from "~/t3team/t3team-sidecarSectionRegistry"
 import { activatePackWebModules, type PackWebActivation } from "./t3team-packWebHost";
 import { createViewRegistry, type ViewRegistry } from "./t3team-viewRegistry";
 
-const registry = createViewRegistry<MessageViewRowContext>();
+let registry = createViewRegistry<MessageViewRowContext>();
 let filled = false;
+
+function fillAppViewRegistry(target: ViewRegistry<MessageViewRowContext>): void {
+  for (const entry of HOST_MESSAGE_VIEWS) target.register(entry);
+  for (const entry of hostDashboardWidgetViews()) target.register(entry);
+  for (const entry of hostSidecarSectionViews()) target.register(entry);
+  activatePackWebModules(target, webActivations);
+}
 
 export function appViewRegistry(): ViewRegistry<MessageViewRowContext> {
   if (!filled) {
+    const attempt = createViewRegistry<MessageViewRowContext>();
+    fillAppViewRegistry(attempt);
+    registry = attempt;
     filled = true;
-    for (const entry of HOST_MESSAGE_VIEWS) registry.register(entry);
-    for (const entry of hostDashboardWidgetViews()) registry.register(entry);
-    for (const entry of hostSidecarSectionViews()) registry.register(entry);
-    activatePackWebModules(registry, webActivations);
   }
   return registry;
 }
