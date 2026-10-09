@@ -85,3 +85,29 @@ describe("recipe config precedence", () => {
     expect(repositoryMatches("hive/nx.nexi", "hive/nxanexi")).toBe(false);
   });
 });
+
+describe("a recipe's own defaults as data", () => {
+  it("keeps literals and workflow refs, and drops what cannot be journaled", async () => {
+    const { recipeDefaultsAsData } = await import("./t3team-recipeConfigLoad.ts");
+    const script = Object.assign(() => "own", { kind: "script" });
+    expect(
+      recipeDefaultsAsData({
+        model: "nexplore/conductor",
+        duties: { fix: true },
+        ownership: script,
+        mergePolicy: {
+          kind: "workflow",
+          path: "./merge.workflow.ts",
+          absolutePath: "/pack/merge.workflow.ts",
+        },
+        botLogins: ["Copilot", script],
+      }),
+    ).toEqual({
+      model: "nexplore/conductor",
+      duties: { fix: true },
+      mergePolicy: { kind: "workflow", absolutePath: "/pack/merge.workflow.ts" },
+      botLogins: ["Copilot"],
+    });
+    expect(recipeDefaultsAsData(undefined)).toEqual({});
+  });
+});

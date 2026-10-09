@@ -27,6 +27,35 @@ import { normalizeConfigLayer } from "./t3team-recipeConfigRefs.ts";
 import type { RecipeConfigLayers } from "./t3team-recipeConfigResolve.ts";
 
 type Layer = Readonly<Record<string, unknown>>;
+
+/**
+ * A recipe's own `defaults` as journalable data: a `defineWorkflow` ref keeps its absolute path,
+ * references stay `{ kind, … }` data, and anything that is not data (a script function) is left
+ * out, so the slot falls to the recipe's built-in default.
+ */
+export function recipeDefaultsAsData(value: unknown): Layer {
+  const convert = (item: unknown): unknown => {
+    if (typeof item === "function" || typeof item === "symbol" || typeof item === "bigint") {
+      return undefined;
+    }
+    if (Array.isArray(item)) return item.map(convert).filter((entry) => entry !== undefined);
+    if (typeof item !== "object" || item === null) return item;
+    const record = item as Record<string, unknown>;
+    if (record.kind === "workflow" && typeof record.absolutePath === "string") {
+      return { kind: "workflow", absolutePath: record.absolutePath };
+    }
+    const out: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(record)) {
+      const converted = convert(entry);
+      if (converted !== undefined) out[key] = converted;
+    }
+    return out;
+  };
+  const converted = convert(value);
+  return typeof converted === "object" && converted !== null && !Array.isArray(converted)
+    ? (converted as Layer)
+    : {};
+}
 const cache = new Map<string, { readonly version: string; readonly layers: RecipeConfigLayers }>();
 
 export const recipeConfigPath = (path: Path.Path, workspaceRoot: string, recipeId: string) =>
@@ -73,7 +102,7 @@ export const loadRecipeConfigLayers = Effect.fn("loadRecipeConfigLayers")(functi
   let recipeDefaults: Layer = {};
   if (recipeModule !== undefined && (yield* mtime(recipeModule)) >= 0) {
     const ref = yield* importRecipeModuleRef(recipeModule).pipe(Effect.option);
-    recipeDefaults = (Option.getOrUndefined(ref)?.defaults ?? {}) as Layer;
+    recipeDefaults = recipeDefaultsAsData(Option.getOrUndefined(ref)?.defaults ?? {});
   }
   const layers = (config: Partial<RecipeConfigLayers>): RecipeConfigLayers => ({
     file: exists ? file : null,
