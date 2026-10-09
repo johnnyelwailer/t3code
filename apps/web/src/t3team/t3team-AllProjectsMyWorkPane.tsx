@@ -1,37 +1,43 @@
 import { useEffect } from "react";
 
+import { useBackendState } from "~/t3team/backend/t3team-index";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 
+import { AllProjectsKickoffAside } from "~/t3team/t3team-AllProjectsKickoffAside";
 import { AllProjectsMyWorkView } from "~/t3team/t3team-AllProjectsMyWorkView";
 import { DigestPrAside } from "~/t3team/t3team-DigestPrAside";
 import { closeDigestPullRequest, useDigestPrAsideStore } from "~/t3team/t3team-digestPrAsideStore";
+import type { ProjectKickoffThreadInput } from "~/t3team/t3team-kickoffTypes";
 import { ResizableRightSidebarLayout } from "~/t3team/t3team-ResizableRightSidebarLayout";
 import type { ProjectThread } from "~/t3team/t3team-types";
-
-function EmptyDetailAside() {
-  return (
-    <aside className="flex h-full min-h-0 flex-1 items-center justify-center border-l border-border/70 bg-background px-6 text-center text-sm text-muted-foreground">
-      Open a pull request or a work item to see it here.
-    </aside>
-  );
-}
+import { useT3TeamScratchHomeChat } from "~/t3team/t3team-useScratchHomeChat";
 
 /**
  * The all-projects My Work home with the same detail aside as a project dashboard: a PR or ticket
- * a digest row opens shows beside the digest. Without it, those rows wrote to a store nothing on
- * this screen read, so clicking them did nothing. Each opened item names its project; the aside
- * renders it in that project's context. Collapsed until something is opened.
+ * a digest row opens shows beside the digest. When nothing is in detail the aside is the generic
+ * kickoff host (recipes / sidecar) — same rule as a single-project dashboard.
+ * Collapsed until something is opened (or the user expands it).
  */
 export function AllProjectsMyWorkPane({
   onOpenTicket,
   getThreadsForProject,
   onRememberEmbeddedThread,
+  onOpenThread,
+  onOpenFullThread,
+  onThreadKickoffConsumed,
+  onKickoffProjectThread,
 }: {
   onOpenTicket: (projectId: string, ticketId: string) => void;
   getThreadsForProject: (projectId: string) => ProjectThread[];
   onRememberEmbeddedThread: (threadId: string) => void;
+  onOpenThread: (projectId: string, threadId: string) => void;
+  onOpenFullThread: (projectId: string, threadId: string) => void;
+  onThreadKickoffConsumed: (threadId: string) => void;
+  onKickoffProjectThread: (input: ProjectKickoffThreadInput) => void;
 }) {
   const { allProjects } = useProjectStore();
+  const { scratchProject, startScratch } = useT3TeamScratchHomeChat(allProjects);
+  const backendState = useBackendState();
   const pullRequest = useDigestPrAsideStore((state) => state.pullRequest);
   const ticket = useDigestPrAsideStore((state) => state.ticket);
   const openedProjectId = ticket?.projectId ?? pullRequest?.projectId ?? null;
@@ -42,6 +48,19 @@ export function AllProjectsMyWorkPane({
   // A detail belongs to the screen it was opened on: leaving this one closes it.
   useEffect(() => closeDigestPullRequest, []);
 
+  const defaultAside = (
+    <AllProjectsKickoffAside
+      scratchProject={scratchProject}
+      onStartScratch={startScratch}
+      providers={backendState.providers}
+      isConnected={backendState.connectionStatus === "connected"}
+      onOpenThread={onOpenThread}
+      onOpenFullThread={onOpenFullThread}
+      onThreadKickoffConsumed={onThreadKickoffConsumed}
+      onKickoffProjectThread={onKickoffProjectThread}
+    />
+  );
+
   return (
     <ResizableRightSidebarLayout
       storageKey="t3team_all_my_work_right_sidebar"
@@ -51,7 +70,7 @@ export function AllProjectsMyWorkPane({
       defaultAsideWidth={24 * 16}
       minMainWidth={36 * 16}
       mobileMainLabel="My work"
-      mobileAsideLabel={pullRequest ? "Pull request" : ticket ? ticket.ticketId : "Details"}
+      mobileAsideLabel={pullRequest ? "Pull request" : ticket ? ticket.ticketId : "Agent"}
       // Only an item this screen can render reveals the aside (its project may still be loading).
       mobileAsideRequest={project ? (pullRequest ?? ticket) : null}
       main={
@@ -65,10 +84,10 @@ export function AllProjectsMyWorkPane({
             project={project}
             projectThreads={getThreadsForProject(project.id)}
             onRememberEmbeddedThread={onRememberEmbeddedThread}
-            fallback={<EmptyDetailAside />}
+            fallback={defaultAside}
           />
         ) : (
-          <EmptyDetailAside />
+          defaultAside
         )
       }
     />

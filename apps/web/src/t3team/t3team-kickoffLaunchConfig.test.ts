@@ -29,6 +29,25 @@ describe("t3team kickoff launch config", () => {
     ).toBeNull();
   });
 
+  it("does not call a connecting session disconnected", () => {
+    expect(
+      getT3TeamKickoffProviderBlocker({
+        isConnected: false,
+        connectionStatus: "connecting",
+        providerInstanceEntries: [],
+        selectedProviderEntry: undefined,
+      }),
+    ).toContain("Connecting");
+    expect(
+      getT3TeamKickoffProviderBlocker({
+        isConnected: false,
+        connectionStatus: "error",
+        providerInstanceEntries: [],
+        selectedProviderEntry: undefined,
+      }),
+    ).toContain("disconnected");
+  });
+
   it("explains why chat kickoff is blocked", () => {
     expect(
       getT3TeamKickoffProviderBlocker({
