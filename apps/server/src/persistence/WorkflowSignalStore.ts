@@ -56,6 +56,24 @@ export const ListSignalRegistrationsInput = Schema.Struct({
 });
 export type ListSignalRegistrationsInput = typeof ListSignalRegistrationsInput.Type;
 
+/** A trigger-owned registration's columns (the trigger runner's reconcile, S5b). */
+export const DeleteSignalRegistrationInput = Schema.Struct({
+  /** The registration owner — a run id, or `trigger:<recipe>:<id>` for a recipe trigger. */
+  owner: Schema.String,
+  sourceName: Schema.String,
+  paramsHash: Schema.String,
+});
+export type DeleteSignalRegistrationInput = typeof DeleteSignalRegistrationInput.Type;
+
+/** Bounded read of one source instance's undelivered slots (the trigger runner's drain, S5b). */
+export const ListUndeliveredInboxEntriesInput = Schema.Struct({
+  sourceName: Schema.String,
+  paramsHash: Schema.String,
+  signalName: Schema.String,
+  limit: Schema.Number,
+});
+export type ListUndeliveredInboxEntriesInput = typeof ListUndeliveredInboxEntriesInput.Type;
+
 /** A durable delivery slot. `payload` is the DECODED signal payload (trusted at write time —
  * the delivery port decoded it against the signal's schema before the insert). */
 export const SignalInboxEntry = Schema.Struct({
@@ -128,8 +146,18 @@ export interface WorkflowSignalStoreShape {
     ReadonlyArray<SignalRegistration>,
     ProjectionRepositoryError
   >;
-  /** Drop settled runs' bindings (terminal cleanup, run by the periodic sweep). */
+  /** Drop settled runs' bindings (terminal cleanup, run by the periodic sweep). Trigger-owned
+   * bindings (S5b) are the trigger runner's to add and remove; they are never purged here. */
   readonly purgeTerminalRegistrations: () => Effect.Effect<void, ProjectionRepositoryError>;
+  /** Drop one registration row by owner (a trigger disabling itself, S5b). */
+  readonly deleteRegistration: (
+    input: DeleteSignalRegistrationInput,
+  ) => Effect.Effect<void, ProjectionRepositoryError>;
+  /** Every trigger-owned registration row (the trigger runner's reconcile, S5b). */
+  readonly listTriggerRegistrations: () => Effect.Effect<
+    ReadonlyArray<SignalRegistration>,
+    ProjectionRepositoryError
+  >;
   /** Write a durable delivery slot for an event that landed while no run was parked. */
   readonly insertInboxEntry: (
     input: InsertSignalInboxEntryInput,
@@ -148,6 +176,10 @@ export interface WorkflowSignalStoreShape {
   readonly deleteDeliveredInboxEntriesOlderThan: (
     cutoffIso: string,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
+  /** A source instance's undelivered slots for one signal, oldest first, capped (S5b). */
+  readonly listUndeliveredInboxEntries: (
+    input: ListUndeliveredInboxEntriesInput,
+  ) => Effect.Effect<ReadonlyArray<SignalInboxEntry>, ProjectionRepositoryError>;
   /** Bound a source's UNDELIVERED slots: drop those created before `olderThanIso` and all but
    * the newest `keepNewest`. For a source whose events nobody may ever drain. */
   readonly pruneUndeliveredInboxEntries: (input: {
@@ -226,7 +258,9 @@ const makeWorkflowSignalStore = Effect.gen(function* () {
   });
 
   // The reconciler's desired-instance input: every binding whose run is still in the live set
-  // (a terminal run's binding must not keep its source instance alive).
+  // (a terminal run's binding must not keep its source instance alive) — plus the trigger runner's
+  // own bindings (S5b), which are owned by a `trigger:<recipe>:<id>` owner string instead of a run
+  // and live until the trigger runner removes them (a disabled trigger must not keep polling).
   const listLiveRegistrationsRow = SqlSchema.findAll({
     Request: Schema.Struct({}),
     Result: SignalRegistrationDbRow,
@@ -239,7 +273,8 @@ const makeWorkflowSignalStore = Effect.gen(function* () {
           r.params_json AS "params",
           r.registered_at AS "registeredAt"
         FROM workflow_signal_registrations r
-        WHERE r.run_id IN (
+        WHERE r.run_id LIKE 'trigger:%'
+           OR r.run_id IN (
           SELECT run_id FROM workflow_runs
           WHERE status IN ('queued', 'running', 'suspended', 'sleeping', 'watching', 'paused')
         )
@@ -248,16 +283,47 @@ const makeWorkflowSignalStore = Effect.gen(function* () {
   });
 
   // Terminal cleanup: drop bindings whose run left the live set (the reconciler's periodic
-  // sweep calls this — a terminal run must not keep its source instance alive).
+  // sweep calls this — a terminal run must not keep its source instance alive). Trigger-owned
+  // bindings have no run at all: they are the trigger runner's to add and remove, never purged.
   const purgeTerminalRegistrationsRow = SqlSchema.void({
     Request: Schema.Struct({}),
     execute: () =>
       sql`
         DELETE FROM workflow_signal_registrations
-        WHERE run_id NOT IN (
+        WHERE run_id NOT LIKE 'trigger:%'
+          AND run_id NOT IN (
           SELECT run_id FROM workflow_runs
           WHERE status IN ('queued', 'running', 'suspended', 'sleeping', 'watching', 'paused')
         )
+      `,
+  });
+
+  // One trigger disabling itself (S5b): drop its registration so the next reconcile stops its
+  // source instance. Matched on all three columns so one owner can never touch another row.
+  const deleteRegistrationRow = SqlSchema.void({
+    Request: DeleteSignalRegistrationInput,
+    execute: ({ owner, sourceName, paramsHash }) =>
+      sql`
+        DELETE FROM workflow_signal_registrations
+        WHERE run_id = ${owner} AND source_name = ${sourceName} AND params_hash = ${paramsHash}
+      `,
+  });
+
+  // The trigger runner's reconcile view (S5b): every row owned by a trigger (no run behind it).
+  const listTriggerRegistrationsRow = SqlSchema.findAll({
+    Request: Schema.Struct({}),
+    Result: SignalRegistrationDbRow,
+    execute: () =>
+      sql`
+        SELECT
+          run_id AS "runId",
+          source_name AS "sourceName",
+          params_hash AS "paramsHash",
+          params_json AS "params",
+          registered_at AS "registeredAt"
+        FROM workflow_signal_registrations
+        WHERE run_id LIKE 'trigger:%'
+        ORDER BY source_name ASC, params_hash ASC, run_id ASC
       `,
   });
 
@@ -349,6 +415,34 @@ const makeWorkflowSignalStore = Effect.gen(function* () {
       `,
   });
 
+  // The trigger runner's drain (S5b): a read-only, bounded view of one instance's undelivered
+  // slots for one signal. The runner decides which to TAKE (launch/skip) through the first-wins
+  // take below and which to leave for the next poll (debounced, interval-limited, capped).
+  const listUndeliveredInboxEntriesRow = SqlSchema.findAll({
+    Request: ListUndeliveredInboxEntriesInput,
+    Result: SignalInboxDbRow,
+    execute: ({ sourceName, paramsHash, signalName, limit }) =>
+      sql`
+        SELECT
+          id,
+          source_name AS "sourceName",
+          params_hash AS "paramsHash",
+          signal_name AS "signalName",
+          key,
+          payload_json AS "payload",
+          delivered,
+          created_at AS "createdAt",
+          delivered_at AS "deliveredAt"
+        FROM workflow_signal_inbox
+        WHERE source_name = ${sourceName}
+          AND params_hash = ${paramsHash}
+          AND signal_name = ${signalName}
+          AND delivered = 0
+        ORDER BY id ASC
+        LIMIT ${limit}
+      `,
+  });
+
   const pruneUndeliveredInboxEntriesRow = SqlSchema.void({
     Request: Schema.Struct({
       sourceName: Schema.String,
@@ -423,6 +517,16 @@ const makeWorkflowSignalStore = Effect.gen(function* () {
       ),
     );
 
+  const deleteRegistration: WorkflowSignalStoreShape["deleteRegistration"] = (input) =>
+    deleteRegistrationRow(input).pipe(
+      Effect.mapError(toPersistenceSqlError("WorkflowSignalStore.deleteRegistration:query")),
+    );
+
+  const listTriggerRegistrations: WorkflowSignalStoreShape["listTriggerRegistrations"] = () =>
+    listTriggerRegistrationsRow({}).pipe(
+      Effect.mapError(toPersistenceSqlError("WorkflowSignalStore.listTriggerRegistrations:query")),
+    );
+
   const insertInboxEntry: WorkflowSignalStoreShape["insertInboxEntry"] = (input) =>
     insertInboxEntryRow(input).pipe(
       Effect.map((row) => row.id),
@@ -451,6 +555,15 @@ const makeWorkflowSignalStore = Effect.gen(function* () {
         ),
       );
 
+  const listUndeliveredInboxEntries: WorkflowSignalStoreShape["listUndeliveredInboxEntries"] = (
+    input,
+  ) =>
+    listUndeliveredInboxEntriesRow(input).pipe(
+      Effect.mapError(
+        toPersistenceSqlError("WorkflowSignalStore.listUndeliveredInboxEntries:query"),
+      ),
+    );
+
   const pruneUndeliveredInboxEntries: WorkflowSignalStoreShape["pruneUndeliveredInboxEntries"] = (
     input,
   ) =>
@@ -475,10 +588,13 @@ const makeWorkflowSignalStore = Effect.gen(function* () {
     listRegistrationsByInstance,
     listLiveRegistrations,
     purgeTerminalRegistrations,
+    deleteRegistration,
+    listTriggerRegistrations,
     insertInboxEntry,
     takeOpenInboxEntry,
     takeFirstOpenInboxEntry,
     deleteDeliveredInboxEntriesOlderThan,
+    listUndeliveredInboxEntries,
     pruneUndeliveredInboxEntries,
     getCursor,
     upsertCursor,

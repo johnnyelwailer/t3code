@@ -1,7 +1,7 @@
 /**
  * Active-surface body for My Work's shared right panel (PR detail, side chat, browser stub).
  */
-import type { ProjectId } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectId, PullRequestRef } from "@t3tools/contracts";
 import { lazy, Suspense, type ReactNode } from "react";
 
 import { isElectron } from "~/env";
@@ -30,20 +30,16 @@ function getShortcutContext() {
 
 export function renderMyWorkRightPanelSurface(input: {
   activeSurface: RightPanelSurface | null;
-  environmentId: string | null;
-  onOpenPullRequest: (reference: {
-    projectId: string;
-    repository: string;
-    number: number;
-    host?: string;
-  }) => void;
+  environmentId: EnvironmentId | null;
+  onOpenPullRequest: (reference: PullRequestRef) => void;
   onCloseSurface: (surface: RightPanelSurface) => void;
 }): ReactNode {
   const { activeSurface, environmentId, onOpenPullRequest, onCloseSurface } = input;
   if (activeSurface === null) return null;
 
   if (activeSurface.kind === "pull-request") {
-    const panelEnvironmentId = activeSurface.environmentId ?? environmentId;
+    const panelEnvironmentId =
+      (activeSurface.environmentId as EnvironmentId | undefined) ?? environmentId;
     if (panelEnvironmentId === null) return null;
     return (
       <PullRequestDetailPanel

@@ -27,6 +27,8 @@ export type {
   RecipeGuidanceStyle,
   RecipeRef,
   RecipeTechnicalDepth,
+  RecipeTriggerSelectContext,
+  RecipeTriggerSpec,
   RecipeVisiblePredicate,
 } from "./t3team-sdk.recipeTypes.ts";
 export type { PrimitiveCall, PrimitiveKind, WorkflowRuntime } from "./t3team-sdk.runtimeTypes.ts";
