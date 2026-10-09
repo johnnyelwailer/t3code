@@ -7,7 +7,6 @@
  * The clock is the engine's `nowMs` port; "advancing time" is `clock.now = …`. No real timers.
  */
 import { describe, expect, it } from "@effect/vitest";
-import * as Effect from "effect/Effect";
 
 import {
   makeRecipeTriggerEngine,
@@ -90,7 +89,8 @@ const processEvents = (
   overrides: Partial<typeof baseInput> = {},
 ) => engine.processEvents({ ...baseInput, ...overrides } as never);
 
-const settle = () => Effect.runPromise(Effect.sleep(0));
+/** Yield so launch-promise resolution can drop the in-flight slot before the next processEvents. */
+const settle = () => Promise.resolve();
 
 describe("recipe trigger launch policy", () => {
   it("collapses a burst of events for one key into ONE launch with the newest payload (trailing debounce)", async () => {
