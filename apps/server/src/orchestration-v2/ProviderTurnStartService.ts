@@ -2,6 +2,8 @@ import { modelSelectionsEqual } from "@t3tools/shared/model";
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
 import {
   CommandId,
+  CONDUCTOR_MODEL_ID,
+  conductorUsageBlock,
   latestProviderTurnForAttempt,
   type OrchestrationV2DomainEvent,
   type OrchestrationV2ExecutionNode,
@@ -24,6 +26,7 @@ import * as Schema from "effect/Schema";
 import * as GitWorkflowService from "../git/GitWorkflowService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as EventSink from "./EventSink.ts";
 import * as ContextHandoffService from "./ContextHandoffService.ts";
 import {
@@ -959,6 +962,17 @@ export const layer: Layer.Layer<
         text: message.text,
         records: message.context?.records ?? [],
       });
+      // Conductor turns carry a compact, read-only usage snapshot of every
+      // enabled instance at its published value. Built from the in-memory
+      // provider registry only — no I/O on the turn-start path — and omitted
+      // for every other model and when no instance reports window data.
+      let conductorUsage = "";
+      if (run.modelSelection.model === CONDUCTOR_MODEL_ID) {
+        const providerRegistry = yield* Effect.serviceOption(ProviderRegistry.ProviderRegistry);
+        if (Option.isSome(providerRegistry)) {
+          conductorUsage = conductorUsageBlock(yield* providerRegistry.value.getProviders);
+        }
+      }
       // Delivered once: this run's provider turn marks the work as told. A
       // restart continuation is prompted by its own text or resumes natively.
       const noteContinuation = isRestartNoteContinuation(
@@ -1176,7 +1190,7 @@ export const layer: Layer.Layer<
           });
           if (!(yield* isCurrentAttemptInStatus("running"))) return;
           const start = compact ? session.compactThread! : session.startTurn;
-          const context = [delivery.context, restartNote]
+          const context = [conductorUsage, delivery.context, restartNote]
             .filter((part) => part !== "")
             .join("\n\n");
           // A note continuation has no turn to resume; its text is the prompt.
@@ -1255,7 +1269,7 @@ export const layer: Layer.Layer<
         hasUnpairedRunInterruptRequest: runControls.hasUnpairedRunInterruptRequest,
         message: {
           messageId: message.id,
-          text: userText,
+          text: conductorUsage === "" ? userText : `${conductorUsage}\n\n${userText}`,
           attachments: message.attachments,
           createdBy: message.createdBy,
           creationSource: message.creationSource,
