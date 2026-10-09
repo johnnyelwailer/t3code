@@ -1,6 +1,9 @@
+// @vitest-environment jsdom
 import { ApprovalRequestId } from "@t3tools/contracts";
+import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vite-plus/test";
+import { createRoot } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import type { PendingUserInput } from "../../session-logic";
@@ -159,5 +162,153 @@ describe("ComposerPendingUserInputPanel", () => {
 
     expect(markup).not.toContain("Show full context");
     expect(markup).not.toContain("line-clamp-4");
+  });
+});
+
+// Dock-time focus behavior needs a live DOM: the card's initial state reads
+// document.activeElement at mount, and the number-key handler attaches to the
+// document.
+describe("ComposerPendingUserInputPanel dock focus", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  // Mounts the panel while `focused` describes where focus sits: the composer
+  // editor when the user is mid-typing, or the document body otherwise.
+  function dock({
+    focused,
+    onToggleOption = vi.fn(),
+    onAdvance = vi.fn(),
+  }: {
+    focused: "editor" | "body";
+    onToggleOption?: (questionId: string, optionValue: string) => void;
+    onAdvance?: () => void;
+  }) {
+    const editor = document.createElement("div");
+    editor.setAttribute("contenteditable", "true");
+    editor.setAttribute("data-testid", "composer-editor");
+    document.body.appendChild(editor);
+    (focused === "editor" ? editor : document.body).focus();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => {
+      root.render(
+        <ComposerPendingUserInputPanel
+          pendingUserInputs={[prompt]}
+          respondingRequestIds={[]}
+          answers={{}}
+          questionIndex={0}
+          onToggleOption={onToggleOption}
+          onAdvance={onAdvance}
+          onDismiss={() => {}}
+        />,
+      );
+    });
+    return {
+      host,
+      root,
+      editor,
+      onToggleOption,
+      onAdvance,
+      get toggle() {
+        return host.querySelector<HTMLButtonElement>("[data-pending-user-input-toggle]");
+      },
+    };
+  }
+
+  it("mounts collapsed and leaves focus in the composer when the user is mid-typing", () => {
+    const { editor, host, root, toggle } = dock({ focused: "editor" });
+
+    expect(toggle?.getAttribute("data-pending-user-input-toggle")).toBe("collapsed");
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    // The header stays; the question body and its options do not mount.
+    expect(host.textContent).toContain("Approach");
+    expect(host.textContent).not.toContain("Incremental");
+    // Nothing in the card grabbed focus: the editor still holds it.
+    expect(document.activeElement).toBe(editor);
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it("mounts expanded and leaves focus alone when the composer is not focused", () => {
+    const { host, root, toggle } = dock({ focused: "body" });
+
+    expect(toggle?.getAttribute("data-pending-user-input-toggle")).toBe("expanded");
+    expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+    expect(host.textContent).toContain("Incremental");
+    // No forced focus: whatever held focus before the dock keeps it.
+    expect(document.activeElement).toBe(document.body);
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it("keeps the disclosure, option selection and auto-advance on a collapsed dock", async () => {
+    const { host, root, toggle, onToggleOption, onAdvance } = dock({ focused: "editor" });
+    expect(toggle?.getAttribute("data-pending-user-input-toggle")).toBe("collapsed");
+
+    // Expand via the disclosure control.
+    act(() => {
+      toggle?.click();
+    });
+    expect(toggle?.getAttribute("data-pending-user-input-toggle")).toBe("expanded");
+    expect(host.textContent).toContain("Incremental");
+
+    // Selecting an option is recorded immediately; single-select auto-advance follows.
+    const incremental = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent?.includes("Incremental"),
+    );
+    act(() => {
+      incremental?.click();
+    });
+    expect(onToggleOption).toHaveBeenCalledWith("question-1", "Incremental");
+    expect(onAdvance).not.toHaveBeenCalled();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    expect(onAdvance).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it("opts the number-key shortcut out of a collapsed dock and back in when expanded", () => {
+    let selections = 0;
+    const { root, toggle } = dock({
+      focused: "editor",
+      onToggleOption: () => {
+        selections += 1;
+      },
+    });
+    expect(toggle?.getAttribute("data-pending-user-input-toggle")).toBe("collapsed");
+
+    // Focus moves to a neutral control (the user clicked elsewhere); while the
+    // card is collapsed, digit keys must not select options.
+    const neutral = document.createElement("button");
+    document.body.appendChild(neutral);
+    neutral.focus();
+    act(() => {
+      neutral.dispatchEvent(new KeyboardEvent("keydown", { key: "1", bubbles: true }));
+    });
+    expect(selections).toBe(0);
+
+    // Expanding restores the shortcut.
+    act(() => {
+      toggle?.click();
+    });
+    expect(toggle?.getAttribute("data-pending-user-input-toggle")).toBe("expanded");
+    act(() => {
+      neutral.dispatchEvent(new KeyboardEvent("keydown", { key: "1", bubbles: true }));
+    });
+    expect(selections).toBe(1);
+
+    act(() => {
+      root.unmount();
+    });
   });
 });

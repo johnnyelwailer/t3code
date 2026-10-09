@@ -11,6 +11,21 @@ import { cn } from "~/lib/utils";
 import { ComposerBanner } from "./ComposerBanner";
 import { T3TeamPendingQuestionMarkdown } from "./t3team-pendingQuestionMarkdown";
 
+// A question that docks while the user is mid-draft must open collapsed: the card
+// would otherwise cover the thread and the draft in front of them, and nothing may
+// move focus. The card is keyed by request id, so each dock is a fresh mount —
+// reading the live DOM here is exactly "at dock time". It cannot go through React
+// focus state: for choice-only questions the editor's contenteditable flips off in
+// the same commit, and the effect that does it (and the blur it causes) only runs
+// after this mount has happened.
+function composerEditorHasFocus(): boolean {
+  if (typeof document === "undefined") return false;
+  const active = document.activeElement;
+  return active instanceof Element
+    ? active.closest('[data-testid="composer-editor"]') !== null
+    : false;
+}
+
 interface PendingUserInputPanelProps {
   pendingUserInputs: PendingUserInput[];
   respondingRequestIds: ApprovalRequestId[];
@@ -78,8 +93,12 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   // is keyed by request id so the next prompt starts expanded, and storing the
   // collapsed question's id (rather than a bare flag) reopens the card when the
   // prompt advances to its next question, which can happen without a click —
-  // sending from the composer advances the active question.
-  const [collapsedQuestionId, setCollapsedQuestionId] = useState<string | null>(null);
+  // sending from the composer advances the active question. A prompt that docks
+  // while the composer editor holds focus starts collapsed (composerEditorHasFocus)
+  // instead of expanded, so it does not steal the user's attention or focus.
+  const [collapsedQuestionId, setCollapsedQuestionId] = useState<string | null>(() =>
+    activeQuestion && composerEditorHasFocus() ? activeQuestion.id : null,
+  );
   const isCollapsed = collapsedQuestionId !== null && collapsedQuestionId === activeQuestion?.id;
 
   useEffect(() => {
