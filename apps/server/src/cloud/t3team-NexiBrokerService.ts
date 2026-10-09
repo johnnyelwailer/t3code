@@ -39,6 +39,8 @@ export class NexiBrokerService extends Context.Service<
       secrets?: Readonly<Record<string, string>>,
       /** The project a machine session is for: it counts toward that project's warm pool. */
       poolKey?: string,
+      /** Names the project workflow may deliver. Values are not included. */
+      teamSecrets?: { readonly repository: string; readonly names: ReadonlyArray<string> },
     ) => Effect.Effect<string, CloudSessionFailedError>;
     /** Reports the projects this user has here, so the broker keeps them warm (#562 option B). */
     readonly reportInterest: (

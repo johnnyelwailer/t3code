@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @source "../../src";
-@import "./t3team-index-keyframes.css";
 @import "./t3team-index-transitions.css";
 @import "./t3team-index-markdown.css";
 @import "./t3team-index-diffs.css";

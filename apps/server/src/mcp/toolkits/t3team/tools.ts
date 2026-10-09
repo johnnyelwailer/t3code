@@ -22,6 +22,7 @@ import { T3TeamAskUserWriter } from "./t3team-askUserWriter.ts";
 import { T3TeamMcpToolError } from "./t3team-mcpToolError.ts";
 import { mcpDescriptionOf } from "./t3team-mcpToolDescription.ts";
 import { T3TeamMyWorkArrangeTool, T3TeamMyWorkDigestTool } from "./t3team-myworkTools.ts";
+import { T3TeamChangeRequestPublishTool } from "./t3team-changeRequestTools.ts";
 
 /**
  * What every t3team tool fails with. `OrchestratorMcpFailure` is the refusal
@@ -46,7 +47,7 @@ export { mcpDescriptionOf };
  * explicit decision for every implemented catalog tool — mapped above, or listed here.
  *
  * The `draft_*` family is excluded for a structural reason, not convenience: those tools are
- * reachable only from a workflow body's `getTools()` tree (`t3team-workflowHostDraftTools.ts`),
+ * reachable only from a workflow body's `getTools()` tree (`t3team-workflowHostTools.ts`),
  * and they are gated three ways — the body must declare the group in `meta.capabilities`, the id
  * must be in the thread's tool context, and the recipe's `allowedToolGroups` filters what
  * survives. Their `publishDraft` is also pinned to the launch thread so the draft carrier message
@@ -500,5 +501,6 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamRecipeValidateTool,
   T3TeamMyWorkDigestTool,
   T3TeamMyWorkArrangeTool,
+  T3TeamChangeRequestPublishTool,
   T3TeamThreadSkillMetadataTool,
 );

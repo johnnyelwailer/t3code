@@ -491,6 +491,14 @@
             if (card) card.setAttribute("aria-label", name + " splash screen");
             const logo = document.getElementById("boot-shell-logo");
             if (logo) logo.alt = name;
+            // A startup failure can render the boot error before this lookup resolves.
+            const bootErrorMessage = document.querySelector("#boot-error p");
+            if (bootErrorMessage && bootErrorMessage.textContent.startsWith(VENDOR_NAME)) {
+              bootErrorMessage.textContent = bootErrorMessage.textContent.replace(
+                VENDOR_NAME,
+                name,
+              );
+            }
           }
           const splashLogo = document.getElementById("boot-shell-logo");
           if (splashLogo && mark) splashLogo.src = mark;

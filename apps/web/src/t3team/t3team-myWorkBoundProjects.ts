@@ -14,7 +14,11 @@ import { useEffect, useMemo, useSyncExternalStore } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import type { Project } from "~/types";
 
-import { useAllEnvironmentShellsBootstrapped, useProjects } from "~/state/entities";
+import {
+  useAllEnvironmentProjectSnapshotsReady,
+  useAllEnvironmentShellsBootstrapped,
+  useProjects,
+} from "~/state/entities";
 import { ensureStoredProjectsHydrated } from "~/t3team/hooks/t3team-projectStorePersistence";
 import {
   readStoredProjectsSnapshot,
@@ -49,16 +53,39 @@ export function selectMyWorkBoundProjects(
   ]);
 }
 
+/**
+ * The bound list, or `null` while it is still being assembled.
+ *
+ * An empty list is "no work source" only once every environment has a live project snapshot.
+ * Shell bootstrap can flip on a cached snapshot that is still empty; treating that as the answer
+ * sends a cold start to the draft landing, and the once-per-session gate never looks again when
+ * the Jira projects arrive a moment later.
+ */
+export function resolveMyWorkBoundProjects(input: {
+  readonly storedProjects: ReadonlyArray<ProjectShellProject> | null;
+  readonly liveProjects: ReadonlyArray<Project>;
+  readonly shellsBootstrapped: boolean;
+  readonly projectSnapshotsReady: boolean;
+}): ReadonlyArray<ProjectShellProject> | null {
+  if (input.storedProjects === null || !input.shellsBootstrapped) return null;
+  const bound = selectMyWorkBoundProjects(input.storedProjects, input.liveProjects);
+  if (bound.length === 0 && !input.projectSnapshotsReady) return null;
+  return bound;
+}
+
 export function useMyWorkBoundProjects(): ReadonlyArray<ProjectShellProject> | null {
   const storedProjects = useHydratedStoredProjects();
   const liveProjects = useProjects();
-  // Until every environment has answered (or given up), a missing project only means "not yet".
-  const bootstrapped = useAllEnvironmentShellsBootstrapped();
+  const shellsBootstrapped = useAllEnvironmentShellsBootstrapped();
+  const projectSnapshotsReady = useAllEnvironmentProjectSnapshotsReady();
   return useMemo(
     () =>
-      storedProjects === null || !bootstrapped
-        ? null
-        : selectMyWorkBoundProjects(storedProjects, liveProjects),
-    [bootstrapped, liveProjects, storedProjects],
+      resolveMyWorkBoundProjects({
+        storedProjects,
+        liveProjects,
+        shellsBootstrapped,
+        projectSnapshotsReady,
+      }),
+    [liveProjects, projectSnapshotsReady, shellsBootstrapped, storedProjects],
   );
 }

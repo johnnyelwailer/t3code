@@ -1,7 +1,8 @@
 /** Line slicing and the caps of `fileAt`, with no provider in the way. */
 import { CHANGE_REQUEST_FILE_MAX_CHARS, ChangeRequestInputError } from "@t3team/sdk";
 import * as Effect from "effect/Effect";
-import { describe, expect, it } from "vite-plus/test";
+import { it } from "@effect/vitest";
+import { describe, expect } from "vite-plus/test";
 
 import { decodeText, sliceLines, validateRange } from "./t3team-scriptHostFileText.ts";
 
@@ -36,16 +37,19 @@ describe("decodeText", () => {
 });
 
 describe("validateRange", () => {
-  it("defaults to the first lines and fails a malformed range as a script input error", () => {
-    expect(Effect.runSync(validateRange(undefined))).toEqual(all);
-    for (const range of [
-      { startLine: 3, endLine: 2 },
-      { startLine: 0, endLine: 2 },
-      { startLine: 1.5, endLine: 2 },
-    ]) {
-      expect(Effect.runSync(Effect.flip(validateRange(range)))).toBeInstanceOf(
-        ChangeRequestInputError,
-      );
-    }
-  });
+  it.effect("defaults to the first lines", () =>
+    Effect.gen(function* () {
+      expect(yield* validateRange(undefined)).toEqual(all);
+    }),
+  );
+
+  it.effect.each([
+    { startLine: 3, endLine: 2 },
+    { startLine: 0, endLine: 2 },
+    { startLine: 1.5, endLine: 2 },
+  ])("fails the malformed range %j as a script input error", (range) =>
+    Effect.gen(function* () {
+      expect(yield* Effect.flip(validateRange(range))).toBeInstanceOf(ChangeRequestInputError);
+    }),
+  );
 });

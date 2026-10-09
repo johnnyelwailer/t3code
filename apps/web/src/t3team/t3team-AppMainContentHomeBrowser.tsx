@@ -10,8 +10,6 @@ import {
 
 export function AppMainContentHomeBrowser({
   onCreate,
-  onInlineProjectCreated,
-  showInitialSetup,
   setupSurfaceReason = T3TEAM_FIRST_PROJECT_SETUP_REASON,
   showAside,
   shouldInsetDesktopHeader = false,
@@ -23,8 +21,6 @@ export function AppMainContentHomeBrowser({
   onKickoffProjectThread,
 }: {
   onCreate: () => void;
-  onInlineProjectCreated: (project: ProjectShellProject) => void;
-  showInitialSetup: boolean;
   setupSurfaceReason?: T3TeamSetupSurfaceReason;
   showAside: boolean;
   shouldInsetDesktopHeader?: boolean;
@@ -39,8 +35,6 @@ export function AppMainContentHomeBrowser({
   return (
     <AppMainContentHomeEmptyState
       onCreate={onCreate}
-      onInlineProjectCreated={onInlineProjectCreated}
-      showInitialSetup={showInitialSetup}
       setupSurfaceReason={setupSurfaceReason}
       showAside={showAside}
       shouldInsetDesktopHeader={shouldInsetDesktopHeader}

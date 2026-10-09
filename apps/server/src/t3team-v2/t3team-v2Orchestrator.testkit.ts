@@ -17,6 +17,7 @@ import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterReg
 import { layerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
 import * as ThreadLineage from "./t3team-threadLineage.ts";
 import * as ThreadMessageRecorder from "./t3team-threadMessageRecorder.ts";
+import * as ThreadWorkflowAsk from "./t3team-threadWorkflowAsk.ts";
 
 const instanceId = ProviderInstanceId.make("codex");
 export const testModelSelection = { instanceId, model: "gpt-5.1-codex" };
@@ -49,6 +50,7 @@ export const makeT3TeamV2TestLayer = (
     }).pipe(Layer.provide(overrides)),
     ThreadMessageRecorder.layer.pipe(Layer.provide(database)),
     ThreadLineage.layer.pipe(Layer.provide(database)),
+    ThreadWorkflowAsk.layer.pipe(Layer.provide(database)),
   );
 };
 

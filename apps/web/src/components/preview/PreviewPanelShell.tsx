@@ -1,5 +1,6 @@
 import { type ReactNode, type RefObject, useLayoutEffect, useRef, useState } from "react";
 
+import { beginPreviewPanelResize } from "~/browser/t3team-previewPanelResizeStore";
 import { isElectron } from "~/env";
 import {
   getPreviewPanelMaxWidth,
@@ -67,7 +68,9 @@ function PreviewPanelShellFrame(
   const maximized = props.maximized ?? false;
   const localHostRef = useRef<HTMLDivElement | null>(null);
   const hostRef = props.hostRef ?? localHostRef;
-  const { width, handlers } = props.inlineSize;
+  const { width, handlers, resizing } = props.inlineSize;
+  // Hosted browser surfaces hold their fit-to-panel scale while the edge is dragged.
+  useLayoutEffect(() => (resizing ? beginPreviewPanelResize() : undefined), [resizing]);
   // Derive suppression before the layout commits so the browser never creates
   // a width transition for resize or maximize changes.
   const [layoutTransition, setLayoutTransition] = useState(() => ({

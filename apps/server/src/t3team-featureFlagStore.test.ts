@@ -8,6 +8,7 @@ import {
   replaceFeatureFlagDatabaseValues,
 } from "@t3tools/project-context/t3teamFeatureFlags";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
+import { isMachineSetupEnabled } from "./cloud/t3team-machineSetupFlag.ts";
 import { isWorkProfileChooserEnabled } from "./t3team-workProfileChooserFlag.ts";
 import {
   PROJECT_STATE_DIR,
@@ -42,6 +43,15 @@ describe("feature flag layering", () => {
     expect(isMainRepositoryEnabled(() => "yes")).toBe(true);
   });
 
+  test("MACHINE_SETUP is off by default, on from the DB, and the env wins either way", () => {
+    expect(isMachineSetupEnabled(noEnv)).toBe(false);
+    replaceFeatureFlagDatabaseValues(new Map([["MACHINE_SETUP", true]]));
+    expect(isMachineSetupEnabled(noEnv)).toBe(true);
+    expect(isMachineSetupEnabled(() => "0")).toBe(false);
+    replaceFeatureFlagDatabaseValues(new Map());
+    expect(isMachineSetupEnabled(() => "1")).toBe(true);
+  });
+
   test("WORK_PROFILE_CHOOSER defaults off, env and DB can turn it on live", () => {
     expect(isWorkProfileChooserEnabled(noEnv)).toBe(false);
     expect(isWorkProfileChooserEnabled(() => "")).toBe(false);
@@ -53,7 +63,7 @@ describe("feature flag layering", () => {
     expect(isWorkProfileChooserEnabled(() => "off")).toBe(false);
   });
 
-  test("registers both Admin switches and freezes state-dir selection for this process", () => {
+  test("registers the Admin switches and freezes state-dir selection for this process", () => {
     const startup = PROJECT_STATE_DIR;
     replaceFeatureFlagDatabaseValues(new Map());
     expect(resolveProjectStateDirName(noEnv)).toBe(".nexi");
@@ -73,6 +83,7 @@ describe("feature flag layering", () => {
         requiresRestart: true,
         description: expect.stringContaining("next server start"),
       }),
+      expect.objectContaining({ key: "MACHINE_SETUP", requiresRestart: false }),
       expect.objectContaining({
         key: "WORK_PROFILE_CHOOSER",
         requiresRestart: false,

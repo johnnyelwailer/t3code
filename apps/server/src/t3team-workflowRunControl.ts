@@ -206,6 +206,12 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
     status = "cancelled";
   }
 
+  // Stop/pause/resume bypass the run lifecycle's push: refresh the launch thread's run facts and
+  // the waiting-question mirror here. Best-effort — the control already landed.
+  if (run.launchThreadId !== null) {
+    yield* deps.host.syncRunFacts(run.launchThreadId).pipe(Effect.ignore);
+  }
+
   // Run-level activity: what the card's banner reads ("Workflow paused" + when); the tool emits it exactly as the button.
   const phase = status === "cancelled" ? "cancelled" : status === "paused" ? "paused" : "started";
   yield* postWorkflowRunControlActivity({

@@ -97,6 +97,22 @@ describe("presentCloudSession for a project machine", () => {
   it("keeps the plain session's words", () => {
     expect(preparing({}).title).toBe("Building the workspace");
   });
+
+  it("says a setup session is checking the project out for an agent to write the machine", () => {
+    expect(preparing({ machineSetup: true })).toMatchObject({
+      title: "Checking out the project",
+    });
+    expect(presentCloudSession(session({ phase: "ready", machineSetup: true })).detail).toBe(
+      "Open it and describe your task; it sets the machine up if the task needs one.",
+    );
+  });
+
+  it("offers no plain session in place of an ended setup session", () => {
+    for (const phase of ["failed", "stopped", "cancelled"] as const) {
+      expect(presentCloudSession(session({ phase, machineSetup: true })).actionLabel).toBeNull();
+      expect(presentCloudSession(session({ phase })).actionLabel).toBe("Start another");
+    }
+  });
 });
 
 describe("isCloudSessionProvisionPending", () => {

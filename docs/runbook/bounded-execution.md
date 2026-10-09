@@ -95,6 +95,43 @@ that cursor rather than scanning already processed input. Source registration, d
 and catch-up reuse the signal-source model from distro GHE #332; `watermark` is not a second trigger
 system.
 
+A watermark loop that watches several sources parks each iteration on whichever event lands first:
+
+```ts
+while ((cursor.current()?.done ?? false) === false) {
+  const watch = await getSignalSource(ScmChangeRequestWatch, params);
+  const checks = await getSignalSource(ScmChangeRequestChecks, params);
+  const hit = await waitForAny([
+    watch.on(ScmChangeRequestMerged, { key }),
+    checks.on(ScmChangeRequestChecksConcluded, { key }),
+  ]);
+  await cursor.advance(next(cursor.current(), hit)); // hit: { index, signal, payload }
+}
+```
+
+`waitForAny` is ONE ask-shaped handle per wait (`awaitAny` in `@runbook/core/handlesAny`), never one
+handle per branch:
+
+- `sent` at the wait's own seq, with args `{ branches: [...] }`. The hash pins the branch list, so a
+  re-driven body that reorders or changes its branches fails with replay drift instead of reading
+  the winner against a different list.
+- `resolved`, keyed by that correlation, with reply `{ index, reply }`. The host writes it for the
+  first branch to land, and first-write-wins refuses every later candidate.
+
+The winner is journaled because "first" is a fact about the past that replay cannot recompute. By
+the time a resume re-drives the body, other branches may have fired as well; choosing at replay —
+lowest index among the resolved branches, or the earliest timestamp — could pick a different branch
+than the drive that advanced the cursor, and the cursor and the body would disagree. Because the
+wait has a single correlation, the sticky suspension latch, abort, the `parallel()`/`pipeline()`
+black-box rule, and checkpoint-window replay apply to it unchanged.
+
+A branch that loses never becomes journal state: no open correlation exists for it. When its event
+arrives later, the host delivers it to the park the run is on at that moment — the next
+iteration's wait, which includes the same branch — or bridges it to the durable inbox, which the
+next wait drains (oldest event first) before parking. Delivery decides only once no drive of the
+run is in flight and re-reads the run's park (`WorkflowRunHost.offer`), so two branches firing
+together cannot both answer one wait, and the second is not dropped.
+
 ### `reduce` / `accumulate` — data + bounded state
 
 Fold observations into a compact current state, optionally retaining the last `N` observations.

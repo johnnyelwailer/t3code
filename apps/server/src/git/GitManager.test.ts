@@ -580,6 +580,7 @@ function createGitHubCliWithFakeGh(scenario: FakeGhScenario = {}): {
             input.title,
             "--body-file",
             input.bodyFile,
+            ...(input.draft === true ? ["--draft"] : []),
           ],
         }).pipe(Effect.asVoid),
       getDefaultBranch: (input) =>
@@ -3767,6 +3768,95 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
         },
       });
       expect(ghCalls.some((call) => call.startsWith("pr view "))).toBe(false);
+    }),
+  );
+
+  it.effect(
+    "openChangeRequest returns the open change request for the branch without creating one",
+    () =>
+      Effect.gen(function* () {
+        const repoDir = yield* makeTempDir("t3code-git-manager-");
+        yield* initRepo(repoDir);
+        yield* runGit(repoDir, ["checkout", "-b", "machine/setup"]);
+        const remoteDir = yield* createBareRemote();
+        yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
+        yield* runGit(repoDir, ["push", "-u", "origin", "machine/setup"]);
+
+        const { manager, ghCalls } = yield* makeManager({
+          ghScenario: {
+            prListSequence: [
+              // @effect-diagnostics-next-line preferSchemaOverJson:off
+              JSON.stringify([
+                {
+                  number: 42,
+                  title: "Existing PR",
+                  url: "https://github.com/pingdotgg/codething-mvp/pull/42",
+                  baseRefName: "main",
+                  headRefName: "machine/setup",
+                },
+              ]),
+            ],
+          },
+        });
+        const result = yield* manager.openChangeRequest({
+          cwd: repoDir,
+          branch: "machine/setup",
+          title: "Add machine setup",
+          body: "Body",
+        });
+
+        expect(result).toMatchObject({
+          status: "opened_existing",
+          provider: "github",
+          url: "https://github.com/pingdotgg/codething-mvp/pull/42",
+          number: 42,
+          baseBranch: "main",
+          headBranch: "machine/setup",
+        });
+        expect(ghCalls.some((call) => call.startsWith("pr create "))).toBe(false);
+      }),
+  );
+
+  it.effect("openChangeRequest creates a draft against the default branch and reads it back", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      yield* initRepo(repoDir);
+      const remoteDir = yield* createBareRemote();
+      yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
+      yield* runGit(repoDir, ["push", "-u", "origin", "main"]);
+      yield* runGit(repoDir, ["checkout", "-b", "machine/setup"]);
+      yield* runGit(repoDir, ["commit", "--allow-empty", "-m", "Setup"]);
+      yield* runGit(repoDir, ["push", "-u", "origin", "machine/setup"]);
+
+      const { manager, ghCalls } = yield* makeManager({
+        ghScenario: {
+          prListSequence: [
+            "[]",
+            // @effect-diagnostics-next-line preferSchemaOverJson:off
+            JSON.stringify([
+              {
+                number: 43,
+                title: "Add machine setup",
+                url: "https://github.com/pingdotgg/codething-mvp/pull/43",
+                baseRefName: "main",
+                headRefName: "machine/setup",
+              },
+            ]),
+          ],
+        },
+      });
+      const result = yield* manager.openChangeRequest({
+        cwd: repoDir,
+        branch: "machine/setup",
+        title: "Add machine setup",
+        body: "Body",
+        draft: true,
+      });
+
+      expect(result).toMatchObject({ status: "created", number: 43, baseBranch: "main" });
+      const create = ghCalls.find((call) => call.startsWith("pr create "));
+      expect(create).toContain("--base main --head machine/setup --title Add machine setup");
+      expect(create).toMatch(/ --draft$/u);
     }),
   );
 

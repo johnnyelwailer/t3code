@@ -1,6 +1,6 @@
 /**
- * `ctx.changeRequests` for recipe scripts: read-only change-request detail and bounded diff
- * pages over `PullRequestService`, so every provider the service reads works here too.
+ * `ctx.changeRequests` for recipe scripts: the project's listing, read-only change-request detail
+ * and bounded diff pages over `PullRequestService`, so every provider the service reads works here too.
  *
  * Scope: a script names a repository, never a project. The reader serves only repositories the
  * service itself resolves for the run's project (its own remote plus its linked repositories),
@@ -20,6 +20,7 @@ import * as Effect from "effect/Effect";
 
 import type { PullRequestService } from "./pullRequest/PullRequestService.ts";
 import { makeFileReads } from "./t3team-scriptHostFiles.ts";
+import { listChangeRequests } from "./t3team-scriptHostChangeRequestList.ts";
 import {
   clampDiffPageSize,
   decodeDiffCursor,
@@ -92,6 +93,7 @@ export function makeChangeRequestReader(
   const files = makeFileReads(pullRequests, resolve);
 
   return {
+    list: (options) => Effect.runPromise(listChangeRequests(pullRequests, projectId, options)),
     detail: (ref) =>
       Effect.runPromise(
         resolve(ref).pipe(

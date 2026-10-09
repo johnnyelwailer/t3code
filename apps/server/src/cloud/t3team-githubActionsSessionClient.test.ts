@@ -8,8 +8,10 @@ import {
   listRunsInvocation,
   parseJobStepsResponse,
   parseRunsResponse,
+  RUN_FIELDS_JQ,
   sessionTagMarker,
 } from "./t3team-githubActionsSessionClient.ts";
+import { sessionRunsForLogin } from "./t3team-cloudSessionRunOwnership.ts";
 
 const REF: CloudSessionRepoRef = {
   host: "nexplore.ghe.com",
@@ -64,6 +66,49 @@ describe("invocations", () => {
     );
   });
 
+  it("asks gh for only the run fields it reads, so a full page stays far under the output cap", () => {
+    const args = listRunsInvocation(REF, 100, "pj").args;
+    expect(args[args.indexOf("--jq") + 1]).toBe(RUN_FIELDS_JQ);
+    for (const field of [
+      "id",
+      "status",
+      "conclusion",
+      "created_at",
+      "updated_at",
+      "html_url",
+      "name",
+      "display_title",
+    ]) {
+      expect(RUN_FIELDS_JQ).toMatch(new RegExp(`[{ ,]${field}[,}]`));
+    }
+    // The projection keeps the shape the parser reads.
+    const projected = {
+      workflow_runs: [
+        {
+          id: 7,
+          status: "in_progress",
+          conclusion: null,
+          created_at: "2026-10-08T10:00:30Z",
+          updated_at: "2026-10-08T10:00:33Z",
+          html_url: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/7",
+          name: "nexi-session [abc] · broker",
+          display_title: "nexi-session [abc] · broker",
+        },
+      ],
+    };
+    expect(parseRunsResponse(JSON.stringify(projected))).toEqual([
+      {
+        id: 7,
+        status: "in_progress",
+        conclusion: null,
+        createdAt: "2026-10-08T10:00:30Z",
+        updatedAt: "2026-10-08T10:00:33Z",
+        htmlUrl: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/7",
+        name: "nexi-session [abc] · broker",
+      },
+    ]);
+  });
+
   it("cancels a run by id with POST and no body", () => {
     const invocation = cancelRunInvocation(REF, 248523362);
     expect(invocation.args).toContain("repos/hive/nx-nexi/actions/runs/248523362/cancel");
@@ -85,6 +130,7 @@ describe("parseRunsResponse", () => {
             updated_at: "2026-09-12T21:35:59Z",
             html_url: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/248523362",
             name: "hive/nx-nexi [main] [c9f4a2]",
+            actor: { login: "pj" },
           },
         ],
       }),
@@ -98,6 +144,7 @@ describe("parseRunsResponse", () => {
         updatedAt: "2026-09-12T21:35:59Z",
         htmlUrl: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/248523362",
         name: "hive/nx-nexi [main] [c9f4a2]",
+        actor: "pj",
       },
     ]);
   });
@@ -151,6 +198,35 @@ describe("parseRunsResponse", () => {
       expect(parseRunsResponse(stdout)).toBeNull();
     },
   );
+});
+
+describe("sessionRunsForLogin", () => {
+  const run = (actor: string, name: string) =>
+    ({
+      id: 1,
+      status: "in_progress",
+      conclusion: null,
+      createdAt: "",
+      updatedAt: "",
+      htmlUrl: "",
+      name,
+      actor,
+    }) as const;
+
+  it("keeps only this login's runs, and never a warm standby", () => {
+    // GHE ignores actor= on the runs query (verified: actor=pj still returns
+    // github-actions[bot] standbys), so the filter is applied here.
+    const kept = sessionRunsForLogin(
+      [
+        run("pj", "nexi-session [mine]"),
+        run("github-actions[bot]", "nexi-session · broker · machine · standby pj.nexi-machine-qa"),
+        run("someone-else", "nexi-session [theirs]"),
+        run("pj", "nexi-session · broker · machine · standby pj.nexi-machine-qa"),
+      ],
+      "pj",
+    );
+    expect(kept.map((entry) => entry.name)).toEqual(["nexi-session [mine]"]);
+  });
 });
 
 describe("parseJobStepsResponse", () => {

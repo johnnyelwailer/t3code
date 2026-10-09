@@ -127,7 +127,15 @@ export interface SpawnThreadOpts<Capabilities = WorkflowChildCapabilities> {
   readonly effort?: AgentEffort;
   /** Ephemeral children stay out of the sidebar; retained children are durable and visible. */
   readonly retention?: "ephemeral" | "retained";
+  readonly checkout?: WorkflowChildCheckout;
 }
+
+/**
+ * Where a child thread works. `"project"` (the default) is the project root; `"launch-thread"` is
+ * the launch thread's branch and worktree, for a recipe that must change the checkout it was
+ * started from (fixing a PR branch). A headless run has no launch thread and uses the root.
+ */
+export type WorkflowChildCheckout = "project" | "launch-thread";
 
 /**
  * Options for `agent(prompt, opts)` — the one-shot `spawnThread(opts).askAgent(prompt, opts)`. It
@@ -144,6 +152,8 @@ export interface AgentOpts<
 > extends AskOpts<R> {
   /** What the one-shot child may do: `"inherit"`, or an explicit subset of the parent's. */
   readonly capabilities: Capabilities;
+  /** Where the one-shot child works; see {@link WorkflowChildCheckout}. */
+  readonly checkout?: WorkflowChildCheckout;
 }
 
 /** Sandboxed inline widget shown in a thread. HTML/SVG must be a fragment.

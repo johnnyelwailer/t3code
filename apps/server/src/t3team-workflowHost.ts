@@ -8,7 +8,8 @@
  *     `message.dispatch`, `interruptThread`), so they take the orchestrator's own lock and
  *     legacy-transcript hydration;
  *   • run-less notes go through the fork recorder, rich rows (decision cards, widgets, step
- *     pips) through the fork artifacts store, run status through the fork facts store, and
+ *     pips) through the fork artifacts store, run status through the fork facts store (and a
+ *     waiting `user.input` ask through the fork workflow-ask mirror on the asked thread), and
  *     workflow children are linked to their launch thread through the fork lineage writer.
  * None of these writers is built here: the server registers each once and this layer consumes
  * them, so the engine shares the orchestrator's lock and event sink by reference.
@@ -29,6 +30,9 @@ import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsSt
 import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import { T3TeamThreadLineage } from "./t3team-v2/t3team-threadLineage.ts";
 import { T3TeamThreadMessageRecorder } from "./t3team-v2/t3team-threadMessageRecorder.ts";
+import { T3TeamThreadWorkflowAsk } from "./t3team-v2/t3team-threadWorkflowAsk.ts";
+import { syncWorkflowAskMirrors } from "./t3team-workflowHostAskMirror.ts";
+import { workflowChildCheckout } from "./t3team-workflowHostChildCheckout.ts";
 import { makeHeldWorkflowMessages } from "./t3team-workflowHostHeld.ts";
 import { splitWorkflowMessage } from "./t3team-workflowHostMessages.ts";
 import type {
@@ -73,6 +77,7 @@ const make = Effect.gen(function* () {
   const artifacts = yield* T3TeamThreadArtifactsStore;
   const facts = yield* T3TeamThreadFactsStore;
   const lineage = yield* T3TeamThreadLineage;
+  const workflowAsk = yield* T3TeamThreadWorkflowAsk;
   const sql = yield* SqlClient.SqlClient;
   const writeMessage = (input: WorkflowHostMessageInput) =>
     Effect.gen(function* () {
@@ -94,6 +99,7 @@ const make = Effect.gen(function* () {
   const createThread = (input: WorkflowHostCreateThreadInput) =>
     Effect.gen(function* () {
       const threadId = ThreadId.make(input.threadId);
+      const checkout = yield* workflowChildCheckout(threads, input);
       // Deterministic: the engine re-fires a spawn only when its journal says it never landed,
       // and a receipt makes a duplicate a no-op rather than a second thread.
       yield* threads.dispatch({
@@ -105,8 +111,7 @@ const make = Effect.gen(function* () {
         modelSelection: input.modelSelection,
         runtimeMode: input.runtimeMode,
         interactionMode: input.interactionMode,
-        branch: null,
-        worktreePath: null,
+        ...checkout,
         createdBy: "system",
         creationSource: "server",
       });
@@ -177,9 +182,11 @@ const make = Effect.gen(function* () {
       }),
     );
 
+  // The run's waiting question also mirrors onto the asked thread's shell (notifications, sidebar).
   const syncRunFacts = (launchThreadId: string) =>
     readWorkflowRunFacts(sql, launchThreadId).pipe(
       Effect.flatMap((patch) => facts.upsert(ThreadId.make(launchThreadId), patch)),
+      Effect.andThen(syncWorkflowAskMirrors({ sql, writer: workflowAsk, launchThreadId })),
       failAs("syncRunFacts"),
     );
 

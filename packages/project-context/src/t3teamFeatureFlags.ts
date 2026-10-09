@@ -11,6 +11,12 @@ export const FEATURE_FLAG_DEFINITIONS = {
     requiresRestart: true,
     description: "Store project state in .nexi. Changes apply on the next server start.",
   },
+  MACHINE_SETUP: {
+    defaultEnabled: false,
+    requiresRestart: false,
+    description:
+      "Set up a project machine from the first message of a cloud session for a project that has none. Changes apply immediately.",
+  },
   // Temporarily disabled 2026-10-07: the work profiles are too dev-focused (only the developer
   // profile is actually tailored), so the chooser costs a setup step without changing the UX.
   // Relanding is tracked in https://nexplore.ghe.com/hive/nx-nexi/issues/60 — turn it back on

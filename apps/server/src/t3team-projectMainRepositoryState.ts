@@ -22,6 +22,7 @@ import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
   REFERENCES_DIR_NAME,
+  isLinkedRepositoryReady,
   type LinkedRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
 
@@ -35,7 +36,7 @@ export const detectMainRepositoryCandidates = Effect.fn("detectMainRepositoryCan
     const candidates: ProjectMainRepositoryCandidate[] = [];
     for (const entry of linkedRepositories) {
       const checkoutPath = entry.localPath?.trim();
-      if (entry.status === "failed" || !checkoutPath) continue;
+      if (!isLinkedRepositoryReady(entry) || !checkoutPath) continue;
       if (candidates.some((candidate) => candidate.checkoutPath === checkoutPath)) continue;
       yield* ensureNexiProjectStateDir(checkoutPath);
       const isClone = yield* exists(path.join(checkoutPath, ".git"));

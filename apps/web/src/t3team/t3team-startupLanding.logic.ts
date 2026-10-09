@@ -73,8 +73,9 @@ export function deriveStartupMyWorkProbe(input: {
 }
 
 /**
- * True when the document was loaded on the index route — the cold start. Browser history routes
- * on the pathname; the desktop shell uses hash history, so its route lives in the hash.
+ * True when the document was loaded on the index route — the cold start. `/` is bridged to the
+ * Team home `/t3team`, so a reload there is a cold start too. Browser history routes on the
+ * pathname; the desktop shell uses hash history, so its route lives in the hash.
  */
 export function isIndexBootUrl(url: string, hashRouting: boolean): boolean {
   let parsed: URL;
@@ -84,7 +85,7 @@ export function isIndexBootUrl(url: string, hashRouting: boolean): boolean {
     return false;
   }
   const path = hashRouting ? parsed.hash.replace(/^#/, "").split("?")[0] : parsed.pathname;
-  return path === "" || path === "/";
+  return path === "" || path === "/" || path === "/t3team" || path === "/t3team/";
 }
 
 /** The URL this document was loaded from, independent of any client-side navigation since. */
@@ -110,7 +111,22 @@ export function markStartupLandingDecided(): void {
   startupLandingDecided = true;
 }
 
+/**
+ * The gate itself also runs once: the home can unmount and remount within one shell mount (pick a
+ * project, then clear it), and that later home must not probe again.
+ */
+let startupGateClaimed = false;
+
+export function isStartupGateUnclaimed(): boolean {
+  return !startupGateClaimed;
+}
+
+export function claimStartupGate(): void {
+  startupGateClaimed = true;
+}
+
 /** Test-only: start a fresh app session. */
 export function resetStartupLandingSessionForTests(): void {
   startupLandingDecided = false;
+  startupGateClaimed = false;
 }

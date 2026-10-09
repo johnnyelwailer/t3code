@@ -139,6 +139,7 @@ import {
   toShellApplicationEvent,
   type ShellApplicationEvent,
 } from "./orchestration-v2/ShellStream.ts";
+import { shownShell } from "./orchestration-v2/t3team-hiddenShellThreads.ts";
 import { ORCHESTRATION_V2_PROJECTION_SCHEMA_VERSION } from "./orchestration-v2/ProjectionStore.ts";
 import { bufferLiveStream } from "./orchestration-v2/LiveStreamBudget.ts";
 import { coalesceThreadLiveStream } from "./orchestration-v2/ThreadLiveEventCoalescer.ts";
@@ -149,6 +150,7 @@ import {
   threadReplayEncodedBytes,
   THREAD_RESUME_MAX_REPLAY_EVENTS,
 } from "./orchestration-v2/ThreadStream.ts";
+import { isMachineSetupEnabled } from "./cloud/t3team-machineSetupFlag.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import { isWorkProfileChooserEnabled } from "./t3team-workProfileChooserFlag.ts";
 import { isNexiStateDirSelectedAtStartup } from "@t3tools/project-context/t3teamProjectStateDir";
@@ -1074,7 +1076,7 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
               return yield* projectItem(stored);
             }
             const shell = yield* threadManagement.getThreadShell(stored.event.threadId);
-            return shellStreamItemFromThreadShell({ stored, shell });
+            return shellStreamItemFromThreadShell({ stored, shell: shownShell(shell) });
           }),
         { concurrency: 8 },
       );
@@ -1825,6 +1827,7 @@ const layerWsRpc = (
             // Runtime feature flags (env NEXI_FF_MAIN_REPOSITORY / NEXI_FF_NEXI_STATE_DIR,
             // default on): project main repository, and the `.nexi` state dir name.
             mainRepository: isMainRepositoryEnabled(),
+            machineSetup: isMachineSetupEnabled(),
             // Runtime feature flag (env NEXI_FF_WORK_PROFILE_CHOOSER, default off): the work
             // profile chooser. Off means clients use the developer profile everywhere.
             workProfileChooser: isWorkProfileChooserEnabled(),
@@ -1876,13 +1879,14 @@ const layerWsRpc = (
               Effect.forEach(
                 coalesceStoredThreadEvents(Array.from(events)),
                 (stored) =>
-                  threadManagement
-                    .getThreadShell(stored.event.threadId)
-                    .pipe(
-                      Effect.map((shell) =>
-                        archivedShellStreamItemFromThreadShell({ stored, shell }),
-                      ),
+                  threadManagement.getThreadShell(stored.event.threadId).pipe(
+                    Effect.map((shell) =>
+                      archivedShellStreamItemFromThreadShell({
+                        stored,
+                        shell: shownShell(shell),
+                      }),
                     ),
+                  ),
                 { concurrency: 8 },
               ),
             ),

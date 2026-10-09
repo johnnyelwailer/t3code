@@ -24,6 +24,7 @@ import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 
 import { activateCompiledInDistribution } from "./t3team-distribution-bootstrap.ts";
+import { activatePackRecipeSources } from "./t3team-packRecipeSourcesFromEnv.ts";
 
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as HostPowerMonitor from "./background/HostPowerMonitor.ts";
@@ -228,6 +229,7 @@ import {
   t3teamGitHubPullRequestContextRouteLayer,
 } from "./t3team-github-routes.ts";
 import { t3teamProjectWorkspaceBootstrapRouteLayer } from "./t3team-project-repository-routes.ts";
+import { T3TeamLinkedRepositorySyncLive } from "./t3team-linkedRepositorySync.ts";
 import { t3teamProjectMainRepositoryRouteLayer } from "./t3team-projectMainRepositoryRoute.ts";
 import { t3teamThreadToolContextRouteLayer } from "./t3team-thread-tool-context-routes.ts";
 import { t3teamThreadPlacementRouteLayer } from "./t3team-thread-placement-routes.ts";
@@ -261,12 +263,14 @@ import {
   T3TeamThreadSilenceWatchReactorLive,
 } from "./t3team-threadSilenceWatchReactorLive.ts";
 import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
+import { T3TeamKickoffRecipeLive } from "./t3team-kickoffRecipe.ts";
 import { T3TeamWorkflowSignalDeliveryLive } from "./t3team-workflowSignalDelivery.ts";
 import { T3TeamWorkflowSignalReconcilerLive } from "./t3team-workflowSignalReconciler.ts";
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 import { T3TeamWorkflowSchedulerSweepLive } from "./t3team-workflowSchedulerSweepLive.ts";
 import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
+import * as T3TeamChangeRequestPublisher from "./t3team-changeRequestPublisher.ts";
 import * as T3TeamScriptHost from "./t3team-scriptHostContext.ts";
 import * as HtmlRender from "./htmlRender/HtmlRender.ts";
 import * as PreviewBrowser from "./htmlRender/PreviewBrowser.ts";
@@ -640,6 +644,14 @@ const T3TeamToolBrokerLayerLive = T3TeamToolBrokerLive.pipe(
   // Same HtmlRender + PreviewBrowser pair the MCP html_render toolkit uses.
   Layer.provide(HtmlRender.layer),
   Layer.provide(PreviewBrowser.layer),
+  // t3team: `t3team.change_request.publish` commits, pushes and opens the change request through
+  // the same git stack the Git panel uses (memoized layer references).
+  Layer.provide(
+    T3TeamChangeRequestPublisher.layer.pipe(
+      Layer.provide(layerGit),
+      Layer.provide(WorkspacePaths.layer),
+    ),
+  ),
 );
 
 // Webhook URLs go through the relay only when the managed tunnel it forwards
@@ -1050,6 +1062,9 @@ const layerMakeServer = Layer.unwrap(
       ),
     );
 
+    // Recipes of the pack on disk (T3TEAM_PACKS_DIR), for a host that compiles its distribution in.
+    yield* activatePackRecipeSources;
+
     const layerHttpListening = Layer.effectDiscard(
       Effect.gen(function* () {
         yield* HttpServer.HttpServer;
@@ -1421,6 +1436,8 @@ const layerMakeServer = Layer.unwrap(
       T3TeamThreadSilenceWatchReactorLive,
       T3TeamThreadTransientTurnRetryLive,
       T3TeamWorkflowEngineRehydrateLive,
+      // t3team: a recipe the first user message on the bootstrap thread starts (T3CODE_KICKOFF_RECIPE).
+      T3TeamKickoffRecipeLive,
       layerCloudDesiredLinkReconcile,
       HeapSnapshot.layer,
     );
@@ -1438,6 +1455,9 @@ const layerMakeServer = Layer.unwrap(
       // t3team: recipe scripts' `ctx.store` / `ctx.changeRequests`, for the recipe launch route
       // (served at this level, like the PR context route above) and boot rehydration.
       Layer.provide(T3TeamScriptHost.layer.pipe(Layer.provide(layerPullRequestService))),
+      // t3team: background linked-repository clones/fetches, shared by the workspace bootstrap and
+      // linked-repository status routes (served at this level, like the PR context route above).
+      Layer.provide(T3TeamLinkedRepositorySyncLive),
       Layer.provide(PullRequestProviderRegistry.layer),
       Layer.provideMerge(layerRuntimeServices),
       Layer.provideMerge(

@@ -2935,6 +2935,8 @@ code {
   --stage-nx-orb-alt: #f7cbed;
   /* Label sits on the ground, so it ships with the ground rather than in the component. */
   --stage-nx-label: #ffffff;
+  /* Sidebar-strip orb only (the send-button field keeps the full orb colour). */
+  --stage-nx-strip-orb-opacity: 1;
   /* In-progress glow: the duo's accent, soft. Ships with the palette, not the component. */
   --glow-nx: #f05a0a;
   --glow-nx-strength: 34%;
@@ -2945,6 +2947,9 @@ code {
   --stage-nx-orb: #e5e0ff;
   --stage-nx-orb-alt: #1c1772;
   --stage-nx-label: #ffffff;
+  /* The near-white orb on the saturated night ground blooms in dark chrome; blend it ~60% into the
+     ground (hard edge kept) so it recedes behind the wordmark. */
+  --stage-nx-strip-orb-opacity: 0.4;
   /* Blau reads as the working colour at night; orange would fight the dark ground. */
   --glow-nx: #6b78e6;
   --glow-nx-strength: 42%;

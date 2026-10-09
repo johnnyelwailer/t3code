@@ -4,6 +4,7 @@ import {
   runRanAfter,
   usageLimitBlockedRun,
 } from "@t3tools/shared/orchestrationV2ThreadError";
+import { isManuallyContinuableRun } from "@t3tools/shared/t3team-manualContinuation";
 import { threadPullRequestsOf } from "@t3tools/shared/threadPullRequests";
 import {
   normalizeThreadPullRequestKey,
@@ -128,8 +129,8 @@ import {
 import { planThreadDeletion } from "./ThreadDeletion.ts";
 import { T3TeamSettleGuard, settleGuardInput } from "../t3team-v2/t3team-settleGuard.ts";
 import { keepsRenderedWakeText } from "../t3team-v2/t3team-delegatedCompletionWakeRenderer.ts";
-import { classifyTransientRunFailure } from "./t3team-transientRunFailure.ts";
 import { t3teamUserInputAnswerText } from "./t3team-userInputAnswerText.ts";
+import { visibleShellThreads } from "./t3team-hiddenShellThreads.ts";
 import { rewritePersistenceFailureCause } from "./persistenceStorageError.ts";
 
 export class OrchestratorDispatchError extends Schema.TaggedError<OrchestratorDispatchError>()(
@@ -4494,14 +4495,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       let projection = yield* getProjectionWithPendingEvents(command.threadId, events);
       if (command.manualContinuationOfRunId !== undefined) {
         const source = projection.runs.find((run) => run.id === command.manualContinuationOfRunId);
-        const limited = latestRootProviderFailure(source ?? null, projection.turnItems);
         if (
           command.dispatchMode.type !== "start_immediately" ||
           source === undefined ||
-          (source.status !== "interrupted" &&
-            !(source.status === "failed" && limited?.class === "usage_limit") &&
-            // t3team: transient failures (gateway 423/429/5xx, stalls) may be continued too.
-            !(source.status === "failed" && classifyTransientRunFailure(limited) !== null)) ||
+          // t3team: any failed run may be continued (a new run), not only usage limits.
+          !isManuallyContinuableRun(source, projection.turnItems) ||
           latestExecutedRun(projection.runs)?.id !== source.id ||
           projection.thread.archivedAt !== null ||
           projection.thread.deletedAt !== null ||
@@ -4706,11 +4704,15 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               : yield* providerSessions
                   .get(providerSessionId)
                   .pipe(Effect.orElseSucceed(() => Option.none()));
-          if (Option.isNone(liveSession)) {
-            const runningTurn = projection.providerTurns.find(
-              (candidate) =>
-                candidate.runAttemptId === target.activeAttemptId && candidate.status === "running",
-            );
+          const runningTurn = projection.providerTurns.find(
+            (candidate) =>
+              candidate.runAttemptId === target.activeAttemptId && candidate.status === "running",
+          );
+          // Only a run that got under way can be a zombie. One that never started keeps the
+          // regular steer validation (maintenance commands, goal commands, not-running targets).
+          const underWay =
+            runningTurn !== undefined || target.status === "running" || target.status === "waiting";
+          if (Option.isNone(liveSession) && underWay) {
             yield* Effect.logWarning(
               "Steer/restart found no live provider session; settling zombie turn and starting a fresh run",
               {
@@ -11008,6 +11010,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         .pipe(Effect.mapError((cause) => new OrchestratorProjectionError({ threadId, cause }))),
     getShellSnapshot: (options) =>
       projectionStore.getShellSnapshot(options).pipe(
+        // t3team: host-machinery threads stay off the navigation shell (t3team-hiddenShellThreads.ts).
+        Effect.map((snapshot) => ({
+          ...snapshot,
+          threads: visibleShellThreads(snapshot.threads),
+          archivedThreads: visibleShellThreads(snapshot.archivedThreads),
+        })),
         Effect.mapError(
           (cause) =>
             new OrchestratorProjectionError({

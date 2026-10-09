@@ -40,7 +40,8 @@ function fakeElement(attributes: Record<string, string>): FakeElement {
   return element;
 }
 
-async function runBrandScript(body: unknown) {
+async function runBrandScript(body: unknown, bootErrorText?: string) {
+  const bootErrorMessage = bootErrorText === undefined ? null : { textContent: bootErrorText };
   const card = fakeElement({ "aria-label": "T3 Code splash screen" });
   const logo = fakeElement({ alt: "T3 Code", src: "/apple-touch-icon.png" });
   const elements = new Map<string, FakeElement>([
@@ -58,6 +59,7 @@ async function runBrandScript(body: unknown) {
     },
     documentElement,
     getElementById: (id: string) => elements.get(id) ?? null,
+    querySelector: (selector: string) => (selector === "#boot-error p" ? bootErrorMessage : null),
   };
   const fetchImpl = () =>
     Promise.resolve({
@@ -66,7 +68,7 @@ async function runBrandScript(body: unknown) {
     });
   const expression = brandScript.trim().replace(/;\s*$/, "");
   await new Function("document", "fetch", `return ${expression}`)(fakeDocument, fetchImpl);
-  return { title, documentElement, card, logo };
+  return { title, documentElement, card, logo, bootErrorMessage };
 }
 
 describe("index.html pack brand boot script", () => {
@@ -91,5 +93,13 @@ describe("index.html pack brand boot script", () => {
     expect(boot.card.attributes["aria-label"]).toBe("Pack Label splash screen");
     expect(boot.logo.alt).toBe("Pack Label");
     expect(boot.logo.src).toBe(mark);
+  });
+
+  it("renames a boot error that rendered before the descriptor resolved", async () => {
+    const boot = await runBrandScript(
+      { appearance: { productName: "Pack Product" } },
+      "T3 Code could not load.",
+    );
+    expect(boot.bootErrorMessage?.textContent).toBe("Pack Product could not load.");
   });
 });

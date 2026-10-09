@@ -45,8 +45,9 @@ const providers = [
   },
 ] as const;
 
-for (const provider of providers) {
-  it.effect(`${provider.name}: fileAt reads the pinned head and base commits, never a branch`, () =>
+it.effect.each(providers)(
+  "$name: fileAt reads the pinned head and base commits, never a branch",
+  (provider) =>
     Effect.gen(function* () {
       const cr = yield* reader();
       providerCalls.length = 0;
@@ -78,47 +79,49 @@ for (const provider of providers) {
         [HEAD, BASE],
       );
     }),
-  );
+);
 
-  it.effect(`${provider.name}: fileAt types binary and missing files`, () =>
+it.effect.each(providers)("$name: fileAt types binary and missing files", (provider) =>
+  Effect.gen(function* () {
+    const cr = yield* reader();
+    const binary = yield* Effect.promise(() =>
+      cr.fileAt({ ref: provider.ref, path: provider.binary, side: "head" }),
+    );
+    assert.deepInclude(binary, { kind: "binary", sha: HEAD });
+    const missing = yield* Effect.promise(() =>
+      cr.fileAt({ ref: provider.ref, path: "nope/missing.ts", side: "head" }),
+    );
+    assert.deepStrictEqual(missing, { kind: "missing", path: "nope/missing.ts", sha: HEAD });
+  }),
+);
+
+it.effect.each(providers)(
+  "$name: fileAt refuses paths outside the repository before asking the provider",
+  (provider) =>
     Effect.gen(function* () {
       const cr = yield* reader();
-      const binary = yield* Effect.promise(() =>
-        cr.fileAt({ ref: provider.ref, path: provider.binary, side: "head" }),
-      );
-      assert.deepInclude(binary, { kind: "binary", sha: HEAD });
-      const missing = yield* Effect.promise(() =>
-        cr.fileAt({ ref: provider.ref, path: "nope/missing.ts", side: "head" }),
-      );
-      assert.deepStrictEqual(missing, { kind: "missing", path: "nope/missing.ts", sha: HEAD });
+      for (const path of [
+        "../secret",
+        "/etc/passwd",
+        "a/../../b",
+        "a//b",
+        "./a",
+        "a\\b",
+        "a/\u0000b",
+        "",
+      ]) {
+        yield* rejects(
+          () => cr.fileAt({ ref: provider.ref, path, side: "head" }),
+          ChangeRequestInputError,
+        );
+        assert.deepStrictEqual(providerCalls, [], `provider asked for path '${path}'`);
+      }
     }),
-  );
+);
 
-  it.effect(
-    `${provider.name}: fileAt refuses paths outside the repository before asking the provider`,
-    () =>
-      Effect.gen(function* () {
-        const cr = yield* reader();
-        for (const path of [
-          "../secret",
-          "/etc/passwd",
-          "a/../../b",
-          "a//b",
-          "./a",
-          "a\\b",
-          "a/\u0000b",
-          "",
-        ]) {
-          yield* rejects(
-            () => cr.fileAt({ ref: provider.ref, path, side: "head" }),
-            ChangeRequestInputError,
-          );
-          assert.deepStrictEqual(providerCalls, [], `provider asked for path '${path}'`);
-        }
-      }),
-  );
-
-  it.effect(`${provider.name}: blobShas reports present and deleted paths at the pinned head`, () =>
+it.effect.each(providers)(
+  "$name: blobShas reports present and deleted paths at the pinned head",
+  (provider) =>
     Effect.gen(function* () {
       const cr = yield* reader();
       providerCalls.length = 0;
@@ -143,8 +146,7 @@ for (const provider of providers) {
         [0],
       );
     }),
-  );
-}
+);
 
 it.layer(Layer.empty)("fileAt shaping and bounds", (it) => {
   const github1 = { repository: "acme/app", number: 1 };

@@ -1050,7 +1050,7 @@ type ScriptHandlerCtx = {
   };
   callTool: <I, R>(ref: ToolRef<I, R>, args: I) => Promise<R>;   // typed cross-tool dispatch
   store?: ScriptPackStore;              // the recipe's own pack store, iff the pack has store:v1
-  changeRequests?: ChangeRequestReader; // detail/diff of the run project's linked repositories,
+  changeRequests?: ChangeRequestReader; // list/detail/diff of the run project's repositories,
                                         // iff the recipe declares integration.read
 };
 ```

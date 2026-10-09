@@ -433,6 +433,150 @@ layer("ProviderEventIngestorV2", (it) => {
     }),
   );
 
+  it.effect("mirrors a todo list reported only as a turn item into its plan", () =>
+    Effect.gen(function* () {
+      const now = yield* DateTime.now;
+      const eventSink = yield* EventSink.EventSinkV2;
+      const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
+      const ingestor = yield* ProviderEventIngestor.ProviderEventIngestorV2;
+      const idAllocator = yield* IdAllocator.IdAllocatorV2;
+      const threadEvent = yield* threadCreatedEvent(now);
+      const providerSessionId = yield* idAllocator.allocate.providerSession({
+        providerInstanceId: modelSelection.instanceId,
+        threadId: threadEvent.threadId,
+      });
+      const planId = PlanId.make("plan:item-only-todo");
+      const nodeId = NodeId.make("node:item-only-todo");
+      type TodoListPlan = Extract<OrchestrationV2PlanArtifact, { readonly kind: "todo_list" }>;
+      // The Nexplore pack driver reports todos this way: a completed snapshot
+      // item per update, with no `plan.updated`.
+      const ingestItem = (steps: TodoListPlan["steps"]) =>
+        ingestor.ingestNormalized({
+          providerSessionId,
+          providerInstanceId: modelSelection.instanceId,
+          threadId: threadEvent.threadId,
+          event: {
+            type: "turn_item.updated",
+            driver: CODEX_DRIVER,
+            turnItem: {
+              id: TurnItemId.make("turn-item:item-only-todo"),
+              threadId: threadEvent.threadId,
+              runId: null,
+              nodeId,
+              providerThreadId: null,
+              providerTurnId: null,
+              nativeItemRef: null,
+              parentItemId: null,
+              ordinal: 1,
+              status: "completed",
+              title: null,
+              startedAt: now,
+              completedAt: now,
+              updatedAt: now,
+              type: "todo_list",
+              planId,
+              steps,
+            },
+          },
+        });
+      const persistedPlan = Effect.map(
+        projectionStore.getThreadProjection(threadEvent.threadId),
+        (projection) =>
+          projection.plans.find(
+            (candidate): candidate is TodoListPlan =>
+              candidate.kind === "todo_list" && candidate.id === planId,
+          ),
+      );
+      const steps: TodoListPlan["steps"] = [
+        { id: "1", text: "Investigate", status: "completed" },
+        { id: "2", text: "Fix todos", status: "running" },
+        { id: "3", text: "Ship it", status: "pending" },
+      ];
+
+      yield* eventSink.write({ events: [threadEvent] });
+      const first = yield* ingestItem(steps);
+      assert.deepEqual(
+        first.map((stored) => stored.event.type),
+        ["turn-item.updated", "plan.updated"],
+      );
+      const plan = yield* persistedPlan;
+      assert.equal(plan?.status, "active");
+      assert.equal(plan?.nodeId, nodeId);
+      assert.deepEqual(
+        plan?.steps.map(({ text, status }) => ({ text, status })),
+        steps.map(({ text, status }) => ({ text, status })),
+      );
+
+      // An unchanged snapshot (or a provider that already sent this plan) adds no plan event.
+      const repeated = yield* ingestItem(steps);
+      assert.deepEqual(
+        repeated.map((stored) => stored.event.type),
+        ["turn-item.updated"],
+      );
+
+      const done = steps.map((step) => ({ ...step, status: "completed" as const }));
+      const completed = yield* ingestItem(done);
+      assert.deepEqual(
+        completed.map((stored) => stored.event.type),
+        ["turn-item.updated", "plan.updated"],
+      );
+      assert.equal((yield* persistedPlan)?.status, "completed");
+
+      // Providers that send the plan first and then its matching item get no extra plan event.
+      const providerPlanId = PlanId.make("plan:provider-sent");
+      yield* ingestor.ingestNormalized({
+        providerSessionId,
+        providerInstanceId: modelSelection.instanceId,
+        threadId: threadEvent.threadId,
+        event: {
+          type: "plan.updated",
+          driver: CODEX_DRIVER,
+          plan: {
+            id: providerPlanId,
+            threadId: threadEvent.threadId,
+            runId: null,
+            nodeId,
+            kind: "todo_list",
+            status: "active",
+            steps,
+          },
+        },
+      });
+      const matchingItem = yield* ingestor.ingestNormalized({
+        providerSessionId,
+        providerInstanceId: modelSelection.instanceId,
+        threadId: threadEvent.threadId,
+        event: {
+          type: "turn_item.updated",
+          driver: CODEX_DRIVER,
+          turnItem: {
+            id: TurnItemId.make("turn-item:provider-sent"),
+            threadId: threadEvent.threadId,
+            runId: null,
+            nodeId,
+            providerThreadId: null,
+            providerTurnId: null,
+            nativeItemRef: null,
+            parentItemId: null,
+            ordinal: 2,
+            status: "running",
+            title: null,
+            startedAt: now,
+            completedAt: null,
+            updatedAt: now,
+            type: "todo_list",
+            planId: providerPlanId,
+            steps,
+          },
+        },
+      });
+      assert.deepEqual(
+        matchingItem.map((stored) => stored.event.type),
+        ["turn-item.updated"],
+      );
+    }),
+  );
+
   it.effect(
     "treats successful provider terminal markers as non-persisted orchestration control signals",
     () =>

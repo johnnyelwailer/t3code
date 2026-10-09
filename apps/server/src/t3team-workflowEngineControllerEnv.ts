@@ -15,13 +15,14 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
 import { createWorkflowEngineBroker } from "./t3team-workflowEngineBroker.ts";
+import { takeFirstBranchEntry, tupleOfBranch } from "./t3team-workflowSignalWatchMatch.ts";
 import {
   createCompositionBranchFailureHandler,
   type WorkflowCompositionBranchFailure,
 } from "./t3team-workflowEngineCompositionFailure.ts";
 import { createWorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
 import { toWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
-import { t3teamWorkflowHostToolRunOptions } from "./t3team-workflowHostDraftTools.ts";
+import { t3teamWorkflowHostToolRunOptions } from "./t3team-workflowHostTools.ts";
 
 import type { WorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
 import type { LaunchWorkflowRecipeInput } from "./t3team-workflowEngineLaunchTypes.ts";
@@ -90,8 +91,8 @@ export function createWorkflowRunControllerEnv(
           },
         }),
     // Signal-source hooks (GHE #332): the binding FACT upserts into the durable registrations
-    // table then pokes the reconciler; a `signal.wait` live-drains the durable inbox (first-wins
-    // take). Absent on the fs/in-memory path — the signal verbs then no-op.
+    // table then pokes the reconciler; a `signal.wait` / `signal.waitAny` live-drains the durable
+    // inbox (first-wins take). Absent on the fs/in-memory path — the signal verbs then no-op.
     ...(input.signalStore === undefined
       ? {}
       : {
@@ -117,6 +118,14 @@ export function createWorkflowRunControllerEnv(
                 deliveredAt: input.nowIso(),
               }),
             ).then((entry) => (Option.isSome(entry) ? entry.value.payload : undefined)),
+          drainSignalWaitAny: (wait) =>
+            Effect.runPromise(
+              takeFirstBranchEntry(
+                input.signalStore!,
+                wait.branches.map(tupleOfBranch),
+                input.nowIso(),
+              ),
+            ).then(Option.getOrUndefined),
         }),
   });
   const options: WorkflowRunOptions = {

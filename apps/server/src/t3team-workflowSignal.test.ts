@@ -293,6 +293,7 @@ const makeFakes = () => {
     purgeTerminalRegistrations: voidFx,
     insertInboxEntry: () => Effect.succeed(0),
     takeOpenInboxEntry: () => Effect.succeed(Option.none()),
+    takeFirstOpenInboxEntry: () => Effect.succeed(Option.none()),
     deleteDeliveredInboxEntriesOlderThan: voidFx,
     pruneUndeliveredInboxEntries: voidFx,
     getCursor: (key: string) =>

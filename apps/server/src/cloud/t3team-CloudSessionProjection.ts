@@ -75,6 +75,8 @@ const isRunSettled = (run: WorkflowRunSummary): boolean => run.status === "compl
 const BROKER_RUN_NAME_MARKER = "· broker";
 /** session.yml marks a run that is inside a project machine (#562). */
 const MACHINE_RUN_NAME_MARKER = "· machine";
+/** session.yml marks a run whose agent writes the project's machine definition. */
+const SETUP_RUN_NAME_MARKER = "· setup";
 
 /**
  * Project one provisioning run into the `CloudSession` the client renders.
@@ -115,6 +117,7 @@ export const projectCloudSession = (
     const environmentId = phase === "ready" ? environmentIdFromSteps(steps) : undefined;
     const settled = sessionRun.status === "completed";
     const projectMachine = sessionRun.name.includes(MACHINE_RUN_NAME_MARKER);
+    const machineSetup = sessionRun.name.includes(SETUP_RUN_NAME_MARKER);
     const machineStage =
       projectMachine && phase === "preparing" ? deriveMachineStage(steps) : undefined;
     const name = sessionNameFromRunName(sessionRun.name);
@@ -134,6 +137,7 @@ export const projectCloudSession = (
       ...(environmentId !== undefined ? { environmentId } : {}),
       transport: sessionRun.name.includes(BROKER_RUN_NAME_MARKER) ? "nexi_broker" : "t3_connect",
       ...(projectMachine ? { projectMachine: true } : {}),
+      ...(machineSetup ? { machineSetup: true } : {}),
       ...(machineStage !== undefined ? { machineStage } : {}),
       // Only a settled run has a real "how long did it run" figure; a live
       // session would be reporting its age, not its duration.

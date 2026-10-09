@@ -3,6 +3,7 @@
  * `.changeRequests`). The host builds one per run; each member is present only when the run is
  * entitled to it, so a script tests for presence rather than catching a refusal.
  */
+import type { ChangeRequestList, ChangeRequestListOptions } from "./t3team-sdk.scriptHostList.ts";
 
 import type {
   ChangeRequestBlobShas,
@@ -121,6 +122,8 @@ export interface ChangeRequestDiffPage {
 
 /** Read-only change requests of the run's project. Present iff the recipe declares `integration.read`. */
 export interface ChangeRequestReader {
+  /** The project's change requests, as the app's pull request list reads them. */
+  readonly list: (options?: ChangeRequestListOptions) => Promise<ChangeRequestList>;
   readonly detail: (ref: ChangeRequestRef) => Promise<ChangeRequestDetail>;
   readonly diff: (
     ref: ChangeRequestRef,

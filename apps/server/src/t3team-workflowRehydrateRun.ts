@@ -32,12 +32,12 @@ import {
 } from "./t3team-workflowEngineLaunch.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import { resolveWorkflowAgentModel } from "./t3team-workflowAgentModelPolicy.ts";
-import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
+import { makeT3TeamWorkflowHostToolClient } from "./t3team-workflowHostTools.ts";
 import type { T3TeamScriptHost } from "./t3team-scriptHostContext.ts";
 import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 
 /** Derived from the consumer rather than re-declared, so it cannot drift from the real broker. */
-type HostDraftToolBroker = Parameters<typeof makeT3TeamWorkflowHostDraftToolClient>[0]["broker"];
+type HostToolBroker = Parameters<typeof makeT3TeamWorkflowHostToolClient>[0]["broker"];
 
 export type WorkflowRunRehydratorDeps = {
   readonly repo: WorkflowRunRepositoryShape;
@@ -46,7 +46,7 @@ export type WorkflowRunRehydratorDeps = {
   readonly runsRoot: string;
   readonly host: WorkflowHostPort;
   readonly rearmScheduler: () => Promise<void>;
-  readonly toolBroker: HostDraftToolBroker | undefined;
+  readonly toolBroker: HostToolBroker | undefined;
   readonly nowIso: () => string;
   /** Durable signal-source state (GHE #332); absent when the host did not wire it (tests).
    * Restored runs replay new `signal.wait`/`signal.register` verbs against it. */
@@ -71,7 +71,7 @@ export function makeWorkflowRunRehydrator(deps: WorkflowRunRehydratorDeps) {
   const hostToolClientFor = (run: WorkflowRun) => {
     const grant = run.hostToolGrant;
     if (toolBroker === undefined || grant === undefined || grant === null) return undefined;
-    return makeT3TeamWorkflowHostDraftToolClient({
+    return makeT3TeamWorkflowHostToolClient({
       broker: toolBroker,
       launchThreadId: run.launchThreadId ?? undefined,
       ...(grant.toolGroups === null ? {} : { allowedToolGroups: grant.toolGroups }),
