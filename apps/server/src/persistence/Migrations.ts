@@ -12,6 +12,7 @@ import * as Migrator from "effect/sql/Migrator";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { reconcileV2PreviewMigration } from "./reconcileV2PreviewMigration.ts";
+import { reconcileForkSprintLedger } from "./t3team-reconcileForkSprintLedger.ts";
 
 // Import all migrations statically
 import Migration0001 from "./Migrations/001_OrchestrationEvents.ts";
@@ -141,6 +142,8 @@ import Migration0099 from "./Migrations/t3team-077_RepairForkPortTables.ts";
 // Project main repository + feature flags: main's sprint migrations. Main originally registered
 // these at 84/85, which this fork's V2 sync already uses, so they move above the current maximum
 // id (101 at the time) to keep the ledger monotonic on every existing fork install.
+// Databases that already recorded them at 84/85 are relabelled before the Migrator runs; see
+// t3team-reconcileForkSprintLedger.ts.
 import Migration0100 from "./Migrations/t3team-064_ProjectionProjectsMainRepository.ts";
 import Migration0101 from "./Migrations/t3team-065_FeatureFlags.ts";
 // Skills-as-subagents Phase 1 (WI-1): delegate_task `extensions.skills` persists the
@@ -314,8 +317,13 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
     toMigrationInclusive === undefined || toMigrationInclusive >= 55
       ? yield* reconcileV2PreviewMigration()
       : [];
+  const sprintLedgerMigrations =
+    toMigrationInclusive === undefined || toMigrationInclusive >= 84
+      ? yield* reconcileForkSprintLedger()
+      : [];
   const executedMigrations = [
     ...previewMigrations,
+    ...sprintLedgerMigrations,
     ...(yield* run({ loader: makeMigrationLoader(toMigrationInclusive) })),
   ];
   const migrations = executedMigrations.map(([id, name]) => `${id}_${name}`);
