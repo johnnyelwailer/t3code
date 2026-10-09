@@ -11,7 +11,7 @@ import { MessageId, type OrchestrationV2Run, type RunId } from "@t3tools/contrac
 
 import type { TransientRunFailure } from "./orchestration-v2/t3team-transientRunFailure.ts";
 import {
-  MAX_SESSION_TRANSIENT_RETRIES,
+  maxTransientRetries,
   transientRetryExhaustedText,
   transientRetryInFlightText,
   transientRetryReason,
@@ -56,18 +56,19 @@ export const planTransientRetry = (input: {
   readonly runs: ReadonlyArray<Pick<OrchestrationV2Run, "id" | "ordinal" | "userMessageId">>;
   readonly failedRunId: RunId;
   readonly failure: TransientRunFailure;
-  readonly delayMs: (attempt: number, directiveSeconds: number | null) => number;
+  readonly delayMs: (attempt: number, directiveSeconds: number | null, outage: boolean) => number;
 }): TransientRetryPlan => {
   const reason = transientRetryReason(input.failure);
   const attempt = priorRetryAttempts(input.runs, input.failedRunId) + 1;
-  if (attempt > MAX_SESSION_TRANSIENT_RETRIES) {
-    return { kind: "exhausted", note: transientRetryExhaustedText(reason) };
+  const max = maxTransientRetries(input.failure.outage);
+  if (attempt > max) {
+    return { kind: "exhausted", note: transientRetryExhaustedText(reason, max) };
   }
-  const delayMs = input.delayMs(attempt, input.failure.directiveSeconds);
+  const delayMs = input.delayMs(attempt, input.failure.directiveSeconds, input.failure.outage);
   return {
     kind: "retry",
     attempt,
     delayMs,
-    note: transientRetryInFlightText(attempt, reason, delayMs),
+    note: transientRetryInFlightText(attempt, reason, delayMs, max),
   };
 };
