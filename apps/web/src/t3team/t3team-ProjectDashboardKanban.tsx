@@ -1,4 +1,5 @@
 import { ProjectDashboardKanbanBoard } from "~/t3team/t3team-ProjectDashboardKanbanBoard";
+import type { KanbanZoomLevel } from "~/t3team/t3team-kanbanZoom";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import type { ProjectDashboardKanbanColumnCollapse } from "~/t3team/t3team-projectDashboardKanbanCollapse";
 import type { TicketHierarchy } from "~/t3team/t3team-projectDashboardKanbanHierarchy";
@@ -14,6 +15,8 @@ export function ProjectDashboardKanban({
   parentChildGroups,
   jiraLastCheckedAt,
   projectId,
+  kanbanZoomLevel,
+  onKanbanZoomLevelChange,
   onOpenTicket,
   onTicketContextMenu,
   renderTicketExtra,
@@ -26,6 +29,8 @@ export function ProjectDashboardKanban({
   parentChildGroups: TicketHierarchy;
   jiraLastCheckedAt?: number;
   projectId: string;
+  kanbanZoomLevel?: KanbanZoomLevel;
+  onKanbanZoomLevelChange?: (level: KanbanZoomLevel) => void;
   onOpenTicket: (projectId: string, ticketId: string) => void;
   onTicketContextMenu: (event: React.MouseEvent, ticket: ProjectTicket) => void;
   renderTicketExtra?: (ticket: ProjectTicket, compact: boolean) => React.ReactNode;
@@ -40,6 +45,8 @@ export function ProjectDashboardKanban({
       parentChildGroups={parentChildGroups}
       {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
       projectId={projectId}
+      {...(kanbanZoomLevel !== undefined ? { kanbanZoomLevel } : {})}
+      {...(onKanbanZoomLevelChange ? { onKanbanZoomLevelChange } : {})}
       onOpenTicket={onOpenTicket}
       onTicketContextMenu={onTicketContextMenu}
       {...(renderTicketExtra ? { renderTicketExtra } : {})}

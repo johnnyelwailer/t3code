@@ -151,6 +151,7 @@ import {
   THREAD_RESUME_MAX_REPLAY_EVENTS,
 } from "./orchestration-v2/ThreadStream.ts";
 import { isMachineSetupEnabled } from "./cloud/t3team-machineSetupFlag.ts";
+import { isKanbanSemanticZoomEnabled } from "./t3team-kanbanZoomFlag.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import { isMyWorkRightPanelEnabled } from "./t3team-myWorkRightPanelFlag.ts";
 import { isWorkProfileChooserEnabled } from "./t3team-workProfileChooserFlag.ts";
@@ -1820,6 +1821,8 @@ const layerWsRpc = (
             threadResubscribeStagger: isThreadResubscribeStaggerEnabled(),
             // Runtime feature flag (env NEXI_FF_RESOURCE_PRESSURE, default off).
             resourcePressure: isResourcePressureEnabled(),
+            // Runtime feature flag (env NEXI_FF_KANBAN_SEMANTIC_ZOOM, default off).
+            kanbanSemanticZoom: isKanbanSemanticZoomEnabled(),
             ...Option.match(scratchWorkspaceRoot, {
               onNone: () => ({}),
               onSome: (root) => ({ scratchWorkspaceRoot: root }),

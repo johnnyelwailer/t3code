@@ -1,5 +1,6 @@
 import type { ProjectMyWorkStatusCategory } from "~/t3team/t3team-projectMyWork";
 import type { ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
+import type { KanbanZoomLevel } from "~/t3team/t3team-kanbanZoom";
 
 export type { ProjectMyWorkLens };
 
@@ -39,6 +40,8 @@ export interface ProjectDashboardMyWorkState {
   selectedStatus: string;
   tableSortBy: ProjectMyWorkTableSortBy;
   tableSortDirection: ProjectMyWorkTableSortDirection;
+  /** Semantic zoom level for the kanban board; persisted per project. */
+  kanbanZoomLevel: KanbanZoomLevel;
 }
 
 export type PersistedProjectDashboardMyWorkState = Partial<ProjectDashboardMyWorkState>;
@@ -138,6 +141,7 @@ export function createDefaultProjectDashboardMyWorkState(): ProjectDashboardMyWo
     selectedStatus: "all",
     tableSortBy: "updated",
     tableSortDirection: "desc",
+    kanbanZoomLevel: "full",
   };
 }
 

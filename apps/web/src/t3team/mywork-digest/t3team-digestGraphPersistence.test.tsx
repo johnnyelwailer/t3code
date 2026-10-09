@@ -187,7 +187,14 @@ describe("persisted digest graphs", () => {
         blockers: [],
       },
     });
-    writePersistedDigestGraphs(["a", "b", "c", "d", "e"].map(entry));
-    expect(readPersistedDigestGraphs().map((stored) => stored.signature)).toEqual(["c", "d", "e"]);
+    writePersistedDigestGraphs(["a", "b", "c", "d", "e", "f", "g", "h"].map(entry));
+    expect(readPersistedDigestGraphs().map((stored) => stored.signature)).toEqual([
+      "c",
+      "d",
+      "e",
+      "f",
+      "g",
+      "h",
+    ]);
   });
 });
