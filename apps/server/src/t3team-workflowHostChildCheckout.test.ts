@@ -76,6 +76,11 @@ it.layer(TestLayer)("workflow host child checkout", (it) => {
       // A headless run has no launch thread to inherit from.
       yield* child("thread:headless", undefined, true);
       assert.deepStrictEqual(yield* checkoutOf("thread:headless"), [null, null]);
+
+      // An opted-in child whose launch thread is gone fails rather than editing the root.
+      const missing = yield* Effect.exit(child("thread:orphan", "thread:gone", true));
+      assert.isTrue(missing._tag === "Failure");
+      assert.strictEqual(yield* threads.getThreadShell(ThreadId.make("thread:orphan")), null);
     }),
   );
 });
