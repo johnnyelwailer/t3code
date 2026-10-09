@@ -9,7 +9,8 @@ import { usePrimarySessionState } from "~/environments/primary";
  */
 export function useCanManageRelay(): boolean {
   const primarySessionState = usePrimarySessionState();
-  if (typeof window !== "undefined" && window.desktopBridge) return AuthAdministrativeScopes.includes(AuthRelayWriteScope);
+  if (typeof window !== "undefined" && window.desktopBridge)
+    return AuthAdministrativeScopes.includes(AuthRelayWriteScope);
   const data = primarySessionState.data;
   return data?.authenticated ? (data.scopes?.includes(AuthRelayWriteScope) ?? false) : false;
 }

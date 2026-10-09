@@ -20,7 +20,7 @@ function rowDetail(session: CloudSession): string {
 const SLOW_CONNECT_MS = 20_000;
 
 /** "Connecting… 12s", ticking each second so a stuck connect is distinguishable from a working one. */
-export function connectingDetail(elapsedMs: number): string {
+function connectingDetail(elapsedMs: number): string {
   const seconds = Math.max(0, Math.floor(elapsedMs / 1000));
   const base = `Connecting… ${seconds}s`;
   return elapsedMs >= SLOW_CONNECT_MS ? `${base} · taking longer than usual` : base;
