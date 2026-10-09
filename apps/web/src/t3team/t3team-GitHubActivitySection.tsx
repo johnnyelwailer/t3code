@@ -1,10 +1,12 @@
 import { LinkExternalIcon } from "@primer/octicons-react";
 import { ExternalLink } from "lucide-react";
+import { WatchedPullRequestIndicator } from "~/components/pullRequest/t3team-WatchedPullRequestIndicator";
 import { Skeleton } from "~/t3team/components/ui/t3team-skeleton";
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { useT3TeamAgentContextDrag } from "~/t3team/t3team-agentContextDrag";
 import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
+import { pullRequestIdentityOfActivityItem } from "~/t3team/t3team-githubActivityPullRequestIdentity";
 import { GitHubActivityTooltipContent } from "~/t3team/t3team-GitHubActivityTooltipContent";
 import type { AgentContextCapabilities } from "~/t3team/t3team-agentContext";
 import {
@@ -36,6 +38,7 @@ function GitHubActivitySectionRow({
   const visual = getGitHubActivityVisual(item);
   const updatedAt = renderRelativeUpdatedAt(item.updatedAt);
   const linkTarget = item.subjectUrl ?? item.repositoryUrl;
+  const identity = pullRequestIdentityOfActivityItem(item);
   const summaryLabel = isActiveReviewRequested(item)
     ? "Review requested"
     : !isRedundantPullRequestReason(item)
@@ -53,6 +56,7 @@ function GitHubActivitySectionRow({
           {updatedAt ? <span>{updatedAt}</span> : null}
         </div>
       </div>
+      {identity ? <WatchedPullRequestIndicator {...identity} className="mt-0.5" /> : null}
       {linkTarget ? (
         <LinkExternalIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/70" />
       ) : null}

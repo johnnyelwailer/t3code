@@ -8,6 +8,7 @@ import { useT3TeamSidecarRecipeQuickStarts } from "~/t3team/t3team-sidecarRecipe
 import type { T3TeamSidecarRecipeInput } from "~/t3team/t3team-sidecarRecipeTypes";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 import type { SidecarSectionHost } from "~/t3team/t3team-sidecarSectionHost";
+import { T3TeamSidecarSectionHostContext } from "~/t3team/t3team-sidecarSectionHostContext";
 
 export type QuickStartsSectionProps = {
   readonly recipeInput: T3TeamSidecarRecipeInput & {
@@ -45,18 +46,20 @@ function QuickStartsSectionList({
   });
 
   return (
-    <T3TeamKickoffRecipeList
-      recipes={orderedQuickStarts}
-      {...(sectionProps.selectedRecipeId
-        ? { selectedRecipeId: sectionProps.selectedRecipeId }
-        : {})}
-      onSelectRecipe={(recipe, customization) => host.stageKickoff(recipe, customization)}
-      renderRecipe={
-        sectionProps.shell?.wrapItem
-          ? (recipe, content) => sectionProps.shell?.wrapItem?.(recipe, content) ?? content
-          : undefined
-      }
-    />
+    <T3TeamSidecarSectionHostContext.Provider value={host}>
+      <T3TeamKickoffRecipeList
+        recipes={orderedQuickStarts}
+        {...(sectionProps.selectedRecipeId
+          ? { selectedRecipeId: sectionProps.selectedRecipeId }
+          : {})}
+        onSelectRecipe={(recipe, customization) => host.stageKickoff(recipe, customization)}
+        renderRecipe={
+          sectionProps.shell?.wrapItem
+            ? (recipe, content) => sectionProps.shell?.wrapItem?.(recipe, content) ?? content
+            : undefined
+        }
+      />
+    </T3TeamSidecarSectionHostContext.Provider>
   );
 }
 
