@@ -105,4 +105,9 @@ export * from "./t3team-packUi.primitives.ts";
 export * from "./t3team-packUi.overlays.ts";
 export * from "./t3team-packUi.icons.ts";
 export * from "./t3team-packUi.navigation.ts";
-export type { PackClassValue, PackUiHostKit } from "./t3team-packUi.hostKit.ts";
+export type {
+  PackClassValue,
+  PackRecipeLaunchInput,
+  PackRecipeLaunchResult,
+  PackUiHostKit,
+} from "./t3team-packUi.hostKit.ts";

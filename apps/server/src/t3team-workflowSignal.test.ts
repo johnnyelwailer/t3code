@@ -307,6 +307,9 @@ const makeFakes = () => {
           : Option.none(),
       ),
     upsertCursor: (i) => Effect.succeed<void>(void cursors.set(i.instanceKey, i.cursorValue)),
+    deleteRegistration: voidFx,
+    listTriggerRegistrations: () => Effect.succeed([]),
+    listUndeliveredInboxEntries: () => Effect.succeed([]),
   };
   return {
     emits,
