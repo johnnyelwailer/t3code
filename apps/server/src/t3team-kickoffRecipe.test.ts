@@ -51,7 +51,8 @@ describe("launchKickoffRecipe", () => {
             runs.filter((run) => (run as { launchThreadId?: string }).launchThreadId === "t1"),
           );
         },
-        listRecent: () => Effect.succeed(runs),
+        listByStatus: ({ status }: { status: string }) =>
+          Effect.succeed(runs.filter((run) => run.status === status)),
       } as unknown as WorkflowRunRepositoryShape;
       // @effect-diagnostics-next-line unsafeEffectTypeAssertion:off - The earlier run returns before any other service is reached.
       const result = yield* launchKickoffRecipe({
@@ -95,8 +96,8 @@ describe("blockingKickoffRuns", () => {
     );
   });
 
-  it("blocks on a run still live on another thread", () => {
-    for (const status of ["running", "suspended", "queued"]) {
+  it("blocks on a run still active on another thread", () => {
+    for (const status of ["running", "suspended", "queued", "authoring"]) {
       assert.deepStrictEqual(
         blockingKickoffRuns([], [run("elsewhere", status)], path).map((r) => r.runId),
         ["elsewhere"],
@@ -104,15 +105,22 @@ describe("blockingKickoffRuns", () => {
     }
   });
 
-  it("lets a session set up when an earlier session's runs have ended", () => {
-    const ended = ["completed", "failed", "cancelled"].map((status) => run(status, status));
-    assert.deepStrictEqual(blockingKickoffRuns([], ended, path), []);
+  it("lets a session set up when an earlier session's runs have ended or are dormant", () => {
+    const rest = ["completed", "failed", "cancelled", "paused", "sleeping", "watching"].map(
+      (status) => run(status, status),
+    );
+    assert.deepStrictEqual(blockingKickoffRuns([], rest, path), []);
   });
 
-  it("ignores live runs of another recipe", () => {
+  it("ignores active runs of another recipe, and names a run once", () => {
     assert.deepStrictEqual(
       blockingKickoffRuns([], [run("other", "running", "/packs/b/workflow.ts")], path),
       [],
+    );
+    const same = run("same", "running");
+    assert.deepStrictEqual(
+      blockingKickoffRuns([same], [same], path).map((r) => r.runId),
+      ["same"],
     );
   });
 });
