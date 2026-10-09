@@ -95,4 +95,40 @@ describe("resolveFromHost", () => {
       resolveFromHost("effect/Schema", bundleDir(["t3team-hostEffect.mjs"]), notInstalled),
     ).toThrow("ERR_MODULE_NOT_FOUND");
   });
+
+  // The load-bearing claim of the published-bundle path: a recipe that lands on the host entry
+  // must see the SAME Schema (and Context) instance the server chunk imports. Fake temp dirs cannot
+  // prove it — only the real `dist/` after `build:bundle`.
+  it("the built host entry and the server chunk share one Schema instance", async () => {
+    const dist = NodePath.resolve(import.meta.dirname, "../dist");
+    const hostEffectPath = NodePath.join(dist, "t3team-hostEffect.mjs");
+    if (!NodeFS.existsSync(hostEffectPath)) {
+      // Local unit runs without a prior build; CI that builds the bundle keeps this gate.
+      return;
+    }
+    const serverChunk = NodeFS.readdirSync(dist).find(
+      (name) => name.startsWith("server-") && name.endsWith(".mjs"),
+    );
+    expect(serverChunk).toBeDefined();
+    const hostUrl = NodeURL.pathToFileURL(NodePath.join(dist, serverChunk!)).href;
+    const effectUrl = resolveFromHost("effect", hostUrl, notInstalled);
+    expect(effectUrl).toBe(NodeURL.pathToFileURL(hostEffectPath).href);
+
+    const viaFallback = (await import(effectUrl)) as { Schema: { String: unknown } };
+    const viaHostEntry = (await import(NodeURL.pathToFileURL(hostEffectPath).href)) as {
+      Schema: { String: unknown };
+    };
+    expect(viaFallback.Schema).toBe(viaHostEntry.Schema);
+    expect(viaFallback.Schema.String).toBe(viaHostEntry.Schema.String);
+
+    // The server chunk must import that same Schema module, not redefine it.
+    const serverSource = NodeFS.readFileSync(NodePath.join(dist, serverChunk!), "utf8");
+    const hostSource = NodeFS.readFileSync(hostEffectPath, "utf8");
+    const schemaFrom = (source: string) => {
+      const match = source.match(/from\s*"(\.\/Schema-[^"]+\.mjs)"/);
+      expect(match?.[1]).toBeDefined();
+      return match![1]!;
+    };
+    expect(schemaFrom(serverSource)).toBe(schemaFrom(hostSource));
+  });
 });
