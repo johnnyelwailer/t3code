@@ -80,7 +80,9 @@ describe("resolveFromHost", () => {
   it("falls back to the bundle's host-module entries when the packages are not installed", () => {
     const hostUrl = bundleDir(["t3team-hostEffect.mjs", "t3team-hostSdk.mjs"]);
     const beside = (name: string) => new URL(name, hostUrl).href;
-    expect(resolveFromHost("effect", hostUrl, notInstalled)).toBe(beside("./t3team-hostEffect.mjs"));
+    expect(resolveFromHost("effect", hostUrl, notInstalled)).toBe(
+      beside("./t3team-hostEffect.mjs"),
+    );
     expect(resolveFromHost("@t3team/sdk", hostUrl, notInstalled)).toBe(
       beside("./t3team-hostSdk.mjs"),
     );
