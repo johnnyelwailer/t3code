@@ -10,6 +10,7 @@ import {
 } from "./persistence/WorkflowRuns.ts";
 import type { PackRecipeSource } from "./t3team-packRecipeSources.ts";
 import {
+  blockingKickoffRuns,
   launchKickoffRecipe,
   runsOfWorkflow,
   resolveKickoffRecipe,
@@ -77,14 +78,43 @@ describe("launchKickoffRecipe", () => {
     }),
   );
 
-  it.effect("leaves a second thread alone when an earlier thread of the environment ran it", () =>
-    Effect.gen(function* () {
-      const { result } = yield* ranRecipe([
-        { runId: "r1", workflowPath: mine, status: "completed", launchThreadId: "t0" } as never,
-      ]);
-      assert.isNull(result);
-    }),
-  );
+});
+
+describe("blockingKickoffRuns", () => {
+  const path = "/packs/a/workflow.ts";
+  const run = (runId: string, status: string, workflowPath = path) => ({
+    runId,
+    status,
+    workflowPath,
+  });
+
+  it("blocks on any run of the recipe on this thread, ended ones included", () => {
+    assert.deepStrictEqual(
+      blockingKickoffRuns([run("mine", "completed")], [], path).map((r) => r.runId),
+      ["mine"],
+    );
+  });
+
+  it("blocks on a run still live on another thread", () => {
+    for (const status of ["running", "suspended", "queued"]) {
+      assert.deepStrictEqual(
+        blockingKickoffRuns([], [run("elsewhere", status)], path).map((r) => r.runId),
+        ["elsewhere"],
+      );
+    }
+  });
+
+  it("lets a session set up when an earlier session's runs have ended", () => {
+    const ended = ["completed", "failed", "cancelled"].map((status) => run(status, status));
+    assert.deepStrictEqual(blockingKickoffRuns([], ended, path), []);
+  });
+
+  it("ignores live runs of another recipe", () => {
+    assert.deepStrictEqual(
+      blockingKickoffRuns([], [run("other", "running", "/packs/b/workflow.ts")], path),
+      [],
+    );
+  });
 });
 
 describe("runsOfWorkflow", () => {
