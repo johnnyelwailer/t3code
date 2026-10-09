@@ -49,7 +49,8 @@ export type HandleKind =
   | "signal.waitAny"
   | "thread.launch"
   | "thread.launched"
-  | "run.facts";
+  | "run.facts"
+  | "config.resolve";
 
 /** What the host is handed for one fired side effect. `payload` carries the verb's data —
  * always a `threadId`, plus `prompt`/`question`/`text`/`name`/`model` per kind. */
@@ -183,6 +184,8 @@ export interface HostBrokerHandlers {
   readonly "thread.launch"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
   readonly "thread.launched"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
   readonly "run.facts"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
+  /** Resolve the run's recipe config; settles the resolver with the journaled answer. */
+  readonly "config.resolve"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
 }
 
 /**
@@ -203,7 +206,8 @@ export function createHostBroker(handlers: HostBrokerHandlers): MessageBroker {
       if (
         envelope.kind === "thread.launch" ||
         envelope.kind === "thread.launched" ||
-        envelope.kind === "run.facts"
+        envelope.kind === "run.facts" ||
+        envelope.kind === "config.resolve"
       ) {
         return handlers[envelope.kind]?.(envelope, resolver);
       }

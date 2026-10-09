@@ -111,6 +111,24 @@ export type { CompositionOptions, PipelineStage, PipelineStages } from "@runbook
 export type { Watermark, WatermarkOptions, WatermarkState } from "@runbook/core/watermark";
 export { waitForAny, type SignalAnyHit, type WaitForAny } from "./t3team-sdk.signalAny.ts";
 export { LaunchedThreadError, launchThread, setRunFacts } from "./t3team-sdk.launchedThreads.ts";
+export {
+  defineRecipeConfig,
+  recipeAction,
+  type RecipeActionRef,
+  type RecipeConfigRef,
+  type RecipeConfigScope,
+  type RecipeConfigSource,
+  type RecipeConfigSpec,
+  type RecipeConfigValues,
+  type RecipeConfigWarning,
+  type ResolvedRecipeConfig,
+} from "./t3team-sdk.recipeConfig.ts";
+export {
+  getConfig,
+  RecipeConfigError,
+  type RecipeConfigQuery,
+  type RecipeConfigReader,
+} from "./t3team-sdk.recipeConfigPrimitive.ts";
 export type {
   LaunchedThread,
   LaunchedThreadPrimitives,
