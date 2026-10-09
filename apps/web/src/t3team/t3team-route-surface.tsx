@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 
 import { BackendProvider, createT3Backend } from "~/t3team/backend/t3team-index";
+import { setPackRecipeLaunchBackend } from "~/t3team/packs/t3team-packRecipeLaunch";
 import { App as T3TeamApp } from "~/t3team/t3team-App";
 import { T3TeamAddLocalWorkspaceProvider } from "~/t3team/components/t3team-addLocalWorkspaceContext";
 import { openCommandPalette } from "~/commandPaletteBus";
@@ -53,6 +54,11 @@ export function T3TeamRouteSurface() {
     () => openCommandPalette({ open: "add-project" }),
     [],
   );
+
+  useEffect(() => {
+    setPackRecipeLaunchBackend(backend);
+    return () => setPackRecipeLaunchBackend(null);
+  }, [backend]);
 
   useEffect(() => {
     if (!authenticated) {

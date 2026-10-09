@@ -83,6 +83,13 @@ export function createMockBackend(): BackendApi {
       return { ok: true };
     },
 
+    async launchRecipeHeadless(input) {
+      return {
+        runId: `mock-headless-${input.recipeId}-${Date.now()}`,
+        status: "queued",
+      };
+    },
+
     async resolveWorkflowInput() {
       return undefined;
     },

@@ -39,3 +39,4 @@ export declare const useVisibleAnimation: PackUiHostKit["useVisibleAnimation"];
 export declare const useNavigation: PackUiHostKit["useNavigation"];
 export declare const usePackDocument: PackUiHostKit["usePackDocument"];
 export declare const usePackDocuments: PackUiHostKit["usePackDocuments"];
+export declare const launchRecipe: PackUiHostKit["launchRecipe"];
