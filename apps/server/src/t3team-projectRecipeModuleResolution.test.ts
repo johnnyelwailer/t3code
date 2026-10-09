@@ -9,6 +9,7 @@ import {
   ensureProjectRecipeModuleResolution,
   isResolvableFromHost,
   resolveFromHost,
+  withConfigVersion,
 } from "./t3team-projectRecipeModuleResolution.ts";
 
 /**
@@ -127,5 +128,26 @@ describe("resolveFromHost", () => {
     const hostSource = NodeFS.readFileSync(hostEffectPath, "utf8");
     expect(schemaFrom(serverSource)).toBe(schemaFrom(hostSource));
     expect(NodeFS.existsSync(NodePath.join(dist, schemaFrom(hostSource).slice(2)))).toBe(true);
+  });
+});
+
+describe("withConfigVersion", () => {
+  const parent = "file:///repo/.nexi/recipes/pr-watch.config.ts?t3team-config=42";
+
+  it("versions a config's file imports with the config's own version", () => {
+    expect(withConfigVersion("file:///repo/.nexi/policies/merge.ts", parent)).toBe(
+      "file:///repo/.nexi/policies/merge.ts?t3team-config=42",
+    );
+  });
+
+  it("leaves packages, unversioned parents and already-versioned children alone", () => {
+    expect(withConfigVersion("node:fs", parent)).toBe("node:fs");
+    expect(withConfigVersion("file:///repo/x.ts", "file:///repo/recipe.ts?v=1")).toBe(
+      "file:///repo/x.ts",
+    );
+    expect(withConfigVersion("file:///repo/x.ts?t3team-config=7", parent)).toBe(
+      "file:///repo/x.ts?t3team-config=7",
+    );
+    expect(withConfigVersion("file:///repo/x.ts", undefined)).toBe("file:///repo/x.ts");
   });
 });
