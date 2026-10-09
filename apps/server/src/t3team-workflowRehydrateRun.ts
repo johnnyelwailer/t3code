@@ -34,6 +34,7 @@ import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineR
 import { resolveWorkflowAgentModel } from "./t3team-workflowAgentModelPolicy.ts";
 import { makeT3TeamWorkflowHostToolClient } from "./t3team-workflowHostTools.ts";
 import type { T3TeamScriptHost } from "./t3team-scriptHostContext.ts";
+import type { RehydratedRunWorkspace } from "./t3team-workflowRehydrateWorkspace.ts";
 import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 
 /** Derived from the consumer rather than re-declared, so it cannot drift from the real broker. */
@@ -54,6 +55,9 @@ export type WorkflowRunRehydratorDeps = {
   /** Rebuilds a restored run's `ctx.store` / `ctx.changeRequests` from its row; absent in tests
    * that wire no script host, whose scripts then see neither. */
   readonly scriptHost?: T3TeamScriptHost["Service"] | undefined;
+  /** A restored run's `ctx.workspace` / `ctx.workspaceRoot`, rooted at its project; absent in
+   * tests that wire no project store, whose scripts then see the SDK's no-workspace error. */
+  readonly workspaceFor?: RehydratedRunWorkspace | undefined;
 };
 
 export function makeWorkflowRunRehydrator(deps: WorkflowRunRehydratorDeps) {
@@ -105,6 +109,7 @@ export function makeWorkflowRunRehydrator(deps: WorkflowRunRehydratorDeps) {
       ...(hostToolClient === undefined ? {} : { hostToolClient }),
       ...(scriptHost === undefined ? {} : { scriptHost }),
       runsRoot,
+      ...(deps.workspaceFor?.(run) ?? {}),
       ...(run.recipePath == null ? {} : { recipePath: run.recipePath }),
       launchThreadId: run.launchThreadId ?? undefined,
       projectId: run.projectId,

@@ -15,6 +15,7 @@ import { PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH } from "@t3tools/project-recipes";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 
 import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
@@ -115,6 +116,7 @@ export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* 
   // play-as-shape preview, then the durable engine launch — the same funnel the ephemeral
   // `t3team.orchestration.run` tool drives through.
   const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   return yield* launchPreparedWorkflow(
     {
       registry,
@@ -123,6 +125,7 @@ export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* 
       rearmScheduler: () => scheduler.rearm(),
       host,
       fileSystem,
+      path,
       ...(signalStore === undefined
         ? {}
         : {

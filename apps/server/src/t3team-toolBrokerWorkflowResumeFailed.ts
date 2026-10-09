@@ -25,6 +25,7 @@ import type { LaunchWorkflowRecipeInput } from "./t3team-workflowEngineLaunchTyp
 import { resumeFailedTurnStep } from "./t3team-workflowEngineResumeFailedStep.ts";
 import { resumeWorkflowRunFromJournal } from "./t3team-workflowEngineResumeFromJournal.ts";
 import { resolveRehydratedWorkflowScripts } from "./t3team-workflowRehydrateScripts.ts";
+import { workspaceLaunchFields } from "./t3team-workspaceFileAccess.ts";
 
 /** The retained `thread.turn` ask of a host-failed run, or `null` for a body-thrown failure. */
 export function retainedFailedTurnStep(
@@ -86,6 +87,11 @@ export const makeResumeFailedRun =
         args: run.args,
         ...(Object.keys(scripts).length === 0 ? {} : { scripts }),
         runsRoot: deps.path!.join(workspaceRoot, ".t3team-runs"),
+        ...workspaceLaunchFields({
+          fileSystem: deps.fileSystem,
+          pathService: deps.path,
+          workspaceRoot,
+        }),
         launchThreadId: run.launchThreadId ?? undefined,
         projectId: run.projectId,
         modelSelection: run.modelSelection,

@@ -30,6 +30,7 @@ import { resolveWorkflowAgentModel } from "./t3team-workflowAgentModelPolicy.ts"
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import { emitWorkflowShapePreview } from "./t3team-workflowShapePreviewEmit.ts";
 import { buildPreparedWorkflowLifecycle } from "./t3team-workflowEphemeralLifecycle.ts";
+import { workspaceLaunchFields } from "./t3team-workspaceFileAccess.ts";
 
 function nowIso(): string {
   return DateTime.formatIso(DateTime.nowUnsafe());
@@ -103,6 +104,12 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
       ...(input.hostToolClient === undefined ? {} : { hostToolClient: input.hostToolClient }),
       ...(input.scriptHost === undefined ? {} : { scriptHost: input.scriptHost }),
       runsRoot: `${input.workspaceRoot}/.t3team-runs`,
+      // The project checkout, so a script's `ctx.workspace` writes where the user's code lives.
+      ...workspaceLaunchFields({
+        fileSystem: deps.fileSystem,
+        pathService,
+        workspaceRoot: input.workspaceRoot,
+      }),
       ...(input.recipePath == null ? {} : { recipePath: input.recipePath }),
       launchThreadId: input.launchThreadId,
       projectId: input.projectId,

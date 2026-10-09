@@ -19,6 +19,7 @@ import type {
   ScriptHostContext,
   SuspendedResult,
   T3TeamToolHandlerClient,
+  ToolWorkspace,
   WorkflowRef,
   WorkflowRunOptions,
   WorkflowRunResult,
@@ -48,6 +49,12 @@ export interface LaunchWorkflowRecipeInput {
   /** The run's `ctx.store` / `ctx.changeRequests` for its scripts (t3team-scriptHostContext.ts). */
   readonly scriptHost?: ScriptHostContext;
   readonly runsRoot: string;
+  /** The project checkout the run's scripts read/write through `ctx.workspace`, path-guarded to
+   * `workspaceRoot` (t3team-workspaceFileAccess.ts). Absent (headless, no project) leaves the SDK's
+   * "started without a workspace filesystem" error in place. */
+  readonly workspace?: ToolWorkspace;
+  /** The project's workspace root (`ctx.workspaceRoot`); absent falls back to the run directory. */
+  readonly workspaceRoot?: string;
   /** The launching recipe's directory; scopes `launchThread` keys to the recipe (absent: the run). */
   readonly recipePath?: string | undefined;
   /** The chat the user launched from; `undefined` for a headless run (`thread` is undefined). */
