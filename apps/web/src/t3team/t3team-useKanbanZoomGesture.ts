@@ -136,7 +136,6 @@ export function useKanbanZoomGesture(input: {
     const target = kanbanZoomLevelToProgress(input.level);
     if (Math.abs(target - progressRef.current) < 0.001) return;
     springTo(target);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- springTo closes over stable refs
   }, [input.level]);
 
   useEffect(() => {

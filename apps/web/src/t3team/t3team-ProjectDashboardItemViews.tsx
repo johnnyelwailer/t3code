@@ -67,7 +67,7 @@ export function TicketWorkItemCard({
   const titleClass =
     zoomVisual === undefined
       ? compact
-        ? "mt-0.5 line-clamp-2 text-[11px] leading-3.5 break-words @md/ticket-card:text-xs @md/ticket-card:leading-4 @lg/ticket-card:line-clamp-1"
+        ? "mt-0.5 line-clamp-2 text-2xs leading-3.5 break-words @md/ticket-card:text-xs @md/ticket-card:leading-4 @lg/ticket-card:line-clamp-1"
         : "line-clamp-2 text-sm leading-5 break-words"
       : titleAvatarLayout
         ? "min-w-0 flex-1 truncate font-medium leading-snug"
@@ -171,7 +171,7 @@ export function TicketWorkItemCard({
                 <div className="mt-0.5 flex items-center gap-1">{avatar}</div>
               ) : showName ? (
                 <div
-                  className={`truncate text-muted-foreground ${compact ? "mt-0.5 hidden text-[11px] leading-4 @lg/ticket-card:block" : "mt-1 text-xs"}`}
+                  className={`truncate text-muted-foreground ${compact ? "mt-0.5 hidden text-2xs leading-4 @lg/ticket-card:block" : "mt-1 text-xs"}`}
                   style={{ opacity: nameOpacity }}
                 >
                   Assigned to {assigneeName}
