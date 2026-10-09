@@ -130,7 +130,7 @@ const T3TEAM_WORKFLOW_HOST_TOOL_REFS: ReadonlyArray<ToolRef<unknown, unknown>> =
  * thread offers" and silently ignores a recipe that scoped itself narrowly.
  */
 export function makeT3TeamWorkflowHostToolClient(input: {
-  readonly broker: T3TeamToolBrokerShape;
+  readonly broker: Pick<T3TeamToolBrokerShape, "bindSession">;
   readonly launchThreadId: string | undefined;
   readonly allowedToolGroups?: ReadonlyArray<string> | undefined;
 }): T3TeamToolHandlerClient | undefined {

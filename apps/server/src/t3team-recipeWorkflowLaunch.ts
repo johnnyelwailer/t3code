@@ -20,17 +20,15 @@ import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
-import { resolveRecipeHostToolScope } from "./t3team-recipeWorkflowToolScope.ts";
-import { resolveRecipeWorkflowScripts } from "./t3team-recipeWorkflowScripts.ts";
 import { loadThreadProjectContext } from "./t3team-thread-recipe-workflow-routes-shared.ts";
 import { T3TeamScriptHost } from "./t3team-scriptHostContext.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { launchPreparedWorkflow } from "./t3team-workflowEphemeralLaunch.ts";
 import { recordRecipeLaunchFact } from "./t3team-recipeLaunchFact.ts";
+import { resolveRecipeRunBindings } from "./t3team-recipeRunBindings.ts";
 import type { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import { T3TeamWorkflowHost, toWorkflowHostPort } from "./t3team-workflowHost.ts";
-import { makeT3TeamWorkflowHostToolClient } from "./t3team-workflowHostTools.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { T3TeamWorkflowSignalReconciler } from "./t3team-workflowSignalReconciler.ts";
 
@@ -103,40 +101,14 @@ export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* 
     }),
   );
 
-  // The launching recipe's private scripts (Epic 25 §Scripts): a `recipe.ts` recipe module's
-  // `scripts` registration becomes the body's `scripts.*` tree. recipe.json recipes (no module)
-  // resolve to an empty record and the engine keeps its `scripts: {}` default.
-  const scripts = yield* resolveRecipeWorkflowScripts({ recipePath, workflowPath });
-
-  // The body's `getTools()` bridge to the broker's host tools (work-item drafts, change-request
-  // publishing), bound to THIS thread so a proposal lands where the recipe was launched and a publish
-  // runs in its checkout. Scope comes from the RECIPE MODULE, never from a caller
-  // (a caller that omitted it would be handed unrestricted scope); unresolvable ⇒ no bridge at
-  // all, and the resolved scope is what is persisted as the grant, so a restart restores this.
-  const hostToolScope = yield* resolveRecipeHostToolScope({ recipePath, workflowPath });
-  if (hostToolScope.kind === "denied") {
-    yield* Effect.logDebug("workflow launch runs without host tools", {
-      runId,
-      reason: hostToolScope.reason,
-    });
-  }
-  const hostToolGrant =
-    hostToolScope.kind === "granted" ? { toolGroups: hostToolScope.toolGroups } : undefined;
-  const hostToolClient =
-    hostToolScope.kind === "granted"
-      ? makeT3TeamWorkflowHostToolClient({
-          broker: toolBroker,
-          launchThreadId: threadId,
-          allowedToolGroups: hostToolScope.toolGroups,
-        })
-      : undefined;
-
-  // `ctx.store` / `ctx.changeRequests` for the recipe's scripts, entitled by the same recipe
-  // declaration as the host tools (never the request) and by the recipe's pack.
-  const scriptHost = scriptHosts.forRun({
+  const bindings = yield* resolveRecipeRunBindings({
+    runId,
+    threadId,
     projectId: thread.projectId,
     recipePath,
-    toolGroups: hostToolGrant?.toolGroups,
+    workflowPath,
+    toolBroker,
+    scriptHosts,
   });
 
   // Shared launch-prep (spec D10): durable lifecycle row (origin 'recipe'), best-effort
@@ -164,17 +136,8 @@ export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* 
       runId,
       workflowPath,
       args: input.args,
-      // Persist the recipe dir alongside the resolved scripts so a restart can re-resolve them
-      // during rehydration (a scriptless launch needs neither).
-      // The recipe dir is persisted for every recipe run (it also scopes `launchThread` keys);
-      // scripts and their host only when there are scripts to re-resolve.
-      ...(recipePath === undefined ? {} : { recipePath }),
-      ...(Object.keys(scripts).length === 0 || recipePath === undefined
-        ? {}
-        : { scripts, scriptHost }),
-      ...(hostToolClient === undefined || hostToolGrant === undefined
-        ? {}
-        : { hostToolClient, hostToolGrant }),
+      // Scripts, host tools, script host and the recipe dir, persisted for rehydration.
+      ...bindings,
       workspaceRoot: project.workspaceRoot,
       launchThreadId: threadId,
       projectId: thread.projectId,

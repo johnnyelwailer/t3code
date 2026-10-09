@@ -213,6 +213,8 @@ const T3TeamReadMessageTool = Tool.make("t3_read_message", {
 const orchestrationRunParameters = Schema.Struct({
   source: Schema.optional(Schema.String),
   workflowPath: Schema.optional(Schema.String),
+  recipe: Schema.optional(Schema.String),
+  action: Schema.optional(Schema.String),
   args: Schema.optional(Schema.Unknown),
   replaceRunId: Schema.optional(Schema.String),
   intent: Schema.Struct({
