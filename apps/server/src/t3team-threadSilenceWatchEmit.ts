@@ -15,7 +15,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import { shouldStopSilenceWatch } from "./t3team-silenceWatchStop.ts";
+import { isTrueTerminalSessionStatus, shouldStopSilenceWatch } from "./t3team-silenceWatchStop.ts";
 import {
   buildSilenceDetectedPayload,
   type ThreadSilenceDetectedPayload,
@@ -56,7 +56,28 @@ export const makeThreadSilenceWatchEmitter = (
       yield* emitDetected(record, payload, nowIso);
     });
 
+  // A `ready`/`idle` target that still holds a pending turn start (queued in
+  // the provider, not yet running) is in flight, not silently idle: closing
+  // its watch would drop the one signal the watcher has on a stalled child.
+  // True terminals still close. One seam covers the live session-set path,
+  // the sweep recheck, and registration (they all resolve through here).
+  const hasPendingTurn = (targetThreadId: string, stoppedStatus: string) =>
+    isTrueTerminalSessionStatus(stoppedStatus)
+      ? Effect.succeed(false)
+      : deps.query
+          .hasPendingTurnStart(ThreadId.make(targetThreadId))
+          .pipe(Effect.orElseSucceed(() => false));
+
   const resolveStopped = (
+    targetThreadId: string,
+    stoppedStatus: string,
+    triggerSeq: number,
+  ): Effect.Effect<void> =>
+    Effect.flatMap(hasPendingTurn(targetThreadId, stoppedStatus), (pending) =>
+      pending ? Effect.void : resolveStoppedNow(targetThreadId, stoppedStatus, triggerSeq),
+    );
+
+  const resolveStoppedNow = (
     targetThreadId: string,
     stoppedStatus: string,
     triggerSeq: number,
