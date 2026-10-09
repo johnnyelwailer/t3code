@@ -78,7 +78,6 @@ describe("launchKickoffRecipe", () => {
       assert.deepStrictEqual(asked, [{ launchThreadId: "t1", includeEnded: true }]);
     }),
   );
-
 });
 
 describe("blockingKickoffRuns", () => {
