@@ -81,6 +81,8 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     fileSystem,
     path,
     loadThreadProject,
+    // A recipe run by id binds its host tools back into this broker, once it exists.
+    hostToolBroker: () => ({ bindSession }),
   });
   const manageChildren = yield* makeManageChildrenHandler(
     localEnvironmentId === undefined ? {} : { localEnvironmentId },

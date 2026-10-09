@@ -75,6 +75,8 @@ export function executeWorkflowSdkWorkflowRunTool(input: {
   readonly runWorkflow: (args: {
     readonly source?: string;
     readonly workflowPath?: string;
+    readonly recipe?: string;
+    readonly action?: string;
     readonly args?: unknown;
     readonly intent: WorkflowRunIntent;
     readonly replaceRunId?: string;

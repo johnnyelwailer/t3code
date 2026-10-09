@@ -16,7 +16,11 @@ import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
 import { ProviderRegistry } from "./provider/ProviderRegistry.ts";
+import { recordRecipeLaunchFact } from "./t3team-recipeLaunchFact.ts";
+import { T3TeamScriptHost } from "./t3team-scriptHostContext.ts";
 import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts";
+import type { T3TeamToolBrokerShape } from "./t3team-toolBroker.ts";
+import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import {
   makeWorkflowRunToolHandlers,
   type T3TeamWorkflowRunToolHandlers,
@@ -52,6 +56,8 @@ export const makeWorkflowRunToolsForThread = Effect.fn("makeWorkflowRunToolsForT
     readonly stopRun?:
       | ((threadId: ThreadId, runId: string) => Effect.Effect<void, string>)
       | undefined;
+    /** The broker itself, for the host tools of a recipe run by id; read at launch time. */
+    readonly hostToolBroker?: (() => Pick<T3TeamToolBrokerShape, "bindSession">) | undefined;
   }) {
     const registry = Option.getOrUndefined(
       yield* Effect.serviceOption(T3TeamWorkflowEngineRegistry),
@@ -77,6 +83,21 @@ export const makeWorkflowRunToolsForThread = Effect.fn("makeWorkflowRunToolsForT
     if (!registry || !runRepository || !journalStore || !scheduler || !host) {
       return undefined;
     }
+    // `recipe` by id needs the recipe's script host and the facts store for its launch fact.
+    const scriptHosts = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamScriptHost));
+    const facts = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamThreadFactsStore));
+    const recipeRun =
+      scriptHosts === undefined || facts === undefined || deps.hostToolBroker === undefined
+        ? undefined
+        : {
+            toolBroker: deps.hostToolBroker,
+            scriptHosts,
+            recordLaunchFact: (input: Parameters<typeof recordRecipeLaunchFact>[0]) =>
+              recordRecipeLaunchFact(input).pipe(
+                Effect.provideService(T3TeamThreadFactsStore, facts),
+                Effect.mapError((error) => error.message),
+              ),
+          };
     return makeWorkflowRunToolHandlers({
       fileSystem: deps.fileSystem,
       path: deps.path,
@@ -86,6 +107,7 @@ export const makeWorkflowRunToolsForThread = Effect.fn("makeWorkflowRunToolsForT
         ? {}
         : { listProviders: () => providerRegistry.getProviders }),
       ...(contextStore === undefined ? {} : { contextStore }),
+      ...(recipeRun === undefined ? {} : { recipeRun }),
       launch: {
         registry,
         runRepository,
