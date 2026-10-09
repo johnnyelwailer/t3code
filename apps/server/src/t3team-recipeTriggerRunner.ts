@@ -10,34 +10,26 @@
  * daily-cap and launches headless runs through t3team-recipeHeadlessLaunch.ts.
  */
 import { ProjectId } from "@t3tools/contracts";
-import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import * as EffectFileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as EffectPath from "effect/Path";
 
-import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
-import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
 import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
 import { launchHeadlessRecipeWorkflow } from "./t3team-recipeHeadlessLaunch.ts";
 import { listProjectRecipesForAgent } from "./t3team-recipeAgentList.ts";
 import { importRecipeModuleRef } from "./t3team-projectRecipeDiscoveryModule.ts";
-import { T3TeamScriptHost } from "./t3team-scriptHostContext.ts";
 import { readRecipeTriggerSettings } from "./t3team-recipeTriggerSettings.ts";
 import { reconcileRecipeTriggerRegistrations } from "./t3team-recipeTriggerReconcile.ts";
+import { makeTriggerRunnerAmbient } from "./t3team-recipeTriggerRunnerAmbient.ts";
 import type {
   LiveTrigger,
   RecipeTriggerEngine,
   RecipeTriggerLaunchRequest,
 } from "./t3team-recipeTriggerRunnerCore.ts";
 import { makeRecipeTriggerEngine } from "./t3team-recipeTriggerRunnerCore.ts";
-import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
-import { T3TeamWorkflowHost } from "./t3team-workflowHost.ts";
-import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { T3TeamWorkflowSignalReconciler } from "./t3team-workflowSignalReconciler.ts";
 import { makeSignalPollTimer } from "./t3team-workflowSignalSweepTimer.ts";
 
@@ -64,30 +56,11 @@ export const T3TeamRecipeTriggerRunnerLive = Layer.effect(
     const reconcilerService = Option.getOrUndefined(
       yield* Effect.serviceOption(T3TeamWorkflowSignalReconciler),
     );
-    // The ambient app composition (the same narrowing the signal reconciler uses for its
-    // source-side callbacks): each helper casts it to the services its effect needs.
-    const ambient = yield* Effect.context<never>();
-    type FsServices = EffectFileSystem.FileSystem | EffectPath.Path | Clock.Clock;
-    type LaunchServices =
-      | FsServices
-      | T3TeamWorkflowHost
-      | T3TeamWorkflowEngineRegistry
-      | WorkflowRunRepository
-      | WorkflowJournalStore
-      | T3TeamWorkflowScheduler
-      | T3TeamScriptHost;
-    const runProjects = <A, E>(e: Effect.Effect<A, E, ProjectStoreV2>): Promise<A> =>
-      Effect.runPromiseWith(ambient as Context.Context<ProjectStoreV2>)(e);
-    const runStore = <A, E>(e: Effect.Effect<A, E, WorkflowSignalStore>): Promise<A> =>
-      Effect.runPromiseWith(ambient as Context.Context<WorkflowSignalStore>)(e);
-    const runFs = <A, E>(e: Effect.Effect<A, E, FsServices>): Promise<A> =>
-      Effect.runPromiseWith(ambient as Context.Context<FsServices>)(e);
-    const runLaunch = <A, E>(e: Effect.Effect<A, E, LaunchServices>): Promise<A> =>
-      Effect.runPromiseWith(ambient as Context.Context<LaunchServices>)(e);
-
-    const log = (message: string, fields?: unknown): void => {
-      Effect.runSync(Effect.logWarning(message, fields as Record<string, unknown>));
-    };
+    // The ambient app composition narrowed to each effect's service set (the helpers run
+    // effects against that context; see t3team-recipeTriggerRunnerAmbient.ts).
+    const { runProjects, runStore, runFs, runLaunch, log } = makeTriggerRunnerAmbient(
+      yield* Effect.context<never>(),
+    );
 
     let liveTriggers: readonly LiveTrigger[] = [];
     let lastReconcileAtMs = 0;

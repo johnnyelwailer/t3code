@@ -5,6 +5,3 @@
  * preferSchemaOverJson diagnostic.
  */
 export const parseRecipeTriggerSettingsJson = (raw: string): unknown => JSON.parse(raw);
-
-export const stringifyRecipeTriggerSettingsJson = (value: unknown): string =>
-  JSON.stringify(value, null, 2);

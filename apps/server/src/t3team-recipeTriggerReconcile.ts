@@ -25,7 +25,7 @@ import {
 } from "./t3team-recipeTriggerSettings.ts";
 
 /** The host-side source adapters a trigger may listen on: source name → params(projectId). */
-export const TRIGGER_SOURCE_PARAMS: Readonly<
+const TRIGGER_SOURCE_PARAMS: Readonly<
   Record<string, (projectId: string) => Record<string, unknown>>
 > = {
   "scm.viewer.change-requests": (projectId) => ({ projectId }),
@@ -76,7 +76,7 @@ export interface RecipeTriggerReconcileInput {
   readonly log: (message: string, fields?: unknown) => void;
 }
 
-export function resolveRecipeTriggerActionWorkflowPath(
+function resolveRecipeTriggerActionWorkflowPath(
   entry: {
     readonly workflowPath?: string | undefined;
     readonly actions?:

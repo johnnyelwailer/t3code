@@ -23,11 +23,7 @@ import {
   RECIPE_TRIGGER_DEFAULT_SETTINGS,
   type RecipeTriggerEffectiveSettings,
 } from "./t3team-recipeTriggerRunnerCore.ts";
-import { writeFileStringAtomically } from "./atomicWrite.ts";
-import {
-  parseRecipeTriggerSettingsJson,
-  stringifyRecipeTriggerSettingsJson,
-} from "./t3team-recipeTriggerSettingsJson.ts";
+import { parseRecipeTriggerSettingsJson } from "./t3team-recipeTriggerSettingsJson.ts";
 
 /** One entry of the settings doc, keyed `${recipeId}:${triggerId}`. A type alias (not an
  * interface) so it stays assignable to plain `Record` shapes the trigger engine consumes. */
@@ -111,29 +107,3 @@ export function effectiveRecipeTriggerSettings(
           : RECIPE_TRIGGER_DEFAULT_SETTINGS.dailyCap,
   };
 }
-
-/** Write one entry (read → merge → atomic replace). Missing state dir is created. */
-export const writeRecipeTriggerSetting = Effect.fn("writeRecipeTriggerSetting")(function* (input: {
-  readonly workspaceRoot: string;
-  readonly recipeId: string;
-  readonly triggerId: string;
-  readonly setting: RecipeTriggerSetting;
-}) {
-  const fileSystem = yield* FileSystem.FileSystem;
-  const pathService = yield* Path.Path;
-  const file = recipeTriggerSettingsPath({ workspaceRoot: input.workspaceRoot, pathService });
-  const current = yield* readRecipeTriggerSettings({ workspaceRoot: input.workspaceRoot });
-  const doc: RecipeTriggerSettingsDoc = {
-    version: 1,
-    triggers: {
-      ...current,
-      [`${input.recipeId}:${input.triggerId}`]: input.setting,
-    },
-  };
-  // The helper resolves symlinks, creates the parent dir and writes atomically.
-  yield* writeFileStringAtomically({
-    filePath: file,
-    contents: `${stringifyRecipeTriggerSettingsJson(doc)}\n`,
-  });
-  return doc;
-});
