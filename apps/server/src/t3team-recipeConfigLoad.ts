@@ -26,7 +26,7 @@ export { recipeDefaultsAsData } from "./t3team-recipeConfigDefaults.ts";
 
 const cache = new Map<string, { readonly version: string; readonly layers: RecipeConfigLayers }>();
 
-export const recipeConfigPath = (path: Path.Path, workspaceRoot: string, recipeId: string) =>
+const recipeConfigPath = (path: Path.Path, workspaceRoot: string, recipeId: string) =>
   path.join(workspaceRoot, PROJECT_STATE_DIR, "recipes", `${recipeId}.config.ts`);
 
 export const loadRecipeConfigLayers = Effect.fn("loadRecipeConfigLayers")(function* (input: {
