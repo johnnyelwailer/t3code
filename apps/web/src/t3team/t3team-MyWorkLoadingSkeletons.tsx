@@ -12,8 +12,8 @@ import { Skeleton } from "~/t3team/components/ui/t3team-skeleton";
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { digestLaneLayout } from "~/t3team/t3team-projectMyWorkDigestLaneLayout";
 
-/** Rows rise in one after another; 70 ms reads as a sweep without feeling like a queue. */
-const STAGGER_STEP_MS = 70;
+/** Rows rise in one after another; 85 ms reads as a sweep without feeling like a queue. */
+const STAGGER_STEP_MS = 85;
 
 function stagger(index: number): CSSProperties {
   return { "--t3team-stagger": `${index * STAGGER_STEP_MS}ms` } as CSSProperties;

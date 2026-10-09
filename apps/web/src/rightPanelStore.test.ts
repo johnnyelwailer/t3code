@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import {
   migratePersistedRightPanelState,
+  MY_WORK_PANEL_REF,
   pullRequestSurface,
   pullRequestSurfaceId,
   selectActiveRightPanel,
@@ -376,6 +377,47 @@ describe("rightPanelStore", () => {
       migratePersistedRightPanelState({
         byThreadKey: {
           "env-1:pull-requests-panel": panelState,
+          "env-1:thread-A": panelState,
+        },
+      }),
+    ).toEqual({
+      byThreadKey: { "env-1:thread-A": panelState },
+      threadPanelVisibilityByThreadKey: {},
+    });
+  });
+
+  it("drops My Work's shared panel so a restart opens the home fresh", () => {
+    const id = pullRequestSurfaceId({
+      projectId: "project-a",
+      repository: "pingdotgg/t3code",
+      number: 12,
+    });
+    const panelState = {
+      isOpen: true,
+      activeSurfaceId: id,
+      surfaces: [
+        {
+          id,
+          kind: "pull-request" as const,
+          projectId: "project-a",
+          repository: "pingdotgg/t3code",
+          number: 12,
+        },
+      ],
+    };
+    useRightPanelStore.getState().openPullRequest(MY_WORK_PANEL_REF, {
+      projectId: "project-a",
+      repository: "pingdotgg/t3code",
+      number: 12,
+    });
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, MY_WORK_PANEL_REF)
+        .surfaces,
+    ).toHaveLength(1);
+    expect(
+      migratePersistedRightPanelState({
+        byThreadKey: {
+          "my-work-panel:my-work-panel": panelState,
           "env-1:thread-A": panelState,
         },
       }),

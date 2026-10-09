@@ -152,6 +152,7 @@ import {
 } from "./orchestration-v2/ThreadStream.ts";
 import { isMachineSetupEnabled } from "./cloud/t3team-machineSetupFlag.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
+import { isMyWorkRightPanelEnabled } from "./t3team-myWorkRightPanelFlag.ts";
 import { isWorkProfileChooserEnabled } from "./t3team-workProfileChooserFlag.ts";
 import { isNexiStateDirSelectedAtStartup } from "@t3tools/project-context/t3teamProjectStateDir";
 import {
@@ -1831,6 +1832,9 @@ const layerWsRpc = (
             // Runtime feature flag (env NEXI_FF_WORK_PROFILE_CHOOSER, default off): the work
             // profile chooser. Off means clients use the developer profile everywhere.
             workProfileChooser: isWorkProfileChooserEnabled(),
+            // Runtime feature flag (env NEXI_FF_MYWORK_RIGHT_PANEL, default on): My Work aside
+            // uses RightPanelTabs; off keeps the legacy DigestPrAside swap.
+            myWorkRightPanel: isMyWorkRightPanelEnabled(),
             nexiStateDir: isNexiStateDirSelectedAtStartup(),
           };
         });

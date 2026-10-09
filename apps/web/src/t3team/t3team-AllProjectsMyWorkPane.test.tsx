@@ -33,11 +33,33 @@ vi.mock("~/t3team/t3team-DigestPrAside", () => ({
   ),
 }));
 
+vi.mock("~/t3team/t3team-MyWorkRightPanel", () => ({
+  MyWorkRightPanel: ({ kickoff }: { kickoff: React.ReactNode }) => (
+    <div>
+      my-work-right-panel
+      {kickoff}
+    </div>
+  ),
+}));
+
+vi.mock("~/t3team/t3team-myWorkRightPanelFlag", () => ({
+  useT3TeamMyWorkRightPanelEnabled: () => true,
+}));
+
 vi.mock("~/t3team/t3team-digestPrAsideStore", () => ({
   closeDigestPullRequest: () => undefined,
   useDigestPrAsideStore: (selector: (state: { pullRequest: null; ticket: null }) => unknown) =>
     selector({ pullRequest: null, ticket: null }),
 }));
+
+vi.mock("~/rightPanelStore", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/rightPanelStore")>();
+  return {
+    ...actual,
+    useRightPanelStore: (selector: (state: { byThreadKey: Record<string, never> }) => unknown) =>
+      selector({ byThreadKey: {} }),
+  };
+});
 
 vi.mock("~/t3team/t3team-ResizableRightSidebarLayout", () => ({
   ResizableRightSidebarLayout: ({
@@ -70,6 +92,7 @@ describe("AllProjectsMyWorkPane", () => {
       />,
     );
     expect(markup).toContain("kickoff-aside");
+    expect(markup).toContain("my-work-right-panel");
     expect(markup).not.toContain("Open a pull request or a work item");
   });
 });

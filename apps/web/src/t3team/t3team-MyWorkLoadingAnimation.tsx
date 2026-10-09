@@ -64,7 +64,7 @@ export function MyWorkLoadingAnimation({
           aria-hidden
         />
         <div className="relative space-y-4">
-          <div className="flex items-center gap-2.5">
+          <div className="t3team-mywork-loading-mark flex items-center gap-2.5">
             <MyWorkLoadingMark />
             <p className="text-sm text-muted-foreground">{message}</p>
           </div>
