@@ -24,6 +24,7 @@ import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 
 import { activateCompiledInDistribution } from "./t3team-distribution-bootstrap.ts";
+import { activatePackRecipeSources } from "./t3team-packRecipeSourcesFromEnv.ts";
 
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as HostPowerMonitor from "./background/HostPowerMonitor.ts";
@@ -1060,6 +1061,9 @@ const layerMakeServer = Layer.unwrap(
         }),
       ),
     );
+
+    // Recipes of the pack on disk (T3TEAM_PACKS_DIR), for a host that compiles its distribution in.
+    yield* activatePackRecipeSources;
 
     const layerHttpListening = Layer.effectDiscard(
       Effect.gen(function* () {

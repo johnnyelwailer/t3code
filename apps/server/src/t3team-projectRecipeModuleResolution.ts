@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - a synchronous Node module-resolution hook, outside Effect.
 /**
  * Makes the authoring packages resolvable from project-local recipe/workflow modules.
  *
@@ -25,13 +26,44 @@
  * Node process (it loaded, having failed with ERR_MODULE_NOT_FOUND before this hook existed).
  */
 
+import * as NodeFS from "node:fs";
 import * as NodeModule from "node:module";
+import * as NodeURL from "node:url";
 
 /** Packages a project-local recipe or workflow module may import (plus their subpaths). */
 const RESOLVABLE_PACKAGES = ["@t3team/sdk", "effect"] as const;
 
 export function isResolvableFromHost(specifier: string): boolean {
   return RESOLVABLE_PACKAGES.some((name) => specifier === name || specifier.startsWith(`${name}/`));
+}
+
+/**
+ * Where a PUBLISHED bundle keeps the host's own copy of the two bare roots. `effect` and
+ * `@t3team/sdk` are inlined into the bundle and not installed beside it, so `import.meta.resolve`
+ * cannot find them there; the build emits one entry per root (vite.config.ts) that re-exports the
+ * bundle's chunk, so a recipe shares the instance the host itself runs. Subpaths are not covered.
+ */
+const BUNDLED_HOST_MODULES: Readonly<Record<string, string>> = {
+  effect: "./t3team-hostEffect.mjs",
+  "@t3team/sdk": "./t3team-hostSdk.mjs",
+};
+
+/** The URL `specifier` resolves to from the server's own installation, or from its bundle. */
+export function resolveFromHost(
+  specifier: string,
+  hostUrl: string = import.meta.url,
+  resolve: (specifier: string) => string = (name) => import.meta.resolve(name),
+): string {
+  try {
+    return resolve(specifier);
+  } catch (error) {
+    const sibling = BUNDLED_HOST_MODULES[specifier];
+    if (sibling !== undefined) {
+      const url = new URL(sibling, hostUrl);
+      if (NodeFS.existsSync(NodeURL.fileURLToPath(url))) return url.href;
+    }
+    throw error;
+  }
 }
 
 let installed = false;
@@ -56,7 +88,7 @@ export function ensureProjectRecipeModuleResolution(): void {
         // `import.meta.resolve` here resolves against THIS module — i.e. the server's own
         // installation — which is exactly the copy the imported recipe should share, so an
         // author's `defineRecipe` result is instanceof the same registry the host reads.
-        return { url: import.meta.resolve(specifier), shortCircuit: true };
+        return { url: resolveFromHost(specifier), shortCircuit: true };
       }
     },
   });

@@ -1,8 +1,14 @@
+// @effect-diagnostics nodeBuiltinImport:off - the tests build a pack directory on disk.
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   ensureProjectRecipeModuleResolution,
   isResolvableFromHost,
+  resolveFromHost,
 } from "./t3team-projectRecipeModuleResolution.ts";
 
 /**
@@ -49,5 +55,77 @@ describe("ensureProjectRecipeModuleResolution", () => {
       ensureProjectRecipeModuleResolution();
       ensureProjectRecipeModuleResolution();
     }).not.toThrow();
+  });
+});
+
+describe("resolveFromHost", () => {
+  const notInstalled = () => {
+    throw new Error("ERR_MODULE_NOT_FOUND");
+  };
+  const bundleDir = (files: ReadonlyArray<string>) => {
+    const dir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "host-modules-"));
+    for (const file of files) NodeFS.writeFileSync(NodePath.join(dir, file), "export {};\n");
+    return NodeURL.pathToFileURL(NodePath.join(dir, "server-abc123.mjs")).href;
+  };
+
+  it("prefers what the server's installation resolves", () => {
+    const hostUrl = bundleDir(["t3team-hostEffect.mjs"]);
+    expect(resolveFromHost("effect", hostUrl, () => "file:///installed/effect.js")).toBe(
+      "file:///installed/effect.js",
+    );
+  });
+
+  // A published bundle inlines effect and @t3team/sdk and installs neither: the recipe must land on
+  // the bundle's own entries, never on a second copy.
+  it("falls back to the bundle's host-module entries when the packages are not installed", () => {
+    const hostUrl = bundleDir(["t3team-hostEffect.mjs", "t3team-hostSdk.mjs"]);
+    const beside = (name: string) => new URL(name, hostUrl).href;
+    expect(resolveFromHost("effect", hostUrl, notInstalled)).toBe(
+      beside("./t3team-hostEffect.mjs"),
+    );
+    expect(resolveFromHost("@t3team/sdk", hostUrl, notInstalled)).toBe(
+      beside("./t3team-hostSdk.mjs"),
+    );
+  });
+
+  it("rethrows when neither the installation nor the bundle has the module", () => {
+    expect(() => resolveFromHost("effect", bundleDir([]), notInstalled)).toThrow(
+      "ERR_MODULE_NOT_FOUND",
+    );
+    // subpaths have no bundle entry
+    expect(() =>
+      resolveFromHost("effect/Schema", bundleDir(["t3team-hostEffect.mjs"]), notInstalled),
+    ).toThrow("ERR_MODULE_NOT_FOUND");
+  });
+
+  // The load-bearing claim of the published-bundle path: a recipe that lands on the host entry
+  // must share the SAME Schema chunk the server imports. Fake temp dirs cannot prove it — only
+  // the real `dist/` after `build:bundle`. (Dynamic import of these chunks fails under vitest
+  // because of shebang/`import.meta.env` prefixes; the static import graph is the identity proof.)
+  it("the built host entry and the server chunk share one Schema module", () => {
+    const dist = NodePath.resolve(import.meta.dirname, "../dist");
+    const hostEffectPath = NodePath.join(dist, "t3team-hostEffect.mjs");
+    if (!NodeFS.existsSync(hostEffectPath)) {
+      // Local unit runs without a prior build; CI that builds the bundle keeps this gate.
+      return;
+    }
+    const serverChunk = NodeFS.readdirSync(dist).find(
+      (name) => name.startsWith("server-") && name.endsWith(".mjs"),
+    );
+    expect(serverChunk).toBeDefined();
+    const hostUrl = NodeURL.pathToFileURL(NodePath.join(dist, serverChunk!)).href;
+    expect(resolveFromHost("effect", hostUrl, notInstalled)).toBe(
+      NodeURL.pathToFileURL(hostEffectPath).href,
+    );
+
+    const schemaFrom = (source: string) => {
+      const match = source.match(/from\s*"(\.\/Schema-[^"]+\.mjs)"/);
+      expect(match?.[1]).toBeDefined();
+      return match![1]!;
+    };
+    const serverSource = NodeFS.readFileSync(NodePath.join(dist, serverChunk!), "utf8");
+    const hostSource = NodeFS.readFileSync(hostEffectPath, "utf8");
+    expect(schemaFrom(serverSource)).toBe(schemaFrom(hostSource));
+    expect(NodeFS.existsSync(NodePath.join(dist, schemaFrom(hostSource).slice(2)))).toBe(true);
   });
 });
