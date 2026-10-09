@@ -8,7 +8,8 @@
  *     `message.dispatch`, `interruptThread`), so they take the orchestrator's own lock and
  *     legacy-transcript hydration;
  *   • run-less notes go through the fork recorder, rich rows (decision cards, widgets, step
- *     pips) through the fork artifacts store, run status through the fork facts store, and
+ *     pips) through the fork artifacts store, run status through the fork facts store (and a
+ *     waiting `user.input` ask through the fork workflow-ask mirror on the asked thread), and
  *     workflow children are linked to their launch thread through the fork lineage writer.
  * None of these writers is built here: the server registers each once and this layer consumes
  * them, so the engine shares the orchestrator's lock and event sink by reference.
@@ -20,8 +21,7 @@ import { CommandId, MessageId, ThreadId } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { STOP_CASCADE_COMMAND_PREFIX } from "./t3team-actorMessageReactor.ts";
@@ -30,7 +30,11 @@ import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsSt
 import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import { T3TeamThreadLineage } from "./t3team-v2/t3team-threadLineage.ts";
 import { T3TeamThreadMessageRecorder } from "./t3team-v2/t3team-threadMessageRecorder.ts";
+import { T3TeamThreadWorkflowAsk } from "./t3team-v2/t3team-threadWorkflowAsk.ts";
+import { syncWorkflowAskMirrors } from "./t3team-workflowHostAskMirror.ts";
+import { workflowChildCheckout } from "./t3team-workflowHostChildCheckout.ts";
 import { makeHeldWorkflowMessages } from "./t3team-workflowHostHeld.ts";
+import * as HostLaunch from "./t3team-workflowHostLaunchMembers.ts";
 import { splitWorkflowMessage } from "./t3team-workflowHostMessages.ts";
 import type {
   WorkflowHostActivityInput,
@@ -38,25 +42,23 @@ import type {
   WorkflowHostCreateThreadInput,
   WorkflowHostInterruptInput,
   WorkflowHostMessageInput,
-  WorkflowHostPort,
   WorkflowHostStartTurnInput,
 } from "./t3team-workflowHostPort.ts";
+import { failAs, T3TeamWorkflowHostError } from "./t3team-workflowHostFail.ts";
 import { readWorkflowRunFacts } from "./t3team-workflowHostRunFacts.ts";
 import { workflowPromptContext } from "./t3team-workflowTurnPrompt.ts";
 
-export class T3TeamWorkflowHostError extends Schema.TaggedError<T3TeamWorkflowHostError>()(
-  "T3TeamWorkflowHostError",
-  { operation: Schema.String, message: Schema.String },
-) {}
+export { T3TeamWorkflowHostError };
 
 type HostEffect = Effect.Effect<void, T3TeamWorkflowHostError>;
 
-export interface T3TeamWorkflowHostShape {
+export interface T3TeamWorkflowHostShape extends HostLaunch.WorkflowHostLaunchMembers {
   readonly createThread: (input: WorkflowHostCreateThreadInput) => HostEffect;
   readonly startTurn: (input: WorkflowHostStartTurnInput) => HostEffect;
   readonly postMessage: (input: WorkflowHostMessageInput) => HostEffect;
   readonly upsertActivity: (input: WorkflowHostActivityInput) => HostEffect;
   readonly interrupt: (input: WorkflowHostInterruptInput) => HostEffect;
+  readonly archiveThread: (threadId: string) => HostEffect;
   readonly syncRunFacts: (launchThreadId: string) => HostEffect;
   /** Post the held `afterActiveRun` messages of a thread whose run has ended. */
   readonly flushHeld: (threadId: string) => HostEffect;
@@ -69,29 +71,15 @@ export class T3TeamWorkflowHost extends Context.Service<
   T3TeamWorkflowHostShape
 >()("t3/t3team-workflowHost/T3TeamWorkflowHost") {}
 
-const describe = (cause: unknown): string =>
-  typeof cause === "object" && cause !== null && "message" in cause
-    ? String((cause as { readonly message: unknown }).message)
-    : String(cause);
-
-const failAs =
-  (operation: string) =>
-  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<void, T3TeamWorkflowHostError, R> =>
-    effect.pipe(
-      Effect.asVoid,
-      Effect.mapError(
-        (cause) => new T3TeamWorkflowHostError({ operation, message: describe(cause) }),
-      ),
-      Effect.withSpan(`t3team.workflowHost.${operation}`),
-    );
-
 const make = Effect.gen(function* () {
   const threads = yield* ThreadManagementService;
   const recorder = yield* T3TeamThreadMessageRecorder;
   const artifacts = yield* T3TeamThreadArtifactsStore;
   const facts = yield* T3TeamThreadFactsStore;
   const lineage = yield* T3TeamThreadLineage;
+  const workflowAsk = yield* T3TeamThreadWorkflowAsk;
   const sql = yield* SqlClient.SqlClient;
+  const launch = yield* HostLaunch.makeWorkflowHostLaunchMembers({ threads, facts });
   const writeMessage = (input: WorkflowHostMessageInput) =>
     Effect.gen(function* () {
       const writes = splitWorkflowMessage(input);
@@ -112,6 +100,7 @@ const make = Effect.gen(function* () {
   const createThread = (input: WorkflowHostCreateThreadInput) =>
     Effect.gen(function* () {
       const threadId = ThreadId.make(input.threadId);
+      const checkout = yield* workflowChildCheckout(threads, input);
       // Deterministic: the engine re-fires a spawn only when its journal says it never landed,
       // and a receipt makes a duplicate a no-op rather than a second thread.
       yield* threads.dispatch({
@@ -123,8 +112,7 @@ const make = Effect.gen(function* () {
         modelSelection: input.modelSelection,
         runtimeMode: input.runtimeMode,
         interactionMode: input.interactionMode,
-        branch: null,
-        worktreePath: null,
+        ...checkout,
         createdBy: "system",
         creationSource: "server",
       });
@@ -185,9 +173,21 @@ const make = Effect.gen(function* () {
       });
     }).pipe(failAs("interrupt"));
 
+  // Deterministic id: retiring the same thread twice is one archive, not a second command.
+  const archiveThread = (threadId: string) =>
+    failAs("archiveThread")(
+      threads.dispatch({
+        type: "thread.archive",
+        commandId: CommandId.make(`t3team-wf:archive:${threadId}`),
+        threadId: ThreadId.make(threadId),
+      }),
+    );
+
+  // The run's waiting question also mirrors onto the asked thread's shell (notifications, sidebar).
   const syncRunFacts = (launchThreadId: string) =>
     readWorkflowRunFacts(sql, launchThreadId).pipe(
       Effect.flatMap((patch) => facts.upsert(ThreadId.make(launchThreadId), patch)),
+      Effect.andThen(syncWorkflowAskMirrors({ sql, writer: workflowAsk, launchThreadId })),
       failAs("syncRunFacts"),
     );
 
@@ -197,20 +197,14 @@ const make = Effect.gen(function* () {
     postMessage,
     upsertActivity,
     interrupt,
+    archiveThread,
     syncRunFacts,
     flushHeld,
     heldThreadIds: held.heldThreadIds,
+    ...launch,
   });
 });
 
 export const layer = Layer.effect(T3TeamWorkflowHost, make);
 
-/** The Promise view the engine calls; host failures reject with the host error. */
-export const toWorkflowHostPort = (host: T3TeamWorkflowHostShape): WorkflowHostPort => ({
-  createThread: (input) => Effect.runPromise(host.createThread(input)),
-  startTurn: (input) => Effect.runPromise(host.startTurn(input)),
-  postMessage: (input) => Effect.runPromise(host.postMessage(input)),
-  upsertActivity: (input) => Effect.runPromise(host.upsertActivity(input)),
-  interrupt: (input) => Effect.runPromise(host.interrupt(input)),
-  syncRunFacts: (launchThreadId) => Effect.runPromise(host.syncRunFacts(launchThreadId)),
-});
+export { toWorkflowHostPort } from "./t3team-workflowHostPortOf.ts";

@@ -2,7 +2,7 @@
 /**
  * A failed run must say WHY — round trip, real engine + real SQLite.
  *
- * `t3team_orchestration_status` / `_resume` used to return a bare status, so an agent (or the
+ * `t3_orchestration_status` / `_resume` used to return a bare status, so an agent (or the
  * self-heal path) had to read the journal to learn the cause. The reason is now written by the
  * ONE terminal-failure funnel into `workflow_runs.failure_reason` / `.failure_step`
  * (migration 044) and echoed by both tools.
@@ -32,11 +32,11 @@ import * as Path from "effect/Path";
 import { afterAll, describe, expect, it as vitestIt } from "vite-plus/test";
 
 import { ServerConfig } from "./config.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
-import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
-import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
+import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import type { WorkflowResumeToolDeps } from "./t3team-toolBrokerWorkflowResumeActions.ts";
 import { makeWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
 import { makeWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";

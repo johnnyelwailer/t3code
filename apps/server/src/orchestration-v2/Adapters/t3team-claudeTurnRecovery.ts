@@ -21,7 +21,7 @@ import {
   isTransientGatewayErrorText,
   MAX_TRANSIENT_GATEWAY_RETRIES,
   transientGatewayRetryDelayMs,
-} from "../../provider/Layers/t3team-claude-gateway-retry.ts";
+} from "../../provider/t3team-claude-gateway-retry.ts";
 
 const INTERRUPTED_PHRASES = [
   "all fibers interrupted without error",

@@ -10,7 +10,7 @@ import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { HttpBody, HttpClient, HttpRouter } from "effect/unstable/http";
+import { HttpBody, HttpClient, HttpRouter } from "effect/http";
 
 import {
   t3teamProjectWorkspaceRefreshProjectContextRouteLayer,
@@ -32,11 +32,13 @@ const makeRouteHttpTestLayer = (prefix: string) =>
       t3teamProjectWorkspaceRefreshProjectContextRouteLayer,
       t3teamProjectWorkspaceRefreshWorkItemContextRouteLayer,
       t3teamProjectWorkspaceRefreshWorkItemSliceContextRouteLayer,
-      makeContextRefreshIntegrationTestLayer(prefix),
-      makeContextRefreshScopeTestLayer(),
     ),
     { disableListenLog: true, disableLogger: true },
-  ).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+  ).pipe(
+    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(makeContextRefreshIntegrationTestLayer(prefix)),
+    Layer.provideMerge(makeContextRefreshScopeTestLayer()),
+  );
 
 const runRouteHttpTest = <A, E, R>(prefix: string, effect: Effect.Effect<A, E, R>) =>
   Effect.runPromise(

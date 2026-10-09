@@ -698,6 +698,7 @@ export function BranchToolbarBranchSelector({
         {displayMode !== "panel" ? (
           <ThreadPullRequestBadgeControl
             render={<ComposerControl size="xs" />}
+            threadRef={threadRef}
             badge={prBadge}
             pullRequests={serverThread?.pullRequests ?? []}
             number={prNumber}
@@ -749,6 +750,7 @@ export function BranchToolbarBranchSelector({
         </span>
         {displayMode === "panel" && prNumber !== undefined && prUrl !== undefined ? (
           <ThreadDetailsPrRows
+            threadRef={threadRef}
             links={serverThread?.pullRequests ?? []}
             currentLink={currentLinkedPr}
             onOpenLink={openPrLink}

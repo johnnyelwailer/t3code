@@ -12,6 +12,7 @@ import {
   ProjectId,
   RunId,
   ScheduledTaskId,
+  SecretRef,
   ThreadId,
   TrimmedNonEmptyString,
   TurnItemId,
@@ -64,7 +65,7 @@ const OrchestratorMcpSchedule = Schema.Union([
   OrchestratorMcpScheduleFromJsonString,
 ]).annotate({
   description:
-    "Recurring schedule object: {type:'interval', everyMs} or {type:'fixed_time', timeOfDay, weekdays?}. Never stringify it unless the provider requires the compatibility form.",
+    "Trigger object: {type:'interval', everyMs}, {type:'fixed_time', timeOfDay, weekdays?}, or {type:'webhook'} to run on each request to a generated URL. Never stringify it unless the provider requires the compatibility form.",
 });
 
 /**
@@ -248,6 +249,17 @@ export const OrchestratorMcpDelegateTaskResult = Schema.Struct({
         "delegate_task only: how the host applied workspace and extension options (branch, worktree, setup script, adjusted options).",
     }),
   ),
+  /**
+   * The target instance's current window state at delegation time, in the
+   * same compact shape as the capabilities view. Omitted when the target has
+   * no window data. Surfaces in delegate_task results only (not task_status).
+   */
+  providerUsage: Schema.optional(
+    Schema.String.annotate({
+      description:
+        "delegate_task only: the target instance's current usage windows as one compact line, e.g. 'claudeAgent: session 42% · weekly 71% · severity: warning'.",
+    }),
+  ),
 });
 export type OrchestratorMcpDelegateTaskResult = typeof OrchestratorMcpDelegateTaskResult.Type;
 
@@ -319,7 +331,15 @@ export const OrchestratorMcpThreadStatus = Schema.Union([
 ]);
 export type OrchestratorMcpThreadStatus = typeof OrchestratorMcpThreadStatus.Type;
 
+const OrchestratorMcpProjectTarget = Schema.optional(
+  ProjectId.annotate({
+    description:
+      "Project to act on. Omit for the calling thread's project; required when the caller is not a T3 thread.",
+  }),
+);
+
 export const OrchestratorMcpThreadListInput = Schema.Struct({
+  projectId: OrchestratorMcpProjectTarget,
   statuses: Schema.optional(
     Schema.Array(OrchestratorMcpThreadStatus).check(Schema.isMaxLength(10)),
   ),
@@ -355,7 +375,8 @@ export type OrchestratorMcpThreadListItem = typeof OrchestratorMcpThreadListItem
 
 export const OrchestratorMcpThreadListResult = Schema.Struct({
   projectId: ProjectId,
-  currentThreadId: ThreadId,
+  /** The calling thread, or null when the caller is not a T3 thread. */
+  currentThreadId: Schema.NullOr(ThreadId),
   threads: Schema.Array(OrchestratorMcpThreadListItem),
   nextCursor: Schema.NullOr(NonNegativeInt),
   total: NonNegativeInt,
@@ -521,12 +542,27 @@ export const OrchestratorMcpProviderCapability = Schema.Struct({
 export type OrchestratorMcpProviderCapability = typeof OrchestratorMcpProviderCapability.Type;
 
 export const OrchestratorMcpCapabilitiesResult = Schema.Struct({
-  parentThreadId: ThreadId,
-  inheritedProviderInstanceId: ProviderInstanceId,
-  inheritedModel: Schema.String,
+  /** The calling thread, or null when the caller is not a T3 thread. */
+  parentThreadId: Schema.NullOr(ThreadId),
+  /** The calling thread's selection, or null when the caller is not a T3 thread. */
+  inheritedProviderInstanceId: Schema.NullOr(ProviderInstanceId),
+  inheritedModel: Schema.NullOr(Schema.String),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   providers: Schema.Array(OrchestratorMcpProviderCapability),
+  /**
+   * Compact per-instance usage view: one short line per instance built from
+   * the published `usageLimits` snapshots, e.g.
+   * `claudeAgent: session 42% (resets 18:00Z) · weekly 71% · severity: warning`,
+   * or an explicit `no usage data` marker. Omitted when the host has no
+   * provider registry snapshot.
+   */
+  providerUsage: Schema.optional(
+    Schema.Array(Schema.String).annotate({
+      description:
+        "Compact per-instance usage view built from published usageLimits snapshots: one short line per instance, or an explicit no-data marker.",
+    }),
+  ),
   features: Schema.Struct({
     appOwnedSubagents: Schema.Boolean,
     asyncPolling: Schema.Boolean,
@@ -550,6 +586,7 @@ export const OrchestratorMcpCapabilitiesResult = Schema.Struct({
 export type OrchestratorMcpCapabilitiesResult = typeof OrchestratorMcpCapabilitiesResult.Type;
 
 export const OrchestratorMcpScheduleTaskInput = Schema.Struct({
+  projectId: OrchestratorMcpProjectTarget,
   prompt: OrchestratorMcpPrompt.annotate({
     description: "Prompt executed on every scheduled run.",
   }),
@@ -584,11 +621,30 @@ export const OrchestratorMcpScheduledTask = Schema.Struct({
   schedule: ScheduledTaskSchedule,
   nextRunAt: Schema.NullOr(IsoDateTime),
   lastRunStatus: ScheduledTaskRunStatus,
+  /** For webhook tasks: the public T3 Connect URL. Absent when this environment has no managed tunnel. */
+  webhookUrl: Schema.optional(Schema.String).annotate({
+    description:
+      "Public URL to give the sender. Absent when this environment has no T3 Connect managed tunnel; the user must enable T3 Connect remote access first.",
+  }),
+  webhookSignature: Schema.optional(Schema.Literals(["none", "set"])).annotate({
+    description: "Whether requests must carry a valid signature.",
+  }),
 });
 export type OrchestratorMcpScheduledTask = typeof OrchestratorMcpScheduledTask.Type;
 
 export const OrchestratorMcpScheduleTaskResult = OrchestratorMcpScheduledTask;
 export type OrchestratorMcpScheduleTaskResult = typeof OrchestratorMcpScheduleTaskResult.Type;
+
+export const OrchestratorMcpListScheduledTasksInput = Schema.Struct({
+  projectId: Schema.optional(
+    ProjectId.annotate({
+      description:
+        "Only list this project's tasks. Omit for the calling thread's project, or for every project when the caller is not a T3 thread.",
+    }),
+  ),
+});
+export type OrchestratorMcpListScheduledTasksInput =
+  typeof OrchestratorMcpListScheduledTasksInput.Type;
 
 export const OrchestratorMcpListScheduledTasksResult = Schema.Struct({
   tasks: Schema.Array(OrchestratorMcpScheduledTask),
@@ -606,6 +662,44 @@ export const OrchestratorMcpUpdateScheduledTaskInput = Schema.Struct({
 });
 export type OrchestratorMcpUpdateScheduledTaskInput =
   typeof OrchestratorMcpUpdateScheduledTaskInput.Type;
+
+export const OrchestratorMcpRequestSecretInput = Schema.Struct({
+  label: TrimmedNonEmptyString.annotate({
+    description: "What you need, shown as the card's title, e.g. 'GitHub webhook secret'.",
+  }),
+  reason: TrimmedNonEmptyString.annotate({
+    description:
+      "One or two sentences on what it is for and where the user gets or also enters it.",
+  }),
+  placeholder: Schema.optional(TrimmedNonEmptyString).annotate({
+    description: "Hint inside the input, e.g. 'Paste your GitHub token'.",
+  }),
+  timeoutMs: Schema.optional(
+    Schema.Int.check(Schema.isBetween({ minimum: 1_000, maximum: 60 * 60 * 1_000 })),
+  ).annotate({ description: "How long to wait for the user. Default 10 minutes." }),
+  clientRequestId: Schema.optional(OrchestratorMcpClientRequestId).annotate({
+    description:
+      "Reuse when retrying a call that lost its result, so the user sees one card and its answer is returned again. Use a new id to ask again after timed_out or cancelled.",
+  }),
+});
+export type OrchestratorMcpRequestSecretInput = typeof OrchestratorMcpRequestSecretInput.Type;
+
+export const OrchestratorMcpRequestSecretResult = Schema.Union([
+  Schema.Struct({
+    status: Schema.Literal("saved").annotate({ description: "secretRef holds the value." }),
+    secretRef: SecretRef.annotate({
+      description:
+        "Pass it to a tool that accepts a secretRef; it works once, and you never see the value.",
+    }),
+  }),
+  Schema.Struct({
+    status: Schema.Literals(["declined", "cancelled", "timed_out"]).annotate({
+      description:
+        "declined: the user chose not to. cancelled: the request ended with the run. timed_out: the user did not answer in time; the card is closed, so ask again with a new clientRequestId if still needed.",
+    }),
+  }),
+]);
+export type OrchestratorMcpRequestSecretResult = typeof OrchestratorMcpRequestSecretResult.Type;
 
 export const OrchestratorMcpDeleteScheduledTaskInput = Schema.Struct({
   scheduledTaskId: ScheduledTaskId,
@@ -638,6 +732,8 @@ export class OrchestratorMcpFailure extends Schema.TaggedError<OrchestratorMcpFa
       "thread_not_interruptible",
       "invalid_request",
       "orchestration_error",
+      "thread_credential_required",
+      "target_required",
     ]),
     message: Schema.String,
   },

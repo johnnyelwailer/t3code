@@ -17,10 +17,12 @@ import { TOOL_SPECS, foldResource, resourceResult } from "./t3team-toolBrokerHel
 import { buildBindingState, permissionMessage } from "./t3team-toolBrokerBindingPermissions.ts";
 import { dispatchT3TeamToolCall } from "./t3team-toolBrokerBindingDispatch.ts";
 import type { T3TeamRecipeToolHandlers } from "./t3team-toolBrokerBindingRecipes.ts";
+import type { T3TeamMyWorkToolHandlers } from "./t3team-toolBrokerBindingMyWork.ts";
 import type { T3TeamWorkflowRunToolHandlers } from "./t3team-toolBrokerWorkflowRunTools.ts";
 import type { T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
 import type { T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
 import type { T3TeamWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowControlTool.ts";
+import type { T3TeamChangeRequestToolHandlers } from "./t3team-toolBrokerBindingChangeRequest.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
 import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 
@@ -37,10 +39,12 @@ export type CreateBindingInput<TReadError = never, TBacklogAssigneeFilterError =
   ) => Effect.Effect<unknown, TBacklogAssigneeFilterError>;
   readonly refreshContextBundle?: T3TeamContextRefreshServiceShape;
   readonly recipeTools?: T3TeamRecipeToolHandlers;
+  readonly myWorkTools?: T3TeamMyWorkToolHandlers;
   readonly workflowRunTools?: T3TeamWorkflowRunToolHandlers;
   readonly workflowStatusTools?: T3TeamWorkflowStatusToolHandlers;
   readonly workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
   readonly workflowControlTools?: T3TeamWorkflowControlToolHandlers;
+  readonly changeRequestTools?: T3TeamChangeRequestToolHandlers;
   readonly showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   /** Search the full transcript of the thread this one was forked from. */
   readonly searchSourceThread?: (
@@ -94,10 +98,12 @@ export function createToolSurface<TReadError, TBacklogAssigneeFilterError>(
         : {}),
       ...(input.refreshContextBundle ? { refreshContextBundle: input.refreshContextBundle } : {}),
       ...(input.recipeTools ? { recipeTools: input.recipeTools } : {}),
+      ...(input.myWorkTools ? { myWorkTools: input.myWorkTools } : {}),
       ...(input.workflowRunTools ? { workflowRunTools: input.workflowRunTools } : {}),
       ...(input.workflowStatusTools ? { workflowStatusTools: input.workflowStatusTools } : {}),
       ...(input.workflowResumeTools ? { workflowResumeTools: input.workflowResumeTools } : {}),
       ...(input.workflowControlTools ? { workflowControlTools: input.workflowControlTools } : {}),
+      ...(input.changeRequestTools ? { changeRequestTools: input.changeRequestTools } : {}),
       ...(input.showWidget ? { showWidget: input.showWidget } : {}),
       ...(input.searchSourceThread && input.threadId
         ? {

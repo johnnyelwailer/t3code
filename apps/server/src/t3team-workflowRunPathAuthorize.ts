@@ -44,7 +44,7 @@ export interface RunWorkflowPathInput {
  * persisted path on every resume/rehydrate, so the file must outlive the call; snapshotting also
  * pins the run to its launch-time source (no replay drift from later out-of-band edits).
  */
-const persistEphemeralWorkflowSource = (input: {
+export const persistEphemeralWorkflowSource = (input: {
   readonly fileSystem: FileSystem.FileSystem;
   readonly path: Path.Path;
   readonly workspaceRoot: string;

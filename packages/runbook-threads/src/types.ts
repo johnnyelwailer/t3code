@@ -127,7 +127,15 @@ export interface SpawnThreadOpts<Capabilities = WorkflowChildCapabilities> {
   readonly effort?: AgentEffort;
   /** Ephemeral children stay out of the sidebar; retained children are durable and visible. */
   readonly retention?: "ephemeral" | "retained";
+  readonly checkout?: WorkflowChildCheckout;
 }
+
+/**
+ * Where a child thread works. `"project"` (the default) is the project root; `"launch-thread"` is
+ * the launch thread's branch and worktree, for a recipe that must change the checkout it was
+ * started from (fixing a PR branch). A headless run has no launch thread and uses the root.
+ */
+export type WorkflowChildCheckout = "project" | "launch-thread";
 
 /**
  * Options for `agent(prompt, opts)` — the one-shot `spawnThread(opts).askAgent(prompt, opts)`. It
@@ -144,14 +152,34 @@ export interface AgentOpts<
 > extends AskOpts<R> {
   /** What the one-shot child may do: `"inherit"`, or an explicit subset of the parent's. */
   readonly capabilities: Capabilities;
+  /** Where the one-shot child works; see {@link WorkflowChildCheckout}. */
+  readonly checkout?: WorkflowChildCheckout;
 }
 
-/** Sandboxed inline widget shown in a thread. HTML/SVG must be a fragment. */
+/** Sandboxed inline widget shown in a thread. HTML/SVG must be a fragment.
+ * Prefer `intent` (builder authors the body); pass `widgetCode` to skip the builder
+ * (required for deterministic workflow replay). `format: "html"` shims onto upstream HTML render. */
 export interface ShowWidgetInput {
   readonly title: string;
-  readonly widgetCode: string;
+  /** Raw fragment; skips the builder. Provide this or `intent`. */
+  readonly widgetCode?: string;
+  /** Preferred: describe what to show; builder authors widgetCode. */
+  readonly intent?: string;
   readonly format?: "html" | "svg";
   readonly loadingMessages?: ReadonlyArray<string>;
+}
+
+/**
+ * A registered view posted into a thread (`Thread.showView`). The view's component is trusted
+ * host or pack code; `props` are untrusted data it decodes with its own schema, so pass ids and
+ * small values, never markup.
+ */
+export interface ShowViewInput {
+  /** Idempotency key within the thread: re-posting the same key updates the view in place. */
+  readonly key: string;
+  /** `<packId>.<name>`, as the pack registered it (`registerView({ slot: "message.view" })`). */
+  readonly viewId: string;
+  readonly props: Readonly<Record<string, unknown>>;
 }
 
 /** The one Thread type, shared by the ambient launching thread and any spawned one. */
@@ -176,6 +204,9 @@ export interface Thread {
   /** Sandboxed inline HTML/SVG for the human (theme variables, host icon sprite). Requires `user`.
    * Fire-and-forget. */
   showWidget(input: ShowWidgetInput): void;
+  /** Post (or re-post, by `key`) a registered view into this thread. Requires `ui.render`.
+   * Fire-and-forget; a run without a thread (`getThread()` undefined) has nowhere to show it. */
+  showView(input: ShowViewInput): void;
   readonly id: ThreadRef;
 }
 

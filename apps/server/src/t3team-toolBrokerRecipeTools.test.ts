@@ -7,6 +7,7 @@ import * as Path from "effect/Path";
 import { describe, expect, it } from "vite-plus/test";
 
 import { makeRecipeToolHandlers } from "./t3team-toolBrokerRecipeTools.ts";
+import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 
 const threadId = ThreadId.make("thread-1");
 
@@ -115,7 +116,7 @@ describe("makeRecipeToolHandlers", () => {
           const workspaceRoot = yield* fileSystem.makeTempDirectoryScoped({
             prefix: "t3team-recipe-tool-handlers-",
           });
-          const recipeRoot = path.join(workspaceRoot, ".t3team/recipes/legacy-recipe");
+          const recipeRoot = path.join(workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes/legacy-recipe`);
           yield* fileSystem.makeDirectory(recipeRoot, { recursive: true });
           yield* fileSystem.writeFileString(path.join(recipeRoot, "prompt.md"), "Do the thing.");
           yield* fileSystem.writeFileString(

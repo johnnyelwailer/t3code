@@ -26,13 +26,13 @@ function file(
   return { key: path, path, oldPath, additions, deletions };
 }
 
-/** Minimal host metadata: Pierre expects `a/` + `b/` prefixes and no `cacheKey`. */
+/** Minimal host metadata: Pierre hands names back unprefixed, with no `cacheKey`. */
 function meta(
   name: string,
   hunks: Array<{ additionLines: number; deletionLines: number }> = [],
   prevName = name,
 ): FileDiffMetadata {
-  return { name: `b/${name}`, prevName: `a/${prevName}`, hunks } as unknown as FileDiffMetadata;
+  return { name, prevName, hunks } as unknown as FileDiffMetadata;
 }
 
 /** A readable nested view: directories as `[name, children]`, files as their path. */
@@ -48,7 +48,7 @@ describe("diffExplorerFileInfo", () => {
     expect(
       diffExplorerFileInfo(meta("src/app.ts", [{ additionLines: 3, deletionLines: 2 }])),
     ).toEqual({
-      key: "a/src/app.ts:b/src/app.ts",
+      key: "src/app.ts:src/app.ts",
       path: "src/app.ts",
       oldPath: null,
       additions: 3,
@@ -69,7 +69,7 @@ describe("diffExplorerFileInfo", () => {
         ),
       ),
     ).toEqual({
-      key: "a/src/old.ts:b/src/new.ts",
+      key: "src/old.ts:src/new.ts",
       path: "src/new.ts",
       oldPath: "src/old.ts",
       additions: 1,

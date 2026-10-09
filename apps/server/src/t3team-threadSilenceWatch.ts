@@ -1,7 +1,7 @@
 /**
  * Thread silence watch (GHE #63) - shared types and pure rules. A watcher
  * thread registers a watch on another thread with a per-subscription timeout
- * (`t3team_children op:"watch"`); the watcher is told, through the inter-agent
+ * (`t3_task_ops op:"watch"`); the watcher is told, through the inter-agent
  * mailbox, when the target has been silent for that long (re-notified at each
  * multiple of the timeout while it stays silent) and once when the target
  * stops. Silence WITH an in-progress tool call is a legitimate long operation;

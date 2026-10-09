@@ -10,6 +10,7 @@ import {
   applyWorkspaceBootstrapToProject,
   replaceLinkedRepositoryUrlsInProject,
 } from "~/t3team/hooks/t3team-createProjectBootstrap";
+import { waitForLinkedRepositoryReady } from "~/t3team/hooks/t3team-waitForLinkedRepositoryReady";
 import {
   applyMainRepositoryAutoDetection,
   applyMainRepositorySwitchToProject,
@@ -21,14 +22,19 @@ export async function saveProjectRepositories(input: {
   readonly linkedRepositoryUrls: ReadonlyArray<string>;
   /** The user's main-repository choice; `undefined` = unchanged (auto-detection may apply). */
   readonly mainRepositoryUrl?: string | null;
+  /** Called once the list is saved and syncs are queued, before any wait for a clone. */
+  readonly onSaved?: (project: ProjectShellProject) => void;
 }): Promise<ProjectShellProject> {
   const { backend, linkedRepositoryUrls } = input;
   let project = replaceLinkedRepositoryUrlsInProject(input.project, linkedRepositoryUrls);
   if (!backend || !project.workspace?.rootPath) return project;
 
+  // Returns at once: clones and fetches run in the background on the server; the dialog shows
+  // their progress through `readLinkedRepositoryStatus`.
   const bootstrap = await backend.projectWorkspace.bootstrapWorkspace({
     workspaceRoot: project.workspace.rootPath,
     linkedRepositoryUrls,
+    refreshLinkedRepositories: true,
   });
   project = applyWorkspaceBootstrapToProject(project, bootstrap);
   if (linkedRepositoryUrls.length === 0) {
@@ -37,6 +43,15 @@ export async function saveProjectRepositories(input: {
 
   if (input.mainRepositoryUrl === undefined) {
     return applyMainRepositoryAutoDetection({ backend, project, bootstrap });
+  }
+  input.onSaved?.(project);
+  // The switch needs the chosen repository's checkout; its first clone may still be running.
+  if (input.mainRepositoryUrl !== null) {
+    await waitForLinkedRepositoryReady({
+      backend,
+      workspaceRoot: bootstrap.workspaceRoot,
+      url: input.mainRepositoryUrl,
+    });
   }
   const result = await backend.projectWorkspace.setMainRepository({
     projectId: project.id,

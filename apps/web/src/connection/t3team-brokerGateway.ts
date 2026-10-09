@@ -5,7 +5,8 @@ import {
 } from "@t3tools/client-runtime/connection";
 import * as Effect from "effect/Effect";
 
-import { CloudBrokerRequestError, cloudBrokerApi } from "~/cloud/t3team-cloudBrokerApi";
+import { CredentialRequestError } from "~/account/t3team-credentialRequest";
+import { cloudBrokerApi } from "~/cloud/t3team-cloudBrokerApi";
 import { resolvePrimaryEnvironmentHttpUrl } from "~/environments/primary/target";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -28,7 +29,7 @@ const call = <A>(run: () => Promise<A>) =>
     try: run,
     catch: (cause) => {
       if (
-        cause instanceof CloudBrokerRequestError &&
+        cause instanceof CredentialRequestError &&
         (cause.reason === "broker_sign_in_required" || cause.reason === "unauthorized")
       ) {
         return new ConnectionBlockedError({ reason: "authentication", detail: cause.message });
@@ -61,7 +62,9 @@ export const webBrokerEnvironmentGateway = BrokerEnvironmentGateway.of({
   attach: (input) =>
     Effect.gen(function* () {
       yield* requireSameMachine;
-      const result = yield* call(() => cloudBrokerApi.attach(input.sessionId));
+      const result = yield* call(() =>
+        cloudBrokerApi.attach(input.sessionId, String(input.expectedEnvironmentId)),
+      );
       if (String(result.environmentId) !== String(input.expectedEnvironmentId)) {
         return yield* new ConnectionBlockedError({
           reason: "configuration",
@@ -69,7 +72,11 @@ export const webBrokerEnvironmentGateway = BrokerEnvironmentGateway.of({
             "The cloud session now runs a different environment. Connect to it again from the cloud session list.",
         });
       }
-      return { httpBaseUrl: result.httpBaseUrl, wsBaseUrl: result.wsBaseUrl };
+      return {
+        sessionId: result.sessionId ?? input.sessionId,
+        httpBaseUrl: result.httpBaseUrl,
+        wsBaseUrl: result.wsBaseUrl,
+      };
     }),
   pair: (input) =>
     requireSameMachine.pipe(

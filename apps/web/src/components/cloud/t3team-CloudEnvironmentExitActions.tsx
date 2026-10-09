@@ -11,6 +11,8 @@ type CloudEnvironmentExitActionsProps = {
   isRemoving: boolean;
   /** The machine is a live cloud session: the row is a read-only connect target. */
   isCloudSession: boolean;
+  /** The cloud session behind it ended: nothing to connect to, only Remove. */
+  sessionEnded?: boolean;
   onConnect: (environmentId: EnvironmentId) => void;
   onRemove: (environmentId: EnvironmentId) => void;
 };
@@ -24,7 +26,7 @@ type CloudEnvironmentExitActionsProps = {
  * the cloud session panel, so the same machine never carries two competing
  * action sets. Any other T3 Connect machine keeps "Forget this environment",
  * which removes the local saved-connection record and deliberately does NOT
- * stop the remote machine.
+ * stop the remote machine. One whose session ended offers Remove only.
  */
 export function CloudEnvironmentExitActions({
   environmentId,
@@ -32,6 +34,7 @@ export function CloudEnvironmentExitActions({
   isConnecting,
   isRemoving,
   isCloudSession,
+  sessionEnded = false,
   onConnect,
   onRemove,
 }: CloudEnvironmentExitActionsProps) {
@@ -52,7 +55,7 @@ export function CloudEnvironmentExitActions({
           <TooltipPopup side="top">Stop or forget it under Cloud sessions</TooltipPopup>
         </Tooltip>
       ) : null}
-      {!isConnected ? (
+      {!isConnected && !sessionEnded ? (
         <Button
           size="xs"
           variant="outline"
@@ -69,7 +72,7 @@ export function CloudEnvironmentExitActions({
               <Button
                 size="icon-xs"
                 variant="outline"
-                aria-label="Forget this environment"
+                aria-label={sessionEnded ? "Remove this ended session" : "Forget this environment"}
                 disabled={isRemoving}
                 onClick={() => onRemove(environmentId)}
               >
@@ -78,7 +81,9 @@ export function CloudEnvironmentExitActions({
             }
           />
           <TooltipPopup side="top">
-            Forget this environment — the machine keeps running
+            {sessionEnded
+              ? "Remove this ended session from the list"
+              : "Forget this environment — the machine keeps running"}
           </TooltipPopup>
         </Tooltip>
       )}

@@ -1,4 +1,5 @@
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
+import { WatchedPullRequestIndicator } from "~/components/pullRequest/t3team-WatchedPullRequestIndicator";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
 /**
  * The thread details panel's pull request row: what the thread's pull request is, and the one
@@ -18,7 +19,14 @@ import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import type { EnvironmentId, ProjectId, PullRequestRef } from "@t3tools/contracts";
 import { sourceControlRepositorySelector } from "@t3tools/shared/sourceControl";
-import { ArrowUpRightIcon, FileDiffIcon, GitBranchIcon, TriangleAlertIcon } from "lucide-react";
+import {
+  ArrowUpRightIcon,
+  EyeIcon,
+  EyeOffIcon,
+  FileDiffIcon,
+  GitBranchIcon,
+  TriangleAlertIcon,
+} from "lucide-react";
 import { useState, type MouseEvent as ReactMouseEvent } from "react";
 
 import { useLiveRefresh } from "~/hooks/useLiveRefresh";
@@ -82,6 +90,7 @@ export function ThreadDetailsPrRow({
   openAriaLabel,
   onOpen,
   onActed,
+  onStopWatching,
 }: {
   environmentId: EnvironmentId;
   pr: ThreadPr;
@@ -95,6 +104,8 @@ export function ThreadDetailsPrRow({
   onOpen: (event: ReactMouseEvent<HTMLElement>) => void;
   /** An action changed the pull request on the host, so the vcs status behind the row is stale. */
   onActed?: () => void;
+  /** Set while the server watches this pull request for the thread; stops the watch. */
+  onStopWatching?: (() => void) | undefined;
 }) {
   const serverConfigs = useServerConfigs();
   const supportsPullRequests =
@@ -341,6 +352,64 @@ export function ThreadDetailsPrRow({
     </>
   );
 
+  // The server ends a watch when the pull request closes, so only an open one shows the eye.
+  // It takes the row's rounded end when nothing follows it.
+  const watchIsLast =
+    detail === null ||
+    ((checksRollup === null || conflicting || detail.isDraft) && trailingAction === null);
+  const watchSegment =
+    onStopWatching && (detail?.state ?? pr?.state ?? "open") === "open" ? (
+      <>
+        <span aria-hidden="true" className={THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS} />
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <ThreadDetailsControl
+                type="button"
+                variant="ghost"
+                size="sm"
+                part={watchIsLast ? "secondary" : "checks"}
+                className="group/watch"
+                aria-label={`Stop watching #${number}`}
+                onClick={onStopWatching}
+              />
+            }
+          >
+            <EyeIcon aria-hidden className="size-4 group-hover/watch:hidden" />
+            <EyeOffIcon aria-hidden className="hidden size-4 group-hover/watch:block" />
+          </TooltipTrigger>
+          <TooltipPopup side="top">
+            Watching: the agent wakes when checks finish, someone comments, or the branch conflicts.
+            Click to stop.
+          </TooltipPopup>
+        </Tooltip>
+      </>
+    ) : null;
+  // t3team: a linked reference gets the universal indicator (hover card, click pins; stop lives
+  // inside it). The legacy button above stays for rows without a host-level reference.
+  const watchSegmentContent =
+    watchSegment && linkedReference ? (
+      <>
+        <span aria-hidden="true" className={THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS} />
+        <ThreadDetailsControl
+          render={<span />}
+          variant="ghost"
+          size="sm"
+          part={watchIsLast ? "secondary" : "checks"}
+        >
+          <WatchedPullRequestIndicator
+            environmentId={environmentId}
+            host={linkedReference.host}
+            repository={linkedReference.repository}
+            number={linkedReference.number}
+            size="md"
+          />
+        </ThreadDetailsControl>
+      </>
+    ) : (
+      watchSegment
+    );
+
   return (
     <>
       {detail ? (
@@ -362,6 +431,7 @@ export function ThreadDetailsPrRow({
             </TooltipTrigger>
             {rowTooltip}
           </Tooltip>
+          {watchSegmentContent}
           {checksRollup !== null && !conflicting && !detail.isDraft ? (
             <>
               <span aria-hidden="true" className={THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS} />
@@ -397,6 +467,27 @@ export function ThreadDetailsPrRow({
               </Tooltip>
             </>
           ) : null}
+        </div>
+      ) : watchSegment ? (
+        <div className={THREAD_DETAILS_PANEL_LINK_SPLIT_GROUP_CLASS}>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <ThreadDetailsControl
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  part="link-primary"
+                  aria-label={openAriaLabel}
+                  onClick={onOpen}
+                />
+              }
+            >
+              {rowContent}
+            </TooltipTrigger>
+            {rowTooltip}
+          </Tooltip>
+          {watchSegmentContent}
         </div>
       ) : (
         <Tooltip>

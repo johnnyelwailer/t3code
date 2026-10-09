@@ -1,7 +1,10 @@
+import type { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
+import { WatchedPullRequestIndicator } from "./t3team-WatchedPullRequestIndicator";
 import { isAtomCommandInterrupted } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, PullRequestRef } from "@t3tools/contracts";
 import {
   cloneElement,
+  useRef,
   useState,
   type ComponentPropsWithoutRef,
   type MouseEvent,
@@ -45,6 +48,7 @@ export function PullRequestLinkPreview({
   fallback?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const previewActionsRef = useRef<PreviewCardPrimitive.Root.Actions | null>(null);
   const [resolvingClick, setResolvingClick] = useState(false);
   const detailQuery = useEnvironmentQuery(
     open
@@ -96,8 +100,14 @@ export function PullRequestLinkPreview({
         : (detail?.author.login ?? null);
 
   return (
-    <PreviewCard open={open} onOpenChange={setOpen}>
-      <Tooltip open={showUrlTooltip}>
+    <PreviewCard open={open} onOpenChange={setOpen} actionsRef={previewActionsRef}>
+      <Tooltip
+        open={showUrlTooltip}
+        onOpenChange={(nextOpen) => {
+          // Cancel the card's delayed hover too, without changing its content preview.
+          if (!nextOpen && !showCard) previewActionsRef.current?.close();
+        }}
+      >
         <PreviewCardTrigger
           render={<TooltipTrigger render={trigger} />}
           delay={350}
@@ -115,6 +125,12 @@ export function PullRequestLinkPreview({
                 <div className="flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
                   <span className="min-w-0 truncate">{detail.repository}</span>
                   <span className="shrink-0">#{detail.number}</span>
+                  <WatchedPullRequestIndicator
+                    environmentId={target.environmentId}
+                    host={target.input.host}
+                    repository={target.input.repository}
+                    number={target.input.number}
+                  />
                   <span aria-hidden>·</span>
                   {state === null ? null : (
                     <span className="inline-flex shrink-0 items-center gap-1">

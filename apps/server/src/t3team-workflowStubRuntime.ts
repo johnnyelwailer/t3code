@@ -13,16 +13,18 @@ import { CommandId, EventId, ProjectId, ThreadId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 
-import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
+import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
-import { makeOrchestratorV2ReplayLayerWithRegistry } from "./orchestration-v2/testkit/ProviderReplayHarness.ts";
+import { layerWithRegistry } from "./orchestration-v2/testkit/ProviderReplayHarness.ts";
 import * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
 import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
 import { T3TeamWorkflowEngineReactorLayer } from "./t3team-workflowEngineReactor.ts";
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
+import { makeThreadLaunchFake } from "./t3team-threadLaunchFake.fixtures.ts";
 import * as T3TeamWorkflowHost from "./t3team-workflowHost.ts";
 import {
   makeWorkflowStubProvider,
@@ -36,11 +38,9 @@ export function makeWorkflowStubRuntime(options: {
 }) {
   const provider = makeWorkflowStubProvider(options.respond);
   const database = SqlitePersistenceMemory;
-  const orchestration = makeOrchestratorV2ReplayLayerWithRegistry(
-    { name: options.name },
-    provider.registryLayer,
-    { databaseLayer: database },
-  );
+  const orchestration = layerWithRegistry({ name: options.name }, provider.registryLayer, {
+    databaseLayer: database,
+  });
   const threads = ThreadManagementService.layer.pipe(Layer.provide(orchestration));
   const foundation = T3TeamV2FoundationLive.pipe(Layer.provide(database));
   const persistence = Layer.mergeAll(
@@ -48,8 +48,12 @@ export function makeWorkflowStubRuntime(options: {
     WorkflowJournalStoreLive,
     ProjectStore.layer,
   ).pipe(Layer.provide(database));
+  // `launchThread` creates top-level threads through ThreadLaunchService; the fake skips git.
+  const threadLaunch = makeThreadLaunchFake();
   const host = T3TeamWorkflowHost.layer.pipe(
-    Layer.provide(Layer.mergeAll(threads, foundation, database)),
+    Layer.provide(threadLaunch.layer.pipe(Layer.provideMerge(threads))),
+    // `getConfig()` reads the project's config files from its workspace.
+    Layer.provide(Layer.mergeAll(threads, foundation, database, persistence, NodeServices.layer)),
   );
   const core = Layer.mergeAll(
     orchestration,
@@ -66,6 +70,8 @@ export function makeWorkflowStubRuntime(options: {
     turns: provider.turns,
     /** End a held turn (see `makeWorkflowStubProvider`). */
     settle: provider.settle,
+    /** Every `launchThread` that created a thread, in order. */
+    launches: threadLaunch.launches,
   };
 }
 

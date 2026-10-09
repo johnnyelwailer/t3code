@@ -16,7 +16,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import {
   type ClaimedDigest,
@@ -49,7 +49,7 @@ export class T3TeamActorMailboxStore extends Context.Service<
       entry: T3TeamActorMailboxEntry,
       state?: "pending" | "surfaced",
     ) => Op<boolean>;
-    /** An entry delivered to `threadId` (any state), for `t3team_read_message`. */
+    /** An entry delivered to `threadId` (any state), for `t3_read_message`. */
     readonly find: (threadId: string, messageId: string) => Op<T3TeamActorMailboxEntry | null>;
     /** Pending entries of a thread, oldest first. */
     readonly pending: (threadId: string) => Op<ReadonlyArray<T3TeamActorMailboxEntry>>;

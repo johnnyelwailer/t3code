@@ -13,6 +13,7 @@ import {
   formatDuration,
   presentCloudSession,
 } from "./t3team-cloudSessionProvisionPresentation";
+import { cloudSessionDisplayName } from "./t3team-cloudSessionDisplayName";
 
 /**
  * One provisioning session rendered as a list row, plus the skeleton rows the
@@ -83,6 +84,8 @@ function CloudSessionLiveDetail({
     setLiveSeconds((current) => Math.max(current, elapsedSeconds));
   }, [elapsedSeconds]);
   const staticSuffix = formatDuration(elapsedSeconds);
+  // A detail that is only the elapsed time ticks as a whole; a longer one carries it as a suffix.
+  if (detail === staticSuffix) return <>{formatDuration(liveSeconds)}</>;
   const marker = ` · ${staticSuffix}`;
   if (!detail.endsWith(marker)) return <>{detail}</>;
   return (
@@ -135,7 +138,7 @@ export function CloudSessionRow({
             />
           </span>
           <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="truncate font-medium text-sm">{presentation.title}</div>
+            <div className="truncate font-medium text-sm">{cloudSessionDisplayName(session)}</div>
             {/* The detail truncates; the tooltip carries the full sentence. */}
             <Tooltip>
               <TooltipTrigger
@@ -148,6 +151,7 @@ export function CloudSessionRow({
                   />
                 }
               >
+                {presentation.title} ·{" "}
                 {presentation.liveElapsed ? (
                   <CloudSessionLiveDetail
                     detail={presentation.detail}
@@ -157,7 +161,9 @@ export function CloudSessionRow({
                   presentation.detail
                 )}
               </TooltipTrigger>
-              <TooltipPopup>{presentation.detail}</TooltipPopup>
+              <TooltipPopup>
+                {presentation.title} · {presentation.detail}
+              </TooltipPopup>
             </Tooltip>
             {presentation.progress === null ? null : (
               <CloudSessionProgressBar progress={presentation.progress} />

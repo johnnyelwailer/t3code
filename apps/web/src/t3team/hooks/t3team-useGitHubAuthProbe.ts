@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { sourceControlEnvironment } from "~/state/sourceControl";
 import { useAtomQueryRunner } from "~/state/use-atom-query-runner";

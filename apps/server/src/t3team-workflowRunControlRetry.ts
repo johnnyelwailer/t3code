@@ -22,7 +22,7 @@ import type {
   WorkflowRunControlDeps,
   WorkflowRunControlStatus,
 } from "./t3team-workflowRunControl.ts";
-import type { WorkflowRun } from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowRun } from "./persistence/WorkflowRuns.ts";
 import {
   makeResumeFailedRun,
   retainedFailedTurnStep,

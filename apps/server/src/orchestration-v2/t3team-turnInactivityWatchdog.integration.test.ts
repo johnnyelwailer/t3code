@@ -35,7 +35,7 @@ import {
   MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS,
   TurnInactivityPolicy,
 } from "./t3team-turnInactivityPolicy.ts";
-import { makeOrchestratorV2ReplayLayerWithRegistry } from "./testkit/ProviderReplayHarness.ts";
+import { layerWithRegistry } from "./testkit/ProviderReplayHarness.ts";
 import { checkpointWorkspace } from "./testkit/ReplayFixtureWorkspace.ts";
 
 const instanceId = ProviderInstanceId.make(PACK_DRIVER);
@@ -67,7 +67,7 @@ const runScenario = (name: string, scenario: Scenario) =>
           },
         },
       });
-      const registry = ProviderAdapterRegistry.makeLayerEffect(
+      const registry = ProviderAdapterRegistry.layerFromAdaptersEffect(
         Effect.gen(function* () {
           const requests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
           return [
@@ -125,6 +125,12 @@ const runScenario = (name: string, scenario: Scenario) =>
         yield* worker.drain();
         yield* Fiber.join(running);
         const runId = (yield* orchestrator.getThreadProjection(threadId)).runs[0]!.id;
+        const settled = yield* watch(
+          (event) =>
+            event.type === "run.updated" &&
+            event.payload.id === runId &&
+            event.payload.status !== "running",
+        );
         if (stop) {
           yield* orchestrator.dispatch({
             type: "run.interrupt",
@@ -134,12 +140,6 @@ const runScenario = (name: string, scenario: Scenario) =>
           });
           yield* worker.drain();
         }
-        const settled = yield* watch(
-          (event) =>
-            event.type === "run.updated" &&
-            event.payload.id === runId &&
-            event.payload.status !== "running",
-        );
         // Stop: the backstop's poll notices the pending Stop, then waits out the grace.
         // Silence: the budget expires, the interrupt is swallowed, then the grace runs out.
         // Acknowledged: the budget expires and the provider ends the turn `interrupted` at once.
@@ -160,7 +160,7 @@ const runScenario = (name: string, scenario: Scenario) =>
         };
       }).pipe(
         Effect.provide(
-          makeOrchestratorV2ReplayLayerWithRegistry({ name }, registry, {
+          layerWithRegistry({ name }, registry, {
             runEffectWorker: false,
           }).pipe(Layer.provide(policy)),
         ),

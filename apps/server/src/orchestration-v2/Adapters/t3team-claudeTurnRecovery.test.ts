@@ -160,6 +160,7 @@ const makeHarness = Effect.gen(function* () {
           messages: Stream.fromQueue(sdkMessages),
           offer: (message: SDKUserMessage) => Effect.sync(() => void offered.push(message)),
           setModel: () => Effect.void,
+          setPermissionMode: () => Effect.void,
           interrupt: Effect.void,
           close: Effect.void,
         }),

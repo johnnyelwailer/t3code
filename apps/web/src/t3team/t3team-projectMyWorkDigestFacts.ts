@@ -4,17 +4,46 @@ import {
   type DigestGraph,
   type DigestItemAction,
   type DigestReviewer,
+  type DigestReviewRequest,
 } from "~/t3team/t3team-projectMyWorkDigestPlan";
+import { digestChangeRequestScope } from "~/t3team/t3team-digestRecipeAction";
 import { buildProjectTicketHierarchy } from "~/t3team/t3team-ticketHierarchy";
 
 const STALE_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
 
-export function digestPrUrl(pr: Pick<DigestChangeRequest, "repo" | "number">): string {
-  return `https://github.com/${pr.repo}/pull/${pr.number}`;
+/**
+ * The PR's page on its own host. A GitHub Enterprise PR links to its GHE install; a PR without a
+ * host (older server payloads, blocker mentions) falls back to github.com.
+ */
+function digestHostOrigin(host: string | undefined): string {
+  const bare = host
+    ?.trim()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/+$/, "");
+  return `https://${bare ? bare : "github.com"}`;
 }
 
-export function digestReviewerUrl(reviewer: Pick<DigestReviewer, "login">): string {
-  return `https://github.com/${reviewer.login}`;
+export function digestPrUrl(pr: Pick<DigestChangeRequest, "repo" | "number" | "host">): string {
+  return `${digestHostOrigin(pr.host)}/${pr.repo}/pull/${pr.number}`;
+}
+
+/** The reviewer's profile on the PR's host (a GHE reviewer is not on github.com). */
+export function digestReviewerUrl(
+  reviewer: Pick<DigestReviewer, "login">,
+  host?: string | undefined,
+): string {
+  return `${digestHostOrigin(host)}/${reviewer.login}`;
+}
+
+/**
+ * A PR title without the ticket key it opens with, for places that already show that key beside
+ * it ("IES-1 Fix login" under IES-1 reads "Fix login"). A title naming another ticket stays whole.
+ */
+export function digestTitleWithoutKey(title: string, key: string | undefined): string {
+  if (!key || !title.toUpperCase().startsWith(key.toUpperCase())) return title;
+  const rest = title.slice(key.length);
+  if (rest !== "" && !/^[\s:\-–|\]\)]/.test(rest)) return title;
+  return rest.replace(/^[\s:\-–|\]\)]+/, "") || title;
 }
 
 export function digestPrsFor(graph: DigestGraph, ticketId: string): readonly DigestChangeRequest[] {
@@ -28,7 +57,7 @@ export function digestPrsFor(graph: DigestGraph, ticketId: string): readonly Dig
  */
 export type DigestAction = {
   readonly text: string;
-  readonly pr?: { readonly repo: string; readonly number: number };
+  readonly pr?: { readonly repo: string; readonly number: number; readonly host?: string };
 };
 
 export function digestActionLine(graph: DigestGraph, ticketId: string): DigestAction | null {
@@ -54,7 +83,7 @@ export function digestActionLine(graph: DigestGraph, ticketId: string): DigestAc
 /**
  * The concrete next steps a digest item offers, derived from its state in the same priority
  * order as the action line. The first entry is primary (always visible); the rest reveal on
- * row hover. Links open threads/PRs; `recipe` entries would start a workflow instead.
+ * row hover. Links open threads/PRs; `recipe` entries stage that recipe, scoped to their PR.
  */
 export function digestItemActions(
   graph: DigestGraph,
@@ -66,7 +95,7 @@ export function digestItemActions(
   if (blocker) {
     actions.push({
       label: "Open enabler",
-      href: `https://github.com/${blocker.repo}/pull/${blocker.number}`,
+      href: digestPrUrl(blocker),
     });
     return actions;
   }
@@ -79,26 +108,52 @@ export function digestItemActions(
     return actions;
   }
   const prs = digestPrsFor(graph, ticketId);
+  const ticket = graph.tickets.find((entry) => entry.id === ticketId);
+  const onPr = (label: string, recipe: string, pr: DigestChangeRequest): DigestItemAction => {
+    const scope = digestChangeRequestScope({
+      ...pr,
+      projectId: pr.projectId ?? ticket?.projectId,
+      ...(ticket ? { workItem: { key: ticket.ref.displayId, title: ticket.ref.title } } : {}),
+    });
+    return scope ? { label, recipe, scope } : { label, recipe };
+  };
+  // With several PRs on one ticket every PR-scoped action names its PR; "Review PR" alone left
+  // the owner guessing which of them a click would open or hand to the agent.
+  const named = (label: string, pr: DigestChangeRequest) =>
+    prs.length > 1 ? `${label} #${pr.number}` : label;
   const reReview = prs.find((pr) => pr.state === "changes-requested");
   if (reReview) {
-    actions.push(
-      { label: "Handle comments", recipe: "handle-pr-comments" },
-      { label: "Open PR", href: digestPrUrl(reReview) },
-    );
+    actions.push(onPr(named("Handle comments", reReview), "pr-handle-comments", reReview), {
+      label: named("Open PR", reReview),
+      href: digestPrUrl(reReview),
+    });
     return actions;
   }
-  const yours = prs.find((pr) => pr.state === "needs-you");
-  if (yours) {
-    actions.push({ label: "Review PR", href: digestPrUrl(yours) });
+  const yours = prs.filter((pr) => pr.state === "needs-you");
+  if (yours.length > 0) {
+    for (const pr of yours) {
+      actions.push(
+        { label: prs.length > 1 ? `Review #${pr.number}` : "Review PR", href: digestPrUrl(pr) },
+        onPr(
+          prs.length > 1 ? `Review #${pr.number} with agent` : "Review with agent",
+          "pr-review",
+          pr,
+        ),
+      );
+    }
     return actions;
   }
   const failing = prs.find((pr) => pr.state === "ci-failing");
   if (failing) {
-    actions.push({ label: "View CI", href: digestPrUrl(failing) });
+    actions.push(
+      { label: named("View CI", failing), href: digestPrUrl(failing) },
+      onPr(named("Fix checks", failing), "pr-fix-ci", failing),
+    );
     return actions;
   }
-  if (prs.some((pr) => (pr.unhandledComments ?? 0) > 0)) {
-    actions.push({ label: "Handle comments", recipe: "handle-pr-comments" });
+  const commented = prs.find((pr) => (pr.unhandledComments ?? 0) > 0);
+  if (commented) {
+    actions.push(onPr(named("Handle comments", commented), "pr-handle-comments", commented));
     return actions;
   }
   const stale = graph.claims.some(
@@ -107,6 +162,15 @@ export function digestItemActions(
   );
   if (stale) actions.push({ label: "Nudge", recipe: "nudge-agent-thread" });
   return actions;
+}
+
+/** A review request's next step: hand the review to an agent, scoped to that PR. */
+export function digestReviewActions(review: DigestReviewRequest): readonly DigestItemAction[] {
+  const scope = digestChangeRequestScope({
+    ...review,
+    ...(review.workItemKey ? { workItem: { key: review.workItemKey } } : {}),
+  });
+  return scope ? [{ label: "Review with agent", recipe: "pr-review", scope }] : [];
 }
 
 /**

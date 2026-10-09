@@ -37,7 +37,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vp test run"
+    "test": "./node_modules/.bin/vp test run"
   },
   "dependencies": {
     "@runbook/core": "workspace:*",

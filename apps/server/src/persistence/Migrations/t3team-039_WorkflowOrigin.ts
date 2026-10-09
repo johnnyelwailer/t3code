@@ -7,7 +7,7 @@
  * 'ephemeral'. Boot rehydration is origin-agnostic — it restores both kinds unchanged.
  */
 
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Effect from "effect/Effect";
 
 export default Effect.gen(function* () {

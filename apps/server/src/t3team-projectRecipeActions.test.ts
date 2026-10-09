@@ -30,6 +30,7 @@ import { listProjectRecipesForAgent } from "./t3team-recipeAgentList.ts";
 import { resolveRecipeWorkflowScripts } from "./t3team-recipeWorkflowScripts.ts";
 import { resolveRunWorkflowPath } from "./t3team-workflowRunPathAuthorize.ts";
 import { backlogRenderContext } from "./t3team-projectRecipeRenderContext.fixtures.ts";
+import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 
 // Temp trees live under `__fixtures__` so a typed `recipe.ts`'s `import("@t3team/sdk")` resolves
 // through the monorepo's node_modules chain (same reason as t3team-recipeAgentList.test.ts).
@@ -143,7 +144,7 @@ describe("multi-action recipes", () => {
       Effect.gen(function* () {
         const path = yield* Path.Path;
         const workspaceRoot = yield* makeTempDir("t3team-actions-ws-");
-        const recipeRoot = path.join(workspaceRoot, ".t3team/recipes/multi");
+        const recipeRoot = path.join(workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes/multi`);
         yield* writeMultiActionRecipe({ recipeRoot, id: "multi" });
         const defaultPath = path.join(recipeRoot, "plan.workflow.ts");
 
@@ -194,7 +195,7 @@ describe("multi-action recipes", () => {
       Effect.gen(function* () {
         const path = yield* Path.Path;
         const workspaceRoot = yield* makeTempDir("t3team-actions-ws-");
-        const recipeRoot = path.join(workspaceRoot, ".t3team/recipes/multi");
+        const recipeRoot = path.join(workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes/multi`);
         yield* writeMultiActionRecipe({ recipeRoot, id: "multi" });
 
         const discovered = yield* discoverProjectRecipes({
@@ -222,7 +223,7 @@ describe("multi-action recipes", () => {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const workspaceRoot = yield* makeTempDir("t3team-actions-ws-");
-        const recipeRoot = path.join(workspaceRoot, ".t3team/recipes/single");
+        const recipeRoot = path.join(workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes/single`);
         yield* fileSystem.makeDirectory(recipeRoot, { recursive: true });
         yield* fileSystem.writeFileString(
           path.join(recipeRoot, "single.workflow.ts"),
@@ -295,7 +296,7 @@ describe("multi-action recipes", () => {
       Effect.gen(function* () {
         const path = yield* Path.Path;
         const workspaceRoot = yield* makeTempDir("t3team-actions-ws-");
-        const recipeRoot = path.join(workspaceRoot, ".t3team/recipes/multi");
+        const recipeRoot = path.join(workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes/multi`);
         yield* writeMultiActionRecipe({ recipeRoot, id: "multi", scripts: true });
 
         for (const declared of ["plan", "estimate", "review"]) {

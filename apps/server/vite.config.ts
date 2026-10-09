@@ -81,9 +81,17 @@ export default mergeConfig(
     pack: {
       // The executable embeds one entry; the history worker becomes a hidden
       // subcommand there instead of a sibling script.
+      // The two host-module entries are what the recipe-module resolver falls back to when
+      // `effect` and `@t3team/sdk` are inlined and not installed (a published bundle in a session).
       entry: packExecutable
         ? ["src/bin.ts"]
-        : ["src/bin.ts", "src/t3team-bin.ts", "src/claude-history-worker.ts"],
+        : [
+            "src/bin.ts",
+            "src/t3team-bin.ts",
+            "src/claude-history-worker.ts",
+            "src/t3team-hostEffect.ts",
+            "src/t3team-hostSdk.ts",
+          ],
       // `?raw` is a vite feature; pack is tsdown/rolldown and has no asset pipeline of its own.
       // Without this, source that ships as TEXT could not be authored as a typechecked module.
       // The distribution plugin inlines the compiled-in distribution (see

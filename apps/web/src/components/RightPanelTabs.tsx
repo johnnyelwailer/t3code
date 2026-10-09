@@ -1,4 +1,5 @@
 import { pullRequestHostOf, type SourceControlProviderKind } from "@t3tools/contracts";
+import { useT3TeamAppBaseName } from "~/t3team/t3team-appBrandName";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { useProjects, useServerConfigs, useThreadShells } from "~/state/entities";
 import {
@@ -24,9 +25,8 @@ import {
   MessagesSquare,
   Plus,
   TerminalSquare,
-  Volume2,
-  VolumeOff,
 } from "lucide-react";
+import { Volume2, VolumeOff } from "lucide";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -45,6 +45,7 @@ import type { RightPanelSurface } from "~/rightPanelStore";
 import { cn } from "~/lib/utils";
 import { readLocalApi } from "~/localApi";
 import { Button } from "~/components/ui/button";
+import { MorphIcon } from "~/components/MorphIcon";
 import { AndroidIcon, AppleIcon } from "~/components/Icons";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { Kbd } from "~/components/ui/kbd";
@@ -79,6 +80,11 @@ import { previewBridge } from "./preview/previewBridge";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
 import { resolvePullRequestState } from "./pullRequest/pullRequestPresentation";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
+import {
+  DETACH_SURFACE_LABEL,
+  openDetachedSurface,
+} from "~/t3team/detached/t3team-openDetachedSurface";
+import { detachedSurfaceRequestForRightPanelSurface } from "~/t3team/detached/t3team-rightPanelSurfaceDetach";
 
 interface RightPanelTabsProps {
   mode: PreviewPanelMode;
@@ -132,6 +138,11 @@ interface RightPanelTabsProps {
   pullRequestsAvailable: boolean;
   deviceAvailable: boolean;
   pullRequestStatusSeeds?: Readonly<Record<string, PullRequestTabStatusSeed>>;
+  /**
+   * Replaces the surface launcher when nothing is selected. My Work passes Agent kickoff here so
+   * the default body is a recipe host, not the generic "open browser" list.
+   */
+  emptyState?: ReactNode;
   children: ReactNode;
 }
 
@@ -152,7 +163,6 @@ export function shouldOpenDefaultBrowserProfileFromMenuClick(
 }
 
 const SURFACE_DISABLED_REASONS = {
-  browser: "Browser previews are only available in the T3 Code desktop app.",
   terminal: "Terminal surfaces are only available from a project thread.",
   files: "Files are only available when a project is open.",
   diff: "Diff is only available for server threads in Git repositories.",
@@ -188,6 +198,7 @@ type TabContextMenuAction =
   | "rename"
   | "copy-path"
   | "toggle-mute"
+  | "detach"
   | "close"
   | "close-others"
   | "close-to-right"
@@ -795,6 +806,7 @@ function PullRequestSurfaceIcon({
 }
 
 export function RightPanelTabs(props: RightPanelTabsProps) {
+  const appName = useT3TeamAppBaseName();
   const ownsDesktopTitleBar = isElectron && props.mode === "inline";
   const browserProfiles = useBrowserDefaults().profiles;
   const { resolvedTheme } = useTheme();
@@ -852,7 +864,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       icon: Globe2,
       shortcut: "B",
       available: props.browserAvailable,
-      disabledReason: SURFACE_DISABLED_REASONS.browser,
+      disabledReason: `Browser previews are only available in the ${appName} desktop app.`,
       onClick: props.onAddBrowser,
     },
     {
@@ -950,6 +962,12 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           }),
         });
       }
+      // t3team: a tab whose surface can stand alone moves into a window (or tab) of its own.
+      const detachRequest = detachedSurfaceRequestForRightPanelSurface(
+        surface,
+        props.environmentId,
+      );
+      if (detachRequest !== null) items.push({ id: "detach", label: DETACH_SURFACE_LABEL });
       items.push(
         { id: "close", label: "Close" },
         {
@@ -991,6 +1009,9 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           }
           break;
         }
+        case "detach":
+          if (detachRequest !== null) openDetachedSurface(detachRequest);
+          break;
         case "close":
           props.onCloseSurface(surface);
           break;
@@ -1168,11 +1189,10 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                                 .catch(() => undefined);
                             }}
                           >
-                            {audio === "muted" ? (
-                              <VolumeOff className="size-3" />
-                            ) : (
-                              <Volume2 className="size-3" />
-                            )}
+                            <MorphIcon
+                              className="size-3"
+                              icon={audio === "muted" ? VolumeOff : Volume2}
+                            />
                           </button>
                         }
                       />
@@ -1234,7 +1254,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                 </div>
               );
             })}
-            {props.surfaces.length > 0 ? (
+            {props.surfaces.length > 0 || props.emptyState !== undefined ? (
               <Menu open={addSurfaceMenuOpen} onOpenChange={setAddSurfaceMenuOpen}>
                 <MenuTrigger
                   render={
@@ -1381,24 +1401,28 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       </div>
       <div className="flex min-h-0 flex-1 flex-col" data-right-panel-surface-content>
         {props.activeSurfaceId === null ? (
-          <RightPanelEmptyState
-            onAddBrowser={props.onAddBrowser}
-            onAddBrowserInProfile={props.onAddBrowserInProfile}
-            browserProfiles={browserProfiles}
-            onAddTerminal={props.onAddTerminal}
-            onAddDiff={props.onAddDiff}
-            onAddFiles={props.onAddFiles}
-            onAddPullRequest={props.onAddPullRequest}
-            onAddPullRequests={props.onAddPullRequests}
-            onAddDevice={props.onAddDevice}
-            browserAvailable={props.browserAvailable}
-            terminalAvailable={props.terminalAvailable}
-            diffAvailable={props.diffAvailable}
-            filesAvailable={props.filesAvailable}
-            pullRequestAvailable={props.pullRequestAvailable}
-            pullRequestsAvailable={props.pullRequestsAvailable}
-            deviceAvailable={props.deviceAvailable}
-          />
+          props.emptyState !== undefined ? (
+            props.emptyState
+          ) : (
+            <RightPanelEmptyState
+              onAddBrowser={props.onAddBrowser}
+              onAddBrowserInProfile={props.onAddBrowserInProfile}
+              browserProfiles={browserProfiles}
+              onAddTerminal={props.onAddTerminal}
+              onAddDiff={props.onAddDiff}
+              onAddFiles={props.onAddFiles}
+              onAddPullRequest={props.onAddPullRequest}
+              onAddPullRequests={props.onAddPullRequests}
+              onAddDevice={props.onAddDevice}
+              browserAvailable={props.browserAvailable}
+              terminalAvailable={props.terminalAvailable}
+              diffAvailable={props.diffAvailable}
+              filesAvailable={props.filesAvailable}
+              pullRequestAvailable={props.pullRequestAvailable}
+              pullRequestsAvailable={props.pullRequestsAvailable}
+              deviceAvailable={props.deviceAvailable}
+            />
+          )
         ) : (
           props.children
         )}

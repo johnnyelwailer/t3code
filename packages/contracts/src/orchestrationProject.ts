@@ -3,7 +3,7 @@ import * as Schema from "effect/Schema";
 import { IsoDateTime, ProjectId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { RepositoryIdentity, ThreadEnvMode } from "./environment.ts";
 import { ModelSelection } from "./modelSelection.ts";
-import { ProjectIconOverride, ProjectScript } from "./project.ts";
+import { ProjectScript, ReceivedProjectIcon } from "./project.ts";
 import { ProjectMainRepository } from "./t3team-projectMainRepository.ts";
 import { ProjectSourceBinding } from "./t3team-orchestrationExt.ts";
 
@@ -22,7 +22,7 @@ export const OrchestrationProjectShell = Schema.Struct({
   autoPull: Schema.optional(Schema.Boolean),
   // Optional on the wire so cached snapshots from older servers still decode.
   faviconPath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
-  projectIcon: Schema.optional(Schema.NullOr(ProjectIconOverride)),
+  projectIcon: Schema.optional(Schema.NullOr(ReceivedProjectIcon)),
   // Optional: the repository whose checkout is `workspaceRoot` (t3team main repository).
   mainRepository: Schema.optional(Schema.NullOr(ProjectMainRepository)),
   scripts: Schema.Array(ProjectScript),

@@ -26,11 +26,11 @@ import {
   CheckIcon,
   ChevronRightIcon,
   CloudIcon,
-  CopyIcon,
   LinkIcon,
   MonitorIcon,
   TerminalIcon,
 } from "lucide-react";
+import { Check, Copy } from "lucide";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";
@@ -82,6 +82,7 @@ import { T3Wordmark } from "../T3Wordmark";
 import { Alert, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
+import { MorphIcon } from "~/components/MorphIcon";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import { Input } from "../ui/input";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../ui/tooltip";
@@ -234,7 +235,11 @@ export function WelcomeWizard({
           title={`Set up ${brand.productName}`}
           identity={
             brand.identity ?? (
-              <div className="flex items-baseline gap-1.5" role="img" aria-label="T3 Code">
+              <div
+                className="flex items-baseline gap-1.5"
+                role="img"
+                aria-label={brand.productName}
+              >
                 <T3Wordmark className="h-4 w-auto shrink-0" aria-hidden />
                 <span className="text-2xl font-medium tracking-tight text-muted-foreground">
                   Code
@@ -1761,7 +1766,7 @@ function CommandBlock({
         aria-label="Copy command"
         onClick={() => copyToClipboard(command, undefined)}
       >
-        {isCopied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
+        <MorphIcon className="size-3.5" icon={isCopied ? Check : Copy} />
       </Button>
     </div>
   );

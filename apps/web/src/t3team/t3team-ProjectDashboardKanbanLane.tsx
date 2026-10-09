@@ -26,6 +26,8 @@ export function ProjectDashboardKanbanLane({
   renderTicketExtra,
   onMoveTicketToStatus,
   optimisticMoves,
+  collapsed,
+  onToggleCollapsed,
 }: {
   column: ProjectTicketKanbanColumn;
   dragging: boolean;
@@ -38,6 +40,8 @@ export function ProjectDashboardKanbanLane({
   renderTicketExtra?: (ticket: ProjectTicket, compact: boolean) => React.ReactNode;
   onMoveTicketToStatus?: (ticket: ProjectTicket, targetStatus: string) => Promise<string>;
   optimisticMoves: Readonly<Record<string, ProjectDashboardKanbanOptimisticMove>>;
+  collapsed?: boolean;
+  onToggleCollapsed?: (collapsed: boolean) => void;
 }) {
   const laneTicketIds = new Set(column.items.map((ticket) => ticket.id));
   const laneHierarchy = isHierarchyMode
@@ -53,6 +57,8 @@ export function ProjectDashboardKanbanLane({
       title={column.title}
       count={column.items.length}
       dragging={dragging}
+      {...(collapsed !== undefined ? { collapsed } : {})}
+      {...(onToggleCollapsed ? { onToggleCollapsed } : {})}
     >
       <div className="space-y-1.5">
         {laneTickets.map((ticket) => {

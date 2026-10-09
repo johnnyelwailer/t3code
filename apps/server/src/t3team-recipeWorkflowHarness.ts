@@ -14,8 +14,8 @@
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { launchT3TeamRecipeHarnessRun } from "./t3team-recipeWorkflowHarnessLaunch.ts";
 import { driveT3TeamRecipeHarnessAsks } from "./t3team-recipeWorkflowHarnessLoop.ts";
 import { assembleT3TeamRecipeHarnessReport } from "./t3team-recipeWorkflowHarnessReport.ts";

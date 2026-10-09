@@ -53,7 +53,7 @@ describe("summarizeActorMessageForDelivery", () => {
     // Auto-summary cuts at the last sentence boundary inside the 300-char window.
     expect(out.startsWith("Status: " + "w ".repeat(140) + "all green…")).toBe(true);
     expect(out).toContain("…[body NOT loaded — " + body.length + " chars total; message id msg-42");
-    expect(out).toContain("call t3team_read_message with this message id to read the full text]");
+    expect(out).toContain("call t3_read_message with this message id to read the full text]");
     // The raw body is NOT inlined — only the subject and the marker.
     expect(out).not.toContain("z".repeat(100));
   });

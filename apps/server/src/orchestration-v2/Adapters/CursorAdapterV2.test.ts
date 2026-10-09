@@ -28,6 +28,7 @@ import * as IdAllocator from "../IdAllocator.ts";
 import { ProviderAdapterV2RuntimePolicy } from "../ProviderAdapter.ts";
 import {
   cursorMcpServers,
+  cursorRunResultFailure,
   cursorRuntimeAgentPolicy,
   cursorSdkModelSelection,
   makeCursorAgentOptions,
@@ -39,6 +40,69 @@ import { isCursorCancellationError, loggedCursorAgentOptions } from "./CursorAge
 const decodeCursorSettings = Schema.decodeEffect(CursorSettings);
 
 describe("CursorAdapterV2", () => {
+  it("surfaces Cursor connection_stalled run errors instead of the opaque default", () => {
+    const failure = cursorRunResultFailure(
+      { message: "Connection stalled repeatedly", code: "connection_stalled" },
+      0,
+    );
+    assert.deepEqual(failure, {
+      message: "Connection stalled repeatedly",
+      code: "connection_stalled",
+      retryable: true,
+    });
+  });
+
+  it("classifies a Cursor usage limit with a future reset day as usage_limit with that reset", () => {
+    const nowMs = DateTime.toEpochMillis(DateTime.makeUnsafe("2026-10-08T12:00:00.000Z"));
+    const failure = cursorRunResultFailure(
+      {
+        message:
+          "Your team has reached its usage limit Please reach out to an admin to enable on-demand usage, or return on 10/9/2026 when your limit resets.",
+      },
+      nowMs,
+    );
+    assert.equal(failure.class, "usage_limit");
+    assert.equal(failure.resetAt, "2026-10-09T00:00:00.000Z");
+    assert.equal(failure.retryable, undefined);
+  });
+
+  it("probes an hour later when the Cursor limit has no (or an already-passed) reset day", () => {
+    const nowMs = DateTime.toEpochMillis(DateTime.makeUnsafe("2026-10-09T12:00:00.000Z"));
+    const expected = "2026-10-09T13:00:00.000Z";
+    for (const [message, resetAt] of [
+      [
+        "Increase limits for faster responses You're out of usage. Switch to Auto or Composer 2.5, or ask your admin to increase your limit to continue.",
+        "2026-10-09T16:00:00.000Z",
+      ],
+      [
+        "Your team has reached its usage limit, or return on 10/9/2026 when your limit resets.",
+        expected,
+      ],
+    ] as const) {
+      const failure = cursorRunResultFailure({ message }, nowMs);
+      assert.equal(failure.class, "usage_limit");
+      assert.equal(failure.resetAt, resetAt);
+    }
+    assert.equal(
+      cursorRunResultFailure({ message: "Failed to fetch usage limit status: fetch failed" }, nowMs)
+        .class,
+      undefined,
+    );
+    assert.equal(cursorRunResultFailure("search failed", nowMs).class, undefined);
+    assert.equal(
+      cursorRunResultFailure(
+        { message: "[unknown] Failed to connect to API key exchange endpoint: fetch failed" },
+        nowMs,
+      ).class,
+      undefined,
+    );
+  });
+
+  it("keeps string Cursor run errors", () => {
+    assert.deepEqual(cursorRunResultFailure("search failed", 0), { message: "search failed" });
+    assert.deepEqual(cursorRunResultFailure(null, 0), {});
+  });
+
   it.effect.each([
     { status: "finished", model: undefined },
     { status: "cancelled", model: "claude-opus-4-6" },
@@ -359,6 +423,22 @@ describe("CursorAdapterV2", () => {
         numFiles: 0,
       };
       const updates: ReadonlyArray<InteractionUpdate> = [
+        ...(["tool-call-started", "tool-call-completed"] as const).map((type) => ({
+          type,
+          modelCallId: "native-model-call",
+          callId: "mcp-weather",
+          toolCall: {
+            type: "mcp" as const,
+            args: {
+              providerIdentifier: "weather",
+              toolName: "get_weather",
+              args: { city: "Berlin" },
+            },
+            ...(type === "tool-call-completed"
+              ? { result: { status: "success" as const, value: { content: [], isError: false } } }
+              : {}),
+          },
+        })),
         {
           type: "tool-call-completed",
           modelCallId: "native-model-call",
@@ -428,6 +508,26 @@ describe("CursorAdapterV2", () => {
             type: "ls",
             args: { path: path.join(workspace, "missing") },
             result: { status: "error", error: "ENOENT" },
+          },
+        },
+        {
+          type: "tool-call-completed",
+          modelCallId: "native-model-call",
+          callId: "grep-failed",
+          toolCall: {
+            type: "grep",
+            args: { pattern: "TODO", path: "src" },
+            result: { status: "error", error: "search failed" },
+          },
+        },
+        {
+          type: "tool-call-completed",
+          modelCallId: "native-model-call",
+          callId: "glob-failed",
+          toolCall: {
+            type: "glob",
+            args: { globPattern: "*.ts" },
+            result: { status: "error", error: "search failed" },
           },
         },
         {
@@ -605,6 +705,30 @@ describe("CursorAdapterV2", () => {
         Stream.takeUntil((event) => event.type === "turn.terminal"),
         Stream.runCollect,
       );
+      const mcpItems = events.flatMap((event) =>
+        event.type === "turn_item.updated" &&
+        event.turnItem.type === "dynamic_tool" &&
+        event.turnItem.toolName === "mcp__weather__get_weather"
+          ? [event.turnItem]
+          : [],
+      );
+      assert.deepEqual(
+        mcpItems.map((item) => item.status),
+        ["running", "completed"],
+      );
+      for (const item of mcpItems) {
+        assert.equal(item.title, "get weather");
+        assert.deepEqual(item.toolSource, {
+          key: "mcp:weather",
+          name: "weather",
+          kind: "integration",
+        });
+        assert.deepEqual(item.input, {
+          providerIdentifier: "weather",
+          toolName: "get_weather",
+          args: { city: "Berlin" },
+        });
+      }
       const fileSearchItems = events.flatMap((event) =>
         event.type === "turn_item.updated" &&
         event.turnItem.type === "file_search" &&
@@ -648,7 +772,17 @@ describe("CursorAdapterV2", () => {
           {
             pattern: path.join(workspace, "missing"),
             status: "failed",
-            results: undefined,
+            results: [{ fileName: path.join(workspace, "missing"), preview: "ENOENT" }],
+          },
+          {
+            pattern: "TODO",
+            status: "failed",
+            results: [{ fileName: "src", preview: "search failed" }],
+          },
+          {
+            pattern: "*.ts",
+            status: "failed",
+            results: [{ fileName: ".", preview: "search failed" }],
           },
           {
             pattern: "src/a.ts, src/b.ts",
@@ -667,7 +801,7 @@ describe("CursorAdapterV2", () => {
           {
             pattern: "src/a.ts",
             status: "failed",
-            results: undefined,
+            results: [{ fileName: "src/a.ts", preview: "lint failed" }],
           },
         ],
       );

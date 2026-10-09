@@ -9,7 +9,7 @@
 import { T3TeamWidgetToolCallRequest, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { HttpRouter, HttpServerResponse } from "effect/unstable/http";
+import { HttpRouter, HttpServerResponse } from "effect/http";
 
 import { errorResponse, okJson, readJsonBody, toAtlassianError } from "./t3team-atlassian-http.ts";
 import { T3TEAM_MCP_SERVER_NAME, T3TeamToolBroker } from "./t3team-toolBroker.ts";

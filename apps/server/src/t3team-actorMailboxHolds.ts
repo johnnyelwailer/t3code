@@ -7,7 +7,7 @@
  * @module t3team-actorMailboxHolds
  */
 import * as Effect from "effect/Effect";
-import type * as SqlClient from "effect/unstable/sql/SqlClient";
+import type * as SqlClient from "effect/sql/SqlClient";
 
 import type { T3TeamActorMailboxError } from "./t3team-actorMailbox.ts";
 

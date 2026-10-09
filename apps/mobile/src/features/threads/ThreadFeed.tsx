@@ -1,5 +1,6 @@
 import { ThreadContextDivider } from "./thread-context-divider";
 import { ThreadHandoffRow } from "./thread-handoff-row";
+import { SecretRequestCard } from "./SecretRequestCard";
 import {
   WorktreeWorkingHeader,
   WorktreeSetupCard,
@@ -9,6 +10,7 @@ import * as Haptics from "expo-haptics";
 import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
 import { useViewabilityAmount, type LegendListRef } from "@legendapp/list/react-native";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { resolveRunInitiatingPrompt } from "@t3tools/client-runtime/t3team-runPromptCopy";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
 import {
@@ -36,6 +38,8 @@ import {
   type CodexArtifactTemplate,
 } from "@t3tools/client-runtime/codex-artifact-templates";
 import { resolveAssetUrl } from "@t3tools/client-runtime/state/assets";
+import { isMarkdownFileLinkLabel } from "@t3tools/client-runtime/markdown-links";
+import { getTextContent, type MarkdownNode } from "react-native-nitro-markdown/headless";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
@@ -160,6 +164,7 @@ import {
   threadFeedRunIsUnsettled,
   isContextCompactionActivityGroup,
   isContextHandoffActivityGroup,
+  isSecretRequestActivityGroup,
   type ThreadFeedEntry,
   type ThreadFeedLatestRun,
 } from "../../lib/threadActivity";
@@ -181,6 +186,8 @@ import {
 import { appendPendingThreadMessages, type PendingThreadFeedEntry } from "./pending-thread-feed";
 import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 import { resolveThreadFeedFixedItemSize } from "./thread-feed-item-size";
+import { htmlRenderFrameHeight } from "@t3tools/shared/htmlRender";
+import { htmlRenderRowHeight, ThreadHtmlRender } from "./HtmlRenderWebView";
 import { useMarkdownCodeHighlight } from "./markdownCodeHighlightState";
 import {
   assetEnvironment,
@@ -721,7 +728,7 @@ interface MarkdownStyleSet {
 }
 
 const failedMarkdownFaviconHosts = new Set<string>();
-const MarkdownLinkLabelContext = createContext(false);
+const MarkdownLinkLabelContext = createContext<"file" | "other" | null>(null);
 const markdownLinkStyles = StyleSheet.create({
   inlineIcon: {
     width: 14,
@@ -811,6 +818,22 @@ function MarkdownInlineCode(props: {
       {presentation?.label ?? props.content}
     </NativeText>
   );
+}
+
+function MarkdownImage(props: {
+  readonly node: MarkdownNode;
+  readonly renderImage: MarkdownImageRenderer;
+}) {
+  const insideLink = useContext(MarkdownLinkLabelContext);
+  if (insideLink === "file")
+    return <NativeText>{props.node.alt ?? props.node.title ?? ""}</NativeText>;
+  return props.node.href
+    ? props.renderImage({
+        href: props.node.href,
+        alt: props.node.alt ?? null,
+        title: props.node.title ?? null,
+      })
+    : null;
 }
 
 const ARTIFACT_TEMPLATE_SYMBOL_BY_KIND: Record<
@@ -1183,26 +1206,31 @@ function useMarkdownStyles(
       preserveSoftBreaks: boolean,
       highlightCode: boolean,
     ): CustomRenderers => ({
-      link: ({ children, href = "" }) => {
+      link: ({ children, node, href = "" }) => {
         const presentation = resolveMarkdownLinkPresentation(href);
         if (presentation.kind === "file") {
           return (
-            <NativeText
-              className="font-t3-bold"
-              onPress={() => onLinkPress(href)}
-              style={{ color: inlineTextColor }}
-            >
-              <Image
-                source={markdownFileIconSource(presentation.icon)}
-                style={markdownLinkStyles.inlineIcon}
-              />
-              {presentation.label}
-            </NativeText>
+            <MarkdownLinkLabelContext.Provider value="file">
+              <NativeText onPress={() => onLinkPress(href)} style={{ color: inlineTextColor }}>
+                {!isMarkdownFileLinkLabel(getTextContent(node), href) && <>{children} </>}
+                <NativeText
+                  className="font-t3-bold"
+                  onPress={() => onLinkPress(href)}
+                  style={{ color: inlineTextColor }}
+                >
+                  <Image
+                    source={markdownFileIconSource(presentation.icon)}
+                    style={markdownLinkStyles.inlineIcon}
+                  />
+                  {presentation.label}
+                </NativeText>
+              </NativeText>
+            </MarkdownLinkLabelContext.Provider>
           );
         }
         if (presentation.kind === "external") {
           return (
-            <MarkdownLinkLabelContext.Provider value>
+            <MarkdownLinkLabelContext.Provider value="other">
               <MarkdownExternalLink
                 href={presentation.href}
                 host={presentation.host}
@@ -1216,7 +1244,7 @@ function useMarkdownStyles(
         }
         const linkHref = presentation.href;
         return (
-          <MarkdownLinkLabelContext.Provider value>
+          <MarkdownLinkLabelContext.Provider value="other">
             <NativeText
               className="underline"
               onPress={
@@ -1265,14 +1293,7 @@ function useMarkdownStyles(
           })}
         </View>
       ),
-      image: ({ node }) =>
-        node.href
-          ? (renderImage({
-              href: node.href,
-              alt: node.alt ?? null,
-              title: node.title ?? null,
-            }) ?? undefined)
-          : undefined,
+      image: ({ node }) => <MarkdownImage node={node} renderImage={renderImage} />,
       code_inline: ({ content }) => (
         <MarkdownInlineCode
           content={content ?? ""}
@@ -1520,6 +1541,8 @@ function renderFeedEntry(
     readonly userBubbleMaxWidth: number;
     /** Width assistant markdown lays out in, so images can size their frame before layout. */
     readonly markdownContentWidth: number;
+    /** Width full-bleed rows (HTML renders) lay out in. */
+    readonly contentWidth: number;
     readonly threadTitle: string;
   },
 ) {
@@ -1558,6 +1581,18 @@ function renderFeedEntry(
     return <ThreadThinkingRow rowSizing={props.workRowSizing} iconSubtleColor={iconSubtleColor} />;
   }
 
+  if (entry.type === "html-render") {
+    return (
+      <ThreadHtmlRender
+        environmentId={props.environmentId}
+        threadId={props.threadId}
+        render={entry.render}
+        frameWidth={props.contentWidth}
+        iconColor={iconSubtleColor}
+      />
+    );
+  }
+
   if (entry.type === "work-toggle") {
     return (
       <ThreadWorkGroupToggle
@@ -1589,6 +1624,16 @@ function renderFeedEntry(
     );
   }
 
+  if (entry.type === "activity-group" && isSecretRequestActivityGroup(entry)) {
+    return (
+      <SecretRequestCard
+        environmentId={props.environmentId}
+        projectedItem={entry.activities[0]!.projectedItem}
+        iconColor={iconSubtleColor}
+      />
+    );
+  }
+
   if (entry.type === "activity-group" && isContextCompactionActivityGroup(entry)) {
     const label = entry.activities[0]!.summary;
     const active =
@@ -1609,6 +1654,7 @@ function renderFeedEntry(
     const { message } = entry;
     const isUser = message.role === "user";
     const presentation = resolveUserMessagePresentation(message);
+    const initiatingPrompt = isUser ? resolveRunInitiatingPrompt(message) : null;
     const renderedText = renderAssistantCitationsAsText(presentation.text);
     const styles = isUser ? markdownStyles.user : markdownStyles.assistant;
     const timestampLabel = formatMessageTime(isUser ? message.createdAt : message.updatedAt);
@@ -1791,14 +1837,14 @@ function renderFeedEntry(
                 <SymbolView name="pencil" size={14} tintColor={iconSubtleColor} />
               </Pressable>
             ) : null}
-            {presentation.text.trim().length > 0 ? (
+            {initiatingPrompt !== null ? (
               <CopyTextButton
                 accessibilityLabel="Copy message"
-                text={presentation.text}
+                text={initiatingPrompt}
                 onCopy={
-                  message.context
+                  message.context && initiatingPrompt === message.text
                     ? () =>
-                        writeComposerContextClipboard(message.text, {
+                        writeComposerContextClipboard(initiatingPrompt, {
                           version: 1,
                           source: { environmentId: props.environmentId, messageId: message.id },
                           records: message.context!.records,
@@ -1917,6 +1963,7 @@ function renderFeedEntry(
       onToggleRow={props.onToggleWorkRow}
       renderImage={props.renderViewedImage}
       renderReasoning={props.renderReasoning}
+      onPressPreview={props.onPressPreview}
     />
   );
 }
@@ -2853,6 +2900,9 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   // cards and related-thread links can exceed the compact row height.
   const getFixedItemSize = useCallback(
     (entry: ThreadFeedEntry) => {
+      if (entry.type === "html-render") {
+        return htmlRenderRowHeight(htmlRenderFrameHeight(entry.render, contentWidth));
+      }
       if (workRowSizing.fixedRowHeight === undefined) {
         return undefined;
       }
@@ -2886,8 +2936,20 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
           return undefined;
       }
     },
-    [expandedWorkRows, workRowSizing.fixedRowHeight],
+    [contentWidth, expandedWorkRows, workRowSizing.fixedRowHeight],
   );
+  // HTML render rows' fixed heights follow the width, so a rotation or split
+  // resize drops the cached sizes, as a text-size change does.
+  const hasHtmlRenders = useMemo(
+    () => presentedFeed.some((entry) => entry.type === "html-render"),
+    [presentedFeed],
+  );
+  const previousContentWidth = useRef(contentWidth);
+  useLayoutEffect(() => {
+    if (previousContentWidth.current === contentWidth) return;
+    previousContentWidth.current = contentWidth;
+    if (hasHtmlRenders) props.listRef.current?.clearCaches({ mode: "sizes" });
+  }, [contentWidth, hasHtmlRenders, props.listRef]);
 
   // Disclosures can mount existing offscreen rows as well as new work rows.
   // Fade those in after movement; never retain removed rows over replacements.
@@ -2930,6 +2992,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             themeAppearance,
             userBubbleMaxWidth,
             markdownContentWidth,
+            contentWidth,
             threadTitle: props.threadTitle,
             skills: props.skills,
             workspaceRoot: props.workspaceRoot,
@@ -2966,6 +3029,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       themeAppearance,
       userBubbleMaxWidth,
       markdownContentWidth,
+      contentWidth,
       onCopyWorkRow,
       markdownLinkHandlers,
       onPressPreview,

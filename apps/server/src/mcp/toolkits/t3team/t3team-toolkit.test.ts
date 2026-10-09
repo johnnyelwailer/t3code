@@ -3,7 +3,7 @@ import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts"
 import { listImplementedT3TeamToolCatalogEntries } from "@t3tools/project-context/t3teamToolCatalog";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { McpSchema, McpServer } from "effect/unstable/ai";
+import { McpSchema, McpServer } from "effect/ai";
 
 import { T3TeamChildThreadMetadata } from "../../../t3team-childThreadMetadata.ts";
 import { T3TeamToolBroker, type T3TeamToolBinding } from "../../../t3team-toolBroker.ts";
@@ -28,9 +28,13 @@ it("maps or explicitly policy-excludes every canonical implemented tool", () => 
 const threadId = ThreadId.make("thread-t3team-mcp-test");
 const invocation: McpInvocationContext.McpInvocationScope = {
   environmentId: EnvironmentId.make("environment-t3team-mcp-test"),
-  threadId,
-  providerSessionId: "provider-session-t3team-mcp-test",
-  providerInstanceId: ProviderInstanceId.make("pack-test"),
+  requestNamespace: "provider-session-t3team-mcp-test",
+  thread: {
+    threadId,
+    providerSessionId: "provider-session-t3team-mcp-test",
+    providerInstanceId: ProviderInstanceId.make("pack-test"),
+  },
+  client: undefined,
   capabilities: new Set(["orchestration"]),
   issuedAt: 1,
 };
@@ -78,7 +82,7 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
   return Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
     const result = yield* server.callTool({
-      name: "t3team_show_widget",
+      name: "t3_show_widget",
       arguments: {
         title: "MCP widget",
         widget_code: "<button>Continue</button>",
@@ -113,15 +117,15 @@ it("exposes only the t3team_orchestration_* names, not the t3team_workflow_* ali
   const names = Object.keys(T3TeamToolkit.tools);
   expect(names).toEqual(
     expect.arrayContaining([
-      "t3team_orchestration_run",
-      "t3team_orchestration_status",
-      "t3team_orchestration_resume",
+      "t3_orchestration_run",
+      "t3_orchestration_status",
+      "t3_orchestration_resume",
     ]),
   );
   expect(names.filter((name) => name.startsWith("t3team_workflow_"))).toEqual([]);
 });
 
-it.effect("routes t3team_recipe_list through the bound broker callTool dispatch", () => {
+it.effect("routes t3_recipe_list through the bound broker callTool dispatch", () => {
   const calls: Array<{
     readonly threadId: ThreadId;
     readonly tool: string;
@@ -152,7 +156,7 @@ it.effect("routes t3team_recipe_list through the bound broker callTool dispatch"
   return Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
     const result = yield* server.callTool({
-      name: "t3team_recipe_list",
+      name: "t3_recipe_list",
       arguments: {},
     });
 
@@ -170,7 +174,7 @@ it.effect("routes t3team_recipe_list through the bound broker callTool dispatch"
   );
 });
 
-it.effect("routes t3team_recipe_validate through the bound broker callTool dispatch", () => {
+it.effect("routes t3_recipe_validate through the bound broker callTool dispatch", () => {
   const calls: Array<{
     readonly threadId: ThreadId;
     readonly tool: string;
@@ -201,7 +205,7 @@ it.effect("routes t3team_recipe_validate through the bound broker callTool dispa
   return Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
     const result = yield* server.callTool({
-      name: "t3team_recipe_validate",
+      name: "t3_recipe_validate",
       arguments: { source: "export const meta = { name: 'x' };" },
     });
 
@@ -240,7 +244,7 @@ it.effect(
     return Effect.gen(function* () {
       const server = yield* McpServer.McpServer;
       const result = yield* server.callTool({
-        name: "t3team_children",
+        name: "t3_task_ops",
         arguments: { op: "environments" },
       });
       expect(result.isError).toBe(true);
@@ -352,8 +356,8 @@ it.effect(
 
 it("MCP and broker surfaces expose the SAME description text for run and resume", () => {
   const cases = [
-    ["t3team_orchestration_run", "t3team.orchestration.run"],
-    ["t3team_orchestration_resume", "t3team.orchestration.resume"],
+    ["t3_orchestration_run", "t3team.orchestration.run"],
+    ["t3_orchestration_resume", "t3team.orchestration.resume"],
   ] as const;
   for (const [mcpName, canonicalId] of cases) {
     const mcp = (T3TeamToolkit.tools as Record<string, { readonly description?: string }>)[mcpName];
@@ -366,7 +370,7 @@ it("MCP and broker surfaces expose the SAME description text for run and resume"
     }
     expect(unmapped).toBe(broker);
     expect(broker).toContain(
-      canonicalId === "t3team.orchestration.resume" ? "corrected 'args'" : "'source'",
+      canonicalId === "t3team.orchestration.resume" ? "corrected 'args'" : "'intent'",
     );
   }
 });

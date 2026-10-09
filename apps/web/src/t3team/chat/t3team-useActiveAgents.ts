@@ -1,7 +1,9 @@
-import type { OrchestrationV2Subagent, ThreadId } from "@t3tools/contracts";
+import type { OrchestrationV2Subagent, ServerProvider, ThreadId } from "@t3tools/contracts";
 import { projectedSubagentsToRuntime } from "@t3tools/client-runtime/state/subagentRuntime";
 import { useMemo } from "react";
 
+import { usePrimarySettings } from "~/hooks/useSettings";
+import { useServerConfigs } from "~/state/entities";
 import {
   type ActiveAgentEntry,
   EMPTY_ACTIVE_AGENTS,
@@ -11,6 +13,32 @@ import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadR
 import type { ProjectThread } from "~/t3team/t3team-types";
 
 const NO_CHILDREN: ReadonlyArray<ProjectThread> = [];
+
+function findProvider(
+  configs: ReturnType<typeof useServerConfigs>,
+  instanceId: string | undefined,
+): ServerProvider | undefined {
+  if (instanceId === undefined) return undefined;
+  for (const config of configs.values()) {
+    const found = config.providers.find((provider) => provider.instanceId === instanceId);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function providerMark(
+  provider: ServerProvider | undefined,
+  fallbackDriver?: ServerProvider["driver"],
+): ActiveAgentEntry["provider"] {
+  const driverKind = provider?.driver ?? fallbackDriver;
+  if (!driverKind) return undefined;
+  return {
+    driverKind,
+    displayName: provider?.displayName ?? driverKind,
+    ...(provider?.iconDataUrl ? { iconDataUrl: provider.iconDataUrl } : {}),
+    ...(provider?.iconUrl ? { acpRegistryIconUrl: provider.iconUrl } : {}),
+  };
+}
 
 /**
  * GHE #201: the working row's active agents — this thread's running app-owned children (the
@@ -22,6 +50,10 @@ export function useT3TeamActiveAgents(input: {
   readonly subagents: ReadonlyArray<OrchestrationV2Subagent> | undefined;
 }): readonly ActiveAgentEntry[] {
   const { threadId, subagents } = input;
+  const activityLabelsEnabled = usePrimarySettings(
+    (settings) => settings.t3teamActivityLabelsEnabled,
+  );
+  const configs = useServerConfigs();
   const children = useT3TeamChildThreadRelationsStore((state) =>
     threadId === null ? undefined : state.childThreadsByParentId.get(threadId),
   );
@@ -32,9 +64,23 @@ export function useT3TeamActiveAgents(input: {
     const ownSubagents = (subagents ?? []).filter(
       (subagent) => subagent.childThreadId === null || !childIds.has(subagent.childThreadId),
     );
-    return mergeActiveAgentsAndChildren({
+    const merged = mergeActiveAgentsAndChildren({
       childThreads,
       subagents: projectedSubagentsToRuntime(ownSubagents),
+      activityLabelsEnabled,
     });
-  }, [childThreads, subagents]);
+    if (merged.length === 0) return merged;
+    return merged.map((entry) => {
+      if (entry.source === "child") {
+        const child = childThreads.find((thread) => `child:${thread.id}` === entry.id);
+        const provider = findProvider(configs, child?.providerInstanceId);
+        const mark = providerMark(provider);
+        return mark ? { ...entry, provider: mark } : entry;
+      }
+      const agent = ownSubagents.find((subagent) => `agent:${subagent.id}` === entry.id);
+      const provider = findProvider(configs, agent?.providerInstanceId);
+      const mark = providerMark(provider, agent?.driver);
+      return mark ? { ...entry, provider: mark } : entry;
+    });
+  }, [activityLabelsEnabled, childThreads, configs, subagents]);
 }

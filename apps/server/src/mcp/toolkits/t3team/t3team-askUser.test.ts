@@ -12,7 +12,7 @@ import * as Layer from "effect/Layer";
 
 import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "../../../orchestration-v2/ProjectionStore.ts";
-import { SqlitePersistenceMemory } from "../../../persistence/Layers/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "../../../persistence/Sqlite.ts";
 import {
   createTestThread,
   makeT3TeamV2TestLayer,
@@ -58,7 +58,7 @@ const threadWithRunningRun = (threadId: ThreadId) =>
 const QUESTION =
   "Which of the two migration strategies should this thread follow for the billing tables?";
 
-it.layer(TestLayer)("t3team_ask_user on V2", (it) => {
+it.layer(TestLayer)("t3_ask_user on V2", (it) => {
   it.effect("records a pending message-mode question on the active run and returns", () =>
     Effect.gen(function* () {
       const projections = yield* ProjectionStore.ProjectionStoreV2;

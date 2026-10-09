@@ -20,8 +20,7 @@ import { showCloudSessionFailureToast } from "./t3team-cloudSessionToast";
 import { useCloudSessionListRefresh } from "./t3team-useCloudSessionListRefresh";
 import { useCloudSessionConnect } from "./t3team-useCloudSessionConnect";
 import { liveCloudSessionForEnvironment } from "./t3team-cloudSessionEnvironmentMatch";
-import { useCloudSessionDuration } from "./t3team-useCloudSessionDuration";
-import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
+import { useCloudSessionCreate } from "./t3team-useCloudSessionCreate";
 
 /**
  * Drives the cloud session surfaces (settings panel + "Run on" menu): create,
@@ -31,9 +30,13 @@ import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
 export function useCloudSessionController() {
   const environmentId = usePrimaryEnvironmentId();
   const { environments: relayDiscovered } = useRelayEnvironmentDiscovery();
-  const { sessions: serverSessions, loading, configured, historyUrl } = useCloudSessions();
-  const [durationSeconds, setDurationSeconds] = useCloudSessionDuration(environmentId);
-  const [createPending, setCreatePending] = useState(false);
+  const {
+    sessions: serverSessions,
+    loading,
+    configured,
+    historyUrl,
+    loadError,
+  } = useCloudSessions();
   const [actionPending, setActionPending] = useState<{
     readonly sessionId: string;
     readonly kind: "cancel" | "stop";
@@ -56,7 +59,6 @@ export function useCloudSessionController() {
     [relayDiscovered],
   );
 
-  const createSession = useAtomCommand(cloudSessionEnvironment.create, { reportFailure: false });
   const cancelSession = useAtomCommand(cloudSessionEnvironment.cancel, { reportFailure: false });
   const registerRelayEnvironment = useAtomCommand(environmentCatalog.register, {
     reportFailure: false,
@@ -75,38 +77,14 @@ export function useCloudSessionController() {
     register: registerRelayEnvironment,
   });
 
-  const onCreate = useCallback(
-    (seconds: number) => {
-      if (environmentId === null || createPending) return;
-      setRelayIdsBefore(
-        new Set(
-          [...relayDiscovered.values()].map((entry) => String(entry.environment.environmentId)),
-        ),
-      );
-      setCreatePending(true);
-      void createSession({ environmentId, input: { durationSeconds: seconds } })
-        .then((result) => {
-          if (result._tag === "Success") {
-            setLocalSession({
-              session: result.value,
-              knownServerSessionIds: new Set(serverSessions.map((session) => session.sessionId)),
-            });
-            refreshCloudSessionList();
-          } else {
-            reportCloudSessionCreateFailure(result);
-          }
-        })
-        .finally(() => setCreatePending(false));
-    },
-    [
-      createPending,
-      createSession,
-      environmentId,
-      refreshCloudSessionList,
-      relayDiscovered,
-      serverSessions,
-    ],
-  );
+  const { onCreate, createPending, createPendingSetup } = useCloudSessionCreate({
+    environmentId,
+    relayDiscovered,
+    serverSessions,
+    setRelayIdsBefore,
+    setLocalSession,
+    refreshCloudSessionList,
+  });
 
   const beginConnect = useCallback(
     (session: CloudSession) => {
@@ -147,12 +125,13 @@ export function useCloudSessionController() {
         // "Start another": a fresh session at the remembered duration. The
         // record carries no requested hold (the runs API omits dispatch
         // inputs), so replaying the ended session's own is not possible.
-        onCreate(durationSeconds);
+        // A setup session offers none: its record carries no project either.
+        if (session.machineSetup !== true) onCreate();
         return;
       }
       cancelRun(session, "cancel", "Cancelling that session…");
     },
-    [beginConnect, cancelRun, durationSeconds, onCreate],
+    [beginConnect, cancelRun, onCreate],
   );
 
   const onSessionSecondaryAction = useCallback(
@@ -175,11 +154,11 @@ export function useCloudSessionController() {
   return {
     sessions,
     loading,
+    loadError,
     configured,
     historyUrl,
-    durationSeconds,
-    onDurationChange: setDurationSeconds,
     createPending,
+    createPendingSetup,
     pendingSessionId,
     pendingKind,
     pendingLabel,
@@ -194,5 +173,7 @@ export function useCloudSessionController() {
     onCloudMenuOpenChange: useCallback((open: boolean) => setCloudMenuOpen(open), []),
     onPanelVisibilityChange: useCallback((open: boolean) => setPanelVisible(open), []),
     available: environmentId !== null,
+    /** Where sessions are created; a project must live here to run in its machine. */
+    primaryEnvironmentId: environmentId,
   };
 }

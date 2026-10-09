@@ -10,15 +10,15 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { makeWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowControlTool.ts";
 import { buildRunningWorkflowRunRow } from "./t3team-workflowEngineDurability.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { makeFakeWorkflowHostLayer } from "./t3team-workflowHostFake.fixtures.ts";
 import { controlWorkflowRun } from "./t3team-workflowRunControl.ts";
-import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 
 const projectId = ProjectId.make("proj-control-tool");
@@ -112,7 +112,9 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
       const value = yield* h.handlers(launchThreadId).controlWorkflowRun("pause", { runId });
 
       assert.strictEqual(value.status, "paused");
-      assert.match(value.hint, /t3team\.orchestration\.resume/);
+      // The agent's name for the tool, never the broker id it cannot call.
+      assert.match(value.hint, /t3_orchestration_resume/);
+      assert.notMatch(value.hint, /t3team\.orchestration\./);
       assert.strictEqual(Option.getOrThrow(yield* h.repo.getById({ runId })).status, "paused");
       assert.strictEqual(h.registry.peekPending(`${runId}:child`), undefined);
       assert.strictEqual(h.rearmed(), 1);

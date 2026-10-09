@@ -19,6 +19,7 @@ import {
   workflowWidgetAttachment,
 } from "./t3team-workflowEngineBrokerContext.ts";
 import type { ThreadMessagePayload, WaitUntilPayload } from "./t3team-workflowEngineBrokerTypes.ts";
+import { handleBrokerShowView } from "./t3team-workflowEngineBrokerShowView.ts";
 
 export async function handleBrokerNotifyVerb(core: BrokerCore, s: BrokerSend): Promise<void> {
   const { deps, enqueueOneWay, runPrimitive, step } = core;
@@ -43,13 +44,18 @@ export async function handleBrokerNotifyVerb(core: BrokerCore, s: BrokerSend): P
   // thread.message — one-way; agent-directed messages ride a queued turn, user-directed ones are
   // a system (user-visible) note. No pending ask either way.
   const p = payload as ThreadMessagePayload;
+  if (p.view !== undefined) {
+    await handleBrokerShowView(core, s, { threadId: p.threadId, view: p.view });
+    return;
+  }
   if (p.widget !== undefined) {
     // Workflow semantic adapter: reuse the canonical widget parser/attachment factory rather
     // than duplicating validation or inventing a second rendering contract.
     const attachment = workflowWidgetAttachment({
       widgetId: deps.newId(),
       title: p.widget.title,
-      widgetCode: p.widget.widgetCode,
+      ...(p.widget.widgetCode === undefined ? {} : { widgetCode: p.widget.widgetCode }),
+      ...(p.widget.intent === undefined ? {} : { intent: p.widget.intent }),
       ...(p.widget.format === undefined ? {} : { format: p.widget.format }),
       ...(p.widget.loadingMessages === undefined
         ? {}

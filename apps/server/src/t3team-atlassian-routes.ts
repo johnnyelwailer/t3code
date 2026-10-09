@@ -2,7 +2,7 @@ import { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
 import { MockIntegrationProvider } from "@t3tools/integrations-core/mock";
 import type { IntegrationAccountRef } from "@t3tools/integrations-core";
 import * as Effect from "effect/Effect";
-import { HttpRouter } from "effect/unstable/http";
+import { HttpRouter } from "effect/http";
 import {
   type BasicConnectInput,
   type OAuthConnectInput,

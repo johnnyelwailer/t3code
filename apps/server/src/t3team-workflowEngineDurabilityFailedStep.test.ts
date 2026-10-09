@@ -10,9 +10,9 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import {
   buildRunningWorkflowRunRow,
   makeWorkflowRunLifecycle,

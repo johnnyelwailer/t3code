@@ -135,7 +135,8 @@ describe("durable workflow engine — composition primitives", () => {
   });
 
   it("wait records a deadline, sleeps once on the original run, and replays instantly", async () => {
-    const ms = 60;
+    // Long enough that an instant replay stays well under it on a loaded CI runner.
+    const ms = 300;
     const t0 = Date.now();
     const { runId, result } = completed(await startWorkflow(waitWorkflow, { ms }, base));
     expect(result).toEqual({ done: true });

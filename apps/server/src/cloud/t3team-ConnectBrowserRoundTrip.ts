@@ -4,7 +4,7 @@ import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Encoding from "effect/Encoding";
+import * as Base64Url from "effect/encoding/Base64Url";
 
 import type { CloudCliTokenManagerError, PersistedToken } from "./CliTokenManager.ts";
 import { cloudCliOAuthConfig, hostedAppUrlConfig } from "./publicConfig.ts";
@@ -19,13 +19,14 @@ const fail = (
 ): Effect.Effect<never, ConnectCredentialMintError> =>
   Effect.fail(new ConnectCredentialMintError({ reason, cause }));
 
-const makePkceRequest = Effect.gen(function* () {
+/** PKCE verifier + S256 challenge and a CSRF state, for any loopback browser sign-in. */
+export const makePkceRequest = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
-  const verifier = Encoding.encodeBase64Url(yield* crypto.randomBytes(32));
-  const challenge = Encoding.encodeBase64Url(
+  const verifier = Base64Url.encode(yield* crypto.randomBytes(32));
+  const challenge = Base64Url.encode(
     yield* crypto.digest("SHA-256", new TextEncoder().encode(verifier)),
   );
-  const state = Encoding.encodeBase64Url(yield* crypto.randomBytes(16));
+  const state = Base64Url.encode(yield* crypto.randomBytes(16));
   return { verifier, challenge, state };
 });
 
@@ -79,7 +80,7 @@ export const runConnectBrowserRoundTrip = Effect.fn("cloud.connect.browser_round
           );
         const code = yield* Deferred.await(callback).pipe(
           Effect.timeout(input.timeout),
-          Effect.catchTag("TimeoutError", (cause) => fail("browser_callback_timeout", cause)),
+          Effect.catchTags({ TimeoutError: (cause) => fail("browser_callback_timeout", cause) }),
         );
         const token = yield* exchangeLoopbackAuthorizationCode({
           metadata,

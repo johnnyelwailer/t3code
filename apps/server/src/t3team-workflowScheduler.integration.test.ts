@@ -32,14 +32,14 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import { afterAll } from "vite-plus/test";
 
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
-import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
-import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
+import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
 import {
   WorkflowRunRepository,
   type WorkflowRunRepositoryShape,
-} from "./persistence/Services/WorkflowRuns.ts";
+} from "./persistence/WorkflowRuns.ts";
 import {
   buildRunningWorkflowRunRow,
   makeWorkflowRunLifecycle,
@@ -52,9 +52,13 @@ import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 import { makeWorkflowScheduler, toSchedulerSleepingRun } from "./t3team-workflowScheduler.ts";
 import { makeSchedulerResume, orphanSleepingRun } from "./t3team-workflowSchedulerResume.ts";
+import { workflowControlValidationError } from "./t3team-workflowRunControl.ts";
 
 const workflowPath = NodeURL.fileURLToPath(
   new URL("../__fixtures__/t3team-exampleTimer.workflow.ts", import.meta.url),
+);
+const waitWorkflowPath = NodeURL.fileURLToPath(
+  new URL("../__fixtures__/t3team-exampleWaitTimer.workflow.ts", import.meta.url),
 );
 const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-scheduler-"));
 afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));
@@ -138,13 +142,14 @@ const launchTimer = (
   store: import("@t3team/sdk").JournalStore,
   runId: string,
   delayMs: number,
+  recipePath: string = workflowPath,
 ) =>
   Effect.gen(function* () {
     const args = { delayMs };
     const launched = yield* Effect.promise(() =>
       launchWorkflowRecipe({
         runId,
-        workflowPath,
+        workflowPath: recipePath,
         args,
         runsRoot,
         launchThreadId: `launch-${runId}`,
@@ -161,7 +166,7 @@ const launchTimer = (
           repo,
           row: buildRunningWorkflowRunRow({
             runId,
-            workflowPath,
+            workflowPath: recipePath,
             args,
             launchThreadId: `launch-${runId}`,
             projectId,
@@ -272,6 +277,56 @@ schedulerLayer("workflow scheduler — DB-backed clock park survives a restart",
       yield* Effect.promise(() => scheduler.runDue());
 
       assert.deepStrictEqual(completed[0], { slept: true, deadline: deadlineMs });
+      assert.strictEqual(Option.getOrThrow(yield* repo.getById({ runId })).status, "completed");
+    }),
+  );
+});
+
+schedulerLayer("workflow scheduler — wait(ms) takes the same durable park", (it) => {
+  it.effect("parks a relative wait as sleeping, accepts pause, and wakes after a restart", () =>
+    Effect.gen(function* () {
+      const repo = yield* WorkflowRunRepository;
+      const store = yield* WorkflowJournalStore;
+      const runId = "wait-parks";
+
+      // Before the fix `wait(ms)` was an in-process timer: the run stayed `running` with no
+      // `wake_at`, pause was refused, and boot rehydration FAILED it as interrupted.
+      const launched = yield* launchTimer(repo, store, runId, HOUR_MS, waitWorkflowPath);
+      assert.strictEqual(launched.status, "suspended");
+      const sleepingRow = Option.getOrThrow(yield* repo.getById({ runId }));
+      assert.strictEqual(sleepingRow.status, "sleeping");
+      assert.isNotNull(sleepingRow.wakeAt);
+      assert.isNull(
+        workflowControlValidationError(sleepingRow, {
+          threadId: `launch-${runId}`,
+          action: "pause",
+        }),
+      );
+      const kinds = [...(yield* Effect.promise(() => store.readEntries(runId))).bySeq.values()].map(
+        (entry) => entry.kind,
+      );
+      assert.includeMembers(kinds, ["wait", "wait.until"]);
+
+      // Restart: only the DB survives; rehydration rebuilds the sleeping run, the sweep wakes it.
+      const deadlineMs = DateTime.makeUnsafe(sleepingRow.wakeAt!).epochMilliseconds;
+      const completed: Array<Record<string, unknown>> = [];
+      const registry = yield* rebuildSleepingFromDb(repo, store, completed);
+      const manual = makeManualClock(deadlineMs - 1000);
+      const scheduler = makeWorkflowScheduler({
+        listSleeping: listSleepingFrom(repo),
+        resume: (rid, correlationId) => {
+          const run = registry.getRun(rid);
+          return run === undefined ? Promise.resolve() : run.resume(correlationId, {});
+        },
+        now: manual.now,
+      });
+      yield* Effect.promise(() => scheduler.rearm());
+      yield* Effect.promise(() => scheduler.runDue());
+      assert.isUndefined(completed[0]);
+
+      manual.setNow(deadlineMs);
+      yield* Effect.promise(() => scheduler.runDue());
+      assert.deepStrictEqual(completed[0], { slept: true });
       assert.strictEqual(Option.getOrThrow(yield* repo.getById({ runId })).status, "completed");
     }),
   );

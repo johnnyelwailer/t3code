@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip --Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Capability disclosure for the play-as-shape "plan" card — the pre-execution permission
  * surface (Epic 25 §Capability gating): before an orchestration with elevated capabilities runs,
@@ -67,6 +67,11 @@ const TOOL_GROUP_CAPABILITY_LABELS: Record<string, { label: string; description:
     label: "Propose changes you review",
     description:
       "Prepare changes as drafts for you to accept or reject. Nothing is saved to your connected tools without your approval.",
+  },
+  "mutation.change_request": {
+    label: "Publish change requests",
+    description:
+      "Commit the files it lists, push a branch, and open a pull or merge request on the repository's host. Nothing else in the checkout is committed.",
   },
   "mutation.write": {
     label: "Save changes directly",

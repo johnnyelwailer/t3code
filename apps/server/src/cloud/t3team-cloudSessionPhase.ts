@@ -1,3 +1,5 @@
+import type { CloudSessionMachineStage } from "@t3tools/contracts";
+
 import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
 
 /**
@@ -30,7 +32,11 @@ export type CloudSessionPhase =
  * backwards, which reads as a bug even though the run is simply dying.
  */
 function reached(step: WorkflowJobStep | undefined): boolean {
-  return step !== undefined && (step.status === "in_progress" || step.status === "completed");
+  // Skipped is not reached. A standby's "Redeem the session's secrets" is
+  // completed-and-skipped while it waits for a claim; counting that as progress
+  // told the user their machine was already building.
+  if (step === undefined || step.conclusion === "skipped") return false;
+  return step.status === "in_progress" || step.status === "completed";
 }
 
 function findByPrefix(
@@ -86,6 +92,30 @@ export function deriveCloudSessionPhase(
   }
   if (steps.length === 0) return "requested";
   return "preparing";
+}
+
+/**
+ * The project-machine milestone a preparing session is on (#562), most advanced first. Undefined
+ * before the machine work starts (checkouts, toolchain), which the client words as preparing.
+ */
+export function deriveMachineStage(
+  steps: readonly WorkflowJobStep[] | null,
+): CloudSessionMachineStage | undefined {
+  if (steps === null) return undefined;
+  if (
+    reached(findByPrefix(steps, "Install the prebuilt server bundle")) ||
+    reached(findByPrefix(steps, "Install dependencies and build"))
+  ) {
+    return "installing";
+  }
+  if (reached(findByPrefix(steps, "Check the project machine"))) return "checking";
+  if (
+    reached(findByPrefix(steps, "Bring up the project machine")) ||
+    reached(findByPrefix(steps, "Redeem the session's secrets"))
+  ) {
+    return "building";
+  }
+  return undefined;
 }
 
 /** Seconds a session has been alive. Never negative — a clock skew must not

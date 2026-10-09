@@ -1,4 +1,8 @@
-import { CloudSessionFailedError } from "@t3tools/contracts";
+import {
+  CloudSessionFailedError,
+  ORCHESTRATION_PROTOCOL_VERSION,
+  ProjectId,
+} from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
@@ -7,15 +11,24 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/process";
 
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as GitHubCli from "../sourceControl/GitHubCli.ts";
 import * as CliTokenManager from "./CliTokenManager.ts";
 import * as ConnectCredentialMinter from "./t3team-ConnectCredentialMinter.ts";
+import type { StandbyClaim } from "./t3team-NexiBrokerClient.ts";
 import * as NexiBrokerService from "./t3team-NexiBrokerService.ts";
 import { ConnectCredentialMintError } from "./t3team-ConnectCredentialMintError.ts";
 import * as CloudSessionService from "./t3team-CloudSessionService.ts";
+import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
+
+/** Sessions here are plain ones: no project, so the machine resolver is never consulted. */
+const noMachines = Layer.mock(CloudSessionMachines)({
+  resolve: () => Effect.die("these sessions have no project"),
+  resolveSetup: () => Effect.die("these sessions have no project"),
+  poolKeyOf: () => Effect.succeed(null),
+});
 
 const ghOut = (stdout: string): VcsProcess.VcsProcessOutput => ({
   exitCode: ChildProcessSpawner.ExitCode(0),
@@ -42,6 +55,7 @@ const GhWorkflowRunsJson = Schema.Struct({
       updated_at: Schema.String,
       html_url: Schema.String,
       name: Schema.String,
+      actor: Schema.Struct({ login: Schema.String }),
     }),
   ),
 });
@@ -98,7 +112,7 @@ const makeGithubMock = (
       return Effect.succeed(respond(joined, input.stdin));
     });
   const respond = (joined: string, stdin: string | undefined): VcsProcess.VcsProcessOutput => {
-    if (joined.includes("--jq")) {
+    if (joined.includes("--jq .login")) {
       // The identity-resolution call: `gh api --hostname … user --jq .login`
       // prints the bare login plus a trailing newline.
       return ghOut(`${login}\n`);
@@ -130,6 +144,7 @@ const makeGithubMock = (
               updated_at: "2026-09-14T12:00:01Z",
               html_url: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/999",
               name: `hive/nx-nexi [main] [${tag}]`,
+              actor: { login },
             },
           ],
         }),
@@ -165,6 +180,7 @@ describe("CloudSessionService.create credential handoff", () => {
         ghMock,
         cloudCliMock,
         minterMock,
+        noMachines,
         configLayer,
         NexiBrokerService.layerDisabled,
       );
@@ -227,6 +243,7 @@ describe("CloudSessionService.create credential handoff", () => {
         ghMock,
         cloudCliMock,
         minterMock,
+        noMachines,
         configLayer,
         NexiBrokerService.layerDisabled,
       );
@@ -283,6 +300,7 @@ describe("CloudSessionService.create credential handoff", () => {
         ghMock,
         cloudCliMock,
         minterMock,
+        noMachines,
         configLayer,
         NexiBrokerService.layerDisabled,
       );
@@ -341,6 +359,7 @@ const providersFor = (
   });
   const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }));
   return Layer.mergeAll(
+    noMachines,
     ghMock,
     cloudCliMock,
     minterMock,
@@ -412,22 +431,30 @@ const isCloudSessionFailed = Schema.is(CloudSessionFailedError);
 
 describe("CloudSessionService.create over the Nexi broker", () => {
   const brokerMock = (
-    requestGrant: (login: string) => Effect.Effect<string, CloudSessionFailedError>,
+    requestGrant: (
+      login: string,
+      secrets?: Readonly<Record<string, string>>,
+      poolKey?: string,
+      teamSecrets?: { readonly repository: string; readonly names: ReadonlyArray<string> },
+    ) => Effect.Effect<string, CloudSessionFailedError>,
   ) =>
     Layer.succeed(NexiBrokerService.NexiBrokerService, {
       enabled: true,
-      status: Effect.die("unused"),
-      signIn: Effect.die("unused"),
-      signOut: Effect.void,
+      status: { enabled: true, accountId: "acme" },
       requestGrant,
       attach: () => Effect.die("unused"),
       pair: () => Effect.die("unused"),
+      claimStandby: () => Effect.succeed(null),
+      sessions: Effect.succeed([]),
+      reportInterest: () => Effect.void,
     });
   const providersWith = (
     execute: ReturnType<typeof makeGithubMock>["execute"],
     broker: ReturnType<typeof brokerMock>,
+    machines: Layer.Layer<CloudSessionMachines> = noMachines,
   ) =>
     Layer.mergeAll(
+      machines,
       Layer.mock(GitHubCli.GitHubCli)({ execute }),
       Layer.mock(CliTokenManager.CloudCliTokenManager)({
         getExisting: Effect.succeed(Option.none()),
@@ -438,9 +465,19 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })),
       broker,
     );
-  const create = (providers: ReturnType<typeof providersWith>) =>
+  const create = (
+    providers: ReturnType<typeof providersWith>,
+    projectId?: ProjectId,
+    extra?: { readonly machineSetup?: boolean },
+  ) =>
     Effect.service(CloudSessionService.CloudSessionService).pipe(
-      Effect.flatMap((svc) => svc.create({ durationSeconds: 3600 })),
+      Effect.flatMap((svc) =>
+        svc.create({
+          durationSeconds: 3600,
+          ...(projectId ? { projectId } : {}),
+          ...(extra?.machineSetup ? { machineSetup: true } : {}),
+        }),
+      ),
       Effect.provide(
         Layer.mergeAll(CloudSessionService.layer.pipe(Layer.provide(providers)), providers),
       ),
@@ -463,6 +500,164 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       );
       const dispatch = calls.find((call) => call.args.join(" ").includes("/dispatches"));
       assert.include(dispatch?.stdin ?? "", '"broker_grant":"grant-xyz"');
+      // A plain session persists under the creator's own workspace, never the shared default.
+      assert.include(dispatch?.stdin ?? "", '"workspace":"u-pj_"');
+    }),
+  );
+
+  it.effect("a project machine's token rides with the grant, never in the dispatch inputs", () =>
+    Effect.gen(function* () {
+      const { calls, execute } = makeGithubMock();
+      const parked: Array<Readonly<Record<string, string>> | undefined> = [];
+      const team: Array<unknown> = [];
+      const machines = Layer.mock(CloudSessionMachines)({
+        resolve: () =>
+          Effect.succeed({
+            repository: {
+              url: "https://nexplore.ghe.com/acme/api.git",
+              host: "nexplore.ghe.com",
+              owner: "acme",
+              name: "api",
+            },
+            commit: "a".repeat(40),
+            devcontainerPath: ".devcontainer/devcontainer.json",
+            healthCheck: "pnpm test --run smoke",
+            token: "ghp_never-an-input",
+            author: { name: "Pj", email: "pj@example.test" },
+            teamSecretNames: ["NPM_TOKEN"],
+          }),
+        resolveSetup: () => Effect.die("this project has a machine"),
+        poolKeyOf: () => Effect.succeed(null),
+      });
+      const broker = brokerMock((_login, secrets, _pool, teamSecrets) =>
+        Effect.sync(() => {
+          parked.push(secrets);
+          team.push(teamSecrets);
+          return "g";
+        }),
+      );
+      yield* runPastDiscoveryPoll(
+        create(providersWith(execute, broker, machines), ProjectId.make("p1")),
+      );
+      assert.deepEqual(parked, [
+        {
+          GIT_TOKEN: "ghp_never-an-input",
+          GIT_AUTHOR_NAME: "Pj",
+          GIT_AUTHOR_EMAIL: "pj@example.test",
+        },
+      ]);
+      const dispatch = calls.find((call) => call.args.join(" ").includes("/dispatches"))?.stdin;
+      for (const input of [
+        '"machine_repository":"https://nexplore.ghe.com/acme/api.git"',
+        `"machine_commit":"${"a".repeat(40)}"`,
+        '"machine_devcontainer":".devcontainer/devcontainer.json"',
+        // The creator's own workspace, so no other user's session restores this one's snapshot.
+        `"workspace":"m-pj.acme.api_"`,
+        '"machine_health_check":"pnpm test --run smoke"',
+        '"machine_team_secrets":"NPM_TOKEN"',
+        // The VM installs the server build for this client's protocol, never the rolling latest.
+        `"server_ref":"protocol-${ORCHESTRATION_PROTOCOL_VERSION}"`,
+      ]) {
+        assert.include(dispatch ?? "", input);
+      }
+      const everything = calls
+        .map((call) => `${call.args.join(" ")} ${call.stdin ?? ""}`)
+        .join("\n");
+      assert.notInclude(everything, "ghp_never-an-input");
+      assert.deepEqual(team, [{ repository: "acme/api", names: ["NPM_TOKEN"] }]);
+    }),
+  );
+
+  it.effect("a setup session clones the repository and does not build a devcontainer", () =>
+    Effect.gen(function* () {
+      const previous = process.env.NEXI_FF_MACHINE_SETUP;
+      process.env.NEXI_FF_MACHINE_SETUP = "1";
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          if (previous === undefined) delete process.env.NEXI_FF_MACHINE_SETUP;
+          else process.env.NEXI_FF_MACHINE_SETUP = previous;
+        }),
+      );
+      const { calls, execute } = makeGithubMock();
+      const machines = Layer.mock(CloudSessionMachines)({
+        resolve: () => Effect.die("a setup does not use an existing machine"),
+        resolveSetup: () =>
+          Effect.succeed({
+            repository: {
+              url: "https://nexplore.ghe.com/acme/api.git",
+              host: "nexplore.ghe.com",
+              owner: "acme",
+              name: "api",
+            },
+            commit: "c".repeat(40),
+            token: "ghp_setup",
+            author: { name: "Pj", email: "pj@example.test" },
+          }),
+        poolKeyOf: () => Effect.succeed(null),
+      });
+      const broker = brokerMock(() => Effect.succeed("g"));
+      yield* runPastDiscoveryPoll(
+        create(providersWith(execute, broker, machines), ProjectId.make("p1"), {
+          machineSetup: true,
+        }),
+      );
+      const dispatch =
+        calls.find((call) => call.args.join(" ").includes("/dispatches"))?.stdin ?? "";
+      assert.include(dispatch, '"machine_setup":"true"');
+      assert.include(dispatch, '"machine_repository":"https://nexplore.ghe.com/acme/api.git"');
+      assert.notInclude(dispatch, "machine_devcontainer");
+      assert.notInclude(dispatch, "ghp_setup");
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("a warm standby of the project is claimed instead of dispatching a session", () =>
+    Effect.gen(function* () {
+      const { calls, execute } = makeGithubMock();
+      const claims: Array<StandbyClaim> = [];
+      const machines = Layer.mock(CloudSessionMachines)({
+        resolve: () =>
+          Effect.succeed({
+            repository: {
+              url: "https://nexplore.ghe.com/Acme/API.git",
+              host: "nexplore.ghe.com",
+              owner: "Acme",
+              name: "API",
+            },
+            commit: "b".repeat(40),
+            devcontainerPath: ".devcontainer/devcontainer.json",
+            healthCheck: null,
+            token: "ghp_claimed",
+            author: { name: "Pj", email: "pj@example.test" },
+            teamSecretNames: ["NPM_TOKEN"],
+          }),
+        resolveSetup: () => Effect.die("this project has a machine"),
+        poolKeyOf: () => Effect.succeed("acme.api"),
+      });
+      const broker = Layer.succeed(NexiBrokerService.NexiBrokerService, {
+        enabled: true,
+        status: { enabled: true, accountId: "acme" },
+        requestGrant: () => Effect.die("a claimed session needs no grant"),
+        attach: () => Effect.die("unused"),
+        pair: () => Effect.die("unused"),
+        claimStandby: (claim) => Effect.sync(() => (claims.push(claim), "777")),
+        sessions: Effect.succeed([]),
+        reportInterest: () => Effect.void,
+      });
+      const session = yield* create(providersWith(execute, broker, machines), ProjectId.make("p1"));
+      assert.equal(session.sessionId, "777");
+      assert.equal(session.phase, "preparing");
+      assert.equal(session.name, "API");
+      assert.deepEqual(
+        claims.map((c) => [c.poolKey, c.session.workspace, c.session.commit]),
+        [["acme.api", "m-pj.Acme.API_", "b".repeat(40)]],
+      );
+      assert.equal(claims[0]?.secrets.GIT_TOKEN, "ghp_claimed");
+      assert.equal(claims[0]?.gheLogin, "pj");
+      assert.equal(claims[0]?.session.teamSecrets, "NPM_TOKEN");
+      assert.isFalse(
+        calls.some((call) => call.args.join(" ").includes("/dispatches")),
+        "no dispatch",
+      );
     }),
   );
 
@@ -495,6 +690,7 @@ describe("CloudSessionService.cancel", () => {
         ...(cancelFailsThenStatus !== undefined ? { cancelFailsThenStatus } : {}),
       });
       const providers = Layer.mergeAll(
+        noMachines,
         Layer.mock(GitHubCli.GitHubCli)({ execute }),
         Layer.mock(CliTokenManager.CloudCliTokenManager)({
           getExisting: Effect.succeed(Option.none()),

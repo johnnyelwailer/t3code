@@ -124,6 +124,23 @@ describe("advance", () => {
       expect(next.displayCode).toBe("B4A0-AA8E");
     });
 
+    it("reads code and URL from gh's prompt-free output (gh 2.101.0, the env the adapter sets)", () => {
+      // Verbatim capture from a silent pty with GH_PROMPT_DISABLED=1 NO_COLOR=1.
+      const codeLine = "! One-time code (0749-5FAA) copied to clipboard";
+      const urlLine =
+        "Open this URL to continue in your web browser: https://nexplore.ghe.com/login/device";
+      const withCode = advance({ tool: "gh", phase: "starting" }, codeLine, GH);
+      expect(withCode.displayCode).toBe("0749-5FAA");
+      const next = advance(withCode, urlLine, GH);
+      expect(next.phase).toBe("awaiting-open");
+      expect(next.url).toBe("https://nexplore.ghe.com/login/device");
+      expect(next.displayCode).toBe("0749-5FAA");
+    });
+
+    it("spawns gh without terminal queries or prompts, which a silent pty never answers", () => {
+      expect(GH.spawnEnv).toMatchObject({ GH_PROMPT_DISABLED: "1", NO_COLOR: "1" });
+    });
+
     it("moves to connected on gh's success lines", () => {
       const prev: AuthState = {
         tool: "gh",

@@ -5,6 +5,7 @@ export { asNamedAttachments, renderAgentAttachments } from "./t3team-sdk.askAtta
 export { appendResolvedEntry, createHostBroker, createMockBroker } from "./t3team-sdk.broker.ts";
 export type { HandleDispatch } from "@runbook/core/handles";
 export { createThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
+export { showViewInputProblem, showViewNamespace } from "@runbook/threads/showView";
 export { hashArgs } from "./t3team-sdk.canonicalJson.ts";
 export {
   createDurableWorkflowRuntime,
@@ -106,7 +107,40 @@ export {
   withBodyApi,
   workflow,
 } from "./t3team-sdk.engineApi.ts";
+export type { CompositionOptions, PipelineStage, PipelineStages } from "@runbook/core/composition";
 export type { Watermark, WatermarkOptions, WatermarkState } from "@runbook/core/watermark";
+export { waitForAny, type SignalAnyHit, type WaitForAny } from "./t3team-sdk.signalAny.ts";
+export { LaunchedThreadError, launchThread, setRunFacts } from "./t3team-sdk.launchedThreads.ts";
+export {
+  defineRecipeConfig,
+  recipeAction,
+  type RecipeActionRef,
+  type RecipeConfigRef,
+  type RecipeConfigScope,
+  type RecipeConfigSource,
+  type RecipeConfigSpec,
+  type RecipeConfigValues,
+  type RecipeConfigWarning,
+  type ResolvedRecipeConfig,
+} from "./t3team-sdk.recipeConfig.ts";
+export { callRef, type CallRefOptions, type ConfigCodeRef } from "./t3team-sdk.callRef.ts";
+export {
+  getConfig,
+  RecipeConfigError,
+  type RecipeConfigQuery,
+  type RecipeConfigReader,
+} from "./t3team-sdk.recipeConfigPrimitive.ts";
+export type {
+  LaunchedThread,
+  LaunchedThreadPrimitives,
+  LaunchedThreadPullRequest,
+  LaunchedThreadRuntimeMode,
+  LaunchedThreadState,
+  LaunchedThreadWorkspace,
+  LaunchThreadOpts,
+} from "./t3team-sdk.launchedThreadTypes.ts";
+// The any-wait reply envelope a host journals for the winning branch.
+export { anyWinner, type AnyWinner } from "@runbook/core/handlesAny";
 export { emit } from "./t3team-sdk.emit.ts";
 // Signal sources (design 42): the shared signal/source vocabulary + built-in Tier A/B
 // catalog declarations. `defineSignalSource` (the effectful producer half) lives on the
@@ -121,11 +155,13 @@ export {
 } from "./t3team-sdk.signal.ts";
 export type {
   Signal,
+  SignalBranch,
   SignalEmit,
   SignalSourceContext,
   SignalSourceHandle,
   SignalSourceInstance,
   SignalSourceRef,
+  SignalOn,
   SignalWaitFor,
 } from "./t3team-sdk.signal.ts";
 export {
@@ -149,6 +185,19 @@ export {
   WorkItemUpdates,
   WorkItemUpdated,
 } from "./t3team-sdk.builtinSignals.ts";
+export {
+  ScmViewerChangeRequests,
+  ScmViewerChangeRequestsParams,
+  ScmViewerChangeRequestUpdated,
+  ScmViewerChangeRequestUpdatedPayload,
+  ViewerChangeRequestPayload,
+  ViewerChangeRequestReason,
+} from "./t3team-sdk.builtinSignalsViewer.ts";
+export type {
+  ScmViewerChangeRequestsParamsType,
+  ViewerChangeRequestPayloadType,
+  ViewerChangeRequestReasonType,
+} from "./t3team-sdk.builtinSignalsViewer.ts";
 export type {
   ChangeRequestChecksPayloadType,
   ChangeRequestPayloadType,
@@ -162,6 +211,7 @@ export { createWorkflowHostRegistry, createWorkflowRunHost } from "./t3team-sdk.
 export type {
   CreateWorkflowRunHostConfig,
   WorkflowHostLifecycle,
+  WorkflowHostOfferTarget,
   WorkflowHostPendingAsk,
   WorkflowHostRedriveOptions,
   WorkflowHostRegisteredRun,
@@ -174,6 +224,11 @@ export type {
 export { extractMeta, prepareWorkflow } from "./t3team-sdk.loader.ts";
 // Load-time static audits (Epic 25 phase 25.5): determinism + capability, before any run.
 export { auditWorkflowSourceStatic, registryToolGroupResolver } from "./t3team-sdk.staticAudit.ts";
+export {
+  checkRecipeConfigSource,
+  type RecipeConfigDiagnostic,
+  type RecipeConfigStaticResult,
+} from "./t3team-sdk.recipeConfigStatic.ts";
 export { scanCapabilities } from "./t3team-sdk.capabilityScan.ts";
 export { scanDeterminism } from "./t3team-sdk.determinismScan.ts";
 export { formatFinding } from "./t3team-sdk.staticAuditTypes.ts";
@@ -193,6 +248,43 @@ export {
   type WorkflowReferenceExample,
 } from "./t3team-sdk.workflowReferenceExamples.ts";
 export { normalizeCapabilities } from "./t3team-sdk.capabilityGating.ts";
+export {
+  CHANGE_REQUEST_DIFF_DEFAULT_PAGE_SIZE,
+  CHANGE_REQUEST_DIFF_MAX_PAGE_CHARS,
+  CHANGE_REQUEST_DIFF_MAX_PAGE_SIZE,
+  ChangeRequestInputError,
+  ChangeRequestScopeError,
+  type ChangeRequestDetail,
+  type ChangeRequestDiffOptions,
+  type ChangeRequestDiffPage,
+  type ChangeRequestReader,
+  type ChangeRequestRef,
+  type ScriptHostContext,
+  type ScriptPackDocument,
+  type ScriptPackStore,
+} from "./t3team-sdk.scriptHost.ts";
+export {
+  CHANGE_REQUEST_BLOB_SHAS_MAX_PATHS,
+  CHANGE_REQUEST_FILE_MAX_BYTES,
+  CHANGE_REQUEST_FILE_MAX_CHARS,
+  CHANGE_REQUEST_FILE_MAX_LINES,
+  ChangeRequestUnsupportedError,
+  type ChangeRequestBlobShas,
+  type ChangeRequestFileAt,
+  type ChangeRequestFileAtInput,
+  type ChangeRequestFileBinary,
+  type ChangeRequestFileMissing,
+  type ChangeRequestFileText,
+  type ChangeRequestFileTooLarge,
+  type ScriptLinkedRepository,
+  type ScriptProject,
+} from "./t3team-sdk.scriptHostFiles.ts";
+export type {
+  ChangeRequestInvolvement,
+  ChangeRequestList,
+  ChangeRequestListEntry,
+  ChangeRequestListOptions,
+} from "./t3team-sdk.scriptHostList.ts";
 
 export type {
   HandleKind,
@@ -221,6 +313,7 @@ export type {
   AskUserOpts,
   ModelCascade,
   ModelCascadeEntry,
+  ShowViewInput,
   SpawnThreadOpts,
   Thread,
   ThreadRef,

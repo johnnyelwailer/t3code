@@ -19,6 +19,10 @@ import * as DesktopConfig from "./DesktopConfig.ts";
 import { resolveLinuxDesktopEntryName } from "./DesktopEarlyElectronStartup.ts";
 import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePaths.ts";
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
+import {
+  applyDistributionProductName,
+  readDistributionProductNameFromEnv,
+} from "./t3team-desktopDistributionBrand.ts";
 import type { OtlpProtocol } from "@t3tools/shared/observability";
 
 export interface MakeDesktopEnvironmentInput {
@@ -208,10 +212,13 @@ const make = Effect.fn("desktop.environment.make")(function* (
     input.isPackaged && input.platform === "win32"
       ? path.join(input.resourcesPath, "server.asar")
       : appRoot;
-  const branding = resolveDesktopAppBranding({
-    isDevelopment,
-    appVersion: input.appVersion,
-  });
+  const branding = applyDistributionProductName(
+    resolveDesktopAppBranding({
+      isDevelopment,
+      appVersion: input.appVersion,
+    }),
+    readDistributionProductNameFromEnv(),
+  );
   const packagedBranding = input.isPackaged
     ? readPackagedDesktopBranding(input.resourcesPath)
     : undefined;

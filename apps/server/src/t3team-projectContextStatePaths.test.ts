@@ -60,7 +60,7 @@ it.effect("persists the browser mirror with physical paths before CAS hashing", 
       const [NodeServices, persistence, workspace, writer] = yield* Effect.promise(() =>
         Promise.all([
           import("@effect/platform-node/NodeServices"),
-          import("./persistence/Layers/Sqlite.ts"),
+          import("./persistence/Sqlite.ts"),
           import("./workspace/WorkspacePaths.ts"),
           import("./t3team-project-workspace-context-files.ts"),
         ]),
@@ -80,7 +80,7 @@ it.effect("persists the browser mirror with physical paths before CAS hashing", 
           Effect.provide(
             Layer.mergeAll(
               NodeServices.layer,
-              persistence.SqlitePersistenceMemory,
+              persistence.layerMemory,
               workspace.layer.pipe(Layer.provide(NodeServices.layer)),
             ),
           ),

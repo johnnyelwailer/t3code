@@ -168,6 +168,13 @@ Draft mutation tools:
 - never commit external writes directly
 - user accepts inline or with `Save all`
 
+Mutation tools:
+
+- write to an external system immediately, with no draft or accept step
+- off by default: a thread gains one only when the user selects it or a launching recipe declares
+  its group
+- example: publish listed files as a change request (`mutation.change_request`)
+
 External convenience tools:
 
 - may create durable user-owned app objects when low risk
@@ -358,6 +365,17 @@ t3team.my_work.set_priority_filter
 t3team.my_work.set_exact_status_filter
 t3team.my_work.reset_advanced_filters
 t3team.my_work.open_item
+```
+
+Implemented: the digest an agent arranges. These are the only My Work tools that exist today
+(the `t3team.my_work.*` rows above are still planned). The read returns the digest payload,
+including the stored `arrangement`; the write validates a plan against the bundled dashboard
+widgets and stores it per viewer and scope, or resets it (groups `integration.read` and
+`view.state`).
+
+```text
+t3team.mywork.digest.read
+t3team.mywork.arrange
 ```
 
 Draft mutation tools should reuse item-level tools when the target is a Jira work item:
@@ -572,6 +590,27 @@ Commit behavior:
 - repository file changes stay in session/worktree flows, not direct PR UI mutation
 - multi-comment review submissions should be previewed as a review package before commit
 
+## Change Request Tools
+
+Neutral across hosts: a change request is a GitHub pull request, a GitLab merge request, or the
+Azure DevOps, Bitbucket and Forgejo equivalents, opened through the source-control provider of the
+repository's `origin`.
+
+Mutation tools (group `mutation.change_request`, off by default):
+
+```text
+t3team.change_request.publish
+```
+
+`publish` works in the calling thread's checkout (its worktree, else the project root): it switches
+to or creates the branch from HEAD, commits ONLY the listed repository-relative paths, pushes the
+branch to `origin`, and opens the change request — or returns the one already open for that branch,
+so a recipe can call it again after pushing a fix. It returns `{url, number, repository, provider,
+branch, commit, projectId}`; `projectId` with `repository` and `number` is what a recipe needs to
+watch the change request's signals. A workflow body reaches it as
+`getTools().t3team.changeRequest.publish(...)` when both the body's `meta.capabilities` and the
+recipe's `allowedToolGroups` name `mutation.change_request`.
+
 ## Thread And Handoff Tools
 
 Context-bound chat and standalone chat share thread tools.
@@ -706,6 +745,7 @@ Commit Jira field edit             UI action only
 Post Jira/GitHub comment           UI action only
 Change Jira status/priority        draft first, UI action only
 Change repository files            standalone agent/worktree flow
+Publish listed files as a CR       granted mutation tool only, writes immediately
 ```
 
 ## Implementation Notes

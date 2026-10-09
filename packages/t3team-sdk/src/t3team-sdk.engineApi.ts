@@ -20,19 +20,12 @@
 
 import type { WorkflowBudget } from "./t3team-sdk.primitiveTypes.ts";
 import { bodyApiStorage } from "./t3team-sdk.internal.ts";
-import type {
-  CheckpointInput,
-  CheckpointPrimitives,
-  CheckpointRecord,
-} from "@runbook/core/checkpoint";
-import type { RetryOptions, RetryPrimitives } from "@runbook/core/retryBackoff";
 import type { Watermark, WatermarkOptions, WatermarkPrimitives } from "@runbook/core/watermark";
-import type { AccumulateOptions, ReducePrimitives, ReducerSnapshot } from "@runbook/core/reduce";
 import type { AgentOpts, SpawnThreadOpts, Thread } from "./t3team-sdk.threadTypes.ts";
 import type { WorkflowInvokeOpts, WorkflowRef } from "./t3team-sdk.types.ts";
 import type { Signal, SignalSourceHandle, SignalSourceRef } from "./t3team-sdk.signal.ts";
 
-/** Reads one member of the active body surface, or explains precisely why it is unavailable. */
+/** Reads one member of the active body surface, or states precisely why it is unavailable. */
 export function fromRun<T>(name: string): T {
   const surface = bodyApiStorage.getStore();
   if (surface === undefined) {
@@ -76,20 +69,7 @@ export function spawnThread(opts: SpawnThreadOpts): Thread {
   return fromRun<(o: SpawnThreadOpts) => Thread>("spawnThread")(opts);
 }
 
-/**
- * Tuple-preserving, so `const [a, b] = await parallel([…])` keeps each thunk's own type instead of
- * collapsing to a union. `null` is in the element type because a failing thunk resolves to null
- * rather than rejecting the whole fanout.
- */
-export function parallel<const T extends ReadonlyArray<() => unknown>>(
-  thunks: T,
-): Promise<{ -readonly [K in keyof T]: Awaited<ReturnType<T[K]>> | null }> {
-  return fromRun<(t: T) => Promise<{ -readonly [K in keyof T]: Awaited<ReturnType<T[K]>> | null }>>(
-    "parallel",
-  )(thunks);
-}
-
-export const pipeline = call<ReadonlyArray<unknown>, Promise<unknown[]>>("pipeline");
+export { parallel, pipeline } from "./t3team-sdk.engineApiComposition.ts";
 
 /**
  * Run another orchestration inline as one sub-step. The typed `WorkflowRef` from `defineWorkflow`
@@ -122,7 +102,8 @@ export const log = call<[string], void>("log");
  * Durable relative timer (`durationMs`): parks the run as `sleeping` without holding an agent
  * turn. Survives a server restart — the deadline is persisted, and an overdue deadline found at
  * restart resumes the run immediately instead of waiting another interval. Never poll, `setTimeout`,
- * shell-sleep or rely on external cron: this IS the schedule. Requires `capabilities: ["schedule"]`.
+ * shell-sleep or rely on external cron: this IS the schedule. Requires `capabilities: ["schedule"]`:
+ * without it there is no park, so `wait` is only an in-process timer that a restart fails.
  */
 export const wait = call<[number], Promise<void>>("wait");
 /**
@@ -135,67 +116,13 @@ export const wait = call<[number], Promise<void>>("wait");
  */
 export const waitUntil = call<[number], Promise<void>>("waitUntil");
 
-/**
- * Bounded execution (docs/runbook/bounded-execution.md): commit the `(seq, compactState)`
- * boundary that a resume replays from instead of from sequence zero. The input participates in
- * the ordinary argsHash replay check, so a re-driven body whose compact state moved fails loud.
- */
-export function checkpoint<State>(input: CheckpointInput<State>): Promise<CheckpointRecord<State>> {
-  return fromRun<CheckpointPrimitives["checkpoint"]>("checkpoint")(input);
-}
-
-/**
- * Bounded execution: run `fn(attempt)` up to `maxAttempts` times with a durable, journaled backoff
- * (`waitUntil`) between attempts. A resume never re-runs a settled attempt, and a crash mid-backoff
- * wakes at the SAME deadline. Gives up with `RetryExhaustedError` (carrying the last classified
- * failure) on exhaustion or a `"fatal"` classification. Requires the `'schedule'` capability.
- */
-export function retry<T>(fn: (attempt: number) => Promise<T>, opts: RetryOptions): Promise<T> {
-  return fromRun<RetryPrimitives["retry"]>("retry")(fn, opts);
-}
-
-/**
- * Bounded execution: fold `observation` into the reducer's current state and commit it as a
- * checkpoint boundary; a resume continues folding from the recorded state. `fold` receives
- * `undefined` on the reducer's first observation and must be deterministic (its result is part of
- * the journaled boundary, so a drifting fold fails loud). `retention.ring` keeps the last N
- * observations. `reducerId` is the reducer's identity: calls with the same id fold into one state.
- * Refused inside sub-workflow bodies and parallel/pipeline branches; once a reducer is active, a
- * plain `checkpoint()` is refused (its boundary would drop the reducer state).
- */
-export function accumulate<State, Observation>(
-  reducerId: string,
-  fold: (current: State | undefined, observation: Observation) => State,
-  observation: Observation,
-  opts?: AccumulateOptions,
-): Promise<State> {
-  return fromRun<ReducePrimitives["accumulate"]>("accumulate")(reducerId, fold, observation, opts);
-}
-
-/**
- * The reducer's latest snapshot (`current` + retained `ring`) in this drive — restored by a
- * checkpoint-window resume or folded since; `undefined` before its first fold.
- */
-export function reducerState<State = unknown, Observation = unknown>(
-  reducerId: string,
-): ReducerSnapshot<State, Observation> | undefined {
-  return fromRun<ReducePrimitives["reducerState"]>("reducerState")<State, Observation>(reducerId);
-}
-
-/**
- * The compact state a checkpoint-window resume restored — seed your carried state from it so the
- * body continues from the boundary instead of re-running the superseded prefix.
- * `undefined` on a fresh start, a full-replay resume, and inside sub-workflow bodies.
- */
-export function getResume(): CheckpointRecord | undefined {
-  const surface = bodyApiStorage.getStore();
-  if (surface === undefined) {
-    throw new Error(
-      "'getResume' was called outside a workflow runtime. Engine APIs only resolve while an orchestration body is running.",
-    );
-  }
-  return surface.resume as CheckpointRecord | undefined;
-}
+export {
+  checkpoint,
+  retry,
+  accumulate,
+  reducerState,
+  getResume,
+} from "./t3team-sdk.engineApiDurable.ts";
 
 /**
  * A durable cursor over a data source (bounded execution). `current()` is the cursor a resume

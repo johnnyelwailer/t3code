@@ -34,13 +34,25 @@ export function makeFakeWorkflowHost(options: { readonly failOn?: keyof Workflow
       calls.push({ op, input } as FakeWorkflowHostCall);
       if (options.failOn === op) throw new Error(`host ${op} failed`);
     };
+  // The launch verbs answer; a fake host that does not launch refuses, as a host without it would.
+  const refusingLaunch =
+    <K extends "launchThread" | "launchedThread" | "setRunFacts" | "resolveRecipeConfig">(op: K) =>
+    async (input: Parameters<WorkflowHostPort[K]>[0]) => {
+      calls.push({ op, input } as FakeWorkflowHostCall);
+      return { ok: false as const, error: "This fake host cannot launch threads." };
+    };
   const host: WorkflowHostPort = {
     createThread: record("createThread"),
     startTurn: record("startTurn"),
     postMessage: record("postMessage"),
     upsertActivity: record("upsertActivity"),
     interrupt: record("interrupt"),
+    archiveThread: record("archiveThread"),
     syncRunFacts: record("syncRunFacts"),
+    launchThread: refusingLaunch("launchThread"),
+    launchedThread: refusingLaunch("launchedThread"),
+    setRunFacts: refusingLaunch("setRunFacts"),
+    resolveRecipeConfig: refusingLaunch("resolveRecipeConfig"),
   };
   const inputsOf = <K extends keyof WorkflowHostPort>(op: K) =>
     calls.flatMap((call) =>
@@ -79,7 +91,12 @@ export function makeFakeWorkflowHostLayer(
     postMessage: lift("postMessage"),
     upsertActivity: lift("upsertActivity"),
     interrupt: lift("interrupt"),
+    archiveThread: lift("archiveThread"),
     syncRunFacts: lift("syncRunFacts"),
+    launchThread: (input) => Effect.promise(() => fake.host.launchThread(input)),
+    launchedThread: (input) => Effect.promise(() => fake.host.launchedThread(input)),
+    setRunFacts: (input) => Effect.promise(() => fake.host.setRunFacts(input)),
+    resolveRecipeConfig: (input) => Effect.promise(() => fake.host.resolveRecipeConfig(input)),
     flushHeld: () => Effect.void,
     heldThreadIds: () => [],
   };

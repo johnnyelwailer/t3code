@@ -34,7 +34,7 @@ import {
   makeRecordingDraftBroker,
   WORKFLOW_DRAFT_TOOL as DRAFT_TOOL,
 } from "./t3team-workflowHostDraft.fixtures.ts";
-import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
+import { makeT3TeamWorkflowHostToolClient } from "./t3team-workflowHostTools.ts";
 import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 import {
   DESCRIPTION_REWRITE_RECIPE_ID,
@@ -105,7 +105,7 @@ async function runRewrite(input: {
     host: host.host,
     newId: () => `${input.runId}-id-${(seq += 1)}`,
     nowIso: () => ISO,
-    hostToolClient: makeT3TeamWorkflowHostDraftToolClient({ broker, launchThreadId: threadId })!,
+    hostToolClient: makeT3TeamWorkflowHostToolClient({ broker, launchThreadId: threadId })!,
     onComplete: async (output) => {
       completed.push(output);
     },
@@ -287,13 +287,19 @@ describe("describe-rewrite bundled workflow", () => {
   it("ships to a workspace as a workflow-backed bundled recipe, with no authoring by the user", () => {
     const files = renderBundledRecipeSetupFiles();
     const paths = files.map((file) => file.relativePath);
-    expect(paths).toContain(`.t3team/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/workflow.ts`);
-    expect(paths).toContain(`.t3team/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/recipe.ts`);
+    expect(paths).toContain(
+      `${PROJECT_STATE_DIR}/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/workflow.ts`,
+    );
+    expect(paths).toContain(
+      `${PROJECT_STATE_DIR}/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/recipe.ts`,
+    );
 
     // The recipe module must point its default action at that workflow, or discovery would treat
     // the recipe as prompt-backed and the body would never run.
     const module = files.find(
-      (file) => file.relativePath === `.t3team/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/recipe.ts`,
+      (file) =>
+        file.relativePath ===
+        `${PROJECT_STATE_DIR}/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/recipe.ts`,
     );
     expect(module?.contents).toContain('defineWorkflow<typeof Workflow>("./workflow.ts")');
     expect(module?.contents).toContain('"mutation.draft"');

@@ -15,6 +15,7 @@ import { useT3TeamDashboardRecipeViewSummary } from "~/t3team/t3team-dashboardRe
 import { runT3TeamViewTransition } from "~/t3team/t3team-runViewTransition";
 import { useT3TeamSidecarRecipeQuickStarts } from "~/t3team/t3team-sidecarRecipes";
 import { useBundledSidecarRecipeLaunch } from "~/t3team/t3team-useBundledSidecarRecipeLaunch";
+import { useDigestRecipeLaunchConsumer } from "~/t3team/t3team-useDigestRecipeLaunchConsumer";
 
 export function ProjectDashboardKickoffAside({
   project,
@@ -108,6 +109,8 @@ export function ProjectDashboardKickoffAside({
         ) as string | undefined,
       onLaunched: clearInjectedContextAttachments,
     });
+  // A digest recipe pill stages through the same `stageRecipeKickoff` as a quick-start click.
+  useDigestRecipeLaunchConsumer({ projectId: project.id, selectedRecipe, stageRecipeKickoff });
 
   const resetKickoffState = () => {
     clearInjectedContextAttachments();

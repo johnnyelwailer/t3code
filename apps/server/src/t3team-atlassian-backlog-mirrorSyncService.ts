@@ -20,6 +20,7 @@ import {
   isT3TeamMirrorSyncIdle,
   lastT3TeamMirrorSyncKickMs,
   recordT3TeamMirrorSyncKick,
+  recordT3TeamMirrorWalkSuccess,
 } from "./t3team-atlassian-mirrorSyncIdleTracking.ts";
 
 export { isT3TeamMirrorSyncIdle } from "./t3team-atlassian-mirrorSyncIdleTracking.ts";
@@ -34,7 +35,7 @@ type ActiveMirrorSync = { readonly token: symbol };
  */
 const activeMirrorSyncs = new Map<string, ActiveMirrorSync>();
 
-function mirrorSyncMapKey(input: {
+export function mirrorSyncMapKey(input: {
   readonly account: IntegrationAccountRef;
   readonly externalProjectId: string;
 }): string {
@@ -163,7 +164,7 @@ function runMirrorLoop(input: T3TeamAtlassianMirrorSyncRequest, isSuperseded: ()
         const outcome = yield* runMirrorReconcile(input, provider, identity, isSuperseded).pipe(
           Effect.andThen(
             Effect.sync(() => {
-              lastSuccessfulWalkMs = nowMs;
+              lastSuccessfulWalkMs = recordT3TeamMirrorWalkSuccess(mapKey, nowMs);
               return "ok" as const;
             }),
           ),
@@ -193,7 +194,7 @@ function runMirrorLoop(input: T3TeamAtlassianMirrorSyncRequest, isSuperseded: ()
         ).pipe(
           Effect.andThen(
             Effect.sync(() => {
-              lastSuccessfulWalkMs = nowMs;
+              lastSuccessfulWalkMs = recordT3TeamMirrorWalkSuccess(mapKey, nowMs);
               return "ok" as const;
             }),
           ),

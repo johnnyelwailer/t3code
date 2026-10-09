@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/process";
 
 import type * as VcsProcess from "../vcs/VcsProcess.ts";
 import { workflowHistoryUrl } from "./t3team-CloudSessionFleet.ts";
@@ -30,6 +30,7 @@ const failedRun: WorkflowRunSummary = {
   updatedAt: "2026-09-28T10:02:00Z",
   htmlUrl: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/77",
   name: "nexi-session [s1]",
+  actor: "pj",
 };
 
 const ghOut = (stdout: string): VcsProcess.VcsProcessOutput => ({
@@ -82,6 +83,38 @@ describe("cloudSessionFailureReason", () => {
   it("says a step timed out when it did", () => {
     const steps = [{ name: "Start t3 serve", status: "completed", conclusion: "timed_out" }];
     assert.equal(cloudSessionFailureReason(failedRun, steps), "Timed out at “Start t3 serve”.");
+  });
+
+  it("says the machine stopped responding when the run ended mid-step (a lost runner)", () => {
+    const steps = [
+      { name: "Set up job", status: "completed", conclusion: "success" },
+      { name: "Install Node 24 and pnpm 11.10.0", status: "in_progress", conclusion: null },
+      { name: "Bring up the project machine", status: "pending", conclusion: null },
+    ];
+    assert.equal(
+      cloudSessionFailureReason(failedRun, steps),
+      "The cloud machine stopped responding at “Install Node 24 and pnpm 11.10.0”. Start another to try again.",
+    );
+  });
+
+  it("says the machine stopped responding when it was lost between steps", () => {
+    const steps = [
+      { name: "Set up job", status: "completed", conclusion: "success" },
+      { name: "Checkout the t3code fork", status: "completed", conclusion: "success" },
+      { name: "Bring up the project machine", status: "pending", conclusion: null },
+    ];
+    assert.equal(
+      cloudSessionFailureReason(failedRun, steps),
+      "The cloud machine stopped responding after “Checkout the t3code fork”. Start another to try again.",
+    );
+  });
+
+  it("says no machine became free when no step ever started", () => {
+    const steps = [{ name: "Set up job", status: "pending", conclusion: null }];
+    assert.equal(
+      cloudSessionFailureReason(failedRun, steps),
+      "No cloud machine became free in time. Start another to try again.",
+    );
   });
 
   it("falls back to the run conclusion, then a concise generic — never the raw string", () => {

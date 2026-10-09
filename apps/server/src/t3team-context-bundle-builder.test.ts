@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
+import {
+  buildJiraTicketAttachmentsIndexPath,
+  buildJiraTicketEntryPoint,
+} from "@t3tools/project-context/t3teamContextPaths";
 
 import { buildT3TeamWorkItemContextBundle } from "./t3team-context-bundle-builder.ts";
+
+const ATTACHMENT_INDEX = buildJiraTicketAttachmentsIndexPath("project-1", "PROJ-1");
+const ENTRY_POINT = buildJiraTicketEntryPoint("project-1", "PROJ-1");
 
 describe("buildT3TeamWorkItemContextBundle", () => {
   it("writes attachment files before full manifest and entrypoint", () => {
@@ -18,7 +25,7 @@ describe("buildT3TeamWorkItemContextBundle", () => {
       ],
       attachmentFiles: [
         {
-          relativePath: ".t3team/context/jira/project-1/items/proj-1/attachments/index.json",
+          relativePath: ATTACHMENT_INDEX,
           contents: "{}",
         },
       ],
@@ -26,7 +33,7 @@ describe("buildT3TeamWorkItemContextBundle", () => {
         [
           "PROJ-1",
           {
-            indexRelativePath: ".t3team/context/jira/project-1/items/proj-1/attachments/index.json",
+            indexRelativePath: ATTACHMENT_INDEX,
             attachmentCount: 1,
             downloadedCount: 1,
             failedCount: 0,
@@ -36,9 +43,7 @@ describe("buildT3TeamWorkItemContextBundle", () => {
     });
 
     const paths = bundle.files.map((file) => file.relativePath);
-    expect(
-      paths.indexOf(".t3team/context/jira/project-1/items/proj-1/attachments/index.json"),
-    ).toBeLessThan(paths.indexOf(".t3team/context/jira/project-1/items/proj-1/entrypoint.json"));
+    expect(paths.indexOf(ATTACHMENT_INDEX)).toBeLessThan(paths.indexOf(ENTRY_POINT));
     expect(bundle.files.at(-1)?.contents).toContain('"availability": "full"');
   });
 });

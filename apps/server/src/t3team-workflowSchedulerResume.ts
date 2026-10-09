@@ -12,7 +12,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import type { WorkflowRunRepositoryShape } from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowRunRepositoryShape } from "./persistence/WorkflowRuns.ts";
 
 /** Mark a stuck `sleeping` run failed (orphaned) so `listSleeping` no longer returns it — the
  * scheduler stops re-arming it. Used when a due row has no registered resume closure this uptime

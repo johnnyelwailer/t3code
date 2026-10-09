@@ -1,20 +1,34 @@
+import type { CloudSession, ScopedProjectRef } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import { useNavigate } from "@tanstack/react-router";
 import { type ComponentProps, useCallback, useMemo } from "react";
 
 import { useCloudSessionController } from "~/cloud/t3team-useCloudSessionController";
+import { useServerConfig } from "~/t3team/t3team-serverState";
 import type { BranchToolbarEnvironmentSelector } from "~/components/BranchToolbarEnvironmentSelector";
-import { formatHoldDuration } from "./t3team-cloudSessionHoldFormat";
+import { useLocalStorage } from "~/hooks/useLocalStorage";
+import { useEnvironments } from "~/state/environments";
 import { runOnCloudSessions } from "./t3team-cloudSessionSplit";
+
+const DISMISSED_FAILURES_KEY = "t3code:cloud-session-dismissed-failures";
+const DISMISSED_FAILURES_LIMIT = 20;
+const DismissedFailuresSchema = Schema.Array(Schema.String);
 
 type SelectorProps = ComponentProps<typeof BranchToolbarEnvironmentSelector>;
 type CloudSelectorProps = Pick<
   SelectorProps,
   | "pendingCloudSessions"
   | "onCreateCloudSession"
-  | "cloudSessionDurationLabel"
+  | "onSetupProjectMachine"
+  | "cloudSessionCreatePending"
+  | "cloudSessionSetupPending"
   | "onCloudSessionAction"
+  | "onDismissCloudSession"
   | "onCloudMenuOpenChange"
   | "onSetupCloudSessions"
+  | "cloudSessionProject"
+  | "connectedEnvironmentIds"
+  | "cloudEnvironmentIds"
 >;
 
 /**
@@ -23,24 +37,77 @@ type CloudSelectorProps = Pick<
  * the most recent failed session, "New cloud session" when a provider is configured, otherwise
  * "Set up cloud sessions". `available` is false without a primary environment, and then no cloud
  * affordance is passed at all. Values are memoised — the composer strip re-renders per keystroke.
+ *
+ * A session runs in the project's machine only when the project lives where sessions are created
+ * (the primary environment); a thread on a remote environment starts a plain one.
  */
-export function useT3TeamRunOnCloudSessionProps(): {
+export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | null): {
   readonly available: boolean;
   readonly selectorProps: CloudSelectorProps;
 } {
   const cloudSessions = useCloudSessionController();
   const navigate = useNavigate();
-  const { available, configured, sessions, durationSeconds, onCreate } = cloudSessions;
+  const { available, configured, sessions, onCreate, createPending, createPendingSetup } =
+    cloudSessions;
+  const { primaryEnvironmentId } = cloudSessions;
   const { onSessionAction, onCloudMenuOpenChange } = cloudSessions;
+  // A failure surfaced in the menu stays dismissed once the user closed it (kept per browser; the
+  // list only ever surfaces the newest session, so the stored ids never grow past a handful).
+  const [dismissed, setDismissed] = useLocalStorage(
+    DISMISSED_FAILURES_KEY,
+    [] as ReadonlyArray<string>,
+    DismissedFailuresSchema,
+  );
+  const dismissedIds = useMemo(() => new Set(dismissed), [dismissed]);
   const pendingCloudSessions = useMemo(
-    () => (available ? runOnCloudSessions(sessions) : []),
-    [available, sessions],
+    () => (available ? runOnCloudSessions(sessions, dismissedIds) : []),
+    [available, dismissedIds, sessions],
+  );
+  const onDismissCloudSession = useCallback(
+    (session: CloudSession) =>
+      setDismissed((current) => [session.sessionId, ...current].slice(0, DISMISSED_FAILURES_LIMIT)),
+    [setDismissed],
+  );
+  const projectEnvironmentId = projectRef?.environmentId ?? null;
+  const projectId = projectRef?.projectId ?? null;
+  const cloudSessionProject = useMemo(
+    () =>
+      projectId !== null &&
+      projectEnvironmentId !== null &&
+      projectEnvironmentId === primaryEnvironmentId
+        ? { environmentId: projectEnvironmentId, projectId }
+        : undefined,
+    [primaryEnvironmentId, projectEnvironmentId, projectId],
   );
   const onCreateCloudSession = useCallback(
-    () => onCreate(durationSeconds),
-    [durationSeconds, onCreate],
+    () => onCreate(cloudSessionProject?.projectId),
+    [cloudSessionProject, onCreate],
+  );
+  const machineSetupEnabled = useServerConfig()?.machineSetup === true;
+  const onSetupProjectMachine = useCallback(
+    () => onCreate(cloudSessionProject?.projectId, { machineSetup: true }),
+    [cloudSessionProject, onCreate],
   );
   // Unconfigured: the entry leaves for the Connections settings, where provisioning lives.
+  // Every environment connected here, whatever its project: a cloud machine connected for another
+  // project is listed as unavailable for this thread rather than as one to connect.
+  const { environments } = useEnvironments();
+  const connectedKey = environments
+    .filter((environment) => environment.connection.phase === "connected")
+    .map((environment) => environment.environmentId)
+    .join("\u0000");
+  const connectedEnvironmentIds = useMemo(
+    () => new Set(connectedKey === "" ? [] : connectedKey.split("\u0000")),
+    [connectedKey],
+  );
+  const cloudKey = environments
+    .filter((environment) => environment.entry.target._tag === "BrokerConnectionTarget")
+    .map((environment) => environment.environmentId)
+    .join("\u0000");
+  const cloudEnvironmentIds = useMemo(
+    () => new Set(cloudKey === "" ? [] : cloudKey.split("\u0000")),
+    [cloudKey],
+  );
   const onSetupCloudSessions = useCallback(() => {
     void navigate({ to: "/settings/connections" });
   }, [navigate]);
@@ -51,18 +118,31 @@ export function useT3TeamRunOnCloudSessionProps(): {
         : configured
           ? {
               pendingCloudSessions,
+              connectedEnvironmentIds,
+              cloudEnvironmentIds,
               onCreateCloudSession,
-              cloudSessionDurationLabel: formatHoldDuration(durationSeconds),
+              ...(machineSetupEnabled && cloudSessionProject ? { onSetupProjectMachine } : {}),
+              cloudSessionCreatePending: createPending,
+              cloudSessionSetupPending: createPendingSetup,
+              ...(cloudSessionProject ? { cloudSessionProject } : {}),
               onCloudSessionAction: onSessionAction,
+              onDismissCloudSession,
               onCloudMenuOpenChange,
             }
           : { onSetupCloudSessions },
     [
       available,
+      cloudSessionProject,
       configured,
-      durationSeconds,
+      connectedEnvironmentIds,
+      cloudEnvironmentIds,
+      createPending,
+      createPendingSetup,
       onCloudMenuOpenChange,
+      machineSetupEnabled,
       onCreateCloudSession,
+      onSetupProjectMachine,
+      onDismissCloudSession,
       onSessionAction,
       onSetupCloudSessions,
       pendingCloudSessions,

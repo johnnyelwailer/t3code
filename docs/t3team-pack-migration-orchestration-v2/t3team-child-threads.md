@@ -39,7 +39,7 @@ clientRequestId?, runtimeMode?, interactionMode?}` (`OrchestratorMcpDelegateTask
 
 ## Status, wait, cancel
 
-| Before (`t3team_children`)                      | After                                                                                       |
+| Before (`t3team_children`, now `t3_task_ops`)   | After                                                                                       |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `op: "list"`                                    | `t3_thread_list {includeSubagents: true}`                                                   |
 | `op: "status"`                                  | `task_status {taskId}` / `t3_thread_read`                                                   |

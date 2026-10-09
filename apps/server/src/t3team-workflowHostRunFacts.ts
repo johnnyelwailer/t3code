@@ -8,7 +8,7 @@ import { OrchestrationWorkflowRunStatus } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import type * as SqlClient from "effect/unstable/sql/SqlClient";
+import type * as SqlClient from "effect/sql/SqlClient";
 
 import type { T3TeamThreadFactsPatch } from "./t3team-v2/t3team-threadFactsStore.ts";
 

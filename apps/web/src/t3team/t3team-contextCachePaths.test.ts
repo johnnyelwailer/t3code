@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
+import {
+  T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
+  T3TEAM_PROJECT_CONTEXT_ROOT,
+} from "@t3tools/project-context/t3teamContextPaths";
 
 import {
   buildContextManifestPath,
@@ -13,14 +17,16 @@ import {
 
 describe("t3team context cache paths", () => {
   it("creates stable shared roots for project and ticket context", () => {
-    expect(buildProjectContextCacheRoot("Project Alpha")).toBe(".t3team/context");
-    expect(buildProjectContextEntryPoint("Project Alpha")).toBe(".t3team/context/entrypoint.json");
+    expect(buildProjectContextCacheRoot("Project Alpha")).toBe(T3TEAM_PROJECT_CONTEXT_ROOT);
+    expect(buildProjectContextEntryPoint("Project Alpha")).toBe(
+      T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
+    );
 
     expect(buildJiraTicketCacheRoot("Project Alpha", "IES-17820")).toBe(
-      ".t3team/context/jira/project-alpha/items/ies-17820",
+      `${T3TEAM_PROJECT_CONTEXT_ROOT}/jira/project-alpha/items/ies-17820`,
     );
     expect(buildJiraTicketEntryPoint("Project Alpha", "IES-17820")).toBe(
-      ".t3team/context/jira/project-alpha/items/ies-17820/entrypoint.json",
+      `${T3TEAM_PROJECT_CONTEXT_ROOT}/jira/project-alpha/items/ies-17820/entrypoint.json`,
     );
     expect(
       buildJiraTicketFocusEntryPoint({
@@ -28,7 +34,9 @@ describe("t3team context cache paths", () => {
         ticketKey: "IES-17820",
         focus: "Sent requests / comments",
       }),
-    ).toBe(".t3team/context/jira/project-alpha/items/ies-17820/focus/sent-requests-comments.json");
+    ).toBe(
+      `${T3TEAM_PROJECT_CONTEXT_ROOT}/jira/project-alpha/items/ies-17820/focus/sent-requests-comments.json`,
+    );
   });
 
   it("sanitizes github cache roots without duplicating repository separators", () => {
@@ -38,7 +46,9 @@ describe("t3team context cache paths", () => {
       activityId: "PR-123 review_requested",
     });
 
-    expect(root).toBe(".t3team/context/github/project-alpha/foo-bar-baz/pr-123-review-requested");
+    expect(root).toBe(
+      `${T3TEAM_PROJECT_CONTEXT_ROOT}/github/project-alpha/foo-bar-baz/pr-123-review-requested`,
+    );
     expect(
       buildGitHubActivityEntryPoint({
         projectId: "Project Alpha",

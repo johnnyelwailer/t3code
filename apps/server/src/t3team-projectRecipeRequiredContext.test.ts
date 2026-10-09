@@ -31,6 +31,7 @@ import { it as effectIt } from "@effect/vitest";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { discoverProjectRecipes } from "./t3team-projectRecipeDiscovery.ts";
+import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 
 const fixtureRoot = NodePath.join(
   NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)),
@@ -61,7 +62,7 @@ const roots: string[] = [];
 const makeWorkspaceWithRecipe = (requiredContextLine: string): string => {
   const root = NodeFS.mkdtempSync(NodePath.join(fixtureRoot, "t3team-reqctx-"));
   roots.push(root);
-  const recipeRoot = NodePath.join(root, ".t3team", "recipes", "needs-deploy-context");
+  const recipeRoot = NodePath.join(root, HIDDEN_T3TEAM_DIR, "recipes", "needs-deploy-context");
   NodeFS.mkdirSync(recipeRoot, { recursive: true });
   NodeFS.writeFileSync(NodePath.join(recipeRoot, "prompt.md"), "Explain the deployment.\n");
   NodeFS.writeFileSync(

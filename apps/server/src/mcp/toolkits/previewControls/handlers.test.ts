@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, it } from "@effect/vitest";
 import {
   DEFAULT_SERVER_SETTINGS,
@@ -14,7 +15,9 @@ import * as Stream from "effect/Stream";
 import * as Preview from "../../../preview/Manager.ts";
 import * as ServerSettings from "../../../serverSettings.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
-import { PreviewControlsHandlersLive } from "./handlers.ts";
+import * as McpToolAccess from "../../McpToolAccess.ts";
+import * as McpToolAccessTestkit from "../../McpToolAccess.testkit.ts";
+import * as PreviewControlsHandlers from "./handlers.ts";
 import { PreviewControlsToolkit } from "./tools.ts";
 
 it.effect.each([
@@ -35,30 +38,39 @@ it.effect.each([
       const effective = resolveProjectSettings(settings, projectId).settings;
       const scope: McpInvocationContext.McpInvocationScope = {
         environmentId: EnvironmentId.make("preview-controls-environment"),
-        threadId,
-        providerSessionId: "preview-controls-provider-session",
-        providerInstanceId: ProviderInstanceId.make("codex"),
+        requestNamespace: "preview-controls-provider-session",
+        thread: {
+          threadId,
+          providerSessionId: "preview-controls-provider-session",
+          providerInstanceId: ProviderInstanceId.make("codex"),
+        },
+        client: undefined,
         capabilities: new Set(effective.enableAgentBrowserAccess ? ["preview"] : []),
         issuedAt: 0,
       };
-      const manager = yield* Preview.make;
+      const manager = yield* Preview.make.pipe(Effect.provide(NodeCrypto.layer));
       const tab = yield* manager.open({ threadId, url: "http://localhost:3000" });
-      const dependencies = Layer.mergeAll(
+      const layerDependencies = Layer.mergeAll(
         Layer.succeed(Preview.PreviewManager, manager),
         Layer.succeed(McpInvocationContext.McpInvocationContext, scope),
+        McpToolAccessTestkit.liveThreadsLayer,
         Layer.mock(ServerSettings.ServerSettingsService)({
           getSettings: Effect.succeed(settings),
         }),
       );
       const toolkit = yield* PreviewControlsToolkit.pipe(
-        Effect.provide(PreviewControlsHandlersLive.pipe(Layer.provide(dependencies))),
+        Effect.provide(
+          McpToolAccess.HandlersLayer.layer(PreviewControlsHandlers.layer).pipe(
+            Layer.provide(layerDependencies),
+          ),
+        ),
       );
       const listed = yield* toolkit
         .handle("t3_preview_list", {})
-        .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(dependencies));
+        .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(layerDependencies));
       const closed = yield* toolkit
         .handle("t3_preview_close", { tabId: tab.tabId })
-        .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(dependencies));
+        .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(layerDependencies));
       if (projectAccess) {
         expect(listed.at(-1)?.result).toMatchObject({ sessions: [tab], nextCursor: null });
         expect(closed.at(-1)?.result).toEqual({});

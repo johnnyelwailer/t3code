@@ -5,6 +5,7 @@ import type {
 import type {
   GitHubBackendApi,
   GitHubInboxDiscoverResponse,
+  LinkedRepositorySyncResult,
   ProjectMainRepositorySwitchResult,
   ProjectWorkspaceContextFile,
   ProjectWorkspaceBackendApi,
@@ -60,10 +61,18 @@ export function createProjectWorkspaceBackendApi(httpBaseUrl: string): ProjectWo
       readonly workspaceRoot: string;
       readonly linkedRepositoryUrls?: ReadonlyArray<string>;
       readonly setupProfileId?: string;
+      readonly refreshLinkedRepositories?: boolean;
     }): Promise<ProjectWorkspaceBootstrapResult> {
       return postJson<typeof input, ProjectWorkspaceBootstrapResult>(
         httpBaseUrl,
         "/api/t3team/project/workspace/bootstrap",
+        input,
+      );
+    },
+    readLinkedRepositoryStatus(input) {
+      return postJson<typeof input, { linkedRepositories: LinkedRepositorySyncResult[] }>(
+        httpBaseUrl,
+        "/api/t3team/project/workspace/linked-repositories/status",
         input,
       );
     },

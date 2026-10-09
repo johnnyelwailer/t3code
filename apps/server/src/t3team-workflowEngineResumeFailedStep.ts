@@ -17,7 +17,7 @@
  */
 import * as Effect from "effect/Effect";
 
-import type { WorkflowRunRepositoryShape } from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowRunRepositoryShape } from "./persistence/WorkflowRuns.ts";
 import { createWorkflowRunController } from "./t3team-workflowEngineController.ts";
 import type { LaunchWorkflowRecipeInput } from "./t3team-workflowEngineLaunchTypes.ts";
 import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
@@ -47,7 +47,7 @@ export const resumeFailedTurnStep = Effect.fn("resumeFailedTurnStep")(function* 
   // synchronous tick, so two concurrent resumes cannot both pass (single-instance host).
   if (launch.registry.getRun(launch.runId) !== undefined) {
     return yield* Effect.fail(
-      `Workflow run '${launch.runId}' is already being resumed; observe it via t3team.orchestration.status.`,
+      `Workflow run '${launch.runId}' is already being resumed; observe it via t3_orchestration_status.`,
     );
   }
   // The controller is what the reactor calls `resume` on when the re-driven turn answers.

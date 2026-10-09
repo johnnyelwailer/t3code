@@ -5,15 +5,16 @@
  * note it in the thread and, after a bounded backoff, continue the run with
  * upstream `message.dispatch{manualContinuationOfRunId}` (accepted for such
  * runs by the fork's eligibility hook in `Orchestrator.ts`). Up to
- * `MAX_SESSION_TRANSIENT_RETRIES` retries per episode, counted from durable
- * runs (`t3team-threadTransientTurnRetryPlan.ts`).
+ * `MAX_SESSION_TRANSIENT_RETRIES` retries per episode (`MAX_OUTAGE_TRANSIENT_RETRIES`
+ * with a longer ladder for a network outage), counted from durable runs
+ * (`t3team-threadTransientTurnRetryPlan.ts`).
  *
  * Only runs whose retry the session owns are continued — never a user stop, a
  * delegated child (its parent was already told) or a workflow step (the
  * workflow re-drives it): `t3team-threadTransientTurnRetryOwner.ts`. A user
  * message during the backoff makes the continuation ineligible (no longer the
- * latest run), so it is dropped. The backoff timer is in-memory: a restart
- * during the wait leaves the failed run to the user's Resume.
+ * latest run), so it is dropped. The backoff timer is in-memory (up to 10 min
+ * for a network outage): a restart during the wait leaves the failed run to the user's Resume.
  *
  * @module t3team-threadTransientTurnRetryReactor
  */
@@ -73,7 +74,7 @@ export interface TransientRetryDeps {
     readonly messageId: ReturnType<typeof transientRetryNoteId>;
     readonly text: string;
   }) => Effect.Effect<unknown, string>;
-  readonly delayMs: (attempt: number, directiveSeconds: number | null) => number;
+  readonly delayMs: (attempt: number, directiveSeconds: number | null, outage: boolean) => number;
 }
 
 /** Handles one failed run: note, back off, continue. Fail-open (logs). */
@@ -178,8 +179,8 @@ export const T3TeamThreadTransientTurnRetryLive = Layer.effectDiscard(
         recorder
           .record({ threadId, messageId, role: "system", text })
           .pipe(Effect.mapError(String)),
-      delayMs: (attempt, directive) =>
-        transientTurnRetryDelayMs(attempt, directive, backoffOverride),
+      delayMs: (attempt, directive, outage) =>
+        transientTurnRetryDelayMs(attempt, directive, backoffOverride, Math.random, outage),
     };
     // A run can be re-published as failed; handle each failed run once per process.
     const handled = new Set<string>();

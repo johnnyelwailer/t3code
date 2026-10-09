@@ -10,37 +10,39 @@ import type {
   PullRequestReviewThread,
   PullRequestThreadCommentsResult,
 } from "@t3tools/contracts";
-import { setPairingTokenOnUrl } from "@t3tools/shared/remote";
 import { areAllDiffFilesCollapsed } from "~/lib/diffCollapse";
 import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  ChevronsDownUpIcon,
-  ChevronsUpDownIcon,
   Columns2Icon,
   EllipsisIcon,
-  ExternalLinkIcon,
   InfoIcon,
   LinkIcon,
   MessageSquareOffIcon,
   PanelRightCloseIcon,
   PanelRightIcon,
+  PictureInPicture2Icon,
   PilcrowIcon,
   Rows3Icon,
   TextWrapIcon,
   TriangleAlertIcon,
 } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from "lucide";
 import { useAtomRefresh } from "@effect/atom-react";
 import * as Schema from "effect/Schema";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { createServerPairingCredential } from "~/environments/primary/auth";
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
 import { useTheme } from "~/hooks/useTheme";
-import { readLocalApi } from "~/localApi";
+import {
+  DETACH_SURFACE_LABEL,
+  isDetachedSurfaceWindow,
+  openDetachedSurface,
+} from "~/t3team/detached/t3team-openDetachedSurface";
+import { pullRequestDetachedSurfaceRequest } from "./t3team-pullRequestDetachedSurface.logic";
 import { pullRequestFindingKey, type PullRequestFinding } from "./pullRequestDetail.logic";
 import { canEditPullRequestComment } from "./pullRequestEditing.logic";
 import { orderDiffFiles } from "./pullRequestFileOrder.logic";
@@ -72,10 +74,12 @@ import { DiffCommentAnnotation } from "../diffs/DiffCommentAnnotation";
 import { useCodeViewFileReveal } from "../diffs/useCodeViewFileReveal";
 import { StyledDiffCodeView } from "../diffs/StyledDiffCodeView";
 import { Button } from "../ui/button";
+import { MorphIcon } from "~/components/MorphIcon";
 import { Checkbox } from "../ui/checkbox";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuRadioGroup,
@@ -100,6 +104,11 @@ import {
 } from "./pullRequestDiff.logic";
 import { PullRequestDiffStat, PullRequestMetaLine } from "./pullRequestPresentation";
 import { DiffExplorerFileTree } from "./t3team-DiffExplorerFileTree";
+import { useElementFitsWidth } from "~/t3team/t3team-ResizableRightSidebarLayoutShared";
+import {
+  PR_CODE_TOOLBAR_FULL_MIN_WIDTH,
+  prCodeTreeDockMinWidth,
+} from "./t3team-prCodeLayout.logic";
 import {
   diffExplorerFileInfo,
   markAllFilesViewed,
@@ -273,11 +282,24 @@ function PullRequestCodeTab({
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(settings.diffIgnoreWhitespace);
   // The file tree is the diff explorer's primary navigation, so it starts open: a reader lands
   // here to pick which changed file to look at first.
-  const [fileTreeOpen, setFileTreeOpen] = useLocalStorage(
+  const [storedFileTreeOpen, setStoredFileTreeOpen] = useLocalStorage(
     PULL_REQUEST_FILE_TREE_STORAGE_KEY,
     true,
     Schema.Boolean,
   );
+  // Too narrow for the tree beside the diff (a drawer, a phone, a slim aside): it starts closed
+  // and opens over the diff instead, closing again once a file is picked. The stored preference
+  // is the wide layout's alone.
+  // Measured on the row the tree shares with the diff, and a split diff needs more of it.
+  const treeRow = useElementFitsWidth(prCodeTreeDockMinWidth(diffLayout));
+  // Too narrow for every control inline: the secondary toggles move into View options so the
+  // tree toggle and the menu are never clipped off the right edge.
+  const toolbarRoom = useElementFitsWidth(PR_CODE_TOOLBAR_FULL_MIN_WIDTH);
+  const compactToolbar = !toolbarRoom.fits;
+  const [overlayTreeOpen, setOverlayTreeOpen] = useState(false);
+  const treeAsOverlay = !treeRow.fits;
+  const fileTreeOpen = treeAsOverlay ? overlayTreeOpen : storedFileTreeOpen;
+  const setFileTreeOpen = treeAsOverlay ? setOverlayTreeOpen : setStoredFileTreeOpen;
   const [selectedLines, setSelectedLines] = useState<{
     id: string;
     range: SelectedLineRange;
@@ -698,31 +720,17 @@ function PullRequestCodeTab({
   useEffect(() => {
     onActiveFileChange?.(activePath);
   }, [activePath, onActiveFileChange]);
-  // Hand the current view to another window. Inside the desktop shell the system browser keeps
-  // its own cookie jar, so the URL carries a short-lived pairing credential that the app
-  // exchanges on load (the same bootstrap flow as device pairing) and then strips from the
-  // address bar; the handoff arrives logged in. A plain tab shares the same-origin session, so
-  // it just opens the current URL as-is.
-  const openInNewWindow = async () => {
-    const currentUrl = window.location.href;
-    let url = currentUrl;
-    if (window.desktopBridge) {
-      // The system browser keeps its own cookie jar. Best effort: carry a short-lived pairing
-      // credential, so the app can exchange it on load and arrive logged in. When one cannot be
-      // minted (the backend is busy, or the session lacks the scope for it), the plain URL still
-      // opens — the browser simply shows the app's own sign-in instead.
-      try {
-        const credential = await createServerPairingCredential({ label: "Diff viewer" });
-        url = setPairingTokenOnUrl(new URL(currentUrl), credential.credential).toString();
-      } catch {
-        // Opening unauthenticated is a working fallback; no error needed here.
-      }
-    }
-    try {
-      await readLocalApi()?.shell.openExternal(url);
-    } catch {
-      toastManager.add({ type: "error", title: "Could not open the link" });
-    }
+  // Hand this pull request's Code tab, on the file in focus, to a window (desktop) or tab (web)
+  // of its own, where it can take the whole screen. See t3team-openDetachedSurface.
+  const openInNewWindow = () => {
+    openDetachedSurface(
+      pullRequestDetachedSurfaceRequest({
+        environmentId,
+        reference,
+        view: { tab: "code", file: activePath },
+        title: detail.title,
+      }),
+    );
   };
   // Focus mode shows a single file to the viewer; the focused file is forced open, since
   // collapsing the one file on screen would just leave a blank pane.
@@ -794,6 +802,7 @@ function PullRequestCodeTab({
   const handleTreeSelect = useCallback(
     (key: string) => {
       setSelectedKey(key);
+      setOverlayTreeOpen(false);
       if (diffMode === "all") {
         const item = items.find((candidate) => candidate.id === key);
         if (item !== undefined && item.collapsed === true) toggleFile(key);
@@ -960,11 +969,7 @@ function PullRequestCodeTab({
             toggleFile(item.id);
           }}
         >
-          {collapsed ? (
-            <ChevronRightIcon className="size-4" />
-          ) : (
-            <ChevronDownIcon className="size-4" />
-          )}
+          <MorphIcon className="size-4" icon={collapsed ? ChevronRight : ChevronDown} />
         </Button>
       );
     },
@@ -1243,8 +1248,14 @@ function PullRequestCodeTab({
   }, [commit, onSelectedCommitChange, selectedCommit]);
   const scopeLabel = selectedCommit ? selectedCommit.messageHeadline : "All commits";
   const toolbar = (
-    <div className="flex h-10 min-h-10 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-background px-4 text-xs text-muted-foreground">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
+    // The padding must not follow `compactToolbar`: the toolbar measures its own content box, so
+    // a padding that changed with the result would flip it back and forth at the threshold.
+    <div
+      ref={toolbarRoom.ref}
+      className="flex h-10 min-h-10 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-background px-2 text-xs text-muted-foreground sm:px-4"
+    >
+      {/* Clipped, so on a narrow pane the counts give way instead of sliding under the controls. */}
+      <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
         {/* A host that reports no commits has nothing to scope by, and a dropdown whose only
             entry is the scope already showing is a control that does nothing. */}
         {orderedCommits.length > 0 ? (
@@ -1300,7 +1311,7 @@ function PullRequestCodeTab({
         ) : null}
         {/* One count, and the caveats as icons that carry their own words. Spelled out they
             competed for a strip this narrow and every one of them truncated to nothing. */}
-        <PullRequestMetaLine className="shrink-0">
+        <PullRequestMetaLine className="min-w-0">
           <span className="shrink-0 tabular-nums">
             {files.length} {files.length === 1 ? "file" : "files"}
             {nextCursor === null ? "" : "+"}
@@ -1439,6 +1450,8 @@ function PullRequestCodeTab({
                 aria-label={
                   ignoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"
                 }
+                // Moved into View options while the toolbar is too narrow for it.
+                className={cn(compactToolbar && "hidden")}
                 variant="ghost"
                 size="sm"
                 pressed={ignoreWhitespace}
@@ -1465,15 +1478,15 @@ function PullRequestCodeTab({
                   size="icon-sm"
                   variant="ghost"
                   aria-label={allFilesCollapsed ? "Expand all files" : "Collapse all files"}
+                  className={cn(compactToolbar && "hidden")}
                   onClick={toggleAllFiles}
                 />
               }
             >
-              {allFilesCollapsed ? (
-                <ChevronsUpDownIcon className="size-3.5" />
-              ) : (
-                <ChevronsDownUpIcon className="size-3.5" />
-              )}
+              <MorphIcon
+                className="size-3.5"
+                icon={allFilesCollapsed ? ChevronsUpDown : ChevronsDownUp}
+              />
             </TooltipTrigger>
             <TooltipPopup side="top">
               {allFilesCollapsed ? "Expand all files" : "Collapse all files"}
@@ -1482,7 +1495,7 @@ function PullRequestCodeTab({
         ) : null}
         <ToggleGroup
           aria-label="Diff layout"
-          className="shrink-0"
+          className={cn("shrink-0", compactToolbar && "hidden")}
           variant="segmented"
           value={[diffLayout]}
           onValueChange={(value) => {
@@ -1504,6 +1517,7 @@ function PullRequestCodeTab({
             render={
               <Toggle
                 aria-label={wordWrap ? "Disable diff line wrapping" : "Enable diff line wrapping"}
+                className={cn(compactToolbar && "hidden")}
                 variant="ghost"
                 size="sm"
                 pressed={wordWrap}
@@ -1552,6 +1566,44 @@ function PullRequestCodeTab({
             <EllipsisIcon className="size-3.5" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
+            {compactToolbar ? (
+              // The toggles the narrow toolbar had no room for, so none of them is lost there.
+              <>
+                <MenuGroup>
+                  <MenuGroupLabel>Diff</MenuGroupLabel>
+                  <DropdownMenuCheckboxItem
+                    checked={ignoreWhitespace}
+                    onCheckedChange={(checked) => {
+                      setIgnoreWhitespace(Boolean(checked));
+                      setDraft(null);
+                      setSelectedLines(null);
+                    }}
+                  >
+                    Hide whitespace changes
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={wordWrap}
+                    onCheckedChange={(checked) => setWordWrap(Boolean(checked))}
+                  >
+                    Wrap long lines
+                  </DropdownMenuCheckboxItem>
+                  {fileKeys.length > 0 ? (
+                    <DropdownMenuItem onClick={toggleAllFiles}>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <MorphIcon
+                          className="size-3.5 shrink-0"
+                          icon={allFilesCollapsed ? ChevronsUpDown : ChevronsDownUp}
+                        />
+                        <span className="min-w-0 flex-1">
+                          {allFilesCollapsed ? "Expand all files" : "Collapse all files"}
+                        </span>
+                      </span>
+                    </DropdownMenuItem>
+                  ) : null}
+                </MenuGroup>
+                <MenuSeparator />
+              </>
+            ) : null}
             <MenuGroup>
               <MenuGroupLabel>View</MenuGroupLabel>
               <MenuRadioGroup
@@ -1641,16 +1693,14 @@ function PullRequestCodeTab({
                   <span className="min-w-0 flex-1">Copy link</span>
                 </span>
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  void openInNewWindow();
-                }}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <ExternalLinkIcon aria-hidden className="size-3.5 shrink-0" />
-                  <span className="min-w-0 flex-1">Open in new tab</span>
-                </span>
-              </DropdownMenuItem>
+              {isDetachedSurfaceWindow() ? null : (
+                <DropdownMenuItem onClick={openInNewWindow}>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <PictureInPicture2Icon aria-hidden className="size-3.5 shrink-0" />
+                    <span className="min-w-0 flex-1">{DETACH_SURFACE_LABEL}</span>
+                  </span>
+                </DropdownMenuItem>
+              )}
             </MenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -1800,7 +1850,7 @@ function PullRequestCodeTab({
           </Collapsible>
         </div>
       ) : null}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div ref={treeRow.ref} className="relative flex min-h-0 flex-1 overflow-hidden">
         {/* Relative wrapper so the review overlay floats over the diff rather than pushing it
             up; the viewer inside still owns its own scrolling. */}
         <div
@@ -1860,8 +1910,22 @@ function PullRequestCodeTab({
             unsafeCSSExtra={REPLACE_FILE_COUNTS_CSS}
           />
         </div>
+        {fileTreeOpen && treeAsOverlay ? (
+          <button
+            type="button"
+            aria-label="Hide file tree"
+            className="absolute inset-0 z-20 bg-background/60"
+            onClick={() => setOverlayTreeOpen(false)}
+          />
+        ) : null}
         {fileTreeOpen ? (
-          <div className="flex min-h-0 w-[min(20rem,40%)] min-w-56 shrink-0">
+          <div
+            className={
+              treeAsOverlay
+                ? "absolute inset-y-0 right-0 z-20 flex min-h-0 w-[min(20rem,85%)] shadow-lg"
+                : "flex min-h-0 w-[min(20rem,40%)] min-w-56 shrink-0"
+            }
+          >
             <DiffExplorerFileTree
               files={explorerFiles}
               selectedKey={activeKey}

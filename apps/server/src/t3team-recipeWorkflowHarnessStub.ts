@@ -43,7 +43,24 @@ export function recordingWorkflowHostPort(
     postMessage: record("postMessage"),
     upsertActivity: record("upsertActivity"),
     interrupt: record("interrupt"),
+    archiveThread: record("archiveThread"),
     syncRunFacts: record("syncRunFacts"),
+    launchThread: (input) => {
+      capture.operations.push({ op: "launchThread", input });
+      return host.launchThread(input);
+    },
+    launchedThread: (input) => {
+      capture.operations.push({ op: "launchedThread", input });
+      return host.launchedThread(input);
+    },
+    resolveRecipeConfig: (input) => {
+      capture.operations.push({ op: "resolveRecipeConfig", input });
+      return host.resolveRecipeConfig(input);
+    },
+    setRunFacts: (input) => {
+      capture.operations.push({ op: "setRunFacts", input });
+      return host.setRunFacts(input);
+    },
   };
 }
 

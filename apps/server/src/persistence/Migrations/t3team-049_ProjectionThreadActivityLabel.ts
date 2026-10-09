@@ -1,4 +1,4 @@
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Effect from "effect/Effect";
 
 /** Live LLM-generated activity label for active threads (GHE #40). Ephemeral UI state, cleared on idle. */

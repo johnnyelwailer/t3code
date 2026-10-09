@@ -25,6 +25,9 @@ export interface WorkflowShapePreviewInput {
   /** The `.workflow.ts` source, read by the caller (the route, via Effect `FileSystem`). */
   readonly sourceText: string;
   readonly runId: string;
+  /** Card name when no shape can be derived yet (an authoring run has no source); defaults to
+   * the workflow path's basename. */
+  readonly fallbackName?: string | undefined;
 }
 
 /** Basename of `workflowPath` without its `.workflow.ts`/`.ts` extension, or "workflow". */
@@ -60,7 +63,7 @@ export function buildWorkflowShapePreviewMessage(
   const shape =
     derived === null || (derived.phases.length === 0 && derived.steps.length === 0)
       ? {
-          name: deriveFallbackWorkflowName(input.workflowPath),
+          name: input.fallbackName ?? deriveFallbackWorkflowName(input.workflowPath),
           description: undefined,
           phases: [],
           steps: [],

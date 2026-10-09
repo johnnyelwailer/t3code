@@ -20,6 +20,8 @@ import type { T3TeamMyWorkDigestProjectInput } from "./t3team-myworkDigestTypes.
 
 export type DigestViewerTickets = {
   readonly tickets: ReadonlyArray<BacklogResourceRef>;
+  /** The viewer's own tickets, without the parents `tickets` adds for context. */
+  readonly assigned: ReadonlyArray<BacklogResourceRef>;
   /**
    * The viewer's Jira display name for THIS account: the assignee the mirror
    * stamped on the viewer's own items wins (an all-projects request spans
@@ -47,6 +49,7 @@ export function readDigestViewerTickets(input: {
       (projection.assigned[0]?.assignee?.trim() || undefined) ?? input.requestedViewerName;
     return {
       tickets: [...projection.assigned, ...projection.parents],
+      assigned: projection.assigned,
       viewerName,
       unresolved: !resolved,
     } satisfies DigestViewerTickets;

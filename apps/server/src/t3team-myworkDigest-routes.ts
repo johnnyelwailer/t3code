@@ -4,6 +4,7 @@
  *   POST /api/t3team/mywork-digest/graph   — the aggregated read
  *   POST /api/t3team/mywork-digest/graph/poll — same read + the fingerprint
  *                                               envelope (`unchanged` short-circuit)
+ *   POST /api/t3team/mywork-digest/arrangement/reset — see t3team-myworkDigestArrangement-routes
  *
  * Both answer with one payload: tickets, claims, decisions, change requests,
  * transitions, and sprint per scoped project — the data layer behind
@@ -14,16 +15,21 @@
  * receipt, and the previous receipt is stamped into the payload only on changed
  * rounds — so a stable digest keeps short-circuiting even while the receipt itself
  * moves.
+ *
+ * Both answer with the viewer's stored arrangement (t3team-myworkDigestArrangement) when there is
+ * one. Unlike the receipt it IS in the fingerprint: an arrangement change is a changed digest.
  */
 
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { HttpRouter } from "effect/unstable/http";
+import { HttpRouter } from "effect/http";
 
 import { errorResponse, okJson, readJsonBody } from "./t3team-atlassian-http.ts";
 import { loadT3TeamMyWorkDigestGraph } from "./t3team-myworkDigest.ts";
+import { attachDigestArrangement } from "./t3team-myworkDigestArrangement.ts";
+import { t3teamMyWorkDigestArrangementRouteLayer } from "./t3team-myworkDigestArrangement-routes.ts";
 import {
   digestLastVisitIdentity,
   readDigestLastVisit,
@@ -58,7 +64,10 @@ const t3teamMyWorkDigestGraphRouteLayer = HttpRouter.add(
   "/api/t3team/mywork-digest/graph",
   Effect.gen(function* () {
     const input = yield* readJsonBody<T3TeamMyWorkDigestInput>();
-    const payload = yield* loadT3TeamMyWorkDigestGraph(input);
+    const payload = yield* attachDigestArrangement(
+      input,
+      yield* loadT3TeamMyWorkDigestGraph(input),
+    );
     // Read-only: this route does not record a visit, only reports the receipt.
     return okJson({ payload: yield* stampDigestLastVisit(input, payload) });
   }).pipe(Effect.catch(errorResponse)),
@@ -69,7 +78,11 @@ const t3teamMyWorkDigestGraphPollRouteLayer = HttpRouter.add(
   "/api/t3team/mywork-digest/graph/poll",
   Effect.gen(function* () {
     const input = yield* readJsonBody<T3TeamMyWorkDigestPollInput>();
-    const payload = yield* loadT3TeamMyWorkDigestGraph(input);
+    // The stored arrangement is part of the digest: a new layout must answer CHANGED.
+    const payload = yield* attachDigestArrangement(
+      input,
+      yield* loadT3TeamMyWorkDigestGraph(input),
+    );
     // Fingerprint over the payload WITHOUT the receipt (see the file header).
     const result = toT3TeamPollResult(payload, input.poll);
     if (result.unchanged === true) {
@@ -89,4 +102,5 @@ const t3teamMyWorkDigestGraphPollRouteLayer = HttpRouter.add(
 export const t3teamMyWorkDigestRouteLayer = Layer.mergeAll(
   t3teamMyWorkDigestGraphRouteLayer,
   t3teamMyWorkDigestGraphPollRouteLayer,
+  t3teamMyWorkDigestArrangementRouteLayer,
 );

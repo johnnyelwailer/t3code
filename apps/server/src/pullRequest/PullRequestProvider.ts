@@ -38,6 +38,7 @@ import type {
   SourceControlProviderKind,
 } from "@t3tools/contracts";
 import { SourceControlProviderKind as SourceControlProviderKindSchema } from "@t3tools/contracts";
+import type { FileAtRevisionRequest, ProviderFileAtRevision } from "./t3team-fileAtRevision.ts";
 
 /**
  * The one failure shape every provider reports, so the service can decide what a failure means
@@ -52,7 +53,13 @@ export class PullRequestProviderError extends Schema.TaggedError<PullRequestProv
   {
     provider: SourceControlProviderKindSchema,
     operation: Schema.String,
-    reason: Schema.Literals(["missing-tool", "unauthenticated", "rate-limited", "failed"]),
+    reason: Schema.Literals([
+      "missing-tool",
+      "unauthenticated",
+      "rate-limited",
+      "not-found",
+      "failed",
+    ]),
     detail: Schema.String,
     retryAt: Schema.optional(Schema.Number),
     cause: Schema.optional(Schema.Defect()),
@@ -61,6 +68,15 @@ export class PullRequestProviderError extends Schema.TaggedError<PullRequestProv
   override get message(): string {
     return `${this.provider} failed in ${this.operation}: ${this.detail}`;
   }
+}
+
+/**
+ * `status` moves with the state, mergeability, head, or checks, which the detail read reports;
+ * `remarks` moves with comments and reviews, which only the activity read reports.
+ */
+export interface ProviderChangeRequestWatchFingerprint {
+  readonly status: string;
+  readonly remarks: string;
 }
 
 export interface PullRequestProviderFailure {
@@ -213,6 +229,14 @@ export interface ProviderChangeRequestStat {
 }
 
 export interface ProviderChangeRequestDetail extends ProviderChangeRequest {
+  /** The head commit, where the host's detail read reports it. */
+  readonly headSha?: string | null;
+  /** The base commit, where the host's detail read reports it. */
+  readonly baseSha?: string | null;
+  /** True only when the host says the head belongs to another repository. */
+  readonly isCrossRepository?: boolean;
+  /** The author's standing on the repository, as the host words it. */
+  readonly authorAssociation?: string | null;
   readonly body: string;
   readonly changedFiles: number;
   readonly mergedAt: string | null;
@@ -246,6 +270,7 @@ export interface ProviderChangeRequestActivity {
    */
   readonly commentCount: number;
   readonly commentsTruncated: boolean;
+  readonly reviewThreadsTruncated?: boolean;
   readonly reviewThreads: ReadonlyArray<PullRequestReviewThread>;
   readonly commits: ReadonlyArray<PullRequestCommit>;
   /** The change request's own reactions, from a host that has them. */
@@ -432,6 +457,15 @@ export interface PullRequestProviderApi {
   ) => Effect.Effect<ProviderChangeRequestSummary, PullRequestProviderError>;
 
   /**
+   * A cheap fingerprint of what a pull request watch reports, so it reads the change request in
+   * full only when this moves. Null when the host gave no answer for it. Optional: a host
+   * without one has its watched change requests read in full on every pass.
+   */
+  readonly getChangeRequestWatchFingerprint?: (
+    input: ProviderRepositoryRef & { readonly number: number },
+  ) => Effect.Effect<ProviderChangeRequestWatchFingerprint | null, PullRequestProviderError>;
+
+  /**
    * The host-native stack a change request belongs to, or null when it is not stacked. Optional
    * because most hosts have no such object; the service derives chains from base branches there.
    */
@@ -499,6 +533,15 @@ export interface PullRequestProviderApi {
   ) => Effect.Effect<ProviderDiffFileContents, PullRequestProviderError>;
 
   /**
+   * t3team: one file at one commit sha, for any path rather than only the ones the diff carries.
+   * Null is "nothing readable there" (absent at that commit, a directory, a symlink). Optional:
+   * a host that cannot read a file at a revision omits it, and the service refuses typed.
+   */
+  readonly readFileAtRevision?: (
+    input: FileAtRevisionRequest,
+  ) => Effect.Effect<ProviderFileAtRevision | null, PullRequestProviderError>;
+
+  /**
    * Which files the reader has already cleared. Only called when `capabilities.viewedFiles` is
    * `"host"`, and read apart from the patch: this moves with every press rather than every push.
    */
@@ -538,6 +581,8 @@ export interface PullRequestProviderApi {
       readonly action: PullRequestAction;
       readonly stackNumber?: number;
       readonly expectedStackHeads?: ReadonlyArray<PullRequestStackHead>;
+      /** GitHub merge message cleanup; ignored by hosts without support. */
+      readonly removeAgentCreditsOnMerge?: boolean;
       /** Meaningful for `merge` and `enable-auto-merge`; absent takes the host's own default. */
       readonly mergeMethod?: PullRequestMergeMethod;
       /** Only meaningful for `update-branch`; absent takes the host's own default. */

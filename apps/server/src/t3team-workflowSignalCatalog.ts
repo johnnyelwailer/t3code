@@ -19,6 +19,7 @@
 import {
   BUILTIN_SIGNAL_SOURCES,
   ScmChangeRequestParams,
+  ScmViewerChangeRequestsParams,
   WorkItemParams,
   type SignalSourceContext,
   type SignalSourceInstance,
@@ -30,7 +31,13 @@ import {
   startScmSignalInstance,
   WORKFLOW_SIGNAL_POLL_MS,
 } from "./t3team-workflowSignalSourceScm.ts";
+import {
+  shareViewerPrRead,
+  startScmViewerSignalInstance,
+  WORKFLOW_VIEWER_SIGNAL_POLL_MS,
+} from "./t3team-workflowSignalSourceScmViewer.ts";
 import { startWorkItemSignalInstance } from "./t3team-workflowSignalSourceWorkItem.ts";
+import type { ViewerPrRead } from "./t3team-myworkViewerPrLoader.ts";
 import type { PullRequestActivity, PullRequestDetail, PullRequestRef } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import type { PullRequestError } from "./pullRequest/PullRequestService.ts";
@@ -86,6 +93,10 @@ export function makeWorkflowSignalSourceCatalog(input: {
   readonly pullRequestService: ScmPollSurface;
   /** Injectable for tests; the built-in sources' default poll cadence. */
   readonly pollMs?: number;
+  /** The viewer's open change requests (host-wide); absent where the host has no `gh`. Shared
+   * between every project's instance for half a poll, so N projects cost one search round. */
+  readonly readViewerPrs?: Effect.Effect<ViewerPrRead>;
+  readonly viewerPollMs?: number;
   /** The work-item instances' provider resolution; injected by the reconciler (it carries the
    * ambient services the Atlassian auth read needs) and overridable in tests. */
   readonly resolveWorkItemProvider?: (
@@ -145,7 +156,36 @@ export function makeWorkflowSignalSourceCatalog(input: {
     },
   };
 
+  const viewerPollMs = input.viewerPollMs ?? WORKFLOW_VIEWER_SIGNAL_POLL_MS;
+  const sharedViewerRead = shareViewerPrRead(
+    input.readViewerPrs ??
+      Effect.succeed({
+        entries: [],
+        signedInHosts: [],
+        incompleteHosts: ["*"],
+        truncatedHosts: [],
+      }),
+    viewerPollMs / 2,
+  );
+  const scmViewerHost: WorkflowSignalSourceHost = {
+    start: async (ctx) => {
+      await validateParams(
+        ScmViewerChangeRequestsParams,
+        (ctx as SignalSourceContext<unknown>).params,
+        "scm.viewer.change-requests",
+      );
+      return startScmViewerSignalInstance({
+        ctx: ctx as SignalSourceContext<{ projectId: string }>,
+        readViewerPrs: sharedViewerRead,
+        detail: (ref) => prs.detail(ref),
+        pollMs: viewerPollMs,
+        log,
+      });
+    },
+  };
+
   const hosts: Readonly<Record<string, WorkflowSignalSourceHost>> = {
+    "scm.viewer.change-requests": scmViewerHost,
     "scm.change-request.watch": scmHost,
     "scm.change-request.checks": scmHost,
     "scm.change-request.review": scmHost,

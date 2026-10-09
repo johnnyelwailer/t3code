@@ -9,10 +9,14 @@ import {
   AuthTerminalOperateScope,
   ORCHESTRATION_V2_WS_METHODS,
   type AuthEnvironmentScope,
+  EnvironmentAuthorizationError,
+  RpcScopeAuthorization,
   WS_METHODS,
   WsRpcGroup,
 } from "@t3tools/contracts";
-import type * as RpcGroup from "effect/unstable/rpc/RpcGroup";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import type * as RpcGroup from "effect/rpc/RpcGroup";
 
 type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
 
@@ -29,6 +33,7 @@ export const RPC_REQUIRED_SCOPES = {
   [ORCHESTRATION_V2_WS_METHODS.searchThreads]: AuthOrchestrationReadScope,
   [ORCHESTRATION_V2_WS_METHODS.getArchivedShellSnapshot]: AuthOrchestrationReadScope,
   [ORCHESTRATION_V2_WS_METHODS.getThreadProjection]: AuthOrchestrationReadScope,
+  [ORCHESTRATION_V2_WS_METHODS.getTurnItem]: AuthOrchestrationReadScope,
   [ORCHESTRATION_V2_WS_METHODS.launchThread]: AuthOrchestrationOperateScope,
   [ORCHESTRATION_V2_WS_METHODS.subscribeArchivedShell]: AuthOrchestrationReadScope,
   [ORCHESTRATION_V2_WS_METHODS.subscribeShell]: AuthOrchestrationReadScope,
@@ -44,6 +49,9 @@ export const RPC_REQUIRED_SCOPES = {
   // t3team: fork thread facts/artifacts side streams are thread reads like subscribeThread.
   [WS_METHODS.t3teamSubscribeThreadFacts]: AuthOrchestrationReadScope,
   [WS_METHODS.t3teamSubscribeThreadArtifacts]: AuthOrchestrationReadScope,
+  [WS_METHODS.t3teamSubscribePackDocuments]: AuthOrchestrationReadScope,
+  // t3team: a pack view writing its own documents is a write, like every other web mutation.
+  [WS_METHODS.t3teamPackStorePut]: AuthOrchestrationOperateScope,
   // t3team: "stop including sub-runs" interrupts runs, like interrupting one thread.
   [WS_METHODS.t3teamStopThreadCascade]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverProbe]: AuthOrchestrationReadScope,
@@ -106,6 +114,11 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.scheduledTasksSetEnabled]: AuthOrchestrationOperateScope,
   [WS_METHODS.scheduledTasksDelete]: AuthOrchestrationOperateScope,
   [WS_METHODS.scheduledTasksRunNow]: AuthOrchestrationOperateScope,
+  [WS_METHODS.scheduledTasksRotateWebhookToken]: AuthOrchestrationOperateScope,
+  [WS_METHODS.secretsAnswerRequest]: AuthOrchestrationOperateScope,
+  // Delivery logs hold request bodies, so they need the same scope as the URL.
+  [WS_METHODS.scheduledTasksListWebhookDeliveries]: AuthOrchestrationOperateScope,
+  [WS_METHODS.scheduledTasksGetWebhookDelivery]: AuthOrchestrationOperateScope,
   [WS_METHODS.cloudGetRelayClientStatus]: AuthRelayReadScope,
   [WS_METHODS.cloudInstallRelayClient]: AuthRelayWriteScope,
   [WS_METHODS.cloudSessionList]: AuthRelayReadScope,
@@ -113,6 +126,8 @@ export const RPC_REQUIRED_SCOPES = {
   // so they sit behind the write scope alongside relay-client installation.
   [WS_METHODS.cloudSessionCreate]: AuthRelayWriteScope,
   [WS_METHODS.cloudSessionCancel]: AuthRelayWriteScope,
+  // Reads committed files in the project's own checkouts, like the other project reads.
+  [WS_METHODS.projectMachineDiscover]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsList]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsListStats]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsSummary]: AuthOrchestrationReadScope,
@@ -241,6 +256,21 @@ export function requiredScopeForRpcMethod(method: string): AuthEnvironmentScope 
   }
   return requiredScope;
 }
+
+export const rpcAuthorizationError = (requiredScope: AuthEnvironmentScope) =>
+  new EnvironmentAuthorizationError({
+    message: `The authenticated token is missing required scope: ${requiredScope}.`,
+    requiredScope,
+  });
+
+/** Authorizes every RPC on one connection against that connection's session scopes. */
+export const layer = (scopes: ReadonlyArray<AuthEnvironmentScope>) =>
+  Layer.succeed(RpcScopeAuthorization)((effect, { rpc }) => {
+    const requiredScope = requiredScopeForRpcMethod(rpc._tag);
+    return scopes.includes(requiredScope)
+      ? effect
+      : Effect.fail(rpcAuthorizationError(requiredScope));
+  });
 
 /** Retrying can install or restart tools even though ordinary listing is readable. */
 export const requiredScopeForDeviceList = (input: DeviceListInput): AuthEnvironmentScope =>

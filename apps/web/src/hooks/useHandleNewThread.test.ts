@@ -169,6 +169,10 @@ vi.mock("../state/entities", () => ({
   useProjects: () => [],
   useThread: () => null,
 }));
+vi.mock("../state/environments", () => ({
+  useEnvironments: () => ({ environments: [] }),
+  usePrimaryEnvironmentId: () => null,
+}));
 vi.mock("../state/server", () => ({
   environmentServerConfigsAtom: {},
   primaryServerSettingsAtom: "primary-settings",

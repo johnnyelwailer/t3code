@@ -10,10 +10,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import type {
-  WorkflowRun,
-  WorkflowRunRepositoryShape,
-} from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowRun, WorkflowRunRepositoryShape } from "./persistence/WorkflowRuns.ts";
 import { makeWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
 
 const threadId = ThreadId.make("thread-status");
@@ -59,6 +56,7 @@ function makeStubRepository(rows: ReadonlyArray<WorkflowRun>): WorkflowRunReposi
       Effect.succeed(
         [...rows].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, limit),
       ),
+    listLiveByLaunchThread: notImplemented("listLiveByLaunchThread"),
     setStatus: notImplemented("setStatus"),
     casSetStatus: notImplemented("casSetStatus"),
     resumePaused: notImplemented("resumePaused"),
@@ -94,6 +92,22 @@ describe("t3team.orchestration.status", () => {
         updatedAt: row.updatedAt,
         hint: "Parked waiting on user.input; it resumes automatically when that resolves.",
       });
+    }),
+  );
+
+  it.effect("explains an authoring run instead of calling the status unrecognized", () =>
+    Effect.gen(function* () {
+      const handlers = makeWorkflowStatusToolHandlers({
+        runRepository: makeStubRepository([
+          baseRow({ runId: "run-authoring", status: "authoring" }),
+        ]),
+      })(threadId);
+      const value = yield* handlers.getStatus({ runId: "run-authoring" });
+      assert.isTrue("hint" in value);
+      if ("hint" in value) {
+        assert.strictEqual(value.status, "authoring");
+        assert.isFalse(value.hint.includes("Unrecognized"));
+      }
     }),
   );
 

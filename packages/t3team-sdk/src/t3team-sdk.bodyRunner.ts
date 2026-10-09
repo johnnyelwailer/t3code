@@ -27,7 +27,10 @@ import type { DurableWorkflowRuntime } from "./t3team-sdk.durableRuntime.ts";
 import { createRetryPrimitives } from "./t3team-sdk.retryPrimitive.ts";
 import type { ReducePrimitives } from "./t3team-sdk.reducePrimitive.ts";
 import { createSchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
+import { withDurableWait } from "./t3team-sdk.durableWait.ts";
 import type { CheckpointPrimitives, CheckpointRecord } from "@runbook/core/checkpoint";
+import { createLaunchedThreadPrimitives } from "./t3team-sdk.launchedThreads.ts";
+import { createRecipeConfigPrimitives } from "./t3team-sdk.recipeConfigPrimitive.ts";
 import { createSignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
 import {
   createWatermarkPrimitives,
@@ -136,6 +139,17 @@ export async function runPreparedBody(opts: {
     broker: opts.broker ?? defaultBroker,
     capabilities,
   });
+  // `launchThread` — top-level threads addressed by key; gated by `"launch"`.
+  const launched = createLaunchedThreadPrimitives({
+    dispatch: opts.handleDispatch,
+    broker: opts.broker ?? defaultBroker,
+    capabilities,
+  });
+  // `getConfig` — the run's recipe config, resolved and journaled by the host.
+  const config = createRecipeConfigPrimitives({
+    dispatch: opts.handleDispatch,
+    broker: opts.broker ?? defaultBroker,
+  });
   // `watermark` (bounded execution) — capability-gated per source (`"source:<name>"`). It owns
   // the run's checkpoint boundary once used, so the body binds ITS guarded `checkpoint`.
   const bounded = createWatermarkPrimitives({
@@ -151,7 +165,13 @@ export async function runPreparedBody(opts: {
     // gate which scripts are callable — that is limited by recipe ownership (Epic 25 §Scripts).
     scripts: capabilities.has("script") ? buildScriptTree(opts.scripts, opts.runtime) : {},
     runtime: opts.runtime,
-    primitives: opts.primitives,
+    // `wait(ms)` parks on the same `waitUntil` clock when `"schedule"` is declared.
+    primitives: withDurableWait({
+      primitives: opts.primitives,
+      runtime: opts.runtime,
+      schedule,
+      capabilities,
+    }),
     checkpoint: bounded.checkpoint,
     resume: opts.resume,
     watermark: opts.watermark ?? bounded.watermark,
@@ -160,6 +180,8 @@ export async function runPreparedBody(opts: {
     schedule,
     retry,
     signals,
+    launched,
+    config,
     // The `RunbookContext` subset (`@runbook/core/authoring`) a `run(ctx)`-shaped body sees;
     // legacy bodies declare zero parameters and the loader never passes this to them.
     ctx: buildRunbookContext({ toolRefs: opts.toolRefs, runtime: opts.runtime, capabilities }),

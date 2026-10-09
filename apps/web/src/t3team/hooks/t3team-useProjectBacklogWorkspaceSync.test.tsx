@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { BackendProvider } from "~/t3team/backend/t3team-BackendContext";
 import type { AtlassianBacklogResponse, BackendApi } from "~/t3team/backend/t3team-types";
+import { T3TEAM_PROJECT_CONTEXT_ROOT } from "~/t3team/t3team-projectSetup";
 import { resetProjectWorkspaceSyncStateForTests } from "~/t3team/t3team-projectWorkspaceSync";
 
 import { useProjectBacklog } from "./t3team-useProjectBacklog";
@@ -120,6 +121,7 @@ describe("useProjectBacklog workspace sync", () => {
           referencesRoot: "/tmp/project-1-backlog-sync-test/.t3team/references",
           linkedRepositories: [],
         })),
+        readLinkedRepositoryStatus: vi.fn(async () => ({ linkedRepositories: [] })),
         setMainRepository: vi.fn(async () => {
           throw new Error("not used");
         }),
@@ -174,7 +176,7 @@ describe("useProjectBacklog workspace sync", () => {
       expect(
         writeContextFiles.mock.calls.some(([input]) =>
           input.files.some(
-            (file) => file.relativePath === ".t3team/context/work-items/proj-1.json",
+            (file) => file.relativePath === `${T3TEAM_PROJECT_CONTEXT_ROOT}/work-items/proj-1.json`,
           ),
         ),
       ).toBe(true);

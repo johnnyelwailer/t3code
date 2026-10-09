@@ -314,7 +314,8 @@ jobs:
     name: Transfer report artifact
     needs: test_server
     if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04 # upstream: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 5
     steps:
       - name: Require transfer measurements
         uses: actions/download-artifact@v8
@@ -459,9 +460,11 @@ jobs:
         with:
           node-version-file: package.json
           cache: true
+          # `vp run` loads every package's vite config; apps/server's imports @t3team/packs.
           run-install: |
             args:
               - --filter=@t3tools/scripts...
+              - --filter=@t3team/packs...
 
       - name: Install mobile native static analysis tools
         run: brew bundle install --file apps/mobile/Brewfile

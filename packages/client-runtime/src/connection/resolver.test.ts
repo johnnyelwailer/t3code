@@ -36,7 +36,7 @@ import {
 } from "./model.ts";
 import * as ConnectionProfileStore from "./profileStore.ts";
 import { BrokerEnvironmentGateway } from "./t3team-brokerConnection.ts";
-import { remoteHttpClientLayer } from "../rpc/http.ts";
+import * as RpcHttp from "../rpc/http.ts";
 import {
   GitHubRoutingPermissions,
   gitHubRoutingConnectionKey,
@@ -155,8 +155,8 @@ const makeDependencies = Effect.fn("TestConnectionResolver.makeDependencies")((o
     disconnect: () => Effect.void,
   });
 
-  const dependencies = Layer.mergeAll(
-    remoteHttpClientLayer((async (input: RequestInfo | URL, init?: RequestInit) => {
+  const layerDependencies = Layer.mergeAll(
+    RpcHttp.layerRemoteHttpClient((async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input instanceof Request ? input.url : String(input);
       if (url.endsWith("/oauth/token")) {
         options?.tokenExchanges?.push(
@@ -200,7 +200,7 @@ const makeDependencies = Effect.fn("TestConnectionResolver.makeDependencies")((o
       ClientCapabilities.ClientPresentation,
       ClientCapabilities.ClientPresentation.of({
         metadata: { label: "Test Client", deviceType: "desktop", surface: "web" },
-        scopes: [],
+        scopes: ["orchestration:read", "relay:write"],
       }),
     ),
     Layer.succeed(RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization, remote),
@@ -210,8 +210,9 @@ const makeDependencies = Effect.fn("TestConnectionResolver.makeDependencies")((o
       BrokerEnvironmentGateway.of({
         attach:
           options?.attachBroker ??
-          (() =>
+          ((input) =>
             Effect.succeed({
+              sessionId: input.sessionId,
               httpBaseUrl: "http://127.0.0.1:4020",
               wsBaseUrl: "ws://127.0.0.1:4020",
             })),
@@ -220,7 +221,7 @@ const makeDependencies = Effect.fn("TestConnectionResolver.makeDependencies")((o
     ),
   );
 
-  return Effect.succeed(ConnectionResolver.layer.pipe(Layer.provide(dependencies)));
+  return Effect.succeed(ConnectionResolver.layer.pipe(Layer.provide(layerDependencies)));
 });
 
 describe("ConnectionResolver", () => {
@@ -235,9 +236,12 @@ describe("ConnectionResolver", () => {
     readonly rejectBearer?: (
       token: string,
     ) => ConnectionBlockedError | ConnectionTransientError | null;
+    /** The session the server attached instead, as when the known one has ended. */
+    readonly liveSessionId?: string;
   }) {
     const attached = yield* Ref.make<ReadonlyArray<string>>([]);
     const pairings = yield* Ref.make(0);
+    const pairedSessions = yield* Ref.make<ReadonlyArray<string>>([]);
     const bearers = yield* Ref.make<ReadonlyArray<{ token: string; method: string }>>([]);
     const tokenExchanges: Array<string> = [];
     const credentials = new Map(options?.credentials ?? []);
@@ -249,9 +253,17 @@ describe("ConnectionResolver", () => {
           ...values,
           `${input.sessionId}:${input.expectedEnvironmentId}`,
         ]).pipe(
-          Effect.as({ httpBaseUrl: "http://127.0.0.1:4020", wsBaseUrl: "ws://127.0.0.1:4020" }),
+          Effect.as({
+            sessionId: options?.liveSessionId ?? input.sessionId,
+            httpBaseUrl: "http://127.0.0.1:4020",
+            wsBaseUrl: "ws://127.0.0.1:4020",
+          }),
         ),
-      pairBroker: () => Ref.update(pairings, (n) => n + 1).pipe(Effect.as("broker-pairing")),
+      pairBroker: (input) =>
+        Ref.update(pairings, (n) => n + 1).pipe(
+          Effect.andThen(Ref.update(pairedSessions, (values) => [...values, input.sessionId])),
+          Effect.as("broker-pairing"),
+        ),
       authorizeBearer: (input) =>
         Effect.gen(function* () {
           yield* Ref.update(bearers, (values) => [
@@ -270,7 +282,7 @@ describe("ConnectionResolver", () => {
         }),
     });
     const resolver = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(layer));
-    return { resolver, credentials, attached, pairings, bearers, tokenExchanges };
+    return { resolver, credentials, attached, pairings, pairedSessions, bearers, tokenExchanges };
   });
 
   it.effect("connects a broker session once by pairing, then reuses the stored bearer", () =>
@@ -284,6 +296,8 @@ describe("ConnectionResolver", () => {
         new URLSearchParams(harness.tokenExchanges[0]).get("subject_token") ??
           harness.tokenExchanges[0],
       ).toContain("broker-pairing");
+      // The session's server may be older and grant narrower scopes: never ask for more.
+      expect(new URLSearchParams(harness.tokenExchanges[0]).get("scope")).toBeNull();
 
       yield* harness.resolver.prepare(catalogEntry(BROKER_TARGET));
       expect(yield* Ref.get(harness.attached)).toEqual([
@@ -296,6 +310,25 @@ describe("ConnectionResolver", () => {
         { token: "broker-bearer", method: "relay" },
         { token: "broker-bearer", method: "relay" },
       ]);
+    }),
+  );
+
+  it.effect("follows the workspace's live session when the known one has ended", () =>
+    Effect.gen(function* () {
+      // A new session in the same workspace serves the same environment (the snapshot keeps its
+      // id): the server attaches the live one, and pairing and the bearer go with it.
+      const harness = yield* makeBrokerHarness({
+        credentials: [
+          ["nexi-broker:290877467", new BearerConnectionCredential({ token: "old-bearer" })],
+        ],
+        liveSessionId: "299999999",
+      });
+      yield* harness.resolver.prepare(catalogEntry(BROKER_TARGET));
+      expect(yield* Ref.get(harness.pairedSessions)).toEqual(["299999999"]);
+      expect(harness.credentials.has("nexi-broker:299999999")).toBe(true);
+      expect((yield* Ref.get(harness.bearers)).map((bearer) => bearer.token)).not.toContain(
+        "old-bearer",
+      );
     }),
   );
 
@@ -340,8 +373,8 @@ describe("ConnectionResolver", () => {
 
   it.effect("blocks an old host during discovery before opening orchestration RPC", () =>
     Effect.gen(function* () {
-      const brokerLayer = yield* makeDependencies({ descriptorProtocolVersion: null });
-      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(brokerLayer));
+      const layerBroker = yield* makeDependencies({ descriptorProtocolVersion: null });
+      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(layerBroker));
       const target = new PrimaryConnectionTarget({
         environmentId: ENVIRONMENT_ID,
         label: "Primary",
@@ -358,10 +391,10 @@ describe("ConnectionResolver", () => {
 
   it.effect("blocks an incompatible host during discovery before opening orchestration RPC", () =>
     Effect.gen(function* () {
-      const brokerLayer = yield* makeDependencies({
+      const layerBroker = yield* makeDependencies({
         descriptorProtocolVersion: ORCHESTRATION_PROTOCOL_VERSION + 1,
       });
-      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(brokerLayer));
+      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(layerBroker));
       const target = new PrimaryConnectionTarget({
         environmentId: ENVIRONMENT_ID,
         label: "Primary",
@@ -378,8 +411,8 @@ describe("ConnectionResolver", () => {
 
   it.effect("prepares a primary environment without remote capabilities", () =>
     Effect.gen(function* () {
-      const brokerLayer = yield* makeDependencies();
-      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(brokerLayer));
+      const layerBroker = yield* makeDependencies();
+      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(layerBroker));
       const target = new PrimaryConnectionTarget({
         environmentId: ENVIRONMENT_ID,
         label: "Primary",
@@ -402,7 +435,7 @@ describe("ConnectionResolver", () => {
   it.effect("authorizes a desktop primary environment with its platform bearer token", () =>
     Effect.gen(function* () {
       const bearerInputs = yield* Ref.make<ReadonlyArray<{ token: string; method: string }>>([]);
-      const brokerLayer = yield* makeDependencies({
+      const layerBroker = yield* makeDependencies({
         primaryBearerToken: "desktop-bearer",
         authorizeBearer: (input) =>
           Ref.update(bearerInputs, (values) => [
@@ -421,7 +454,7 @@ describe("ConnectionResolver", () => {
             }),
           ),
       });
-      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(brokerLayer));
+      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(layerBroker));
       const target = new PrimaryConnectionTarget({
         environmentId: ENVIRONMENT_ID,
         label: "Primary",
@@ -453,7 +486,7 @@ describe("ConnectionResolver", () => {
         httpBaseUrl: ENDPOINT.httpBaseUrl,
         wsBaseUrl: ENDPOINT.wsBaseUrl,
       });
-      const brokerLayer = yield* makeDependencies({
+      const layerBroker = yield* makeDependencies({
         credentials: [["saved-1", new BearerConnectionCredential({ token: "secret-bearer" })]],
         authorizeBearer: (input) =>
           Ref.update(bearerInputs, (values) => [
@@ -472,7 +505,7 @@ describe("ConnectionResolver", () => {
             }),
           ),
       });
-      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(brokerLayer));
+      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(layerBroker));
 
       expect(
         (yield* broker.prepare(catalogEntry(target, Option.some(profile)))).socketUrl,
@@ -487,8 +520,8 @@ describe("ConnectionResolver", () => {
         environmentId: ENVIRONMENT_ID,
         label: "Cloud",
       });
-      const brokerLayer = yield* makeDependencies();
-      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(brokerLayer));
+      const layerBroker = yield* makeDependencies();
+      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(layerBroker));
 
       expect(yield* broker.prepare(catalogEntry(target))).toEqual({
         environmentId: ENVIRONMENT_ID,
@@ -513,7 +546,7 @@ describe("ConnectionResolver", () => {
         environmentId: ENVIRONMENT_ID,
         label: "Cloud",
       });
-      const brokerLayer = yield* makeDependencies({
+      const layerBroker = yield* makeDependencies({
         authorizeDpop: (input) =>
           Effect.succeed({
             environmentId: input.expectedEnvironmentId,
@@ -527,7 +560,7 @@ describe("ConnectionResolver", () => {
             },
           }).pipe(Effect.withSpan("test.remote.authorizeDpop")),
       });
-      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(brokerLayer));
+      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(layerBroker));
 
       yield* broker
         .prepare(catalogEntry(target))
@@ -558,7 +591,7 @@ describe("ConnectionResolver", () => {
         label: "SSH",
         target: SSH_TARGET,
       });
-      const brokerLayer = yield* makeDependencies({
+      const layerBroker = yield* makeDependencies({
         prepareSsh: (input) =>
           Ref.update(preparedTargets, (values) => [...values, input.target]).pipe(
             Effect.as({
@@ -585,7 +618,7 @@ describe("ConnectionResolver", () => {
             }),
           ),
       });
-      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(brokerLayer));
+      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(layerBroker));
 
       expect(
         (yield* broker.prepare(catalogEntry(target, Option.some(profile)))).socketUrl,
@@ -636,7 +669,7 @@ describe("ConnectionResolver", () => {
             ),
         });
         let savedProfile: ConnectionProfile = profile;
-        const brokerLayer = yield* makeDependencies({
+        const layerBroker = yield* makeDependencies({
           profileStore: {
             get: () => Effect.sync(() => Option.some(savedProfile)),
             put: (value) =>
@@ -669,7 +702,7 @@ describe("ConnectionResolver", () => {
             }),
         });
         const broker = yield* ConnectionResolver.ConnectionResolver.pipe(
-          Effect.provide(brokerLayer),
+          Effect.provide(layerBroker),
         );
         const prepare = broker
           .prepare(entry)
@@ -702,10 +735,10 @@ describe("ConnectionResolver", () => {
         detail: "Relay environment connection timed out.",
         traceId: "relay-trace",
       });
-      const brokerLayer = yield* makeDependencies({
+      const layerBroker = yield* makeDependencies({
         authorizeDpop: () => Effect.fail(authorizationError),
       });
-      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(brokerLayer));
+      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(layerBroker));
       const error = yield* Effect.flip(broker.prepare(catalogEntry(target)));
 
       expect(error).toBe(authorizationError);

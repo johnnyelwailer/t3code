@@ -8,7 +8,10 @@ import type { ProjectThread } from "~/t3team/t3team-types";
 
 const state = vi.hoisted(() => ({ projection: null as unknown }));
 
-vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => vi.fn(),
+  useParams: () => ({ threadId: undefined }),
+}));
 vi.mock("../../state/entities", () => ({
   useThreadProjection: () => ({ projection: state.projection }),
   useThreadShells: () => [],

@@ -1,79 +1,35 @@
 import type {
   CloudBrokerStatus,
   CloudSessionAttachResult,
-  CloudSessionFailureReason,
   CloudSessionPairingResult,
 } from "@t3tools/contracts";
 
-import { readDesktopPrimaryBearerToken } from "~/environments/primary/desktopAuth";
-import { resolvePrimaryEnvironmentHttpUrl } from "~/environments/primary/target";
+import { credentialRequest } from "~/account/t3team-credentialRequest";
 
 /**
- * This machine's server, asked about the Nexi broker (`/api/t3team/cloud-broker/*`). The routes
- * authenticate like the environment API, so the call carries the desktop's primary bearer when there
- * is one and the same-origin session cookie otherwise.
+ * This machine's server, asked about the Nexi broker (`/api/t3team/cloud-broker/*`): whether it is
+ * on and which account signs in to it, and attaching to a ready session. The sign-in itself is the
+ * account's (`~/account/t3team-accountsApi`).
  */
 
-const REQUEST_TIMEOUT_MS = 20_000;
 /** Pairing writes to the VM's database, which can be slow while the session is busy. */
 const PAIRING_TIMEOUT_MS = 75_000;
-
-export class CloudBrokerRequestError extends Error {
-  constructor(
-    message: string,
-    /** The server's failure reason when it gave one (`broker_sign_in_required`, …). */
-    readonly reason: CloudSessionFailureReason | "unauthorized" | "network",
-  ) {
-    super(message);
-    this.name = "CloudBrokerRequestError";
-  }
-}
-
-async function request<T>(
-  method: "GET" | "POST",
-  path: string,
-  body?: object,
-  timeoutMs = REQUEST_TIMEOUT_MS,
-): Promise<T> {
-  const bearer = await readDesktopPrimaryBearerToken().catch(() => null);
-  let response: Response;
-  try {
-    response = await fetch(resolvePrimaryEnvironmentHttpUrl(`/api/t3team/cloud-broker/${path}`), {
-      method,
-      // Bearer (desktop) or the same-origin session cookie (web), never both: a credentialed
-      // cross-origin read is refused by CORS anyway.
-      credentials: bearer ? "omit" : "include",
-      headers: {
-        ...(bearer ? { authorization: `Bearer ${bearer}` } : {}),
-        ...(body ? { "content-type": "application/json" } : {}),
-      },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-  } catch (cause) {
-    throw new CloudBrokerRequestError(
-      `Could not reach this machine's server: ${String(cause)}`,
-      "network",
-    );
-  }
-  const json = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
-  if (response.ok) return json as T;
-  if (response.status === 401)
-    throw new CloudBrokerRequestError(
-      "This app is not signed in to its own server.",
-      "unauthorized",
-    );
-  throw new CloudBrokerRequestError(
-    json.message ?? "The cloud-session service answered unexpectedly.",
-    (json.error as CloudSessionFailureReason | undefined) ?? "broker_unavailable",
-  );
-}
+const fallbackReason = "broker_unavailable";
 
 export const cloudBrokerApi = {
-  status: () => request<CloudBrokerStatus>("GET", "status"),
-  signIn: () => request<CloudBrokerStatus>("POST", "sign-in"),
-  signOut: () => request<{ ok: true }>("POST", "sign-out"),
-  attach: (sessionId: string) => request<CloudSessionAttachResult>("POST", "attach", { sessionId }),
+  status: () =>
+    credentialRequest<CloudBrokerStatus>("GET", "/api/t3team/cloud-broker/status", {
+      fallbackReason,
+    }),
+  attach: (sessionId: string, environmentId: string) =>
+    credentialRequest<CloudSessionAttachResult>("POST", "/api/t3team/cloud-broker/attach", {
+      body: { sessionId, environmentId },
+      fallbackReason,
+    }),
   pair: (sessionId: string) =>
-    request<CloudSessionPairingResult>("POST", "pairing", { sessionId }, PAIRING_TIMEOUT_MS),
+    credentialRequest<CloudSessionPairingResult>("POST", "/api/t3team/cloud-broker/pairing", {
+      body: { sessionId },
+      timeoutMs: PAIRING_TIMEOUT_MS,
+      fallbackReason,
+    }),
 };

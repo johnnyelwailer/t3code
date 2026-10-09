@@ -5,17 +5,17 @@ import * as Clock from "effect/Clock";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Encoding from "effect/Encoding";
+import * as Base64Url from "effect/encoding/Base64Url";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Schedule from "effect/Schedule";
 import * as TestClock from "effect/testing/TestClock";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
-import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
-import { FetchHttpClient } from "effect/unstable/http";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import { FetchHttpClient } from "effect/http";
 
 import * as ServerConfig from "../config.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
@@ -62,8 +62,8 @@ const decodeStoredTokenJson = Schema.decodeUnknownOption(StoredTokenJson);
 
 // A JWT whose payload claims { email: "theo@example.test" }.
 const idTokenWithEmail = (() => {
-  const header = Encoding.encodeBase64Url(JSON.stringify({ alg: "none" }));
-  const payload = Encoding.encodeBase64Url(JSON.stringify({ email: "theo@example.test" }));
+  const header = Base64Url.encode(JSON.stringify({ alg: "none" }));
+  const payload = Base64Url.encode(JSON.stringify({ email: "theo@example.test" }));
   return `${header}.${payload}.`;
 })();
 

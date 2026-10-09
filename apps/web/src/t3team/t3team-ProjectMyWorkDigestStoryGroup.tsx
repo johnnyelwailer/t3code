@@ -3,11 +3,15 @@ import type { MouseEvent, ReactNode } from "react";
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import { digestStoryProgress } from "~/t3team/t3team-projectMyWorkDigestFacts";
+import type { DigestStoryAdjacency } from "~/t3team/t3team-projectMyWorkDigestAdjacency";
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import type { ProjectTicket } from "~/t3team/t3team-types";
+import { DigestAdjacentWork } from "~/t3team/t3team-ProjectMyWorkDigestAdjacentPills";
 import { DigestAgentDots } from "~/t3team/t3team-ProjectMyWorkDigestAgentDots";
 import { DigestProjectChip, DigestStatusDot } from "~/t3team/t3team-ProjectMyWorkDigestRows";
-import { WorkItemPersonAvatar } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
+import { DigestPrChips } from "~/t3team/t3team-ProjectMyWorkDigestPrChips";
+import { digestPrsFor } from "~/t3team/t3team-projectMyWorkDigestFacts";
+import { digestRepoLabeler } from "~/t3team/t3team-projectMyWorkDigestRepoLabels";
 
 /**
  * A story's task progress as a compact fraction plus a 40px track. The fraction is the number
@@ -36,14 +40,20 @@ export function DigestStoryGroupHeader({
   story,
   graph,
   nowMs,
+  showPrs = true,
   onOpenTicket,
 }: {
   story: ProjectTicket;
   graph: DigestGraph;
   nowMs: number;
+  showPrs?: boolean | undefined;
   onOpenTicket?: ((ticketId: string) => void) | undefined;
 }) {
   const progress = digestStoryProgress(graph, story.id);
+  // PRs named after the story itself (the usual case once work is split into subtasks): they are
+  // the viewer's work as much as a subtask's, so they stay on the card instead of disappearing —
+  // unless the story is also a row somewhere, which carries them already.
+  const storyPrs = showPrs ? digestPrsFor(graph, story.id) : [];
   const claims = graph.claims.filter((c) => c.ticketId === story.id);
   const onAnchorClick = (e: MouseEvent) => {
     e.stopPropagation();
@@ -53,107 +63,70 @@ export function DigestStoryGroupHeader({
     }
   };
   return (
-    <div
-      className="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 border-b border-border/60 bg-muted/40 py-1.5 px-3 text-xs"
-      onClick={() =>
-        onOpenTicket ? onOpenTicket(story.id) : window.open(story.ref.url, "_blank", "noopener")
-      }
-    >
-      <JiraIssueTypeIcon
-        issueType={story.issueType}
-        issueTypeIconUrl={story.issueTypeIconUrl}
-        className="size-3.5 shrink-0"
-      />
-      <a
-        href={story.ref.url}
-        className="font-mono text-2xs text-muted-foreground hover:text-foreground hover:underline"
-        onClick={onAnchorClick}
+    <div className="border-b border-border/60 bg-muted/40">
+      <div
+        className="flex min-w-0 cursor-pointer flex-nowrap items-center gap-2 overflow-hidden px-3 py-1.5 text-xs"
+        onClick={() =>
+          onOpenTicket ? onOpenTicket(story.id) : window.open(story.ref.url, "_blank", "noopener")
+        }
       >
-        {story.ref.displayId}
-      </a>
-      <a
-        href={story.ref.url}
-        className="min-w-0 truncate font-medium hover:underline"
-        onClick={onAnchorClick}
-      >
-        {story.ref.title}
-      </a>
-      <DigestProjectChip graph={graph} projectId={story.projectId} />
-      <span className="ml-auto flex shrink-0 items-center gap-2">
-        {progress ? <DigestStoryProgress done={progress.done} total={progress.total} /> : null}
-        <DigestAgentDots claims={claims} nowMs={nowMs} />
-        <DigestStatusDot status={story.status} />
-      </span>
-    </div>
-  );
-}
-
-/**
- * The story's children that are NOT surfaced as full rows above — the "rest of this story" at a
- * glance. Each entry is a compact chip: type icon, linked key, truncated title, status, and the
- * assignee's avatar (viewer keeps the ring), so you can see what the other subtasks and bugs are
- * on and who they're on, without expanding them.
- */
-export function DigestOtherChildren({
-  items: children,
-  viewerName,
-}: {
-  items: readonly ProjectTicket[];
-  viewerName: string;
-}) {
-  if (children.length === 0) return null;
-  return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border/50 bg-muted/20 px-3 py-1.5">
-      {children.map((child) => (
+        <JiraIssueTypeIcon
+          issueType={story.issueType}
+          issueTypeIconUrl={story.issueTypeIconUrl}
+          className="size-3.5 shrink-0"
+        />
         <a
-          key={child.id}
-          href={child.ref.url}
-          className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-background/70 px-1.5 py-0.5 text-2xs text-muted-foreground ring-1 ring-border/50 hover:text-foreground hover:ring-border"
-          onClick={(e) => e.stopPropagation()}
+          href={story.ref.url}
+          className="shrink-0 font-mono text-2xs text-muted-foreground hover:text-foreground hover:underline"
+          onClick={onAnchorClick}
         >
-          <JiraIssueTypeIcon
-            issueType={child.issueType}
-            issueTypeIconUrl={child.issueTypeIconUrl}
-            className="size-3 shrink-0"
-          />
-          <span className="shrink-0 font-mono text-3xs leading-none -translate-y-px">
-            {child.ref.displayId}
-          </span>
-          <span className="truncate leading-none -translate-y-px">{child.ref.title}</span>
-          <span className="shrink-0 text-3xs leading-none text-foreground/50 -translate-y-px">
-            {child.status}
-          </span>
-          {child.assignee ? (
-            <WorkItemPersonAvatar
-              person={{ displayName: child.assignee }}
-              size="sm"
-              isCurrentUser={child.assignee === viewerName}
-            />
-          ) : null}
+          {story.ref.displayId}
         </a>
-      ))}
+        <a
+          href={story.ref.url}
+          className="min-w-0 flex-1 truncate font-medium hover:underline"
+          onClick={onAnchorClick}
+        >
+          {story.ref.title}
+        </a>
+        <DigestProjectChip graph={graph} projectId={story.projectId} />
+        <span className="flex shrink-0 items-center gap-2">
+          {progress ? <DigestStoryProgress done={progress.done} total={progress.total} /> : null}
+          <DigestAgentDots claims={claims} nowMs={nowMs} />
+          <DigestStatusDot status={story.status} />
+        </span>
+      </div>
+      {storyPrs.length > 0 ? (
+        <div className="@container/prs flex flex-wrap items-center gap-x-2 gap-y-1 px-3 pb-1.5">
+          <DigestPrChips
+            prs={storyPrs}
+            repoLabel={digestRepoLabeler(graph.changeRequests.map((pr) => pr.repo))}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
 
 /**
- * One story group in the main lane: the story header, then its tasks nested under it. Items
- * without a story parent render flat in a plain panel instead.
+ * One story group in the main lane, in three tiers of attention: the story header and the
+ * viewer's own rows at full weight, then adjacent active work as pills, then the rest as one
+ * count. Items without a story parent render flat in a plain panel instead.
  */
 export function DigestStoryGroup({
   story,
   graph,
   nowMs,
-  otherChildren,
-  viewerName,
+  adjacency,
+  showStoryPrs,
   onOpenTicket,
   children,
 }: {
   story: ProjectTicket | null;
   graph: DigestGraph;
   nowMs: number;
-  otherChildren?: readonly ProjectTicket[];
-  viewerName: string;
+  adjacency?: DigestStoryAdjacency | undefined;
+  showStoryPrs?: boolean | undefined;
   onOpenTicket?: ((ticketId: string) => void) | undefined;
   children: ReactNode;
 }) {
@@ -164,11 +137,14 @@ export function DigestStoryGroup({
           story={story}
           graph={graph}
           nowMs={nowMs}
+          showPrs={showStoryPrs}
           onOpenTicket={onOpenTicket}
         />
       ) : null}
       <div className="divide-y divide-border/50">{children}</div>
-      {story ? <DigestOtherChildren items={otherChildren ?? []} viewerName={viewerName} /> : null}
+      {story && adjacency ? (
+        <DigestAdjacentWork adjacency={adjacency} onOpenTicket={onOpenTicket} />
+      ) : null}
     </T3SurfacePanel>
   );
 }

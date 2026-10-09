@@ -8,6 +8,10 @@
  *   the imported note when it has text. A draft proposal (V1 kept it on a hidden
  *   carrier row) becomes the `draft-mutation` artifact whose id is the draft id,
  *   so the reviewer's verdict route and the client's draft ingest find it.
+ * - A V1 transcript-copy fork duplicated its parent's system rows, attachments
+ *   included, so a copied widget or draft derives the same artifact id as the
+ *   parent's. The thread that claims an id first keeps it; a copy in another
+ *   thread is re-keyed to `<artifact id>@<thread id>` (`legacyForkCopyArtifact`).
  * - V1 inter-agent deliveries still pending at shutdown: every `actor` row of a
  *   recipient whose reaction turn never ran. A reaction turn is a hidden user
  *   row whose ext `actor.messageIds` names its batch; older single-delivery
@@ -70,6 +74,32 @@ export function legacySystemRowArtifacts(
     ext: { ...ext, attachments: shown },
   });
   return [...drafts, ...artifacts.map((artifact) => ({ ...artifact, createdAt: row.createdAt }))];
+}
+
+/** The artifact id a fork copy gets when its original id belongs to another thread. */
+const legacyForkCopyArtifactId = (artifactId: string, threadId: string) =>
+  `${artifactId}@${threadId}`;
+
+const isDraftPayload = (payload: unknown): payload is DraftAttachment =>
+  typeof payload === "object" &&
+  payload !== null &&
+  (payload as { readonly kind?: unknown }).kind === "draft-mutation" &&
+  typeof (payload as { readonly draft?: unknown }).draft === "object";
+
+/**
+ * `artifact` re-keyed for its own thread, deterministically, so a re-run upserts the same row.
+ * A widget keeps its payload (the widget id is the widget's identity, not the row's); a draft
+ * carries its id in the payload too, so the verdict route resolves the copy, not the original.
+ */
+export function legacyForkCopyArtifact(
+  artifact: T3TeamThreadArtifactInput,
+): T3TeamThreadArtifactInput {
+  const id = legacyForkCopyArtifactId(artifact.id, artifact.threadId);
+  const payload =
+    artifact.kind === T3TEAM_DRAFT_MUTATION_ARTIFACT_KIND && isDraftPayload(artifact.payload)
+      ? { ...artifact.payload, draft: { ...artifact.payload.draft, id } }
+      : artifact.payload;
+  return { ...artifact, id, payload };
 }
 
 export interface LegacyActorRow {

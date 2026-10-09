@@ -12,7 +12,7 @@
  * T3 process at transition time (who was eating memory).
  */
 
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Effect from "effect/Effect";
 
 export default Effect.gen(function* () {

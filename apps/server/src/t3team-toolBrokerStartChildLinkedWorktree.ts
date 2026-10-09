@@ -11,6 +11,7 @@ import * as Schema from "effect/Schema";
 import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
+  isLinkedRepositoryReady,
   REFERENCES_DIR_NAME,
 } from "./t3team-project-repository-utils.ts";
 import {
@@ -71,9 +72,9 @@ export const resolveLinkedRepositoryWorktree = (input: {
         `No linked repository matched '${input.repoFullName}' in this project workspace.`,
       );
     }
-    if (linkedRepository.status === "failed") {
+    if (!isLinkedRepositoryReady(linkedRepository)) {
       return yield* Effect.fail(
-        `Linked repository '${input.repoFullName}' is not ready: ${linkedRepository.error ?? "bootstrap failed"}.`,
+        `Linked repository '${input.repoFullName}' is not ready: ${linkedRepository.error ?? (linkedRepository.status === "pending" ? "it is still being cloned" : "bootstrap failed")}.`,
       );
     }
 

@@ -11,6 +11,13 @@
  * or isolated-vm) is the real sandbox if/when untrusted workflows are in scope.
  */
 
+import type { LaunchedThreadPrimitives } from "./t3team-sdk.launchedThreadTypes.ts";
+import { createCallRef } from "./t3team-sdk.callRef.ts";
+import { LaunchedThreadError } from "./t3team-sdk.launchedThreads.ts";
+import {
+  RecipeConfigError,
+  type RecipeConfigPrimitives,
+} from "./t3team-sdk.recipeConfigPrimitive.ts";
 import * as Schema from "effect/Schema";
 
 import { deterministicGlobals, hostSource, type DeterministicSource } from "@runbook/ts/globals";
@@ -75,6 +82,8 @@ export function buildWorkflowGlobals(opts: {
   readonly schedule: SchedulePrimitives;
   readonly retry: RetryPrimitives;
   readonly signals: SignalPrimitives;
+  readonly launched: LaunchedThreadPrimitives;
+  readonly config: RecipeConfigPrimitives;
   /** The `@runbook/core/authoring` `RunbookContext` subset a body's `run(ctx)` sees. Optional:
    * older globals shapes and legacy zero-arg bodies never reference `ctx` at all. */
   readonly ctx?: unknown;
@@ -132,6 +141,16 @@ export function buildWorkflowGlobals(opts: {
     // `getSignalSource` (design 42) binds a durable source instance; gated by the
     // `"source:<name>"` capability per source.
     getSignalSource: opts.signals.getSignalSource,
+    // `waitForAny` parks on several `handle.on(...)` branches; each carries its source's gate.
+    waitForAny: opts.signals.waitForAny,
+    // `launchThread` launches or finds a top-level thread by key (gated by `"launch"`);
+    // `setRunFacts` writes the run's own launch-thread facts (a recipe card's summary).
+    launchThread: opts.launched.launchThread,
+    setRunFacts: opts.launched.setRunFacts,
+    // `getConfig().for({ repository })` reads the run's recipe config (G12), journaled.
+    getConfig: opts.config.getConfig,
+    // `callRef(ref, input, { outputs, fallback })` calls a config reference, failing closed.
+    callRef: createCallRef(p.workflow as Parameters<typeof createCallRef>[0]),
     // The built-in signal-source declarations (design 42 §7): the loader blanks every import in
     // a body, so `ScmChangeRequestWatch` & co. resolve from this surface, exactly like
     // `defineWorkflow` and the error classes.
@@ -165,5 +184,7 @@ export function buildWorkflowGlobals(opts: {
     CancelledError,
     ReplayDriftError,
     RetryExhaustedError,
+    LaunchedThreadError,
+    RecipeConfigError,
   };
 }

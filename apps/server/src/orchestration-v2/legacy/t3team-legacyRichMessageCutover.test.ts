@@ -2,9 +2,9 @@ import { assert, it } from "@effect/vitest";
 import { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
-import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "../../persistence/Sqlite.ts";
 import * as ThreadArtifactsStore from "../../t3team-v2/t3team-threadArtifactsStore.ts";
 import {
   createTestThread,
@@ -207,6 +207,122 @@ it.layer(makeLayer("t3team-legacy-rich"))("runLegacyRichMessageCutover", (it) =>
       );
 
       assert.isNull(yield* runLegacyRichMessageCutover);
+    }),
+  );
+});
+
+it.layer(makeLayer("t3team-legacy-rich-fork-copies"))("runLegacyRichMessageCutover", (it) => {
+  // A V1 transcript-copy fork duplicated the parent's system rows (same attachments, same
+  // created_at, a `fork:<child>:<uuid>` message id). The artifact id of a widget or draft is
+  // derived from the attachment, so the copy used to collide with the parent's artifact and
+  // abort the whole cutover on every start.
+  const system = { author: { kind: "system" } };
+  const seedForkCopies = Effect.gen(function* () {
+    for (const name of ["parent", "fork"]) yield* createTestThread(id(name));
+    yield* insertRow({
+      id: "s:widget",
+      thread: "parent",
+      role: "system",
+      minute: 1,
+      ext: { ...system, attachments: [widget] },
+    });
+    yield* insertRow({
+      id: `fork:${id("fork")}:copy-widget`,
+      thread: "fork",
+      role: "system",
+      minute: 1,
+      ext: { ...system, attachments: [widget] },
+    });
+    yield* insertRow({
+      id: "carrier-1",
+      thread: "parent",
+      role: "system",
+      minute: 2,
+      ext: { ...system, visibleToUser: false, attachments: [draft] },
+    });
+    yield* insertRow({
+      id: `fork:${id("fork")}:copy-draft`,
+      thread: "fork",
+      role: "system",
+      minute: 2,
+      ext: { ...system, visibleToUser: false, attachments: [draft] },
+    });
+  });
+  const listArtifacts = (thread: string) =>
+    Effect.flatMap(ThreadArtifactsStore.T3TeamThreadArtifactsStore, (store) =>
+      store.listByThread(id(thread)),
+    );
+
+  it.effect("gives fork copies their own artifact ids and completes", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* seedForkCopies;
+      // A previous boot carried the parent's widget, then failed on the fork copy.
+      yield* (yield* ThreadArtifactsStore.T3TeamThreadArtifactsStore).upsert({
+        id: "widget:chart-1",
+        threadId: id("parent"),
+        messageId: null,
+        kind: "widget",
+        payload: widget,
+        createdAt: at(1),
+      });
+
+      assert.deepStrictEqual(yield* runLegacyRichMessageCutover, {
+        artifacts: 4,
+        pendingDeliveries: 0,
+        heldThreads: 0,
+      });
+
+      // The original thread keeps the original ids.
+      const parent = yield* listArtifacts("parent");
+      assert.deepStrictEqual(
+        parent.map((artifact) => [artifact.id, artifact.kind]),
+        [
+          ["widget:chart-1", "widget"],
+          ["jira-draft:carrier-1", "draft-mutation"],
+        ],
+      );
+      assert.deepStrictEqual(parent[1]?.payload, draft);
+
+      // The fork copy gets ids derived from the original id and its own thread id; the widget
+      // payload is unchanged (it renders as before) and the draft names its new id.
+      const forkWidgetId = `widget:chart-1@${id("fork")}`;
+      const forkDraftId = `jira-draft:carrier-1@${id("fork")}`;
+      const fork = yield* listArtifacts("fork");
+      assert.deepStrictEqual(
+        fork.map((artifact) => [artifact.id, artifact.kind, artifact.createdAt]),
+        [
+          [forkWidgetId, "widget", at(1)],
+          [forkDraftId, "draft-mutation", at(2)],
+        ],
+      );
+      assert.deepStrictEqual(fork[0]?.payload, widget);
+      assert.deepStrictEqual(fork[1]?.payload, {
+        ...draft,
+        draft: { ...draft.draft, id: forkDraftId },
+      });
+
+      const ledger = yield* sql<{ readonly step: string }>`SELECT step FROM t3team_v2_cutover`;
+      assert.deepStrictEqual(
+        ledger.map((row) => row.step),
+        ["v1-rich-messages"],
+      );
+
+      // Idempotent: a forced re-run writes the same rows again.
+      yield* sql`DELETE FROM t3team_v2_cutover WHERE step = 'v1-rich-messages'`;
+      assert.deepStrictEqual(yield* runLegacyRichMessageCutover, {
+        artifacts: 4,
+        pendingDeliveries: 0,
+        heldThreads: 0,
+      });
+      assert.deepStrictEqual(
+        (yield* listArtifacts("fork")).map((artifact) => artifact.id),
+        [forkWidgetId, forkDraftId],
+      );
+      assert.strictEqual(
+        (yield* listArtifacts("parent")).length + (yield* listArtifacts("fork")).length,
+        4,
+      );
     }),
   );
 });

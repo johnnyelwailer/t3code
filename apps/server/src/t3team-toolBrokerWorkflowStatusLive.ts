@@ -9,7 +9,7 @@ import type { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import {
   makeWorkflowStatusToolHandlers,
   type T3TeamWorkflowStatusToolHandlers,

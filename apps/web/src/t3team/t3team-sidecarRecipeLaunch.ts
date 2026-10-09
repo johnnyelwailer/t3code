@@ -5,6 +5,7 @@ import { runThreadBootstrapKickoff } from "~/t3team/chat/t3team-runThreadBootstr
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { WORKFLOW_BACKED_BUNDLED_RECIPE_IDS } from "~/t3team/t3team-bundledRecipeWorkflowIds";
 import type { T3TeamKickoffLaunchConfig } from "~/t3team/t3team-kickoffLaunchConfig";
+import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 
 export type BundledRecipeWorkflow = Extract<T3TeamKickoffWorkflow, { kind: "recipe" }>;
@@ -62,38 +63,33 @@ export function buildBundledSidecarRecipeKickoffMessage(input: {
   return recipe.promptTemplate ?? recipe.shortDescription;
 }
 
-export async function launchBundledSidecarRecipeThread(input: {
+type CreateSidecarRecipeThread = (input: {
+  kickoffMessage: string;
+  kickoffWorkflow?: BundledRecipeWorkflow;
+  launchConfig: T3TeamKickoffLaunchConfig;
+}) => unknown | Promise<unknown>;
+
+/**
+ * Creates the thread through the host's composer path, then runs the bootstrap kickoff that
+ * launches the workflow on it. The one way a sidecar card starts a recipe thread: there is no
+ * headless launch, and the launch route needs the thread, the model and the recipe paths.
+ */
+async function launchSidecarRecipeThread(input: {
   readonly backend: BackendApi | null | undefined;
   readonly environmentId: string | null | undefined;
   readonly projectId: string;
-  readonly surface: RecipeSurface;
-  readonly projectWorkspaceRoot?: string | undefined;
-  readonly recipeId: string;
-  readonly parameters?: Record<string, unknown> | undefined;
+  readonly title: string;
+  readonly kickoffMessage: string;
+  readonly kickoffWorkflow: BundledRecipeWorkflow | null;
   readonly launchConfig: T3TeamKickoffLaunchConfig;
-  readonly createThread: (input: {
-    kickoffMessage: string;
-    kickoffWorkflow?: BundledRecipeWorkflow;
-    launchConfig: T3TeamKickoffLaunchConfig;
-  }) => unknown | Promise<unknown>;
+  readonly createThread: CreateSidecarRecipeThread;
 }): Promise<boolean> {
-  const recipe = getBundledT3TeamRecipe(input.recipeId);
-  if (!recipe || !input.backend || !input.environmentId) {
+  if (!input.backend || !input.environmentId) {
     return false;
   }
-
-  const kickoffWorkflow = buildBundledSidecarRecipeWorkflowLaunch({
-    recipeId: input.recipeId,
-    surface: input.surface,
-    projectWorkspaceRoot: input.projectWorkspaceRoot,
-    ...(input.parameters ? { parameters: input.parameters } : {}),
-  });
-  const kickoffMessage = buildBundledSidecarRecipeKickoffMessage({
-    recipeId: input.recipeId,
-    ...(input.parameters ? { parameters: input.parameters } : {}),
-  });
+  const kickoffWorkflow = input.kickoffWorkflow;
   const threadId = await input.createThread({
-    kickoffMessage,
+    kickoffMessage: input.kickoffMessage,
     ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
     launchConfig: input.launchConfig,
   });
@@ -115,8 +111,8 @@ export async function launchBundledSidecarRecipeThread(input: {
     environmentId: input.environmentId,
     threadId,
     canonicalProjectId: input.projectId,
-    title: recipe.title,
-    initialUserMessage: kickoffMessage,
+    title: input.title,
+    initialUserMessage: input.kickoffMessage,
     kickoffModelSelection: input.launchConfig.selection,
     kickoffRuntimeMode: input.launchConfig.runtimeMode,
     kickoffInteractionMode: input.launchConfig.interactionMode,
@@ -128,4 +124,64 @@ export async function launchBundledSidecarRecipeThread(input: {
   });
 
   return true;
+}
+
+export async function launchBundledSidecarRecipeThread(input: {
+  readonly backend: BackendApi | null | undefined;
+  readonly environmentId: string | null | undefined;
+  readonly projectId: string;
+  readonly surface: RecipeSurface;
+  readonly projectWorkspaceRoot?: string | undefined;
+  readonly recipeId: string;
+  readonly parameters?: Record<string, unknown> | undefined;
+  readonly launchConfig: T3TeamKickoffLaunchConfig;
+  readonly createThread: CreateSidecarRecipeThread;
+}): Promise<boolean> {
+  const recipe = getBundledT3TeamRecipe(input.recipeId);
+  if (!recipe) {
+    return false;
+  }
+  return launchSidecarRecipeThread({
+    backend: input.backend,
+    environmentId: input.environmentId,
+    projectId: input.projectId,
+    title: recipe.title,
+    kickoffMessage: buildBundledSidecarRecipeKickoffMessage({
+      recipeId: input.recipeId,
+      ...(input.parameters ? { parameters: input.parameters } : {}),
+    }),
+    kickoffWorkflow: buildBundledSidecarRecipeWorkflowLaunch({
+      recipeId: input.recipeId,
+      surface: input.surface,
+      projectWorkspaceRoot: input.projectWorkspaceRoot,
+      ...(input.parameters ? { parameters: input.parameters } : {}),
+    }),
+    launchConfig: input.launchConfig,
+    createThread: input.createThread,
+  });
+}
+
+/** A discovered (project or pack) quick start with a workflow: the RunToggle card's "on". */
+export async function launchSidecarRecipeQuickStartThread(input: {
+  readonly backend: BackendApi | null | undefined;
+  readonly environmentId: string | null | undefined;
+  readonly projectId: string;
+  readonly quickStart: Pick<T3TeamSidecarRecipeQuickStart, "title" | "prompt" | "workflow">;
+  readonly launchConfig: T3TeamKickoffLaunchConfig;
+  readonly createThread: CreateSidecarRecipeThread;
+}): Promise<boolean> {
+  const workflow = input.quickStart.workflow;
+  if (workflow?.kind !== "recipe" || !workflow.workflowPath) {
+    return false;
+  }
+  return launchSidecarRecipeThread({
+    backend: input.backend,
+    environmentId: input.environmentId,
+    projectId: input.projectId,
+    title: input.quickStart.title,
+    kickoffMessage: input.quickStart.prompt,
+    kickoffWorkflow: workflow,
+    launchConfig: input.launchConfig,
+    createThread: input.createThread,
+  });
 }

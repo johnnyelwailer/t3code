@@ -35,10 +35,10 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import { ResourcePressureEventRepositoryLive } from "./persistence/Layers/t3team-ResourcePressureEvents.ts";
-import { ResourcePressureEventRepository } from "./persistence/Services/t3team-ResourcePressureEvents.ts";
+import { ResourcePressureEventRepositoryLive } from "./persistence/t3team-ResourcePressureEvents.ts";
+import { ResourcePressureEventRepository } from "./persistence/t3team-ResourcePressureEvents.ts";
 import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import {

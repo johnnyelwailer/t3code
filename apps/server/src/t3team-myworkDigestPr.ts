@@ -9,11 +9,28 @@
  */
 
 import { ProjectId, type PullRequestListEntry } from "@t3tools/contracts";
-import * as DateTime from "effect/DateTime";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
 import type { T3TeamDigestProjectSource } from "./t3team-myworkDigestTypes.ts";
+import {
+  digestEnrichmentFields,
+  enrichPr,
+  toDigestPerson,
+  type PrEnrichment,
+} from "./t3team-myworkDigestPrEnrich.ts";
+import {
+  isRateLimitedFailure,
+  resolveDigestListing,
+  type DigestListingMemory,
+} from "./t3team-myworkDigestRateLimited.ts";
+
+export {
+  digestEnrichmentFields,
+  enrichPr,
+  type PrEnrichment,
+} from "./t3team-myworkDigestPrEnrich.ts";
 
 const DIGEST_PR_LIMIT = 50;
 /**
@@ -24,15 +41,11 @@ const DIGEST_PR_LIMIT = 50;
  */
 const DIGEST_PR_ENRICH_LIMIT = 8;
 
-export type PrEnrichment = {
-  readonly reviewers: ReadonlyArray<{ readonly name: string; readonly login: string }>;
-  readonly unhandledReviewThreads: ReadonlyArray<{ readonly lastCommentAt?: string }>;
-  readonly body: string;
-};
-
 export type PrReadResult = {
   readonly entries: readonly PullRequestListEntry[];
   readonly note?: string;
+  /** The entries are the last good listing, served while the host rate-limits reads. */
+  readonly stale?: boolean;
   readonly enrichments?: Record<string, PrEnrichment>;
 };
 
@@ -45,53 +58,17 @@ function digestPrKey(entry: {
   return `${entry.host}:${entry.repository}#${entry.number}`;
 }
 
-function mapReviewers(detail: {
-  readonly reviewers: ReadonlyArray<{ readonly name: string | null; readonly login: string }>;
-}): PrEnrichment["reviewers"] {
-  return detail.reviewers.map((reviewer) => ({
-    name: reviewer.name !== null && reviewer.name.trim() !== "" ? reviewer.name : reviewer.login,
-    login: reviewer.login,
-  }));
-}
-
-/** Unresolved threads only, newest comment time where the host carried one. */
-function mapUnhandledThreads(activity: {
-  readonly reviewThreads: ReadonlyArray<{
-    readonly isResolved: boolean;
-    readonly comments: ReadonlyArray<{ readonly createdAt: string }>;
-  }>;
-}): PrEnrichment["unhandledReviewThreads"] {
-  return activity.reviewThreads
-    .filter((thread) => !thread.isResolved)
-    .map((thread) => {
-      const times = thread.comments
-        .map((comment) => Date.parse(comment.createdAt))
-        .filter((time) => Number.isFinite(time));
-      return times.length > 0
-        ? { lastCommentAt: DateTime.formatIso(DateTime.makeUnsafe(Math.max(...times))) }
-        : {};
-    });
-}
-
 /**
  * One open PR's enrichment, through the shared cached reads. Any per-PR
  * failure (a repo the CLI cannot see, a host blip) skips that PR's enrichment
  * instead of sinking the round — the chip simply loses its faces.
  */
 function enrichOnePr(service: PullRequestService["Service"], entry: PullRequestListEntry) {
-  const ref = {
+  return enrichPr(service, {
     projectId: entry.projectId,
     repository: entry.repository,
     number: entry.number,
-  };
-  return Effect.all([service.detail(ref), service.activity(ref)], { concurrency: 2 }).pipe(
-    Effect.map(([detail, activity]): PrEnrichment => ({
-      reviewers: mapReviewers(detail),
-      unhandledReviewThreads: mapUnhandledThreads(activity),
-      body: typeof detail.body === "string" ? detail.body : "",
-    })),
-    Effect.catch(() => Effect.succeed<PrEnrichment | undefined>(undefined)),
-  );
+  });
 }
 
 /** The digest's PR rows: the cached listing shaped for the joiner, enrichment merged in. */
@@ -113,16 +90,15 @@ export function toDigestPrEntries(
       viewerReviewRequested: entry.viewerReviewRequested,
       ...(entry.reviewDecision !== undefined ? { reviewDecision: entry.reviewDecision } : {}),
       ...(entry.checksState !== undefined ? { checksState: entry.checksState } : {}),
-      ...(enrichment !== undefined
-        ? {
-            reviewers: enrichment.reviewers,
-            unhandledReviewThreads: enrichment.unhandledReviewThreads,
-            body: enrichment.body,
-          }
-        : {}),
+      ...(entry.author?.login ? { authorLogin: entry.author.login } : {}),
+      ...(entry.author ? { author: toDigestPerson(entry.author) } : {}),
+      ...(enrichment !== undefined ? digestEnrichmentFields(enrichment) : {}),
     };
   });
 }
+
+// The last clean listing per app project, for `resolveDigestListing`.
+const lastGoodListing: DigestListingMemory<PullRequestListEntry> = new Map();
 
 export function loadPrEntries(
   appProjectId: string | undefined,
@@ -131,20 +107,33 @@ export function loadPrEntries(
     if (appProjectId === undefined) return undefined;
     const service = yield* PullRequestService;
 
-    let entries: readonly PullRequestListEntry[] = [];
-    let note: string | undefined;
     const listRead = yield* service
       .list({ state: "all", projectId: ProjectId.make(appProjectId), limit: DIGEST_PR_LIMIT })
       .pipe(Effect.result);
-    if (listRead._tag === "Success") {
-      entries = listRead.success.entries;
-    } else {
-      note =
-        listRead.failure instanceof Error
-          ? listRead.failure.message
-          : "Change requests unavailable.";
+    const { entries, stale, note } = resolveDigestListing({
+      memory: lastGoodListing,
+      projectId: appProjectId,
+      nowMs: yield* Clock.currentTimeMillis,
+      read:
+        listRead._tag === "Success"
+          ? {
+              _tag: "Success",
+              entries: listRead.success.entries,
+              hadErrors: listRead.success.errors.length > 0,
+            }
+          : {
+              _tag: "Failure",
+              rateLimited: isRateLimitedFailure(listRead.failure),
+              message:
+                listRead.failure instanceof Error
+                  ? listRead.failure.message
+                  : "Change requests unavailable.",
+            },
+    });
+    const staleField = stale ? { stale: true } : {};
+    if (entries.length === 0) {
+      return { entries, ...(note !== undefined ? { note } : {}), ...staleField };
     }
-    if (entries.length === 0) return { entries, ...(note !== undefined ? { note } : {}) };
 
     // Enrich only the freshest OPEN rows: those are the chips that show
     // faces and comment counts. Bounded and parallel through the service's
@@ -165,6 +154,7 @@ export function loadPrEntries(
     return {
       entries,
       ...(note !== undefined ? { note } : {}),
+      ...staleField,
       ...(Object.keys(enrichments).length > 0 ? { enrichments } : {}),
     };
   });
