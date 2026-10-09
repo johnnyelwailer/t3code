@@ -1,11 +1,17 @@
 /**
- * The queued-turn stall emission leaf: tell a delegated child's parent that
- * the child is stuck in the provider queue (an URGENT `thread.actor.message`,
- * the same channel as the abnormal-stop notice in
- * t3team-childAbnormalStopNotify.ts), then append the durable
- * QUEUED_TURN_STALL_NOTIFIED_KIND marker on the child. A thread with no
- * parent still gets the marker - it is the observability record and the
- * dedup fact the tracker rehydrates at boot.
+ * The queued-turn stall emission leaf: append the durable
+ * QUEUED_TURN_STALL_NOTIFIED_KIND marker on the child FIRST, then tell a
+ * delegated child's parent that the child is stuck in the provider queue (an
+ * URGENT `thread.actor.message`, the same channel as the abnormal-stop notice
+ * in t3team-childAbnormalStopNotify.ts). Marker-first makes delivery
+ * at-most-once: a crash between the two loses the notice rather than
+ * duplicating it after restart. A thread with no parent, an archived child,
+ * or a stall older than QUEUED_TURN_STALL_MAX_NOTIFY_AGE_MS gets the marker
+ * only - it is the observability record and the dedup fact the tracker
+ * rehydrates at boot.
+ *
+ * The notice carries QUEUED_TURN_STALL_NOTICE_TAG as its subject so the
+ * silent-completion check does not mistake it for the child reporting.
  *
  * Non-terminal by design: the child is NOT settled or failed here; the
  * gateway may still start its turn.
@@ -21,7 +27,11 @@ import * as Option from "effect/Option";
 import { type OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import { type ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { findHandoffParentThreadId } from "./t3team-childAbnormalStopNotify.ts";
-import { QUEUED_TURN_STALL_NOTIFIED_KIND } from "./t3team-queuedTurnStall.ts";
+import {
+  QUEUED_TURN_STALL_MAX_NOTIFY_AGE_MS,
+  QUEUED_TURN_STALL_NOTICE_TAG,
+  QUEUED_TURN_STALL_NOTIFIED_KIND,
+} from "./t3team-queuedTurnStall.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 
 /** The parent-facing notice: explicitly a stall, not a failure. */
@@ -32,7 +42,7 @@ export function buildQueuedTurnStallNotice(input: {
 }): string {
   const minutes = Math.max(1, Math.round(input.stalledMs / 60_000));
   return (
-    `[Child stalled in provider queue] Child «${input.childTitle}» (thread ${input.childThreadId}) ` +
+    `${QUEUED_TURN_STALL_NOTICE_TAG} Child «${input.childTitle}» (thread ${input.childThreadId}) ` +
     `has had a turn queued for about ${minutes} min without the provider starting it. ` +
     `It is stalled, not failed: the turn may still start later. ` +
     `You may nudge it (send it a message) or re-dispatch the work to a new child.`
@@ -59,40 +69,14 @@ export const makeQueuedTurnStallNotifier =
           .pipe(Effect.orElseSucceed(() => Option.none())),
       );
       if (!child) return;
-      const parentThreadId = findHandoffParentThreadId(child.activities);
+      const handoffParent = findHandoffParentThreadId(child.activities);
+      const suppressed = child.archivedAt
+        ? "archived"
+        : input.stalledMs > QUEUED_TURN_STALL_MAX_NOTIFY_AGE_MS
+          ? "stale"
+          : null;
+      const parentThreadId = suppressed === null ? handoffParent : null;
       const nowIso = DateTime.formatIso(DateTime.nowUnsafe());
-      if (parentThreadId !== null) {
-        yield* deps.engine
-          .dispatch({
-            type: "thread.actor.message",
-            commandId: CommandId.make(`server:t3team:queued-turn-stall:${t3teamRandomUUID()}`),
-            threadId: ThreadId.make(parentThreadId),
-            messageId: MessageId.make(t3teamRandomUUID()),
-            fromThreadId: ThreadId.make(child.id),
-            fromTitle: child.title,
-            fromProjectId: child.projectId,
-            text: buildQueuedTurnStallNotice({
-              childTitle: child.title,
-              childThreadId: String(child.id),
-              stalledMs: input.stalledMs,
-            }),
-            // Urgent, like the abnormal-stop notice: the parent must hear now,
-            // not after the idle coalescing window.
-            urgency: "urgent",
-            hopCount: NonNegativeInt.make(0),
-            rootThreadId: ThreadId.make(parentThreadId),
-            createdAt: nowIso,
-          })
-          .pipe(
-            Effect.catchCause((cause) =>
-              Effect.logWarning("queued-turn stall actor message failed", {
-                threadId: input.threadId,
-                parentThreadId,
-                cause: Cause.pretty(cause),
-              }),
-            ),
-          );
-      }
       yield* deps.engine
         .dispatch({
           type: "thread.activity.append",
@@ -111,6 +95,7 @@ export const makeQueuedTurnStallNotifier =
               requestSequence: input.requestSeq,
               stalledMs: input.stalledMs,
               parentThreadId,
+              ...(suppressed !== null && handoffParent !== null ? { suppressed } : {}),
             },
             turnId: null,
             createdAt: nowIso,
@@ -121,6 +106,38 @@ export const makeQueuedTurnStallNotifier =
           Effect.catchCause((cause) =>
             Effect.logWarning("queued-turn stall marker failed", {
               threadId: input.threadId,
+              cause: Cause.pretty(cause),
+            }),
+          ),
+        );
+      if (parentThreadId === null) return;
+      yield* deps.engine
+        .dispatch({
+          type: "thread.actor.message",
+          commandId: CommandId.make(`server:t3team:queued-turn-stall:${t3teamRandomUUID()}`),
+          threadId: ThreadId.make(parentThreadId),
+          messageId: MessageId.make(t3teamRandomUUID()),
+          fromThreadId: ThreadId.make(child.id),
+          fromTitle: child.title,
+          fromProjectId: child.projectId,
+          text: buildQueuedTurnStallNotice({
+            childTitle: child.title,
+            childThreadId: String(child.id),
+            stalledMs: input.stalledMs,
+          }),
+          summary: QUEUED_TURN_STALL_NOTICE_TAG,
+          // Urgent, like the abnormal-stop notice: the parent must hear now,
+          // not after the idle coalescing window.
+          urgency: "urgent",
+          hopCount: NonNegativeInt.make(0),
+          rootThreadId: ThreadId.make(parentThreadId),
+          createdAt: nowIso,
+        })
+        .pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("queued-turn stall actor message failed", {
+              threadId: input.threadId,
+              parentThreadId,
               cause: Cause.pretty(cause),
             }),
           ),

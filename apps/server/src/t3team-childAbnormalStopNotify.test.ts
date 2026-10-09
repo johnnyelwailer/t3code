@@ -14,6 +14,7 @@ import {
   makeChildAbnormalStopNotifier,
   type HandoffActivityLike,
 } from "./t3team-childAbnormalStopNotify.ts";
+import { QUEUED_TURN_STALL_NOTICE_TAG } from "./t3team-queuedTurnStall.ts";
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 
@@ -210,6 +211,32 @@ describe("makeChildAbnormalStopNotifier silent-completion (outcome: completed)",
         );
         yield* effect;
         expect(dispatches).toHaveLength(0);
+      }),
+  );
+
+  it.effect(
+    "a server-originated queued-turn stall notice does not count as the child reporting",
+    () =>
+      Effect.gen(function* () {
+        // The stall notice is attributed to the child (fromThreadId) but tagged
+        // with QUEUED_TURN_STALL_NOTICE_TAG; a later silent completion must
+        // still reach the parent.
+        const { dispatches, effect } = runNotifier(
+          childThread(),
+          { outcome: "completed", lastError: null },
+          undefined,
+          parentThread([
+            {
+              role: "actor",
+              t3teamExt: {
+                actor: { senderThreadId: "child-1", summary: QUEUED_TURN_STALL_NOTICE_TAG },
+              },
+            },
+          ]),
+        );
+        yield* effect;
+        expect(dispatches).toHaveLength(1);
+        expect(actorMessage(dispatches[0]!).text).toContain("[Child completed silently]");
       }),
   );
 

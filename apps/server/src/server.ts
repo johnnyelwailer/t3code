@@ -229,7 +229,7 @@ import { T3TeamChildSettleSweeperLive } from "./t3team-childSettleSweeper.ts";
 import { T3TeamChildCleanupNudgeReactorLive } from "./t3team-childCleanupNudgeReactor.ts";
 import { T3TeamThreadTransientTurnRetryLive } from "./t3team-threadTransientTurnRetry.ts";
 import { T3TeamThreadSilenceWatchReactorLive } from "./t3team-threadSilenceWatchReactorLive.ts";
-import { T3TeamQueuedTurnStallReactorLive } from "./t3team-queuedTurnStallReactor.ts";
+import { T3TeamQueuedTurnStallReactorLive } from "./t3team-queuedTurnStallReactorLive.ts";
 import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
 import { T3TeamWorkflowSignalDeliveryLive } from "./t3team-workflowSignalDelivery.ts";
 import { T3TeamWorkflowSignalReconcilerLive } from "./t3team-workflowSignalReconciler.ts";

@@ -37,6 +37,8 @@ import {
   threadHasActionableProposedPlan,
 } from "@t3tools/shared/t3team-threadAwaitingParent";
 
+import { QUEUED_TURN_STALL_NOTICE_TAG } from "./t3team-queuedTurnStall.ts";
+
 /** The message fields the "did it report?" check reads (structural, so the
  *  caller can pass a projection row or a full detail). `| undefined` on each
  *  optional level: the real `OrchestrationMessage.t3teamExt` (and its `actor`
@@ -47,7 +49,13 @@ export interface SilentCompletionMessageLike {
   readonly role: string;
   readonly t3teamExt?:
     | {
-        readonly actor?: { readonly senderThreadId?: string | null | undefined } | null | undefined;
+        readonly actor?:
+          | {
+              readonly senderThreadId?: string | null | undefined;
+              readonly summary?: string | null | undefined;
+            }
+          | null
+          | undefined;
       }
     | null
     | undefined;
@@ -74,7 +82,9 @@ export interface SilentCompletionPlanLike {
  * True when the PARENT's durable transcript already holds at least one
  * actor-role message whose sender is this child: the child has reached the
  * parent (its own result, a question, or a notice we already sent). Derived
- * from the parent's state — no flag the child sets.
+ * from the parent's state — no flag the child sets. A server-originated
+ * queued-turn stall notice (QUEUED_TURN_STALL_NOTICE_TAG subject) is attributed
+ * to the child but is NOT the child reporting, so it does not count.
  */
 export function parentReceivedFromChild(
   parent: SilentCompletionThreadMessagesLike,
@@ -82,7 +92,9 @@ export function parentReceivedFromChild(
 ): boolean {
   return parent.messages.some(
     (message) =>
-      message.role === "actor" && message.t3teamExt?.actor?.senderThreadId === childThreadId,
+      message.role === "actor" &&
+      message.t3teamExt?.actor?.senderThreadId === childThreadId &&
+      message.t3teamExt.actor.summary !== QUEUED_TURN_STALL_NOTICE_TAG,
   );
 }
 

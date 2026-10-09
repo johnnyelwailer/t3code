@@ -4,91 +4,21 @@
  * survives restarts via the durable marker, and stays quiet once the turn
  * starts or the session goes terminal.
  */
-import type { OrchestrationCommand, OrchestrationEvent } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
-import * as Stream from "effect/Stream";
 
-import {
-  QUEUED_TURN_STALL_NOTIFIED_KIND,
-  QUEUED_TURN_STALL_TIMEOUT_MS,
-} from "./t3team-queuedTurnStall.ts";
+import { QUEUED_TURN_STALL_TIMEOUT_MS } from "./t3team-queuedTurnStall.ts";
 import { buildQueuedTurnStallNotice } from "./t3team-queuedTurnStallNotify.ts";
-import { makeQueuedTurnStallReactor } from "./t3team-queuedTurnStallReactor.ts";
-
-const CHILD = "child-1";
-const PARENT = "parent-1";
-const START = 1_700_000_000_000;
-const START_ISO = "2023-11-14T22:13:20.000Z"; // START as ISO
-
-let seq = 0;
-const event = (type: string, payload: unknown, extra: Record<string, unknown> = {}) =>
-  ({
-    sequence: ++seq,
-    type,
-    payload,
-    occurredAt: START_ISO,
-    commandId: null,
-    ...extra,
-  }) as unknown as OrchestrationEvent;
-
-const turnRequested = (threadId = CHILD) =>
-  event("thread.turn-start-requested", { threadId, messageId: `m-${seq}`, createdAt: START_ISO });
-const sessionSet = (status: string, threadId = CHILD) =>
-  event("thread.session-set", { threadId, session: { threadId, status, activeTurnId: null } });
-
-function makeHarness(input: { parent?: string | null; replay?: OrchestrationEvent[] } = {}) {
-  const dispatches: OrchestrationCommand[] = [];
-  const pendingTurns = new Set<string>([CHILD]);
-  let nowMs = START;
-  const parent = input.parent === undefined ? PARENT : input.parent;
-  const reactor = makeQueuedTurnStallReactor({
-    engine: {
-      dispatch: (command: OrchestrationCommand) =>
-        Effect.sync(() => {
-          dispatches.push(command);
-          return { sequence: 0 };
-        }),
-      readEvents: () => Stream.fromIterable(input.replay ?? []),
-      streamDomainEvents: Stream.empty,
-    } as never,
-    query: {
-      getThreadDetailById: () =>
-        Effect.succeed(
-          Option.some({
-            id: CHILD,
-            title: "QA child",
-            projectId: "project-1",
-            activities:
-              parent === null
-                ? []
-                : [{ kind: "t3team.handoff.created", payload: { parentThreadId: parent } }],
-          }),
-        ),
-      hasPendingTurnStart: (threadId: string) => Effect.succeed(pendingTurns.has(threadId)),
-    } as never,
-    clock: { now: () => nowMs, setTimer: () => undefined, clearTimer: () => undefined },
-  });
-  return {
-    reactor,
-    dispatches,
-    pendingTurns,
-    advance: (ms: number) => {
-      nowMs += ms;
-    },
-  };
-}
-
-const actorMessages = (dispatches: OrchestrationCommand[]) =>
-  dispatches.filter((c) => c.type === "thread.actor.message") as Array<
-    Extract<OrchestrationCommand, { type: "thread.actor.message" }>
-  >;
-const markers = (dispatches: OrchestrationCommand[]) =>
-  dispatches.filter(
-    (c) =>
-      c.type === "thread.activity.append" && c.activity.kind === QUEUED_TURN_STALL_NOTIFIED_KIND,
-  ) as Array<Extract<OrchestrationCommand, { type: "thread.activity.append" }>>;
+import {
+  actorMessages,
+  CHILD,
+  event,
+  makeHarness,
+  markers,
+  PARENT,
+  sessionSet,
+  turnRequested,
+} from "./t3team-queuedTurnStallTestHarness.ts";
 
 const PAST_TIMEOUT = QUEUED_TURN_STALL_TIMEOUT_MS + 5_000;
 
@@ -113,6 +43,12 @@ describe("makeQueuedTurnStallReactor", () => {
       expect(messages[0]!.text).toContain("stalled, not failed");
       expect(messages[0]!.text).toContain(CHILD);
       expect(markers(h.dispatches)).toHaveLength(1);
+      // Durable marker first, notice second (at-most-once across a crash).
+      expect(h.dispatches.map((c) => c.type)).toEqual([
+        "thread.activity.append",
+        "thread.actor.message",
+      ]);
+      expect(messages[0]!.summary).toBe("[Child stalled in provider queue]");
       // Non-terminal: nothing beyond the notice + marker (no settle/stop).
       expect(h.dispatches).toHaveLength(2);
 
@@ -156,7 +92,11 @@ describe("makeQueuedTurnStallReactor", () => {
       yield* h.reactor.sweep;
       yield* h.reactor.handleEvent(sessionSet("running"));
       yield* h.reactor.handleEvent(sessionSet("idle"));
-      yield* h.reactor.handleEvent(turnRequested());
+      yield* h.reactor.handleEvent(turnRequested(CHILD, h.nowIso()));
+      yield* h.reactor.sweep;
+      // The new request starts a fresh clock: not due until the timeout passes again.
+      expect(actorMessages(h.dispatches)).toHaveLength(1);
+      h.advance(PAST_TIMEOUT);
       yield* h.reactor.sweep;
       expect(actorMessages(h.dispatches)).toHaveLength(2);
     }),

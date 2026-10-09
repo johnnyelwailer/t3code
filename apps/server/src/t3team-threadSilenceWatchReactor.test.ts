@@ -481,6 +481,76 @@ describe("makeThreadSilenceWatchReactor", () => {
     }),
   );
 
+  it.effect("rehydration: a ready target with a pending turn start stays armed and breaches", () =>
+    Effect.gen(function* () {
+      // Restart: the in-memory activity store is empty; the shell reads ready
+      // with a queued turn start. The kept-armed watch must be seeded or the
+      // sweeper (which skips watches without state) would never fire it.
+      const harness = makeHarness({
+        targetShell: {
+          ...TARGET_SHELL,
+          updatedAt: "2023-11-14T22:13:20.000Z", // START
+          session: { status: "ready" },
+        },
+        replayEvents: [watchRegistered()],
+      });
+      harness.pendingTurns.add(TARGET);
+      yield* harness.rehydrate;
+      yield* Effect.yieldNow;
+      expect(harness.watchdog.getActivityState(TARGET)).toBeDefined();
+      harness.advance(60_000);
+      harness.fireTick();
+      yield* settle(harness);
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
+      harness.advance(900_000);
+      harness.fireTick();
+      yield* settle(harness);
+      expect(detectedPayloads(harness.dispatches)).toMatchObject([{ reason: "silent" }]);
+    }),
+  );
+
+  it.effect("rehydration: a ready target without a pending turn start still closes", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness({
+        targetShell: { ...TARGET_SHELL, session: { status: "ready" } },
+        replayEvents: [watchRegistered()],
+      });
+      yield* harness.rehydrate;
+      yield* Effect.yieldNow;
+      expect(harness.watchdog.getActivityState(TARGET)).toBeUndefined();
+      harness.advance(900_000);
+      harness.fireTick();
+      yield* settle(harness);
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
+    }),
+  );
+
+  it.effect("first breach of a silence episode is urgent, its re-notifications normal", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness({});
+      yield* harness.handleEvent(watchRegistered());
+      const urgencies = () =>
+        actorMessages(harness.dispatches).map((m) => (m as { urgency: string }).urgency);
+      harness.advance(900_000);
+      harness.fireTick();
+      yield* settle(harness, 2);
+      harness.advance(900_000);
+      harness.fireTick();
+      yield* settle(harness, 4);
+      expect(urgencies()).toEqual(["urgent", "normal"]);
+
+      // Activity resumes, then a fresh silence: a new episode, urgent again.
+      harness.watchdog.state.set(TARGET, {
+        lastActivityAtMs: START + 1_900_000,
+        pendingToolCount: 0,
+      });
+      harness.advance(1_000_000);
+      harness.fireTick();
+      yield* settle(harness, 6);
+      expect(urgencies()).toEqual(["urgent", "normal", "urgent"]);
+    }),
+  );
+
   it.effect(
     "last background task settles after ready with no later session-set and stops the watch",
     () =>

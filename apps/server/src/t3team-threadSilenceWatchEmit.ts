@@ -38,7 +38,15 @@ export const makeThreadSilenceWatchEmitter = (
     record: ThreadSilenceWatchRecord,
     payload: ThreadSilenceDetectedPayload,
     nowIso: string,
-  ) => emitSilenceDetected({ engine: deps.engine, query: deps.query }, record, payload, nowIso);
+    urgency?: "urgent" | "normal",
+  ) =>
+    emitSilenceDetected(
+      { engine: deps.engine, query: deps.query },
+      record,
+      payload,
+      nowIso,
+      urgency,
+    );
 
   const emitSilence = (record: ThreadSilenceWatchRecord, nowMs: number): Effect.Effect<void> =>
     Effect.gen(function* () {
@@ -53,7 +61,13 @@ export const makeThreadSilenceWatchEmitter = (
         pendingToolCall: state.pendingToolCount > 0,
         pendingToolCount: state.pendingToolCount,
       });
-      yield* emitDetected(record, payload, nowIso);
+      // The first breach of a silence episode (never notified, or activity
+      // since the last notice) is urgent; repeats within it are normal, so an
+      // hours-long stall cannot become an unbounded urgent wake storm.
+      const lastNotifiedAtMs = deps.index.notifiedAt(record.watchId);
+      const firstOfEpisode =
+        lastNotifiedAtMs === undefined || lastNotifiedAtMs < state.lastActivityAtMs;
+      yield* emitDetected(record, payload, nowIso, firstOfEpisode ? "urgent" : "normal");
     });
 
   // A `ready`/`idle` target that still holds a pending turn start (queued in
@@ -66,6 +80,8 @@ export const makeThreadSilenceWatchEmitter = (
       ? Effect.succeed(false)
       : deps.query
           .hasPendingTurnStart(ThreadId.make(targetThreadId))
+          // A failed probe counts as NOT pending: keep the pre-existing close
+          // behavior rather than pin a watch open on an unreadable projection.
           .pipe(Effect.orElseSucceed(() => false));
 
   const resolveStopped = (
@@ -118,7 +134,11 @@ export const makeThreadSilenceWatchEmitter = (
             : null;
       if (terminalStatus !== null) {
         yield* resolveStopped(record.targetThreadId, terminalStatus, triggerSeq);
-        return;
+        // Kept armed (ready with a queued turn start): seed its clock anyway -
+        // after a restart the activity store is empty and the sweeper skips
+        // watches without state, so it would otherwise never fire.
+        if (!deps.index.forTarget(record.targetThreadId).some((w) => w.watchId === record.watchId))
+          return;
       }
       const seededAtMs = Date.parse(shell!.updatedAt);
       if (!Number.isNaN(seededAtMs)) {

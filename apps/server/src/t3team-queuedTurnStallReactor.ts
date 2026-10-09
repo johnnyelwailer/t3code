@@ -11,23 +11,24 @@
  * Unlike ProviderSessionReaper this never stops, settles, or fails anything:
  * a stall is not terminal and the gateway may still start the turn.
  *
+ * Delivery is at-most-once per epoch: the durable marker is written before
+ * the parent notice (t3team-queuedTurnStallNotify.ts).
+ *
+ * Boot ordering: live events arriving during the log replay are buffered and
+ * folded afterwards, only those past the last replayed sequence, so a live
+ * clear is never overwritten by an older replayed request. The Live layer
+ * (t3team-queuedTurnStallReactorLive.ts) starts the sweeper only at command-ready.
+ *
  * @module t3team-queuedTurnStallReactor
  */
 import type { OrchestrationEvent } from "@t3tools/contracts";
 import { ThreadId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 
-import {
-  OrchestrationEngineService,
-  type OrchestrationEngineShape,
-} from "./orchestration/Services/OrchestrationEngine.ts";
-import {
-  ProjectionSnapshotQuery,
-  type ProjectionSnapshotQueryShape,
-} from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { type OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
+import { type ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import {
   makeQueuedTurnStallTracker,
   QUEUED_TURN_STALL_SWEEP_INTERVAL_MS,
@@ -53,12 +54,22 @@ export const makeQueuedTurnStallReactor = (deps: QueuedTurnStallReactorDeps) => 
   let timer: unknown;
   let stopped = false;
   let sweeping = false;
+  // Replay/live merge: live events are buffered until the replay is done.
+  let replayed = false;
+  let lastReplayedSeq = 0;
+  const buffered: OrchestrationEvent[] = [];
+  const foldLive = (event: OrchestrationEvent) => {
+    if (!replayed) buffered.push(event);
+    else if (event.sequence > lastReplayedSeq) tracker.fold(event);
+  };
 
   const sweep: Effect.Effect<void> = Effect.gen(function* () {
     const nowMs = clock.now();
     for (const entry of tracker.due(nowMs, timeoutMs)) {
       // The projection is authoritative: a request the fold could not see
       // cleared (e.g. a compaction) is dropped, not reported.
+      // A failed probe counts as still pending: a spurious stall notice is
+      // cheaper than silently losing the only signal on a stuck child.
       const stillPending = yield* deps.query
         .hasPendingTurnStart(ThreadId.make(entry.threadId))
         .pipe(Effect.orElseSucceed(() => true));
@@ -68,7 +79,7 @@ export const makeQueuedTurnStallReactor = (deps: QueuedTurnStallReactorDeps) => 
       }
       const epochKey = queuedTurnStallEpochKey(entry);
       // Mark before dispatching so an overlapping sweep cannot double-report;
-      // the durable marker the notifier appends carries it across restarts.
+      // the durable marker the notifier appends (first) carries it across restarts.
       tracker.markNotified(epochKey);
       yield* notify({
         threadId: entry.threadId,
@@ -101,11 +112,21 @@ export const makeQueuedTurnStallReactor = (deps: QueuedTurnStallReactorDeps) => 
     startEventStream: () =>
       Effect.forkScoped(
         Stream.runForEach(deps.engine.streamDomainEvents, (event) =>
-          Effect.sync(() => tracker.fold(event)),
+          Effect.sync(() => foldLive(event)),
         ),
       ),
     rehydrate: Stream.runForEach(deps.engine.readEvents(0, Number.MAX_SAFE_INTEGER), (event) =>
-      Effect.sync(() => tracker.fold(event)),
+      Effect.sync(() => {
+        tracker.fold(event);
+        lastReplayedSeq = Math.max(lastReplayedSeq, event.sequence);
+      }),
+    ).pipe(
+      Effect.andThen(
+        Effect.sync(() => {
+          replayed = true;
+          for (const event of buffered.splice(0)) foldLive(event);
+        }),
+      ),
     ),
     sweep,
     tick,
@@ -120,15 +141,3 @@ export const makeQueuedTurnStallReactor = (deps: QueuedTurnStallReactorDeps) => 
     },
   };
 };
-
-export const T3TeamQueuedTurnStallReactorLive = Layer.effectDiscard(
-  Effect.gen(function* () {
-    const engine = yield* OrchestrationEngineService;
-    const query = yield* ProjectionSnapshotQuery;
-    const reactor = makeQueuedTurnStallReactor({ engine, query });
-    yield* reactor.startEventStream();
-    yield* reactor.rehydrate;
-    reactor.startSweeper();
-    yield* Effect.addFinalizer(() => Effect.sync(() => reactor.stop()));
-  }),
-);

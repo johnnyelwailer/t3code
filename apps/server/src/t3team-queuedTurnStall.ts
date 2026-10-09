@@ -28,6 +28,10 @@ export const QUEUED_TURN_STALL_TIMEOUT_MS = 10 * 60_000;
 export const QUEUED_TURN_STALL_SWEEP_INTERVAL_MS = 5_000;
 /** Durable "stall reported" marker kind, appended on the stalled thread. */
 export const QUEUED_TURN_STALL_NOTIFIED_KIND = "t3team.queued_turn_stall.notified";
+/** Older stalls (e.g. replayed on first boot) get the marker only, no parent notice. */
+export const QUEUED_TURN_STALL_MAX_NOTIFY_AGE_MS = 24 * 60 * 60_000;
+/** Notice subject marking it SERVER-originated (not the child reporting; see childSilentCompletion). */
+export const QUEUED_TURN_STALL_NOTICE_TAG = "[Child stalled in provider queue]";
 
 const TERMINAL_STATUSES: ReadonlySet<string> = new Set(["error", "interrupted", "stopped"]);
 
@@ -84,8 +88,10 @@ export function makeQueuedTurnStallTracker(): QueuedTurnStallTracker {
       case "thread.session-set": {
         const threadId = event.payload.threadId;
         const status = event.payload.session.status;
-        if (status === "running") {
-          // The provider started a turn: the queued request was picked up.
+        // Mirror the projection: only `running` WITH an active turn means the
+        // queued request was picked up. A provider reporting the still-queued
+        // run as running/waiting has no activeTurnId yet - still pending.
+        if (status === "running" && event.payload.session.activeTurnId !== null) {
           running.add(threadId);
           pending.delete(threadId);
           return;
