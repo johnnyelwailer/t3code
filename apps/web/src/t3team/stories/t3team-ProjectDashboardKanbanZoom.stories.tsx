@@ -9,6 +9,11 @@ import { projectDashboardKanbanMatrixFixtureBoardColumns } from "~/t3team/t3team
 import { buildProjectTicketKanbanColumns } from "~/t3team/t3team-projectTicketStatus";
 import { buildProjectTicketHierarchy } from "~/t3team/t3team-ticketHierarchy";
 import type { ProjectTicket } from "~/t3team/t3team-types";
+// Storybook vite aliases `useKanbanSemanticZoomFlag` to this mock via a string
+// path knip cannot follow; the direct import keeps the mock file reachable.
+import { useKanbanSemanticZoomFlag as useKanbanSemanticZoomFlagStory } from "../t3team-useKanbanSemanticZoomFlag.storyMock";
+
+void useKanbanSemanticZoomFlagStory;
 
 /**
  * Flat-board fixture: mixed assignees, child counts, priorities and title
