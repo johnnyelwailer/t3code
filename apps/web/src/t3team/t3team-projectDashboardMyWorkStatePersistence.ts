@@ -1,3 +1,4 @@
+import { kanbanZoomLevelValues } from "~/t3team/t3team-kanbanZoom";
 import {
   createDefaultProjectDashboardMyWorkState,
   parsePersistedStringList,
@@ -88,6 +89,9 @@ export function readPersistedProjectDashboardMyWorkState(
       projectMyWorkTableSortDirectionValues,
     );
     if (tableSortDirection !== undefined) persisted.tableSortDirection = tableSortDirection;
+
+    const kanbanZoomLevel = parseRouteEnum(parsed.kanbanZoomLevel, kanbanZoomLevelValues);
+    if (kanbanZoomLevel !== undefined) persisted.kanbanZoomLevel = kanbanZoomLevel;
 
     return persisted;
   } catch {
@@ -214,7 +218,8 @@ export function areProjectDashboardMyWorkStatesEqual(
     left.selectedPriority === right.selectedPriority &&
     left.selectedStatus === right.selectedStatus &&
     left.tableSortBy === right.tableSortBy &&
-    left.tableSortDirection === right.tableSortDirection
+    left.tableSortDirection === right.tableSortDirection &&
+    left.kanbanZoomLevel === right.kanbanZoomLevel
   );
 }
 

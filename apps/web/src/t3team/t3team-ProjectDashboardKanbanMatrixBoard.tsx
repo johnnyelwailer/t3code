@@ -7,6 +7,7 @@ import {
   type ProjectDashboardKanbanColumnCollapse,
 } from "~/t3team/t3team-projectDashboardKanbanCollapse";
 import { ProjectDashboardKanbanMatrixLaneCard } from "~/t3team/t3team-ProjectDashboardKanbanMatrixLaneCard";
+import type { KanbanZoomVisual } from "~/t3team/t3team-kanbanZoom";
 import type { ProjectDashboardKanbanOptimisticMove } from "~/t3team/t3team-projectDashboardKanbanDnd";
 import type { TicketHierarchy } from "~/t3team/t3team-projectDashboardKanbanHierarchy";
 import type { ProjectTicketKanbanColumns } from "~/t3team/t3team-projectTicketStatus";
@@ -25,6 +26,7 @@ export function ProjectDashboardKanbanMatrixBoard({
   parentChildGroups,
   jiraLastCheckedAt,
   projectId,
+  zoomVisual,
   onOpenTicket,
   onTicketContextMenu,
   renderTicketExtra,
@@ -38,6 +40,7 @@ export function ProjectDashboardKanbanMatrixBoard({
   parentChildGroups: TicketHierarchy;
   jiraLastCheckedAt?: number;
   projectId: string;
+  zoomVisual: KanbanZoomVisual;
   onOpenTicket: (projectId: string, ticketId: string) => void;
   onTicketContextMenu: (event: React.MouseEvent, ticket: ProjectTicket) => void;
   renderTicketExtra?: (ticket: ProjectTicket, compact: boolean) => React.ReactNode;
@@ -64,15 +67,21 @@ export function ProjectDashboardKanbanMatrixBoard({
     kanbanColumns: layoutColumns,
     allTickets,
     parentChildGroups,
+    laneMinWidthRem: zoomVisual.laneMinWidthRem,
+    columnGapRem: zoomVisual.columnGapRem,
   });
 
   return (
     <div className="overflow-x-auto pb-2">
       <div
-        className="grid min-w-full gap-x-3 gap-y-1"
+        className="grid min-w-full gap-y-1"
         style={{
           ...boardBodyStyle,
-          gridTemplateColumns: buildKanbanGridTemplateColumns(kanbanColumns, collapsedIds),
+          gridTemplateColumns: buildKanbanGridTemplateColumns(
+            kanbanColumns,
+            collapsedIds,
+            zoomVisual.laneMinWidthRem,
+          ),
         }}
       >
         {kanbanColumns.map((column, columnIndex) => (
@@ -82,6 +91,8 @@ export function ProjectDashboardKanbanMatrixBoard({
             title={column.title}
             count={column.items.length}
             dragging={dragging}
+            laneMinWidthRem={zoomVisual.laneMinWidthRem}
+            headerBorderOpacity={zoomVisual.laneHeaderBorderOpacity}
             {...(columnCollapse
               ? {
                   collapsed: columnCollapse.collapsedIds.has(column.id),
@@ -98,8 +109,29 @@ export function ProjectDashboardKanbanMatrixBoard({
 
         {shellRenderPlans.map((plan) => {
           const shellDepth = shellDepthByPlacementKey.get(plan.placementKey) ?? 0;
-          const shellInsetStartPx = 4 + shellDepth * 4;
-          const shellInsetEndPx = 4 + shellDepth * 8;
+          // Nesting adds inset; base inset is sized to clear the shell radius so cards never
+          // poke through the rounded corner (the old 4px inset + 1.35rem radius clipped badly).
+          const shellInsetStartPx = zoomVisual.shellInsetStartPx + shellDepth * 5;
+          const shellInsetEndPx = zoomVisual.shellInsetEndPx + shellDepth * 7;
+          // Outer epic quieter; nested story shells slightly stronger so hierarchy reads.
+          const shellBg =
+            shellDepth === 0
+              ? "color-mix(in oklab, var(--background) 88%, var(--muted) 12%)"
+              : "color-mix(in oklab, var(--background) 96%, var(--muted) 4%)";
+          const shellBorder =
+            shellDepth === 0
+              ? "color-mix(in oklab, var(--border) 70%, transparent)"
+              : "color-mix(in oklab, var(--border) 55%, transparent)";
+          const shellStyle = {
+            borderRadius: `${zoomVisual.shellRadiusRem}rem`,
+            borderWidth: zoomVisual.shellBorderWidthPx,
+            borderStyle: "solid" as const,
+            borderColor: shellBorder,
+            backgroundColor: shellBg,
+            marginInlineStart: `${shellInsetStartPx}px`,
+            marginInlineEnd: `${shellInsetEndPx}px`,
+            ...(shellDepth > 0 ? { marginBottom: "6px" } : { marginBottom: "2px" }),
+          };
 
           if (plan.kind === "singleLane") {
             return (
@@ -108,13 +140,11 @@ export function ProjectDashboardKanbanMatrixBoard({
                   data-shell-ticket={plan.ticketId}
                   data-shell-role="single-lane"
                   data-shell-depth={shellDepth}
-                  className="pointer-events-none relative z-10 rounded-3xl border-2 border-border bg-background inset-shadow-2xs inset-shadow-white/6"
+                  className="pointer-events-none relative z-10 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                   style={{
                     gridColumn: plan.columnIndex + 1,
                     gridRow: `${PROJECT_DASHBOARD_KANBAN_MATRIX_HEADER_ROWS + plan.rowStart} / span ${plan.rowSpan}`,
-                    marginInlineStart: `${shellInsetStartPx}px`,
-                    marginInlineEnd: `${shellInsetEndPx}px`,
-                    ...(shellDepth > 0 ? { marginBottom: "4px" } : {}),
+                    ...shellStyle,
                   }}
                 />
               </Fragment>
@@ -127,13 +157,11 @@ export function ProjectDashboardKanbanMatrixBoard({
                 data-shell-ticket={plan.ticketId}
                 data-shell-role="spanning"
                 data-shell-depth={shellDepth}
-                className="pointer-events-none relative z-10 rounded-3xl border-2 border-border bg-background inset-shadow-2xs inset-shadow-white/6"
+                className="pointer-events-none relative z-10 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                 style={{
                   gridColumn: `${plan.columnIndex + 1} / span ${plan.columnSpan}`,
                   gridRow: `${PROJECT_DASHBOARD_KANBAN_MATRIX_HEADER_ROWS + plan.rowStart} / span ${plan.rowSpan}`,
-                  marginInlineStart: `${shellInsetStartPx}px`,
-                  marginInlineEnd: `${shellInsetEndPx}px`,
-                  ...(shellDepth > 0 ? { marginBottom: "4px" } : {}),
+                  ...shellStyle,
                 }}
               />
             </Fragment>
@@ -158,6 +186,7 @@ export function ProjectDashboardKanbanMatrixBoard({
             rowHeightPx={PROJECT_DASHBOARD_KANBAN_MATRIX_ROW_HEIGHT_PX}
             rowGapPx={PROJECT_DASHBOARD_KANBAN_MATRIX_ROW_GAP_PX}
             onMeasuredRowSpan={handleMeasuredRowSpan}
+            zoomVisual={zoomVisual}
             {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
             onOpenTicket={onOpenTicket}
             onTicketContextMenu={onTicketContextMenu}

@@ -64,6 +64,8 @@ export function ProjectDashboardMyWorkView({
     setTableSortBy,
     tableSortDirection,
     setTableSortDirection,
+    kanbanZoomLevel,
+    setKanbanZoomLevel,
     resetOptionsFilters,
     assignedWorkItems,
     filteredWorkItems,
@@ -102,6 +104,7 @@ export function ProjectDashboardMyWorkView({
       selectedStatus,
       tableSortBy,
       tableSortDirection,
+      kanbanZoomLevel,
     },
     filteredWorkItems,
     setQuery,
@@ -161,6 +164,8 @@ export function ProjectDashboardMyWorkView({
           selectedStatus={selectedStatus}
           onSelectedStatusChange={setSelectedStatus}
           statusOptions={statusOptions}
+          kanbanZoomLevel={kanbanZoomLevel}
+          onKanbanZoomLevelChange={setKanbanZoomLevel}
           tableSortBy={tableSortBy}
           onTableSortByChange={setTableSortBy}
           tableSortDirection={tableSortDirection}
@@ -183,6 +188,8 @@ export function ProjectDashboardMyWorkView({
           tableSortDirection={tableSortDirection}
           kanbanColumns={kanbanColumns}
           parentChildGroups={parentChildGroups}
+          kanbanZoomLevel={kanbanZoomLevel}
+          onKanbanZoomLevelChange={setKanbanZoomLevel}
           githubActivityByWorkItem={githubActivity.activityByWorkItem}
           digestFilters={digestFilters}
           columnCollapse={columnCollapse}

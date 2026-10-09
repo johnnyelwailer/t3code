@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   areProjectDashboardMyWorkStatesEqual,
   buildProjectDashboardMyWorkRouteSearch,
+  getProjectDashboardMyWorkStorageKey,
   parseProjectDashboardMyWorkRouteSearch,
   readPersistedProjectDashboardMyWorkState,
   resolveProjectDashboardMyWorkState,
@@ -27,6 +28,7 @@ describe("project dashboard my work state", () => {
       selectedStatus: "all",
       tableSortBy: "updated",
       tableSortDirection: "desc",
+      kanbanZoomLevel: "full",
     });
   });
 
@@ -73,6 +75,7 @@ describe("project dashboard my work state", () => {
       selectedStatus: "In Progress",
       tableSortBy: "updated",
       tableSortDirection: "desc",
+      kanbanZoomLevel: "full",
     });
   });
 
@@ -91,6 +94,7 @@ describe("project dashboard my work state", () => {
       selectedStatus: "all",
       tableSortBy: "updated",
       tableSortDirection: "desc",
+      kanbanZoomLevel: "full",
     });
   });
 
@@ -113,7 +117,37 @@ describe("project dashboard my work state", () => {
       selectedStatus: "all",
       tableSortBy: "updated",
       tableSortDirection: "desc",
+      kanbanZoomLevel: "full",
     });
+  });
+
+  it("restores a persisted kanban zoom level and drops unknown values on read", () => {
+    const storage = new Map<string, string>([
+      ["t3team:project-my-work-state:v1:project-1", JSON.stringify({ kanbanZoomLevel: "bogus" })],
+    ]);
+    const windowStub = {
+      localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: () => {},
+        removeItem: () => {},
+      },
+    } as unknown as Window & typeof globalThis;
+    Object.defineProperty(globalThis, "window", {
+      value: windowStub,
+      configurable: true,
+      writable: true,
+    });
+
+    const persisted = readPersistedProjectDashboardMyWorkState(
+      getProjectDashboardMyWorkStorageKey("project-1"),
+    );
+    expect(persisted?.kanbanZoomLevel).toBeUndefined();
+    expect(resolveProjectDashboardMyWorkState({ persisted }).kanbanZoomLevel).toBe("full");
+    expect(
+      resolveProjectDashboardMyWorkState({
+        persisted: { kanbanZoomLevel: "at-a-glance" },
+      }).kanbanZoomLevel,
+    ).toBe("at-a-glance");
   });
 
   // Intentional change: the lens used to live only in local storage, so a link carrying

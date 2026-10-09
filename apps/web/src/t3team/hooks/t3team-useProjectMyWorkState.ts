@@ -20,6 +20,7 @@ import { useProjectKanbanColumnCollapse } from "~/t3team/hooks/t3team-useProject
 import { useProjectKanbanBoardColumns } from "~/t3team/hooks/t3team-useProjectKanbanBoardColumns";
 import { useProjectMyWork } from "~/t3team/hooks/t3team-useProjectMyWork";
 import { type ProjectMyWorkStatusCategory } from "~/t3team/t3team-projectMyWork";
+import type { KanbanZoomLevel } from "~/t3team/t3team-kanbanZoom";
 import {
   useProjectDashboardMyWorkState,
   type ProjectMyWorkLens,
@@ -71,6 +72,7 @@ export function useProjectMyWorkState({
     selectedStatus,
     tableSortBy,
     tableSortDirection,
+    kanbanZoomLevel,
   } = state;
   const deferredQuery = useDeferredValue(query);
   const columnCollapse = useProjectKanbanColumnCollapse({ state, setState });
@@ -181,6 +183,8 @@ export function useProjectMyWorkState({
     tableSortDirection,
     setTableSortDirection: (value: ProjectMyWorkTableSortDirection) =>
       updateState({ tableSortDirection: value }),
+    kanbanZoomLevel,
+    setKanbanZoomLevel: (value: KanbanZoomLevel) => updateState({ kanbanZoomLevel: value }),
     activeOptionsCount: countProjectMyWorkActiveOptions({
       lens,
       statusCategory,

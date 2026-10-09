@@ -667,6 +667,13 @@ export const ServerConfig = Schema.Struct({
    */
   resourcePressure: Schema.optionalKey(Schema.Boolean),
   /**
+   * Whether the My Work kanban board advertises semantic zoom (continuous density progress with
+   * three soft-snap levels, steered from the toolbar or Ctrl/Cmd+wheel / trackpad pinch).
+   * Server-advertised runtime feature flag (env `NEXI_FF_KANBAN_SEMANTIC_ZOOM`, default off);
+   * absent on older servers.
+   */
+  kanbanSemanticZoom: Schema.optionalKey(Schema.Boolean),
+  /**
    * Whether a project can designate a linked repository as its MAIN repository (picker,
    * switch-with-migration, auto-detection, `start_child` default). Runtime feature flag (env
    * `NEXI_FF_MAIN_REPOSITORY`, default on); absent on older servers.
