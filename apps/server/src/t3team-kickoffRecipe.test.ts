@@ -10,7 +10,6 @@ import {
 } from "./persistence/WorkflowRuns.ts";
 import type { PackRecipeSource } from "./t3team-packRecipeSources.ts";
 import {
-  blockingKickoffRuns,
   launchKickoffRecipe,
   runsOfWorkflow,
   resolveKickoffRecipe,
@@ -51,8 +50,6 @@ describe("launchKickoffRecipe", () => {
             runs.filter((run) => (run as { launchThreadId?: string }).launchThreadId === "t1"),
           );
         },
-        listByStatus: ({ status }: { status: string }) =>
-          Effect.succeed(runs.filter((run) => run.status === status)),
       } as unknown as WorkflowRunRepositoryShape;
       // @effect-diagnostics-next-line unsafeEffectTypeAssertion:off - The earlier run returns before any other service is reached.
       const result = yield* launchKickoffRecipe({
@@ -78,50 +75,6 @@ describe("launchKickoffRecipe", () => {
       assert.deepStrictEqual(asked, [{ launchThreadId: "t1", includeEnded: true }]);
     }),
   );
-});
-
-describe("blockingKickoffRuns", () => {
-  const path = "/packs/a/workflow.ts";
-  const run = (runId: string, status: string, workflowPath = path) => ({
-    runId,
-    status,
-    workflowPath,
-  });
-
-  it("blocks on any run of the recipe on this thread, ended ones included", () => {
-    assert.deepStrictEqual(
-      blockingKickoffRuns([run("mine", "completed")], [], path).map((r) => r.runId),
-      ["mine"],
-    );
-  });
-
-  it("blocks on a run still active on another thread", () => {
-    for (const status of ["running", "suspended", "queued", "authoring"]) {
-      assert.deepStrictEqual(
-        blockingKickoffRuns([], [run("elsewhere", status)], path).map((r) => r.runId),
-        ["elsewhere"],
-      );
-    }
-  });
-
-  it("lets a session set up when an earlier session's runs have ended or are dormant", () => {
-    const rest = ["completed", "failed", "cancelled", "paused", "sleeping", "watching"].map(
-      (status) => run(status, status),
-    );
-    assert.deepStrictEqual(blockingKickoffRuns([], rest, path), []);
-  });
-
-  it("ignores active runs of another recipe, and names a run once", () => {
-    assert.deepStrictEqual(
-      blockingKickoffRuns([], [run("other", "running", "/packs/b/workflow.ts")], path),
-      [],
-    );
-    const same = run("same", "running");
-    assert.deepStrictEqual(
-      blockingKickoffRuns([same], [same], path).map((r) => r.runId),
-      ["same"],
-    );
-  });
 });
 
 describe("runsOfWorkflow", () => {
