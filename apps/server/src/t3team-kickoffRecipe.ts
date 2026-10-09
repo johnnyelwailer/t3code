@@ -10,8 +10,10 @@
  * needs it.
  *
  * Reads the live event tail only: history is not a first message. Not launched when the thread
- * already ran the recipe, live or ended, so a restarted server neither starts a second run beside
- * a live one nor redoes a finished setup; `/machine-setup` runs it again on purpose.
+ * already ran the recipe, live or ended. Runs of other threads never count: a session restores the
+ * workspace of earlier sessions, runs included, and a setup they left finished or waiting on its
+ * question must not keep this one from setting up. The cost is that a restart followed by a first
+ * message on another thread sets up a second time; `/machine-setup` runs it again on purpose.
  *
  * @module t3team-kickoffRecipe
  */
@@ -53,9 +55,6 @@ export function runsOfWorkflow<Run extends { readonly workflowPath: string }>(
   return runs.filter((run) => run.workflowPath === workflowPath);
 }
 
-/** How many recent runs the once-per-environment check reads. */
-const RECENT_RUN_LIMIT = 200;
-
 export const launchKickoffRecipe = Effect.fn("launchKickoffRecipe")(function* (input: {
   readonly threadId: ThreadId;
   readonly recipe: PackRecipeSource;
@@ -64,21 +63,12 @@ export const launchKickoffRecipe = Effect.fn("launchKickoffRecipe")(function* (i
   const runs = yield* WorkflowRunRepository;
   const path = yield* Path.Path;
   const workflowPath = path.join(input.recipe.recipeRoot, "workflow.ts");
-  // An environment runs its kickoff once: after a restart, a live run continues and an ended one
-  // stays ended, even when the first message after the restart comes on another thread. A run of
-  // another recipe does not count. A cloud session has few runs, so the recent ones cover it.
   const earlier = runsOfWorkflow(
-    [
-      ...(yield* runs.listLiveByLaunchThread({
-        launchThreadId: input.threadId,
-        includeEnded: true,
-      })),
-      ...(yield* runs.listRecent({ limit: RECENT_RUN_LIMIT })),
-    ],
+    yield* runs.listLiveByLaunchThread({ launchThreadId: input.threadId, includeEnded: true }),
     workflowPath,
   );
   if (earlier.length > 0) {
-    yield* Effect.logInfo("kickoff recipe: the environment already ran it", {
+    yield* Effect.logInfo("kickoff recipe: the thread already ran it", {
       threadId: input.threadId,
       runIds: earlier.map((run) => run.runId),
     });

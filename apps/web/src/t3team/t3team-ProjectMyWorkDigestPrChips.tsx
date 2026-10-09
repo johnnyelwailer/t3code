@@ -1,7 +1,9 @@
 import { ProjectId } from "@t3tools/contracts";
-import { useState, type MouseEvent } from "react";
+import { Fragment, useState, type MouseEvent } from "react";
 
+import { WatchedPullRequestIndicator } from "~/components/pullRequest/t3team-WatchedPullRequestIndicator";
 import { Badge } from "~/t3team/components/ui/t3team-badge";
+import { MyWorkChangeRequestSlot } from "~/t3team/packs/t3team-changeRequestSlots";
 import { cn } from "~/t3team/lib/t3team-utils";
 import { openDigestPullRequest } from "~/t3team/t3team-digestPrAsideStore";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
@@ -129,6 +131,7 @@ export function DigestPrChip({
               </span>
             ) : null}
             <DigestReviewerStack reviewers={pr.reviewers} host={pr.host} />
+            <WatchedPullRequestIndicator host={pr.host} repository={pr.repo} number={pr.number} />
             {pr.unhandledComments && pr.unhandledComments > 0 ? (
               <span className="-translate-y-px text-3xs leading-none">
                 {pr.unhandledComments} comments
@@ -170,12 +173,11 @@ export function DigestPrChips({
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
       {shown.map((pr) => (
-        <DigestPrChip
-          key={pr.id}
-          pr={pr}
-          showState={showState}
-          {...(repoLabel ? { repoLabel } : {})}
-        />
+        <Fragment key={pr.id}>
+          <DigestPrChip pr={pr} showState={showState} {...(repoLabel ? { repoLabel } : {})} />
+          {/* Beside the chip, never inside its link. */}
+          <MyWorkChangeRequestSlot changeRequest={pr} density="chip" />
+        </Fragment>
       ))}
       {hidden > 0 ? (
         <button

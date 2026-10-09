@@ -14,6 +14,8 @@ export type SidecarSectionHost = {
     customization?: T3TeamRecipeQuickStartLaunchCustomization,
   ) => void;
   readonly launchRecipe: (recipeId: string, parameters?: Record<string, unknown>) => void;
+  /** Starts a discovered quick start's workflow on a new thread; false when it could not. */
+  readonly launchQuickStart: (recipe: T3TeamSidecarRecipeQuickStart) => Promise<boolean>;
   readonly openThread: (threadId: string) => void;
 };
 

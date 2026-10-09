@@ -1,4 +1,5 @@
 import { SearchIcon } from "lucide-react";
+import { WatchedPullRequestIndicator } from "./t3team-WatchedPullRequestIndicator";
 import { PullRequestStackPopover } from "./PullRequestStackPopover";
 import {
   PullRequestSpeedActions,
@@ -169,6 +170,12 @@ function PullRequestRowImpl({
           title={entry.title}
           signals={
             <>
+              <WatchedPullRequestIndicator
+                environmentId={entry.environmentId}
+                host={entry.host}
+                repository={entry.repository}
+                number={entry.number}
+              />
               {entry.checksState === undefined ? null : (
                 <PullRequestChecksPopover
                   checksState={entry.checksState}

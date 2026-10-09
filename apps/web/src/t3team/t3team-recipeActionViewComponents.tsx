@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   Code2,
+  Eye,
   LifeBuoy,
   Link2,
   ListFilter,
@@ -22,6 +23,7 @@ import { Badge } from "~/t3team/components/ui/t3team-badge";
 import { RecipeActionIssuePreview } from "~/t3team/t3team-recipeActionIssuePreview";
 import { LaunchOptionGroup, LaunchTextInput } from "~/t3team/t3team-recipeActionLaunchControls";
 import { InlineActionChip } from "~/t3team/t3team-recipeInlineActionChip";
+import { RunToggle } from "~/t3team/t3team-recipeRunToggle";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipes";
 
 const iconByName = {
@@ -31,6 +33,7 @@ const iconByName = {
   "clipboard-check": ClipboardCheck,
   "clipboard-list": ClipboardList,
   "code-2": Code2,
+  eye: Eye,
   "life-buoy": LifeBuoy,
   "list-filter": ListFilter,
   "list-todo": ListTodo,
@@ -142,6 +145,7 @@ export const recipeActionViewComponents = {
   LaunchTextInput,
   RecipeAction,
   RiskPill,
+  RunToggle,
   SourceLink,
 };
 

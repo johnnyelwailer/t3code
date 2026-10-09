@@ -1,4 +1,5 @@
 import type { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
+import { WatchedPullRequestIndicator } from "./t3team-WatchedPullRequestIndicator";
 import { isAtomCommandInterrupted } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, PullRequestRef } from "@t3tools/contracts";
 import {
@@ -124,6 +125,12 @@ export function PullRequestLinkPreview({
                 <div className="flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
                   <span className="min-w-0 truncate">{detail.repository}</span>
                   <span className="shrink-0">#{detail.number}</span>
+                  <WatchedPullRequestIndicator
+                    environmentId={target.environmentId}
+                    host={target.input.host}
+                    repository={target.input.repository}
+                    number={target.input.number}
+                  />
                   <span aria-hidden>·</span>
                   {state === null ? null : (
                     <span className="inline-flex shrink-0 items-center gap-1">

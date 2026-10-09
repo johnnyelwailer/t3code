@@ -223,7 +223,9 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       "here) and optional 'args' (the orchestration's input); a dedicated author agent writes, " +
       "validates and launches the source (persisted under .t3team-runs/<runId>/). Pass " +
       "'workflowPath' only to run an existing saved .workflow.ts as-is (body format: " +
-      `${PROJECT_STATE_DIR}/recipes/AUTHORING.md). Returns {runId, status: authoring|accepted, ` +
+      `${PROJECT_STATE_DIR}/recipes/AUTHORING.md); pass 'recipe' (an id from the recipe list) ` +
+      "and optional 'action' to run a recipe with its own scripts and tool scope. Returns " +
+      "{runId, status: authoring|accepted, " +
       "handoff: 'workflow-ui'} " +
       "immediately; the orchestration card shows authoring → running → the result, and only a " +
       "genuinely unfixable outcome is reported back, once. After the handoff, end the current " +
@@ -247,6 +249,17 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
           type: "string",
           description:
             "Path to an existing saved .workflow.ts to run as-is, relative to the project workspace root (absolute paths must stay inside the workspace). Omit to have the orchestration authored from intent.",
+          minLength: 1,
+        },
+        recipe: {
+          type: "string",
+          description:
+            "A recipe id from the recipe list; the project's own recipe wins over a pack's. Runs it with its scripts and tool scope.",
+          minLength: 1,
+        },
+        action: {
+          type: "string",
+          description: "The recipe action to run with 'recipe'; omit for its default action.",
           minLength: 1,
         },
         args: {

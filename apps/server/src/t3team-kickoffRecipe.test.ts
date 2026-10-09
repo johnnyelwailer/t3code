@@ -50,7 +50,6 @@ describe("launchKickoffRecipe", () => {
             runs.filter((run) => (run as { launchThreadId?: string }).launchThreadId === "t1"),
           );
         },
-        listRecent: () => Effect.succeed(runs),
       } as unknown as WorkflowRunRepositoryShape;
       // @effect-diagnostics-next-line unsafeEffectTypeAssertion:off - The earlier run returns before any other service is reached.
       const result = yield* launchKickoffRecipe({
@@ -74,15 +73,6 @@ describe("launchKickoffRecipe", () => {
       ]);
       assert.isNull(result);
       assert.deepStrictEqual(asked, [{ launchThreadId: "t1", includeEnded: true }]);
-    }),
-  );
-
-  it.effect("leaves a second thread alone when an earlier thread of the environment ran it", () =>
-    Effect.gen(function* () {
-      const { result } = yield* ranRecipe([
-        { runId: "r1", workflowPath: mine, status: "completed", launchThreadId: "t0" } as never,
-      ]);
-      assert.isNull(result);
     }),
   );
 });

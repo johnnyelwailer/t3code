@@ -101,9 +101,11 @@ describe("presentCloudSession for a project machine", () => {
     expect(preparing({ machineSetup: true })).toMatchObject({
       title: "Checking out project",
     });
-    expect(presentCloudSession(session({ phase: "ready", machineSetup: true })).detail).toBe(
-      "describe your task",
-    );
+    // Ready reads like any other session: no instruction rides on the row.
+    expect(
+      presentCloudSession(session({ phase: "ready", machineSetup: true, machineLabel: "ubuntu" }))
+        .detail,
+    ).toContain("ubuntu");
   });
 
   it("offers no plain session in place of an ended setup session", () => {

@@ -21,6 +21,7 @@ import { pullRequestEnvironment } from "~/state/pullRequests";
 import { cn } from "~/lib/utils";
 import { useOpenLink } from "~/browser/useOpenLink";
 import { formatRelativeTimeLabel } from "~/timestampFormat";
+import { ChangeRequestSummarySlot } from "~/t3team/packs/t3team-changeRequestSlots";
 
 import { Button } from "../ui/button";
 import { PullRequestEditButton } from "./PullRequestEditButton";
@@ -822,6 +823,8 @@ export function PullRequestSummaryTab({
           ) : null}
         </div>
       </section>
+
+      <ChangeRequestSummarySlot reference={reference} detail={detail} />
 
       <Section key={`description:${detail.url}`} title="Description" keepMounted>
         <div className="group">

@@ -74,6 +74,31 @@ export function resolveFromHost(
   }
 }
 
+/** The query parameter a recipe config import carries (t3team-recipeConfigLoad.ts). */
+export const CONFIG_VERSION_PARAM = "t3team-config";
+
+/**
+ * A recipe config is imported with `?t3team-config=<version>`; every file it imports inherits
+ * that version, so an edited policy script reloads with the config instead of staying cached
+ * for the life of the process. Only relative imports of a versioned parent change: a package
+ * (the SDK, `effect`) is loaded once, never a fresh copy per config edit.
+ */
+export function withConfigVersion(
+  url: string,
+  parentURL: string | undefined,
+  specifier: string,
+): string {
+  if (parentURL === undefined || !url.startsWith("file:") || !specifier.startsWith(".")) {
+    return url;
+  }
+  const version = new URL(parentURL).searchParams.get(CONFIG_VERSION_PARAM);
+  if (version === null) return url;
+  const child = new URL(url);
+  if (child.searchParams.has(CONFIG_VERSION_PARAM)) return url;
+  child.searchParams.set(CONFIG_VERSION_PARAM, version);
+  return child.toString();
+}
+
 let installed = false;
 
 /**
@@ -88,7 +113,9 @@ export function ensureProjectRecipeModuleResolution(): void {
   NodeModule.registerHooks({
     resolve(specifier, context, nextResolve) {
       try {
-        return nextResolve(specifier, context);
+        const resolved = nextResolve(specifier, context);
+        const url = withConfigVersion(resolved.url, context.parentURL, specifier);
+        return url === resolved.url ? resolved : { ...resolved, url };
       } catch (error) {
         if (!isResolvableFromHost(specifier)) {
           throw error;

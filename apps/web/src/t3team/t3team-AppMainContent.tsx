@@ -115,6 +115,10 @@ export function AppMainContent({
       onOpenTicket={onOpenTicket}
       getThreadsForProject={getThreadsForProject}
       onRememberEmbeddedThread={(threadId) => onThreadDisplayModeChange(threadId, "embedded")}
+      onOpenThread={onOpenThread}
+      onOpenFullThread={onOpenFullThread}
+      onThreadKickoffConsumed={onThreadKickoffConsumed}
+      onKickoffProjectThread={onKickoffProjectThread}
     />
   );
 

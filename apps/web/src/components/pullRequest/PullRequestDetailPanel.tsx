@@ -1,4 +1,5 @@
 import { parseChangeRequestUrl } from "@t3tools/shared/changeRequestUrl";
+import { WatchedPullRequestIndicator } from "./t3team-WatchedPullRequestIndicator";
 import { useAtomValue } from "@effect/atom-react";
 import { usePullRequestStack } from "~/state/usePullRequestStack";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
@@ -1742,6 +1743,12 @@ export function PullRequestDetailPanel({
                   />
                   <TooltipPopup side="top">{openOnHostLabel(detail.provider)}</TooltipPopup>
                 </Tooltip>
+                <WatchedPullRequestIndicator
+                  environmentId={environmentId}
+                  host={reference.host}
+                  repository={reference.repository}
+                  number={reference.number}
+                />
               </>
             ) : null}
           </div>
@@ -1797,6 +1804,12 @@ export function PullRequestDetailPanel({
                   />
                   <TooltipPopup side="top">{openOnHostLabel(detail.provider)}</TooltipPopup>
                 </Tooltip>
+                <WatchedPullRequestIndicator
+                  environmentId={environmentId}
+                  host={reference.host}
+                  repository={reference.repository}
+                  number={reference.number}
+                />
                 <Tooltip>
                   <TooltipTrigger
                     render={

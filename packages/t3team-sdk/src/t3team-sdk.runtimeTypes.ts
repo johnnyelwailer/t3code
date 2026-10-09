@@ -22,6 +22,7 @@ export const PRIMITIVE_KINDS = [
   "thread.launch",
   "thread.launched",
   "run.facts",
+  "config.resolve",
 ] as const;
 
 export type PrimitiveKind = (typeof PRIMITIVE_KINDS)[number];

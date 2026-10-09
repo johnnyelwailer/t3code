@@ -1,4 +1,5 @@
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
+import { WatchedPullRequestIndicator } from "~/components/pullRequest/t3team-WatchedPullRequestIndicator";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
 /**
  * The thread details panel's pull request row: what the thread's pull request is, and the one
@@ -384,6 +385,30 @@ export function ThreadDetailsPrRow({
         </Tooltip>
       </>
     ) : null;
+  // t3team: a linked reference gets the universal indicator (hover card, click pins; stop lives
+  // inside it). The legacy button above stays for rows without a host-level reference.
+  const watchSegmentContent =
+    watchSegment && linkedReference ? (
+      <>
+        <span aria-hidden="true" className={THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS} />
+        <ThreadDetailsControl
+          render={<span />}
+          variant="ghost"
+          size="sm"
+          part={watchIsLast ? "secondary" : "checks"}
+        >
+          <WatchedPullRequestIndicator
+            environmentId={environmentId}
+            host={linkedReference.host}
+            repository={linkedReference.repository}
+            number={linkedReference.number}
+            size="md"
+          />
+        </ThreadDetailsControl>
+      </>
+    ) : (
+      watchSegment
+    );
 
   return (
     <>
@@ -406,7 +431,7 @@ export function ThreadDetailsPrRow({
             </TooltipTrigger>
             {rowTooltip}
           </Tooltip>
-          {watchSegment}
+          {watchSegmentContent}
           {checksRollup !== null && !conflicting && !detail.isDraft ? (
             <>
               <span aria-hidden="true" className={THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS} />
@@ -462,7 +487,7 @@ export function ThreadDetailsPrRow({
             </TooltipTrigger>
             {rowTooltip}
           </Tooltip>
-          {watchSegment}
+          {watchSegmentContent}
         </div>
       ) : (
         <Tooltip>

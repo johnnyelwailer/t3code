@@ -13,6 +13,7 @@ import { CommandId, EventId, ProjectId, ThreadId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 
 import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
 import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
@@ -51,7 +52,8 @@ export function makeWorkflowStubRuntime(options: {
   const threadLaunch = makeThreadLaunchFake();
   const host = T3TeamWorkflowHost.layer.pipe(
     Layer.provide(threadLaunch.layer.pipe(Layer.provideMerge(threads))),
-    Layer.provide(Layer.mergeAll(threads, foundation, database)),
+    // `getConfig()` reads the project's config files from its workspace.
+    Layer.provide(Layer.mergeAll(threads, foundation, database, persistence, NodeServices.layer)),
   );
   const core = Layer.mergeAll(
     orchestration,
