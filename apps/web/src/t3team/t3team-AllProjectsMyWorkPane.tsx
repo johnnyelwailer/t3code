@@ -14,8 +14,8 @@ import { useT3TeamScratchHomeChat } from "~/t3team/t3team-useScratchHomeChat";
 
 /**
  * The all-projects My Work home with the same detail aside as a project dashboard: a PR or ticket
- * a digest row opens shows beside the digest. Without a selection the aside stays the generic
- * kickoff host (recipes / sidecar), same as a project dashboard — not a PR-only empty state.
+ * a digest row opens shows beside the digest. When nothing is in detail the aside is the generic
+ * kickoff host (recipes / sidecar) — same rule as a single-project dashboard.
  * Collapsed until something is opened (or the user expands it).
  */
 export function AllProjectsMyWorkPane({

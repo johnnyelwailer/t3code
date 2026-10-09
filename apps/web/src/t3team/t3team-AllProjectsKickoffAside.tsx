@@ -8,9 +8,10 @@ import type { ProjectKickoffThreadInput } from "~/t3team/t3team-kickoffTypes";
 import { ProjectDashboardKickoffAside } from "~/t3team/t3team-ProjectDashboardKickoffAside";
 
 /**
- * Default aside on the all-projects My Work home when no PR/ticket is open: the same generic
- * kickoff host a project dashboard uses (recipe quick-starts / sidecar), aimed at Scratch
- * ("No project"). Detail only replaces this while something is selected.
+ * Default aside when no PR/ticket is open on the all-projects My Work home: the same generic
+ * kickoff host a project dashboard uses when its detail is empty (recipe quick-starts /
+ * sidecar), aimed at Scratch ("No project"). Detail only replaces this while something is
+ * selected — all-projects vs single-project is irrelevant; empty detail is the condition.
  */
 export function AllProjectsKickoffAside({
   scratchProject,
