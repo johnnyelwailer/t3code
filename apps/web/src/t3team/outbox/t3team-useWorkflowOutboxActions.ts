@@ -32,7 +32,13 @@ export function useT3TeamWorkflowOutboxActions(input: {
   readonly backend: T3TeamOutboxBackend | null | undefined;
   readonly environmentId: string | null;
   readonly threadId: string;
+  /**
+   * False when the environment reads as connected but a direct send cannot be made right now (its
+   * connection details are missing for a moment around a reconnect); the send is queued instead.
+   */
+  readonly canSendDirect?: () => boolean;
 }) {
+  const { canSendDirect } = input;
   const environment = useEnvironment(input.environmentId as never);
   const availableRef = useRef(false);
   availableRef.current = environment?.connection.phase === "connected";
@@ -46,7 +52,7 @@ export function useT3TeamWorkflowOutboxActions(input: {
       correlationId: string;
     }) => {
       if (!input.backend) return;
-      if (!availableRef.current && input.environmentId) {
+      if (!(availableRef.current && (canSendDirect?.() ?? true)) && input.environmentId) {
         const queued = enqueueT3TeamOutboxEntry(
           makeT3TeamOutboxEntry(
             "workflow-answer",
@@ -71,13 +77,13 @@ export function useT3TeamWorkflowOutboxActions(input: {
         correlationId: decision.correlationId,
       });
     },
-    [input.backend, input.environmentId],
+    [input.backend, input.environmentId, canSendDirect],
   );
 
   const submitRecipeCardAction = useCallback(
     async (action: { cardId: string; actionId: string; submit?: Record<string, unknown> }) => {
       if (!input.backend) return;
-      if (!availableRef.current && input.environmentId) {
+      if (!(availableRef.current && (canSendDirect?.() ?? true)) && input.environmentId) {
         const queued = enqueueT3TeamOutboxEntry(
           makeT3TeamOutboxEntry(
             "recipe-card-action",
@@ -100,7 +106,7 @@ export function useT3TeamWorkflowOutboxActions(input: {
         ...(action.submit ? { submit: action.submit } : {}),
       });
     },
-    [input.backend, input.threadId, input.environmentId],
+    [input.backend, input.threadId, input.environmentId, canSendDirect],
   );
 
   return { resolveWorkflowDecision, submitRecipeCardAction };

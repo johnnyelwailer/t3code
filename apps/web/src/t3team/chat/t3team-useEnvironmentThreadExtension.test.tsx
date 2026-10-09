@@ -6,10 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 const environmentPhase = vi.hoisted(() => ({ value: "connected" }));
 const preparedConnection = vi.hoisted(() => ({
-  value: null as null | {
-    httpBaseUrl: string;
-    httpAuthorization: { _tag: "Bearer"; token: string } | null;
-  },
+  value: null as null | { environmentId: string; httpBaseUrl: string },
+}));
+const environmentPost = vi.hoisted(() => ({
+  calls: [] as Array<{ prepared: unknown; path: string; body: unknown }>,
+  reply: { status: 200, payload: { ok: true } as unknown },
 }));
 
 vi.mock("~/state/environments", () => ({
@@ -20,6 +21,24 @@ vi.mock("~/state/session", () => ({
 }));
 vi.mock("~/t3team/chat/t3team-useThreadOutboxDock", () => ({
   useT3TeamThreadOutboxDock: () => undefined,
+}));
+// The environment request itself (bearer or DPoP signing) is covered in client-runtime
+// (`t3team-environmentJsonPost.test.ts`); here the runtime command is replaced by a recorder.
+vi.mock("~/connection/runtime", () => ({ connectionAtomRuntime: {} }));
+vi.mock("@t3tools/client-runtime/state/runtime", () => ({
+  createRuntimeCommand: (_runtime: unknown, options: { execute: (input: never) => unknown }) => ({
+    run: async (_registry: unknown, input: { prepared: unknown; path: string; body: unknown }) => {
+      environmentPost.calls.push(input);
+      return { _tag: "Success", value: environmentPost.reply };
+    },
+    options,
+  }),
+  runAtomCommand: (
+    registry: unknown,
+    command: { run: (registry: unknown, input: unknown) => unknown },
+    input: unknown,
+  ) => command.run(registry, input),
+  squashAtomCommandFailure: (result: { cause: unknown }) => result.cause,
 }));
 
 import {
@@ -43,7 +62,17 @@ const DECISION = {
 
 let root: Root | null = null;
 let host: HTMLElement | null = null;
-let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
+
+function expectQueuedAnswer() {
+  expect(getT3TeamOutboxSnapshot().entries).toMatchObject([
+    {
+      kind: "workflow-answer",
+      environmentId: RELAY_ENVIRONMENT,
+      threadId: "thread-1",
+      payload: { messageId: "reply-1", value: true, correlationId: "ask-1" },
+    },
+  ]);
+}
 
 async function mountExtension() {
   const latest: { extension: ReturnType<typeof useT3TeamEnvironmentThreadExtension> | null } = {
@@ -76,15 +105,9 @@ beforeEach(() => {
   });
   resetT3TeamOutboxStoreForTests();
   environmentPhase.value = "connected";
-  preparedConnection.value = {
-    httpBaseUrl: "http://127.0.0.1:50123/",
-    httpAuthorization: { _tag: "Bearer", token: "session-bearer" },
-  };
-  fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-    ok: true,
-    json: async () => ({ ok: true }),
-  } as Response);
-  vi.stubGlobal("fetch", fetchMock);
+  preparedConnection.value = { environmentId: "relay-env", httpBaseUrl: "http://127.0.0.1:50123/" };
+  environmentPost.calls = [];
+  environmentPost.reply = { status: 200, payload: { ok: true } };
 });
 
 afterEach(async () => {
@@ -96,26 +119,36 @@ afterEach(async () => {
 });
 
 describe("useT3TeamEnvironmentThreadExtension", () => {
-  it("answers a decision card on the thread's own environment, with that connection's bearer", async () => {
+  it("answers a decision card on the thread's own environment", async () => {
     const latest = await mountExtension();
 
     await latest.extension?.dispatchWorkflowDecision?.(DECISION);
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0] ?? [];
-    expect(String(url)).toBe("http://127.0.0.1:50123/api/t3team/thread/workflow/resolve-input");
-    expect(init).toMatchObject({
-      method: "POST",
-      credentials: "omit",
-      headers: { authorization: "Bearer session-bearer" },
-    });
-    expect(JSON.parse(String(init?.body))).toEqual({
-      threadId: "thread-1",
-      text: "Open it",
-      messageId: "reply-1",
-      value: true,
-      correlationId: "ask-1",
-    });
+    expect(environmentPost.calls).toEqual([
+      {
+        prepared: preparedConnection.value,
+        path: "/api/t3team/thread/workflow/resolve-input",
+        body: {
+          threadId: "thread-1",
+          text: "Open it",
+          messageId: "reply-1",
+          value: true,
+          correlationId: "ask-1",
+        },
+      },
+    ]);
+  });
+
+  it("rejects with the server's own reason when it refuses the answer", async () => {
+    environmentPost.reply = {
+      status: 400,
+      payload: { error: "This decision is no longer pending — the workflow has moved on." },
+    };
+    const latest = await mountExtension();
+
+    await expect(latest.extension?.dispatchWorkflowDecision?.(DECISION)).rejects.toThrow(
+      "This decision is no longer pending",
+    );
   });
 
   it("queues the answer instead of sending while the environment is not connected", async () => {
@@ -124,47 +157,33 @@ describe("useT3TeamEnvironmentThreadExtension", () => {
 
     await latest.extension?.dispatchWorkflowDecision?.(DECISION);
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(getT3TeamOutboxSnapshot().entries).toMatchObject([
-      {
-        kind: "workflow-answer",
-        environmentId: RELAY_ENVIRONMENT,
-        threadId: "thread-1",
-        payload: { messageId: "reply-1", value: true, correlationId: "ask-1" },
-      },
-    ]);
+    expect(environmentPost.calls).toEqual([]);
+    expectQueuedAnswer();
   });
 
-  it("rejects instead of sending unauthenticated when the connection uses a DPoP credential", async () => {
-    preparedConnection.value = {
-      httpBaseUrl: "https://relay.example/",
-      httpAuthorization: { _tag: "Dpop", accessToken: "t", expiresAtEpochMs: 1 } as never,
-    };
+  it("queues the answer when the environment reads as connected but its connection is not ready", async () => {
+    preparedConnection.value = null;
     const latest = await mountExtension();
 
-    await expect(latest.extension?.dispatchWorkflowDecision?.(DECISION)).rejects.toThrow(
-      /relay sign-in/,
-    );
-    expect(fetchMock).not.toHaveBeenCalled();
+    await latest.extension?.dispatchWorkflowDecision?.(DECISION);
+
+    expect(environmentPost.calls).toEqual([]);
+    expectQueuedAnswer();
   });
 
   it("controls a run on the thread's own environment", async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({ ok: true, status: "paused" }),
-    } as Response);
+    environmentPost.reply = { status: 200, payload: { ok: true, status: "paused" } };
     const latest = await mountExtension();
 
     await expect(
       latest.extension?.onControlWorkflow?.({ workflowRunId: "run-1", action: "pause" }),
     ).resolves.toMatchObject({ status: "paused" });
 
-    const [url, init] = fetchMock.mock.calls[0] ?? [];
-    expect(String(url)).toBe("http://127.0.0.1:50123/api/t3team/thread/workflow/control");
-    expect(JSON.parse(String(init?.body))).toEqual({
-      threadId: "thread-1",
-      workflowRunId: "run-1",
-      action: "pause",
-    });
+    expect(environmentPost.calls).toMatchObject([
+      {
+        path: "/api/t3team/thread/workflow/control",
+        body: { threadId: "thread-1", workflowRunId: "run-1", action: "pause" },
+      },
+    ]);
   });
 });

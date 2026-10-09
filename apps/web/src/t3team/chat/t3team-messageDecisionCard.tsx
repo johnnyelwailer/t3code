@@ -10,7 +10,6 @@
  * `waiting-for-input` message with no user reply after it (mirrors
  * `isThreadWaitingForRecipeInput`); older cards in the history render disabled.
  */
-import { useState } from "react";
 import { CheckIcon, CircleHelpIcon, CornerDownRightIcon } from "lucide-react";
 
 import type { ProjectRecipeWorkflowDecisionPayload } from "@t3tools/project-recipes";
@@ -19,6 +18,7 @@ import type { ChatMessage } from "~/types";
 
 import { T3TeamWorkflowQuestionProse } from "./t3team-WorkflowQuestionProse";
 import { T3TeamWorkflowDecisionAffordance } from "./t3team-messageDecisionAffordance";
+import { useDecisionSubmit } from "./t3team-useDecisionSubmit";
 import type { T3TeamWorkflowDecisionAnswer } from "./t3team-workflowDecisionAnswers";
 // Re-exported for existing callers — the attachment lookup itself now lives in
 // `t3team-workflowDecisionAnswers.ts` so that module doesn't need to import back from here (that
@@ -77,7 +77,7 @@ export function T3TeamWorkflowDecisionCard(props: {
   onChoose?: WorkflowDecisionChooseHandler | undefined;
 }) {
   const { decision, active, unavailableMessage, answer, onChoose } = props;
-  const [submitting, setSubmitting] = useState<string | null>(null);
+  const { submitting, error, submit } = useDecisionSubmit(onChoose);
   const affordance = decision.affordance;
   const unavailable = unavailableMessage !== undefined;
   const locked = unavailable || !active || !onChoose || submitting !== null;
@@ -88,10 +88,7 @@ export function T3TeamWorkflowDecisionCard(props: {
     if (!onChoose || locked) {
       return;
     }
-    setSubmitting(choice);
-    void onChoose({ choice, value, correlationId: decision.correlationId }).finally(() =>
-      setSubmitting((current) => (current === choice ? null : current)),
-    );
+    submit(choice, value, decision.correlationId);
   };
 
   return (
@@ -132,6 +129,16 @@ export function T3TeamWorkflowDecisionCard(props: {
           onChoose={runChoose}
         />
       )}
+
+      {error ? (
+        <p
+          role="alert"
+          className="mt-2 text-xs font-medium text-destructive"
+          data-workflow-decision-status="error"
+        >
+          {error}
+        </p>
+      ) : null}
 
       {/*
         The run is BLOCKED here. A muted one-liner read as a status note, so the card looked like a

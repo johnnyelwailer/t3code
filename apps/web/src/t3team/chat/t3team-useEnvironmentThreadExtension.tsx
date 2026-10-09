@@ -20,17 +20,18 @@ export function useT3TeamEnvironmentThreadExtension(
   environmentId: EnvironmentId,
   threadId: string,
 ): ChatViewT3TeamExtensionProps {
-  const backend = useMemo(
-    () =>
-      createEnvironmentWorkflowBackend({
-        resolveConnection: () => readPreparedConnection(environmentId),
-      }),
+  const backend = useMemo(() => createEnvironmentWorkflowBackend(environmentId), [environmentId]);
+  // "Connected" can be seen a moment before the prepared connection is readable again after a
+  // reconnect; queue then, as when offline, rather than fail the click.
+  const canSendDirect = useCallback(
+    () => readPreparedConnection(environmentId) !== null,
     [environmentId],
   );
   const { resolveWorkflowDecision, submitRecipeCardAction } = useT3TeamWorkflowOutboxActions({
     backend,
     environmentId,
     threadId,
+    canSendDirect,
   });
   const composerBannerLeading = useT3TeamThreadOutboxDock(environmentId, threadId, backend);
   const onControlWorkflow = useCallback<

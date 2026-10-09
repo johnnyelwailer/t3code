@@ -13,10 +13,6 @@ import { createMyWorkDigestArrangementApi } from "./t3team-myworkDigestArrangeme
 import { createPrimaryEnvironmentOrchestrationApi } from "./t3team-orchestrationApi";
 import { postJson, resolveHttpBaseUrl, resolveWsUrl } from "./t3team-t3BackendHttp";
 import { createThreadWorkflowApi } from "./t3team-threadWorkflowApi";
-import type {
-  LaunchProjectRecipeWorkflowRequest,
-  LaunchProjectRecipeWorkflowResponse,
-} from "@t3tools/project-recipes";
 
 export function createT3Backend(wsBaseUrl: string): BackendApi {
   const httpBaseUrl = resolveHttpBaseUrl(wsBaseUrl);
@@ -65,15 +61,9 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     );
   }
 
-  async function launchRecipeWorkflow(input: LaunchProjectRecipeWorkflowRequest) {
-    return postJson<LaunchProjectRecipeWorkflowRequest, LaunchProjectRecipeWorkflowResponse>(
-      httpBaseUrl,
-      "/api/t3team/thread/recipe-workflow/launch",
-      input,
-    );
-  }
-
-  const threadWorkflow = createThreadWorkflowApi(() => ({ httpBaseUrl }));
+  const threadWorkflow = createThreadWorkflowApi((routePath, body) =>
+    postJson(httpBaseUrl, routePath, body),
+  );
 
   const atlassian = {
     ...createAtlassianBackendApi(httpBaseUrl),
@@ -93,7 +83,6 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     connect,
     disconnect,
     orchestration: createPrimaryEnvironmentOrchestrationApi(),
-    launchRecipeWorkflow,
     ...threadWorkflow,
     listThreadPlacements,
     syncThreadToolContext,

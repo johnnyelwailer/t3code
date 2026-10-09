@@ -243,6 +243,10 @@
       "types": "./src/state/outdatedServerUpdate.ts",
       "default": "./src/state/outdatedServerUpdate.ts"
     },
+    "./state/environment-json-post": {
+      "types": "./src/state/t3team-environmentJsonPost.ts",
+      "default": "./src/state/t3team-environmentJsonPost.ts"
+    },
     "./state/session": {
       "types": "./src/state/session.ts",
       "default": "./src/state/session.ts"

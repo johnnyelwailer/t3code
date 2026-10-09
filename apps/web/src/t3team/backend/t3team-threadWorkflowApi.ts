@@ -6,37 +6,38 @@
  * differ, so the routes are not repeated.
  */
 import type {
+  LaunchProjectRecipeWorkflowRequest,
+  LaunchProjectRecipeWorkflowResponse,
   SubmitProjectRecipeCardActionRequest,
   SubmitProjectRecipeCardActionResponse,
 } from "@t3tools/project-recipes";
 
 import type { BackendApi } from "./t3team-types";
-import { postJson, type BackendAuthInit } from "./t3team-t3BackendHttp";
 
 export type ThreadWorkflowApi = Pick<
   BackendApi,
-  "resolveWorkflowInput" | "submitRecipeCardAction"
+  "launchRecipeWorkflow" | "resolveWorkflowInput" | "submitRecipeCardAction"
 > &
   Required<Pick<BackendApi, "controlWorkflow">>;
 
-/** Where a request goes right now. Resolved per call so a reconnect's new URL or token is used. */
-export interface ThreadWorkflowTarget {
-  readonly httpBaseUrl: string;
-  readonly auth?: () => Promise<BackendAuthInit>;
-}
+/** POST a JSON body to a t3team route of the server that owns the thread, and decode the reply. */
+export type ThreadWorkflowPost = <TInput extends object, TResponse>(
+  routePath: string,
+  body: TInput,
+) => Promise<TResponse>;
 
 type ControlWorkflowInput = Parameters<NonNullable<BackendApi["controlWorkflow"]>>[0];
 type ControlWorkflowResult = Awaited<ReturnType<NonNullable<BackendApi["controlWorkflow"]>>>;
 type ResolveWorkflowInput = Parameters<BackendApi["resolveWorkflowInput"]>[0];
 
-export function createThreadWorkflowApi(
-  resolveTarget: () => ThreadWorkflowTarget,
-): ThreadWorkflowApi {
-  const post = <TInput extends object, TResponse>(routePath: string, body: TInput) => {
-    const { httpBaseUrl, auth } = resolveTarget();
-    return postJson<TInput, TResponse>(httpBaseUrl, routePath, body, auth ? { auth } : undefined);
-  };
+export function createThreadWorkflowApi(post: ThreadWorkflowPost): ThreadWorkflowApi {
   return {
+    async launchRecipeWorkflow(input) {
+      return post<LaunchProjectRecipeWorkflowRequest, LaunchProjectRecipeWorkflowResponse>(
+        "/api/t3team/thread/recipe-workflow/launch",
+        input,
+      );
+    },
     async submitRecipeCardAction(input) {
       return post<SubmitProjectRecipeCardActionRequest, SubmitProjectRecipeCardActionResponse>(
         "/api/t3team/thread/recipe-workflow/card-action",

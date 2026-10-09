@@ -2,48 +2,77 @@
  * The thread-workflow actions for a thread on ANY environment, not just this app's primary server.
  *
  * `createT3Backend` talks to the primary server with the primary's own credential. A cloud
- * session, SSH or WSL environment is a different server: its decision-card answer must go to THAT
- * server (the workflow, and its pending ask, live there) and carry THAT connection's credential.
- * Both come from the environment's prepared connection, read at call time so a reconnect's new
- * URL or bearer is used.
+ * session, SSH, WSL or T3 Connect environment is a different server: a decision-card answer must
+ * go to THAT server (the workflow, and its pending ask, live there) and carry THAT connection's
+ * credential. The prepared connection is read per call, so a reconnect's new URL or token is used,
+ * and the request is authenticated by the client runtime's environment HTTP auth (bearer, or a
+ * signed and renewable DPoP proof), the same as every other request to that environment.
  */
 import type { PreparedConnection } from "@t3tools/client-runtime/connection";
+import {
+  postEnvironmentJson,
+  type EnvironmentJsonPostResponse,
+} from "@t3tools/client-runtime/state/environment-json-post";
+import {
+  createRuntimeCommand,
+  runAtomCommand,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
+import type { EnvironmentId } from "@t3tools/contracts";
 
+import { connectionAtomRuntime } from "~/connection/runtime";
+import { appAtomRegistry } from "~/rpc/atomRegistry";
+import { readPreparedConnection } from "~/state/session";
+import { BackendApiError } from "./t3team-t3BackendHttp";
 import { createThreadWorkflowApi, type ThreadWorkflowApi } from "./t3team-threadWorkflowApi";
-import type { BackendAuthInit } from "./t3team-t3BackendHttp";
 
-export type EnvironmentHttpConnection = Pick<
-  PreparedConnection,
-  "httpBaseUrl" | "httpAuthorization"
->;
+const environmentJsonPost = createRuntimeCommand(connectionAtomRuntime, {
+  label: "t3team:environment-json-post",
+  execute: (input: {
+    readonly prepared: PreparedConnection;
+    readonly path: string;
+    readonly body: unknown;
+  }) => postEnvironmentJson(input),
+});
 
-/**
- * Bearer connections send their token (and no cookies); a connection with no credential relies on
- * the environment's session cookie, which a cross-origin request only carries when credentialed.
- * A DPoP (T3 Connect) credential needs a per-request signed proof that this plain `fetch` path
- * cannot make, so it fails loudly instead of sending an unauthenticated request.
- */
-export async function environmentAuthInit(
-  authorization: EnvironmentHttpConnection["httpAuthorization"],
-): Promise<BackendAuthInit> {
-  if (authorization === null) return { credentials: "include", headers: {} };
-  if (authorization._tag === "Bearer") {
-    return { credentials: "omit", headers: { authorization: `Bearer ${authorization.token}` } };
+/** Thrown when the environment has no prepared connection (between reconnects, or never paired). */
+export class EnvironmentNotConnectedError extends Error {
+  constructor() {
+    super("Not connected to this environment.");
+    this.name = "EnvironmentNotConnectedError";
   }
-  throw new Error("This environment's relay sign-in cannot answer workflow cards from here yet.");
 }
 
-export function createEnvironmentWorkflowBackend(input: {
-  readonly resolveConnection: () => EnvironmentHttpConnection | null;
-}): ThreadWorkflowApi {
-  return createThreadWorkflowApi(() => {
-    const connection = input.resolveConnection();
-    if (connection === null) {
-      throw new Error("Not connected to this environment.");
-    }
-    return {
-      httpBaseUrl: connection.httpBaseUrl,
-      auth: () => environmentAuthInit(connection.httpAuthorization),
-    };
+/** Same outcome shape as `postJson`: the route's own `error`/`code` on a non-2xx reply. */
+function unwrapResponse<TResponse>(path: string, response: EnvironmentJsonPostResponse): TResponse {
+  const payload = (response.payload ?? null) as { error?: unknown; code?: unknown } | null;
+  if (response.status < 200 || response.status >= 300) {
+    throw new BackendApiError(
+      typeof payload?.error === "string"
+        ? payload.error
+        : `Request to ${path} failed with ${response.status}`,
+      typeof payload?.code === "string" ? payload.code : undefined,
+    );
+  }
+  if (payload === null) throw new Error("Empty response from backend.");
+  return payload as TResponse;
+}
+
+export function createEnvironmentWorkflowBackend(environmentId: EnvironmentId): ThreadWorkflowApi {
+  return createThreadWorkflowApi(async (path, body) => {
+    const prepared = readPreparedConnection(environmentId);
+    if (prepared === null) throw new EnvironmentNotConnectedError();
+    const result = await runAtomCommand(
+      appAtomRegistry,
+      environmentJsonPost,
+      { prepared, path, body },
+      { label: "t3team:environment-json-post", reportFailure: false },
+    );
+    if (result._tag === "Failure") throw toError(squashAtomCommandFailure(result));
+    return unwrapResponse(path, result.value);
   });
+}
+
+function toError(cause: unknown): Error {
+  return cause instanceof Error ? cause : new Error(String(cause));
 }
