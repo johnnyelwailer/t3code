@@ -19,10 +19,16 @@ export function useProjectDashboardKanbanMatrixLayout({
   kanbanColumns,
   allTickets,
   parentChildGroups,
+  laneMinWidthRem = 17,
+  columnGapRem = 0.75,
 }: {
   kanbanColumns: ProjectTicketKanbanColumns;
   allTickets: readonly ProjectTicket[] | undefined;
   parentChildGroups: TicketHierarchy;
+  /** Semantic-zoom lane min width; matrix grid tracks must use the same value. */
+  laneMinWidthRem?: number;
+  /** Horizontal gap between lanes; shrinks with zoom so more columns fit. */
+  columnGapRem?: number;
 }) {
   const matchedTickets = useMemo(
     () => kanbanColumns.flatMap((column) => column.items),
@@ -161,7 +167,8 @@ export function useProjectDashboardKanbanMatrixLayout({
   }, []);
   const boardRowCount = Math.max(layout.maxRow, PROJECT_DASHBOARD_KANBAN_MATRIX_MIN_CARD_ROWS + 6);
   const boardBodyStyle = {
-    gridTemplateColumns: `repeat(${kanbanColumns.length}, minmax(17rem, 1fr))`,
+    gridTemplateColumns: `repeat(${kanbanColumns.length}, minmax(${laneMinWidthRem}rem, 1fr))`,
+    columnGap: `${columnGapRem}rem`,
     gridAutoRows: `${PROJECT_DASHBOARD_KANBAN_MATRIX_ROW_HEIGHT_PX}px`,
   } satisfies CSSProperties;
 

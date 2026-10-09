@@ -10,16 +10,17 @@ export interface ProjectDashboardKanbanColumnCollapse {
   readonly onToggle: (columnId: string, collapsed: boolean) => void;
 }
 
-const OPEN_COLUMN_WIDTH = "minmax(17rem, 1fr)";
 const COLLAPSED_COLUMN_WIDTH = "2.75rem";
 
 /** One track per column: open columns share the width, a collapsed one is a narrow strip. */
 export function buildKanbanGridTemplateColumns(
   columns: ProjectTicketKanbanColumns,
   collapsedIds: ReadonlySet<string> | undefined,
+  laneMinWidthRem: number = 17,
 ): string {
+  const openColumnWidth = `minmax(${laneMinWidthRem}rem, 1fr)`;
   return columns
-    .map((column) => (collapsedIds?.has(column.id) ? COLLAPSED_COLUMN_WIDTH : OPEN_COLUMN_WIDTH))
+    .map((column) => (collapsedIds?.has(column.id) ? COLLAPSED_COLUMN_WIDTH : openColumnWidth))
     .join(" ");
 }
 
