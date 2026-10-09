@@ -13,7 +13,7 @@ import {
   launchKickoffRecipe,
   runsOfWorkflow,
   resolveKickoffRecipe,
-  userMessageText,
+  typedUserMessage,
 } from "./t3team-kickoffRecipe.ts";
 
 const source: PackRecipeSource = {
@@ -84,24 +84,30 @@ describe("runsOfWorkflow", () => {
   });
 });
 
-describe("userMessageText", () => {
-  const thread = ThreadId.make("t1");
-  const message = (overrides: Record<string, unknown>) =>
+describe("typedUserMessage", () => {
+  const message = (overrides: Record<string, unknown>, threadId = "t1") =>
     ({
       event: {
         type: "message.updated",
-        threadId: "t1",
+        threadId,
         payload: { role: "user", createdBy: "user", text: "fix the build", ...overrides },
       },
     }) as never;
 
-  it("takes a message the user typed on the thread", () => {
-    assert.strictEqual(userMessageText(message({}), thread), "fix the build");
+  it("takes a message the user typed, from whichever thread it was typed on", () => {
+    assert.deepStrictEqual(typedUserMessage(message({})), {
+      threadId: "t1",
+      text: "fix the build",
+    });
+    assert.deepStrictEqual(typedUserMessage(message({}, "t2")), {
+      threadId: "t2",
+      text: "fix the build",
+    });
   });
 
-  it("ignores the agent, the system, and other threads", () => {
-    assert.isUndefined(userMessageText(message({ role: "assistant" }), thread));
-    assert.isUndefined(userMessageText(message({ createdBy: "system" }), thread));
-    assert.isUndefined(userMessageText(message({}), ThreadId.make("t2")));
+  it("ignores the agent, the system and other event types", () => {
+    assert.isUndefined(typedUserMessage(message({ role: "assistant" })));
+    assert.isUndefined(typedUserMessage(message({ createdBy: "system" })));
+    assert.isUndefined(typedUserMessage({ event: { type: "thread.created" } } as never));
   });
 });
