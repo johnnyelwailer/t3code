@@ -124,6 +124,11 @@ export {
   type ResolvedRecipeConfig,
 } from "./t3team-sdk.recipeConfig.ts";
 export {
+  callRef,
+  type CallRefOptions,
+  type ConfigCodeRef,
+} from "./t3team-sdk.callRef.ts";
+export {
   getConfig,
   RecipeConfigError,
   type RecipeConfigQuery,
