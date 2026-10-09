@@ -48,6 +48,7 @@ import { drainSignalParkInbox } from "./t3team-workflowSignalParkDrain.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { makeWorkflowRunRehydrator } from "./t3team-workflowRehydrateRun.ts";
 import { T3TeamScriptHost } from "./t3team-scriptHostContext.ts";
+import { makeRehydratedRunWorkspace } from "./t3team-workflowRehydrateWorkspace.ts";
 import {
   T3TeamWorkflowSignalRehydrateGate,
   T3TeamWorkflowSignalRehydrateGateLive,
@@ -169,6 +170,13 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
       nowIso,
       signalStore: Option.getOrUndefined(yield* Effect.serviceOption(WorkflowSignalStore)),
       scriptHost: Option.getOrUndefined(yield* Effect.serviceOption(T3TeamScriptHost)),
+      workspaceFor: yield* makeRehydratedRunWorkspace([
+        ...suspended,
+        ...sleeping,
+        ...paused,
+        ...queued,
+        ...watching,
+      ]),
     });
 
     // Durable queued rows preserve FIFO order (`listByStatus` sorts by creation time). Each

@@ -149,6 +149,8 @@ export function createWorkflowRunControllerEnv(
     }),
     ...t3teamWorkflowHostToolRunOptions(input.hostToolClient),
     scripts: input.scripts ?? {},
+    ...(input.workspace === undefined ? {} : { workspace: input.workspace }),
+    ...(input.workspaceRoot === undefined ? {} : { workspaceRoot: input.workspaceRoot }),
     ...(input.scriptHost === undefined ? {} : { scriptHost: input.scriptHost }),
     defaultModel: toWorkflowModelSelection(
       input.defaultAgentModelSelection ?? input.modelSelection,

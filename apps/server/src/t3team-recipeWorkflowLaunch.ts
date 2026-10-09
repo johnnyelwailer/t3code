@@ -15,12 +15,14 @@ import { PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH } from "@t3tools/project-recipes";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 
 import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import { loadThreadProjectContext } from "./t3team-thread-recipe-workflow-routes-shared.ts";
+import { threadCheckoutRoot } from "./t3team-threadCheckoutRoot.ts";
 import { T3TeamScriptHost } from "./t3team-scriptHostContext.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
@@ -115,6 +117,7 @@ export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* 
   // play-as-shape preview, then the durable engine launch — the same funnel the ephemeral
   // `t3team.orchestration.run` tool drives through.
   const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   return yield* launchPreparedWorkflow(
     {
       registry,
@@ -123,6 +126,7 @@ export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* 
       rearmScheduler: () => scheduler.rearm(),
       host,
       fileSystem,
+      path,
       ...(signalStore === undefined
         ? {}
         : {
@@ -139,6 +143,7 @@ export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* 
       // Scripts, host tools, script host and the recipe dir, persisted for rehydration.
       ...bindings,
       workspaceRoot: project.workspaceRoot,
+      checkoutRoot: threadCheckoutRoot(thread, project.workspaceRoot),
       launchThreadId: threadId,
       projectId: thread.projectId,
       modelSelection: input.modelSelection,
