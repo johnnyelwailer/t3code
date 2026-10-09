@@ -16,6 +16,8 @@ export const FAKE_LAUNCH_WORKTREE = "/worktrees/launched";
 
 export function makeThreadLaunchFake() {
   const launches: Array<ThreadLaunchInput> = [];
+  /** Set to make the next launch die right after its thread is created, as a crash would. */
+  const crash = { afterCreate: false };
   const layer = Layer.effect(
     ThreadLaunchService,
     Effect.gen(function* () {
@@ -39,6 +41,10 @@ export function makeThreadLaunchFake() {
             createdBy: input.createdBy,
             creationSource: input.creationSource,
           });
+          if (crash.afterCreate) {
+            crash.afterCreate = false;
+            return yield* Effect.die("crashed after create");
+          }
           return { threadId, resumed: false };
         }).pipe(Effect.orDie);
       return {
@@ -47,5 +53,5 @@ export function makeThreadLaunchFake() {
       } as unknown as ThreadLaunchService["Service"];
     }),
   );
-  return { layer, launches };
+  return { layer, launches, crash };
 }

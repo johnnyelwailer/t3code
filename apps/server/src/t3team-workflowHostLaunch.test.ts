@@ -25,7 +25,7 @@ import { FAKE_LAUNCH_WORKTREE, makeThreadLaunchFake } from "./t3team-threadLaunc
 import * as WorkflowHost from "./t3team-workflowHost.ts";
 import { launchedThreadIdentity } from "./t3team-workflowLaunchedThreadIds.ts";
 
-const { layer: ThreadLaunchFake, launches } = makeThreadLaunchFake();
+const { layer: ThreadLaunchFake, launches, crash } = makeThreadLaunchFake();
 
 const base = makeT3TeamV2TestLayer("t3team-workflow-host-launch");
 const services = Layer.mergeAll(
@@ -113,6 +113,34 @@ it.layer(TestLayer)("workflow host launchThread", (it) => {
         yield* host.launchThread({ ...launchInput, recipePath: "/repo/.nexi/recipes/other" }),
       );
       assert.notStrictEqual(other.threadId, first.threadId);
+    }),
+  );
+
+  it.effect("a launch that crashed after creating the thread is finished on the next pass", () =>
+    Effect.gen(function* () {
+      const host = yield* WorkflowHost.T3TeamWorkflowHost;
+      const facts = yield* T3TeamThreadFactsStore;
+      const crashKey = "pr:github.com/acme/app#11";
+      const threadId = ThreadId.make(
+        launchedThreadIdentity({ projectId, scope, key: crashKey }).threadId,
+      );
+      launches.length = 0;
+      crash.afterCreate = true;
+      const crashed = yield* Effect.exit(host.launchThread({ ...launchInput, key: crashKey }));
+      assert.isTrue(crashed._tag === "Failure");
+      assert.isUndefined((yield* facts.get(threadId))?.extensions?.[T3TEAM_LAUNCHED_BY_FACT_KEY]);
+
+      // The thread exists but its launch never completed: launching again replays the service's
+      // receipts under the same command id, then records who launched it.
+      const replayed = ok(yield* host.launchThread({ ...launchInput, key: crashKey }));
+      assert.deepStrictEqual(replayed, { threadId, created: true });
+      assert.strictEqual(launches.length, 2);
+      assert.strictEqual(launches[0]?.commandId, launches[1]?.commandId);
+      assert.isDefined((yield* facts.get(threadId))?.extensions?.[T3TEAM_LAUNCHED_BY_FACT_KEY]);
+
+      // Once recorded, a known key does not launch again.
+      assert.isFalse(ok(yield* host.launchThread({ ...launchInput, key: crashKey })).created);
+      assert.strictEqual(launches.length, 2);
     }),
   );
 

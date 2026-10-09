@@ -40,7 +40,13 @@ export function makeHostLaunchThread(deps: {
       if (existing !== null && existing.projectId !== input.projectId) {
         return yield* refuse(`Thread ${threadId} belongs to another project.`);
       }
-      if (existing === null) {
+      const previous = (yield* facts.get(threadId))?.extensions?.[T3TEAM_LAUNCHED_BY_FACT_KEY] as
+        | T3TeamLaunchedByFact
+        | undefined;
+      // The fact is written after the launch returns, so a thread without it may be a crashed
+      // launch that never sent its first message or prepared its workspace. The service replays
+      // its own receipts per command id, so launching again finishes the job and repeats nothing.
+      if (existing === null || previous === undefined) {
         if (Option.isNone(deps.launches)) return yield* refuse("This host cannot launch threads.");
         yield* deps.launches.value.launch({
           commandId: CommandId.make(identity.commandId),
@@ -74,9 +80,6 @@ export function makeHostLaunchThread(deps: {
         key: input.key,
         launchedAt: yield* nowIso,
       };
-      const previous = (yield* facts.get(threadId))?.extensions?.[T3TEAM_LAUNCHED_BY_FACT_KEY] as
-        | T3TeamLaunchedByFact
-        | undefined;
       if (
         previous?.runId !== input.runId ||
         previous.launchThreadId !== launchedBy.launchThreadId
@@ -85,6 +88,6 @@ export function makeHostLaunchThread(deps: {
           extensions: { [T3TEAM_LAUNCHED_BY_FACT_KEY]: launchedBy },
         });
       }
-      return answer({ threadId: identity.threadId, created: existing === null });
+      return answer({ threadId: identity.threadId, created: previous === undefined });
     });
 }
