@@ -69,6 +69,7 @@ function buildRunContexts(opts: {
     callTool,
     ...(host?.store === undefined ? {} : { store: host.store }),
     ...(host?.changeRequests === undefined ? {} : { changeRequests: host.changeRequests }),
+    ...(host?.project === undefined ? {} : { project: host.project }),
   };
   return { toolCtx: toolCtxRef, scriptCtx };
 }

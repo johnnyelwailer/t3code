@@ -545,6 +545,9 @@ export const make = Effect.gen(function* () {
     getDiffFileContents: (input) =>
       cli.getPullRequestDiffFileContents(input).pipe(Effect.mapError(fail("getDiffFileContents"))),
 
+    readFileAtRevision: (input) =>
+      cli.readFileAtRevision(input).pipe(Effect.mapError(fail("readFileAtRevision"))),
+
     getFilesViewed: (input) =>
       cli.getPullRequestFilesViewed(input).pipe(Effect.mapError(fail("getFilesViewed"))),
 

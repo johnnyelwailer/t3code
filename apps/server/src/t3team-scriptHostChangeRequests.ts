@@ -19,6 +19,7 @@ import {
 import * as Effect from "effect/Effect";
 
 import type { PullRequestService } from "./pullRequest/PullRequestService.ts";
+import { makeFileReads } from "./t3team-scriptHostFiles.ts";
 import { listChangeRequests } from "./t3team-scriptHostChangeRequestList.ts";
 import {
   clampDiffPageSize,
@@ -47,6 +48,8 @@ function toChangeRequestDetail(detail: PullRequestDetail, host: string): ChangeR
     headBranch: detail.headBranch,
     baseBranch: detail.baseBranch,
     headSha: detail.headSha ?? null,
+    baseSha: detail.baseSha ?? null,
+    isCrossRepository: detail.isCrossRepository ?? false,
     headRepository: detail.headRepositoryNameWithOwner ?? null,
     additions: detail.additions,
     deletions: detail.deletions,
@@ -58,11 +61,12 @@ function toChangeRequestDetail(detail: PullRequestDetail, host: string): ChangeR
   };
 }
 
-export function makeChangeRequestReader(
-  pullRequests: PullRequests,
-  projectId: ProjectId,
-): ChangeRequestReader {
-  const resolve = (ref: ChangeRequestRef) =>
+/**
+ * Pins a script's ref to a repository the service itself resolves for the run's project, or
+ * refuses before any provider is asked. Shared by every verb of the reader.
+ */
+const makeTargetResolver =
+  (pullRequests: PullRequests, projectId: ProjectId) => (ref: ChangeRequestRef) =>
     Effect.gen(function* () {
       if (!Number.isInteger(ref.number) || ref.number <= 0) {
         return yield* Effect.fail(
@@ -80,6 +84,13 @@ export function makeChangeRequestReader(
         return yield* Effect.fail(new ChangeRequestScopeError(ref.repository));
       return { projectId, host: linked.host, repository: linked.repository, number: ref.number };
     });
+
+export function makeChangeRequestReader(
+  pullRequests: PullRequests,
+  projectId: ProjectId,
+): ChangeRequestReader {
+  const resolve = makeTargetResolver(pullRequests, projectId);
+  const files = makeFileReads(pullRequests, resolve);
 
   return {
     list: (options) => Effect.runPromise(listChangeRequests(pullRequests, projectId, options)),
@@ -129,5 +140,6 @@ export function makeChangeRequestReader(
           return result;
         }),
       ),
+    ...files,
   };
 }
