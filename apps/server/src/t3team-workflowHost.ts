@@ -32,6 +32,7 @@ import { T3TeamThreadLineage } from "./t3team-v2/t3team-threadLineage.ts";
 import { T3TeamThreadMessageRecorder } from "./t3team-v2/t3team-threadMessageRecorder.ts";
 import { T3TeamThreadWorkflowAsk } from "./t3team-v2/t3team-threadWorkflowAsk.ts";
 import { syncWorkflowAskMirrors } from "./t3team-workflowHostAskMirror.ts";
+import { workflowChildCheckout } from "./t3team-workflowHostChildCheckout.ts";
 import { makeHeldWorkflowMessages } from "./t3team-workflowHostHeld.ts";
 import { splitWorkflowMessage } from "./t3team-workflowHostMessages.ts";
 import type {
@@ -98,12 +99,7 @@ const make = Effect.gen(function* () {
   const createThread = (input: WorkflowHostCreateThreadInput) =>
     Effect.gen(function* () {
       const threadId = ThreadId.make(input.threadId);
-      // An opted-in child works in its launch thread's checkout, as a delegated task does, so a
-      // recipe run on a worktree thread fixes that worktree rather than the project root.
-      const parent =
-        input.parentThreadId === undefined || input.inheritCheckout !== true
-          ? null
-          : yield* threads.getThreadShell(ThreadId.make(input.parentThreadId));
+      const checkout = yield* workflowChildCheckout(threads, input);
       // Deterministic: the engine re-fires a spawn only when its journal says it never landed,
       // and a receipt makes a duplicate a no-op rather than a second thread.
       yield* threads.dispatch({
@@ -115,8 +111,7 @@ const make = Effect.gen(function* () {
         modelSelection: input.modelSelection,
         runtimeMode: input.runtimeMode,
         interactionMode: input.interactionMode,
-        branch: parent?.branch ?? null,
-        worktreePath: parent?.worktreePath ?? null,
+        ...checkout,
         createdBy: "system",
         creationSource: "server",
       });
