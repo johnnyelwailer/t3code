@@ -27,6 +27,10 @@ import {
 } from "./t3team-projectRecipeDiscoveryShared.ts";
 import { resolveAgentRecipePath } from "./t3team-recipeAgentPaths.ts";
 import { validateWorkflowSourceStatic } from "./t3team-recipeAgentValidateStatic.ts";
+import {
+  isRecipeConfigPath,
+  validateRecipeConfigForAgent,
+} from "./t3team-recipeAgentValidateConfig.ts";
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -125,6 +129,13 @@ export const validateProjectRecipeWorkflowForAgent = Effect.fn(
   const stat = yield* fileSystem.stat(requestedPath).pipe(Effect.catch(() => Effect.succeed(null)));
   if (!stat) {
     return failedResult([issue(requestedPath, "discover", "Path does not exist.")]);
+  }
+  if (stat.type === "File" && isRecipeConfigPath(requestedPath)) {
+    return yield* validateRecipeConfigForAgent({ workspaceRoot, configPath: requestedPath }).pipe(
+      Effect.catch((error) =>
+        Effect.succeed(failedResult([issue(requestedPath, "load", errorMessage(error))])),
+      ),
+    );
   }
   const resolved =
     stat.type === "Directory"
