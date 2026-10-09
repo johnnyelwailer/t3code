@@ -72,6 +72,7 @@ export function createWorkflowRunControllerEnv(
     runId: input.runId,
     ...(input.launchThreadId === undefined ? {} : { launchThreadId: input.launchThreadId }),
     projectId: input.projectId,
+    ...(input.recipePath === undefined ? {} : { recipePath: input.recipePath }),
     modelSelection: input.modelSelection,
     runtimeMode: input.runtimeMode,
     interactionMode: input.interactionMode,

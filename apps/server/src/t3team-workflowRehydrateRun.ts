@@ -105,6 +105,7 @@ export function makeWorkflowRunRehydrator(deps: WorkflowRunRehydratorDeps) {
       ...(hostToolClient === undefined ? {} : { hostToolClient }),
       ...(scriptHost === undefined ? {} : { scriptHost }),
       runsRoot,
+      ...(run.recipePath == null ? {} : { recipePath: run.recipePath }),
       launchThreadId: run.launchThreadId ?? undefined,
       projectId: run.projectId,
       modelSelection: run.modelSelection,

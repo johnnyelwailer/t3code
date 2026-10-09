@@ -30,6 +30,7 @@ import {
   resolveWorkflowChildModel,
   resolveWorkflowModelCascade,
 } from "./t3team-workflowChildModel.ts";
+import { handleBrokerLaunchVerb, isBrokerLaunchVerb } from "./t3team-workflowEngineBrokerLaunch.ts";
 import { getChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
 import { toWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
 import { createWorkflowLiveSettlement } from "./t3team-workflowLiveSettlement.ts";
@@ -156,6 +157,11 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
       sendCtx.kind === "signal.waitAny"
     ) {
       if (await handleBrokerSignalVerb(core, sendCtx)) return;
+    }
+    // Gated on the kind, like the signal verbs, so the ask verb keeps its synchronous prefix.
+    if (isBrokerLaunchVerb(kind)) {
+      await handleBrokerLaunchVerb(core, sendCtx);
+      return;
     }
     if (await handleBrokerAskVerb(core, sendCtx)) return;
     await handleBrokerNotifyVerb(core, sendCtx);

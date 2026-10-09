@@ -12,6 +12,7 @@
  *   • `"ui.render"` → `showView` on a thread           (@runbook/threads primitives.ts)
  *   • `"schedule"` → `waitUntil`                       (t3team-sdk.schedulePrimitive.ts)
  *                  → `retry` (its backoff IS a waitUntil) (t3team-sdk.retryPrimitive.ts)
+ *   • `"launch"`   → `launchThread`, `setRunFacts`    (t3team-sdk.launchedThreads.ts)
  *   • `"source:<name>"` → `getSignalSource(<built-in source>)` (t3team-sdk.signalPrimitive.ts)
  *                    and `watermark("<name>")`        (t3team-sdk.watermarkPrimitive.ts)
  *   • tool group   → `tools.<id>` at its call site     (t3team-sdk.capabilityGating.ts)
@@ -138,6 +139,8 @@ function scanCallSites(
       const needsSchedule = verb === "waitUntil" || (verb === "retry" && retryIsVerb);
       if (needsSchedule && !declared.has("schedule")) {
         into.push(missing(ts, sf, node, "schedule", `\`${verb}(…)\``));
+      } else if ((verb === "launchThread" || verb === "setRunFacts") && !declared.has("launch")) {
+        into.push(missing(ts, sf, node, "launch", `\`${verb}(…)\``));
       } else if (verb === "getSignalSource" || verb === "watermark") {
         const name = staticSourceName(ts, verb, node.arguments[0], bindings);
         if (name !== undefined && !declared.has(`source:${name}`)) {

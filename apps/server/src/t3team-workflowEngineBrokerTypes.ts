@@ -91,6 +91,8 @@ export interface WorkflowEngineBrokerDeps {
   readonly runId: string;
   readonly launchThreadId?: string;
   readonly projectId: ProjectId;
+  /** The run's recipe directory: scopes `launchThread` keys to the recipe; absent for none. */
+  readonly recipePath?: string;
   readonly modelSelection: ModelSelection;
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;

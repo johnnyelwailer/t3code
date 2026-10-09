@@ -34,6 +34,7 @@ import { T3TeamThreadWorkflowAsk } from "./t3team-v2/t3team-threadWorkflowAsk.ts
 import { syncWorkflowAskMirrors } from "./t3team-workflowHostAskMirror.ts";
 import { workflowChildCheckout } from "./t3team-workflowHostChildCheckout.ts";
 import { makeHeldWorkflowMessages } from "./t3team-workflowHostHeld.ts";
+import * as HostLaunch from "./t3team-workflowHostLaunchMembers.ts";
 import { splitWorkflowMessage } from "./t3team-workflowHostMessages.ts";
 import type {
   WorkflowHostActivityInput,
@@ -41,7 +42,6 @@ import type {
   WorkflowHostCreateThreadInput,
   WorkflowHostInterruptInput,
   WorkflowHostMessageInput,
-  WorkflowHostPort,
   WorkflowHostStartTurnInput,
 } from "./t3team-workflowHostPort.ts";
 import { failAs, T3TeamWorkflowHostError } from "./t3team-workflowHostFail.ts";
@@ -52,7 +52,7 @@ export { T3TeamWorkflowHostError };
 
 type HostEffect = Effect.Effect<void, T3TeamWorkflowHostError>;
 
-export interface T3TeamWorkflowHostShape {
+export interface T3TeamWorkflowHostShape extends HostLaunch.WorkflowHostLaunchMembers {
   readonly createThread: (input: WorkflowHostCreateThreadInput) => HostEffect;
   readonly startTurn: (input: WorkflowHostStartTurnInput) => HostEffect;
   readonly postMessage: (input: WorkflowHostMessageInput) => HostEffect;
@@ -79,6 +79,7 @@ const make = Effect.gen(function* () {
   const lineage = yield* T3TeamThreadLineage;
   const workflowAsk = yield* T3TeamThreadWorkflowAsk;
   const sql = yield* SqlClient.SqlClient;
+  const launch = yield* HostLaunch.makeWorkflowHostLaunchMembers({ threads, facts });
   const writeMessage = (input: WorkflowHostMessageInput) =>
     Effect.gen(function* () {
       const writes = splitWorkflowMessage(input);
@@ -200,18 +201,10 @@ const make = Effect.gen(function* () {
     syncRunFacts,
     flushHeld,
     heldThreadIds: held.heldThreadIds,
+    ...launch,
   });
 });
 
 export const layer = Layer.effect(T3TeamWorkflowHost, make);
 
-/** The Promise view the engine calls; host failures reject with the host error. */
-export const toWorkflowHostPort = (host: T3TeamWorkflowHostShape): WorkflowHostPort => ({
-  createThread: (input) => Effect.runPromise(host.createThread(input)),
-  startTurn: (input) => Effect.runPromise(host.startTurn(input)),
-  postMessage: (input) => Effect.runPromise(host.postMessage(input)),
-  upsertActivity: (input) => Effect.runPromise(host.upsertActivity(input)),
-  interrupt: (input) => Effect.runPromise(host.interrupt(input)),
-  archiveThread: (threadId) => Effect.runPromise(host.archiveThread(threadId)),
-  syncRunFacts: (launchThreadId) => Effect.runPromise(host.syncRunFacts(launchThreadId)),
-});
+export { toWorkflowHostPort } from "./t3team-workflowHostPortOf.ts";

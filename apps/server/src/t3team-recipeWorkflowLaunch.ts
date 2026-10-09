@@ -27,6 +27,8 @@ import { T3TeamScriptHost } from "./t3team-scriptHostContext.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { launchPreparedWorkflow } from "./t3team-workflowEphemeralLaunch.ts";
+import { recordRecipeLaunchFact } from "./t3team-recipeLaunchFact.ts";
+import type { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import { T3TeamWorkflowHost, toWorkflowHostPort } from "./t3team-workflowHost.ts";
 import { makeT3TeamWorkflowHostToolClient } from "./t3team-workflowHostTools.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
@@ -41,6 +43,12 @@ export interface RecipeWorkflowLaunchInput {
   readonly modelSelection: ModelSelection;
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;
+  /** Recorded on the thread as the `t3team.recipe` fact, so a card finds its recipe's run. */
+  readonly recipe?: {
+    readonly id: string;
+    readonly version?: string | undefined;
+    readonly action?: string | undefined;
+  };
 }
 
 export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* (
@@ -62,6 +70,21 @@ export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* 
   const { recipePath, workflowPath, threadId } = input;
   const { project, thread } = yield* loadThreadProjectContext(threadId);
   const runId = t3teamRandomUUID();
+  // The launch fact lands once the run row exists, so a launch refused before admission never
+  // leaves a fact naming a run that does not exist; a facts failure does not fail the launch.
+  const recipe = input.recipe;
+  const factsContext = yield* Effect.context<T3TeamThreadFactsStore>();
+  const onAdmitted =
+    recipe === undefined
+      ? undefined
+      : () =>
+          Effect.runPromiseWith(factsContext)(
+            recordRecipeLaunchFact({ threadId, runId, recipe }).pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning("recipe launch fact not recorded", { runId, cause }),
+              ),
+            ),
+          );
 
   // Stamp the launch thread with a recipe-launch activity BEFORE starting the run. The web
   // composer arms a one-shot "launch this recipe" override while a thread has a recipe
@@ -143,9 +166,12 @@ export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* 
       args: input.args,
       // Persist the recipe dir alongside the resolved scripts so a restart can re-resolve them
       // during rehydration (a scriptless launch needs neither).
+      // The recipe dir is persisted for every recipe run (it also scopes `launchThread` keys);
+      // scripts and their host only when there are scripts to re-resolve.
+      ...(recipePath === undefined ? {} : { recipePath }),
       ...(Object.keys(scripts).length === 0 || recipePath === undefined
         ? {}
-        : { scripts, recipePath, scriptHost }),
+        : { scripts, scriptHost }),
       ...(hostToolClient === undefined || hostToolGrant === undefined
         ? {}
         : { hostToolClient, hostToolGrant }),
@@ -156,6 +182,7 @@ export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* 
       runtimeMode: input.runtimeMode,
       interactionMode: input.interactionMode,
       origin: "recipe",
+      ...(onAdmitted === undefined ? {} : { onAdmitted }),
     },
   );
 });

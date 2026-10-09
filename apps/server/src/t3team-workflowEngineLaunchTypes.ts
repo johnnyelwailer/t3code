@@ -48,6 +48,8 @@ export interface LaunchWorkflowRecipeInput {
   /** The run's `ctx.store` / `ctx.changeRequests` for its scripts (t3team-scriptHostContext.ts). */
   readonly scriptHost?: ScriptHostContext;
   readonly runsRoot: string;
+  /** The launching recipe's directory; scopes `launchThread` keys to the recipe (absent: the run). */
+  readonly recipePath?: string | undefined;
   /** The chat the user launched from; `undefined` for a headless run (`thread` is undefined). */
   readonly launchThreadId: string | undefined;
   readonly projectId: ProjectId;

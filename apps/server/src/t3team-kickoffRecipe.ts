@@ -93,6 +93,7 @@ export const launchKickoffRecipe = Effect.fn("launchKickoffRecipe")(function* (i
     modelSelection: thread.modelSelection,
     runtimeMode: thread.runtimeMode,
     interactionMode: thread.interactionMode,
+    recipe: { id: input.recipe.declaredId, version: input.recipe.packVersion },
   });
 });
 

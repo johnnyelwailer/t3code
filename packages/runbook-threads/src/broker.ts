@@ -46,7 +46,10 @@ export type HandleKind =
   | "model.resolve"
   | "signal.register"
   | "signal.wait"
-  | "signal.waitAny";
+  | "signal.waitAny"
+  | "thread.launch"
+  | "thread.launched"
+  | "run.facts";
 
 /** What the host is handed for one fired side effect. `payload` carries the verb's data —
  * always a `threadId`, plus `prompt`/`question`/`text`/`name`/`model` per kind. */
@@ -175,6 +178,11 @@ export interface HostBrokerHandlers {
   readonly "signal.wait"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
   /** The same for several branches at once: a drained entry settles with its branch's index. */
   readonly "signal.waitAny"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
+  /** Launch or find a top-level thread by key, act on one, or write the run's own facts. Each
+   * MUST settle the resolver itself: the host's answer IS the primitive's journaled reply. */
+  readonly "thread.launch"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
+  readonly "thread.launched"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
+  readonly "run.facts"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
 }
 
 /**
@@ -191,6 +199,13 @@ export function createHostBroker(handlers: HostBrokerHandlers): MessageBroker {
       if (envelope.kind === "signal.wait") return handlers["signal.wait"]?.(envelope, resolver);
       if (envelope.kind === "signal.waitAny") {
         return handlers["signal.waitAny"]?.(envelope, resolver);
+      }
+      if (
+        envelope.kind === "thread.launch" ||
+        envelope.kind === "thread.launched" ||
+        envelope.kind === "run.facts"
+      ) {
+        return handlers[envelope.kind]?.(envelope, resolver);
       }
       await handlers[envelope.kind]?.(envelope);
     },
