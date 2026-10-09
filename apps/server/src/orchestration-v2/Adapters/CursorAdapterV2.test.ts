@@ -69,14 +69,25 @@ describe("CursorAdapterV2", () => {
   it("probes an hour later when the Cursor limit has no (or an already-passed) reset day", () => {
     const nowMs = DateTime.toEpochMillis(DateTime.makeUnsafe("2026-10-09T12:00:00.000Z"));
     const expected = "2026-10-09T13:00:00.000Z";
-    for (const message of [
-      "Increase limits for faster responses You're out of usage. Switch to Auto or Composer 2.5, or ask your admin to increase your limit to continue.",
-      "Your team has reached its usage limit, or return on 10/9/2026 when your limit resets.",
-    ]) {
+    for (const [message, resetAt] of [
+      [
+        "Increase limits for faster responses You're out of usage. Switch to Auto or Composer 2.5, or ask your admin to increase your limit to continue.",
+        "2026-10-09T16:00:00.000Z",
+      ],
+      [
+        "Your team has reached its usage limit, or return on 10/9/2026 when your limit resets.",
+        expected,
+      ],
+    ] as const) {
       const failure = cursorRunResultFailure({ message }, nowMs);
       assert.equal(failure.class, "usage_limit");
-      assert.equal(failure.resetAt, expected);
+      assert.equal(failure.resetAt, resetAt);
     }
+    assert.equal(
+      cursorRunResultFailure({ message: "Failed to fetch usage limit status: fetch failed" }, nowMs)
+        .class,
+      undefined,
+    );
     assert.equal(cursorRunResultFailure("search failed", nowMs).class, undefined);
     assert.equal(
       cursorRunResultFailure(

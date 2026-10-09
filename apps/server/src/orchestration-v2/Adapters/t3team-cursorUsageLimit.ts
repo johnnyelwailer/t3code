@@ -12,15 +12,22 @@
  */
 import * as DateTime from "effect/DateTime";
 
-const USAGE_LIMIT_TEXT = /\busage limit\b|\bout of usage\b/i;
+/** The two known phrasings; anything looser (e.g. "failed to fetch usage limit status") must not match. */
+const USAGE_LIMIT_TEXT = /\breached its usage limit\b|\byou're out of usage\b/i;
 /** Cursor writes the reset day as US `M/D/YYYY`. */
 const RESET_DATE = /\breturn on (\d{1,2})\/(\d{1,2})\/(\d{4})\b/i;
 
 /**
- * With no (or an already-passed) reset day, probe again after this long: a probe is one run that
- * fails at once while the limit holds, and the worker re-arms with a fresh `resetAt` each time.
+ * With an already-passed reset day, probe again after this long: a probe is one run that fails at
+ * once while the limit holds, and the worker re-arms with a fresh `resetAt` each time.
  */
 export const CURSOR_USAGE_LIMIT_PROBE_MS = 60 * 60 * 1000;
+
+/**
+ * "You're out of usage" names no reset at all (the pool can stay empty until the monthly cycle),
+ * so probe slowly: ~6 runs a day while auto-resume is on, instead of 24.
+ */
+export const CURSOR_USAGE_LIMIT_NO_RESET_PROBE_MS = 4 * CURSOR_USAGE_LIMIT_PROBE_MS;
 
 export const isCursorUsageLimitText = (message: string): boolean => USAGE_LIMIT_TEXT.test(message);
 
@@ -37,5 +44,7 @@ export function cursorUsageLimitResetAt(message: string, nowMs: number): string 
       if (DateTime.toEpochMillis(reset) > nowMs) return DateTime.formatIso(reset);
     }
   }
-  return DateTime.formatIso(DateTime.makeUnsafe(nowMs + CURSOR_USAGE_LIMIT_PROBE_MS));
+  const probeMs =
+    match === null ? CURSOR_USAGE_LIMIT_NO_RESET_PROBE_MS : CURSOR_USAGE_LIMIT_PROBE_MS;
+  return DateTime.formatIso(DateTime.makeUnsafe(nowMs + probeMs));
 }
