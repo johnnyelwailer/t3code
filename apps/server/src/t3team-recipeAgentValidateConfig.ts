@@ -52,6 +52,7 @@ export const validateRecipeConfigForAgent = Effect.fn("validateRecipeConfigForAg
       const layers = yield* loadRecipeConfigLayers({
         workspaceRoot: input.workspaceRoot,
         recipeId,
+        file: input.configPath,
         recipePath: recipe._tag === "Some" ? recipe.value.recipePath : undefined,
       });
       for (const warning of layers.warnings) {
@@ -66,6 +67,6 @@ export const validateRecipeConfigForAgent = Effect.fn("validateRecipeConfigForAg
       }
     }
     const result: ValidateRecipeToolResult = { ok: issues.length === 0, errors: issues };
-  return result;
+    return result;
   },
 );

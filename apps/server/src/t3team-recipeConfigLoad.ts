@@ -2,15 +2,13 @@
  * Loads one recipe's config layers for a project (G12): the recipe's own `defaults` and the
  * project's `<state dir>/recipes/<recipeId>.config.ts`.
  *
- * The file is checked as data (`checkRecipeConfigSource`) BEFORE it is imported; a file with
- * errors is not imported at all, and every key keeps the recipe's default, with one warning per
- * error naming file and line. A clean file is imported like `recipe.ts`, versioned so it and the
- * files it imports reload after an edit (t3team-projectRecipeModuleResolution.ts). The loaded
- * layers are cached by the modification times of the config and its relative imports, so an
- * unchanged config is not re-imported on every pass.
+ * The file is checked as data (`checkRecipeConfigSource`) and its relative imports must stay
+ * under the state dir, BEFORE anything imports it; a file that fails either is not imported at
+ * all, and every key keeps the recipe's default, with one warning per problem naming file and
+ * line. A clean file is imported (t3team-recipeConfigImport.ts) and its references normalized.
+ * The layers are cached by the modification times of the config, everything it imports and the
+ * recipe module, so an unchanged config is not re-imported on every pass.
  */
-import * as NodeURL from "node:url";
-
 import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import { checkRecipeConfigSource, type RecipeConfigWarning } from "@t3team/sdk";
 import * as Effect from "effect/Effect";
@@ -18,44 +16,14 @@ import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
-import { importRecipeModuleRef } from "./t3team-projectRecipeDiscoveryModule.ts";
-import {
-  CONFIG_VERSION_PARAM,
-  ensureProjectRecipeModuleResolution,
-} from "./t3team-projectRecipeModuleResolution.ts";
+import { loadRecipeDefaults } from "./t3team-recipeConfigDefaults.ts";
+import { importCheckedConfig } from "./t3team-recipeConfigImport.ts";
+import { collectConfigImports } from "./t3team-recipeConfigImports.ts";
 import { normalizeConfigLayer } from "./t3team-recipeConfigRefs.ts";
 import type { RecipeConfigLayers } from "./t3team-recipeConfigResolve.ts";
 
-type Layer = Readonly<Record<string, unknown>>;
+export { recipeDefaultsAsData } from "./t3team-recipeConfigDefaults.ts";
 
-/**
- * A recipe's own `defaults` as journalable data: a `defineWorkflow` ref keeps its absolute path,
- * references stay `{ kind, … }` data, and anything that is not data (a script function) is left
- * out, so the slot falls to the recipe's built-in default.
- */
-export function recipeDefaultsAsData(value: unknown): Layer {
-  const convert = (item: unknown): unknown => {
-    if (typeof item === "function" || typeof item === "symbol" || typeof item === "bigint") {
-      return undefined;
-    }
-    if (Array.isArray(item)) return item.map(convert).filter((entry) => entry !== undefined);
-    if (typeof item !== "object" || item === null) return item;
-    const record = item as Record<string, unknown>;
-    if (record.kind === "workflow" && typeof record.absolutePath === "string") {
-      return { kind: "workflow", absolutePath: record.absolutePath };
-    }
-    const out: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(record)) {
-      const converted = convert(entry);
-      if (converted !== undefined) out[key] = converted;
-    }
-    return out;
-  };
-  const converted = convert(value);
-  return typeof converted === "object" && converted !== null && !Array.isArray(converted)
-    ? (converted as Layer)
-    : {};
-}
 const cache = new Map<string, { readonly version: string; readonly layers: RecipeConfigLayers }>();
 
 export const recipeConfigPath = (path: Path.Path, workspaceRoot: string, recipeId: string) =>
@@ -66,11 +34,13 @@ export const loadRecipeConfigLayers = Effect.fn("loadRecipeConfigLayers")(functi
   readonly recipeId: string;
   /** The recipe's directory, for its own `defaults`; absent skips that layer. */
   readonly recipePath: string | undefined;
+  /** The config file; defaults to `<state dir>/recipes/<recipeId>.config.ts`. */
+  readonly file?: string;
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const stateRoot = path.join(input.workspaceRoot, PROJECT_STATE_DIR);
-  const file = recipeConfigPath(path, input.workspaceRoot, input.recipeId);
+  const file = input.file ?? recipeConfigPath(path, input.workspaceRoot, input.recipeId);
   const mtime = (target: string) =>
     fileSystem.stat(target).pipe(
       Effect.map((info) =>
@@ -81,17 +51,12 @@ export const loadRecipeConfigLayers = Effect.fn("loadRecipeConfigLayers")(functi
       ),
       Effect.orElseSucceed(() => -1),
     );
+  const exists = (yield* mtime(file)) >= 0;
   const recipeModule =
     input.recipePath === undefined ? undefined : path.join(input.recipePath, "recipe.ts");
-  const exists = (yield* mtime(file)) >= 0;
-  const source = exists ? yield* fileSystem.readFileString(file) : "";
-  const checked = exists ? checkRecipeConfigSource(file, source) : undefined;
-  const relativeImports = Object.values(checked?.imports ?? {})
-    .map((entry) => entry.specifier)
-    .filter((specifier) => specifier.startsWith("."))
-    .map((specifier) => path.resolve(path.dirname(file), specifier));
+  const graph = exists ? yield* collectConfigImports(file, stateRoot) : { files: [], outside: [] };
   const version = (yield* Effect.forEach(
-    [file, ...(recipeModule === undefined ? [] : [recipeModule]), ...relativeImports],
+    [file, ...graph.files.slice(1), ...(recipeModule === undefined ? [] : [recipeModule])],
     mtime,
   )).join(":");
   const cacheKey = `${file}\0${recipeModule ?? ""}`;
@@ -99,11 +64,10 @@ export const loadRecipeConfigLayers = Effect.fn("loadRecipeConfigLayers")(functi
   if (cached?.version === version) return cached.layers;
 
   const warnings: RecipeConfigWarning[] = [];
-  let recipeDefaults: Layer = {};
-  if (recipeModule !== undefined && (yield* mtime(recipeModule)) >= 0) {
-    const ref = yield* importRecipeModuleRef(recipeModule).pipe(Effect.option);
-    recipeDefaults = recipeDefaultsAsData(Option.getOrUndefined(ref)?.defaults ?? {});
-  }
+  const recipeDefaults =
+    recipeModule !== undefined && (yield* mtime(recipeModule)) >= 0
+      ? yield* loadRecipeDefaults(recipeModule)
+      : {};
   const layers = (config: Partial<RecipeConfigLayers>): RecipeConfigLayers => ({
     file: exists ? file : null,
     recipeDefaults,
@@ -114,48 +78,39 @@ export const loadRecipeConfigLayers = Effect.fn("loadRecipeConfigLayers")(functi
     ...config,
   });
   let result = layers({});
-  if (checked !== undefined && checked.diagnostics.length > 0) {
+  const source = exists ? yield* fileSystem.readFileString(file) : "";
+  const checked = exists ? checkRecipeConfigSource(file, source) : undefined;
+  const refuse = (message: string, line?: number) =>
+    warnings.push({ message, file, ...(line === undefined ? {} : { line }) });
+  if (checked !== undefined) {
     for (const diagnostic of checked.diagnostics) {
-      warnings.push({
-        message: `${diagnostic.message} The config is not loaded; using the recipe's defaults.`,
-        file,
-        line: diagnostic.line,
-      });
+      refuse(
+        `${diagnostic.message} The config is not loaded; using the recipe's defaults.`,
+        diagnostic.line,
+      );
     }
-  } else if (checked !== undefined && checked.recipeId !== input.recipeId) {
-    warnings.push({
-      message: `This config is for '${checked.recipeId}', not '${input.recipeId}'; it is not loaded.`,
-      file,
-    });
-  } else if (checked !== undefined) {
-    ensureProjectRecipeModuleResolution();
-    const url = NodeURL.pathToFileURL(file);
-    url.searchParams.set(CONFIG_VERSION_PARAM, version.replace(/:/g, "-"));
-    const imported = yield* Effect.tryPromise(() => import(url.toString())).pipe(Effect.result);
-    const config = (imported._tag === "Success" ? imported.success.default : undefined) as
-      | {
-          readonly kind?: string;
-          readonly defaults?: Layer;
-          readonly scopes?: ReadonlyArray<Layer>;
-        }
-      | undefined;
-    if (config?.kind !== "recipe-config") {
-      warnings.push({
-        message:
-          imported._tag === "Failure"
-            ? `The config failed to load: ${String(imported.failure)}`
-            : "The config's default export is not a defineRecipeConfig(...) result.",
-        file,
-      });
+    for (const outside of graph.outside) {
+      refuse(`It imports ${outside}, outside ${stateRoot}; the config is not loaded.`);
+    }
+    if (checked.recipeId !== null && checked.recipeId !== input.recipeId) {
+      refuse(
+        `This config is for '${checked.recipeId}', not '${input.recipeId}'; it is not loaded.`,
+      );
+    }
+  }
+  if (checked !== undefined && warnings.length === 0) {
+    const loaded = yield* importCheckedConfig({ file, version, checkedSource: source });
+    if ("problem" in loaded) {
+      refuse(loaded.problem);
     } else {
       const context = { ...checked, workspaceRoot: input.workspaceRoot, stateRoot, file };
       const defaults = yield* normalizeConfigLayer(
         context,
-        config.defaults ?? {},
+        loaded.config.defaults ?? {},
         "defaults",
         warnings,
       );
-      const scopes = yield* Effect.forEach(config.scopes ?? [], (scope, index) =>
+      const scopes = yield* Effect.forEach(loaded.config.scopes ?? [], (scope, index) =>
         normalizeConfigLayer(context, scope, `scopes[${index}]`, warnings),
       );
       result = layers({ defaults, scopes, keyLines: checked.keyLines });

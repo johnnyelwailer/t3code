@@ -2,7 +2,8 @@
  * The data-only check of a recipe config file (G12), run on its source BEFORE anything imports
  * it, and by `t3_recipe_validate`. A config file may hold:
  *
- *   • imports (a `defineScript` module, `import type` of a recipe, the SDK),
+ *   • imports: values from `@t3team/sdk` or the project's own files (`./`, `../`; the loader
+ *     keeps them under the state dir), `import type` from anywhere, no side-effect imports,
  *   • `const x = defineWorkflow("…")` / `recipeAction("…", "…")` with literal arguments,
  *   • one `export default defineRecipeConfig("<id>", { … })`,
  *
@@ -60,14 +61,23 @@ export function checkRecipeConfigSource(
   for (const statement of sf.statements) {
     if (ts.isImportDeclaration(statement)) {
       const clause = statement.importClause;
-      if (
-        clause === undefined ||
-        clause.isTypeOnly ||
-        !ts.isStringLiteral(statement.moduleSpecifier)
-      ) {
+      if (clause === undefined) {
+        report(statement, "A side-effect import runs code; import a binding instead.");
         continue;
       }
+      if (clause.isTypeOnly || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
       const specifier = statement.moduleSpecifier.text;
+      if (
+        specifier !== "@t3team/sdk" &&
+        !specifier.startsWith("./") &&
+        !specifier.startsWith("../")
+      ) {
+        report(
+          statement.moduleSpecifier,
+          `Values come from "@t3team/sdk" or the project's own files, not '${specifier}' (a type-only import may name anything).`,
+        );
+        continue;
+      }
       if (clause.name !== undefined) imports[clause.name.text] = { specifier, name: "default" };
       const named = clause.namedBindings;
       if (named !== undefined && ts.isNamedImports(named)) {

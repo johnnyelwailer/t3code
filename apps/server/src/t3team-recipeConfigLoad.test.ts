@@ -181,4 +181,47 @@ it.layer(NodeServices.layer)("recipe config loader", (it) => {
       assert.strictEqual(layers.recipeDefaults.foreignPrs, "report-only");
     }),
   );
+
+  it.effect("never imports a config that reaches outside the state dir", () =>
+    Effect.gen(function* () {
+      const { workspaceRoot, write, recipePath } = yield* setUp();
+      yield* write(
+        "recipes/pr-watch.config.ts",
+        [
+          `import { defineRecipeConfig } from "@t3team/sdk";`,
+          `import secret from "../../outside.ts";`,
+          `export default defineRecipeConfig("pr-watch", { defaults: { model: secret } });`,
+        ].join("\n"),
+      );
+      const layers = yield* loadRecipeConfigLayers({
+        workspaceRoot,
+        recipeId: "pr-watch",
+        recipePath,
+      });
+      assert.deepStrictEqual(layers.defaults, {});
+      assert.include(layers.warnings[0]?.message ?? "", "outside.ts");
+    }),
+  );
+
+  it.effect("reloads when a file two imports down changes", () =>
+    Effect.gen(function* () {
+      const { workspaceRoot, write, recipePath } = yield* setUp();
+      yield* write("policies/deep.ts", `export const level = "one";`);
+      yield* write("policies/mid.ts", `export { level } from "./deep.ts";`);
+      yield* write(
+        "recipes/pr-watch.config.ts",
+        [
+          `import { defineRecipeConfig } from "@t3team/sdk";`,
+          `import { level } from "../policies/mid.ts";`,
+          `export default defineRecipeConfig("pr-watch", { defaults: { level } });`,
+        ].join("\n"),
+      );
+      const load = loadRecipeConfigLayers({ workspaceRoot, recipeId: "pr-watch", recipePath });
+      const first = yield* load;
+      assert.strictEqual(yield* load, first);
+      yield* Effect.promise(() => NodeTimersPromises.setTimeout(20));
+      yield* write("policies/deep.ts", `export const level = "two";`);
+      assert.notStrictEqual(yield* load, first, "a deep edit invalidates the cached layers");
+    }),
+  );
 });

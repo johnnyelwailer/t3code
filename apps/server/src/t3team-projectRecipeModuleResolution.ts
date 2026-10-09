@@ -80,10 +80,17 @@ export const CONFIG_VERSION_PARAM = "t3team-config";
 /**
  * A recipe config is imported with `?t3team-config=<version>`; every file it imports inherits
  * that version, so an edited policy script reloads with the config instead of staying cached
- * for the life of the process. Only file URLs below a versioned parent change.
+ * for the life of the process. Only relative imports of a versioned parent change: a package
+ * (the SDK, `effect`) is loaded once, never a fresh copy per config edit.
  */
-export function withConfigVersion(url: string, parentURL: string | undefined): string {
-  if (parentURL === undefined || !url.startsWith("file:")) return url;
+export function withConfigVersion(
+  url: string,
+  parentURL: string | undefined,
+  specifier: string,
+): string {
+  if (parentURL === undefined || !url.startsWith("file:") || !specifier.startsWith(".")) {
+    return url;
+  }
   const version = new URL(parentURL).searchParams.get(CONFIG_VERSION_PARAM);
   if (version === null) return url;
   const child = new URL(url);
@@ -107,7 +114,7 @@ export function ensureProjectRecipeModuleResolution(): void {
     resolve(specifier, context, nextResolve) {
       try {
         const resolved = nextResolve(specifier, context);
-        const url = withConfigVersion(resolved.url, context.parentURL);
+        const url = withConfigVersion(resolved.url, context.parentURL, specifier);
         return url === resolved.url ? resolved : { ...resolved, url };
       } catch (error) {
         if (!isResolvableFromHost(specifier)) {

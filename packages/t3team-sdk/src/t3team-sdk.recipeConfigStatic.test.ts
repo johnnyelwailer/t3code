@@ -63,6 +63,22 @@ describe("recipe config data-only check", () => {
     expect(result.diagnostics[1]?.message).toContain("not data");
   });
 
+  it("allows values only from the SDK and the project's files, and no side-effect imports", () => {
+    const result = checkRecipeConfigSource(
+      "x.config.ts",
+      lines(
+        'import { defineRecipeConfig } from "@t3team/sdk";',
+        'import type Other from "@t3team/recipes/other";',
+        'import "./setup.ts";',
+        'import { readFileSync } from "node:fs";',
+        'import lodash from "lodash";',
+        'export default defineRecipeConfig("x", {});',
+      ),
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.line)).toEqual([3, 4, 5]);
+    expect(result.diagnostics[0]?.message).toContain("side-effect");
+  });
+
   it("needs a default-exported defineRecipeConfig with a literal id", () => {
     expect(
       checkRecipeConfigSource("x.config.ts", "export const config = 1;").diagnostics.length,

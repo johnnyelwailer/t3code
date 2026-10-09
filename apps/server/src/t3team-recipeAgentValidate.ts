@@ -3,7 +3,9 @@
  * Static only — the workflow BODY is never executed. `prepareWorkflow`/`extractMeta` run just the
  * file's head (imports blanked, only `Schema` injected) in a `node:vm` context to read the `meta`
  * literal, and `deriveWorkflowShape` is the same static AST scan the UI's play-as-shape preview
- * uses ({@link ./t3team-workflowShapePreview.ts}). The one dynamic import is a recipe DIRECTORY's
+ * uses ({@link ./t3team-workflowShapePreview.ts}). A recipe config (`*.config.ts`) is imported
+ * only after it passes its data-only check (t3team-recipeAgentValidateConfig.ts), and so are the
+ * recipe modules it names. The other dynamic import is a recipe DIRECTORY's
  * `recipe.ts` (to resolve its `defaultAction` workflow) — the same trusted-project-code path UI
  * discovery already takes. Paths are constrained to the project workspace root or an active pack's
  * recipe directory ({@link ./t3team-recipeAgentPaths.ts}) — a pack recipe's `recipePath` is what

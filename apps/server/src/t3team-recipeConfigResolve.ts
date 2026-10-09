@@ -43,6 +43,7 @@ export function repositoryMatches(pattern: string, repository: string): boolean 
     .toLowerCase()
     .replace(/^https?:\/\//, "");
   const wanted = pattern.trim().toLowerCase();
+  if (wanted === "*") return true;
   const segments = wanted.split("/").length;
   // A two-segment pattern names `owner/name` on any host.
   const subject = segments === 2 ? target.split("/").slice(-2).join("/") : target;

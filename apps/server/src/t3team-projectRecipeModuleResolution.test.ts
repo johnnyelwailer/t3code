@@ -135,19 +135,22 @@ describe("withConfigVersion", () => {
   const parent = "file:///repo/.nexi/recipes/pr-watch.config.ts?t3team-config=42";
 
   it("versions a config's file imports with the config's own version", () => {
-    expect(withConfigVersion("file:///repo/.nexi/policies/merge.ts", parent)).toBe(
-      "file:///repo/.nexi/policies/merge.ts?t3team-config=42",
-    );
+    expect(
+      withConfigVersion("file:///repo/.nexi/policies/merge.ts", parent, "../policies/merge.ts"),
+    ).toBe("file:///repo/.nexi/policies/merge.ts?t3team-config=42");
   });
 
   it("leaves packages, unversioned parents and already-versioned children alone", () => {
-    expect(withConfigVersion("node:fs", parent)).toBe("node:fs");
-    expect(withConfigVersion("file:///repo/x.ts", "file:///repo/recipe.ts?v=1")).toBe(
+    expect(withConfigVersion("node:fs", parent, "node:fs")).toBe("node:fs");
+    // A package resolves to a file too; it must not be loaded again per config version.
+    const sdk = "file:///repo/node_modules/@t3team/sdk/src/t3team-sdk.index.ts";
+    expect(withConfigVersion(sdk, parent, "@t3team/sdk")).toBe(sdk);
+    expect(withConfigVersion("file:///repo/x.ts", "file:///repo/recipe.ts?v=1", "./x.ts")).toBe(
       "file:///repo/x.ts",
     );
-    expect(withConfigVersion("file:///repo/x.ts?t3team-config=7", parent)).toBe(
+    expect(withConfigVersion("file:///repo/x.ts?t3team-config=7", parent, "./x.ts")).toBe(
       "file:///repo/x.ts?t3team-config=7",
     );
-    expect(withConfigVersion("file:///repo/x.ts", undefined)).toBe("file:///repo/x.ts");
+    expect(withConfigVersion("file:///repo/x.ts", undefined, "./x.ts")).toBe("file:///repo/x.ts");
   });
 });

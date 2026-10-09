@@ -83,6 +83,7 @@ describe("recipe config precedence", () => {
       true,
     );
     expect(repositoryMatches("hive/nx.nexi", "hive/nxanexi")).toBe(false);
+    expect(repositoryMatches("*", "nexplore.ghe.com/hive/nx-nexi")).toBe(true);
   });
 });
 
