@@ -114,6 +114,38 @@ describe("collectRecipeRun", () => {
     expect(run.watchThreads[0]?.recipeId).toBe("pr-watch");
   });
 
+  it("leaves out the threads of pull requests that have merged or closed", () => {
+    const open = fixtureLink({ repository: "hive/nx-nexi", number: 1, title: "Open" });
+    const merged = fixtureLink({
+      repository: "hive/nx-nexi",
+      number: 2,
+      title: "Merged",
+      state: "merged",
+    });
+    const closed = fixtureLink({
+      repository: "hive/nx-nexi",
+      number: 3,
+      title: "Closed",
+      state: "closed",
+    });
+    const run = collectRecipeRun(
+      [
+        shell({ id: "home" }),
+        shell({ id: "open", pullRequests: [open] }),
+        shell({ id: "merged", pullRequests: [merged], hasPendingUserInput: true }),
+        shell({ id: "closed", pullRequests: [closed] }),
+      ],
+      new Map([
+        facts("home", launch("sleeping")),
+        facts("open", { extensions: launchedBy("recipe:pr-watch") }),
+        facts("merged", { extensions: launchedBy("recipe:pr-watch") }),
+        facts("closed", { extensions: launchedBy("recipe:pr-watch") }),
+      ]),
+      scope,
+    );
+    expect(run.watchThreads.map((w) => w.threadRef.threadId)).toEqual(["open"]);
+  });
+
   it("also takes a thread whose launch thread is the home, whatever its scope says", () => {
     const link = fixtureLink({ repository: "hive/nx-nexi", number: 412, title: "Scope filter" });
     const run = collectRecipeRun(

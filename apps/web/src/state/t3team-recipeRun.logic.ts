@@ -105,7 +105,10 @@ export function collectRecipeRun(
       launchedBy?.scope === launchScope || (home !== null && launchThreadId === home.shell.id);
     if (!ofRecipe) continue;
     const link = resolveThreadCurrentPullRequestLink(shell.pullRequests);
-    if (link !== null) watchers.push(buildWatcher(shell, facts.get(shell.id), link));
+    // A watch thread outlives its pull request (its id derives from the key), so a merged or
+    // closed one is history, not a watcher. An unwatched open one stays: that is a parked row.
+    if (link === null || (link.snapshot !== null && link.snapshot.state !== "open")) continue;
+    watchers.push(buildWatcher(shell, facts.get(shell.id), link));
   }
   if (home === null && watchers.length === 0) return EMPTY_RECIPE_RUN;
   return {
