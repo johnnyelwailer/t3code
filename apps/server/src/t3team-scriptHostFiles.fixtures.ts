@@ -15,12 +15,13 @@ import {
   type SourceControlProviderKind,
 } from "@t3tools/contracts";
 import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts/settings";
-import { CHANGE_REQUEST_FILE_MAX_BYTES, CHANGE_REQUEST_FILE_MAX_LINES, type ChangeRequestReader } from "@t3team/sdk";
+import { CHANGE_REQUEST_FILE_MAX_BYTES, CHANGE_REQUEST_FILE_MAX_LINES } from "@t3team/sdk";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import { afterAll } from "vite-plus/test";
 
 import * as PullRequestFilesViewed from "./persistence/PullRequestFilesViewed.ts";
@@ -52,7 +53,12 @@ type Files = Record<string, Uint8Array>;
 /** `repository -> commit -> path -> bytes`. A path that is not listed is absent at that commit. */
 type Repositories = Record<string, Record<string, Files>>;
 
-export const providerCalls: Array<{ method: string; repository: string; revision?: string; maxBytes?: number }> = [];
+export const providerCalls: Array<{
+  method: string;
+  repository: string;
+  revision?: string;
+  maxBytes?: number;
+}> = [];
 
 /** A provider shaped like `kind`'s host: it reports shas on detail and serves files by commit. */
 function fakeHost(
@@ -137,7 +143,11 @@ const project = (workspaceRoot: string): OrchestrationProjectShell => ({
   workspaceRoot,
   repositoryIdentity: {
     canonicalKey: "github.com/acme/app",
-    locator: { source: "git-remote", remoteName: "origin", remoteUrl: "https://github.com/acme/app.git" },
+    locator: {
+      source: "git-remote",
+      remoteName: "origin",
+      remoteUrl: "https://github.com/acme/app.git",
+    },
     provider: "github",
     displayName: "acme/app",
   },
@@ -147,11 +157,14 @@ const project = (workspaceRoot: string): OrchestrationProjectShell => ({
   updatedAt: "2026-07-01T00:00:00Z",
 });
 
+const encodeLinkedRepositories = Schema.encodeSync(
+  Schema.fromJsonString(Schema.Struct({ linkedRepositoryUrls: Schema.Array(Schema.String) })),
+);
 const workspace = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-script-files-"));
 NodeFS.mkdirSync(NodePath.join(workspace, HIDDEN_T3TEAM_DIR, "context"), { recursive: true });
 NodeFS.writeFileSync(
   NodePath.join(workspace, HIDDEN_T3TEAM_DIR, "context", "linked-repositories.json"),
-  JSON.stringify({
+  encodeLinkedRepositories({
     linkedRepositoryUrls: [
       "https://gitlab.com/group/proj.git",
       "https://gitlab.com/group/noshas.git",
@@ -165,7 +178,10 @@ const scriptHost = Effect.gen(function* () {
   const providers = [
     fakeHost("github", { repositories: github }),
     // One GitLab-shaped host; `group/noshas` is the repository whose detail reports no commits.
-    fakeHost("gitlab", { repositories: { ...gitlab, "group/noshas": {} }, withoutShas: "group/noshas" }),
+    fakeHost("gitlab", {
+      repositories: { ...gitlab, "group/noshas": {} },
+      withoutShas: "group/noshas",
+    }),
     fakeHost("bitbucket", { repositories: {}, canReadFiles: false }),
   ];
   const context = yield* Layer.build(
@@ -213,8 +229,7 @@ export const forRun = (toolGroups: ReadonlyArray<string>) =>
   Effect.map(scriptHost, (host) =>
     host.forRun({ projectId, recipePath: "/repo/.t3team/recipes/local", toolGroups }),
   );
-export const reader = (): Effect.Effect<ChangeRequestReader, never, never> =>
-  Effect.map(forRun(["integration.read"]), (ctx) => ctx.changeRequests!);
+export const reader = () => Effect.map(forRun(["integration.read"]), (ctx) => ctx.changeRequests!);
 
 export const rejects = <E extends Error>(
   attempt: () => Promise<unknown>,
@@ -226,7 +241,6 @@ export const rejects = <E extends Error>(
       () => undefined,
       (caught: unknown) => caught,
     );
-    assert.instanceOf(error, type);
+    assert.isTrue(error instanceof type, `expected ${type.name}, got ${String(error)}`);
     return error as E;
   });
-

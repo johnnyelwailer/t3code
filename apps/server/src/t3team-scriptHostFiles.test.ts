@@ -27,8 +27,22 @@ import {
 } from "./t3team-scriptHostFiles.fixtures.ts";
 
 const providers = [
-  { name: "GitHub-shaped", ref: { repository: "acme/app", number: 1 }, file: "src/a.ts", text: "one\ntwo\nthree\nfour\nfive\n", binary: "src/bin.dat", baseText: "old" },
-  { name: "GitLab-shaped", ref: { repository: "group/proj", number: 2 }, file: "lib/b.py", text: "alpha\nbeta\ngamma\n", binary: "lib/bin.dat", baseText: "before" },
+  {
+    name: "GitHub-shaped",
+    ref: { repository: "acme/app", number: 1 },
+    file: "src/a.ts",
+    text: "one\ntwo\nthree\nfour\nfive\n",
+    binary: "src/bin.dat",
+    baseText: "old",
+  },
+  {
+    name: "GitLab-shaped",
+    ref: { repository: "group/proj", number: 2 },
+    file: "lib/b.py",
+    text: "alpha\nbeta\ngamma\n",
+    binary: "lib/bin.dat",
+    baseText: "before",
+  },
 ] as const;
 
 for (const provider of providers) {
@@ -36,20 +50,31 @@ for (const provider of providers) {
     Effect.gen(function* () {
       const cr = yield* reader();
       providerCalls.length = 0;
-      const head = yield* Effect.promise(() => cr.fileAt({ ref: provider.ref, path: provider.file, side: "head" }));
+      const head = yield* Effect.promise(() =>
+        cr.fileAt({ ref: provider.ref, path: provider.file, side: "head" }),
+      );
       assert.deepStrictEqual(head.kind, "text");
       if (head.kind !== "text") return;
       assert.strictEqual(head.sha, HEAD);
       assert.strictEqual(head.text, provider.text.replace(/\n$/, ""));
       assert.deepStrictEqual(
         [head.startLine, head.endLine, head.totalLines, head.truncated],
-        [1, provider.text.trimEnd().split("\n").length, provider.text.trimEnd().split("\n").length, false],
+        [
+          1,
+          provider.text.trimEnd().split("\n").length,
+          provider.text.trimEnd().split("\n").length,
+          false,
+        ],
       );
       assert.match(head.blobSha, /^blob:/);
-      const base = yield* Effect.promise(() => cr.fileAt({ ref: provider.ref, path: provider.file, side: "base" }));
+      const base = yield* Effect.promise(() =>
+        cr.fileAt({ ref: provider.ref, path: provider.file, side: "base" }),
+      );
       assert.deepInclude(base, { kind: "text", sha: BASE, text: provider.baseText });
       assert.deepStrictEqual(
-        providerCalls.filter((call) => call.method === "readFileAtRevision").map((call) => call.revision),
+        providerCalls
+          .filter((call) => call.method === "readFileAtRevision")
+          .map((call) => call.revision),
         [HEAD, BASE],
       );
     }),
@@ -58,21 +83,39 @@ for (const provider of providers) {
   it.effect(`${provider.name}: fileAt types binary and missing files`, () =>
     Effect.gen(function* () {
       const cr = yield* reader();
-      const binary = yield* Effect.promise(() => cr.fileAt({ ref: provider.ref, path: provider.binary, side: "head" }));
+      const binary = yield* Effect.promise(() =>
+        cr.fileAt({ ref: provider.ref, path: provider.binary, side: "head" }),
+      );
       assert.deepInclude(binary, { kind: "binary", sha: HEAD });
-      const missing = yield* Effect.promise(() => cr.fileAt({ ref: provider.ref, path: "nope/missing.ts", side: "head" }));
+      const missing = yield* Effect.promise(() =>
+        cr.fileAt({ ref: provider.ref, path: "nope/missing.ts", side: "head" }),
+      );
       assert.deepStrictEqual(missing, { kind: "missing", path: "nope/missing.ts", sha: HEAD });
     }),
   );
 
-  it.effect(`${provider.name}: fileAt refuses paths outside the repository before asking the provider`, () =>
-    Effect.gen(function* () {
-      const cr = yield* reader();
-      for (const path of ["../secret", "/etc/passwd", "a/../../b", "a//b", "./a", "a\\b", "a/\u0000b", ""]) {
-        yield* rejects(() => cr.fileAt({ ref: provider.ref, path, side: "head" }), ChangeRequestInputError);
-        assert.deepStrictEqual(providerCalls, [], `provider asked for ${JSON.stringify(path)}`);
-      }
-    }),
+  it.effect(
+    `${provider.name}: fileAt refuses paths outside the repository before asking the provider`,
+    () =>
+      Effect.gen(function* () {
+        const cr = yield* reader();
+        for (const path of [
+          "../secret",
+          "/etc/passwd",
+          "a/../../b",
+          "a//b",
+          "./a",
+          "a\\b",
+          "a/\u0000b",
+          "",
+        ]) {
+          yield* rejects(
+            () => cr.fileAt({ ref: provider.ref, path, side: "head" }),
+            ChangeRequestInputError,
+          );
+          assert.deepStrictEqual(providerCalls, [], `provider asked for path '${path}'`);
+        }
+      }),
   );
 
   it.effect(`${provider.name}: blobShas reports present and deleted paths at the pinned head`, () =>
@@ -82,12 +125,21 @@ for (const provider of providers) {
       const paths = [provider.file, "src/deleted.ts", provider.file];
       const result = yield* Effect.promise(() => cr.blobShas(provider.ref, paths));
       assert.strictEqual(result.sha, HEAD);
-      assert.deepStrictEqual(Object.keys(result.blobShas).sort(), [provider.file, "src/deleted.ts"].sort());
+      assert.deepStrictEqual(
+        Object.keys(result.blobShas).sort(),
+        [provider.file, "src/deleted.ts"].sort(),
+      );
       assert.match(result.blobShas[provider.file]!, /^blob:/);
       assert.strictEqual(result.blobShas["src/deleted.ts"], null);
       // Content is not fetched for a staleness check: size 0 asks for the blob id alone.
       assert.deepStrictEqual(
-        [...new Set(providerCalls.filter((call) => call.method === "readFileAtRevision").map((call) => call.maxBytes))],
+        [
+          ...new Set(
+            providerCalls
+              .filter((call) => call.method === "readFileAtRevision")
+              .map((call) => call.maxBytes),
+          ),
+        ],
         [0],
       );
     }),
@@ -99,7 +151,9 @@ it.layer(Layer.empty)("fileAt shaping and bounds", (it) => {
   it.effect("an explicit sha reads that commit, and exactly one of side or sha is required", () =>
     Effect.gen(function* () {
       const cr = yield* reader();
-      const pinned = yield* Effect.promise(() => cr.fileAt({ ref: github1, path: "src/a.ts", sha: PINNED }));
+      const pinned = yield* Effect.promise(() =>
+        cr.fileAt({ ref: github1, path: "src/a.ts", sha: PINNED }),
+      );
       assert.deepInclude(pinned, { kind: "text", sha: PINNED, text: "pinned" });
       for (const bad of [
         { path: "src/a.ts" },
@@ -115,13 +169,42 @@ it.layer(Layer.empty)("fileAt shaping and bounds", (it) => {
     Effect.gen(function* () {
       const cr = yield* reader();
       const at = (startLine: number, endLine: number) =>
-        Effect.promise(() => cr.fileAt({ ref: github1, path: "src/a.ts", side: "head", range: { startLine, endLine } }));
-      assert.deepInclude(yield* at(2, 3), { text: "two\nthree", startLine: 2, endLine: 3, totalLines: 5, truncated: false });
+        Effect.promise(() =>
+          cr.fileAt({
+            ref: github1,
+            path: "src/a.ts",
+            side: "head",
+            range: { startLine, endLine },
+          }),
+        );
+      assert.deepInclude(yield* at(2, 3), {
+        text: "two\nthree",
+        startLine: 2,
+        endLine: 3,
+        totalLines: 5,
+        truncated: false,
+      });
       assert.deepInclude(yield* at(4, 99), { text: "four\nfive", endLine: 5, truncated: false });
-      assert.deepInclude(yield* at(9, 12), { text: "", startLine: 9, endLine: 8, totalLines: 5, truncated: false });
-      for (const [start, end] of [[0, 1], [3, 2], [1.5, 2]] as const) {
+      assert.deepInclude(yield* at(9, 12), {
+        text: "",
+        startLine: 9,
+        endLine: 8,
+        totalLines: 5,
+        truncated: false,
+      });
+      for (const [start, end] of [
+        [0, 1],
+        [3, 2],
+        [1.5, 2],
+      ] as const) {
         yield* rejects(
-          () => cr.fileAt({ ref: github1, path: "src/a.ts", side: "head", range: { startLine: start, endLine: end } }),
+          () =>
+            cr.fileAt({
+              ref: github1,
+              path: "src/a.ts",
+              side: "head",
+              range: { startLine: start, endLine: end },
+            }),
           ChangeRequestInputError,
         );
       }
@@ -131,24 +214,50 @@ it.layer(Layer.empty)("fileAt shaping and bounds", (it) => {
   it.effect("a long file is cut at the line cap and says so; the rest is one more range away", () =>
     Effect.gen(function* () {
       const cr = yield* reader();
-      const first = yield* Effect.promise(() => cr.fileAt({ ref: github1, path: "src/long.ts", side: "head" }));
-      assert.deepInclude(first, { kind: "text", startLine: 1, endLine: CHANGE_REQUEST_FILE_MAX_LINES, totalLines: CHANGE_REQUEST_FILE_MAX_LINES + 500, truncated: true });
+      const first = yield* Effect.promise(() =>
+        cr.fileAt({ ref: github1, path: "src/long.ts", side: "head" }),
+      );
+      assert.deepInclude(first, {
+        kind: "text",
+        startLine: 1,
+        endLine: CHANGE_REQUEST_FILE_MAX_LINES,
+        totalLines: CHANGE_REQUEST_FILE_MAX_LINES + 500,
+        truncated: true,
+      });
       const rest = yield* Effect.promise(() =>
-        cr.fileAt({ ref: github1, path: "src/long.ts", side: "head", range: { startLine: CHANGE_REQUEST_FILE_MAX_LINES + 1, endLine: CHANGE_REQUEST_FILE_MAX_LINES + 500 } }),
+        cr.fileAt({
+          ref: github1,
+          path: "src/long.ts",
+          side: "head",
+          range: {
+            startLine: CHANGE_REQUEST_FILE_MAX_LINES + 1,
+            endLine: CHANGE_REQUEST_FILE_MAX_LINES + 500,
+          },
+        }),
       );
       assert.deepInclude(rest, { truncated: false, endLine: CHANGE_REQUEST_FILE_MAX_LINES + 500 });
     }),
   );
 
-  it.effect("a file over the byte cap is typed too-large with its blob id, and empty files are text", () =>
-    Effect.gen(function* () {
-      const cr = yield* reader();
-      const huge = yield* Effect.promise(() => cr.fileAt({ ref: github1, path: "src/huge.ts", side: "head" }));
-      assert.deepInclude(huge, { kind: "too-large", size: CHANGE_REQUEST_FILE_MAX_BYTES + 1, maxBytes: CHANGE_REQUEST_FILE_MAX_BYTES });
-      assert.match((huge as { blobSha: string }).blobSha, /^blob:/);
-      const empty = yield* Effect.promise(() => cr.fileAt({ ref: github1, path: "src/empty.ts", side: "head" }));
-      assert.deepInclude(empty, { kind: "text", text: "", totalLines: 0, truncated: false });
-    }),
+  it.effect(
+    "a file over the byte cap is typed too-large with its blob id, and empty files are text",
+    () =>
+      Effect.gen(function* () {
+        const cr = yield* reader();
+        const huge = yield* Effect.promise(() =>
+          cr.fileAt({ ref: github1, path: "src/huge.ts", side: "head" }),
+        );
+        assert.deepInclude(huge, {
+          kind: "too-large",
+          size: CHANGE_REQUEST_FILE_MAX_BYTES + 1,
+          maxBytes: CHANGE_REQUEST_FILE_MAX_BYTES,
+        });
+        assert.match((huge as { blobSha: string }).blobSha, /^blob:/);
+        const empty = yield* Effect.promise(() =>
+          cr.fileAt({ ref: github1, path: "src/empty.ts", side: "head" }),
+        );
+        assert.deepInclude(empty, { kind: "text", text: "", totalLines: 0, truncated: false });
+      }),
   );
 
   it.effect("blobShas bounds its path count", () =>
@@ -177,37 +286,41 @@ it.layer(Layer.empty)("fileAt shaping and bounds", (it) => {
     Effect.gen(function* () {
       const cr = yield* reader();
       const unsupported = yield* rejects(
-        () => cr.fileAt({ ref: { repository: "acme/legacy", number: 3 }, path: "a.ts", sha: PINNED }),
+        () =>
+          cr.fileAt({ ref: { repository: "acme/legacy", number: 3 }, path: "a.ts", sha: PINNED }),
         ChangeRequestUnsupportedError,
       );
       assert.strictEqual(unsupported.reason, "host-cannot-read-files");
       const unreported = yield* rejects(
-        () => cr.fileAt({ ref: { repository: "group/noshas", number: 4 }, path: "a.ts", side: "head" }),
+        () =>
+          cr.fileAt({ ref: { repository: "group/noshas", number: 4 }, path: "a.ts", side: "head" }),
         ChangeRequestUnsupportedError,
       );
       assert.strictEqual(unreported.reason, "revision-not-reported");
     }),
   );
 
-  it.effect("linkedRepositories lists what changeRequests accepts, in neutral form, and nothing else", () =>
-    Effect.gen(function* () {
-      const ctx = yield* forRun(["integration.read"]);
-      const repositories = yield* Effect.promise(() => ctx.project!.linkedRepositories());
-      assert.strictEqual(ctx.project!.id, projectId);
-      assert.deepStrictEqual(
-        [...repositories].sort((a, b) => a.repository.localeCompare(b.repository)),
-        [
-          { provider: "github", host: "github.com", repository: "acme/app" },
-          { provider: "bitbucket", host: "bitbucket.org", repository: "acme/legacy" },
-          { provider: "gitlab", host: "gitlab.com", repository: "group/noshas" },
-          { provider: "gitlab", host: "gitlab.com", repository: "group/proj" },
-        ],
-      );
-      // No project paths, no tokens, no CLI state: only the three neutral fields per entry.
-      for (const entry of repositories) {
-        assert.deepStrictEqual(Object.keys(entry).sort(), ["host", "provider", "repository"]);
-      }
-    }),
+  it.effect(
+    "linkedRepositories lists what changeRequests accepts, in neutral form, and nothing else",
+    () =>
+      Effect.gen(function* () {
+        const ctx = yield* forRun(["integration.read"]);
+        const repositories = yield* Effect.promise(() => ctx.project!.linkedRepositories());
+        assert.strictEqual(ctx.project!.id, projectId);
+        assert.deepStrictEqual(
+          [...repositories].sort((a, b) => a.repository.localeCompare(b.repository)),
+          [
+            { provider: "github", host: "github.com", repository: "acme/app" },
+            { provider: "bitbucket", host: "bitbucket.org", repository: "acme/legacy" },
+            { provider: "gitlab", host: "gitlab.com", repository: "group/noshas" },
+            { provider: "gitlab", host: "gitlab.com", repository: "group/proj" },
+          ],
+        );
+        // No project paths, no tokens, no CLI state: only the three neutral fields per entry.
+        for (const entry of repositories) {
+          assert.deepStrictEqual(Object.keys(entry).sort(), ["host", "provider", "repository"]);
+        }
+      }),
   );
 
   it.effect("without integration.read the script has neither changeRequests nor project", () =>

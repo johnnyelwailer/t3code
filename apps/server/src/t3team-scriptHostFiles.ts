@@ -69,11 +69,15 @@ export function makeFileReads(pullRequests: PullRequests, resolve: ResolveTarget
     );
 
   const read = (target: Target, revision: string, path: string, maxBytes: number) =>
-    pullRequests.fileAtRevision({ ...target, revision, path, maxBytes }).pipe(
-      Effect.flatMap((result) =>
-        result.kind === "unsupported" ? Effect.fail(unsupportedHost(target)) : Effect.succeed(result),
-      ),
-    );
+    pullRequests
+      .fileAtRevision({ ...target, revision, path, maxBytes })
+      .pipe(
+        Effect.flatMap((result) =>
+          result.kind === "unsupported"
+            ? Effect.fail(unsupportedHost(target))
+            : Effect.succeed(result),
+        ),
+      );
 
   const fileAt = (input: ChangeRequestFileAtInput) =>
     Effect.gen(function* () {
@@ -123,7 +127,9 @@ export function makeFileReads(pullRequests: PullRequests, resolve: ResolveTarget
         unique,
         (path) =>
           read(target, sha, path, 0).pipe(
-            Effect.map((result) => [path, result.kind === "file" ? result.file.blobSha : null] as const),
+            Effect.map(
+              (result) => [path, result.kind === "file" ? result.file.blobSha : null] as const,
+            ),
           ),
         { concurrency: 4 },
       );
@@ -146,10 +152,12 @@ export const makeProjectScope = (pullRequests: PullRequests, projectId: ProjectI
   id: projectId,
   linkedRepositories: (): Promise<ReadonlyArray<ScriptLinkedRepository>> =>
     Effect.runPromise(
-      pullRequests.projectRepositories(projectId).pipe(
-        Effect.map((repositories) =>
-          repositories.map(({ provider, host, repository }) => ({ provider, host, repository })),
+      pullRequests
+        .projectRepositories(projectId)
+        .pipe(
+          Effect.map((repositories) =>
+            repositories.map(({ provider, host, repository }) => ({ provider, host, repository })),
+          ),
         ),
-      ),
     ),
 });

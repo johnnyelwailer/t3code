@@ -16,54 +16,66 @@ export const CHANGE_REQUEST_FILE_MAX_LINES = 2_000;
 export const CHANGE_REQUEST_FILE_MAX_CHARS = 256_000;
 export const CHANGE_REQUEST_BLOB_SHAS_MAX_PATHS = 100;
 
-/** Which commit to read: one side of the change request as pinned by its detail, or a full sha. */
-export type ChangeRequestFileRevision =
-  | { readonly side: "head" | "base"; readonly sha?: never }
-  | { readonly sha: string; readonly side?: never };
-
-export type ChangeRequestFileAtInput = {
+export interface ChangeRequestFileAtInput {
   readonly ref: ChangeRequestRef;
   /** Repository-relative, `/`-separated. Absolute paths, `.`/`..` segments and `\` are refused. */
   readonly path: string;
-  /** 1-based, inclusive. Defaults to the first `CHANGE_REQUEST_FILE_MAX_LINES` lines. */
+  /** Which commit: one side of the change request as pinned by its detail. Name this or `sha`. */
+  readonly side?: "head" | "base";
+  /** Which commit: a full commit sha. Name this or `side`; naming both or neither is refused. */
+  readonly sha?: string;
+  /** 1-based, inclusive. Defaults to the whole file, cut at the line and character caps. */
   readonly range?: { readonly startLine: number; readonly endLine: number };
-} & ChangeRequestFileRevision;
+}
+
+/** A text file's lines. `sha` is the commit read and `blobSha` the git blob id of the whole file. */
+export interface ChangeRequestFileText {
+  readonly kind: "text";
+  readonly path: string;
+  readonly sha: string;
+  readonly blobSha: string;
+  readonly text: string;
+  readonly startLine: number;
+  /** The last line in `text`; `startLine - 1` when the range starts past the end of the file. */
+  readonly endLine: number;
+  readonly totalLines: number;
+  /** `text` stops short of the requested end (or the file's end) because of a cap. */
+  readonly truncated: boolean;
+}
+
+export interface ChangeRequestFileBinary {
+  readonly kind: "binary";
+  readonly path: string;
+  readonly sha: string;
+  readonly blobSha: string;
+  readonly size: number;
+}
+
+export interface ChangeRequestFileTooLarge {
+  readonly kind: "too-large";
+  readonly path: string;
+  readonly sha: string;
+  readonly blobSha: string;
+  readonly size: number;
+  readonly maxBytes: number;
+}
 
 /**
- * One file at one commit. `sha` is the commit actually read and `blobSha` the git blob id of the
- * whole file, which is what a later staleness check compares.
+ * Nothing readable at that path in that commit: absent, a directory, a symlink or a submodule.
+ * Hosts also answer 404 for a path the account's credentials cannot see, which reads the same.
  */
+export interface ChangeRequestFileMissing {
+  readonly kind: "missing";
+  readonly path: string;
+  readonly sha: string;
+}
+
+/** One file at one commit; the `kind` says what could be read. */
 export type ChangeRequestFileAt =
-  | {
-      readonly kind: "text";
-      readonly path: string;
-      readonly sha: string;
-      readonly blobSha: string;
-      readonly text: string;
-      readonly startLine: number;
-      /** The last line in `text`; `startLine - 1` when the range starts past the end of the file. */
-      readonly endLine: number;
-      readonly totalLines: number;
-      /** `text` stops before the requested `endLine` because of the line or character cap. */
-      readonly truncated: boolean;
-    }
-  | {
-      readonly kind: "binary";
-      readonly path: string;
-      readonly sha: string;
-      readonly blobSha: string;
-      readonly size: number;
-    }
-  | {
-      readonly kind: "too-large";
-      readonly path: string;
-      readonly sha: string;
-      readonly blobSha: string;
-      readonly size: number;
-      readonly maxBytes: number;
-    }
-  /** Nothing readable at that path in that commit: absent, a directory, a symlink or a submodule. */
-  | { readonly kind: "missing"; readonly path: string; readonly sha: string };
+  | ChangeRequestFileText
+  | ChangeRequestFileBinary
+  | ChangeRequestFileTooLarge
+  | ChangeRequestFileMissing;
 
 export interface ChangeRequestBlobShas {
   readonly kind: "change-request-blob-shas";

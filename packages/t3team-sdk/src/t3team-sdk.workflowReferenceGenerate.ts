@@ -43,6 +43,10 @@ const REFERENCED_TYPES = [
 const SCRIPT_HOST_TYPES = [
   "ChangeRequestReader",
   "ChangeRequestFileAtInput",
+  "ChangeRequestFileText",
+  "ChangeRequestFileBinary",
+  "ChangeRequestFileTooLarge",
+  "ChangeRequestFileMissing",
   "ChangeRequestFileAt",
   "ChangeRequestBlobShas",
   "ScriptProject",

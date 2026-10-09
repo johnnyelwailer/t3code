@@ -232,7 +232,10 @@ export {
   type ChangeRequestBlobShas,
   type ChangeRequestFileAt,
   type ChangeRequestFileAtInput,
-  type ChangeRequestFileRevision,
+  type ChangeRequestFileBinary,
+  type ChangeRequestFileMissing,
+  type ChangeRequestFileText,
+  type ChangeRequestFileTooLarge,
   type ScriptLinkedRepository,
   type ScriptProject,
 } from "./t3team-sdk.scriptHostFiles.ts";

@@ -57,7 +57,6 @@ function toChangeRequestDetail(detail: PullRequestDetail, host: string): ChangeR
     updatedAt: detail.updatedAt,
     mergedAt: detail.mergedAt,
     closedAt: detail.closedAt,
-    ...files,
   };
 }
 

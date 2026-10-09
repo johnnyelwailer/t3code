@@ -16,6 +16,12 @@ import {
 } from "./t3team-fileAtRevision.ts";
 
 const TIMEOUT_MS = 60_000;
+/**
+ * GitLab's file API always answers with the content, whatever the caller wants of it, so the
+ * budget is the largest file `fileAt` will ever ask for (base64 plus envelope) even when only the
+ * blob id is wanted. A file past it is `undefined` (not understood), never a short read.
+ */
+const OUTPUT_BUDGET = Math.ceil(1_000_000 * 1.4) + 64 * 1024;
 
 /** `glab` reports a 404 as a command failure whose cause the process runner classed `not-found`. */
 const isNotFound = (error: { readonly _tag: string; readonly cause?: unknown }) =>
@@ -42,7 +48,7 @@ export const readGitLabFileAtRevision = (
         "api",
         `projects/${encodeURIComponent(input.repository)}/repository/files/${encodeURIComponent(input.path)}?ref=${input.revision}`,
       ],
-      maxOutputBytes: Math.ceil(limit * 1.4) + 64 * 1024,
+      maxOutputBytes: OUTPUT_BUDGET,
       timeoutMs: TIMEOUT_MS,
     })
     .pipe(

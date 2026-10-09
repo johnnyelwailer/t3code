@@ -20,10 +20,14 @@ export function validateRange(
   range: FileLineRange | undefined,
 ): Effect.Effect<FileLineRange, ChangeRequestInputError> {
   if (range === undefined) {
-    return Effect.succeed({ startLine: 1, endLine: CHANGE_REQUEST_FILE_MAX_LINES });
+    // No range asked for means the whole file, so a cut at the caps is reported as truncated.
+    return Effect.succeed({ startLine: 1, endLine: Number.MAX_SAFE_INTEGER });
   }
   const { startLine, endLine } = range;
-  return Number.isInteger(startLine) && Number.isInteger(endLine) && startLine >= 1 && endLine >= startLine
+  return Number.isInteger(startLine) &&
+    Number.isInteger(endLine) &&
+    startLine >= 1 &&
+    endLine >= startLine
     ? Effect.succeed(range)
     : Effect.fail(
         new ChangeRequestInputError(
@@ -60,10 +64,15 @@ export function sliceLines(
   const cappedEnd = Math.min(requestedEnd, range.startLine + CHANGE_REQUEST_FILE_MAX_LINES - 1);
   const picked: string[] = [];
   let chars = 0;
+  let lineCut = false;
   for (let line = range.startLine; line <= cappedEnd; line += 1) {
     const next = lines[line - 1]!;
     if (picked.length > 0 && chars + next.length + 1 > CHANGE_REQUEST_FILE_MAX_CHARS) break;
-    picked.push(next.length > CHANGE_REQUEST_FILE_MAX_CHARS ? next.slice(0, CHANGE_REQUEST_FILE_MAX_CHARS) : next);
+    // One line longer than the whole cap is cut, and the answer says so even though the line
+    // count reached the requested end.
+    const cut = next.length > CHANGE_REQUEST_FILE_MAX_CHARS;
+    lineCut ||= cut;
+    picked.push(cut ? next.slice(0, CHANGE_REQUEST_FILE_MAX_CHARS) : next);
     chars += next.length + 1;
   }
   const endLine = range.startLine + picked.length - 1;
@@ -72,6 +81,6 @@ export function sliceLines(
     startLine: range.startLine,
     endLine,
     totalLines,
-    truncated: endLine < requestedEnd,
+    truncated: lineCut || endLine < requestedEnd,
   };
 }

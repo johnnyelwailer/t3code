@@ -20,7 +20,7 @@ const TIMEOUT_MS = 60_000;
 const outputBudget = (maxBytes: number) => Math.ceil(maxBytes * 1.4) + 64 * 1024;
 
 /** A path or revision GitHub says it does not have, as opposed to a read that failed. */
-const isNotFound = (error: { readonly _tag: string; readonly httpStatus?: number }) =>
+const isNotFound = (error: { readonly _tag: string; readonly httpStatus?: number | undefined }) =>
   error._tag === "GitHubPullRequestNotFoundError" ||
   (error._tag === "GitHubCliCommandError" && error.httpStatus === 404);
 
@@ -57,9 +57,7 @@ export const readGitHubFileAtRevision = (
     })
     .pipe(
       Effect.map((result) =>
-        result.stdoutTruncated
-          ? undefined
-          : fileFromHostJson(result.stdout.trim(), limit),
+        result.stdoutTruncated ? undefined : fileFromHostJson(result.stdout.trim(), limit),
       ),
       Effect.catchIf(isNotFound, () =>
         Effect.succeed<ProviderFileAtRevision | null | undefined>(null),

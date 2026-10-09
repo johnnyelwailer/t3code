@@ -52,7 +52,8 @@ export interface FileAtRevisionRequest {
 }
 
 /** A commit sha arrives from a script and goes into a request path, so it is checked. */
-export const isRevisionSha = (value: string): boolean => /^[0-9a-f]{40}([0-9a-f]{24})?$/i.test(value);
+export const isRevisionSha = (value: string): boolean =>
+  /^[0-9a-f]{40}([0-9a-f]{24})?$/i.test(value);
 
 /**
  * A path that stays inside the repository: relative, no empty, `.` or `..` segment, no

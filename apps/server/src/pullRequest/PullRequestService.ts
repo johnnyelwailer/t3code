@@ -239,9 +239,7 @@ export class PullRequestService extends Context.Service<
      * t3team: the repositories a project's change requests can be read from — its own remote and
      * its linked repositories, on hosts this build can read — resolved exactly as a listing does.
      */
-    readonly projectRepositories: (
-      projectId: ProjectId,
-    ) => Effect.Effect<
+    readonly projectRepositories: (projectId: ProjectId) => Effect.Effect<
       ReadonlyArray<{
         readonly host: string;
         readonly repository: string;
@@ -2043,9 +2041,8 @@ export const make = Effect.gen(function* () {
               maxBytes: input.maxBytes,
             }).pipe(
               Effect.mapError(toPullRequestError("readFileAtRevision")),
-              Effect.map(
-                (file): PullRequestFileAtRevisionResult =>
-                  file === null ? { kind: "missing" } : { kind: "file", file },
+              Effect.map((file): PullRequestFileAtRevisionResult =>
+                file === null ? { kind: "missing" } : { kind: "file", file },
               ),
             );
       }),
