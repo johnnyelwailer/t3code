@@ -370,3 +370,11 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
 - `apps/server/src/auth/McpOAuth.ts`, `…/McpOAuth.test.ts`, `…/mcpOAuthHtml.ts`, `…/mcpOAuthHttp.ts`
 - `apps/web/src/components/auth/ConnectAgentSurface.tsx`, `apps/web/src/routes/connect-agent.tsx`
 - `oxlint-plugin-t3code/rules/no-raw-mcp-registration.ts`, `…/no-raw-mcp-registration.test.ts`
+
+## `changeRequest.summary` slot (T8)
+
+- `apps/web/src/components/pullRequest/PullRequestSummaryTab.tsx` — one import and one
+  `<ChangeRequestSummarySlot />` line between the meta section and Description; the slot renders
+  nothing until a view is registered, so the panel is unchanged without one.
+- `apps/web/src/components/pullRequest/PullRequestSummaryTab.test.tsx` — one case: a throwing
+  registered Summary view leaves the real panel standing.

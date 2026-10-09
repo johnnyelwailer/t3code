@@ -1,12 +1,17 @@
 /**
- * The shell components behind the bundled `dashboard.widget` definitions
- * (`@t3tools/t3team-skill-packs` `BUNDLED_DASHBOARD_WIDGETS`), keyed by their `component`, the same
- * stage-1 binding `t3team-sidecarSectionRegistry.tsx` uses. A digest section names a widget id; the
- * view resolves it here, so an arrangement — heuristic or agent-made — only ever places widgets.
+ * The `dashboard.widget` slot. The shell components behind the bundled definitions
+ * (`@t3tools/t3team-skill-packs` `BUNDLED_DASHBOARD_WIDGETS`) are registered into the app's view
+ * registry as host views, next to the widgets packs register with their own definition. A digest
+ * section names a widget id; the view resolves it there, so an arrangement — heuristic or
+ * agent-made — only ever places widgets.
  */
-import { bundledDashboardWidget } from "@t3tools/t3team-skill-packs";
+import { BUNDLED_DASHBOARD_WIDGETS } from "@t3tools/t3team-skill-packs";
 import type { DashboardWidgetPlacement } from "@t3team/sdk/placements";
 import type { ReactNode } from "react";
+
+import { appViewRegistry } from "~/t3team/packs/t3team-appViewRegistry";
+import { ViewInstance } from "~/t3team/packs/t3team-ViewInstance";
+import type { DashboardWidgetEntry } from "~/t3team/packs/t3team-viewRegistry";
 
 import { DigestYesterdayWidget } from "~/t3team/t3team-ProjectMyWorkDigestYesterday";
 import { DigestReviewSection } from "~/t3team/t3team-ProjectMyWorkDigestReviewSection";
@@ -18,7 +23,7 @@ import {
 } from "~/t3team/t3team-ProjectMyWorkDigestSections";
 import type { DigestSection } from "~/t3team/t3team-projectMyWorkDigestPlan";
 
-type DashboardWidgetProps = LaneProps & {
+export type DashboardWidgetProps = LaneProps & {
   readonly section: DigestSection;
   readonly placement: DashboardWidgetPlacement;
 };
@@ -30,7 +35,8 @@ function DigestTicketsWidget({ placement, ...props }: DashboardWidgetProps) {
   return <MainSection {...props} />;
 }
 
-const DASHBOARD_WIDGET_COMPONENTS: Record<string, (props: DashboardWidgetProps) => ReactNode> = {
+/** Keyed by a bundled definition's `component`; read lazily, see `t3team-appViewRegistry.ts`. */
+const BUNDLED_WIDGET_COMPONENTS: Record<string, (props: DashboardWidgetProps) => ReactNode> = {
   "digest-tickets": DigestTicketsWidget,
   "digest-reviews": ({ placement: _placement, ...props }) => <DigestReviewSection {...props} />,
   // Reads the graph itself; the compact list is the same in the side lane and the footer.
@@ -42,13 +48,49 @@ export function digestSectionWidgetId(section: DigestSection): string {
   return section.widget ?? (section.kind === "reviews" ? "my-work.reviews" : "my-work.tickets");
 }
 
+/** The bundled widgets as host views of the `dashboard.widget` slot. */
+export function hostDashboardWidgetViews(): ReadonlyArray<DashboardWidgetEntry> {
+  return BUNDLED_DASHBOARD_WIDGETS.flatMap((definition) => {
+    const component = BUNDLED_WIDGET_COMPONENTS[definition.component];
+    return component
+      ? [
+          {
+            slot: "dashboard.widget" as const,
+            id: definition.id,
+            owner: { kind: "host" as const },
+            definition,
+            component,
+          },
+        ]
+      : [];
+  });
+}
+
+/** The inputs a widget renders, as primitives, so a data refresh retries a failed widget. */
+export function dashboardWidgetResetKeys(
+  widgetId: string,
+  { section, placement }: Pick<DashboardWidgetProps, "section" | "placement">,
+) {
+  const ticketIds = section.items.map((item) => item.ticketId).join(",");
+  return [widgetId, placement, section.id, ticketIds, (section.reviewIds ?? []).join(",")];
+}
+
 /**
- * One placed widget. A widget id the shell does not know, or a placement its definition does not
- * allow, renders nothing — an arrangement is data and must not be able to break the view.
+ * One placed widget, in its own error boundary. A widget id nobody registered, or a placement its
+ * definition does not allow, renders nothing — an arrangement is data and must not be able to
+ * break the view.
  */
 export function DashboardWidget(props: DashboardWidgetProps) {
-  const definition = bundledDashboardWidget(digestSectionWidgetId(props.section));
-  if (definition === undefined || !definition.placements.includes(props.placement)) return null;
-  const Component = DASHBOARD_WIDGET_COMPONENTS[definition.component];
-  return Component ? <Component {...props} /> : null;
+  const widgetId = digestSectionWidgetId(props.section);
+  const entry = appViewRegistry().get("dashboard.widget", widgetId);
+  if (entry === undefined || !entry.definition.placements.includes(props.placement)) return null;
+  return (
+    <ViewInstance
+      owner={entry.owner}
+      resetKeys={dashboardWidgetResetKeys(widgetId, props)}
+      fallback={null}
+    >
+      <entry.component {...props} />
+    </ViewInstance>
+  );
 }

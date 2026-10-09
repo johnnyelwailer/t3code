@@ -39,6 +39,7 @@ const hostView = (
   placement: MessageViewPlacement,
   bind: Bind,
 ): MessageViewEntry<MessageViewRowContext> => ({
+  slot: "message.view",
   id,
   owner: { kind: "host" },
   placement,

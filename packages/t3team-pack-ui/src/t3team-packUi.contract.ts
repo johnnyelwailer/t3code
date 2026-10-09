@@ -17,11 +17,26 @@ import type { ComponentType } from "react";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import type * as Schema from "effect/Schema";
 
+import type {
+  ChangeRequestSummaryRegistration,
+  DashboardWidgetRegistration,
+  MyWorkChangeRequestRegistration,
+  SidecarSectionRegistration,
+} from "./t3team-packUi.slots.ts";
+
 /** Bumped on a breaking change to anything in this file. */
 export const PACK_UI_VERSION = 1;
 
-/** The slots a view can be registered into. Only slots the host renders are listed. */
-export type ViewSlot = "message.view";
+/**
+ * The slots a view can be registered into. Only slots the host renders are listed. A registration
+ * is keyed by `(slot, id)`; the slots other than `message.view` are in `t3team-packUi.slots.ts`.
+ */
+export type ViewSlot =
+  | "message.view"
+  | "changeRequest.summary"
+  | "myWork.changeRequest"
+  | "dashboard.widget"
+  | "sidecar.section";
 
 /** What a `message.view` component receives. `props` were decoded with the registration's schema. */
 export interface MessageViewProps<P> {
@@ -49,10 +64,18 @@ export interface MessageViewRegistration<P> {
   readonly layout?: "lane" | "fullBleed";
 }
 
+/** Everything `registerView` takes; `slot` says which. */
+export type ViewRegistration<P> =
+  | MessageViewRegistration<P>
+  | ChangeRequestSummaryRegistration
+  | MyWorkChangeRequestRegistration
+  | DashboardWidgetRegistration
+  | SidecarSectionRegistration;
+
 export interface WebActivateContext {
   readonly packId: string;
-  /** Throws if `id` is not `<packId>.<name>` or is already registered. */
-  registerView<P>(registration: MessageViewRegistration<P>): void;
+  /** Throws if `id` is not `<packId>.<name>` or is already registered in that slot. */
+  registerView<P>(registration: ViewRegistration<P>): void;
 }
 
 export type WebActivate = (context: WebActivateContext) => void;
@@ -77,6 +100,7 @@ export type PackDocumentState<V> =
   | { readonly status: "loading" }
   | { readonly status: "ready"; readonly value: V };
 
+export * from "./t3team-packUi.slots.ts";
 export * from "./t3team-packUi.primitives.ts";
 export * from "./t3team-packUi.overlays.ts";
 export * from "./t3team-packUi.icons.ts";

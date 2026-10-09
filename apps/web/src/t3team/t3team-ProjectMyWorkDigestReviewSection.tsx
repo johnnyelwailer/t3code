@@ -2,6 +2,7 @@ import { ProjectId } from "@t3tools/contracts";
 import type { MouseEvent } from "react";
 
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
+import { MyWorkChangeRequestSlot } from "~/t3team/packs/t3team-changeRequestSlots";
 import { DigestKicker, formatDigestAgo } from "~/t3team/t3team-ProjectMyWorkDigestChips";
 import { DigestItemActions } from "~/t3team/t3team-ProjectMyWorkDigestActions";
 import { openDigestPullRequest } from "~/t3team/t3team-digestPrAsideStore";
@@ -172,6 +173,7 @@ export function DigestReviewSection({
                     </button>
                   ) : null}
                   <DigestItemActions actions={digestReviewActions(review)} />
+                  <MyWorkChangeRequestSlot changeRequest={review} density="row" />
                 </div>
               </div>
             </div>

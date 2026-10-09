@@ -318,6 +318,8 @@
     "apps/web/src/components/preview/previewAutomationErrors.ts",
     "apps/web/src/components/pullRequest/PullRequestCodeTab.tsx",
     "apps/web/src/components/pullRequest/PullRequestDetailPanel.tsx",
+    "apps/web/src/components/pullRequest/PullRequestSummaryTab.test.tsx",
+    "apps/web/src/components/pullRequest/PullRequestSummaryTab.tsx",
     "apps/web/src/components/settings/ConnectionsSettings.tsx",
     "apps/web/src/components/settings/DiagnosticsSettings.tsx",
     "apps/web/src/components/settings/EnvironmentRow.tsx",
