@@ -10,7 +10,10 @@
  *   1. a script writes a file at the right place under the root, and `exists` sees it;
  *   2. `..` and absolute paths are rejected and nothing is written outside the root;
  *   3. a run that survived a restart (parked on `askUser`) writes through the same workspace;
- *   4. a restored run whose project is unknown keeps the SDK's clear no-workspace error.
+ *   4. a restored run whose project is unknown keeps the SDK's clear no-workspace error;
+ *   5. `.git`, `.t3team-runs` and `.t3` are unavailable, `.github/` is not;
+ *   6. the root is the LAUNCH THREAD's worktree when it has one, else the project root — on a
+ *      fresh recipe launch and after rehydration alike.
  */
 
 import * as NodeFS from "node:fs";
@@ -19,7 +22,7 @@ import * as NodeURL from "node:url";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -49,7 +52,15 @@ import {
   makeFakeWorkflowHostLayer,
 } from "./t3team-workflowHostFake.fixtures.ts";
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
-import { seedWorkflowStubProject } from "./t3team-workflowStubRuntime.ts";
+import { T3TeamScriptHost } from "./t3team-scriptHostContext.ts";
+import { NoopT3TeamToolBroker, T3TeamToolBroker } from "./t3team-toolBroker.ts";
+import { launchRecipeWorkflow } from "./t3team-recipeWorkflowLaunch.ts";
+import {
+  createWorkflowStubThread,
+  makeWorkflowStubRuntime,
+  seedWorkflowStubProject,
+} from "./t3team-workflowStubRuntime.ts";
+import { WORKFLOW_STUB_MODEL_SELECTION } from "./t3team-workflowStubAgentTurn.ts";
 
 const fixtureRoot = NodePath.join(
   NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)),
@@ -77,6 +88,7 @@ export default defineScript({
   outputs: Schema.Struct({ existed: Schema.Boolean, root: Schema.String }),
   handler: async (args, ctx) => {
     await ctx.workspace.writeText(args.path, args.content);
+    await ctx.workspace.writeText(args.path + ".root", ctx.workspaceRoot);
     return { existed: await ctx.workspace.exists(args.path), root: ctx.workspaceRoot };
   },
 });
@@ -162,6 +174,7 @@ const launchRecipe = (input: {
     const { recipeRoot, workflowPath } = writeRecipeFixture(input.recipeId, input);
     const scripts = yield* resolveRecipeWorkflowScripts({ recipePath: recipeRoot, workflowPath });
     const launchThreadId = `thread-${input.runId}`;
+    const completed: unknown[] = [];
     const result = yield* launchPreparedWorkflow(
       {
         registry: makeWorkflowEngineRegistry(),
@@ -185,9 +198,12 @@ const launchRecipe = (input: {
         runtimeMode: "full-access",
         interactionMode: "default",
         origin: "recipe",
+        onComplete: async (output) => {
+          completed.push(output);
+        },
       },
     );
-    return { result, launchThreadId };
+    return { result, launchThreadId, completed };
   });
 
 const runRow = (runId: string) =>
@@ -198,7 +214,7 @@ const runRow = (runId: string) =>
 
 it.effect("a script writes under the project root and exists() sees it", () =>
   Effect.gen(function* () {
-    const { result } = yield* launchRecipe({
+    const { result, completed } = yield* launchRecipe({
       runId: "ws-fs-write",
       recipeId: "ws-fs-write",
       askFirst: false,
@@ -209,6 +225,8 @@ it.effect("a script writes under the project root and exists() sees it", () =>
       NodeFS.readFileSync(NodePath.join(workspaceRoot, ".nexi", "machine.json"), "utf8"),
       '{"ok":true}',
     );
+    // The ctx root is the project root, not the run dir the SDK falls back to.
+    assert.deepStrictEqual(completed, [{ existed: true, root: workspaceRoot }]);
     assert.strictEqual((yield* runRow("ws-fs-write")).status, "completed");
   }).pipe(Effect.provide(TestLayer)),
 );
@@ -296,4 +314,140 @@ it.effect("a restored run whose project is gone keeps the clear no-workspace err
     assert.include(settled.failureReason ?? "", "without a workspace filesystem");
     assert.isFalse(NodeFS.existsSync(NodePath.join(workspaceRoot, "never.txt")));
   }).pipe(Effect.provide(TestLayer)),
+);
+
+it.effect("reserved entries are refused for write, while .github and .nexi stay writable", () =>
+  Effect.gen(function* () {
+    const denied = [".git/config", ".t3team-runs/other-run/workflow.ts", ".t3/state.json"];
+    for (const [index, path] of [...denied, "a/../.git/hooks/pre-commit"].entries()) {
+      const runId = `ws-fs-reserved-${index}`;
+      const { result } = yield* launchRecipe({
+        runId,
+        recipeId: runId,
+        askFirst: false,
+        args: { path, content: "tampered" },
+      });
+      assert.strictEqual(result.status, "failed", path);
+      assert.include((yield* runRow(runId)).failureReason ?? "", "cannot access", path);
+    }
+    assert.isFalse(NodeFS.existsSync(NodePath.join(workspaceRoot, ".git")));
+    assert.isFalse(NodeFS.existsSync(NodePath.join(workspaceRoot, ".t3")));
+    assert.isFalse(NodeFS.existsSync(NodePath.join(workspaceRoot, ".t3team-runs", "other-run")));
+
+    const { result } = yield* launchRecipe({
+      runId: "ws-fs-github",
+      recipeId: "ws-fs-github",
+      askFirst: false,
+      args: { path: ".github/workflows/x.yml", content: "name: x" },
+    });
+    assert.strictEqual(result.status, "completed");
+    assert.strictEqual(
+      NodeFS.readFileSync(NodePath.join(workspaceRoot, ".github", "workflows", "x.yml"), "utf8"),
+      "name: x",
+    );
+  }).pipe(Effect.provide(TestLayer)),
+);
+
+// ── Launch-thread checkout: the worktree when the thread has one, else the project root ─────────
+// Driven through the real recipe launch route (`launchRecipeWorkflow`) and boot rehydration over a
+// real V2 runtime, so the thread → root derivation is what is under test, not a handed-in root.
+
+const worktreeRoot = NodePath.join(sandbox, "wt");
+NodeFS.mkdirSync(worktreeRoot);
+
+const checkoutLayer = () => {
+  const stub = makeWorkflowStubRuntime({ name: "t3team-workspace-fs", respond: () => "ok" });
+  return Layer.mergeAll(
+    T3TeamWorkflowSchedulerLive,
+    Layer.succeed(T3TeamToolBroker, NoopT3TeamToolBroker),
+    Layer.succeed(T3TeamScriptHost, { forRun: () => ({}) }),
+    ServerConfig.layerTest(sandbox, { prefix: "t3-workspace-fs-checkout-" }),
+  ).pipe(Layer.provideMerge(stub.layer), Layer.provideMerge(NodeServices.layer));
+};
+
+const launchOnThread = (input: {
+  readonly name: string;
+  readonly worktreePath: string | undefined;
+  readonly askFirst: boolean;
+}) =>
+  Effect.gen(function* () {
+    yield* seedWorkflowStubProject({ projectId, workspaceRoot });
+    const threadId = `thread-${input.name}`;
+    yield* createWorkflowStubThread({
+      threadId,
+      projectId,
+      ...(input.worktreePath === undefined ? {} : { worktreePath: input.worktreePath }),
+    });
+    const { recipeRoot, workflowPath } = writeRecipeFixture(input.name, input);
+    const launched = yield* launchRecipeWorkflow({
+      threadId: ThreadId.make(threadId),
+      recipePath: recipeRoot,
+      workflowPath,
+      args: { path: `${input.name}/out.txt`, content: input.name },
+      modelSelection: createModelSelection(
+        WORKFLOW_STUB_MODEL_SELECTION.instanceId,
+        WORKFLOW_STUB_MODEL_SELECTION.model,
+      ),
+      runtimeMode: "full-access",
+      interactionMode: "default",
+    });
+    return { launched, threadId, runId: launched.runId };
+  });
+
+const wrote = (root: string, name: string) => ({
+  file: NodeFS.existsSync(NodePath.join(root, name, "out.txt")),
+  root: NodeFS.existsSync(NodePath.join(root, name, "out.txt.root"))
+    ? NodeFS.readFileSync(NodePath.join(root, name, "out.txt.root"), "utf8")
+    : undefined,
+});
+
+it.live("a launch thread with a worktree writes into that worktree, not the project root", () =>
+  Effect.gen(function* () {
+    const name = "ws-fs-thread-worktree";
+    const { launched } = yield* launchOnThread({
+      name,
+      worktreePath: worktreeRoot,
+      askFirst: false,
+    });
+    assert.strictEqual(launched.status, "completed");
+    assert.deepStrictEqual(wrote(worktreeRoot, name), { file: true, root: worktreeRoot });
+    assert.deepStrictEqual(wrote(workspaceRoot, name), { file: false, root: undefined });
+  }).pipe(Effect.scoped, Effect.provide(checkoutLayer())),
+);
+
+it.live("a launch thread without a worktree writes into the project root", () =>
+  Effect.gen(function* () {
+    const name = "ws-fs-thread-root";
+    const { launched } = yield* launchOnThread({ name, worktreePath: undefined, askFirst: false });
+    assert.strictEqual(launched.status, "completed");
+    assert.deepStrictEqual(wrote(workspaceRoot, name), { file: true, root: workspaceRoot });
+    assert.deepStrictEqual(wrote(worktreeRoot, name), { file: false, root: undefined });
+  }).pipe(Effect.scoped, Effect.provide(checkoutLayer())),
+);
+
+it.live("rehydration re-derives the launch thread's worktree for a restored run", () =>
+  Effect.gen(function* () {
+    const name = "ws-fs-thread-rehydrated";
+    const { launched, runId, threadId } = yield* launchOnThread({
+      name,
+      worktreePath: worktreeRoot,
+      askFirst: true,
+    });
+    assert.strictEqual(launched.status, "suspended");
+
+    // Restart: drop the live controller, then let the real boot rehydration rebuild it.
+    const registry = yield* T3TeamWorkflowEngineRegistry;
+    registry.deleteRun(runId);
+    registry.removePendingForRun(runId);
+    yield* rehydrateSuspendedWorkflowRuns();
+    const ask = registry.peekPending(threadId);
+    assert.strictEqual(ask?.kind, "user.input");
+    yield* Effect.promise(() =>
+      registry.getRun(runId)!.resume(ask!.correlationId, { proceed: true }),
+    );
+
+    assert.strictEqual((yield* runRow(runId)).status, "completed");
+    assert.deepStrictEqual(wrote(worktreeRoot, name), { file: true, root: worktreeRoot });
+    assert.deepStrictEqual(wrote(workspaceRoot, name), { file: false, root: undefined });
+  }).pipe(Effect.scoped, Effect.provide(checkoutLayer())),
 );

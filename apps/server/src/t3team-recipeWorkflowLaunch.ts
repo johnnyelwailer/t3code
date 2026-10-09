@@ -22,6 +22,7 @@ import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import { loadThreadProjectContext } from "./t3team-thread-recipe-workflow-routes-shared.ts";
+import { threadCheckoutRoot } from "./t3team-threadCheckoutRoot.ts";
 import { T3TeamScriptHost } from "./t3team-scriptHostContext.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
@@ -142,6 +143,7 @@ export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* 
       // Scripts, host tools, script host and the recipe dir, persisted for rehydration.
       ...bindings,
       workspaceRoot: project.workspaceRoot,
+      checkoutRoot: threadCheckoutRoot(thread, project.workspaceRoot),
       launchThreadId: threadId,
       projectId: thread.projectId,
       modelSelection: input.modelSelection,

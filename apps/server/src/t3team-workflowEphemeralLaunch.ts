@@ -108,7 +108,7 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
       ...workspaceLaunchFields({
         fileSystem: deps.fileSystem,
         pathService,
-        workspaceRoot: input.workspaceRoot,
+        workspaceRoot: input.checkoutRoot ?? input.workspaceRoot,
       }),
       ...(input.recipePath == null ? {} : { recipePath: input.recipePath }),
       launchThreadId: input.launchThreadId,

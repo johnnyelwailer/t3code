@@ -4,7 +4,8 @@
  *
  * One implementation so both surfaces share the SAME path guard: every relative path is resolved
  * through {@link resolveWithinRoot}, which proves containment on canonical (realpath) forms, so
- * `..`, an absolute path, or a symlink out of the root throws instead of touching the file.
+ * `..`, an absolute path, or a symlink out of the root throws instead of touching the file. A
+ * symlink INSIDE the root that points at a reserved entry is not caught by the name rule.
  */
 import type { ToolWorkspace } from "@t3team/sdk";
 import * as Effect from "effect/Effect";
@@ -12,6 +13,29 @@ import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
 
 import { resolveWithinRoot } from "./t3team-projectRecipeDiscoveryShared.ts";
+
+/** Top-level entries a workspace never reads or writes: git internals, the runs scratch dir (it
+ * holds other runs' ephemeral `workflow.ts`, which a failed-run resume re-baselines) and the
+ * project's own `.t3` state. `.github/`, `.devcontainer/` and `.nexi/` stay writable. */
+export const WORKSPACE_RESERVED_ENTRIES: ReadonlyArray<string> = [".git", ".t3team-runs", ".t3"];
+
+/** `resolveWithinRoot` plus the reserved-entry rule, judged on the RESOLVED path relative to the
+ * root so `a/../.git/x` cannot slip past a prefix check on the raw string. */
+function resolveWorkspacePath(
+  pathService: Path.Path,
+  rootPath: string,
+  requestedPath: string,
+): string {
+  const resolved = resolveWithinRoot(pathService, rootPath, requestedPath);
+  const [first] = pathService.relative(pathService.resolve(rootPath), resolved).split(/[\\/]/);
+  if (first !== undefined && WORKSPACE_RESERVED_ENTRIES.includes(first)) {
+    throw new Error(
+      `Path '${requestedPath}' is inside '${first}', which a workflow workspace cannot access ` +
+        `(reserved: ${WORKSPACE_RESERVED_ENTRIES.join(", ")}).`,
+    );
+  }
+  return resolved;
+}
 
 export interface WorkspaceFileAccessInput {
   readonly fileSystem: FileSystem.FileSystem;
@@ -26,9 +50,11 @@ export function createWorkspaceFileAccess(input: WorkspaceFileAccessInput): Tool
   const runPromise = input.runPromise ?? Effect.runPromise;
   return {
     readText: async (relativePath) =>
-      runPromise(fileSystem.readFileString(resolveWithinRoot(pathService, rootPath, relativePath))),
+      runPromise(
+        fileSystem.readFileString(resolveWorkspacePath(pathService, rootPath, relativePath)),
+      ),
     writeText: async (relativePath, content) => {
-      const targetPath = resolveWithinRoot(pathService, rootPath, relativePath);
+      const targetPath = resolveWorkspacePath(pathService, rootPath, relativePath);
       await runPromise(
         fileSystem
           .makeDirectory(pathService.dirname(targetPath), { recursive: true })
@@ -38,7 +64,7 @@ export function createWorkspaceFileAccess(input: WorkspaceFileAccessInput): Tool
     exists: async (relativePath) =>
       runPromise(
         fileSystem
-          .exists(resolveWithinRoot(pathService, rootPath, relativePath))
+          .exists(resolveWorkspacePath(pathService, rootPath, relativePath))
           .pipe(Effect.orElseSucceed(() => false)),
       ),
   };

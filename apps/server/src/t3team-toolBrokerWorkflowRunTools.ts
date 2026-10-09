@@ -18,6 +18,7 @@ import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
 
+import { threadCheckoutRoot } from "./t3team-threadCheckoutRoot.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import type { T3TeamThreadToolContextStoreShape } from "./t3team-threadToolContextStore.ts";
 import { startAuthoredWorkflowRun } from "./t3team-workflowAuthorLaunch.ts";
@@ -63,6 +64,7 @@ type LoadThreadProject<E> = (threadId: ThreadId) => Effect.Effect<
       readonly runtimeMode: RuntimeMode;
       readonly interactionMode: ProviderInteractionMode;
       readonly modelSelection?: ModelSelection | null | undefined;
+      readonly worktreePath?: string | null | undefined;
     };
   },
   E
@@ -120,6 +122,7 @@ export function makeWorkflowRunToolHandlers<E>(
           runId,
           args: args.args ?? {},
           workspaceRoot,
+          checkoutRoot: threadCheckoutRoot(thread, workspaceRoot),
           launchThreadId: threadId,
           projectId: thread.projectId,
           modelSelection,

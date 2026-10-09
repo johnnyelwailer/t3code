@@ -69,6 +69,10 @@ export interface PreparedWorkflowLaunchInput {
   /** Bounded host repair attempts; zero disables repair. */
   readonly repairMaxAttempts?: number;
   readonly workspaceRoot: string;
+  /** Where the run's `ctx.workspace` is rooted: the launch thread's checkout (its worktree when it
+   * has one). Absent means `workspaceRoot`. Distinct because `workspaceRoot` also anchors the runs
+   * scratch dir and ephemeral sources, which always live under the project root. */
+  readonly checkoutRoot?: string | undefined;
   readonly launchThreadId: string | undefined;
   readonly projectId: ProjectId;
   readonly modelSelection: ModelSelection;

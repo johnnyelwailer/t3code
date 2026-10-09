@@ -112,6 +112,8 @@ export const createWorkflowStubThread = (input: {
   readonly threadId: string;
   readonly projectId: string;
   readonly title?: string;
+  /** A thread bound to its own git worktree; absent is a thread on the project root. */
+  readonly worktreePath?: string;
 }) =>
   Effect.flatMap(ThreadManagementService.ThreadManagementService, (threads) =>
     threads.dispatch({
@@ -124,7 +126,7 @@ export const createWorkflowStubThread = (input: {
       runtimeMode: "full-access",
       interactionMode: "default",
       branch: null,
-      worktreePath: null,
+      worktreePath: input.worktreePath ?? null,
       createdBy: "user",
       creationSource: "web",
     }),

@@ -12,6 +12,7 @@ import * as Option from "effect/Option";
 
 import { T3TeamChangeRequestPublisher } from "./t3team-changeRequestPublisher.ts";
 import { describeChangeRequestPublishError } from "./t3team-changeRequestPublishErrors.ts";
+import { threadCheckoutRoot } from "./t3team-threadCheckoutRoot.ts";
 import type { T3TeamChangeRequestToolHandlers } from "./t3team-toolBrokerBindingChangeRequest.ts";
 import type { T3TeamThreadReads } from "./t3team-toolBrokerThreadReads.ts";
 
@@ -28,7 +29,7 @@ export const makeChangeRequestToolsForThread = Effect.fn("makeChangeRequestTools
             publisher
               .publish({
                 ...args,
-                cwd: thread.worktreePath ?? project.workspaceRoot,
+                cwd: threadCheckoutRoot(thread, project.workspaceRoot),
                 projectId: project.id,
               })
               .pipe(Effect.mapError(describeChangeRequestPublishError)),
