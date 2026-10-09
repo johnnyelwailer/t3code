@@ -76,8 +76,10 @@ export function WatchedPullRequestCardRow({
   const { environmentId, threadId } = watcher.threadRef;
   const babysitter = watcher.recipeId !== null || watcher.prWatch !== null;
   const supervised = watcher.runtimeMode === "approval-required";
+  // What the thread is doing, else what it asks, else why it waits (doc 07 §2.4, §3.3).
   const underline =
     watcher.activityLabel ??
+    watcher.prWatch?.note ??
     (watcher.prWatch?.parked ? `Parked · ${watcher.prWatch.parked.reason}` : null) ??
     (watcher.prWatch?.lastWake ? `Last wake: ${watcher.prWatch.lastWake.text}` : null);
   const chips = chipsOf(watcher);

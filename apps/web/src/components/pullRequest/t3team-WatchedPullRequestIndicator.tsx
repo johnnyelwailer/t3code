@@ -7,7 +7,6 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 import type { MouseEvent, PointerEvent } from "react";
 
-import { Button } from "~/components/ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "~/components/ui/popover";
 import { cn } from "~/lib/utils";
 import { usePrimaryEnvironmentId } from "~/state/environments";
@@ -54,11 +53,17 @@ export function WatchedPullRequestIndicator({
         openOnHover
         delay={300}
         closeDelay={150}
+        // A span, not a button: the indicator sits inside links and row buttons, where a nested
+        // button is invalid markup. It stays focusable and keyboard-operable through Base UI.
+        nativeButton={false}
         render={
-          <Button
-            variant="ghost"
-            size="icon-tiny"
-            className={cn("shrink-0 cursor-default", className)}
+          <span
+            role="button"
+            tabIndex={0}
+            className={cn(
+              "inline-flex size-4 shrink-0 cursor-default items-center justify-center rounded-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring",
+              className,
+            )}
           />
         }
         aria-label={`${WATCHED_TONE_LABEL[tone]} · #${number}`}
