@@ -25,6 +25,8 @@ export interface RecipeConfigStaticResult {
   readonly diagnostics: ReadonlyArray<RecipeConfigDiagnostic>;
   /** 1-based line of each settings key: `defaults.<key>`, `scopes[<i>].<key>`. */
   readonly keyLines: Readonly<Record<string, number>>;
+  /** Settings keys whose value is an imported binding: key path → local name. */
+  readonly keyRefs: Readonly<Record<string, string>>;
   /** Imported value bindings: local name → module specifier and imported name. */
   readonly imports: Readonly<Record<string, { readonly specifier: string; readonly name: string }>>;
 }
@@ -45,6 +47,7 @@ export function checkRecipeConfigSource(
   );
   const diagnostics: RecipeConfigDiagnostic[] = [];
   const keyLines: Record<string, number> = {};
+  const keyRefs: Record<string, string> = {};
   const imports: Record<string, { specifier: string; name: string }> = {};
   const refConsts = new Set<string>();
   let recipeId: string | null = null;
@@ -106,7 +109,11 @@ export function checkRecipeConfigSource(
     for (const property of node.properties) {
       if (ts.isShorthandPropertyAssignment(property)) {
         checkValue(property.name, null);
-        if (path !== null) keyLines[`${path}.${property.name.text}`] = at(property).line + 1;
+        if (path !== null) {
+          keyLines[`${path}.${property.name.text}`] = at(property).line + 1;
+          if (property.name.text in imports)
+            keyRefs[`${path}.${property.name.text}`] = property.name.text;
+        }
         continue;
       }
       if (!ts.isPropertyAssignment(property)) {
@@ -118,7 +125,12 @@ export function checkRecipeConfigSource(
         report(name, "Computed keys are not data; write the key out.");
         continue;
       }
-      if (path !== null) keyLines[`${path}.${name.text}`] = at(property).line + 1;
+      if (path !== null) {
+        keyLines[`${path}.${name.text}`] = at(property).line + 1;
+        const value = unwrap(property.initializer);
+        if (ts.isIdentifier(value) && value.text in imports)
+          keyRefs[`${path}.${name.text}`] = value.text;
+      }
       checkValue(property.initializer, null);
     }
   };
@@ -223,5 +235,5 @@ export function checkRecipeConfigSource(
   if (!exported) {
     diagnostics.push({ line: 1, column: 1, message: "No `export default defineRecipeConfig(…)`." });
   }
-  return { recipeId, diagnostics, keyLines, imports };
+  return { recipeId, diagnostics, keyLines, keyRefs, imports };
 }

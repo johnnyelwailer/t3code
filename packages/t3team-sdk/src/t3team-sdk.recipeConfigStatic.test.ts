@@ -29,6 +29,7 @@ describe("recipe config data-only check", () => {
       "scopes[0].mergePolicy": 8,
       "scopes[1].with": 9,
     });
+    expect(result.keyRefs).toEqual({ "defaults.ownership": "ownershipByJira" });
     expect(result.imports.ownershipByJira).toEqual({
       specifier: "../policies/ownership-by-jira.ts",
       name: "default",
