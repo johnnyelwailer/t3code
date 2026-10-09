@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import * as NodeFS from "node:fs";
+import indexCss from "../index.css?raw";
+import indexCss from "../index.css?raw";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -276,7 +277,7 @@ describe("T3TeamNexploreStripArt dark-mode orb dimming", () => {
     } finally {
       cleanup();
     }
-    const css = NodeFS.readFileSync("src/index.css", "utf8");
+    const css = indexCss;
     const light = /:root \{[^}]*--stage-nx-strip-orb-opacity:\s*([\d.]+)/.exec(css);
     const dark = /\.dark \{[^}]*--stage-nx-strip-orb-opacity:\s*([\d.]+)/.exec(css);
     expect(Number(light?.[1])).toBe(1);
