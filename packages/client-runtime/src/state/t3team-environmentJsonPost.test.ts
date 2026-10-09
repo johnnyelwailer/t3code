@@ -77,39 +77,41 @@ const headerOf = (init: RequestInit, name: string) =>
   new Headers(init.headers).get(name) ?? undefined;
 
 describe("postEnvironmentJson", () => {
-  it.effect("signs a DPoP request for the exact URL and renews once when the route rejects it", () =>
-    Effect.gen(function* () {
-      const harness = makeHarness((n) =>
-        n === 1
-          ? Response.json({ error: "expired" }, { status: 401 })
-          : Response.json({ ok: true }),
-      );
+  it.effect(
+    "signs a DPoP request for the exact URL and renews once when the route rejects it",
+    () =>
+      Effect.gen(function* () {
+        const harness = makeHarness((n) =>
+          n === 1
+            ? Response.json({ error: "expired" }, { status: 401 })
+            : Response.json({ ok: true }),
+        );
 
-      const result = yield* postEnvironmentJson({
-        prepared: prepared({ _tag: "Dpop", accessToken: "expired-token", expiresAtEpochMs: 0 }),
-        path: PATH,
-        body: BODY,
-      }).pipe(Effect.provide(harness.services));
+        const result = yield* postEnvironmentJson({
+          prepared: prepared({ _tag: "Dpop", accessToken: "expired-token", expiresAtEpochMs: 0 }),
+          path: PATH,
+          body: BODY,
+        }).pipe(Effect.provide(harness.services));
 
-      expect(result).toEqual({ status: 200, payload: { ok: true } });
-      expect(harness.calls.map((call) => call.url)).toEqual([
-        `https://current.example.test${PATH}`,
-        `https://current.example.test${PATH}`,
-      ]);
-      expect(harness.calls.map((call) => headerOf(call.init, "authorization"))).toEqual([
-        "DPoP current-token",
-        "DPoP renewed-token",
-      ]);
-      expect(harness.calls.map((call) => headerOf(call.init, "dpop"))).toEqual([
-        "proof-1",
-        "proof-2",
-      ]);
-      expect(harness.proofs.map((proof) => [proof.method, proof.url])).toEqual([
-        ["POST", `https://current.example.test${PATH}`],
-        ["POST", `https://current.example.test${PATH}`],
-      ]);
-      expect(decodeJson(String(harness.calls[0]?.init.body))).toEqual(BODY);
-    }),
+        expect(result).toEqual({ status: 200, payload: { ok: true } });
+        expect(harness.calls.map((call) => call.url)).toEqual([
+          `https://current.example.test${PATH}`,
+          `https://current.example.test${PATH}`,
+        ]);
+        expect(harness.calls.map((call) => headerOf(call.init, "authorization"))).toEqual([
+          "DPoP current-token",
+          "DPoP renewed-token",
+        ]);
+        expect(harness.calls.map((call) => headerOf(call.init, "dpop"))).toEqual([
+          "proof-1",
+          "proof-2",
+        ]);
+        expect(harness.proofs.map((proof) => [proof.method, proof.url])).toEqual([
+          ["POST", `https://current.example.test${PATH}`],
+          ["POST", `https://current.example.test${PATH}`],
+        ]);
+        expect(decodeJson(String(harness.calls[0]?.init.body))).toEqual(BODY);
+      }),
   );
 
   it.effect("sends a bearer token and hands a route's error body back with its status", () =>
