@@ -24,7 +24,7 @@ describe("AllProjectsKickoffAside", () => {
   it("renders the dashboard kickoff host for the scratch project", () => {
     const markup = renderToStaticMarkup(
       <AllProjectsKickoffAside
-        scratchProject={{ id: "scratch-1", name: "No project" } as ProjectShellProject}
+        scratchProject={{ id: "scratch-1" } as unknown as ProjectShellProject}
         onStartScratch={undefined}
         providers={[]}
         isConnected
