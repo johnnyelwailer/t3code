@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { renderRelativeUpdatedAt } from "~/t3team/t3team-githubActivityViewUtils";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
@@ -47,7 +48,7 @@ export function TicketWorkItemCardMeta({
       {showKey ? (
         <span
           className={`min-w-0 shrink truncate font-medium text-muted-foreground ${
-            compact ? "text-[11px] @md/ticket-card:text-xs" : "text-xs"
+            compact ? "text-2xs @md/ticket-card:text-xs" : "text-xs"
           }`}
           style={{ opacity: keyOpacity }}
         >
@@ -60,7 +61,7 @@ export function TicketWorkItemCardMeta({
       />
       {showStatus ? (
         <span
-          className={`max-w-28 shrink truncate text-[10px] text-muted-foreground/75 ${
+          className={`max-w-28 shrink truncate text-3xs text-muted-foreground/75 ${
             compact ? "hidden @md/ticket-card:inline" : ""
           }`}
           style={{ opacity: statusOpacity }}
@@ -70,7 +71,7 @@ export function TicketWorkItemCardMeta({
       ) : null}
       {showPriority ? (
         <span
-          className={`max-w-24 shrink truncate rounded bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground ${
+          className={`max-w-24 shrink truncate rounded bg-muted/40 px-1.5 py-0.5 text-3xs text-muted-foreground ${
             compact ? "hidden @lg/ticket-card:inline" : ""
           }`}
           style={{ opacity: priorityOpacity }}
@@ -81,13 +82,19 @@ export function TicketWorkItemCardMeta({
       {updatedLabel ? (
         // In-flow + truncate (no shrink-0). Card padding owns the edge inset — do not
         // flush this against the border.
-        <span
-          className="ml-auto min-w-0 max-w-[40%] shrink truncate pl-2 text-right text-[10px] leading-4 text-muted-foreground"
-          style={{ opacity: updatedOpacity }}
-          title={`Updated ${updatedLabel}`}
-        >
-          Updated {updatedLabel}
-        </span>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span
+                className="ml-auto min-w-0 max-w-[40%] shrink truncate pl-2 text-right text-3xs leading-4 text-muted-foreground"
+                style={{ opacity: updatedOpacity }}
+              />
+            }
+          >
+            Updated {updatedLabel}
+          </TooltipTrigger>
+          <TooltipPopup side="top">Updated {updatedLabel}</TooltipPopup>
+        </Tooltip>
       ) : null}
     </div>
   );
@@ -106,9 +113,9 @@ export function TicketWorkItemRowMeta({
     <div className="flex flex-wrap items-center gap-1.5">
       <span className="text-xs font-medium text-muted-foreground">{ticket.ref.displayId}</span>
       <ProjectDashboardTicketRelationshipBadge child={child} childCount={childCount} />
-      <span className="text-[10px] text-muted-foreground/75">{ticket.status}</span>
+      <span className="text-3xs text-muted-foreground/75">{ticket.status}</span>
       {ticket.priority && (
-        <span className="rounded bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+        <span className="rounded bg-muted/40 px-1.5 py-0.5 text-3xs text-muted-foreground">
           {ticket.priority}
         </span>
       )}
