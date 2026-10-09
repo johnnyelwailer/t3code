@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import indexCss from "../index.css?raw";
-import indexCss from "../index.css?raw";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
