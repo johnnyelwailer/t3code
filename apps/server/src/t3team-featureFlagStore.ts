@@ -3,7 +3,7 @@
 import * as Effect from "effect/Effect";
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import {
   FEATURE_FLAG_DEFINITIONS,
   replaceFeatureFlagDatabaseValues,

@@ -6,7 +6,7 @@ import {
   type T3TeamThreadArtifactsStreamEvent,
 } from "@t3tools/contracts";
 import * as Stream from "effect/Stream";
-import type { Atom } from "effect/unstable/reactivity";
+import type { Atom } from "effect/reactivity";
 
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 import { subscribeWhenSupported } from "../rpc/t3team-capabilityGatedSubscription.ts";
@@ -80,7 +80,7 @@ export function createT3TeamThreadArtifactsAtoms<R, E>(
         subscribeWhenSupported(WS_METHODS.t3teamSubscribeThreadArtifacts, input, {
           supported: supportsT3TeamThreadArtifacts,
           unsupported: { type: "snapshot", threadId: input.threadId, artifacts: [] },
-        }).pipe(Stream.scan(EMPTY_T3TEAM_THREAD_ARTIFACTS, applyT3TeamThreadArtifactsEvent)),
+        }).pipe(Stream.scan(() => EMPTY_T3TEAM_THREAD_ARTIFACTS, applyT3TeamThreadArtifactsEvent)),
     }),
   };
 }

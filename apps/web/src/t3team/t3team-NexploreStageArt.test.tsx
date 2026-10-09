@@ -262,3 +262,18 @@ describe("T3TeamNexploreStripArt traffic-light wash", () => {
     }
   });
 });
+
+describe("T3TeamNexploreStripArt dark-mode orb dimming", () => {
+  it("routes the strip orb opacity through the dark-mode dimming token", async () => {
+    const { cleanup, circle } = await renderHeader({
+      width: 420,
+      brand: [18, 120],
+      toggle: [372, 404],
+    } satisfies HeaderLayout);
+    try {
+      expect(circle().getAttribute("style")).toContain("var(--stage-nx-strip-orb-opacity, 1)");
+    } finally {
+      cleanup();
+    }
+  });
+});

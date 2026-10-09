@@ -8,7 +8,7 @@
  * → delivered; `surfaced` = shown without a reaction (hop cap); `failed` =
  * gave up after repeated dispatch failures.
  */
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Effect from "effect/Effect";
 
 export default Effect.gen(function* () {

@@ -60,7 +60,12 @@ export function T3TeamSystemTimelineNotificationBody({
             : undefined
         }
       >
-        <ChatMarkdown text={trimmedText} cwd={markdownCwd} threadRef={threadRef ?? undefined} />
+        <ChatMarkdown
+          text={trimmedText}
+          cwd={markdownCwd}
+          threadRef={threadRef ?? undefined}
+          lineBreaks
+        />
       </div>
       {canCollapse ? (
         <div className="mt-1.5 flex justify-start" data-workflow-notification-footer="true">

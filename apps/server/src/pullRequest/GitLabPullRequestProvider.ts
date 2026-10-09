@@ -102,6 +102,7 @@ export function gitLabProviderFailure(
   if (error._tag === "GitLabCliUnavailableError") return { reason: "missing-tool" };
   if (error._tag === "GitLabCliAuthenticationError") return { reason: "unauthenticated" };
   if (error._tag === "GitLabCliRateLimitError") return { reason: "rate-limited" };
+  if (error._tag === "GitLabMergeRequestNotFoundError") return { reason: "not-found" };
   return { reason: "failed" };
 }
 
@@ -232,6 +233,9 @@ export const make = Effect.gen(function* () {
     // What each marked file is at the head, which is what tells a mark that still stands from one
     // the branch has moved past. GitLab's own local-storage marks are keyed on the blob id too,
     // so this stales at the same moment its web UI would.
+    readFileAtRevision: (input) =>
+      cli.readFileAtRevision(input).pipe(Effect.mapError(fail("readFileAtRevision"))),
+
     getFileRevisions: (input) =>
       cli.getFileRevisions(input).pipe(
         Effect.mapError(fail("getFileRevisions")),

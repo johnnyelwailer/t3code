@@ -353,6 +353,30 @@ describe("normalizeIssueSearch", () => {
     expect(result[1]?.parentId).toBe("TEST-1");
     expect(result[1]?.labels).toBeUndefined();
   });
+
+  it("keeps the assignee's face for people chips", () => {
+    const [ref] = normalizeIssueSearch(
+      {
+        issues: [
+          {
+            id: "1",
+            key: "TEST-3",
+            self: "https://test.atlassian.net/rest/api/3/issue/1",
+            fields: {
+              summary: "Face",
+              assignee: {
+                displayName: "Ada",
+                avatarUrls: { "24x24": "https://a/24", "48x48": "https://a/48" },
+              },
+            },
+          },
+        ],
+        total: 1,
+      } as JiraIssueSearchResponse,
+      "https://test.atlassian.net",
+    );
+    expect(ref).toMatchObject({ assignee: "Ada", assigneeAvatarUrl: "https://a/48" });
+  });
 });
 
 describe("normalizeIssue parent relationships", () => {

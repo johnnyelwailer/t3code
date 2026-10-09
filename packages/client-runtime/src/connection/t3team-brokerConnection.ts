@@ -2,7 +2,7 @@ import { EnvironmentId } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import * as HttpClient from "effect/unstable/http/HttpClient";
+import * as HttpClient from "effect/http/HttpClient";
 
 import { bootstrapRemoteBearerSession } from "../authorization/remote.ts";
 import * as RemoteEnvironmentAuthorization from "../authorization/service.ts";
@@ -28,6 +28,8 @@ import type {
  */
 
 export interface AttachedBrokerEnvironment {
+  /** The session attached: the target's, or the live one now serving the same environment. */
+  readonly sessionId: string;
   readonly httpBaseUrl: string;
   readonly wsBaseUrl: string;
 }
@@ -64,7 +66,7 @@ export const makeBrokerResolver = Effect.fn("clientRuntime.connection.broker.mak
         sessionId: target.sessionId,
         expectedEnvironmentId: target.environmentId,
       });
-      const key = brokerCredentialKey(target.sessionId);
+      const key = brokerCredentialKey(attached.sessionId);
       const authorize = (bearerToken: string) =>
         remote.authorizeBearer({
           expectedEnvironmentId: target.environmentId,
@@ -88,12 +90,13 @@ export const makeBrokerResolver = Effect.fn("clientRuntime.connection.broker.mak
         if (Option.isSome(reused)) return { ...reused.value, target } satisfies PreparedConnection;
       }
 
-      const pairingCredential = yield* gateway.pair({ sessionId: target.sessionId });
+      const pairingCredential = yield* gateway.pair({ sessionId: attached.sessionId });
       const access = yield* bootstrapRemoteBearerSession({
         httpBaseUrl: attached.httpBaseUrl,
         credential: pairingCredential,
-        // No scopes = the pairing credential's own (server default); an empty `scope` is invalid OAuth.
-        ...(presentation.scopes.length > 0 ? { scopes: presentation.scopes } : {}),
+        // The pairing credential's own scopes (no `scope` asked): the session's server may be an
+        // older build whose standard scopes are narrower than this client's, and asking for more
+        // than the grant holds is refused. The session's server decides what its pairing grants.
         clientMetadata: presentation.metadata,
       }).pipe(
         Effect.mapError((error) => mapRemoteEnvironmentError(error)),

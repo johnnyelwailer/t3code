@@ -94,6 +94,7 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
             loadThreadDetail: reads.loadSearchableThread,
           }),
         recipeTools: deps.recipeToolsForThread(threadId),
+        ...(deps.myWorkTools ? { myWorkTools: deps.myWorkTools } : {}),
         ...(deps.workflowTools.workflowRunToolsForThread
           ? { workflowRunTools: deps.workflowTools.workflowRunToolsForThread(threadId) }
           : {}),
@@ -105,6 +106,9 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
           : {}),
         ...(deps.workflowTools.workflowControlToolsForThread
           ? { workflowControlTools: deps.workflowTools.workflowControlToolsForThread(threadId) }
+          : {}),
+        ...(deps.changeRequestToolsForThread
+          ? { changeRequestTools: deps.changeRequestToolsForThread(threadId) }
           : {}),
       });
       return withPressureLines(binding, deps.resourcePressure);

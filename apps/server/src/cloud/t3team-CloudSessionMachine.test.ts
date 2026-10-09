@@ -19,6 +19,14 @@ import { CloudSessionMachines, layer } from "./t3team-CloudSessionMachine.ts";
 
 const projectId = ProjectId.make("project-1");
 const DEVCONTAINER = { ".devcontainer/devcontainer.json": `{ "image": "node:24" }` };
+const MACHINE_WITH_SECRETS = JSON.stringify({
+  version: 1,
+  devcontainer: ".devcontainer/devcontainer.json",
+  secrets: [
+    { name: "NPM_TOKEN", scope: "team" },
+    { name: "MY_KEY", scope: "user" },
+  ],
+});
 
 const git = (cwd: string, ...args: Array<string>) =>
   NodeChildProcess.execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...args], {
@@ -54,7 +62,11 @@ const checkout = (
   return root;
 };
 
-const resolveIn = (root: string, token = "ghp_user-token") => {
+const sessionIn = <A, E>(
+  root: string,
+  token: string,
+  use: (machines: CloudSessionMachines["Service"]) => Effect.Effect<A, E>,
+) => {
   const projects = Layer.mock(ProjectService)({
     getById: () => Effect.succeed(Option.some({ workspaceRoot: root } as unknown as Project)),
   });
@@ -77,9 +89,15 @@ const resolveIn = (root: string, token = "ghp_user-token") => {
   ).pipe(Layer.provideMerge(NodeServices.layer));
   return Effect.gen(function* () {
     const machines = yield* CloudSessionMachines;
-    return yield* machines.resolve(projectId);
+    return yield* use(machines);
   }).pipe(Effect.provide(layer.pipe(Layer.provide(dependencies))));
 };
+
+const resolveIn = (root: string, token = "ghp_user-token") =>
+  sessionIn(root, token, (machines) => machines.resolve(projectId));
+
+const setupIn = (root: string, token = "ghp_user-token") =>
+  sessionIn(root, token, (machines) => machines.resolveSetup(projectId));
 
 describe("CloudSessionMachines.resolve", () => {
   it.effect("pins a pushed definition and carries the user's token, never a credential URL", () =>
@@ -96,6 +114,7 @@ describe("CloudSessionMachines.resolve", () => {
         commit: git(root, "rev-parse", "HEAD"),
         devcontainerPath: ".devcontainer/devcontainer.json",
         healthCheck: null,
+        teamSecretNames: [],
         token: "ghp_user-token",
         author: { name: "Philip J", email: "7+pj@users.noreply.nexplore.ghe.com" },
       });
@@ -177,11 +196,50 @@ describe("CloudSessionMachines.resolve", () => {
     }),
   );
 
+  it.effect("carries team secret names and leaves user secrets unnamed here", () =>
+    Effect.gen(function* () {
+      const root = checkout({
+        ...DEVCONTAINER,
+        ".nexi/machine.json": MACHINE_WITH_SECRETS,
+      });
+      const machine = yield* resolveIn(root);
+      expect(machine?.teamSecretNames).toEqual(["NPM_TOKEN"]);
+    }),
+  );
+
   it.effect("asks for a gh sign-in when the host has none", () =>
     Effect.gen(function* () {
       const error = yield* Effect.flip(resolveIn(checkout(DEVCONTAINER), ""));
       expect(error.reason).toBe("repository_sign_in_required");
       expect(error.message).toContain("gh auth login --hostname nexplore.ghe.com");
+    }),
+  );
+});
+
+describe("CloudSessionMachines.resolveSetup", () => {
+  it.effect("checks the project out at the commit origin already has", () =>
+    Effect.gen(function* () {
+      const root = checkout({ "README.md": "hi" });
+      const setup = yield* setupIn(root);
+      expect(setup.repository.name).toBe("api");
+      expect(setup.commit).toBe(git(root, "rev-parse", "HEAD"));
+      expect(setup.token).toBe("ghp_user-token");
+    }),
+  );
+
+  it.effect("refuses a project that already has a machine", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(setupIn(checkout(DEVCONTAINER)));
+      expect(error.reason).toBe("machine_unavailable");
+      expect(error.message).toContain("already has a machine");
+    }),
+  );
+
+  it.effect("refuses a branch origin does not have yet", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(setupIn(checkout({ "README.md": "hi" }, { pushed: false })));
+      expect(error.reason).toBe("machine_unavailable");
+      expect(error.message).toContain("Push");
     }),
   );
 });

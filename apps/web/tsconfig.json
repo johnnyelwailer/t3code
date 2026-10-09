@@ -9,7 +9,9 @@
     "jsx": "react-jsx",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "paths": {
-      "~/*": ["./src/*"]
+      "~/*": ["./src/*"],
+      "@t3code/distribution-web": ["./src/t3team-distributionWeb.ts"],
+      "@t3team/pack-ui": ["./src/t3team/packs/t3team-packUiImpl.ts"]
     },
     "plugins": [
       {
@@ -32,6 +34,7 @@
     "vercel.ts",
     "test",
     "scripts/warm-dep-cache.ts",
+    "scripts/t3team-distributionWebPlugin.ts",
     "../../scripts/lib/public-config.ts",
     "../../scripts/lib/third-party-licenses.ts"
   ]

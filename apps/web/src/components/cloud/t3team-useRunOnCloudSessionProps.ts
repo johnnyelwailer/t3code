@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { type ComponentProps, useCallback, useMemo } from "react";
 
 import { useCloudSessionController } from "~/cloud/t3team-useCloudSessionController";
+import { useServerConfig } from "~/t3team/t3team-serverState";
 import type { BranchToolbarEnvironmentSelector } from "~/components/BranchToolbarEnvironmentSelector";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useEnvironments } from "~/state/environments";
@@ -18,7 +19,9 @@ type CloudSelectorProps = Pick<
   SelectorProps,
   | "pendingCloudSessions"
   | "onCreateCloudSession"
+  | "onSetupProjectMachine"
   | "cloudSessionCreatePending"
+  | "cloudSessionSetupPending"
   | "onCloudSessionAction"
   | "cloudSessionConnectFailure"
   | "onDismissCloudSession"
@@ -26,6 +29,7 @@ type CloudSelectorProps = Pick<
   | "onSetupCloudSessions"
   | "cloudSessionProject"
   | "connectedEnvironmentIds"
+  | "cloudEnvironmentIds"
 >;
 
 /**
@@ -44,7 +48,8 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
 } {
   const cloudSessions = useCloudSessionController();
   const navigate = useNavigate();
-  const { available, configured, sessions, onCreate, createPending } = cloudSessions;
+  const { available, configured, sessions, onCreate, createPending, createPendingSetup } =
+    cloudSessions;
   const { primaryEnvironmentId } = cloudSessions;
   const { onSessionAction, onCloudMenuOpenChange, connectFailure } = cloudSessions;
   // A failure surfaced in the menu stays dismissed once the user closed it (kept per browser; the
@@ -79,6 +84,11 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
     () => onCreate(cloudSessionProject?.projectId),
     [cloudSessionProject, onCreate],
   );
+  const machineSetupEnabled = useServerConfig()?.machineSetup === true;
+  const onSetupProjectMachine = useCallback(
+    () => onCreate(cloudSessionProject?.projectId, { machineSetup: true }),
+    [cloudSessionProject, onCreate],
+  );
   // Unconfigured: the entry leaves for the Connections settings, where provisioning lives.
   // Every environment connected here, whatever its project: a cloud machine connected for another
   // project is listed as unavailable for this thread rather than as one to connect.
@@ -91,6 +101,14 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
     () => new Set(connectedKey === "" ? [] : connectedKey.split("\u0000")),
     [connectedKey],
   );
+  const cloudKey = environments
+    .filter((environment) => environment.entry.target._tag === "BrokerConnectionTarget")
+    .map((environment) => environment.environmentId)
+    .join("\u0000");
+  const cloudEnvironmentIds = useMemo(
+    () => new Set(cloudKey === "" ? [] : cloudKey.split("\u0000")),
+    [cloudKey],
+  );
   const onSetupCloudSessions = useCallback(() => {
     void navigate({ to: "/settings/connections" });
   }, [navigate]);
@@ -102,8 +120,11 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
           ? {
               pendingCloudSessions,
               connectedEnvironmentIds,
+              cloudEnvironmentIds,
               onCreateCloudSession,
+              ...(machineSetupEnabled && cloudSessionProject ? { onSetupProjectMachine } : {}),
               cloudSessionCreatePending: createPending,
+              cloudSessionSetupPending: createPendingSetup,
               ...(cloudSessionProject ? { cloudSessionProject } : {}),
               onCloudSessionAction: onSessionAction,
               cloudSessionConnectFailure: connectFailure,
@@ -117,9 +138,13 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
       configured,
       connectedEnvironmentIds,
       connectFailure,
+      cloudEnvironmentIds,
       createPending,
+      createPendingSetup,
       onCloudMenuOpenChange,
+      machineSetupEnabled,
       onCreateCloudSession,
+      onSetupProjectMachine,
       onDismissCloudSession,
       onSessionAction,
       onSetupCloudSessions,

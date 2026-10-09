@@ -100,6 +100,15 @@ function extractDisplayName(user: unknown): string | undefined {
   return undefined;
 }
 
+/** A Jira user's face, the size people chips draw. */
+function extractAvatarUrl(user: unknown): string | undefined {
+  if (user === null || typeof user !== "object") return undefined;
+  const avatarUrls = (user as { avatarUrls?: unknown }).avatarUrls;
+  return avatarUrls && typeof avatarUrls === "object"
+    ? pickAvatarUrl(avatarUrls as Record<string, string>)
+    : undefined;
+}
+
 function extractStatusName(status: unknown): string | undefined {
   if (status === null || status === undefined) return undefined;
   if (typeof status !== "object") return undefined;
@@ -396,6 +405,9 @@ export function normalizeIssueSearch(
       status: extractStatusName(jiraIssue.fields.status),
       priority: extractPriorityName(jiraIssue.fields.priority),
       assignee: extractDisplayName(jiraIssue.fields.assignee),
+      ...(extractAvatarUrl(jiraIssue.fields.assignee)
+        ? { assigneeAvatarUrl: extractAvatarUrl(jiraIssue.fields.assignee) }
+        : {}),
       updatedAt:
         typeof jiraIssue.fields.updated === "string" ? jiraIssue.fields.updated : undefined,
       ...(extractLabels(jiraIssue.fields.labels)

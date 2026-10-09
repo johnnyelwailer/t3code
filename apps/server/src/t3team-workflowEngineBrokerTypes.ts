@@ -14,6 +14,7 @@ import type {
 
 import type {
   SignalRegisterPayload,
+  SignalWaitAnyPayload,
   SignalWaitPayload,
 } from "./t3team-workflowEngineBrokerPayloads.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
@@ -43,11 +44,14 @@ export interface WorkflowEngineWatch {
   readonly paramsHash: string;
   readonly watchSignalName: string;
   readonly watchSignalKey: string;
+  /** An any-wait park (`signal.waitAny`): every branch, in branch order; the fields above then
+   * name branch 0. Absent for a single-signal park. */
+  readonly branches?: ReadonlyArray<SignalWaitPayload>;
 }
 
 /**
  * Write-through to the durable `workflow_runs` record. The host implements this over
- * {@link import("./persistence/Services/WorkflowRuns.ts").WorkflowRunRepository}; absent (SDK
+ * {@link import("./persistence/WorkflowRuns.ts").WorkflowRunRepository}; absent (SDK
  * fs path / tests) the run is purely in-memory.
  */
 export interface WorkflowRunLifecycle {
@@ -87,6 +91,8 @@ export interface WorkflowEngineBrokerDeps {
   readonly runId: string;
   readonly launchThreadId?: string;
   readonly projectId: ProjectId;
+  /** The run's recipe directory: scopes `launchThread` keys to the recipe; absent for none. */
+  readonly recipePath?: string;
   readonly modelSelection: ModelSelection;
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;
@@ -128,6 +134,13 @@ export interface WorkflowEngineBrokerDeps {
    */
   readonly drainSignalWait?: (wait: SignalWaitPayload) => Promise<unknown | undefined>;
   /**
+   * The any-wait drain (`signal.waitAny`): take the OLDEST open inbox entry matching any branch
+   * (first-wins) and report which branch it answers, or `undefined` when none is open.
+   */
+  readonly drainSignalWaitAny?: (
+    wait: SignalWaitAnyPayload,
+  ) => Promise<{ readonly index: number; readonly payload: unknown } | undefined>;
+  /**
    * Live step-status sink (UX slice 1 — "no black box"): each fired primitive emits a
    * `workflow.step` thread activity on the launch thread. Best-effort by construction; absent
    * on the SDK fs path and in minimal tests.
@@ -150,6 +163,7 @@ export interface WorkflowEngineBrokerDeps {
 export type {
   ModelResolvePayload,
   SignalRegisterPayload,
+  SignalWaitAnyPayload,
   SignalWaitPayload,
   ThreadCreatePayload,
   ThreadMessagePayload,

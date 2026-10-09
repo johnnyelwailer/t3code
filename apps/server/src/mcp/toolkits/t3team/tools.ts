@@ -3,8 +3,9 @@
  * t3team-toolBrokerBindingDispatch.ts. Adding a host tool means adding it to that
  * dispatch/catalog once, then adding only a small static Tool.make wrapper here.
  */
+import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { Tool, Toolkit } from "effect/unstable/ai";
+import { Tool, Toolkit } from "effect/ai";
 
 import {
   T3TEAM_WIDGET_AUTHORING_GUIDANCE,
@@ -18,6 +19,17 @@ import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP } from "../../../t3team-mcpCanonicalToolMap.ts";
 import { T3TeamAskUserWriter } from "./t3team-askUserWriter.ts";
+import { T3TeamMcpToolError } from "./t3team-mcpToolError.ts";
+import { mcpDescriptionOf } from "./t3team-mcpToolDescription.ts";
+import { T3TeamMyWorkArrangeTool, T3TeamMyWorkDigestTool } from "./t3team-myworkTools.ts";
+import { T3TeamChangeRequestPublishTool } from "./t3team-changeRequestTools.ts";
+
+/**
+ * What every t3team tool fails with. `OrchestratorMcpFailure` is the refusal
+ * `McpToolAccess` raises before the handler runs (see handlers.ts), so the
+ * compiler requires it here the same way upstream's toolkits declare it.
+ */
+const T3TeamToolFailure = Schema.Union([T3TeamMcpToolError, OrchestratorMcpFailure]);
 
 const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroker];
 
@@ -28,24 +40,14 @@ const askUserDependencies = [McpInvocationContext.McpInvocationContext, T3TeamAs
 
 export { T3TEAM_MCP_CANONICAL_TOOL_MAP };
 
-/**
- * The broker catalog's description for a canonical tool, with every canonical id the text names
- * rewritten to its MCP tool name (table-driven through the map above, so it is exact).
- */
-export function mcpDescriptionOf(canonicalId: T3TeamImplementedToolId): string {
-  let text: string = getT3TeamToolDefinition(canonicalId).description;
-  for (const [mcpName, id] of Object.entries(T3TEAM_MCP_CANONICAL_TOOL_MAP)) {
-    text = text.replaceAll(id, mcpName);
-  }
-  return text;
-}
+export { mcpDescriptionOf };
 
 /**
  * Canonical tools deliberately NOT on the provider `/mcp` surface. The parity test forces an
  * explicit decision for every implemented catalog tool — mapped above, or listed here.
  *
  * The `draft_*` family is excluded for a structural reason, not convenience: those tools are
- * reachable only from a workflow body's `getTools()` tree (`t3team-workflowHostDraftTools.ts`),
+ * reachable only from a workflow body's `getTools()` tree (`t3team-workflowHostTools.ts`),
  * and they are gated three ways — the body must declare the group in `meta.capabilities`, the id
  * must be in the thread's tool context, and the recipe's `allowedToolGroups` filters what
  * survives. Their `publishDraft` is also pinned to the launch thread so the draft carrier message
@@ -71,10 +73,7 @@ export const T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS: ReadonlySet<string> = n
   "t3team.work_item.link.draft_remove",
 ]);
 
-export class T3TeamMcpToolError extends Schema.TaggedError<T3TeamMcpToolError>()(
-  "T3TeamMcpToolError",
-  { message: Schema.String },
-) {}
+export { T3TeamMcpToolError };
 
 const T3TeamProviderUsageTool = Tool.make("t3_provider_usage", {
   description:
@@ -86,7 +85,7 @@ const T3TeamProviderUsageTool = Tool.make("t3_provider_usage", {
     }),
   }),
   success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
+  failure: T3TeamToolFailure,
   dependencies,
 });
 
@@ -121,7 +120,7 @@ const T3TeamChildrenTool = Tool.make("t3_task_ops", {
     op_name: Schema.optional(Schema.String),
   }),
   success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
+  failure: T3TeamToolFailure,
   dependencies,
 });
 
@@ -159,7 +158,7 @@ const T3TeamSearchThreadTool = Tool.make("t3_search_thread", {
     toPosition: Schema.optional(Schema.Number),
   }),
   success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
+  failure: T3TeamToolFailure,
   dependencies,
 });
 
@@ -184,7 +183,7 @@ const T3TeamSearchSourceTool = Tool.make("t3_search_source", {
     order: Schema.optional(Schema.Literals(["recent", "oldest"])),
   }),
   success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
+  failure: T3TeamToolFailure,
   dependencies,
 });
 
@@ -202,7 +201,7 @@ const T3TeamReadMessageTool = Tool.make("t3_read_message", {
     message_id: Schema.String,
   }),
   success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
+  failure: T3TeamToolFailure,
   dependencies,
 });
 
@@ -214,6 +213,8 @@ const T3TeamReadMessageTool = Tool.make("t3_read_message", {
 const orchestrationRunParameters = Schema.Struct({
   source: Schema.optional(Schema.String),
   workflowPath: Schema.optional(Schema.String),
+  recipe: Schema.optional(Schema.String),
+  action: Schema.optional(Schema.String),
   args: Schema.optional(Schema.Unknown),
   replaceRunId: Schema.optional(Schema.String),
   intent: Schema.Struct({
@@ -232,7 +233,7 @@ const T3TeamOrchestrationRunTool = Tool.make("t3_orchestration_run", {
   description: orchestrationRunDescription,
   parameters: orchestrationRunParameters,
   success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
+  failure: T3TeamToolFailure,
   dependencies,
 });
 
@@ -249,7 +250,7 @@ const T3TeamOrchestrationStatusTool = Tool.make("t3_orchestration_status", {
   description: orchestrationStatusDescription,
   parameters: orchestrationStatusParameters,
   success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
+  failure: T3TeamToolFailure,
   dependencies,
 });
 
@@ -269,7 +270,7 @@ const T3TeamOrchestrationResumeTool = Tool.make("t3_orchestration_resume", {
   description: orchestrationResumeDescription,
   parameters: orchestrationResumeParameters,
   success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
+  failure: T3TeamToolFailure,
   dependencies,
 });
 
@@ -286,7 +287,7 @@ const T3TeamOrchestrationPauseTool = Tool.make("t3_orchestration_pause", {
     "t3_orchestration_resume. Returns {runId, status: 'paused', hint}.",
   parameters: orchestrationControlParameters,
   success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
+  failure: T3TeamToolFailure,
   dependencies,
 });
 
@@ -298,7 +299,7 @@ const T3TeamOrchestrationStopTool = Tool.make("t3_orchestration_stop", {
     "status: 'cancelled', hint}.",
   parameters: orchestrationControlParameters,
   success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
+  failure: T3TeamToolFailure,
   dependencies,
 });
 
@@ -368,7 +369,7 @@ const T3TeamAskUserTool = Tool.make("t3_ask_user", {
     }),
   }),
   success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
+  failure: T3TeamToolFailure,
   dependencies: askUserDependencies,
 });
 
@@ -385,18 +386,28 @@ export const T3TeamShowWidgetTool = Tool.make("t3_show_widget", {
       description:
         "Short snake_case identifier for this widget (e.g. 'q4_revenue_chart'). Used as the artifact name.",
     }),
+    intent: Schema.optional(Schema.String).annotate({
+      description:
+        "Preferred default: describe what to show. A builder subagent authors the widget (theme/icon contract) and html output goes through the upstream HTML render shim. Omit when passing widget_code.",
+    }),
     // The full authoring contract rides the property annotation: it is the text the model reads
     // while writing the widget body, and it is the single source of truth for the theme-token,
     // icon-sprite, layout and CSP rules (never hard-code light or dark palette colors).
-    widget_code: Schema.String.annotate({ description: T3TEAM_WIDGET_AUTHORING_GUIDANCE }),
-    format: Schema.optional(Schema.Literals(["html", "svg"])),
+    // Optional when `intent` is provided; required to skip the builder (deterministic workflows).
+    widget_code: Schema.optional(Schema.String).annotate({
+      description: T3TEAM_WIDGET_AUTHORING_GUIDANCE,
+    }),
+    format: Schema.optional(Schema.Literals(["html", "svg"])).annotate({
+      description:
+        "html is shimmed onto upstream html_render storage/theme; svg stays on the widget tier.",
+    }),
     loading_messages: Schema.optional(Schema.Array(Schema.String)),
     capabilities: Schema.optional(
       Schema.Struct({ tools: Schema.optional(Schema.Array(Schema.String)) }),
     ),
   }),
   success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
+  failure: T3TeamToolFailure,
   dependencies,
 });
 
@@ -423,7 +434,7 @@ const T3TeamRecipeListTool = Tool.make("t3_recipe_list", {
   // that client, not just this tool. Omitting it picks up `Tool.EmptyParams`, which renders as
   // `{type:"object",additionalProperties:false}`. Guarded by t3team-mcpToolInputSchema.test.ts.
   success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
+  failure: T3TeamToolFailure,
   dependencies,
 });
 
@@ -443,7 +454,7 @@ const T3TeamRecipeValidateTool = Tool.make("t3_recipe_validate", {
     source: Schema.optional(Schema.String),
   }),
   success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
+  failure: T3TeamToolFailure,
   dependencies,
 });
 
@@ -471,7 +482,7 @@ const T3TeamThreadSkillMetadataTool = Tool.make("t3team_thread_skill_metadata", 
       description: "Requested skill names; empty when this thread has no skill delegation.",
     }),
   }),
-  failure: T3TeamMcpToolError,
+  failure: T3TeamToolFailure,
   dependencies: [McpInvocationContext.McpInvocationContext],
 });
 
@@ -490,5 +501,8 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamShowWidgetTool,
   T3TeamRecipeListTool,
   T3TeamRecipeValidateTool,
+  T3TeamMyWorkDigestTool,
+  T3TeamMyWorkArrangeTool,
+  T3TeamChangeRequestPublishTool,
   T3TeamThreadSkillMetadataTool,
 );

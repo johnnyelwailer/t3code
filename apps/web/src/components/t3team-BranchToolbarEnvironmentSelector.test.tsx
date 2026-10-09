@@ -281,7 +281,8 @@ describe("BranchToolbarEnvironmentSelector", () => {
     expect(onEnvironmentChange).toHaveBeenCalledWith("env-cloud");
   });
 
-  it("stops connecting, and says why, when the machine connects without this project", () => {
+  it("waits for a connected machine's project, then says why it cannot run here", () => {
+    vi.useFakeTimers();
     const ready = {
       sessionId: "1",
       phase: "ready",
@@ -313,9 +314,15 @@ describe("BranchToolbarEnvironmentSelector", () => {
         />,
       );
     });
+    // A fresh machine registers its project seconds after connecting: still connecting.
+    expect(liveContainer?.textContent).toContain("Connecting…");
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
     expect(liveContainer?.textContent).not.toContain("Connecting…");
     expect(liveContainer?.textContent).toContain("Doesn't have this project");
     expect(props.onEnvironmentChange).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 
   describe("a connect that does not finish", () => {
@@ -466,7 +473,7 @@ describe("BranchToolbarEnvironmentSelector", () => {
       ],
     });
 
-    expect(markup).toContain("Building the workspace");
+    expect(markup).toContain("Building workspace");
     expect(markup).toContain("New cloud session");
   });
 
@@ -592,7 +599,7 @@ describe("BranchToolbarEnvironmentSelector", () => {
     });
 
     expect(liveContainer?.querySelector(".animate-pulse")).toBeNull();
-    expect(liveContainer?.textContent).toContain("Provisioning failed");
+    expect(liveContainer?.textContent).toContain("Failed");
   });
 });
 

@@ -3,7 +3,7 @@ import { create } from "zustand";
 
 /**
  * The sidebar's current project scope, mirrored out of upstream `Sidebar.tsx` so chrome that
- * renders OUTSIDE the scrolling nav (the footer's "My work" / "Backlog" rows, the pull request
+ * renders OUTSIDE the scrolling nav (the footer's "My work" row, the pull request
  * route) can follow it. Upstream keeps `scopedProjectGroup` as local component state; those
  * consumers are siblings with no prop path to it, and threading a prop through upstream's
  * `Sidebar` → `SidebarChrome` chain would touch far more upstream surface than this mirror.

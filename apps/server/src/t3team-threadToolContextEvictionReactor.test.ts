@@ -18,7 +18,7 @@ import {
   T3TeamThreadToolContextEvictionReactor,
   T3TeamThreadToolContextEvictionReactorLayer,
 } from "./t3team-threadToolContextEvictionReactor.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import * as ThreadArtifactsStore from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import * as ThreadFactsStore from "./t3team-v2/t3team-threadFactsStore.ts";
 

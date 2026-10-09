@@ -51,6 +51,7 @@ export function resourceRefToProjectTicket(
     parentId?: unknown;
     description?: unknown;
     assigneeAccountId?: unknown;
+    assigneeAvatarUrl?: unknown;
     estimateValue?: unknown;
     issueTypeIsSubtask?: unknown;
     timeOriginalEstimateSeconds?: unknown;
@@ -69,6 +70,7 @@ export function resourceRefToProjectTicket(
   };
   const description = readOptionalString(resourceWithParent.description);
   const assigneeAccountId = readOptionalString(resourceWithParent.assigneeAccountId);
+  const assigneeAvatarUrl = readOptionalString(resourceWithParent.assigneeAvatarUrl);
   const estimateValue = readOptionalNumber(resourceWithParent.estimateValue);
   const issueTypeIsSubtask = resourceWithParent.issueTypeIsSubtask === true;
   const timeOriginalEstimateSeconds = readOptionalNumber(
@@ -122,6 +124,7 @@ export function resourceRefToProjectTicket(
     status: ref.status ?? "Unknown",
     ...(ref.assignee !== undefined ? { assignee: ref.assignee } : {}),
     ...(assigneeAccountId ? { assigneeAccountId } : {}),
+    ...(assigneeAvatarUrl ? { assigneeAvatarUrl } : {}),
     ...(ref.priority !== undefined ? { priority: ref.priority } : {}),
     ...(estimateValue !== undefined ? { estimateValue } : {}),
     ...(timeOriginalEstimateSeconds !== undefined ? { timeOriginalEstimateSeconds } : {}),

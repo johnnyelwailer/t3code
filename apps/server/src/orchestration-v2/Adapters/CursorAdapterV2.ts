@@ -44,6 +44,7 @@ import * as Stream from "effect/Stream";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import * as ServerConfig from "../../config.ts";
+import { mcpToolPresentation } from "../../provider/McpToolPresentation.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import { CursorTransportFailure } from "../../provider/acp/CursorTransportFailure.ts";
 import { cursorSdkModelSelection } from "../../provider/cursorSdkModel.ts";
@@ -74,11 +75,62 @@ import {
   subagentThreadTitle,
 } from "../SubagentProjection.ts";
 import * as CursorAgentSdk from "./CursorAgentSdk.ts";
+import { cursorUsageLimitResetAt, isCursorUsageLimitText } from "./t3team-cursorUsageLimit.ts";
 export { cursorSdkModelSelection } from "../../provider/cursorSdkModel.ts";
 
 export const CURSOR_DRIVER_KIND = CursorAgentSdk.CURSOR_PROVIDER;
 export const CURSOR_DEFAULT_INSTANCE_ID = defaultInstanceIdForDriver(CURSOR_DRIVER_KIND);
 const DEFAULT_CURSOR_SETTINGS = Schema.decodeSync(CursorSettings)({});
+
+const cursorUsageLimitFailure = (message: string, nowMs: number) =>
+  isCursorUsageLimitText(message)
+    ? { class: "usage_limit" as const, resetAt: cursorUsageLimitResetAt(message, nowMs) }
+    : {};
+
+/** Pull message/code off Cursor SDK run errors so the UI is not stuck on the opaque default. */
+export function cursorRunResultFailure(
+  error: unknown,
+  nowMs: number,
+): {
+  readonly message?: string;
+  readonly code?: string | null;
+  readonly retryable?: boolean | null;
+  readonly class?: "usage_limit";
+  readonly resetAt?: string;
+} {
+  if (typeof error === "string") {
+    const message = error.trim();
+    return message.length > 0 ? { message, ...cursorUsageLimitFailure(message, nowMs) } : {};
+  }
+  if (typeof error !== "object" || error === null) {
+    return {};
+  }
+  try {
+    const record = error as Record<string, unknown>;
+    const message =
+      typeof record.message === "string" && record.message.trim().length > 0
+        ? record.message.trim()
+        : undefined;
+    const code =
+      typeof record.code === "string" && record.code.trim().length > 0
+        ? record.code.trim()
+        : undefined;
+    const retryable =
+      code === "connection_stalled"
+        ? true
+        : typeof record.retryable === "boolean"
+          ? record.retryable
+          : undefined;
+    return {
+      ...(message === undefined ? {} : { message }),
+      ...(code === undefined ? {} : { code }),
+      ...(retryable === undefined ? {} : { retryable }),
+      ...(message === undefined ? {} : cursorUsageLimitFailure(message, nowMs)),
+    };
+  } catch {
+    return {};
+  }
+}
 
 export const CursorProviderCapabilitiesV2 = {
   sessions: {
@@ -1227,7 +1279,10 @@ export function makeCursorAdapterV2(
                 toolCall.result?.status === "success" &&
                 toolCall.result.value.diffString !== undefined
                   ? { diffStr: toolCall.result.value.diffString }
-                  : {}),
+                  : // A failed change keeps its error where the diff would be.
+                    toolCall.result?.status === "error" && outputText.trim().length > 0
+                    ? { diffStr: outputText }
+                    : {}),
                 ...(toolCall.type === "write" ? { newStr: toolCall.args.fileText } : {}),
               };
               break;
@@ -1248,8 +1303,20 @@ export function makeCursorAdapterV2(
             case "ls":
             case "readLints":
             case "semSearch": {
-              const results = cursorToolSearchResults(toolCall, path);
               const pattern = cursorToolSearchPattern(toolCall);
+              const searchPath =
+                toolCall.type === "grep"
+                  ? toolCall.args.path
+                  : toolCall.type === "glob"
+                    ? toolCall.args.targetDirectory
+                    : toolCall.type === "semSearch"
+                      ? toolCall.args.targetDirectories?.join(", ")
+                      : pattern;
+              // A failed search keeps its error as one row under the searched path.
+              const results =
+                toolCall.result?.status === "error" && outputText.trim().length > 0
+                  ? [{ fileName: searchPath?.trim() || ".", preview: outputText }]
+                  : cursorToolSearchResults(toolCall, path);
               turnItem = {
                 ...base,
                 title:
@@ -1267,6 +1334,12 @@ export function makeCursorAdapterV2(
               turnItem = {
                 ...base,
                 type: "dynamic_tool",
+                ...(toolCall.type === "mcp"
+                  ? mcpToolPresentation({
+                      serverName: toolCall.args.providerIdentifier,
+                      toolName: toolCall.args.toolName,
+                    })
+                  : {}),
                 toolName: cursorToolName(toolCall),
                 input: toolCall.args,
                 ...(cursorToolOutput(toolCall) === undefined
@@ -2269,6 +2342,7 @@ export function makeCursorAdapterV2(
                   }
                   if (context !== null) {
                     const transportFailure = context.assistantReply.failure;
+                    const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
                     const status =
                       transportFailure === undefined ? terminalStatus(context, result) : "failed";
                     yield* finalizeTurn({
@@ -2276,14 +2350,21 @@ export function makeCursorAdapterV2(
                       status,
                       ...(status === "failed"
                         ? {
-                            failure: makeProviderFailure({
-                              cause:
-                                transportFailure ?? (result as { readonly error?: unknown }).error,
-                              class:
+                            failure: (() => {
+                              const runError = (result as { readonly error?: unknown }).error;
+                              const fromRun: ReturnType<typeof cursorRunResultFailure> =
                                 transportFailure === undefined
-                                  ? "provider_error"
-                                  : "transport_error",
-                            }),
+                                  ? cursorRunResultFailure(runError, nowMs)
+                                  : {};
+                              return makeProviderFailure({
+                                cause: transportFailure ?? runError,
+                                ...fromRun,
+                                class:
+                                  transportFailure !== undefined
+                                    ? "transport_error"
+                                    : (fromRun.class ?? "provider_error"),
+                              });
+                            })(),
                           }
                         : {}),
                     });

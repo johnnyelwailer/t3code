@@ -125,6 +125,8 @@ export const ServerProviderWorkspaceSnapshot = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   checkedAt: IsoDateTime,
   slashCommands: Schema.Array(ServerProviderSlashCommand),
+  /** Skills are available, but command discovery still needs a retry. */
+  slashCommandsPending: Schema.optional(Schema.Boolean),
   skills: Schema.Array(ServerProviderSkill),
 });
 export type ServerProviderWorkspaceSnapshot = typeof ServerProviderWorkspaceSnapshot.Type;
@@ -605,6 +607,15 @@ export function environmentThemeFileHasColors(file: EnvironmentThemeFile): boole
   );
 }
 
+export const ServerDirectEndpointKind = Schema.Literals(["lan", "tailnet"]);
+export type ServerDirectEndpointKind = typeof ServerDirectEndpointKind.Type;
+
+export const ServerDirectEndpoint = Schema.Struct({
+  kind: ServerDirectEndpointKind,
+  httpBaseUrl: TrimmedNonEmptyString,
+});
+export type ServerDirectEndpoint = typeof ServerDirectEndpoint.Type;
+
 export const ServerConfig = Schema.Struct({
   environment: ExecutionEnvironmentDescriptor,
   auth: ServerAuthDescriptor,
@@ -622,6 +633,13 @@ export const ServerConfig = Schema.Struct({
    * sshd or no advertisable name.
    */
   remoteOpenTargets: Schema.optionalKey(ForwardCompatibleArray(RemoteOpenTarget)),
+  /**
+   * Direct addresses this server listens on right now (LAN and tailnet), so a
+   * client connected one way can learn the others. Hints only: the client
+   * checks each address answers as this environment before using it. Absent on
+   * servers that predate the feature; empty when bound to loopback only.
+   */
+  directEndpoints: Schema.optionalKey(ForwardCompatibleArray(ServerDirectEndpoint)),
   observability: ServerObservability,
   settings: ServerSettings,
   /** Whether shell subscriptions can emit an opt-in catch-up completion marker. */
@@ -654,6 +672,26 @@ export const ServerConfig = Schema.Struct({
    * `NEXI_FF_MAIN_REPOSITORY`, default on); absent on older servers.
    */
   mainRepository: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Whether a cloud session for a project with no machine definition sets one up.
+   * Runtime feature flag (env `NEXI_FF_MACHINE_SETUP`, default off); absent on older servers.
+   */
+  machineSetup: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Whether the work profile chooser is offered (first-run setup surface, the add-project
+   * wizard's profile step, the Settings default-profile picker). Runtime feature flag (env
+   * `NEXI_FF_WORK_PROFILE_CHOOSER`, default OFF); absent on older servers, which clients must
+   * also treat as off. While off, clients use the developer profile and leave any stored
+   * profile choice untouched.
+   */
+  workProfileChooser: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Whether My Work hosts its aside through `RightPanelTabs` on a fixed panel ref (PR / thread /
+   * browser tabs, Agent kickoff when empty). Runtime feature flag (env `NEXI_FF_MYWORK_RIGHT_PANEL`,
+   * default on); absent on older servers, which clients treat as on (legacy DigestPrAside remains
+   * available when the flag is explicitly off).
+   */
+  myWorkRightPanel: Schema.optionalKey(Schema.Boolean),
   /**
    * Whether this server names the project state dir `.nexi` instead of `.t3team`. Runtime
    * feature flag (env `NEXI_FF_NEXI_STATE_DIR`, default on); absent on older servers.

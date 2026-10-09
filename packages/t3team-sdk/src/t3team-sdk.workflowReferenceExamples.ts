@@ -42,6 +42,7 @@ export default async function run() {
           schema: Findings,
         }),
     ),
+    { concurrency: 2 },
   );
   phase("Synthesize");
   const merged = reviews.flatMap((review) => review?.findings ?? []);

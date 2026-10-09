@@ -3,8 +3,8 @@ import { expect, it } from "@effect/vitest";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { McpServer } from "effect/unstable/ai";
-import { HttpBody, HttpClient, HttpRouter } from "effect/unstable/http";
+import { McpServer } from "effect/ai";
+import { HttpBody, HttpClient, HttpRouter } from "effect/http";
 
 import { T3TeamToolBroker, type T3TeamToolBinding } from "../../../t3team-toolBroker.ts";
 import { T3_MCP_PROTOCOL, T3TeamToolkitRegistrationLive } from "../../McpHttpServer.ts";
@@ -71,9 +71,13 @@ it.effect("the wrapper rewrites only tools/call names and leaves tools/list unto
 const threadId = ThreadId.make("thread-t3team-alias-test");
 const invocation: McpInvocationContext.McpInvocationScope = {
   environmentId: EnvironmentId.make("environment-t3team-alias-test"),
-  threadId,
-  providerSessionId: "provider-session-t3team-alias-test",
-  providerInstanceId: ProviderInstanceId.make("pack-test"),
+  requestNamespace: "provider-session-t3team-alias-test",
+  thread: {
+    threadId,
+    providerSessionId: "provider-session-t3team-alias-test",
+    providerInstanceId: ProviderInstanceId.make("pack-test"),
+  },
+  client: undefined,
   capabilities: new Set(["orchestration"]),
   issuedAt: 1,
 };

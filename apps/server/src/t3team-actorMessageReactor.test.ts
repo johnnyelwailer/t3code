@@ -8,7 +8,7 @@ import * as Layer from "effect/Layer";
 import * as EventSink from "./orchestration-v2/EventSink.ts";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { T3TeamActorMailboxStore, T3TeamActorMailboxStoreLive } from "./t3team-actorMailbox.ts";
 import { T3TeamActorMailbox } from "./t3team-actorMailboxService.ts";
 import { T3TeamActorMessageReactor } from "./t3team-actorMessageReactor.ts";

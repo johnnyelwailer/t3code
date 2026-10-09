@@ -115,7 +115,7 @@ export class GitHubCliRateLimitError extends Schema.TaggedError<GitHubCliRateLim
   { ...gitHubCliFailureFields, retryAt: Schema.optionalKey(Schema.Finite) },
 ) {
   get detail(): string {
-    return "GitHub API rate limit exceeded. Run `gh api rate_limit` to inspect the quota and reset time.";
+    return "GitHub API rate limit exceeded. For the GraphQL quota and reset time, run `gh api graphql -f query='{rateLimit{remaining resetAt}}'`; `gh api rate_limit` reports REST.";
   }
 
   override get message(): string {
@@ -344,6 +344,7 @@ export class GitHubCli extends Context.Service<
       readonly headSelector: string;
       readonly title: string;
       readonly bodyFile: string;
+      readonly draft?: boolean;
     }) => Effect.Effect<void, GitHubCliError>;
 
     readonly getDefaultBranch: (input: {
@@ -1059,6 +1060,7 @@ export const make = Effect.gen(function* () {
           input.title,
           "--body-file",
           input.bodyFile,
+          ...(input.draft === true ? ["--draft"] : []),
         ],
       }).pipe(Effect.asVoid),
     getDefaultBranch: (input) =>

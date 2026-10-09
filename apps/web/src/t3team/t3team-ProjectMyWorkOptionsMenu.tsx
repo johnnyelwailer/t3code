@@ -7,6 +7,7 @@ import { ProjectMyWorkOptionsMenuViewSection } from "~/t3team/t3team-ProjectMyWo
 import type { ProjectMyWorkOptionsMenuProps } from "~/t3team/t3team-projectMyWorkOptionsMenuTypes";
 
 export function ProjectMyWorkOptionsMenu({
+  lens,
   activeOptionsCount,
   viewMode,
   onViewModeChange,
@@ -44,6 +45,7 @@ export function ProjectMyWorkOptionsMenu({
       </MenuTrigger>
       <MenuPopup align="end" side="bottom" className="min-w-68">
         <ProjectMyWorkOptionsMenuViewSection
+          lens={lens}
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}
           groupMode={groupMode}

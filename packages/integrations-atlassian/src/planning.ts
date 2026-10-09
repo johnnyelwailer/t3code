@@ -160,6 +160,21 @@ export function readJiraAssigneeAccountId(issue: JiraIssue): string | undefined 
   return typeof accountId === "string" && accountId.trim().length > 0 ? accountId : undefined;
 }
 
+/**
+ * `normalizeIssueSearch` leaves out the assignee's accountId; My Work needs it to tell the
+ * viewer's own issues from parent context. Items line up 1:1 with `issues`.
+ */
+export function withJiraAssigneeAccountIds<T extends object>(
+  issues: ReadonlyArray<JiraIssue>,
+  items: ReadonlyArray<T>,
+): ReadonlyArray<T> {
+  return items.map((item, index) => {
+    const issue = issues[index];
+    const assigneeAccountId = issue ? readJiraAssigneeAccountId(issue) : undefined;
+    return assigneeAccountId ? Object.assign({}, item, { assigneeAccountId }) : item;
+  });
+}
+
 export function readJiraSubtaskCount(issue: JiraIssue): number | undefined {
   const subtasks = issue.fields.subtasks;
   return Array.isArray(subtasks) ? subtasks.length : undefined;

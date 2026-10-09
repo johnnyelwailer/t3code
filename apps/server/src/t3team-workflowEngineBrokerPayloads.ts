@@ -22,6 +22,12 @@ export interface SignalWaitPayload {
   readonly key: string;
 }
 
+/** The `signal.waitAny` envelope payload: every branch, in branch order — the winner's index
+ * refers to this list. Each branch has the shape of a single `signal.wait`. */
+export interface SignalWaitAnyPayload {
+  readonly branches: ReadonlyArray<SignalWaitPayload>;
+}
+
 export interface ThreadCreatePayload {
   readonly threadId: string;
   readonly name?: string;
@@ -32,6 +38,8 @@ export interface ThreadCreatePayload {
   readonly effort?: import("@t3team/sdk").AgentEffort;
   /** Omitted is ephemeral, preserving one-shot agent() as a hidden child. */
   readonly retention?: "ephemeral" | "retained";
+  /** `launch-thread` puts the child in the launch thread's checkout; omitted is the project root. */
+  readonly checkout?: "project" | "launch-thread";
 }
 export interface ThreadTurnPayload {
   readonly threadId: string;
@@ -53,10 +61,13 @@ export interface ThreadMessagePayload {
   readonly text: string;
   readonly widget?: {
     readonly title: string;
-    readonly widgetCode: string;
+    readonly widgetCode?: string;
+    readonly intent?: string;
     readonly format?: "html" | "svg";
     readonly loadingMessages?: ReadonlyArray<string>;
   };
+  /** `Thread.showView` (`@runbook/threads`); handled by t3team-workflowEngineBrokerShowView.ts. */
+  readonly view?: import("@t3team/sdk").ShowViewInput;
 }
 export interface UserInputPayload {
   readonly threadId: string;
@@ -80,4 +91,39 @@ export interface ModelResolvePayload {
 /** The `wait.until` envelope payload: the wall-clock deadline (epoch millis) the run sleeps to. */
 export interface WaitUntilPayload {
   readonly deadline: number;
+}
+
+/** `launchThread(opts)` as the SDK sends it (t3team-sdk.launchedThreads.ts). */
+export interface LaunchThreadPayload {
+  readonly key: string;
+  readonly title: string;
+  readonly message?: string;
+  readonly model?: import("@t3team/sdk").ModelOption;
+  readonly runtimeMode?: string;
+  readonly interactionMode?: string;
+  readonly workspace?: import("./t3team-workflowHostPort.ts").WorkflowHostLaunchWorkspace;
+}
+
+/** One verb on a launched thread, addressed by the id and key `launchThread` returned. */
+export type LaunchedThreadOpPayload = { readonly threadId: string; readonly key: string } & (
+  | { readonly op: "watch"; readonly url: string; readonly watching: boolean }
+  | { readonly op: "send"; readonly text: string }
+  | {
+      readonly op: "configure";
+      readonly model?: import("@t3team/sdk").ModelOption;
+      readonly runtimeMode?: string;
+    }
+  | { readonly op: "read" }
+  | { readonly op: "facts"; readonly extensions: Readonly<Record<string, unknown>> }
+);
+
+export interface RunFactsPayload {
+  readonly extensions: Readonly<Record<string, unknown>>;
+}
+
+/** `getConfig().for(query)` as the SDK sends it (t3team-sdk.recipeConfigPrimitive.ts). */
+export interface RecipeConfigQueryPayload {
+  readonly repository?: string;
+  readonly caller?: Readonly<Record<string, unknown>>;
+  readonly run?: Readonly<Record<string, unknown>>;
 }

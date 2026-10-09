@@ -16,7 +16,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 
-import type { ResourcePressureEventRepositoryShape } from "./persistence/Services/t3team-ResourcePressureEvents.ts";
+import type { ResourcePressureEventRepositoryShape } from "./persistence/t3team-ResourcePressureEvents.ts";
 import type * as HostResources from "./resourceTelemetry/HostResources.ts";
 import type * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import {

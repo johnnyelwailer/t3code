@@ -1,6 +1,6 @@
 import { WS_METHODS } from "@t3tools/contracts";
 import * as Stream from "effect/Stream";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 import { subscribe } from "../rpc/client.ts";
@@ -38,7 +38,7 @@ export function createToolAuthEnvironmentAtoms<R, E>(
       label: "environment-data:toolauth:stream",
       subscribe: (_input: null) =>
         subscribe(WS_METHODS.subscribeToolAuth, {}).pipe(
-          Stream.scan(EMPTY_TOOLAUTH_STATES, applyToolAuthStreamEvent),
+          Stream.scan(() => EMPTY_TOOLAUTH_STATES, applyToolAuthStreamEvent),
         ),
     }),
     start: createEnvironmentRpcCommand(runtime, {

@@ -1,4 +1,5 @@
 import { parseChangeRequestUrl } from "@t3tools/shared/changeRequestUrl";
+import { WatchedPullRequestIndicator } from "./t3team-WatchedPullRequestIndicator";
 import { useAtomValue } from "@effect/atom-react";
 import { usePullRequestStack } from "~/state/usePullRequestStack";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
@@ -6,7 +7,6 @@ import { scopedThreadKey, scopeProjectRef } from "@t3tools/client-runtime/enviro
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   type EnvironmentId,
-  DEFAULT_SERVER_SETTINGS,
   type PullRequestAction,
   type PullRequestMergeMethod,
   type PullRequestListEntry,
@@ -15,7 +15,6 @@ import {
   resolveEnvironmentMachineKind,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
-import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
   ArrowDownUpIcon,
   ArrowLeftIcon,
@@ -63,20 +62,14 @@ import {
   type ShortcutMatchContext,
 } from "~/keybindings";
 import { primaryServerKeybindingsAtom } from "~/state/server";
-import { useClientSettings } from "~/hooks/useSettings";
-import {
-  deriveLogicalProjectKeyFromSettings,
-  derivePhysicalProjectKey,
-  selectProjectGroupingSettings,
-} from "~/logicalProject";
+import { usePullRequestDefaultMergeMethodResolver } from "./usePullRequestActions";
 import { changeRequestRepositoryUrl, gitHubPullRequestBrowserUrl } from "~/lib/openPullRequestLink";
 import { usePreparePullRequestThreadAction } from "~/lib/sourceControlActions";
 import { cn } from "~/lib/utils";
 import { readLocalApi } from "~/localApi";
 import type { ReviewCommentContext } from "~/reviewCommentContext";
-import { buildPhysicalToLogicalProjectKeyMap } from "~/sidebarProjectGrouping";
 import { useProjects, useServerConfigs } from "~/state/entities";
-import { useEnvironments, usePrimaryEnvironmentId } from "~/state/environments";
+import { useEnvironments } from "~/state/environments";
 import { useEnvironmentQuery } from "~/state/query";
 import { useLiveRefresh } from "~/hooks/useLiveRefresh";
 import {
@@ -144,6 +137,7 @@ import {
   handoffReviewComments,
   latestPullRequestReviewOutcomes,
   loadingPullRequestCheckoutCommand,
+  isPullRequestNotFound,
   isStackedPullRequestBase,
   pullRequestActionMenuHasGroup,
   pullRequestActionNeedsHostRefresh,
@@ -186,6 +180,8 @@ import {
   summarizePullRequestChecks,
 } from "./pullRequestPresentation";
 import { PullRequestGlyph } from "./pullRequestIcons";
+import { pullRequestDetachedSurfaceRequest } from "./t3team-pullRequestDetachedSurface.logic";
+import { DetachSurfaceButton } from "~/t3team/detached/t3team-DetachSurfaceButton";
 
 type DetailTab = PullRequestDetailTab;
 
@@ -595,19 +591,14 @@ export function PullRequestDetailPanel({
   }, [condensed]);
   const lastSelectedMergeMethod = useUiStateStore((state) => state.pullRequestMergeMethod);
   const setLastSelectedMergeMethod = useUiStateStore((state) => state.setPullRequestMergeMethod);
-  // Server-side and per project, like every other project setting. The
-  // client-local per-project map from before still answers when the server
-  // has no value, so a choice made on an older release keeps applying until
-  // it is set (or reset) in Settings.
-  const legacyMergeMethodOverrides = useClientSettings(
-    (settings) => settings.pullRequestMergeMethodOverrides,
+  const resolveProjectDefaultMergeMethod = usePullRequestDefaultMergeMethodResolver(
+    environmentId,
+    reference.projectId,
   );
-  const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
-  const projectDefaultMergeMethod =
-    resolveProjectSettings(
-      environmentConfigs.get(environmentId)?.settings ?? DEFAULT_SERVER_SETTINGS,
-      reference.projectId,
-    ).settings.pullRequestMergeMethod ?? undefined;
+  const projectDefaultMergeMethod = useMemo(
+    () => resolveProjectDefaultMergeMethod(),
+    [resolveProjectDefaultMergeMethod],
+  );
   const [mergeMethodSelection, setMergeMethodSelection] = useState<{
     readonly pullRequestKey: string;
     readonly method: PullRequestMergeMethod;
@@ -919,39 +910,12 @@ export function PullRequestDetailPanel({
   const [titleSaving, setTitleSaving] = useState(false);
   const newThread = useNewThreadHandler();
   const { environments } = useEnvironments();
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
   const unavailableGitHubUrl = useMemo(() => {
     const identity = projects.find(
       (project) => project.id === reference.projectId && project.environmentId === environmentId,
     )?.repositoryIdentity;
     return gitHubPullRequestBrowserUrl(identity, reference.repository, reference.number);
   }, [environmentId, projects, reference.number, reference.projectId, reference.repository]);
-  // Project settings stored the override under the sidebar group's key, which a duplicate row
-  // borrows from its siblings, so the project alone does not always name the same key.
-  const legacyProjectDefaultMergeMethod = useMemo(() => {
-    if (projectDefaultMergeMethod !== undefined) return undefined;
-    const project = projects.find(
-      (candidate) =>
-        candidate.environmentId === environmentId && candidate.id === reference.projectId,
-    );
-    if (!project) return undefined;
-    const projectKey =
-      buildPhysicalToLogicalProjectKeyMap({
-        projects,
-        settings: projectGroupingSettings,
-        primaryEnvironmentId,
-      }).get(derivePhysicalProjectKey(project)) ??
-      deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings);
-    return legacyMergeMethodOverrides[projectKey];
-  }, [
-    environmentId,
-    legacyMergeMethodOverrides,
-    primaryEnvironmentId,
-    projectDefaultMergeMethod,
-    projectGroupingSettings,
-    projects,
-    reference.projectId,
-  ]);
   // Beside a thread there is nothing to pick: the hand-offs land in that thread's composer, and
   // the thread is already on one server's copy of the branch.
   const pickableEnvironments = useMemo(
@@ -1272,8 +1236,10 @@ export function PullRequestDetailPanel({
       setHandoff(null);
       // The server says what to do about it — that the branch is already checked out in the main
       // repository, say — and that sentence is the only way out of the failure.
-      const detailMessage =
-        prepareThread.error instanceof Error ? prepareThread.error.message : null;
+      // Read from the result: the hook's `error` is the state this render saw, from before the
+      // call, so it is always empty here.
+      const failure = squashAtomCommandFailure(prepared);
+      const detailMessage = failure instanceof Error ? failure.message : null;
       toastManager.update(toastId, {
         type: "error",
         title: "Could not prepare the pull request checkout",
@@ -1321,9 +1287,9 @@ export function PullRequestDetailPanel({
         prepared.value.isOnPullRequestHead
           ? {
               type: "success",
-              title: mode === "local" ? "Checked out here" : "Checked out",
+              title: prepared.value.worktreePath === null ? "Checked out here" : "Checked out",
               description:
-                mode === "local"
+                prepared.value.worktreePath === null
                   ? "This repository is on the pull request's branch, with a thread open on it."
                   : "The pull request is in its own worktree, with a thread open on it.",
             }
@@ -1453,7 +1419,7 @@ export function PullRequestDetailPanel({
   const selectedMergeMethod = resolvePullRequestMergeMethod(
     allowedMergeMethods,
     currentMergeMethod,
-    projectDefaultMergeMethod ?? legacyProjectDefaultMergeMethod,
+    projectDefaultMergeMethod,
     lastSelectedMergeMethod,
   );
   const selectedMergeMethodLabel = PULL_REQUEST_MERGE_METHOD_LABELS[selectedMergeMethod];
@@ -1777,6 +1743,12 @@ export function PullRequestDetailPanel({
                   />
                   <TooltipPopup side="top">{openOnHostLabel(detail.provider)}</TooltipPopup>
                 </Tooltip>
+                <WatchedPullRequestIndicator
+                  environmentId={environmentId}
+                  host={reference.host}
+                  repository={reference.repository}
+                  number={reference.number}
+                />
               </>
             ) : null}
           </div>
@@ -1832,6 +1804,12 @@ export function PullRequestDetailPanel({
                   />
                   <TooltipPopup side="top">{openOnHostLabel(detail.provider)}</TooltipPopup>
                 </Tooltip>
+                <WatchedPullRequestIndicator
+                  environmentId={environmentId}
+                  host={reference.host}
+                  repository={reference.repository}
+                  number={reference.number}
+                />
                 <Tooltip>
                   <TooltipTrigger
                     render={
@@ -2719,6 +2697,17 @@ export function PullRequestDetailPanel({
                 </Button>
               </div>
             ) : null}
+            <DetachSurfaceButton
+              className={cn(tab === "code" && "ml-auto")}
+              request={() =>
+                pullRequestDetachedSurfaceRequest({
+                  environmentId,
+                  reference,
+                  view: { tab, file: tab === "code" ? activeFile : null },
+                  title: detail.title,
+                })
+              }
+            />
           </nav>
         ) : null}
       </div>
@@ -2752,7 +2741,13 @@ export function PullRequestDetailPanel({
       >
         {detailQuery.error && !detail ? (
           <PullRequestsUnavailableState
-            error={detailQuery.error}
+            {...(isPullRequestNotFound(detailQuery.failure)
+              ? {
+                  title: `Pull request #${reference.number} not found`,
+                  error:
+                    "It may be an issue rather than a pull request, or this account can't see it.",
+                }
+              : { error: detailQuery.error })}
             refreshing={detailQuery.isPending}
             onRetry={refreshDetail}
             {...(unavailableGitHubUrl ? { gitHubUrl: unavailableGitHubUrl } : {})}

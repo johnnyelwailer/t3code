@@ -2,7 +2,7 @@ import { OAuthPopupBlockedNotice } from "~/t3team/components/t3team-OAuthPopupBl
 import type { useAtlassianOAuth } from "~/t3team/hooks/t3team-useAtlassianOAuth";
 
 /**
- * Carries the `oauth.state` projection the popup-blocked notice needs, so `CreateProjectDialog.tsx`
+ * Carries the `oauth.state` projection the popup-blocked notice needs, so the connect panel
  * only has to render one component rather than derive `signinUrl`/`expired` itself. Covers both
  * causes that land here — a blocked popup, and one the user closed — both of which leave sign-in
  * waiting on a manual open rather than failed.

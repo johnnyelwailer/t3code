@@ -67,7 +67,7 @@ export function RunOnCloudRow(props: {
       </SelectItem>
     );
   }
-  if (session.phase === "ready" && row.environment === null && !row.unavailable) {
+  if (session.phase === "ready" && row.environment === null && (!row.unavailable || connecting)) {
     const detail = connecting
       ? props.connectingSince == null
         ? "Connecting…"

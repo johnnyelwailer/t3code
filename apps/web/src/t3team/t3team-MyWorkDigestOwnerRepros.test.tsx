@@ -124,7 +124,6 @@ function contentProps(overrides: { lens: "digest" | "hierarchy" | "board" }): Co
     assignedWorkItems: tickets,
     filteredWorkItems: tickets,
     visibleHierarchy,
-    onLensChange: () => {},
     viewMode: "list" as const,
     groupMode: "flat" as const,
     tableSortBy: "updated" as const,

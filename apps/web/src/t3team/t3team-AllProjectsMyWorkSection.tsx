@@ -19,6 +19,8 @@
 import { useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronRightIcon } from "lucide-react";
+
+import { InlineButton } from "~/components/ui/button";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { useProjectMyWork } from "~/t3team/hooks/t3team-useProjectMyWork";
@@ -35,6 +37,7 @@ import {
   type ProjectTicketHierarchy,
 } from "~/t3team/t3team-ticketHierarchy";
 import { buildProjectTicketKanbanColumns } from "~/t3team/t3team-projectTicketStatus";
+import { scopeProjectSearch } from "~/t3team/t3team-scopeRouteSync.logic";
 import type { ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
@@ -136,8 +139,7 @@ export function AllProjectsMyWorkSection({
   return (
     <section className="flex min-w-0 flex-col gap-2">
       <header className="flex min-w-0 items-center gap-2">
-        {/* The whole heading filters into the project's own My-work board — the roll-up is the
-            overview, the project view is where the work happens. */}
+        {/* The heading opens this project's My work on the lens the roll-up is showing. */}
         <button
           type="button"
           className="group/section-head flex min-w-0 cursor-pointer items-center gap-2 rounded-md text-left hover:text-foreground"
@@ -145,7 +147,7 @@ export function AllProjectsMyWorkSection({
             void navigate({
               to: "/t3team/projects/$projectId",
               params: { projectId: project.id },
-              search: { projectView: "my-work" },
+              search: scopeProjectSearch("my-work", lens),
             });
           }}
         >
@@ -160,9 +162,14 @@ export function AllProjectsMyWorkSection({
       {sessionExpired ? (
         <JiraSessionExpiredPanel onSignedIn={reload} />
       ) : error ? (
-        <p className="text-destructive text-xs">
-          {humanizeT3TeamBackendError(error).title}
-          <span className="sr-only"> {error}</span>
+        <p className="flex flex-wrap items-center gap-x-2 text-destructive text-xs">
+          <span>
+            {humanizeT3TeamBackendError(error).title}
+            <span className="sr-only"> {error}</span>
+          </span>
+          <InlineButton tone="destructive" onClick={() => reload()}>
+            Retry
+          </InlineButton>
         </p>
       ) : lens === "board" ? (
         <AllProjectsMyWorkBoard

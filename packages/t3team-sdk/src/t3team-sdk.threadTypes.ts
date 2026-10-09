@@ -9,6 +9,7 @@ import type {
   AskUserOpts as GenericAskUserOpts,
   ModelCascade as GenericModelCascade,
   ModelCascadeEntry as GenericModelCascadeEntry,
+  ShowViewInput as GenericShowViewInput,
   ShowWidgetInput as GenericShowWidgetInput,
   SpawnThreadOpts as GenericSpawnThreadOpts,
   Thread as GenericThread,
@@ -29,6 +30,7 @@ export type AnyAskOpts<R = string> = GenericAnyAskOpts<R>;
 export type SpawnThreadOpts = GenericSpawnThreadOpts<WorkflowChildCapabilities>;
 export type AgentOpts<R = string> = GenericAgentOpts<R, WorkflowChildCapabilities>;
 export type ShowWidgetInput = GenericShowWidgetInput;
+export type ShowViewInput = GenericShowViewInput;
 export type Thread = GenericThread;
 export type WorkflowThreadPrimitives = GenericWorkflowThreadPrimitives<WorkflowChildCapabilities>;
 

@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 
-import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "../persistence/Sqlite.ts";
 import * as ThreadArtifactsStore from "./t3team-threadArtifactsStore.ts";
 import { collectAfterSnapshot } from "./t3team-v2Streams.testkit.ts";
 

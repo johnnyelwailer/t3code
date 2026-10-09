@@ -12,7 +12,7 @@
 import { CommandId, ProjectId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import { HttpRouter } from "effect/unstable/http";
+import { HttpRouter } from "effect/http";
 
 import * as ProjectService from "./project/ProjectService.ts";
 import {
@@ -21,6 +21,7 @@ import {
   readJsonBody,
   T3TeamAtlassianError,
 } from "./t3team-atlassian-http.ts";
+import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import { toT3TeamError } from "./t3team-project-repository-utils.ts";
 import { switchProjectMainRepository } from "./t3team-projectMainRepositorySwitch.ts";
@@ -53,11 +54,15 @@ export const t3teamProjectMainRepositoryRouteLayer = HttpRouter.add(
       return yield* new T3TeamAtlassianError({ message: `Project '${projectId}' was not found.` });
     }
 
-    const result = yield* switchProjectMainRepository({
-      project,
-      url,
-      selection: input.selection === "detected" ? "detected" : "user",
-    });
+    // The switch rewrites reference manifests; serialize it with bootstraps and sync outcomes.
+    const sync = yield* T3TeamLinkedRepositorySync;
+    const result = yield* sync.withManifestLock(
+      switchProjectMainRepository({
+        project,
+        url,
+        selection: input.selection === "detected" ? "detected" : "user",
+      }),
+    );
     if (result.changed && result.mainRepository) {
       yield* projects.update({
         commandId: CommandId.make(`server:t3team:main-repository:${t3teamRandomUUID()}`),

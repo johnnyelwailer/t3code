@@ -3,10 +3,10 @@ import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as References from "effect/References";
-import { Command, Flag, GlobalFlag } from "effect/unstable/cli";
+import { Command, Flag, GlobalFlag } from "effect/cli";
 
 import * as ServerConfig from "../config.ts";
-import { layerConfig as SqlitePersistenceLayerLive } from "../persistence/Layers/Sqlite.ts";
+import { layerConfig as SqlitePersistenceLayerLive } from "../persistence/Sqlite.ts";
 import { seedT3TeamFixtureProject } from "../t3team-fixtureProjectSeed.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import { projectLocationFlags, resolveCliAuthConfig } from "./config.ts";

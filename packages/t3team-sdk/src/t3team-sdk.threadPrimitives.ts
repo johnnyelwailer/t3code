@@ -20,6 +20,7 @@ export type {
   AskUserOpts,
   ModelCascade,
   ModelCascadeEntry,
+  ShowViewInput,
   ShowWidgetInput,
   SpawnThreadOpts,
   Thread,

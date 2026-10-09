@@ -1,6 +1,7 @@
 import { DEFAULT_CLIENT_SETTINGS, type ClientSettings } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { readLocalApi } from "~/localApi";
+import { publishStoredProjectsSnapshot } from "./t3team-storedProjectsSnapshot";
 import {
   loadStoredProjects,
   saveStoredProjects,
@@ -72,7 +73,37 @@ export async function hydrateStoredProjects(): Promise<ProjectShellProject[]> {
   }
 }
 
+let hydration: Promise<ReadonlyArray<ProjectShellProject>> | null = null;
+
+/**
+ * `hydrateStoredProjects()`, once per page, shared by every caller.
+ *
+ * It is an IPC round trip plus a full client-settings parse, and it merges the server-persisted
+ * list back into localStorage as a side effect. Running it per consumer paid for it twice and —
+ * worse — let a consumer whose effect re-ran before the promise resolved cancel its own result and
+ * keep the partial localStorage snapshot. That was the cold-start "Nothing needs you": My Work
+ * scoped its digest to a project list that had not finished loading.
+ */
+export function ensureStoredProjectsHydrated(): Promise<ReadonlyArray<ProjectShellProject>> {
+  hydration ??= hydrateStoredProjects()
+    // hydrateStoredProjects already falls back to the local list; this only covers an outright throw.
+    .catch(() => loadStoredProjects())
+    .then((projects) => {
+      publishStoredProjectsSnapshot(projects);
+      return projects;
+    });
+  return hydration;
+}
+
+/** Test-only: a fresh page. Pair with `resetStoredProjectsSnapshotForTests`. */
+export function resetStoredProjectsHydrationForTests(): void {
+  hydration = null;
+}
+
 export function persistStoredProjects(projects: ReadonlyArray<ProjectShellProject>): void {
+  // Every mutation path (add, delete, rename, update) lands here, so this is where the page's
+  // shared list stays current — My Work must see a project the user just added.
+  publishStoredProjectsSnapshot(projects);
   const localApi = readLocalApi();
   if (!localApi) {
     return;

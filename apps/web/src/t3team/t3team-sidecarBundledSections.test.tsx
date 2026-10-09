@@ -40,6 +40,7 @@ const host: SidecarSectionHost = {
   placement: "sidecar.section",
   surface: "project.dashboard.backlog",
   projectId: "project-1",
+  launchQuickStart: async () => false,
   stageKickoff: vi.fn(),
   launchRecipe: vi.fn(),
   openThread: vi.fn(),

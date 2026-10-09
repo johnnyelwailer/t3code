@@ -1,6 +1,6 @@
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { toPersistenceSqlError } from "./persistence/Errors.ts";
 import {
@@ -17,6 +17,7 @@ import {
   type T3TeamBacklogCacheIdentity,
   type T3TeamBacklogSelectionInput,
 } from "./t3team-atlassian-backlog-cacheShared.ts";
+import { captureDigestStatusTransitionsOf } from "./t3team-digestStatusTransitions.ts";
 import { ensureBacklogCacheTables } from "./t3team-atlassian-backlog-cacheTables.ts";
 
 export { readCachedT3TeamAtlassianBacklog } from "./t3team-atlassian-backlog-cacheRead.ts";
@@ -82,6 +83,7 @@ export const writeCachedT3TeamAtlassianBacklog = Effect.fn("t3team.atlassianBack
         ...(input.requestSelection ? { requestSelection: input.requestSelection } : {}),
       });
 
+      yield* captureDigestStatusTransitionsOf(input, input.response.page.items);
       yield* sql.withTransaction(
         Effect.gen(function* () {
           if (input.replaceProjectCache) {

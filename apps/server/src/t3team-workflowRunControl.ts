@@ -11,8 +11,9 @@ import * as Effect from "effect/Effect";
 import type {
   WorkflowRun,
   WorkflowRunRepositoryShape,
-} from "./persistence/Services/WorkflowRuns.ts";
-import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
+  WorkflowRunStatus,
+} from "./persistence/WorkflowRuns.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import { retireWorkflowAuthorThread } from "./t3team-workflowAuthorThreadCleanup.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
@@ -79,6 +80,13 @@ export interface WorkflowRunControlDeps {
    * (t3team-actorMessageReactor.ts); the agent's tool is automation and must not masquerade as the user.
    */
   readonly stopOrigin: "user" | "system";
+  /**
+   * Narrow stop: only a run still in one of these statuses is stopped. The CAS lands FIRST and the
+   * in-memory controller / admission are cancelled only after it, so a run that woke up in between
+   * is reported stale and left running. Used by the settle path for parked runs (no live
+   * controller); the card and the tool keep the default cancel-then-CAS order.
+   */
+  readonly stopOnlyIf?: ReadonlyArray<WorkflowRunStatus>;
   readonly turnRedrive?: InterruptedTurnRetry;
   /** GHE #344: failed-run retry deps; absent where no durable journal (agent pause/stop tools). */
   readonly retryFailed?: WorkflowRunControlRetryDeps;
@@ -156,11 +164,17 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
     if (warning !== undefined) yield* Effect.logWarning(warning.message, warning.details);
     status = restored;
   } else {
-    // Synchronous first: an active detached controller can no longer publish completion, and the cancel
-    // interrupts any re-drive fiber armed for the run's step (registry.cancelRun, GHE #411 §3).
-    const childThreads = registry.childThreadsForRun(runId);
-    registry.cancelRun(runId);
-    workflowAdmissionQueue.cancel(runId);
+    // Default: synchronous first — an active detached controller can no longer publish completion,
+    // and the cancel interrupts any re-drive fiber armed for the run's step (registry.cancelRun,
+    // GHE #411 §3). A narrow stop (`stopOnlyIf`) cancels in memory only after its CAS lands.
+    const cancelInMemory = () => {
+      const childThreads = registry.childThreadsForRun(runId);
+      registry.cancelRun(runId);
+      workflowAdmissionQueue.cancel(runId);
+      return childThreads;
+    };
+    const narrow = deps.stopOnlyIf;
+    const childThreadsBeforeCas = narrow === undefined ? cancelInMemory() : [];
     // Compare-and-set (GHE #411 §1): only a still-non-terminal row is flipped to `cancelled` — a run
     // that already completed/failed in between is reported, not overwritten.
     const affected = yield* repo
@@ -168,10 +182,11 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
         runId,
         status: "cancelled",
         updatedAt: deps.nowIso(),
-        expectedStatuses: NON_TERMINAL_STATUSES,
+        expectedStatuses: narrow ?? NON_TERMINAL_STATUSES,
       })
       .pipe(Effect.mapError(errorMessage));
     if (!affected) return yield* reportStaleWrite(repo, runId);
+    const childThreads = narrow === undefined ? childThreadsBeforeCas : cancelInMemory();
     for (const childThreadId of childThreads) {
       yield* deps.host
         .interrupt({ threadId: childThreadId, reason: "Workflow stopped", origin: deps.stopOrigin })
@@ -189,6 +204,12 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
     );
     yield* Effect.promise(() => deps.rearmScheduler());
     status = "cancelled";
+  }
+
+  // Stop/pause/resume bypass the run lifecycle's push: refresh the launch thread's run facts and
+  // the waiting-question mirror here. Best-effort — the control already landed.
+  if (run.launchThreadId !== null) {
+    yield* deps.host.syncRunFacts(run.launchThreadId).pipe(Effect.ignore);
   }
 
   // Run-level activity: what the card's banner reads ("Workflow paused" + when); the tool emits it exactly as the button.

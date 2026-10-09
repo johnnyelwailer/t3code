@@ -22,6 +22,11 @@ import {
   isT3TeamRecipeTool,
   type T3TeamRecipeToolHandlers,
 } from "./t3team-toolBrokerBindingRecipes.ts";
+import {
+  callT3TeamMyWorkTool,
+  isT3TeamMyWorkTool,
+  type T3TeamMyWorkToolHandlers,
+} from "./t3team-toolBrokerBindingMyWork.ts";
 import type { T3TeamWorkflowRunToolHandlers } from "./t3team-toolBrokerWorkflowRunTools.ts";
 import type { T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
 import type { T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
@@ -29,6 +34,11 @@ import type { T3TeamWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkf
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
 import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 import { resolveT3TeamCanonicalToolId } from "./t3team-toolBrokerLegacyToolIds.ts";
+import {
+  callT3TeamChangeRequestPublishTool,
+  T3TEAM_CHANGE_REQUEST_PUBLISH_TOOL_ID,
+  type T3TeamChangeRequestToolHandlers,
+} from "./t3team-toolBrokerBindingChangeRequest.ts";
 import {
   tryDispatchThreadScopedToolCall,
   tryDispatchWorkflowToolCall,
@@ -46,10 +56,12 @@ export function dispatchT3TeamToolCall(input: {
   setBacklogAssigneeFilter?: (mode: "current-user") => Effect.Effect<unknown, string>;
   refreshContextBundle?: T3TeamContextRefreshServiceShape;
   recipeTools?: T3TeamRecipeToolHandlers;
+  myWorkTools?: T3TeamMyWorkToolHandlers;
   workflowRunTools?: T3TeamWorkflowRunToolHandlers;
   workflowStatusTools?: T3TeamWorkflowStatusToolHandlers;
   workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
   workflowControlTools?: T3TeamWorkflowControlToolHandlers;
+  changeRequestTools?: T3TeamChangeRequestToolHandlers;
   showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   searchSourceThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   searchThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
@@ -83,6 +95,15 @@ export function dispatchT3TeamToolCall(input: {
       ...(input.recipeTools ? { recipeTools: input.recipeTools } : {}),
     });
   }
+  if (isT3TeamMyWorkTool(tool)) {
+    return callT3TeamMyWorkTool({
+      tool,
+      scopeLabel: input.scopeLabel,
+      toolArgs,
+      ...(input.threadId ? { threadId: input.threadId } : {}),
+      ...(input.myWorkTools ? { myWorkTools: input.myWorkTools } : {}),
+    });
+  }
   const workflowToolCall = tryDispatchWorkflowToolCall({
     tool,
     scopeLabel: input.scopeLabel,
@@ -94,6 +115,13 @@ export function dispatchT3TeamToolCall(input: {
   });
   if (workflowToolCall !== undefined) {
     return workflowToolCall;
+  }
+  if (tool === T3TEAM_CHANGE_REQUEST_PUBLISH_TOOL_ID) {
+    return callT3TeamChangeRequestPublishTool({
+      scopeLabel: input.scopeLabel,
+      toolArgs,
+      changeRequestTools: input.changeRequestTools,
+    });
   }
   const threadScopedToolCall = tryDispatchThreadScopedToolCall({
     tool,

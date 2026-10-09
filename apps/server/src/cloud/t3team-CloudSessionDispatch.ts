@@ -11,7 +11,7 @@ import {
   type WorkflowRunSummary,
 } from "./t3team-githubActionsSessionClient.ts";
 import { pendingCloudSession, projectCloudSession } from "./t3team-CloudSessionProjection.ts";
-import type { CloudSessionMachine } from "./t3team-CloudSessionMachine.ts";
+import type { CloudSessionMachine, CloudSessionSetup } from "./t3team-CloudSessionMachine.ts";
 
 /**
  * Which published session-server build the session installs (`server_ref`): the one tagged for this
@@ -51,6 +51,8 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
     readonly workspace: string;
     /** Set when the session runs in a project machine; its token is NOT an input (broker secret). */
     readonly machine?: CloudSessionMachine | null;
+    /** Set when the session checks the project out on the host so an agent can write a machine. */
+    readonly setup?: CloudSessionSetup | null;
   }) {
     const marker = sessionTagMarker(input.sessionTag);
 
@@ -69,6 +71,16 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
               ...(input.machine.healthCheck
                 ? { machine_health_check: input.machine.healthCheck }
                 : {}),
+              ...(input.machine.teamSecretNames.length > 0
+                ? { machine_team_secrets: input.machine.teamSecretNames.join(",") }
+                : {}),
+            }
+          : {}),
+        ...(input.setup
+          ? {
+              machine_repository: input.setup.repository.url,
+              machine_commit: input.setup.commit,
+              machine_setup: "true",
             }
           : {}),
       }),
@@ -94,6 +106,7 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
         ...pendingCloudSession(input.sessionTag, input.durationSeconds, input.machineLabel),
         transport: input.brokerGrant ? ("nexi_broker" as const) : ("t3_connect" as const),
         ...(input.machine ? { projectMachine: true } : {}),
+        ...(input.setup ? { machineSetup: true } : {}),
       };
     }
     return yield* projectCloudSession(

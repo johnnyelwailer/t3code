@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/process";
 
 import type * as VcsProcess from "../vcs/VcsProcess.ts";
 import { workflowHistoryUrl } from "./t3team-CloudSessionFleet.ts";
@@ -30,6 +30,7 @@ const failedRun: WorkflowRunSummary = {
   updatedAt: "2026-09-28T10:02:00Z",
   htmlUrl: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/77",
   name: "nexi-session [s1]",
+  actor: "pj",
 };
 
 const ghOut = (stdout: string): VcsProcess.VcsProcessOutput => ({

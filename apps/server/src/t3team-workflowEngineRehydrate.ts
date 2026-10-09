@@ -34,9 +34,9 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
 import { ServerConfig } from "./config.ts";
-import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
-import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
+import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
+import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
 import { retireWorkflowAuthorThread } from "./t3team-workflowAuthorThreadCleanup.ts";
 import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
 import { T3TeamWorkflowEngineReactorLive } from "./t3team-workflowEngineReactor.ts";
@@ -47,6 +47,7 @@ import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { drainSignalParkInbox } from "./t3team-workflowSignalParkDrain.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { makeWorkflowRunRehydrator } from "./t3team-workflowRehydrateRun.ts";
+import { T3TeamScriptHost } from "./t3team-scriptHostContext.ts";
 import {
   T3TeamWorkflowSignalRehydrateGate,
   T3TeamWorkflowSignalRehydrateGateLive,
@@ -167,6 +168,7 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
       toolBroker,
       nowIso,
       signalStore: Option.getOrUndefined(yield* Effect.serviceOption(WorkflowSignalStore)),
+      scriptHost: Option.getOrUndefined(yield* Effect.serviceOption(T3TeamScriptHost)),
     });
 
     // Durable queued rows preserve FIFO order (`listByStatus` sorts by creation time). Each

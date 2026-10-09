@@ -98,6 +98,7 @@
     "dev:nexi": "node scripts/t3team-dev-nexi.ts"
   },
   "devDependencies": {
+    "@coderabbitai/config": "1.1.0",
     "@effect/tsgo": "catalog:",
     "@shadcn/lint": "0.1.5",
     "@types/node": "catalog:",

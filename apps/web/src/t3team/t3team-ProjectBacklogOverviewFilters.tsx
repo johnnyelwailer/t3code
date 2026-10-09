@@ -11,7 +11,6 @@ import { Input } from "~/t3team/components/ui/t3team-input";
 import { ProjectBacklogOverviewAssigneeFilter } from "~/t3team/t3team-ProjectBacklogOverviewAssigneeFilter";
 import { ProjectBacklogOverviewJiraFiltersMenu } from "~/t3team/t3team-ProjectBacklogOverviewJiraFiltersMenu";
 import { ProjectBacklogOverviewLabelsFilter } from "~/t3team/t3team-ProjectBacklogOverviewLabelsFilter";
-import { ProjectBacklogOverviewViewSwitch } from "~/t3team/t3team-ProjectBacklogOverviewViewSwitch";
 import { ProjectBacklogOptionsMenu } from "~/t3team/t3team-ProjectBacklogOptionsMenu";
 import type { ProjectBacklogViewMode } from "~/t3team/t3team-projectBacklogPresentation";
 import type {
@@ -159,7 +158,6 @@ export function ProjectBacklogOverviewFilters({
             <span>Updating backlog…</span>
           </div>
         ) : null}
-        <ProjectBacklogOverviewViewSwitch viewMode={viewMode} onViewModeChange={onViewModeChange} />
         <ProjectBacklogOptionsMenu
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}

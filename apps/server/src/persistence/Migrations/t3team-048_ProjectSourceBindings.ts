@@ -18,7 +18,7 @@
  * event store for this projector on next boot would be pure cost with zero
  * rows produced.
  */
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Effect from "effect/Effect";
 
 export default Effect.gen(function* () {

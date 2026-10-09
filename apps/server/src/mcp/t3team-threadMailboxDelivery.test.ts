@@ -2,6 +2,7 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import {
   EnvironmentId,
   type OrchestrationV2ThreadProjection,
+  type OrchestrationV2ThreadShell,
   ProjectId,
   ProviderInstanceId,
   ThreadId,
@@ -13,8 +14,10 @@ import { expect, it } from "vite-plus/test";
 
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
-import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
+import * as ProjectService from "../project/ProjectService.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
+import * as SecretRequests from "../secrets/SecretRequests.ts";
 import type * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
 import {
@@ -30,9 +33,13 @@ const instanceId = ProviderInstanceId.make("codex");
 
 const scope: McpInvocationContext.McpInvocationScope = {
   environmentId: EnvironmentId.make("environment-mailbox"),
-  threadId: senderId,
-  providerSessionId: "provider-session-mailbox",
-  providerInstanceId: instanceId,
+  requestNamespace: "provider-session-mailbox",
+  thread: {
+    threadId: senderId,
+    providerSessionId: "provider-session-mailbox",
+    providerInstanceId: instanceId,
+  },
+  client: undefined,
   capabilities: new Set(["orchestration"]),
   issuedAt: 1,
 };
@@ -57,7 +64,12 @@ const projection = (threadId: ThreadId) =>
       createdAt: now,
       updatedAt: now,
     },
-    runs: [],
+    // The sender must own a live run for `assertLiveCaller` (OrchestratorMcpService.ts) to let
+    // it reach another thread; the target's own run state is irrelevant to a mailbox delivery.
+    runs:
+      threadId === senderId
+        ? [{ ordinal: 1, status: "running", providerInstanceId: instanceId }]
+        : [],
     runtimeRequests: [],
     messages: [],
     contextTransfers: [],
@@ -72,6 +84,8 @@ const makeLayer = (mailbox: Layer.Layer<never>) =>
     Layer.provide(
       Layer.mergeAll(
         Layer.mock(ThreadManagementService.ThreadManagementService)({
+          getThreadShell: (threadId) =>
+            Effect.succeed(projection(threadId).thread as unknown as OrchestrationV2ThreadShell),
           getThreadRecords: (threadId) => Effect.succeed(projection(threadId)),
           getProjectThreadRecords: (input) => Effect.succeed(projection(input.threadId)),
           sendToThread: () => Effect.die("mailbox mode must not start, queue or steer a run"),
@@ -83,6 +97,8 @@ const makeLayer = (mailbox: Layer.Layer<never>) =>
         Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({
           list: () => Effect.succeed([]),
         }),
+        Layer.mock(ProjectService.ProjectService)({}),
+        Layer.mock(SecretRequests.SecretRequests)({}),
         NodeCrypto.layer,
       ),
     ),

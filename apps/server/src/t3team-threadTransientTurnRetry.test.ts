@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { MessageId, RunId } from "@t3tools/contracts";
 
 import {
+  MAX_OUTAGE_TRANSIENT_RETRIES,
   MAX_SESSION_TRANSIENT_RETRIES,
   transientRetryExhaustedText,
   transientRetryInFlightText,
@@ -16,7 +17,7 @@ import {
   priorRetryAttempts,
   transientRetryMessageId,
 } from "./t3team-threadTransientTurnRetryPlan.ts";
-import { retryDirectiveSeconds } from "./provider/Layers/t3team-claude-gateway-retry.ts";
+import { retryDirectiveSeconds } from "./provider/t3team-claude-gateway-retry.ts";
 
 describe("transientTurnRetryDelayMs", () => {
   it("honors a gateway retry_after_seconds directive with a small cushion", () => {
@@ -84,6 +85,23 @@ describe("transientTurnRetryBackoffMs", () => {
   });
 });
 
+describe("network-outage ladder", () => {
+  it("climbs to a 10 minute step, clamped to the last", () => {
+    const steps = [1, 2, 3, 4, 5, 6, 7].map((n) => transientTurnRetryBackoffMs(n, undefined, true));
+    expect(steps).toEqual([15_000, 30_000, 60_000, 120_000, 300_000, 600_000, 600_000]);
+  });
+
+  it("keeps the short ladder for everything else and ignores a gateway directive for outages", () => {
+    expect(transientTurnRetryBackoffMs(6)).toBe(60_000);
+    expect(transientTurnRetryDelayMs(5, 12, undefined, () => 0, true)).toBe(300_000);
+    expect(transientTurnRetryDelayMs(1, 12, undefined, () => 0)).toBe(12_600);
+  });
+
+  it("still lets the e2e override cap an outage wait", () => {
+    expect(transientTurnRetryBackoffMs(6, 500, true)).toBe(500);
+  });
+});
+
 describe("reason text helpers", () => {
   it("formats the in-flight and exhausted stop reasons", () => {
     expect(transientRetryInFlightText(1, "Provider stream stalled", 15_000)).toBe(
@@ -91,6 +109,15 @@ describe("reason text helpers", () => {
     );
     expect(transientRetryExhaustedText("423 GPU reservation")).toBe(
       `423 GPU reservation — automatic retries exhausted (${MAX_SESSION_TRANSIENT_RETRIES} attempts)`,
+    );
+  });
+
+  it("shows the outage budget and long waits in minutes", () => {
+    expect(
+      transientRetryInFlightText(5, "fetch failed", 300_000, MAX_OUTAGE_TRANSIENT_RETRIES),
+    ).toBe(`Retrying (5/${MAX_OUTAGE_TRANSIENT_RETRIES}) — fetch failed, next attempt in ~5m`);
+    expect(transientRetryExhaustedText("fetch failed", MAX_OUTAGE_TRANSIENT_RETRIES)).toBe(
+      `fetch failed — automatic retries exhausted (${MAX_OUTAGE_TRANSIENT_RETRIES} attempts)`,
     );
   });
 
@@ -132,7 +159,11 @@ describe("priorRetryAttempts (durable episode count)", () => {
 });
 
 describe("planTransientRetry", () => {
-  const failure = { message: "HTTP 503 service unavailable", directiveSeconds: null };
+  const failure = {
+    message: "HTTP 503 service unavailable",
+    directiveSeconds: null,
+    outage: false,
+  };
   const delayMs = (attempt: number) => attempt * 1_000;
 
   it("schedules the next attempt with the ladder delay and an in-flight note", () => {
@@ -161,6 +192,37 @@ describe("planTransientRetry", () => {
     expect(planTransientRetry({ runs, failedRunId: RunId.make("r4"), failure, delayMs })).toEqual({
       kind: "exhausted",
       note: transientRetryExhaustedText("HTTP 503 service unavailable"),
+    });
+  });
+
+  it("gives a network outage the longer budget, then exhausts", () => {
+    const outage = { message: "[unknown] fetch failed", directiveSeconds: null, outage: true };
+    const chain = (length: number) =>
+      Array.from({ length }, (_, index) =>
+        run(
+          `r${index + 1}`,
+          index + 1,
+          index === 0 ? "u" : transientRetryMessageId(RunId.make(`r${index}`)),
+        ),
+      );
+    const fourth = planTransientRetry({
+      runs: chain(4),
+      failedRunId: RunId.make("r4"),
+      failure: outage,
+      delayMs: (attempt, _directive, isOutage) =>
+        transientTurnRetryBackoffMs(attempt, undefined, isOutage),
+    });
+    expect(fourth).toMatchObject({ kind: "retry", attempt: 4, delayMs: 120_000 });
+    expect(
+      planTransientRetry({
+        runs: chain(MAX_OUTAGE_TRANSIENT_RETRIES + 1),
+        failedRunId: RunId.make(`r${MAX_OUTAGE_TRANSIENT_RETRIES + 1}`),
+        failure: outage,
+        delayMs,
+      }),
+    ).toEqual({
+      kind: "exhausted",
+      note: transientRetryExhaustedText("[unknown] fetch failed", MAX_OUTAGE_TRANSIENT_RETRIES),
     });
   });
 });

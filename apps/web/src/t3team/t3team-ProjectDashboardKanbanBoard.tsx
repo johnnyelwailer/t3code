@@ -4,6 +4,10 @@ import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { projectDashboardKanbanLaneCollisionDetection } from "~/t3team/t3team-ProjectDashboardKanbanDndUi";
 import { ProjectDashboardKanbanMatrixBoard } from "~/t3team/t3team-ProjectDashboardKanbanMatrixBoard";
 import { ProjectDashboardKanbanLane } from "~/t3team/t3team-ProjectDashboardKanbanLane";
+import {
+  buildKanbanGridTemplateColumns,
+  type ProjectDashboardKanbanColumnCollapse,
+} from "~/t3team/t3team-projectDashboardKanbanCollapse";
 import type { TicketHierarchy } from "~/t3team/t3team-projectDashboardKanbanHierarchy";
 import type { ProjectTicketKanbanColumns } from "~/t3team/t3team-projectTicketStatus";
 import type { ProjectTicket } from "~/t3team/t3team-types";
@@ -25,6 +29,7 @@ export function ProjectDashboardKanbanBoard({
   onTicketContextMenu,
   renderTicketExtra,
   onMoveTicketToStatus,
+  columnCollapse,
 }: {
   kanbanColumns: ProjectTicketKanbanColumns;
   allTickets?: readonly ProjectTicket[];
@@ -36,6 +41,7 @@ export function ProjectDashboardKanbanBoard({
   onTicketContextMenu: (event: React.MouseEvent, ticket: ProjectTicket) => void;
   renderTicketExtra?: (ticket: ProjectTicket, compact: boolean) => React.ReactNode;
   onMoveTicketToStatus?: (ticket: ProjectTicket, targetStatus: string) => Promise<string>;
+  columnCollapse?: ProjectDashboardKanbanColumnCollapse;
 }) {
   const {
     sensors,
@@ -74,10 +80,19 @@ export function ProjectDashboardKanbanBoard({
             {...(renderTicketExtra ? { renderTicketExtra } : {})}
             {...(onMoveTicketToStatus ? { onMoveTicketToStatus } : {})}
             optimisticMoves={optimisticMoves}
+            {...(columnCollapse ? { columnCollapse } : {})}
           />
         ) : (
           <div className="overflow-x-auto pb-2">
-            <div className="grid min-w-full grid-flow-col auto-cols-[minmax(17rem,1fr)] gap-3">
+            <div
+              className="grid min-w-full grid-flow-col gap-3"
+              style={{
+                gridTemplateColumns: buildKanbanGridTemplateColumns(
+                  displayColumns,
+                  columnCollapse?.collapsedIds,
+                ),
+              }}
+            >
               {displayColumns.map((column) => (
                 <ProjectDashboardKanbanLane
                   key={column.id}
@@ -92,6 +107,13 @@ export function ProjectDashboardKanbanBoard({
                   {...(renderTicketExtra ? { renderTicketExtra } : {})}
                   {...(onMoveTicketToStatus ? { onMoveTicketToStatus } : {})}
                   optimisticMoves={optimisticMoves}
+                  {...(columnCollapse
+                    ? {
+                        collapsed: columnCollapse.collapsedIds.has(column.id),
+                        onToggleCollapsed: (collapsed: boolean) =>
+                          columnCollapse.onToggle(column.id, collapsed),
+                      }
+                    : {})}
                 />
               ))}
             </div>

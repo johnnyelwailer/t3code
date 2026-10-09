@@ -7,10 +7,12 @@ import {
   type ThreadPullRequestLink,
 } from "@t3tools/contracts";
 import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
+import * as Cause from "effect/Cause";
 import { act, type ReactNode, type ReactElement, type ComponentProps } from "react";
 import { create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
+import { toastManager } from "../ui/toast";
 
 const { newThread, prepareThread, refresh, Wrapper, Trigger } = vi.hoisted(() => ({
   newThread: vi.fn(),
@@ -32,6 +34,7 @@ vi.mock("~/state/environments", () => ({
   usePrimaryEnvironmentId: () => EnvironmentId.make("env-1"),
 }));
 vi.mock("~/hooks/useSettings", () => ({
+  useEnvironmentSettings: () => undefined,
   useClientSettings: (select: (settings: typeof DEFAULT_CLIENT_SETTINGS) => unknown) =>
     select(DEFAULT_CLIENT_SETTINGS),
 }));
@@ -308,6 +311,23 @@ describe.each([
       .findAllByType("button")
       .filter((node) => node.props["aria-label"] === "Check out");
     expect(checkout).toHaveLength(thread === stackThread ? 0 : 1);
+  });
+
+  it.skipIf(target !== undefined)("tells the user why the checkout failed", async () => {
+    // The server's sentence is the only way out of the failure, so it must reach the toast.
+    prepareThread.mockResolvedValue({
+      _tag: "Failure",
+      cause: Cause.fail(new Error("The local clone of github.com/acme/api is missing.")),
+    });
+    await act(async () => render());
+    await click("Fix check");
+    expect(toastManager.update).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({
+        title: "Could not prepare the pull request checkout",
+        description: "The local clone of github.com/acme/api is missing.",
+      }),
+    );
   });
 
   it.each(actions)("%s writes to the correct composer", async (action) => {

@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import { HttpRouter } from "effect/unstable/http";
+import { HttpRouter } from "effect/http";
 
 import { errorResponse, okJson, readJsonBody } from "./t3team-atlassian-http.ts";
 import {

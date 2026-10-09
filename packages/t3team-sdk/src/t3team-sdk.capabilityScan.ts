@@ -9,8 +9,10 @@
  *   • `"script"`   → `scripts.*` is bound at all      (t3team-sdk.bodyRunner.ts)
  *   • `"user"`     → `askUser` / `notifyUser` / `showWidget` on a thread
  *                                                     (t3team-sdk.threadPrimitives.ts)
+ *   • `"ui.render"` → `showView` on a thread           (@runbook/threads primitives.ts)
  *   • `"schedule"` → `waitUntil`                       (t3team-sdk.schedulePrimitive.ts)
  *                  → `retry` (its backoff IS a waitUntil) (t3team-sdk.retryPrimitive.ts)
+ *   • `"launch"`   → `launchThread`, `setRunFacts`    (t3team-sdk.launchedThreads.ts)
  *   • `"source:<name>"` → `getSignalSource(<built-in source>)` (t3team-sdk.signalPrimitive.ts)
  *                    and `watermark("<name>")`        (t3team-sdk.watermarkPrimitive.ts)
  *   • tool group   → `tools.<id>` at its call site     (t3team-sdk.capabilityGating.ts)
@@ -28,7 +30,7 @@
  */
 import type * as TsApi from "typescript";
 
-import { BUILTIN_SIGNAL_GLOBALS } from "./t3team-sdk.builtinSignals.ts";
+import { staticSourceName } from "./t3team-sdk.capabilityScanSources.ts";
 import { finding, memberChain, type WorkflowAuditFinding } from "./t3team-sdk.staticAuditTypes.ts";
 import {
   collectWorkflowBodyBindings,
@@ -38,33 +40,6 @@ import {
 
 /** Thread verbs gated by the `"user"` capability, per createThreadPrimitives. */
 const USER_VERBS = new Set(["askUser", "notifyUser", "showWidget"]);
-
-/** Built-in source declaration export name → source name (`ScmChangeRequestWatch` → `scm.…`). */
-const BUILTIN_SOURCE_NAMES: ReadonlyMap<string, string> = new Map(
-  Object.entries(BUILTIN_SIGNAL_GLOBALS).flatMap(([exportName, value]) => {
-    const ref = value as { readonly kind?: unknown; readonly name?: unknown };
-    return ref.kind === "signalSource" && typeof ref.name === "string"
-      ? [[exportName, ref.name] as const]
-      : [];
-  }),
-);
-
-/**
- * The source a `getSignalSource`/`watermark` call binds, when it is knowable statically: a
- * built-in source declaration for `getSignalSource`, a string literal key for `watermark`.
- * Anything else (an author-defined source, a computed key) stays silent — miss > false alarm.
- */
-function staticSourceName(
-  ts: typeof TsApi,
-  verb: "getSignalSource" | "watermark",
-  arg: TsApi.Expression | undefined,
-  bindings: WorkflowBodyBindings,
-): string | undefined {
-  if (arg === undefined) return undefined;
-  if (verb === "watermark") return ts.isStringLiteralLike(arg) ? arg.text : undefined;
-  const exportName = resolveVerb(ts, arg, bindings);
-  return exportName === null ? undefined : BUILTIN_SOURCE_NAMES.get(exportName);
-}
 
 export interface CapabilityScanOptions {
   /** Normalized `meta.capabilities` (see normalizeCapabilities). */
@@ -164,6 +139,8 @@ function scanCallSites(
       const needsSchedule = verb === "waitUntil" || (verb === "retry" && retryIsVerb);
       if (needsSchedule && !declared.has("schedule")) {
         into.push(missing(ts, sf, node, "schedule", `\`${verb}(…)\``));
+      } else if ((verb === "launchThread" || verb === "setRunFacts") && !declared.has("launch")) {
+        into.push(missing(ts, sf, node, "launch", `\`${verb}(…)\``));
       } else if (verb === "getSignalSource" || verb === "watermark") {
         const name = staticSourceName(ts, verb, node.arguments[0], bindings);
         if (name !== undefined && !declared.has(`source:${name}`)) {
@@ -173,6 +150,8 @@ function scanCallSites(
         const verb = callee.name.text;
         if (USER_VERBS.has(verb) && !declared.has("user")) {
           into.push(missing(ts, sf, callee, "user", `\`${verb}(…)\``));
+        } else if (verb === "showView" && !declared.has("ui.render")) {
+          into.push(missing(ts, sf, callee, "ui.render", "`showView(…)`"));
         } else {
           const chain = memberChain(ts, callee);
           const isToolTree =

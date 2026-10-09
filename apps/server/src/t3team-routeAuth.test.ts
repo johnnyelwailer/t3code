@@ -6,7 +6,7 @@ import * as NodeURL from "node:url";
 import { AuthOrchestrationOperateScope, AuthOrchestrationReadScope } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { HttpRouter, HttpServerResponse } from "effect/unstable/http";
+import { HttpRouter, HttpServerResponse } from "effect/http";
 import { describe, expect, it } from "vite-plus/test";
 
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
@@ -72,11 +72,11 @@ describe("t3team route auth", () => {
   });
 });
 
-/** t3team route layers `makeRoutesLayer` merges OUTSIDE a group that provides the auth layer. */
+/** t3team route layers `layerMakeRoutes` merges OUTSIDE a group that provides the auth layer. */
 function unauthenticatedRouteLayers(): ReadonlyArray<string> {
   const here = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
   const source = NodeFS.readFileSync(NodePath.join(here, "server.ts"), "utf8");
-  const start = source.indexOf("const makeRoutesLayer =");
+  const start = source.indexOf("const layerMakeRoutes =");
   const lines = source.slice(start, source.indexOf("\n).pipe(", start)).split("\n");
   return lines.flatMap((line, index) => {
     const route = /^\s*(t3team[A-Za-z]*RouteLayer),$/.exec(line)?.[1];
@@ -89,6 +89,7 @@ function unauthenticatedRouteLayers(): ReadonlyArray<string> {
 describe("t3team route registry", () => {
   it("authenticates every t3team route except the ones that carry their own capability", () => {
     expect([...unauthenticatedRouteLayers()].toSorted()).toEqual([
+      "t3teamAccountRouteLayer",
       "t3teamAtlassianAssetContentRouteLayer",
       "t3teamAtlassianOAuthCallbackRouteLayer",
       "t3teamCloudBrokerRouteLayer",

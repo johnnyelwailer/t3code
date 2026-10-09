@@ -3,7 +3,7 @@ import {
   IsoDateTime,
   ModelSelection,
   type OrchestrationProjectShell,
-  ProjectIconOverride,
+  StoredProjectIcon,
   ProjectId,
   ProjectMainRepository,
   ProjectScript,
@@ -14,8 +14,8 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
-import * as SqlSchema from "effect/unstable/sql/SqlSchema";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as SqlSchema from "effect/sql/SqlSchema";
 
 import { attachProjectSourceBindings } from "../t3team-projectSourceShells.ts";
 
@@ -40,7 +40,7 @@ export const ProjectRow = Schema.Struct({
   defaultThreadEnvMode: Schema.NullOr(ThreadEnvMode),
   autoPull: Schema.Boolean,
   faviconPath: Schema.NullOr(Schema.String),
-  projectIcon: Schema.NullOr(ProjectIconOverride),
+  projectIcon: Schema.NullOr(StoredProjectIcon),
   mainRepository: Schema.NullOr(ProjectMainRepository),
   scripts: Schema.Array(ProjectScript),
   createdAt: IsoDateTime,
@@ -53,7 +53,7 @@ const ProjectDbRow = Schema.Struct({
   ...ProjectRow.fields,
   defaultModelSelection: Schema.NullOr(Schema.fromJsonString(ModelSelection)),
   autoPull: Schema.BooleanFromBit,
-  projectIcon: Schema.NullOr(Schema.fromJsonString(ProjectIconOverride)),
+  projectIcon: Schema.NullOr(Schema.fromJsonString(StoredProjectIcon)),
   mainRepository: Schema.NullOr(Schema.fromJsonString(ProjectMainRepository)),
   scripts: Schema.fromJsonString(Schema.Array(ProjectScript)),
 });

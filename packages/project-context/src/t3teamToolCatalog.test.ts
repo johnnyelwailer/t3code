@@ -59,6 +59,9 @@ describe("t3teamToolCatalog", () => {
       "t3team.work_item.subtask.draft_create",
       "t3team.work_item.link.draft_create",
       "t3team.work_item.link.draft_remove",
+      "t3team.mywork.digest.read",
+      "t3team.mywork.arrange",
+      "t3team.change_request.publish",
     ]);
   });
 

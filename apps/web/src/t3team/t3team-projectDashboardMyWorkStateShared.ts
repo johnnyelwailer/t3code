@@ -11,6 +11,7 @@ export type ProjectMyWorkTableSortDirection = "asc" | "desc";
 
 export interface ProjectDashboardMyWorkRouteSearch {
   myWorkQ?: string;
+  myWorkLens?: ProjectMyWorkLens;
   myWorkView?: ProjectMyWorkViewMode;
   myWorkGroup?: ProjectMyWorkGroupMode;
   myWorkStatus?: ProjectMyWorkStatusCategory;
@@ -31,6 +32,8 @@ export interface ProjectDashboardMyWorkState {
   statusCategory: ProjectMyWorkStatusCategory;
   hiddenKanbanColumnIds: ReadonlyArray<string>;
   hasCustomizedKanbanLanes: boolean;
+  /** Board columns folded into a narrow strip. Persisted per project, never in the URL. */
+  collapsedKanbanColumnIds: ReadonlyArray<string>;
   excludedTypeKeys: ReadonlyArray<string>;
   selectedPriority: string;
   selectedStatus: string;
@@ -69,6 +72,7 @@ export const projectMyWorkTableSortDirectionValues = new Set<ProjectMyWorkTableS
 
 export const projectDashboardMyWorkRouteSearchKeys = [
   "myWorkQ",
+  "myWorkLens",
   "myWorkView",
   "myWorkGroup",
   "myWorkStatus",
@@ -128,6 +132,7 @@ export function createDefaultProjectDashboardMyWorkState(): ProjectDashboardMyWo
     statusCategory: "all",
     hiddenKanbanColumnIds: [],
     hasCustomizedKanbanLanes: false,
+    collapsedKanbanColumnIds: [],
     excludedTypeKeys: [],
     selectedPriority: "all",
     selectedStatus: "all",
@@ -147,6 +152,11 @@ export function parseProjectDashboardMyWorkRouteSearch(
 
   if (typeof search.myWorkQ === "string") {
     parsed.myWorkQ = search.myWorkQ;
+  }
+
+  const lens = parseRouteEnum(search.myWorkLens, projectMyWorkLensValues);
+  if (lens !== undefined) {
+    parsed.myWorkLens = lens;
   }
 
   const viewMode = parseRouteEnum(search.myWorkView, projectMyWorkViewModeValues);

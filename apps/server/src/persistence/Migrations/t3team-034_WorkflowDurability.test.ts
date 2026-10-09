@@ -1,7 +1,7 @@
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { runMigrations } from "../Migrations.ts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
@@ -70,6 +70,7 @@ layer("t3team-034_WorkflowDurability", (it) => {
         "turn_retries", // added by t3team-053 (interrupted-turn re-drive budget)
         "updated_at",
         "wake_at", // added by t3team-035 (Epic 27 scheduler)
+        "watch_any_json", // added by t3team-080 (waitForAny parks)
         "watch_params_hash", // added by t3team-059 (signal sources, GHE #332)
         "watch_signal_key",
         "watch_signal_name",

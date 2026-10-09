@@ -11,6 +11,20 @@ export type T3TeamThreadToolId = T3TeamToolId;
 
 export type ProjectThreadDisplayMode = "embedded" | "thread";
 
+/** Shell run words the sub-run status label reads. Matches V2 runtime status. */
+export type ProjectThreadShellRunStatus =
+  | "idle"
+  | "preparing"
+  | "queued"
+  | "starting"
+  | "running"
+  | "waiting"
+  | "completed"
+  | "interrupted"
+  | "failed"
+  | "cancelled"
+  | "rolled_back";
+
 export type T3TeamKickoffWorkflow = {
   readonly kind: "recipe";
   readonly recipeId: string;
@@ -48,6 +62,16 @@ export type ProjectThread = {
   selectedToolIds?: ReadonlyArray<T3TeamThreadToolId>;
   kickoffWorkflow?: T3TeamKickoffWorkflow;
   status: "idle" | "running" | "completed" | "error";
+  /**
+   * The child shell's own run word (`runtime.status`, which is the activity
+   * run when one exists, otherwise the latest run). Sub-run rows read this
+   * for Starting / Queued / Running / Waiting / Failed / Stopped / Completed.
+   * A finished run stays `completed` here even when `status` has collapsed
+   * to `idle` because the thread is not archived.
+   */
+  shellRunStatus?: ProjectThreadShellRunStatus;
+  /** The child shell's provider instance, for the row's driver mark. */
+  providerInstanceId?: string;
   /**
    * GHE #304 follow-up: the thread's REAL settle state — shell
    * `settledOverride === "settled"` (a `thread.settled` event fired: user
@@ -144,6 +168,8 @@ export type ProjectTicket = {
   status: string;
   priority?: string;
   assignee?: string;
+  /** The assignee's Jira face (a public avatar URL). */
+  assigneeAvatarUrl?: string;
   assigneeAccountId?: string;
   /** Jira reporter — the digest surfaces it for bugs, where who hit the problem matters. */
   reporter?: string;

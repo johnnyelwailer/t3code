@@ -43,6 +43,15 @@ describe("endedCloudSessionEnvironmentIds", () => {
     ]);
   });
 
+  it("does not call an environment ended while the workspace's next session serves it", () => {
+    const environments = [broker("env-ws", "s-first")];
+    const sessions = [
+      session("s-first", "stopped"),
+      { ...session("s-next", "ready"), environmentId: "env-ws" } as CloudSession,
+    ];
+    expect(endedCloudSessionEnvironmentIds(environments, sessions).size).toBe(0);
+  });
+
   it("never marks an environment that is not a cloud session", () => {
     const laptop = saved(
       "env-laptop",

@@ -1,4 +1,4 @@
-import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
+import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
 import { useCallback, useMemo, useState } from "react";
 
 import { environmentCatalog } from "~/connection/catalog";
@@ -20,8 +20,7 @@ import { showCloudSessionFailureToast } from "./t3team-cloudSessionToast";
 import { useCloudSessionListRefresh } from "./t3team-useCloudSessionListRefresh";
 import { useCloudSessionConnect } from "./t3team-useCloudSessionConnect";
 import { liveCloudSessionForEnvironment } from "./t3team-cloudSessionEnvironmentMatch";
-import { CLOUD_SESSION_LIFETIME_SECONDS } from "./t3team-cloudSessionLifetime";
-import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
+import { useCloudSessionCreate } from "./t3team-useCloudSessionCreate";
 import { useCanManageRelay } from "./t3team-useCanManageRelay";
 
 /**
@@ -40,7 +39,6 @@ export function useCloudSessionController() {
     historyUrl,
     loadError,
   } = useCloudSessions();
-  const [createPending, setCreatePending] = useState(false);
   const [actionPending, setActionPending] = useState<{
     readonly sessionId: string;
     readonly kind: "cancel" | "stop";
@@ -63,7 +61,6 @@ export function useCloudSessionController() {
     [relayDiscovered],
   );
 
-  const createSession = useAtomCommand(cloudSessionEnvironment.create, { reportFailure: false });
   const cancelSession = useAtomCommand(cloudSessionEnvironment.cancel, { reportFailure: false });
   const registerRelayEnvironment = useAtomCommand(environmentCatalog.register, {
     reportFailure: false,
@@ -82,46 +79,15 @@ export function useCloudSessionController() {
     register: registerRelayEnvironment,
   });
 
-  /** `projectId` (a project on the primary environment) runs the session in its machine. */
-  const onCreate = useCallback(
-    (projectId?: ProjectId) => {
-      if (environmentId === null || !canManageRelay || createPending) return;
-      setRelayIdsBefore(
-        new Set(
-          [...relayDiscovered.values()].map((entry) => String(entry.environment.environmentId)),
-        ),
-      );
-      setCreatePending(true);
-      void createSession({
-        environmentId,
-        input: {
-          durationSeconds: CLOUD_SESSION_LIFETIME_SECONDS,
-          ...(projectId ? { projectId } : {}),
-        },
-      })
-        .then((result) => {
-          if (result._tag === "Success") {
-            setLocalSession({
-              session: result.value,
-              knownServerSessionIds: new Set(serverSessions.map((session) => session.sessionId)),
-            });
-            refreshCloudSessionList();
-          } else {
-            reportCloudSessionCreateFailure(result);
-          }
-        })
-        .finally(() => setCreatePending(false));
-    },
-    [
-      canManageRelay,
-      createPending,
-      createSession,
-      environmentId,
-      refreshCloudSessionList,
-      relayDiscovered,
-      serverSessions,
-    ],
-  );
+  const { onCreate, createPending, createPendingSetup } = useCloudSessionCreate({
+    environmentId,
+    canManageRelay,
+    relayDiscovered,
+    serverSessions,
+    setRelayIdsBefore,
+    setLocalSession,
+    refreshCloudSessionList,
+  });
 
   const beginConnect = useCallback(
     (session: CloudSession) => {
@@ -162,7 +128,8 @@ export function useCloudSessionController() {
         // "Start another": a fresh session at the remembered duration. The
         // record carries no requested hold (the runs API omits dispatch
         // inputs), so replaying the ended session's own is not possible.
-        onCreate();
+        // A setup session offers none: its record carries no project either.
+        if (session.machineSetup !== true) onCreate();
         return;
       }
       cancelRun(session, "cancel", "Cancelling that session…");
@@ -194,6 +161,7 @@ export function useCloudSessionController() {
     configured,
     historyUrl,
     createPending,
+    createPendingSetup,
     pendingSessionId,
     pendingKind,
     pendingLabel,

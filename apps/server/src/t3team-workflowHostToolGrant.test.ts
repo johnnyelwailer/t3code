@@ -29,14 +29,14 @@ import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { ServerConfig } from "./config.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
-import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
-import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
+import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { makeBrokerLayer, threadId } from "./t3team-toolBrokerTestUtils.ts";
 import type { T3TeamThreadArtifactInput } from "./t3team-v2/t3team-threadArtifactsStore.ts";
@@ -53,7 +53,7 @@ import {
 } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 import { draftToolContext, findDraftArtifact } from "./t3team-workflowHostDraft.fixtures.ts";
-import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
+import { makeT3TeamWorkflowHostToolClient } from "./t3team-workflowHostTools.ts";
 import {
   makeFakeWorkflowHost,
   makeFakeWorkflowHostLayer,
@@ -137,7 +137,7 @@ const parkProbe = Effect.fn("parkProbe")(function* (input: {
 
   const hostToolGrant = input.granted ? { toolGroups: ["mutation.draft"] } : undefined;
   const hostToolClient = input.granted
-    ? makeT3TeamWorkflowHostDraftToolClient({
+    ? makeT3TeamWorkflowHostToolClient({
         broker,
         launchThreadId: runThreadId,
         allowedToolGroups: ["mutation.draft"],

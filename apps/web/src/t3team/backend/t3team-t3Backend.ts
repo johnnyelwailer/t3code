@@ -9,6 +9,7 @@ import {
 import { createAtlassianPollingBackendApi } from "./t3team-pollingBackend";
 import { createAtlassianProjectIssuesBackendApi } from "./t3team-projectIssuesBackend";
 import { createMyWorkDigestBackendApi } from "./t3team-myworkDigestBackendApi";
+import { createMyWorkDigestArrangementApi } from "./t3team-myworkDigestArrangementApi";
 import { createPrimaryEnvironmentOrchestrationApi } from "./t3team-orchestrationApi";
 import { postJson, resolveHttpBaseUrl, resolveWsUrl } from "./t3team-t3BackendHttp";
 import type {
@@ -108,6 +109,7 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     ...createAtlassianPollingBackendApi(httpBaseUrl),
     ...createAtlassianProjectIssuesBackendApi(httpBaseUrl),
     ...createMyWorkDigestBackendApi(httpBaseUrl),
+    ...createMyWorkDigestArrangementApi(httpBaseUrl),
   };
   const github = createGitHubBackendApi(httpBaseUrl);
   const projectWorkspace = createProjectWorkspaceBackendApi(httpBaseUrl);

@@ -35,6 +35,18 @@
       "types": "./src/userMessage.ts",
       "default": "./src/userMessage.ts"
     },
+    "./t3team-runPromptCopy": {
+      "types": "./src/t3team-runPromptCopy.ts",
+      "default": "./src/t3team-runPromptCopy.ts"
+    },
+    "./secret-request": {
+      "types": "./src/secretRequest.ts",
+      "default": "./src/secretRequest.ts"
+    },
+    "./scheduled-task-webhook": {
+      "types": "./src/scheduledTaskWebhook.ts",
+      "default": "./src/scheduledTaskWebhook.ts"
+    },
     "./connection": {
       "types": "./src/connection/index.ts",
       "default": "./src/connection/index.ts"
@@ -134,6 +146,10 @@
     "./text-paste": {
       "types": "./src/textPaste.ts",
       "default": "./src/textPaste.ts"
+    },
+    "./webhook-address": {
+      "types": "./src/webhookAddress.ts",
+      "default": "./src/webhookAddress.ts"
     },
     "./delayed-status": {
       "types": "./src/delayedStatus.ts",
@@ -259,6 +275,10 @@
       "types": "./src/state/t3team-threadArtifacts.ts",
       "default": "./src/state/t3team-threadArtifacts.ts"
     },
+    "./state/pack-documents": {
+      "types": "./src/state/t3team-packDocuments.ts",
+      "default": "./src/state/t3team-packDocuments.ts"
+    },
     "./state/message-framing": {
       "types": "./src/state/t3team-messageFraming.ts",
       "default": "./src/state/t3team-messageFraming.ts"
@@ -282,6 +302,10 @@
     "./state/thread-sort": {
       "types": "./src/state/threadSort.ts",
       "default": "./src/state/threadSort.ts"
+    },
+    "./state/thread-inbox": {
+      "types": "./src/state/threadInbox.ts",
+      "default": "./src/state/threadInbox.ts"
     },
     "./state/thread-relationships": {
       "types": "./src/state/threadRelationships.ts",
@@ -330,6 +354,10 @@
     "./work-log/user-input": {
       "types": "./src/work-log/userInput.ts",
       "default": "./src/work-log/userInput.ts"
+    },
+    "./work-log/item-detail": {
+      "types": "./src/work-log/itemDetail.ts",
+      "default": "./src/work-log/itemDetail.ts"
     },
     "./work-log/presentation": {
       "types": "./src/work-log/presentation.ts",

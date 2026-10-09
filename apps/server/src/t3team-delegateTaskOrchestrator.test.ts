@@ -121,19 +121,24 @@ it.layer(makeT3TeamV2TestLayer("t3team-delegate-task-workspace"))(
       }),
     );
 
-    it.effect("shares the parent's pull requests when it shares the parent's checkout", () =>
-      Effect.gen(function* () {
-        const child = yield* delegate({
-          parentThreadId: ThreadId.make("thread:delegate-inherit-pr-parent"),
-          key: "inherit-pr",
-          parentHasPullRequest: true,
-        });
-        assert.strictEqual(child?.linkedPullRequest?.number, 7);
-        assert.deepStrictEqual(
-          child?.pullRequests?.map((link) => link.number),
-          [7],
-        );
-      }),
+    // Upstream 7812230572 (#14918) made this unconditional: a delegated child's PR links
+    // stay independent of the parent even when it shares the parent's checkout, so a
+    // subagent's own PR activity is never conflated with the thread the user is reviewing.
+    // That superseded this fork's narrower rule ("shared checkout keeps sharing PRs");
+    // see `Orchestrator.control-reads.test.ts`'s "keeps delegated child pull-request links
+    // independent of the parent" for upstream's matching coverage of this same scenario.
+    it.effect(
+      "does not share the parent's pull requests even when it shares the parent's checkout",
+      () =>
+        Effect.gen(function* () {
+          const child = yield* delegate({
+            parentThreadId: ThreadId.make("thread:delegate-inherit-pr-parent"),
+            key: "inherit-pr",
+            parentHasPullRequest: true,
+          });
+          assert.strictEqual(child?.linkedPullRequest ?? null, null);
+          assert.deepStrictEqual(child?.pullRequests ?? [], []);
+        }),
     );
 
     it.effect("inherits the parent's checkout when no workspace is given", () =>

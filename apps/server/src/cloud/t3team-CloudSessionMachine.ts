@@ -24,6 +24,7 @@ import {
   type MachineRepository,
   machineGitAuthor,
   machineRepositoryFromRemote,
+  standbyPoolKey,
 } from "./t3team-cloudSessionMachineNames.ts";
 
 export interface CloudSessionMachine {
@@ -35,6 +36,16 @@ export interface CloudSessionMachine {
   /** The user's token for `repository.host`; travels only to the broker, as a session secret. */
   readonly token: string;
   /** The user's commit identity, so the machine's commits carry their name like their pushes do. */
+  readonly author: MachineGitAuthor;
+  /** Team secret names from `.nexi/machine.json`. Values stay on the repository. */
+  readonly teamSecretNames: ReadonlyArray<string>;
+}
+
+/** A project with no machine yet: the session clones it on the host so an agent can write one. */
+export interface CloudSessionSetup {
+  readonly repository: MachineRepository;
+  readonly commit: string;
+  readonly token: string;
   readonly author: MachineGitAuthor;
 }
 
@@ -60,6 +71,18 @@ export class CloudSessionMachines extends Context.Service<
     readonly resolve: (
       projectId: ProjectId,
     ) => Effect.Effect<CloudSessionMachine | null, CloudSessionFailedError>;
+    /**
+     * The checkout a setup session clones. Fails when the project already has a machine, or when
+     * its branch is not on `origin` yet.
+     */
+    readonly resolveSetup: (
+      projectId: ProjectId,
+    ) => Effect.Effect<CloudSessionSetup, CloudSessionFailedError>;
+    /**
+     * The project's warm pool (`<owner>.<repo>`) when it has a usable machine definition and an
+     * https origin, else null. Needs no sign-in: it only reads the checkout.
+     */
+    readonly poolKeyOf: (projectId: ProjectId) => Effect.Effect<string | null>;
   }
 >()("t3/cloud/t3team-CloudSessionMachine/CloudSessionMachines") {}
 
@@ -151,7 +174,23 @@ const make = Effect.gen(function* () {
       );
     }
 
-    // The user's own `gh` login for the repository host: the session clones and pushes as them.
+    const creds = yield* credentials(root, repository);
+    return {
+      repository,
+      commit,
+      devcontainerPath: machine.devcontainerPath,
+      healthCheck: machine.healthCheck,
+      teamSecretNames: machine.secrets
+        .filter((secret) => secret.scope === "team")
+        .map((secret) => secret.name),
+      ...creds,
+    } satisfies CloudSessionMachine;
+  });
+
+  const credentials = Effect.fn("cloud.session_machine.credentials")(function* (
+    root: string,
+    repository: MachineRepository,
+  ) {
     const token = yield* github
       .execute({
         cwd: root,
@@ -184,17 +223,55 @@ const make = Effect.gen(function* () {
             }),
         ),
       );
-    return {
-      repository,
-      commit,
-      author: machineGitAuthor(profile, repository.host),
-      devcontainerPath: machine.devcontainerPath,
-      healthCheck: machine.healthCheck,
-      token,
-    } satisfies CloudSessionMachine;
+    return { token, author: machineGitAuthor(profile, repository.host) };
   });
 
-  return CloudSessionMachines.of({ resolve });
+  const resolveSetup = Effect.fn("cloud.session_machine.resolve_setup")(function* (
+    projectId: ProjectId,
+  ) {
+    const found = yield* discovery
+      .resolveDefault(projectId)
+      .pipe(Effect.mapError((error) => unavailable(error.message)));
+    if (found.source !== null) {
+      return yield* unavailable(
+        "This project already has a machine. Start a cloud session to use it.",
+      );
+    }
+    const broken = found.discovery.rejected[0];
+    if (broken !== undefined) {
+      return yield* unavailable(`${broken.path} cannot be used: ${broken.reason}`);
+    }
+    const checkout = found.checkouts[0];
+    if (checkout === undefined) {
+      return yield* unavailable("This project has no repository to set a machine up in.");
+    }
+    const origin = yield* git(checkout.root, "machine.origin", ["remote", "get-url", "origin"]);
+    const repository = origin.ok ? machineRepositoryFromRemote(origin.stdout) : null;
+    if (repository === null) {
+      return yield* unavailable(
+        "This project has no origin remote a cloud session can clone over https.",
+      );
+    }
+    const commit = yield* pinnedCommit(checkout.root);
+    if (commit === null) {
+      return yield* unavailable(
+        "Push this project's branch so the setup machine can check it out.",
+      );
+    }
+    const creds = yield* credentials(checkout.root, repository);
+    return { repository, commit, ...creds } satisfies CloudSessionSetup;
+  });
+
+  const poolKeyOf = (projectId: ProjectId) =>
+    Effect.gen(function* () {
+      const { source } = yield* discovery.resolveDefault(projectId);
+      if (source === null) return null;
+      const origin = yield* git(source.root, "machine.origin", ["remote", "get-url", "origin"]);
+      const repository = origin.ok ? machineRepositoryFromRemote(origin.stdout) : null;
+      return repository === null ? null : standbyPoolKey(repository);
+    }).pipe(Effect.orElseSucceed(() => null));
+
+  return CloudSessionMachines.of({ resolve, resolveSetup, poolKeyOf });
 });
 
 export const layer = Layer.effect(CloudSessionMachines, make);

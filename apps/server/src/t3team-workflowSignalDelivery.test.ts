@@ -19,13 +19,11 @@
 import { assert, describe, it } from "@effect/vitest";
 import { assertInstanceOf } from "@effect/vitest/utils";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import { PersistenceSqlError } from "./persistence/Errors.ts";
-import type {
-  ClearWorkflowRunPendingInput,
-  WorkflowRun,
-} from "./persistence/Services/WorkflowRuns.ts";
-import type { InsertSignalInboxEntryInput } from "./persistence/Services/WorkflowSignalStore.ts";
+import type { ClearWorkflowRunPendingInput, WorkflowRun } from "./persistence/WorkflowRuns.ts";
+import type { InsertSignalInboxEntryInput } from "./persistence/WorkflowSignalStore.ts";
 import type { WorkflowRegisteredRun } from "./t3team-workflowEngineRegistry.ts";
 import {
   makeSignalDeliveryPort,
@@ -108,6 +106,7 @@ describe("makeSignalDeliveryPort", () => {
           listByStatus: () =>
             Effect.succeed([parkedA, parkedB, parkedOtherSignal, parkedOtherInstance]),
           clearPending: () => Effect.succeed(undefined),
+          getById: () => Effect.succeed(Option.none()),
         },
         store: {
           insertInboxEntry: (input) => {
@@ -153,6 +152,7 @@ describe("makeSignalDeliveryPort", () => {
         repo: {
           listByStatus: () => Effect.succeed([parkedElsewhere]),
           clearPending: () => Effect.succeed(undefined),
+          getById: () => Effect.succeed(Option.none()),
         },
         store: {
           insertInboxEntry: (input) => {
@@ -200,6 +200,7 @@ describe("makeSignalDeliveryPort", () => {
               cleared.push(input);
               return Effect.succeed(undefined);
             },
+            getById: () => Effect.succeed(Option.none()),
           },
           store: { insertInboxEntry: () => Effect.succeed(1) },
           registry: { getRun: () => undefined },
@@ -241,6 +242,7 @@ describe("makeSignalDeliveryPort", () => {
             cleared.push(input);
             return Effect.succeed(undefined);
           },
+          getById: () => Effect.succeed(Option.none()),
         },
         store: { insertInboxEntry: () => Effect.succeed(1) },
         registry: { getRun: () => undefined },
@@ -270,6 +272,7 @@ describe("makeSignalDeliveryPort", () => {
           repo: {
             listByStatus: () => Effect.succeed([parked]),
             clearPending: () => Effect.succeed(undefined),
+            getById: () => Effect.succeed(Option.none()),
           },
           store: { insertInboxEntry: () => Effect.succeed(1) },
           registry: {

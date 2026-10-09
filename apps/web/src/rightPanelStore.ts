@@ -8,17 +8,13 @@
  * workspace paths, and diff/files remain singleton surfaces.
  */
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import {
-  EnvironmentId,
-  ThreadId,
-  type ChatFileAttachment,
-  type ScopedThreadRef,
-} from "@t3tools/contracts";
+import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { resolveStorage } from "./lib/storage";
 import type { ThreadPanelPresentation } from "./rightPanelLayout";
+import type { ChatFileAttachment } from "./types";
 
 const RIGHT_PANEL_KINDS = [
   "diff",
@@ -114,10 +110,20 @@ export const PULL_REQUESTS_PANEL_REF = scopeThreadRef(
 );
 
 /**
- * The pull-request list's shared panel is session
- * state: reopening the app should show the list, not last session's tabs and detail fetches.
+ * Fixed workspace-level ref for My Work's shared aside (project dashboard + all-projects home).
+ * Same session-scoped rule as the pull-request list: restart must not restore stale tabs.
  */
-const isPullRequestsPanelKey = (threadKey: string) => threadKey.endsWith(":pull-requests-panel");
+export const MY_WORK_PANEL_REF = scopeThreadRef(
+  EnvironmentId.make("my-work-panel"),
+  ThreadId.make("my-work-panel"),
+);
+
+/**
+ * Shared workspace panels are session state: reopening the app should show the
+ * list/home, not last session's tabs and detail fetches.
+ */
+const isSessionScopedPanelKey = (threadKey: string) =>
+  threadKey.endsWith(":pull-requests-panel") || threadKey.endsWith(":my-work-panel");
 
 export interface ThreadRightPanelState {
   isOpen: boolean;
@@ -451,7 +457,7 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
     typeof persistedState.byThreadKey === "object"
       ? Object.fromEntries(
           Object.entries(persistedState.byThreadKey as Record<string, ThreadRightPanelState>)
-            .filter(([threadKey]) => !isPullRequestsPanelKey(threadKey))
+            .filter(([threadKey]) => !isSessionScopedPanelKey(threadKey))
             .map(([threadKey, threadState]) => {
               const validThreadState =
                 threadState && typeof threadState === "object" ? threadState : null;
@@ -1034,7 +1040,7 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
       partialize: (state) => ({
         byThreadKey: Object.fromEntries(
           Object.entries(state.byThreadKey).filter(
-            ([threadKey]) => !isPullRequestsPanelKey(threadKey),
+            ([threadKey]) => !isSessionScopedPanelKey(threadKey),
           ),
         ),
         threadPanelVisibilityByThreadKey: Object.fromEntries(

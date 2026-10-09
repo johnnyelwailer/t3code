@@ -8,6 +8,9 @@
  *   entries, with the recipient HELD as V1's restart rehydrate held it: nothing
  *   is delivered on upgrade; the digest arrives once the user writes in that
  *   thread again (the hold lifts like a user-stop hold).
+ * - rows copied by a V1 transcript-copy fork (`fork:` message ids) run last, so the
+ *   original thread keeps the artifact ids; a copy whose id another thread already
+ *   owns gets its own id (`legacyForkCopyArtifact`).
  *
  * Runs once per database (ledger step `v1-rich-messages` in `t3team_v2_cutover`),
  * right after the lineage cutover at startup. Every write is idempotent, and a
@@ -19,7 +22,7 @@ import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { T3TEAM_ACTOR_MESSAGE_HOP_CAP } from "../../t3team-actorMessageReactorLimits.ts";
 import { T3TeamThreadArtifactsStore } from "../../t3team-v2/t3team-threadArtifactsStore.ts";
@@ -28,6 +31,7 @@ import {
   collectPendingV1Deliveries,
   type LegacyActorRow,
   type LegacySystemRow,
+  legacyForkCopyArtifact,
   legacySystemRowArtifacts,
 } from "./t3team-legacyRichMessages.ts";
 
@@ -63,13 +67,19 @@ export const runLegacyRichMessageCutover = Effect.gen(function* () {
         FROM projection_thread_messages
         WHERE role = 'system' AND json_valid(${extSql})
           AND json_type(${extSql}, '$.attachments') = 'array'
-        ORDER BY created_at ASC, message_id ASC
+        ORDER BY (message_id LIKE 'fork:%') ASC, created_at ASC, message_id ASC
       `;
       let artifactCount = 0;
       for (const row of systemRows) {
         if (!live.has(row.threadId)) continue;
         for (const artifact of legacySystemRowArtifacts({ ...row, visible: row.visible !== 0 })) {
-          yield* artifactsStore.upsert(artifact);
+          // A V1 fork copy derives its parent's artifact id; the first thread keeps it.
+          const owner = yield* artifactsStore.get(artifact.id);
+          yield* artifactsStore.upsert(
+            owner !== null && owner.threadId !== artifact.threadId
+              ? legacyForkCopyArtifact(artifact)
+              : artifact,
+          );
           artifactCount += 1;
         }
       }

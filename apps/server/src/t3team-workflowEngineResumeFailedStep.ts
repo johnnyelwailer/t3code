@@ -17,7 +17,7 @@
  */
 import * as Effect from "effect/Effect";
 
-import type { WorkflowRunRepositoryShape } from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowRunRepositoryShape } from "./persistence/WorkflowRuns.ts";
 import { createWorkflowRunController } from "./t3team-workflowEngineController.ts";
 import type { LaunchWorkflowRecipeInput } from "./t3team-workflowEngineLaunchTypes.ts";
 import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";

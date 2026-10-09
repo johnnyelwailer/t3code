@@ -8,7 +8,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
-import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import { TestClock } from "effect/testing";
 
 import * as ProcessRunner from "../processRunner.ts";
@@ -26,7 +26,7 @@ const git = (cwd: string, args: ReadonlyArray<string>) =>
     });
   }).pipe(Effect.provide(ProcessRunner.layer));
 
-const makeRepositoryIdentityResolverTestLayer = (options: {
+const layerRepositoryIdentityResolverTest = (options: {
   readonly positiveCacheTtl?: Duration.Input;
   readonly negativeCacheTtl?: Duration.Input;
 }) =>
@@ -45,7 +45,7 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
     let remoteUrl = "git@github.com:T3Tools/t3code.git";
     let refinements = 0;
     let refinementFails = false;
-    const processRunner = Layer.succeed(ProcessRunner.ProcessRunner, {
+    const layerProcessRunner = Layer.succeed(ProcessRunner.ProcessRunner, {
       run: (input) =>
         Effect.sync(() => {
           calls.push(input.args);
@@ -63,7 +63,7 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
           };
         }),
     });
-    const resolverLayer = Layer.effect(
+    const layerResolver = Layer.effect(
       RepositoryIdentityResolver.RepositoryIdentityResolver,
       RepositoryIdentityResolver.make({
         refine: (identity) => {
@@ -88,7 +88,7 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
           );
         },
       }),
-    ).pipe(Layer.provide(processRunner));
+    ).pipe(Layer.provide(layerProcessRunner));
 
     return Effect.gen(function* () {
       const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
@@ -125,13 +125,13 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
       const unavailable = yield* resolver.resolve(rootPath, { refresh: true });
       expect(unavailable?.webUrl).toBeUndefined();
       expect(unavailable?.canonicalKey).toBe("ssh.forge.test/team/repo");
-    }).pipe(Effect.provide(Layer.merge(TestClock.layer(), resolverLayer)));
+    }).pipe(Effect.provide(Layer.merge(TestClock.layer(), layerResolver)));
   });
 
   it.effect("retries Git root discovery after the negative TTL", () => {
     const calls: Array<ReadonlyArray<string>> = [];
     let rootAttempts = 0;
-    const processRunner = Layer.succeed(ProcessRunner.ProcessRunner, {
+    const layerProcessRunner = Layer.succeed(ProcessRunner.ProcessRunner, {
       run: (input) =>
         Effect.sync(() => {
           calls.push(input.args);
@@ -153,10 +153,10 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
           };
         }),
     });
-    const resolverLayer = Layer.effect(
+    const layerResolver = Layer.effect(
       RepositoryIdentityResolver.RepositoryIdentityResolver,
       RepositoryIdentityResolver.make(),
-    ).pipe(Layer.provide(processRunner));
+    ).pipe(Layer.provide(layerProcessRunner));
 
     return Effect.gen(function* () {
       const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
@@ -171,7 +171,7 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
         ["-C", "/repo/packages/web", "rev-parse", "--show-toplevel"],
         ["-C", "/repo", "remote", "-v"],
       ]);
-    }).pipe(Effect.provide(Layer.merge(TestClock.layer(), resolverLayer)));
+    }).pipe(Effect.provide(Layer.merge(TestClock.layer(), layerResolver)));
   });
 
   it.effect("normalizes equivalent GitHub remotes into a stable repository identity", () =>
@@ -311,6 +311,38 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
       }).pipe(Effect.provide(RepositoryIdentityResolver.layer)),
   );
 
+  // Upstream 017c9a0eb5 (#16353) added `origin` assuming `pickPrimaryRemote` resolves to
+  // `upstream` first: canonicalKey stays the upstream project (for PR features) while `origin`
+  // reports the checkout's own remote, so sidebar grouping can key off it instead. This fork
+  // resolves the OTHER way on purpose ("prefers origin over upstream when both remotes are
+  // configured" above, from 4d741b4ca0 / #239): PRs in this workflow target the fork itself
+  // (AGENTS.md's "never target upstream" rule), and `t3team-github-pr-project-resolver.ts`
+  // matches inbound webhook repositories against `identity.displayName`, so a fork's canonical
+  // identity has to BE the fork, not upstream, or webhook PR-context resolution breaks for every
+  // forked project. Under that preference, this checkout's canonical identity already IS its own
+  // `origin` remote, so `origin` has nothing left to report (it's only ever populated for the
+  // opposite, upstream-first orientation) — a fork's own repo never groups with its upstream's
+  // project here, same end result as upstream's fix, by a different, already-load-bearing route.
+  it.effect("keeps a fork's own remote as the canonical identity next to the upstream remote", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const cwd = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-repository-identity-fork-test-",
+      });
+
+      yield* git(cwd, ["init"]);
+      yield* git(cwd, ["remote", "add", "origin", "git@github.com:julius/t3code-fork.git"]);
+      yield* git(cwd, ["remote", "add", "upstream", "git@github.com:T3Tools/t3code.git"]);
+
+      const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
+      const identity = yield* resolver.resolve(cwd);
+
+      expect(identity?.canonicalKey).toBe("github.com/julius/t3code-fork");
+      expect(identity?.displayName).toBe("julius/t3code-fork");
+      expect(identity?.origin).toBeUndefined();
+    }).pipe(Effect.provide(RepositoryIdentityResolver.layer)),
+  );
+
   it.effect("uses the last remote path segment as the repository name for nested groups", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -364,7 +396,7 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
         Effect.provide(
           Layer.merge(
             TestClock.layer(),
-            makeRepositoryIdentityResolverTestLayer({
+            layerRepositoryIdentityResolverTest({
               negativeCacheTtl: Duration.millis(50),
               positiveCacheTtl: Duration.seconds(1),
             }),
@@ -405,7 +437,7 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
       Effect.provide(
         Layer.merge(
           TestClock.layer(),
-          makeRepositoryIdentityResolverTestLayer({
+          layerRepositoryIdentityResolverTest({
             negativeCacheTtl: Duration.millis(50),
             positiveCacheTtl: Duration.millis(100),
           }),

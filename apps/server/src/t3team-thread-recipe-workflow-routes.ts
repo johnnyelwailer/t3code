@@ -4,14 +4,11 @@ import {
   ProviderInstanceId,
   ThreadId,
 } from "@t3tools/contracts";
-import { PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH } from "@t3tools/project-recipes";
 import type { LaunchProjectRecipeWorkflowRequest } from "@t3tools/project-recipes";
 import { toPhysicalProjectStatePath } from "@t3tools/project-context/t3teamProjectStateDir";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
-import * as FileSystem from "effect/FileSystem";
-import { HttpRouter } from "effect/unstable/http";
+import { HttpRouter } from "effect/http";
 
 import { expandHomePath } from "./pathExpansion.ts";
 import {
@@ -20,51 +17,25 @@ import {
   readJsonBody,
   T3TeamAtlassianError,
 } from "./t3team-atlassian-http.ts";
-import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { toT3TeamError } from "./t3team-project-repository-utils.ts";
 import { resolveLaunchWorkflowPath } from "./t3team-projectRecipeActionLaunch.ts";
-import { t3teamRandomUUID } from "./t3team-random.ts";
-import { resolveRecipeWorkflowScripts } from "./t3team-recipeWorkflowScripts.ts";
-import { launchPreparedWorkflow } from "./t3team-workflowEphemeralLaunch.ts";
+import { launchRecipeWorkflow } from "./t3team-recipeWorkflowLaunch.ts";
 import {
   isProviderInteractionMode,
   isRuntimeMode,
-  loadThreadProjectContext,
 } from "./t3team-thread-recipe-workflow-routes-shared.ts";
-import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
-import { T3TeamWorkflowHost, toWorkflowHostPort } from "./t3team-workflowHost.ts";
-import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
-import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
-import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
-import { resolveRecipeHostToolScope } from "./t3team-recipeWorkflowToolScope.ts";
-import { T3TeamWorkflowSignalReconciler } from "./t3team-workflowSignalReconciler.ts";
-import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
 
 export { t3teamThreadWorkflowResolveInputRouteLayer } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
 
 /**
- * Launch a recipe's `.workflow.ts` through the durable engine (Epic 25). Replaces the legacy
- * step-union launch: it resolves the launching thread's project, builds a per-run
- * orchestration broker, and calls `startWorkflow`. A run that fires an ask verb suspends and is
- * parked by the registry; the workflow-engine reactor resumes it when the reply lands.
+ * Launch a recipe's `.workflow.ts` through the durable engine (Epic 25): decodes the request and
+ * hands it to {@link launchRecipeWorkflow}. A run that fires an ask verb suspends and is parked by
+ * the registry; the workflow-engine reactor resumes it when the reply lands.
  */
 export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3team/thread/recipe-workflow/launch",
   Effect.gen(function* () {
-    const host = toWorkflowHostPort(yield* T3TeamWorkflowHost);
-    const registry = yield* T3TeamWorkflowEngineRegistry;
-    const runRepository = yield* WorkflowRunRepository;
-    const journalStore = yield* WorkflowJournalStore;
-    const scheduler = yield* T3TeamWorkflowScheduler;
-    // Durable signal-source state (GHE #332); optional so test layers without the signal
-    // services still launch — a run then simply has no signal verbs.
-    const signalStore = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowSignalStore));
-    const signalReconciler = Option.getOrUndefined(
-      yield* Effect.serviceOption(T3TeamWorkflowSignalReconciler),
-    );
-    const toolBroker = yield* T3TeamToolBroker;
     const input = yield* readJsonBody<LaunchProjectRecipeWorkflowRequest>();
 
     const threadIdInput = input.threadId?.trim() ?? "";
@@ -82,9 +53,9 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
     }
     // Single expansion point (pathExpansion.ts): a workspace-root recipePath may carry a literal
     // `~`; expand it ONCE so every downstream use below — plus the persisted run row — agrees.
-    const recipePath =
-      input.launch.recipePath &&
-      toPhysicalProjectStatePath(expandHomePath(input.launch.recipePath));
+    const recipePath = input.launch.recipePath
+      ? toPhysicalProjectStatePath(expandHomePath(input.launch.recipePath))
+      : undefined;
     // One recipe, several actions (Epic 16): a named action is resolved from the recipe's own
     // module, so it can only select a workflow the recipe declares. No name ⇒ defaultAction.
     const workflowPath = yield* resolveLaunchWorkflowPath({
@@ -115,102 +86,20 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
       ProviderInstanceId.make(modelInstanceId),
       modelName,
     );
-    const { project, thread } = yield* loadThreadProjectContext(threadId);
-
-    const runId = t3teamRandomUUID();
-    const args = input.launch.parameters ?? {};
-
-    // Stamp the launch thread with a recipe-launch activity BEFORE starting the run. The web
-    // composer arms a one-shot "launch this recipe" override while a thread has a recipe
-    // kickoffWorkflow and no launch activity yet; without this stamp the override never disarms,
-    // so the very first reply a user types to answer the workflow's `askUser` re-launches the
-    // recipe instead of resolving the pending ask (and the initial launch can double-fire).
-    // On V2 the stamp is a keyed thread artifact (the host's activity), not a V1 activity.
-    yield* Effect.promise(() =>
-      host.upsertActivity({
-        threadId: threadIdInput,
-        id: `t3team-recipe-launch:${runId}`,
-        kind: PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH,
-        tone: "info",
-        summary: "Recipe started",
-        payload: { workflowRunId: runId },
-      }),
-    );
-
-    // The launching recipe's private scripts (Epic 25 §Scripts): a `recipe.ts` recipe module's
-    // `scripts` registration becomes the body's `scripts.*` tree. recipe.json recipes (no
-    // module) resolve to an empty record and the engine keeps its `scripts: {}` default.
-    const scripts = yield* resolveRecipeWorkflowScripts({
+    const result = yield* launchRecipeWorkflow({
+      threadId,
       recipePath,
       workflowPath,
-    });
-
-    // The body's `getTools()` bridge to the broker's work-item DRAFT tools, bound to THIS thread so
-    // a proposal lands where the user launched it. Scope comes from the RECIPE MODULE, never from
-    // the client-supplied `input.launch.allowedToolGroups` (a caller that omitted it would be
-    // handed unrestricted scope); unresolvable ⇒ no bridge at all, and the resolved scope is what
-    // is persisted as the grant, so a restart restores this rather than the request.
-    const hostToolScope = yield* resolveRecipeHostToolScope({
-      recipePath,
-      workflowPath,
-    });
-    if (hostToolScope.kind === "denied") {
-      yield* Effect.logDebug("workflow launch runs without host tools", {
-        runId,
-        reason: hostToolScope.reason,
-      });
-    }
-    const hostToolGrant =
-      hostToolScope.kind === "granted" ? { toolGroups: hostToolScope.toolGroups } : undefined;
-    const hostToolClient =
-      hostToolScope.kind === "granted"
-        ? makeT3TeamWorkflowHostDraftToolClient({
-            broker: toolBroker,
-            launchThreadId: threadIdInput,
-            allowedToolGroups: hostToolScope.toolGroups,
-          })
-        : undefined;
-
-    // Shared launch-prep (spec D10): durable lifecycle row (origin 'recipe'), best-effort
-    // play-as-shape preview, then the durable engine launch — the same funnel the ephemeral
-    // `t3team.orchestration.run` tool drives through.
-    const fileSystem = yield* FileSystem.FileSystem;
-    const result = yield* launchPreparedWorkflow(
-      {
-        registry,
-        runRepository,
-        journalStore,
-        rearmScheduler: () => scheduler.rearm(),
-        host,
-        fileSystem,
-        ...(signalStore === undefined
-          ? {}
-          : {
-              signalStore,
-              ...(signalReconciler === undefined
-                ? {}
-                : { pokeSignalReconcile: () => void signalReconciler.reconcile().catch(() => {}) }),
-            }),
+      args: input.launch.parameters ?? {},
+      modelSelection,
+      runtimeMode,
+      interactionMode,
+      recipe: {
+        id: input.launch.recipeId,
+        version: input.launch.recipeVersion,
+        action: actionName,
       },
-      {
-        runId,
-        workflowPath,
-        args,
-        // Persist the recipe dir alongside the resolved scripts so a restart can re-resolve
-        // them during rehydration (a scriptless launch needs neither).
-        ...(Object.keys(scripts).length === 0 ? {} : { scripts, recipePath }),
-        ...(hostToolClient === undefined || hostToolGrant === undefined
-          ? {}
-          : { hostToolClient, hostToolGrant }),
-        workspaceRoot: project.workspaceRoot,
-        launchThreadId: threadIdInput,
-        projectId: thread.projectId,
-        modelSelection,
-        runtimeMode,
-        interactionMode,
-        origin: "recipe",
-      },
-    );
+    });
 
     return okJson({ ok: true, mode: "engine", runId: result.runId, status: result.status });
   }).pipe(

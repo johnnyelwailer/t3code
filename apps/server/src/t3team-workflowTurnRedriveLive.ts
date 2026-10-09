@@ -15,7 +15,7 @@ import * as Effect from "effect/Effect";
 import type * as Scope from "effect/Scope";
 
 import type { ThreadManagementServiceShape } from "./orchestration-v2/ThreadManagementService.ts";
-import type { WorkflowRunRepositoryShape } from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowRunRepositoryShape } from "./persistence/WorkflowRuns.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import {
   type InterruptedTurnRetry,

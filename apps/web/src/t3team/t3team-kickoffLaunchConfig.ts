@@ -43,11 +43,16 @@ export function createDefaultT3TeamKickoffLaunchConfig(): T3TeamKickoffLaunchCon
 
 export function getT3TeamKickoffProviderBlocker(input: {
   readonly isConnected: boolean;
+  /** When set, "connecting" is not reported as disconnected (matches the thread composer). */
+  readonly connectionStatus?: "disconnected" | "connecting" | "connected" | "error";
   readonly hasConfiguredProviders?: boolean;
   readonly providerInstanceEntries: ReadonlyArray<ProviderInstanceEntry>;
   readonly selectedProviderEntry: ProviderInstanceEntry | undefined;
 }): string | null {
-  if (!input.isConnected) return "Server is disconnected.";
+  if (!input.isConnected) {
+    if (input.connectionStatus === "connecting") return "Connecting to the server…";
+    return "Server is disconnected.";
+  }
   if (input.providerInstanceEntries.length === 0) {
     if (input.hasConfiguredProviders) {
       return "Loading provider status...";

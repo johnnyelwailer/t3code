@@ -22,19 +22,32 @@ export function runOnRows(
   environments: readonly EnvironmentOption[],
   sessions: readonly CloudSession[],
   activeEnvironmentId: EnvironmentOption["environmentId"],
-  connectedEnvironmentIds: ReadonlySet<string> = new Set(),
+  known: {
+    /** Every environment connected on this client, whatever its project. */
+    readonly connected?: ReadonlySet<string> | undefined;
+    /** Environments that are cloud machines (reached through the cloud-session broker). */
+    readonly cloud?: ReadonlySet<string> | undefined;
+  } = {},
 ): { readonly machines: EnvironmentOption[]; readonly cloud: RunOnCloudRow[] } {
   const sessionByEnvironment = new Map(
     sessions.flatMap((session) =>
       session.environmentId === undefined ? [] : [[session.environmentId, session] as const],
     ),
   );
+  const connectedEnvironmentIds = known.connected ?? new Set<string>();
   const cloudEnvironments = new Map<string, EnvironmentOption>();
   const others: EnvironmentOption[] = [];
   for (const environment of environments) {
     const session = sessionByEnvironment.get(environment.environmentId);
-    if (session === undefined) others.push(environment);
-    else
+    if (session === undefined) {
+      // A cloud machine with no live session and no connection has finished: nothing can run on
+      // it, and the workspace's next session lists itself. Still shown while it is this thread's.
+      const finished =
+        known.cloud?.has(environment.environmentId) === true &&
+        !connectedEnvironmentIds.has(environment.environmentId) &&
+        environment.environmentId !== activeEnvironmentId;
+      if (!finished) others.push(environment);
+    } else
       cloudEnvironments.set(environment.environmentId, {
         ...environment,
         label: cloudSessionDisplayName(session),

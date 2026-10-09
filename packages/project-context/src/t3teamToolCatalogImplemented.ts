@@ -28,33 +28,37 @@ const WIDGET_SHOW_INPUT_SCHEMA = {
         "Short snake_case identifier for this widget (e.g. 'q4_revenue_chart'). Used as the artifact name.",
       minLength: 1,
     },
+    intent: {
+      type: "string",
+      description:
+        "Preferred default: describe what to show. A builder subagent authors the widget (theme/icon contract) and html output goes through the upstream HTML render shim. Omit when passing widget_code.",
+    },
     widget_code: {
       type: "string",
       description: T3TEAM_WIDGET_AUTHORING_GUIDANCE,
-      minLength: 1,
     },
     format: {
       type: "string",
+      enum: ["html", "svg"],
       description:
-        "Widget fidelity tier. 'html'/'svg': instant, sandboxed iframe with theme CSS variables and the sendPrompt/callTool bridge (default; auto-detected from widget_code — starts with <svg → svg, else html). 'mdx': trusted whitelisted first-party components rendered inline (not yet available). 'tsx': full React view via the registered-view compose pipeline — slower, design-system-native (not yet available).",
-      enum: ["html", "svg", "mdx", "tsx"],
+        "html is shimmed onto upstream html_render storage/theme; svg stays on the widget tier.",
     },
     loading_messages: {
       type: "array",
-      description: "Optional short placeholder messages shown while the widget renders.",
       items: { type: "string" },
     },
     capabilities: {
       type: "object",
       additionalProperties: false,
-      description:
-        "Optional runtime capabilities. tools is an allowlist of t3team broker tool names the widget's window.host.callTool bridge may invoke. Omitted or empty = no tool access.",
       properties: {
-        tools: { type: "array", items: { type: "string" } },
+        tools: {
+          type: "array",
+          items: { type: "string" },
+        },
       },
     },
   },
-  required: ["title", "widget_code"],
+  required: ["title"],
 } as const;
 
 const ASK_USER_INPUT_SCHEMA = {
@@ -219,7 +223,9 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       "here) and optional 'args' (the orchestration's input); a dedicated author agent writes, " +
       "validates and launches the source (persisted under .t3team-runs/<runId>/). Pass " +
       "'workflowPath' only to run an existing saved .workflow.ts as-is (body format: " +
-      `${PROJECT_STATE_DIR}/recipes/AUTHORING.md). Returns {runId, status: authoring|accepted, ` +
+      `${PROJECT_STATE_DIR}/recipes/AUTHORING.md); pass 'recipe' (an id from the recipe list) ` +
+      "and optional 'action' to run a recipe with its own scripts and tool scope. Returns " +
+      "{runId, status: authoring|accepted, " +
       "handoff: 'workflow-ui'} " +
       "immediately; the orchestration card shows authoring → running → the result, and only a " +
       "genuinely unfixable outcome is reported back, once. After the handoff, end the current " +
@@ -243,6 +249,17 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
           type: "string",
           description:
             "Path to an existing saved .workflow.ts to run as-is, relative to the project workspace root (absolute paths must stay inside the workspace). Omit to have the orchestration authored from intent.",
+          minLength: 1,
+        },
+        recipe: {
+          type: "string",
+          description:
+            "A recipe id from the recipe list; the project's own recipe wins over a pack's. Runs it with its scripts and tool scope.",
+          minLength: 1,
+        },
+        action: {
+          type: "string",
+          description: "The recipe action to run with 'recipe'; omit for its default action.",
           minLength: 1,
         },
         args: {

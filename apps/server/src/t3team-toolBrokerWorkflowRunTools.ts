@@ -25,11 +25,10 @@ import { resolveWorkflowAuthorModel } from "./t3team-workflowAuthorModel.ts";
 import { workflowAuthorSessionForThread } from "./t3team-workflowAuthorSession.ts";
 import { submitAuthoredWorkflowSource } from "./t3team-workflowAuthorSubmit.ts";
 import type { PreparedWorkflowLaunchDeps } from "./t3team-workflowEphemeralLaunch.ts";
-import {
-  launchDetachedWorkflow,
-  prepareDirectWorkflowLaunch,
-} from "./t3team-workflowRunDirectLaunch.ts";
+import { launchDetachedWorkflow } from "./t3team-workflowRunDirectLaunch.ts";
+import { resolveRunTarget } from "./t3team-toolBrokerWorkflowRunTarget.ts";
 import { recentActiveLaunchBlocker } from "./t3team-workflowRunLaunchBlocker.ts";
+import * as RecipeRun from "./t3team-toolBrokerWorkflowRunRecipe.ts";
 
 export { recentActiveLaunchBlocker } from "./t3team-workflowRunLaunchBlocker.ts";
 
@@ -39,6 +38,8 @@ const nowIso = () => DateTime.formatIso(DateTime.nowUnsafe());
 export interface RunWorkflowHandlerArgs {
   readonly source?: string | undefined;
   readonly workflowPath?: string | undefined;
+  readonly recipe?: string | undefined;
+  readonly action?: string | undefined;
   readonly args?: unknown;
   readonly intent: WorkflowRunIntent;
   /** Stop this still-active run (launched from the same thread) before launching the new one. */
@@ -83,6 +84,8 @@ export interface WorkflowRunToolDeps<E> {
   readonly nowMs?: (() => number) | undefined;
   /** Test seam: the author turn's wall-clock ceiling. */
   readonly authorTurnTimeoutMs?: number | undefined;
+  /** Runs `recipe` by id with its bindings; absent refuses `recipe`. */
+  readonly recipeRun?: RecipeRun.RecipeRunByIdDeps | undefined;
 }
 
 export function makeWorkflowRunToolHandlers<E>(
@@ -113,19 +116,25 @@ export function makeWorkflowRunToolHandlers<E>(
         const providers =
           deps.listProviders === undefined ? undefined : yield* deps.listProviders();
         const runId = t3teamRandomUUID();
-        const requestedPath = args.workflowPath?.trim() ?? "";
-        const pinnedPath =
-          requestedPath.length === 0
-            ? undefined
-            : yield* prepareDirectWorkflowLaunch({
-                fileSystem,
-                path,
-                workspaceRoot,
-                runId,
-                workflowPath: requestedPath,
-                providers,
-                baseModelSelection: modelSelection,
-              });
+        const common = {
+          runId,
+          args: args.args ?? {},
+          workspaceRoot,
+          launchThreadId: threadId,
+          projectId: thread.projectId,
+          modelSelection,
+          runtimeMode: thread.runtimeMode,
+          interactionMode: thread.interactionMode,
+        };
+        const { recipeRun, pinnedPath } = yield* resolveRunTarget({
+          ...common,
+          recipeRun: deps.recipeRun,
+          args,
+          fileSystem,
+          path,
+          threadId,
+          providers,
+        });
 
         // Arguments are valid; now the one launch-per-turn rule (GHE #415), before anything durable.
         const recentRows = yield* deps.launch.runRepository
@@ -145,16 +154,13 @@ export function makeWorkflowRunToolHandlers<E>(
         }
 
         const launch: PreparedWorkflowLaunchDeps = { ...deps.launch, fileSystem, path };
-        const common = {
-          runId,
-          args: args.args ?? {},
-          workspaceRoot,
-          launchThreadId: threadId,
-          projectId: thread.projectId,
-          modelSelection,
-          runtimeMode: thread.runtimeMode,
-          interactionMode: thread.interactionMode,
-        };
+        if (recipeRun !== undefined) {
+          return yield* RecipeRun.launchRecipeRun(recipeRun, launch, {
+            ...common,
+            threadId,
+            intent: args.intent,
+          });
+        }
         if (pinnedPath !== undefined) {
           return yield* launchDetachedWorkflow(launch, {
             ...common,
