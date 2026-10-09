@@ -41,6 +41,15 @@ export interface BackendApi {
   readonly launchRecipeWorkflow: (
     input: LaunchProjectRecipeWorkflowRequest,
   ) => Promise<LaunchProjectRecipeWorkflowResponse>;
+  /** Headless recipe launch (S5b): no thread — the run belongs to the project only. Optional so
+   * surface-scoped mock backends can omit it; `launchRecipe` rejects on its absence. */
+  readonly launchRecipeHeadless?: (input: {
+    readonly projectId: string;
+    readonly recipeId: string;
+    readonly action?: string;
+    readonly args?: Record<string, unknown>;
+    readonly surfaceContext?: Record<string, unknown>;
+  }) => Promise<{ readonly runId: string; readonly status: string }>;
   readonly submitRecipeCardAction: (
     input: SubmitProjectRecipeCardActionRequest,
   ) => Promise<SubmitProjectRecipeCardActionResponse>;

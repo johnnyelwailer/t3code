@@ -363,6 +363,8 @@ export type {
   RecipeGuidanceStyle,
   RecipeRef,
   RecipeTechnicalDepth,
+  RecipeTriggerSelectContext,
+  RecipeTriggerSpec,
   RecipeVisiblePredicate,
   RegisteredWorkflowScriptsTree,
   RegisteredWorkflowToolsTree,

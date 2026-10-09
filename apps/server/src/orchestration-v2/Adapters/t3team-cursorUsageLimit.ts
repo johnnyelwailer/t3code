@@ -21,13 +21,13 @@ const RESET_DATE = /\breturn on (\d{1,2})\/(\d{1,2})\/(\d{4})\b/i;
  * With an already-passed reset day, probe again after this long: a probe is one run that fails at
  * once while the limit holds, and the worker re-arms with a fresh `resetAt` each time.
  */
-export const CURSOR_USAGE_LIMIT_PROBE_MS = 60 * 60 * 1000;
+const CURSOR_USAGE_LIMIT_PROBE_MS = 60 * 60 * 1000;
 
 /**
  * "You're out of usage" names no reset at all (the pool can stay empty until the monthly cycle),
  * so probe slowly: ~6 runs a day while auto-resume is on, instead of 24.
  */
-export const CURSOR_USAGE_LIMIT_NO_RESET_PROBE_MS = 4 * CURSOR_USAGE_LIMIT_PROBE_MS;
+const CURSOR_USAGE_LIMIT_NO_RESET_PROBE_MS = 4 * CURSOR_USAGE_LIMIT_PROBE_MS;
 
 export const isCursorUsageLimitText = (message: string): boolean => USAGE_LIMIT_TEXT.test(message);
 
