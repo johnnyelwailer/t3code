@@ -63,7 +63,7 @@ export const launchScenarioWorkflow = (
     readonly projectId: ProjectId;
     readonly runsRoot: string;
     readonly args?: unknown;
-  } & Partial<Pick<LaunchWorkflowRecipeInput, "lifecycle" | "store" | "scripts">>,
+  } & Partial<Pick<LaunchWorkflowRecipeInput, "lifecycle" | "store" | "scripts" | "recipePath">>,
 ) =>
   Effect.gen(function* () {
     const registry = yield* T3TeamWorkflowEngineRegistry;
@@ -98,6 +98,7 @@ export const launchScenarioWorkflow = (
         ...(input.lifecycle === undefined ? {} : { lifecycle: input.lifecycle }),
         ...(input.store === undefined ? {} : { store: input.store }),
         ...(input.scripts === undefined ? {} : { scripts: input.scripts }),
+        ...(input.recipePath === undefined ? {} : { recipePath: input.recipePath }),
       }),
     );
     return { launched, completed, errors, host };

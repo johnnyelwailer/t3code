@@ -50,6 +50,7 @@ function harness() {
     launchThread: async () => ({ ok: false, error: "unused" }),
     launchedThread: async () => ({ ok: false, error: "unused" }),
     setRunFacts: async () => ({ ok: false, error: "unused" }),
+    resolveRecipeConfig: async () => ({ ok: false, error: "unused" }),
   };
   const broker = createWorkflowEngineBroker({
     runId: "run",

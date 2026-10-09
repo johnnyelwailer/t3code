@@ -36,7 +36,7 @@ export function makeFakeWorkflowHost(options: { readonly failOn?: keyof Workflow
     };
   // The launch verbs answer; a fake host that does not launch refuses, as a host without it would.
   const refusingLaunch =
-    <K extends "launchThread" | "launchedThread" | "setRunFacts">(op: K) =>
+    <K extends "launchThread" | "launchedThread" | "setRunFacts" | "resolveRecipeConfig">(op: K) =>
     async (input: Parameters<WorkflowHostPort[K]>[0]) => {
       calls.push({ op, input } as FakeWorkflowHostCall);
       return { ok: false as const, error: "This fake host cannot launch threads." };
@@ -52,6 +52,7 @@ export function makeFakeWorkflowHost(options: { readonly failOn?: keyof Workflow
     launchThread: refusingLaunch("launchThread"),
     launchedThread: refusingLaunch("launchedThread"),
     setRunFacts: refusingLaunch("setRunFacts"),
+    resolveRecipeConfig: refusingLaunch("resolveRecipeConfig"),
   };
   const inputsOf = <K extends keyof WorkflowHostPort>(op: K) =>
     calls.flatMap((call) =>
@@ -95,6 +96,7 @@ export function makeFakeWorkflowHostLayer(
     launchThread: (input) => Effect.promise(() => fake.host.launchThread(input)),
     launchedThread: (input) => Effect.promise(() => fake.host.launchedThread(input)),
     setRunFacts: (input) => Effect.promise(() => fake.host.setRunFacts(input)),
+    resolveRecipeConfig: (input) => Effect.promise(() => fake.host.resolveRecipeConfig(input)),
     flushHeld: () => Effect.void,
     heldThreadIds: () => [],
   };

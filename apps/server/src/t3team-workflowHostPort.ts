@@ -6,6 +6,7 @@
  *
  * Types only, importing nothing from the engine, so it cannot take part in an import cycle.
  */
+import type { ResolvedRecipeConfig } from "@t3team/sdk";
 import type {
   ModelSelection,
   ProjectId,
@@ -139,6 +140,15 @@ export type WorkflowHostLaunchAnswer<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: string };
 
+export interface WorkflowHostRecipeConfigInput {
+  readonly projectId: ProjectId;
+  /** The run's recipe directory; its name is the recipe id the config file is named after. */
+  readonly recipePath: string;
+  readonly repository?: string;
+  readonly caller?: Readonly<Record<string, unknown>>;
+  readonly run?: Readonly<Record<string, unknown>>;
+}
+
 export interface WorkflowHostPort {
   readonly createThread: (input: WorkflowHostCreateThreadInput) => Promise<void>;
   /** Queue a turn behind the thread's active run (starts at once on an idle thread). */
@@ -160,6 +170,10 @@ export interface WorkflowHostPort {
   readonly launchedThread: (
     input: WorkflowHostLaunchedThreadInput,
   ) => Promise<WorkflowHostLaunchAnswer<unknown>>;
+  /** The run's recipe config for one repository (G12); refused for a run without a recipe. */
+  readonly resolveRecipeConfig: (
+    input: WorkflowHostRecipeConfigInput,
+  ) => Promise<WorkflowHostLaunchAnswer<ResolvedRecipeConfig>>;
   /** Merge pack `extensions` facts on the run's launch thread; `t3team.*` keys are refused. */
   readonly setRunFacts: (input: {
     readonly launchThreadId: string;

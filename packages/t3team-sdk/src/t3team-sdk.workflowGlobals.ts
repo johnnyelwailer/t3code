@@ -12,7 +12,12 @@
  */
 
 import type { LaunchedThreadPrimitives } from "./t3team-sdk.launchedThreadTypes.ts";
+import { createCallRef } from "./t3team-sdk.callRef.ts";
 import { LaunchedThreadError } from "./t3team-sdk.launchedThreads.ts";
+import {
+  RecipeConfigError,
+  type RecipeConfigPrimitives,
+} from "./t3team-sdk.recipeConfigPrimitive.ts";
 import * as Schema from "effect/Schema";
 
 import { deterministicGlobals, hostSource, type DeterministicSource } from "@runbook/ts/globals";
@@ -78,6 +83,7 @@ export function buildWorkflowGlobals(opts: {
   readonly retry: RetryPrimitives;
   readonly signals: SignalPrimitives;
   readonly launched: LaunchedThreadPrimitives;
+  readonly config: RecipeConfigPrimitives;
   /** The `@runbook/core/authoring` `RunbookContext` subset a body's `run(ctx)` sees. Optional:
    * older globals shapes and legacy zero-arg bodies never reference `ctx` at all. */
   readonly ctx?: unknown;
@@ -141,6 +147,10 @@ export function buildWorkflowGlobals(opts: {
     // `setRunFacts` writes the run's own launch-thread facts (a recipe card's summary).
     launchThread: opts.launched.launchThread,
     setRunFacts: opts.launched.setRunFacts,
+    // `getConfig().for({ repository })` reads the run's recipe config (G12), journaled.
+    getConfig: opts.config.getConfig,
+    // `callRef(ref, input, { outputs, fallback })` calls a config reference, failing closed.
+    callRef: createCallRef(p.workflow as Parameters<typeof createCallRef>[0]),
     // The built-in signal-source declarations (design 42 §7): the loader blanks every import in
     // a body, so `ScmChangeRequestWatch` & co. resolve from this surface, exactly like
     // `defineWorkflow` and the error classes.
@@ -175,5 +185,6 @@ export function buildWorkflowGlobals(opts: {
     ReplayDriftError,
     RetryExhaustedError,
     LaunchedThreadError,
+    RecipeConfigError,
   };
 }
