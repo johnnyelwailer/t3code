@@ -525,6 +525,7 @@
     "packages/runbook-tools/package.json",
     "packages/runbook-ts/package.json",
     "packages/runbook-ts/src/staticAuditTypes.ts",
+    "packages/runbook-ts/src/typescript.ts",
     "packages/shared/package.json",
     "packages/shared/src/devProxy.ts",
     "packages/shared/src/git.test.ts",
