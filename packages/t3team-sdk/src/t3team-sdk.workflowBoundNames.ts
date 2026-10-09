@@ -14,6 +14,7 @@
  */
 
 import type { LaunchedThreadPrimitives } from "./t3team-sdk.launchedThreadTypes.ts";
+import type { RecipeConfigPrimitives } from "./t3team-sdk.recipeConfigPrimitive.ts";
 import { hostSource } from "@runbook/ts/globals";
 import type { CheckpointPrimitives } from "@runbook/core/checkpoint";
 
@@ -50,6 +51,7 @@ export const WORKFLOW_BOUND_GLOBAL_NAMES: ReadonlyArray<string> = Object.freeze(
       schedule: { waitUntil: inert } as unknown as SchedulePrimitives,
       signals: { getSignalSource: inert, waitForAny: inert } as unknown as SignalPrimitives,
       launched: { launchThread: inert, setRunFacts: inert } as unknown as LaunchedThreadPrimitives,
+      config: { getConfig: inert } as unknown as RecipeConfigPrimitives,
       watermark: inert as unknown as WatermarkPrimitives["watermark"],
       reduce: { accumulate: inert, reducerState: inert } as unknown as ReducePrimitives,
       retry: { retry: inert } as unknown as RetryPrimitives,

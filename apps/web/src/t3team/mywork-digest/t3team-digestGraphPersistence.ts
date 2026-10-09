@@ -21,8 +21,10 @@ export type PersistedDigestGraph = {
 
 /** Bump when `DigestGraph` changes in a way an older entry cannot satisfy. */
 const STORAGE_KEY = "t3team:mywork-digest:graphs:v1";
-/** Small on purpose: a graph is a few hundred KB of JSON and localStorage is a ~5 MB budget. */
-const MAX_PERSISTED = 3;
+/** Small on purpose: a graph is a few hundred KB of JSON and localStorage is a ~5 MB budget.
+ * Six covers a typical multi-project cold start (several projects + the all-projects scope)
+ * without crowding the quota the way an unbounded cache would. */
+const MAX_PERSISTED = 6;
 
 /** Arrays the plan builder iterates unconditionally; a missing one would throw on first render. */
 const REQUIRED_ARRAYS = [

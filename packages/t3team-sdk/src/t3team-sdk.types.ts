@@ -77,6 +77,8 @@ export interface T3TeamToolHandlerClient {
   readonly runWorkflow?: (input: {
     readonly source?: string;
     readonly workflowPath?: string;
+    readonly recipe?: string;
+    readonly action?: string;
     readonly args?: unknown;
     readonly intent: WorkflowRunIntent;
     readonly replaceRunId?: string;

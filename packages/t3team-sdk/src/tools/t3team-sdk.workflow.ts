@@ -24,6 +24,11 @@ export const RunWorkflowToolArgs = Schema.Struct({
   source: Schema.optional(Schema.String),
   /** Path to an existing `.workflow.ts` inside the project workspace root. */
   workflowPath: Schema.optional(Schema.String),
+  /** A recipe id from `t3_recipe_list` (project recipes win over pack ones); runs it with its
+   * scripts and tool scope. */
+  recipe: Schema.optional(Schema.String),
+  /** The recipe action to run; absent runs the recipe's default action. */
+  action: Schema.optional(Schema.String),
   /** Launch args decoded by the workflow's `meta.inputs` schema. */
   args: Schema.optional(Schema.Unknown),
   /** Required execution contract for the workflow. */
@@ -57,11 +62,18 @@ export const runWorkflowTool = defineTool({
   handler: async (args, ctx) => {
     const source = args.source?.trim() ?? "";
     const workflowPath = args.workflowPath?.trim() ?? "";
-    // Neither is the primary form: the host authors the source from `intent`. Both at once is a
-    // contradiction (which one is the run?), so only that combination is refused.
-    if (source.length > 0 && workflowPath.length > 0) {
+    const recipe = args.recipe?.trim() ?? "";
+    const action = args.action?.trim() ?? "";
+    // None is the primary form: the host authors the source from `intent`. Two at once is a
+    // contradiction (which one is the run?), so only that is refused.
+    if ([source, workflowPath, recipe].filter((value) => value.length > 0).length > 1) {
       throw new Error(
-        "t3_orchestration_run requires at most one of 'source' or 'workflowPath' (an existing .workflow.ts in the workspace); omit both to have the orchestration authored from 'intent'.",
+        "t3_orchestration_run requires at most one of 'source', 'workflowPath' (an existing .workflow.ts in the workspace) or 'recipe' (a recipe id); omit all to have the orchestration authored from 'intent'.",
+      );
+    }
+    if (action.length > 0 && recipe.length === 0) {
+      throw new Error(
+        "t3_orchestration_run 'action' names an action of 'recipe'; pass 'recipe' too.",
       );
     }
     const intent = {
@@ -89,6 +101,8 @@ export const runWorkflowTool = defineTool({
     return (await ctx.t3team.runWorkflow({
       ...(source.length > 0 ? { source } : {}),
       ...(workflowPath.length > 0 ? { workflowPath } : {}),
+      ...(recipe.length > 0 ? { recipe } : {}),
+      ...(action.length > 0 ? { action } : {}),
       ...(args.args === undefined ? {} : { args: args.args }),
       intent,
       ...(args.replaceRunId === undefined ? {} : { replaceRunId: args.replaceRunId }),

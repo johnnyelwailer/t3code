@@ -1,4 +1,5 @@
 import { ThreadHoverCard, ThreadHoverCardPopup } from "./ThreadHoverCard";
+import { WatchedPullRequestIndicator } from "~/components/pullRequest/t3team-WatchedPullRequestIndicator";
 import { CollapsibleSectionHeader } from "./ui/collapsible-section-header";
 import { setThreadChangeRequestSnapshot } from "./ThreadStatusIndicators";
 import { ThreadContextDragGhost } from "./chat/ThreadContextDragGhost";
@@ -1719,6 +1720,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     prBadgeShape?.kind === "stack" || pr || currentLinkedPr ? (
       <ThreadPullRequestBadgeControl
         render={<InlineButton />}
+        threadRef={threadRef}
         badge={prBadgeShape}
         pullRequests={thread.pullRequests}
         number={pr?.number ?? currentLinkedPr?.number}
@@ -2183,6 +2185,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               <InboxThreadAttribution threadId={thread.id} />
               {terminalStatusIcon}
               {prBadge}
+              {/* t3team: the universal watched indicator for the thread's own pull request. */}
+              {currentLinkedPr ? (
+                <WatchedPullRequestIndicator
+                  environmentId={thread.environmentId}
+                  host={currentLinkedPr.host}
+                  repository={currentLinkedPr.repository}
+                  number={currentLinkedPr.number}
+                />
+              ) : null}
               {diff ? (
                 <span className="shrink-0 font-mono">
                   <span className="text-diff-addition-foreground">+{diff.insertions}</span>{" "}

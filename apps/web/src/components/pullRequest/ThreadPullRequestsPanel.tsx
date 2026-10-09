@@ -1,4 +1,5 @@
 import type { ScopedThreadRef, ThreadPullRequestLink } from "@t3tools/contracts";
+import { WatchedPullRequestIndicator } from "./t3team-WatchedPullRequestIndicator";
 import {
   resolveThreadPullRequestChains,
   visibleThreadPullRequests,
@@ -130,17 +131,12 @@ function LinkRow({
           signals={
             open ? (
               <>
-                {watching ? (
-                  <Tooltip>
-                    <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
-                      <EyeIcon role="img" aria-label="Watching" className="size-3.5" />
-                    </TooltipTrigger>
-                    <TooltipPopup>
-                      Watching: the agent wakes when checks finish, someone comments, or the branch
-                      conflicts
-                    </TooltipPopup>
-                  </Tooltip>
-                ) : null}
+                <WatchedPullRequestIndicator
+                  environmentId={threadRef.environmentId}
+                  host={link.host}
+                  repository={link.repository}
+                  number={link.number}
+                />
                 {snapshot?.checksState ? <ChecksGlyph state={snapshot.checksState} /> : null}
                 {snapshot?.reviewDecision ? (
                   <PullRequestReviewDecisionGlyph decision={snapshot.reviewDecision} />

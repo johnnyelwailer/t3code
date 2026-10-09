@@ -120,3 +120,10 @@ export type LaunchedThreadOpPayload = { readonly threadId: string; readonly key:
 export interface RunFactsPayload {
   readonly extensions: Readonly<Record<string, unknown>>;
 }
+
+/** `getConfig().for(query)` as the SDK sends it (t3team-sdk.recipeConfigPrimitive.ts). */
+export interface RecipeConfigQueryPayload {
+  readonly repository?: string;
+  readonly caller?: Readonly<Record<string, unknown>>;
+  readonly run?: Readonly<Record<string, unknown>>;
+}

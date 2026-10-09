@@ -111,6 +111,25 @@ export type { CompositionOptions, PipelineStage, PipelineStages } from "@runbook
 export type { Watermark, WatermarkOptions, WatermarkState } from "@runbook/core/watermark";
 export { waitForAny, type SignalAnyHit, type WaitForAny } from "./t3team-sdk.signalAny.ts";
 export { LaunchedThreadError, launchThread, setRunFacts } from "./t3team-sdk.launchedThreads.ts";
+export {
+  defineRecipeConfig,
+  recipeAction,
+  type RecipeActionRef,
+  type RecipeConfigRef,
+  type RecipeConfigScope,
+  type RecipeConfigSource,
+  type RecipeConfigSpec,
+  type RecipeConfigValues,
+  type RecipeConfigWarning,
+  type ResolvedRecipeConfig,
+} from "./t3team-sdk.recipeConfig.ts";
+export { callRef, type CallRefOptions, type ConfigCodeRef } from "./t3team-sdk.callRef.ts";
+export {
+  getConfig,
+  RecipeConfigError,
+  type RecipeConfigQuery,
+  type RecipeConfigReader,
+} from "./t3team-sdk.recipeConfigPrimitive.ts";
 export type {
   LaunchedThread,
   LaunchedThreadPrimitives,
@@ -205,6 +224,11 @@ export type {
 export { extractMeta, prepareWorkflow } from "./t3team-sdk.loader.ts";
 // Load-time static audits (Epic 25 phase 25.5): determinism + capability, before any run.
 export { auditWorkflowSourceStatic, registryToolGroupResolver } from "./t3team-sdk.staticAudit.ts";
+export {
+  checkRecipeConfigSource,
+  type RecipeConfigDiagnostic,
+  type RecipeConfigStaticResult,
+} from "./t3team-sdk.recipeConfigStatic.ts";
 export { scanCapabilities } from "./t3team-sdk.capabilityScan.ts";
 export { scanDeterminism } from "./t3team-sdk.determinismScan.ts";
 export { formatFinding } from "./t3team-sdk.staticAuditTypes.ts";

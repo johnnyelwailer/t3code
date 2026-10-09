@@ -1,6 +1,7 @@
 import { ProjectId } from "@t3tools/contracts";
 import { Fragment, useState, type MouseEvent } from "react";
 
+import { WatchedPullRequestIndicator } from "~/components/pullRequest/t3team-WatchedPullRequestIndicator";
 import { Badge } from "~/t3team/components/ui/t3team-badge";
 import { MyWorkChangeRequestSlot } from "~/t3team/packs/t3team-changeRequestSlots";
 import { cn } from "~/t3team/lib/t3team-utils";
@@ -130,6 +131,7 @@ export function DigestPrChip({
               </span>
             ) : null}
             <DigestReviewerStack reviewers={pr.reviewers} host={pr.host} />
+            <WatchedPullRequestIndicator host={pr.host} repository={pr.repo} number={pr.number} />
             {pr.unhandledComments && pr.unhandledComments > 0 ? (
               <span className="-translate-y-px text-3xs leading-none">
                 {pr.unhandledComments} comments

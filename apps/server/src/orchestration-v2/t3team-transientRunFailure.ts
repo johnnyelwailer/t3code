@@ -1,7 +1,8 @@
 /**
  * Which failed V2 runs count as TRANSIENT (worth re-running as they were):
  * gateway capacity/rate/5xx errors (423, 429, 502–504, retry directives),
- * transport failures such as the host turn-inactivity watchdog, and any
+ * transport failures such as the host turn-inactivity watchdog, network
+ * outages (`t3team-networkOutageFailure.ts`), and any
  * failure the provider itself marked `retryable`.
  *
  * The fork's session-level transient retry
@@ -16,6 +17,7 @@
  */
 import type { OrchestrationV2ProviderFailure } from "@t3tools/contracts";
 
+import { isNetworkOutageFailure } from "./t3team-networkOutageFailure.ts";
 import {
   isTransientGatewayErrorText,
   retryDirectiveSeconds,
@@ -28,6 +30,8 @@ export interface TransientRunFailure {
   readonly message: string;
   /** Gateway `retry_after_seconds` / `Retry-After`, when the text carries one. */
   readonly directiveSeconds: number | null;
+  /** A network outage (can last minutes): the session retry gives it the longer budget. */
+  readonly outage: boolean;
 }
 
 export const classifyTransientRunFailure = (
@@ -42,11 +46,17 @@ export const classifyTransientRunFailure = (
     return null;
   }
   if (failure.code !== null && NEVER_TRANSIENT_CODES.has(failure.code)) return null;
+  const outage = isNetworkOutageFailure(failure);
   const transient =
     failure.retryable === true ||
     failure.class === "transport_error" ||
+    outage ||
     isTransientGatewayErrorText(failure.message);
   return transient
-    ? { message: failure.message, directiveSeconds: retryDirectiveSeconds(failure.message) }
+    ? {
+        message: failure.message,
+        directiveSeconds: retryDirectiveSeconds(failure.message),
+        outage,
+      }
     : null;
 };
