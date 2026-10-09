@@ -30,7 +30,7 @@ function involvementOf(
   ];
 }
 
-export function toChangeRequestList(result: PullRequestListResult): ChangeRequestList {
+function toChangeRequestList(result: PullRequestListResult): ChangeRequestList {
   return {
     entries: result.entries.map((entry) => ({
       provider: entry.provider,
