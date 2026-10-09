@@ -51,7 +51,10 @@ const MOUNT = /<WatchedPullRequestIndicator\b/;
 
 /** Files that render a marker without mounting the indicator, and why that is right. */
 const EXEMPT = new Map<string, string>([
-  ["components/ThreadStatusIndicators.tsx", "upstream mini list: its eye is the stop button (doc 07 §3.3)"],
+  [
+    "components/ThreadStatusIndicators.tsx",
+    "upstream mini list: its eye is the stop button (doc 07 §3.3)",
+  ],
 ]);
 
 describe("watched pull request indicator mounts", () => {
