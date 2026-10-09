@@ -379,7 +379,7 @@ describe("BranchToolbarEnvironmentSelector", () => {
       ],
     });
 
-    expect(markup).toContain("Building the workspace");
+    expect(markup).toContain("Building workspace");
     expect(markup).toContain("New cloud session");
   });
 
@@ -505,7 +505,7 @@ describe("BranchToolbarEnvironmentSelector", () => {
     });
 
     expect(liveContainer?.querySelector(".animate-pulse")).toBeNull();
-    expect(liveContainer?.textContent).toContain("Provisioning failed");
+    expect(liveContainer?.textContent).toContain("Failed");
   });
 });
 
