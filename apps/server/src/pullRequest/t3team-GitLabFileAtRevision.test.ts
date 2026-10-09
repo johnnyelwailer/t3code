@@ -31,12 +31,7 @@ const fakeGitLab = (stdout: string) => {
 describe("readGitLabFileAtRevision", () => {
   it.effect("sends a content read to the linked host", () =>
     Effect.gen(function* () {
-      const body = JSON.stringify({
-        blob_id: "b1",
-        size: 5,
-        encoding: "base64",
-        content: Buffer.from("hello").toString("base64"),
-      });
+      const body = `{"blob_id":"b1","size":5,"encoding":"base64","content":"${Buffer.from("hello").toString("base64")}"}`;
       const { calls, service } = fakeGitLab(body);
       const file = yield* readGitLabFileAtRevision(service, request(1000));
       expect(calls).toHaveLength(1);

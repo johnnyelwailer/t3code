@@ -45,8 +45,8 @@ export const projectId = "project-1" as ProjectId;
 export const HEAD = "a".repeat(40);
 export const BASE = "b".repeat(40);
 export const PINNED = "c".repeat(40);
-export const bytes = (text: string) => new TextEncoder().encode(text);
-export const numbered = (count: number) =>
+const bytes = (text: string) => new TextEncoder().encode(text);
+const numbered = (count: number) =>
   Array.from({ length: count }, (_, index) => `line ${index + 1}`).join("\n") + "\n";
 
 type Files = Record<string, Uint8Array>;
