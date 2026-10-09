@@ -3,6 +3,7 @@
  * default body when no surface is selected. Digest PR opens become pull-request tabs; ticket-only
  * detail stays on DigestTicketAside until a later work-item surface exists.
  */
+import type { EnvironmentId, PullRequestRef } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { type ReactNode, useEffect } from "react";
 
@@ -27,15 +28,7 @@ const EMPTY_PREVIEW_SESSIONS = {};
 const EMPTY_PREVIEW_DESKTOP_STATE = {};
 const EMPTY_TERMINAL_LABELS = new Map<string, string>();
 
-function openMyWorkPullRequest(
-  reference: {
-    projectId: string;
-    repository: string;
-    number: number;
-    host?: string;
-  },
-  environmentId: string,
-) {
+function openMyWorkPullRequest(reference: PullRequestRef, environmentId: EnvironmentId) {
   useRightPanelStore.getState().openPullRequest(MY_WORK_PANEL_REF, {
     projectId: reference.projectId,
     repository: reference.repository,
