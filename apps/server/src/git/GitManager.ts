@@ -76,6 +76,7 @@ import * as SourceControlProviderRegistry from "../sourceControl/SourceControlPr
 import type * as SourceControlProvider from "../sourceControl/SourceControlProvider.ts";
 import { detectPrTemplate } from "../sourceControl/PrTemplateDetection.ts";
 import type { ChangeRequest } from "@t3tools/contracts";
+import { resolvePullRequestCheckoutRoot } from "../t3team-pullRequestCheckoutRoot.ts";
 
 export interface GitActionProgressReporter {
   readonly publish: (event: GitActionProgressEvent) => Effect.Effect<void, never>;
@@ -739,6 +740,16 @@ export const make = Effect.gen(function* () {
   const path = yield* Path.Path;
 
   const sourceControlProvider = (cwd: string) => sourceControlProviders.resolve({ cwd });
+  // A linked-repository project keeps its pull requests in clones its workspace root does not
+  // contain, so pull request operations run where the pull request's repository is.
+  const pullRequestCheckoutRoot = (
+    operation: string,
+    input: { readonly cwd: string; readonly reference: string },
+  ) =>
+    resolvePullRequestCheckoutRoot({ operation, sourceControlProviders, ...input }).pipe(
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, path),
+    );
   const serverSettingsService = yield* ServerSettings.ServerSettingsService;
   const threads = yield* ProjectionStore.ProjectionStoreV2;
   const projects = yield* ProjectStore.ProjectStoreV2;
@@ -2403,7 +2414,11 @@ export const make = Effect.gen(function* () {
 
   const resolvePullRequest: GitManager["Service"]["resolvePullRequest"] = Effect.fn(
     "resolvePullRequest",
-  )(function* (input) {
+  )(function* (projectInput) {
+    const input = {
+      ...projectInput,
+      cwd: yield* pullRequestCheckoutRoot("resolvePullRequest", projectInput),
+    };
     const pullRequest = yield* (yield* sourceControlProvider(input.cwd))
       .getChangeRequest({
         cwd: input.cwd,
@@ -2416,7 +2431,20 @@ export const make = Effect.gen(function* () {
 
   const preparePullRequestThread: GitManager["Service"]["preparePullRequestThread"] = Effect.fn(
     "preparePullRequestThread",
-  )(function* (input) {
+  )(function* (projectInput) {
+    // Everything below acts on the pull request's repository; only the project-level lookups
+    // (setup script, settings, status caches) keep the project's own root.
+    const checkoutCwd = yield* pullRequestCheckoutRoot("preparePullRequestThread", projectInput);
+    const alreadyCheckedOutDetail =
+      checkoutCwd === projectInput.cwd
+        ? "This PR branch is already checked out in the main repo. Use Local, or switch the main repo off that branch before creating a worktree thread."
+        : `This PR branch is already checked out in ${checkoutCwd}. Switch that repository off the branch, then try again.`;
+    const input = {
+      ...projectInput,
+      cwd: checkoutCwd,
+      // A linked repository's pull request cannot be checked out "here", where the thread runs.
+      mode: checkoutCwd === projectInput.cwd ? projectInput.mode : ("worktree" as const),
+    };
     const maybeRunSetupScript = (worktreePath: string) => {
       if (!input.threadId) {
         return Effect.void;
@@ -2424,7 +2452,7 @@ export const make = Effect.gen(function* () {
       return projectSetupScriptRunner
         .runForThread({
           threadId: input.threadId,
-          projectCwd: input.cwd,
+          projectCwd: projectInput.cwd,
           worktreePath,
         })
         .pipe(
@@ -2629,8 +2657,7 @@ export const make = Effect.gen(function* () {
         return yield* new GitManagerError({
           operation: "preparePullRequestThread",
           cwd: input.cwd,
-          detail:
-            "This PR branch is already checked out in the main repo. Use Local, or switch the main repo off that branch before creating a worktree thread.",
+          detail: alreadyCheckedOutDetail,
         });
       }
 
@@ -2657,8 +2684,7 @@ export const make = Effect.gen(function* () {
         return yield* new GitManagerError({
           operation: "preparePullRequestThread",
           cwd: input.cwd,
-          detail:
-            "This PR branch is already checked out in the main repo. Use Local, or switch the main repo off that branch before creating a worktree thread.",
+          detail: alreadyCheckedOutDetail,
         });
       }
 
@@ -2671,7 +2697,7 @@ export const make = Effect.gen(function* () {
         {
           worktreesDirectory: yield* readWorktreesDirectory,
           // Best effort: a settings read failure falls back to the checkout's t3.json.
-          submodules: yield* projectSettingsFor(input).pipe(
+          submodules: yield* projectSettingsFor(projectInput).pipe(
             Effect.map((settings) => settings.worktreeSubmodules),
             Effect.orElseSucceed(() => null),
           ),
@@ -2686,7 +2712,13 @@ export const make = Effect.gen(function* () {
         worktreePath: worktree.worktree.path,
         isOnPullRequestHead: true,
       };
-    }).pipe(Effect.ensuring(invalidateStatus(input.cwd)));
+    }).pipe(
+      Effect.ensuring(
+        Effect.all([invalidateStatus(projectInput.cwd), invalidateStatus(checkoutCwd)], {
+          discard: true,
+        }),
+      ),
+    );
   });
 
   const runFeatureBranchStep = Effect.fn("runFeatureBranchStep")(function* (
