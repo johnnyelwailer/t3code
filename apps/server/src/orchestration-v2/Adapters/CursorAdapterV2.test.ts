@@ -41,10 +41,10 @@ const decodeCursorSettings = Schema.decodeEffect(CursorSettings);
 
 describe("CursorAdapterV2", () => {
   it("surfaces Cursor connection_stalled run errors instead of the opaque default", () => {
-    const failure = cursorRunResultFailure({
-      message: "Connection stalled repeatedly",
-      code: "connection_stalled",
-    });
+    const failure = cursorRunResultFailure(
+      { message: "Connection stalled repeatedly", code: "connection_stalled" },
+      0,
+    );
     assert.deepEqual(failure, {
       message: "Connection stalled repeatedly",
       code: "connection_stalled",
@@ -52,9 +52,44 @@ describe("CursorAdapterV2", () => {
     });
   });
 
+  it("classifies a Cursor usage limit with a future reset day as usage_limit with that reset", () => {
+    const nowMs = DateTime.toEpochMillis(DateTime.makeUnsafe("2026-10-08T12:00:00.000Z"));
+    const failure = cursorRunResultFailure(
+      {
+        message:
+          "Your team has reached its usage limit Please reach out to an admin to enable on-demand usage, or return on 10/9/2026 when your limit resets.",
+      },
+      nowMs,
+    );
+    assert.equal(failure.class, "usage_limit");
+    assert.equal(failure.resetAt, "2026-10-09T00:00:00.000Z");
+    assert.equal(failure.retryable, undefined);
+  });
+
+  it("probes an hour later when the Cursor limit has no (or an already-passed) reset day", () => {
+    const nowMs = DateTime.toEpochMillis(DateTime.makeUnsafe("2026-10-09T12:00:00.000Z"));
+    const expected = "2026-10-09T13:00:00.000Z";
+    for (const message of [
+      "Increase limits for faster responses You're out of usage. Switch to Auto or Composer 2.5, or ask your admin to increase your limit to continue.",
+      "Your team has reached its usage limit, or return on 10/9/2026 when your limit resets.",
+    ]) {
+      const failure = cursorRunResultFailure({ message }, nowMs);
+      assert.equal(failure.class, "usage_limit");
+      assert.equal(failure.resetAt, expected);
+    }
+    assert.equal(cursorRunResultFailure("search failed", nowMs).class, undefined);
+    assert.equal(
+      cursorRunResultFailure(
+        { message: "[unknown] Failed to connect to API key exchange endpoint: fetch failed" },
+        nowMs,
+      ).class,
+      undefined,
+    );
+  });
+
   it("keeps string Cursor run errors", () => {
-    assert.deepEqual(cursorRunResultFailure("search failed"), { message: "search failed" });
-    assert.deepEqual(cursorRunResultFailure(null), {});
+    assert.deepEqual(cursorRunResultFailure("search failed", 0), { message: "search failed" });
+    assert.deepEqual(cursorRunResultFailure(null, 0), {});
   });
 
   it.effect.each([
