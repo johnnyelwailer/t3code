@@ -325,6 +325,100 @@ describe("BranchToolbarEnvironmentSelector", () => {
     vi.useRealTimers();
   });
 
+  describe("a connect that does not finish", () => {
+    const ready = {
+      sessionId: "1",
+      phase: "ready",
+      environmentId: "env-cloud",
+      machineLabel: "ubuntu-slim",
+      remainingSeconds: null,
+    } as unknown as CloudSession;
+    const baseProps = {
+      onEnvironmentChange: vi.fn(),
+      onCreateCloudSession: () => {},
+      onCloudSessionAction: () => {},
+      pendingCloudSessions: [ready],
+    };
+    const clickRow = () =>
+      act(() => {
+        Array.from(liveContainer?.querySelectorAll("button") ?? [])
+          .find((button) => button.textContent?.startsWith("Cloud session"))
+          ?.click();
+      });
+    const rerender = (extra: object) =>
+      act(() => {
+        liveRoot?.render(
+          <BranchToolbarEnvironmentSelector
+            envLocked={false}
+            environmentId={PRIMARY.environmentId}
+            availableEnvironments={[PRIMARY]}
+            {...baseProps}
+            {...extra}
+          />,
+        );
+      });
+
+    afterEach(() => vi.useRealTimers());
+
+    it("counts the seconds spent connecting, and admits when it is slow", () => {
+      vi.useFakeTimers();
+      mountSelector(baseProps);
+      clickRow();
+      expect(liveContainer?.textContent).toContain("Connecting… 0s");
+      act(() => {
+        vi.advanceTimersByTime(12_000);
+      });
+      expect(liveContainer?.textContent).toContain("Connecting… 12s");
+      expect(liveContainer?.textContent).not.toContain("taking longer");
+      act(() => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(liveContainer?.textContent).toContain("Connecting… 22s · taking longer than usual");
+    });
+
+    it("leaves Connecting… with the real reason, and retries on the next click", () => {
+      const onCloudSessionAction = vi.fn();
+      const props = { ...baseProps, onCloudSessionAction };
+      mountSelector(props);
+      clickRow();
+      expect(liveContainer?.textContent).toContain("Connecting…");
+      rerender({
+        onCloudSessionAction,
+        cloudSessionConnectFailure: {
+          sessionId: "1",
+          message: "The authenticated token is missing required scope: relay:write",
+        },
+      });
+      expect(liveContainer?.textContent).not.toContain("Connecting…");
+      expect(liveContainer?.textContent).toContain(
+        "Couldn't connect: The authenticated token is missing required scope: relay:write",
+      );
+      clickRow();
+      expect(onCloudSessionAction).toHaveBeenCalledTimes(2);
+      expect(liveContainer?.textContent).toContain("Connecting…");
+      expect(liveContainer?.textContent).not.toContain("Couldn't connect");
+    });
+
+    it("ignores a failure that belongs to another session", () => {
+      mountSelector(baseProps);
+      clickRow();
+      rerender({ cloudSessionConnectFailure: { sessionId: "other", message: "nope" } });
+      expect(liveContainer?.textContent).toContain("Connecting…");
+    });
+
+    it("lets the user stop waiting", () => {
+      mountSelector(baseProps);
+      clickRow();
+      act(() => {
+        Array.from(liveContainer?.querySelectorAll("button") ?? [])
+          .find((button) => button.textContent === "Cancel")
+          ?.click();
+      });
+      expect(liveContainer?.textContent).not.toContain("Connecting…");
+      expect(liveContainer?.textContent).not.toContain("Couldn't connect");
+    });
+  });
+
   it("shows a create in flight at once, and a second click cannot start a second machine", () => {
     const onCreateCloudSession = vi.fn();
     mountSelector({ onCreateCloudSession, cloudSessionCreatePending: true });

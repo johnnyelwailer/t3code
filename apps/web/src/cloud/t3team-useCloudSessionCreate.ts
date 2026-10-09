@@ -16,13 +16,14 @@ import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
  */
 export function useCloudSessionCreate(input: {
   readonly environmentId: EnvironmentId | null;
+  readonly canManageRelay: boolean;
   readonly relayDiscovered: ReturnType<typeof useRelayEnvironmentDiscovery>["environments"];
   readonly serverSessions: ReadonlyArray<CloudSession>;
   readonly setRelayIdsBefore: (ids: ReadonlySet<string>) => void;
   readonly setLocalSession: (session: LocalCloudSession) => void;
   readonly refreshCloudSessionList: () => void;
 }) {
-  const { environmentId, relayDiscovered, serverSessions } = input;
+  const { environmentId, canManageRelay, relayDiscovered, serverSessions } = input;
   const { setRelayIdsBefore, setLocalSession, refreshCloudSessionList } = input;
   const createSession = useAtomCommand(cloudSessionEnvironment.create, { reportFailure: false });
   const [pendingKind, setPendingKind] = useState<null | "session" | "setup">(null);
@@ -34,7 +35,7 @@ export function useCloudSessionCreate(input: {
   /** `projectId` (a project on the primary environment) runs the session in its machine. */
   const onCreate = useCallback(
     (projectId?: ProjectId, options?: { readonly machineSetup?: boolean }) => {
-      if (environmentId === null || createPending) return;
+      if (environmentId === null || !canManageRelay || createPending) return;
       setRelayIdsBefore(
         new Set(
           [...relayDiscovered.values()].map((entry) => String(entry.environment.environmentId)),
@@ -63,6 +64,7 @@ export function useCloudSessionCreate(input: {
         .finally(() => setPendingKind(null));
     },
     [
+      canManageRelay,
       createPending,
       createSession,
       environmentId,

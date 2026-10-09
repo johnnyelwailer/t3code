@@ -3,7 +3,7 @@ import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { ScaleIcon, SettingsIcon } from "lucide-react";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
 import { cn } from "../lib/utils";
@@ -90,6 +90,8 @@ export interface BranchToolbarEnvironmentSelectorProps {
    * configured; the same controller drives the Settings panel's Connect.
    */
   onCloudSessionAction?: (cloudSession: CloudSession) => void;
+  /** t3team: why the last connect attempt ended without connecting; the row shows it. */
+  cloudSessionConnectFailure?: { readonly sessionId: string; readonly message: string } | null;
   /** t3team: hides a surfaced failure from the menu once the user has seen it. */
   onDismissCloudSession?: (cloudSession: CloudSession) => void;
   /**
@@ -121,6 +123,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   cloudSessionProject,
   onSetupCloudSessions,
   onCloudSessionAction,
+  cloudSessionConnectFailure,
   onDismissCloudSession,
   onCloudMenuOpenChange,
 }: BranchToolbarEnvironmentSelectorProps) {
@@ -175,9 +178,32 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   // registers for this project, it is selected and the menu closes. Until then the row says it
   // is connecting; a machine that connects without this project stops there, shown unavailable.
   const [selectWhenConnected, setSelectWhenConnected] = useState<string | null>(null);
+  // When that wait began, so the row can show how long it has been going.
+  const [connectStartedAt, setConnectStartedAt] = useState<number | null>(null);
+  // Why the wait ended without connecting, on the row it belongs to, until the next attempt.
+  const [connectFailure, setConnectFailure] = useState<{
+    readonly sessionId: string;
+    readonly message: string;
+  } | null>(null);
   // The machine the user just tried that turned out not to have this project: it stays listed,
   // saying why. Other projects' machines are not listed at all — nothing here can run on them.
   const [refusedEnvironmentId, setRefusedEnvironmentId] = useState<string | null>(null);
+  const cancelConnect = useCallback(() => {
+    setSelectWhenConnected(null);
+    setConnectStartedAt(null);
+  }, []);
+  // The connect itself failed (the toast says so too): stop waiting and say why on the row.
+  const handledConnectFailure = useRef(cloudSessionConnectFailure);
+  useEffect(() => {
+    if (selectWhenConnected === null || !cloudSessionConnectFailure) return;
+    // A failure acts once: a retry must not be cut short by the one it is retrying from.
+    if (handledConnectFailure.current === cloudSessionConnectFailure) return;
+    const waitingRow = cloudRows.find((row) => row.session.environmentId === selectWhenConnected);
+    if (waitingRow?.session.sessionId !== cloudSessionConnectFailure.sessionId) return;
+    handledConnectFailure.current = cloudSessionConnectFailure;
+    setConnectFailure(cloudSessionConnectFailure);
+    cancelConnect();
+  }, [cancelConnect, cloudRows, cloudSessionConnectFailure, selectWhenConnected]);
   useEffect(() => {
     if (selectWhenConnected === null || !projectEnvironmentIds.has(selectWhenConnected)) return;
     setSelectWhenConnected(null);
@@ -386,9 +412,18 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                       selectWhenConnected !== null &&
                       selectWhenConnected === row.session.environmentId
                     }
+                    connectingSince={connectStartedAt}
+                    connectError={
+                      connectFailure?.sessionId === row.session.sessionId
+                        ? connectFailure.message
+                        : null
+                    }
+                    onCancelConnect={cancelConnect}
                     onConnect={(session) => {
+                      setConnectFailure(null);
                       onCloudSessionAction?.(session);
                       if (session.environmentId !== undefined) {
+                        setConnectStartedAt(Date.now());
                         setSelectWhenConnected(session.environmentId);
                       }
                     }}
