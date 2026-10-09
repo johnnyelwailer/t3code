@@ -23,6 +23,10 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import { connectionAtomRuntime } from "~/connection/runtime";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { readPreparedConnection } from "~/state/session";
+import {
+  EnvironmentNotConnectedError,
+  toEnvironmentRequestError,
+} from "./t3team-environmentTransientError";
 import { BackendApiError } from "./t3team-t3BackendHttp";
 import { createThreadWorkflowApi, type ThreadWorkflowApi } from "./t3team-threadWorkflowApi";
 
@@ -34,14 +38,6 @@ const environmentJsonPost = createRuntimeCommand(connectionAtomRuntime, {
     readonly body: unknown;
   }) => postEnvironmentJson(input),
 });
-
-/** Thrown when the environment has no prepared connection (between reconnects, or never paired). */
-export class EnvironmentNotConnectedError extends Error {
-  constructor() {
-    super("Not connected to this environment.");
-    this.name = "EnvironmentNotConnectedError";
-  }
-}
 
 /** Same outcome shape as `postJson`: the route's own `error`/`code` on a non-2xx reply. */
 function unwrapResponse<TResponse>(path: string, response: EnvironmentJsonPostResponse): TResponse {
@@ -68,11 +64,9 @@ export function createEnvironmentWorkflowBackend(environmentId: EnvironmentId): 
       { prepared, path, body },
       { label: "t3team:environment-json-post", reportFailure: false },
     );
-    if (result._tag === "Failure") throw toError(squashAtomCommandFailure(result));
+    if (result._tag === "Failure") {
+      throw toEnvironmentRequestError(squashAtomCommandFailure(result));
+    }
     return unwrapResponse(path, result.value);
   });
-}
-
-function toError(cause: unknown): Error {
-  return cause instanceof Error ? cause : new Error(String(cause));
 }
