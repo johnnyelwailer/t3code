@@ -110,11 +110,7 @@ export {
 export type { CompositionOptions, PipelineStage, PipelineStages } from "@runbook/core/composition";
 export type { Watermark, WatermarkOptions, WatermarkState } from "@runbook/core/watermark";
 export { waitForAny, type SignalAnyHit, type WaitForAny } from "./t3team-sdk.signalAny.ts";
-export {
-  LaunchedThreadError,
-  launchThread,
-  setRunFacts,
-} from "./t3team-sdk.launchedThreads.ts";
+export { LaunchedThreadError, launchThread, setRunFacts } from "./t3team-sdk.launchedThreads.ts";
 export type {
   LaunchedThread,
   LaunchedThreadPrimitives,
