@@ -1236,8 +1236,10 @@ export function PullRequestDetailPanel({
       setHandoff(null);
       // The server says what to do about it — that the branch is already checked out in the main
       // repository, say — and that sentence is the only way out of the failure.
-      const detailMessage =
-        prepareThread.error instanceof Error ? prepareThread.error.message : null;
+      // Read from the result: the hook's `error` is the state this render saw, from before the
+      // call, so it is always empty here.
+      const failure = squashAtomCommandFailure(prepared);
+      const detailMessage = failure instanceof Error ? failure.message : null;
       toastManager.update(toastId, {
         type: "error",
         title: "Could not prepare the pull request checkout",
@@ -1285,9 +1287,9 @@ export function PullRequestDetailPanel({
         prepared.value.isOnPullRequestHead
           ? {
               type: "success",
-              title: mode === "local" ? "Checked out here" : "Checked out",
+              title: prepared.value.worktreePath === null ? "Checked out here" : "Checked out",
               description:
-                mode === "local"
+                prepared.value.worktreePath === null
                   ? "This repository is on the pull request's branch, with a thread open on it."
                   : "The pull request is in its own worktree, with a thread open on it.",
             }
