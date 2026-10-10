@@ -27,7 +27,11 @@ vi.mock("~/t3team/outbox/t3team-outboxTimelineRows", () => ({
 
 import { ThreadChatViewBody, type ThreadChatViewBodyProps } from "./t3team-ThreadChatViewBody";
 
-function body(threadId: string, embeddedMode: boolean) {
+function body(
+  threadId: string,
+  embeddedMode: boolean,
+  overrides: Partial<ThreadChatViewBodyProps> = {},
+) {
   const props: ThreadChatViewBodyProps = {
     environmentId: "env-1" as EnvironmentId,
     threadId,
@@ -49,6 +53,7 @@ function body(threadId: string, embeddedMode: boolean) {
       composerDropTarget: { composerContainerProps: {}, composerContainerOverlay: null },
       contextAttachments: [],
     } as never,
+    ...overrides,
   };
   return <ThreadChatViewBody key={threadId} {...props} />;
 }
@@ -67,5 +72,31 @@ describe("ThreadChatViewBody composer handle scope", () => {
     );
 
     expect(appHandleRef.current).toEqual({ threadId: "primary-thread" });
+  });
+
+  it("shows creating progress before the server shell exists", () => {
+    const markup = renderToStaticMarkup(
+      body("local-thread", true, {
+        hasServerThread: false,
+        bootstrapStatus: "running",
+        kickoffMessage: "Investigate the regression",
+        showKickoffPlaceholder: true,
+      }),
+    );
+
+    expect(markup).toContain("Creating thread...");
+    expect(markup).toContain("Creating the conversation on the server.");
+  });
+
+  it("shows launch interrupted inside the open chat after the shell exists", () => {
+    const markup = renderToStaticMarkup(
+      body("local-thread", true, {
+        hasServerThread: true,
+        bootstrapStatus: "failed",
+      }),
+    );
+
+    expect(markup).toContain("Launch interrupted");
+    expect(markup).toContain("Retry launch");
   });
 });

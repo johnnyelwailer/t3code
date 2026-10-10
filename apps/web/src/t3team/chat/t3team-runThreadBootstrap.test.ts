@@ -4,6 +4,7 @@ import { readT3TeamMessageExtContext } from "@t3tools/contracts";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { createRecordingOrchestrationApi } from "~/t3team/backend/t3team-orchestrationApi.testSupport";
+import { tryClaimRecipeWorkflowLaunch } from "~/t3team/chat/t3team-recipeLaunchDedup";
 import { runThreadBootstrap } from "~/t3team/chat/t3team-runThreadBootstrap";
 import {
   buildPendingContextAttachment,
@@ -548,5 +549,43 @@ describe("runThreadBootstrap", () => {
         kickoffMessage: "Tell me something about this",
       }),
     );
+  });
+
+  it("releases the recipe launch claim when the launch throws", async () => {
+    const backend = createBackend();
+    vi.mocked(backend.launchRecipeWorkflow!).mockRejectedValue(new Error("launch failed"));
+    const threadId = "thread-launch-throws";
+
+    await expect(
+      runThreadBootstrap({
+        backend,
+        environmentId: "env-1",
+        threadId,
+        projectTitle: "Project Alpha",
+        projectWorkspaceRoot: "/tmp/project-alpha",
+        canonicalProjectId: "project-alpha",
+        title: "Thread title",
+        initialUserMessage: "Tell me something about this",
+        kickoffModelSelection: { instanceId: "codex" as any, model: "gpt-5.4" },
+        kickoffRuntimeMode: "full-access",
+        kickoffInteractionMode: "default",
+        kickoffBranch: null,
+        kickoffWorkflow: TEST_KICKOFF_WORKFLOW,
+        createdAt: "2026-05-19T12:00:00.000Z",
+        shouldEnsureProject: false,
+        action: "kickoff",
+        state: {
+          threadId,
+          projectEnsured: false,
+          threadCreateSent: false,
+          kickoffSent: false,
+          dispatchedBranch: undefined,
+          branchBackfillSent: false,
+        },
+        onInitialUserMessageSent: undefined,
+      }),
+    ).rejects.toThrow("launch failed");
+
+    expect(tryClaimRecipeWorkflowLaunch(threadId)).toBe(true);
   });
 });

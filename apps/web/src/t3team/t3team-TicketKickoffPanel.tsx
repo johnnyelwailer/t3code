@@ -6,6 +6,7 @@ import type { T3TeamContextAttachment } from "~/t3team/t3team-contextAttachment"
 import { mergeContextAttachmentsById } from "~/t3team/t3team-contextAttachmentMerge";
 import { T3TeamSidecarComposition } from "~/t3team/t3team-SidecarComposition";
 import { applyT3TeamRecipeQuickStartLaunchCustomization } from "~/t3team/t3team-recipeQuickStartLaunch";
+import { requestTicketKickoffPanelRecipeThread } from "~/t3team/t3team-ticketKickoffPanelRecipeThread";
 import type { T3TeamSidecarRecipeInput } from "~/t3team/t3team-sidecarRecipeTypes";
 import {
   useT3TeamStagedComposerAction,
@@ -69,19 +70,14 @@ export function TicketKickoffPanel({
         recipe: applyT3TeamRecipeQuickStartLaunchCustomization(recipe, customization),
         ...(customization ? { customization } : {}),
       }),
-      createThread: async ({ kickoffMessage, kickoffWorkflow, launchConfig }) =>
-        (await Promise.resolve(
-          onKickoff(
-            kickoffMessage,
-            false,
-            launchConfig.selection,
-            launchConfig.runtimeMode,
-            launchConfig.interactionMode,
-            launchConfig.selectedToolIds,
-            localContextAttachments,
-            kickoffWorkflow,
-          ),
-        )) as string | undefined,
+      createThread: ({ kickoffMessage, kickoffWorkflow, launchConfig }) =>
+        requestTicketKickoffPanelRecipeThread({
+          onKickoff,
+          kickoffMessage,
+          kickoffWorkflow,
+          launchConfig,
+          contextAttachments: localContextAttachments,
+        }) as string | undefined,
       onLaunched: () => {
         setLocalContextAttachments([]);
         setDismissedAttachmentIds(new Set());

@@ -56,20 +56,27 @@ export function useThreadBootstrap({
   const onInitialUserMessageSentRef = useRef(onInitialUserMessageSent);
   const [bootstrapStatus, setBootstrapStatus] = useState<ThreadBootstrapStatus>("idle");
   const [retryGeneration, setRetryGeneration] = useState(0);
+  const launchAttemptRef = useRef(0);
+  const threadIdRef = useRef(threadId);
   onInitialUserMessageSentRef.current = onInitialUserMessageSent;
+  threadIdRef.current = threadId;
 
   const retryThreadBootstrap = useCallback(() => {
     resetThreadBootstrapDispatchState(threadId);
+    launchAttemptRef.current += 1;
     setBootstrapStatus("idle");
     setRetryGeneration((value) => value + 1);
   }, [threadId]);
 
   useEffect(() => {
-    let active = true;
+    // The server shell arriving re-runs this effect while the kickoff promise is still
+    // going. Only a retry starts a new attempt; the in-flight promise must still be able
+    // to report failure after that re-run.
+    const attempt = launchAttemptRef.current;
+    const threadAtStart = threadId;
     const updateBootstrapStatus = (status: ThreadBootstrapStatus) => {
-      if (active) {
-        setBootstrapStatus(status);
-      }
+      if (launchAttemptRef.current !== attempt || threadIdRef.current !== threadAtStart) return;
+      setBootstrapStatus(status);
     };
 
     runThreadBootstrapEffect({
@@ -92,10 +99,6 @@ export function useThreadBootstrap({
       serverThread,
       updateBootstrapStatus,
     });
-
-    return () => {
-      active = false;
-    };
   }, [
     backend,
     canonicalProjectId,

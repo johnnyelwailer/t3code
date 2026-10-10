@@ -12,6 +12,7 @@ import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import type { ProjectThread, ViewState } from "~/t3team/t3team-types";
 import { navigateBackWithFallback } from "~/t3team/t3team-historyBack";
 import { useFinalizePromotedDraft } from "~/t3team/t3team-useFinalizePromotedDraft";
+import { embeddedKickoffInitialUserMessage } from "~/t3team/t3team-embeddedKickoffInitialUserMessage";
 import { runT3TeamViewTransition } from "~/t3team/t3team-runViewTransition";
 
 export function AppThreadPane({
@@ -113,6 +114,7 @@ export function AppThreadPane({
     view.projectId,
   ]);
 
+  const initialUserMessage = embeddedKickoffInitialUserMessage(resolvedThread ?? {});
   const parentChat = (
     <ThreadChatView
       threadId={view.threadId}
@@ -132,9 +134,7 @@ export function AppThreadPane({
       {...(resolvedThread?.kickoffWorkflow
         ? { kickoffWorkflow: resolvedThread.kickoffWorkflow }
         : {})}
-      {...(resolvedThread?.kickoffPending && resolvedThread.kickoffMessage !== undefined
-        ? { initialUserMessage: resolvedThread.kickoffMessage }
-        : {})}
+      {...(initialUserMessage !== undefined ? { initialUserMessage } : {})}
       {...(resolvedThread?.kickoffModelSelection
         ? { initialModelSelection: resolvedThread.kickoffModelSelection }
         : {})}
