@@ -3,6 +3,10 @@ export type ThreadBootstrapDispatchState = {
   projectEnsured: boolean;
   threadCreateSent: boolean;
   kickoffSent: boolean;
+  /** Set once the in-flight kickoff promise settles, success or failure. */
+  kickoffSettled?: boolean;
+  /** The kickoff promise rejected. Stays set so a later render does not hide the error. */
+  kickoffFailed?: boolean;
   // The branch the create/kickoff dispatch actually carried (`null` when it went out before the
   // workspace's branch was known). Once set, `runThreadBootstrapEffect` uses this to decide
   // whether a later-resolved branch still needs to be backfilled via `thread.meta.update`.

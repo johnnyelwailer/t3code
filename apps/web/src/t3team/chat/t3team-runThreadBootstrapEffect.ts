@@ -7,6 +7,7 @@ import { runThreadBootstrap } from "~/t3team/chat/t3team-runThreadBootstrap";
 import { resolveThreadBootstrapKickoffDefaults } from "~/t3team/chat/t3team-threadBootstrapKickoffDefaults";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
+import { releaseRecipeWorkflowLaunchClaim } from "~/t3team/chat/t3team-recipeLaunchDedup";
 import {
   recordThreadBootstrapFailure,
   recordThreadBootstrapPlan,
@@ -100,7 +101,16 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
     dispatchState: bootstrapPlan.state,
   });
 
-  if (serverThread != null) {
+  // A server shell arriving mid-launch used to flip this to idle and unmount the pending
+  // state, so a later failure looked like an empty composer. Keep running until the
+  // kickoff promise settles, and keep a failure visible after it does.
+  if (bootstrapPlan.state.kickoffFailed) {
+    updateBootstrapStatus("failed");
+    return;
+  }
+  if (bootstrapPlan.state.kickoffSent && bootstrapPlan.state.kickoffSettled !== true) {
+    updateBootstrapStatus("running");
+  } else if (serverThread != null) {
     updateBootstrapStatus("idle");
   } else if (
     bootstrapPlan.action === "none" &&
@@ -141,6 +151,8 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
   // yield: a second effect pass in the same tick would otherwise still read the un-flagged state.
   if (bootstrapPlan.action === "kickoff") {
     bootstrapPlan.state.kickoffSent = true;
+    bootstrapPlan.state.kickoffSettled = false;
+    bootstrapPlan.state.kickoffFailed = false;
   } else {
     bootstrapPlan.state.threadCreateSent = true;
   }
@@ -169,20 +181,29 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
     action: bootstrapPlan.action,
     state: bootstrapPlan.state,
     onInitialUserMessageSent,
-  }).catch((error) => {
-    updateBootstrapStatus("failed");
-    recordThreadBootstrapFailure({
-      environmentId,
-      threadId,
-      canonicalProjectId,
-      action: bootstrapPlan.action,
-      error: error instanceof Error ? error.message : String(error),
-    });
+  })
+    .then(() => {
+      if (bootstrapPlan.action === "kickoff") {
+        bootstrapPlan.state.kickoffSettled = true;
+      }
+      updateBootstrapStatus("idle");
+    })
+    .catch((error) => {
+      updateBootstrapStatus("failed");
+      recordThreadBootstrapFailure({
+        environmentId,
+        threadId,
+        canonicalProjectId,
+        action: bootstrapPlan.action,
+        error: error instanceof Error ? error.message : String(error),
+      });
 
-    if (bootstrapPlan.action === "kickoff") {
-      bootstrapPlan.state.kickoffSent = false;
-    } else if (bootstrapPlan.action === "create") {
-      bootstrapPlan.state.threadCreateSent = false;
-    }
-  });
+      if (bootstrapPlan.action === "kickoff") {
+        bootstrapPlan.state.kickoffSettled = true;
+        bootstrapPlan.state.kickoffFailed = true;
+        releaseRecipeWorkflowLaunchClaim(threadId);
+      } else if (bootstrapPlan.action === "create") {
+        bootstrapPlan.state.threadCreateSent = false;
+      }
+    });
 }
