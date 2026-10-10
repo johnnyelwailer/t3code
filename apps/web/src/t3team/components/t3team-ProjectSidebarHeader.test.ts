@@ -10,7 +10,7 @@ describe("resolveProjectSidebarBrandInset", () => {
         isDesktop: true,
         isWindowControlsOverlay: false,
       }),
-    ).toBe("ml-[var(--workspace-controls-left)]");
+    ).toBe("ml-[var(--workspace-titlebar-content-left)]");
   });
 
   it("keeps the titlebar control clearance for macOS web WCO", () => {
