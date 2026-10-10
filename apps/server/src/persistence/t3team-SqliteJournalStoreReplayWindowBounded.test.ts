@@ -12,6 +12,7 @@
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import {
   selectReplayWindow,
@@ -91,6 +92,47 @@ const readWindow = (store: JournalStore, runId: string): Promise<ReplayWindow> =
   }
   return fn(runId);
 };
+
+interface MeasuredQuery {
+  readonly sql: string;
+  readonly rows: number;
+}
+
+/**
+ * A `SqlClient` that records the SQL each template statement compiles to and how many rows it
+ * actually returned. Only the template-tag call is intercepted (the store reads through it);
+ * every other member is forwarded to the real client, so the store is exercised against the
+ * real in-memory SQLite rather than a stand-in.
+ */
+const countingSqlClient = (
+  client: SqlClient.SqlClient,
+  measured: MeasuredQuery[],
+): SqlClient.SqlClient => {
+  const wrapper: SqlClient.SqlClient = new Proxy(client, {
+    apply(target, thisArg, args) {
+      // The store only ever RUNS the template statement, so returning the measured effect
+      // instead of the statement itself keeps the real execution (and real rows) intact.
+      const statement = Reflect.apply(target, thisArg, args) as Statement.Statement<
+        Record<string, unknown>
+      >;
+      const [sql] = statement.compile();
+      return Effect.map(statement, (rows) => {
+        measured.push({ sql, rows: rows.length });
+        return rows;
+      }) as never;
+    },
+    get(target, prop) {
+      if (prop === "safe" || prop === "withoutTransforms") return wrapper;
+      const value = Reflect.get(target, prop, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  return wrapper;
+};
+
+/** Rows the real DB returned for the superseded-prefix `sent` read (the unsettled-ask scan). */
+const prefixSentRowsMeasured = (measured: ReadonlyArray<MeasuredQuery>): ReadonlyArray<number> =>
+  measured.filter((query) => /phase = 'sent' AND seq </.test(query.sql)).map((query) => query.rows);
 
 /** A plain-object snapshot of a window — the same content the conformance harness compares. */
 const windowSnapshot = (window: ReplayWindow) => ({
@@ -175,6 +217,58 @@ layer("SqliteJournalStore bounded-SQL replay-window read (H0)", (it) => {
         assert.deepStrictEqual([...window.unresolvedPrefixCorrelationIds].sort(), ["h0-unsettled"]);
         assert.strictEqual(window.materializedEntries, 1);
       }),
+  );
+
+  it.effect("prefix read excludes one-way payloads while retaining every resolvable kind", () =>
+    Effect.gen(function* () {
+      const raw = yield* SqlClient.SqlClient;
+      const measured: MeasuredQuery[] = [];
+      const store = buildSqliteJournalStore(countingSqlClient(raw, measured));
+      const runId = "h0-prefix-filter";
+      const ONE_WAY_SENDS = 200;
+      const entries: Array<JournalEntry> = [];
+      for (let i = 0; i < ONE_WAY_SENDS; i++) {
+        // One-way verbs (thread.create / thread.message) never settle, so the reference window
+        // can never flag them — their lifetime payloads must not be replay material.
+        entries.push(
+          sentEntry(
+            entries.length + 1,
+            i % 2 === 0 ? "thread.create" : "thread.message",
+            `h0-oneway-${i}`,
+          ),
+        );
+      }
+      entries.push(sentEntry(ONE_WAY_SENDS + 1, "user.input", "h0-settled"));
+      entries.push(sentEntry(ONE_WAY_SENDS + 2, "wait.until", "h0-unsettled"));
+      entries.push(sentEntry(ONE_WAY_SENDS + 3, "thread.turn", "h0-turn"));
+      entries.push(sentEntry(ONE_WAY_SENDS + 4, "model.resolve", "h0-model"));
+      entries.push(checkpointEntry(ONE_WAY_SENDS + 5, ONE_WAY_SENDS + 4, { i: 1 }));
+      entries.push(callEntry(ONE_WAY_SENDS + 6, "after"));
+      for (const entry of entries) {
+        yield* Effect.promise(() => store.appendEntry(runId, entry));
+      }
+      yield* Effect.promise(() =>
+        store.appendResolved(runId, reply("h0-settled", "user.input", { ok: true })),
+      );
+
+      measured.length = 0;
+      const window = yield* Effect.promise(() => readWindow(store, runId));
+      const reference = selectReplayWindow(yield* Effect.promise(() => store.readEntries(runId)));
+
+      // The prefix read fetched exactly the four resolvable asks (settled + unsettled), not the
+      // 200 one-way sends: the working set no longer grows with the run's lifetime send count.
+      assert.deepStrictEqual(prefixSentRowsMeasured(measured), [4]);
+      // Reference parity is unchanged: totals, correlation map, suffix and the unsafe-window
+      // flag all still come from the shared selection over the full journal.
+      assert.deepStrictEqual(windowSnapshot(window), windowSnapshot(reference));
+      assert.strictEqual(window.totalEntries, entries.length); // lifetime, unfiltered
+      assert.strictEqual(window.materializedEntries, 1);
+      assert.deepStrictEqual([...window.entries.byCorrelation.keys()], ["h0-settled"]);
+      assert.deepStrictEqual(
+        [...window.unresolvedPrefixCorrelationIds],
+        ["h0-unsettled", "h0-turn", "h0-model"],
+      );
+    }),
   );
 
   it.effect("falls back to the full journal when no checkpoint is committed", () =>
