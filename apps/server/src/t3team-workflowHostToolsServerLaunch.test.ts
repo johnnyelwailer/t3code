@@ -128,7 +128,10 @@ async function runBody(input: {
 /** What an agent turn on the launch thread sees: a plain binding, no run grant. */
 async function agentTurnPublish(broker: T3TeamToolBrokerShape, groups?: ReadonlyArray<string>) {
   const binding = await Effect.runPromise(
-    broker.bindSession({ threadId, ...(groups === undefined ? {} : { allowedToolGroups: groups }) }),
+    broker.bindSession({
+      threadId,
+      ...(groups === undefined ? {} : { allowedToolGroups: groups }),
+    }),
   );
   if (binding === undefined) throw new Error("expected a binding");
   return await Effect.runPromise(

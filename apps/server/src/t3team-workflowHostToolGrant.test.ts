@@ -362,103 +362,101 @@ it.effect(
     }).pipe(Effect.provide(TestLayer)),
 );
 
-it.effect(
-  "a server-launched publish grant still reaches the publisher after rehydration",
-  () =>
-    Effect.gen(function* () {
-      // Live machine-setup failure: kickoff parks on askUser, the desktop restarts or the run
-      // resumes after the answer, and publish must still work even though the launch thread never
-      // had that tool synced into its context.
-      publishCalls.length = 0;
-      const runId = "grant-publish-rehydrated";
-      const repo = yield* WorkflowRunRepository;
-      const store = yield* WorkflowJournalStore;
-      const config = yield* ServerConfig;
-      const broker = yield* T3TeamToolBroker;
+it.effect("a server-launched publish grant still reaches the publisher after rehydration", () =>
+  Effect.gen(function* () {
+    // Live machine-setup failure: kickoff parks on askUser, the desktop restarts or the run
+    // resumes after the answer, and publish must still work even though the launch thread never
+    // had that tool synced into its context.
+    publishCalls.length = 0;
+    const runId = "grant-publish-rehydrated";
+    const repo = yield* WorkflowRunRepository;
+    const store = yield* WorkflowJournalStore;
+    const config = yield* ServerConfig;
+    const broker = yield* T3TeamToolBroker;
 
-      // No publish tool in the synced context — the cloud kickoff path never unions it in.
-      yield* broker.bindSession({
-        threadId,
-        toolContext: createThreadToolContext({
-          tools: [{ id: "t3team.thread.children", label: "Children", capabilities: ["read"] }],
-        }),
-      });
+    // No publish tool in the synced context — the cloud kickoff path never unions it in.
+    yield* broker.bindSession({
+      threadId,
+      toolContext: createThreadToolContext({
+        tools: [{ id: "t3team.thread.children", label: "Children", capabilities: ["read"] }],
+      }),
+    });
 
-      const hostToolGrant = { toolGroups: ["mutation.change_request"] };
-      const hostToolClient = makeT3TeamWorkflowHostToolClient({
-        broker,
+    const hostToolGrant = { toolGroups: ["mutation.change_request"] };
+    const hostToolClient = makeT3TeamWorkflowHostToolClient({
+      broker,
+      launchThreadId: threadId,
+      allowedToolGroups: ["mutation.change_request"],
+    });
+
+    let seq = 0;
+    const launched = yield* Effect.promise(() =>
+      launchWorkflowRecipe({
+        runId,
+        workflowPath: publishProbeWorkflowPath,
+        args: {},
+        runsRoot: NodePath.join(config.cwd, ".t3team-runs"),
         launchThreadId: threadId,
-        allowedToolGroups: ["mutation.change_request"],
-      });
-
-      let seq = 0;
-      const launched = yield* Effect.promise(() =>
-        launchWorkflowRecipe({
-          runId,
-          workflowPath: publishProbeWorkflowPath,
-          args: {},
-          runsRoot: NodePath.join(config.cwd, ".t3team-runs"),
-          launchThreadId: threadId,
-          projectId,
-          modelSelection,
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          registry: makeWorkflowEngineRegistry(),
-          host: makeFakeWorkflowHost().host,
-          newId: () => `${runId}-id-${(seq += 1)}`,
-          nowIso,
-          store,
-          hostToolClient,
-          lifecycle: makeWorkflowRunLifecycle({
-            repo,
-            row: buildRunningWorkflowRunRow({
-              runId,
-              workflowPath: publishProbeWorkflowPath,
-              args: {},
-              launchThreadId: threadId,
-              projectId,
-              modelSelection,
-              runtimeMode: "full-access",
-              interactionMode: "default",
-              origin: "recipe",
-              hostToolGrant,
-              nowIso: nowIso(),
-            }),
-            nowIso,
+        projectId,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        registry: makeWorkflowEngineRegistry(),
+        host: makeFakeWorkflowHost().host,
+        newId: () => `${runId}-id-${(seq += 1)}`,
+        nowIso,
+        store,
+        ...(hostToolClient === undefined ? {} : { hostToolClient }),
+        lifecycle: makeWorkflowRunLifecycle({
+          repo,
+          row: buildRunningWorkflowRunRow({
+            runId,
+            workflowPath: publishProbeWorkflowPath,
+            args: {},
+            launchThreadId: threadId,
+            projectId,
+            modelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            origin: "recipe",
+            hostToolGrant,
+            nowIso: nowIso(),
           }),
+          nowIso,
         }),
-      );
-      assert.strictEqual(launched.status, "suspended");
-      assert.deepStrictEqual(
-        Option.getOrThrow(yield* repo.getById({ runId })).hostToolGrant,
-        hostToolGrant,
-      );
-      assert.strictEqual(publishCalls.length, 0);
+      }),
+    );
+    assert.strictEqual(launched.status, "suspended");
+    assert.deepStrictEqual(
+      Option.getOrThrow(yield* repo.getById({ runId })).hostToolGrant,
+      hostToolGrant,
+    );
+    assert.strictEqual(publishCalls.length, 0);
 
-      // Drop the live controller; boot rehydration rebuilds the host-tool client from the row.
-      yield* rehydrateSuspendedWorkflowRuns();
+    // Drop the live controller; boot rehydration rebuilds the host-tool client from the row.
+    yield* rehydrateSuspendedWorkflowRuns();
 
-      const registry = yield* T3TeamWorkflowEngineRegistry;
-      const ask = registry.peekPending(threadId);
-      assert.strictEqual(ask?.kind, "user.input");
-      yield* Effect.promise(() => registry.getRun(runId)!.resume(ask!.correlationId, "yes"));
+    const registry = yield* T3TeamWorkflowEngineRegistry;
+    const ask = registry.peekPending(threadId);
+    assert.strictEqual(ask?.kind, "user.input");
+    yield* Effect.promise(() => registry.getRun(runId)!.resume(ask!.correlationId, "yes"));
 
-      const settled = Option.getOrThrow(yield* repo.getById({ runId }));
-      assert.strictEqual(settled.status, "completed");
-      assert.strictEqual(publishCalls.length, 1);
-      assert.deepStrictEqual(
-        {
-          cwd: publishCalls[0]?.cwd,
-          projectId: publishCalls[0]?.projectId,
-          branch: publishCalls[0]?.branch,
-          paths: publishCalls[0]?.paths,
-        },
-        {
-          cwd: "/workspace/project-1",
-          projectId: "project-1",
-          branch: "machine/setup",
-          paths: ["a.json"],
-        },
-      );
-    }).pipe(Effect.provide(TestLayer)),
+    const settled = Option.getOrThrow(yield* repo.getById({ runId }));
+    assert.strictEqual(settled.status, "completed");
+    assert.strictEqual(publishCalls.length, 1);
+    assert.deepStrictEqual(
+      {
+        cwd: publishCalls[0]?.cwd,
+        projectId: publishCalls[0]?.projectId,
+        branch: publishCalls[0]?.branch,
+        paths: publishCalls[0]?.paths,
+      },
+      {
+        cwd: "/workspace/project-1",
+        projectId: "project-1",
+        branch: "machine/setup",
+        paths: ["a.json"],
+      },
+    );
+  }).pipe(Effect.provide(TestLayer)),
 );
