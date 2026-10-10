@@ -229,6 +229,41 @@ const make = Effect.gen(function* () {
     }
   });
 
+  /**
+   * Reject worktree launches before thread.create when the base ref cannot start
+   * a worktree. An unborn/missing local baseRef otherwise creates a failed thread
+   * after an opaque `git worktree add` error (e.g. `fatal: invalid reference: main`).
+   * When startFromOrigin is set and origin exists, preparation still fetches later.
+   */
+  const validateWorktreeBaseRef = Effect.fn("ThreadLaunchService.validateWorktreeBaseRef")(
+    function* (
+      input: ThreadLaunchInput & {
+        readonly workspaceStrategy: Extract<ThreadLaunchWorkspaceStrategy, { type: "worktree" }>;
+      },
+      workspaceRoot: string,
+    ) {
+      const baseRef = input.workspaceStrategy.baseRef;
+      const hasLocalBase = yield* git
+        .hasCommit({ cwd: workspaceRoot, refName: baseRef })
+        .pipe(Effect.mapError(mapError(input, "provision-worktree")));
+      if (hasLocalBase) return;
+
+      const canFetchFromOrigin =
+        input.workspaceStrategy.startFromOrigin === true &&
+        (yield* git
+          .remoteExists({ cwd: workspaceRoot, remoteName: "origin" })
+          .pipe(Effect.mapError(mapError(input, "provision-worktree"))));
+      if (canFetchFromOrigin) return;
+
+      return yield* mapError(
+        input,
+        "provision-worktree",
+      )(
+        `Cannot create a worktree from baseRef '${baseRef}' in '${workspaceRoot}': that ref does not resolve to a commit (unborn branch or missing). Choose a baseRef that exists locally, set startFromOrigin when origin has it, or launch with an existing worktree.`,
+      );
+    },
+  );
+
   const prepareInBackground = Effect.fn("ThreadLaunchService.prepareInBackground")(function* (
     input: PreparationInput,
     threadId: ThreadId,
@@ -704,18 +739,33 @@ const make = Effect.gen(function* () {
       }
 
       const launchReceipt = yield* readReceipt(input, input.commandId);
+      const replayingAcceptedCreate =
+        Option.isSome(launchReceipt) &&
+        launchReceipt.value.status === "accepted" &&
+        launchReceipt.value.commandType === "thread.create";
+      // reuseExistingThread records an accepted metadata.update, not create.
+      // Skip baseRef validation on either accepted claim so WS retries stay
+      // idempotent even if the local base disappears after the first accept.
+      const replayingAcceptedClaim =
+        replayingAcceptedCreate ||
+        (Option.isSome(launchReceipt) &&
+          launchReceipt.value.status === "accepted" &&
+          launchReceipt.value.commandType === "thread.metadata.update");
+      // Fail before allocating/creating a thread when the worktree base cannot
+      // resolve. Skip on idempotent replay of an already-accepted claim.
+      if (input.workspaceStrategy.type === "worktree" && !replayingAcceptedClaim) {
+        yield* validateWorktreeBaseRef(
+          { ...input, workspaceStrategy: input.workspaceStrategy },
+          project.workspaceRoot,
+        );
+      }
       return yield* Effect.gen(function* () {
         // A retried launch has no client-supplied id to replay against, so
         // recover the thread id its accepted create was recorded under before
         // allocating another one; a fresh id would only collide with the
         // recorded receipt.
         const reusableLaunchReceipt =
-          input.threadId === undefined &&
-          Option.isSome(launchReceipt) &&
-          launchReceipt.value.status === "accepted" &&
-          launchReceipt.value.commandType === "thread.create"
-            ? launchReceipt.value
-            : undefined;
+          input.threadId === undefined && replayingAcceptedCreate ? launchReceipt.value : undefined;
         const candidateThreadId =
           input.threadId ??
           reusableLaunchReceipt?.threadId ??

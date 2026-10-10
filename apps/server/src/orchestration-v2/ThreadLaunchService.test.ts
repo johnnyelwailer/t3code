@@ -101,6 +101,7 @@ interface HarnessOptions {
   readonly createWorktree?: GitWorkflow.GitWorkflowService["Service"]["createWorktree"];
   readonly fetchRemote?: GitWorkflow.GitWorkflowService["Service"]["fetchRemote"];
   readonly hasCommit?: GitWorkflow.GitWorkflowService["Service"]["hasCommit"];
+  readonly remoteExists?: GitWorkflow.GitWorkflowService["Service"]["remoteExists"];
   readonly renameBranch?: GitWorkflow.GitWorkflowService["Service"]["renameBranch"];
   readonly runSetup?: ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"]["runForThread"];
   readonly generateTitle?: TextGeneration.TextGeneration["Service"]["generateThreadTitle"];
@@ -169,8 +170,11 @@ function makeHarness(options: HarnessOptions = {}) {
       createWorktree,
       renameBranch,
       fetchRemote: options.fetchRemote ?? (() => Effect.void),
-      hasCommit: options.hasCommit ?? (() => Effect.succeed(false)),
-      remoteExists: () => Effect.succeed(true),
+      // Default: base refs resolve; the temporary `refs/heads/t3` namespace probe does not
+      // (so launches keep `t3/<hash>` unless a test opts into flattening).
+      hasCommit:
+        options.hasCommit ?? ((input) => Effect.succeed(input.refName !== "refs/heads/t3")),
+      remoteExists: options.remoteExists ?? (() => Effect.succeed(true)),
       remoteBranchExists: () => Effect.succeed(true),
       removeWorktree,
       resolveRemoteTrackingCommit: () =>
@@ -1188,7 +1192,8 @@ it.effect("renames a temporary t3/<hash> branch off the provisioning critical pa
 it.effect("provisions under t3-<hash> when a plain t3 branch blocks t3/*", () =>
   Effect.gen(function* () {
     const harness = makeHarness({
-      hasCommit: (input) => Effect.succeed(input.refName === "refs/heads/t3"),
+      hasCommit: (input) =>
+        Effect.succeed(input.refName === "refs/heads/t3" || input.refName === "main"),
       createWorktree: (input) =>
         Effect.succeed({
           worktree: { path: "/repo-worktrees/temp", refName: input.newRefName, headSha: "abc" },
@@ -1304,10 +1309,109 @@ it.effect("renames a temporary branch on an existing worktree to a generated nam
   }),
 );
 
+it.effect("rejects a worktree launch before create when baseRef does not resolve", () => {
+  const harness = makeHarness({
+    hasCommit: () => Effect.succeed(false),
+    remoteExists: () => Effect.succeed(false),
+  });
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    const threads = yield* ThreadManagement.ThreadManagementService;
+    const failed = yield* launches
+      .launch(
+        launchInput({
+          command: "command:launch:unborn-base",
+          thread: "thread:launch:unborn-base",
+          message: "Should not create a thread",
+          workspace: { type: "worktree", baseRef: "main", branch: "fix/orch-status-panel-card" },
+        }),
+      )
+      .pipe(Effect.flip);
+    assert.equal(failed._tag, "ThreadLaunchError");
+    assert.equal(failed.operation, "provision-worktree");
+    assert.isUndefined(failed.threadId);
+    assert.include(String(failed.cause), "baseRef 'main'");
+    assert.include(String(failed.cause), "does not resolve to a commit");
+    assert.equal(harness.createWorktree.mock.calls.length, 0);
+    const shells = yield* threads.listProjectThreads({ projectId, includeSubagents: true });
+    assert.equal(shells.length, 0);
+  }).pipe(Effect.provide(harness.layer));
+});
+
+it.effect("allows a missing local baseRef when startFromOrigin can fetch it", () => {
+  const harness = makeHarness({
+    hasCommit: () => Effect.succeed(false),
+    remoteExists: () => Effect.succeed(true),
+  });
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    const launched = yield* launches.launch(
+      launchInput({
+        command: "command:launch:origin-base-ok",
+        thread: "thread:launch:origin-base-ok",
+        message: "Fetch base from origin",
+        workspace: { type: "worktree", baseRef: "main", startFromOrigin: true },
+      }),
+    );
+    // Launch must accept (thread created) even though local main is missing;
+    // preparation fetches from origin afterward.
+    assert.equal(launched.projection.thread.branch, null);
+    assert.isTrue(
+      launched.projection.runs[0]?.status === "preparing" ||
+        launched.projection.runs[0]?.status === "running" ||
+        launched.projection.runs[0]?.status === "completed",
+    );
+  }).pipe(Effect.provide(harness.layer));
+});
+
+it.effect("replays a reused-thread worktree launch after local baseRef disappears", () => {
+  let baseResolves = true;
+  const harness = makeHarness({
+    hasCommit: () => Effect.succeed(baseResolves),
+    remoteExists: () => Effect.succeed(false),
+  });
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    const threads = yield* ThreadManagement.ThreadManagementService;
+    const threadId = ThreadId.make("thread:launch:reuse-base-replay");
+    yield* threads.dispatch({
+      type: "thread.create",
+      commandId: CommandId.make("command:launch:reuse-base-replay:create"),
+      threadId,
+      projectId,
+      title: "Empty shell",
+      modelSelection,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: null,
+      worktreePath: null,
+      createdBy: "user",
+      creationSource: "web",
+    });
+    const input = {
+      ...launchInput({
+        command: "command:launch:reuse-base-replay",
+        thread: threadId,
+        message: "Bind a worktree",
+        workspace: { type: "worktree" as const, baseRef: "main", branch: "feature/reuse" },
+      }),
+      reuseExistingThread: true,
+    };
+    const first = yield* launches.launch(input);
+    assert.isFalse(first.resumed);
+    baseResolves = false;
+    const replay = yield* launches.launch(input);
+    assert.isTrue(replay.resumed);
+    assert.equal(replay.threadId, threadId);
+  }).pipe(Effect.provide(harness.layer));
+});
+
 it.effect("shows the fetch diagnosis when preparing a worktree from origin fails", () => {
   const detail =
     "Git could not authenticate with the remote. Check Git credentials or SSH access on the server, then retry.";
   const harness = makeHarness({
+    // Local main is missing; startFromOrigin + origin lets launch proceed, then fetch fails.
+    hasCommit: () => Effect.succeed(false),
     fetchRemote: () =>
       Effect.fail(
         new GitCommandError({
