@@ -93,7 +93,17 @@ describe("workflow controls", () => {
 
   it("shows queued capacity feedback on the workflow card", async () => {
     const markup = await renderTimeline([runActivity("started")], undefined, { status: "queued" });
-    expect(markup).toContain("Queued · starts when capacity is free");
+    expect(markup).toContain("Queued · Starts when capacity is free");
+  });
+
+  it("tells the truth while authoring: the plan is being written, not capacity-queued", async () => {
+    const markup = await renderTimeline([runActivity("started")], undefined, {
+      status: "authoring",
+    });
+    // The honest sidebar-shared copy, and never the capacity lie it used to borrow from `queued`.
+    expect(markup).toContain("Authoring the orchestration");
+    expect(markup).not.toContain("capacity");
+    expect(markup).not.toContain("Queued");
   });
 });
 

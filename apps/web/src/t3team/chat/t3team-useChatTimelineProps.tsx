@@ -54,6 +54,10 @@ export function useT3TeamChatTimelineProps(input: {
   readonly timelineProps: MessagesTimelineT3TeamProps;
   readonly composerBannerLeading: ReactNode;
   readonly facts: T3TeamThreadFacts | undefined;
+  /** The thread's active orchestration runs, for the thread-details orchestration section. */
+  readonly dockItems: ReadonlyArray<T3TeamActiveWorkflowDockItem>;
+  /** Scroll the timeline to a run's launch card — the same action the composer dock triggers. */
+  readonly onLocateWorkflowCard: (item: T3TeamActiveWorkflowDockItem) => void;
 } {
   const facts = useT3TeamThreadFacts(input.environmentId, input.threadId);
   const {
@@ -136,5 +140,11 @@ export function useT3TeamChatTimelineProps(input: {
       workingRow,
     ],
   );
-  return { timelineProps, composerBannerLeading, facts };
+  return {
+    timelineProps,
+    composerBannerLeading,
+    facts,
+    dockItems,
+    onLocateWorkflowCard: openWorkflowCard,
+  };
 }

@@ -158,6 +158,21 @@ describe("active workflow dock", () => {
     expect(items[0]?.summaries).toEqual(["Waiting to start"]);
   });
 
+  it("says the plan is being authored instead of the generic 'Running'", () => {
+    const message = shapeMessage("run-authoring", "Authoring review");
+    const items = deriveT3TeamActiveWorkflowDockItems([{ kind: "message", message }], new Map(), {
+      runId: "run-authoring",
+      status: "authoring",
+      pendingKind: null,
+      wakeAt: null,
+      updatedAt: "2026-07-19T10:00:00.000Z",
+    });
+
+    // Authoring used to fall through to "Running" — a lie before any plan existed.
+    expect(items[0]?.summaries).toEqual(["Authoring the orchestration"]);
+    expect(items[0]?.summaries).not.toContain("Running");
+  });
+
   it("switches compactly and opens the selected workflow card", async () => {
     const onOpen = vi.fn();
     const items: T3TeamActiveWorkflowDockItem[] = [
