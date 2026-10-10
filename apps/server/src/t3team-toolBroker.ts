@@ -89,6 +89,13 @@ export interface T3TeamToolBrokerShape {
     readonly threadId: ThreadId;
     readonly toolContext?: T3TeamTurnToolContext;
     readonly allowedToolGroups?: ReadonlyArray<string>;
+    /**
+     * Tool ids THIS binding offers on top of the thread's synced tool context. For a workflow run
+     * calling the host tools its own grant names, so a server-launched run (kickoff, trigger,
+     * `orchestration.run`) is not at the mercy of what a web client last synced. It widens only this
+     * binding: the thread's stored context is untouched, and `allowedToolGroups` still filters.
+     */
+    readonly grantedToolIds?: ReadonlyArray<string>;
   }) => Effect.Effect<T3TeamToolBinding | undefined, never>;
   readonly bindReadOnly: (input: {
     readonly workspaceRoot: string;

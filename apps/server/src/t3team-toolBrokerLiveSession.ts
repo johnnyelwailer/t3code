@@ -24,7 +24,7 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
   const { contextStore, genericThreadToolIds, reads } = deps;
   const scopeLabel = "for this thread.";
 
-  return ({ threadId, toolContext, allowedToolGroups }) =>
+  return ({ threadId, toolContext, allowedToolGroups, grantedToolIds }) =>
     Effect.gen(function* () {
       if (toolContext !== undefined) {
         yield* contextStore.put({ threadId, toolContext });
@@ -43,7 +43,9 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
               })),
             };
 
-      const toolIds = Array.from(new Set(resolvedToolContext.tools.map((tool) => tool.id)));
+      const toolIds = Array.from(
+        new Set([...resolvedToolContext.tools.map((tool) => tool.id), ...(grantedToolIds ?? [])]),
+      );
       if (toolIds.length === 0) {
         return undefined;
       }

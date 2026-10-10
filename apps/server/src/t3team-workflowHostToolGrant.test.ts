@@ -31,6 +31,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as SqlClient from "effect/sql/SqlClient";
 
+import type { ChangeRequestPublishInput } from "./t3team-changeRequestPublishErrors.ts";
 import { ServerConfig } from "./config.ts";
 import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
@@ -38,7 +39,11 @@ import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
 import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
-import { makeBrokerLayer, threadId } from "./t3team-toolBrokerTestUtils.ts";
+import {
+  createThreadToolContext,
+  makeBrokerLayer,
+  threadId,
+} from "./t3team-toolBrokerTestUtils.ts";
 import type { T3TeamThreadArtifactInput } from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import {
   buildRunningWorkflowRunRow,
@@ -86,12 +91,51 @@ export default async function run() {
   "utf8",
 );
 
+// machine-setup shape: park on the user's answer, then publish. The launch thread's synced context
+// never carries publish (server kickoff), so only the persisted grant may widen the binding.
+const publishProbeWorkflowPath = NodePath.join(cwd, "grant-publish-probe.workflow.ts");
+NodeFS.writeFileSync(
+  publishProbeWorkflowPath,
+  `import { Schema } from "effect";
+import { getThread, getTools } from "@t3team/sdk";
+export const Inputs = Schema.Struct({});
+export const meta = {
+  name: "grant-publish-probe",
+  inputs: Inputs,
+  capabilities: ["user", "mutation.change_request"],
+} as const;
+export default async function run() {
+  await getThread().askUser("Open a change request?");
+  const published = await getTools().t3team.changeRequest.publish({
+    branch: "machine/setup",
+    paths: ["a.json"],
+    commitMessage: "chore: add machine setup",
+    title: "Add machine setup",
+    body: "Adds the dev container.",
+  });
+  return { published };
+}
+`,
+  "utf8",
+);
+
 const projectId = ProjectId.make("project-1");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
 const nowIso = (): string => "2026-07-27T00:00:00.000Z";
 
 /** Every thread artifact the broker writes — where a proposed draft lands. */
 const brokerArtifacts: T3TeamThreadArtifactInput[] = [];
+/** Recording publisher for the publish-after-rehydrate case. */
+const publishCalls: ChangeRequestPublishInput[] = [];
+const published = {
+  url: "https://example.test/pr/7",
+  number: 7,
+  repository: "acme/setup",
+  provider: "github" as const,
+  branch: "machine/setup",
+  commit: "abc1234",
+  projectId,
+};
 
 const DurabilityTestLive = T3TeamWorkflowSchedulerLive.pipe(
   Layer.provideMerge(
@@ -109,7 +153,16 @@ const DurabilityTestLive = T3TeamWorkflowSchedulerLive.pipe(
 const TestLayer = Layer.mergeAll(
   DurabilityTestLive,
   makeFakeWorkflowHostLayer().layer,
-  makeBrokerLayer(undefined, { onArtifact: (artifact) => brokerArtifacts.push(artifact) }),
+  makeBrokerLayer(undefined, {
+    onArtifact: (artifact) => brokerArtifacts.push(artifact),
+    changeRequestPublisher: {
+      publish: (input) =>
+        Effect.sync(() => {
+          publishCalls.push(input);
+          return published;
+        }),
+    },
+  }),
   ServerConfig.layerTest(cwd, { prefix: "t3-grant-test-" }),
   SqlitePersistenceMemory, // same reference as DurabilityTestLive's, so it's memoized — exposes SqlClient below.
 ).pipe(Layer.provideMerge(NodeServices.layer));
@@ -307,4 +360,103 @@ it.effect(
       assert.isDefined(carrier);
       assert.strictEqual(carrier?.threadId, good.thread);
     }).pipe(Effect.provide(TestLayer)),
+);
+
+it.effect("a server-launched publish grant still reaches the publisher after rehydration", () =>
+  Effect.gen(function* () {
+    // Live machine-setup failure: kickoff parks on askUser, the desktop restarts or the run
+    // resumes after the answer, and publish must still work even though the launch thread never
+    // had that tool synced into its context.
+    publishCalls.length = 0;
+    const runId = "grant-publish-rehydrated";
+    const repo = yield* WorkflowRunRepository;
+    const store = yield* WorkflowJournalStore;
+    const config = yield* ServerConfig;
+    const broker = yield* T3TeamToolBroker;
+
+    // No publish tool in the synced context — the cloud kickoff path never unions it in.
+    yield* broker.bindSession({
+      threadId,
+      toolContext: createThreadToolContext({
+        tools: [{ id: "t3team.thread.children", label: "Children", capabilities: ["read"] }],
+      }),
+    });
+
+    const hostToolGrant = { toolGroups: ["mutation.change_request"] };
+    const hostToolClient = makeT3TeamWorkflowHostToolClient({
+      broker,
+      launchThreadId: threadId,
+      allowedToolGroups: ["mutation.change_request"],
+    });
+
+    let seq = 0;
+    const launched = yield* Effect.promise(() =>
+      launchWorkflowRecipe({
+        runId,
+        workflowPath: publishProbeWorkflowPath,
+        args: {},
+        runsRoot: NodePath.join(config.cwd, ".t3team-runs"),
+        launchThreadId: threadId,
+        projectId,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        registry: makeWorkflowEngineRegistry(),
+        host: makeFakeWorkflowHost().host,
+        newId: () => `${runId}-id-${(seq += 1)}`,
+        nowIso,
+        store,
+        ...(hostToolClient === undefined ? {} : { hostToolClient }),
+        lifecycle: makeWorkflowRunLifecycle({
+          repo,
+          row: buildRunningWorkflowRunRow({
+            runId,
+            workflowPath: publishProbeWorkflowPath,
+            args: {},
+            launchThreadId: threadId,
+            projectId,
+            modelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            origin: "recipe",
+            hostToolGrant,
+            nowIso: nowIso(),
+          }),
+          nowIso,
+        }),
+      }),
+    );
+    assert.strictEqual(launched.status, "suspended");
+    assert.deepStrictEqual(
+      Option.getOrThrow(yield* repo.getById({ runId })).hostToolGrant,
+      hostToolGrant,
+    );
+    assert.strictEqual(publishCalls.length, 0);
+
+    // Drop the live controller; boot rehydration rebuilds the host-tool client from the row.
+    yield* rehydrateSuspendedWorkflowRuns();
+
+    const registry = yield* T3TeamWorkflowEngineRegistry;
+    const ask = registry.peekPending(threadId);
+    assert.strictEqual(ask?.kind, "user.input");
+    yield* Effect.promise(() => registry.getRun(runId)!.resume(ask!.correlationId, "yes"));
+
+    const settled = Option.getOrThrow(yield* repo.getById({ runId }));
+    assert.strictEqual(settled.status, "completed");
+    assert.strictEqual(publishCalls.length, 1);
+    assert.deepStrictEqual(
+      {
+        cwd: publishCalls[0]?.cwd,
+        projectId: publishCalls[0]?.projectId,
+        branch: publishCalls[0]?.branch,
+        paths: publishCalls[0]?.paths,
+      },
+      {
+        cwd: "/workspace/project-1",
+        projectId: "project-1",
+        branch: "machine/setup",
+        paths: ["a.json"],
+      },
+    );
+  }).pipe(Effect.provide(TestLayer)),
 );
