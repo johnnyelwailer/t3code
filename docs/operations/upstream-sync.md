@@ -4,6 +4,13 @@ How the fork (`johnnyelwailer/t3code`) takes in upstream `pingdotgg/t3code`. The
 numbered so they can be cited in reviews and sync PRs ("rule 9 applies here"). The sync is
 recurring work, not a one-off: nothing here depends on a particular date, machine, or branch.
 
+```mermaid
+flowchart LR
+  U["upstream pingdotgg/t3code"] -->|merge| B["nexi/sync-upstream-YYYYMMDD"]
+  B -->|PR, CI + e2e green| M["fork main"]
+  M -->|pin| P["nexi-work pack (hive/nx-nexi)"]
+```
+
 For the merge mechanics (worktree, seam files, serial regression run), follow the
 `merge-upstream` skill in `.claude/skills/merge-upstream/SKILL.md`.
 
@@ -30,6 +37,7 @@ For the merge mechanics (worktree, seam files, serial regression run), follow th
 6. **Who wins a conflict.** Where both sides changed a file, upstream's new structure wins and the
    fork's extension points are re-applied on top. Files that exist only in the fork keep the
    fork's version. New upstream files are taken as they are.
+   Dependencies: take upstream's versions and keep fork-only workspaces and packs.
 7. **Event-storing core gets the most scrutiny.** Core files that store events (decider,
    projector, `OrchestrationEngine`, `ProjectionPipeline`, migrations, and the like) get the
    closest review. Any real judgment call there stops the sync for review instead of being
