@@ -7,6 +7,8 @@ export type ThreadBootstrapDispatchState = {
   kickoffSettled?: boolean;
   /** The kickoff promise rejected. Stays set so a later render does not hide the error. */
   kickoffFailed?: boolean;
+  /** A user retry after a failed kickoff: re-send it even though the server shell exists. */
+  kickoffRetry?: boolean;
   // The branch the create/kickoff dispatch actually carried (`null` when it went out before the
   // workspace's branch was known). Once set, `runThreadBootstrapEffect` uses this to decide
   // whether a later-resolved branch still needs to be backfilled via `thread.meta.update`.
@@ -55,15 +57,19 @@ export function planThreadBootstrap(input: {
 } {
   const state = resolveThreadBootstrapDispatchState(input.currentState, input.threadId);
 
+  const hasKickoff = input.hasInitialUserMessage || input.hasKickoffWorkflow;
+
   if (input.hasServerThread) {
+    // The workflow path creates the shell before launching, so a failed launch leaves a shell
+    // behind. Only an explicit retry of that failure re-sends the kickoff into it.
     return {
       state,
-      action: "none",
+      action: hasKickoff && state.kickoffRetry === true && !state.kickoffSent ? "kickoff" : "none",
       shouldEnsureProject: false,
     };
   }
 
-  if (input.hasInitialUserMessage || input.hasKickoffWorkflow) {
+  if (hasKickoff) {
     return {
       state,
       action: state.kickoffSent ? "none" : "kickoff",

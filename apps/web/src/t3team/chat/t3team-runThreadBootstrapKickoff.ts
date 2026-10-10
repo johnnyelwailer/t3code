@@ -75,6 +75,8 @@ type RunThreadBootstrapKickoffInput = {
   toolContext: T3TeamTurnToolContext | undefined;
   createdAt: string;
   onInitialUserMessageSent: (() => void) | undefined;
+  /** A retry into a shell a failed launch left behind: send the kickoff without creating it. */
+  serverThreadExists?: boolean;
 };
 
 type WorkflowBackedRecipe = T3TeamKickoffWorkflow & { readonly workflowPath: string };
@@ -120,7 +122,7 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
   // run, and nothing thrown: the two calls sit before the create, so a hang there is indistinguishable
   // from a launch that is merely slow. On the turn path there is nothing to hoist — the create rides
   // inside `thread.turn.start`'s own `bootstrap.createThread`.
-  if (hasWorkflowLaunchPath(input.kickoffWorkflow)) {
+  if (hasWorkflowLaunchPath(input.kickoffWorkflow) && input.serverThreadExists !== true) {
     await dispatchThreadBootstrapCreateWithRecovery({
       backend: input.backend,
       action: input.action,
@@ -203,18 +205,22 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
     titleSeed: input.title,
     runtimeMode: input.kickoffRuntimeMode,
     interactionMode: input.kickoffInteractionMode,
-    bootstrap: {
-      createThread: {
-        projectId: ProjectId.make(input.canonicalProjectId),
-        title: input.title,
-        modelSelection: input.kickoffModelSelection,
-        runtimeMode: input.kickoffRuntimeMode,
-        interactionMode: input.kickoffInteractionMode,
-        branch: input.kickoffBranch,
-        worktreePath: null,
-        createdAt: input.createdAt,
-      },
-    },
+    ...(input.serverThreadExists === true
+      ? {}
+      : {
+          bootstrap: {
+            createThread: {
+              projectId: ProjectId.make(input.canonicalProjectId),
+              title: input.title,
+              modelSelection: input.kickoffModelSelection,
+              runtimeMode: input.kickoffRuntimeMode,
+              interactionMode: input.kickoffInteractionMode,
+              branch: input.kickoffBranch,
+              worktreePath: null,
+              createdAt: input.createdAt,
+            },
+          },
+        }),
   });
   finalizeThreadBootstrapKickoff({
     environmentId: input.environmentId,

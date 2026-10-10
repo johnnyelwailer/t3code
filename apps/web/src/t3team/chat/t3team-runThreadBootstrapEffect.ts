@@ -101,23 +101,18 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
     dispatchState: bootstrapPlan.state,
   });
 
-  // A server shell arriving mid-launch used to flip this to idle and unmount the pending
-  // state, so a later failure looked like an empty composer. Keep running until the
-  // kickoff promise settles, and keep a failure visible after it does.
-  if (bootstrapPlan.state.kickoffFailed) {
+  // Keep running until the kickoff promise settles, even once the server shell exists, and keep
+  // a failure visible after it does (otherwise it looks like an empty composer).
+  const { state } = bootstrapPlan;
+  if (state.kickoffFailed) {
     updateBootstrapStatus("failed");
     return;
   }
-  if (bootstrapPlan.state.kickoffSent && bootstrapPlan.state.kickoffSettled !== true) {
+  if (bootstrapPlan.action === "kickoff" || (state.kickoffSent && state.kickoffSettled !== true)) {
     updateBootstrapStatus("running");
   } else if (serverThread != null) {
     updateBootstrapStatus("idle");
-  } else if (
-    bootstrapPlan.action === "none" &&
-    (bootstrapPlan.state.kickoffSent || bootstrapPlan.state.threadCreateSent)
-  ) {
-    updateBootstrapStatus("running");
-  } else if (bootstrapPlan.action === "none") {
+  } else if (bootstrapPlan.action === "none" && !state.kickoffSent && !state.threadCreateSent) {
     updateBootstrapStatus("idle");
   } else {
     updateBootstrapStatus("running");
@@ -181,6 +176,7 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
     action: bootstrapPlan.action,
     state: bootstrapPlan.state,
     onInitialUserMessageSent,
+    ...(serverThread != null ? { serverThreadExists: true } : {}),
   })
     .then(() => {
       if (bootstrapPlan.action === "kickoff") {

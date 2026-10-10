@@ -69,7 +69,7 @@ export function ThreadPendingChat({
         </p>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
           {isFailed
-            ? "The live conversation never picked up the local kickoff state. Retry the launch to recreate the durable thread state."
+            ? "The kickoff didn't reach the run. Retry the launch to send it again — the conversation is kept."
             : stalled
               ? "Something went wrong before anything was sent — no model was called and nothing ran. Retrying is safe."
               : runningDetail(phase)}
