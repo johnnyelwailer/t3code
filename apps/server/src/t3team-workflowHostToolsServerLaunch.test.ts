@@ -20,7 +20,8 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 
-import { afterAll, describe, expect, it } from "vite-plus/test";
+import { assert, describe, it } from "@effect/vitest";
+import { afterAll } from "vite-plus/test";
 import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
@@ -48,162 +49,198 @@ const published = {
   url: "https://example.test/pr/7",
   number: 7,
   repository: "acme/setup",
-  provider: "github",
+  provider: "github" as const,
   branch: "machine/setup",
   commit: "abc1234",
   projectId: ProjectId.make("project-1"),
-} as const;
+};
 
-/** The real broker over V2 fakes with a recording publisher. `contextTools` seeds the launch
- * thread's synced context (what a web client would have written); `undefined` = never synced. */
-async function makeBroker(contextTools: ReadonlyArray<string> | undefined) {
+const projectId = ProjectId.make("project-1");
+const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
+const nowIso = (): string => "2026-07-27T00:00:00.000Z";
+
+/** A cloud session's first message: nothing synced yet. Or a thread synced without publish. */
+const threadContexts = [
+  { label: "a thread whose tool context was never synced", contextTools: undefined },
+  { label: "a thread synced without the tool", contextTools: ["t3team.thread.children"] },
+] as const;
+
+const ungrantedCases = threadContexts.flatMap((thread) =>
+  (
+    [
+      { groups: ["integration.read"] as const, slug: "integration.read" },
+      { groups: [] as const, slug: "empty" },
+      { groups: ["mutation.draft"] as const, slug: "mutation.draft" },
+    ] as const
+  ).map((ungranted) => ({
+    label: thread.label,
+    contextTools: thread.contextTools,
+    groups: ungranted.groups,
+    slug: ungranted.slug,
+  })),
+);
+
+/** Real broker + recording publisher; optional seed of the launch thread's synced context. */
+const withBroker = Effect.fn("withBroker")(function* (
+  contextTools: ReadonlyArray<string> | undefined,
+) {
   const publishCalls: ChangeRequestPublishInput[] = [];
-  const broker = await Effect.runPromise(
-    Effect.gen(function* () {
-      const resolved = yield* T3TeamToolBroker;
-      if (contextTools !== undefined) {
-        yield* resolved.bindSession({
-          threadId,
-          toolContext: createThreadToolContext({
-            tools: contextTools.map((id) => ({ id, label: id, capabilities: ["read" as const] })),
-          }),
-        });
-      }
-      return resolved;
-    }).pipe(
-      Effect.provide(
-        makeBrokerLayer(undefined, {
-          changeRequestPublisher: {
-            publish: (input) =>
-              Effect.sync(() => {
-                publishCalls.push(input);
-                return published;
-              }),
-          },
-        }),
-      ),
+  const broker = yield* T3TeamToolBroker.pipe(
+    Effect.provide(
+      makeBrokerLayer(undefined, {
+        changeRequestPublisher: {
+          publish: (input) =>
+            Effect.sync(() => {
+              publishCalls.push(input);
+              return published;
+            }),
+        },
+      }),
     ),
   );
+  if (contextTools !== undefined) {
+    yield* broker.bindSession({
+      threadId,
+      toolContext: createThreadToolContext({
+        tools: contextTools.map((id) => ({ id, label: id, capabilities: ["read" as const] })),
+      }),
+    });
+  }
   return { broker, publishCalls };
-}
+});
 
-async function runBody(input: {
+const runBody = (input: {
   readonly runId: string;
   readonly broker: T3TeamToolBrokerShape;
   readonly allowedToolGroups: ReadonlyArray<string>;
-}) {
-  const hostToolClient = makeT3TeamWorkflowHostToolClient({
-    broker: input.broker,
-    launchThreadId: threadId,
-    allowedToolGroups: input.allowedToolGroups,
+}) =>
+  Effect.promise(async () => {
+    const hostToolClient = makeT3TeamWorkflowHostToolClient({
+      broker: input.broker,
+      launchThreadId: threadId,
+      allowedToolGroups: input.allowedToolGroups,
+    });
+    const completed: unknown[] = [];
+    const errors: unknown[] = [];
+    let seq = 0;
+    const result = await launchWorkflowRecipe({
+      runId: input.runId,
+      workflowPath,
+      args: { branch: "machine/setup", paths: ["a.json"] },
+      runsRoot,
+      launchThreadId: threadId,
+      projectId,
+      modelSelection,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      registry: makeWorkflowEngineRegistry(),
+      host: makeFakeWorkflowHost().host,
+      newId: () => `${input.runId}-id-${(seq += 1)}`,
+      nowIso,
+      ...(hostToolClient === undefined ? {} : { hostToolClient }),
+      onComplete: async (output) => {
+        completed.push(output);
+      },
+      onError: async (error) => {
+        errors.push(error);
+      },
+    });
+    return { result, completed, errors };
   });
-  const completed: unknown[] = [];
-  const errors: unknown[] = [];
-  let seq = 0;
-  const result = await launchWorkflowRecipe({
-    runId: input.runId,
-    workflowPath,
-    args: { branch: "machine/setup", paths: ["a.json"] },
-    runsRoot,
-    launchThreadId: threadId,
-    projectId: ProjectId.make("project-1"),
-    modelSelection: createModelSelection(ProviderInstanceId.make("inst-1"), "model-x"),
-    runtimeMode: "full-access",
-    interactionMode: "default",
-    registry: makeWorkflowEngineRegistry(),
-    host: makeFakeWorkflowHost().host,
-    newId: () => `${input.runId}-id-${(seq += 1)}`,
-    nowIso: () => "2026-07-27T00:00:00.000Z",
-    ...(hostToolClient === undefined ? {} : { hostToolClient }),
-    onComplete: async (output) => {
-      completed.push(output);
-    },
-    onError: async (error) => {
-      errors.push(error);
-    },
-  });
-  return { result, completed, errors };
-}
 
 /** What an agent turn on the launch thread sees: a plain binding, no run grant. */
-async function agentTurnPublish(broker: T3TeamToolBrokerShape, groups?: ReadonlyArray<string>) {
-  const binding = await Effect.runPromise(
-    broker.bindSession({
+const agentTurnPublish = (
+  broker: T3TeamToolBrokerShape,
+  groups: ReadonlyArray<string> | undefined,
+) =>
+  Effect.gen(function* () {
+    const binding = yield* broker.bindSession({
       threadId,
       ...(groups === undefined ? {} : { allowedToolGroups: groups }),
-    }),
-  );
-  if (binding === undefined) throw new Error("expected a binding");
-  return await Effect.runPromise(
-    binding.callTool({ server: "t3team", tool: PUBLISH, arguments: {}, threadId }),
-  );
-}
+    });
+    assert.isDefined(binding);
+    return yield* binding!.callTool({
+      server: "t3team",
+      tool: PUBLISH,
+      arguments: {},
+      threadId,
+    });
+  });
 
 describe("a server-launched run calling the host tools its grant names", () => {
-  // A cloud session's first message: nothing synced yet. And a thread whose synced context is the
-  // `thread`-surface defaults, which never carry the opt-in publish tool.
-  const threads = [
-    ["a thread whose tool context was never synced", undefined],
-    ["a thread synced without the tool", ["t3team.thread.children"]],
-  ] as const;
+  it.effect.each(threadContexts)("reaches the publisher on $label", ({ label, contextTools }) =>
+    Effect.gen(function* () {
+      const { broker, publishCalls } = yield* withBroker(contextTools);
 
-  for (const [label, contextTools] of threads) {
-    it(`reaches the publisher on ${label}`, async () => {
-      const { broker, publishCalls } = await makeBroker(contextTools);
-
-      const { result, completed, errors } = await runBody({
+      const { result, completed, errors } = yield* runBody({
         runId: `server-launch-granted-${label.length}`,
         broker,
         allowedToolGroups: ["mutation.change_request"],
       });
 
-      expect(errors).toEqual([]);
-      expect(result.status).toBe("completed");
-      expect(completed[0]).toMatchObject({ published: { url: published.url, number: 7 } });
-      // Bound to the launch thread's checkout, with the body's own arguments.
-      expect(publishCalls).toHaveLength(1);
-      expect(publishCalls[0]).toMatchObject({
-        cwd: "/workspace/project-1",
-        projectId: "project-1",
-        branch: "machine/setup",
-        paths: ["a.json"],
-      });
-    });
+      assert.deepStrictEqual(errors, []);
+      assert.strictEqual(result.status, "completed");
+      const output = completed[0] as { published: { url: string; number: number } };
+      assert.strictEqual(output.published.url, published.url);
+      assert.strictEqual(output.published.number, 7);
+      assert.strictEqual(publishCalls.length, 1);
+      assert.deepStrictEqual(
+        {
+          cwd: publishCalls[0]?.cwd,
+          projectId: publishCalls[0]?.projectId,
+          branch: publishCalls[0]?.branch,
+          paths: publishCalls[0]?.paths,
+        },
+        {
+          cwd: "/workspace/project-1",
+          projectId: "project-1",
+          branch: "machine/setup",
+          paths: ["a.json"],
+        },
+      );
+    }),
+  );
 
-    it(`gets no widening on ${label} when the recipe does not hold the group`, async () => {
-      const { broker, publishCalls } = await makeBroker(contextTools);
+  it.effect.each(ungrantedCases)(
+    "gets no widening on $label when the recipe holds $slug",
+    ({ label, contextTools, groups, slug }) =>
+      Effect.gen(function* () {
+        const { broker, publishCalls } = yield* withBroker(contextTools);
 
-      // The body declares `mutation.change_request`, so the SDK gate passes; the RECIPE lacks it.
-      for (const groups of [["integration.read"], [], ["mutation.draft"]] as const) {
-        const { result, errors } = await runBody({
-          runId: `server-launch-ungranted-${label.length}-${groups.join("-") || "empty"}`,
+        // The body declares `mutation.change_request`, so the SDK gate passes; the RECIPE lacks it.
+        const { result, errors } = yield* runBody({
+          runId: `server-launch-ungranted-${label.length}-${slug}`,
           broker,
           allowedToolGroups: groups,
         });
-        expect(result.status).toBe("failed");
-        expect(String(errors[0])).toContain(`Tool '${PUBLISH}' is not enabled for this thread.`);
+        assert.strictEqual(result.status, "failed");
+        assert.include(String(errors[0]), `Tool '${PUBLISH}' is not enabled for this thread.`);
+        assert.deepStrictEqual(publishCalls, []);
+      }),
+  );
+
+  it.effect("does not leak the widening to an agent turn on the same thread", () =>
+    Effect.gen(function* () {
+      const { broker, publishCalls } = yield* withBroker(["t3team.thread.children"]);
+
+      const run = yield* runBody({
+        runId: "server-launch-leak",
+        broker,
+        allowedToolGroups: ["mutation.change_request"],
+      });
+      assert.strictEqual(run.result.status, "completed");
+      assert.strictEqual(publishCalls.length, 1);
+
+      // The same thread, afterwards, as an agent turn binds it — with or without the recipe groups.
+      for (const groups of [undefined, ["mutation.change_request"]] as const) {
+        const turn = yield* agentTurnPublish(broker, groups);
+        assert.isTrue(turn.isError);
+        assert.include(
+          turn.content[0]?.text ?? "",
+          `Tool '${PUBLISH}' is not enabled for this thread.`,
+        );
       }
-      expect(publishCalls).toEqual([]);
-    });
-  }
-
-  it("does not leak the widening to an agent turn on the same thread", async () => {
-    const { broker, publishCalls } = await makeBroker(["t3team.thread.children"]);
-
-    const run = await runBody({
-      runId: "server-launch-leak",
-      broker,
-      allowedToolGroups: ["mutation.change_request"],
-    });
-    expect(run.result.status).toBe("completed");
-    expect(publishCalls).toHaveLength(1);
-
-    // The same thread, afterwards, as an agent turn binds it — with or without the recipe groups.
-    for (const groups of [undefined, ["mutation.change_request"]] as const) {
-      const turn = await agentTurnPublish(broker, groups);
-      expect(turn.isError).toBe(true);
-      expect(turn.content[0]?.text).toContain(`Tool '${PUBLISH}' is not enabled for this thread.`);
-    }
-    expect(publishCalls).toHaveLength(1);
-  });
+      assert.strictEqual(publishCalls.length, 1);
+    }),
+  );
 });
