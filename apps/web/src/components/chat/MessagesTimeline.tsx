@@ -281,7 +281,9 @@ import {
   resolveUserMessageContext,
   reviewCommentContextLabel,
   selectedMessageContextFragment,
+  workItemContextChipKind,
 } from "~/lib/composerContextRecords";
+import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import {
   collectComposerContextReferences,
   formatComposerContextReference,
@@ -4570,6 +4572,25 @@ const userMessageContextPresentationRegistry = createContextPresentationRegistry
       render: (record, context) =>
         record.kind === "thread" ? (
           <ThreadContextChip record={record} copyMarkdown={context.copyMarkdown} />
+        ) : (
+          <UnavailableUserMessageContextChip {...context} />
+        ),
+    },
+    {
+      kind: "work-item",
+      canRender: (record) => record.kind === "work-item",
+      render: (record, context) =>
+        record.kind === "work-item" ? (
+          <ContextChipShell
+            kind={workItemContextChipKind(record.status)}
+            icon={<JiraIssueTypeIcon issueType={undefined} />}
+            label={record.key}
+            aria-label={`Work item ${record.key}, ${record.status}`}
+            data-markdown-copy={context.copyMarkdown}
+            tooltip={[record.title, record.status, record.url]
+              .filter((line) => line.trim())
+              .join("\n")}
+          />
         ) : (
           <UnavailableUserMessageContextChip {...context} />
         ),

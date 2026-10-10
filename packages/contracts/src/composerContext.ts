@@ -28,6 +28,7 @@ export const COMPOSER_CONTEXT_KINDS = [
   "mention",
   "skill",
   "thread",
+  "work-item",
 ] as const;
 export type KnownComposerContextKind = (typeof COMPOSER_CONTEXT_KINDS)[number];
 
@@ -88,6 +89,21 @@ export const PullRequestContextMetadata = Schema.Struct({
   isDraft: Schema.Boolean,
 });
 export type PullRequestContextMetadata = typeof PullRequestContextMetadata.Type;
+
+/**
+ * Snapshot of a Jira work item attached as a reference. The issue key is its stable identity;
+ * `jiraProjectKey` is carried for display and projection, and `capturedAt` marks when the
+ * snapshot was taken so a stale chip can be recognized.
+ */
+export const WorkItemContextMetadata = Schema.Struct({
+  key: TrimmedNonEmptyString.check(Schema.isMaxLength(64)),
+  jiraProjectKey: TrimmedNonEmptyString.check(Schema.isMaxLength(32)),
+  title: ShortString,
+  status: ShortString,
+  url: ShortString,
+  capturedAt: BoundedString(64),
+});
+export type WorkItemContextMetadata = typeof WorkItemContextMetadata.Type;
 
 const recordBase = {
   version: Schema.Literal(1),
@@ -232,6 +248,18 @@ export const ThreadContextRecord = Schema.Struct({
 export type ThreadContextRecord = typeof ThreadContextRecord.Type;
 
 /**
+ * A Jira work item attached so the agent can read its context. Only the reference snapshot
+ * travels on the wire; the full ticket bundle lives on disk under
+ * `.t3team/context/jira/<project>/items/<key>/` in the project workspace.
+ */
+export const WorkItemContextRecord = Schema.Struct({
+  ...recordBase,
+  kind: Schema.Literal("work-item"),
+  ...WorkItemContextMetadata.fields,
+});
+export type WorkItemContextRecord = typeof WorkItemContextRecord.Type;
+
+/**
  * Catch-all for kinds this build does not know. Known discriminators are excluded so a
  * malformed known record fails its own schema instead of sliding through unchecked.
  * Mirrors `ChatUnknownAttachment`.
@@ -262,6 +290,7 @@ export const KnownComposerContextRecord = Schema.Union([
   MentionContextRecord,
   SkillContextRecord,
   ThreadContextRecord,
+  WorkItemContextRecord,
 ]);
 export type KnownComposerContextRecord = typeof KnownComposerContextRecord.Type;
 
