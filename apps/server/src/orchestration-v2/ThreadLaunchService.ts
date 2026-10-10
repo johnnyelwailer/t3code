@@ -743,9 +743,17 @@ const make = Effect.gen(function* () {
         Option.isSome(launchReceipt) &&
         launchReceipt.value.status === "accepted" &&
         launchReceipt.value.commandType === "thread.create";
+      // reuseExistingThread records an accepted metadata.update, not create.
+      // Skip baseRef validation on either accepted claim so WS retries stay
+      // idempotent even if the local base disappears after the first accept.
+      const replayingAcceptedClaim =
+        replayingAcceptedCreate ||
+        (Option.isSome(launchReceipt) &&
+          launchReceipt.value.status === "accepted" &&
+          launchReceipt.value.commandType === "thread.metadata.update");
       // Fail before allocating/creating a thread when the worktree base cannot
-      // resolve. Skip on idempotent replay of an already-accepted create.
-      if (input.workspaceStrategy.type === "worktree" && !replayingAcceptedCreate) {
+      // resolve. Skip on idempotent replay of an already-accepted claim.
+      if (input.workspaceStrategy.type === "worktree" && !replayingAcceptedClaim) {
         yield* validateWorktreeBaseRef(
           { ...input, workspaceStrategy: input.workspaceStrategy },
           project.workspaceRoot,

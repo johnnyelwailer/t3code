@@ -1364,6 +1364,48 @@ it.effect("allows a missing local baseRef when startFromOrigin can fetch it", ()
   }).pipe(Effect.provide(harness.layer));
 });
 
+it.effect("replays a reused-thread worktree launch after local baseRef disappears", () => {
+  let baseResolves = true;
+  const harness = makeHarness({
+    hasCommit: () => Effect.succeed(baseResolves),
+    remoteExists: () => Effect.succeed(false),
+  });
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    const threads = yield* ThreadManagement.ThreadManagementService;
+    const threadId = ThreadId.make("thread:launch:reuse-base-replay");
+    yield* threads.dispatch({
+      type: "thread.create",
+      commandId: CommandId.make("command:launch:reuse-base-replay:create"),
+      threadId,
+      projectId,
+      title: "Empty shell",
+      modelSelection,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: null,
+      worktreePath: null,
+      createdBy: "user",
+      creationSource: "web",
+    });
+    const input = {
+      ...launchInput({
+        command: "command:launch:reuse-base-replay",
+        thread: threadId,
+        message: "Bind a worktree",
+        workspace: { type: "worktree" as const, baseRef: "main", branch: "feature/reuse" },
+      }),
+      reuseExistingThread: true,
+    };
+    const first = yield* launches.launch(input);
+    assert.isFalse(first.resumed);
+    baseResolves = false;
+    const replay = yield* launches.launch(input);
+    assert.isTrue(replay.resumed);
+    assert.equal(replay.threadId, threadId);
+  }).pipe(Effect.provide(harness.layer));
+});
+
 it.effect("shows the fetch diagnosis when preparing a worktree from origin fails", () => {
   const detail =
     "Git could not authenticate with the remote. Check Git credentials or SSH access on the server, then retry.";
