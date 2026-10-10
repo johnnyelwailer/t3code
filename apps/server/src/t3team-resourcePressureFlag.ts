@@ -13,14 +13,14 @@
  */
 
 /** Environment override for the resource-pressure flag. `1`/`true`/`on` on, anything else off. */
-export const RESOURCE_PRESSURE_FLAG_ENV = "NEXI_FF_RESOURCE_PRESSURE";
+const RESOURCE_PRESSURE_FLAG_ENV = "NEXI_FF_RESOURCE_PRESSURE";
 
 /** Optional sample-period override (ms), clamped to the bounded range below. */
-export const RESOURCE_PRESSURE_INTERVAL_ENV = "T3TEAM_RESOURCE_PRESSURE_INTERVAL_MS";
+const RESOURCE_PRESSURE_INTERVAL_ENV = "T3TEAM_RESOURCE_PRESSURE_INTERVAL_MS";
 
-export const RESOURCE_PRESSURE_DEFAULT_INTERVAL_MS = 20_000;
-export const RESOURCE_PRESSURE_MIN_INTERVAL_MS = 10_000;
-export const RESOURCE_PRESSURE_MAX_INTERVAL_MS = 120_000;
+const RESOURCE_PRESSURE_DEFAULT_INTERVAL_MS = 20_000;
+const RESOURCE_PRESSURE_MIN_INTERVAL_MS = 10_000;
+const RESOURCE_PRESSURE_MAX_INTERVAL_MS = 120_000;
 
 type ReadEnv = (key: string) => string | undefined;
 const processEnv: ReadEnv = (key) => process.env[key];

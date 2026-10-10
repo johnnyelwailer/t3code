@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildProjectTicketLookup,
+  latestLiveTicketThreadId,
   matchesProjectThreadTicket,
   resolveCanonicalProjectTicketId,
 } from "~/t3team/t3team-ticketLookup";
@@ -14,7 +15,6 @@ function createThread(overrides: Partial<ProjectThread> = {}): ProjectThread {
     title: "IES-18425 kickoff 1",
     status: "idle",
     lastMessageAt: "2026-05-26T12:00:00.000Z",
-    messageCount: 0,
     createdAt: "2026-05-26T12:00:00.000Z",
     ...overrides,
   };
@@ -66,5 +66,24 @@ describe("matchesProjectThreadTicket", () => {
         "IES-99999",
       ),
     ).toBe(false);
+  });
+});
+
+describe("latestLiveTicketThreadId", () => {
+  it("picks the ticket's newest unsettled thread, by id or display key", () => {
+    const threads = [
+      createThread({ id: "old", ticketId: "t-1", createdAt: "2026-10-01T00:00:00Z" }),
+      createThread({ id: "new", ticketDisplayId: "IES-1", createdAt: "2026-10-05T00:00:00Z" }),
+      createThread({
+        id: "settled",
+        ticketId: "t-1",
+        createdAt: "2026-10-06T00:00:00Z",
+        settled: true,
+      }),
+      createThread({ id: "other", ticketId: "t-2", createdAt: "2026-10-07T00:00:00Z" }),
+    ];
+    expect(latestLiveTicketThreadId(threads, "t-1")).toBe("old");
+    expect(latestLiveTicketThreadId(threads, "IES-1")).toBe("new");
+    expect(latestLiveTicketThreadId(threads, "t-3")).toBeUndefined();
   });
 });

@@ -1,5 +1,7 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
+import { useAllEnvironmentShellsBootstrapped } from "~/state/entities";
 import { useBackendState } from "~/t3team/backend/t3team-index";
+import { ProjectMyWorkLoadingState } from "~/t3team/t3team-projectMyWorkContentState";
 import type {
   ProjectKickoffThreadInput,
   TicketKickoffThreadInput,
@@ -8,14 +10,17 @@ import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeS
 import type { ProjectThreadDisplayMode, ProjectThread, ViewState } from "~/t3team/t3team-types";
 import { AppDashboardPane } from "~/t3team/t3team-AppDashboardPane";
 import { AppMainContentHomeBrowser } from "~/t3team/t3team-AppMainContentHomeBrowser";
-import { AllProjectsMyWorkView } from "~/t3team/t3team-AllProjectsMyWorkView";
+import { AllProjectsMyWorkPane } from "~/t3team/t3team-AllProjectsMyWorkPane";
 import { AppDraftPane } from "~/t3team/t3team-AppDraftPane";
+import {
+  T3TeamStartupMyWorkGate,
+  useStartupLandingEligible,
+} from "~/t3team/t3team-StartupMyWorkGate";
 import { AppThreadPane } from "~/t3team/t3team-AppThreadPane";
-import { useHomeProjectChat } from "./t3team-AppMainContentShell";
+import { useT3TeamScratchHomeChat } from "~/t3team/t3team-useScratchHomeChat";
 import { resolveWorkHomeProject } from "~/t3team/t3team-appMainContentResolution";
 import { resolveT3TeamSetupSurfaceReason } from "~/t3team/t3team-setupSurfaceReason";
 import { useAppMainContentThreadResolution } from "~/t3team/t3team-useAppMainContentThreadResolution";
-import { useLocalProviderSessionThreadFilter } from "~/t3team/hooks/t3team-useLocalProviderSessionThreadFilter";
 
 type MainContentProps = {
   view: ViewState | null;
@@ -37,7 +42,6 @@ type MainContentProps = {
   onThreadDisplayModeChange: (threadId: string, displayMode: ProjectThreadDisplayMode) => void;
   onBackToDashboard: (projectId: string) => void;
   onCreate: () => void;
-  onInlineProjectCreated: (project: ProjectShellProject) => void;
   renderDashboard: (project: ProjectShellProject) => React.ReactNode;
   renderTicketDetail: (
     project: ProjectShellProject,
@@ -63,24 +67,21 @@ export function AppMainContent({
   onKickoffProjectThread,
   onBackToDashboard,
   onCreate,
-  onInlineProjectCreated,
   renderDashboard,
   renderTicketDetail,
   onThreadKickoffConsumed,
   onThreadDisplayModeChange,
 }: MainContentProps) {
   const backendState = useBackendState();
-  // Display-only hiding of adopted local provider sessions (the "Local provider sessions"
-  // toggle). Thread resolution below intentionally keeps the full getThreadsForProject, so
-  // an external session that is open while the toggle turns off stays open — it just
-  // leaves the lists.
-  const { filterForProject: visibleThreadsForProject } =
-    useLocalProviderSessionThreadFilter(getThreadsForProject);
-  const { homeChatProject, homeChatThreadId } = useHomeProjectChat({
-    projects,
-    getThreadsForProject,
-  });
-  const showInitialSetup = !view && (reopenInitialSetup || allProjects.length === 0);
+  const startupEligible = useStartupLandingEligible();
+  // Project-less chats live in upstream's Scratch project ("No project").
+  const { scratchProject, startScratch } = useT3TeamScratchHomeChat(allProjects);
+  // Until the environments bootstrap, an empty list means "not loaded yet", not "first run":
+  // judging it as first run flashed the setup surface on every launch. Bootstrapped also settles
+  // for an environment that stays disconnected, so this can never hold the skeleton forever.
+  const projectsLoading = !useAllEnvironmentShellsBootstrapped() && allProjects.length === 0;
+  const showInitialSetup =
+    !view && (reopenInitialSetup || (!projectsLoading && allProjects.length === 0));
   const setupSurfaceReason = resolveT3TeamSetupSurfaceReason({
     allProjects,
     selectedProjectId,
@@ -95,17 +96,28 @@ export function AppMainContent({
   const homeBrowser = (
     <AppMainContentHomeBrowser
       onCreate={onCreate}
-      onInlineProjectCreated={onInlineProjectCreated}
-      showInitialSetup={showInitialSetup}
       setupSurfaceReason={setupSurfaceReason}
       showAside={!reopenInitialSetup && projects.length > 0}
       shouldInsetDesktopHeader={shouldInsetDesktopHeader}
-      homeChatProject={homeChatProject}
+      scratchProject={scratchProject}
+      onStartScratch={startScratch}
       providers={backendState.providers}
       isConnected={backendState.connectionStatus === "connected"}
       onOpenHomeThread={(threadId) => {
-        if (homeChatProject) onOpenThread(homeChatProject.id, threadId);
+        if (scratchProject) onOpenThread(scratchProject.id, threadId);
       }}
+      onKickoffProjectThread={onKickoffProjectThread}
+    />
+  );
+
+  const allProjectsMyWork = (
+    <AllProjectsMyWorkPane
+      onOpenTicket={onOpenTicket}
+      getThreadsForProject={getThreadsForProject}
+      onRememberEmbeddedThread={(threadId) => onThreadDisplayModeChange(threadId, "embedded")}
+      onOpenThread={onOpenThread}
+      onOpenFullThread={onOpenFullThread}
+      onThreadKickoffConsumed={onThreadKickoffConsumed}
       onKickoffProjectThread={onKickoffProjectThread}
     />
   );
@@ -114,8 +126,6 @@ export function AppMainContent({
     view,
     allProjects,
     homeProject,
-    homeChatProject,
-    homeChatThreadId,
     getThreadsForProject,
   });
 
@@ -123,9 +133,11 @@ export function AppMainContent({
     if (homeProject) {
       return (
         <AppDashboardPane
+          // One instance per project: a detail, reveal or collapse state never carries over.
+          key={homeProject.id}
           activeDashboardMode={activeDashboardMode}
           project={homeProject}
-          projectThreads={visibleThreadsForProject(homeProject.id)}
+          projectThreads={getThreadsForProject(homeProject.id)}
           activeThread={null}
           activeThreadId={null}
           providers={backendState.providers}
@@ -139,14 +151,26 @@ export function AppMainContent({
         />
       );
     }
-
-    return homeBrowser;
+    // A cold start lands on My Work when it has something to show; otherwise the new conversation.
+    return (
+      <T3TeamStartupMyWorkGate
+        eligible={startupEligible && selectedProjectId === null && !reopenInitialSetup}
+      >
+        {projectsLoading && !reopenInitialSetup ? (
+          <div className="flex w-full flex-col p-4 sm:p-6">
+            <ProjectMyWorkLoadingState />
+          </div>
+        ) : (
+          homeBrowser
+        )}
+      </T3TeamStartupMyWorkGate>
+    );
   }
 
   // Like a draft, this resolves no project — its subject is the viewer, not a project — so it has
   // to be handled before any project lookup.
   if (view.type === "all-my-work") {
-    return <AllProjectsMyWorkView onOpenTicket={onOpenTicket} />;
+    return allProjectsMyWork;
   }
 
   // A draft has no project or thread of its own yet, so it resolves nothing
@@ -179,9 +203,10 @@ export function AppMainContent({
   if (view.type === "dashboard") {
     return (
       <AppDashboardPane
+        key={project.id}
         activeDashboardMode={activeDashboardMode}
         project={project}
-        projectThreads={visibleThreadsForProject(project.id)}
+        projectThreads={getThreadsForProject(project.id)}
         activeThread={resolvedThread}
         activeThreadId={view.embeddedThreadId ?? null}
         providers={backendState.providers}

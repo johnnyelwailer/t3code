@@ -48,7 +48,9 @@ export default async function run() {
 beforeAll(resetTypeCheckHosts);
 afterAll(resetTypeCheckHosts);
 
-describe("workflow type checking", () => {
+// A cold checker host parses the whole lib + `effect` declaration graph; on a CI runner shared by
+// four concurrent package suites that outlasts the 5s default.
+describe("workflow type checking", { timeout: 30_000 }, () => {
   it("reports nothing for a workflow that is actually correct", () => {
     const findings = typeCheckWorkflowSource({
       absolutePath: workspaceFile("clean"),

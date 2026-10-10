@@ -106,7 +106,7 @@ export function WorkItemAttachmentTile({
 
       <div className="min-w-0 space-y-0.5 p-2">
         <p className="truncate text-xs font-medium text-foreground">{name}</p>
-        <div className="flex min-w-0 items-center gap-1 text-[0.6875rem] text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-1 text-2xs text-muted-foreground">
           {sizeText ? <span className="shrink-0">{sizeText}</span> : null}
           {attachment.author ? (
             <span className="hidden min-w-0 truncate @lg/workitem:inline">

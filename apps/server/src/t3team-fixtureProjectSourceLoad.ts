@@ -44,7 +44,7 @@ export type T3TeamFixtureProjectSource = {
   readonly childKeysByParentKey: ReadonlyMap<string, ReadonlyArray<string>>;
 };
 
-export class T3TeamFixtureProjectSourceError extends Error {}
+class T3TeamFixtureProjectSourceError extends Error {}
 
 function readJsonFile(absolutePath: string): Record<string, unknown> {
   try {

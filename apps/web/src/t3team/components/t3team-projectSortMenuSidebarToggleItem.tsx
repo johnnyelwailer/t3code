@@ -15,11 +15,12 @@ export function SidebarToggleItem(input: {
       onCheckedChange={(nextChecked) => onCheckedChange(Boolean(nextChecked))}
       disabled={disabled}
       variant="switch"
-      className="min-h-11 py-1.5"
+      className="min-h-11"
     >
-      <div className="flex min-w-0 flex-col gap-0.5">
+      {/* The item's own py-1 plus this py-0.5 gives the two-line label its 6px inset. */}
+      <div className="flex min-w-0 flex-col gap-0.5 py-0.5">
         <span className="text-xs font-medium text-foreground">{label}</span>
-        <span className="text-[10px] leading-4 text-muted-foreground/80">{description}</span>
+        <span className="text-3xs leading-4 text-muted-foreground/80">{description}</span>
       </div>
     </MenuCheckboxItem>
   );

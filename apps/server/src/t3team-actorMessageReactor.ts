@@ -1,257 +1,163 @@
 /**
- * Reactor that turns a DELIVERED BATCH of inter-agent ("actor") messages into
- * a single consolidated digest turn on the receiving thread.
+ * Drives inter-agent mailbox delivery (t3team-actorMailboxService.ts) from V2
+ * state:
  *
- * Delivery model (inter-agent messaging overhaul): messages do NOT drive
- * individual turns. They accumulate in the mailbox and are claimed as ONE
- * batch at a boundary — the thread is idle (`isThreadBusy`), not reacting and
- * not suppressed — and delivered as one digest (t3team-actorReactionInput.ts)
- * that carries sender/subject/urgency per message, short bodies inlined, long
- * bodies as subject + t3team_read_message pointer.
+ * - a run of a thread ending → try that thread's digest now;
+ * - a user Stop (`run_interrupt_request` turn item from a client command, or
+ *   a fork stop cascade) → hold the thread's delivery, so a digest cannot
+ *   re-open the turn the user just stopped;
+ * - a message the user typed (`role: "user"`, `createdBy: "user"`) → lift
+ *   the holds of the thread and of its held descendants, then deliver (V1
+ *   history the importer writes never counts);
+ * - a durable sweep (`Scheduler.register`, 5 s tick) → drop the holds of
+ *   deleted threads, then deliver every due digest. The sweep is what makes
+ *   delivery restart-safe: it derives due work from the mailbox table, never
+ *   from the live event tail.
  *
- * Drains are engagement-aware: the baseline coalescing window applies always,
- * and while the USER is actively typing in the thread's composer (the
- * per-thread composing heartbeat — see t3team-threadEngagement.ts) the drain
- * backs off, re-checking every baseline window until the typing signal
- * lapses. There is deliberately NO hard cap: a genuine typing signal is
- * self-clearing, so a pending digest can never be starved. `urgent`
- * deliveries keep the ONLY interrupt path: a zero window that claims
- * immediately, unchanged.
- *
- * The standing inter-agent protocol is appended to a thread's FIRST digest
- * since process start (mailbox isBriefed/markBriefed), not repeated per
- * message.
- *
- * Design notes (F1 sendTurn framing, F2 admission + mailbox serialization,
- * coalescing semantics): see the module docs of
- * `t3team-actorMessageReactorLimits.ts` and `t3team-actorMessageReactorEvents.ts`.
+ * The reactor reads the LIVE tail only. Replaying history on boot would apply
+ * old events to current durable state: an old user message would lift a hold
+ * the user placed later and start a digest run in a thread they stopped.
  *
  * @module t3team-actorMessageReactor
  */
-import { ThreadId } from "@t3tools/contracts";
+import {
+  type OrchestrationV2StoredEvent,
+  type OrchestrationV2ThreadShell,
+  ThreadId,
+} from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
-import * as Duration from "effect/Duration";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
-import { T3TeamActorMailbox } from "./t3team-actorMailbox.ts";
-import { rehydrateActorMailbox } from "./t3team-actorMailboxRehydrate.ts";
-import { startActorReaction, startActorRestartHoldSummary } from "./t3team-actorMessageReaction.ts";
-import { loadInterruptedChildThreads } from "./t3team-actorRestartHold.ts";
-import {
-  isThreadBusy,
-  resolveActorMessageBatchMax,
-  resolveActorMessageDebounceMs,
-  T3TEAM_ACTOR_MESSAGE_HOP_CAP,
-} from "./t3team-actorMessageReactorLimits.ts";
-import { createActorMessageEventHandler } from "./t3team-actorMessageReactorEvents.ts";
-import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
+import { EventSinkV2 } from "./orchestration-v2/EventSink.ts";
+import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
+import * as Scheduler from "./scheduling/Scheduler.ts";
+import { forkParked } from "./serverActivation.ts";
+import { T3TeamActorMailbox } from "./t3team-actorMailboxService.ts";
+import { T3TeamEventSinkLayer } from "./t3team-v2/t3team-v2Layers.ts";
 
-export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
+const CLIENT_COMMAND_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Command id prefix of the fork's "stop including sub-runs" cascade (a user stop, too). */
+export const STOP_CASCADE_COMMAND_PREFIX = "t3team-cascade-stop:";
+
+/** Client commands carry random UUIDs; server-issued ones are prefixed ids. */
+export const isUserStopCommandId = (commandId: string | null): boolean =>
+  commandId !== null &&
+  (CLIENT_COMMAND_ID.test(commandId) || commandId.startsWith(STOP_CASCADE_COMMAND_PREFIX));
+
+const TERMINAL_RUN_STATUSES: ReadonlySet<string> = new Set([
+  "completed",
+  "failed",
+  "interrupted",
+  "cancelled",
+  "rolled_back",
+]);
+
+/** Event id prefix of the V1 importer's history (`orchestration-v2/legacy/LegacyV1ThreadImporter.ts`). */
+const IMPORTED_V1_EVENT_PREFIX = "migration:v1:";
+
+/** Lineage depth searched when lifting a held descendant's hold. */
+const MAX_LINEAGE_DEPTH = 16;
+
+/** The reactor over whichever `EventSinkV2` the caller provides (tests: the harness sink). */
+export const T3TeamActorMessageReactor = Layer.effectDiscard(
   Effect.gen(function* () {
-    const engine = yield* OrchestrationEngineService;
-    const query = yield* ProjectionSnapshotQuery;
+    const threads = yield* ThreadManagementService;
+    const eventSink = yield* EventSinkV2;
+    // The cursor is fixed when the layer builds, so nothing committed between boot and the
+    // stream's subscription is missed (`stream()` replays (cursor, high water] first).
+    const bootSequence = yield* eventSink.latestSequence().pipe(Effect.orDie);
     const mailbox = yield* T3TeamActorMailbox;
-    const engagement = yield* T3TeamThreadEngagement;
-    const debounceMs = resolveActorMessageDebounceMs();
-    const batchMax = resolveActorMessageBatchMax();
-    // Restart-held set (GHE #155): captured from rehydrate below; declared
-    // first so surfaceHoldSummary's closure binds it without a use-before-
-    // declaration. Mutable: a thread is consumed (deleted) the first time its
-    // hold is surfaced, so a later clean settle drains normally instead of
-    // re-surfacing a summary (e.g. repeatedly listing a still-stopped child).
-    let heldAtRehydrate: Set<string> = new Set();
+    const scheduler = yield* Scheduler.Scheduler;
+    const scope = yield* Effect.scope;
+    const logFailure =
+      (message: string) =>
+      <E>(cause: Cause.Cause<E>) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.failCause(cause)
+          : Effect.logWarning(message, { cause: Cause.pretty(cause) });
 
-    // Idle-aware wake policy: a per-thread mirror of the URGENT ids currently
-    // pending in the mailbox. An urgent entry makes the next drain claim with
-    // a zero window ("wake now"); claimed ids are forgotten at claim time and
-    // re-noted on requeue (onRequeueUrgent), so a failed dispatch cannot
-    // silently downgrade an urgent delivery to the idle window.
-    const urgentPending = new Map<string, Set<string>>();
-    const noteUrgentDelivery = (threadId: string, messageId: string) => {
-      const ids = urgentPending.get(threadId) ?? new Set<string>();
-      ids.add(messageId);
-      urgentPending.set(threadId, ids);
-    };
-    const forgetClaimedUrgent = (
-      threadId: string,
-      batch: ReadonlyArray<{ readonly messageId: string }>,
-    ) => {
-      const ids = urgentPending.get(threadId);
-      if (ids === undefined) return;
-      for (const entry of batch) ids.delete(entry.messageId);
-      if (ids.size === 0) urgentPending.delete(threadId);
-    };
-    const hasUrgentPending = (threadId: string) =>
-      (urgentPending.get(threadId)?.size ?? 0) > 0;
+    const drainSoon = (threadId: string) =>
+      mailbox
+        .drain(threadId)
+        .pipe(
+          Effect.catchCause(logFailure("t3team mailbox drain failed")),
+          Effect.forkIn(scope),
+          Effect.asVoid,
+        );
 
-    const loadThread = (threadId: string) =>
-      query.getThreadDetailById(ThreadId.make(threadId)).pipe(
-        Effect.orElseSucceed(() => Option.none()),
-        Effect.map(Option.getOrUndefined),
-      );
-
-    // Claim-and-dispatch: only when the thread is neither reacting nor
-    // otherwise running does a queued batch become a digest turn. The drain
-    // is FORKED (a domain-event must never block the stream on the window)
-    // and coalescing: it waits the baseline window — re-checking, while the
-    // user is engaged, up to the hard cap — then claims the whole pending
-    // batch so a burst of deliveries coalesces into ONE turn. The atomic
-    // claim plus the `reacting` flag keep per-thread serialization:
-    // concurrent drains for the same thread race to the claim, and only the
-    // first wins a non-empty batch.
-    const tryDrain = (threadId: string) =>
+    const isDescendantOf = (threadId: string, ancestorId: string) =>
       Effect.gen(function* () {
-        if (yield* mailbox.isReacting(threadId)) {
-          return;
+        let current: string | null = threadId;
+        for (let depth = 0; current !== null && depth < MAX_LINEAGE_DEPTH; depth += 1) {
+          const shell: OrchestrationV2ThreadShell | null = yield* threads
+            .getThreadShell(ThreadId.make(current))
+            .pipe(Effect.orElseSucceed(() => null));
+          current = shell?.lineage.parentThreadId ?? null;
+          if (current === ancestorId) return true;
         }
-        const thread = yield* loadThread(threadId);
-        if (!thread || isThreadBusy(thread)) {
-          return;
-        }
-        // Coalescing window. Urgent: zero window, claim now (the only
-        // interrupt path — never gated by engagement). Everything else:
-        // baseline window; deliveries enqueued while we wait join the batch.
-        // While the user is actively TYPING in this thread's composer the
-        // drain backs off — re-check engagement every baseline window and
-        // keep waiting until the typing signal lapses. No cap: the signal is
-        // self-clearing (the heartbeat stops when the user stops typing), so
-        // a pending digest can never be starved.
-        if (!hasUrgentPending(threadId) && debounceMs > 0) {
-          for (;;) {
-            yield* Effect.sleep(Duration.millis(debounceMs));
-            // Re-check after the window: a user turn may have started while
-            // we waited. If so, abort — the turn-settle drain picks up.
-            const settled = yield* loadThread(threadId);
-            if (!settled || isThreadBusy(settled)) {
-              return;
-            }
-            if (!(yield* engagement.isEngaged(threadId))) {
-              break;
-            }
-          }
-        }
-        const batch = yield* mailbox.takeNextForDispatch(threadId, batchMax);
-        forgetClaimedUrgent(threadId, batch);
-        if (batch.length === 0) {
-          return;
-        }
-        // Once-per-session standing instruction: append to the FIRST digest
-        // this thread receives since process start; mark only when the turn
-        // actually dispatched (a failed/requeued batch keeps its briefing).
-        const includeStanding = !(yield* mailbox.isBriefed(threadId));
-        const dispatched = yield* startActorReaction({
-          engine,
-          mailbox,
-          threadId,
-          loadThread,
-          entries: batch,
-          includeStandingInstruction: includeStanding,
-          // Re-note claimed-then-requeued urgent entries: forgetClaimedUrgent
-          // already ran at claim, so a failed dispatch must not silently
-          // downgrade them to the idle window.
-          onRequeueUrgent: (requeued) => {
-            for (const entry of requeued) {
-              if (entry.urgency === "urgent") noteUrgentDelivery(threadId, entry.messageId);
-            }
-          },
-        });
-        if (dispatched && includeStanding) {
-          yield* mailbox.markBriefed(threadId);
-        }
-      }).pipe(
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.failCause(cause)
-            : Effect.logWarning("t3team actor-message drain failed", {
-                threadId,
-                cause: Cause.pretty(cause),
-              }),
-        ),
-        Effect.forkDetach,
-      );
+        return false;
+      });
 
-    // Restart hold (GHE #155): a RESTART-held thread (suppressed at
-    // rehydrate because it had pending deliveries or a stale running session)
-    // whose turn just settled cleanly was CONTINUED by the user — surface its
-    // held work as ONE summary turn (interrupted children + one line per held
-    // message), not one turn per held message. The user's continue is the
-    // explicit lift: clear suppression, then claim the whole held batch with
-    // the ordinary atomic claim (no cap = everything). A racing live-delivery
-    // drain still loses atomically to exactly one turn. Scoped to the
-    // rehydrate-held set so a user-stop suppression on any other thread keeps
-    // its current semantics (no auto-dispatch until a real user message).
-    // Forked like tryDrain: the descendant walk is SQL and must never block
-    // the domain-event stream.
-    const surfaceHoldSummary = (threadId: string) =>
+    const liftHolds = (threadId: string) =>
       Effect.gen(function* () {
-        if (!heldAtRehydrate.has(threadId)) {
-          return yield* tryDrain(threadId);
+        const shell = yield* threads
+          .getThreadShell(ThreadId.make(threadId))
+          .pipe(Effect.orElseSucceed(() => null));
+        if (shell === null) return;
+        // Only this thread's own lineage tree can hold one of its descendants.
+        const held = yield* mailbox.store.heldThreadsInTree(shell.lineage.rootThreadId);
+        const lifted: string[] = [];
+        for (const heldId of held) {
+          if (heldId === threadId || (yield* isDescendantOf(heldId, threadId))) lifted.push(heldId);
         }
-        // Consume the hold NOW: after this settle the thread is no longer
-        // restart-held, so subsequent clean settles drain normally (no
-        // repeated summaries). The claim below still serializes against any
-        // racing live-delivery drain.
-        heldAtRehydrate.delete(threadId);
-        const interrupted = yield* loadInterruptedChildThreads(threadId, query);
-        const batch = yield* mailbox
-          .clearSuppression(threadId)
-          .pipe(Effect.andThen(() => mailbox.takeNextForDispatch(threadId)));
-        if (batch.length === 0 && interrupted.length === 0) {
-          // Nothing held: the hold is lifted and the thread behaves normally.
-          return;
-        }
-        // If the summary turn fails to start, the claimed entries are requeued
-        // by the dispatcher and the ordinary drain picks them up on the next
-        // settle.
-        const includeStanding = !(yield* mailbox.isBriefed(threadId));
-        const dispatched = yield* startActorRestartHoldSummary({
-          engine,
-          mailbox,
-          threadId,
-          loadThread,
-          entries: batch,
-          interruptedChildren: interrupted,
-          includeStandingInstruction: includeStanding,
-          onRequeueUrgent: (requeued) => {
-            for (const entry of requeued) {
-              if (entry.urgency === "urgent") noteUrgentDelivery(threadId, entry.messageId);
-            }
-          },
-        });
-        if (dispatched && includeStanding) {
-          yield* mailbox.markBriefed(threadId);
-        }
-      }).pipe(
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.failCause(cause)
-            : Effect.logWarning("t3team restart-hold summary failed", {
-                threadId,
-                cause: Cause.pretty(cause),
-              }),
-        ),
-        Effect.forkDetach,
-      );
+        yield* mailbox.store.releaseHolds(lifted);
+        yield* Effect.forEach(lifted, drainSoon, { discard: true });
+      });
 
-    const { handleSafely } = createActorMessageEventHandler({
-      mailbox,
-      tryDrain,
-      surfaceHoldSummary,
-      noteUrgentDelivery,
-    });
+    const handle = ({ commandId, event }: OrchestrationV2StoredEvent) => {
+      // V1 history the transcript importer writes is not a live action: an imported user
+      // message must not lift the hold the V1 cutover placed on its undelivered messages.
+      if (event.id.startsWith(IMPORTED_V1_EVENT_PREFIX)) return Effect.void;
+      if (event.type === "run.updated" && TERMINAL_RUN_STATUSES.has(event.payload.status)) {
+        return drainSoon(event.threadId);
+      }
+      if (
+        event.type === "turn-item.updated" &&
+        event.payload.type === "run_interrupt_request" &&
+        isUserStopCommandId(commandId)
+      ) {
+        return mailbox.store.hold(event.threadId, DateTime.formatIso(DateTime.nowUnsafe()));
+      }
+      if (
+        event.type === "message.updated" &&
+        event.payload.role === "user" &&
+        event.payload.createdBy === "user"
+      ) {
+        return liftHolds(event.threadId).pipe(Effect.andThen(drainSoon(event.threadId)));
+      }
+      return Effect.void;
+    };
 
-    // Rehydrate the held-message index BEFORE subscribing the live stream, so a
-    // restart-hold event landing in the window sees the fully-populated index.
-    heldAtRehydrate = yield* rehydrateActorMailbox({
-      engine,
-      mailbox,
-      hopCap: T3TEAM_ACTOR_MESSAGE_HOP_CAP,
-    });
-    yield* Effect.forkScoped(Stream.runForEach(engine.streamDomainEvents, handleSafely));
+    const sweep = mailbox.store.pruneHolds().pipe(
+      Effect.andThen(mailbox.store.threadsWithWork()),
+      Effect.flatMap((threadIds) =>
+        Effect.forEach(threadIds, (threadId) => mailbox.drain(threadId), { discard: true }),
+      ),
+    );
+
+    yield* forkParked(scheduler.register("t3team-actor-mailbox", sweep));
+    yield* forkParked(
+      Stream.runForEach(eventSink.stream({ afterSequence: bootSequence }), (stored) =>
+        handle(stored).pipe(Effect.catchCause(logFailure("t3team mailbox event handling failed"))),
+      ).pipe(Effect.catchCause(logFailure("t3team mailbox event stream failed"))),
+    );
   }),
+).pipe(Layer.provide(Scheduler.layer));
+
+/** Production: the runtime's ONE event sink, by layer reference (t3team-v2Layers.ts). */
+export const T3TeamActorMessageReactorLive = T3TeamActorMessageReactor.pipe(
+  Layer.provide(T3TeamEventSinkLayer),
 );

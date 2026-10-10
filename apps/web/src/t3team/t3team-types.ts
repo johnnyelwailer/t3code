@@ -6,11 +6,24 @@ import type {
   RecipeSurface,
 } from "@t3tools/project-recipes";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
-import type { ActivityState } from "~/t3team/t3team-activityStateDisplay";
 
 export type T3TeamThreadToolId = T3TeamToolId;
 
 export type ProjectThreadDisplayMode = "embedded" | "thread";
+
+/** Shell run words the sub-run status label reads. Matches V2 runtime status. */
+export type ProjectThreadShellRunStatus =
+  | "idle"
+  | "preparing"
+  | "queued"
+  | "starting"
+  | "running"
+  | "waiting"
+  | "completed"
+  | "interrupted"
+  | "failed"
+  | "cancelled"
+  | "rolled_back";
 
 export type T3TeamKickoffWorkflow = {
   readonly kind: "recipe";
@@ -39,8 +52,6 @@ export type ProjectThread = {
   dashboardMode?: ProjectDashboardMode;
   displayMode?: ProjectThreadDisplayMode;
   title: string;
-  providerKind?: "codex" | "claudeAgent";
-  messageCount: number;
   lastMessageAt: string;
   createdAt: string;
   kickoffMessage?: string;
@@ -51,6 +62,16 @@ export type ProjectThread = {
   selectedToolIds?: ReadonlyArray<T3TeamThreadToolId>;
   kickoffWorkflow?: T3TeamKickoffWorkflow;
   status: "idle" | "running" | "completed" | "error";
+  /**
+   * The child shell's own run word (`runtime.status`, which is the activity
+   * run when one exists, otherwise the latest run). Sub-run rows read this
+   * for Starting / Queued / Running / Waiting / Failed / Stopped / Completed.
+   * A finished run stays `completed` here even when `status` has collapsed
+   * to `idle` because the thread is not archived.
+   */
+  shellRunStatus?: ProjectThreadShellRunStatus;
+  /** The child shell's provider instance, for the row's driver mark. */
+  providerInstanceId?: string;
   /**
    * GHE #304 follow-up: the thread's REAL settle state — shell
    * `settledOverride === "settled"` (a `thread.settled` event fired: user
@@ -69,15 +90,17 @@ export type ProjectThread = {
   workflowRunStatus?: {
     readonly runId?: string;
     readonly status:
+      | "authoring"
       | "queued"
       | "running"
       | "suspended"
       | "sleeping"
+      | "watching"
       | "paused"
       | "completed"
       | "failed"
       | "cancelled";
-    readonly pendingKind: "thread.turn" | "user.input" | null;
+    readonly pendingKind: "thread.turn" | "user.input" | "signal.wait" | null;
     readonly wakeAt: string | null;
     readonly updatedAt: string;
   };
@@ -86,10 +109,6 @@ export type ProjectThread = {
   /** GHE #40: live LLM-generated 2–4 word label for what an active thread is working
    *  on NOW; rendered on the Working pill while present. Absent/idle = static "Working". */
   activityLabel?: string | null;
-  /** GHE #208: deterministic 4-state activity word (thinking/writing/working/waiting);
-   *  the base pill word while a turn runs. Absent/idle = null. */
-  activityState?: ActivityState | null;
-  activityStateUpdatedAt?: string | null;
   /**
    * True while the thread has a pending user-input request (a question docked
    * in its composer). Shell-sourced live state — absent/cleared when no
@@ -110,23 +129,12 @@ export type ProjectThread = {
    */
   awaitingParent?: boolean;
   /**
-   * True while this thread's own work is settled but it has one or more
-   * non-terminal, non-settled t3team children (durable handoff relation —
-   * legacy `parent:N` sub-runs never count). The DERIVED waiting fact: the
-   * row reads "Monitoring", not "Done"/"Completed" — mirrors the server
-   * primitive's `waiting` run state (t3team-threadRunStatus). Recomputed on
-   * every live sync; absence clears.
+   * True while this thread's own work is settled but child work is still live: a pending
+   * `subagent` background task on its V2 shell, or a live app-owned child in the lineage
+   * (`deriveThreadRunState` "waiting"). The row reads "Waiting", not "Done"/"Completed".
+   * Recomputed on every live sync; absence clears.
    */
   waitingOnChildren?: boolean;
-  /**
-   * True while this thread has registered a `t3team_children` wait (`op: wait`)
-   * that is still pending — the DECLARED waiting fact: a genuine blocking
-   * relationship, not just "children are live". Derived from the thread's own
-   * durable activities (open registered/resolved pair) — no flag anyone sets.
-   * The row reads "Waiting" (declared outranks derived "Monitoring"); both
-   * keep the standard working/in-progress colour. Absence clears.
-   */
-  waitingDeclared?: boolean;
   childStatusUpdatedAt?: string | null;
 };
 
@@ -160,6 +168,8 @@ export type ProjectTicket = {
   status: string;
   priority?: string;
   assignee?: string;
+  /** The assignee's Jira face (a public avatar URL). */
+  assigneeAvatarUrl?: string;
   assigneeAccountId?: string;
   /** Jira reporter — the digest surfaces it for bugs, where who hit the problem matters. */
   reporter?: string;
@@ -179,6 +189,8 @@ export type ProjectTicket = {
   sprintCompleteDate?: string;
   updatedAt: string;
   labels?: ReadonlyArray<string>;
+  /** Position in the provider's board order (Jira Rank); set for backlog tickets only. */
+  boardRank?: number;
 };
 
 export type ProjectBacklogSubtaskCreateInput = {
@@ -210,6 +222,9 @@ export type ViewState =
       projectId?: string;
       embeddedThreadId?: string;
     };
+
+/** Parent views that can host an embedded project thread (sidebar chat). */
+export type EmbeddedThreadParentView = Extract<ViewState, { type: "dashboard" | "ticket" }>;
 
 export function readActiveThreadIdFromView(view: ViewState | null): string | null {
   if (!view) {

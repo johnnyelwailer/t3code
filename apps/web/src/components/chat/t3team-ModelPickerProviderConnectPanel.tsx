@@ -1,6 +1,6 @@
 "use client";
 
-import type { ToolAuthToolId } from "@t3tools/contracts";
+import type { EnvironmentId, ToolAuthToolId } from "@t3tools/contracts";
 
 import type { ProviderInstanceEntry } from "../../providerInstances";
 import { usePrimaryEnvironmentId } from "../../state/environments";
@@ -14,6 +14,12 @@ export interface ModelPickerProviderConnectPanelProps {
   /** `entry.driverKind` mapped through `toolAuthToolForDriverKind` — the caller already checked this exists. */
   readonly tool: ToolAuthToolId;
   readonly readiness: "needsAuth" | "needsInstall";
+  /**
+   * The environment the picker's instances come from (the thread's). The tool's sign-in state and
+   * every connect/install act on that machine, not on the primary: a thread on a cloud session must
+   * not show (or change) this computer's CLI login. Defaults to the primary environment.
+   */
+  readonly environmentId?: EnvironmentId | undefined;
 }
 
 /**
@@ -31,11 +37,13 @@ export interface ModelPickerProviderConnectPanelProps {
 export function ModelPickerProviderConnectPanel({
   tool,
   readiness,
+  environmentId: threadEnvironmentId,
 }: ModelPickerProviderConnectPanelProps) {
   const meta = toolAuthMetaForTool(tool);
-  const environmentId = usePrimaryEnvironmentId();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const environmentId = threadEnvironmentId ?? primaryEnvironmentId;
   const states = useToolAuthStates(environmentId);
-  const { onConnect, onInstall, onSubmitCode, onCancel } = useToolAuthActions(meta);
+  const { onConnect, onInstall, onSubmitCode, onCancel } = useToolAuthActions(meta, environmentId);
 
   // Top-aligned, not centred: the card is short and the picker's list area is
   // tall, so centring left a big dead gap above it that read as a broken panel.

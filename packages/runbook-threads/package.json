@@ -62,13 +62,17 @@
       "types": "./src/primitives.ts",
       "import": "./src/primitives.ts"
     },
+    "./showView": {
+      "types": "./src/showView.ts",
+      "import": "./src/showView.ts"
+    },
     "./titles": {
       "types": "./src/titles.ts",
       "import": "./src/titles.ts"
     }
   },
   "scripts": {
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "vp test run"
   },
   "dependencies": {

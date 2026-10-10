@@ -1,9 +1,11 @@
 /**
- * A provider session RESTART for a live thread (model tier / cwd / access
- * change → `ProviderService.startSession` on a thread whose agent process is
- * still running) mints a new MCP credential. The old token must stay valid:
- * a driver that reuses its live session never sees the new bearer, and the
- * agent was left on `invalid_mcp_credential` until the app restarted.
+ * Re-issuing an MCP credential for a thread that still holds one (a provider
+ * session restart) keeps the old token valid under the new scope: a driver that
+ * reuses its live session never sees the new bearer, and the agent was left on
+ * `invalid_mcp_credential` until the app restarted. Upstream V2's session
+ * manager reuses a still-valid credential and revokes the thread itself before
+ * a deliberate rotation, so this carry-over only matters for direct `issue`
+ * callers. Every session also gets upstream's baseline capabilities.
  *
  * Every clock here is injected — no real sleeps.
  */
@@ -12,14 +14,15 @@ import { expect, it } from "@effect/vitest";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
+import * as NetAddress from "effect/net/NetAddress";
 
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 
 const environmentId = EnvironmentId.make("environment-restart");
 const fakeHttpServer = HttpServer.HttpServer.of({
-  address: { _tag: "TcpAddress", hostname: "127.0.0.1", port: 43124 },
+  address: NetAddress.inetAddressFromIpStringUnsafe("127.0.0.1", 43124),
   serve: (() => Effect.void) as HttpServer.HttpServer["Service"]["serve"],
 });
 const fakeEnvironment = ServerEnvironment.ServerEnvironment.of({
@@ -42,7 +45,9 @@ const makeRegistry = (now: () => number) =>
 const bearer = (issued: McpSessionRegistry.McpIssuedCredential) =>
   issued.config.authorizationHeader.replace(/^Bearer\s+/, "");
 
-const nexplore = ProviderInstanceId.make("nexplore");
+const packProvider = ProviderInstanceId.make("pack-provider");
+/** Upstream grants every MCP session these, whatever the request asks for. */
+const BASELINE = ["orchestration", "pull-requests", "worktree"] as const;
 
 it.effect("a session restart keeps the token the running agent still holds valid", () =>
   Effect.gen(function* () {
@@ -53,7 +58,7 @@ it.effect("a session restart keeps the token the running agent still holds valid
     // Cold start: the agent process receives token A.
     const first = yield* registry.issue({
       threadId,
-      providerInstanceId: nexplore,
+      providerInstanceId: packProvider,
       capabilities: new Set(),
     });
     timestamp += 50;
@@ -64,17 +69,17 @@ it.effect("a session restart keeps the token the running agent still holds valid
     timestamp += 30;
     const second = yield* registry.issue({
       threadId,
-      providerInstanceId: nexplore,
+      providerInstanceId: packProvider,
       capabilities: new Set(),
     });
     expect(bearer(second)).not.toBe(bearer(first));
 
     const viaOld = yield* registry.resolve(bearer(first));
     const viaNew = yield* registry.resolve(bearer(second));
-    expect(viaOld?.threadId).toBe(threadId);
-    expect(viaNew?.threadId).toBe(threadId);
+    expect(viaOld?.thread?.threadId).toBe(threadId);
+    expect(viaNew?.thread?.threadId).toBe(threadId);
     // Both tokens describe the SAME (latest) provider session.
-    expect(viaOld?.providerSessionId).toBe(second.config.providerSessionId);
+    expect(viaOld?.thread?.providerSessionId).toBe(second.config.providerSessionId);
     expect(viaOld?.issuedAt).toBe(viaNew?.issuedAt);
   }),
 );
@@ -85,18 +90,19 @@ it.effect("the restarted session's scope wins for the old token", () =>
     const threadId = ThreadId.make("thread-rescope");
     const first = yield* registry.issue({
       threadId,
-      providerInstanceId: nexplore,
+      providerInstanceId: packProvider,
       capabilities: new Set(["preview", "device"]),
     });
     // Access setting narrowed between the two starts.
     yield* registry.issue({
       threadId,
-      providerInstanceId: ProviderInstanceId.make("nexplore-2"),
+      providerInstanceId: ProviderInstanceId.make("pack-provider-2"),
       capabilities: new Set(),
     });
     const scope = yield* registry.resolve(bearer(first));
-    expect([...(scope?.capabilities ?? [])].sort()).toEqual(["pull-requests"]);
-    expect(scope?.providerInstanceId).toBe("nexplore-2");
+    // The narrowed request dropped preview and device; only upstream's baseline remains.
+    expect([...(scope?.capabilities ?? [])].sort()).toEqual([...BASELINE]);
+    expect(scope?.thread?.providerInstanceId).toBe("pack-provider-2");
   }),
 );
 
@@ -107,19 +113,19 @@ it.effect("liveness is shared: the restart refreshes the old token, a stop revok
     const threadId = ThreadId.make("thread-shared-liveness");
     const first = yield* registry.issue({
       threadId,
-      providerInstanceId: nexplore,
+      providerInstanceId: packProvider,
       capabilities: new Set(),
     });
 
     timestamp += LIVENESS_WINDOW_MS - 1;
     const second = yield* registry.issue({
       threadId,
-      providerInstanceId: nexplore,
+      providerInstanceId: packProvider,
       capabilities: new Set(),
     });
     // Without the restart refreshing it, A would have lapsed here.
     timestamp += LIVENESS_WINDOW_MS - 1;
-    expect((yield* registry.resolve(bearer(first)))?.threadId).toBe(threadId);
+    expect((yield* registry.resolve(bearer(first)))?.thread?.threadId).toBe(threadId);
 
     yield* registry.revokeThread(threadId);
     expect(yield* registry.resolve(bearer(first))).toBeUndefined();
@@ -133,12 +139,12 @@ it.effect("revoking the latest provider session takes the carried tokens with it
     const threadId = ThreadId.make("thread-revoke-session");
     const first = yield* registry.issue({
       threadId,
-      providerInstanceId: nexplore,
+      providerInstanceId: packProvider,
       capabilities: new Set(),
     });
     const second = yield* registry.issue({
       threadId,
-      providerInstanceId: nexplore,
+      providerInstanceId: packProvider,
       capabilities: new Set(),
     });
     yield* registry.revokeProviderSession(second.config.providerSessionId);
@@ -154,17 +160,17 @@ it.effect("a token that lapsed before the restart stays dead", () =>
     const threadId = ThreadId.make("thread-lapsed");
     const first = yield* registry.issue({
       threadId,
-      providerInstanceId: nexplore,
+      providerInstanceId: packProvider,
       capabilities: new Set(),
     });
     timestamp += LIVENESS_WINDOW_MS + 1;
     const second = yield* registry.issue({
       threadId,
-      providerInstanceId: nexplore,
+      providerInstanceId: packProvider,
       capabilities: new Set(),
     });
     expect(yield* registry.resolve(bearer(first))).toBeUndefined();
-    expect((yield* registry.resolve(bearer(second)))?.threadId).toBe(threadId);
+    expect((yield* registry.resolve(bearer(second)))?.thread?.threadId).toBe(threadId);
   }),
 );
 
@@ -173,40 +179,41 @@ it.effect("other threads' tokens are not touched by a restart", () =>
     const registry = yield* makeRegistry(() => 1_000);
     const other = yield* registry.issue({
       threadId: ThreadId.make("thread-other"),
-      providerInstanceId: nexplore,
+      providerInstanceId: packProvider,
       capabilities: new Set(["preview"]),
     });
     yield* registry.issue({
       threadId: ThreadId.make("thread-restarting"),
-      providerInstanceId: nexplore,
+      providerInstanceId: packProvider,
       capabilities: new Set(),
     });
     const scope = yield* registry.resolve(bearer(other));
-    expect(scope?.providerSessionId).toBe(other.config.providerSessionId);
-    expect([...(scope?.capabilities ?? [])].sort()).toEqual(["preview", "pull-requests"]);
+    // No cross-thread carry-over: the other thread keeps its own session, thread and scope.
+    expect(scope?.thread?.threadId).toBe("thread-other");
+    expect(scope?.thread?.providerSessionId).toBe(other.config.providerSessionId);
+    expect([...(scope?.capabilities ?? [])].sort()).toEqual([...BASELINE, "preview"].sort());
   }),
 );
 
-// `ProviderService.prepareMcpSession` goes through this module-level seam on
-// every startSession; the restart path must not pre-revoke the thread.
+// The module-level seam (`issueActiveMcpCredential`) must not pre-revoke the thread either.
 it.effect("issueActiveMcpCredential twice for one thread leaves the first token resolvable", () =>
   Effect.gen(function* () {
     const registry = yield* McpSessionRegistry.McpSessionRegistry;
     const threadId = ThreadId.make("thread-active-seam");
     const first = yield* McpSessionRegistry.issueActiveMcpCredential({
       threadId,
-      providerInstanceId: nexplore,
+      providerInstanceId: packProvider,
       capabilities: new Set(),
     });
     const second = yield* McpSessionRegistry.issueActiveMcpCredential({
       threadId,
-      providerInstanceId: nexplore,
+      providerInstanceId: packProvider,
       capabilities: new Set(),
     });
     expect(first).toBeDefined();
     expect(second).toBeDefined();
     const scope = yield* registry.resolve(bearer(first!));
-    expect(scope?.threadId).toBe(threadId);
-    expect(scope?.providerSessionId).toBe(second!.config.providerSessionId);
+    expect(scope?.thread?.threadId).toBe(threadId);
+    expect(scope?.thread?.providerSessionId).toBe(second!.config.providerSessionId);
   }).pipe(Effect.provide(McpSessionRegistry.layer.pipe(Layer.provide(infrastructure)))),
 );

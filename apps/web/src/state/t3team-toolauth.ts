@@ -50,14 +50,18 @@ function reportToolAuthFailure(
 }
 
 /**
- * `start`/`install`/`submitCode`/`cancel` wired to the primary environment,
+ * `start`/`install`/`submitCode`/`cancel` wired to an environment (the primary unless one is given),
  * with failure toasts + logging. Shared by every "Connect this tool" surface —
  * the settings page's `ConnectedToolsSettings` and the model picker's
  * `ModelPickerProviderConnectPanel` — so the connect flow behaves
  * identically wherever it's triggered from.
  */
-export function useToolAuthActions(meta: ToolAuthToolMeta) {
-  const environmentId = usePrimaryEnvironmentId();
+export function useToolAuthActions(
+  meta: ToolAuthToolMeta,
+  targetEnvironmentId?: EnvironmentId | null,
+) {
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const environmentId = targetEnvironmentId ?? primaryEnvironmentId;
   const start = useAtomCommand(toolAuthEnvironment.start, { reportFailure: false });
   const install = useAtomCommand(toolAuthEnvironment.install, { reportFailure: false });
   const submitCode = useAtomCommand(toolAuthEnvironment.submitCode, { reportFailure: false });

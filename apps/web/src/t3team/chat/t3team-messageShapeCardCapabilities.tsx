@@ -68,6 +68,11 @@ const TOOL_GROUP_CAPABILITY_LABELS: Record<string, { label: string; description:
     description:
       "Prepare changes as drafts for you to accept or reject. Nothing is saved to your connected tools without your approval.",
   },
+  "mutation.change_request": {
+    label: "Publish change requests",
+    description:
+      "Commit the files it lists, push a branch, and open a pull or merge request on the repository's host. Nothing else in the checkout is committed.",
+  },
   "mutation.write": {
     label: "Save changes directly",
     description: "Write changes straight to your connected tools without a review step.",
@@ -115,7 +120,7 @@ export function T3TeamShapeCapabilityChips({
   return (
     <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
       <span
-        className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/65"
+        className="flex items-center gap-1 text-3xs font-medium uppercase tracking-widest text-muted-foreground/65"
         title="This orchestration declared these capabilities; they are granted for this run."
       >
         <ShieldIcon className="size-3" />
@@ -126,7 +131,7 @@ export function T3TeamShapeCapabilityChips({
         return (
           <span
             key={`${capability.kind}:${capability.id}`}
-            className="shrink-0 rounded-full border border-border/55 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-foreground/80"
+            className="shrink-0 rounded-full border border-border/55 bg-muted/40 px-2 py-0.5 text-2xs font-medium text-foreground/80"
             title={description}
           >
             {label}

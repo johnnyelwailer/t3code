@@ -14,14 +14,17 @@ import { Route as UsageRouteImport } from './routes/usage'
 import { Route as T3teamRouteImport } from './routes/t3team'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PairRouteImport } from './routes/pair'
+import { Route as ConnectAgentRouteImport } from './routes/connect-agent'
 import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as ChatRouteImport } from './routes/_chat'
 import { Route as ChatIndexRouteImport } from './routes/_chat.index'
 import { Route as T3teamNewRouteImport } from './routes/t3team.new'
 import { Route as T3teamMyWorkRouteImport } from './routes/t3team.my-work'
+import { Route as T3teamDetachedKindRouteImport } from './routes/t3team-detached.$kind'
 import { Route as SettingsStorageRouteImport } from './routes/settings.storage'
 import { Route as SettingsSourceControlRouteImport } from './routes/settings.source-control'
 import { Route as SettingsSnapShotRouteImport } from './routes/settings.snap-shot'
+import { Route as SettingsScheduledTasksRouteImport } from './routes/settings.scheduled-tasks'
 import { Route as SettingsProvidersRouteImport } from './routes/settings.providers'
 import { Route as SettingsProjectsRouteImport } from './routes/settings.projects'
 import { Route as SettingsOpenSourceLicensesRouteImport } from './routes/settings.open-source-licenses'
@@ -68,6 +71,11 @@ const PairRoute = PairRouteImport.update({
   path: '/pair',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConnectAgentRoute = ConnectAgentRouteImport.update({
+  id: '/connect-agent',
+  path: '/connect-agent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConnectRoute = ConnectRouteImport.update({
   id: '/connect',
   path: '/connect',
@@ -92,6 +100,11 @@ const T3teamMyWorkRoute = T3teamMyWorkRouteImport.update({
   path: '/my-work',
   getParentRoute: () => T3teamRoute,
 } as any)
+const T3teamDetachedKindRoute = T3teamDetachedKindRouteImport.update({
+  id: '/t3team-detached/$kind',
+  path: '/t3team-detached/$kind',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsStorageRoute = SettingsStorageRouteImport.update({
   id: '/storage',
   path: '/storage',
@@ -105,6 +118,11 @@ const SettingsSourceControlRoute = SettingsSourceControlRouteImport.update({
 const SettingsSnapShotRoute = SettingsSnapShotRouteImport.update({
   id: '/snap-shot',
   path: '/snap-shot',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsScheduledTasksRoute = SettingsScheduledTasksRouteImport.update({
+  id: '/scheduled-tasks',
+  path: '/scheduled-tasks',
   getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsProvidersRoute = SettingsProvidersRouteImport.update({
@@ -215,6 +233,7 @@ const T3teamProjectsProjectIdThreadsThreadIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof ChatIndexRoute
   '/connect': typeof ConnectRoute
+  '/connect-agent': typeof ConnectAgentRoute
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/t3team': typeof T3teamRouteWithChildren
@@ -234,9 +253,11 @@ export interface FileRoutesByFullPath {
   '/settings/open-source-licenses': typeof SettingsOpenSourceLicensesRoute
   '/settings/projects': typeof SettingsProjectsRoute
   '/settings/providers': typeof SettingsProvidersRoute
+  '/settings/scheduled-tasks': typeof SettingsScheduledTasksRoute
   '/settings/snap-shot': typeof SettingsSnapShotRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/settings/storage': typeof SettingsStorageRoute
+  '/t3team-detached/$kind': typeof T3teamDetachedKindRoute
   '/t3team/my-work': typeof T3teamMyWorkRoute
   '/t3team/new': typeof T3teamNewRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
@@ -248,6 +269,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/connect': typeof ConnectRoute
+  '/connect-agent': typeof ConnectAgentRoute
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/t3team': typeof T3teamRouteWithChildren
@@ -267,9 +289,11 @@ export interface FileRoutesByTo {
   '/settings/open-source-licenses': typeof SettingsOpenSourceLicensesRoute
   '/settings/projects': typeof SettingsProjectsRoute
   '/settings/providers': typeof SettingsProvidersRoute
+  '/settings/scheduled-tasks': typeof SettingsScheduledTasksRoute
   '/settings/snap-shot': typeof SettingsSnapShotRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/settings/storage': typeof SettingsStorageRoute
+  '/t3team-detached/$kind': typeof T3teamDetachedKindRoute
   '/t3team/my-work': typeof T3teamMyWorkRoute
   '/t3team/new': typeof T3teamNewRoute
   '/': typeof ChatIndexRoute
@@ -284,6 +308,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_chat': typeof ChatRouteWithChildren
   '/connect': typeof ConnectRoute
+  '/connect-agent': typeof ConnectAgentRoute
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/t3team': typeof T3teamRouteWithChildren
@@ -303,9 +328,11 @@ export interface FileRoutesById {
   '/settings/open-source-licenses': typeof SettingsOpenSourceLicensesRoute
   '/settings/projects': typeof SettingsProjectsRoute
   '/settings/providers': typeof SettingsProvidersRoute
+  '/settings/scheduled-tasks': typeof SettingsScheduledTasksRoute
   '/settings/snap-shot': typeof SettingsSnapShotRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/settings/storage': typeof SettingsStorageRoute
+  '/t3team-detached/$kind': typeof T3teamDetachedKindRoute
   '/t3team/my-work': typeof T3teamMyWorkRoute
   '/t3team/new': typeof T3teamNewRoute
   '/_chat/': typeof ChatIndexRoute
@@ -321,6 +348,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/connect'
+    | '/connect-agent'
     | '/pair'
     | '/settings'
     | '/t3team'
@@ -340,9 +368,11 @@ export interface FileRouteTypes {
     | '/settings/open-source-licenses'
     | '/settings/projects'
     | '/settings/providers'
+    | '/settings/scheduled-tasks'
     | '/settings/snap-shot'
     | '/settings/source-control'
     | '/settings/storage'
+    | '/t3team-detached/$kind'
     | '/t3team/my-work'
     | '/t3team/new'
     | '/$environmentId/$threadId'
@@ -354,6 +384,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/connect'
+    | '/connect-agent'
     | '/pair'
     | '/settings'
     | '/t3team'
@@ -373,9 +404,11 @@ export interface FileRouteTypes {
     | '/settings/open-source-licenses'
     | '/settings/projects'
     | '/settings/providers'
+    | '/settings/scheduled-tasks'
     | '/settings/snap-shot'
     | '/settings/source-control'
     | '/settings/storage'
+    | '/t3team-detached/$kind'
     | '/t3team/my-work'
     | '/t3team/new'
     | '/'
@@ -389,6 +422,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_chat'
     | '/connect'
+    | '/connect-agent'
     | '/pair'
     | '/settings'
     | '/t3team'
@@ -408,9 +442,11 @@ export interface FileRouteTypes {
     | '/settings/open-source-licenses'
     | '/settings/projects'
     | '/settings/providers'
+    | '/settings/scheduled-tasks'
     | '/settings/snap-shot'
     | '/settings/source-control'
     | '/settings/storage'
+    | '/t3team-detached/$kind'
     | '/t3team/my-work'
     | '/t3team/new'
     | '/_chat/'
@@ -425,6 +461,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   ChatRoute: typeof ChatRouteWithChildren
   ConnectRoute: typeof ConnectRoute
+  ConnectAgentRoute: typeof ConnectAgentRoute
   PairRoute: typeof PairRoute
   SettingsRoute: typeof SettingsRouteWithChildren
   T3teamRoute: typeof T3teamRouteWithChildren
@@ -432,6 +469,7 @@ export interface RootRouteChildren {
   WelcomeRoute: typeof WelcomeRoute
   OauthCallbackRoute: typeof OauthCallbackRoute
   ProjectsProjectKeyRoute: typeof ProjectsProjectKeyRoute
+  T3teamDetachedKindRoute: typeof T3teamDetachedKindRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -471,6 +509,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PairRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/connect-agent': {
+      id: '/connect-agent'
+      path: '/connect-agent'
+      fullPath: '/connect-agent'
+      preLoaderRoute: typeof ConnectAgentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/connect': {
       id: '/connect'
       path: '/connect'
@@ -506,6 +551,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof T3teamMyWorkRouteImport
       parentRoute: typeof T3teamRoute
     }
+    '/t3team-detached/$kind': {
+      id: '/t3team-detached/$kind'
+      path: '/t3team-detached/$kind'
+      fullPath: '/t3team-detached/$kind'
+      preLoaderRoute: typeof T3teamDetachedKindRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings/storage': {
       id: '/settings/storage'
       path: '/storage'
@@ -525,6 +577,13 @@ declare module '@tanstack/react-router' {
       path: '/snap-shot'
       fullPath: '/settings/snap-shot'
       preLoaderRoute: typeof SettingsSnapShotRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/scheduled-tasks': {
+      id: '/settings/scheduled-tasks'
+      path: '/scheduled-tasks'
+      fullPath: '/settings/scheduled-tasks'
+      preLoaderRoute: typeof SettingsScheduledTasksRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/settings/providers': {
@@ -698,6 +757,7 @@ interface SettingsRouteChildren {
   SettingsOpenSourceLicensesRoute: typeof SettingsOpenSourceLicensesRoute
   SettingsProjectsRoute: typeof SettingsProjectsRoute
   SettingsProvidersRoute: typeof SettingsProvidersRoute
+  SettingsScheduledTasksRoute: typeof SettingsScheduledTasksRoute
   SettingsSnapShotRoute: typeof SettingsSnapShotRoute
   SettingsSourceControlRoute: typeof SettingsSourceControlRoute
   SettingsStorageRoute: typeof SettingsStorageRoute
@@ -715,6 +775,7 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsOpenSourceLicensesRoute: SettingsOpenSourceLicensesRoute,
   SettingsProjectsRoute: SettingsProjectsRoute,
   SettingsProvidersRoute: SettingsProvidersRoute,
+  SettingsScheduledTasksRoute: SettingsScheduledTasksRoute,
   SettingsSnapShotRoute: SettingsSnapShotRoute,
   SettingsSourceControlRoute: SettingsSourceControlRoute,
   SettingsStorageRoute: SettingsStorageRoute,
@@ -762,6 +823,7 @@ const T3teamRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRouteWithChildren,
   ConnectRoute: ConnectRoute,
+  ConnectAgentRoute: ConnectAgentRoute,
   PairRoute: PairRoute,
   SettingsRoute: SettingsRouteWithChildren,
   T3teamRoute: T3teamRouteWithChildren,
@@ -769,6 +831,7 @@ const rootRouteChildren: RootRouteChildren = {
   WelcomeRoute: WelcomeRoute,
   OauthCallbackRoute: OauthCallbackRoute,
   ProjectsProjectKeyRoute: ProjectsProjectKeyRoute,
+  T3teamDetachedKindRoute: T3teamDetachedKindRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

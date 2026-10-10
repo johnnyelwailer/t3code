@@ -1,22 +1,24 @@
 import { ProviderInstanceId, type ModelSelection, type ServerProvider } from "@t3tools/contracts";
-import * as Effect from "effect/Effect";
 
 import type { AgentEffort } from "@t3team/sdk";
 
 import {
   buildStartChildModelSelection,
-  type T3TeamStartChildArgs,
   type T3TeamStartChildReasoningEffort,
-} from "./t3team-toolBrokerStartChildArgs.ts";
-import { applyWorkflowEffort, effortIsHonored } from "./t3team-workflowEffortOptions.ts";
+} from "./t3team-toolBrokerStartChildModel.ts";
+import { applyWorkflowEffort } from "./t3team-workflowEffortOptions.ts";
 import {
   formatList,
+  optionsSupportedByModel,
   resolveSlug,
+  slugPrefixHint,
   unusableReason,
+  WorkflowModelSelectionError,
 } from "./t3team-toolBrokerStartChildProviderSlug.ts";
 
 /**
- * Free cross-provider + model resolution for `t3team.thread.start_child`.
+ * Free cross-provider + model resolution for fork child turns (workflow children; the
+ * delegate_task path resolves its target upstream and only applies `effort` on top).
  *
  * This is a GENERIC host capability: it lets a parent agent spawn a child on a
  * DIFFERENT configured provider instance (e.g. a Claude parent spawning a Codex
@@ -41,17 +43,19 @@ export type ResolveStartChildModelSelectionInput = {
 
 export type ResolveStartChildModelSelectionResult =
   | { readonly ok: true; readonly value: ModelSelection }
-  | { readonly ok: false; readonly message: string };
+  | {
+      readonly ok: false;
+      readonly message: string;
+      readonly error: WorkflowModelSelectionError;
+    };
 
 /**
  * Resolve the child's `ModelSelection`.
  *
- * - No `requestedProvider` → inherit the parent's provider instance and defer
- *   entirely to `buildStartChildModelSelection` (pure refactor, no behavior
- *   change).
- * - `requestedProvider` set → validate it against the live provider snapshots
- *   (must exist, be usable, and own the requested/default model), then build a
- *   cross-provider base and reuse `buildStartChildModelSelection` for effort.
+ * The instance defaults to the parent's instance. The model is that instance's
+ * declared non-legacy default. With no declared default, the same instance keeps
+ * the parent's model; any other instance fails with its valid slugs.
+ * Explicit models use exact catalog matching, including explicitly chosen legacy models.
  */
 export function resolveStartChildModelSelection(
   input: ResolveStartChildModelSelectionInput,
@@ -63,51 +67,43 @@ export function resolveStartChildModelSelection(
     input.reasoningEffort
       ? selection
       : applyWorkflowEffort(selection, input.effort, input.providers);
-  const requested = input.requestedProvider?.trim();
-  if (!requested) {
-    const target = input.providers.find(
-      (provider) => provider.instanceId === input.parentModelSelection.instanceId,
-    );
-    return {
-      ok: true,
-      value: withTier(
-        buildStartChildModelSelection(
-          input.parentModelSelection,
-          {
-            ...(input.requestedModel ? { model: input.requestedModel } : {}),
-            ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
-          },
-          target,
-        ),
-      ),
-    };
-  }
-
-  const target = input.providers.find((provider) => provider.instanceId === requested);
+  const requested = input.requestedProvider?.trim() ?? input.parentModelSelection.instanceId;
+  const target = input.providers.find(
+    (provider) => provider.instanceId.toLowerCase() === requested.toLowerCase(),
+  );
   if (!target) {
-    return {
-      ok: false,
-      message:
-        `Unknown provider instance '${requested}'. Available provider instances: ` +
-        `${formatList(input.providers.map((provider) => provider.instanceId))}.`,
-    };
+    const choices = input.providers.map((provider) => provider.instanceId);
+    const hint = slugPrefixHint(requested, input.requestedModel, input.providers);
+    const error = new WorkflowModelSelectionError(
+      "unknown_instance",
+      `Unknown provider instance '${requested}'. Available provider instances: ` +
+        `${formatList(choices)}. Use model: "<instanceId>" or "<instanceId>/<slug>" ` +
+        `with one of these exact instance ids.${hint}`,
+      choices,
+    );
+    return { ok: false, message: error.message, error };
   }
 
   const reason = unusableReason(target);
   if (reason) {
-    return {
-      ok: false,
-      message: `Provider instance '${requested}' cannot run a child: ${reason}.`,
-    };
+    const error = new WorkflowModelSelectionError(
+      "unavailable_instance",
+      `Provider instance '${target.instanceId}' cannot run a child: ${reason}.`,
+    );
+    return { ok: false, message: error.message, error };
   }
 
-  const slug = resolveSlug(target, input.requestedModel, input.parentModelSelection.model);
+  const slug = resolveSlug(target, input.requestedModel, input.parentModelSelection);
   if (!slug.ok) return slug;
 
+  const sameInstance =
+    target.instanceId.toLowerCase() === input.parentModelSelection.instanceId.toLowerCase();
   const base: ModelSelection = {
-    instanceId: ProviderInstanceId.make(requested),
+    instanceId: ProviderInstanceId.make(target.instanceId),
     model: slug.slug,
-    options: [],
+    options: sameInstance
+      ? optionsSupportedByModel(target, slug.slug, input.parentModelSelection.options)
+      : [],
   };
   return {
     ok: true,
@@ -119,54 +115,4 @@ export function resolveStartChildModelSelection(
       ),
     ),
   };
-}
-
-/**
- * Effectful wrapper used by the start_child flow: loads the live provider
- * snapshots (empty when the registry is absent), runs the pure resolver, and
- * fails the turn with the resolver's message when the requested provider/model
- * is invalid. Keeps `t3team-toolBrokerStartChild.ts` a single call site.
- *
- * Also surfaces an `effortNote` when a provider-agnostic `effort` was requested
- * but CANNOT be honored (the provider exposes neither a reasoning control nor
- * tier models): the downgrade then says so in the launch result instead of
- * silently running the child on whatever model it inherited.
- */
-export type ResolveChildModelResult = {
-  readonly modelSelection: ModelSelection;
-  readonly effortNote?: string;
-};
-
-export function resolveChildModel(
-  baseModelSelection: ModelSelection,
-  args: Pick<T3TeamStartChildArgs, "provider" | "model" | "reasoningEffort" | "effort">,
-  listProviders: (() => Effect.Effect<ReadonlyArray<ServerProvider>>) | undefined,
-): Effect.Effect<ResolveChildModelResult, string> {
-  return Effect.gen(function* () {
-    if (args.provider && !listProviders) {
-      return yield* Effect.fail(
-        `Provider registry is not wired into this server build; cannot resolve provider ` +
-          `instance '${args.provider}' for start_child.`,
-      );
-    }
-    const providers = listProviders ? yield* listProviders() : [];
-    const result = resolveStartChildModelSelection({
-      parentModelSelection: baseModelSelection,
-      ...(args.provider ? { requestedProvider: args.provider } : {}),
-      ...(args.model ? { requestedModel: args.model } : {}),
-      ...(args.reasoningEffort ? { reasoningEffort: args.reasoningEffort } : {}),
-      ...(args.effort ? { effort: args.effort } : {}),
-      providers,
-    });
-    if (!result.ok) return yield* Effect.fail(result.message);
-    const effortNote =
-      args.effort !== undefined && !effortIsHonored(result.value, args.effort, providers)
-        ? `effort '${args.effort}' was not honored: provider '${result.value.instanceId}' exposes ` +
-          `no reasoning control and no tier models; the child runs on model '${result.value.model}'.`
-        : undefined;
-    return {
-      modelSelection: result.value,
-      ...(effortNote ? { effortNote } : {}),
-    };
-  });
 }

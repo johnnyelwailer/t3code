@@ -22,6 +22,7 @@ import { acquireDesktopTab, type AcquiredDesktopTab } from "./desktopTabLifetime
 import { resolveHostedBrowserWebviewWrapperStyle } from "./hostedBrowserWebviewStyle";
 import { usePreviewWebviewConfig } from "./previewWebviewConfigState";
 import { useBrowserViewportResize } from "./useBrowserViewportResize";
+import { usePreviewPanelResizing } from "./t3team-previewPanelResizeStore";
 import {
   INITIAL_WEBVIEW_CRASH_RECOVERY_STATE,
   planWebviewCrashRecovery,
@@ -156,9 +157,18 @@ export function HostedBrowserWebview(props: {
         }
       }, recovery.delayMs);
     };
+    // A click inside the guest only reaches this document as a webview focus
+    // event, so open menus and popovers never see the outside press that
+    // would dismiss them. Replay it as a pointerdown on the webview itself.
+    const dismissHostPopups = () => {
+      webview.dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse" }),
+      );
+    };
     webview.addEventListener("did-attach", register);
     webview.addEventListener("dom-ready", register);
     webview.addEventListener("render-process-gone", recoverGuest);
+    webview.addEventListener("focus", dismissHostPopups);
     register();
     return () => {
       disposed = true;
@@ -166,6 +176,7 @@ export function HostedBrowserWebview(props: {
       webview.removeEventListener("did-attach", register);
       webview.removeEventListener("dom-ready", register);
       webview.removeEventListener("render-process-gone", recoverGuest);
+      webview.removeEventListener("focus", dismissHostPopups);
     };
   }, [clientSettingsHydrated, config, initialSrc, runtimeTabId, webviewGeneration]);
 
@@ -199,6 +210,13 @@ export function HostedBrowserWebview(props: {
         };
   const containerSize = active && lastRect ? lastRect : hiddenSize;
   const deviceToolbarVisible = active && viewport._tag !== "fill" && !presentation.fitSourceContent;
+  // While the panel edge is dragged the visible guest keeps the scale it had at drag start; the
+  // slot rect still follows the panel, and the layout re-fits once when the drag ends. Hidden
+  // guests are not held: their offscreen layout is not the one they show when activated.
+  const anyPanelResizing = usePreviewPanelResizing();
+  const panelResizing = anyPanelResizing && active;
+  const [heldViewportScale, setHeldViewportScale] = useState<number | null>(null);
+  const heldScale = panelResizing ? (heldViewportScale ?? undefined) : undefined;
   const {
     activeDrag,
     commitViewportChange,
@@ -213,6 +231,7 @@ export function HostedBrowserWebview(props: {
     containerSize,
     deviceToolbarVisible,
     aspectRatio: lockedAspectRatio,
+    heldScale,
   });
   const fittedSourceViewport =
     presentation.fitSourceContent && lastRect
@@ -224,8 +243,15 @@ export function HostedBrowserWebview(props: {
       : null;
   const layout =
     fittedSourceViewport && lastRect
-      ? resolveBrowserViewportLayout(lastRect, fittedSourceViewport, normalizedZoomFactor)
+      ? resolveBrowserViewportLayout(
+          lastRect,
+          fittedSourceViewport,
+          normalizedZoomFactor,
+          heldScale,
+        )
       : viewportLayout;
+  const nextHeldViewportScale = panelResizing ? (heldViewportScale ?? layout.viewportScale) : null;
+  if (nextHeldViewportScale !== heldViewportScale) setHeldViewportScale(nextHeldViewportScale);
 
   const syncContentPresentation = useCallback(() => {
     const wrapper = wrapperRef.current;
@@ -342,7 +368,7 @@ export function HostedBrowserWebview(props: {
             />
             {activeDrag ? (
               <div
-                className="pointer-events-none absolute z-40 -translate-x-1/2 rounded-md border border-border/80 bg-background/95 px-2 py-1 text-[11px] font-medium tabular-nums text-foreground shadow-md backdrop-blur-sm"
+                className="pointer-events-none absolute z-40 -translate-x-1/2 rounded-md border border-border/80 bg-background/95 px-2 py-1 text-2xs font-medium tabular-nums text-foreground shadow-md backdrop-blur-sm"
                 style={{
                   left: layout.viewportX + layout.viewportWidth / 2,
                   top: layout.viewportY + 10,

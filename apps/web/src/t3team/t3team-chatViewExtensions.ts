@@ -43,15 +43,11 @@ export type ChatViewT3TeamExtensionProps = {
     readonly hasAttachments: boolean;
   }) => boolean | Promise<boolean>;
   /**
-   * Queued-send rows the host wants rendered at the bottom of the timeline,
-   * directly after the native queued messages. The t3team offline outbox uses
-   * this to share the native queued-message surface instead of its own
-   * top-header banner: one queue, one place.
+   * Host banner in the composer's leading dock, after the active-workflow dock and next to the
+   * native server queue (`QueuedRunsControl`). The t3team offline outbox lists its waiting sends
+   * here: one queue surface, one place.
    */
-  readonly queuedExtensions?: ReadonlyArray<{
-    readonly id: string;
-    readonly node: ReactNode;
-  }>;
+  readonly composerBannerLeading?: ReactNode;
   readonly composerContextAttachmentSlot?: ReactNode;
   readonly composerContainerProps?: HTMLAttributes<HTMLDivElement>;
   readonly composerContainerOverlay?: ReactNode;
@@ -87,10 +83,4 @@ export type ChatViewT3TeamExtensionProps = {
     readonly projectId: string;
     readonly threadId: string;
   }) => void;
-  /**
-   * Fork the current thread from a given message (branch point: the fork
-   * carries messages up to and including that message). Rendered as a subtle
-   * per-message affordance next to the copy button; absent = no fork button.
-   */
-  readonly onForkThread?: (input: { readonly messageId: string }) => void | Promise<void>;
 };

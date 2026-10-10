@@ -8,12 +8,12 @@
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
-import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
+import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
+import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
 import { makeWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowControlTool.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { T3TeamWorkflowHost } from "./t3team-workflowHost.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { makeWorkflowTurnRedriveLive } from "./t3team-workflowTurnRedriveLive.ts";
 
@@ -26,24 +26,22 @@ export const makeWorkflowControlToolsForThread = Effect.fn("makeWorkflowControlT
     );
     const repo = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowRunRepository));
     const scheduler = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamWorkflowScheduler));
-    const orchestration = Option.getOrUndefined(
-      yield* Effect.serviceOption(OrchestrationEngineService),
-    );
-    const threadQuery = Option.getOrUndefined(yield* Effect.serviceOption(ProjectionSnapshotQuery));
+    const host = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamWorkflowHost));
+    const threads = Option.getOrUndefined(yield* Effect.serviceOption(ThreadManagementService));
     const signalStore = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowSignalStore));
-    if (!registry || !repo || !scheduler || !orchestration || !threadQuery) {
+    if (!registry || !repo || !scheduler || !host || !threads) {
       return undefined;
     }
     return makeWorkflowControlToolHandlers({
       repo,
       registry,
       rearmScheduler: () => scheduler.rearm(),
-      dispatch: (command) => orchestration.dispatch(command),
+      host,
       turnRedrive: makeWorkflowTurnRedriveLive({
         registry,
+        threads,
+        host,
         runRepository: repo,
-        orchestration,
-        threadQuery,
       }),
       // GHE #332: a `watching` run's pause/resume round-trip drains its bridged inbox events.
       ...(signalStore === undefined ? {} : { signalStore }),

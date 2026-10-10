@@ -176,7 +176,7 @@ describe("BackgroundJobsRunningIndicator", () => {
     // In flight: the X becomes a spinner and the button takes no more clicks.
     expect(markup).toContain("motion-safe:animate-spin");
     expect(markup).toContain('disabled=""');
-    expect(markup).toContain('title="Stopping job"');
+    expect(markup).toContain('aria-label="Stopping job"');
   });
 
   it("opens the output panel for the selected job when a controller is present", () => {
@@ -239,13 +239,12 @@ describe("BackgroundJobList", () => {
       />,
     );
     // The label is the primary text — it reads like the tool card that
-    // started the job — and the raw command moves to the hover title.
+    // started the job — and the raw command moves to the hover tooltip, which
+    // static markup does not open.
     expect(markup).toContain("Running the quality gate");
-    expect(markup).toContain('title="node scripts/quality-gate.mjs"');
+    expect(markup).toContain('data-slot="tooltip-trigger"');
     // The command must not also render as the row's primary text.
-    expect(markup).not.toContain(
-      'text-xs text-foreground/80">node scripts/quality-gate.mjs</span>',
-    );
+    expect(markup).not.toContain("node scripts/quality-gate.mjs");
   });
 
   it("degrades to the job id when the row never carried a command", () => {

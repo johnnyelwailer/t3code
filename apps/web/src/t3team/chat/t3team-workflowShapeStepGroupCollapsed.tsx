@@ -75,7 +75,7 @@ export function T3TeamWorkflowShapeCollapsedGroup({
         <span className="min-w-0 flex-1 truncate text-sm text-foreground/90">
           {label} · {completed}/{rows.length}
           {totalLabel ? (
-            <span className="text-[11px] text-muted-foreground/70"> · {totalLabel}</span>
+            <span className="text-2xs text-muted-foreground/70"> · {totalLabel}</span>
           ) : null}
         </span>
       </summary>
@@ -84,7 +84,7 @@ export function T3TeamWorkflowShapeCollapsedGroup({
           <button
             type="button"
             data-step-group-show-all={rows.length}
-            className="rounded px-1 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="rounded px-1 py-0.5 text-2xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
             onClick={() => setShowAll(true)}
           >
             Show all {rows.length}

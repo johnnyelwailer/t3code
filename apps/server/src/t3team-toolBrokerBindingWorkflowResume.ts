@@ -11,6 +11,7 @@ import type {
   ResumeWorkflowHandlerArgs,
   T3TeamWorkflowResumeToolHandlers,
 } from "./t3team-toolBrokerWorkflowResumeTool.ts";
+import { mcpToolNameOf } from "./t3team-mcpCanonicalToolMap.ts";
 
 export const T3TEAM_WORKFLOW_RESUME_TOOL_ID = "t3team.orchestration.resume";
 
@@ -18,10 +19,15 @@ const readArgs = (value: unknown): ResumeWorkflowHandlerArgs => {
   if (!value || typeof value !== "object" || globalThis.Array.isArray(value)) {
     return {};
   }
-  const record = value as { readonly runId?: unknown; readonly source?: unknown };
+  const record = value as {
+    readonly runId?: unknown;
+    readonly source?: unknown;
+    readonly args?: unknown;
+  };
   return {
     runId: typeof record.runId === "string" ? record.runId : undefined,
     source: typeof record.source === "string" ? record.source : undefined,
+    ...(record.args === undefined ? {} : { args: record.args }),
   };
 };
 
@@ -33,11 +39,13 @@ export function callT3TeamWorkflowResumeTool(input: {
   const handlers = input.workflowResumeTools;
   if (!handlers) {
     return Effect.succeed(
-      errorResult(`Tool '${T3TEAM_WORKFLOW_RESUME_TOOL_ID}' is not enabled ${input.scopeLabel}.`),
+      errorResult(
+        `Tool '${mcpToolNameOf(T3TEAM_WORKFLOW_RESUME_TOOL_ID)}' is not enabled ${input.scopeLabel}.`,
+      ),
     );
   }
 
   return foldResult(handlers.resumeWorkflowRun(readArgs(input.toolArgs)), okResult, (message) =>
-    errorResult(`Failed to run ${T3TEAM_WORKFLOW_RESUME_TOOL_ID}: ${message}`),
+    errorResult(`Failed to run ${mcpToolNameOf(T3TEAM_WORKFLOW_RESUME_TOOL_ID)}: ${message}`),
   );
 }

@@ -6,9 +6,11 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { BackendProvider } from "~/t3team/backend/t3team-BackendContext";
 import type { AtlassianBacklogResponse, BackendApi } from "~/t3team/backend/t3team-types";
+import { T3TEAM_PROJECT_CONTEXT_ROOT } from "~/t3team/t3team-projectSetup";
 import { resetProjectWorkspaceSyncStateForTests } from "~/t3team/t3team-projectWorkspaceSync";
 
 import { useProjectBacklog } from "./t3team-useProjectBacklog";
+import { createRecordingOrchestrationApi } from "~/t3team/backend/t3team-orchestrationApi.testSupport";
 
 function createBacklogResponse(): AtlassianBacklogResponse {
   return {
@@ -102,8 +104,7 @@ describe("useProjectBacklog workspace sync", () => {
       },
       connect: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
-      dispatchCommand: vi.fn(async () => undefined),
-      forkThread: vi.fn(async () => ({ ok: true as const, childThreadId: "child-thread" })),
+      orchestration: createRecordingOrchestrationApi(),
       launchRecipeWorkflow: vi.fn(async () => ({ ok: true })),
       submitRecipeCardAction: vi.fn(async () => ({ ok: true })),
       resolveWorkflowInput: vi.fn(async () => undefined),
@@ -120,6 +121,10 @@ describe("useProjectBacklog workspace sync", () => {
           referencesRoot: "/tmp/project-1-backlog-sync-test/.t3team/references",
           linkedRepositories: [],
         })),
+        readLinkedRepositoryStatus: vi.fn(async () => ({ linkedRepositories: [] })),
+        setMainRepository: vi.fn(async () => {
+          throw new Error("not used");
+        }),
         discoverRecipes: vi.fn(async () => ({
           workspaceRoot: "/tmp/project-1-backlog-sync-test",
           hasProjectLocalRecipes: false,
@@ -171,7 +176,7 @@ describe("useProjectBacklog workspace sync", () => {
       expect(
         writeContextFiles.mock.calls.some(([input]) =>
           input.files.some(
-            (file) => file.relativePath === ".t3team/context/work-items/proj-1.json",
+            (file) => file.relativePath === `${T3TEAM_PROJECT_CONTEXT_ROOT}/work-items/proj-1.json`,
           ),
         ),
       ).toBe(true);

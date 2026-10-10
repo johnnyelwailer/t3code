@@ -68,14 +68,20 @@ export function DiffExplorerFileTree({
   const everythingOpen = closedDirectories.size === 0;
 
   return (
-    <aside className="flex min-h-0 min-w-0 shrink-0 flex-col border-l border-border/60 bg-background">
+    // Fills the pane its parent sized rather than sizing itself to the longest path: as a
+    // shrink-0 flex child it took max-content width, so a deep compacted folder pushed the
+    // diffstats, counts and header buttons past the pane's right edge, where they were clipped.
+    <aside
+      data-pr-tree-pane
+      className="flex min-h-0 w-full min-w-0 flex-col border-l border-border/60 bg-background"
+    >
       <div
         className="flex h-10 min-h-10 shrink-0 items-center gap-1 border-b border-border/60 px-2 text-xs text-muted-foreground"
         data-surface-subheader
       >
         <span className="px-1 font-medium text-foreground">Files</span>
         <span className="tabular-nums">{files.length}</span>
-        <span className="ml-auto tabular-nums text-[11px]">
+        <span className="ml-auto min-w-0 truncate tabular-nums text-2xs">
           {counts.viewed}/{counts.total} viewed
         </span>
         {directoryPaths.length > 0 ? (

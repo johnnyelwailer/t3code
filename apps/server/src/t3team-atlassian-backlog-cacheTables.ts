@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 export const ensureBacklogCacheTables = Effect.fn("t3team.atlassianBacklogCache.ensureTables")(
   function* () {

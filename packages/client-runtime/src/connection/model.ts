@@ -38,11 +38,21 @@ export class SshConnectionTarget extends Schema.TaggedClass<SshConnectionTarget>
   },
 ) {}
 
+/** A cloud session reached through the Nexi broker; see `t3team-brokerConnection.ts`. */
+export class BrokerConnectionTarget extends Schema.TaggedClass<BrokerConnectionTarget>()(
+  "BrokerConnectionTarget",
+  {
+    ...ConnectionTargetBase,
+    sessionId: Schema.String,
+  },
+) {}
+
 export const ConnectionTarget = Schema.Union([
   PrimaryConnectionTarget,
   BearerConnectionTarget,
   RelayConnectionTarget,
   SshConnectionTarget,
+  BrokerConnectionTarget,
 ]);
 export type ConnectionTarget = typeof ConnectionTarget.Type;
 
@@ -50,6 +60,7 @@ export const PersistedConnectionTarget = Schema.Union([
   BearerConnectionTarget,
   RelayConnectionTarget,
   SshConnectionTarget,
+  BrokerConnectionTarget,
 ]);
 export type PersistedConnectionTarget = typeof PersistedConnectionTarget.Type;
 
@@ -94,6 +105,8 @@ export class ConnectionBlockedError extends Schema.TaggedError<ConnectionBlocked
     reason: ConnectionBlockedReason,
     detail: Schema.String,
     traceId: Schema.optionalKey(Schema.String),
+    /** The host speaks an older orchestration protocol; updating it restores the connection. */
+    serverUpdateRequired: Schema.optionalKey(Schema.Boolean),
   },
 ) {
   override get message(): string {

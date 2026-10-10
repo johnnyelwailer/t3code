@@ -6,11 +6,12 @@
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import type { WorkflowRunRepositoryShape } from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowRunRepositoryShape } from "./persistence/WorkflowRuns.ts";
 
 /** Non-terminal statuses stop's compare-and-set write is allowed to move away from — the
  * complement of `completed` / `failed` / `cancelled`. */
 export const NON_TERMINAL_STATUSES = [
+  "authoring",
   "queued",
   "running",
   "suspended",

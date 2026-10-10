@@ -1,8 +1,9 @@
-import { ProjectId, type EnvironmentId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId, ThreadId, type EnvironmentId } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
-import type { Project } from "~/types";
+import type { Project, ThreadShell } from "~/types";
 import type { ProjectThread } from "~/t3team/t3team-types";
+import { makeThreadFixture, type ThreadFixtureOverrides } from "~/test-fixtures";
 
 export function makeLiveProject(overrides: Partial<Project> = {}): Project {
   return {
@@ -46,8 +47,24 @@ export function makeProjectThread(overrides: Partial<ProjectThread> = {}): Proje
     title: "Investigate regression",
     status: "idle",
     lastMessageAt: "2026-05-22T10:00:00.000Z",
-    messageCount: 1,
     createdAt: "2026-05-22T09:00:00.000Z",
     ...overrides,
   };
+}
+
+/**
+ * A live V2 thread SHELL — the only thing the t3team store reads per row. Defaults to an idle root
+ * thread in `live-project`; override just the fields under test.
+ */
+export function makeLiveThreadShell(overrides: ThreadFixtureOverrides = {}): ThreadShell {
+  return makeThreadFixture({
+    id: ThreadId.make("thread-1"),
+    environmentId: "env-local" as EnvironmentId,
+    projectId: ProjectId.make("live-project"),
+    title: "Investigate regression",
+    modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
+    createdAt: "2026-05-22T09:00:00.000Z",
+    updatedAt: "2026-05-22T10:00:00.000Z",
+    ...overrides,
+  });
 }

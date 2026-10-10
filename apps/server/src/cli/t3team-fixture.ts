@@ -3,28 +3,28 @@ import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as References from "effect/References";
-import { Command, Flag, GlobalFlag } from "effect/unstable/cli";
+import { Command, Flag, GlobalFlag } from "effect/cli";
 
 import * as ServerConfig from "../config.ts";
-import { layerConfig as SqlitePersistenceLayerLive } from "../persistence/Layers/Sqlite.ts";
+import { layerConfig as SqlitePersistenceLayerLive } from "../persistence/Sqlite.ts";
 import { seedT3TeamFixtureProject } from "../t3team-fixtureProjectSeed.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import { projectLocationFlags, resolveCliAuthConfig } from "./config.ts";
 
-const fixtureFlag = Flag.string("fixture").pipe(
+const fixtureFlag = Flag.String("fixture").pipe(
   Flag.withDescription("Path to the fixture directory (metadata.json + work-items/*.json)."),
 );
 
-const workspaceFlag = Flag.string("workspace").pipe(
+const workspaceFlag = Flag.String("workspace").pipe(
   Flag.withDescription("Workspace root the fixture project is ingested into."),
 );
 
-const accountFlag = Flag.string("account").pipe(
+const accountFlag = Flag.String("account").pipe(
   Flag.withDescription("Fixture account name; the account id becomes `fixture:<name>`."),
   Flag.withDefault("demo"),
 );
 
-const jsonFlag = Flag.boolean("json").pipe(
+const jsonFlag = Flag.Boolean("json").pipe(
   Flag.withDescription("Emit JSON instead of human-readable output."),
   Flag.withDefault(false),
 );
@@ -33,7 +33,7 @@ const jsonFlag = Flag.boolean("json").pipe(
  * `t3team fixture seed` — ingest a fixture directory into a workspace through the same
  * refresh pipeline the live Atlassian sync uses. Scriptable for humans, agents and CI.
  */
-export const fixtureSeedCommand = Command.make("seed", {
+const fixtureSeedCommand = Command.make("seed", {
   ...projectLocationFlags,
   fixture: fixtureFlag,
   workspace: workspaceFlag,

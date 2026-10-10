@@ -141,6 +141,8 @@ export async function tryWorkflowRepair(
     });
     if (result.kind === "recovered") return true;
     if (result.kind === "not-attempted") return false;
+    // "Cannot fix" from the author who has the run's context is final — no blind repeats.
+    if (result.terminal === true) return false;
     priorReasons.push(result.reason.slice(0, 240));
   }
   return false;

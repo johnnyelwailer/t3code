@@ -86,7 +86,7 @@ export function T3TeamProjectSetupProfileCards({
             <div className="relative grid h-full grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-2">
               <CardIcon option={option} compact={compact} />
               <div className="min-w-0">
-                <div className="text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
+                <div className="text-2xs font-semibold tracking-widest text-muted-foreground uppercase">
                   {option.eyebrow}
                 </div>
                 <h3

@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
+import { mergeRouteAndStoreView } from "~/t3team/t3team-projectThreadViewState";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
 import type { ViewState } from "~/t3team/t3team-types";
@@ -76,4 +77,16 @@ export function useResolvedViewSync({
 
     store.setView(resolvedView);
   }, [activeDashboardMode, onOpenDashboard, onOpenThread, onOpenTicket, resolvedView, store, view]);
+}
+
+/**
+ * Route view wins, but while URL navigation lags the store the merged view
+ * keeps the store's embeddedThreadId (sidebar chat) visible. See
+ * `mergeRouteAndStoreView` for the exact merge rules.
+ */
+export function useMergedRouteAndStoreView(
+  routeView: ViewState | null | undefined,
+  storeView: ViewState | null,
+) {
+  return useMemo(() => mergeRouteAndStoreView(routeView, storeView), [routeView, storeView]);
 }

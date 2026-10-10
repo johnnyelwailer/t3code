@@ -29,7 +29,7 @@ export function WorkItemStatusBadge({
   });
 
   return (
-    <Badge variant={workItemStatusBadgeVariant(tone)} className={cn("gap-1.5", className)}>
+    <Badge variant={workItemStatusBadgeVariant(tone)} className={className}>
       <span
         aria-hidden="true"
         className={cn("size-1.5 rounded-full", workItemStatusDotClassName[tone])}

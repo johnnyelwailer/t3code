@@ -22,6 +22,8 @@ export type UpstreamRouteTranslation =
 // this shell, so the shell must not translate them — swallowing them breaks terminal-less login.
 const PASSTHROUGH_PREFIXES = [
   "/t3team",
+  // Detached surfaces render bare in a window of their own (t3team-detachedSurface).
+  "/t3team-detached",
   "/settings",
   // The first-run wizard renders outside the Team shell and is owned by
   // FirstRunGate's own navigation. Translating /welcome away makes the gate
@@ -37,6 +39,9 @@ const PASSTHROUGH_PREFIXES = [
   "/pair",
   "/connect",
   "/connect_",
+  // MCP OAuth approval page for outside agents (upstream #16336). Matching is exact-or-`prefix/`,
+  // so "/connect" does not cover it; translated away it lands on /t3team's pairing gate.
+  "/connect-agent",
 ] as const;
 
 export function isT3TeamShellPath(pathname: string): boolean {
@@ -103,6 +108,24 @@ export interface UpstreamRouteBridgeDeps {
     readonly environmentId: string;
     readonly threadId: string;
   }) => string | null;
+  /**
+   * This app's primary environment, or `null` while it is not known yet. The Team thread view and
+   * its backend talk to the primary server only, so a thread anywhere else (a cloud session, SSH,
+   * WSL) stays on upstream's environment-scoped thread route.
+   */
+  readonly primaryEnvironmentId: string | null;
+}
+
+/**
+ * Whether the Team thread view can show a thread from this environment. `false` while the primary
+ * is unknown: upstream's environment-scoped view renders any thread, and the bridge moves a primary
+ * one into the Team shell once the id resolves — a Team route, once entered, is never moved back.
+ */
+export function isTeamShellEnvironment(
+  environmentId: string,
+  primaryEnvironmentId: string | null,
+): boolean {
+  return primaryEnvironmentId !== null && environmentId === primaryEnvironmentId;
 }
 
 export function translateUpstreamPath(
@@ -119,6 +142,14 @@ export function translateUpstreamPath(
 
   const threadPath = parseUpstreamThreadPath(pathname);
   const projectId = threadPath ? deps.resolveProjectIdForThread(threadPath) : null;
+  // Only a real thread: an unresolvable `/draft/<id>` would otherwise read as environment "draft".
+  if (
+    threadPath &&
+    projectId &&
+    !isTeamShellEnvironment(threadPath.environmentId, deps.primaryEnvironmentId)
+  ) {
+    return { kind: "ignore" };
+  }
 
   // A real thread always wins, so an environment literally named "draft" keeps
   // working; only an unresolvable `/draft/<id>` is treated as a draft.
@@ -143,4 +174,21 @@ export function translateUpstreamPath(
       params: { projectId, threadId: threadPath.threadId },
     },
   };
+}
+
+/**
+ * Options for applying a bridge translation. Always replace so Back cannot land
+ * on the transient upstream path that this bridge just translated away.
+ */
+export function buildUpstreamBridgeNavigation(
+  translation: Exclude<UpstreamRouteTranslation, { kind: "ignore" }>,
+):
+  | (Exclude<UpstreamRouteTranslation, { kind: "ignore" | "unhandled" }>["target"] & {
+      readonly replace: true;
+    })
+  | { readonly to: "/t3team"; readonly replace: true } {
+  if (translation.kind === "unhandled") {
+    return { to: "/t3team", replace: true };
+  }
+  return { ...translation.target, replace: true };
 }

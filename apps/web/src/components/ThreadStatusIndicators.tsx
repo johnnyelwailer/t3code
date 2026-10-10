@@ -1,41 +1,62 @@
+import {
+  scopeProjectRef,
+  scopedThreadKey,
+  scopeThreadRef,
+} from "@t3tools/client-runtime/environment";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
-import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+
 import { pullRequestDetailToVcsStatus } from "@t3tools/client-runtime/state/pull-requests";
-import { Atom } from "effect/unstable/reactivity";
-import { appAtomRegistry } from "../rpc/atomRegistry";
 import {
   resolveEnvironmentMachineKind,
   type EnvironmentId,
+  type ScopedThreadRef,
   type ThreadLinkedPullRequest,
   type ThreadPullRequestLink,
   type VcsStatusResult,
 } from "@t3tools/contracts";
+import { Atom } from "effect/reactivity";
+import { EyeIcon, EyeOffIcon, FolderGit2Icon, TerminalIcon } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { appAtomRegistry } from "../rpc/atomRegistry";
+import { useEnvironment, usePrimaryEnvironmentId } from "../state/environments";
+import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
+import { useProject } from "../state/entities";
 import {
   resolveThreadCurrentPullRequestLink,
   resolveThreadPullRequestChains,
   visibleThreadPullRequests,
   type ThreadPullRequestBadge,
 } from "@t3tools/shared/threadPullRequests";
-import { FolderGit2Icon, TerminalIcon } from "lucide-react";
-import { useMemo, type MouseEvent } from "react";
-import { buttonVariants, InlineButton } from "./ui/button";
+import { useRender } from "@base-ui/react/use-render";
+import { type ReactNode, type AnimationEvent, type MouseEvent, type ReactElement } from "react";
 import { cn } from "../lib/utils";
-import { useEnvironment, usePrimaryEnvironmentId } from "../state/environments";
-import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
+
 import { parseChangeRequestUrl } from "../lib/openPullRequestLink";
 import { useEnvironmentQuery } from "../state/query";
 import { linkedPullRequestDetailAtom, useSharedPullRequestSummary } from "../state/pullRequests";
 import { useThreadRunningTerminalIds } from "../state/terminalSessions";
+import { threadEnvironment } from "../state/threads";
+import { useAtomCommand } from "../state/use-atom-command";
+import { vcsEnvironment } from "../state/vcs";
 import { useUiStateStore } from "../uiStateStore";
 import { resolveChangeRequestPresentation } from "../sourceControlPresentation";
-import { resolveThreadStatusPill, type ThreadStatusPill } from "./Sidebar.logic";
-import { usePrimarySettings } from "~/hooks/useSettings";
+import {
+  resolveThreadLastVisitedAt,
+  resolveThreadStatusPill,
+  type ThreadStatusPill,
+  useRetainedValue,
+  useSidebarRowSubscriptionLease,
+} from "./Sidebar.logic";
+import { useT3TeamSidebarRowFacts } from "~/t3team/hooks/t3team-useSidebarRowFacts";
 import {
   activityPulseClass,
   resolveActivityPillDisplay,
 } from "~/t3team/t3team-activityStateDisplay";
+import { resolveStatusOrbState, STATUS_ORB_CLASS } from "~/t3team/t3team-statusOrb";
+import "~/t3team/t3team-statusOrb.css";
 import type { SidebarThreadSummary } from "../types";
 import { formatWorktreePathForDisplay } from "../worktreeCleanup";
+import { Button } from "./ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { pullRequestListLines } from "./pullRequest/pullRequestListLines";
 import {
@@ -83,15 +104,24 @@ export function useLinkedThreadPullRequest(
   );
   const fallback =
     current === null ? ((!supportsLinks ? linkedPullRequest : null) ?? branchPullRequest) : null;
-  const host = fallback == null ? undefined : parseChangeRequestUrl(fallback.url)?.host;
-  const reference =
-    fallback == null ? null : { ...fallback, ...(host === undefined ? {} : { host }) };
+  // Stable per link: the shared summary effect keys on this object, and a sidebar row must not
+  // touch the cache on every render.
+  const reference = useMemo(() => {
+    if (fallback == null) return null;
+    const host = parseChangeRequestUrl(fallback.url)?.host;
+    return { ...fallback, ...(host === undefined ? {} : { host }) };
+  }, [fallback]);
   const queried = useEnvironmentQuery(
     !enabled || environmentId === null || reference === null
       ? null
       : linkedPullRequestDetailAtom({ environmentId, input: reference }),
-  ).data;
-  const detail = useSharedPullRequestSummary(environmentId, reference, queried);
+  );
+  const detail = useSharedPullRequestSummary(
+    environmentId,
+    reference,
+    queried.data,
+    queried.dataUpdatedAt,
+  );
 
   return useMemo(() => {
     if (current !== null) return linkedPullRequestSnapshotStatus(current);
@@ -189,85 +219,151 @@ export function resolveThreadPullRequestBadgePresentation({
   };
 }
 
-/** The complete linked-PR control shared by the sidebar and composer footer. */
+/**
+ * The linked-PR badge shared by the sidebar and composer footer. The badge owns what it shows:
+ * the state glyph and number at the meta size, in the state's color. The caller owns the control
+ * it sits in through `render` (an inline link in a sidebar row, a toolbar control in the
+ * composer), and the badge fills in the behavior: a single PR is a link to it, while a stack or
+ * several linked PRs is a button that opens the thread's pull requests tab.
+ */
 export function ThreadPullRequestBadgeControl({
-  variant,
+  render,
+  threadRef,
   badge,
+  pullRequests,
   number,
   url,
   status,
-  onOpenStack,
+  onOpenList,
   onOpenPullRequest,
 }: {
-  variant: "underline" | "ghost";
+  render: ReactElement<{ render?: useRender.RenderProp }>;
+  threadRef: ScopedThreadRef;
   badge: ThreadPullRequestBadge | null;
+  pullRequests: ReadonlyArray<ThreadPullRequestLink>;
   number?: number | undefined;
   url?: string | undefined;
   status: PrStatusIndicator | null;
-  onOpenStack: () => void;
-  onOpenPullRequest: (event: MouseEvent<HTMLAnchorElement>) => void;
+  onOpenList: () => void;
+  onOpenPullRequest: (event: MouseEvent<HTMLElement>, url?: string) => void;
 }) {
   const presentation = resolveThreadPullRequestBadgePresentation({ badge, number, url, status });
   if (presentation === null) return null;
-  const isStack = badge?.kind === "stack";
-  const className = cn(
-    variant === "ghost"
-      ? buttonVariants({ variant: "ghost", size: "xs" })
-      : "inline-flex shrink-0 cursor-pointer items-center gap-0.5 whitespace-nowrap border-b border-transparent hover:border-current focus-visible:outline-2 focus-visible:outline-ring",
-    "text-xs tabular-nums",
-    variant === "ghost" &&
-      "font-normal text-xs! active:scale-100 [--control-icon-color:currentColor]",
-    presentation.toneClassName,
+  return (
+    <PullRequestBadge
+      render={render}
+      threadRef={threadRef}
+      presentation={presentation}
+      opensList={badge !== null && (badge.kind === "stack" || badge.others > 0)}
+      url={url}
+      number={number}
+      status={status}
+      pullRequests={pullRequests}
+      onOpenList={onOpenList}
+      onOpenPullRequest={onOpenPullRequest}
+    />
   );
-  const content = (
-    <>
-      <presentation.Icon aria-hidden className="size-3 shrink-0" />
-      {presentation.text}
-    </>
+}
+
+function PullRequestBadge({
+  render,
+  threadRef,
+  presentation,
+  opensList,
+  url,
+  number,
+  status,
+  pullRequests,
+  onOpenList,
+  onOpenPullRequest,
+}: {
+  render: ReactElement<{ render?: useRender.RenderProp }>;
+  threadRef: ScopedThreadRef;
+  presentation: NonNullable<ReturnType<typeof resolveThreadPullRequestBadgePresentation>>;
+  opensList: boolean;
+  url: string | undefined;
+  number: number | undefined;
+  status: PrStatusIndicator | null;
+  pullRequests: ReadonlyArray<ThreadPullRequestLink>;
+  onOpenList: () => void;
+  onOpenPullRequest: (event: MouseEvent<HTMLElement>, url?: string) => void;
+}) {
+  const onClick = opensList
+    ? (event: MouseEvent<HTMLElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onOpenList();
+      }
+    : onOpenPullRequest;
+  const element = opensList ? (
+    <button type="button" />
+  ) : (
+    <a href={url} target="_blank" rel="noopener noreferrer" />
   );
+  // The caller's control (InlineButton, ComposerControl) renders as the link or stack button
+  // through its own render prop; useRender merges the badge's behavior into it.
+  const control = useRender({
+    render,
+    props: {
+      render: element,
+      "aria-label": presentation.label,
+      onPointerDown: (event: MouseEvent<HTMLElement>) => event.stopPropagation(),
+      onClick,
+    },
+  });
   return (
     <Tooltip>
-      <TooltipTrigger
-        render={
-          isStack ? (
-            <InlineButton
-              className={className}
-              aria-label={presentation.label}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onOpenStack();
-              }}
-            />
-          ) : (
-            <a
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={className}
-              aria-label={presentation.label}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={onOpenPullRequest}
-            />
-          )
-        }
-      >
-        {content}
+      <TooltipTrigger render={control}>
+        <span
+          className={cn("contents font-normal text-xs tabular-nums", presentation.toneClassName)}
+        >
+          <presentation.Icon aria-hidden className="size-3 shrink-0" />
+          {/* An element, not bare text: bare text takes its line box from the control, which
+              inherits the row's size, so beside a text-sm title it sat below the other meta. */}
+          <span>{presentation.text}</span>
+        </span>
       </TooltipTrigger>
-      <TooltipPopup side="top">{presentation.label}</TooltipPopup>
+      <TooltipPopup
+        side="top"
+        sideOffset={0}
+        variant="glass"
+        className="pointer-events-auto w-80 max-w-[calc(100vw-2rem)] text-left whitespace-normal"
+      >
+        {visibleThreadPullRequests(pullRequests).length > 0 ? (
+          <ThreadPullRequestsMiniList
+            pullRequests={pullRequests}
+            threadRef={threadRef}
+            onOpenPullRequest={onOpenPullRequest}
+          />
+        ) : number !== undefined && url !== undefined ? (
+          <ul className="flex flex-col gap-1">
+            <ThreadPullRequestMiniListItem
+              number={number}
+              url={url}
+              title={status?.tooltipTitle ?? presentation.label}
+              presentation={presentation}
+              onOpenPullRequest={onOpenPullRequest}
+            />
+          </ul>
+        ) : null}
+      </TooltipPopup>
     </Tooltip>
   );
 }
 
 /**
  * A miniature of the pull-requests panel for the thread tooltip: same order, same indentation,
- * so the hover answers "what is in here" without opening the surface.
+ * so the hover answers "what is in here" without opening the surface. Watched pull requests
+ * show an eye. With `threadRef`, the popup is interactive and the eye stops the watch.
  */
 export function ThreadPullRequestsMiniList({
   pullRequests,
+  threadRef,
+  onOpenPullRequest,
 }: {
   pullRequests: ReadonlyArray<ThreadPullRequestLink>;
+  threadRef?: ScopedThreadRef;
+  onOpenPullRequest?: (event: MouseEvent<HTMLAnchorElement>, url: string) => void;
 }) {
   const lines = useMemo(
     () =>
@@ -283,38 +379,139 @@ export function ThreadPullRequestsMiniList({
           snapshot === null
             ? null
             : resolvePullRequestState({ state: snapshot.state, isDraft: snapshot.isDraft });
+        // Same rule as the panel: a watch only matters while the pull request is open.
+        const watching =
+          line.link.watch !== undefined && (snapshot === null || snapshot.state === "open");
         return (
-          <li
+          <ThreadPullRequestMiniListItem
             key={`${line.link.host}/${line.link.repository}#${line.link.number}`}
-            className="flex min-w-0 items-center gap-2"
-            // Capped like the panel: past a few layers the indent only repeats "still in the
-            // stack", and sixteen of them would walk the titles off the popover.
-            style={{ paddingLeft: `${Math.min(line.depth, 3) * 0.75}rem` }}
+            number={line.link.number}
+            url={line.link.url}
+            title={snapshot?.title ?? line.link.repository}
+            presentation={presentation}
+            depth={line.depth}
+            onOpenPullRequest={onOpenPullRequest}
+            action={
+              !watching ? null : threadRef ? (
+                <StopWatchingButton threadRef={threadRef} link={line.link} />
+              ) : (
+                <EyeIcon
+                  role="img"
+                  aria-label="Watching"
+                  className="size-3 shrink-0 text-foreground/75"
+                />
+              )
+            }
           >
-            {presentation ? (
-              <presentation.Icon
-                aria-hidden
-                className={cn("size-3 shrink-0", presentation.toneClassName)}
-              />
-            ) : (
-              <PullRequestGlyph.pullRequest
-                aria-hidden
-                className="size-3 shrink-0 stroke-muted-foreground"
-              />
-            )}
-            <span className="shrink-0 font-mono tabular-nums">#{line.link.number}</span>
-            <span className="min-w-0 truncate text-foreground/75">
-              {snapshot?.title ?? line.link.repository}
-            </span>
             {line.stack ? (
-              <span className="ml-auto shrink-0 pl-1 text-[10px]">
+              <span className="ml-auto shrink-0 pl-1 text-3xs">
                 {line.stack.kind === "native" ? "stack" : "chain"} · {line.stack.size}
               </span>
             ) : null}
-          </li>
+          </ThreadPullRequestMiniListItem>
         );
       })}
     </ul>
+  );
+}
+
+function ThreadPullRequestMiniListItem({
+  number,
+  url,
+  title,
+  presentation,
+  depth = 0,
+  onOpenPullRequest,
+  action,
+  children,
+}: {
+  number: number;
+  url: string;
+  title: string;
+  presentation: Pick<ThreadPullRequestBadgePresentation, "Icon" | "toneClassName"> | null;
+  depth?: number;
+  onOpenPullRequest?: ((event: MouseEvent<HTMLAnchorElement>, url: string) => void) | undefined;
+  /** Trails the row, outside the link so it can be its own control. */
+  action?: ReactNode;
+  children?: ReactNode;
+}) {
+  const Icon = presentation?.Icon ?? PullRequestGlyph.pullRequest;
+  const content = (
+    <>
+      <Icon
+        aria-hidden
+        className={cn("size-3 shrink-0", presentation?.toneClassName ?? "stroke-muted-foreground")}
+      />
+      <span className="shrink-0 font-mono tabular-nums">#{number}</span>
+      <span className="min-w-0 truncate text-foreground/75">{title}</span>
+      {children}
+    </>
+  );
+  return (
+    <li
+      className="flex min-w-0 items-center gap-1"
+      style={{ paddingLeft: `${Math.min(depth, 3) * 0.75}rem` }}
+    >
+      {onOpenPullRequest ? (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-sm px-1 py-1 hover:bg-accent focus-visible:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => onOpenPullRequest(event, url)}
+        >
+          {content}
+        </a>
+      ) : (
+        <div className="flex min-w-0 flex-1 items-center gap-2">{content}</div>
+      )}
+      {action}
+    </li>
+  );
+}
+
+/**
+ * The eye on a watched pull request in an interactive popup. Hover shows the crossed eye, and a
+ * click stops the watch; the row loses the eye once the server records it.
+ */
+export function StopWatchingButton({
+  threadRef,
+  link,
+}: {
+  threadRef: ScopedThreadRef;
+  link: ThreadPullRequestLink;
+}) {
+  const watch = useAtomCommand(threadEnvironment.watchPullRequest, { reportFailure: true });
+  const [stopping, setStopping] = useState(false);
+  return (
+    <Button
+      variant="ghost"
+      size="icon-micro"
+      aria-label={`Stop watching #${link.number}`}
+      disabled={stopping}
+      className="group/watch shrink-0"
+      // The popup portals out, but React still bubbles to the sidebar row behind it.
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setStopping(true);
+        void watch({
+          environmentId: threadRef.environmentId,
+          input: {
+            threadId: threadRef.threadId,
+            host: link.host,
+            repository: link.repository,
+            number: link.number,
+            watching: false,
+          },
+        }).finally(() => setStopping(false));
+      }}
+    >
+      <EyeIcon aria-hidden className="size-3 group-hover/watch:hidden" />
+      <EyeOffIcon aria-hidden className="hidden size-3 group-hover/watch:block" />
+    </Button>
   );
 }
 
@@ -360,241 +557,26 @@ export function PrStatusTooltipContent({ status }: { status: PrStatusIndicator }
   );
 }
 
-export function terminalStatusFromRunningIds(
-  runningTerminalIds: ReadonlyArray<string>,
-): TerminalStatusIndicator | null {
-  if (runningTerminalIds.length === 0) {
-    return null;
-  }
-  return {
-    label: "Terminal process running",
-    colorClass: "text-teal-600 dark:text-teal-300/90",
-    pulse: true,
-  };
-}
-
-export function ThreadWorktreeIndicator({
-  thread,
-}: {
-  thread: Pick<SidebarThreadSummary, "id" | "branch" | "worktreePath">;
-}) {
-  const worktreePath = thread.worktreePath?.trim();
-  if (!worktreePath) {
+export function resolveThreadPr(input: {
+  threadBranch: string | null;
+  gitStatus: VcsStatusResult | null;
+}): ThreadPr | null {
+  const { threadBranch, gitStatus } = input;
+  if (gitStatus === null) {
     return null;
   }
 
-  const displayPath = formatWorktreePathForDisplay(worktreePath);
-  const tooltip = thread.branch
-    ? `Worktree: ${displayPath} (${thread.branch})`
-    : `Worktree: ${displayPath}`;
-
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <span
-            role="img"
-            aria-label={tooltip}
-            data-testid={`thread-worktree-${thread.id}`}
-            className="inline-flex items-center justify-center"
-          />
-        }
-      >
-        <FolderGit2Icon className="size-3 text-muted-foreground/40" />
-      </TooltipTrigger>
-      <TooltipPopup side="top">{tooltip}</TooltipPopup>
-    </Tooltip>
-  );
-}
-
-export function ThreadStatusLabel({
-  status,
-  compact = false,
-}: {
-  status: ThreadStatusPill;
-  compact?: boolean;
-}) {
-  // GHE #40/#208: the deterministic state word is the base label (always
-  // available, zero inference); the live LLM label is optional enrichment
-  // appended as "{state} · {detail}". `label` stays the stable status key.
-  const displayLabel = resolveActivityPillDisplay(status);
-  if (compact) {
-    return (
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <span
-              aria-label={displayLabel}
-              className={`inline-flex size-3.5 shrink-0 items-center justify-center ${status.colorClass}`}
-            />
-          }
-        >
-          <span
-            className={`size-[9px] rounded-full transition-colors duration-200 ${status.dotClass} ${activityPulseClass(status)}`}
-          />
-        </TooltipTrigger>
-        <TooltipPopup side="top">{displayLabel}</TooltipPopup>
-      </Tooltip>
-    );
+  if (threadBranch === null || gitStatus.refName !== threadBranch) {
+    return null;
   }
 
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <span
-            aria-label={displayLabel}
-            className={`inline-flex items-center gap-1 text-[10px] ${status.colorClass}`}
-          />
-        }
-      >
-        <span
-          className={`h-1.5 w-1.5 rounded-full transition-colors duration-200 ${status.dotClass} ${activityPulseClass(status)}`}
-        />
-        {/* GHE #208: keyed so the soft fade (animate-label-fade) restarts on a label
-            change — state-word transitions never hard-swap. */}
-        <span key={displayLabel} className="hidden animate-label-fade md:inline">
-          {displayLabel}
-        </span>
-      </TooltipTrigger>
-      <TooltipPopup side="top">{displayLabel}</TooltipPopup>
-    </Tooltip>
-  );
+  return gitStatus.pr ?? null;
 }
 
 /**
- * Non-interactive leading status icons for a thread row in compact contexts
- * like the command palette. Shows the change request state icon (if present) and the
- * thread status dot, matching the sidebar's leading indicators.
+ * Parent-held PR snapshot for Sidebar V2. Rows remount when settlement
+ * partitions move them, so terminal PR metadata must live above the row.
  */
-export function ThreadRowLeadingStatus({ thread }: { thread: SidebarThreadSummary }) {
-  const threadRef = scopeThreadRef(thread.environmentId, thread.id);
-  const lastVisitedAt = useUiStateStore(
-    (state) => state.threadLastVisitedAtById[scopedThreadKey(threadRef)],
-  );
-  const pullRequest = useLinkedThreadPullRequest(
-    thread.environmentId,
-    thread.linkedPullRequest,
-    true,
-    thread.pullRequests,
-    thread.branchPullRequest,
-  );
-  const pr = pullRequest?.pr ?? null;
-  const prStatus = prStatusIndicator(pr, pullRequest?.sourceControlProvider);
-  const threadStatus = resolveThreadStatusPill({
-    thread: {
-      ...thread,
-      lastVisitedAt,
-    },
-    activityLabelsEnabled: usePrimarySettings((settings) => settings.t3teamActivityLabelsEnabled),
-  });
-
-  const supportsMultiplePullRequests = useSupportsMultiplePullRequests(thread.environmentId);
-  const pendingLink =
-    pr === null && supportsMultiplePullRequests
-      ? resolveThreadCurrentPullRequestLink(thread.pullRequests)
-      : null;
-  if (!prStatus && !threadStatus && !pendingLink) {
-    return null;
-  }
-
-  return (
-    <span className="inline-flex shrink-0 items-center gap-1.5">
-      {prStatus && pr ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <span
-                aria-label={prStatus.tooltip}
-                className={`inline-flex items-center justify-center ${prStatus.colorClass}`}
-              />
-            }
-          >
-            <ChangeRequestStatusIcon state={pr.state} isDraft={pr.isDraft} className="size-3" />
-          </TooltipTrigger>
-          <TooltipPopup side="top">
-            <PrStatusTooltipContent status={prStatus} />
-          </TooltipPopup>
-        </Tooltip>
-      ) : null}
-      {pendingLink ? (
-        <PullRequestGlyph.pullRequest
-          className="size-3 text-muted-foreground"
-          aria-label={`PR #${pendingLink.number}, status pending`}
-        />
-      ) : null}
-      {threadStatus ? <ThreadStatusLabel status={threadStatus} /> : null}
-    </span>
-  );
-}
-
-/**
- * Non-interactive trailing status icons for a thread row in compact contexts
- * like the command palette. Shows a terminal-running indicator and a remote
- * environment indicator, matching the sidebar's trailing indicators.
- */
-export function ThreadRowTrailingStatus({ thread }: { thread: SidebarThreadSummary }) {
-  const runningTerminalIds = useThreadRunningTerminalIds({
-    environmentId: thread.environmentId,
-    threadId: thread.id,
-  });
-  const environment = useEnvironment(thread.environmentId);
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
-  // No primary (the hosted app) means every thread is remote, and the machine
-  // glyph is what tells the environments apart.
-  const isRemoteThread = thread.environmentId !== primaryEnvironmentId;
-  const remoteEnvLabel = environment?.label ?? null;
-  const threadEnvironmentLabel = isRemoteThread ? (remoteEnvLabel ?? "Remote") : null;
-  const remoteMachine = resolveEnvironmentMachineKind(environment?.serverConfig ?? null);
-  const terminalStatus = terminalStatusFromRunningIds(runningTerminalIds);
-
-  if (!terminalStatus && !isRemoteThread) {
-    return null;
-  }
-
-  return (
-    <span className="inline-flex shrink-0 items-center gap-1.5">
-      {terminalStatus ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <span
-                role="img"
-                aria-label={terminalStatus.label}
-                className={`inline-flex items-center justify-center ${terminalStatus.colorClass}`}
-              />
-            }
-          >
-            <TerminalIcon className={`size-3 ${activityPulseClass(terminalStatus)}`} />
-          </TooltipTrigger>
-          <TooltipPopup side="top">{terminalStatus.label}</TooltipPopup>
-        </Tooltip>
-      ) : null}
-      {isRemoteThread ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <span
-                aria-label={threadEnvironmentLabel ?? "Remote"}
-                className="inline-flex items-center justify-center"
-              />
-            }
-          >
-            <EnvironmentMachineIcon
-              kind={remoteMachine}
-              className="size-3 text-muted-foreground/60"
-            />
-          </TooltipTrigger>
-          <TooltipPopup side="top">{threadEnvironmentLabel}</TooltipPopup>
-        </Tooltip>
-      ) : null}
-    </span>
-  );
-}
-
-// t3team (fork): change-request snapshot pipeline — per-thread chip state kept out of
-// the live git-status stream so settled rows keep a terminal PR until the user
-// re-engages. Carried forward during the 2026-09 upstream sync.
 export interface ThreadChangeRequestSnapshot {
   readonly branch: string;
   readonly pr: NonNullable<ThreadPr>;
@@ -746,7 +728,7 @@ export function nextThreadChangeRequestSnapshot(input: {
  * checkouts only, a cached merged/closed PR for the thread. Local thread
  * metadata follows the shared checkout, so the cached branch intentionally
  * survives that metadata changing to the newly checked-out branch. Open PRs
- * are never retained — their state can still change.
+ * are retained only while live status is absent and the branch still matches.
  */
 export function resolveDisplayedThreadPr(input: {
   threadBranch: string | null;
@@ -779,6 +761,15 @@ export function resolveDisplayedThreadPr(input: {
     gitStatus.pr != null
   ) {
     return gitStatus.pr;
+  }
+
+  if (
+    gitStatus === null &&
+    threadBranch !== null &&
+    snapshot?.branch === threadBranch &&
+    snapshot.linkedPullRequest === undefined
+  ) {
+    return snapshot.pr;
   }
 
   if (
@@ -828,6 +819,15 @@ export function resolveDisplayedThreadPrProvider(input: {
   }
 
   if (
+    gitStatus === null &&
+    threadBranch !== null &&
+    snapshot?.branch === threadBranch &&
+    snapshot.linkedPullRequest === undefined
+  ) {
+    return snapshot.sourceControlProvider;
+  }
+
+  if (
     threadBranch !== null &&
     retainTerminalOnBranchMismatch &&
     snapshot != null &&
@@ -840,20 +840,305 @@ export function resolveDisplayedThreadPrProvider(input: {
   return undefined;
 }
 
-
-export function settledPrHoverColorClass(
-  state: NonNullable<ThreadPr>["state"],
-  isDraft = false,
-): string {
-  switch (state) {
-    case "open":
-      if (isDraft) {
-        return "group-hover/v2-row:text-zinc-500 dark:group-hover/v2-row:text-zinc-400/80";
-      }
-      return "group-hover/v2-row:text-emerald-600 dark:group-hover/v2-row:text-emerald-300/90";
-    case "merged":
-      return "group-hover/v2-row:text-violet-600 dark:group-hover/v2-row:text-violet-300/90";
-    case "closed":
-      return "group-hover/v2-row:text-red-600 dark:group-hover/v2-row:text-red-300/90";
+export function terminalStatusFromRunningIds(
+  runningTerminalIds: ReadonlyArray<string>,
+): TerminalStatusIndicator | null {
+  if (runningTerminalIds.length === 0) {
+    return null;
   }
+  return {
+    label: "Terminal process running",
+    colorClass: "text-teal-600 dark:text-teal-300/90",
+    pulse: true,
+  };
+}
+
+/** Align newly started pulses with the document clock without a timer or frame loop. */
+export function synchronizeTerminalPulse(event: AnimationEvent<SVGSVGElement>) {
+  if (event.animationName !== "status-pulse") return;
+
+  for (const animation of event.currentTarget.getAnimations()) {
+    if ("animationName" in animation && animation.animationName === "status-pulse") {
+      animation.startTime = 0;
+    }
+  }
+}
+
+export function ThreadWorktreeIndicator({
+  thread,
+}: {
+  thread: Pick<SidebarThreadSummary, "id" | "branch" | "worktreePath">;
+}) {
+  const worktreePath = thread.worktreePath?.trim();
+  if (!worktreePath) {
+    return null;
+  }
+
+  const displayPath = formatWorktreePathForDisplay(worktreePath);
+  const tooltip = thread.branch
+    ? `Worktree: ${displayPath} (${thread.branch})`
+    : `Worktree: ${displayPath}`;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            role="img"
+            aria-label={tooltip}
+            data-testid={`thread-worktree-${thread.id}`}
+            className="inline-flex items-center justify-center"
+          />
+        }
+      >
+        <FolderGit2Icon className="size-3 text-muted-foreground/40" />
+      </TooltipTrigger>
+      <TooltipPopup side="top">{tooltip}</TooltipPopup>
+    </Tooltip>
+  );
+}
+
+export function ThreadStatusLabel({
+  status,
+  compact = false,
+}: {
+  status: ThreadStatusPill;
+  compact?: boolean;
+}) {
+  // GHE #40/#208: the deterministic state word is the base label (always
+  // available, zero inference); the live LLM label is optional enrichment
+  // appended as "{state} · {detail}". `label` stays the stable status key.
+  const displayLabel = resolveActivityPillDisplay(status);
+  // GHE #201: the dot paints through the shared porcelain orb when the pill
+  // maps onto that vocabulary; unmapped pills keep their tailwind dot class.
+  const orbState = resolveStatusOrbState(status);
+  const dotClass = orbState
+    ? STATUS_ORB_CLASS
+    : `transition-colors duration-200 ${status.dotClass}`;
+  if (compact) {
+    return (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span
+              role="img"
+              aria-label={displayLabel}
+              className={`inline-flex size-3.5 shrink-0 items-center justify-center ${status.colorClass}`}
+            />
+          }
+        >
+          <span
+            data-t3team-state={orbState ?? undefined}
+            className={`size-[9px] rounded-full ${dotClass} ${activityPulseClass(status)}`}
+          />
+        </TooltipTrigger>
+        <TooltipPopup side="top">{displayLabel}</TooltipPopup>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            role="img"
+            aria-label={displayLabel}
+            className={`inline-flex items-center gap-1 text-3xs ${status.colorClass}`}
+          />
+        }
+      >
+        <span
+          data-t3team-state={orbState ?? undefined}
+          className={`h-1.5 w-1.5 rounded-full ${dotClass} ${activityPulseClass(status)}`}
+        />
+        {/* GHE #208: keyed so the soft fade (animate-label-fade) restarts on a label
+            change — state-word transitions never hard-swap. */}
+        <span key={displayLabel} className="hidden animate-label-fade md:inline">
+          {displayLabel}
+        </span>
+      </TooltipTrigger>
+      <TooltipPopup side="top">{displayLabel}</TooltipPopup>
+    </Tooltip>
+  );
+}
+
+/**
+ * Non-interactive leading status icons for a thread row in compact contexts
+ * like the command palette. Shows the change request state icon (if present) and the
+ * thread status dot, matching the sidebar's leading indicators.
+ */
+export function ThreadRowLeadingStatus({
+  thread,
+  snapshot,
+}: {
+  thread: SidebarThreadSummary;
+  snapshot?: ThreadChangeRequestSnapshot | undefined;
+}) {
+  const { leaseLiveStatus, rowRef } = useSidebarRowSubscriptionLease(false);
+  // Observe the containing title even when this thread has no badge yet.
+  const statusRef = useCallback(
+    (node: HTMLSpanElement | null) => rowRef(node?.parentElement ?? null),
+    [rowRef],
+  );
+  const threadRef = scopeThreadRef(thread.environmentId, thread.id);
+  const localLastVisitedAt = useUiStateStore(
+    (state) => state.threadLastVisitedAtById[scopedThreadKey(threadRef)],
+  );
+  const lastVisitedAt = resolveThreadLastVisitedAt(thread.lastVisitedAt, localLastVisitedAt);
+  const threadProject = useProject(
+    useMemo(
+      () => scopeProjectRef(thread.environmentId, thread.projectId),
+      [thread.environmentId, thread.projectId],
+    ),
+  );
+  const threadProjectCwd = threadProject?.workspaceRoot ?? null;
+  const gitCwd = thread.worktreePath ?? threadProjectCwd;
+  const linkedPullRequest = useLinkedThreadPullRequest(
+    thread.environmentId,
+    thread.linkedPullRequest,
+    leaseLiveStatus,
+  );
+  const gitStatus = useEnvironmentQuery(
+    leaseLiveStatus &&
+      thread.linkedPullRequest == null &&
+      (thread.branch != null || thread.worktreePath !== null) &&
+      gitCwd !== null
+      ? vcsEnvironment.status({
+          environmentId: thread.environmentId,
+          input: { cwd: gitCwd },
+        })
+      : null,
+  );
+  const visibleGitStatus = useRetainedValue(
+    JSON.stringify([thread.environmentId, gitCwd]),
+    gitStatus.data,
+  );
+  const displayedPrInput = {
+    threadBranch: thread.branch,
+    gitStatus: visibleGitStatus,
+    snapshot,
+    retainTerminalOnBranchMismatch: thread.worktreePath === null,
+    linkedPullRequest: thread.linkedPullRequest,
+    linkedPullRequestStatus: linkedPullRequest,
+  };
+  const pr = resolveDisplayedThreadPr(displayedPrInput);
+  const prStatus = prStatusIndicator(pr, resolveDisplayedThreadPrProvider(displayedPrInput));
+  // t3team: fork thread facts (activity label, pre-gated by its setting; workflow run liveness).
+  const t3teamRow = useT3TeamSidebarRowFacts(thread.environmentId, thread.id);
+  const threadStatus = resolveThreadStatusPill({
+    thread: {
+      ...thread,
+      lastVisitedAt,
+      activityLabel: t3teamRow.activityLabel,
+      workflowRunLiveness: t3teamRow.liveness,
+    },
+  });
+
+  const supportsMultiplePullRequests = useSupportsMultiplePullRequests(thread.environmentId);
+  const pendingLink =
+    pr === null && supportsMultiplePullRequests
+      ? resolveThreadCurrentPullRequestLink(thread.pullRequests)
+      : null;
+
+  return (
+    <span
+      ref={statusRef}
+      className={
+        prStatus || threadStatus ? "inline-flex shrink-0 items-center gap-1.5" : "contents"
+      }
+    >
+      {prStatus && pr ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span
+                aria-label={prStatus.tooltip}
+                className={`inline-flex items-center justify-center ${prStatus.colorClass}`}
+              />
+            }
+          >
+            <ChangeRequestStatusIcon state={pr.state} isDraft={pr.isDraft} className="size-3" />
+          </TooltipTrigger>
+          <TooltipPopup side="top">
+            <PrStatusTooltipContent status={prStatus} />
+          </TooltipPopup>
+        </Tooltip>
+      ) : null}
+      {pendingLink ? (
+        <PullRequestGlyph.pullRequest
+          className="size-3 text-muted-foreground"
+          aria-label={`PR #${pendingLink.number}, status pending`}
+        />
+      ) : null}
+      {threadStatus ? <ThreadStatusLabel status={threadStatus} /> : null}
+    </span>
+  );
+}
+
+/**
+ * Non-interactive trailing status icons for a thread row in compact contexts
+ * like the command palette. Shows a terminal-running indicator and a remote
+ * environment indicator, matching the sidebar's trailing indicators.
+ */
+export function ThreadRowTrailingStatus({ thread }: { thread: SidebarThreadSummary }) {
+  const runningTerminalIds = useThreadRunningTerminalIds({
+    environmentId: thread.environmentId,
+    threadId: thread.id,
+  });
+  const environment = useEnvironment(thread.environmentId);
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  // No primary (the hosted app) means every thread is remote, and the machine
+  // glyph is what tells the environments apart.
+  const isRemoteThread = thread.environmentId !== primaryEnvironmentId;
+  const remoteEnvLabel = environment?.label ?? null;
+  const threadEnvironmentLabel = isRemoteThread ? (remoteEnvLabel ?? "Remote") : null;
+  const remoteMachine = resolveEnvironmentMachineKind(environment?.serverConfig ?? null);
+  const terminalStatus = terminalStatusFromRunningIds(runningTerminalIds);
+
+  if (!terminalStatus && !isRemoteThread) {
+    return null;
+  }
+
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5">
+      {terminalStatus ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span
+                role="img"
+                aria-label={terminalStatus.label}
+                className={`inline-flex items-center justify-center ${terminalStatus.colorClass}`}
+              />
+            }
+          >
+            <TerminalIcon
+              className={`size-3 ${terminalStatus.pulse ? "motion-safe:animate-status-pulse" : ""}`}
+              onAnimationStart={synchronizeTerminalPulse}
+            />
+          </TooltipTrigger>
+          <TooltipPopup side="top">{terminalStatus.label}</TooltipPopup>
+        </Tooltip>
+      ) : null}
+      {isRemoteThread ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span
+                aria-label={threadEnvironmentLabel ?? "Remote"}
+                className="inline-flex items-center justify-center"
+              />
+            }
+          >
+            <EnvironmentMachineIcon
+              kind={remoteMachine}
+              className="size-3 text-muted-foreground/60"
+            />
+          </TooltipTrigger>
+          <TooltipPopup side="top">{threadEnvironmentLabel}</TooltipPopup>
+        </Tooltip>
+      ) : null}
+    </span>
+  );
 }

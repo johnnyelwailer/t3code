@@ -9,7 +9,6 @@ import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
 import type {
   ModelSelection,
-  OrchestrationCommand,
   ProjectId,
   ProviderInteractionMode,
   RuntimeMode,
@@ -20,23 +19,25 @@ import type {
   WorkflowRun,
   WorkflowRunOrigin,
   WorkflowRunRepositoryShape,
-} from "./persistence/Services/WorkflowRuns.ts";
-import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
+} from "./persistence/WorkflowRuns.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 import type { LaunchWorkflowRecipeInput } from "./t3team-workflowEngineLaunchTypes.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 
 export interface PreparedWorkflowLaunchDeps {
   readonly registry: T3TeamWorkflowEngineRegistryShape;
   readonly runRepository: WorkflowRunRepositoryShape;
   readonly journalStore: JournalStore;
-  /** Scheduler poke re-arming the soonest-deadline timer after a `waitUntil` park (Epic 27). */
+  /** Scheduler poke after a `waitUntil` park (Epic 27); opens the wake sweep if still shut. */
   readonly rearmScheduler: () => Promise<void>;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
+  /** The thread operations the run performs (`T3TeamWorkflowHost`). */
+  readonly host: WorkflowHostPort;
   /** Backs the best-effort shape preview; absent = preview skipped, launch unchanged. */
   readonly fileSystem?: FileSystem.FileSystem | undefined;
   /** Needed only to verify and atomically replace an ephemeral workflow source. */
   readonly path?: Path.Path | undefined;
-  /** Distribution policy. Omitted uses Nexi's default of three bounded attempts. */
+  /** Distribution policy. Omitted uses the default of three bounded attempts. */
   readonly repairMaxAttempts?: number;
   readonly repairModelSelection?: "inherit" | ModelSelection;
   readonly repairTotalTimeBudgetMs?: number;
@@ -53,8 +54,10 @@ export interface PreparedWorkflowLaunchInput {
   readonly args: unknown;
   /** The launching recipe's private scripts (recipe launches only; Epic 25 §Scripts). */
   readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
-  /** Per-run bridge to the broker's work-item draft tools (t3team-workflowHostDraftTools.ts). */
+  /** Per-run bridge to the broker's host tools (t3team-workflowHostTools.ts). */
   readonly hostToolClient?: LaunchWorkflowRecipeInput["hostToolClient"];
+  /** The run's script host members; rebuilt from the run row on rehydration, never persisted. */
+  readonly scriptHost?: LaunchWorkflowRecipeInput["scriptHost"];
   /** The same grant in persistable form; recorded on the run row so boot rehydration restores
    * this bridge and its scope rather than inferring one (migration 047). */
   readonly hostToolGrant?: WorkflowRun["hostToolGrant"];

@@ -1,9 +1,8 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { SidebarTrigger } from "~/t3team/components/ui/t3team-sidebar";
 import { useT3TeamActiveChatStore } from "~/t3team/t3team-activeChatStore";
-import { createHomeProject } from "~/t3team/t3team-homeProject";
 import { ProjectDashboardKickoffAside } from "~/t3team/t3team-ProjectDashboardKickoffAside";
 import type { ProjectDashboardKickoffAsideProps } from "~/t3team/t3team-ProjectDashboardKickoffAsideTypes";
 import { ResizableRightSidebarLayout } from "~/t3team/t3team-ResizableRightSidebarLayout";
@@ -14,40 +13,10 @@ import {
   T3TEAM_FIRST_PROJECT_SETUP_REASON,
   type T3TeamSetupSurfaceReason,
 } from "~/t3team/t3team-setupSurfaceReason";
-import {
-  readActiveThreadIdFromView,
-  type ProjectThread,
-  type ViewState,
-} from "~/t3team/t3team-types";
+import { Button } from "~/components/ui/button";
+import { readActiveThreadIdFromView, type ViewState } from "~/t3team/t3team-types";
 
-export function useHomeProjectChat(input: {
-  projects: ProjectShellProject[];
-  getThreadsForProject: (projectId: string) => ProjectThread[];
-}) {
-  const { getThreadsForProject } = input;
-
-  const homeChatProject = useMemo(() => createHomeProject(), []);
-  const homeChatThreadId = useMemo(() => {
-    const existing = getThreadsForProject(homeChatProject.id).toSorted(
-      (left, right) =>
-        new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime(),
-    )[0];
-    return existing?.id ?? `project-${homeChatProject.id}-chat`;
-  }, [getThreadsForProject, homeChatProject]);
-
-  return {
-    homeChatProject,
-    homeChatThreadId,
-  };
-}
-
-export function useSyncActiveChatTarget(input: {
-  view: ViewState | null;
-  getThreadsForProject: (projectId: string) => ProjectThread[];
-  homeChatProject: ProjectShellProject | null;
-  homeChatThreadId: string | null;
-}) {
-  const { view } = input;
+export function useSyncActiveChatTarget(view: ViewState | null) {
   const setActiveChatTarget = useT3TeamActiveChatStore((state) => state.setTarget);
 
   useEffect(() => {
@@ -83,15 +52,11 @@ export function useSyncActiveChatTarget(input: {
 
 function ProjectBrowserEmpty({
   onCreate,
-  content,
   setupSurfaceReason = T3TEAM_FIRST_PROJECT_SETUP_REASON,
-  showInlineCreateWizard = false,
   shouldInsetDesktopHeader = false,
 }: {
   onCreate: () => void;
-  content?: ReactNode;
   setupSurfaceReason?: T3TeamSetupSurfaceReason;
-  showInlineCreateWizard?: boolean;
   shouldInsetDesktopHeader?: boolean;
 }) {
   // The welcome surface beside this header already titles itself with the pack's
@@ -117,11 +82,8 @@ function ProjectBrowserEmpty({
         <span className="text-sm font-medium text-muted-foreground/70">{headerLabel}</span>
       </header>
       <div className="min-h-0 flex-1 overflow-hidden">
-        <div
-          key={showInlineCreateWizard ? "wizard" : "welcome"}
-          className="flex h-full min-h-0 [view-transition-name:t3team-create-project-entry-surface]"
-        >
-          {content ?? <T3TeamSetupWelcomeSurface onCreate={onCreate} reason={setupSurfaceReason} />}
+        <div className="flex h-full min-h-0">
+          <T3TeamSetupWelcomeSurface onCreate={onCreate} reason={setupSurfaceReason} />
         </div>
       </div>
     </div>
@@ -135,10 +97,9 @@ export function ProjectBrowserEmptyWithChat({
   isConnected,
   onOpenThread,
   onKickoffThread,
+  onStartScratch,
   showAside = true,
-  emptyContent,
   setupSurfaceReason = T3TEAM_FIRST_PROJECT_SETUP_REASON,
-  showInlineCreateWizard = false,
   shouldInsetDesktopHeader = false,
 }: {
   onCreate: () => void;
@@ -147,19 +108,17 @@ export function ProjectBrowserEmptyWithChat({
   isConnected: boolean;
   onOpenThread: (threadId: string) => void;
   onKickoffThread: ProjectDashboardKickoffAsideProps["onKickoffThread"];
+  /** Creates the Scratch project the project-less chat lives in, while it does not exist yet. */
+  onStartScratch?: (() => void) | undefined;
   showAside?: boolean;
-  emptyContent?: ReactNode;
   setupSurfaceReason?: T3TeamSetupSurfaceReason;
-  showInlineCreateWizard?: boolean;
   shouldInsetDesktopHeader?: boolean;
 }) {
   if (!showAside) {
     return (
       <ProjectBrowserEmpty
         onCreate={onCreate}
-        content={emptyContent}
         setupSurfaceReason={setupSurfaceReason}
-        showInlineCreateWizard={showInlineCreateWizard}
         shouldInsetDesktopHeader={shouldInsetDesktopHeader}
       />
     );
@@ -170,14 +129,12 @@ export function ProjectBrowserEmptyWithChat({
       storageKey="t3team_home_right_sidebar"
       defaultAsideWidth={28 * 16}
       minAsideWidth={24 * 16}
-      mobileMainLabel={showInlineCreateWizard ? "Setup" : "Home"}
+      mobileMainLabel="Home"
       mobileAsideLabel="Agent"
       main={
         <ProjectBrowserEmpty
           onCreate={onCreate}
-          content={emptyContent}
           setupSurfaceReason={setupSurfaceReason}
-          showInlineCreateWizard={showInlineCreateWizard}
           shouldInsetDesktopHeader={shouldInsetDesktopHeader}
         />
       }
@@ -194,8 +151,17 @@ export function ProjectBrowserEmptyWithChat({
             onKickoffThread={onKickoffThread}
           />
         ) : (
-          <aside className="flex min-h-0 h-full flex-1 items-center justify-center border-l border-border/70 bg-background px-6 text-center text-sm text-muted-foreground">
-            Your kickoff chat will appear here once the first project is ready.
+          <aside className="flex min-h-0 h-full flex-1 flex-col items-center justify-center gap-3 border-l border-border/70 bg-background px-6 text-center text-sm text-muted-foreground">
+            {onStartScratch ? (
+              <>
+                Chat without a project: threads live in the No project folder.
+                <Button variant="outline" size="sm" onClick={onStartScratch}>
+                  Start a chat without a project
+                </Button>
+              </>
+            ) : (
+              "Your kickoff chat will appear here once the first project is ready."
+            )}
           </aside>
         )
       }

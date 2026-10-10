@@ -23,9 +23,19 @@ import { WorkflowInputDecodeError } from "./t3team-sdk.errors.ts";
 import type { HandleDispatch } from "./t3team-sdk.handles.ts";
 import { decodeWithSchema, setNestedValue } from "./t3team-sdk.internal.ts";
 import type { WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
+import type { DurableWorkflowRuntime } from "./t3team-sdk.durableRuntime.ts";
+import { createRetryPrimitives } from "./t3team-sdk.retryPrimitive.ts";
+import type { ReducePrimitives } from "./t3team-sdk.reducePrimitive.ts";
 import { createSchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
+import { withDurableWait } from "./t3team-sdk.durableWait.ts";
 import type { CheckpointPrimitives, CheckpointRecord } from "@runbook/core/checkpoint";
+import { createLaunchedThreadPrimitives } from "./t3team-sdk.launchedThreads.ts";
+import { createRecipeConfigPrimitives } from "./t3team-sdk.recipeConfigPrimitive.ts";
 import { createSignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
+import {
+  createWatermarkPrimitives,
+  type WatermarkPrimitives,
+} from "./t3team-sdk.watermarkPrimitive.ts";
 import { createThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
 import {
   extractMeta,
@@ -46,7 +56,7 @@ const fs = nodeRequire("node:fs") as { readonly readFileSync: (p: string, e: "ut
 
 /** Load + run a workflow body against `runtime`, decoding inputs/outputs against its `meta`. */
 export async function runPreparedBody(opts: {
-  readonly runtime: T.WorkflowRuntime;
+  readonly runtime: DurableWorkflowRuntime;
   readonly ref: T.WorkflowRef;
   readonly args: unknown;
   readonly toolRefs: ReadonlyArray<T.AnyToolRef>;
@@ -59,6 +69,10 @@ export async function runPreparedBody(opts: {
    * Absent on a fresh start and on a full-replay resume; sub-workflow bodies never see one.
    */
   readonly resume?: CheckpointRecord | undefined;
+  /** A sub-workflow's refusing `watermark` stand-in; absent = the run's real primitive. */
+  readonly watermark?: WatermarkPrimitives["watermark"];
+  /** The run's reducers (`accumulate`) — the refusing stand-in for a sub-workflow body. */
+  readonly reduce: ReducePrimitives;
   readonly handleDispatch: HandleDispatch;
   readonly broker?: MessageBroker;
   readonly launchThreadId?: string;
@@ -117,10 +131,31 @@ export async function runPreparedBody(opts: {
     broker: opts.broker ?? defaultBroker,
     capabilities,
   });
+  // `retry` (bounded execution) — its backoff is `waitUntil`, so the same `"schedule"` gate.
+  const retry = createRetryPrimitives({ runtime: opts.runtime, schedule, capabilities });
   // `getSignalSource` (design 42) — capability-gated per source (`"source:<name>"`).
   const signals = createSignalPrimitives({
     dispatch: opts.handleDispatch,
     broker: opts.broker ?? defaultBroker,
+    capabilities,
+  });
+  // `launchThread` — top-level threads addressed by key; gated by `"launch"`.
+  const launched = createLaunchedThreadPrimitives({
+    dispatch: opts.handleDispatch,
+    broker: opts.broker ?? defaultBroker,
+    capabilities,
+  });
+  // `getConfig` — the run's recipe config, resolved and journaled by the host.
+  const config = createRecipeConfigPrimitives({
+    dispatch: opts.handleDispatch,
+    broker: opts.broker ?? defaultBroker,
+  });
+  // `watermark` (bounded execution) — capability-gated per source (`"source:<name>"`). It owns
+  // the run's checkpoint boundary once used, so the body binds ITS guarded `checkpoint`.
+  const bounded = createWatermarkPrimitives({
+    checkpoint: opts.checkpoint,
+    resume: opts.resume,
+    now: opts.runtime.now,
     capabilities,
   });
   const globals = buildWorkflowGlobals({
@@ -130,12 +165,23 @@ export async function runPreparedBody(opts: {
     // gate which scripts are callable — that is limited by recipe ownership (Epic 25 §Scripts).
     scripts: capabilities.has("script") ? buildScriptTree(opts.scripts, opts.runtime) : {},
     runtime: opts.runtime,
-    primitives: opts.primitives,
-    checkpoint: opts.checkpoint,
+    // `wait(ms)` parks on the same `waitUntil` clock when `"schedule"` is declared.
+    primitives: withDurableWait({
+      primitives: opts.primitives,
+      runtime: opts.runtime,
+      schedule,
+      capabilities,
+    }),
+    checkpoint: bounded.checkpoint,
     resume: opts.resume,
+    watermark: opts.watermark ?? bounded.watermark,
+    reduce: opts.reduce,
     threads,
     schedule,
+    retry,
     signals,
+    launched,
+    config,
     // The `RunbookContext` subset (`@runbook/core/authoring`) a `run(ctx)`-shaped body sees;
     // legacy bodies declare zero parameters and the loader never passes this to them.
     ctx: buildRunbookContext({ toolRefs: opts.toolRefs, runtime: opts.runtime, capabilities }),

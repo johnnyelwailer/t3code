@@ -22,9 +22,18 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20260908-postsync` → fork commit `046a181c46` (the
-  post-merge-main tree after PR #188 absorbed the 2026-09-06/07 upstream sync plus the
-  guard rebaseline). Grandfathered: the sync content the first baseline had to red on.
+- Current: `t3team/fork-baseline-20261006` → the 2026-10-06 upstream sync merge commit
+  `ba03dadc53` (247 upstream commits absorbed, `db514607f4..9ae9f2ba1f`). Grandfathered:
+  upstream's tree plus the conflict resolutions in that merge commit. The tag points at the
+  merge itself, not the post-port tree, so the Effect/layout port and cutover fix that follow
+  it on the sync branch are checked with full strictness.
+- Before that: `t3team/fork-baseline-20261003` → the 2026-10-03 upstream sync merge commit
+  `88992deee` (123 upstream commits absorbed, including the orchestration V2 rewrite).
+- Earlier: `t3team/fork-baseline-20260927` → fork commit `1fad6113ea` (the tree the
+  2026-09-27 upstream sync lands on main). Grandfathered: the 391 absorbed upstream commits.
+- Earlier: `t3team/fork-baseline-20260908-postsync` → fork commit `598218c705` (the
+  tag was re-pointed after the 2026-09-17 sync; originally `046a181c46`, the post-merge-main
+  tree after PR #188 absorbed the 2026-09-06/07 upstream sync plus the guard rebaseline).
 - Previous: `t3team/fork-baseline-20260908` → fork main commit `06c2bc30f0` (2026-09-08,
   cut before the sync was merged into main; kept for history — see "Move record" below).
 - Everything inside the tree the tag points at is **grandfathered debt**. It is not re-checked.
@@ -64,10 +73,13 @@ git push origin t3team/fork-baseline-YYYYMMDD
 
 ### Move record
 
-| date       | from                            | to                                                      | reason                                                                                                                                                                                                |
-| ---------- | ------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-08 | —                               | `t3team/fork-baseline-20260908` (`06c2bc30f0`)          | First baseline; grandfathers the pre-existing fork debt that red the guard on every CI run since 2026-09-06.                                                                                          |
-| 2026-09-08 | `t3team/fork-baseline-20260908` | `t3team/fork-baseline-20260908-postsync` (`046a181c46`) | PR #188 absorbed the 2026-09-06/07 upstream sync into main; the post-merge main tree (== the `046a181c46` tree) is grandfathered so main and every PR forked off it measure only their own additions. |
+| date       | from                                     | to                                                      | reason                                                                                                                                                                                                                  |
+| ---------- | ---------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-08 | —                                        | `t3team/fork-baseline-20260908` (`06c2bc30f0`)          | First baseline; grandfathers the pre-existing fork debt that red the guard on every CI run since 2026-09-06.                                                                                                            |
+| 2026-09-08 | `t3team/fork-baseline-20260908`          | `t3team/fork-baseline-20260908-postsync` (`046a181c46`) | PR #188 absorbed the 2026-09-06/07 upstream sync into main; the post-merge main tree (== the `046a181c46` tree) is grandfathered so main and every PR forked off it measure only their own additions.                   |
+| 2026-09-27 | `t3team/fork-baseline-20260908-postsync` | `t3team/fork-baseline-20260927` (`1fad6113ea`)          | The 2026-09-27 upstream sync (de251fc297, 391 commits). Against the old tag the guard flagged 5,017 new lines; 4,990 were upstream-identical files and the rest were reviewed fork resolutions (listed in the sync PR). |
+| 2026-10-03 | `t3team/fork-baseline-20260927`          | `t3team/fork-baseline-20261003` (`88992deee`)           | The 2026-10-03 upstream sync (orchestration V2 rewrite, 123 commits). Tag points at the merge commit so the post-merge V2 port stays measured.                                                                          |
+| 2026-10-06 | `t3team/fork-baseline-20261003`          | `t3team/fork-baseline-20261006` (`ba03dadc53`)          | The 2026-10-06 upstream sync (9ae9f2ba1f, 247 commits per johnnyelwailer/t3code#385). Tag points at the merge commit so the Effect/layout port + cutover fix stay measured.                                             |
 
 Until the new tag is pushed, the guard fails loudly on CI (missing tag), never silently.
 
@@ -229,7 +241,7 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
 ## ask-user context — docked question references prior content
 
 - `packages/contracts/src/providerRuntime.ts`
-  - Optional `context` field on `UserInputQuestion` so a docked `t3team_ask_user` question can carry the content it refers to; shared with provider-native questions, but the field is optional so existing adapter payloads stay valid.
+  - Optional `context` field on `UserInputQuestion` so a docked `t3_ask_user` question can carry the content it refers to; shared with provider-native questions, but the field is optional so existing adapter payloads stay valid.
 
 ## Cloud-sessions stack re-land (2026-09-15)
 
@@ -244,7 +256,23 @@ Upstream files the cloud-sessions stack (branch `work/cloud-sessions-stack`) tou
 - `apps/web/src/hooks/useTheme.ts`
   - Expose the theme-snapshot trigger so widget iframes resnapshot on host theme flips.
 - `packages/project-context/src/t3teamWidgetGuidance.ts`
-  - Widget guidance carries the theme-token + icon-sprite contract so `t3team_show_widget` renders against the host theme.
+  - Widget guidance carries the theme-token + icon-sprite contract so `t3_show_widget` renders against the host theme.
+
+## Cloud-sessions UI fixes (2026-09-28)
+
+- `apps/web/src/components/onboarding/WelcomeWizard.tsx`
+  - Onboarding no longer auto-ticks an unreachable computer, and one does not block Continue; the rules live in `t3team-onboardingComputerSelection.ts`.
+- `apps/web/src/components/onboarding/WelcomeWizard.test.tsx`
+  - Covers the rule above, and repairs the `publicConfig` mock that upstream's `lib/runtime` import broke (the whole suite failed on `853cf6d3e6`).
+- `apps/web/src/components/cloud/CloudEnvironmentConnectList.tsx`
+  - The same rule for discovered T3 Connect computers: an offline relay is listed but not auto-ticked.
+
+## Runbook-core lane (2026-10-04) — bounded-execution primitives
+
+- `packages/runbook-core/src/errors.ts`
+  - Error types for the reduce/watermark/retry bounded-execution primitives (lane PRs #314/#316/#318/#320): the sub-workflow checkpoint refusal now names the refused primitive (`watermark()`/`accumulate()`), and `RetryExhaustedError` + `RetryClassifiedFailure` are added for `retry()` giving up.
+- `docs/runbook/bounded-execution.md`
+  - Document the `retry` primitive's journal/replay semantics (attempt re-drive, the fn-catches-gap drift limit, `RetryExhaustedError`) alongside the existing bounded-execution spec.
 
 ## Allowed Unprefixed New Files
 
@@ -273,3 +301,80 @@ existing `docs/t3team-mvp/**` and `.claude/**` entries.
 - Prefer additive `t3team-*` or `t3team.*` files over editing upstream files.
 - Additive `.test`, `.browser`, `.stories`, and `*Fixtures` files use a higher LOC ceiling because they are validation/demo artifacts rather than shipped runtime surfaces.
 - Remove entries when no longer needed.
+
+## Preview panel resize: row-based cap, scale held during drag (2026-10-08)
+
+The thread side panel stopped growing at 70% of the window even when the row had room, and
+device-viewport webviews rescaled on every frame of the drag.
+
+- `apps/web/src/hooks/usePreviewPanelInlineSize.ts` (+ `components/preview/PreviewPanelShell.test.ts`) — max width uses the measured row; the window fraction is only the unmeasured fallback.
+- `apps/web/src/hooks/useResizableWidth.ts` (+ test) — exposes `resizing` for the drag session.
+- `apps/web/src/hooks/useResizeDrag.ts` — a drag whose handle unmounts mid-drag (panel closed/maximized) ends on the window's pointer release instead of staying stuck.
+- `apps/web/src/components/preview/PreviewPanelShell.tsx` — publishes the drag to `browser/t3team-previewPanelResizeStore.ts`.
+- `apps/web/src/browser/browserViewportLayout.ts` (+ test), `useBrowserViewportResize.ts`, `HostedBrowserWebview.tsx` — hold the fit-to-panel scale while the panel is dragged; re-fit once on release.
+
+## Pack-configurable vendor branding (2026-10-07)
+
+Distribution appearance (`labels.appName`, product name, brand mark) has to reach the
+surfaces that still spelled the vendor name before a session existed, plus the desktop
+window title and the DMG background the desktop build rasterizes.
+
+- `apps/web/index.html` — boot splash title, label, and mark follow the pack descriptor when one is served.
+- `apps/web/src/lib/bootError.ts` — startup failure copy uses the same boot product name.
+- `apps/web/src/routes/_chat.index.tsx` — hosted empty state uses the pack product name.
+- `apps/web/src/components/auth/AuthSurfaceShell.tsx` — connect masthead uses the pack display name.
+- `apps/web/src/components/auth/PairingRouteSurface.tsx` — pairing eyebrows use the pack display name.
+- `apps/desktop/src/window/DesktopApplicationMenu.ts` — update dialog names the active product.
+- `apps/web/src/components/preview/PreviewPanel.tsx` — desktop-only preview notice names the active product.
+
+## PR #344 main-repository port onto orchestration V2 (2026-10-05)
+
+Owner-approved 2026-10-05. Exact paths; each is upstream orchestration V2 surface, integrated via PR #344:
+
+- `apps/server/src/orchestration-v2/ProjectCommands.test.ts` — upstream orchestration V2 surface, integrated via PR #344: ProjectRow fixture gains `mainRepository: null`.
+- `apps/server/src/orchestration-v2/ProjectCommands.ts` — upstream orchestration V2 surface, integrated via PR #344: project meta-update command carries `mainRepository`.
+- `apps/server/src/orchestration-v2/RuntimePolicy.test.ts` — upstream orchestration V2 surface, integrated via PR #344: ProjectRow fixture gains `mainRepository: null`.
+- `apps/server/src/orchestration-v2/ThreadLaunchService.test.ts` — upstream orchestration V2 surface, integrated via PR #344: ProjectRow fixture gains `mainRepository: null`.
+- `apps/server/src/orchestration-v2/ThreadTitleRegenerationService.test.ts` — upstream orchestration V2 surface, integrated via PR #344: ProjectRow fixture gains `mainRepository: null`.
+- `apps/server/src/project/ProjectService.ts` — upstream orchestration V2 surface, integrated via PR #344: forwards `mainRepository` on project meta updates.
+- `packages/contracts/src/applicationEvent.ts` — upstream orchestration V2 surface, integrated via PR #344: project meta-updated payload gains optional `mainRepository`.
+- `apps/mobile/src/features/threads/ThreadFeed.tsx` — user-message hover copy uses the shared initiating-prompt string, and stays hidden for system triggers and tool continuations.
+
+## MCP tool-access declarations + MCP OAuth port (2026-10-07)
+
+Three upstream commits cherry-picked onto the fork: `2f85686d9d` (#16335, every T3 MCP tool
+declares who may call it), `2c8be5893e` (#16336, outside agents sign in to the T3 MCP server with
+OAuth) and `10f39eb9ac` (#16718, hosted agents like ChatGPT can sign in). Every entry below is
+upstream's own file, carrying upstream's own change; the fork edits none of them beyond the
+cherry-picked content and the three conflict resolutions recorded in the port log.
+
+Modified upstream files — each gains the `McpToolAccess` access declaration (#16335) or the OAuth
+client-authenticator seam (#16336):
+
+- `apps/server/src/mcp/threadAccess.ts` — `readWritableThread`/`readMutationCaller`/`readFullAccessCaller` collapse into `loadCaller` + `assertLiveCaller`/`assertFullAccess`, which the declarations call.
+- `apps/server/src/mcp/McpInvocationContext.ts`, `…/McpInvocationContext.test.ts` — the invocation scope gains the OAuth client ceiling.
+- `apps/server/src/mcp/ThreadMetadataMcpService.ts`, `…/ThreadMetadataMcpService.test.ts` — the per-tool caller checks move into the declarations.
+- `apps/server/src/mcp/McpDeviceToolkit.test.ts`, `…/McpHttpServer.test.ts`, `…/OrchestratorMcpService.test.ts`, `…/toolkits/core.test.ts` — register handlers through `McpToolAccess.HandlersLayer` and the new testkit.
+- `apps/server/src/mcp/toolkits/{attachment,device,environment,html,orchestrator,preview,previewControls,project,pullRequests,thread,worktree}/{handlers,tools}.ts` and their tests — every tool declares its access and widens `failure:` to include `OrchestratorMcpFailure`.
+- `apps/server/src/orchestration-v2/ThreadMessageIntake.ts` — threads a dispatch-mode limit through intake.
+- `apps/server/src/auth/EnvironmentAuth.ts`, `apps/server/src/auth/SessionStore.ts` — MCP OAuth session kind and client records.
+- `packages/contracts/src/environmentHttp.ts`, `packages/shared/src/devProxy.ts` — the `/.well-known/oauth-*` discovery routes and their dev proxy entries.
+- `oxlint-plugin-t3code/index.ts` — registers the new `no-raw-mcp-registration` rule.
+- `docs/internals/environment-auth.md`, `docs/orchestration-v2/orchestrator-mcp-server.md` — upstream's own documentation for the above.
+
+New unprefixed upstream files (upstream's modules, taken verbatim):
+
+- `apps/server/src/mcp/McpToolAccess.ts`, `…/McpToolAccess.testkit.ts`, `…/McpToolAccess.test.ts`, `…/McpToolAccess.race.test.ts`
+- `apps/server/src/mcp/toolkits/environment/handlers.test.ts`
+- `apps/server/src/orchestration-v2/DispatchModeLimit.ts`, `…/DispatchModeLimit.test.ts`
+- `apps/server/src/auth/McpOAuth.ts`, `…/McpOAuth.test.ts`, `…/mcpOAuthHtml.ts`, `…/mcpOAuthHttp.ts`
+- `apps/web/src/components/auth/ConnectAgentSurface.tsx`, `apps/web/src/routes/connect-agent.tsx`
+- `oxlint-plugin-t3code/rules/no-raw-mcp-registration.ts`, `…/no-raw-mcp-registration.test.ts`
+
+## `changeRequest.summary` slot (T8)
+
+- `apps/web/src/components/pullRequest/PullRequestSummaryTab.tsx` — one import and one
+  `<ChangeRequestSummarySlot />` line between the meta section and Description; the slot renders
+  nothing until a view is registered, so the panel is unchanged without one.
+- `apps/web/src/components/pullRequest/PullRequestSummaryTab.test.tsx` — one case: a throwing
+  registered Summary view leaves the real panel standing.

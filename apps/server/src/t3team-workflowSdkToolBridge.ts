@@ -9,7 +9,6 @@ import {
   type ToolRef,
   type ToolWorkspace,
 } from "@t3team/sdk";
-import { renameThreadTool, type RenameThreadToolResult } from "@t3team/sdk/tools/t3team";
 import type {
   ListRecipesToolResult,
   ValidateRecipeToolResult,
@@ -70,40 +69,14 @@ function baseToolHandlerCtx(t3team: T3TeamToolHandlerClient): ToolHandlerCtx {
   };
 }
 
-const unsupportedRenameThread: T3TeamToolHandlerClient["renameThread"] = async () => {
-  throw new Error("t3team.thread.rename is not wired for this tool call.");
-};
-
-export function executeWorkflowSdkThreadRename(input: {
-  readonly toolArgs: unknown;
-  readonly renameThread: (title: string) => Effect.Effect<unknown, WorkflowSdkBridgeError>;
-  readonly renameThreadResult?: (title: string) => unknown;
-}): Effect.Effect<RenameThreadToolResult, WorkflowSdkBridgeError> {
-  return Effect.tryPromise({
-    try: () =>
-      executeRegisteredTool(
-        renameThreadTool.id,
-        input.toolArgs,
-        baseToolHandlerCtx({
-          renameThread: async ({ title }) => {
-            await Effect.runPromise(input.renameThread(title));
-            const result = input.renameThreadResult
-              ? input.renameThreadResult(title)
-              : { ok: true as const, title };
-            return result as RenameThreadToolResult;
-          },
-        }),
-      ) as Promise<RenameThreadToolResult>,
-    catch: toWorkflowSdkBridgeError,
-  });
-}
-
 /** Execute `t3team.orchestration.run` through the SDK tool registry (arg decode + result check). */
 export function executeWorkflowSdkWorkflowRunTool(input: {
   readonly toolArgs: unknown;
   readonly runWorkflow: (args: {
     readonly source?: string;
     readonly workflowPath?: string;
+    readonly recipe?: string;
+    readonly action?: string;
     readonly args?: unknown;
     readonly intent: WorkflowRunIntent;
     readonly replaceRunId?: string;
@@ -115,7 +88,6 @@ export function executeWorkflowSdkWorkflowRunTool(input: {
         "t3team.orchestration.run",
         input.toolArgs,
         baseToolHandlerCtx({
-          renameThread: unsupportedRenameThread,
           runWorkflow: (args) => Effect.runPromise(input.runWorkflow(args)),
         }),
       ) as Promise<RunWorkflowToolResult>,
@@ -141,7 +113,6 @@ export function executeWorkflowSdkRecipeTool(input: {
         input.toolId,
         input.toolArgs,
         baseToolHandlerCtx({
-          renameThread: unsupportedRenameThread,
           listRecipes: () => Effect.runPromise(input.listRecipes()),
           validateRecipe: (args) => Effect.runPromise(input.validateRecipe(args)),
         }),

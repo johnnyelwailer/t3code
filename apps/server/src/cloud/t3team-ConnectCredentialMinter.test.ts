@@ -5,17 +5,17 @@ import * as Clock from "effect/Clock";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Encoding from "effect/Encoding";
+import * as Base64Url from "effect/encoding/Base64Url";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Schedule from "effect/Schedule";
 import * as TestClock from "effect/testing/TestClock";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
-import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
-import { FetchHttpClient } from "effect/unstable/http";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import { FetchHttpClient } from "effect/http";
 
 import * as ServerConfig from "../config.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
@@ -62,8 +62,8 @@ const decodeStoredTokenJson = Schema.decodeUnknownOption(StoredTokenJson);
 
 // A JWT whose payload claims { email: "theo@example.test" }.
 const idTokenWithEmail = (() => {
-  const header = Encoding.encodeBase64Url(JSON.stringify({ alg: "none" }));
-  const payload = Encoding.encodeBase64Url(JSON.stringify({ email: "theo@example.test" }));
+  const header = Base64Url.encode(JSON.stringify({ alg: "none" }));
+  const payload = Base64Url.encode(JSON.stringify({ email: "theo@example.test" }));
   return `${header}.${payload}.`;
 })();
 
@@ -123,10 +123,7 @@ const makeMinterLayer = (
     Layer.provide(configLayer),
     Layer.provide(NodeServices.layer),
   );
-  const launcherMock = Layer.succeed(
-    ExternalLauncher.ExternalLauncher,
-    { launchBrowser } as never,
-  );
+  const launcherMock = Layer.succeed(ExternalLauncher.ExternalLauncher, { launchBrowser } as never);
   const cliLayer = CliTokenManager.layer.pipe(
     Layer.provide(secretsLayer),
     Layer.provide(http),
@@ -171,10 +168,7 @@ const launchAndRedirect =
       yield* Effect.gen(function* () {
         const client = yield* HttpClient.HttpClient;
         yield* client.execute(HttpClientRequest.get(target));
-      }).pipe(
-        Effect.provide(FetchHttpClient.layer),
-        Effect.retry(Schedule.recurs(200)),
-      );
+      }).pipe(Effect.provide(FetchHttpClient.layer), Effect.retry(Schedule.recurs(200)));
     });
 
 describe("ConnectCredentialMinter", () => {
@@ -209,7 +203,10 @@ describe("ConnectCredentialMinter", () => {
       assert.equal(exchange.url, "https://clerk.example.test/oauth/token");
       assert.equal(exchange.params.get("grant_type"), "authorization_code");
       assert.equal(exchange.params.get("code"), "clerk-code-123");
-      assert.equal(exchange.params.get("redirect_uri"), `http://127.0.0.1:${LOOPBACK_PORT}/callback`);
+      assert.equal(
+        exchange.params.get("redirect_uri"),
+        `http://127.0.0.1:${LOOPBACK_PORT}/callback`,
+      );
       assert.equal(exchange.params.get("client_id"), "oauth_client_test");
       assert.isNotNull(exchange.params.get("code_verifier"));
 

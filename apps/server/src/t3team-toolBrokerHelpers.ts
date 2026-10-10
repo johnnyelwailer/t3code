@@ -27,10 +27,21 @@ export const TOOL_SPECS = Object.fromEntries(
 
 const jsonText = (value: unknown) => JSON.stringify(value, null, 2);
 
-export const okResult = (value: unknown): T3TeamToolCallResult => ({
-  content: [{ type: "text", text: jsonText(value) }],
-  structuredContent: value,
-});
+/**
+ * MCP `structuredContent` is validated as `Schema.Json`, which rejects an `undefined`-valued key
+ * (e.g. `{ pendingKind: undefined }`) and fails the whole CallToolResult. The text block already
+ * drops those keys via `JSON.stringify`, so derive the structured payload from the same text.
+ */
+const toJsonValue = (text: string | undefined, fallback: unknown) =>
+  text === undefined ? fallback : (JSON.parse(text) as unknown);
+
+export const okResult = (value: unknown): T3TeamToolCallResult => {
+  const text = jsonText(value);
+  return {
+    content: [{ type: "text", text }],
+    structuredContent: toJsonValue(text, value),
+  };
+};
 
 export const errorResult = (message: string): T3TeamToolCallResult => ({
   content: [{ type: "text", text: message }],
@@ -70,7 +81,7 @@ export const foldResource = <A, E>(
     ),
   );
 
-export const readRenameTitle = (value: unknown): string | undefined => {
+const readRenameTitle = (value: unknown): string | undefined => {
   if (!value || typeof value !== "object" || globalThis.Array.isArray(value)) {
     return undefined;
   }

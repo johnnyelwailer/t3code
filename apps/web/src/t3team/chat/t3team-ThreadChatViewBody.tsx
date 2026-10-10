@@ -1,13 +1,15 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import ChatView from "~/components/ChatView";
+import type { ChatComposerHandle } from "~/components/chat/ChatComposer";
+import { ComposerHandleContext, useComposerHandleContext } from "~/composerHandleContext";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { ThreadPendingChat } from "~/t3team/chat/t3team-threadPendingChat";
 import type { ThreadBootstrapStatus } from "~/t3team/chat/t3team-useThreadBootstrap";
 import { useThreadChatComposerState } from "~/t3team/chat/t3team-useThreadChatComposerState";
 import { ThreadKickoffPlaceholder } from "~/t3team/chat/t3team-threadKickoffPlaceholder";
 import { T3TeamThreadComposerAccessory } from "~/t3team/chat/t3team-ThreadComposerAccessory";
-import { t3TeamOutboxTimelineExtensions } from "~/t3team/outbox/t3team-outboxTimelineRows";
+import { T3TeamOutboxQueueDock } from "~/t3team/outbox/t3team-outboxQueueDock";
 import { useT3TeamOutboxStore } from "~/t3team/outbox/t3team-outboxStore";
 import { useT3TeamOutboxDrain } from "~/t3team/outbox/t3team-useOutboxDrain";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
@@ -16,8 +18,6 @@ import type { ChatMessage } from "~/types";
 type ThreadChatComposerState = ReturnType<typeof useThreadChatComposerState>;
 
 export interface ThreadChatViewBodyProps {
-  /** Covers the composer when an external Codex/Claude session still owns this thread. */
-  composerReadOnlyOverlay?: React.ReactNode;
   environmentId: EnvironmentId;
   threadId: string;
   projectId: string;
@@ -33,8 +33,6 @@ export interface ThreadChatViewBodyProps {
   titleBarControlsAccessory: React.ReactNode | undefined;
   hideHeader: boolean;
   embeddedMode: boolean;
-  /** Fork the thread from a message (branch point); rendered next to each message's copy button. */
-  onForkThread?: ((input: { readonly messageId: string }) => void | Promise<void>) | undefined;
   backend: BackendApi | null | undefined;
   bootstrapStatus: ThreadBootstrapStatus;
   retryThreadBootstrap: () => void;
@@ -60,7 +58,6 @@ function useThreadOutbox(
 
 /** Presentational body for {@link ThreadChatView}: kickoff placeholder + ChatView/pending-chat split. */
 export function ThreadChatViewBody({
-  composerReadOnlyOverlay,
   environmentId,
   threadId,
   projectId,
@@ -75,7 +72,6 @@ export function ThreadChatViewBody({
   titleBarControlsAccessory,
   hideHeader,
   embeddedMode,
-  onForkThread,
   backend,
   bootstrapStatus,
   retryThreadBootstrap,
@@ -103,16 +99,21 @@ export function ThreadChatViewBody({
       onRemoveAttachment={removeContextAttachment}
     />
   );
+  // ChatView reads its send model from the context handle, and the app-wide one belongs to the
+  // primary thread. An embedded peer thread scopes its own, or its composer hijacks the primary's.
+  const appComposerHandleRef = useComposerHandleContext();
+  const embeddedComposerHandleRef = useRef<ChatComposerHandle | null>(null);
   const outboxEntries = useThreadOutbox(environmentId, threadId, backend);
   const outboxSnapshot = useT3TeamOutboxStore();
-  // Stable row nodes for the native queued surface: re-built only when the
-  // outbox actually changes, so composer churn does not re-render the rows.
-  const outboxTimelineExtensions = useMemo(
+  // Re-built only when the outbox actually changes, so composer churn does not re-render it.
+  const outboxDock = useMemo(
     () =>
-      t3TeamOutboxTimelineExtensions(
-        outboxEntries,
-        outboxSnapshot.dispatchingEntryId,
-        outboxSnapshot.failures,
+      outboxEntries.length === 0 ? undefined : (
+        <T3TeamOutboxQueueDock
+          entries={outboxEntries}
+          dispatchingEntryId={outboxSnapshot.dispatchingEntryId}
+          failures={outboxSnapshot.failures}
+        />
       ),
     [outboxEntries, outboxSnapshot.dispatchingEntryId, outboxSnapshot.failures],
   );
@@ -136,41 +137,35 @@ export function ThreadChatViewBody({
       {hasServerThread ? (
         <>
           {kickoffPlaceholder}
-          <ChatView
-            environmentId={environmentId}
-            threadId={threadId as never}
-            routeKind="server"
-            {...(kickoffHistoryMessage ? { syntheticMessages: [kickoffHistoryMessage] } : {})}
-            {...(onBack ? { onBack } : {})}
-            {...(titleBarControlsAccessory ? { titleBarControlsAccessory } : {})}
-            hideHeader={hideHeader || embeddedMode}
-            hideBranchToolbar={embeddedMode}
-            minimalComposer={embeddedMode}
-            beforeDispatchTurnStart={prepareTurnStart}
-            dispatchTurnStartOverride={dispatchTurnStartOverride}
-            enqueueOfflineTurnStart={enqueueOfflineTurnStart}
-            composerContextAttachmentSlot={contextAttachmentSlot}
-            composerContainerProps={composerDropTarget.composerContainerProps}
-            composerContainerOverlay={
-              composerReadOnlyOverlay ? (
-                <>
-                  {composerDropTarget.composerContainerOverlay}
-                  {composerReadOnlyOverlay}
-                </>
-              ) : (
-                composerDropTarget.composerContainerOverlay
-              )
-            }
-            composerContextAttachments={contextAttachments}
-            prepareComposerContextAttachments={prepareComposerContextAttachments}
-            onComposerContextAttachmentsConsumed={clearThreadAttachments}
-            onSubmitRecipeCardAction={submitRecipeCardAction}
-            dispatchWorkflowDecision={resolveWorkflowDecision}
-            {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
-            onOpenThread={onOpenThread}
-            {...(onForkThread ? { onForkThread } : {})}
-            queuedExtensions={outboxTimelineExtensions}
-          />
+          <ComposerHandleContext
+            value={embeddedMode ? embeddedComposerHandleRef : appComposerHandleRef}
+          >
+            <ChatView
+              environmentId={environmentId}
+              threadId={threadId as never}
+              routeKind="server"
+              {...(kickoffHistoryMessage ? { syntheticMessages: [kickoffHistoryMessage] } : {})}
+              {...(onBack ? { onBack } : {})}
+              {...(titleBarControlsAccessory ? { titleBarControlsAccessory } : {})}
+              hideHeader={hideHeader || embeddedMode}
+              hideBranchToolbar={embeddedMode}
+              minimalComposer={embeddedMode}
+              beforeDispatchTurnStart={prepareTurnStart}
+              dispatchTurnStartOverride={dispatchTurnStartOverride}
+              enqueueOfflineTurnStart={enqueueOfflineTurnStart}
+              composerContextAttachmentSlot={contextAttachmentSlot}
+              composerContainerProps={composerDropTarget.composerContainerProps}
+              composerContainerOverlay={composerDropTarget.composerContainerOverlay}
+              composerContextAttachments={contextAttachments}
+              prepareComposerContextAttachments={prepareComposerContextAttachments}
+              onComposerContextAttachmentsConsumed={clearThreadAttachments}
+              onSubmitRecipeCardAction={submitRecipeCardAction}
+              dispatchWorkflowDecision={resolveWorkflowDecision}
+              {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
+              onOpenThread={onOpenThread}
+              {...(outboxDock ? { composerBannerLeading: outboxDock } : {})}
+            />
+          </ComposerHandleContext>
         </>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">

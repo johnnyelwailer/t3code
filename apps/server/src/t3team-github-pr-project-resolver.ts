@@ -6,7 +6,7 @@ import {
   type SourceControlProviderKind,
 } from "@t3tools/contracts";
 
-import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as ProjectService from "./project/ProjectService.ts";
 import { PullRequestProviderRegistry } from "./pullRequest/PullRequestProviderRegistry.ts";
 
 /**
@@ -14,7 +14,8 @@ import { PullRequestProviderRegistry } from "./pullRequest/PullRequestProviderRe
  * checkout's own git remote rather than addressing a repository directly. The pr-context route
  * only ever has `host`+`repository` (from a GitHub webhook/notification payload), so this is the
  * seam that turns one back into the other — a reverse lookup over the project shells the
- * workspace already knows about.
+ * workspace already knows about (`ProjectService.listShells`, which resolves each shell's
+ * repository identity).
  */
 
 /** The provider-native repository identity, matching `repositoryIdentityOf` in PullRequestService. */
@@ -41,19 +42,17 @@ export function resolvePullRequestProjectId(input: {
 }): Effect.Effect<
   ProjectId | null,
   never,
-  ProjectionSnapshotQuery.ProjectionSnapshotQuery | PullRequestProviderRegistry
+  ProjectService.ProjectService | PullRequestProviderRegistry
 > {
   const wantedHost = input.host.trim().toLowerCase();
   const wantedRepository = input.repository.trim().toLowerCase();
 
   return Effect.all([
-    ProjectionSnapshotQuery.ProjectionSnapshotQuery.pipe(
-      Effect.flatMap((projections) => projections.getShellSnapshot()),
-    ),
+    ProjectService.ProjectService.pipe(Effect.flatMap((projects) => projects.listShells())),
     PullRequestProviderRegistry,
   ]).pipe(
-    Effect.flatMap(([snapshot, registry]) => {
-      const matches = snapshot.projects.filter((project) => {
+    Effect.flatMap(([projects, registry]) => {
+      const matches = projects.filter((project) => {
         const repository = repositoryIdentityOf(project);
         if (!repository || repository.toLowerCase() !== wantedRepository) return false;
         const kind = project.repositoryIdentity?.provider as SourceControlProviderKind | undefined;

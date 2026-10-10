@@ -8,7 +8,7 @@ describe("stopWorkflowsOwnedByThread", () => {
     const registry = makeWorkflowEngineRegistry();
     const cancelController = vi.fn();
     const durableStop = vi.fn(async () => {});
-    const dispatched: unknown[] = [];
+    const interrupted: string[] = [];
     registry.registerRun("run-1", { resume: async () => {}, cancel: cancelController });
     registry.registerOwnership("run-1", "master");
     registry.registerMasterStop("run-1", durableStop);
@@ -18,19 +18,18 @@ describe("stopWorkflowsOwnedByThread", () => {
     await stopWorkflowsOwnedByThread({
       registry,
       threadId: "master",
-      createdAt: "2026-07-19T00:00:00.000Z",
-      dispatch: async (command) => {
-        dispatched.push(command);
+      host: {
+        interrupt: async ({ threadId }) => {
+          interrupted.push(threadId);
+        },
+        archiveThread: async () => {},
       },
     });
 
     expect(durableStop).toHaveBeenCalledOnce();
     expect(cancelController).toHaveBeenCalledOnce();
     expect(registry.getRun("run-1")).toBeUndefined();
-    expect(dispatched).toEqual([
-      expect.objectContaining({ type: "thread.turn.interrupt", threadId: "child-a" }),
-      expect.objectContaining({ type: "thread.turn.interrupt", threadId: "child-b" }),
-    ]);
+    expect(interrupted).toEqual(["child-a", "child-b"]);
   });
 
   it("withdraws a pending ask before awaiting the durable stop", async () => {
@@ -58,8 +57,7 @@ describe("stopWorkflowsOwnedByThread", () => {
     const stopping = stopWorkflowsOwnedByThread({
       registry,
       threadId: "master",
-      createdAt: "2026-07-19T00:00:00.000Z",
-      dispatch: async () => {},
+      host: { interrupt: async () => {}, archiveThread: async () => {} },
     });
 
     expect(durableStop).toHaveBeenCalledOnce();

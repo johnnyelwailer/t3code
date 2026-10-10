@@ -11,9 +11,10 @@ import { defineTool } from "../t3team-sdk.ts";
 /** One structured, agent-actionable problem found while discovering/loading/validating. */
 export const RecipeToolIssue = Schema.Struct({
   path: Schema.String,
-  /** `determinism` / `capability` are the phase-25.5 load-time static audits; `types` is the real
-   * TypeScript checker (`t3team-sdk.typeCheck.ts`). These mirror `WorkflowAuditFacet` — a facet
-   * missing here cannot be reported, and the tool result fails to encode. */
+  /** `determinism` / `capability` / `bindings` are the load-time static audits; `types` is the
+   * real TypeScript checker (`t3team-sdk.typeCheck.ts`). These mirror `WorkflowAuditFacet` — a
+   * facet missing here cannot be reported, and the tool result fails to encode. `format` is the
+   * host's pre-parse gate and `model` its live provider/model-slug gate. */
   phase: Schema.Literals([
     "discover",
     "load",
@@ -22,6 +23,9 @@ export const RecipeToolIssue = Schema.Struct({
     "determinism",
     "capability",
     "types",
+    "bindings",
+    "format",
+    "model",
   ]),
   message: Schema.String,
 });
@@ -132,7 +136,7 @@ export const listRecipesTool = defineTool({
   result: ListRecipesToolResult,
   handler: async (_args, ctx) => {
     if (!ctx.t3team?.listRecipes) {
-      throw new Error("t3team.recipe.list requires a t3team recipe client in ToolHandlerCtx.");
+      throw new Error("t3_recipe_list requires a t3team recipe client in ToolHandlerCtx.");
     }
     // The host result is re-validated against ListRecipesToolResult by executeToolHandler.
     return (await ctx.t3team.listRecipes()) as ListRecipesToolResult;
@@ -149,11 +153,11 @@ export const validateRecipeTool = defineTool({
     const source = args.source?.trim() ?? "";
     if ((path.length === 0) === (source.length === 0)) {
       throw new Error(
-        "t3team.recipe.validate requires exactly one of 'path' (workspace .workflow.ts or recipe directory) or 'source' (inline workflow TypeScript).",
+        "t3_recipe_validate requires exactly one of 'path' (workspace .workflow.ts or recipe directory) or 'source' (inline workflow TypeScript).",
       );
     }
     if (!ctx.t3team?.validateRecipe) {
-      throw new Error("t3team.recipe.validate requires a t3team recipe client in ToolHandlerCtx.");
+      throw new Error("t3_recipe_validate requires a t3team recipe client in ToolHandlerCtx.");
     }
     // The host result is re-validated against ValidateRecipeToolResult by executeToolHandler.
     return (await ctx.t3team.validateRecipe(

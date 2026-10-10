@@ -11,6 +11,13 @@
  * or isolated-vm) is the real sandbox if/when untrusted workflows are in scope.
  */
 
+import type { LaunchedThreadPrimitives } from "./t3team-sdk.launchedThreadTypes.ts";
+import { createCallRef } from "./t3team-sdk.callRef.ts";
+import { LaunchedThreadError } from "./t3team-sdk.launchedThreads.ts";
+import {
+  RecipeConfigError,
+  type RecipeConfigPrimitives,
+} from "./t3team-sdk.recipeConfigPrimitive.ts";
 import * as Schema from "effect/Schema";
 
 import { deterministicGlobals, hostSource, type DeterministicSource } from "@runbook/ts/globals";
@@ -21,18 +28,23 @@ import {
   PermissionDeniedError,
   ProviderUnavailableError,
   ReplayDriftError,
+  RetryExhaustedError,
   SchemaExhaustedError,
   SubWorkflowCheckpointError,
   TargetMissingError,
+  WatermarkScopeError,
   TimeoutError,
   WorkflowError,
 } from "./t3team-sdk.errors.ts";
 import type { WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
+import type { RetryPrimitives } from "./t3team-sdk.retryPrimitive.ts";
+import type { ReducePrimitives } from "./t3team-sdk.reducePrimitive.ts";
 import type { SchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
 import type { SignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
+import type { WatermarkPrimitives } from "./t3team-sdk.watermarkPrimitive.ts";
 import { BUILTIN_SIGNAL_GLOBALS } from "./t3team-sdk.builtinSignals.ts";
 import type { WorkflowThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
-import { defineWorkflow } from "./t3team-sdk.ts";
+import { defineModel, defineWorkflow } from "./t3team-sdk.ts";
 import { defineSignal } from "./t3team-sdk.signal.ts";
 
 export {
@@ -62,9 +74,16 @@ export function buildWorkflowGlobals(opts: {
   readonly checkpoint: CheckpointPrimitives["checkpoint"];
   /** The compact state a checkpoint-window resume restored (absent = fresh / full-replay). */
   readonly resume?: CheckpointRecord | undefined;
+  /** The run's `watermark` primitive (a durable source cursor over `checkpoint`). */
+  readonly watermark: WatermarkPrimitives["watermark"];
+  /** The run's reducers (`accumulate` folds commit checkpoint boundaries). */
+  readonly reduce: ReducePrimitives;
   readonly threads: WorkflowThreadPrimitives;
   readonly schedule: SchedulePrimitives;
+  readonly retry: RetryPrimitives;
   readonly signals: SignalPrimitives;
+  readonly launched: LaunchedThreadPrimitives;
+  readonly config: RecipeConfigPrimitives;
   /** The `@runbook/core/authoring` `RunbookContext` subset a body's `run(ctx)` sees. Optional:
    * older globals shapes and legacy zero-arg bodies never reference `ctx` at all. */
   readonly ctx?: unknown;
@@ -89,6 +108,14 @@ export function buildWorkflowGlobals(opts: {
     // checkpoint — a plain loop is unchanged.
     checkpoint: opts.checkpoint,
     resume: opts.resume,
+    // `watermark(key)` keeps a durable cursor as that boundary's state; gated by the
+    // `"source:<key>"` capability, like `getSignalSource`.
+    watermark: opts.watermark,
+    // `accumulate` folds an observation into a reducer and commits it as a checkpoint boundary;
+    // `reducerState` reads a reducer's restored-or-folded snapshot. Unconditionally bound, like
+    // `checkpoint` (a sub-workflow body gets the refusing stand-in instead).
+    accumulate: opts.reduce.accumulate,
+    reducerState: opts.reduce.reducerState,
     budget: p.budget,
     phase: p.phase,
     log: p.log,
@@ -108,9 +135,22 @@ export function buildWorkflowGlobals(opts: {
     // `waitUntil` (Epic 27) suspends until a wall-clock instant; gated by the `"schedule"`
     // capability (calling it without that capability throws PermissionDeniedError).
     waitUntil: opts.schedule.waitUntil,
+    // `retry` (bounded execution) re-runs an attempt with a journaled backoff between attempts;
+    // gated by `"schedule"` because the backoff is a durable `waitUntil`.
+    retry: opts.retry.retry,
     // `getSignalSource` (design 42) binds a durable source instance; gated by the
     // `"source:<name>"` capability per source.
     getSignalSource: opts.signals.getSignalSource,
+    // `waitForAny` parks on several `handle.on(...)` branches; each carries its source's gate.
+    waitForAny: opts.signals.waitForAny,
+    // `launchThread` launches or finds a top-level thread by key (gated by `"launch"`);
+    // `setRunFacts` writes the run's own launch-thread facts (a recipe card's summary).
+    launchThread: opts.launched.launchThread,
+    setRunFacts: opts.launched.setRunFacts,
+    // `getConfig().for({ repository })` reads the run's recipe config (G12), journaled.
+    getConfig: opts.config.getConfig,
+    // `callRef(ref, input, { outputs, fallback })` calls a config reference, failing closed.
+    callRef: createCallRef(p.workflow as Parameters<typeof createCallRef>[0]),
     // The built-in signal-source declarations (design 42 §7): the loader blanks every import in
     // a body, so `ScmChangeRequestWatch` & co. resolve from this surface, exactly like
     // `defineWorkflow` and the error classes.
@@ -131,8 +171,11 @@ export function buildWorkflowGlobals(opts: {
     // `defineWorkflow` lets a body construct the typed sub-workflow ref `workflow()` needs;
     // it is a pure ref constructor (no capability concern), so it is unconditionally bound.
     defineWorkflow,
+    // Existing bodies import this pure constructor; imports are erased by the loader.
+    defineModel,
     WorkflowError,
     SubWorkflowCheckpointError,
+    WatermarkScopeError,
     TimeoutError,
     SchemaExhaustedError,
     ProviderUnavailableError,
@@ -140,5 +183,8 @@ export function buildWorkflowGlobals(opts: {
     TargetMissingError,
     CancelledError,
     ReplayDriftError,
+    RetryExhaustedError,
+    LaunchedThreadError,
+    RecipeConfigError,
   };
 }

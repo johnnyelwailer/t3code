@@ -1,24 +1,14 @@
-import { jsx } from "react/jsx-runtime";
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
-import { getPreviewPanelMaxWidth, PreviewPanelShell } from "./PreviewPanelShell";
+import { getPreviewPanelMaxWidth } from "./PreviewPanelShell";
 
 describe("getPreviewPanelMaxWidth", () => {
-  it("allows the panel to use 70% of an ultra-wide viewport without a pixel ceiling", () => {
+  it("falls back to 70% of the window only while the row is unmeasured", () => {
     expect(getPreviewPanelMaxWidth(6_000)).toBe(4_200);
   });
 
   it("rounds fractional CSS pixels down", () => {
     expect(getPreviewPanelMaxWidth(2_001)).toBe(1_400);
-  });
-
-  it("keeps inline panels inside their containing workspace", () => {
-    const markup = renderToStaticMarkup(
-      jsx(PreviewPanelShell, { mode: "inline", defaultWidth: 1_000, children: "Panel" }),
-    );
-
-    expect(markup).toContain("max-w-full");
   });
 
   it("reserves the sibling column minimum when the flex row is known", () => {
@@ -28,8 +18,18 @@ describe("getPreviewPanelMaxWidth", () => {
     expect(getPreviewPanelMaxWidth(1_512, 1_256)).toBe(896);
   });
 
-  it("keeps the fraction cap when the row is wide enough for both columns", () => {
-    expect(getPreviewPanelMaxWidth(3_000, 2_900)).toBe(2_100);
+  it("caps against the row only once it is known, not a fraction of the window", () => {
+    // Wide row: the old 70%-of-window cap (2100) stopped the drag 440px early.
+    expect(getPreviewPanelMaxWidth(3_000, 2_900)).toBe(2_540);
+    // Left sidebar open on a 2560 window: row 2304 → 1944, where 70% of the window (1792)
+    // used to stop the drag while the chat column still had room to give.
+    expect(getPreviewPanelMaxWidth(2_560, 2_304)).toBe(1_944);
+    // Sidebar closed: the whole window is the row, and the panel may grow to row − 360.
+    expect(getPreviewPanelMaxWidth(1_920, 1_920)).toBe(1_560);
+  });
+
+  it("ignores the window width entirely when the row is known", () => {
+    expect(getPreviewPanelMaxWidth(800, 1_600)).toBe(getPreviewPanelMaxWidth(6_000, 1_600));
   });
 
   it("rounds fractional row widths down", () => {

@@ -1,3 +1,4 @@
+import type { ThreadShell } from "~/types";
 import type { ThreadBootstrapDispatchState } from "~/t3team/chat/t3team-threadBootstrapPlan";
 import {
   recordT3TeamThreadDebug,
@@ -17,7 +18,7 @@ export function recordThreadBootstrapPlan(input: {
   shouldEnsureProject: boolean;
   hasServerThread: boolean;
   hasInitialUserMessage: boolean;
-  serverThread: unknown;
+  serverThread: Partial<ThreadShell> | null | undefined;
   dispatchState: ThreadBootstrapDispatchState;
 }) {
   recordT3TeamThreadDebug("thread-bootstrap.plan", {

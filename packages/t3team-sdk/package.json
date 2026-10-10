@@ -27,17 +27,9 @@
       "types": "./src/t3team-sdk.groups.ts",
       "import": "./src/t3team-sdk.groups.ts"
     },
-    "./models": {
-      "types": "./src/t3team-sdk.models.ts",
-      "import": "./src/t3team-sdk.models.ts"
-    },
     "./time": {
       "types": "./src/t3team-sdk.time.ts",
       "import": "./src/t3team-sdk.time.ts"
-    },
-    "./tools/t3team": {
-      "types": "./src/tools/t3team-sdk.t3team.ts",
-      "import": "./src/tools/t3team-sdk.t3team.ts"
     },
     "./tools/t3teamRecipes": {
       "types": "./src/tools/t3team-sdk.t3teamRecipes.ts",
@@ -49,8 +41,8 @@
     }
   },
   "scripts": {
-    "typecheck": "tsgo --noEmit",
-    "test": "vp test run"
+    "typecheck": "tsc --noEmit",
+    "test": "./node_modules/.bin/vp test run"
   },
   "dependencies": {
     "@runbook/core": "workspace:*",

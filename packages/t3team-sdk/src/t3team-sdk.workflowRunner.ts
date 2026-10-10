@@ -11,6 +11,7 @@ import type { ExecuteBodyRequest } from "@runbook/core/runEngine";
 import { runPreparedBody } from "./t3team-sdk.bodyRunner.ts";
 import { buildWorkflowPrimitives } from "./t3team-sdk.subWorkflows.ts";
 import { createCheckpointPrimitives } from "@runbook/core/checkpoint";
+import { createReducePrimitives } from "./t3team-sdk.reducePrimitive.ts";
 import {
   createDurableWorkflowRuntime,
   type DurableWorkflowRuntime,
@@ -62,7 +63,15 @@ function buildRunContexts(opts: {
     callTool,
     ...(opts.options.t3team === undefined ? {} : { t3team: opts.options.t3team }),
   };
-  return { toolCtx: toolCtxRef, scriptCtx: { ...shared, callTool } };
+  const host = opts.options.scriptHost;
+  const scriptCtx: T.ScriptHandlerCtx = {
+    ...shared,
+    callTool,
+    ...(host?.store === undefined ? {} : { store: host.store }),
+    ...(host?.changeRequests === undefined ? {} : { changeRequests: host.changeRequests }),
+    ...(host?.project === undefined ? {} : { project: host.project }),
+  };
+  return { toolCtx: toolCtxRef, scriptCtx };
 }
 
 export async function executeWorkflowBody(
@@ -114,12 +123,19 @@ export async function executeWorkflowBody(
     scripts,
     nowIso,
   });
-  const checkpoint = createCheckpointPrimitives({
-    callPrimitive: runtime.callPrimitive,
-    currentSeq: runtime.currentSeq,
-    nowIso,
-    ...(opts.resume?.checkpoint === undefined ? {} : { resumeFrom: opts.resume.checkpoint }),
-  }).checkpoint;
+  // `accumulate` folds commit through the run's checkpoint; the reducer-aware `checkpoint` it
+  // returns is the one the body binds (a plain boundary is refused once a reducer is active), and a
+  // checkpoint-window resume seeds every reducer from its boundary.
+  const { checkpoint, ...reduce } = createReducePrimitives({
+    checkpoint: createCheckpointPrimitives({
+      callPrimitive: runtime.callPrimitive,
+      currentSeq: runtime.currentSeq,
+      nowIso,
+      ...(opts.resume?.checkpoint === undefined ? {} : { resumeFrom: opts.resume.checkpoint }),
+    }).checkpoint,
+    resume: opts.resume?.checkpoint,
+    isBlackBoxed: runtime.isBlackBoxed,
+  });
   return await runPreparedBody({
     runtime,
     ref: opts.ref,
@@ -131,6 +147,7 @@ export async function executeWorkflowBody(
     // resume restored (absent on fresh starts and full-replay resumes).
     checkpoint,
     resume: opts.resume?.checkpoint,
+    reduce,
     // Feed the body's capability set back so workflow() children intersect against it.
     onCapabilities: captureCapabilities,
     handleDispatch: runtime.handles,

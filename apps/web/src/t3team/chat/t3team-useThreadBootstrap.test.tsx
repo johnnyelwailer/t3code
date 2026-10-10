@@ -14,6 +14,12 @@ import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { createMockBackend } from "~/t3team/backend/t3team-mockBackend";
+import type {
+  CreateThreadInput,
+  StartThreadTurnInput,
+  UpdateThreadMetadataInput,
+} from "@t3tools/client-runtime/operations";
+
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { clearThreadBootstrapDispatchStates } from "~/t3team/chat/t3team-threadBootstrapDispatchRegistry";
 import { useThreadBootstrap } from "~/t3team/chat/t3team-useThreadBootstrap";
@@ -34,56 +40,68 @@ function createRecipeKickoffWorkflow(): T3TeamKickoffWorkflow {
   } as T3TeamKickoffWorkflow;
 }
 
+type TrackedWrite =
+  | { readonly kind: "createThread"; readonly input: CreateThreadInput }
+  | { readonly kind: "startThreadTurn"; readonly input: StartThreadTurnInput }
+  | { readonly kind: "updateThreadMetadata"; readonly input: UpdateThreadMetadataInput };
+
 type TrackedBackend = {
   backend: BackendApi;
-  dispatchCommand: ReturnType<typeof vi.fn>;
+  writes: TrackedWrite[];
   launchRecipeWorkflow: ReturnType<typeof vi.fn>;
   threadCreateCount: () => number;
 };
 
 /**
- * Backend stub that behaves like the real orchestration store: the second `thread.create` for a
- * thread rejects with the Effect `Cause` envelope the atom-command layer produces.
+ * Backend stub that records every orchestration write in order. The second `createThread` for a
+ * thread rejects with the Effect `Cause` envelope the atom-command layer produces, as a duplicate
+ * create would.
  */
 function createTrackedBackend(): TrackedBackend {
   const createdThreadIds = new Set<string>();
-  const dispatchCommand = vi.fn(async (command: { type: string; threadId?: unknown }) => {
-    if (command.type !== "thread.create") {
-      return undefined;
-    }
-    const threadId = String(command.threadId);
-    if (createdThreadIds.has(threadId)) {
-      throw {
-        _id: "Cause",
-        failures: [
-          {
-            _tag: "Fail",
-            error: {
-              _tag: "OrchestrationDispatchCommandError",
-              message: `Orchestration command invariant failed (thread.create): Thread '${threadId}' already exists and cannot be created twice.`,
-            },
-          },
-        ],
-      };
-    }
-    createdThreadIds.add(threadId);
-    return undefined;
-  });
+  const writes: TrackedWrite[] = [];
   const launchRecipeWorkflow = vi.fn(async () => ({ ok: true, mode: "thread" as const }));
+  const base = createMockBackend();
 
   const backend = {
-    ...createMockBackend(),
-    dispatchCommand,
+    ...base,
+    orchestration: {
+      ...base.orchestration,
+      async createThread(input: CreateThreadInput) {
+        writes.push({ kind: "createThread", input });
+        const threadId = String(input.threadId);
+        if (createdThreadIds.has(threadId)) {
+          throw {
+            _id: "Cause",
+            failures: [
+              {
+                _tag: "Fail",
+                error: {
+                  _tag: "OrchestrationDispatchCommandError",
+                  message: `Thread '${threadId}' already exists and cannot be created twice.`,
+                },
+              },
+            ],
+          };
+        }
+        createdThreadIds.add(threadId);
+      },
+      async startThreadTurn(input: StartThreadTurnInput) {
+        writes.push({ kind: "startThreadTurn", input });
+      },
+      async updateThreadMetadata(input: UpdateThreadMetadataInput) {
+        writes.push({ kind: "updateThreadMetadata", input });
+      },
+    },
     launchRecipeWorkflow,
     syncThreadToolContext: vi.fn(async () => undefined),
   } as unknown as BackendApi;
 
   return {
     backend,
-    dispatchCommand,
+    writes,
     launchRecipeWorkflow,
-    threadCreateCount: () =>
-      dispatchCommand.mock.calls.filter(([command]) => command?.type === "thread.create").length,
+    threadCreateCount: () => writes.filter((write) => write.kind === "createThread").length,
   };
 }
 
@@ -158,7 +176,7 @@ function BranchAwareBootstrapProbe({
   backend: BackendApi;
   threadId: string;
   initialBranch: string | undefined;
-  serverThread?: unknown | null;
+  serverThread?: { readonly branch: string | null } | null;
 }) {
   useThreadBootstrap({
     backend,
@@ -183,7 +201,7 @@ function BranchAwareBootstrapProbe({
 }
 
 describe("useThreadBootstrap branch backfill (F11)", () => {
-  it("dispatches the kickoff immediately even while the branch query is still pending, then backfills the resolved branch via thread.meta.update", async () => {
+  it("dispatches the kickoff immediately even while the branch query is still pending, then backfills the resolved branch via a metadata update", async () => {
     const threadId = "thread-branch-hold-1";
     const tracked = createTrackedBackend();
 
@@ -206,12 +224,12 @@ describe("useThreadBootstrap branch backfill (F11)", () => {
 
     // The branch query being unresolved must NOT hold up the dispatch — a fresh kickoff with no
     // branch known yet still has to reach the server, carrying `branch: null` for now.
-    expect(tracked.dispatchCommand).toHaveBeenCalledTimes(1);
-    const [createCommand] = tracked.dispatchCommand.mock.calls[0] as [
-      { type: string; bootstrap?: { createThread?: { branch?: string | null } } },
-    ];
-    expect(createCommand.type).toBe("thread.turn.start");
-    expect(createCommand.bootstrap?.createThread?.branch).toBeNull();
+    expect(tracked.writes).toHaveLength(1);
+    const [launch] = tracked.writes;
+    expect(launch?.kind).toBe("startThreadTurn");
+    expect(
+      launch?.kind === "startThreadTurn" ? launch.input.bootstrap?.createThread?.branch : undefined,
+    ).toBeNull();
 
     act(() => {
       root.render(
@@ -228,7 +246,7 @@ describe("useThreadBootstrap branch backfill (F11)", () => {
     // The dispatch has been claimed (kickoffSent) but the server hasn't confirmed the thread
     // exists yet (`serverThread` is still null): a backfill sent into that window is rejected
     // server-side, so the hasServerThread gate must hold it rather than sending it.
-    expect(tracked.dispatchCommand).toHaveBeenCalledTimes(1);
+    expect(tracked.writes).toHaveLength(1);
 
     act(() => {
       root.render(
@@ -236,7 +254,7 @@ describe("useThreadBootstrap branch backfill (F11)", () => {
           backend={tracked.backend}
           threadId={threadId}
           initialBranch="feature/some-branch"
-          serverThread={{ id: threadId }}
+          serverThread={{ branch: null }}
         />,
       );
     });
@@ -244,14 +262,11 @@ describe("useThreadBootstrap branch backfill (F11)", () => {
 
     // Once the server confirms the thread exists, the branch is backfilled onto the
     // already-dispatched thread rather than being lost.
-    expect(tracked.dispatchCommand).toHaveBeenCalledTimes(2);
-    const [metaUpdateCommand] = tracked.dispatchCommand.mock.calls[1] as [
-      { type: string; threadId?: unknown; branch?: string | null; expectedBranch?: string | null },
-    ];
-    expect(metaUpdateCommand.type).toBe("thread.meta.update");
-    expect(metaUpdateCommand.threadId).toBe(threadId);
-    expect(metaUpdateCommand.branch).toBe("feature/some-branch");
-    expect(metaUpdateCommand.expectedBranch).toBeNull();
+    expect(tracked.writes).toHaveLength(2);
+    expect(tracked.writes[1]).toEqual({
+      kind: "updateThreadMetadata",
+      input: { threadId, branch: "feature/some-branch" },
+    });
 
     // A further render with the same resolved serverThread must not re-fire the backfill.
     act(() => {
@@ -260,13 +275,47 @@ describe("useThreadBootstrap branch backfill (F11)", () => {
           backend={tracked.backend}
           threadId={threadId}
           initialBranch="feature/some-branch"
-          serverThread={{ id: threadId }}
+          serverThread={{ branch: null }}
         />,
       );
     });
     await flush();
 
-    expect(tracked.dispatchCommand).toHaveBeenCalledTimes(2);
+    expect(tracked.writes).toHaveLength(2);
+  });
+
+  it("does not backfill over a branch the live thread already carries", async () => {
+    const threadId = "thread-branch-set-1";
+    const tracked = createTrackedBackend();
+    const container = document.createElement("div");
+    document.body.append(container);
+    containers.push(container);
+    const root = createRoot(container);
+    roots.push(root);
+
+    act(() => {
+      root.render(
+        <BranchAwareBootstrapProbe
+          backend={tracked.backend}
+          threadId={threadId}
+          initialBranch={undefined}
+        />,
+      );
+    });
+    await flush();
+    act(() => {
+      root.render(
+        <BranchAwareBootstrapProbe
+          backend={tracked.backend}
+          threadId={threadId}
+          initialBranch="feature/some-branch"
+          serverThread={{ branch: "user/chosen" }}
+        />,
+      );
+    });
+    await flush();
+
+    expect(tracked.writes.map((write) => write.kind)).toEqual(["startThreadTurn"]);
   });
 
   it("dispatches the kickoff immediately when the environment does not exist yet (fresh kickoff regression)", async () => {
@@ -293,8 +342,7 @@ describe("useThreadBootstrap branch backfill (F11)", () => {
     });
     await flush();
 
-    expect(tracked.dispatchCommand).toHaveBeenCalledTimes(1);
-    expect(tracked.dispatchCommand.mock.calls[0]?.[0]?.type).toBe("thread.turn.start");
+    expect(tracked.writes.map((write) => write.kind)).toEqual(["startThreadTurn"]);
   });
 });
 

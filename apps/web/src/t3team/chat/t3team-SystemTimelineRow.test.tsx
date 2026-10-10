@@ -20,7 +20,7 @@ import {
 import { act, type ReactNode, type Ref } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef } from "@legendapp/list/react";
 
 import { buildT3TeamMessagesTimelineTestProps } from "~/t3team/chat/t3team-messagesTimelineTestProps";
@@ -95,7 +95,7 @@ function workflowNotificationMessage(
     streaming: false,
     createdAt: "2026-06-20T00:00:00.000Z",
     updatedAt: "2026-06-20T00:00:00.000Z",
-    turnId: null,
+    runId: null,
     t3teamExt: {
       author: { kind: "system", workflowRunId },
       visibleToUser: true,
@@ -114,7 +114,7 @@ function decisionMessage(id: string): ChatMessage {
     streaming: false,
     createdAt: "2026-06-20T00:00:00.000Z",
     updatedAt: "2026-06-20T00:00:00.000Z",
-    turnId: null,
+    runId: null,
     t3teamExt: {
       visibleToUser: true,
       status: "waiting-for-input",
@@ -142,7 +142,7 @@ function shapeMessage(id: string): ChatMessage {
     streaming: false,
     createdAt: "2026-06-20T00:00:00.000Z",
     updatedAt: "2026-06-20T00:00:00.000Z",
-    turnId: null,
+    runId: null,
     t3teamExt: {
       visibleToUser: true,
       attachments: [
@@ -179,6 +179,12 @@ async function renderTimeline(messages: ReadonlyArray<ChatMessage>) {
     />,
   );
 }
+
+// The timeline's import graph is large; load it once up front so the first case's own
+// 10 s budget measures rendering, not a cold module import on a loaded machine.
+beforeAll(async () => {
+  await import("~/components/chat/MessagesTimeline");
+}, 60_000);
 
 const mountedRoots: Array<{ root: ReturnType<typeof createRoot>; container: HTMLElement }> = [];
 
@@ -298,7 +304,7 @@ function widgetOnlyMessage(id: string): ChatMessage {
     streaming: false,
     createdAt: "2026-06-20T00:00:00.000Z",
     updatedAt: "2026-06-20T00:00:00.000Z",
-    turnId: null,
+    runId: null,
     t3teamExt: {
       visibleToUser: true,
       attachments: [
@@ -325,8 +331,9 @@ describe("full-bleed widget row width in the timeline", () => {
     ]);
 
     const fullWidthWrapper = '<div class="mx-auto w-full min-w-0" data-timeline-root="true">';
+    // Every other row keeps upstream's capped content lane (`.chat-content-lane`).
     const narrowWrapper =
-      '<div class="mx-auto w-full min-w-0 max-w-3xl overflow-x-clip" data-timeline-root="true">';
+      '<div class="chat-content-lane overflow-x-clip" data-timeline-root="true">';
 
     // Exactly one full-width (no cap, no clip) row wrapper — the widget row's.
     const firstFull = markup.indexOf(fullWidthWrapper);
@@ -335,11 +342,12 @@ describe("full-bleed widget row width in the timeline", () => {
     // The widget iframe sits inside that wrapper, before the next row starts.
     const widgetStart = markup.indexOf('data-widget-id="widget-1"');
     expect(widgetStart).toBeGreaterThan(firstFull);
-    expect(markup).not.toContain("max-w-[92%]");
 
     // The prose row keeps the narrow capped wrapper, and its text lives after it.
     const narrowStart = markup.indexOf(narrowWrapper);
     expect(narrowStart).toBeGreaterThan(firstFull);
+    // The widget row itself carries no inner width cap.
+    expect(markup.slice(firstFull, narrowStart)).not.toContain("max-w-[92%]");
     expect(markup.indexOf(narrowWrapper, narrowStart + 1)).toBe(-1);
     expect(markup.indexOf(proseLine)).toBeGreaterThan(narrowStart);
   }, 10000);
@@ -353,7 +361,7 @@ describe("full-bleed widget row width in the timeline", () => {
 
     const fullWidthWrapper = '<div class="mx-auto w-full min-w-0" data-timeline-root="true">';
     const narrowWrapper =
-      '<div class="mx-auto w-full min-w-0 max-w-3xl overflow-x-clip" data-timeline-root="true">';
+      '<div class="chat-content-lane overflow-x-clip" data-timeline-root="true">';
     expect(markup.indexOf(fullWidthWrapper)).toBe(-1);
     expect(markup.indexOf(narrowWrapper)).toBeGreaterThan(-1);
   }, 10000);

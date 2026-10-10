@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { ProjectShellProject } from "@t3tools/project-context";
+import {
+  T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
+  T3TEAM_PROJECT_CONTEXT_ROOT,
+  T3TEAM_WORK_ITEMS_INDEX_PATH,
+  buildJiraTicketEntryPoint,
+} from "@t3tools/project-context/t3teamContextPaths";
 
 import { buildProjectContextBundle } from "~/t3team/t3team-projectContextBundle";
 import type { ProjectTicket } from "~/t3team/t3team-types";
@@ -52,27 +58,27 @@ describe("buildProjectContextBundle", () => {
       projectTickets: [createTicket("PROJ-1"), createTicket("PROJ-2")],
     });
 
-    expect(bundle.bundleRootRelativePath).toBe(".t3team/context");
+    expect(bundle.bundleRootRelativePath).toBe(T3TEAM_PROJECT_CONTEXT_ROOT);
     expect(bundle.fileReferences).toEqual([
       {
         label: "Project entrypoint",
-        relativePath: ".t3team/context/entrypoint.json",
+        relativePath: T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
       },
     ]);
 
     const entryPoint = bundle.files.find(
-      (file) => file.relativePath === ".t3team/context/entrypoint.json",
+      (file) => file.relativePath === T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
     );
     expect(entryPoint).toBeDefined();
     expect(JSON.parse(entryPoint?.contents ?? "{}")).toMatchObject({
       kind: "project",
       paths: {
-        workItemsIndex: ".t3team/context/work-items/index.json",
+        workItemsIndex: T3TEAM_WORK_ITEMS_INDEX_PATH,
       },
     });
 
     const workItemsIndex = bundle.files.find(
-      (file) => file.relativePath === ".t3team/context/work-items/index.json",
+      (file) => file.relativePath === T3TEAM_WORK_ITEMS_INDEX_PATH,
     );
     expect(JSON.parse(workItemsIndex?.contents ?? "{}")).toMatchObject({
       workItems: [
@@ -80,13 +86,11 @@ describe("buildProjectContextBundle", () => {
           key: "PROJ-1",
           availability: "summary",
           loadableOnDemand: true,
-          ticketEntryPointRelativePath:
-            ".t3team/context/jira/project-alpha/items/proj-1/entrypoint.json",
+          ticketEntryPointRelativePath: buildJiraTicketEntryPoint("Project Alpha", "PROJ-1"),
         },
         {
           key: "PROJ-2",
-          ticketEntryPointRelativePath:
-            ".t3team/context/jira/project-alpha/items/proj-2/entrypoint.json",
+          ticketEntryPointRelativePath: buildJiraTicketEntryPoint("Project Alpha", "PROJ-2"),
         },
       ],
     });
@@ -101,12 +105,12 @@ describe("buildProjectContextBundle", () => {
       },
     });
 
-    expect(
-      bundle.files.some((file) => file.relativePath === ".t3team/context/work-items/index.json"),
-    ).toBe(false);
+    expect(bundle.files.some((file) => file.relativePath === T3TEAM_WORK_ITEMS_INDEX_PATH)).toBe(
+      false,
+    );
     expect(
       JSON.parse(
-        bundle.files.find((file) => file.relativePath === ".t3team/context/entrypoint.json")
+        bundle.files.find((file) => file.relativePath === T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH)
           ?.contents ?? "{}",
       ).paths,
     ).not.toHaveProperty("workItemsIndex");
@@ -123,7 +127,6 @@ describe("buildProjectContextBundle", () => {
             id: "thread-1",
             projectId: "Project Alpha",
             title: "Kickoff",
-            messageCount: 2,
             lastMessageAt: "2026-05-18T13:00:00.000Z",
             createdAt: "2026-05-18T12:30:00.000Z",
             status: "idle",
@@ -143,15 +146,19 @@ describe("buildProjectContextBundle", () => {
     });
 
     expect(
-      bundle.files.some((file) => file.relativePath === ".t3team/context/threads/index.json"),
-    ).toBe(true);
-    expect(
       bundle.files.some(
-        (file) => file.relativePath === ".t3team/context/github/activity/index.json",
+        (file) => file.relativePath === `${T3TEAM_PROJECT_CONTEXT_ROOT}/threads/index.json`,
       ),
     ).toBe(true);
     expect(
-      bundle.files.some((file) => file.relativePath === ".t3team/context/ui/visible-state.json"),
+      bundle.files.some(
+        (file) => file.relativePath === `${T3TEAM_PROJECT_CONTEXT_ROOT}/github/activity/index.json`,
+      ),
+    ).toBe(true);
+    expect(
+      bundle.files.some(
+        (file) => file.relativePath === `${T3TEAM_PROJECT_CONTEXT_ROOT}/ui/visible-state.json`,
+      ),
     ).toBe(true);
   });
 });

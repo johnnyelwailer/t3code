@@ -171,7 +171,7 @@ export const FAKE: ToolAuthAdapter = {
   persistPaths: [".fake"],
 };
 
-export const ADAPTERS: Record<string, ToolAuthAdapter> = {
+const ADAPTERS: Record<string, ToolAuthAdapter> = {
   [CLAUDE.tool]: CLAUDE,
   [CODEX.tool]: CODEX,
   [GH.tool]: GH,

@@ -1,51 +1,12 @@
 /**
- * Pure logic for the t3team Agents panel sub-runs section (see
- * `t3team-AgentsPanelForkSection.tsx`): building the child-thread tree and
+ * Pure logic for the t3team sub-run tree: building the child-thread tree and
  * ordering it by status priority. Kept out of the presentation component so
- * the panel stays small; the panel's "N idle · expand" collapsing and the
- * nested indentation live in `t3team-AgentsPanelSubRunTree.tsx`.
+ * it stays small; the "N idle · expand" collapsing and the nested indentation
+ * live in `t3team-AgentsPanelSubRunTree.tsx`.
  */
-import type { AgentPanelModel } from "@t3tools/client-runtime/state/subagentRuntime";
-
-import type { T3TeamActiveWorkflowDockItem } from "~/t3team/chat/t3team-activeWorkflowDock";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { compareSubRunThreads } from "~/t3team/components/t3team-projectSidebarThreadTree";
 import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
-
-/**
- * The VARIANTS decision (2026-09-08 agents-panel UX) — variant 1, "one source of truth":
- * the roster already renders a workflow run's own name + phase + members, so re-listing that
- * same run as a "Recipe workflows" row directly under it is the duplication PJ screenshotted
- * (the panel's Recipe section and the composer dock share `deriveT3TeamActiveWorkflowDockItems`
- * by design; the SECTION inside the panel is the redundant one). These pure helpers let the
- * caller drop dock items the panel model already covers, WITHOUT touching the shared dock
- * derivation the composer still needs.
- */
-/** Every run id the panel model's workflow groups already render (group + member run handles). */
-export function panelModelRunIds(model: AgentPanelModel): ReadonlySet<string> {
-  const ids = new Set<string>();
-  for (const group of model.workflows) {
-    for (const agent of [
-      group.workflow,
-      ...group.unphasedMembers,
-      ...group.phases.flatMap((p) => p.members),
-    ]) {
-      const runId = agent.runHandles?.runId;
-      if (runId) ids.add(runId);
-      if (agent.kind === "workflow") ids.add(agent.id);
-    }
-  }
-  return ids;
-}
-
-/** Dock items that the panel roster does NOT already render — the deduped Recipe-workflows list. */
-export function filterWorkflowRunsForForkSection(
-  runs: ReadonlyArray<T3TeamActiveWorkflowDockItem>,
-  model: AgentPanelModel,
-): ReadonlyArray<T3TeamActiveWorkflowDockItem> {
-  const covered = panelModelRunIds(model);
-  return covered.size === 0 ? runs : runs.filter((item) => !covered.has(item.runId));
-}
 
 export type SubRunOpenCallback = (input: {
   readonly projectId: string;
@@ -98,53 +59,38 @@ export const SUB_RUN_STATUS_LABEL: Record<ProjectThread["status"], string> = {
   idle: "Idle",
   running: "Running",
   completed: "Completed",
-  error: "Error",
+  error: "Failed",
 };
 
 /**
- * The two WAITING labels, defined in ONE place (they may become icon-led
- * later, so keep the text here, not scattered across components).
- *
- * The parent's settled-own-work + children situation is TWO distinct facts,
- * not one: DERIVED ("has live children") is the looser state — keeping an
- * eye on children that are still running; DECLARED ("a `t3team_children`
- * `op: wait` registered on this thread is still pending") is the stronger,
- * intentional blocking relationship. Against "Waiting", "Monitoring" reads
- * as the looser state; keep that contrast — a later reader who sees only one
- * will otherwise collapse them back together. DECLARED outranks DERIVED for
- * the label (a parent explicitly blocked on a result is more specific than
- * one merely supervising); a parent's OWN live work outranks both.
- *
- * Both use the standard working/in-progress colour, NOT amber: amber stays
- * reserved for "Question awaiting answer", the only one of these that
- * actually needs the user. Rejected names: "Paused" (that is a resumable
- * orchestration run state, and the parent is not suspended — it finished its
- * part) and "Idle" (`ThreadRunState` "idle" means nothing is happening — the
- * opposite of "children are running").
+ * The parent's "own work settled, child work still live" label. Matches the word upstream's
+ * sidebar uses for pending background work (V2 `pendingBackgroundTasks`), so the sub-run tree
+ * and the sidebar never name the same fact differently. Uses the working colour, not amber:
+ * amber stays reserved for "Question awaiting answer", which actually needs the user.
  */
-export const SUB_RUN_MONITORING_LABEL = "Monitoring";
-export const SUB_RUN_WAITING_DECLARED_LABEL = "Waiting";
+export const SUB_RUN_WAITING_LABEL = "Waiting";
 
 /**
  * The live status TEXT of a panel sub-run/agent row — the SAME shared resolution the
- * sidebar sub-run rows use (`resolveActivityPillDisplay` over the same
- * `activityLabel`/`activityState` fields, so the panel and the sidebar never
- * disagree at this seam): the LLM activity label REPLACES the state word when it
- * flows (only while the `t3teamActivityLabelsEnabled` flag is on — the caller gates
- * the flag here, mirroring t3team-SidebarSubRunRow), the deterministic state word
- * (Thinking/Writing/Working/Waiting) stands alone when there is no label, and the
- * stable status label is the fallback for settled states and old servers. Dots are
- * unaffected (they carry the 4-state + settled visuals).
+ * sidebar sub-run rows use (`resolveActivityPillDisplay` over the same `activityLabel`
+ * field, so the panel and the sidebar never disagree at this seam): the LLM activity
+ * label REPLACES the stable status word while it flows (only while the
+ * `t3teamActivityLabelsEnabled` flag is on — the caller gates the flag here, mirroring
+ * t3team-SidebarSubRunRow); the server's `childStatus` summary backs it up when no
+ * label flows. Listed rows have no thinking/writing word: that needs the
+ * thread's turn items, which only the open thread loads.
  */
+const LIVE_SHELL_WORDS = new Set(["preparing", "starting", "queued", "running"]);
+
 export function resolveSubRunStatusLabel(
   thread: Pick<
     ProjectThread,
     | "status"
+    | "shellRunStatus"
     | "activityLabel"
-    | "activityState"
+    | "childStatus"
     | "pendingUserInput"
     | "waitingOnChildren"
-    | "waitingDeclared"
     | "awaitingParent"
   >,
   options: { readonly activityLabelsEnabled: boolean },
@@ -162,27 +108,34 @@ export function resolveSubRunStatusLabel(
   if (thread.awaitingParent === true) {
     return "Plan awaiting approval";
   }
-  // Own work settled: the thread is waiting on child work. Two facts, one
-  // branch — the DECLARED one (a registered `op: wait` still pending) is the
-  // stronger, intentional blocking state and outranks the DERIVED one
-  // (children merely still live). A parent explicitly blocked on a result
-  // reads "Waiting", a parent merely supervising live children reads
-  // "Monitoring". Own live work (running) and a failed row (error) keep their
-  // own word, mirroring the server primitive's precedence.
-  if (
-    (thread.waitingOnChildren === true || thread.waitingDeclared === true) &&
-    thread.status !== "running" &&
-    thread.status !== "error"
-  ) {
-    return thread.waitingDeclared === true
-      ? SUB_RUN_WAITING_DECLARED_LABEL
-      : SUB_RUN_MONITORING_LABEL;
+  const shell = thread.shellRunStatus;
+  // Shell words outrank the collapsed ProjectThread.status. A finished run
+  // that is not archived (and so not `status: "completed"`) still says
+  // Completed, not Idle.
+  if (shell === "preparing" || shell === "starting") return "Starting";
+  if (shell === "queued") return "Queued";
+  if (shell === "waiting") return SUB_RUN_WAITING_LABEL;
+  const ownLive =
+    thread.status === "running" || (shell !== undefined && LIVE_SHELL_WORDS.has(shell));
+  const ownFailed = shell === "failed" || thread.status === "error";
+  // Own work settled but child work is still live. Own live work and a
+  // failed row keep their own word, mirroring the server primitive's precedence.
+  if (thread.waitingOnChildren === true && !ownLive && !ownFailed) {
+    return SUB_RUN_WAITING_LABEL;
   }
-  const label = SUB_RUN_STATUS_LABEL[thread.status];
-  if (thread.status !== "running") return label;
-  return resolveActivityPillDisplay({
-    label,
-    activityState: thread.activityState ?? null,
-    activityLabel: options.activityLabelsEnabled ? (thread.activityLabel ?? null) : null,
-  });
+  if (ownLive) {
+    return resolveActivityPillDisplay({
+      label: "Running",
+      // The live activity label wins; between labels (debounced, TTL-limited) the
+      // server's child-status summary of the child's recent work fills the gap
+      // instead of a bare "Running".
+      activityLabel: options.activityLabelsEnabled
+        ? (thread.activityLabel ?? thread.childStatus ?? null)
+        : null,
+    });
+  }
+  if (ownFailed) return "Failed";
+  if (shell === "interrupted" || shell === "cancelled") return "Stopped";
+  if (shell === "completed" || thread.status === "completed") return "Completed";
+  return SUB_RUN_STATUS_LABEL[thread.status];
 }

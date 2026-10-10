@@ -13,6 +13,9 @@ const backendRef: { current: BackendApi | null } = { current: null };
 vi.mock("~/t3team/backend/t3team-index", () => ({
   useBackend: () => backendRef.current,
 }));
+vi.mock("~/t3team/backend/t3team-BackendContext", () => ({
+  useBackend: () => backendRef.current,
+}));
 
 import { useRepairProjectBinding } from "./t3team-useRepairProjectBinding";
 
@@ -63,18 +66,30 @@ function renderRepair(project: ProjectShellProject) {
   };
 }
 
+async function settle() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 describe("useRepairProjectBinding", () => {
-  let dispatchCommand: ReturnType<typeof vi.fn<BackendApi["dispatchCommand"]>>;
+  let updateProjectSource: ReturnType<
+    typeof vi.fn<BackendApi["orchestration"]["updateProjectSource"]>
+  >;
 
   beforeEach(() => {
-    dispatchCommand = vi.fn<BackendApi["dispatchCommand"]>().mockResolvedValue(undefined);
+    updateProjectSource = vi
+      .fn<BackendApi["orchestration"]["updateProjectSource"]>()
+      .mockResolvedValue(undefined);
     const baseBackend = createMockBackend();
     backendRef.current = {
       ...baseBackend,
-      dispatchCommand,
+      orchestration: { ...baseBackend.orchestration, updateProjectSource },
       atlassian: {
         ...baseBackend.atlassian,
-        listAccounts: vi.fn().mockResolvedValue([]),
+        listAccounts: vi.fn().mockResolvedValue([account]),
         listProjects: vi.fn().mockResolvedValue([iesSandbox]),
       },
     };
@@ -82,35 +97,21 @@ describe("useRepairProjectBinding", () => {
 
   it("dispatches nothing until confirmed, then sends the exact expected source", async () => {
     const rendered = renderRepair(brokenProject);
+    await settle();
+    expect(rendered.value().catalogState.catalog.map((entry) => entry.entryKey)).toEqual([
+      "acct-1::2",
+    ]);
 
-    // Let the (empty) bootstrap account load settle before touching anything.
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(dispatchCommand).not.toHaveBeenCalled();
-
-    act(() => {
-      rendered.value().setSelectedAccount(account);
-    });
-    // Populates `projects` so `setSelectedProject` (which resolves by id against that list) can
-    // find the row below.
-    await act(async () => {
-      await rendered.value().loadProjects(account);
-    });
-    act(() => {
-      rendered.value().setSelectedProject(iesSandbox);
-    });
-    expect(dispatchCommand).not.toHaveBeenCalled();
+    act(() => rendered.value().select("acct-1::2"));
+    expect(updateProjectSource).not.toHaveBeenCalled();
 
     const result: { current: ProjectShellProject | null } = { current: null };
     await act(async () => {
       result.current = await rendered.value().confirmRepair();
     });
 
-    expect(dispatchCommand).toHaveBeenCalledTimes(1);
-    const [command] = dispatchCommand.mock.calls[0] as [Record<string, unknown>];
-    expect(command.type).toBe("project.meta.update");
+    expect(updateProjectSource).toHaveBeenCalledTimes(1);
+    const [command] = updateProjectSource.mock.calls[0]!;
     expect(command.projectId).toBe("proj-1");
     expect(command.source).toEqual({
       provider: "atlassian",
@@ -123,27 +124,43 @@ describe("useRepairProjectBinding", () => {
     rendered.unmount();
   });
 
+  it("pre-selects the project the stored binding still points at, but never confirms for the user", async () => {
+    const rendered = renderRepair({
+      ...brokenProject,
+      source: { provider: "atlassian", accountId: "acct-1", externalProjectId: "2" },
+    });
+    await settle();
+
+    expect(rendered.value().selectedKey).toBe("acct-1::2");
+    expect(updateProjectSource).not.toHaveBeenCalled();
+
+    rendered.unmount();
+  });
+
+  it("cannot confirm before a project is chosen", async () => {
+    const rendered = renderRepair(brokenProject);
+    await settle();
+
+    let repaired: ProjectShellProject | null | undefined;
+    await act(async () => {
+      repaired = await rendered.value().confirmRepair();
+    });
+
+    expect(repaired).toBeNull();
+    expect(updateProjectSource).not.toHaveBeenCalled();
+
+    rendered.unmount();
+  });
+
   it("surfaces a duplicate-binding failure without silently updating the stored project", async () => {
-    dispatchCommand.mockRejectedValue(
+    updateProjectSource.mockRejectedValue(
       new Error(
         "Orchestration command invariant failed (project.meta.update): externalProjectId is already bound to project 'other-project'",
       ),
     );
     const rendered = renderRepair(brokenProject);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    act(() => {
-      rendered.value().setSelectedAccount(account);
-    });
-    await act(async () => {
-      await rendered.value().loadProjects(account);
-    });
-    act(() => {
-      rendered.value().setSelectedProject(iesSandbox);
-    });
+    await settle();
+    act(() => rendered.value().select("acct-1::2"));
 
     let repaired: ProjectShellProject | null = null;
     await act(async () => {

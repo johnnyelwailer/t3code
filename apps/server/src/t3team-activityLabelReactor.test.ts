@@ -1,164 +1,136 @@
-import { ThreadId, type OrchestrationEvent, type ProviderRuntimeEvent } from "@t3tools/contracts";
-import { describe, expect, it } from "@effect/vitest";
+import { assert, it } from "@effect/vitest";
+import {
+  DEFAULT_SERVER_SETTINGS,
+  MessageId,
+  type OrchestrationV2DomainEvent,
+  type OrchestrationV2ThreadShell,
+  RunId,
+  ThreadId,
+  TurnItemId,
+} from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import * as Stream from "effect/Stream";
 
-import {
-  OrchestrationEngineService,
-  type OrchestrationEngineShape,
-} from "./orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
-import { ProviderService } from "./provider/Services/ProviderService.ts";
-import { TextGeneration } from "./textGeneration/TextGeneration.ts";
-import { T3TeamActivityLabelReactorLive } from "./t3team-activityLabelReactor.ts";
+import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import * as ServerSettings from "./serverSettings.ts";
+import { TextGeneration } from "./textGeneration/TextGeneration.ts";
+import {
+  makeT3TeamActivityLabelReactor,
+  parseActivityLabelTtlMs,
+} from "./t3team-activityLabelReactor.ts";
+import * as ThreadFactsStore from "./t3team-v2/t3team-threadFactsStore.ts";
+import { testModelSelection } from "./t3team-v2/t3team-v2Orchestrator.testkit.ts";
 
-/**
- * GHE #297 Codex finding (LOW): a deleted thread's activity-state re-arming
- * stall timer (`t3team-activityState.ts`) used to keep ticking forever —
- * `onIdle` in `t3team-activityLabelReactor.ts` only cleared the tracker on
- * `thread.turn-diff-completed` / `thread.settled` / `thread.turn-interrupt-requested`,
- * never on `thread.deleted`. This exercises the real reactor layer (rather
- * than the pure `t3team-activityState.ts` tracker, whose own `clear()` is
- * already unit-tested) so it actually proves the missing wiring is fixed.
- *
- * Both domain events and provider runtime events are driven through PubSubs
- * so the test controls ordering precisely: set a non-null state first (via a
- * runtime event), THEN delete the thread, and assert the tracker's null
- * clear was dispatched — same shape `thread.settled` already produces.
- */
+const at = DateTime.makeUnsafe("2026-01-01T00:00:00.000Z");
+const threadId = ThreadId.make("thread:activity-label");
 
-const drainFibers = Effect.forEach(Array.from({ length: 20 }), () => Effect.yieldNow, {
-  discard: true,
-});
-
-const turnStartedRuntimeEvent = (threadId: ThreadId): ProviderRuntimeEvent =>
+const commandItem = (input: string): OrchestrationV2DomainEvent =>
   ({
-    type: "turn.started",
-    eventId: "evt-turn-started",
-    provider: "codex",
-    providerInstanceId: "codex",
+    type: "turn-item.updated",
     threadId,
-    createdAt: "2026-01-01T00:00:00.000Z",
-    turnId: "turn-1",
-    payload: {},
-  }) as unknown as ProviderRuntimeEvent;
+    payload: {
+      id: TurnItemId.make(`item:${input}`),
+      threadId,
+      runId: RunId.make("run:1"),
+      nodeId: null,
+      providerTurnId: null,
+      parentItemId: null,
+      ordinal: 1,
+      status: "completed",
+      title: null,
+      startedAt: at,
+      completedAt: at,
+      updatedAt: at,
+      type: "command_execution",
+      input,
+    },
+  }) as never;
 
-describe("T3TeamActivityLabelReactorLive — thread.deleted cleanup (GHE #297)", () => {
-  it.effect(
-    "clears the tracked activity state on thread.deleted (same shape as thread.settled)",
-    () =>
-      Effect.gen(function* () {
-        const threadId = ThreadId.make("thread-activity-label-deleted-test");
-        const dispatchedActivityStates: Array<unknown> = [];
+const userMessage = (text: string): OrchestrationV2DomainEvent =>
+  ({
+    type: "message.updated",
+    threadId,
+    payload: { id: MessageId.make("msg:1"), threadId, role: "user", text, streaming: false },
+  }) as never;
 
-        const domainEventPubSub = yield* PubSub.unbounded<OrchestrationEvent>();
-        const runtimeEventPubSub = yield* PubSub.unbounded<ProviderRuntimeEvent>();
+/** Polls in real time (`it.live`): the summarizer runs on real timers, not the test clock. */
+const waitFor = <E, R>(check: Effect.Effect<boolean, E, R>) =>
+  Effect.gen(function* () {
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      if (yield* check) return;
+      yield* Effect.sleep("10 millis");
+    }
+    return yield* Effect.die(new Error("condition not reached"));
+  });
 
-        const fakeEngine: OrchestrationEngineShape = {
-          streamDomainEvents: Stream.fromPubSub(domainEventPubSub),
-          dispatch: (command: unknown) =>
-            Effect.sync(() => {
-              const meta = command as { activityState?: unknown };
-              if ("activityState" in meta) dispatchedActivityStates.push(meta.activityState);
-              return { sequence: 0 };
-            }),
-        } as unknown as OrchestrationEngineShape;
+const runTerminal: OrchestrationV2DomainEvent = {
+  type: "run.updated",
+  threadId,
+  payload: { id: RunId.make("run:1"), threadId, status: "completed" },
+} as never;
 
-        const layer = T3TeamActivityLabelReactorLive.pipe(
-          Layer.provideMerge(Layer.succeed(OrchestrationEngineService, fakeEngine)),
-          Layer.provideMerge(
-            Layer.succeed(ProjectionSnapshotQuery, {
-              getThreadShellById: () => Effect.succeedNone,
-            } as unknown as ProjectionSnapshotQuery["Service"]),
-          ),
-          Layer.provideMerge(
-            Layer.succeed(TextGeneration, {} as unknown as TextGeneration["Service"]),
-          ),
-          Layer.provideMerge(
-            Layer.succeed(ProviderService, {
-              streamEvents: Stream.fromPubSub(runtimeEventPubSub),
-            } as unknown as ProviderService["Service"]),
-          ),
-          Layer.provideMerge(ServerSettings.ServerSettingsService.layerTest()),
-        );
-
-        yield* Effect.scoped(
-          Effect.gen(function* () {
-            yield* Layer.build(layer);
-            yield* drainFibers;
-
-            // 1. Drive the deterministic tracker into a non-null state
-            //    ("thinking") — otherwise clearing on delete would be a
-            //    no-op and this test would pass regardless of the fix.
-            yield* PubSub.publish(runtimeEventPubSub, turnStartedRuntimeEvent(threadId));
-            yield* drainFibers;
-            expect(dispatchedActivityStates).toEqual(["thinking"]);
-
-            // 2. Delete the thread. Before the fix, `onIdle` never matched
-            //    `thread.deleted`, so no clear was ever dispatched and the
-            //    state — and its re-arming stall timer — kept running.
-            yield* PubSub.publish(domainEventPubSub, {
-              type: "thread.deleted",
-              payload: { threadId },
-            } as unknown as OrchestrationEvent);
-            yield* drainFibers;
-
-            expect(dispatchedActivityStates).toEqual(["thinking", null]);
-          }),
-        );
+it.live("labels a thread from finished turn items and clears it when the run ends", () =>
+  Effect.gen(function* () {
+    const events = yield* PubSub.unbounded<OrchestrationV2DomainEvent>();
+    const contexts: string[] = [];
+    const Mocks = Layer.mergeAll(
+      Layer.mock(ThreadManagementService)({
+        streamDomainEvents: Stream.fromPubSub(events),
+        getThreadShell: () =>
+          Effect.succeed({
+            id: threadId,
+            projectId: "project-1",
+            modelSelection: testModelSelection,
+          } as unknown as OrchestrationV2ThreadShell),
       }),
-  );
-
-  it.effect("ignores an unrelated domain event — no activity-state dispatch", () =>
-    Effect.gen(function* () {
-      const threadId = ThreadId.make("thread-activity-label-unrelated-test");
-      const dispatchedActivityStates: Array<unknown> = [];
-      const domainEventPubSub = yield* PubSub.unbounded<OrchestrationEvent>();
-      const runtimeEventPubSub = yield* PubSub.unbounded<ProviderRuntimeEvent>();
-
-      const fakeEngine: OrchestrationEngineShape = {
-        streamDomainEvents: Stream.fromPubSub(domainEventPubSub),
-        dispatch: (command: unknown) =>
+      Layer.mock(TextGeneration)({
+        generateActivityLabel: (input) =>
           Effect.sync(() => {
-            const meta = command as { activityState?: unknown };
-            if ("activityState" in meta) dispatchedActivityStates.push(meta.activityState);
-            return { sequence: 0 };
+            contexts.push(input.context);
+            return { label: "Running the test suite" };
           }),
-      } as unknown as OrchestrationEngineShape;
-
-      const layer = T3TeamActivityLabelReactorLive.pipe(
-        Layer.provideMerge(Layer.succeed(OrchestrationEngineService, fakeEngine)),
-        Layer.provideMerge(
-          Layer.succeed(ProjectionSnapshotQuery, {
-            getThreadShellById: () => Effect.succeedNone,
-          } as unknown as ProjectionSnapshotQuery["Service"]),
-        ),
-        Layer.provideMerge(
-          Layer.succeed(TextGeneration, {} as unknown as TextGeneration["Service"]),
-        ),
-        Layer.provideMerge(
-          Layer.succeed(ProviderService, {
-            streamEvents: Stream.fromPubSub(runtimeEventPubSub),
-          } as unknown as ProviderService["Service"]),
-        ),
-        Layer.provideMerge(ServerSettings.ServerSettingsService.layerTest()),
-      );
-
-      yield* Effect.scoped(
-        Effect.gen(function* () {
-          yield* Layer.build(layer);
-          yield* drainFibers;
-          yield* PubSub.publish(domainEventPubSub, {
-            type: "thread.created",
-            payload: { threadId },
-          } as unknown as OrchestrationEvent);
-          yield* drainFibers;
-          expect(dispatchedActivityStates).toEqual([]);
+      }),
+      Layer.succeed(ServerSettings.ServerSettingsService, {
+        getSettings: Effect.succeed({
+          ...DEFAULT_SERVER_SETTINGS,
+          t3teamActivityLabelsEnabled: true,
         }),
-      );
-    }),
-  );
+        streamChanges: Stream.never,
+      } as never),
+    );
+    const facts = yield* ThreadFactsStore.T3TeamThreadFactsStore;
+    const labelIs = (label: string | null) =>
+      facts.get(threadId).pipe(Effect.map((record) => record?.activityLabel === label));
+    yield* makeT3TeamActivityLabelReactor({
+      debounceMs: 0,
+      minRegenerateMs: 0,
+      activityLabelTtlMs: 0,
+    }).pipe(Effect.provide(Mocks));
+    // Let the forked stream subscribe before publishing (a PubSub drops earlier events).
+    yield* Effect.sleep("20 millis");
+
+    yield* PubSub.publish(events, userMessage("Please   fix the flaky test"));
+    yield* PubSub.publish(events, commandItem("pnpm test"));
+    yield* waitFor(labelIs("Running the test suite"));
+    assert.include(contexts[0], "pnpm test");
+    assert.include(contexts[0], "Please fix the flaky test");
+
+    yield* PubSub.publish(events, runTerminal);
+    yield* waitFor(labelIs(null));
+  }).pipe(
+    Effect.provide(ThreadFactsStore.layer.pipe(Layer.provideMerge(SqlitePersistenceMemory))),
+    Effect.scoped,
+  ),
+);
+
+it("parses the label TTL override strictly", () => {
+  assert.strictEqual(parseActivityLabelTtlMs("0"), 0);
+  assert.strictEqual(parseActivityLabelTtlMs("1500"), 1500);
+  assert.isUndefined(parseActivityLabelTtlMs("-1"));
+  assert.isUndefined(parseActivityLabelTtlMs("soon"));
+  assert.isUndefined(parseActivityLabelTtlMs(undefined));
 });

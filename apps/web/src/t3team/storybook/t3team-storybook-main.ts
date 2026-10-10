@@ -4,7 +4,7 @@ import { reactCompilerPreset } from "@vitejs/plugin-react";
 import type { StorybookConfig } from "@storybook/react-vite";
 import * as NodeURL from "node:url";
 import * as NodeModule from "node:module";
-import { mergeConfig, type Plugin } from "vite";
+import { mergeConfig, type Plugin, type PluginOption } from "vite";
 
 const srcDir =
   process.env.T3TEAM_STORYBOOK_SRC_DIR ?? NodeURL.fileURLToPath(new URL("../src", import.meta.url));
@@ -109,8 +109,34 @@ function t3teamStorybookResolver(baseDir: string): Plugin {
 // real distribution themes: T3TEAM_STORYBOOK_PACK_DIR=<pack dir> vp run storybook.
 const packDir = process.env.T3TEAM_STORYBOOK_PACK_DIR;
 
+/** Drops one named plugin from vite's nested `PluginOption` list. */
+function withoutPlugin(plugins: PluginOption[], name: string): PluginOption[] {
+  return plugins
+    .map((plugin) => (Array.isArray(plugin) ? withoutPlugin(plugin, name) : plugin))
+    .filter(
+      (plugin) =>
+        !(
+          plugin !== null &&
+          typeof plugin === "object" &&
+          !Array.isArray(plugin) &&
+          "name" in plugin &&
+          plugin.name === name
+        ),
+    );
+}
+
+// Pack stories: the pack-ui kit's own fixture pack, plus the packs of T3CODE_DISTRIBUTION, which
+// the launcher (t3team-storybook.mjs) resolves; this file loads as CommonJS and cannot.
+const packStoryDirs = new Set([
+  `${srcDir}/t3team/packs/t3team-kit-fixture-pack`,
+  ...(JSON.parse(process.env.T3TEAM_STORYBOOK_PACK_DIRS ?? "[]") as string[]),
+]);
+
 const config: StorybookConfig = {
-  stories: [`${srcDir}/t3team/stories/**/*.stories.tsx`],
+  stories: [
+    `${srcDir}/t3team/stories/**/*.stories.tsx`,
+    ...[...packStoryDirs].map((dir) => `${dir}/**/*.stories.tsx`),
+  ],
   staticDirs: packDir ? [{ from: packDir, to: "/pack" }] : [],
   framework: {
     name: "@storybook/react-vite",
@@ -126,6 +152,10 @@ const config: StorybookConfig = {
         (dep) => dep !== "@clerk/clerk-js",
       );
     }
+    // The inherited app config also runs the third-party license manifest plugin, which
+    // audits every bundled package — including Storybook itself, whose packages ship no
+    // license file — and fails the build. The manifest belongs to the shipped app only.
+    config.plugins = withoutPlugin(config.plugins ?? [], "t3code:third-party-licenses");
     return mergeConfig(config, {
       plugins: [
         t3teamStorybookResolver(srcDir),

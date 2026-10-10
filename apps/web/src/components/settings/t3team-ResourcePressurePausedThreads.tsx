@@ -32,7 +32,7 @@ function PausedThreadRow(props: {
     <li className="flex items-center justify-between gap-3 py-1.5 text-xs">
       <div className="min-w-0">
         <div className="truncate">{shell?.title ?? props.thread.threadId}</div>
-        <div className="text-[11px] text-muted-foreground/70">
+        <div className="text-2xs text-muted-foreground/70">
           Memory pressure · {props.stateLabel} · paused <Ago at={props.thread.pausedAt} /> ·{" "}
           {props.thread.heldTurnCount} turn(s) held
         </div>
@@ -61,7 +61,7 @@ export function PausedThreadList(props: {
   const stateLabel = autoPauseStateLabel(autoPause, nowMs);
   return (
     <div>
-      <div className="text-[11px] font-medium text-muted-foreground/70">
+      <div className="text-2xs font-medium text-muted-foreground/70">
         Auto-paused threads (resume after {Math.round(autoPause.cooldownMs / 1000)} s below
         critical)
       </div>

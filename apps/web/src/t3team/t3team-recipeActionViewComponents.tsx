@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   Code2,
+  Eye,
   LifeBuoy,
   Link2,
   ListFilter,
@@ -22,6 +23,7 @@ import { Badge } from "~/t3team/components/ui/t3team-badge";
 import { RecipeActionIssuePreview } from "~/t3team/t3team-recipeActionIssuePreview";
 import { LaunchOptionGroup, LaunchTextInput } from "~/t3team/t3team-recipeActionLaunchControls";
 import { InlineActionChip } from "~/t3team/t3team-recipeInlineActionChip";
+import { RunToggle } from "~/t3team/t3team-recipeRunToggle";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipes";
 
 const iconByName = {
@@ -31,6 +33,7 @@ const iconByName = {
   "clipboard-check": ClipboardCheck,
   "clipboard-list": ClipboardList,
   "code-2": Code2,
+  eye: Eye,
   "life-buoy": LifeBuoy,
   "list-filter": ListFilter,
   "list-todo": ListTodo,
@@ -67,7 +70,7 @@ function RecipeAction(props: {
         <Icon className="size-3.5" />
       </div>
       {props.eyebrow ? (
-        <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70">
+        <div className="text-3xs font-medium uppercase tracking-widest text-muted-foreground/70">
           {props.eyebrow}
         </div>
       ) : null}
@@ -88,7 +91,7 @@ function RecipeAction(props: {
 
 function SourceLink(props: { readonly label: ReactNode; readonly href?: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground/80">
+    <span className="inline-flex items-center gap-1.5 text-2xs font-medium text-muted-foreground/80">
       <Link2 className="size-3.5" />
       <span>{props.label}</span>
     </span>
@@ -97,7 +100,7 @@ function SourceLink(props: { readonly label: ReactNode; readonly href?: string }
 
 function ArtifactLink(props: { readonly label: ReactNode; readonly href?: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-foreground/80">
+    <span className="inline-flex items-center gap-1.5 text-2xs font-medium text-foreground/80">
       <ArrowUpRight className="size-3.5 text-muted-foreground" />
       <span>{props.label}</span>
     </span>
@@ -142,6 +145,7 @@ export const recipeActionViewComponents = {
   LaunchTextInput,
   RecipeAction,
   RiskPill,
+  RunToggle,
   SourceLink,
 };
 

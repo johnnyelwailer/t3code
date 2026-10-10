@@ -12,7 +12,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
-import type { WorkflowRun } from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowRun } from "./persistence/WorkflowRuns.ts";
 import {
   nowIso,
   workspaceRootFor,
@@ -58,7 +58,7 @@ export const makeResumeFailedRun =
     Effect.gen(function* () {
       if (!deps.path) {
         return yield* Effect.fail(
-          "Filesystem services are not available for t3team.orchestration.resume in this runtime.",
+          "Filesystem services are not available for t3_orchestration_resume in this runtime.",
         );
       }
       const workspaceRoot = yield* workspaceRootFor(deps, threadId);
@@ -78,8 +78,7 @@ export const makeResumeFailedRun =
         onSleep: () => {
           void deps.rearmScheduler();
         },
-        dispatch: deps.dispatch,
-        newId,
+        host: deps.host,
       });
       const launch: LaunchWorkflowRecipeInput = {
         runId: run.runId,
@@ -94,7 +93,7 @@ export const makeResumeFailedRun =
         runtimeMode: run.runtimeMode,
         interactionMode: run.interactionMode,
         registry: deps.registry,
-        dispatch: deps.dispatch,
+        host: deps.host,
         newId,
         nowIso,
         store: deps.journalStore,
@@ -111,7 +110,7 @@ export const makeResumeFailedRun =
       if (retained !== null) {
         if (deps.turnRedrive === undefined) {
           return yield* Effect.fail(
-            "Re-driving a failed agent step is not available in this runtime (no thread query / dispatch).",
+            "Re-driving a failed agent step is not available in this runtime (no workflow host).",
           );
         }
         yield* resumeFailedTurnStep({
@@ -126,8 +125,8 @@ export const makeResumeFailedRun =
           status: "suspended" as const,
           ...failure,
           hint: run.failureReason
-            ? `Re-driving the failed agent step after: ${run.failureReason} — the run resumes automatically when the step answers; observe progress via t3team.orchestration.status.`
-            : "Re-driving the failed agent step; the run resumes automatically when it answers — observe progress via t3team.orchestration.status.",
+            ? `Re-driving the failed agent step after: ${run.failureReason} — the run resumes automatically when the step answers; observe progress via t3_orchestration_status.`
+            : "Re-driving the failed agent step; the run resumes automatically when it answers — observe progress via t3_orchestration_status.",
         };
       }
       yield* Effect.promise(() => resumeWorkflowRunFromJournal(launch)).pipe(
@@ -142,7 +141,7 @@ export const makeResumeFailedRun =
         status: "accepted" as const,
         ...failure,
         hint: run.failureReason
-          ? `Resuming from the journal (same-prefix replay) after: ${run.failureReason} — observe progress via t3team.orchestration.status.`
-          : "Resuming from the journal (same-prefix replay); observe progress via t3team.orchestration.status.",
+          ? `Resuming from the journal (same-prefix replay) after: ${run.failureReason} — observe progress via t3_orchestration_status.`
+          : "Resuming from the journal (same-prefix replay); observe progress via t3_orchestration_status.",
       };
     });

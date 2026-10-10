@@ -1,498 +1,149 @@
-import { expect, it } from "@effect/vitest";
+import { assert, it } from "@effect/vitest";
 import {
-  EnvironmentId,
+  CommandId,
   EventId,
-  ProviderInstanceId,
+  MessageId,
+  type OrchestrationV2Run,
   ThreadId,
-  type OrchestrationCommand,
 } from "@t3tools/contracts";
-import * as Cause from "effect/Cause";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
-import * as Stream from "effect/Stream";
-import { McpSchema, McpServer } from "effect/unstable/ai";
 
+import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
+import * as ProjectionStore from "../../../orchestration-v2/ProjectionStore.ts";
+import { layerMemory as SqlitePersistenceMemory } from "../../../persistence/Sqlite.ts";
 import {
-  OrchestrationEngineService,
-  type OrchestrationEngineShape,
-} from "../../../orchestration/Services/OrchestrationEngine.ts";
-import {
-  ProjectionThreadActivityRepository,
-  type ProjectionThreadActivity,
-  type ProjectionThreadActivityRepositoryShape,
-} from "../../../persistence/Services/ProjectionThreadActivities.ts";
-import { T3TeamToolBroker, type T3TeamToolBinding } from "../../../t3team-toolBroker.ts";
-import { T3TeamToolkitRegistrationLive } from "../../McpHttpServer.ts";
-import * as McpInvocationContext from "../../McpInvocationContext.ts";
+  createTestThread,
+  makeT3TeamV2TestLayer,
+} from "../../../t3team-v2/t3team-v2Orchestrator.testkit.ts";
 import { t3TeamAskUser } from "./t3team-askUser.ts";
-import { T3TeamMcpToolError } from "./tools.ts";
+import { T3TeamAskUserWriterLive } from "./t3team-askUserWriter.ts";
 
-const threadId = ThreadId.make("thread-ask-user-test");
+const TestLayer = Layer.mergeAll(
+  makeT3TeamV2TestLayer("t3team-ask-user"),
+  T3TeamAskUserWriterLive.pipe(Layer.provide(SqlitePersistenceMemory)),
+);
 
-// ── Fakes ────────────────────────────────────────────────────────────────────
-
-interface ActivityRecord {
-  readonly kind: string;
-  readonly summary: string;
-  readonly payload: Record<string, unknown>;
-  readonly threadId: string;
-}
-
-const readActivities = (commands: OrchestrationCommand[]): ActivityRecord[] =>
-  commands.flatMap((command) => {
-    if (command.type !== "thread.activity.append") return [];
-    return [
-      {
-        kind: command.activity.kind,
-        summary: command.activity.summary,
-        payload: command.activity.payload as Record<string, unknown>,
-        threadId: command.threadId,
-      },
-    ];
+/** A thread whose latest run is `running`, as it is while an agent calls MCP tools. */
+const threadWithRunningRun = (threadId: ThreadId) =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    yield* createTestThread(threadId);
+    yield* orchestrator.dispatch({
+      type: "message.dispatch",
+      commandId: CommandId.make(`start:${threadId}`),
+      threadId,
+      messageId: MessageId.make(`start:${threadId}`),
+      text: "Plan the rollout",
+      attachments: [],
+      dispatchMode: { type: "start_immediately" },
+      createdBy: "user",
+      creationSource: "web",
+    });
+    const { runs } = yield* projections.getThreadRecords(threadId, ["runs"]);
+    const run = runs.at(-1) as OrchestrationV2Run;
+    yield* projections.apply({
+      id: EventId.make(`running:${threadId}`),
+      type: "run.updated",
+      threadId,
+      runId: run.id,
+      occurredAt: yield* DateTime.now,
+      payload: { ...run, status: "running", startedAt: yield* DateTime.now },
+    });
+    return run;
   });
 
-/** Read a recorded activity by position, failing loudly if it is missing. */
-const activityAt = (commands: OrchestrationCommand[], index: number): ActivityRecord => {
-  const found = readActivities(commands)[index];
-  if (found === undefined) {
-    throw new Error(
-      `expected an activity at index ${index}, but only ${readActivities(commands).length} were recorded`,
-    );
-  }
-  return found;
-};
+const QUESTION =
+  "Which of the two migration strategies should this thread follow for the billing tables?";
 
-/** Records every dispatch; never answers — the message-mode tool must not suspend. */
-const makeRecordingEngine = (): {
-  readonly shape: OrchestrationEngineShape;
-  readonly commands: OrchestrationCommand[];
-} => {
-  const commands: OrchestrationCommand[] = [];
-  const shape: OrchestrationEngineShape = {
-    readEvents: () => Stream.empty,
-    streamDomainEvents: Stream.empty,
-    readThreadEvents: () => Stream.empty,
-    getThreadReplayStats: () => Effect.die("unused"),
-    dispatch: (command) =>
-      Effect.gen(function* () {
-        commands.push(command);
-        return { sequence: commands.length };
-      }),
-    subscribeDomainEvents: Effect.succeed(Stream.empty),
-    latestSequence: Effect.succeed(0),
-  };
-  return { shape, commands };
-};
-
-const activityRow = (
-  sequence: number,
-  kind: string,
-  payload: Record<string, unknown>,
-): ProjectionThreadActivity =>
-  ({
-    activityId: EventId.make(`activity-${sequence}`),
-    threadId,
-    turnId: null,
-    tone: "info",
-    kind,
-    summary: "fixture",
-    payload,
-    sequence,
-    createdAt: `2026-01-01T00:00:0${sequence}.000Z`,
-  }) satisfies ProjectionThreadActivity;
-
-const makeRepository = (rows: ReadonlyArray<ProjectionThreadActivity>) =>
-  ({
-    upsert: () => Effect.die("unused"),
-    getLatestTaskActivity: () => Effect.die("unused"),
-    listByThreadId: () => Effect.die("unused"),
-    listUserInputLifecycleByThreadId: () => Effect.succeed(rows),
-    deleteByThreadId: () => Effect.die("unused"),
-  }) satisfies ProjectionThreadActivityRepositoryShape;
-
-const provideAskUser = <A, E, R>(
-  effect: Effect.Effect<A, E, R>,
-  engine: OrchestrationEngineShape,
-  repository: ProjectionThreadActivityRepositoryShape,
-) =>
-  effect.pipe(
-    Effect.provideService(OrchestrationEngineService, engine),
-    Effect.provideService(ProjectionThreadActivityRepository, repository),
-  );
-
-// ── Behavior ─────────────────────────────────────────────────────────────────
-
-it.effect("appends a message-mode user-input.requested and returns immediately", () =>
-  Effect.gen(function* () {
-    const fake = makeRecordingEngine();
-    const result = yield* provideAskUser(
-      t3TeamAskUser({ question: "Pick a database", options: ["Postgres", "SQLite"] }, threadId),
-      fake.shape,
-      makeRepository([]),
-    );
-
-    expect(result).toMatchObject({
-      delivered: true,
-      questionId: result.requestId,
-    });
-
-    const activities = readActivities(fake.commands);
-    expect(activities).toHaveLength(1);
-    const requested = activityAt(fake.commands, 0);
-    expect(requested.kind).toBe("user-input.requested");
-    expect(requested.summary).toBe("User input requested");
-    expect(requested.threadId).toBe(threadId);
-    expect(requested.payload.requestId).toBe(result.requestId);
-    expect(requested.payload.responseMode).toBe("message");
-    const questions = (requested.payload.questions ?? []) as Array<Record<string, unknown>>;
-    expect(questions).toEqual([
-      {
-        // id is the requestId — a short identifier, not the question text.
-        id: result.requestId,
-        header: "Question",
-        question: "Pick a database",
-        options: [
-          { label: "Postgres", description: "Postgres" },
-          { label: "SQLite", description: "SQLite" },
-        ],
-        multiSelect: false,
-      },
-    ]);
-
-    // No user-input.resolved: only the user's answer may close the question.
-    expect(activities.map((activity) => activity.kind)).toEqual(["user-input.requested"]);
-  }),
-);
-
-it.effect("maps multiSelect and allowFreeText:false onto the question", () =>
-  Effect.gen(function* () {
-    const fake = makeRecordingEngine();
-    yield* provideAskUser(
-      t3TeamAskUser(
-        {
-          question: "Pick flavors",
-          options: ["choc", "van"],
-          multiSelect: true,
-          allowFreeText: false,
-        },
-        threadId,
-      ),
-      fake.shape,
-      makeRepository([]),
-    );
-
-    const requested = activityAt(fake.commands, 0);
-    const questions = (requested.payload.questions ?? []) as Array<Record<string, unknown>>;
-    expect(questions[0]?.multiSelect).toBe(true);
-    // allowFreeText lived on the payload where nothing consumed it; the
-    // composer reads allowCustomAnswer on the question.
-    expect(questions[0]?.allowCustomAnswer).toBe(false);
-    expect(requested.payload.allowFreeText).toBeUndefined();
-  }),
-);
-
-it.effect("omits allowCustomAnswer when free text stays allowed", () =>
-  Effect.gen(function* () {
-    const fake = makeRecordingEngine();
-    yield* provideAskUser(
-      t3TeamAskUser({ question: "Pick flavors", allowFreeText: true }, threadId),
-      fake.shape,
-      makeRepository([]),
-    );
-    const requested = activityAt(fake.commands, 0);
-    const questions = (requested.payload.questions ?? []) as Array<Record<string, unknown>>;
-    expect(questions[0]?.allowCustomAnswer).toBeUndefined();
-  }),
-);
-
-it.effect("maps header and structured options; warns when a description restates its label", () =>
-  Effect.gen(function* () {
-    const fake = makeRecordingEngine();
-    const result = yield* provideAskUser(
-      t3TeamAskUser(
-        {
-          question: "Pick a direction",
-          header: "CR header",
-          options: [
-            "Drop the header (recommended)",
-            { label: "Keep it", description: "Preserves the observed UX; costs a render pass" },
-            { label: "", description: "blank label is dropped" },
-          ],
-        },
-        threadId,
-      ),
-      fake.shape,
-      makeRepository([]),
-    );
-
-    expect(result.delivered).toBe(true);
-    // The string option has no distinct description, so it warns. The short
-    // context-less question also triggers the missing-context soft warning.
-    expect(result.warnings).toHaveLength(2);
-    expect(result.warnings?.[0]).toContain("Drop the header (recommended)");
-    expect(result.warnings?.[1]).toContain("no context was provided");
-
-    const requested = activityAt(fake.commands, 0);
-    const questions = (requested.payload.questions ?? []) as Array<Record<string, unknown>>;
-    expect(questions[0]?.header).toBe("CR header");
-    expect(questions[0]?.options).toEqual([
-      { label: "Drop the header (recommended)", description: "Drop the header (recommended)" },
-      { label: "Keep it", description: "Preserves the observed UX; costs a render pass" },
-    ]);
-  }),
-);
-
-it.effect(
-  "persists context onto the question payload and suppresses the missing-context warning",
-  () =>
+it.layer(TestLayer)("t3_ask_user on V2", (it) => {
+  it.effect("records a pending message-mode question on the active run and returns", () =>
     Effect.gen(function* () {
-      const fake = makeRecordingEngine();
-      const result = yield* provideAskUser(
-        t3TeamAskUser(
-          {
-            question: "Which of these should we ship first?",
-            context:
-              "  ### Proposed options\n\n1. Ship A — smallest, ships this week\n2. Ship B — user-requested  ",
-          },
-          threadId,
-        ),
-        fake.shape,
-        makeRepository([]),
-      );
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const threadId = ThreadId.make("thread:ask-record");
+      const run = yield* threadWithRunningRun(threadId);
 
-      expect(result.warnings ?? []).toEqual([]);
-
-      const requested = activityAt(fake.commands, 0);
-      const questions = (requested.payload.questions ?? []) as Array<Record<string, unknown>>;
-      // Trimmed: the handler must not persist whitespace-padded context.
-      expect(questions[0]?.context).toBe(
-        "### Proposed options\n\n1. Ship A — smallest, ships this week\n2. Ship B — user-requested",
-      );
-    }),
-);
-
-it.effect("warns when the question is short and no context is provided", () =>
-  Effect.gen(function* () {
-    const fake = makeRecordingEngine();
-    const result = yield* provideAskUser(
-      t3TeamAskUser({ question: "Which option should I take?" }, threadId),
-      fake.shape,
-      makeRepository([]),
-    );
-
-    expect(result.delivered).toBe(true);
-    expect(result.warnings).toEqual([
-      "question references prior content but no context was provided — pass the referenced content in 'context'",
-    ]);
-
-    const requested = activityAt(fake.commands, 0);
-    const questions = (requested.payload.questions ?? []) as Array<Record<string, unknown>>;
-    // No context key on the payload — the panel must not render an empty strip.
-    expect(questions[0]?.context).toBeUndefined();
-  }),
-);
-
-it.effect("keeps whitespace-only context out of the payload and keeps the warning", () =>
-  Effect.gen(function* () {
-    const fake = makeRecordingEngine();
-    const result = yield* provideAskUser(
-      t3TeamAskUser({ question: "Which option should I take?", context: "   " }, threadId),
-      fake.shape,
-      makeRepository([]),
-    );
-
-    expect(result.warnings).toHaveLength(1);
-    expect(result.warnings?.[0]).toContain("no context was provided");
-
-    const requested = activityAt(fake.commands, 0);
-    const questions = (requested.payload.questions ?? []) as Array<Record<string, unknown>>;
-    expect(questions[0]?.context).toBeUndefined();
-  }),
-);
-
-it.effect("does not warn on a long self-contained question without context", () =>
-  Effect.gen(function* () {
-    const fake = makeRecordingEngine();
-    const result = yield* provideAskUser(
-      t3TeamAskUser(
-        {
-          question:
-            "The migration can run per-tenant sequentially over a weekend window with a rollback job; should we proceed with that plan?",
-        },
+      const result = yield* t3TeamAskUser(
+        { question: QUESTION, options: ["Blue-green", "In place"], multiSelect: true },
         threadId,
-      ),
-      fake.shape,
-      makeRepository([]),
-    );
+      );
+      assert.strictEqual(result.delivered, true);
 
-    expect(result.warnings ?? []).toEqual([]);
-  }),
-);
-
-it.effect("rejects an empty question without touching the thread", () =>
-  Effect.gen(function* () {
-    const fake = makeRecordingEngine();
-    const exit = yield* provideAskUser(
-      t3TeamAskUser({ question: "   " }, threadId),
-      fake.shape,
-      makeRepository([]),
-    ).pipe(Effect.exit);
-
-    expect(Exit.isFailure(exit)).toBe(true);
-    if (Exit.isFailure(exit)) {
-      expect(Cause.squash(exit.cause)).toBeInstanceOf(T3TeamMcpToolError);
-    }
-    expect(fake.commands).toEqual([]);
-  }),
-);
-
-// ── One pending question per thread ──────────────────────────────────────────
-
-const pendingMessageMode = (requestId: string): ReadonlyArray<ProjectionThreadActivity> => [
-  activityRow(1, "user-input.requested", {
-    requestId,
-    questions: [{ id: requestId, header: "Question", question: "Old question", options: [] }],
-    responseMode: "message",
-  }),
-];
-
-it.effect("refuses to ask while a message-mode question is pending, naming its requestId", () =>
-  Effect.gen(function* () {
-    const fake = makeRecordingEngine();
-    const exit = yield* provideAskUser(
-      t3TeamAskUser({ question: "New question" }, threadId),
-      fake.shape,
-      makeRepository(pendingMessageMode("request-already-pending")),
-    ).pipe(Effect.exit);
-
-    expect(Exit.isFailure(exit)).toBe(true);
-    if (Exit.isFailure(exit)) {
-      const error = Cause.squash(exit.cause);
-      expect(error).toBeInstanceOf(T3TeamMcpToolError);
-      expect((error as T3TeamMcpToolError).message).toContain("request-already-pending");
-    }
-    expect(fake.commands).toEqual([]);
-  }),
-);
-
-it.effect("allows a new question when provider-native (sync) questions are pending", () =>
-  Effect.gen(function* () {
-    // Sync questions are provider-session-bound: flushed when their turn ends.
-    // A stale one must not block a new durable question.
-    const fake = makeRecordingEngine();
-    const result = yield* provideAskUser(
-      t3TeamAskUser({ question: "New question" }, threadId),
-      fake.shape,
-      makeRepository([
-        activityRow(1, "user-input.requested", {
-          requestId: "request-native",
-          questions: [{ id: "q", header: "Question", question: "Native", options: [] }],
-        }),
-      ]),
-    );
-
-    expect(result.delivered).toBe(true);
-    expect(readActivities(fake.commands)).toHaveLength(1);
-  }),
-);
-
-it.effect("allows a new question once the pending one is resolved", () =>
-  Effect.gen(function* () {
-    const fake = makeRecordingEngine();
-    const result = yield* provideAskUser(
-      t3TeamAskUser({ question: "New question" }, threadId),
-      fake.shape,
-      makeRepository([
-        ...pendingMessageMode("request-answered"),
-        activityRow(2, "user-input.resolved", { requestId: "request-answered", answers: {} }),
-      ]),
-    );
-
-    expect(result.delivered).toBe(true);
-  }),
-);
-
-it.effect("allows a new question after a stale respond-failure cleared the pending one", () =>
-  Effect.gen(function* () {
-    const fake = makeRecordingEngine();
-    const result = yield* provideAskUser(
-      t3TeamAskUser({ question: "New question" }, threadId),
-      fake.shape,
-      makeRepository([
-        ...pendingMessageMode("request-stale"),
-        activityRow(2, "provider.user-input.respond.failed", {
-          requestId: "request-stale",
-          detail: "stale pending user-input request request-stale",
-        }),
-      ]),
-    );
-
-    expect(result.delivered).toBe(true);
-  }),
-);
-
-// ── Wiring through the real MCP registration layer ───────────────────────────
-
-const invocation: McpInvocationContext.McpInvocationScope = {
-  environmentId: EnvironmentId.make("environment-ask-user-test"),
-  threadId,
-  providerSessionId: "provider-session-ask-user-test",
-  providerInstanceId: ProviderInstanceId.make("pack-ask-user-test"),
-  capabilities: new Set(),
-  issuedAt: 1,
-};
-const client = McpSchema.McpServerClient.of({
-  clientId: 1,
-  clientCapabilities: {},
-  clientInfo: { name: "t3team-test", version: "1.0.0" },
-  protocolVersion: "2025-06-18",
-  initializePayload: {
-    protocolVersion: "2025-03-26",
-    capabilities: {},
-    clientInfo: { name: "t3team-ask-user-mcp-test", version: "1.0.0" },
-  },
-  getClient: Effect.die("unused"),
-});
-
-it.effect("routes t3team_ask_user through the MCP toolkit to the ask-user handler", () => {
-  const fake = makeRecordingEngine();
-  const unusedBinding: T3TeamToolBinding = {
-    threadId,
-    listServers: () => [],
-    readResource: ({ uri }) => Effect.succeed({ contents: [{ uri, text: "{}" }] }),
-    callTool: () => Effect.succeed({ content: [{ type: "text" as const, text: "ok" }] }),
-  };
-  const broker = T3TeamToolBroker.of({
-    sendMessage: () => Effect.succeed(undefined),
-    bindSession: ({ threadId: boundThreadId }) =>
-      Effect.succeed(boundThreadId === threadId ? unusedBinding : undefined),
-    bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
-  });
-  const TestLayer = T3TeamToolkitRegistrationLive.pipe(
-    Layer.provideMerge(McpServer.McpServer.layer),
-    Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
-    Layer.provideMerge(Layer.succeed(OrchestrationEngineService, fake.shape)),
-    Layer.provideMerge(Layer.succeed(ProjectionThreadActivityRepository, makeRepository([]))),
+      const records = yield* projections.getThreadRecords(threadId, [
+        "runtimeRequests",
+        "nodes",
+        "turnItems",
+      ]);
+      const request = records.runtimeRequests.find((entry) => entry.id === result.requestId);
+      assert.strictEqual(request?.status, "pending");
+      assert.strictEqual(request?.kind, "user_input");
+      assert.deepStrictEqual(request?.responseCapability, { type: "message" });
+      const node = records.nodes.find((entry) => entry.id === request?.nodeId);
+      assert.strictEqual(node?.parentNodeId, run.rootNodeId);
+      assert.strictEqual(node?.kind, "user_input_request");
+      const item = records.turnItems.find((entry) => entry.type === "user_input_request");
+      assert.ok(item?.type === "user_input_request");
+      assert.strictEqual(item.requestId, result.requestId);
+      assert.strictEqual(item.responseMode, "message");
+      assert.strictEqual(item.runId, run.id);
+      assert.strictEqual(item.questions[0]?.id, result.questionId);
+      assert.strictEqual(item.questions[0]?.multiSelect, true);
+    }),
   );
 
-  return Effect.gen(function* () {
-    const server = yield* McpServer.McpServer;
-    const result = yield* server.callTool({
-      name: "t3team_ask_user",
-      arguments: { question: "Continue?", options: ["Yes", "No"] },
-    });
+  it.effect("refuses a second question while one is pending, naming its requestId", () =>
+    Effect.gen(function* () {
+      const threadId = ThreadId.make("thread:ask-pending");
+      yield* threadWithRunningRun(threadId);
+      const first = yield* t3TeamAskUser({ question: QUESTION }, threadId);
+      const second = yield* Effect.flip(t3TeamAskUser({ question: QUESTION }, threadId));
+      assert.include(second.message, `requestId: ${first.requestId}`);
+    }),
+  );
 
-    expect(result.isError).toBe(false);
-    const structured = result.structuredContent as Record<string, unknown>;
-    expect(structured).toMatchObject({ delivered: true });
-    expect(structured.requestId).toBe(String(structured.questionId));
-    const activities = readActivities(fake.commands);
-    expect(activities.map((activity) => activity.kind)).toEqual(["user-input.requested"]);
-    expect(activities[0]?.payload.responseMode).toBe("message");
-  }).pipe(
-    Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
-    Effect.provideService(McpSchema.McpServerClient, client),
-    Effect.provide(TestLayer),
+  it.effect("needs an active turn and a non-empty question", () =>
+    Effect.gen(function* () {
+      const threadId = ThreadId.make("thread:ask-idle");
+      yield* createTestThread(threadId);
+      const idle = yield* Effect.flip(t3TeamAskUser({ question: QUESTION }, threadId));
+      assert.include(idle.message, "only be called during an active turn");
+      const empty = yield* Effect.flip(t3TeamAskUser({ question: "  " }, threadId));
+      assert.include(empty.message, "non-empty 'question'");
+    }),
+  );
+
+  it.effect("delivers a multi-select answer joined with a bullet and frees the slot", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const threadId = ThreadId.make("thread:ask-answer");
+      yield* threadWithRunningRun(threadId);
+      const asked = yield* t3TeamAskUser(
+        { question: QUESTION, options: ["Red, bold", "Blue"], multiSelect: true },
+        threadId,
+      );
+
+      yield* orchestrator.dispatch({
+        type: "runtime-request.respond",
+        commandId: CommandId.make("answer:ask"),
+        threadId,
+        requestId: asked.requestId,
+        answers: { [asked.questionId]: ["Red, bold", "Blue"] },
+      });
+
+      const records = yield* projections.getThreadRecords(threadId, [
+        "runtimeRequests",
+        "messages",
+      ]);
+      const request = records.runtimeRequests.find((entry) => entry.id === asked.requestId);
+      assert.strictEqual(request?.status, "resolved");
+      const answer = records.messages.find((message) => message.text.endsWith("Red, bold • Blue"));
+      assert.strictEqual(answer?.text, `${QUESTION}\nRed, bold • Blue`);
+      // The slot is free again for the next question.
+      const next = yield* t3TeamAskUser({ question: QUESTION }, threadId);
+      assert.notStrictEqual(next.requestId, asked.requestId);
+    }),
   );
 });

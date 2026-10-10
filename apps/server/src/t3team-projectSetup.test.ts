@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 
 import {
   createT3TeamProjectSetupContentHash,
@@ -12,6 +13,14 @@ import {
   T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
   T3TEAM_PROJECT_PROFILE_MANIFEST_PATH,
 } from "./t3team-projectSetup.js";
+import { renderPreviousAgentsMdStartChild } from "./t3team-projectSetupAgentsPreviousStartChild.ts";
+import {
+  resolveT3TeamProjectSetupProfile,
+  T3TEAM_PROJECT_CONTEXT_ROOT,
+  T3TEAM_PROJECT_RECIPES_ROOT,
+  T3TEAM_PROJECT_STATUS_SKILL_PATH,
+  T3TEAM_PROJECT_TEMPLATES_ROOT,
+} from "./t3team-projectSetupShared.ts";
 
 describe("resolveT3TeamProjectSetupProfileId", () => {
   it("preserves unknown ids while surfacing fallback preferences", () => {
@@ -24,7 +33,9 @@ describe("renderT3TeamProjectSetupFiles", () => {
     const files = renderT3TeamProjectSetupFiles();
     const agents = files.find((file) => file.relativePath === T3TEAM_PROJECT_AGENTS_PATH);
     const claude = files.find((file) => file.relativePath === T3TEAM_PROJECT_CLAUDE_PATH);
-    const contextReadme = files.find((file) => file.relativePath === ".t3team/context/README.md");
+    const contextReadme = files.find(
+      (file) => file.relativePath === `${T3TEAM_PROJECT_CONTEXT_ROOT}/README.md`,
+    );
     const manifest = files.find(
       (file) => file.relativePath === T3TEAM_PROJECT_PROFILE_MANIFEST_PATH,
     );
@@ -32,28 +43,35 @@ describe("renderT3TeamProjectSetupFiles", () => {
       (file) => file.relativePath === T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
     );
     const statusSkill = files.find(
-      (file) => file.relativePath === ".t3team/skills/status-and-context-summary/SKILL.md",
+      (file) => file.relativePath === T3TEAM_PROJECT_STATUS_SKILL_PATH,
     );
     const starterRecipeModule = files.find(
-      (file) => file.relativePath === ".t3team/recipes/explain-selected-work/recipe.ts",
+      (file) =>
+        file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/explain-selected-work/recipe.ts`,
     );
     const starterRecipePrompt = files.find(
-      (file) => file.relativePath === ".t3team/recipes/explain-selected-work/prompt.md",
+      (file) =>
+        file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/explain-selected-work/prompt.md`,
     );
     const manageRecipeModule = files.find(
-      (file) => file.relativePath === ".t3team/recipes/manage-project-recipes/recipe.ts",
+      (file) =>
+        file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/manage-project-recipes/recipe.ts`,
     );
     const manageRecipePrompt = files.find(
-      (file) => file.relativePath === ".t3team/recipes/manage-project-recipes/prompt.md",
+      (file) =>
+        file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/manage-project-recipes/prompt.md`,
     );
     const manageRecipeWorkflow = files.find(
-      (file) => file.relativePath === ".t3team/recipes/manage-project-recipes/workflow.ts",
+      (file) =>
+        file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/manage-project-recipes/workflow.ts`,
     );
     const skillTemplate = files.find(
-      (file) => file.relativePath === ".t3team/templates/skills/repeatable-workflow/SKILL.md",
+      (file) =>
+        file.relativePath ===
+        `${T3TEAM_PROJECT_TEMPLATES_ROOT}/skills/repeatable-workflow/SKILL.md`,
     );
     const recipesAuthoringGuide = files.find(
-      (file) => file.relativePath === ".t3team/recipes/AUTHORING.md",
+      (file) => file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/AUTHORING.md`,
     );
 
     expect(agents?.contents).toContain("Use plain, non-technical language");
@@ -62,7 +80,7 @@ describe("renderT3TeamProjectSetupFiles", () => {
     expect(agents?.contents).toContain(T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH);
     expect(agents?.contents).toContain("prefer a read-only subagent");
     expect(agents?.contents).toContain(
-      "Save reusable work as a project recipe (under `.t3team/recipes/`) in the background",
+      `Save reusable work as a project recipe (under \`${PROJECT_STATE_DIR}/recipes/\`) in the background`,
     );
     expect(agents?.contents).toContain("do it in a separate thread scoped to the right repository");
     expect(agents?.contents).toContain("surface that thread as a link");
@@ -92,6 +110,7 @@ describe("renderT3TeamProjectSetupFiles", () => {
     expect(entrypoint?.contents).toContain("pending-sync");
     expect(statusSkill?.contents).toContain("name: t3team-status-and-context-summary");
     expect(statusSkill?.contents).toContain("Do not narrate file exploration");
+    expect(statusSkill?.contents).toContain(`under ${PROJECT_STATE_DIR}/context/`);
     // A prompt-only starter: its default action is the prompt.md beside it.
     expect(starterRecipeModule?.contents).toContain("import { definePrompt, defineRecipe }");
     expect(starterRecipeModule?.contents).toContain('defaultAction: definePrompt("./prompt.md")');
@@ -99,6 +118,7 @@ describe("renderT3TeamProjectSetupFiles", () => {
     expect(starterRecipePrompt?.contents).toContain("Explain this simply");
     expect(manageRecipeModule?.contents).toContain('defaultAction: definePrompt("./prompt.md")');
     expect(manageRecipePrompt?.contents).toContain("Create or edit a t3team recipe");
+    expect(manageRecipePrompt?.contents).toContain(`${PROJECT_STATE_DIR}/recipes/<recipe-id>/`);
     expect(manageRecipeWorkflow).toBeUndefined();
     expect(skillTemplate?.contents).toContain("use a read-only subagent");
     expect(recipesAuthoringGuide?.writeMode).toBe("if-missing");
@@ -212,6 +232,26 @@ describe("readPersistedT3TeamProjectSetupState", () => {
         "AGENTS.md": "sha256:known",
         "CLAUDE.md": "sha256:known-claude",
       },
+    });
+  });
+});
+
+describe("AGENTS.md child-session guidance", () => {
+  it("teaches delegate_task and refreshes the managed start_child version", () => {
+    const agents = renderT3TeamProjectSetupFiles().find(
+      (file) => file.relativePath === T3TEAM_PROJECT_AGENTS_PATH,
+    );
+    expect(agents?.contents).toContain("`delegate_task`");
+    expect(agents?.contents).toContain('`{ isolation: "worktree" }`');
+    expect(agents?.contents).not.toContain("start_child");
+    const { profile } = resolveT3TeamProjectSetupProfile({});
+    const startChildVersion = renderPreviousAgentsMdStartChild(profile);
+    expect(startChildVersion).toContain("t3team.thread.start_child");
+    expect(
+      resolveT3TeamProjectSetupWriteDecision({ file: agents!, currentContents: startChildVersion }),
+    ).toEqual({
+      shouldWrite: true,
+      nextManagedHash: createT3TeamProjectSetupContentHash(agents!.contents),
     });
   });
 });

@@ -24,7 +24,7 @@ import * as Layer from "effect/Layer";
 
 import type { T3TeamMessageWorkflowAuthor } from "@t3tools/contracts";
 
-import type { AskAffordance } from "@t3team/sdk";
+import type { AskAffordance, WorkflowRunHost } from "@t3team/sdk";
 import { makeWorkflowTurnRetryFiberMap } from "./t3team-workflowTurnRetryFibers.ts";
 
 /** Which ask kind a thread is parked on — selects the event that resolves it. */
@@ -51,28 +51,35 @@ export interface WorkflowPendingAsk {
   /** Settle an in-memory waiter when its owning run is cancelled. */
   readonly cancelLive?: () => void;
   /**
-   * Present when this step's turn was INTERRUPTED by a host restart and the ask was rehydrated
-   * from the `workflow_runs` row (`turn_retries`, migration 052) — never set by the live broker.
+   * Present when the ask was rehydrated from the `workflow_runs` row after a restart
+   * (`turn_retries`, migration 052) or re-armed by a re-drive — never set by the live broker.
    * It carries the journaled re-drive count so a no-text settle re-drives the step instead of
    * failing the run, up to the bounded budget (see t3team-workflowEngineTurnRetry.ts). A live
    * step that simply says nothing still fails the run.
    */
   readonly turnRetries?: number;
   /**
-   * Set when the host has ARMED a re-drive of this step (t3team-workflowEngineTurnRetry.ts) and the
-   * re-driven turn has not started yet. Until a session write with a live turn lands, idle/dead
-   * session writes on the thread are the OLD turn's tail — the session-level transient retry
-   * (`t3team-threadTransientTurnRetry.ts`) re-writes the dead session with its "Retrying (n/N)"
-   * reason ~300 ms after the turn ends — and must not be read as another failed turn, or every
-   * such write would burn one re-drive of the budget (GHE #403 review). Hot-index only.
+   * The prompt message of the CURRENT attempt of a `thread.turn` step: the run it starts or
+   * queues is the run whose terminal status settles the step (t3team-workflowTurnRun.ts). Set by
+   * the broker and by a re-drive BEFORE they dispatch, so a check that races the dispatch waits
+   * instead of declaring the prompt lost. Hot-index only: a rehydrated ask recovers it from the
+   * thread by the prompt's workflow author stamp (t3team-workflowTurnPrompt.ts).
    */
-  readonly redriveArmed?: boolean;
+  readonly promptMessageId?: string;
+  /**
+   * Set while a re-drive of this step is scheduled (t3team-workflowEngineTurnRetry.ts): the dead
+   * run it answers stays dead until the re-drive posts a new prompt, so checks in between must
+   * not judge it again (each would burn another attempt of the budget). Hot-index only.
+   */
+  readonly redriveScheduled?: boolean;
 }
 
 export interface WorkflowRegisteredRun {
   /** Append the resolved reply for `correlationId` and replay the run to completion or its
    * next suspension. Created by the launch so it carries the ref + options. */
   readonly resume: (correlationId: string, reply: unknown) => Promise<void>;
+  /** The queued wake signal delivery uses (`WorkflowRunHost.offer`); optional for test doubles. */
+  readonly offer?: WorkflowRunHost["offer"];
   /** Prevent a detached controller from publishing a later terminal result. */
   readonly cancel: () => void;
   /**
@@ -99,7 +106,7 @@ export interface T3TeamWorkflowEngineRegistryShape {
   readonly registerChildThread: (runId: string, threadId: string) => void;
   readonly childThreadsForRun: (runId: string) => ReadonlyArray<string>;
   /** The launching thread of the run that spawned `threadId`, when it is a live run's child.
-   * Lets `start_child` parent a session spawned from inside a workflow child thread under the
+   * Lets `delegate_task` place a child spawned from inside a workflow child thread under the
    * (visible) launching thread instead of a hidden ephemeral workflow thread. */
   readonly launchThreadForChildThread: (threadId: string) => string | undefined;
   /** Record the fiber an armed re-drive is waiting on (GHE #411 §3) — interrupted by a pause or
@@ -114,10 +121,10 @@ export interface T3TeamWorkflowEngineRegistryShape {
   readonly setPending: (threadId: string, pending: WorkflowPendingAsk) => void;
   /** Read and remove the pending ask for a thread (first matching reply wins). */
   readonly takePending: (threadId: string) => WorkflowPendingAsk | undefined;
-  /** Read the pending ask for a thread WITHOUT removing it. The reactor uses this to decide
-   * whether a streaming assistant delta is worth buffering (only while a turn is awaited on the
-   * thread); it must not consume the ask, which is settled by the matching `streaming: false`
-   * event. */
+  /** Every thread with a pending ask (the reactor's durable sweep walks them). */
+  readonly pendingThreadIds: () => ReadonlyArray<string>;
+  /** Read the pending ask for a thread WITHOUT removing it — the reactor's checks peek, and only
+   * the settle that answers the ask takes it. */
   readonly peekPending: (threadId: string) => WorkflowPendingAsk | undefined;
 }
 
@@ -200,6 +207,7 @@ export function makeWorkflowEngineRegistry(): T3TeamWorkflowEngineRegistryShape 
       return pending;
     },
     peekPending: (threadId) => pendingByThread.get(threadId),
+    pendingThreadIds: () => [...pendingByThread.keys()],
   };
 }
 

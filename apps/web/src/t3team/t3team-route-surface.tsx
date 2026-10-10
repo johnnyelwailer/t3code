@@ -6,13 +6,12 @@ import { App as T3TeamApp } from "~/t3team/t3team-App";
 import { T3TeamAddLocalWorkspaceProvider } from "~/t3team/components/t3team-addLocalWorkspaceContext";
 import { openCommandPalette } from "~/commandPaletteBus";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { APP_DISPLAY_NAME } from "~/t3team/t3team-branding";
+import { useT3TeamAppDisplayName } from "~/t3team/t3team-appBrandName";
 import { recordT3TeamThreadDebug } from "~/t3team/chat/t3team-threadDebug";
 import {
   parseT3TeamRouteSearch,
   parseT3TeamViewFromPath,
   T3TEAM_CREATE_PATH,
-  type T3TeamRouteSearch,
 } from "~/t3team/t3team-routeState";
 import { readActiveThreadIdFromView } from "~/t3team/t3team-types";
 import { Route as RootRoute } from "~/routes/__root";
@@ -20,30 +19,23 @@ import { Route as RootRoute } from "~/routes/__root";
 import "~/t3team/t3team-index.css";
 import { readProjectIdFromView } from "~/t3team/t3team-types";
 import { resolveWsBaseUrl } from "~/t3team/t3team-route-surface-wsUrl";
-
-function buildRouteSearch(
-  search: T3TeamRouteSearch,
-  input: {
-    projectView?: T3TeamRouteSearch["projectView"];
-    chatThreadId?: string | null;
-  } = {},
-): T3TeamRouteSearch {
-  const { chatThreadId: _ignoredChatThreadId, setup: _ignoredSetup, ...rest } = search;
-  const projectView = input.projectView ?? search.projectView;
-
-  return {
-    ...rest,
-    ...(projectView ? { projectView } : {}),
-    ...(input.chatThreadId ? { chatThreadId: input.chatThreadId } : {}),
-  };
-}
+import { isTeamShellEnvironment } from "~/t3team/t3team-upstreamRouteBridge";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { readThreadShells } from "~/state/entities";
+import { usePrimaryEnvironmentId } from "~/state/environments";
+import { buildThreadRouteParams } from "~/threadRoutes";
+import { buildRouteSearch } from "~/t3team/t3team-buildRouteSearch";
+import { useCreateProjectRequestNavigation } from "~/t3team/hooks/t3team-useCreateProjectRequestNavigation";
 
 export function T3TeamRouteSurface() {
+  const appName = useT3TeamAppDisplayName();
   const [backend] = useState(() => createT3Backend(resolveWsBaseUrl()));
   const { authGateState } = RootRoute.useRouteContext();
   const authenticated =
     authGateState.status === "authenticated" || authGateState.status === "hosted-static";
   const navigate = useNavigate();
+  useCreateProjectRequestNavigation();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const search = useSearch({
     strict: false,
@@ -98,7 +90,7 @@ export function T3TeamRouteSurface() {
         <div className="w-full max-w-xl rounded-lg border border-border/70 bg-card/30 p-8 shadow-sm/5">
           <h2 className="text-xl font-semibold">Authentication required</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            This environment requires pairing before opening {APP_DISPLAY_NAME} threads.
+            This environment requires pairing before opening {appName} threads.
           </p>
           <div className="mt-6 flex items-center gap-2">
             <button
@@ -156,6 +148,15 @@ export function T3TeamRouteSurface() {
             });
           }}
           onOpenThread={(projectId, threadId) => {
+            // The Team thread view talks to the primary server only; elsewhere, upstream's view.
+            const shell = readThreadShells().find((candidate) => candidate.id === threadId);
+            if (shell && !isTeamShellEnvironment(shell.environmentId, primaryEnvironmentId)) {
+              void navigate({
+                to: "/$environmentId/$threadId",
+                params: buildThreadRouteParams(scopeThreadRef(shell.environmentId, shell.id)),
+              });
+              return;
+            }
             void navigate({
               to: "/t3team/projects/$projectId/threads/$threadId",
               params: { projectId, threadId },
@@ -175,10 +176,12 @@ export function T3TeamRouteSurface() {
             });
           }}
           onProjectCreated={(project: ProjectShellProject) => {
+            // Replace, not push: Back must not return to a form for a project that now exists.
             void navigate({
               to: project.source.provider === "local" ? "/t3team" : "/t3team/projects/$projectId",
               ...(project.source.provider === "local" ? {} : { params: { projectId: project.id } }),
               search: buildRouteSearch(search),
+              replace: true,
             });
           }}
         />

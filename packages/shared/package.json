@@ -3,6 +3,14 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./orchestrationV2ThreadError": {
+      "types": "./src/orchestrationV2ThreadError.ts",
+      "import": "./src/orchestrationV2ThreadError.ts"
+    },
+    "./t3team-manualContinuation": {
+      "types": "./src/t3team-manualContinuation.ts",
+      "import": "./src/t3team-manualContinuation.ts"
+    },
     "./t3team-githubActivity": {
       "types": "./src/t3team-githubActivity.ts",
       "import": "./src/t3team-githubActivity.ts"
@@ -15,13 +23,17 @@
       "types": "./src/t3team-threadRunStatus.ts",
       "import": "./src/t3team-threadRunStatus.ts"
     },
+    "./t3team-detachedSurface": {
+      "types": "./src/t3team-detachedSurface.ts",
+      "import": "./src/t3team-detachedSurface.ts"
+    },
     "./t3team-threadAwaitingParent": {
       "types": "./src/t3team-threadAwaitingParent.ts",
       "import": "./src/t3team-threadAwaitingParent.ts"
     },
-    "./t3team-childWaitFacts": {
-      "types": "./src/t3team-childWaitFacts.ts",
-      "import": "./src/t3team-childWaitFacts.ts"
+    "./t3team-workflowOutputData": {
+      "types": "./src/t3team-workflowOutputData.ts",
+      "import": "./src/t3team-workflowOutputData.ts"
     },
     "./t3team-workflowOutputText": {
       "types": "./src/t3team-workflowOutputText.ts",
@@ -83,9 +95,17 @@
       "types": "./src/observability.ts",
       "import": "./src/observability.ts"
     },
+    "./otelEnvironment": {
+      "types": "./src/otelEnvironment.ts",
+      "import": "./src/otelEnvironment.ts"
+    },
     "./httpObservability": {
       "types": "./src/httpObservability.ts",
       "import": "./src/httpObservability.ts"
+    },
+    "./editor": {
+      "types": "./src/editor.ts",
+      "import": "./src/editor.ts"
     },
     "./shell": {
       "types": "./src/shell.ts",
@@ -107,6 +127,10 @@
       "types": "./src/KeyedCoalescingWorker.ts",
       "import": "./src/KeyedCoalescingWorker.ts"
     },
+    "./KeyedLock": {
+      "types": "./src/KeyedLock.ts",
+      "import": "./src/KeyedLock.ts"
+    },
     "./schemaJson": {
       "types": "./src/schemaJson.ts",
       "import": "./src/schemaJson.ts"
@@ -118,6 +142,14 @@
     "./toolActivity": {
       "types": "./src/toolActivity.ts",
       "import": "./src/toolActivity.ts"
+    },
+    "./toolOutput": {
+      "types": "./src/toolOutput.ts",
+      "import": "./src/toolOutput.ts"
+    },
+    "./htmlRender": {
+      "types": "./src/htmlRender.ts",
+      "import": "./src/htmlRender.ts"
     },
     "./favicon": {
       "types": "./src/favicon.ts",
@@ -147,10 +179,6 @@
       "types": "./src/projectSettings.ts",
       "import": "./src/projectSettings.ts"
     },
-    "./threadEnvMode": {
-      "types": "./src/threadEnvMode.ts",
-      "import": "./src/threadEnvMode.ts"
-    },
     "./t3ProjectFile": {
       "types": "./src/t3ProjectFile.ts",
       "import": "./src/t3ProjectFile.ts"
@@ -170,6 +198,10 @@
     "./dpop": {
       "types": "./src/dpop.ts",
       "import": "./src/dpop.ts"
+    },
+    "./desktopBootstrapToken": {
+      "types": "./src/desktopBootstrapToken.ts",
+      "import": "./src/desktopBootstrapToken.ts"
     },
     "./dpopCommon": {
       "types": "./src/dpopCommon.ts",
@@ -206,6 +238,10 @@
     "./connectAuth": {
       "types": "./src/connectAuth.ts",
       "import": "./src/connectAuth.ts"
+    },
+    "./symlink": {
+      "types": "./src/symlink.ts",
+      "import": "./src/symlink.ts"
     },
     "./path": {
       "types": "./src/path.ts",
@@ -359,6 +395,22 @@
       "types": "./src/nodeSqliteClient.ts",
       "import": "./src/nodeSqliteClient.ts"
     },
+    "./orchestrationV2Timeline": {
+      "types": "./src/orchestrationV2Timeline.ts",
+      "import": "./src/orchestrationV2Timeline.ts"
+    },
+    "./t3McpToolPresentation": {
+      "types": "./src/t3McpToolPresentation.ts",
+      "import": "./src/t3McpToolPresentation.ts"
+    },
+    "./Array": {
+      "types": "./src/Array.ts",
+      "import": "./src/Array.ts"
+    },
+    "./orchestrationV2PendingBackgroundWork": {
+      "types": "./src/orchestrationV2PendingBackgroundWork.ts",
+      "import": "./src/orchestrationV2PendingBackgroundWork.ts"
+    },
     "./hostClassification": {
       "types": "./src/hostClassification.ts",
       "import": "./src/hostClassification.ts"
@@ -370,11 +422,27 @@
     "./cliRelease": {
       "types": "./src/cliRelease.ts",
       "import": "./src/cliRelease.ts"
+    },
+    "./gitPatchPath": {
+      "types": "./src/gitPatchPath.ts",
+      "import": "./src/gitPatchPath.ts"
+    },
+    "./providerAuthReturnUrl": {
+      "types": "./src/providerAuthReturnUrl.ts",
+      "import": "./src/providerAuthReturnUrl.ts"
+    },
+    "./codexAuthCallback": {
+      "types": "./src/codexAuthCallback.ts",
+      "import": "./src/codexAuthCallback.ts"
+    },
+    "./codexAuthHandoff": {
+      "types": "./src/codexAuthHandoff.ts",
+      "import": "./src/codexAuthHandoff.ts"
     }
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vp test run"
+    "test": "vp test run --config ../../vite.config.ts --dir ."
   },
   "dependencies": {
     "@noble/curves": "catalog:",

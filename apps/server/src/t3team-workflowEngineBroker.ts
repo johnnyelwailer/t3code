@@ -1,16 +1,18 @@
 /**
- * The orchestration-backed {@link MessageBroker} for the workflow engine (Epic 25 §Host
- * wiring). Each thread verb fired by a workflow body maps onto one orchestration command:
+ * The host-backed {@link MessageBroker} for the workflow engine (Epic 25 §Host wiring). Each
+ * thread verb fired by a workflow body maps onto one workflow-host operation
+ * (`t3team-workflowHost.ts`):
  *
- *   • thread.create  → dispatch(thread.create)        — make the spawned thread.
- *   • thread.turn    → dispatch(thread.turn.start)     — start an agent turn; record a pending
- *                       ask so the reactor can resolve it when the turn completes.
- *   • thread.message → dispatch(thread.message.upsert) — post a one-way message (no turn).
- *   • user.input     → dispatch(thread.message.upsert, role system) — request user input; record
- *                       a pending ask resolved when the user replies.
+ *   • thread.create  → host.createThread — make the spawned thread (linked under the launch thread).
+ *   • thread.turn    → host.startTurn    — queue an agent turn; record a pending ask the reactor
+ *                       resolves when that turn's run ends.
+ *   • thread.message → host.postMessage  — post a one-way note (user-facing), or queue a turn
+ *                       carrying it (agent-facing: an agent only reads what a turn delivers).
+ *   • user.input     → host.postMessage  — post the question (a decision card when it has
+ *                       choices); record a pending ask resolved when the user replies.
  *
  * The broker is created per run, so it carries the run's id, project, and model selection.
- * Dispatches are chained on a single tail promise: `thread.create` is fired floating by the
+ * Host calls are chained on a single tail promise: `thread.create` is fired floating by the
  * SDK's one-way `sendOneWay`, so chaining guarantees the create lands before the `thread.turn`
  * it precedes (turn-on-a-missing-thread would otherwise race).
  */
@@ -23,11 +25,13 @@ import {
   type WorkflowEngineBrokerDeps,
 } from "./t3team-workflowEngineBrokerTypes.ts";
 import { workflowStepDetailSnippet } from "./t3team-workflowEngineStepActivities.ts";
-import { dispatchWorkflowChild } from "./t3team-workflowChildPlacement.ts";
+import { createWorkflowChild } from "./t3team-workflowChildPlacement.ts";
 import {
   resolveWorkflowChildModel,
   resolveWorkflowModelCascade,
 } from "./t3team-workflowChildModel.ts";
+import { handleBrokerLaunchVerb, isBrokerLaunchVerb } from "./t3team-workflowEngineBrokerLaunch.ts";
+import { getChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
 import { toWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
 import { createWorkflowLiveSettlement } from "./t3team-workflowLiveSettlement.ts";
 import { handleBrokerAskVerb } from "./t3team-workflowEngineBrokerAsk.ts";
@@ -127,22 +131,37 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
       if (deps.registry.childThreadsForRun(deps.runId).includes(p.threadId)) return;
       // Resolve BEFORE registering/dispatching: enqueueOneWay swallows dispatch errors, so an
       // invalid provider/model must reject this send() while the SDK still observes it.
-      // Stay SYNCHRONOUS when there is nothing to resolve: awaiting unconditionally would yield a
+      // Stay SYNCHRONOUS in catalog-free harnesses: awaiting unconditionally would yield a
       // microtask before `setPending`, and callers observe the pending entry right after `send`.
       const modelSelection =
-        p.model === undefined && p.effort === undefined
+        p.model === undefined && p.effort === undefined && getChildProviderCatalog() === undefined
           ? deps.modelSelection
-          : await resolveWorkflowChildModel(deps.modelSelection, p.model, p.effort);
+          : await resolveWorkflowChildModel(
+              deps.modelSelection,
+              p.model,
+              p.effort,
+              p.modelIsDefault,
+            );
       step(correlationId, kind, "completed", p.name ?? "Spawn thread", p.threadId);
-      await runPrimitive(() => enqueueOneWay(() => dispatchWorkflowChild(deps, p, modelSelection)));
+      await runPrimitive(() => enqueueOneWay(() => createWorkflowChild(deps, p, modelSelection)));
       return;
     }
-    // Signal-source verbs (GHE #332): `signal.register` (one-way binding FACT) and `signal.wait`
-    // (event park — live-drains the durable inbox or records `watching` and suspends out of band).
-    // Gated on the kind so non-signal verbs stay on the synchronous prefix the ask verb relies
-    // on (an unconditional await here would yield a microtask before `setPending`).
-    if (sendCtx.kind === "signal.register" || sendCtx.kind === "signal.wait") {
+    // Signal-source verbs (GHE #332): `signal.register` (one-way binding FACT), `signal.wait` and
+    // `signal.waitAny` (event park — live-drains the durable inbox or records `watching` and
+    // suspends out of band). Gated on the kind so non-signal verbs stay on the synchronous prefix
+    // the ask verb relies on (an unconditional await here would yield a microtask before
+    // `setPending`).
+    if (
+      sendCtx.kind === "signal.register" ||
+      sendCtx.kind === "signal.wait" ||
+      sendCtx.kind === "signal.waitAny"
+    ) {
       if (await handleBrokerSignalVerb(core, sendCtx)) return;
+    }
+    // Gated on the kind, like the signal verbs, so the ask verb keeps its synchronous prefix.
+    if (isBrokerLaunchVerb(kind)) {
+      await handleBrokerLaunchVerb(core, sendCtx);
+      return;
     }
     if (await handleBrokerAskVerb(core, sendCtx)) return;
     await handleBrokerNotifyVerb(core, sendCtx);

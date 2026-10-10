@@ -7,7 +7,7 @@
  * silently removes every t3team AND every preview tool from the agent's reach.
  *
  * It has now regressed twice, the same way both times:
- *   - `t3team_recipe_list` — caught before shipping.
+ *   - `t3_recipe_list` — caught before shipping.
  *   - `t3team_task_list` (#209) — shipped. Every Nexplore agent lost all 22 t3team_* and all 14
  *     preview_* tools, silently, for a day. This test was RED on main and the PR merged anyway.
  *
@@ -20,7 +20,7 @@
  * same `tools/list` response — it was collateral damage in #209 while having no guard of its own.
  */
 import { describe, expect, it } from "vite-plus/test";
-import * as Tool from "effect/unstable/ai/Tool";
+import * as Tool from "effect/ai/Tool";
 
 import { PreviewToolkit } from "../preview/tools.ts";
 import { T3TeamShowWidgetTool, T3TeamToolkit } from "./tools.ts";
@@ -36,29 +36,23 @@ const toolkits = [
   { label: "preview", tools: toolkitTools(PreviewToolkit), atLeast: 10 },
 ];
 
-for (const { label, tools, atLeast } of toolkits) {
-  describe(`${label} MCP tool input schemas`, () => {
-    it("exports tools to check", () => {
-      expect(tools.length).toBeGreaterThan(atLeast);
-    });
-
-    for (const tool of tools) {
-      const name = (tool as { readonly name?: unknown }).name ?? "anonymous";
-      it(`${name} advertises an object inputSchema`, () => {
-        const schema = Tool.getJsonSchema(tool as never) as Record<string, unknown>;
-        // Top level only: `anyOf` INSIDE a property is just how an optional union renders and is fine.
-        expect(
-          schema.anyOf,
-          `${name} inputSchema must not be a top-level union`,
-        ).toBeUndefined();
-        expect(schema.type).toBe("object");
-      });
-    }
+describe.each(toolkits)("$label MCP tool input schemas", ({ tools, atLeast }) => {
+  it("exports tools to check", () => {
+    expect(tools.length).toBeGreaterThan(atLeast);
   });
-}
+
+  it.each(
+    tools.map((tool) => [String((tool as { readonly name?: unknown }).name ?? "anonymous"), tool]),
+  )("%s advertises an object inputSchema", (name, tool) => {
+    const schema = Tool.getJsonSchema(tool as never) as Record<string, unknown>;
+    // Top level only: `anyOf` INSIDE a property is just how an optional union renders and is fine.
+    expect(schema.anyOf, `${name} inputSchema must not be a top-level union`).toBeUndefined();
+    expect(schema.type).toBe("object");
+  });
+});
 
 /**
- * The `t3team_show_widget` model-facing contract must stay in lockstep with the documented
+ * The `t3_show_widget` model-facing contract must stay in lockstep with the documented
  * guidance (packages/project-context/src/t3teamWidgetGuidance.ts).
  *
  * This regressed silently once: the guidance constant and the catalog snapshot both carried the
@@ -69,7 +63,7 @@ for (const { label, tools, atLeast } of toolkits) {
  * surface drifted with every CI run green. These assertions check the LIVE JSON schema the
  * MCP server advertises.
  */
-describe("t3team_show_widget model-facing contract", () => {
+describe("t3_show_widget model-facing contract", () => {
   const tool = T3TeamShowWidgetTool;
   const schema = Tool.getJsonSchema(tool as never) as Record<string, unknown>;
   const schemaText = JSON.stringify(schema);

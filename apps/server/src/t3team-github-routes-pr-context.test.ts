@@ -7,14 +7,13 @@ import * as Layer from "effect/Layer";
 import { PullRequestOperationError } from "@t3tools/contracts";
 import type {
   OrchestrationProjectShell,
-  OrchestrationShellSnapshot,
   PullRequestActivity,
   PullRequestDetail,
   PullRequestDiffResult,
 } from "@t3tools/contracts";
 
 import { loadPullRequestContext } from "./t3team-github-routes-pr-context.ts";
-import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as ProjectService from "./project/ProjectService.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import { PullRequestProviderRegistry } from "./pullRequest/PullRequestProviderRegistry.ts";
 
@@ -38,16 +37,10 @@ const project = {
   updatedAt: "2026-01-01T00:00:00.000Z",
 } as unknown as OrchestrationProjectShell;
 
-const shellSnapshot = {
-  snapshotSequence: 1,
-  projects: [project],
-  threads: [],
-  updatedAt: "2026-01-01T00:00:00.000Z",
-} as unknown as OrchestrationShellSnapshot;
+const projectsLayer = (projects: ReadonlyArray<OrchestrationProjectShell>) =>
+  Layer.mock(ProjectService.ProjectService)({ listShells: () => Effect.succeed(projects) });
 
-const projectionLayer = Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
-  getShellSnapshot: () => Effect.succeed(shellSnapshot),
-} as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]);
+const projectionLayer = projectsLayer([project]);
 
 const detail: PullRequestDetail = {
   provider: "github",
@@ -167,6 +160,8 @@ function pullRequestServiceLayer(
   const service = PullRequestService.PullRequestService.of({
     list: () => Effect.die("not used"),
     listStats: () => Effect.die("not used"),
+    checks: () => Effect.die("not used"),
+    watchFingerprint: () => Effect.die("not used"),
     summary: () => Effect.die("not used"),
     subscribeMerges: Effect.die("not used"),
     subscribeRefreshes: Stream.empty,
@@ -178,6 +173,10 @@ function pullRequestServiceLayer(
     labelCandidates: () => Effect.die("not used"),
     setLabels: () => Effect.die("not used"),
     detail: () => Effect.succeed(detail),
+    projectRepositories: () => Effect.die("not used"),
+    preview: () => Effect.die("not used"),
+    filesViewed: () => Effect.die("not used"),
+    setFilesViewed: () => Effect.die("not used"),
     activity: activityImpl ?? (() => Effect.succeed(activity)),
     diff:
       diffImpl ??
@@ -187,6 +186,7 @@ function pullRequestServiceLayer(
           truncated: false,
           nextCursor: null,
         } satisfies PullRequestDiffResult)),
+    fileAtRevision: () => Effect.die("not used"),
     diffFileContents: () =>
       Effect.succeed({
         oldContents: "export const value = 'old';\n",
@@ -247,13 +247,7 @@ describe("loadPullRequestContext", () => {
 
   it.effect("fails when no project checkout is bound to the repository", () =>
     Effect.gen(function* () {
-      const emptyProjectionLayer = Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
-        getShellSnapshot: () =>
-          Effect.succeed({
-            ...shellSnapshot,
-            projects: [],
-          } as unknown as OrchestrationShellSnapshot),
-      } as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]);
+      const emptyProjectionLayer = projectsLayer([]);
 
       const outcome = yield* Effect.exit(
         loadPullRequestContext({

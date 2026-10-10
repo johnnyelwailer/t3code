@@ -12,10 +12,12 @@
     "apps/mobile/t3team-typecheck.mjs",
     "apps/server/__fixtures__/t3team-decisionBoolean.workflow.ts",
     "apps/server/__fixtures__/t3team-decisionForm.workflow.ts",
+    "apps/server/__fixtures__/t3team-getConfig.workflow.ts",
+    "apps/server/__fixtures__/t3team-hostChangeRequestTool.workflow.ts",
     "apps/server/__fixtures__/t3team-hostDraftTool.workflow.ts",
     "apps/server/__fixtures__/t3team-hostDraftToolUndeclared.workflow.ts",
+    "apps/server/__fixtures__/t3team-launchThread.workflow.ts",
     "apps/server/scripts/t3team-dev-entry.mjs",
-    "apps/server/scripts/t3team-providerUsageLiveCheck.ts",
     "apps/server/src/t3team-provider-tool-injection-codex-cli.ts",
     "apps/server/src/t3team-provider-tool-injection-codex-utils.ts",
     "apps/server/src/t3team-provider-tool-injection-opencode-config.ts",
@@ -54,6 +56,7 @@
     "apps/web/src/t3team/t3team-projectContextPayload.ts",
     "apps/web/src/t3team/t3team-projectDashboardKanbanMatrix.browser.tsx",
     "apps/web/src/t3team/t3team-useProjectDashboardState.ts",
+    "packages/t3team-sdk/src/__fixtures__/t3team-sdk.callRef.workflow.ts",
     "packages/t3team-sdk/src/__fixtures__/t3team-sdk.capabilityBad.workflow.ts",
     "packages/t3team-sdk/src/__fixtures__/t3team-sdk.capabilityOk.workflow.ts",
     "packages/t3team-sdk/src/__fixtures__/t3team-sdk.determinismBad.workflow.ts",
@@ -95,26 +98,45 @@
     ".": {
       // Keep vendored reference repositories outside the root project.
       "project": ["*.{js,mjs,cjs,ts,mts,cts}", ".github/**/*.cjs"],
-      "entry": [".github/scripts/thread-transfer-report.cjs"],
+      "entry": [
+        // CodeRabbit loads its configuration by filename.
+        ".coderabbit.config.ts",
+        ".github/scripts/thread-transfer-report.cjs",
+      ],
       "vite": { "entry": [".github/**/*.test.cjs"] },
       "vitest": { "entry": [".github/**/*.test.cjs"] },
     },
     "scripts": {
-      // Knip loads its preprocessor through a CLI option; native verification runs directly.
-      "entry": ["knip-schemas.ts", "mobile-native-client.ts"],
+      // Knip loads its preprocessor through a CLI option; native verification and
+      // worktree setup (from t3.json) run directly.
+      "entry": ["knip-schemas.ts", "mobile-native-client.ts", "setup-worktree.ts"],
     },
     "apps/server": {
       // Vite+ pack entries and the launcher used by installed background services.
       "entry": [
         "src/bin.ts!",
         "src/claude-history-worker.ts!",
+        "src/t3team-hostEffect.ts!",
+        "src/t3team-hostSdk.ts!",
         "scripts/cli.ts",
         "scripts/evaluate-thread-titles.ts",
+        "scripts/measure-pr-preview.ts",
+        "scripts/probe-claude-fork-local-rollback-replay.ts",
+        "scripts/update-test-shard-weights.ts",
+        "scripts/verify-background-live.ts",
         "src/provider/testFixtures/*.mjs",
+        // One-off operator script, run by path (it imports its -run/-mapping/-layers siblings).
+        "scripts/t3team-replay-task-records-to-plans.ts",
+        // Workflow fixtures loaded at runtime by URL (new URL("../__fixtures__/" + name)) from
+        // the t3team-workflowEngine{DecisionCard,Reactor} integration tests, not imported.
+        "__fixtures__/t3team-decisionChoice.workflow.ts",
+        "__fixtures__/t3team-parallelAgentsAfterResume.workflow.ts",
       ],
       // Keep the transitive Effect runtime pinned for standalone npm installs.
-      // Native msgpack acceleration and the Vite+ web build prerequisite.
-      "ignoreDependencies": ["@effect/platform-node-shared", "msgpackr-extract", "@t3tools/web"],
+      // The Vite+ web build prerequisite.
+      // undici: a bundle external (Cursor's closure) that inlined pi-coding-agent imports at
+      // runtime; no source file imports it, but dist/ cannot start without it.
+      "ignoreDependencies": ["@effect/platform-node-shared", "@t3tools/web", "undici"],
     },
     "apps/desktop": {
       // Electron loads these bundles by filename rather than importing them.
@@ -124,6 +146,8 @@
         "src/snapShot/GlobalShiftShortcutWorker.ts!",
         "src/snapShot/RegionSnapShotWorker.ts!",
         "src/snapShot/SnapShotAccessibilityWorker.ts!",
+        "src/boot.ts!",
+        "src/compileCache.ts!",
         "src/main.ts!",
         "src/preload.ts!",
         "src/preview-pick-preload.ts!",
@@ -136,7 +160,9 @@
       "ignoreDependencies": ["playwright-core", "electron-builder"],
     },
     "apps/web": {
-      // Worktree setup invokes this directly from t3.json. Story entries: knip's storybook
+      // Vitest loads this through the per-file @vitest-environment directive.
+      "ignoreDependencies": ["jsdom"],
+      // Worktree setup (scripts/setup-worktree.ts) runs this directly. Story entries: knip's storybook
       // plugin replaces its default `**/*.stories.*` entry glob once .storybook/main.ts is
       // detected (added in b57bebc5bc, PR diff explorer). The bridge config re-exports from
       // src/t3team/storybook, which knip cannot read `stories` from, so every story file (and
@@ -162,8 +188,14 @@
       },
     },
     "apps/mobile": {
-      // Expo loads local config plugins by string; Metro handles platform variants.
-      "entry": ["index.ts!", "plugins/*.cjs"],
+      // Expo loads plugins and the fingerprint config by string; Metro embeds the browser entry in the native WebView.
+      "entry": [
+        "index.ts!",
+        "fingerprint.config.js",
+        "plugins/*.cjs",
+        "scripts/generate-device-stream.mts",
+        "src/features/devices/device-stream.browser.ts!",
+      ],
       // Fonts are configured as asset paths; Expo autolinks the native packages.
       "ignoreDependencies": [
         "@expo-google-fonts/dm-sans",
@@ -181,6 +213,17 @@
     "packages/*": {
       // These workspace packages are private to this monorepo.
       "includeEntryExports": true,
+    },
+    "packages/t3team-sdk": {
+      // Operator-run e2e driver (`node e2e/t3team-sdk.boundedExecution.e2e.ts start|resume`);
+      // it loads the workflow module by path, not by import.
+      // The workflow-reference generator is run by path to regenerate the checked-in
+      // t3team-sdk.workflowReference.generated.ts (its test names the command).
+      "entry": [
+        "e2e/t3team-sdk.boundedExecution.e2e.ts",
+        "e2e/*.workflow.ts",
+        "scripts/t3team-generate-workflow-reference.ts",
+      ],
     },
     "packages/client-runtime": {
       // Fork debt baseline (2026-09-09): exports consumed only by fork modules that are

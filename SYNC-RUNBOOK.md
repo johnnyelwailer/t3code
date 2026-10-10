@@ -1,14 +1,17 @@
 # Upstream sync runbook — branch `sync/upstream-20260917`
 
 ## Mission
+
 Complete the t3code upstream sync that is **mid-merge** in this worktree. Upstream
 (`pingdotgg/t3code`) is 527 commits ahead; the `--no-commit` merge produced 113
 conflicted files. Your job: resolve all conflicts, install, verify (guard + typecheck
-+ serial tests), and leave the merge **committed in this worktree only**. You do NOT
-push and you do NOT merge back to main — the coordinator reviews the core resolutions
-and merges back.
+
+- serial tests), and leave the merge **committed in this worktree only**. You do NOT
+  push and you do NOT merge back to main — the coordinator reviews the core resolutions
+  and merges back.
 
 ## Ground rules (non-negotiable)
+
 - **Work ONLY in `/tmp/upstream-sync`.** Every git/pnpm/test command: `cd /tmp/upstream-sync` first.
   Never touch the user's main checkout (`/Users/pj/Dev/github/nexi-distribution/nexi-work/t3code`).
 - **NEVER push to `upstream`** (its push remote is disabled on purpose). Never override it.
@@ -23,6 +26,7 @@ and merges back.
   cat it.
 
 ## Current state (updated 2026-09-17 ~15:25)
+
 - Branch `sync/upstream-20260917`, `MERGE_HEAD` set (mid-merge). Base = fork main `bf228d9ca`;
   upstream/main = `1ab2dfb5a`; merge-base `e5d086c26`.
 - **All 113 conflicts are already RESOLVED and staged** (0 unmerged files; `git add -A` done).
@@ -31,8 +35,10 @@ and merges back.
   verification. **Remaining work = the Verification + Finalize + Report sections below.**
 
 ## The fork's additive contract (what "correct" looks like)
+
 This fork keeps t3team **additive**: new `t3team-*`/`t3team.` prefixed files + a
 guard-whitelisted set of modified upstream files. When resolving:
+
 - For a file upstream changed AND we changed: the goal is **upstream's new shape + our t3team
   extension points re-applied on top**. Read both sides (`git show :2:<path>` = ours/fork,
   `:3:<path>` = theirs/upstream; `:1:` = base). Re-apply our additive bits onto upstream's new
@@ -42,6 +48,7 @@ guard-whitelisted set of modified upstream files. When resolving:
   violations (compare against a baseline captured on fork main — see step 5).
 
 ## Resolution order
+
 1. **Event-sourced core (highest care)** — resolve with the most scrutiny; flag each for the
    coordinator's review in your report:
    `apps/server/src/orchestration/decider.ts`, `.../projector.ts`,
@@ -61,6 +68,7 @@ guard-whitelisted set of modified upstream files. When resolving:
    fork-specific additions (e.g. t3team workspaces/packs the fork adds).
 
 ## Verification (all must be green before you report "done")
+
 1. `git add -A` (stage all resolutions). No unmerged files remain:
    `git status --short | grep -cE '^(UU|AA|DU|UD|AU|UA)'` → 0.
 2. `pnpm install` (dependency set changed). If it fails on a workspace/pack path, note it.
@@ -76,11 +84,13 @@ guard-whitelisted set of modified upstream files. When resolving:
    failure from merge regression (skill step 7). Only report merge regressions as blockers.
 
 ## Finalize (only when green)
+
 - `git commit` the merge (this finalizes the `--no-commit` merge in the worktree). Message:
   `sync: merge upstream/main (1ab2dfb5a) into fork main (bf228d9ca)`.
 - Do NOT push. Do NOT open a PR. Leave the committed merge on `sync/upstream-20260917`.
 
 ## Report back (send to the parent thread when completely done, or on a hard blocker)
+
 - Conflict count resolved (113 → 0 confirmed).
 - Per-package test pass/fail counts (serial run).
 - Guard status: new findings vs baseline (list any).
@@ -91,5 +101,6 @@ guard-whitelisted set of modified upstream files. When resolving:
 - Anything you were unsure of and how you handled it.
 
 ## Last resort
+
 If the merge becomes unresolvable, `git merge --abort` restores the clean fork-main tree, then
 report the blocker. Don't abort without telling the coordinator why.

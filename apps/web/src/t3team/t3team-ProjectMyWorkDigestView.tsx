@@ -1,43 +1,81 @@
-import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
+import { digestLaneLayout } from "~/t3team/t3team-projectMyWorkDigestLaneLayout";
 import {
-  FooterSection,
-  MainSection,
-  SideSection,
-} from "~/t3team/t3team-ProjectMyWorkDigestSections";
+  digestRowTicketIds,
+  digestShownTicketIds,
+} from "~/t3team/t3team-projectMyWorkDigestGroups";
+import { DashboardWidget } from "~/t3team/t3team-dashboardWidgetRegistry";
+import { MyWorkLoadingLanesPlaceholder } from "~/t3team/t3team-MyWorkLoadingAnimation";
+import { DigestArrangementBar } from "~/t3team/t3team-ProjectMyWorkDigestArrangementBar";
+import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import {
   ProjectMyWorkDigestHeader,
   type DigestBurndownVariant,
 } from "~/t3team/t3team-ProjectMyWorkDigestHeader";
 import type { DigestGraph, ResolvedDigestPlan } from "~/t3team/t3team-projectMyWorkDigestPlan";
+import { useDigestPrThreadClaims } from "~/t3team/mywork-digest/t3team-useDigestPrThreadClaims";
 
 export function ProjectMyWorkDigestView({
   plan,
-  graph,
+  graph: serverGraph,
   nowMs,
   onOpenTicket,
   burndownVariant = "off",
+  updatedAtMs,
+  onResetArrangement,
+  refreshing = false,
+  emptyStateAllowed = true,
 }: {
   plan: ResolvedDigestPlan;
   graph: DigestGraph;
   nowMs: number;
   onOpenTicket?: ((ticketId: string) => void) | undefined;
   burndownVariant?: DigestBurndownVariant;
+  updatedAtMs?: number;
+  /** Clears an agent-made arrangement for this scope (back to the default). */
+  onResetArrangement?: (() => Promise<void>) | undefined;
+  /** A revalidation is in flight over this content; the header's status strip says so. */
+  refreshing?: boolean;
+  /**
+   * False until a fresh, successful round for this scope has landed: a plan with no sections is
+   * then "not known yet", not "nothing", so the lanes keep loading instead of claiming the user is
+   * free. Default true — fixtures and stories hand over a settled graph.
+   */
+  emptyStateAllowed?: boolean;
 }) {
+  const graph = useDigestPrThreadClaims(serverGraph, nowMs);
   const ticketsById = new Map(graph.tickets.map((ticket) => [ticket.id, ticket]));
   const lane = { graph, ticketsById, nowMs, onOpenTicket };
   const header = (
-    <ProjectMyWorkDigestHeader graph={graph} nowMs={nowMs} burndownVariant={burndownVariant} />
+    <ProjectMyWorkDigestHeader
+      graph={graph}
+      nowMs={nowMs}
+      burndownVariant={burndownVariant}
+      refreshing={refreshing}
+      {...(updatedAtMs !== undefined ? { updatedAtMs } : {})}
+    />
   );
+  const arranged = graph.arrangement ? (
+    <DigestArrangementBar
+      arrangement={graph.arrangement}
+      nowMs={nowMs}
+      onReset={onResetArrangement}
+    />
+  ) : null;
   if (plan.sections.length === 0) {
     return (
-      <div className="space-y-8">
+      <div className="@container/digest space-y-8">
         {header}
-        <T3SurfacePanel
-          tone="dashed"
-          className="px-6 py-10 text-center text-sm text-muted-foreground"
-        >
-          Nothing needs you
-        </T3SurfacePanel>
+        {arranged}
+        {emptyStateAllowed ? (
+          <T3SurfacePanel
+            tone="dashed"
+            className="px-6 py-10 text-center text-sm text-muted-foreground"
+          >
+            Nothing needs you
+          </T3SurfacePanel>
+        ) : (
+          <MyWorkLoadingLanesPlaceholder />
+        )}
       </div>
     );
   }
@@ -45,46 +83,66 @@ export function ProjectMyWorkDigestView({
   const main = plan.sections.filter((s) => s.placement === "main");
   const footer = plan.sections.filter((s) => s.placement === "footer");
   // Only parked / stalled items: say so in one line instead of leaving the two-lane grid as a
-  // blank band between the header and the footer.
+  // blank band between the header and the footer. Width is the parent's job: the digest lens
+  // drops the centered max-width cap so a widescreen uses the whole pane.
   const lanesEmpty = side.length === 0 && main.length === 0;
   // A lone footer section spans the row; the 2/3-column split only applies once there is more than
   // one, so a single "Parked" card never gets squeezed into a third of the width.
   const footerColumns =
     footer.length >= 3
-      ? "md:grid-cols-2 xl:grid-cols-3"
+      ? "@3xl/digest:grid-cols-2 @6xl/digest:grid-cols-3"
       : footer.length === 2
-        ? "md:grid-cols-2"
+        ? "@3xl/digest:grid-cols-2"
         : "";
+  const lanes = digestLaneLayout({ side: side.length, main: main.length });
+  const shownTicketIds = digestShownTicketIds([...side, ...main], graph);
+  const rowTicketIds = digestRowTicketIds([...side, ...main], graph);
   return (
-    <div className="space-y-8">
+    <div className="@container/digest space-y-8">
       {header}
+      {arranged}
       {lanesEmpty ? (
-        <T3SurfacePanel
-          tone="dashed"
-          className="px-6 py-6 text-center text-sm text-muted-foreground"
-        >
-          Nothing needs you right now
-        </T3SurfacePanel>
+        emptyStateAllowed ? (
+          <T3SurfacePanel
+            tone="dashed"
+            className="px-6 py-6 text-center text-sm text-muted-foreground"
+          >
+            Nothing needs you right now
+          </T3SurfacePanel>
+        ) : (
+          <MyWorkLoadingLanesPlaceholder />
+        )
       ) : (
-        <div className="grid gap-x-6 gap-y-8 sm:gap-x-10 xl:grid-cols-[minmax(16rem,2fr)_minmax(0,5fr)]">
-          <div className="min-w-0 space-y-8">
-            {side.map((s) => (
-              <SideSection key={s.id} section={s} {...lane} />
-            ))}
-          </div>
-          <div className="min-w-0 space-y-8">
-            {main.map((s) => (
-              <MainSection key={s.id} section={s} {...lane} />
-            ))}
-          </div>
+        <div className={lanes.gridClassName}>
+          {lanes.showSide ? (
+            <div className="min-w-0 space-y-8">
+              {side.map((s) => (
+                <DashboardWidget key={s.id} section={s} placement="side" {...lane} />
+              ))}
+            </div>
+          ) : null}
+          {lanes.showMain ? (
+            <div className="@container/lane min-w-0 space-y-8">
+              {main.map((s) => (
+                <DashboardWidget
+                  key={s.id}
+                  section={s}
+                  placement="main"
+                  {...lane}
+                  shownTicketIds={shownTicketIds}
+                  rowTicketIds={rowTicketIds}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
       )}
       {footer.length > 0 ? (
         <div
-          className={`grid gap-x-6 gap-y-6 border-t border-border/70 pt-6 sm:gap-x-10 ${footerColumns}`}
+          className={`grid grid-cols-1 gap-x-6 gap-y-6 border-t border-border/70 pt-6 @xl/digest:gap-x-10 ${footerColumns}`}
         >
           {footer.map((s) => (
-            <FooterSection key={s.id} section={s} {...lane} />
+            <DashboardWidget key={s.id} section={s} placement="footer" {...lane} />
           ))}
         </div>
       ) : null}

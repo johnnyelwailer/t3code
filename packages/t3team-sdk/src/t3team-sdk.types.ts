@@ -9,6 +9,7 @@ import type { ModelSelection } from "@runbook/threads/models";
 import type { MessageBroker } from "./t3team-sdk.broker.ts";
 import type { ToolGroupRef } from "./t3team-sdk.capabilityVocabulary.ts";
 import type { AnyRecipeRef } from "./t3team-sdk.recipeTypes.ts";
+import type { ScriptHostContext } from "./t3team-sdk.scriptHost.ts";
 import type { WorkflowRunIntent } from "./tools/t3team-sdk.workflow.ts";
 
 // `workflow()`'s third-parameter type lives next to the broker composition it wraps.
@@ -38,7 +39,7 @@ export type {
   WorkflowCapability,
   WorkflowChildCapabilities,
 } from "./t3team-sdk.capabilityVocabulary.ts";
-export type { ModelRef, ModelSelection } from "@runbook/threads/models";
+export type { ModelOption, ModelRef, ModelSelection } from "@runbook/threads/models";
 
 export type IntegrationMethod = (...args: ReadonlyArray<unknown>) => Promise<unknown>;
 
@@ -63,11 +64,6 @@ export interface ToolWorkspace {
 }
 
 export interface T3TeamToolHandlerClient {
-  readonly renameThread: (input: { readonly title: string }) => Promise<{
-    readonly ok: true;
-    readonly title: string;
-    readonly threadId?: string | undefined;
-  }>;
   /** Host-provided project-recipe listing; result is validated against the tool result schema. */
   readonly listRecipes?: () => Promise<unknown>;
   /** Host-provided static workflow validation; result is validated against the tool result schema. */
@@ -79,6 +75,8 @@ export interface T3TeamToolHandlerClient {
   readonly runWorkflow?: (input: {
     readonly source?: string;
     readonly workflowPath?: string;
+    readonly recipe?: string;
+    readonly action?: string;
     readonly args?: unknown;
     readonly intent: WorkflowRunIntent;
     readonly replaceRunId?: string;
@@ -121,6 +119,12 @@ export interface ScriptHandlerCtx {
   readonly fetch: FetchLike;
   readonly workspace: ToolWorkspace;
   readonly callTool: <I, R>(ref: ToolRef<I, R>, args: I) => Promise<R>;
+  /** The recipe's pack store; present iff its pack declares `store:v1` persistence. */
+  readonly store?: ScriptHostContext["store"];
+  /** Change requests of the run's project; present iff the recipe declares `integration.read`. */
+  readonly changeRequests?: ScriptHostContext["changeRequests"];
+  /** The run's project and its repositories; present iff the recipe declares `integration.read`. */
+  readonly project?: ScriptHostContext["project"];
 }
 
 export type ToolRef<
@@ -191,6 +195,8 @@ export interface WorkflowRunOptions {
   /** Host client handed to tool handlers as `ToolHandlerCtx.t3team` — the per-run half of a
    * host-tool ref, whose handler is registered globally and so cannot close over the run. */
   readonly t3team?: T3TeamToolHandlerClient;
+  /** Per-run host members for `ScriptHandlerCtx` (pack store, change requests); host-built. */
+  readonly scriptHost?: ScriptHostContext;
   /** Host fairness hooks around live tool/script primitives. Replayed entries do not call them. */
   readonly beforePrimitive?: () => Promise<boolean>;
   readonly afterPrimitive?: () => void;

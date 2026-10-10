@@ -11,16 +11,13 @@
  * happened before.
  */
 
-import type { OrchestrationCommand } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import type {
-  WorkflowRun,
-  WorkflowRunRepositoryShape,
-} from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowRun, WorkflowRunRepositoryShape } from "./persistence/WorkflowRuns.ts";
 import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
 import { workflowFailureStepText } from "./t3team-workflowFailureReason.ts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 
 /** The agent-facing reason a crash-orphaned clock park failed — persisted AND posted. */
 const ORPHANED_WAKE_REASON =
@@ -31,8 +28,7 @@ export function makeOrphanIfSleeping(opts: {
   readonly row: WorkflowRun;
   readonly nowIso: () => string;
   readonly releaseAdmission: () => void;
-  readonly dispatch?: (command: OrchestrationCommand) => Promise<void>;
-  readonly newId?: () => string;
+  readonly host?: WorkflowHostPort;
 }): (correlationId: string) => Promise<void> {
   const { repo, row } = opts;
   return (correlationId) =>
@@ -57,15 +53,14 @@ export function makeOrphanIfSleeping(opts: {
           "workflow scheduler orphaned a sleeping run whose wake reply was resolved before settle",
           { runId: row.runId, correlationId },
         );
-        if (opts.dispatch !== undefined && opts.newId !== undefined) {
+        if (opts.host !== undefined) {
+          const host = opts.host;
           yield* Effect.promise(() =>
             deliverWorkflowFailure({
               launchThreadId: row.launchThreadId ?? undefined,
               workflowRunId: row.runId,
               errorText: ORPHANED_WAKE_REASON,
-              dispatch: opts.dispatch!,
-              newId: opts.newId!,
-              nowIso: opts.nowIso,
+              host,
             }),
           );
         }

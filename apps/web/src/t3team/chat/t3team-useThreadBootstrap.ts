@@ -28,7 +28,7 @@ type ThreadBootstrapInput = {
   kickoffWorkflow: T3TeamKickoffWorkflow | undefined;
   initialToolContext: T3TeamTurnToolContext | undefined;
   onInitialUserMessageSent: (() => void) | undefined;
-  serverThread: unknown | null | undefined;
+  serverThread: { readonly branch: string | null } | null | undefined;
 };
 
 export function useThreadBootstrap({

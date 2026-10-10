@@ -65,7 +65,7 @@ export function ResizableRightSidebarAside({
 
         <div
           className={cn(
-            "box-border h-full min-h-0 pt-[var(--workspace-topbar-height)]",
+            "box-border h-full min-h-0 pt-(--workspace-topbar-height)",
             isCollapsed ? "pointer-events-none opacity-0" : "opacity-100",
           )}
         >

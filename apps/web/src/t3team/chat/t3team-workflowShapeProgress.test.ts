@@ -160,9 +160,9 @@ describe("reconcileT3TeamWorkflowShapeProgress", () => {
       ],
     );
 
-    const reviewDetails = ["Review correctness", "Review edge cases", "Review API design"];
+    const reviewDetails = new Set(["Review correctness", "Review edge cases", "Review API design"]);
     const dynamicRows = result.rows.filter((row) =>
-      reviewDetails.includes(row.runtimeStep?.detail ?? ""),
+      reviewDetails.has(row.runtimeStep?.detail ?? ""),
     );
     expect(dynamicRows).toHaveLength(3);
     expect(dynamicRows.map((row) => row.phase)).toEqual(["Review", "Review", "Review"]);

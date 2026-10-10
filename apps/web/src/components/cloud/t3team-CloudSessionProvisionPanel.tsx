@@ -2,20 +2,16 @@ import type { CloudSession } from "@t3tools/contracts";
 import { type ReactNode, useCallback, useMemo } from "react";
 
 import { Button } from "../ui/button";
-import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { CloudSessionHistoryDisclosure } from "./t3team-CloudSessionHistoryDisclosure";
 import { CloudSessionRow, CloudSessionRowsSkeleton } from "./t3team-CloudSessionProvisionRow";
-import {
-  formatDuration,
-  isCloudSessionProvisionPending,
-} from "./t3team-cloudSessionProvisionPresentation";
+import { isCloudSessionProvisionPending } from "./t3team-cloudSessionProvisionPresentation";
 import { splitCloudSessions } from "./t3team-cloudSessionSplit";
 
 /**
  * The one-click surface: start a Nexi workspace on fleet compute and connect to
  * it when it comes up.
  *
- * Owns the panel chrome — the duration picker, the create button, and the
+ * Owns the panel chrome — the create button and the
  * composition of session rows. The list is split into sessions still doing
  * work (shown by default, with their row actions) and a collapsed history of
  * finished sessions (capped, no actions); the split rule lives in
@@ -30,40 +26,29 @@ import { splitCloudSessions } from "./t3team-cloudSessionSplit";
  * separate, replaceable layer.
  */
 
-/**
- * Session lengths offered in the panel. The provisioning job holds the machine
- * for the chosen span and then stops itself, so this is the only knob that has
- * to exist — everything else (which repo, which branch, which secrets) is
- * already fixed by the workspace pack.
- */
-export const CLOUD_SESSION_DURATION_CHOICES = [
-  { seconds: 3600, label: "1 hour" },
-  { seconds: 4 * 3600, label: "4 hours" },
-  { seconds: 8 * 3600, label: "8 hours" },
-] as const;
-
-export const DEFAULT_CLOUD_SESSION_DURATION_SECONDS = 4 * 3600;
-
 export function CloudSessionProvisionPanel({
   sessions,
   loading = false,
+  loadError = null,
   createPending = false,
-  durationSeconds = DEFAULT_CLOUD_SESSION_DURATION_SECONDS,
-  onDurationChange,
   onCreate,
   onSessionAction,
   onSessionSecondaryAction,
   pendingSessionId = null,
   pendingKind = null,
   pendingLabel = null,
+  historyUrl = null,
+  onSessionForget,
+  canForgetSession,
   empty = null,
+  banner = null,
 }: {
   readonly sessions: ReadonlyArray<CloudSession>;
   readonly loading?: boolean;
+  /** Why the session list could not be read; replaces the rows when set. */
+  readonly loadError?: string | null;
   readonly createPending?: boolean;
-  readonly durationSeconds?: number;
-  readonly onDurationChange?: (seconds: number) => void;
-  readonly onCreate: (durationSeconds: number) => void;
+  readonly onCreate: () => void;
   readonly onSessionAction: (session: CloudSession) => void;
   /** Secondary action on a ready row (release the machine). Absent hides it. */
   readonly onSessionSecondaryAction?: ((session: CloudSession) => void) | undefined;
@@ -73,28 +58,17 @@ export function CloudSessionProvisionPanel({
   readonly pendingKind?: "connect" | "cancel" | "stop" | null;
   /** Label for the in-flight primary button (Connect/Cancel); defaults to "Working…". */
   readonly pendingLabel?: string | null;
+  /** The provider's page with every session, linked from the capped history. */
+  readonly historyUrl?: string | null;
+  /** Forget a ready machine's saved connection (the panel owns the lifecycle). */
+  readonly onSessionForget?: ((session: CloudSession) => void) | undefined;
+  /** Whether that session's machine is saved here, so Forget would do something. */
+  readonly canForgetSession?: ((session: CloudSession) => boolean) | undefined;
   readonly empty?: ReactNode;
+  /** Shown under the header, e.g. the account sign-in the broker needs. */
+  readonly banner?: ReactNode;
 }) {
-  const handleCreate = useCallback(() => {
-    onCreate(durationSeconds);
-  }, [onCreate, durationSeconds]);
-
-  const handleDurationChange = useCallback(
-    (value: string | null) => {
-      if (value === null) return;
-      onDurationChange?.(Number(value));
-    },
-    [onDurationChange],
-  );
-
-  const durationItems = useMemo(
-    () =>
-      CLOUD_SESSION_DURATION_CHOICES.map((choice) => ({
-        value: String(choice.seconds),
-        label: choice.label,
-      })),
-    [],
-  );
+  const handleCreate = useCallback(() => onCreate(), [onCreate]);
 
   const pendingCount = sessions.filter((session) =>
     isCloudSessionProvisionPending(session.phase),
@@ -113,37 +87,24 @@ export function CloudSessionProvisionPanel({
           <h2 className="font-medium text-sm">Cloud sessions</h2>
           <p className="text-muted-foreground text-xs">
             {pendingCount > 0
-              ? `${pendingCount} starting · usually ready in about ${formatDuration(155)}`
+              ? `${pendingCount} starting`
               : "Start a Nexi machine in the cloud and work on it from here."}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <span className="text-muted-foreground text-xs">Runs for</span>
-          <Select
-            modal={false}
-            value={String(durationSeconds)}
-            onValueChange={handleDurationChange}
-            items={durationItems}
-          >
-            <SelectTrigger size="sm" className="w-24 min-w-0" aria-label="Runs for">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectPopup>
-              {durationItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
           <Button size="sm" disabled={createPending} onClick={handleCreate}>
             {createPending ? "Starting…" : "New session"}
           </Button>
         </div>
       </header>
+      {banner}
 
       <div className="space-y-1">
-        {loading ? (
+        {loadError !== null ? (
+          <p className="px-3 py-6 text-center text-destructive text-xs sm:px-4">
+            Could not load your cloud sessions: {loadError}
+          </p>
+        ) : loading ? (
           <>
             <CloudSessionRowsSkeleton />
             <CloudSessionRowsSkeleton />
@@ -152,19 +113,13 @@ export function CloudSessionProvisionPanel({
           <>
             {activeSessions.length === 0
               ? (empty ?? (
+                  // Text only: the header's "New session" is the one start
+                  // affordance, and it sits beside the duration it will use.
                   <div className="px-3 py-8 text-center sm:px-4">
                     <p className="text-muted-foreground text-xs">No active cloud sessions.</p>
                     <p className="text-muted-foreground/80 text-xs">
-                      Start one — it will appear here as soon as it is ready.
+                      Start one with New session — it will appear here as soon as it is ready.
                     </p>
-                    <Button
-                      size="sm"
-                      className="mt-3"
-                      disabled={createPending}
-                      onClick={handleCreate}
-                    >
-                      {createPending ? "Starting…" : "New session"}
-                    </Button>
                   </div>
                 ))
               : activeSessions.map((session) => {
@@ -175,6 +130,7 @@ export function CloudSessionProvisionPanel({
                       session={session}
                       onAction={onSessionAction}
                       onSecondaryAction={onSessionSecondaryAction}
+                      onForget={canForgetSession?.(session) ? onSessionForget : undefined}
                       actionPending={isThisPending && pendingKind !== "stop"}
                       secondaryActionPending={isThisPending && pendingKind === "stop"}
                       pendingLabel={pendingLabel}
@@ -185,6 +141,7 @@ export function CloudSessionProvisionPanel({
               <CloudSessionHistoryDisclosure
                 sessions={historySessions}
                 hiddenCount={hiddenHistoryCount}
+                historyUrl={historyUrl}
               />
             )}
           </>

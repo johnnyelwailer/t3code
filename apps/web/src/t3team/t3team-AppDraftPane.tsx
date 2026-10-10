@@ -5,7 +5,7 @@ import ChatView from "~/components/ChatView";
 import { threadHasStarted } from "~/components/ChatView.logic";
 import { DraftId, markPromotedDraftThreadByRef, useComposerDraftStore } from "~/composerDraftStore";
 import { buildThreadRouteParams } from "~/threadRoutes";
-import { useThread, useThreadRefs } from "~/state/entities";
+import { useThreadRefs, useThreadShell } from "~/state/entities";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { waitForDraftHeroTransition } from "~/components/chat/draftHeroTransition";
 
@@ -32,7 +32,7 @@ export function AppDraftPane({ draftId: rawDraftId }: { draftId: string }) {
       ) ?? null)
     : null;
   const serverThreadRef = draftSession?.promotedTo ?? inferredThreadRef;
-  const serverThread = useThread(serverThreadRef);
+  const serverThread = useThreadShell(serverThreadRef);
   const canonicalThreadRef = threadHasStarted(serverThread) ? serverThreadRef : null;
 
   useEffect(() => {

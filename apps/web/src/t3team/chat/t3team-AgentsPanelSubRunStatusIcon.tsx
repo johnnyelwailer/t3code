@@ -1,39 +1,44 @@
 /**
- * GHE #254: the sub-run status icon — the SAME status language as the parent
- * card (ThreadActivityMorphIcon, sm variant) and the sidebar sub-run rows
- * (t3team-SidebarSubRunRow): the morphing ring while running, a check when
- * done, an alert icon on error, a faded static ring when idle. Previously
- * the sub-run tree rendered a plain colored dot for every state, so a
- * running child looked identical to an idle one.
- *
- * Lives in its own file so t3team-AgentsPanelSubRunTree.tsx stays under the
- * additive guard's 200-LOC ceiling.
+ * Sub-run status glyph. Question and error keep their own marks. Every other
+ * word uses ThreadActivityMorphIcon: solid (check drawn) when Completed,
+ * a pulsing dashed ring while the run is live. `spinTick` bumps when the
+ * live phrase changes so the ring does one springy spin.
  */
-import { CircleAlertIcon, CircleCheckIcon, CircleQuestionMarkIcon } from "lucide-react";
+import { CircleAlertIcon, CircleQuestionMarkIcon } from "lucide-react";
 
 import { cn } from "~/lib/utils";
 import { ThreadActivityMorphIcon } from "~/components/t3team-ThreadActivityStatus";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
+const STATIC_LABELS = new Set([
+  "Waiting",
+  "Failed",
+  "Stopped",
+  "Completed",
+  "Idle",
+  "Question awaiting answer",
+  "Plan awaiting approval",
+]);
+
+function isLiveLabel(label: string | undefined, status: ProjectThread["status"]): boolean {
+  if (label === undefined) return status === "running";
+  return !STATIC_LABELS.has(label);
+}
+
 export function SubRunStatusIcon({
   status,
+  label,
   pendingUserInput = false,
   awaitingParent = false,
+  spinTick = 0,
   className,
 }: {
   status: ProjectThread["status"];
-  /**
-   * A question is docked in this child's composer — the amber question mark
-   * outranks the lifecycle glyph, because the parent's next action is to
-   * look at that question, not the child's run state.
-   */
+  /** Resolved status word. Absent on the compact settled fold. */
+  label?: string;
   pendingUserInput?: boolean;
-  /**
-   * A plan-mode child presented its plan and stopped: the SAME amber pending
-   * treatment as a docked question (one indicator system), because the
-   * parent's next action is likewise to look at the child's plan.
-   */
   awaitingParent?: boolean;
+  spinTick?: number;
   /** Optional size override (the fold list renders smaller glyphs). */
   className?: string;
 }) {
@@ -42,28 +47,41 @@ export function SubRunStatusIcon({
     return (
       <CircleQuestionMarkIcon
         aria-hidden
-        className={cn("shrink-0 text-amber-600 dark:text-amber-400", iconClass)}
+        data-sub-run-status=""
+        className={cn("shrink-0 text-warning-foreground", iconClass)}
       />
     );
   }
-  if (status === "running") {
+  if (status === "error" || label === "Failed") {
     return (
-      <span className={cn("shrink-0 text-sky-600 dark:text-sky-400", className)}>
-        <ThreadActivityMorphIcon solid={false} size="sm" pulse />
-      </span>
+      <CircleAlertIcon
+        aria-hidden
+        data-sub-run-status=""
+        className={cn("shrink-0 text-destructive", iconClass)}
+      />
     );
   }
-  if (status === "completed") {
-    return <CircleCheckIcon aria-hidden className={cn("shrink-0 text-success", iconClass)} />;
+  const completed = label === "Completed" || (label === undefined && status === "completed");
+  if (completed) {
+    return <ThreadActivityMorphIcon solid size="sm" className={cn("text-success", iconClass)} />;
   }
-  if (status === "error") {
-    return <CircleAlertIcon aria-hidden className={cn("shrink-0 text-destructive", iconClass)} />;
-  }
-  // GHE #254: idle keeps the SAME ring, faded + static, so every state reads
-  // at the ring's size instead of a shrunk dot.
+  const live = isLiveLabel(label, status);
   return (
-    <span className={cn("shrink-0 text-muted-foreground/40", className)}>
-      <ThreadActivityMorphIcon solid={false} size="sm" />
+    <span
+      data-sub-run-status=""
+      className={cn(
+        "shrink-0",
+        live ? "text-info-foreground" : "text-muted-foreground/40",
+        className,
+      )}
+    >
+      <ThreadActivityMorphIcon
+        solid={false}
+        size="sm"
+        pulse={live}
+        spin={live}
+        spinTick={spinTick}
+      />
     </span>
   );
 }

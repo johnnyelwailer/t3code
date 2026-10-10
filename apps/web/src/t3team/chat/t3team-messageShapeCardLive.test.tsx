@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { EventId, type OrchestrationThreadActivity } from "@t3tools/contracts";
+import { EventId } from "@t3tools/contracts";
 import { PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP } from "@t3tools/project-recipes";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";

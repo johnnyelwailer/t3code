@@ -1,37 +1,26 @@
-import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { AppMainContentHomeEmptyState } from "./t3team-AppMainContentHomeEmptyState";
 
-vi.mock("~/t3team/t3team-CreateProjectDialog", () => ({
-  CreateProjectDialog: ({ variant }: { variant: string }) => <div>create-dialog:{variant}</div>,
-}));
+const shellProps: Array<{ onCreate: () => void }> = [];
 
 vi.mock("./t3team-AppMainContentShell", () => ({
-  ProjectBrowserEmptyWithChat: ({
-    showInlineCreateWizard,
-    emptyContent,
-  }: {
-    showInlineCreateWizard?: boolean;
-    emptyContent?: ReactNode;
-  }) => (
-    <div>
-      browser-empty:{showInlineCreateWizard ? "wizard" : "welcome"}
-      {emptyContent}
-    </div>
-  ),
+  ProjectBrowserEmptyWithChat: (props: { onCreate: () => void }) => {
+    shellProps.push(props);
+    return <div>browser-empty:welcome</div>;
+  },
 }));
 
 describe("AppMainContentHomeEmptyState", () => {
-  it("starts on the welcome surface when reopened from settings", () => {
+  it("shows the welcome surface and hands the create action straight to the route", () => {
+    const onCreate = () => {};
     const markup = renderToStaticMarkup(
       <AppMainContentHomeEmptyState
-        onCreate={() => {}}
-        onInlineProjectCreated={() => {}}
-        showInitialSetup
+        onCreate={onCreate}
         showAside={false}
-        homeChatProject={null}
+        scratchProject={null}
+        onStartScratch={undefined}
         providers={[]}
         isConnected
         onOpenHomeThread={() => {}}
@@ -40,6 +29,7 @@ describe("AppMainContentHomeEmptyState", () => {
     );
 
     expect(markup).toContain("browser-empty:welcome");
-    expect(markup).not.toContain("create-dialog:inline");
+    // No inline copy of the wizard: "create" is the `/t3team/new` route, not local state.
+    expect(shellProps.at(-1)?.onCreate).toBe(onCreate);
   });
 });

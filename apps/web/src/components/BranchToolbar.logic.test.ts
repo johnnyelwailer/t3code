@@ -13,6 +13,7 @@ import {
   resolveBranchToolbarPrBranch,
   resolveBranchToolbarValue,
   resolveLockedWorkspaceLabel,
+  resolveWorkspaceDisplayName,
   resolveLocalCheckoutBranchMismatch,
   resolvePreviousWorktreeLabel,
   resolvePreviousWorktreeSeed,
@@ -425,9 +426,28 @@ describe("shouldShowEnvironmentIndicator", () => {
 });
 
 describe("shouldShowComposerContextStrip", () => {
+  it.each([false, true])(
+    "honors the active-thread preference with resting controls %s",
+    (hostsRestingComposerControls) => {
+      const input = {
+        isDraftHeroState: false,
+        hasActiveProject: true,
+        isGitRepo: true,
+        showEnvironmentIndicator: true,
+        hostsRestingComposerControls,
+      };
+      expect(shouldShowComposerContextStrip({ ...input, persistInActiveThreads: false })).toBe(
+        false,
+      );
+      expect(shouldShowComposerContextStrip({ ...input, persistInActiveThreads: true })).toBe(true);
+    },
+  );
+
   it("keeps the environment indicator visible for a non-Git project", () => {
     expect(
       shouldShowComposerContextStrip({
+        isDraftHeroState: true,
+        persistInActiveThreads: false,
         hasActiveProject: true,
         isGitRepo: false,
         showEnvironmentIndicator: true,
@@ -439,6 +459,8 @@ describe("shouldShowComposerContextStrip", () => {
   it("hides the strip when a non-Git project has nothing to show", () => {
     expect(
       shouldShowComposerContextStrip({
+        isDraftHeroState: true,
+        persistInActiveThreads: false,
         hasActiveProject: true,
         isGitRepo: false,
         showEnvironmentIndicator: false,
@@ -450,6 +472,8 @@ describe("shouldShowComposerContextStrip", () => {
   it("keeps the strip for visible resting composer controls in a non-Git thread", () => {
     expect(
       shouldShowComposerContextStrip({
+        isDraftHeroState: true,
+        persistInActiveThreads: false,
         hasActiveProject: true,
         isGitRepo: false,
         showEnvironmentIndicator: false,
@@ -461,6 +485,8 @@ describe("shouldShowComposerContextStrip", () => {
   it("shows Git controls without requiring an environment indicator", () => {
     expect(
       shouldShowComposerContextStrip({
+        isDraftHeroState: true,
+        persistInActiveThreads: false,
         hasActiveProject: true,
         isGitRepo: true,
         showEnvironmentIndicator: false,
@@ -490,6 +516,24 @@ describe("resolveEffectiveEnvMode", () => {
       }),
     ).toBe("worktree");
   });
+
+  it("keeps a server thread in worktree mode while its worktree is still being created", () => {
+    expect(
+      resolveEffectiveEnvMode({
+        activeWorktreePath: null,
+        hasServerThread: true,
+        draftThreadEnvMode: undefined,
+        preparingWorktree: true,
+      }),
+    ).toBe("worktree");
+    expect(
+      resolveEffectiveEnvMode({
+        activeWorktreePath: null,
+        hasServerThread: true,
+        draftThreadEnvMode: undefined,
+      }),
+    ).toBe("local");
+  });
 });
 
 describe("resolveEnvModeLabel", () => {
@@ -511,11 +555,29 @@ describe("resolveCurrentWorkspaceLabel", () => {
 
 describe("resolveLockedWorkspaceLabel", () => {
   it("uses a shorter label for the main repo checkout", () => {
-    expect(resolveLockedWorkspaceLabel(null)).toBe("Local checkout");
+    expect(resolveLockedWorkspaceLabel(null, "local")).toBe("Local checkout");
   });
 
   it("uses a shorter label for an attached worktree", () => {
-    expect(resolveLockedWorkspaceLabel("/repo/.t3/worktrees/feature-a")).toBe("Worktree");
+    expect(resolveLockedWorkspaceLabel("/repo/.t3/worktrees/feature-a", "worktree")).toBe(
+      "Worktree",
+    );
+  });
+
+  it("describes a worktree that is still being created as a new worktree", () => {
+    expect(resolveLockedWorkspaceLabel(null, "worktree")).toBe("New worktree");
+  });
+});
+
+describe("resolveWorkspaceDisplayName", () => {
+  it("returns the final folder for POSIX and Windows paths", () => {
+    expect(resolveWorkspaceDisplayName("/repo/.t3/worktrees/feature-a")).toBe("feature-a");
+    expect(resolveWorkspaceDisplayName("C:\\code\\project\\feature-b\\")).toBe("feature-b");
+  });
+
+  it("handles missing and root paths", () => {
+    expect(resolveWorkspaceDisplayName(null)).toBeNull();
+    expect(resolveWorkspaceDisplayName("/")).toBe("/");
   });
 });
 
@@ -870,8 +932,16 @@ describe("dedupeRunOnEnvironments", () => {
   });
 
   it("never collapses two different machine kinds with the same label", () => {
-    const first = runOnEnvironment({ environmentId: "env-a", label: "MacBook Pro", machine: "laptop" });
-    const second = runOnEnvironment({ environmentId: "env-b", label: "MacBook Pro", machine: "server" });
+    const first = runOnEnvironment({
+      environmentId: "env-a",
+      label: "MacBook Pro",
+      machine: "laptop",
+    });
+    const second = runOnEnvironment({
+      environmentId: "env-b",
+      label: "MacBook Pro",
+      machine: "server",
+    });
     expect(dedupeRunOnEnvironments([first, second], first.environmentId)).toHaveLength(2);
   });
 
@@ -883,35 +953,54 @@ describe("dedupeRunOnEnvironments", () => {
   });
 
   it("never touches the primary row", () => {
-    const primary = runOnEnvironment({ environmentId: "env-primary", label: "This device", isPrimary: true });
+    const primary = runOnEnvironment({
+      environmentId: "env-primary",
+      label: "This device",
+      isPrimary: true,
+    });
     const remote = runOnEnvironment({ environmentId: "env-a", label: "This device" });
     expect(dedupeRunOnEnvironments([primary, remote], primary.environmentId)).toHaveLength(2);
   });
 
   it("keeps the connected row when the stale duplicate was seen first", () => {
     const stale = runOnEnvironment({ environmentId: "env-a", label: "nx-nexi" });
-    const live = { ...runOnEnvironment({ environmentId: "env-b", label: "nx-nexi" }), connected: true };
+    const live = {
+      ...runOnEnvironment({ environmentId: "env-b", label: "nx-nexi" }),
+      connected: true,
+    };
     const deduped = dedupeRunOnEnvironments([stale, live], stale.environmentId);
     expect(deduped).toEqual([live]);
   });
 
   it("keeps the connected row when it was seen first", () => {
-    const live = { ...runOnEnvironment({ environmentId: "env-b", label: "nx-nexi" }), connected: true };
+    const live = {
+      ...runOnEnvironment({ environmentId: "env-b", label: "nx-nexi" }),
+      connected: true,
+    };
     const stale = runOnEnvironment({ environmentId: "env-a", label: "nx-nexi" });
     const deduped = dedupeRunOnEnvironments([live, stale], live.environmentId);
     expect(deduped).toEqual([live]);
   });
 
   it("still prefers the active environment over a connected duplicate", () => {
-    const stale = { ...runOnEnvironment({ environmentId: "env-a", label: "nx-nexi" }), connected: true };
+    const stale = {
+      ...runOnEnvironment({ environmentId: "env-a", label: "nx-nexi" }),
+      connected: true,
+    };
     const active = runOnEnvironment({ environmentId: "env-b", label: "nx-nexi" });
     const deduped = dedupeRunOnEnvironments([stale, active], active.environmentId);
     expect(deduped).toEqual([active]);
   });
 
   it("keeps the first row when both duplicates are connected", () => {
-    const first = { ...runOnEnvironment({ environmentId: "env-a", label: "nx-nexi" }), connected: true };
-    const second = { ...runOnEnvironment({ environmentId: "env-b", label: "nx-nexi" }), connected: true };
+    const first = {
+      ...runOnEnvironment({ environmentId: "env-a", label: "nx-nexi" }),
+      connected: true,
+    };
+    const second = {
+      ...runOnEnvironment({ environmentId: "env-b", label: "nx-nexi" }),
+      connected: true,
+    };
     const deduped = dedupeRunOnEnvironments([first, second], first.environmentId);
     expect(deduped).toEqual([first]);
   });

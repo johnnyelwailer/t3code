@@ -1,6 +1,11 @@
-import { Fragment } from "react";
+import { Fragment, useMemo } from "react";
 
 import { ProjectDashboardKanbanDroppableColumnBody } from "~/t3team/t3team-ProjectDashboardKanbanDndUi";
+import {
+  buildKanbanGridTemplateColumns,
+  withoutCollapsedColumnItems,
+  type ProjectDashboardKanbanColumnCollapse,
+} from "~/t3team/t3team-projectDashboardKanbanCollapse";
 import { ProjectDashboardKanbanMatrixLaneCard } from "~/t3team/t3team-ProjectDashboardKanbanMatrixLaneCard";
 import type { ProjectDashboardKanbanOptimisticMove } from "~/t3team/t3team-projectDashboardKanbanDnd";
 import type { TicketHierarchy } from "~/t3team/t3team-projectDashboardKanbanHierarchy";
@@ -25,6 +30,7 @@ export function ProjectDashboardKanbanMatrixBoard({
   renderTicketExtra,
   onMoveTicketToStatus,
   optimisticMoves,
+  columnCollapse,
 }: {
   kanbanColumns: ProjectTicketKanbanColumns;
   allTickets?: readonly ProjectTicket[];
@@ -37,7 +43,14 @@ export function ProjectDashboardKanbanMatrixBoard({
   renderTicketExtra?: (ticket: ProjectTicket, compact: boolean) => React.ReactNode;
   onMoveTicketToStatus?: (ticket: ProjectTicket, targetStatus: string) => Promise<string>;
   optimisticMoves: Readonly<Record<string, ProjectDashboardKanbanOptimisticMove>>;
+  columnCollapse?: ProjectDashboardKanbanColumnCollapse;
 }) {
+  const collapsedIds = columnCollapse?.collapsedIds;
+  // A collapsed column keeps its strip (with the full count) but places no cards in the matrix.
+  const layoutColumns = useMemo(
+    () => withoutCollapsedColumnItems(kanbanColumns, collapsedIds),
+    [kanbanColumns, collapsedIds],
+  );
   const {
     layout,
     shellHeaderPlacementKeys,
@@ -48,14 +61,20 @@ export function ProjectDashboardKanbanMatrixBoard({
     boardRowCount,
     boardBodyStyle,
   } = useProjectDashboardKanbanMatrixLayout({
-    kanbanColumns,
+    kanbanColumns: layoutColumns,
     allTickets,
     parentChildGroups,
   });
 
   return (
     <div className="overflow-x-auto pb-2">
-      <div className="grid min-w-full gap-x-3 gap-y-1" style={boardBodyStyle}>
+      <div
+        className="grid min-w-full gap-x-3 gap-y-1"
+        style={{
+          ...boardBodyStyle,
+          gridTemplateColumns: buildKanbanGridTemplateColumns(kanbanColumns, collapsedIds),
+        }}
+      >
         {kanbanColumns.map((column, columnIndex) => (
           <ProjectDashboardKanbanDroppableColumnBody
             key={column.id}
@@ -63,6 +82,13 @@ export function ProjectDashboardKanbanMatrixBoard({
             title={column.title}
             count={column.items.length}
             dragging={dragging}
+            {...(columnCollapse
+              ? {
+                  collapsed: columnCollapse.collapsedIds.has(column.id),
+                  onToggleCollapsed: (collapsed: boolean) =>
+                    columnCollapse.onToggle(column.id, collapsed),
+                }
+              : {})}
             style={{
               gridColumn: columnIndex + 1,
               gridRow: `1 / span ${boardRowCount + PROJECT_DASHBOARD_KANBAN_MATRIX_HEADER_ROWS}`,
@@ -82,7 +108,7 @@ export function ProjectDashboardKanbanMatrixBoard({
                   data-shell-ticket={plan.ticketId}
                   data-shell-role="single-lane"
                   data-shell-depth={shellDepth}
-                  className="pointer-events-none relative z-10 rounded-[1.35rem] border-[1.5px] border-border bg-background shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                  className="pointer-events-none relative z-10 rounded-3xl border-2 border-border bg-background inset-shadow-2xs inset-shadow-white/6"
                   style={{
                     gridColumn: plan.columnIndex + 1,
                     gridRow: `${PROJECT_DASHBOARD_KANBAN_MATRIX_HEADER_ROWS + plan.rowStart} / span ${plan.rowSpan}`,
@@ -101,7 +127,7 @@ export function ProjectDashboardKanbanMatrixBoard({
                 data-shell-ticket={plan.ticketId}
                 data-shell-role="spanning"
                 data-shell-depth={shellDepth}
-                className="pointer-events-none relative z-10 rounded-[1.35rem] border-[1.5px] border-border bg-background shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                className="pointer-events-none relative z-10 rounded-3xl border-2 border-border bg-background inset-shadow-2xs inset-shadow-white/6"
                 style={{
                   gridColumn: `${plan.columnIndex + 1} / span ${plan.columnSpan}`,
                   gridRow: `${PROJECT_DASHBOARD_KANBAN_MATRIX_HEADER_ROWS + plan.rowStart} / span ${plan.rowSpan}`,

@@ -1,10 +1,10 @@
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { toPersistenceSqlError } from "./persistence/Errors.ts";
 import {
-  readCachedBacklogIssueRows,
+  readCachedBacklogIssueRowsByIds,
   readCachedBacklogViewRow,
   serializeBacklogCacheJson,
 } from "./t3team-atlassian-backlog-cacheQueries.ts";
@@ -17,6 +17,7 @@ import {
   type T3TeamBacklogCacheIdentity,
   type T3TeamBacklogSelectionInput,
 } from "./t3team-atlassian-backlog-cacheShared.ts";
+import { captureDigestStatusTransitionsOf } from "./t3team-digestStatusTransitions.ts";
 import { ensureBacklogCacheTables } from "./t3team-atlassian-backlog-cacheTables.ts";
 
 export { readCachedT3TeamAtlassianBacklog } from "./t3team-atlassian-backlog-cacheRead.ts";
@@ -55,10 +56,11 @@ export const writeCachedT3TeamAtlassianBacklog = Effect.fn("t3team.atlassianBack
         const liveIds = new Set(input.response.page.items.map((item) => item.id));
         const tailIds = (existingIds ?? []).filter((id) => !liveIds.has(id));
         if (tailIds.length > 0) {
-          const issueRows = yield* readCachedBacklogIssueRows({
+          const issueRows = yield* readCachedBacklogIssueRowsByIds({
             provider: input.provider,
             accountId: input.accountId,
             externalProjectId: input.externalProjectId,
+            issueIds: tailIds,
           });
           const issuesById = new Map(
             issueRows.map((row) => [row.issueId, parseJson<BacklogResourceRef>(row.resourceJson)]),
@@ -81,6 +83,7 @@ export const writeCachedT3TeamAtlassianBacklog = Effect.fn("t3team.atlassianBack
         ...(input.requestSelection ? { requestSelection: input.requestSelection } : {}),
       });
 
+      yield* captureDigestStatusTransitionsOf(input, input.response.page.items);
       yield* sql.withTransaction(
         Effect.gen(function* () {
           if (input.replaceProjectCache) {

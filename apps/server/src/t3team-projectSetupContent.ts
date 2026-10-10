@@ -1,3 +1,4 @@
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import {
   T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
   T3TEAM_PROJECT_CONTEXT_ROOT,
@@ -43,7 +44,7 @@ export function renderAgentsMd(profile: ProjectSetupProfileDefinition): string {
 
 ## What You Can Do, And Not Ask About
 
-Save reusable work as a project recipe (under \`.t3team/recipes/\`) in the background, as a matter of course -- no permission-seeking. Same for a temporary workflow to carry out a multi-step task: create it and run it directly. Mention what you made afterward, briefly. Only hold off if the user has asked you not to.
+Save reusable work as a project recipe (under \`${T3TEAM_PROJECT_RECIPES_ROOT}/\`) in the background, as a matter of course -- no permission-seeking. Same for a temporary workflow to carry out a multi-step task: create it and run it directly. Mention what you made afterward, briefly. Only hold off if the user has asked you not to.
 
 Still ask, with options laid out, when a choice is genuinely the user's -- not permission to do your job.
 
@@ -66,18 +67,18 @@ Use these project files internally before asking the user to restate context:
 
 - ${T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH}
 - ${T3TEAM_PROJECT_CONTEXT_ROOT}/
-- .t3team/references/reference-repositories.json
+- ${PROJECT_STATE_DIR}/references/reference-repositories.json
 - ${T3TEAM_PROJECT_PROFILE_MANIFEST_PATH}
 
 ## Working Separately
 
 - Treat the current thread as where you coordinate and synthesize.
-- Use one child-session tool, \`t3team.thread.start_child\`, and always pass \`isolation\`.
+- Use one child-session tool, \`delegate_task\`, and choose the workspace explicitly.
 - Decision table:
-  | Work | \`isolation\` | Repository fields |
+  | Work | \`workspace\` | Repository fields |
   | --- | --- | --- |
-  | Planning, triage, synthesis, project status | \`shared\` | Do not pass \`repo_full_name\` or \`repo_ref\` |
-  | Implementation, debugging, tests, review, PR work | \`own-worktree\` | Pass \`repo_full_name\` for a linked repo (omit it in a local workspace or a monorepo project where the workspace is the meta-repo, to isolate in that repository); pass \`repo_ref\` when the base matters |
+  | Planning, triage, synthesis, project status | omit (shared checkout) | none |
+  | Implementation, debugging, tests, review, PR work | \`{ isolation: "worktree" }\` | \`repository\` for a linked repo (omit it in a local workspace or a monorepo project where the workspace is the meta-repo, to isolate in that repository); \`baseRef\` when the base matters |
 - For work that means digging through a repository, changing code, debugging, validation, or code review, do it in a separate thread scoped to the right repository, and keep this thread clean.
 - Tell the user in outcome terms ("I looked into that separately"), never in mechanics, and surface that thread as a link they can open to watch or review it.
 - If the answer needs checking several repositories or context bundles, prefer a read-only subagent and return one synthesized summary.
@@ -204,7 +205,7 @@ export function renderContextEntrypointPlaceholder(): string {
   return jsonFile({
     kind: "project-workspace-context",
     status: "pending-sync",
-    referencesManifestPath: ".t3team/references/reference-repositories.json",
+    referencesManifestPath: `${PROJECT_STATE_DIR}/references/reference-repositories.json`,
     profilePath: T3TEAM_PROJECT_PROFILE_MANIFEST_PATH,
     contextRoot: T3TEAM_PROJECT_CONTEXT_ROOT,
     paths: {

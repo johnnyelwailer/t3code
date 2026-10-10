@@ -1,3 +1,5 @@
+import { readDesktopPrimaryBearerToken } from "~/environments/primary/desktopAuth";
+
 export function resolveWsUrl(rawUrl: string): string {
   const resolved = new URL(rawUrl);
   if (resolved.protocol === "http:") resolved.protocol = "ws:";
@@ -23,6 +25,21 @@ export function resolveHttpBaseUrl(rawUrl: string): string {
 }
 
 const BACKEND_POST_TIMEOUT_MS = 15_000;
+
+/**
+ * How a request authenticates to this app's own server, which requires a session on every
+ * `/api/t3team` route: the desktop's primary bearer when there is one (the renderer is another
+ * origin, so it has no cookie there), else the same-origin session cookie.
+ */
+export async function primaryServerAuthInit(): Promise<{
+  readonly credentials: RequestCredentials;
+  readonly headers: Readonly<Record<string, string>>;
+}> {
+  const bearer = await readDesktopPrimaryBearerToken().catch(() => null);
+  return bearer
+    ? { credentials: "omit", headers: { authorization: `Bearer ${bearer}` } }
+    : { credentials: "same-origin", headers: {} };
+}
 
 /**
  * The server dropped the account's dead Jira refresh token and wants a fresh sign-in. The client
@@ -88,12 +105,15 @@ async function requestJson<TResponse>(
     abortController.abort();
   }, timeoutMs);
 
+  const auth = await primaryServerAuthInit();
   const response = await fetch(url, {
     method: init.method,
-    credentials: "same-origin",
-    ...(init.body === undefined
-      ? {}
-      : { headers: { "content-type": "application/json" }, body: init.body }),
+    credentials: auth.credentials,
+    headers: {
+      ...auth.headers,
+      ...(init.body === undefined ? {} : { "content-type": "application/json" }),
+    },
+    ...(init.body === undefined ? {} : { body: init.body }),
     signal: abortController.signal,
   })
     .catch((error) => {

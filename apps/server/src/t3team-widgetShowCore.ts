@@ -1,18 +1,32 @@
 /**
  * Pure input validation + attachment construction for the `t3team.widget.show` broker tool
  * (Epic 24 ad-hoc widget tier). Effectful orchestration lives in `t3team-widgetShowTool.ts`.
+ *
+ * `format: "html"` is shimmed onto upstream HtmlRender storage (Phil 2026-10-06): the fragment
+ * stays on the attachment for back-compat; an optional `htmlRender` ref points at the published
+ * attachment clients render via HtmlRenderFrame. Other formats stay on the widget tier.
  */
 
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import type { T3TeamMessageWidgetAttachment } from "@t3tools/contracts";
+import type { HtmlRenderReference } from "@t3tools/shared/htmlRender";
 
 import { resolveWidgetCapabilityPolicy } from "./t3team-widgetCapabilityPolicy.ts";
 
-export const T3TEAM_WIDGET_SHOW_TOOL_ID = "t3team.widget.show";
-export const T3TEAM_WIDGET_CODE_MAX_BYTES = 128 * 1024;
+const T3TEAM_WIDGET_SHOW_TOOL_ID = "t3team.widget.show";
+const T3TEAM_WIDGET_CODE_MAX_BYTES = 128 * 1024;
 const TITLE_MAX_LENGTH = 64;
+const INTENT_MAX_LENGTH = 8_000;
 const LOADING_MESSAGES_MAX = 8;
 const LOADING_MESSAGE_MAX_LENGTH = 200;
 const TOOLS_MAX = 16;
+
+/** CSP kept for widget html even when stored via HtmlRender (no remote network). */
+export const T3TEAM_WIDGET_HTML_CSP =
+  "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'";
+
+/** Default frame height when shim-publishing via HtmlRender (clients refine via measured heights). */
+export const T3TEAM_WIDGET_HTML_RENDER_DEFAULT_HEIGHT = 400;
 
 export type T3TeamWidgetFormat = "html" | "svg" | "mdx" | "tsx";
 const WIDGET_FORMATS: ReadonlySet<T3TeamWidgetFormat> = new Set(["html", "svg", "mdx", "tsx"]);
@@ -23,7 +37,10 @@ const IMPLEMENTED_WIDGET_FORMATS: ReadonlySet<T3TeamWidgetFormat> = new Set(["ht
 export interface T3TeamWidgetShowInput {
   readonly title: string;
   readonly format: T3TeamWidgetFormat;
+  /** Present when the caller bypassed the builder with raw code. Empty when intent-only. */
   readonly widgetCode: string;
+  /** Preferred default input: what the caller wants to see. Builder authors widgetCode from it. */
+  readonly intent: string | undefined;
   readonly loadingMessages: ReadonlyArray<string>;
   /** Allowlist of broker tool ids the widget bridge may call. */
   readonly tools: ReadonlyArray<string>;
@@ -42,12 +59,29 @@ function readStringArray(value: unknown, max: number): ReadonlyArray<string> | u
     .slice(0, max);
 }
 
+/**
+ * Wrap a validated HTML fragment into a full document suitable for HtmlRender.publish,
+ * preserving the widget CSP (`connect-src 'none'`) — never route through publicProxy.
+ */
+export function wrapWidgetHtmlFragmentForHtmlRender(fragment: string): string {
+  return [
+    "<!DOCTYPE html>",
+    '<html><head><meta charset="utf-8">',
+    `<meta http-equiv="Content-Security-Policy" content="${T3TEAM_WIDGET_HTML_CSP}">`,
+    "</head><body>",
+    fragment,
+    "</body></html>",
+  ].join("");
+}
+
 /** Validate raw tool arguments. Returns the parsed input or a human-readable error string. */
 export function parseT3TeamWidgetShowInput(
   toolArgs: unknown,
 ): T3TeamWidgetShowInput | { readonly error: string } {
   if (!toolArgs || typeof toolArgs !== "object" || globalThis.Array.isArray(toolArgs)) {
-    return { error: "t3team.widget.show requires an object with title and widget_code." };
+    return {
+      error: "t3team.widget.show requires an object with title and intent or widget_code.",
+    };
   }
   const args = toolArgs as Record<string, unknown>;
 
@@ -64,21 +98,34 @@ export function parseT3TeamWidgetShowInput(
     return { error: "title must contain at least one alphanumeric character." };
   }
 
+  const rawIntent = typeof args.intent === "string" ? args.intent.trim() : "";
+  const intent =
+    rawIntent.length === 0
+      ? undefined
+      : rawIntent.length > INTENT_MAX_LENGTH
+        ? rawIntent.slice(0, INTENT_MAX_LENGTH)
+        : rawIntent;
+
   const widgetCode = typeof args.widget_code === "string" ? args.widget_code.trim() : "";
-  if (widgetCode.length === 0) {
-    return { error: "widget_code is required and must be a non-empty string." };
-  }
-  // Cap in UTF-8 bytes (what actually gets persisted and shipped), not UTF-16 length.
-  if (new TextEncoder().encode(widgetCode).byteLength > T3TEAM_WIDGET_CODE_MAX_BYTES) {
-    return {
-      error: `widget_code exceeds the ${T3TEAM_WIDGET_CODE_MAX_BYTES / 1024} KB limit.`,
-    };
-  }
-  if (FORBIDDEN_DOCUMENT_MARKUP.test(widgetCode)) {
+  if (widgetCode.length === 0 && intent === undefined) {
     return {
       error:
-        "widget_code must be a fragment: raw SVG or HTML without <!DOCTYPE>, <html>, <head>, or <body> tags.",
+        "Provide intent (preferred: describe what to show; a builder authors the widget) or widget_code (raw bypass, required for deterministic workflow replay).",
     };
+  }
+  if (widgetCode.length > 0) {
+    // Cap in UTF-8 bytes (what actually gets persisted and shipped), not UTF-16 length.
+    if (new TextEncoder().encode(widgetCode).byteLength > T3TEAM_WIDGET_CODE_MAX_BYTES) {
+      return {
+        error: `widget_code exceeds the ${T3TEAM_WIDGET_CODE_MAX_BYTES / 1024} KB limit.`,
+      };
+    }
+    if (FORBIDDEN_DOCUMENT_MARKUP.test(widgetCode)) {
+      return {
+        error:
+          "widget_code must be a fragment: raw SVG or HTML without <!DOCTYPE>, <html>, <head>, or <body> tags.",
+      };
+    }
   }
 
   let format: T3TeamWidgetFormat | undefined;
@@ -89,7 +136,9 @@ export function parseT3TeamWidgetShowInput(
     format = args.format as T3TeamWidgetFormat;
   }
   // Mirror the Claude desktop convention: auto-detect svg vs html from the code itself.
-  const resolvedFormat = format ?? (widgetCode.startsWith("<svg") ? "svg" : "html");
+  // Intent-only defaults to html (builder / shim path).
+  const resolvedFormat =
+    format ?? (widgetCode.length > 0 ? (widgetCode.startsWith("<svg") ? "svg" : "html") : "html");
   if (!IMPLEMENTED_WIDGET_FORMATS.has(resolvedFormat)) {
     const target =
       resolvedFormat === "tsx"
@@ -142,22 +191,30 @@ export function parseT3TeamWidgetShowInput(
   const policy = resolveWidgetCapabilityPolicy(resolvedFormat);
   const effectiveTools = policy.callToolAllowed ? tools : [];
 
-  return { title, format: resolvedFormat, widgetCode, loadingMessages, tools: effectiveTools };
+  return {
+    title,
+    format: resolvedFormat,
+    widgetCode,
+    intent,
+    loadingMessages,
+    tools: effectiveTools,
+  };
 }
 
 export function buildT3TeamWidgetArtifactRelativePath(input: {
   readonly title: string;
   readonly widgetId: string;
 }): string {
-  return `.t3team/artifacts/widgets/${input.title}-${input.widgetId}.html`;
+  return `${PROJECT_STATE_DIR}/artifacts/widgets/${input.title}-${input.widgetId}.html`;
 }
 
 export function buildT3TeamWidgetAttachment(input: {
   readonly widgetId: string;
   readonly parsed: T3TeamWidgetShowInput;
   readonly artifactRelativePath: string | undefined;
+  readonly htmlRender?: HtmlRenderReference | undefined;
 }): T3TeamMessageWidgetAttachment {
-  const { widgetId, parsed, artifactRelativePath } = input;
+  const { widgetId, parsed, artifactRelativePath, htmlRender } = input;
   return {
     kind: "widget",
     widget: {
@@ -165,6 +222,16 @@ export function buildT3TeamWidgetAttachment(input: {
       title: parsed.title,
       format: parsed.format,
       html: parsed.widgetCode,
+      ...(htmlRender
+        ? {
+            htmlRender: {
+              attachmentId: htmlRender.attachmentId,
+              title: htmlRender.title,
+              height: htmlRender.height,
+              ...(htmlRender.heights === undefined ? {} : { heights: [...htmlRender.heights] }),
+            },
+          }
+        : {}),
       ...(artifactRelativePath
         ? {
             artifact: {

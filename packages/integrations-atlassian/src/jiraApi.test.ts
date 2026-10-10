@@ -39,6 +39,59 @@ describe("JiraApiClient", () => {
     );
   });
 
+  it("fetches an OAuth site's public issue-type icon without sending the bearer token", async () => {
+    const fetchMock = vi.fn(
+      async () => new Response("<svg/>", { headers: { "content-type": "image/svg+xml" } }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const client = new JiraApiClient({
+      kind: "oauth",
+      cloudId: "cloud-123",
+      siteUrl: "https://test.atlassian.net",
+      accessToken: "access-token",
+    });
+
+    const asset = await client.downloadAsset(
+      "https://test.atlassian.net/images/icons/issuetypes/epic.svg",
+    );
+
+    expect(asset.mimeType).toBe("image/svg+xml");
+    const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
+    expect(JSON.stringify(init.headers)).not.toContain("access-token");
+    // The asset route is unauthenticated: a redirect must not steer the server elsewhere.
+    expect(init.redirect).toBe("error");
+  });
+
+  it("does not treat a non-icon path on the OAuth site as a public asset", async () => {
+    globalThis.fetch = vi.fn() as unknown as typeof fetch;
+    const client = new JiraApiClient({
+      kind: "oauth",
+      cloudId: "cloud-123",
+      siteUrl: "https://test.atlassian.net",
+      accessToken: "access-token",
+    });
+
+    await expect(
+      client.downloadAsset("https://test.atlassian.net/secure/attachment/1/x.png"),
+    ).rejects.toThrow(/outside the authenticated origin/);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("still refuses an OAuth asset on any origin other than the gateway or its own site", async () => {
+    globalThis.fetch = vi.fn() as unknown as typeof fetch;
+    const client = new JiraApiClient({
+      kind: "oauth",
+      cloudId: "cloud-123",
+      siteUrl: "https://test.atlassian.net",
+      accessToken: "access-token",
+    });
+
+    await expect(client.downloadAsset("https://evil.example/x.svg")).rejects.toThrow(
+      /outside the authenticated origin/,
+    );
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
   it("lists a board's quick filters", async () => {
     const fetchMock = vi.fn(async () =>
       Response.json({
@@ -335,5 +388,45 @@ describe("JiraApiClient", () => {
     expect(result.issueLinkTypes).toEqual([
       { id: "1", name: "Blocks", inward: "is blocked by", outward: "blocks" },
     ]);
+  });
+});
+
+describe("JiraApiClient.searchProjects pagination", () => {
+  const makeClient = () =>
+    new JiraApiClient({
+      kind: "basic",
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+  const project = (n: number) => ({ id: String(n), key: `P${n}`, name: `Project ${n}` });
+
+  it("walks startAt until the last page so >100 projects are not truncated", async () => {
+    const all = Array.from({ length: 250 }, (_, i) => project(i));
+    const fetchMock = vi.fn(async (url: string) => {
+      const startAt = Number(new URL(url).searchParams.get("startAt"));
+      const values = all.slice(startAt, startAt + 100);
+      return Response.json({ values, total: all.length, isLast: startAt + 100 >= all.length });
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await makeClient().searchProjects();
+
+    expect(result.values).toHaveLength(250);
+    expect(new Set(result.values.map((p) => p.id)).size).toBe(250);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("stops on an empty page even if the server never reports isLast", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      const startAt = Number(new URL(url).searchParams.get("startAt"));
+      return Response.json({ values: startAt === 0 ? [project(1)] : [], total: 999 });
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await makeClient().searchProjects();
+
+    expect(result.values).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

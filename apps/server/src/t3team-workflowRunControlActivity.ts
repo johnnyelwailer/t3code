@@ -4,34 +4,29 @@
  * t3team-workflowRunControl.ts for the additive size budget. What the card's banner reads
  * ("Workflow paused" + when); the agent's tool emits it exactly as the card's button does.
  */
-import { CommandId, EventId, ThreadId, type OrchestrationCommand } from "@t3tools/contracts";
 import { PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP } from "@t3tools/project-recipes";
 import * as Effect from "effect/Effect";
 
-import type { OrchestrationDispatchError } from "./orchestration/Errors.ts";
+import { workflowStepActivityId } from "./t3team-workflowEngineStepActivities.ts";
+import type { T3TeamWorkflowHostShape } from "./t3team-workflowHost.ts";
 
 export type WorkflowRunControlPhase = "started" | "paused" | "cancelled";
 
-const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
-
 export const postWorkflowRunControlActivity = Effect.fn("postWorkflowRunControlActivity")(
   function* (input: {
-    readonly dispatch: (command: OrchestrationCommand) => Effect.Effect<unknown, OrchestrationDispatchError>;
+    readonly host: Pick<T3TeamWorkflowHostShape, "upsertActivity">;
     readonly runId: string;
     readonly threadId: string;
     readonly projectId: string;
     readonly phase: WorkflowRunControlPhase;
-    readonly nowIso: () => string;
   }) {
-    const { dispatch, runId, threadId, projectId, phase, nowIso } = input;
-    yield* dispatch({
-      type: "thread.activity.append",
-      commandId: CommandId.make(`t3team-wf-control:${runId}:${nowIso()}`),
-      threadId: ThreadId.make(threadId),
-      activity: {
-        id: EventId.make(`t3team-wf-step:${runId}:run`),
-        tone: "info",
+    const { host, runId, threadId, projectId, phase } = input;
+    yield* host
+      .upsertActivity({
+        threadId,
+        id: workflowStepActivityId(`${runId}:run`),
         kind: PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
+        tone: "info",
         summary:
           phase === "paused"
             ? "Workflow paused"
@@ -45,10 +40,7 @@ export const postWorkflowRunControlActivity = Effect.fn("postWorkflowRunControlA
           phase,
           projectId,
         },
-        turnId: null,
-        createdAt: nowIso(),
-      },
-      createdAt: nowIso(),
-    }).pipe(Effect.mapError(errorMessage));
+      })
+      .pipe(Effect.mapError((error) => error.message));
   },
 );

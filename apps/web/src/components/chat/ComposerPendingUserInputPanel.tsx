@@ -1,4 +1,4 @@
-import { type ApprovalRequestId } from "@t3tools/contracts";
+import { type RuntimeRequestId } from "@t3tools/contracts";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { type PendingUserInput } from "../../session-logic";
 import {
@@ -28,12 +28,12 @@ function composerEditorHasFocus(): boolean {
 
 interface PendingUserInputPanelProps {
   pendingUserInputs: PendingUserInput[];
-  respondingRequestIds: ApprovalRequestId[];
+  respondingRequestIds: RuntimeRequestId[];
   answers: Record<string, PendingUserInputDraftAnswer>;
   questionIndex: number;
   onToggleOption: (questionId: string, optionValue: string) => void;
   onAdvance: () => void;
-  onDismiss: (requestId: ApprovalRequestId) => void;
+  onDismiss: (requestId: RuntimeRequestId) => void;
 }
 
 export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserInputPanel({
@@ -78,8 +78,11 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   questionIndex: number;
   onToggleOption: (questionId: string, optionValue: string) => void;
   onAdvance: () => void;
-  onDismiss: (requestId: ApprovalRequestId) => void;
+  onDismiss: (requestId: RuntimeRequestId) => void;
 }) {
+  // Message-mode requests remain answerable after their provider turn ends.
+  const canRespond = prompt.responseCapability !== "not_resumable";
+  const responseDisabled = isResponding || !canRespond;
   const progress = derivePendingUserInputProgress(prompt.questions, answers, questionIndex);
   const activeQuestion = progress.activeQuestion;
   const autoAdvanceTimerRef = useRef<number | null>(null);
@@ -159,7 +162,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   // select prompts keep the existing auto-advance behavior. Collapsed prompts opt
   // out, since the numbers they refer to are not on screen.
   useEffect(() => {
-    if (!activeQuestion || isResponding || isCollapsed) return;
+    if (!activeQuestion || responseDisabled || isCollapsed) return;
     const handler = (event: globalThis.KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target;
@@ -183,7 +186,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [activeQuestion, handleOptionSelection, isCollapsed, isResponding]);
+  }, [activeQuestion, handleOptionSelection, isCollapsed, responseDisabled]);
 
   if (!activeQuestion) {
     return null;
@@ -224,7 +227,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
         </ComposerBanner.Content>
         <ComposerBanner.Actions>
           {prompt.questions.length > 1 ? (
-            <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
+            <span className="text-3xs font-medium text-muted-foreground tabular-nums">
               {questionIndex + 1}/{prompt.questions.length}
             </span>
           ) : null}
@@ -255,7 +258,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
       </CollapsibleTrigger>
       <CollapsiblePanel>
         <ComposerBanner.Scroll className="max-h-[calc(100dvh-13rem)]">
-          <ComposerBanner.Body className="pe-1 pb-1">
+          <ComposerBanner.Body className="pe-1 pb-1 wrap-anywhere">
             {activeQuestion.context ? (
               // Context strip: the earlier-thread content the question points
               // at, so the question reads without scrolling back. Subtle,
@@ -264,12 +267,12 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
               <div className="mb-2 rounded-md bg-muted/40 px-2.5 py-1.5">
                 <T3TeamPendingQuestionMarkdown
                   text={activeQuestion.context}
-                  className="text-secondary-label text-[11px] line-clamp-4"
+                  className="text-secondary-label text-2xs line-clamp-4"
                 />
                 <Collapsible>
                   <CollapsibleTrigger
                     render={<button type="button" />}
-                    className="mt-0.5 text-[10px] font-medium text-muted-foreground"
+                    className="mt-0.5 text-3xs font-medium text-muted-foreground"
                   >
                     Show full context
                   </CollapsibleTrigger>
@@ -277,7 +280,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                     <div className="pt-0.5">
                       <T3TeamPendingQuestionMarkdown
                         text={activeQuestion.context}
-                        className="text-secondary-label text-[11px]"
+                        className="text-secondary-label text-2xs"
                       />
                     </div>
                   </CollapsiblePanel>
@@ -313,7 +316,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                       {option.description && option.description !== option.label ? (
                         <T3TeamPendingQuestionMarkdown
                           text={option.description}
-                          className="text-secondary-label text-[11px]"
+                          className="text-secondary-label text-2xs"
                         />
                       ) : null}
                     </div>
@@ -322,7 +325,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                     ) : shortcutKey !== null ? (
                       <kbd
                         className={cn(
-                          "flex size-5 shrink-0 items-center justify-center text-[10px] font-medium text-muted-foreground tabular-nums",
+                          "flex size-5 shrink-0 items-center justify-center text-3xs font-medium text-muted-foreground tabular-nums",
                         )}
                       >
                         {shortcutKey}

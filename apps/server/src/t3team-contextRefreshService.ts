@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { ServerConfig } from "./config.ts";
 import { runT3TeamContextRefreshForeground } from "./t3team-contextRefreshForegroundRun.ts";
@@ -27,7 +27,6 @@ import { resumeIncompleteT3TeamContextBackgroundJobs } from "./t3team-contextRef
 import { WorkspacePaths } from "./workspace/WorkspacePaths.ts";
 
 export {
-  T3TeamContextRefreshError,
   type T3TeamContextRefreshInput,
   type T3TeamContextProjectRefreshInput,
   type T3TeamContextProjectRefreshResult,

@@ -1,22 +1,21 @@
 /**
- * `effort` on `t3team.thread.start_child`.
- *
- * The provider-agnostic tier (`light` / `standard` / `high`) previously reached workflow child
- * turns only. start_child shares the model-selection resolver, so it now takes the same tier and
- * routes it through the SAME `applyWorkflowEffort` seam — one mapping, not two. What must hold:
+ * The provider-agnostic `effort` tier in the shared child model resolver
+ * (`resolveStartChildModelSelection`, used by workflow child turns and the delegate_task
+ * `effort` extension). It routes through the SAME `applyWorkflowEffort` seam — one mapping,
+ * not two. What must hold:
  *
  *   • the tier lands on whatever reasoning control the RESOLVED provider/model advertises, both
  *     when inheriting the parent's provider and when switching providers;
  *   • the instance and model are never swapped out from under the caller;
  *   • a provider with no reasoning control is a silent NO-OP — never a failed spawn;
- *   • the explicit, provider-vocabulary `reasoning_effort` stays the more specific request and
- *     wins when both are supplied (they write the same option);
- *   • the arg reader accepts the tier and rejects nonsense with an agent-readable message.
+ *   • the explicit, provider-vocabulary `reasoningEffort` stays the more specific request and
+ *     wins when both are supplied (they write the same option).
  */
 import type { ModelSelection, ServerProvider } from "@t3tools/contracts";
+import { it as effectIt } from "@effect/vitest";
+import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { readStartChildArgs } from "./t3team-toolBrokerStartChildArgs.ts";
 import { resolveStartChildModelSelection } from "./t3team-toolBrokerStartChildProvider.ts";
 
 const selectCaps = (options: ReadonlyArray<{ id: string; isDefault?: boolean }>) => ({
@@ -54,11 +53,11 @@ const ladder = provider(
 );
 const toggle = provider("toggle", ["toggle-a"], booleanCaps());
 const plain = provider("plain", ["plain-a"], null);
-// The Nexplore gateway's shape: the tiers ARE the model slugs (gateway aliases) and no
-// reasoning control is advertised — the effort must land on the closest tier model.
-const nexplore = provider("nexplore", ["no-thinking", "low", "medium", "high"], null);
+// A gateway whose tiers ARE the model slugs (tier aliases) and that advertises no reasoning
+// control — the effort must land on the closest tier model.
+const tiered = provider("tiered", ["no-thinking", "low", "medium", "high"], null);
 
-const providers = [ladder, toggle, plain, nexplore];
+const providers = [ladder, toggle, plain, tiered];
 
 const parentOn = (instanceId: string, model: string): ModelSelection =>
   ({ instanceId, model, options: [] }) as unknown as ModelSelection;
@@ -69,7 +68,7 @@ const resolve = (input: Parameters<typeof resolveStartChildModelSelection>[0]) =
   return result.value;
 };
 
-describe("start_child effort — inheriting the parent's provider", () => {
+describe("child effort — inheriting the parent's provider", () => {
   const parent = parentOn("ladder", "ladder-a");
 
   it("maps the tier onto the provider's own reasoning ladder", () => {
@@ -100,10 +99,10 @@ describe("start_child effort — inheriting the parent's provider", () => {
     );
   });
 
-  it("maps the tier onto the provider's tier models when those are all it exposes (nexplore)", () => {
-    const onFast = parentOn("nexplore", "low");
+  it("maps the tier onto the provider's tier models when those are all it exposes (tiered)", () => {
+    const onFast = parentOn("tiered", "low");
     // The bug this guards: a Fast-tier parent + effort 'high' used to silently stay on 'low'
-    // because the nexplore provider advertises no reasoning control to map onto.
+    // because the tiered provider advertises no reasoning control to map onto.
     expect(resolve({ parentModelSelection: onFast, effort: "high", providers }).model).toBe("high");
     expect(resolve({ parentModelSelection: onFast, effort: "light", providers }).model).toBe("low");
     expect(resolve({ parentModelSelection: onFast, effort: "standard", providers }).model).toBe(
@@ -113,16 +112,16 @@ describe("start_child effort — inheriting the parent's provider", () => {
 
   it("never swaps the instance when the tier moves the model to another rung", () => {
     const value = resolve({
-      parentModelSelection: parentOn("nexplore", "low"),
+      parentModelSelection: parentOn("tiered", "low"),
       effort: "high",
       providers,
     });
-    expect(value.instanceId).toBe("nexplore");
+    expect(value.instanceId).toBe("tiered");
     expect(value.model).toBe("high");
   });
 });
 
-describe("start_child effort — cross-provider", () => {
+describe("child effort — cross-provider", () => {
   it("maps the tier against the REQUESTED provider's control, not the parent's", () => {
     const value = resolve({
       parentModelSelection: parentOn("toggle", "toggle-a"),
@@ -136,7 +135,7 @@ describe("start_child effort — cross-provider", () => {
   });
 });
 
-describe("start_child effort — documented no-op degrade", () => {
+describe("child effort — documented no-op degrade", () => {
   it("is a silent no-op when the provider exposes no reasoning control", () => {
     const value = resolve({
       parentModelSelection: parentOn("plain", "plain-a"),
@@ -148,14 +147,19 @@ describe("start_child effort — documented no-op degrade", () => {
     expect(value.options).toEqual([]);
   });
 
-  it("is a no-op when the provider snapshot is unknown, rather than failing the spawn", () => {
-    const value = resolve({
-      parentModelSelection: parentOn("ladder", "ladder-a"),
-      effort: "high",
-      providers: [],
-    });
-    expect(value.options).toEqual([]);
-  });
+  effectIt.effect(
+    "rejects an unknown provider snapshot because no latest catalog model can be chosen",
+    () =>
+      Effect.sync(() => {
+        const result = resolveStartChildModelSelection({
+          parentModelSelection: parentOn("ladder", "ladder-a"),
+          effort: "high",
+          providers: [],
+        });
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error.reason).toBe("unknown_instance");
+      }),
+  );
 
   it("leaves a boolean control untouched for the standard tier (provider default wins)", () => {
     expect(
@@ -168,7 +172,7 @@ describe("start_child effort — documented no-op degrade", () => {
   });
 });
 
-describe("start_child effort — precedence over the provider-specific dial", () => {
+describe("child effort — precedence over the provider-specific dial", () => {
   it("lets the explicit reasoning_effort win when both are supplied", () => {
     const value = resolve({
       parentModelSelection: parentOn("ladder", "ladder-a"),
@@ -177,36 +181,5 @@ describe("start_child effort — precedence over the provider-specific dial", ()
       providers,
     });
     expect(value.options).toEqual([{ id: "reasoningEffort", value: "low" }]);
-  });
-});
-
-describe("start_child effort — argument reading", () => {
-  const base = { name: "child", execution_scope: "metarepo" as const };
-
-  it("accepts the tier, case-insensitively, and omits it when absent", () => {
-    const parsed = readStartChildArgs({ ...base, effort: " High " });
-    expect(parsed.ok).toBe(true);
-    if (parsed.ok) expect(parsed.value.effort).toBe("high");
-    const none = readStartChildArgs(base);
-    expect(none.ok).toBe(true);
-    if (none.ok) expect(none.value.effort).toBeUndefined();
-  });
-
-  it("rejects a provider's own vocabulary with a message naming the valid tiers", () => {
-    const parsed = readStartChildArgs({ ...base, effort: "medium" });
-    expect(parsed.ok).toBe(false);
-    if (!parsed.ok) {
-      expect(parsed.message).toContain("'light', 'standard', or 'high'");
-      expect(parsed.message).toContain("provider-agnostic");
-    }
-  });
-
-  it("still reads the provider-specific reasoning_effort alongside it", () => {
-    const parsed = readStartChildArgs({ ...base, effort: "light", reasoning_effort: "HIGH" });
-    expect(parsed.ok).toBe(true);
-    if (parsed.ok) {
-      expect(parsed.value.effort).toBe("light");
-      expect(parsed.value.reasoningEffort).toBe("high");
-    }
   });
 });

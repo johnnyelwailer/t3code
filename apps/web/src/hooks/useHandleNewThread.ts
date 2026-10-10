@@ -23,18 +23,20 @@ import {
   selectProjectGroupingSettings,
 } from "../logicalProject";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
-import { resolveDefaultThreadEnvMode } from "@t3tools/shared/threadEnvMode";
-import { readProjects, readThreadShell, useProjects, useThread } from "../state/entities";
+import { readProjects, readThreadShell, useProjects, useThreadShell } from "../state/entities";
 import {
   hasExplicitComposerModelSelection,
   resolveNewDraftStartFromOrigin,
   resolveNewThreadModelSelectionOverride,
 } from "../lib/chatThreadActions";
-import { readT3ProjectFileDefaultThreadEnvMode } from "../lib/t3ProjectFileDefaults";
+import { readT3ProjectFile } from "../lib/t3ProjectFileDefaults";
 import { environmentServerConfigsAtom } from "../state/server";
 import { resolveThreadRouteTarget } from "../threadRoutes";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { useClientSettings } from "./useSettings";
+import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
+import { pickScopedDefaultProject } from "../t3team/t3team-scopeProjectResolution";
+import { useT3TeamSidebarProjectScope } from "../t3team/t3team-sidebarProjectScopeStore";
 
 interface NewThreadWorkspaceOptions {
   branch?: string | null;
@@ -138,10 +140,6 @@ export function useNewThreadHandler() {
       );
       const projectDefaultModelSelection = projectSettings.settings.defaultModelSelection;
       const defaultRuntimeMode = projectSettings.settings.defaultRuntimeMode;
-      const projectThreadEnvMode =
-        projectSettings.sources.defaultThreadEnvMode === "project"
-          ? projectSettings.settings.defaultThreadEnvMode
-          : undefined;
       const resolveModelSelectionOverride = (destinationDraftId: DraftId) =>
         resolveNewThreadModelSelectionOverride({
           projectDefaultSelection: projectDefaultModelSelection ?? null,
@@ -154,17 +152,17 @@ export function useNewThreadHandler() {
       // skipped entirely when a higher-priority source decides, and its
       // query atom caches per project after the first call.
       const resolveDefaultEnvMode = async (): Promise<DraftThreadEnvMode> => {
-        const consultProjectFile = project !== undefined && projectThreadEnvMode == null;
-        return resolveDefaultThreadEnvMode({
-          projectSetting: projectThreadEnvMode,
-          projectFile: consultProjectFile
-            ? await readT3ProjectFileDefaultThreadEnvMode(
-                project.environmentId,
-                project.workspaceRoot,
-              )
-            : null,
-          globalDefault: projectSettings.settings.defaultThreadEnvMode,
-        });
+        const consultProjectFile =
+          project !== undefined && projectSettings.settings.defaultThreadEnvMode === null;
+        const projectFile = consultProjectFile
+          ? await readT3ProjectFile(project.environmentId, project.workspaceRoot)
+          : null;
+        return resolveProjectSettings(
+          targetServerSettings,
+          project?.id ?? null,
+          project,
+          projectFile,
+        ).settings.defaultThreadEnvMode;
       };
       const logicalProjectKey = project
         ? deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings)
@@ -447,7 +445,7 @@ export function useHandleNewThread() {
   });
   const routeThreadRef = routeTarget?.kind === "server" ? routeTarget.threadRef : null;
   const routeDraftId = routeTarget?.kind === "draft" ? routeTarget.draftId : null;
-  const activeThread = useThread(routeThreadRef);
+  const activeThread = useThreadShell(routeThreadRef);
   const getDraftThread = useComposerDraftStore((store) => store.getDraftThread);
   const activeDraftThread = useComposerDraftStore(() =>
     routeTarget
@@ -469,12 +467,40 @@ export function useHandleNewThread() {
     });
   }, [projectOrder, projects]);
   const handleNewThread = useNewThreadHandler();
+  // t3team: the default project is the first one whose environment is reachable — a project on a
+  // machine that went away (an ended cloud session) cannot take a new thread.
+  // This computer always counts as reachable, even while it is still connecting at startup.
+  const { environments } = useEnvironments();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  // t3team: the sidebar's project scope outranks project order for the default — "new thread"
+  // starts in the project the user is looking at. An open thread or draft still wins (see
+  // resolveThreadActionProjectRef), and an unscoped sidebar behaves as before.
+  const scopedProjectRefs = useT3TeamSidebarProjectScope((state) => state.scopedProjectRefs);
+  const defaultProject = useMemo(() => {
+    const offline = new Set<string>(
+      environments
+        .filter(
+          (environment) =>
+            environment.connection.phase !== "connected" &&
+            environment.environmentId !== primaryEnvironmentId,
+        )
+        .map((environment) => environment.environmentId),
+    );
+    return pickScopedDefaultProject({
+      orderedProjects,
+      scopedProjectRefs,
+      offlineEnvironmentIds: offline,
+      fallback:
+        orderedProjects.find((project) => !offline.has(project.environmentId)) ??
+        orderedProjects[0],
+    });
+  }, [environments, orderedProjects, primaryEnvironmentId, scopedProjectRefs]);
 
   return {
     activeDraftThread,
     activeThread,
-    defaultProjectRef: orderedProjects[0]
-      ? scopeProjectRef(orderedProjects[0].environmentId, orderedProjects[0].id)
+    defaultProjectRef: defaultProject
+      ? scopeProjectRef(defaultProject.environmentId, defaultProject.id)
       : null,
     handleNewThread,
     routeDraftId,

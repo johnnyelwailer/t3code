@@ -22,7 +22,6 @@
       "@t3code/distribution": ["./apps/server/src/t3team-distribution.ts"],
       "@t3team/sdk": ["./packages/t3team-sdk/src/t3team-sdk.index.ts"],
       "@t3team/sdk/groups": ["./packages/t3team-sdk/src/t3team-sdk.groups.ts"],
-      "@t3team/sdk/models": ["./packages/t3team-sdk/src/t3team-sdk.models.ts"],
       "@t3team/sdk/tools/t3team": ["./packages/t3team-sdk/src/tools/t3team-sdk.t3team.ts"]
     },
     "plugins": [
@@ -57,7 +56,8 @@
           "globalTimers": "error",
           "globalTimersInEffect": "error",
           "globalFetch": "error",
-          "globalFetchInEffect": "error"
+          "globalFetchInEffect": "error",
+          "schemaNumber": "off"
         }
       }
     ]

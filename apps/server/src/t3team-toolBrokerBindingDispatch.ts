@@ -17,12 +17,16 @@ import {
   callT3TeamProjectRefreshContextBundleEffect,
   callT3TeamWorkItemRefreshContextBundleEffect,
 } from "./t3team-toolBrokerContextSync.ts";
-import { callT3TeamRenameTool } from "./t3team-toolBrokerBindingRename.ts";
 import {
   callT3TeamRecipeTool,
   isT3TeamRecipeTool,
   type T3TeamRecipeToolHandlers,
 } from "./t3team-toolBrokerBindingRecipes.ts";
+import {
+  callT3TeamMyWorkTool,
+  isT3TeamMyWorkTool,
+  type T3TeamMyWorkToolHandlers,
+} from "./t3team-toolBrokerBindingMyWork.ts";
 import type { T3TeamWorkflowRunToolHandlers } from "./t3team-toolBrokerWorkflowRunTools.ts";
 import type { T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
 import type { T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
@@ -30,6 +34,11 @@ import type { T3TeamWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkf
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
 import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 import { resolveT3TeamCanonicalToolId } from "./t3team-toolBrokerLegacyToolIds.ts";
+import {
+  callT3TeamChangeRequestPublishTool,
+  T3TEAM_CHANGE_REQUEST_PUBLISH_TOOL_ID,
+  type T3TeamChangeRequestToolHandlers,
+} from "./t3team-toolBrokerBindingChangeRequest.ts";
 import {
   tryDispatchThreadScopedToolCall,
   tryDispatchWorkflowToolCall,
@@ -44,16 +53,15 @@ export function dispatchT3TeamToolCall(input: {
   threadId?: ThreadId;
   toolContext?: T3TeamTurnToolContext;
   readView: () => Effect.Effect<unknown, string>;
-  renameThread?: (title: string) => Effect.Effect<unknown, unknown>;
-  renameThreadResult?: (title: string) => unknown;
-  startChild?: (arguments_: unknown) => Effect.Effect<unknown, string>;
   setBacklogAssigneeFilter?: (mode: "current-user") => Effect.Effect<unknown, string>;
   refreshContextBundle?: T3TeamContextRefreshServiceShape;
   recipeTools?: T3TeamRecipeToolHandlers;
+  myWorkTools?: T3TeamMyWorkToolHandlers;
   workflowRunTools?: T3TeamWorkflowRunToolHandlers;
   workflowStatusTools?: T3TeamWorkflowStatusToolHandlers;
   workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
   workflowControlTools?: T3TeamWorkflowControlToolHandlers;
+  changeRequestTools?: T3TeamChangeRequestToolHandlers;
   showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   searchSourceThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   searchThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
@@ -62,7 +70,6 @@ export function dispatchT3TeamToolCall(input: {
     toolArgs: unknown,
     callerThreadId: ThreadId,
   ) => Effect.Effect<T3TeamToolCallResult>;
-  readRuntimeModels?: () => Effect.Effect<T3TeamToolCallResult>;
   /** Live plan-limit samples for the configured provider instances. */
   readProviderUsage?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   publishDraft?: T3TeamDraftMutationPublisher;
@@ -80,21 +87,21 @@ export function dispatchT3TeamToolCall(input: {
   if (state.effectiveGroups && !state.allowedToolIdSet.has(tool)) {
     return Effect.succeed(errorResult(permissionMessage(tool, state.effectiveGroups)));
   }
-  if (tool === "t3team.thread.rename") {
-    return callT3TeamRenameTool({
-      tool,
-      scopeLabel: input.scopeLabel,
-      toolArgs,
-      ...(input.renameThread ? { renameThread: input.renameThread } : {}),
-      ...(input.renameThreadResult ? { renameThreadResult: input.renameThreadResult } : {}),
-    });
-  }
   if (isT3TeamRecipeTool(tool)) {
     return callT3TeamRecipeTool({
       tool,
       scopeLabel: input.scopeLabel,
       toolArgs,
       ...(input.recipeTools ? { recipeTools: input.recipeTools } : {}),
+    });
+  }
+  if (isT3TeamMyWorkTool(tool)) {
+    return callT3TeamMyWorkTool({
+      tool,
+      scopeLabel: input.scopeLabel,
+      toolArgs,
+      ...(input.threadId ? { threadId: input.threadId } : {}),
+      ...(input.myWorkTools ? { myWorkTools: input.myWorkTools } : {}),
     });
   }
   const workflowToolCall = tryDispatchWorkflowToolCall({
@@ -109,12 +116,18 @@ export function dispatchT3TeamToolCall(input: {
   if (workflowToolCall !== undefined) {
     return workflowToolCall;
   }
+  if (tool === T3TEAM_CHANGE_REQUEST_PUBLISH_TOOL_ID) {
+    return callT3TeamChangeRequestPublishTool({
+      scopeLabel: input.scopeLabel,
+      toolArgs,
+      changeRequestTools: input.changeRequestTools,
+    });
+  }
   const threadScopedToolCall = tryDispatchThreadScopedToolCall({
     tool,
     scopeLabel: input.scopeLabel,
     toolArgs,
     ...(input.threadId ? { threadId: input.threadId } : {}),
-    ...(input.startChild ? { startChild: input.startChild } : {}),
     ...(input.setBacklogAssigneeFilter
       ? { setBacklogAssigneeFilter: input.setBacklogAssigneeFilter }
       : {}),
@@ -123,7 +136,6 @@ export function dispatchT3TeamToolCall(input: {
     ...(input.searchThread ? { searchThread: input.searchThread } : {}),
     ...(input.readMessageThread ? { readMessageThread: input.readMessageThread } : {}),
     ...(input.manageChildren ? { manageChildren: input.manageChildren } : {}),
-    ...(input.readRuntimeModels ? { readRuntimeModels: input.readRuntimeModels } : {}),
     ...(input.readProviderUsage ? { readProviderUsage: input.readProviderUsage } : {}),
   });
   if (threadScopedToolCall !== undefined) {

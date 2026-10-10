@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import type { AskVerb } from "./askVerb.ts";
 import { defineModel } from "./models.ts";
-import type { ModelSelection } from "./models.ts";
+import type { ModelOption, ModelSelection } from "./models.ts";
 import { createThreadCascadeAsk, toModelCascadeWire } from "./modelCascade.ts";
 import type { AnyAskOpts, ModelCascade } from "./types.ts";
 
@@ -24,7 +24,7 @@ describe("host-neutral model cascades", () => {
       model: defineModel({ provider: "primary", id: "model-a" }),
     };
     let resolveCount = 0;
-    const seen: Array<ModelSelection | undefined> = [];
+    const seen: Array<ModelOption | undefined> = [];
     const askVerb: AskVerb = async <R>(
       _kind: "thread.turn" | "user.input",
       _threadId: string,

@@ -14,10 +14,11 @@ import type { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import type { WorkflowRun } from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowRun } from "./persistence/WorkflowRuns.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import {
   makeResumePausedRun,
+  replaceRunArgsIfRequested,
   replaceRunSourceIfRequested,
   type WorkflowResumeToolDeps,
 } from "./t3team-toolBrokerWorkflowResumeActions.ts";
@@ -26,6 +27,10 @@ import { makeResumeFailedRun } from "./t3team-toolBrokerWorkflowResumeFailed.ts"
 export interface ResumeWorkflowHandlerArgs {
   readonly runId?: string | undefined;
   readonly source?: string | undefined;
+  /** Corrected launch args for a run that failed its `meta.inputs` decode — the decision "re-run
+   * this same run with these inputs" as a tool argument, so an input fault never needs a second
+   * run (and a second card). Persisted on the row before the journal re-drive reads it. */
+  readonly args?: unknown;
 }
 
 export interface WorkflowResumeToolValue {
@@ -49,7 +54,7 @@ export type T3TeamWorkflowResumeToolHandlers = {
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 const notFoundHint = (runId: string) =>
-  `No orchestration run found for runId '${runId}'. Use t3team.orchestration.status to list your ` +
+  `No orchestration run found for runId '${runId}'. Use t3_orchestration_status to list your ` +
   "recent runs.";
 
 /** Build the per-thread `t3team.orchestration.resume` handler factory. */
@@ -61,7 +66,7 @@ export function makeWorkflowResumeToolHandlers<E>(
       Effect.gen(function* () {
         const runId = args.runId?.trim() ?? "";
         if (runId.length === 0) {
-          return yield* Effect.fail("t3team.orchestration.resume requires a runId.");
+          return yield* Effect.fail("t3_orchestration_resume requires a runId.");
         }
         const found = yield* deps.runRepository
           .getById({ runId })
@@ -69,12 +74,12 @@ export function makeWorkflowResumeToolHandlers<E>(
         if (Option.isNone(found) || found.value.launchThreadId !== String(threadId)) {
           return yield* Effect.fail(notFoundHint(runId));
         }
-        const run: WorkflowRun = found.value;
-        if (run.status !== "paused" && run.status !== "failed") {
+        if (found.value.status !== "paused" && found.value.status !== "failed") {
           return yield* Effect.fail(
-            `Workflow run '${runId}' is ${run.status}; only a paused or failed run can be resumed.`,
+            `Workflow run '${runId}' is ${found.value.status}; only a paused or failed run can be resumed.`,
           );
         }
+        const run: WorkflowRun = yield* replaceRunArgsIfRequested(deps, found.value, args.args);
         yield* replaceRunSourceIfRequested(deps, threadId, run, args.source);
         if (run.status === "paused") {
           return yield* makeResumePausedRun(deps)(run);

@@ -1,4 +1,9 @@
-import type { T3TeamMessageAttachment, T3TeamMessageExt } from "@t3tools/contracts";
+import {
+  type OrchestrationMessageContext,
+  type T3TeamMessageAttachment,
+  type T3TeamMessageExt,
+  withT3TeamMessageExtContext,
+} from "@t3tools/contracts";
 
 import type { T3TeamContextAttachment } from "~/t3team/t3team-contextAttachment";
 
@@ -62,4 +67,12 @@ export function buildContextAttachmentMessageExt(
     visibleToAgent: true,
     attachments: attachments.map(contextAttachmentToMessageAttachment),
   };
+}
+
+/** A composer send's message context with the work-item ext record merged in (when any). */
+export function withT3TeamContextAttachmentExt(
+  context: OrchestrationMessageContext | undefined,
+  ext: T3TeamMessageExt | undefined,
+): OrchestrationMessageContext | undefined {
+  return ext === undefined ? context : withT3TeamMessageExtContext(ext, context);
 }

@@ -4,8 +4,8 @@
  * calls DIRECTLY (not a hand-rolled re-implementation, unlike the older durability/scheduler
  * tests' `rebuildFromDb` helpers). It boots the real `WorkflowRunRepository` +
  * `WorkflowJournalStore` + `T3TeamWorkflowEngineRegistry` + `T3TeamWorkflowScheduler` layers
- * over an in-memory SQLite DB, plus a stub `OrchestrationEngineService` (dispatch is a no-op
- * success; no domain-event reactor is under test here — that is
+ * over an in-memory SQLite DB, plus a recording fake `T3TeamWorkflowHost` (every host call
+ * succeeds; no reactor is under test here — that is
  * `t3team-workflowEngineReactor.integration.test.ts`'s job).
  *
  * Three cases:
@@ -31,25 +31,22 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Stream from "effect/Stream";
 import { afterAll } from "vite-plus/test";
 
 import { ServerConfig } from "./config.ts";
-import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
-import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
-import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
+import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import {
   buildRunningWorkflowRunRow,
   makeWorkflowRunLifecycle,
 } from "./t3team-workflowEngineDurability.ts";
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import { rehydrateSuspendedWorkflowRuns } from "./t3team-workflowEngineRehydrate.ts";
-import { WorkflowSignalStoreLive } from "./persistence/Layers/WorkflowSignalStore.ts";
-import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
+import { WorkflowSignalStoreLive } from "./persistence/WorkflowSignalStore.ts";
+import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import { setWorkflowEphemeralConcurrencyPolicy } from "./t3team-workflowEphemeralConcurrencyPolicy.ts";
 import {
@@ -57,7 +54,12 @@ import {
   T3TeamWorkflowEngineRegistry,
   T3TeamWorkflowEngineRegistryLive,
 } from "./t3team-workflowEngineRegistry.ts";
+import {
+  makeFakeWorkflowHost,
+  makeFakeWorkflowHostLayer,
+} from "./t3team-workflowHostFake.fixtures.ts";
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
+import { T3TeamWorkflowSchedulerSweepLive } from "./t3team-workflowSchedulerSweepLive.ts";
 
 const reviewWorkflowPath = NodeURL.fileURLToPath(
   new URL("../__fixtures__/t3team-exampleReview.workflow.ts", import.meta.url),
@@ -74,19 +76,6 @@ afterAll(() => NodeFS.rmSync(cwd, { recursive: true, force: true }));
 const projectId = ProjectId.make("proj-rehydrate");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
 const nowIso = (): string => "2026-06-08T00:00:00.000Z";
-
-// A no-op stub: no domain-event reactor is under test in this file, so `dispatch` just
-// succeeds and `streamDomainEvents` is never subscribed.
-const stubEngine: OrchestrationEngineShape = {
-  readEvents: () => Stream.empty,
-  readThreadEvents: () => Stream.empty,
-  getThreadReplayStats: () => Effect.die("unused"),
-  dispatch: () => Effect.succeed({ sequence: 0 }),
-  streamDomainEvents: Stream.never,
-  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
-  latestSequence: Effect.succeed(0),
-};
-const OrchestrationEngineTestLive = Layer.succeed(OrchestrationEngineService, stubEngine);
 
 it.live("rehydrates durable queued runs and promotes them when FIFO capacity opens", () =>
   Effect.scoped(
@@ -153,15 +142,21 @@ const WorkflowEngineDurabilityTestLive = T3TeamWorkflowSchedulerLive.pipe(
 
 // Exactly the six services `rehydrateSuspendedWorkflowRuns` requires (plus the durable signal
 // store, which the event-park rehydration drains the boot-gap inbox through when present).
-const TestLayer = Layer.mergeAll(
-  WorkflowEngineDurabilityTestLive,
-  OrchestrationEngineTestLive,
-  ServerConfig.layerTest(cwd, { prefix: "t3-rehydrate-test-" }),
-  WorkflowSignalStoreLive.pipe(Layer.provide(SqlitePersistenceMemory)),
-).pipe(Layer.provideMerge(NodeServices.layer));
+// The scheduler's wake sweep sits on top, as server.ts mounts it with the workflow host.
+const TestLayer = T3TeamWorkflowSchedulerSweepLive.pipe(
+  Layer.provideMerge(
+    Layer.mergeAll(
+      WorkflowEngineDurabilityTestLive,
+      makeFakeWorkflowHostLayer().layer,
+      ServerConfig.layerTest(cwd, { prefix: "t3-rehydrate-test-" }),
+      WorkflowSignalStoreLive.pipe(Layer.provide(SqlitePersistenceMemory)),
+    ),
+  ),
+  Layer.provideMerge(NodeServices.layer),
+);
 
 /** Poll an in-memory predicate until it holds or times out. Used only by the sleeping-run case,
- * which waits on a REAL scheduler timer (see that test for why `it.live` is required there). */
+ * which waits on the REAL scheduler sweep (see that test for why `it.live` is required there). */
 const waitUntil = (predicate: () => boolean, label: string): Effect.Effect<void> =>
   Effect.gen(function* () {
     for (let i = 0; i < 200; i += 1) {
@@ -201,7 +196,7 @@ it.effect(
           runtimeMode: "full-access",
           interactionMode: "default",
           registry: throwaway,
-          dispatch: () => Promise.resolve(),
+          host: makeFakeWorkflowHost().host,
           newId: () => `id-${(seq += 1)}`,
           nowIso,
           store,
@@ -285,9 +280,9 @@ it.effect("skips a suspended row with no recorded pending ask instead of crashin
   }).pipe(Effect.provide(TestLayer)),
 );
 
-// `it.live` (real clock): the production scheduler layer (`T3TeamWorkflowSchedulerLive`) has no
-// clock-injection seam, so proving the past-due catch-up arm requires a real ~1s wait for the
-// `MIN_DUE_DELAY_MS` floor to fire. Under the default TestClock this would never tick.
+// `it.live` (real clock): the production sweep (`T3TeamWorkflowSchedulerSweepLive`) reads the wall
+// clock, and its boot catch-up pass runs in the background once `rearm` opens the gate, so the
+// test polls.
 it.live(
   "rehydrates a sleeping run and the scheduler's real re-arm fires the already-past-due wake",
   () =>
@@ -316,7 +311,7 @@ it.live(
           runtimeMode: "full-access",
           interactionMode: "default",
           registry: throwaway,
-          dispatch: () => Promise.resolve(),
+          host: makeFakeWorkflowHost().host,
           newId: () => "id-1",
           nowIso,
           store,
@@ -346,8 +341,8 @@ it.live(
       // Let real wall-clock time pass the tiny deadline before rehydrating.
       yield* Effect.sleep(Duration.millis(50));
 
-      // The real boot path: rebuilds the resume closure AND arms the real scheduler, which finds
-      // the deadline already due and fires it at the `MIN_DUE_DELAY_MS` floor, with nobody here
+      // The real boot path: rebuilds the resume closure AND opens the real scheduler, whose
+      // catch-up pass finds the deadline already due and wakes the run, with nobody here
       // calling `resume` by hand.
       yield* rehydrateSuspendedWorkflowRuns();
 
@@ -367,198 +362,269 @@ it.live(
 // that landed in the durable inbox while the previous uptime was down. `it.live` (real clock):
 // the rehydrated controller's resume re-drives the body ASYNCHRONOUSLY, so the assertion
 // polls the durable row for the re-park on the second signal.
-it.live(
-  "rehydrates a watching run and drains the boot-gap inbox entry that woken it",
+it.live("rehydrates a watching run and drains the boot-gap inbox entry that woken it", () =>
+  Effect.gen(function* () {
+    const repo = yield* WorkflowRunRepository;
+    const store = yield* WorkflowJournalStore;
+    const signalStore = yield* WorkflowSignalStore;
+    const config = yield* ServerConfig;
+    const runsRoot = NodePath.join(config.cwd, ".t3team-runs");
+
+    const runId = "rehydrate-watching";
+    const launchThreadId = "rehydrate-launch-watching";
+    const args = { key: "42" };
+
+    // Throwaway uptime: the run parks on its FIRST signal.wait — the durable row ends up in
+    // status `watching` with the awaited (signal, key) + correlation recorded.
+    const throwaway = makeWorkflowEngineRegistry();
+    let seq = 0;
+    const launched = yield* Effect.promise(() =>
+      launchWorkflowRecipe({
+        runId,
+        workflowPath: signalParkWorkflowPath,
+        args,
+        runsRoot,
+        launchThreadId,
+        projectId,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        registry: throwaway,
+        host: makeFakeWorkflowHost().host,
+        newId: () => `id-${(seq += 1)}`,
+        nowIso,
+        store,
+        lifecycle: makeWorkflowRunLifecycle({
+          repo,
+          row: buildRunningWorkflowRunRow({
+            runId,
+            workflowPath: signalParkWorkflowPath,
+            args,
+            launchThreadId,
+            projectId,
+            modelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            nowIso: nowIso(),
+          }),
+          nowIso,
+        }),
+      }),
+    );
+    assert.strictEqual(
+      launched.status,
+      "suspended",
+      `launch should park on the first signal.wait, got status '${launched.status}'`,
+    );
+
+    const parkedRow = Option.getOrThrow(yield* repo.getById({ runId }));
+    assert.strictEqual(parkedRow.status, "watching");
+    assert.strictEqual(parkedRow.pendingKind, "signal.wait");
+    assert.isNotNull(parkedRow.watchSourceName);
+    assert.isNotNull(parkedRow.watchParamsHash);
+    assert.isNotNull(parkedRow.watchSignalName);
+    assert.isNotNull(parkedRow.watchSignalKey);
+    assert.isNotNull(parkedRow.pendingCorrelationId);
+    const firstCorrelation = parkedRow.pendingCorrelationId!;
+
+    // An event that landed while this uptime was down: the durable inbox holds it for the
+    // tuple the run is parked on.
+    const mergedPayload = {
+      changeRequest: {
+        provider: "github",
+        number: 42,
+        title: "Fix the billing path",
+        state: "merged",
+        isDraft: false,
+      },
+    };
+    yield* signalStore.insertInboxEntry({
+      sourceName: parkedRow.watchSourceName!,
+      paramsHash: parkedRow.watchParamsHash!,
+      signalName: parkedRow.watchSignalName!,
+      key: parkedRow.watchSignalKey!,
+      payload: mergedPayload,
+      createdAt: nowIso(),
+    });
+
+    // ── The real boot path: throw away `throwaway`, rehydrate into the layer's registry ──
+    // The watching loop must rebuild the controller AND drain the boot-gap inbox entry, which
+    // resolves the first wait and drives the body to its SECOND park (the closed signal).
+    yield* rehydrateSuspendedWorkflowRuns();
+
+    const registry = yield* T3TeamWorkflowEngineRegistry;
+    assert.isDefined(registry.getRun(runId));
+
+    let row = parkedRow;
+    for (let i = 0; i < 200; i += 1) {
+      row = Option.getOrThrow(yield* repo.getById({ runId }));
+      if (
+        row.status === "watching" &&
+        row.watchSignalName === "scm.change-request.closed" &&
+        row.pendingCorrelationId !== null &&
+        row.pendingCorrelationId !== firstCorrelation
+      ) {
+        break;
+      }
+      yield* Effect.sleep(Duration.millis(25));
+    }
+
+    assert.strictEqual(row.status, "watching");
+    assert.strictEqual(row.watchSignalName, "scm.change-request.closed");
+    assert.isNotNull(row.pendingCorrelationId);
+    assert.notStrictEqual(row.pendingCorrelationId, firstCorrelation);
+    // The inbox entry was consumed (first-wins): nothing left to drain for the tuple.
+    const remaining = yield* signalStore.takeOpenInboxEntry({
+      sourceName: parkedRow.watchSourceName!,
+      paramsHash: parkedRow.watchParamsHash!,
+      signalName: parkedRow.watchSignalName!,
+      key: parkedRow.watchSignalKey!,
+      deliveredAt: nowIso(),
+    });
+    assertNone(remaining);
+  }).pipe(Effect.provide(TestLayer)),
+);
+
+it.live("rehydrates a watching run with no inbox entry: rebuilt, still parked, untouched", () =>
+  Effect.gen(function* () {
+    const repo = yield* WorkflowRunRepository;
+    const store = yield* WorkflowJournalStore;
+    const config = yield* ServerConfig;
+    const runsRoot = NodePath.join(config.cwd, ".t3team-runs");
+
+    const runId = "rehydrate-watching-no-event";
+    const launchThreadId = "rehydrate-launch-watching-no-event";
+
+    // A run parked on a signal whose awaited event has not landed anywhere (no live source
+    // this uptime yet, no inbox entry). Rehydration must rebuild the controller from the
+    // journal and leave the row exactly as parked — the delivery port wakes it when the
+    // source fires.
+    const throwaway = makeWorkflowEngineRegistry();
+    let seq = 0;
+    const launched = yield* Effect.promise(() =>
+      launchWorkflowRecipe({
+        runId,
+        workflowPath: signalParkWorkflowPath,
+        args: { key: "42" },
+        runsRoot,
+        launchThreadId,
+        projectId,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        registry: throwaway,
+        host: makeFakeWorkflowHost().host,
+        newId: () => `id-${(seq += 1)}`,
+        nowIso,
+        store,
+        lifecycle: makeWorkflowRunLifecycle({
+          repo,
+          row: buildRunningWorkflowRunRow({
+            runId,
+            workflowPath: signalParkWorkflowPath,
+            args: { key: "42" },
+            launchThreadId,
+            projectId,
+            modelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            nowIso: nowIso(),
+          }),
+          nowIso,
+        }),
+      }),
+    );
+    assert.strictEqual(launched.status, "suspended");
+
+    const parked = Option.getOrThrow(yield* repo.getById({ runId }));
+    assert.strictEqual(parked.status, "watching");
+    assert.isNotNull(parked.pendingCorrelationId);
+    const parkedCorrelation = parked.pendingCorrelationId!;
+
+    // No inbox entry for the tuple — the rehydration must NOT wake the run.
+    yield* rehydrateSuspendedWorkflowRuns();
+
+    const registry = yield* T3TeamWorkflowEngineRegistry;
+    assert.isDefined(registry.getRun(runId)); // the resume closure is back
+
+    const row = Option.getOrThrow(yield* repo.getById({ runId }));
+    assert.strictEqual(row.status, "watching");
+    assert.strictEqual(row.pendingCorrelationId, parkedCorrelation);
+    assert.strictEqual(row.watchSignalName, "scm.change-request.merged");
+  }).pipe(Effect.provide(TestLayer)),
+);
+
+// Review of fork #349: a restart mid-authoring left a `queued`-looking row that boot would launch
+// as a real workflow before any source existed. The row now carries its own status and boot
+// settles it: failed once, the launch thread told once, the author thread retired, nothing run.
+it.effect(
+  "boot never launches an AUTHORING row: fails it once, notifies once, retires the author",
   () =>
     Effect.gen(function* () {
       const repo = yield* WorkflowRunRepository;
-      const store = yield* WorkflowJournalStore;
-      const signalStore = yield* WorkflowSignalStore;
-      const config = yield* ServerConfig;
-      const runsRoot = NodePath.join(config.cwd, ".t3team-runs");
-
-      const runId = "rehydrate-watching";
-      const launchThreadId = "rehydrate-launch-watching";
-      const args = { key: "42" };
-
-      // Throwaway uptime: the run parks on its FIRST signal.wait — the durable row ends up in
-      // status `watching` with the awaited (signal, key) + correlation recorded.
-      const throwaway = makeWorkflowEngineRegistry();
-      let seq = 0;
-      const launched = yield* Effect.promise(() =>
-        launchWorkflowRecipe({
+      const runId = "rehydrate-authoring";
+      yield* repo.upsert({
+        ...buildRunningWorkflowRunRow({
           runId,
-          workflowPath: signalParkWorkflowPath,
-          args,
-          runsRoot,
-          launchThreadId,
+          workflowPath: NodePath.join(cwd, ".t3team-runs", runId, "workflow.ts"),
+          args: {},
+          launchThreadId: "authoring-launch-thread",
           projectId,
           modelSelection,
           runtimeMode: "full-access",
           interactionMode: "default",
-          registry: throwaway,
-          dispatch: () => Promise.resolve(),
-          newId: () => `id-${(seq += 1)}`,
-          nowIso,
-          store,
-          lifecycle: makeWorkflowRunLifecycle({
-            repo,
-            row: buildRunningWorkflowRunRow({
-              runId,
-              workflowPath: signalParkWorkflowPath,
-              args,
-              launchThreadId,
-              projectId,
-              modelSelection,
-              runtimeMode: "full-access",
-              interactionMode: "default",
-              nowIso: nowIso(),
-            }),
-            nowIso,
-          }),
+          origin: "ephemeral",
+          nowIso: nowIso(),
         }),
-      );
-      assert.strictEqual(
-        launched.status,
-        "suspended",
-        `launch should park on the first signal.wait, got status '${launched.status}'`,
-      );
-
-      const parkedRow = Option.getOrThrow(yield* repo.getById({ runId }));
-      assert.strictEqual(parkedRow.status, "watching");
-      assert.strictEqual(parkedRow.pendingKind, "signal.wait");
-      assert.isNotNull(parkedRow.watchSourceName);
-      assert.isNotNull(parkedRow.watchParamsHash);
-      assert.isNotNull(parkedRow.watchSignalName);
-      assert.isNotNull(parkedRow.watchSignalKey);
-      assert.isNotNull(parkedRow.pendingCorrelationId);
-      const firstCorrelation = parkedRow.pendingCorrelationId!;
-
-      // An event that landed while this uptime was down: the durable inbox holds it for the
-      // tuple the run is parked on.
-      const mergedPayload = {
-        changeRequest: {
-          provider: "github",
-          number: 42,
-          title: "Fix the billing path",
-          state: "merged",
-          isDraft: false,
-        },
-      };
-      yield* signalStore.insertInboxEntry({
-        sourceName: parkedRow.watchSourceName!,
-        paramsHash: parkedRow.watchParamsHash!,
-        signalName: parkedRow.watchSignalName!,
-        key: parkedRow.watchSignalKey!,
-        payload: mergedPayload,
-        createdAt: nowIso(),
+        status: "authoring",
       });
-
-      // ── The real boot path: throw away `throwaway`, rehydrate into the layer's registry ──
-      // The watching loop must rebuild the controller AND drain the boot-gap inbox entry, which
-      // resolves the first wait and drives the body to its SECOND park (the closed signal).
-      yield* rehydrateSuspendedWorkflowRuns();
+      const fake = makeFakeWorkflowHostLayer();
+      yield* rehydrateSuspendedWorkflowRuns().pipe(Effect.provide(fake.layer));
 
       const registry = yield* T3TeamWorkflowEngineRegistry;
-      assert.isDefined(registry.getRun(runId));
-
-      let row = parkedRow;
-      for (let i = 0; i < 200; i += 1) {
-        row = Option.getOrThrow(yield* repo.getById({ runId }));
-        if (
-          row.status === "watching" &&
-          row.watchSignalName === "scm.change-request.closed" &&
-          row.pendingCorrelationId !== null &&
-          row.pendingCorrelationId !== firstCorrelation
-        ) {
-          break;
-        }
-        yield* Effect.sleep(Duration.millis(25));
-      }
-
-      assert.strictEqual(row.status, "watching");
-      assert.strictEqual(row.watchSignalName, "scm.change-request.closed");
-      assert.isNotNull(row.pendingCorrelationId);
-      assert.notStrictEqual(row.pendingCorrelationId, firstCorrelation);
-      // The inbox entry was consumed (first-wins): nothing left to drain for the tuple.
-      const remaining = yield* signalStore.takeOpenInboxEntry({
-        sourceName: parkedRow.watchSourceName!,
-        paramsHash: parkedRow.watchParamsHash!,
-        signalName: parkedRow.watchSignalName!,
-        key: parkedRow.watchSignalKey!,
-        deliveredAt: nowIso(),
-      });
-      assertNone(remaining);
+      assert.isUndefined(registry.getRun(runId));
+      assert.isFalse(workflowAdmissionQueue.snapshot().queued.includes(runId));
+      const row = Option.getOrThrow(yield* repo.getById({ runId }));
+      assert.strictEqual(row.status, "failed");
+      assert.strictEqual(row.failureStep, "authoring");
+      const notices = fake
+        .messages()
+        .filter(
+          (message) =>
+            message.threadId === "authoring-launch-thread" &&
+            message.text.includes("being authored"),
+        );
+      assert.strictEqual(notices.length, 1);
+      assert.isTrue(
+        fake.calls.some((call) => call.op === "archiveThread" && call.input === `${runId}:author`),
+      );
     }).pipe(Effect.provide(TestLayer)),
 );
 
-it.live(
-  "rehydrates a watching run with no inbox entry: rebuilt, still parked, untouched",
-  () =>
-    Effect.gen(function* () {
-      const repo = yield* WorkflowRunRepository;
-      const store = yield* WorkflowJournalStore;
-      const config = yield* ServerConfig;
-      const runsRoot = NodePath.join(config.cwd, ".t3team-runs");
-
-      const runId = "rehydrate-watching-no-event";
-      const launchThreadId = "rehydrate-launch-watching-no-event";
-
-      // A run parked on a signal whose awaited event has not landed anywhere (no live source
-      // this uptime yet, no inbox entry). Rehydration must rebuild the controller from the
-      // journal and leave the row exactly as parked — the delivery port wakes it when the
-      // source fires.
-      const throwaway = makeWorkflowEngineRegistry();
-      let seq = 0;
-      const launched = yield* Effect.promise(() =>
-        launchWorkflowRecipe({
-          runId,
-          workflowPath: signalParkWorkflowPath,
-          args: { key: "42" },
-          runsRoot,
-          launchThreadId,
-          projectId,
-          modelSelection,
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          registry: throwaway,
-          dispatch: () => Promise.resolve(),
-          newId: () => `id-${(seq += 1)}`,
-          nowIso,
-          store,
-          lifecycle: makeWorkflowRunLifecycle({
-            repo,
-            row: buildRunningWorkflowRunRow({
-              runId,
-              workflowPath: signalParkWorkflowPath,
-              args: { key: "42" },
-              launchThreadId,
-              projectId,
-              modelSelection,
-              runtimeMode: "full-access",
-              interactionMode: "default",
-              nowIso: nowIso(),
-            }),
-            nowIso,
-          }),
-        }),
-      );
-      assert.strictEqual(launched.status, "suspended");
-
-      const parked = Option.getOrThrow(yield* repo.getById({ runId }));
-      assert.strictEqual(parked.status, "watching");
-      assert.isNotNull(parked.pendingCorrelationId);
-      const parkedCorrelation = parked.pendingCorrelationId!;
-
-      // No inbox entry for the tuple — the rehydration must NOT wake the run.
-      yield* rehydrateSuspendedWorkflowRuns();
-
-      const registry = yield* T3TeamWorkflowEngineRegistry;
-      assert.isDefined(registry.getRun(runId)); // the resume closure is back
-
-      const row = Option.getOrThrow(yield* repo.getById({ runId }));
-      assert.strictEqual(row.status, "watching");
-      assert.strictEqual(row.pendingCorrelationId, parkedCorrelation);
-      assert.strictEqual(row.watchSignalName, "scm.change-request.merged");
-    }).pipe(Effect.provide(TestLayer)),
+it.effect("boot of an interrupted running row retires its author thread", () =>
+  Effect.gen(function* () {
+    const repo = yield* WorkflowRunRepository;
+    const runId = "rehydrate-running-author";
+    yield* repo.upsert(
+      buildRunningWorkflowRunRow({
+        runId,
+        workflowPath: NodePath.join(cwd, ".t3team-runs", runId, "workflow.ts"),
+        args: {},
+        launchThreadId: "running-launch-thread",
+        projectId,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        origin: "ephemeral",
+        nowIso: nowIso(),
+      }),
+    );
+    const fake = makeFakeWorkflowHostLayer();
+    yield* rehydrateSuspendedWorkflowRuns().pipe(Effect.provide(fake.layer));
+    const row = Option.getOrThrow(yield* repo.getById({ runId }));
+    assert.strictEqual(row.status, "failed");
+    assert.isTrue(
+      fake.calls.some((call) => call.op === "archiveThread" && call.input === `${runId}:author`),
+    );
+  }).pipe(Effect.provide(TestLayer)),
 );

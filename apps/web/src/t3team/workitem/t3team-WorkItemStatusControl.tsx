@@ -105,12 +105,14 @@ export function WorkItemStatusControl({
           aria-label={`Status: ${displayName}. Change status.`}
           aria-busy={mutation.pending}
           disabled={mutation.pending}
-          className="group/status inline-flex items-center rounded-sm leading-none outline-none transition-opacity focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
+          render={
+            <button
+              type="button"
+              className="inline-flex items-center rounded-sm leading-none outline-none transition-opacity hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-70 dark:hover:brightness-125"
+            />
+          }
         >
-          <Badge
-            variant={workItemStatusBadgeVariant(tone)}
-            className="gap-1.5 transition-colors group-hover/status:brightness-95 dark:group-hover/status:brightness-125"
-          >
+          <Badge variant={workItemStatusBadgeVariant(tone)}>
             <span
               aria-hidden="true"
               className={cn("size-1.5 rounded-full", workItemStatusDotClassName[tone])}

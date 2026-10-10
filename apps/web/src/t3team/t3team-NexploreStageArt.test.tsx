@@ -22,7 +22,14 @@ class NoopResizeObserver {
   disconnect() {}
 }
 
-type Box = { left: number; right: number; width: number; height: number; top: number; bottom: number };
+type Box = {
+  left: number;
+  right: number;
+  width: number;
+  height: number;
+  top: number;
+  bottom: number;
+};
 
 /** toJSON is part of the DOMRect contract, so every stored rect carries it. */
 function toRect(box: Box) {
@@ -52,10 +59,18 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  if (originalGetBoundingClientRect) Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+  if (originalGetBoundingClientRect)
+    Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
 });
 
-type Rect = { left: number; right: number; width: number; height: number; top: number; bottom: number };
+type Rect = {
+  left: number;
+  right: number;
+  width: number;
+  height: number;
+  top: number;
+  bottom: number;
+};
 
 function withRect(element: Element, box: Box): Element {
   rectStore.set(element, toRect(box));
@@ -110,7 +125,14 @@ async function renderHeader(layout: HeaderLayout) {
     top: 0,
     bottom: 52,
   });
-  withRect(backdrop, { left: 0, right: layout.width, width: layout.width, height: 80, top: 0, bottom: 80 });
+  withRect(backdrop, {
+    left: 0,
+    right: layout.width,
+    width: layout.width,
+    height: 80,
+    top: 0,
+    bottom: 80,
+  });
   withRect(packLayer, {
     left: 0,
     right: layout.width,
@@ -237,6 +259,21 @@ describe("T3TeamNexploreStripArt traffic-light wash", () => {
       }
     } finally {
       Object.defineProperty(navigator, "platform", { value: "MacIntel", configurable: true });
+    }
+  });
+});
+
+describe("T3TeamNexploreStripArt dark-mode orb dimming", () => {
+  it("routes the strip orb opacity through the dark-mode dimming token", async () => {
+    const { cleanup, circle } = await renderHeader({
+      width: 420,
+      brand: [18, 120],
+      toggle: [372, 404],
+    } satisfies HeaderLayout);
+    try {
+      expect(circle().getAttribute("style")).toContain("var(--stage-nx-strip-orb-opacity, 1)");
+    } finally {
+      cleanup();
     }
   });
 });

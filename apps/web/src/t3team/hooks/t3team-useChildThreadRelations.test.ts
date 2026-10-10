@@ -14,7 +14,6 @@ function createThread(overrides: Partial<ProjectThread> = {}): ProjectThread {
     projectId: overrides.projectId ?? "project-1",
     title: overrides.title ?? "Thread",
     status: overrides.status ?? "idle",
-    messageCount: overrides.messageCount ?? 0,
     lastMessageAt: overrides.lastMessageAt ?? "2026-05-26T12:00:00.000Z",
     createdAt: overrides.createdAt ?? "2026-05-26T12:00:00.000Z",
     ...overrides,
@@ -61,6 +60,28 @@ describe("buildChildThreadRelations", () => {
 
     expect(relations.childThreadIds.has("orphan-1")).toBe(false);
     expect(relations.subRunCountsByParentId.size).toBe(0);
+  });
+
+  it("keeps a finished ephemeral helper out of the roster but also out of the flat list", () => {
+    const parent = createThread({ id: "parent" });
+    const helper = createThread({
+      id: "helper",
+      parentThreadId: "parent",
+      retention: "ephemeral",
+      status: "completed",
+    });
+    const liveHelper = createThread({
+      id: "live-helper",
+      parentThreadId: "parent",
+      retention: "ephemeral",
+      status: "running",
+    });
+    const relations = buildChildThreadRelations([parent, helper, liveHelper]);
+    expect([...relations.childThreadIds].toSorted()).toEqual(["helper", "live-helper"]);
+    expect(relations.childThreadsByParentId.get("parent")?.map((child) => child.id)).toEqual([
+      "live-helper",
+    ]);
+    expect(relations.subRunCountsByParentId.get("parent")).toEqual({ total: 1, running: 1 });
   });
 
   it("returns empty relations for threads with no parent/child links", () => {
@@ -198,6 +219,21 @@ describe("computeChildThreadRelationsSignature", () => {
 
     expect(sig1).not.toBe(sig2);
     expect(sig2).not.toBe(sig3);
+  });
+
+  it("covers what the sub-run rows render (settled fold, question, activity label)", () => {
+    const base = createThread({ id: "child", parentThreadId: "parent" });
+    const signature = computeChildThreadRelationsSignature([base]);
+    for (const changed of [
+      { ...base, settled: true },
+      { ...base, pendingUserInput: true },
+      { ...base, activityLabel: "running the tests" },
+      { ...base, shellRunStatus: "completed" as const },
+      { ...base, providerInstanceId: "provider-1" },
+      { ...base, retention: "ephemeral" as const },
+    ]) {
+      expect(computeChildThreadRelationsSignature([changed])).not.toBe(signature);
+    }
   });
 
   it("is order-independent", () => {

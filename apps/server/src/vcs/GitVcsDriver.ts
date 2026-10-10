@@ -1,8 +1,8 @@
-import * as NodeCrypto from "node:crypto";
 import * as NodeBuffer from "node:buffer";
 
 import * as Context from "effect/Context";
 import * as Clock from "effect/Clock";
+import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -11,7 +11,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/process";
 
 import {
   GitCommandError,
@@ -35,6 +35,7 @@ import {
   type VcsRemoveWorktreeInput,
   type VcsStatusInput,
   type VcsStatusResult,
+  type WorktreeSubmodules,
 } from "@t3tools/contracts";
 import {
   makeGitVcsDriverCore,
@@ -81,10 +82,18 @@ export interface GitStatusDetails {
   upstreamRef: string | null;
   hasWorkingTreeChanges: boolean;
   workingTree: VcsStatusResult["workingTree"];
+  branchChanges?: VcsStatusResult["branchChanges"];
   hasUpstream: boolean;
   aheadCount: number;
   behindCount: number;
   aheadOfDefaultCount: number;
+}
+
+export interface GitLocalStatusOptions {
+  /** Skip revision walks and return zero divergence counts for local-only consumers. */
+  readonly includeDivergence?: boolean;
+  /** Also read the diff panel's Changes totals. Failures leave them out. */
+  readonly includeBranchChanges?: boolean;
 }
 
 export interface GitRemoteStatusDetails {
@@ -134,6 +143,10 @@ export interface CreateWorktreeProgress {
     total: number;
   }) => Effect.Effect<void, never>;
   readonly onSubmodulesStarted?: () => Effect.Effect<void, never>;
+  /** Fires when `.gitmodules` exists but the resolved submodule mode is `"none"`. */
+  readonly onSubmodulesDisabled?: (input: {
+    source: "settings" | "t3.json";
+  }) => Effect.Effect<void, never>;
   readonly onSubmoduleLine?: (line: string) => Effect.Effect<void, never>;
   readonly onSubmodulesFinished?: (input: {
     ok: boolean;
@@ -143,6 +156,14 @@ export interface CreateWorktreeProgress {
 
 export interface CreateWorktreeOptions {
   readonly progress?: CreateWorktreeProgress;
+  /**
+   * The project-over-environment `worktreeSubmodules` setting. Null (or
+   * omitted, for callers without settings access) defers to the checkout's
+   * own t3.json.
+   */
+  readonly submodules?: WorktreeSubmodules | null;
+  /** The `worktreesDirectory` setting, used when the input has no explicit path. */
+  readonly worktreesDirectory?: string;
 }
 
 export interface GitCommitProgress {
@@ -161,6 +182,14 @@ export interface GitCommitProgress {
 export interface GitCommitOptions {
   readonly timeoutMs?: number;
   readonly progress?: GitCommitProgress;
+  /** Stage the current working tree immediately before committing. */
+  readonly stage?: { readonly filePaths?: readonly string[] };
+}
+
+export interface GitDeleteLocalBranchInput {
+  readonly cwd: string;
+  readonly refName: string;
+  readonly force?: boolean;
 }
 
 export interface GitPushResult {
@@ -177,6 +206,8 @@ export interface GitRangeContext {
 }
 
 export interface GitRenameBranchInput {
+  /** Fail on a name collision instead of appending a numeric suffix. */
+  exactName?: boolean;
   cwd: string;
   oldBranch: string;
   newBranch: string;
@@ -284,7 +315,10 @@ export class GitVcsDriver extends Context.Service<
     readonly execute: (input: ExecuteGitInput) => Effect.Effect<ExecuteGitResult, GitCommandError>;
     readonly status: (input: VcsStatusInput) => Effect.Effect<VcsStatusResult, GitCommandError>;
     readonly statusDetails: (cwd: string) => Effect.Effect<GitStatusDetails, GitCommandError>;
-    readonly statusDetailsLocal: (cwd: string) => Effect.Effect<GitStatusDetails, GitCommandError>;
+    readonly statusDetailsLocal: (
+      cwd: string,
+      options?: GitLocalStatusOptions,
+    ) => Effect.Effect<GitStatusDetails, GitCommandError>;
     readonly statusDetailsRemote: (
       cwd: string,
       options?: GitRemoteStatusOptions,
@@ -370,6 +404,14 @@ export class GitVcsDriver extends Context.Service<
     readonly pruneWorktrees: (input: {
       readonly cwd: string;
     }) => Effect.Effect<void, GitCommandError>;
+    /**
+     * Absolute paths of every live worktree of the repository at `cwd`, the
+     * main checkout included. Worktrees whose directory is gone are left out.
+     */
+    readonly listWorktreePaths: (cwd: string) => Effect.Effect<string[], GitCommandError>;
+    readonly deleteLocalBranch: (
+      input: GitDeleteLocalBranchInput,
+    ) => Effect.Effect<void, GitCommandError>;
     readonly renameBranch: (
       input: GitRenameBranchInput,
     ) => Effect.Effect<GitRenameBranchResult, GitCommandError>;
@@ -385,6 +427,8 @@ export class GitVcsDriver extends Context.Service<
 >()("t3/vcs/GitVcsDriver") {}
 
 const WORKSPACE_FILES_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
+const CHECKPOINT_RECOVERY_MAX_CANDIDATES = 64;
+const CHECKPOINT_RECOVERY_TIMEOUT = "5 seconds";
 const GIT_CHECK_IGNORE_MAX_STDIN_BYTES = 256 * 1024;
 const CHECKPOINT_DIFF_MAX_OUTPUT_BYTES = 10_000_000;
 const WORKSPACE_GIT_HARDENED_CONFIG_ARGS = [
@@ -503,6 +547,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const vcsProcess = yield* VcsProcess.VcsProcess;
+  const crypto = yield* Crypto.Crypto;
   const capabilities = {
     kind: "git" as const,
     supportsWorktrees: true,
@@ -721,12 +766,13 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       }),
     );
 
-  const hasHeadCommit = (cwd: string) =>
+  const hasHeadCommit = (cwd: string, env?: NodeJS.ProcessEnv) =>
     execute({
       operation: "GitVcsDriver.checkpoints.hasHeadCommit",
       cwd,
       args: ["rev-parse", "--verify", "HEAD"],
       allowNonZeroExit: true,
+      ...(env !== undefined ? { env } : {}),
     }).pipe(Effect.map((result) => result.exitCode === 0));
 
   const resolveCheckpointCommit = (cwd: string, checkpointRef: string) =>
@@ -797,7 +843,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
 
   const checkpoints: VcsDriver.VcsCheckpointOps = {
     captureCheckpoint: Effect.fn("GitVcsDriver.checkpoints.captureCheckpoint")(function* (input) {
-      const operation = "GitVcsDriver.checkpoints.captureCheckpoint";
+      const operation = VcsProcess.CHECKPOINT_CAPTURE_OPERATION;
       const indexConfig = [
         "-c",
         "core.fsmonitor=false",
@@ -811,10 +857,8 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       // HEAD, and an idempotent update-ref — so retrying a timed-out attempt
       // from scratch is always safe.
       const attempt = Effect.gen(function* () {
-        const tempIndexPath = path.join(
-          gitCommonDir,
-          `t3-checkpoint-index-${NodeCrypto.randomUUID()}`,
-        );
+        const indexId = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
+        const tempIndexPath = path.join(gitCommonDir, `t3-checkpoint-index-${indexId}`);
         const commitEnv: NodeJS.ProcessEnv = {
           ...process.env,
           GIT_INDEX_FILE: tempIndexPath,
@@ -824,9 +868,12 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
           GIT_COMMITTER_EMAIL: "t3code@users.noreply.github.com",
         };
 
-        const cleanupTempIndex = fileSystem
-          .remove(tempIndexPath, { force: true })
-          .pipe(Effect.ignore);
+        // Forced process termination can leave Git's private index lock behind.
+        const cleanupTempIndex = Effect.forEach(
+          [tempIndexPath, `${tempIndexPath}.lock`],
+          (indexFile) => fileSystem.remove(indexFile, { force: true }).pipe(Effect.ignore),
+          { discard: true },
+        );
 
         yield* Effect.gen(function* () {
           const headExists = yield* hasHeadCommit(input.cwd);
@@ -954,21 +1001,96 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
             }
           }
 
-          // t3team: `git add -A -- .` with the unindexable-path fallback (reserved
-          // host names abort the broad add; retry via an explicit pathspec file).
-          // Preserve absent skipped entries, but capture present nonignored files outside the cone.
-          yield* indexCheckpointPaths({
-            operation,
-            cwd: input.cwd,
-            gitCommonDir,
-            env: commitEnv,
-            execute,
-            fileSystem,
-            path,
-            timeoutMs: CHECKPOINT_INDEX_TIMEOUT_MS,
-            addPrefixArgs: [...indexConfig, ...durableWrite],
-            addFlags: sparseCheckout ? ["--sparse"] : [],
-          });
+          const stageFiles = (exclusions: ReadonlyArray<string>) =>
+            execute({
+              operation,
+              cwd: input.cwd,
+              // Preserve absent skipped entries, but capture present nonignored files outside the cone.
+              args: [
+                ...indexConfig,
+                ...durableWrite,
+                "add",
+                ...(sparseCheckout ? ["--sparse"] : []),
+                "-A",
+                "--",
+                ".",
+                ...exclusions,
+              ],
+              env: commitEnv,
+              timeoutMs: CHECKPOINT_INDEX_TIMEOUT_MS,
+            });
+          // `false` means the broad add failed for a reason other than an embedded repository.
+          const staged = yield* stageFiles([]).pipe(
+            Effect.as(true),
+            Effect.catchTags({
+              VcsProcessExitError: (error) =>
+                Effect.gen(function* () {
+                  // Git cannot stage an embedded repository until it has a commit. Discover these
+                  // only after staging fails so ordinary checkpoints do not need another file scan.
+                  const untracked = yield* execute({
+                    operation,
+                    cwd: input.cwd,
+                    args: ["ls-files", "--others", "--exclude-standard", "-z", "--", "."],
+                    env: commitEnv,
+                    maxOutputBytes: WORKSPACE_FILES_MAX_OUTPUT_BYTES,
+                  });
+                  if (untracked.stdoutTruncated) return yield* error;
+                  const candidates = splitNullSeparatedGitStdoutPaths(untracked).filter((entry) =>
+                    entry.endsWith("/"),
+                  );
+                  // Refuse excessive recovery work before probing any nested repositories.
+                  if (candidates.length > CHECKPOINT_RECOVERY_MAX_CANDIDATES) return yield* error;
+                  // Discover each child's repository instead of inheriting the server's Git bindings.
+                  const nestedRepoEnv: NodeJS.ProcessEnv = {
+                    ...process.env,
+                    GIT_DIR: undefined,
+                    GIT_WORK_TREE: undefined,
+                    GIT_COMMON_DIR: undefined,
+                    GIT_INDEX_FILE: undefined,
+                    GIT_OBJECT_DIRECTORY: undefined,
+                    GIT_ALTERNATE_OBJECT_DIRECTORIES: undefined,
+                  };
+                  const exclusions: Array<string> = [];
+                  for (const entry of candidates) {
+                    const nestedCwd = path.join(input.cwd, entry);
+                    if (
+                      (yield* fileSystem
+                        .exists(path.join(nestedCwd, ".git"))
+                        .pipe(Effect.mapError(() => error))) &&
+                      !(yield* hasHeadCommit(nestedCwd, nestedRepoEnv))
+                    ) {
+                      exclusions.push(`:(exclude,literal)${entry}`);
+                    }
+                  }
+                  if (exclusions.length === 0) return false;
+                  yield* stageFiles(exclusions);
+                  return true;
+                }).pipe(
+                  // One budget covers discovery, queued Git admission, probes, and the staging retry.
+                  Effect.timeoutOrElse({
+                    duration: CHECKPOINT_RECOVERY_TIMEOUT,
+                    orElse: () => Effect.fail(error),
+                  }),
+                ),
+            }),
+          );
+          if (!staged) {
+            // t3team: no embedded repository explains the failure, so retry through the
+            // unindexable-path fallback (reserved host names such as `nul` abort the broad
+            // add; it re-adds via an explicit pathspec file and skips those paths).
+            yield* indexCheckpointPaths({
+              operation,
+              cwd: input.cwd,
+              gitCommonDir,
+              env: commitEnv,
+              execute,
+              fileSystem,
+              path,
+              timeoutMs: CHECKPOINT_INDEX_TIMEOUT_MS,
+              addPrefixArgs: [...indexConfig, ...durableWrite],
+              addFlags: sparseCheckout ? ["--sparse"] : [],
+            });
+          }
 
           const writeTreeResult = yield* execute({
             operation,
@@ -1113,7 +1235,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
           /^warning: failed to remove \.\/: [^\n]+$/.test(cleaned.stderr.trim()) &&
           (yield* fileSystem.readDirectory(input.cwd).pipe(
             Effect.map((entries) => entries.length === 0),
-            Effect.catch(() => Effect.succeed(false)),
+            Effect.orElseSucceed(() => false),
           ));
         if (!emptiedWorkspace)
           return yield* new VcsProcessExitError({
@@ -1243,5 +1365,5 @@ export const make = Effect.gen(function* () {
   return GitVcsDriver.of(git);
 });
 
-export const vcsLayer = Layer.effect(VcsDriver.VcsDriver, makeVcsDriver);
+export const layerVcs = Layer.effect(VcsDriver.VcsDriver, makeVcsDriver);
 export const layer = Layer.effect(GitVcsDriver, make);

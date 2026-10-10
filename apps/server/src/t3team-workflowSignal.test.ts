@@ -33,9 +33,7 @@ import type { PullRequestActivity, PullRequestDetail } from "@t3tools/contracts"
 import { PersistenceSqlError } from "./persistence/Errors.ts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import type {
-  WorkflowSignalStoreShape,
-} from "./persistence/Services/WorkflowSignalStore.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 
 // ---------------------------------------------------------------------------
 // Tier A diff logic
@@ -295,7 +293,9 @@ const makeFakes = () => {
     purgeTerminalRegistrations: voidFx,
     insertInboxEntry: () => Effect.succeed(0),
     takeOpenInboxEntry: () => Effect.succeed(Option.none()),
+    takeFirstOpenInboxEntry: () => Effect.succeed(Option.none()),
     deleteDeliveredInboxEntriesOlderThan: voidFx,
+    pruneUndeliveredInboxEntries: voidFx,
     getCursor: (key: string) =>
       Effect.succeed(
         cursors.has(key)
@@ -354,18 +354,13 @@ type CoreInputOverrides = {
   };
 };
 
-const coreInput = (
-  fakes: ReturnType<typeof makeFakes>,
-  overrides: CoreInputOverrides = {},
-) => ({
+const coreInput = (fakes: ReturnType<typeof makeFakes>, overrides: CoreInputOverrides = {}) => ({
   catalog: overrides.catalog ?? fakes.catalog,
   delivery: fakes.delivery,
   store: fakes.store,
-  sweepMs: 60_000,
   inboxCutoffIso: () => "2025-12-01T00:00:00Z",
   nowIso: () => "2026-01-01T00:00:00Z",
   log: () => Effect.void,
-  startTimer: false,
 });
 
 describe("makeReconcilerCore", () => {
@@ -390,14 +385,12 @@ describe("makeReconcilerCore", () => {
     fakes.setLive([]);
     await core.reconcile();
     expect(fakes.stopped).toEqual(["scm.change-request.watch"]);
-    core.stop();
+    await core.stopAll();
   });
 
   it("minted emit: an undeclared signal rejects; a declared one is delivered + schema-validated", async () => {
     const fakes = makeFakes();
-    let mintedEmit:
-      | ((signal: unknown, key: string, payload: unknown) => Promise<void>)
-      | undefined;
+    let mintedEmit: ((signal: unknown, key: string, payload: unknown) => Promise<void>) | undefined;
     const core: ReconcilerCore = makeReconcilerCore(
       coreInput(fakes, {
         catalog: {
@@ -421,24 +414,22 @@ describe("makeReconcilerCore", () => {
     await core.reconcile();
     expect(mintedEmit).toBeDefined();
     // Declared signal, well-typed payload → delivered with the decoded payload.
-    await mintedEmit!(
-      ScmChangeRequestMerged,
-      "42",
-      { changeRequest: toNeutralChangeRequest(detail({ state: "merged" })) },
-    );
+    await mintedEmit!(ScmChangeRequestMerged, "42", {
+      changeRequest: toNeutralChangeRequest(detail({ state: "merged" })),
+    });
     expect(fakes.emits).toHaveLength(1);
     expect(fakes.emits[0]!.signalName).toBe(ScmChangeRequestMerged.name);
     // Undeclared for this source → rejects before delivery.
     await expect(
-      mintedEmit!(
-        WorkItemUpdated,
-        "SVC-7",
-        { provider: "atlassian", issueKey: "SVC-7", title: "x" },
-      ),
+      mintedEmit!(WorkItemUpdated, "SVC-7", {
+        provider: "atlassian",
+        issueKey: "SVC-7",
+        title: "x",
+      }),
     ).rejects.toThrow(/emitted undeclared signal/);
     // Declared but mistyped payload → rejects at the schema boundary.
     await expect(mintedEmit!(ScmChangeRequestMerged, "42", { nope: true })).rejects.toThrow();
-    core.stop();
+    await core.stopAll();
   });
 
   it("cursor round-trips through the store under the instance key", async () => {
@@ -473,7 +464,7 @@ describe("makeReconcilerCore", () => {
     expect(await minted!.getCursor()).toBe(null);
     await minted!.setCursor('{"status":"To Do"}');
     expect(await minted!.getCursor()).toBe('{"status":"To Do"}');
-    core.stop();
+    await core.stopAll();
   });
 });
 
@@ -553,14 +544,15 @@ describe("startScmSignalInstance durable cursor", () => {
 
     // A source-side emit fault (not a delivery failure) must NOT wedge the cursor: it is
     // skipped, and the cursor advances so later transitions keep flowing.
-    const ctxFault: SignalSourceContext<{ projectId: string; repository: string; number: number }> = {
-      params: { projectId: "p1", repository: "o/r", number: 42 },
-      emit: async () => {
-        throw new Error("source emitted an undeclared signal");
-      },
-      getCursor: async () => null,
-      setCursor: async () => {},
-    };
+    const ctxFault: SignalSourceContext<{ projectId: string; repository: string; number: number }> =
+      {
+        params: { projectId: "p1", repository: "o/r", number: 42 },
+        emit: async () => {
+          throw new Error("source emitted an undeclared signal");
+        },
+        getCursor: async () => null,
+        setCursor: async () => {},
+      };
     let faultCursorCalls = 0;
     const faultInstance = startScmSignalInstance({
       ctx: {

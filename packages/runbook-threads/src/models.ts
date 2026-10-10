@@ -11,6 +11,9 @@ export interface ModelSelection<Ref extends ModelRef = ModelRef> {
   readonly model: Ref;
 }
 
+/** A provider instance, optionally followed by its exact catalog slug (`instance/slug`). */
+export type ModelOption = string | ModelSelection;
+
 export function defineModel<const Provider extends string, const Id extends string>(opts: {
   readonly provider: Provider;
   readonly id: Id;

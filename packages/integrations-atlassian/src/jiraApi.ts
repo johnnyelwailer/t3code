@@ -45,6 +45,9 @@ export type JiraApiAuth =
     };
 
 export const JIRA_API_TIMEOUT_MS = 10_000;
+/** `project/search` returns at most 100 per page; the page cap only guards a server that never says "last". */
+const PROJECT_SEARCH_PAGE_SIZE = 100;
+const MAX_PROJECT_SEARCH_PAGES = 100;
 
 export function jiraCloudApiBaseUrl(cloudId: string): string {
   return `https://api.atlassian.com/ex/jira/${cloudId}`;
@@ -146,6 +149,41 @@ export class JiraApiClient {
     };
   }
 
+  /**
+   * An OAuth client talks to `api.atlassian.com`, but Jira still hands out some asset URLs on the
+   * site itself — the built-in issue-type icons (`<site>/images/icons/issuetypes/epic.svg`). The
+   * bearer token is not valid there, and those files are public, so they are fetched without it.
+   * Only the connection's own site and its static `/images/` tree qualify, and redirects are
+   * refused (the asset route is unauthenticated, so a redirect must not steer the fetch elsewhere).
+   * The token never leaves the gateway.
+   */
+  private isOAuthSiteUrl(url: string): boolean {
+    if (this.auth.kind !== "oauth" || !this.auth.siteUrl) return false;
+    try {
+      const parsed = new URL(url);
+      return (
+        parsed.origin === new URL(this.auth.siteUrl).origin &&
+        parsed.pathname.startsWith("/images/")
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  private async fetchPublicSiteAsset(url: string): Promise<Response> {
+    const path = new URL(url).pathname;
+    let response: Response;
+    try {
+      response = await fetchWithJiraTimeout(url, { headers: { Accept: "*/*" }, redirect: "error" });
+    } catch (cause) {
+      throw new AtlassianNetworkError({ cause, path });
+    }
+    if (!response.ok) {
+      throw new AtlassianApiError({ status: response.status, message: "Asset fetch failed", path });
+    }
+    return response;
+  }
+
   private async fetchResponse(
     pathOrUrl: string,
     init?: RequestInit,
@@ -174,9 +212,11 @@ export class JiraApiClient {
     }
 
     if (response.status === 401 || response.status === 403) {
+      const body = await response.text().catch(() => "");
       throw new AtlassianAuthError({
         message: `Authentication failed (${response.status}). Check your credentials or re-authenticate.`,
         path,
+        ...(/scope does not match/i.test(body) ? { missingScope: true } : {}),
       });
     }
 
@@ -287,9 +327,9 @@ export class JiraApiClient {
   }
 
   async downloadAsset(url: string): Promise<{ bytes: Uint8Array; mimeType?: string }> {
-    const { response } = await this.fetchResponse(url, undefined, {
-      accept: "*/*",
-    });
+    const response = this.isOAuthSiteUrl(url)
+      ? await this.fetchPublicSiteAsset(url)
+      : (await this.fetchResponse(url, undefined, { accept: "*/*" })).response;
     const bytes = new Uint8Array(await response.arrayBuffer());
     const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim();
     return {
@@ -302,10 +342,26 @@ export class JiraApiClient {
     return this.fetchJson<JiraMyself>("/rest/api/3/myself");
   }
 
+  /**
+   * Every project the caller can browse. `project/search` caps a page at 100, so this walks
+   * `startAt` until Jira says the last page arrived (or a page comes back empty).
+   */
   async searchProjects(): Promise<JiraProjectSearchResponse> {
-    return this.fetchJson<JiraProjectSearchResponse>(
-      "/rest/api/3/project/search?maxResults=100&orderBy=name",
-    );
+    const values: JiraProject[] = [];
+    let startAt = 0;
+    for (let page = 0; page < MAX_PROJECT_SEARCH_PAGES; page += 1) {
+      const response = await this.fetchJson<JiraProjectSearchResponse>(
+        `/rest/api/3/project/search?maxResults=${PROJECT_SEARCH_PAGE_SIZE}&startAt=${startAt}&orderBy=name`,
+      );
+      values.push(...response.values);
+      startAt += response.values.length;
+      const done =
+        response.isLast === true ||
+        response.values.length === 0 ||
+        (response.isLast === undefined && startAt >= response.total);
+      if (done) break;
+    }
+    return { values, total: values.length, isLast: true };
   }
 
   async getProject(projectIdOrKey: string): Promise<JiraProject> {
@@ -367,6 +423,12 @@ export class JiraApiClient {
   async listFavouriteFilters(): Promise<ReadonlyArray<JiraFilter>> {
     return this.fetchJson<ReadonlyArray<JiraFilter>>(
       "/rest/api/3/filter/favourite?expand=owner,jql",
+    );
+  }
+
+  async getFilter(filterId: string): Promise<JiraFilter> {
+    return this.fetchJson<JiraFilter>(
+      `/rest/api/3/filter/${encodeURIComponent(filterId)}?expand=jql`,
     );
   }
 

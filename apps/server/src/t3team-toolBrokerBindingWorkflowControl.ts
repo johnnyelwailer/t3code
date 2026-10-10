@@ -12,9 +12,10 @@ import type {
   T3TeamWorkflowControlToolHandlers,
   WorkflowControlToolAction,
 } from "./t3team-toolBrokerWorkflowControlTool.ts";
+import { mcpToolNameOf } from "./t3team-mcpCanonicalToolMap.ts";
 
-export const T3TEAM_WORKFLOW_PAUSE_TOOL_ID = "t3team.orchestration.pause";
-export const T3TEAM_WORKFLOW_STOP_TOOL_ID = "t3team.orchestration.stop";
+const T3TEAM_WORKFLOW_PAUSE_TOOL_ID = "t3team.orchestration.pause";
+const T3TEAM_WORKFLOW_STOP_TOOL_ID = "t3team.orchestration.stop";
 
 const ACTION_BY_TOOL_ID: Readonly<Record<string, WorkflowControlToolAction>> = {
   [T3TEAM_WORKFLOW_PAUSE_TOOL_ID]: "pause",
@@ -40,11 +41,13 @@ export function callT3TeamWorkflowControlTool(input: {
   const handlers = input.workflowControlTools;
   const action = ACTION_BY_TOOL_ID[input.tool];
   if (!handlers || action === undefined) {
-    return Effect.succeed(errorResult(`Tool '${input.tool}' is not enabled ${input.scopeLabel}.`));
+    return Effect.succeed(
+      errorResult(`Tool '${mcpToolNameOf(input.tool)}' is not enabled ${input.scopeLabel}.`),
+    );
   }
   return foldResult(
     handlers.controlWorkflowRun(action, readArgs(input.toolArgs)),
     okResult,
-    (message) => errorResult(`Failed to run ${input.tool}: ${message}`),
+    (message) => errorResult(`Failed to run ${mcpToolNameOf(input.tool)}: ${message}`),
   );
 }

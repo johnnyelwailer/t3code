@@ -1,3 +1,4 @@
+import { ProjectId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -6,6 +7,7 @@ import {
   summarizeT3TeamThreadEvent,
   type T3TeamThreadDebugEvent,
 } from "~/t3team/chat/t3team-threadDebug";
+import { makeThreadFixture } from "~/test-fixtures";
 
 describe("appendT3TeamThreadDebugEvent", () => {
   it("keeps only the newest entries when the buffer exceeds its cap", () => {
@@ -44,27 +46,26 @@ describe("summarizeT3TeamThreadEvent", () => {
 });
 
 describe("summarizeT3TeamServerThread", () => {
-  it("extracts a compact summary from live thread state", () => {
+  it("extracts a compact summary from a live V2 shell", () => {
     expect(
-      summarizeT3TeamServerThread({
-        id: "thread-1",
-        projectId: "project-1",
-        title: "My thread",
-        messages: [{}, {}],
-        latestTurn: { turnId: "turn-1" },
-        session: { status: "running" },
-        archivedAt: null,
-        error: null,
-      }),
+      summarizeT3TeamServerThread(
+        makeThreadFixture({
+          id: ThreadId.make("thread-1"),
+          projectId: ProjectId.make("project-1"),
+          title: "My thread",
+          visibleItemCount: 2,
+        }),
+      ),
     ).toEqual({
       id: "thread-1",
       projectId: "project-1",
       title: "My thread",
-      messageCount: 2,
-      latestTurnId: "turn-1",
-      sessionStatus: "running",
+      visibleItemCount: 2,
+      latestRunId: null,
+      runtimeStatus: null,
       archivedAt: null,
       error: null,
     });
+    expect(summarizeT3TeamServerThread(null)).toBeNull();
   });
 });

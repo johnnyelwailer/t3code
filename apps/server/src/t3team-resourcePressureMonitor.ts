@@ -16,9 +16,10 @@
  * overlap because the loop is sequential. Level transitions (after hysteresis)
  * are appended to the durable `resource_pressure_events` journal and logged,
  * and every sampled level feeds the auto-pause state machine
- * (`t3team-resourcePressureAutoPause.ts`) that holds turn starts while
- * critical. With the flag off the layer forks nothing, reports
- * `enabled: false` and exposes no auto-pause (the turn gate is a no-op).
+ * (`t3team-resourcePressureAutoPause.ts`). On orchestration V2 nothing holds
+ * turn starts yet: the turn gate needs a turn-admission hook in the V2 turn
+ * start path, which does not exist (deferred). With the flag off the layer
+ * forks nothing, reports `enabled: false` and exposes no auto-pause.
  *
  * @module t3team-resourcePressureMonitor
  */
@@ -34,10 +35,10 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import { ResourcePressureEventRepositoryLive } from "./persistence/Layers/t3team-ResourcePressureEvents.ts";
-import { ResourcePressureEventRepository } from "./persistence/Services/t3team-ResourcePressureEvents.ts";
+import { ResourcePressureEventRepositoryLive } from "./persistence/t3team-ResourcePressureEvents.ts";
+import { ResourcePressureEventRepository } from "./persistence/t3team-ResourcePressureEvents.ts";
 import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import {
@@ -52,7 +53,7 @@ import {
 } from "./t3team-resourcePressureAutoPause.ts";
 
 /** Recent transitions returned with every report. */
-export const RESOURCE_PRESSURE_REPORT_EVENT_LIMIT = 20;
+const RESOURCE_PRESSURE_REPORT_EVENT_LIMIT = 20;
 
 export interface ResourcePressureMonitorShape {
   readonly report: Effect.Effect<ResourcePressureReport>;

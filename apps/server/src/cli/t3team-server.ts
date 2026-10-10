@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import * as Config from "effect/Config";
 import * as Data from "effect/Data";
 import * as Option from "effect/Option";
-import { Command, GlobalFlag } from "effect/unstable/cli";
+import { Command, GlobalFlag } from "effect/cli";
 
 import { ServerConfig, type StartupPresentation } from "../config.ts";
 // One server layer, two binaries. `server.ts` already composes every t3team route and reactor,
@@ -15,11 +15,21 @@ import { activateCompiledInDistribution } from "../t3team-distribution-bootstrap
 import {
   inspectConfiguredWorkspacePacks,
   loadPackAppearanceOverlay,
+  loadPackModelPolicy,
   loadPackProviderOverlay,
   loadPackWorkflowAgentModelPolicy,
   loadPackWorkflowEphemeralConcurrencyPolicy,
   loadPackWorkflowRepairPolicy,
 } from "../t3team-pack-host.ts";
+import { setDistributionModelPolicy } from "../t3team-configuredDefaultModelSelection.ts";
+import { packAccounts, setPackAccounts } from "../account/t3team-packAccounts.ts";
+import { loadPackAccounts } from "../t3team-pack-accounts.ts";
+import {
+  loadPackCompletionWakeRenderer,
+  setPackCompletionWakeRenderer,
+} from "../t3team-pack-completionWakeRenderer.ts";
+import { loadPackPersistence } from "../t3team-packPersistence.ts";
+import { registerPackCollections } from "../t3team-packDocumentConfig.ts";
 import { setPackAppearanceOverlay } from "../t3team-pack-appearanceOverlay.ts";
 import {
   loadPackSetupProfileOverlay,
@@ -63,11 +73,25 @@ export const runT3TeamServerCommand = (
         }),
       ),
     );
-    const workspacePacksDir = yield* Config.string("T3TEAM_PACKS_DIR").pipe(Config.option);
+    const workspacePacksDir = yield* Config.String("T3TEAM_PACKS_DIR").pipe(Config.option);
     const packDiagnostic = yield* Effect.promise(() =>
       inspectConfiguredWorkspacePacks(Option.getOrUndefined(workspacePacksDir)),
     );
     if (packDiagnostic.enabled) {
+      yield* Effect.tryPromise({
+        try: () => loadPackPersistence(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        Effect.tap((collections) =>
+          Effect.try({
+            try: () => registerPackCollections(collections, "runtime"),
+            catch: (cause) => new WorkspacePackLoadError({ cause }),
+          }),
+        ),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack persistence loading failed", { cause }),
+        ),
+      );
       // Pack recipe roots (Epic 16 §Recipe Sources And Precedence). Pure resolution — the recipes
       // themselves load lazily through the shared discovery pipeline on each discover request.
       const recipeSources = loadPackRecipeSources(packDiagnostic);
@@ -122,6 +146,62 @@ export const runT3TeamServerCommand = (
           Effect.logWarning("Workspace pack setup profile loading failed", { cause }).pipe(
             Effect.as(undefined),
           ),
+        ),
+      );
+      yield* Effect.tryPromise({
+        try: () => loadPackAccounts(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        // Added to the compiled-in distribution's accounts, which win on a shared id.
+        Effect.tap((accounts) =>
+          Effect.gen(function* () {
+            const taken = new Set(packAccounts().map((account) => account.id));
+            const added = accounts.filter((account) => !taken.has(account.id));
+            for (const skipped of accounts.filter((account) => taken.has(account.id))) {
+              yield* Effect.logWarning(
+                "Workspace pack account skipped: the id is already defined",
+                {
+                  account: skipped.id,
+                },
+              );
+            }
+            if (added.length > 0) setPackAccounts([...packAccounts(), ...added]);
+          }),
+        ),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack account loading failed", { cause }).pipe(
+            Effect.as(undefined),
+          ),
+        ),
+      );
+      yield* Effect.tryPromise({
+        try: () => loadPackModelPolicy(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        Effect.tap((policy) =>
+          Effect.sync(() => {
+            if (policy !== undefined) setDistributionModelPolicy(policy);
+          }),
+        ),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack model policy loading failed", { cause }).pipe(
+            Effect.as(undefined),
+          ),
+        ),
+      );
+      yield* Effect.tryPromise({
+        try: () => loadPackCompletionWakeRenderer(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        Effect.tap((renderer) =>
+          Effect.sync(() => {
+            if (renderer !== undefined) setPackCompletionWakeRenderer(renderer);
+          }),
+        ),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack completion wake renderer loading failed", {
+            cause,
+          }).pipe(Effect.as(undefined)),
         ),
       );
       yield* Effect.tryPromise({

@@ -25,14 +25,16 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import { createQueryable } from "@t3tools/project-context";
 import type { ProjectRecipeRenderContext } from "@t3tools/project-recipes";
-import { type OrchestrationCommand, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { discoverProjectRecipes } from "./t3team-projectRecipeDiscovery.ts";
+import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 import { resolveRecipeWorkflowScripts } from "./t3team-recipeWorkflowScripts.ts";
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 
 const fixtureRoot = NodePath.join(
   NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)),
@@ -47,7 +49,7 @@ afterAll(() => {
   NodeFS.rmSync(runsRoot, { recursive: true, force: true });
 });
 
-const recipeRoot = NodePath.join(workspaceRoot, ".t3team", "recipes", "estimation-stats");
+const recipeRoot = NodePath.join(workspaceRoot, HIDDEN_T3TEAM_DIR, "recipes", "estimation-stats");
 NodeFS.mkdirSync(NodePath.join(recipeRoot, "scripts"), { recursive: true });
 NodeFS.writeFileSync(
   NodePath.join(recipeRoot, "scripts", "computeStats.ts"),
@@ -206,7 +208,6 @@ describe("recipe workflow scripts (Epic 25 §Scripts)", () => {
     expect(scripts.computeStats!.kind).toBe("script");
 
     const registry = makeWorkflowEngineRegistry();
-    const dispatched: OrchestrationCommand[] = [];
     let seq = 0;
     let completed: unknown;
     const result = await launchWorkflowRecipe({
@@ -221,9 +222,7 @@ describe("recipe workflow scripts (Epic 25 §Scripts)", () => {
       runtimeMode: "full-access",
       interactionMode: "default",
       registry,
-      dispatch: async (command) => {
-        dispatched.push(command);
-      },
+      host: makeFakeWorkflowHost().host,
       newId: () => `id-${(seq += 1)}`,
       nowIso: () => "2026-01-01T00:00:00.000Z",
       onComplete: async (output) => {

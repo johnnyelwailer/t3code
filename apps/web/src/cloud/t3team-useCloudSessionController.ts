@@ -1,4 +1,4 @@
-import type { CloudSession } from "@t3tools/contracts";
+import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
 import { useCallback, useMemo, useState } from "react";
 
 import { environmentCatalog } from "~/connection/catalog";
@@ -9,7 +9,6 @@ import {
 } from "~/state/t3team-cloudSessions";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useRelayEnvironmentDiscovery } from "~/state/environments";
-import { DEFAULT_CLOUD_SESSION_DURATION_SECONDS } from "~/components/cloud/t3team-CloudSessionProvisionPanel";
 import { toastManager } from "~/components/ui/toast";
 import { type RelayEnvironmentCandidate } from "~/components/cloud/t3team-cloudSessionConnect";
 import {
@@ -20,19 +19,24 @@ import {
 import { showCloudSessionFailureToast } from "./t3team-cloudSessionToast";
 import { useCloudSessionListRefresh } from "./t3team-useCloudSessionListRefresh";
 import { useCloudSessionConnect } from "./t3team-useCloudSessionConnect";
-import { useCloudSessionEnvironmentExit } from "./t3team-useCloudSessionEnvironmentExit";
-import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
+import { liveCloudSessionForEnvironment } from "./t3team-cloudSessionEnvironmentMatch";
+import { useCloudSessionCreate } from "./t3team-useCloudSessionCreate";
 
 /**
- * Drives the cloud session surfaces (settings panel + "Run on" menu). Create,
- * cancel/stop, connect, and the saved-machine "Stop" all exit via their hooks.
+ * Drives the cloud session surfaces (settings panel + "Run on" menu): create,
+ * cancel/stop and connect. The panel owns a session's whole lifecycle; its
+ * saved-backend row is a read-only connect target (`hasLiveCloudSession`).
  */
 export function useCloudSessionController() {
   const environmentId = usePrimaryEnvironmentId();
   const { environments: relayDiscovered } = useRelayEnvironmentDiscovery();
-  const { sessions: serverSessions, loading, configured } = useCloudSessions();
-  const [durationSeconds, setDurationSeconds] = useState(DEFAULT_CLOUD_SESSION_DURATION_SECONDS);
-  const [createPending, setCreatePending] = useState(false);
+  const {
+    sessions: serverSessions,
+    loading,
+    configured,
+    historyUrl,
+    loadError,
+  } = useCloudSessions();
   const [actionPending, setActionPending] = useState<{
     readonly sessionId: string;
     readonly kind: "cancel" | "stop";
@@ -55,7 +59,6 @@ export function useCloudSessionController() {
     [relayDiscovered],
   );
 
-  const createSession = useAtomCommand(cloudSessionEnvironment.create, { reportFailure: false });
   const cancelSession = useAtomCommand(cloudSessionEnvironment.cancel, { reportFailure: false });
   const registerRelayEnvironment = useAtomCommand(environmentCatalog.register, {
     reportFailure: false,
@@ -63,15 +66,8 @@ export function useCloudSessionController() {
   const { refreshCloudSessionList, refreshRelayEnvironments } = useCloudSessionListRefresh(
     environmentId,
     cloudMenuOpen || panelVisible,
-  );
-
-  const exit = useCloudSessionEnvironmentExit({
     sessions,
-    environmentId,
-    cancelSession,
-    refreshCloudSessionList,
-    refreshRelayEnvironments,
-  });
+  );
 
   const { connectPendingSessionId, requestConnect } = useCloudSessionConnect({
     sessions,
@@ -79,41 +75,16 @@ export function useCloudSessionController() {
     primaryEnvironmentId: environmentId,
     environmentIdsBefore: relayIdsBefore,
     register: registerRelayEnvironment,
-    onRegistered: exit.onRegistered,
   });
 
-  const onCreate = useCallback(
-    (seconds: number) => {
-      if (environmentId === null || createPending) return;
-      setRelayIdsBefore(
-        new Set(
-          [...relayDiscovered.values()].map((entry) => String(entry.environment.environmentId)),
-        ),
-      );
-      setCreatePending(true);
-      void createSession({ environmentId, input: { durationSeconds: seconds } })
-        .then((result) => {
-          if (result._tag === "Success") {
-            setLocalSession({
-              session: result.value,
-              knownServerSessionIds: new Set(serverSessions.map((session) => session.sessionId)),
-            });
-            refreshCloudSessionList();
-          } else {
-            reportCloudSessionCreateFailure(result);
-          }
-        })
-        .finally(() => setCreatePending(false));
-    },
-    [
-      createPending,
-      createSession,
-      environmentId,
-      refreshCloudSessionList,
-      relayDiscovered,
-      serverSessions,
-    ],
-  );
+  const { onCreate, createPending, createPendingSetup } = useCloudSessionCreate({
+    environmentId,
+    relayDiscovered,
+    serverSessions,
+    setRelayIdsBefore,
+    setLocalSession,
+    refreshCloudSessionList,
+  });
 
   const beginConnect = useCallback(
     (session: CloudSession) => {
@@ -151,12 +122,16 @@ export function useCloudSessionController() {
         return;
       }
       if (isTerminalCloudSessionPhase(session.phase)) {
-        onCreate(durationSeconds);
+        // "Start another": a fresh session at the remembered duration. The
+        // record carries no requested hold (the runs API omits dispatch
+        // inputs), so replaying the ended session's own is not possible.
+        // A setup session offers none: its record carries no project either.
+        if (session.machineSetup !== true) onCreate();
         return;
       }
       cancelRun(session, "cancel", "Cancelling that session…");
     },
-    [beginConnect, cancelRun, durationSeconds, onCreate],
+    [beginConnect, cancelRun, onCreate],
   );
 
   const onSessionSecondaryAction = useCallback(
@@ -179,21 +154,26 @@ export function useCloudSessionController() {
   return {
     sessions,
     loading,
+    loadError,
     configured,
-    durationSeconds,
-    onDurationChange: setDurationSeconds,
+    historyUrl,
     createPending,
+    createPendingSetup,
     pendingSessionId,
     pendingKind,
     pendingLabel,
     onCreate,
     onSessionAction,
     onSessionSecondaryAction,
-    stopEnvironment: exit.stopEnvironment,
-    hasLiveCloudSession: exit.hasLiveCloudSession,
-    stoppingEnvironmentId: exit.stoppingEnvironmentId,
+    hasLiveCloudSession: useCallback(
+      (machineEnvironmentId: EnvironmentId) =>
+        liveCloudSessionForEnvironment(sessions, machineEnvironmentId) !== null,
+      [sessions],
+    ),
     onCloudMenuOpenChange: useCallback((open: boolean) => setCloudMenuOpen(open), []),
     onPanelVisibilityChange: useCallback((open: boolean) => setPanelVisible(open), []),
     available: environmentId !== null,
+    /** Where sessions are created; a project must live here to run in its machine. */
+    primaryEnvironmentId: environmentId,
   };
 }

@@ -1,5 +1,6 @@
 import { Input } from "~/t3team/components/ui/t3team-input";
 import { ProjectMyWorkOptionsMenu } from "~/t3team/t3team-ProjectMyWorkOptionsMenu";
+import type { ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 import type {
   ProjectMyWorkKanbanLaneOption,
   ProjectMyWorkTypeOption,
@@ -12,6 +13,7 @@ import type {
 } from "~/t3team/t3team-projectDashboardMyWorkState";
 
 export function ProjectMyWorkFilterBar({
+  lens,
   query,
   onQueryChange,
   viewMode,
@@ -41,6 +43,7 @@ export function ProjectMyWorkFilterBar({
   onTableSortDirectionChange,
   onReset,
 }: {
+  lens: ProjectMyWorkLens;
   query: string;
   onQueryChange: (value: string) => void;
   viewMode: ProjectMyWorkViewMode;
@@ -76,11 +79,12 @@ export function ProjectMyWorkFilterBar({
         value={query}
         onChange={(event) => onQueryChange(event.target.value)}
         placeholder="Search your assigned work"
-        className="h-8 w-full border-border/80 bg-background/95 text-xs sm:w-[15rem] lg:w-[18rem]"
+        className="w-full sm:w-60 lg:w-72"
       />
 
       <div className="ml-auto flex items-center gap-2">
         <ProjectMyWorkOptionsMenu
+          lens={lens}
           activeOptionsCount={activeOptionsCount}
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}

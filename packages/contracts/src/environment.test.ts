@@ -33,6 +33,25 @@ const descriptor = {
 } as const;
 
 describe("ExecutionEnvironmentDescriptor", () => {
+  it("decodes old, recognized and future manual installation descriptors", () => {
+    expect(decodeDescriptor(descriptor).capabilities.serverInstallation).toBeUndefined();
+    for (const installation of [{ kind: "npx" }, { kind: "npm-global", prefix: "/opt/node" }]) {
+      expect(
+        decodeDescriptor({
+          ...descriptor,
+          capabilities: { ...descriptor.capabilities, serverInstallation: installation },
+        }).capabilities.serverInstallation,
+      ).toEqual(installation);
+    }
+    for (const installation of [{ kind: "future-manager" }, { kind: "npm-global" }]) {
+      expect(
+        decodeDescriptor({
+          ...descriptor,
+          capabilities: { ...descriptor.capabilities, serverInstallation: installation },
+        }).capabilities.serverInstallation,
+      ).toBeUndefined();
+    }
+  });
   it("requires an advertised required-worktree bootstrap capability", () => {
     expect(decodeDescriptor(descriptor).capabilities.requiredWorktreeBootstrap).toBeUndefined();
     expect(
@@ -92,5 +111,21 @@ describe("ExecutionEnvironmentDescriptor", () => {
     expect(
       decodeDescriptor({ ...descriptor, serverStartedAtMs: 1_700_000_000_000 }).serverStartedAtMs,
     ).toBe(1_700_000_000_000);
+  });
+
+  it("treats missing server-resolved command context as unsupported", () => {
+    expect(decodeDescriptor(descriptor).capabilities.serverResolvedCommandContext).toBeUndefined();
+  });
+
+  it("preserves advertised server-resolved command context", () => {
+    expect(
+      decodeDescriptor({
+        ...descriptor,
+        capabilities: {
+          ...descriptor.capabilities,
+          serverResolvedCommandContext: true,
+        },
+      }).capabilities.serverResolvedCommandContext,
+    ).toBe(true);
   });
 });

@@ -12,8 +12,8 @@ import { describe, expect, it } from "vite-plus/test";
 import { auditWorkflowSourceStatic } from "./t3team-sdk.staticAudit.ts";
 // Imported for its registration side effect: the default tool->group resolver reads the
 // `defineTool` registry, which a module only joins when it is loaded (the server broker does
-// the same). Without this, `tools.t3team.thread.rename` is an unknown id and stays silent.
-import "./tools/t3team-sdk.t3team.ts";
+// the same). Without this, `tools.t3team.orchestration.run` is an unknown id and stays silent.
+import "./tools/t3team-sdk.workflow.ts";
 
 const FIXTURES = NodePath.join(import.meta.dirname, "__fixtures__");
 
@@ -105,6 +105,32 @@ describe("static capability check", () => {
     expect(rules(withUser)).toEqual([]);
   });
 
+  it("gates an imported launchThread on the launch capability", () => {
+    const sourceText = (capabilities: string) =>
+      [
+        'import { launchThread } from "@t3team/sdk";',
+        `export const meta = { name: 'inline', capabilities: [${capabilities}] } as const;`,
+        "export default async function run() {",
+        "  await launchThread({ key: 'k', title: 't' });",
+        "}",
+      ].join("\n");
+    const absolutePath = NodePath.join(FIXTURES, "inline.workflow.ts");
+    const missing = auditWorkflowSourceStatic(
+      { absolutePath, sourceText: sourceText("") },
+      { declared: new Set() },
+    );
+    expect(missing.map((item) => [item.rule, item.construct])).toEqual([
+      ["missing-capability", "launchThread({ key: 'k', title: 't' })"],
+    ]);
+    expect(missing[0]?.message).toContain("'launch'");
+    expect(
+      auditWorkflowSourceStatic(
+        { absolutePath, sourceText: sourceText("'launch'") },
+        { declared: new Set(["launch"]) },
+      ),
+    ).toEqual([]);
+  });
+
   it("stays silent about a tools.* call whose group cannot be resolved", () => {
     const source = {
       absolutePath: NodePath.join(FIXTURES, "inline.workflow.ts"),
@@ -122,14 +148,28 @@ describe("static capability check", () => {
       absolutePath: NodePath.join(FIXTURES, "inline.workflow.ts"),
       sourceText: [
         "export const meta = { name: 'inline', capabilities: [] };",
-        "const out = await tools.t3team.thread.rename({ title: 'x' });",
+        "const out = await tools.t3team.orchestration.run({ source: 'x' });",
         "return { out };",
       ].join("\n"),
     };
     const findings = auditWorkflowSourceStatic(source, { declared: new Set() });
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain("'t3team.thread.write'");
-    expect(findings[0]?.construct).toBe("tools.t3team.thread.rename");
+    expect(findings[0]?.construct).toBe("tools.t3team.orchestration.run");
+  });
+
+  it("gates thread.showView on ui.render", () => {
+    const source = {
+      absolutePath: NodePath.join(FIXTURES, "inline.workflow.ts"),
+      sourceText: [
+        "export const meta = { name: 'inline', capabilities: ['user'] };",
+        "getThread()?.showView({ key: 'k', viewId: 'notes.card', props: {} });",
+        "return {};",
+      ].join("\n"),
+    };
+    const findings = auditWorkflowSourceStatic(source, { declared: new Set(["user"]) });
+    expect(findings.map((item) => item.message)).toEqual([expect.stringContaining("'ui.render'")]);
+    expect(auditWorkflowSourceStatic(source, { declared: new Set(["ui.render"]) })).toEqual([]);
   });
 
   it("skips capability rules when the capability set is unknowable", () => {
@@ -164,9 +204,16 @@ describe("capability check resolves imported bindings", () => {
       `}`,
     ]);
 
-    expect(findings).toHaveLength(1);
-    expect(findings[0]?.rule).toBe("missing-capability");
-    expect(findings[0]?.message).toContain("'schedule'");
+    // The capability facet still sees through the alias (gates `at` as waitUntil); the bindings
+    // facet additionally rejects the alias itself — the loader erases imports, so `at` would be
+    // undefined at runtime regardless of the capability.
+    const capability = findings.filter((item) => item.facet === "capability");
+    expect(capability).toHaveLength(1);
+    expect(capability[0]?.rule).toBe("missing-capability");
+    expect(capability[0]?.message).toContain("'schedule'");
+    expect(findings.filter((item) => item.facet === "bindings").map((item) => item.rule)).toEqual([
+      "aliased-import",
+    ]);
   });
 
   it("gates an author-named scripts tree", () => {
@@ -235,5 +282,41 @@ describe("runtime-import rule is body-shape aware", () => {
 
     expect(findings.map((entry) => entry.rule)).toEqual(["runtime-import"]);
     expect(findings[0]?.message).toContain("blanks every import");
+  });
+});
+
+describe("composition options in static scans", () => {
+  const source = (concurrency: string) => ({
+    absolutePath: "/virtual/concurrency.workflow.ts",
+    sourceText: `import { parallel, pipeline, waitUntil } from "@t3team/sdk";
+export const meta = { name: "bounded", description: "Bounded work", capabilities: [] } as const;
+export default async function run() {
+  await parallel([async () => 1], { concurrency: ${concurrency} });
+  return await pipeline([1, 2], async (prev) => prev, { concurrency: 2 });
+}`,
+  });
+
+  it("accepts both options signatures without extra capabilities", () => {
+    expect(auditWorkflowSourceStatic(source("2"), { declared: new Set() })).toEqual([]);
+  });
+
+  it("typechecks sync and async pipeline stages with explicit input types", () => {
+    const typed = source("2");
+    typed.sourceText = typed.sourceText.replace(
+      "async (prev) => prev",
+      "(prev: number) => prev + 1, async (prev: number) => prev + 1",
+    );
+    expect(auditWorkflowSourceStatic(typed, { declared: new Set(), typecheck: true })).toEqual([]);
+    // A cold typecheck parses the lib + effect declaration graph (~9s on CI runners).
+  }, 60_000);
+
+  it("still scans expressions inside the options object", () => {
+    const findings = auditWorkflowSourceStatic(source("process.pid + await waitUntil(1)"), {
+      declared: new Set(),
+    });
+    expect(findings.map((f) => f.rule).sort()).toEqual([
+      "missing-capability",
+      "unjournaled-host-global",
+    ]);
   });
 });

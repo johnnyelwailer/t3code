@@ -168,6 +168,13 @@ Draft mutation tools:
 - never commit external writes directly
 - user accepts inline or with `Save all`
 
+Mutation tools:
+
+- write to an external system immediately, with no draft or accept step
+- off by default: a thread gains one only when the user selects it or a launching recipe declares
+  its group
+- example: publish listed files as a change request (`mutation.change_request`)
+
 External convenience tools:
 
 - may create durable user-owned app objects when low risk
@@ -358,6 +365,17 @@ t3team.my_work.set_priority_filter
 t3team.my_work.set_exact_status_filter
 t3team.my_work.reset_advanced_filters
 t3team.my_work.open_item
+```
+
+Implemented: the digest an agent arranges. These are the only My Work tools that exist today
+(the `t3team.my_work.*` rows above are still planned). The read returns the digest payload,
+including the stored `arrangement`; the write validates a plan against the bundled dashboard
+widgets and stores it per viewer and scope, or resets it (groups `integration.read` and
+`view.state`).
+
+```text
+t3team.mywork.digest.read
+t3team.mywork.arrange
 ```
 
 Draft mutation tools should reuse item-level tools when the target is a Jira work item:
@@ -572,6 +590,27 @@ Commit behavior:
 - repository file changes stay in session/worktree flows, not direct PR UI mutation
 - multi-comment review submissions should be previewed as a review package before commit
 
+## Change Request Tools
+
+Neutral across hosts: a change request is a GitHub pull request, a GitLab merge request, or the
+Azure DevOps, Bitbucket and Forgejo equivalents, opened through the source-control provider of the
+repository's `origin`.
+
+Mutation tools (group `mutation.change_request`, off by default):
+
+```text
+t3team.change_request.publish
+```
+
+`publish` works in the calling thread's checkout (its worktree, else the project root): it switches
+to or creates the branch from HEAD, commits ONLY the listed repository-relative paths, pushes the
+branch to `origin`, and opens the change request — or returns the one already open for that branch,
+so a recipe can call it again after pushing a fix. It returns `{url, number, repository, provider,
+branch, commit, projectId}`; `projectId` with `repository` and `number` is what a recipe needs to
+watch the change request's signals. A workflow body reaches it as
+`getTools().t3team.changeRequest.publish(...)` when both the body's `meta.capabilities` and the
+recipe's `allowedToolGroups` name `mutation.change_request`.
+
 ## Thread And Handoff Tools
 
 Context-bound chat and standalone chat share thread tools.
@@ -579,7 +618,6 @@ Context-bound chat and standalone chat share thread tools.
 Useful tools:
 
 ```text
-t3team.runtime.models
 t3team.runtime.provider_usage
 t3team.view.read
 t3team.recipe.list
@@ -592,7 +630,6 @@ t3team.orchestration.stop
 t3team.widget.show
 t3team.task.write
 t3team.task.list
-t3team.thread.rename
 t3team.thread.search
 t3team.thread.search_source
 t3team.thread.read_message
@@ -600,30 +637,28 @@ t3team.thread.ask_user
 t3team.thread.read_current
 t3team.thread.rename.draft_update
 t3team.thread.create_context_bound
-t3team.thread.start_child
 t3team.thread.children
 t3team.thread.send_cross_thread_message
 t3team.thread.attach_context
 t3team.thread.open_full_page
 ```
 
-`t3team.runtime.models`, `t3team.view.read`, `t3team.thread.rename`, `t3team.thread.search`,
-`t3team.thread.search_source`, `t3team.thread.read_message`, `t3team.thread.start_child`,
-`t3team.thread.children`, `t3team.orchestration.run`, `t3team.orchestration.status`,
-`t3team.orchestration.resume`, `t3team.orchestration.pause`, and `t3team.orchestration.stop` are
-the current live runtime slice used by the broker implementation. The rest of this section
-remains planned catalog scope.
+`t3team.view.read`, `t3team.thread.search`, `t3team.thread.search_source`,
+`t3team.thread.read_message`, `t3team.thread.children`, `t3team.orchestration.run`,
+`t3team.orchestration.status`, `t3team.orchestration.resume`, `t3team.orchestration.pause`, and
+`t3team.orchestration.stop` are the current live runtime slice used by the broker
+implementation. The rest of this section remains planned catalog scope.
+
+Child threads, their status, waiting and stopping, thread renames and the model catalog are not
+t3team tools: they are the orchestrator MCP tools every T3 agent gets (`delegate_task`,
+`task_status`, `task_cancel`, `t3_thread_list` / `_read` / `_wait` / `_interrupt` / `_update`,
+`orchestrator_capabilities`). A delegated child's completion wakes its parent automatically.
 
 `t3team.orchestration.pause` / `t3team.orchestration.stop` give the agent the same controls the
 run card gives the user, scoped to the runs its own thread launched (GHE #403): pause parks a
 waiting or scheduled run and keeps its continuation for `resume`; stop cancels the run and
 interrupts its child agent turns — the way to retire a superseded run before launching its
 replacement.
-
-`t3team.runtime.models` reads the current thread's true `ModelSelection` plus every configured
-provider instance and model from the live `ProviderRegistry` snapshots. Agent authors call it
-before naming an exact provider/model in `start_child` or an orchestration; the SDK deliberately
-ships no curated model tree.
 
 `t3team.runtime.provider_usage` samples the provider's LIVE rolling plan-limit windows —
 complements the transcript-based consumption reporting: it asks each configured provider
@@ -637,7 +672,7 @@ do not poll it, the host pushes it. The server samples every 20 s by default
 (`T3TEAM_RESOURCE_PRESSURE_INTERVAL_MS`, clamped 10–120 s) and:
 
 - appends one compact line (level, T3 app-tree RSS, machine verdict, one advisory) to every result
-  of `t3team.thread.start_child` and `t3team.orchestration.run` / `.resume` — in `content` and, for
+  of `t3team.orchestration.run` / `.resume` — in `content` and, for
   object results, as `structuredContent.hostResourcePressure`;
 - prepends one host note to a thread's next turn after each escalation to `warn`/`critical`
   ("avoid spawning new agents/jobs; finish in-flight work and end the turn");
@@ -676,45 +711,26 @@ decision that scrolled out of the (compacted) context window and follow up with
 as `t3team.thread.search_source`.
 
 `t3team.thread.search_source` searches the full transcript of the thread the current
-thread was forked from (the fork provenance note carries the source thread id), so the
-middle of a truncated fork stays reachable.
+thread was forked from (its lineage parent), so details the fork's compacted handoff left out
+stay reachable.
 
-`t3team.thread.read_message` reads the full body of a previously delivered inter-agent
-message in the current thread. Long inter-agent bodies are truncated on delivery to a
-short preview plus a marker carrying the message id; the full body stays persisted on the
-first-class `actor`-role message and this tool retrieves it on demand.
+`t3team.thread.read_message` reads the full body of an inter-agent message delivered to the
+current thread. Agents send those with `t3_thread_send` `mode: "mailbox"`: the message waits in a
+durable mailbox and reaches the recipient, batched with its other pending messages, as one digest
+turn once the recipient is idle. Long bodies appear in the digest as a subject plus a marker
+carrying the message id; this tool retrieves the full body from the mailbox on demand.
 
-`t3team.thread.start_child` keeps the `t3team` tool id, but uses session-style input and
-result vocabulary aligned with Copilot session tooling:
+`delegate_task` carries the fork's child-launch options: `workspace: { isolation: "worktree",
+repository?, baseRef? }` gives the child its own branch and worktree (of a linked repository, the
+adopted meta-repo, or the local repository) and runs the project setup script there;
+`extensions` carries `effort` (provider-agnostic thinking tier), `ticketId` (the work item the
+child belongs to, defaulting to the parent's) and `environment` (bind the child to another
+T3 server). `orchestrator_capabilities` lists them under `delegation`.
 
-- `name` for the child session title
-- required `isolation` (`shared` or `own-worktree`)
-- optional `kickoff_prompt`
-- optional `kickoff_mode` (`plan`, `interactive`, `autopilot`)
-- optional `model` and `reasoning_effort`
-- `repo_full_name` required for `own-worktree` scope when the workspace has linked repositories (omit it in a local workspace to isolate the child in a worktree of the local repository), and forbidden for `shared` scope
-- result metadata including `project_session_id`, navigation hint, and repo/worktree details
-
-`shared` means the project's shared checkout — the workspace that holds project context,
-references, recipes, skills, and cross-repository synthesis. `own-worktree` means a
-dedicated branch + worktree: of the linked implementation repository when
-`repo_full_name` is passed, or of the local repository in a local workspace.
-
-`t3team.thread.children` is ONE meta tool for managing a thread's child sessions, selected
-by an `op` parameter (`list`, `status`, `wait`, `stop`, `close`, `help`) rather than five
-separate tools — the context cost stays one compact description no matter how many ops
-exist, and per-op detail is discovered on demand via `help` or a malformed call's error
-message. It is STATE (child liveness / completion), not content: child→parent content still
-flows through `send_message`. Read-only state (list/status) is derived by the shared
-`deriveThreadRunStatus` primitive (the same source the sidebar needs); `wait` is a durable
-wait (a registered activity + a reactor that resolves it on the child's terminal event or a
-timeout), not a poll loop.
-
-The first live slice creates project-level child sessions with durable parent/child
-activity cards. Visual parent-thread or work-item attachment metadata remains planned.
-
-`start_child` is agent-started and does not require user approval in the MVP. The created
-child thread must be visible in navigation and receive the chosen context immediately.
+`t3team.thread.children` is ONE meta tool for the child-thread operations upstream does not
+have, selected by an `op` parameter: `watch` / `unwatch` (silence watch), `sweep` (bulk settle of
+finished children), `drain` (deliver this thread's own pending mailbox messages now), `environments`
+(targets for `extensions.environment`) and `help`.
 
 ## Tool Safety Matrix
 
@@ -729,6 +745,7 @@ Commit Jira field edit             UI action only
 Post Jira/GitHub comment           UI action only
 Change Jira status/priority        draft first, UI action only
 Change repository files            standalone agent/worktree flow
+Publish listed files as a CR       granted mutation tool only, writes immediately
 ```
 
 ## Implementation Notes

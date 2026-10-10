@@ -36,7 +36,10 @@ export interface Signal<Payload> {
 }
 
 /** Declare a signal once; producer, consumer, and every delivery boundary import the same ref. */
-export function defineSignal<Payload>(name: string, schema: Schema.Schema<Payload>): Signal<Payload> {
+export function defineSignal<Payload>(
+  name: string,
+  schema: Schema.Schema<Payload>,
+): Signal<Payload> {
   assertSignalName(name);
   return Object.freeze({ kind: "signal", name, schema });
 }
@@ -105,10 +108,7 @@ export interface SignalSourceRef<
 
 /** Declare a BUILT-IN (catalog) source: the shared declaration a body imports; the host
  * registers its `start` behavior under the same `name`. */
-export function builtinSignalSource<
-  const P,
-  Signals extends ReadonlyArray<Signal<unknown>>,
->(opts: {
+export function builtinSignalSource<const P, Signals extends ReadonlyArray<Signal<unknown>>>(opts: {
   readonly name: string;
   readonly params: P;
   readonly emits: Signals;
@@ -139,13 +139,33 @@ export type SignalWaitFor<Signals extends ReadonlyArray<Signal<unknown>>> = {
     : never;
 }[number];
 
+/** One branch of an any-wait, described WITHOUT waiting: the bound instance, the awaited signal
+ * and its key. Only `waitForAny` consumes it, and only a branch minted by `handle.on` in the same
+ * run — so every branch carries the `source:<name>` gate its `getSignalSource` passed. */
+export interface SignalBranch<Payload> {
+  readonly kind: "signal.branch";
+  readonly source: string;
+  readonly paramsHash: string;
+  readonly signal: Signal<Payload>;
+  readonly key: string;
+}
+
+/** `on` narrowed by the source's `emits`, like `waitFor`: the branch carries the signal's payload
+ * type, which `waitForAny` turns into the hit's per-index payload. */
+export type SignalOn<Signals extends ReadonlyArray<Signal<unknown>>> = <S extends Signals[number]>(
+  signal: S,
+  opts: { readonly key: string },
+) => SignalBranch<S extends Signal<infer P> ? P : never>;
+
 /** The consumer half of the binding, returned by `getSignalSource`. `waitFor` journals a
  * durable `signal.wait` handle and parks the run until the source (or a durable inbox entry
- * that landed while the run was not parked) delivers the awaited `(signal, key)`. */
+ * that landed while the run was not parked) delivers the awaited `(signal, key)`; `on` describes
+ * the same wait as a branch for `waitForAny`, which parks on several at once. */
 export interface SignalSourceHandle<Signals extends ReadonlyArray<Signal<unknown>>> {
   readonly sourceName: string;
   readonly paramsHash: string;
   readonly waitFor: SignalWaitFor<Signals>;
+  readonly on: SignalOn<Signals>;
 }
 
 /** Decode a delivered payload against the signal's schema — the boundary check every

@@ -1,8 +1,9 @@
 /**
- * Which timeline rows `T3TeamSystemTimelineRow` renders as a full-bleed `T3TeamWidgetBlock`:
- * the widget-only case (widget attachment(s), no visible text, no workflow card, no generic
- * attachment) and the trusted-historical-HTML case (system author + workflowRunId + an
- * HTML-looking body, rendered as a widget directly).
+ * Which timeline rows `T3TeamSystemTimelineRow` renders full-bleed: a registered `message.view`
+ * registered with `layout: "fullBleed"`, and two `T3TeamWidgetBlock` cases — the widget-only case
+ * (widget attachment(s), no visible text, no workflow card, no generic attachment) and the
+ * trusted-historical-HTML case (system author + workflowRunId + an HTML-looking body, rendered as
+ * a widget directly).
  *
  * The `MessagesTimeline` row wrapper must know about this, because only these rows are
  * allowed to span the full thread content width: the wrapper drops the narrow message-column
@@ -18,19 +19,15 @@ import type { ChatMessage } from "~/types";
 import {
   getT3TeamRenderableAttachments,
   getT3TeamWidgetAttachments,
-  getT3TeamWorkflowCardAttachment,
 } from "./t3team-messageExtViews";
-import { getT3TeamWorkflowShapeAttachment } from "./t3team-messageShapeCard";
-import { getT3TeamWorkflowDecisionAttachment } from "./t3team-workflowDecisionAnswers";
+import { findMessageView } from "./t3team-messageViewRegistry";
 
 export function isT3TeamFullBleedWidgetRow(message: ChatMessage): boolean {
-  // Branch parity with `T3TeamSystemTimelineRow`: shape and decision cards own their own
-  // compact rows and never render a widget, so they short-circuit to false first.
-  if (getT3TeamWorkflowShapeAttachment(message) !== null) {
-    return false;
-  }
-  if (getT3TeamWorkflowDecisionAttachment(message) !== null) {
-    return false;
+  // Branch parity with `T3TeamSystemTimelineRow`: a registered view that owns the row (the host's
+  // compact shape and decision cards, a pack view) decides by its own layout, first.
+  const rowView = findMessageView(message, "row");
+  if (rowView !== null) {
+    return rowView.entry.layout === "fullBleed";
   }
 
   // Trusted historical workflow HTML: the message body itself is the widget payload.
@@ -50,7 +47,7 @@ export function isT3TeamFullBleedWidgetRow(message: ChatMessage): boolean {
   }
   return (
     getT3TeamWidgetAttachments(message).length > 0 &&
-    getT3TeamWorkflowCardAttachment(message) === null &&
+    findMessageView(message, "card-body") === null &&
     getT3TeamRenderableAttachments(message).length === 0
   );
 }

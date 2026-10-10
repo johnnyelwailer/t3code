@@ -32,13 +32,13 @@ import {
 
 /** Wall-clock ceiling for one composition. Generous: the composer decides its own length, and a
  * long report is a legitimate reason to take a while. The fallback covers the overrun. */
-export const WORKFLOW_REPORT_TIMEOUT_MS = 120_000;
+const WORKFLOW_REPORT_TIMEOUT_MS = 120_000;
 
 /**
  * The utility-model call, injected. Shaped like the `generateRepairStructured` port on
  * `LaunchWorkflowRecipeInput` (`t3team-workflowEngineLaunchTypes.ts:80`), for the same reason: the
- * engine-side modules stay free of Effect services and the live wiring resolves `TextGeneration`
- * once, at the edge (`t3team-workflowReportComposerLive.ts`).
+ * engine-side modules stay free of Effect services and whatever wires the composer resolves
+ * `TextGeneration` once, at the edge.
  */
 export type GenerateWorkflowReport = (input: {
   readonly prompt: string;

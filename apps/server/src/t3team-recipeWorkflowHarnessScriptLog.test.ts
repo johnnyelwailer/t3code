@@ -22,7 +22,7 @@ import * as NodeURL from "node:url";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
-import { type OrchestrationCommand, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { FsJournalStore } from "@t3team/sdk";
 import { afterAll, describe, expect, it } from "vite-plus/test";
@@ -34,6 +34,7 @@ import {
 import { resolveRecipeWorkflowScripts } from "./t3team-recipeWorkflowScripts.ts";
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 
 const fixtureRoot = NodePath.join(
   NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)),
@@ -135,7 +136,6 @@ describe("harness scriptCalls is a real invocation log", () => {
     // Both are REGISTERED — the declaration set the old report echoed back verbatim.
     expect(Object.keys(scripts).toSorted()).toEqual(["doubleIt", "neverCalled"]);
 
-    const dispatched: OrchestrationCommand[] = [];
     let seq = 0;
     const runId = "script-log-run-1";
     const result = await launchWorkflowRecipe({
@@ -150,9 +150,7 @@ describe("harness scriptCalls is a real invocation log", () => {
       runtimeMode: "full-access",
       interactionMode: "default",
       registry: makeWorkflowEngineRegistry(),
-      dispatch: async (command) => {
-        dispatched.push(command);
-      },
+      host: makeFakeWorkflowHost().host,
       newId: () => `id-${(seq += 1)}`,
       nowIso: () => "2026-01-01T00:00:00.000Z",
     });

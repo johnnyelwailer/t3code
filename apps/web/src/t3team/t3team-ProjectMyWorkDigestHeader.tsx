@@ -1,16 +1,18 @@
+import { DigestAutoStatus } from "~/t3team/t3team-ProjectMyWorkDigestAutoStatus";
+import { DigestSprintAxis } from "~/t3team/t3team-ProjectMyWorkDigestSprintAxis";
+import { PrWatchDigestStatus } from "~/t3team/t3team-PrWatchDigestStatus";
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import {
   DigestBurndownChart,
   DigestBurndownSparkline,
 } from "~/t3team/t3team-ProjectMyWorkDigestBurndown";
+import { digestSprintProgress } from "~/t3team/t3team-projectMyWorkDigestSprintProgress";
 
 /**
  * How the sprint time axis is drawn: the 4px elapsed-time bar of today, the personal burndown
  * chart, or its sparkline form. The real app feeds this from the Beta feature flag.
  */
 export type DigestBurndownVariant = "off" | "chart" | "sparkline";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 function formatDay(iso: string): string {
   const date = new Date(iso);
@@ -21,22 +23,29 @@ export function ProjectMyWorkDigestHeader({
   graph,
   nowMs,
   burndownVariant = "off",
+  updatedAtMs,
+  refreshing = false,
 }: {
   graph: DigestGraph;
   nowMs: number;
   burndownVariant?: DigestBurndownVariant;
+  updatedAtMs?: number;
+  /** A revalidation is in flight over content already on screen; the status strip says so. */
+  refreshing?: boolean;
 }) {
   const sprint = graph.sprint;
   const scopeLabel =
     graph.scope === "all" ? `All projects · ${graph.projects.length}` : graph.projects[0]?.name;
+  // The watch count is per project: an all-projects digest has no single run to read.
+  const watchProjectId = graph.scope === "all" ? undefined : graph.projects[0]?.id;
   if (!sprint) {
     return (
       <header className="flex flex-wrap items-end justify-between gap-x-10 gap-y-2 border-b border-border/70 pb-4">
         <div>
-          <p className="text-[11px] tracking-wide text-muted-foreground">Digest · {scopeLabel}</p>
+          <p className="text-2xs tracking-wide text-muted-foreground">Digest · {scopeLabel}</p>
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">My Work</h1>
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12.5px] text-muted-foreground sm:gap-x-7">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground sm:gap-x-7">
           {graph.scope === "all"
             ? graph.projects.map((project) => (
                 <span key={project.id}>
@@ -47,69 +56,65 @@ export function ProjectMyWorkDigestHeader({
                 </span>
               ))
             : null}
-          <span>
-            {graph.viewer.name} · {graph.viewer.role}
-          </span>
+          <DigestAutoStatus
+            updatedAtMs={updatedAtMs}
+            jiraSyncedAt={graph.jiraSyncedAt}
+            changeRequestNote={graph.changeRequestNote}
+            nowMs={nowMs}
+            refreshing={refreshing}
+          />
+          <PrWatchDigestStatus projectId={watchProjectId} />
         </div>
       </header>
     );
   }
-  const start = Date.parse(sprint.startDate);
-  const end = Date.parse(sprint.endDate);
-  const total = Math.max(1, Math.round((end - start) / DAY_MS));
-  const day = Math.min(total, Math.max(1, Math.ceil((nowMs - start) / DAY_MS)));
-  const pct = Math.round(((nowMs - start) / (end - start)) * 100);
+  const { total, day, daysLeft, pct, ended } = digestSprintProgress(sprint, nowMs);
+  // No usable dates (the mapper collapses missing ones to a single instant): drop the day
+  // counter, the date range and the progress row rather than print "Day 1 of 1" and a 0 % bar.
+  const datesKnown = pct !== null;
   return (
     <header className="space-y-4 border-b border-border/70 pb-4">
       <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-2">
         <div>
-          <p className="text-[11px] tracking-wide text-muted-foreground">Digest · {scopeLabel}</p>
+          <p className="text-2xs tracking-wide text-muted-foreground">Digest · {scopeLabel}</p>
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
             {sprint.name}{" "}
-            <span className="font-normal text-muted-foreground">
-              · Day {day} of {total}
-            </span>
+            {datesKnown ? (
+              <span className="font-normal text-muted-foreground">
+                · {ended ?? `Day ${day} of ${total}`}
+              </span>
+            ) : null}
           </h1>
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12.5px] text-muted-foreground sm:gap-x-7">
-          <span>
-            {formatDay(sprint.startDate)} – {formatDay(sprint.endDate)}
-          </span>
-          <span>
-            <b className="font-semibold text-foreground">{total - day}</b> days left
-          </span>
-          <span>
-            {graph.viewer.name} · {graph.viewer.role}
-          </span>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground sm:gap-x-7">
+          {datesKnown && ended === null ? (
+            <span>
+              <b className="font-semibold text-foreground">{daysLeft}</b> days left
+            </span>
+          ) : null}
+          <DigestAutoStatus
+            updatedAtMs={updatedAtMs}
+            jiraSyncedAt={graph.jiraSyncedAt}
+            changeRequestNote={graph.changeRequestNote}
+            nowMs={nowMs}
+            refreshing={refreshing}
+          />
+          <PrWatchDigestStatus projectId={watchProjectId} />
         </div>
       </div>
-      <div className="space-y-1.5">
-        {burndownVariant === "chart" ? (
-          <DigestBurndownChart graph={graph} nowMs={nowMs} />
-        ) : burndownVariant === "sparkline" ? (
-          <DigestBurndownSparkline graph={graph} nowMs={nowMs} />
-        ) : (
-          <div className="relative h-1 rounded-full bg-border">
-            <div
-              className="absolute inset-y-0 left-0 rounded-full bg-foreground/70"
-              style={{ width: `${pct}%` }}
-            />
-            <div
-              className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background bg-foreground"
-              style={{ left: `${pct}%` }}
-            />
-          </div>
-        )}
-        <div className="flex justify-between text-[10.5px] text-muted-foreground/80">
-          <span>{formatDay(sprint.startDate)}</span>
-          <span>
-            {pct} % elapsed · today {formatDay(new Date(nowMs).toISOString())}
-          </span>
-          <span>{formatDay(sprint.endDate)}</span>
+      {burndownVariant !== "off" || datesKnown ? (
+        <div className="space-y-1.5">
+          {burndownVariant === "chart" ? (
+            <DigestBurndownChart graph={graph} nowMs={nowMs} />
+          ) : burndownVariant === "sparkline" ? (
+            <DigestBurndownSparkline graph={graph} nowMs={nowMs} />
+          ) : (
+            <DigestSprintAxis graph={graph} nowMs={nowMs} />
+          )}
         </div>
-      </div>
+      ) : null}
       {sprint.goal.length > 0 ? (
-        <ul className="flex flex-wrap gap-x-6 gap-y-1 text-[12.5px] text-muted-foreground">
+        <ul className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
           {sprint.goal.map((line) => (
             <li
               key={line}

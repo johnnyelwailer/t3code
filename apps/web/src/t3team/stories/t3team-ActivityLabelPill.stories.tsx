@@ -10,58 +10,46 @@ import {
 import {
   activityPulseClass,
   resolveActivityPillDisplay,
-  type ActivityState,
 } from "~/t3team/t3team-activityStateDisplay";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
 /**
- * GHE #40 + GHE #208 — live activity label & deterministic state word states.
+ * GHE #40 — live activity label states on the listed-thread surfaces.
  *
- * One story file for every surface the label reaches:
  * - the upstream/v2 `ThreadStatusLabel` (thread header + v2 sidebar row): the
- *   4-state base word, the `{state} · {detail}` enrichment, static "Working"
- *   fallback, flag off, idle/cleared
- * - the t3team sidebar dot (exact ThreadRow markup): state word in the tooltip
- *   title, static dot when the state is absent
- * - the t3team project rollup: the most active thread's word bubbles to the
+ *   label replacing "Working", static "Working" fallback, flag off, idle/cleared
+ * - the t3team sidebar dot (exact ThreadRow markup): label in the tooltip title
+ * - the t3team project rollup: the most active thread's label bubbles to the
  *   project row
  *
- * The 4 states: thinking (reasoning deltas flowing), writing (assistant text
- * streaming), working (a tool call in flight), waiting (30s output gap with no
- * tool in flight). `waiting` is quieter — the slower, shallower pulse plus a
- * dim slate, so it reads as idle but not dead. Under `prefers-reduced-motion`
- * every pulse is disabled globally (index.css media guard), so all stories
- * render static in a reduced-motion environment; the ReducedMotion story
- * documents that.
+ * Listed rows carry no thinking/writing word: that is derived from the open
+ * thread's turn items and shows only on its working row (see the Working Row
+ * stories). Under `prefers-reduced-motion` every pulse is disabled globally
+ * (index.css media guard); the ReducedMotion story documents that.
  */
 
-type T3Thread = Pick<ProjectThread, "status" | "activityLabel" | "activityState">;
+type T3Thread = Pick<ProjectThread, "status" | "activityLabel">;
 
 const running: T3Thread = {
   status: "running",
-  activityState: "working",
   activityLabel: "editing the retry test",
 };
-const runningNoLabel: T3Thread = { status: "running", activityState: "thinking" };
+const runningNoLabel: T3Thread = { status: "running" };
 const completed: T3Thread = { status: "completed" };
 
 function upstreamPill(t3Pill: {
   label: string;
   activityLabel?: string;
-  activityState?: ActivityState;
   colorClass: string;
   dotClass: string;
   pulse: boolean;
-  pulseClass?: string;
 }): ThreadStatusPill {
   return {
     label: t3Pill.label as ThreadStatusPill["label"],
     ...(t3Pill.activityLabel ? { activityLabel: t3Pill.activityLabel } : {}),
-    ...(t3Pill.activityState ? { activityState: t3Pill.activityState } : {}),
     colorClass: t3Pill.colorClass,
     dotClass: t3Pill.dotClass,
     pulse: t3Pill.pulse,
-    ...(t3Pill.pulseClass ? { pulseClass: t3Pill.pulseClass } : {}),
   };
 }
 
@@ -93,7 +81,7 @@ function T3SidebarDot({ thread, flag }: { thread: T3Thread; flag: boolean }) {
         title={resolveActivityPillDisplay(pill)}
       />
       <span className="min-w-0 truncate text-xs">Refactor the settings panel</span>
-      <span className="ml-auto text-[10px] text-muted-foreground/40">2m</span>
+      <span className="ml-auto text-3xs text-muted-foreground/40">2m</span>
     </div>
   );
 }
@@ -109,7 +97,7 @@ function ProjectRollupRow({ threads, flag }: { threads: T3Thread[]; flag: boolea
         className={`inline-flex size-[9px] shrink-0 rounded-full ${rollup.dotClass} ${activityPulseClass(rollup)}`}
       />
       <span className="truncate text-xs">Alpha — settings overhaul</span>
-      <span className="ml-auto text-[10px] text-muted-foreground/40">
+      <span className="ml-auto text-3xs text-muted-foreground/40">
         {resolveActivityPillDisplay(rollup)}
       </span>
     </div>
@@ -125,7 +113,7 @@ function ActivityLabelPillStory({ thread, flag }: { thread: T3Thread; flag: bool
           <span className="truncate text-xs">Refactor the settings panel</span>
           {t3Pill ? <ThreadStatusLabel status={upstreamPill(t3Pill)} /> : null}
         </div>
-        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-2 text-3xs text-muted-foreground">
           <span>compact:</span>
           {t3Pill ? <ThreadStatusLabel status={upstreamPill(t3Pill)} compact /> : null}
         </div>
@@ -144,48 +132,23 @@ function ActivityLabelPillStory({ thread, flag }: { thread: T3Thread; flag: bool
 }
 
 const meta = {
-  title: "T3Team/Sidebar/Activity Label (GHE #40 · #208)",
+  title: "T3Team/Sidebar/Activity Label (GHE #40)",
   component: ActivityLabelPillStory,
 } satisfies Meta<typeof ActivityLabelPillStory>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/**
- * The 4 deterministic base words (GHE #208), one story per state. No LLM
- * enrichment present: the state word stands alone, exactly as when the flag
- * is off or the LLM call fails.
- */
-export const StateThinking: Story = {
-  args: { thread: { status: "running", activityState: "thinking" }, flag: true },
-};
-export const StateWriting: Story = {
-  args: { thread: { status: "running", activityState: "writing" }, flag: true },
-};
-export const StateWorking: Story = {
-  args: { thread: { status: "running", activityState: "working" }, flag: true },
-};
-/** `waiting`: 30s output gap with no tool in flight — quieter: slower, shallower pulse + dim slate. */
-export const StateWaiting: Story = {
-  args: { thread: { status: "running", activityState: "waiting" }, flag: true },
-};
-
-/** Active thread with a fresh label: "Working · editing the retry test". */
+/** Active thread with a fresh label: the label replaces "Working". */
 export const ActiveWithLiveLabel: Story = { args: { thread: running, flag: true } };
 
-/**
- * Active thread before the first LLM detail lands: the state word is already
- * up (deterministic, zero inference) and the detail catches up lazily.
- */
+/** Active thread before the first LLM detail lands: the static "Working" word. */
 export const ActiveStaticWorkingFallback: Story = { args: { thread: runningNoLabel, flag: true } };
 
-/**
- * Settings flag off: no LLM calls, but the deterministic state word still
- * shows ("Working", not "Working · …").
- */
+/** Settings flag off: no LLM calls, the static "Working" word. */
 export const SettingsFlagOff: Story = { args: { thread: running, flag: false } };
 
-/** Idle/terminal: the label + state are cleared with the turn; settled status wins. */
+/** Idle/terminal: the label is cleared with the turn; settled status wins. */
 export const IdleCleared: Story = { args: { thread: completed, flag: true } };
 
 /**
@@ -198,7 +161,6 @@ export const ReducedMotion: Story = {
   args: {
     thread: {
       status: "running",
-      activityState: "thinking",
       activityLabel: "tracing the error",
     },
     flag: true,
@@ -207,7 +169,7 @@ export const ReducedMotion: Story = {
     docs: {
       description: {
         story:
-          "All four state words render identically under prefers-reduced-motion: " +
+          "Every pill renders identically under prefers-reduced-motion: " +
           "the index.css `@media (prefers-reduced-motion: reduce)` guard sets " +
           "`animate-status-pulse` / `animate-pulse` to `animation: none`, so the " +
           "indicator is a static dot at its resting opacity. The word itself is " +

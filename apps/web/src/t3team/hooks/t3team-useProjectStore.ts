@@ -1,7 +1,8 @@
 import { useState, useCallback, useMemo } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { useMergedThreads } from "~/t3team/t3team-mergedThreads";
-import { useProjects } from "~/state/entities";
+import { useProjects, useThreadShells } from "~/state/entities";
+import { usePrimaryEnvironmentId } from "~/state/environments";
+import { useT3TeamThreadFactsMap } from "~/state/t3team-threadSideStreams";
 import type { ViewState, ProjectThread, ProjectThreadDisplayMode } from "~/t3team/t3team-types";
 import { useProjectStoreActions } from "./t3team-useProjectStoreActions";
 import { useProjectStoreQueries } from "./t3team-useProjectStoreQueries";
@@ -17,7 +18,7 @@ import {
   reconcileStoredProjectsWithLive,
 } from "./t3team-projectStoreUtils";
 import { useProjectStoreSyncEffects } from "./t3team-useProjectStore-syncEffects";
-import { resolveStoredProjectId } from "./t3team-threadBridge";
+import { isListedLiveThread, resolveStoredProjectId } from "./t3team-threadBridge";
 
 export function useProjectStore() {
   const [storedProjects, setStoredProjects] = useState<ProjectShellProject[]>(loadStoredProjects);
@@ -31,7 +32,11 @@ export function useProjectStore() {
   const [threads, setThreads] = useState<ProjectThread[]>([]);
   const [threadsHydrated, setThreadsHydrated] = useState(false);
   const liveProjects = useProjects();
-  const liveThreads = useMergedThreads();
+  // Shells only, like upstream's sidebar: see mapLiveThreadToProjectThread. Provider-native
+  // subagents stay hidden there too (isListedLiveThread).
+  const allLiveThreads = useThreadShells();
+  const liveThreads = useMemo(() => allLiveThreads.filter(isListedLiveThread), [allLiveThreads]);
+  const factsByThreadId = useT3TeamThreadFactsMap(usePrimaryEnvironmentId());
   useHydrateStoredProjects({
     setStoredProjects,
     setSelectedProjectId,
@@ -44,6 +49,7 @@ export function useProjectStore() {
     storedProjects,
     liveProjects,
     liveThreads,
+    factsByThreadId,
   });
   useProjectStoreSyncEffects({
     threads,
@@ -51,6 +57,7 @@ export function useProjectStore() {
     storedProjects,
     liveProjects,
     liveThreads,
+    factsByThreadId,
     setThreads,
   });
 
@@ -80,6 +87,7 @@ export function useProjectStore() {
     threads,
     liveProjects,
     liveThreads,
+    factsByThreadId,
   });
   const {
     addProject,

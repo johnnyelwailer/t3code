@@ -10,10 +10,11 @@
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import { ChildProcess } from "effect/unstable/process";
+import { ChildProcess } from "effect/process";
 
 import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
@@ -61,7 +62,9 @@ export const checkOrchestrationBundle = Effect.fn("checkOrchestrationBundle")(fu
   const verbose = Option.getOrElse(input.verbose, () => false);
   const asarPathFlag = Option.getOrUndefined(input.asarPath);
 
-  const repoRoot = NodePath.resolve(NodePath.dirname(new URL(import.meta.url).pathname), "..");
+  // This module lives in scripts/lib/, two levels below the repo root.
+  // fileURLToPath (not URL#pathname) so a checkout path with spaces resolves.
+  const repoRoot = NodeURL.fileURLToPath(new URL("../..", import.meta.url));
   const distDir = NodePath.resolve(
     distDirFlag ?? NodePath.join(repoRoot, "apps", "server", "dist"),
   );

@@ -29,17 +29,14 @@ import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Stream from "effect/Stream";
 import { afterAll } from "vite-plus/test";
 
 import { ServerConfig } from "./config.ts";
-import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
-import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
-import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
+import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { resolveRecipeWorkflowScripts } from "./t3team-recipeWorkflowScripts.ts";
 import {
   buildRunningWorkflowRunRow,
@@ -52,6 +49,10 @@ import {
   T3TeamWorkflowEngineRegistry,
   T3TeamWorkflowEngineRegistryLive,
 } from "./t3team-workflowEngineRegistry.ts";
+import {
+  makeFakeWorkflowHost,
+  makeFakeWorkflowHostLayer,
+} from "./t3team-workflowHostFake.fixtures.ts";
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 
 const fixtureRoot = NodePath.join(
@@ -141,19 +142,6 @@ const projectId = ProjectId.make("proj-rehydrate-scripts");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
 const nowIso = (): string => "2026-07-20T00:00:00.000Z";
 
-const stubEngine: OrchestrationEngineShape = {
-  readEvents: () => Stream.empty,
-  readThreadEvents: () => Stream.empty,
-  getThreadReplayStats: () => Effect.die("unused"),
-  dispatch: () => Effect.succeed({ sequence: 0 }),
-  streamDomainEvents: Stream.never,
-  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
-  // Required by OrchestrationEngineShape since main's sidebar/turn work; this stub never
-  // dispatches, so the latest sequence is simply 0.
-  latestSequence: Effect.succeed(0),
-};
-const OrchestrationEngineTestLive = Layer.succeed(OrchestrationEngineService, stubEngine);
-
 const WorkflowEngineDurabilityTestLive = T3TeamWorkflowSchedulerLive.pipe(
   Layer.provideMerge(
     Layer.mergeAll(
@@ -167,7 +155,7 @@ const WorkflowEngineDurabilityTestLive = T3TeamWorkflowSchedulerLive.pipe(
 
 const TestLayer = Layer.mergeAll(
   WorkflowEngineDurabilityTestLive,
-  OrchestrationEngineTestLive,
+  makeFakeWorkflowHostLayer().layer,
   ServerConfig.layerTest(cwd, { prefix: "t3-rehydrate-scripts-test-" }),
 ).pipe(Layer.provideMerge(NodeServices.layer));
 
@@ -203,7 +191,7 @@ const launchToSuspension = (input: {
         runtimeMode: "full-access",
         interactionMode: "default",
         registry: throwaway,
-        dispatch: () => Promise.resolve(),
+        host: makeFakeWorkflowHost().host,
         newId: () => `id-${(seq += 1)}`,
         nowIso,
         store,

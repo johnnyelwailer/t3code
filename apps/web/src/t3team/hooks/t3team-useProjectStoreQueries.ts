@@ -1,10 +1,12 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import type { Project, Thread } from "~/types";
+import type { T3TeamThreadFacts } from "@t3tools/contracts";
+import type { Project, ThreadShell } from "~/types";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
 import { getMockTicketsForProject } from "./t3team-projectStoreUtils";
 import {
+  collectLiveChildParentIds,
   mapLiveThreadToProjectThread,
   mergeProjectThreads,
   remapProjectThreadToStoredProject,
@@ -17,7 +19,10 @@ export function resolveProjectThreadsForQuery(input: {
   projects: ProjectShellProject[];
   threads: ProjectThread[];
   liveProjects: ReadonlyArray<Project>;
-  liveThreads: ReadonlyArray<Thread>;
+  liveThreads: ReadonlyArray<ThreadShell>;
+  /** Fork thread facts: a live row mapped without them would drop its pills on merge. */
+  factsByThreadId?: ReadonlyMap<string, T3TeamThreadFacts>;
+  liveChildParentIds?: ReadonlySet<string>;
 }) {
   const { projectId, projects, threads, liveProjects, liveThreads } = input;
   const resolvedProjectId = resolveStoredProjectId(projectId, projects, liveProjects);
@@ -37,13 +42,15 @@ export function resolveProjectThreadsForQuery(input: {
       .map((thread) => thread.id),
   );
   const liveProjectThreads = liveThreads
-    .filter(
-      (thread) =>
-        thread.projectId === canonicalProjectId &&
-        thread.retention !== "ephemeral" &&
-        !claimedThreadIds.has(thread.id),
-    )
-    .map((thread) => mapLiveThreadToProjectThread(thread, resolvedProjectId));
+    .filter((thread) => thread.projectId === canonicalProjectId && !claimedThreadIds.has(thread.id))
+    .map((thread) =>
+      mapLiveThreadToProjectThread(
+        thread,
+        resolvedProjectId,
+        input.factsByThreadId?.get(thread.id),
+        input.liveChildParentIds?.has(thread.id) ?? false,
+      ),
+    );
 
   return mergeProjectThreads([...localThreads, ...liveProjectThreads]).filter(
     (thread) => thread.retention !== "ephemeral",
@@ -54,9 +61,14 @@ export function useProjectStoreQueries(input: {
   projects: ProjectShellProject[];
   threads: ProjectThread[];
   liveProjects: ReadonlyArray<Project>;
-  liveThreads: ReadonlyArray<Thread>;
+  liveThreads: ReadonlyArray<ThreadShell>;
+  factsByThreadId: ReadonlyMap<string, T3TeamThreadFacts>;
 }) {
-  const { projects, threads, liveProjects, liveThreads } = input;
+  const { projects, threads, liveProjects, liveThreads, factsByThreadId } = input;
+  const liveChildParentIds = useMemo(
+    () => collectLiveChildParentIds(threads, liveThreads),
+    [liveThreads, threads],
+  );
 
   const getThreadsForProject = useCallback(
     (projectId: string) =>
@@ -66,8 +78,10 @@ export function useProjectStoreQueries(input: {
         threads,
         liveProjects,
         liveThreads,
+        factsByThreadId,
+        liveChildParentIds,
       }),
-    [liveProjects, liveThreads, projects, threads],
+    [factsByThreadId, liveChildParentIds, liveProjects, liveThreads, projects, threads],
   );
 
   const getTicketsForProject = useCallback(

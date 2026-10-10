@@ -36,7 +36,6 @@ export const makeWorkflowToolsForThread = Effect.fn("makeWorkflowToolsForThread"
   const workflowResumeToolsForThread = yield* makeWorkflowResumeToolsForThread({
     fileSystem: deps.fileSystem,
     path: deps.path,
-    dispatch: deps.dispatch,
     loadThreadProject: deps.loadThreadProject,
   });
   return {

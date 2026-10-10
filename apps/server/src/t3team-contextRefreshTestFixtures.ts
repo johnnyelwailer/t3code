@@ -2,6 +2,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { ProjectShellProject, ProjectShellProjectId } from "@t3tools/project-context";
 import {
+  T3TEAM_PROJECT_CONTEXT_ROOT,
   T3TEAM_WORK_ITEMS_INDEX_PATH,
   buildJiraTicketEntryPoint,
 } from "@t3tools/project-context/t3teamContextPaths";
@@ -14,7 +15,7 @@ import * as Effect from "effect/Effect";
 import { afterEach } from "vite-plus/test";
 
 import * as ServerConfig from "./config.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { replaceAtlassianAuths } from "./t3team-atlassian-auth-store.ts";
 import { writeCachedT3TeamAtlassianBacklog } from "./t3team-atlassian-backlog-cache.ts";
 import {
@@ -69,7 +70,7 @@ export function makeContextRefreshTestWorkspace(
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   };
-  writeContextRefreshTestJson(root, ".t3team/context/metadata.json", { project });
+  writeContextRefreshTestJson(root, `${T3TEAM_PROJECT_CONTEXT_ROOT}/metadata.json`, { project });
   writeContextRefreshTestJson(root, T3TEAM_WORK_ITEMS_INDEX_PATH, {
     workItems: [
       {
@@ -86,7 +87,7 @@ export function makeContextRefreshScopeTestLayer() {
   return Layer.mergeAll(nodeLayer, WorkspacePaths.layer.pipe(Layer.provide(nodeLayer)));
 }
 
-export function makeContextRefreshServiceTestLayer(prefix: string) {
+function makeContextRefreshServiceTestLayer(prefix: string) {
   const nodeLayer = NodeServices.layer;
   return T3TeamContextRefreshServiceLive.pipe(
     Layer.provide(
@@ -108,7 +109,7 @@ export function makeContextRefreshLiveLayer(prefix = "t3team-broker-context-refr
   return makeContextRefreshServiceTestLayer(prefix);
 }
 
-export function seedContextRefreshBacklogChild(input: {
+function seedContextRefreshBacklogChild(input: {
   readonly project: ProjectShellProject;
   readonly parentKey: string;
   readonly childKey: string;

@@ -31,7 +31,7 @@ import * as Layer from "effect/Layer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Logger from "effect/Logger";
-import { Command, Flag } from "effect/unstable/cli";
+import { Command, Flag } from "effect/cli";
 
 import { checkOrchestrationBundle } from "./lib/t3team-orchestration-bundle-check.ts";
 
@@ -42,21 +42,21 @@ export {
 } from "./lib/t3team-orchestration-bundle-errors.ts";
 
 const checkOrchestrationBundleCli = Command.make("check-orchestration-bundle", {
-  distDir: Flag.string("dist-dir").pipe(
+  distDir: Flag.String("dist-dir").pipe(
     Flag.withDescription("Server dist directory (default: apps/server/dist)."),
     Flag.optional,
   ),
-  asarPath: Flag.string("asar").pipe(
+  asarPath: Flag.String("asar").pipe(
     Flag.withDescription(
       "Also assert this emitted app.asar carries the typechecker closure (the .d.ts files electron-builder strips) and the curated authoring types.",
     ),
     Flag.optional,
   ),
-  keepDir: Flag.boolean("keep-dir").pipe(
+  keepDir: Flag.Boolean("keep-dir").pipe(
     Flag.withDescription("Keep the staging directory for inspection."),
     Flag.optional,
   ),
-  verbose: Flag.boolean("verbose").pipe(
+  verbose: Flag.Boolean("verbose").pipe(
     Flag.withDescription("Stream subprocess output."),
     Flag.optional,
   ),

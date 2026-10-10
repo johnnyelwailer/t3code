@@ -1,4 +1,4 @@
-import { EnvironmentId, ORCHESTRATION_WS_METHODS } from "@t3tools/contracts";
+import { EnvironmentId, ORCHESTRATION_V2_WS_METHODS } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -16,7 +16,10 @@ import {
 } from "../connection/model.ts";
 import { EnvironmentSupervisor } from "../connection/supervisor.ts";
 import { subscribeDynamic } from "./client.ts";
-import { createThreadResubscribeGate, type ThreadResubscribeGate } from "./t3team-threadResubscribeGate.ts";
+import {
+  createThreadResubscribeGate,
+  type ThreadResubscribeGate,
+} from "./t3team-threadResubscribeGate.ts";
 import type { WsRpcProtocolClient } from "./protocol.ts";
 import type { RpcSession } from "./session.ts";
 
@@ -139,7 +142,7 @@ describe("staggered resubscribe wiring (GHE #382)", () => {
       // the phase's queue list.
       let callIndex = 0;
       const client = {
-        [ORCHESTRATION_WS_METHODS.subscribeThread]: () => {
+        [ORCHESTRATION_V2_WS_METHODS.subscribeThread]: () => {
           const index = callIndex;
           callIndex += 1;
           return Stream.fromQueue(
@@ -155,7 +158,7 @@ describe("staggered resubscribe wiring (GHE #382)", () => {
 
       const streams = Array.from({ length: STREAM_COUNT }, () =>
         subscribeDynamic(
-          ORCHESTRATION_WS_METHODS.subscribeThread,
+          ORCHESTRATION_V2_WS_METHODS.subscribeThread,
           () => Effect.succeed({} as never),
           {
             // Same shape the thread-state wiring uses: take a slot in the
@@ -181,17 +184,17 @@ describe("staggered resubscribe wiring (GHE #382)", () => {
         { concurrency: "unbounded" },
       ).pipe(Effect.forkChild);
 
-      const awaitAllocations = Effect.fn("ThreadResubscribeGateTest.awaitAllocations")(
-        function* (count: number) {
-          for (let attempt = 0; attempt < 20_000; attempt += 1) {
-            if (delays.length >= count) return;
-            yield* Effect.yieldNow;
-          }
-          return yield* Effect.die(
-            new Error(`Expected ${count} beforeSubscribe allocations, saw ${delays.length}.`),
-          );
-        },
-      );
+      const awaitAllocations = Effect.fn("ThreadResubscribeGateTest.awaitAllocations")(function* (
+        count: number,
+      ) {
+        for (let attempt = 0; attempt < 20_000; attempt += 1) {
+          if (delays.length >= count) return;
+          yield* Effect.yieldNow;
+        }
+        return yield* Effect.die(
+          new Error(`Expected ${count} beforeSubscribe allocations, saw ${delays.length}.`),
+        );
+      });
 
       const awaitReceived = Effect.fn("ThreadResubscribeGateTest.awaitReceived")(function* (
         count: number,
@@ -224,8 +227,8 @@ describe("staggered resubscribe wiring (GHE #382)", () => {
 
       yield* Fiber.interrupt(consumers);
 
-      const firstBurst = [...delays.slice(0, STREAM_COUNT)].sort((a, b) => a - b);
-      const secondBurst = [...delays.slice(STREAM_COUNT)].sort((a, b) => a - b);
+      const firstBurst = delays.slice(0, STREAM_COUNT).sort((a, b) => a - b);
+      const secondBurst = delays.slice(STREAM_COUNT).sort((a, b) => a - b);
       const expectedProfile = Array.from({ length: STREAM_COUNT }, (value, index) =>
         index < B.maxImmediate ? 0 : (index - B.maxImmediate + 1) * B.stepMs,
       );

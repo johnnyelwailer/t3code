@@ -1,30 +1,58 @@
 import * as NodeOS from "node:os";
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
+import type {
+  ProjectMainRepositoryCandidate,
+  ProjectMainRepositorySelection,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Path from "effect/Path";
 
 import { T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
+import { ensureNexiProjectStateDir } from "./t3team-projectMainRepositoryState.ts";
 
 export type BootstrapWorkspaceRequest = {
   readonly workspaceRoot: string;
   readonly linkedRepositoryUrls?: ReadonlyArray<string>;
   readonly setupProfileId?: string;
+  /** An explicit save: refetch every linked repository instead of honoring the refetch throttle. */
+  readonly refreshLinkedRepositories?: boolean;
   readonly customProfile?: import("@t3tools/t3team-skill-packs").T3TeamProfile;
 };
 
+/** One linked repository in the reference manifest. `status` is the checkout's last settled state:
+ * `pending` until a first clone lands, `cloned`/`updated` once usable, `failed` when no usable
+ * checkout exists. Clones and fetches run in the background (`t3team-linkedRepositorySync`);
+ * `syncState` is only set on responses, never persisted, while that work is queued or running. */
 export type LinkedRepositoryBootstrapResult = {
   readonly url: string;
   readonly localPath: string;
-  readonly status: "cloned" | "updated" | "failed";
+  readonly status: "pending" | "cloned" | "updated" | "failed";
   readonly error?: string;
+  /** When the last background clone/fetch settled (success or failure); throttles refetches. */
+  readonly syncedAt?: string;
+  readonly syncState?: LinkedRepositorySyncPhase;
 };
 
-/** The workspace root is itself a git repository (monorepo / wrapper repo) adopted as the
- * project meta-repo: sub-work happens in worktrees of this repository, not in reference
- * clones. `url` is the detected origin remote when one is configured. */
-export type MetaRepositoryBootstrapResult = {
+export type LinkedRepositorySyncPhase = "queued" | "cloning" | "updating";
+
+/** A manifest entry as reported to a client: with its in-flight sync phase, if any. */
+export const withSyncState = (
+  entry: LinkedRepositoryBootstrapResult,
+  phase: LinkedRepositorySyncPhase | undefined,
+): LinkedRepositoryBootstrapResult => ({ ...entry, ...(phase ? { syncState: phase } : {}) });
+
+/** A usable checkout: anything a reader may branch from or read files in. */
+export const isLinkedRepositoryReady = (entry: LinkedRepositoryBootstrapResult): boolean =>
+  entry.status === "cloned" || entry.status === "updated";
+
+/** The workspace root is itself a git repository — the project's main repository: sub-work
+ * happens in worktrees of this repository, not in reference clones. `adopted` when the workspace
+ * already was a repository; `detected`/`user` when a linked clone became the workspace (see
+ * `ProjectMainRepositorySelection`). `url` is the origin remote when one is configured. */
+export type MainRepositoryBootstrapResult = {
   readonly url?: string;
   readonly localPath: string;
-  readonly status: "adopted";
+  readonly status: ProjectMainRepositorySelection;
 };
 
 export type BootstrapWorkspaceResponse = {
@@ -32,7 +60,10 @@ export type BootstrapWorkspaceResponse = {
   readonly workspaceRepositoryInitialized: boolean;
   readonly referencesRoot: string;
   readonly linkedRepositories: ReadonlyArray<LinkedRepositoryBootstrapResult>;
-  readonly metaRepository?: MetaRepositoryBootstrapResult;
+  readonly mainRepository?: MainRepositoryBootstrapResult;
+  /** Linked clones that already carry a project state dir (flag `NEXI_FF_MAIN_REPOSITORY`; only
+   * when the workspace has no main repository yet). */
+  readonly mainRepositoryCandidates?: ReadonlyArray<ProjectMainRepositoryCandidate>;
 };
 
 export type ContextWorkspaceFile = {
@@ -51,16 +82,18 @@ export type WriteContextFilesResponse = {
   readonly writtenFiles: ReadonlyArray<string>;
 };
 
-export const HIDDEN_T3TEAM_DIR = ".t3team";
+/** The project state dir name — owned by the single resolver in `@t3tools/project-context`. */
+export const HIDDEN_T3TEAM_DIR = PROJECT_STATE_DIR;
 export const REFERENCES_DIR_NAME = "references";
 export const MANIFEST_FILE_NAME = "reference-repositories.json";
-export const GITIGNORE_ENTRY = ".t3team/";
-/** Gitignore entries for an ADOPTED meta-repo (workspace root is a real git repository):
+export const CHILD_WORKTREES_DIR_NAME = "child-session-worktrees";
+export const GITIGNORE_ENTRY = `${HIDDEN_T3TEAM_DIR}/`;
+/** Gitignore entries for a MAIN repository (the workspace root is a real git repository):
  * only the machine-local subpaths stay ignored so committed team state (skills, recipes,
- * conventions) can live under `.t3team/` and be shared through the repository (GHE #42). */
-export const META_REPOSITORY_GITIGNORE_ENTRIES = [
-  ".t3team/references/",
-  ".t3team/child-session-worktrees/",
+ * conventions) can live in the state dir and be shared through the repository (GHE #42). */
+export const MAIN_REPOSITORY_GITIGNORE_ENTRIES = [
+  `${HIDDEN_T3TEAM_DIR}/${REFERENCES_DIR_NAME}/`,
+  `${HIDDEN_T3TEAM_DIR}/${CHILD_WORKTREES_DIR_NAME}/`,
 ] as const;
 
 export type ReferenceManifestFile = {
@@ -68,7 +101,7 @@ export type ReferenceManifestFile = {
   readonly referencesRoot: string;
   readonly workspaceRepositoryInitialized: boolean;
   readonly linkedRepositories: ReadonlyArray<LinkedRepositoryBootstrapResult>;
-  readonly metaRepository?: MetaRepositoryBootstrapResult;
+  readonly mainRepository?: MainRepositoryBootstrapResult;
   readonly updatedAt: string;
 };
 
@@ -88,13 +121,14 @@ export const normalizeT3TeamWorkspaceRoot = Effect.fn("normalizeT3TeamWorkspaceR
 ) {
   const path = yield* Path.Path;
   const trimmed = workspaceRoot.trim();
-  if (trimmed === "~") {
-    return NodeOS.homedir();
-  }
-  if (trimmed.startsWith("~/") || trimmed.startsWith("~\\")) {
-    return path.join(NodeOS.homedir(), trimmed.slice(2));
-  }
-  return path.resolve(trimmed);
+  const root =
+    trimmed === "~"
+      ? NodeOS.homedir()
+      : trimmed.startsWith("~/") || trimmed.startsWith("~\\")
+        ? path.join(NodeOS.homedir(), trimmed.slice(2))
+        : path.resolve(trimmed);
+  yield* ensureNexiProjectStateDir(root);
+  return root;
 });
 
 function sanitizeSlugSegment(value: string): string {

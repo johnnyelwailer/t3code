@@ -17,7 +17,6 @@ const workspaceFiles = [
   "apps/desktop/package.json",
   "apps/web/package.json",
   "apps/mobile/package.json",
-  "apps/mobile/deps/react-native-nitro-markdown-0.5.0.tgz",
   "apps/mobile/modules/t3-markdown-text/package.json",
   "apps/mobile/modules/t3-review-diff/package.json",
   "apps/mobile/modules/t3-terminal/package.json",
@@ -31,28 +30,47 @@ const workspaceFiles = [
   "packages/tailscale/package.json",
   "packages/effect-acp/package.json",
   "packages/effect-codex-app-server/package.json",
-  // t3team: the fork's own packages, reachable as workspace dependencies from apps/server and
-  // apps/desktop. The smoke workspace copies manifests only, so any package missing here fails
-  // resolution with ERR_PNPM_WORKSPACE_PKG_NOT_FOUND before a single release step runs. This is
-  // the full transitive closure over the roots above — add to it when a new fork package becomes
-  // a dependency of one of them.
-  "packages/integrations-atlassian/package.json",
-  "packages/integrations-core/package.json",
-  "packages/project-context/package.json",
-  "packages/project-recipes/package.json",
-  "packages/runbook-core/package.json",
-  "packages/runbook-scripts/package.json",
-  "packages/runbook-threads/package.json",
-  "packages/runbook-tools/package.json",
-  "packages/runbook-ts/package.json",
-  "packages/t3team-packs/package.json",
-  "packages/t3team-sdk/package.json",
-  "packages/t3team-skill-packs/package.json",
   "scripts/package.json",
 ] as const;
 
+// t3team: the fork's own packages are reachable as workspace dependencies from the roots above.
+// The smoke workspace copies manifests only, so a missing one fails resolution with
+// ERR_PNPM_WORKSPACE_PKG_NOT_FOUND before a single release step runs. A hand-kept list drifted every
+// time a fork package was added, so the transitive workspace closure is derived from the manifests.
+function workspaceDependencyClosure(roots: readonly string[]): string[] {
+  const manifestByName = new Map<string, string>();
+  for (const directory of ["packages"]) {
+    for (const entry of NodeFS.readdirSync(NodePath.resolve(repoRoot, directory))) {
+      const relativePath = `${directory}/${entry}/package.json`;
+      if (!NodeFS.existsSync(NodePath.resolve(repoRoot, relativePath))) continue;
+      const manifest = JSON.parse(
+        NodeFS.readFileSync(NodePath.resolve(repoRoot, relativePath), "utf8"),
+      );
+      manifestByName.set(manifest.name, relativePath);
+    }
+  }
+  const seen = new Set<string>(roots);
+  const queue = [...roots];
+  while (queue.length > 0) {
+    const manifest = JSON.parse(
+      NodeFS.readFileSync(NodePath.resolve(repoRoot, queue.pop()!), "utf8"),
+    );
+    for (const field of ["dependencies", "devDependencies", "optionalDependencies"]) {
+      for (const [name, range] of Object.entries<string>(manifest[field] ?? {})) {
+        const relativePath = manifestByName.get(name);
+        if (!range.startsWith("workspace:") || !relativePath || seen.has(relativePath)) continue;
+        seen.add(relativePath);
+        queue.push(relativePath);
+      }
+    }
+  }
+  return [...seen];
+}
+
 function copyWorkspaceManifestFixture(targetRoot: string): void {
-  for (const relativePath of workspaceFiles) {
+  const manifests = workspaceFiles.filter((path) => path.endsWith("package.json"));
+  const files = new Set<string>([...workspaceFiles, ...workspaceDependencyClosure(manifests)]);
+  for (const relativePath of files) {
     const sourcePath = NodePath.resolve(repoRoot, relativePath);
     const destinationPath = NodePath.resolve(targetRoot, relativePath);
     NodeFS.mkdirSync(NodePath.dirname(destinationPath), { recursive: true });
@@ -205,6 +223,12 @@ function assertMissing(path: string, message: string): void {
 const tempRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-release-smoke-"));
 
 try {
+  NodeChildProcess.execFileSync(
+    process.execPath,
+    ["--test", NodePath.resolve(repoRoot, ".github/scripts/relay-state-output.test.cjs")],
+    { stdio: "inherit" },
+  );
+
   copyWorkspaceManifestFixture(tempRoot);
 
   NodeChildProcess.execFileSync(
@@ -223,6 +247,13 @@ try {
 
   NodeFS.rmSync(NodePath.resolve(tempRoot, "pnpm-lock.yaml"), { force: true });
 
+  // The lockfile was just deleted, so transitive deps resolve fresh and a patch pinned to an exact
+  // transitive version (expo-modules-core) can miss its target. That is no smoke-test signal, so
+  // the throwaway workspace tolerates unused patches.
+  NodeFS.appendFileSync(
+    NodePath.resolve(tempRoot, "pnpm-workspace.yaml"),
+    "\nallowUnusedPatches: true\n",
+  );
   NodeChildProcess.execFileSync("vp", ["install", "--lockfile-only", "--ignore-scripts"], {
     cwd: tempRoot,
     stdio: "inherit",

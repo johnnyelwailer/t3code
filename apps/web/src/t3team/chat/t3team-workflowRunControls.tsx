@@ -127,7 +127,7 @@ export function T3TeamWorkflowRunControls({
           <MenuTrigger
             aria-label={showStopItem ? "More orchestration actions" : "What this run may do"}
             disabled={pending !== null && showStopItem}
-            className={ICON_BUTTON_CLASS_NAME}
+            render={<button type="button" className={ICON_BUTTON_CLASS_NAME} />}
           >
             <EllipsisIcon className="size-3.5" />
           </MenuTrigger>
@@ -141,8 +141,8 @@ export function T3TeamWorkflowRunControls({
             {hasCapabilities ? (
               <MenuGroup>
                 {showStopItem ? <MenuSeparator /> : null}
-                <MenuGroupLabel className="flex cursor-default items-center gap-1 px-2 pt-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60">
-                  <ShieldIcon className="size-2.5" />
+                <MenuGroupLabel className="flex cursor-default items-center">
+                  <ShieldIcon className="mr-1 size-3" />
                   This run may
                 </MenuGroupLabel>
                 {capabilities.map((capability) => {

@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { replaceFeatureFlagDatabaseValues } from "@t3tools/project-context/t3teamFeatureFlags";
 
 import {
   DEFAULT_T3TEAM_PROJECT_SETUP_PROFILE_ID,
@@ -33,7 +34,14 @@ const profile = {
 };
 
 describe("pack setup profile overlay", () => {
-  afterEach(() => setPackSetupProfileOverlay(undefined));
+  // The pack's own `default` marker only survives while WORK_PROFILE_CHOOSER is on; with the
+  // chooser off the default moves to the developer (engineering) profile, covered separately
+  // below and in t3team-pack-setupProfileDefault.test.ts.
+  beforeEach(() => replaceFeatureFlagDatabaseValues(new Map([["WORK_PROFILE_CHOOSER", true]])));
+  afterEach(() => {
+    setPackSetupProfileOverlay(undefined);
+    replaceFeatureFlagDatabaseValues(new Map());
+  });
 
   it("exposes only the presentation subset to the descriptor", () => {
     setPackSetupProfileOverlay([profile]);
@@ -99,5 +107,33 @@ describe("pack setup profile overlay", () => {
     expect(resolveT3TeamProjectSetupProfileId(undefined)).toBe(
       DEFAULT_T3TEAM_PROJECT_SETUP_PROFILE_ID,
     );
+  });
+
+  it("moves the default onto the developer profile while the chooser is off", () => {
+    replaceFeatureFlagDatabaseValues(new Map([["WORK_PROFILE_CHOOSER", false]]));
+    const product = { ...profile, id: "requirements-product", category: "product" as const };
+    setPackSetupProfileOverlay([product, { ...profile, id: "engineer", default: false }]);
+
+    expect(getPackSetupProfileDescriptors()?.map((entry) => [entry.id, entry.default])).toEqual([
+      ["requirements-product", undefined],
+      ["engineer", true],
+    ]);
+    expect(getPackProfilesForResolver()?.["requirements-product"]?.default).toBeUndefined();
+    expect(getPackProfilesForResolver()?.["engineer"]?.default).toBe(true);
+    // Nothing stored now resolves to the developer profile instead of the pack's own default.
+    expect(resolveT3TeamProjectSetupProfileId(undefined)).toBe("engineer");
+
+    // Flipping the flag back on is live — no restart, and the pack's declaration is intact.
+    replaceFeatureFlagDatabaseValues(new Map([["WORK_PROFILE_CHOOSER", true]]));
+    expect(resolveT3TeamProjectSetupProfileId(undefined)).toBe("requirements-product");
+  });
+
+  it("leaves the pack default alone with the chooser off and no engineering profile", () => {
+    replaceFeatureFlagDatabaseValues(new Map([["WORK_PROFILE_CHOOSER", false]]));
+    setPackSetupProfileOverlay([
+      { ...profile, id: "requirements-product", category: "product" as const },
+      { ...profile, id: "delivery", category: "delivery" as const, default: false },
+    ]);
+    expect(resolveT3TeamProjectSetupProfileId(undefined)).toBe("requirements-product");
   });
 });

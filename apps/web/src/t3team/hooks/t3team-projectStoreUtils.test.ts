@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { ProjectId, type EnvironmentId } from "@t3tools/contracts";
+import { ProjectId, type EnvironmentId, type ProjectSourceBinding } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import type { Project } from "~/types";
 import { buildThreadForProject, deriveLooseWorkspaceProjects } from "./t3team-projectStoreUtils";
@@ -22,7 +22,9 @@ function makeStoredProject(overrides: Partial<ProjectShellProject> = {}): Projec
   };
 }
 
-function makeLiveProject(overrides: Partial<Project> = {}): Project {
+function makeLiveProject(
+  overrides: Partial<Project> & { readonly source?: ProjectSourceBinding } = {},
+): Project {
   return {
     id: ProjectId.make("live-project"),
     environmentId: "env-local" as EnvironmentId,

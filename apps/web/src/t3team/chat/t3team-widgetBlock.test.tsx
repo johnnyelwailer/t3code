@@ -13,7 +13,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("~/state/entities", () => ({ useThread: () => null }));
+vi.mock("~/state/entities", () => ({ useThreadShell: () => null }));
 
 import { T3TeamWidgetBlock } from "~/t3team/chat/t3team-widgetBlock";
 import {

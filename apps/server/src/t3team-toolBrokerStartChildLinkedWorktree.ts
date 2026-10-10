@@ -1,8 +1,7 @@
 /**
- * Linked-repository worktree resolution for `t3team.thread.start_child`
- * isolation (split out of `t3team-toolBrokerStartChildContext.ts` for the
- * additive LOC budget): creates a dedicated worktree of a LINKED repository
- * named in the start-child args. Behavior unchanged.
+ * Linked-repository worktree resolution for delegate_task workspace isolation
+ * (`t3team-delegateTaskWorkspace.ts`): creates a dedicated worktree of a LINKED
+ * repository named by `workspace.repository`.
  *
  * @module t3team-toolBrokerStartChildLinkedWorktree
  */
@@ -12,14 +11,15 @@ import * as Schema from "effect/Schema";
 import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
+  isLinkedRepositoryReady,
   REFERENCES_DIR_NAME,
 } from "./t3team-project-repository-utils.ts";
 import {
-  buildChildBranchName,
   buildScopedChildWorktreePath,
   findLinkedRepository,
   readLinkedRepositories,
 } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
+import { createOrReuseChildWorktree } from "./t3team-toolBrokerStartChildLocalWorktree.ts";
 import type { T3TeamStartChildLinkedRepositoryServices } from "./t3team-toolBrokerStartChildContext.ts";
 
 const LinkedRepositoryManifestJson = Schema.Struct({
@@ -35,7 +35,7 @@ export const resolveLinkedRepositoryWorktree = (input: {
   readonly repoFullName: string;
   readonly repoRef?: string;
   readonly sessionName: string;
-  readonly childThreadId: string;
+  readonly worktreeKey: string;
 }) =>
   Effect.gen(function* () {
     const manifestPath = input.services.path.join(
@@ -72,9 +72,9 @@ export const resolveLinkedRepositoryWorktree = (input: {
         `No linked repository matched '${input.repoFullName}' in this project workspace.`,
       );
     }
-    if (linkedRepository.status === "failed") {
+    if (!isLinkedRepositoryReady(linkedRepository)) {
       return yield* Effect.fail(
-        `Linked repository '${input.repoFullName}' is not ready: ${linkedRepository.error ?? "bootstrap failed"}.`,
+        `Linked repository '${input.repoFullName}' is not ready: ${linkedRepository.error ?? (linkedRepository.status === "pending" ? "it is still being cloned" : "bootstrap failed")}.`,
       );
     }
 
@@ -107,7 +107,7 @@ export const resolveLinkedRepositoryWorktree = (input: {
       projectWorkspaceRoot: input.projectWorkspaceRoot,
       repoFullName: input.repoFullName,
       repoRef: baseRef,
-      childThreadId: input.childThreadId,
+      worktreeKey: input.worktreeKey,
     });
 
     yield* input.services.fileSystem.makeDirectory(
@@ -117,17 +117,13 @@ export const resolveLinkedRepositoryWorktree = (input: {
       },
     );
 
-    const worktree = yield* input.services.gitWorkflow.createWorktree({
+    const worktree = yield* createOrReuseChildWorktree({
+      services: input.services,
       cwd: repositoryPath,
-      refName: typeof baseRef === "string" && baseRef.trim().length > 0 ? baseRef.trim() : "main",
-      newRefName: buildChildBranchName(input.sessionName),
-      path: scopedWorktreePath,
+      baseRef,
+      sessionName: input.sessionName,
+      worktreePath: scopedWorktreePath,
     });
 
-    return {
-      repoFullName: input.repoFullName,
-      repoRef: baseRef,
-      branch: worktree.worktree.refName,
-      worktreePath: worktree.worktree.path,
-    };
+    return { repoFullName: input.repoFullName, repoRef: baseRef, ...worktree };
   }).pipe(Effect.mapError((error) => (error instanceof Error ? error.message : String(error))));

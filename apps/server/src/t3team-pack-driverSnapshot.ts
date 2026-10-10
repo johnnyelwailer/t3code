@@ -1,11 +1,10 @@
 /**
- * Pack driver snapshot bridge.
+ * Pack driver snapshot mapping.
  *
  * Maps a pack `PackProviderSnapshot` (plain data) into the host's
- * `ServerProviderShape`. `getSnapshot` / `refresh` recompute live from the
- * pack instance; the resulting `ServerProvider` is re-stamped with the
- * bridged instance id + driver kind. v1 does not forward `subscribeSnapshot`
- * push updates onto `streamChanges` (consumers poll via `refresh`).
+ * `ServerProvider`, re-stamped with the bridged instance id + driver kind,
+ * and builds the degraded snapshot for a throwing/malformed pack. The
+ * stateful `ServerProviderShape` lives in `t3team-pack-driverSnapshotShape.ts`.
  *
  * @module t3team-pack-driverSnapshot
  */
@@ -15,15 +14,9 @@ import {
   type ServerProvider,
   type ServerProviderModel,
 } from "@t3tools/contracts";
-import type { PackProviderInstance, PackProviderSnapshot } from "@t3team/packs";
-import * as Cause from "effect/Cause";
-import * as DateTime from "effect/DateTime";
-import * as Effect from "effect/Effect";
-import * as Stream from "effect/Stream";
+import type { PackProviderInstance, PackProviderSnapshot } from "@t3team/pack-api";
 
-import { makeManualOnlyProviderMaintenanceCapabilities } from "./provider/providerMaintenance.ts";
 import { buildServerProvider } from "./provider/providerSnapshot.ts";
-import type { ServerProviderShape } from "./provider/Services/ServerProvider.ts";
 
 const toModels = (snapshot: PackProviderSnapshot): ReadonlyArray<ServerProviderModel> =>
   snapshot.models.map((model) => ({
@@ -75,7 +68,7 @@ export const packSnapshotToServerProvider = (input: {
   };
 };
 
-type SnapshotInput = {
+export type SnapshotInput = {
   readonly packInstance: PackProviderInstance;
   readonly driverKind: ProviderDriverKind;
   readonly instanceId: ProviderInstanceId;
@@ -86,7 +79,7 @@ type SnapshotInput = {
 };
 
 /** Degraded snapshot when the pack's `snapshot()` throws or returns malformed data. */
-const degradedServerProvider = (
+export const degradedServerProvider = (
   input: SnapshotInput,
   checkedAt: string,
   cause: unknown,
@@ -118,49 +111,5 @@ const degradedServerProvider = (
     continuation: { groupKey: input.continuationKey },
     ...(input.accentColor ? { accentColor: input.accentColor } : {}),
     ...(input.iconDataUrl ? { iconDataUrl: input.iconDataUrl } : {}),
-  };
-};
-
-export const makePackProviderSnapshot = (input: SnapshotInput): ServerProviderShape => {
-  const getSnapshot = Effect.gen(function* () {
-    const checkedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
-    return yield* Effect.sync(() =>
-      // Guards both the pack `snapshot()` call and the mapping: a throwing or
-      // malformed snapshot becomes a defect we catch into a degraded snapshot
-      // instead of escaping.
-      packSnapshotToServerProvider({
-        ...input,
-        checkedAt,
-        snapshot: input.packInstance.snapshot(),
-      }),
-    ).pipe(
-      Effect.catchCause((cause) =>
-        Effect.logWarning("Pack provider snapshot() failed", {
-          driverKind: input.driverKind,
-          instanceId: input.instanceId,
-          cause,
-        }).pipe(Effect.as(degradedServerProvider(input, checkedAt, Cause.squash(cause)))),
-      ),
-    );
-  });
-  return {
-    // Pack providers are not package-managed: maintenance is manual-only, so the
-    // capabilities are static (no cached resolution like the built-in drivers).
-    resolveMaintenance: () =>
-      Effect.succeed(
-        makeManualOnlyProviderMaintenanceCapabilities({
-          provider: input.driverKind,
-          packageName: null,
-        }),
-      ),
-    getSnapshot,
-    refresh: getSnapshot,
-    // Pack providers publish no rate-limit telemetry and hold no snapshot
-    // state between reads, so there is nothing to fold a runtime limit update
-    // into: the next getSnapshot/refresh recomputes from the pack instance.
-    applyUsageLimits: () => Effect.void,
-    get streamChanges() {
-      return Stream.empty as Stream.Stream<ServerProvider>;
-    },
   };
 };

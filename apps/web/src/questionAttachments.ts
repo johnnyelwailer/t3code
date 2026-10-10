@@ -1,4 +1,4 @@
-import type { ApprovalRequestId, EnvironmentId, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { create } from "zustand";
 import { DraftId, useComposerDraftStore } from "./composerDraftStore";
 import { releaseDraftAttachments } from "./lib/attachmentUploadQueue";
@@ -13,7 +13,7 @@ export function questionAttachmentDraftPrefix(
 export function questionAttachmentDraftId(
   environmentId: EnvironmentId,
   threadId: ThreadId,
-  requestId: ApprovalRequestId,
+  requestId: string,
   questionId: string,
 ): DraftId {
   return DraftId.make(
@@ -51,7 +51,8 @@ export function clearQuestionAttachmentDraft(key: DraftId): void {
   if (draft) {
     releaseDraftAttachments([...draft.images, ...draft.files]);
     for (const image of draft.images) {
-      if (image.previewUrl && image.previewUrl.startsWith("blob:")) URL.revokeObjectURL(image.previewUrl);
+      if (image.previewUrl && image.previewUrl.startsWith("blob:"))
+        URL.revokeObjectURL(image.previewUrl);
     }
   }
   store.clearComposerContent(key);

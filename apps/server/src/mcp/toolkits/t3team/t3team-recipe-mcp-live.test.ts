@@ -1,7 +1,7 @@
 /**
  * Live-path integration for the recipe MCP tools: proves that a provider agent reaching the
  * server over `/mcp` can (a) authenticate with a real `McpSessionRegistry`-minted bearer, (b) see
- * `t3team_recipe_list`/`t3team_recipe_validate` in the registered toolkit, and (c) get a REAL
+ * `t3_recipe_list`/`t3_recipe_validate` in the registered toolkit, and (c) get a REAL
  * static-validation result back — the full registration → handler → broker dispatch → recipe
  * validation chain, driven through the same `McpServer` object the HTTP transport uses. The broker
  * binding runs the real `callT3TeamRecipeTool` + `makeRecipeToolHandlers` (no mock result), so the
@@ -12,8 +12,9 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { HttpServer } from "effect/unstable/http";
-import { McpSchema, McpServer } from "effect/unstable/ai";
+import { HttpServer } from "effect/http";
+import * as NetAddress from "effect/net/NetAddress";
+import { McpSchema, McpServer } from "effect/ai";
 
 import * as ServerEnvironment from "../../../environment/ServerEnvironment.ts";
 import {
@@ -63,7 +64,7 @@ const client = McpSchema.McpServerClient.of({
 // A real McpSessionRegistry backed by a fake HttpServer/ServerEnvironment (same shape the unit
 // test uses), so we mint + resolve a provider bearer through the exact production code path.
 const fakeHttpServer = HttpServer.HttpServer.of({
-  address: { _tag: "TcpAddress", hostname: "127.0.0.1", port: 43199 },
+  address: NetAddress.inetAddressFromIpStringUnsafe("127.0.0.1", 43199),
   serve: (() => Effect.void) as HttpServer.HttpServer["Service"]["serve"],
 });
 const fakeEnvironment = ServerEnvironment.ServerEnvironment.of({
@@ -100,7 +101,6 @@ const realBinding: T3TeamToolBinding = {
 };
 
 const broker = T3TeamToolBroker.of({
-  sendMessage: () => Effect.succeed(undefined),
   bindSession: ({ threadId: boundThreadId }) =>
     Effect.succeed(boundThreadId === threadId ? realBinding : undefined),
   bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
@@ -127,20 +127,20 @@ it.effect(
 
       // This is exactly what McpHttpServer's auth middleware does: registry.resolve(bearer).
       const scope = yield* registry.resolve(token);
-      expect(scope?.threadId).toBe(threadId);
-      expect(scope?.providerInstanceId).toBe(providerInstanceId);
+      expect(scope?.thread?.threadId).toBe(threadId);
+      expect(scope?.thread?.providerInstanceId).toBe(providerInstanceId);
 
       const rejected = yield* registry.resolve("not-a-real-token");
       expect(rejected).toBeUndefined();
     }),
 );
 
-it.effect("registers t3team_recipe_list and t3team_recipe_validate in the live toolkit", () =>
+it.effect("registers t3_recipe_list and t3_recipe_validate in the live toolkit", () =>
   Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
     const names = server.tools.map(({ tool }) => tool.name);
-    expect(names).toContain("t3team_recipe_list");
-    expect(names).toContain("t3team_recipe_validate");
+    expect(names).toContain("t3_recipe_list");
+    expect(names).toContain("t3_recipe_validate");
   }).pipe(Effect.provide(TestLayer)),
 );
 
@@ -150,14 +150,18 @@ it.effect(
     Effect.gen(function* () {
       const server = yield* McpServer.McpServer;
       const result = yield* server
-        .callTool({ name: "t3team_recipe_validate", arguments: { source: VALID_WORKFLOW } })
+        .callTool({ name: "t3_recipe_validate", arguments: { source: VALID_WORKFLOW } })
         .pipe(
           Effect.provideService(McpInvocationContext.McpInvocationContext, {
             environmentId,
-            threadId,
-            providerSessionId: "provider-session-recipe-mcp-live",
-            providerInstanceId,
-            capabilities: new Set<McpInvocationContext.McpCapability>(),
+            requestNamespace: "provider-session-recipe-mcp-live",
+            thread: {
+              threadId,
+              providerSessionId: "provider-session-recipe-mcp-live",
+              providerInstanceId,
+            },
+            client: undefined,
+            capabilities: new Set<McpInvocationContext.McpCapability>(["orchestration"]),
             issuedAt: 1,
           }),
           Effect.provideService(McpSchema.McpServerClient, client),
@@ -183,14 +187,18 @@ it.effect(
     Effect.gen(function* () {
       const server = yield* McpServer.McpServer;
       const result = yield* server
-        .callTool({ name: "t3team_recipe_validate", arguments: { source: INVALID_WORKFLOW } })
+        .callTool({ name: "t3_recipe_validate", arguments: { source: INVALID_WORKFLOW } })
         .pipe(
           Effect.provideService(McpInvocationContext.McpInvocationContext, {
             environmentId,
-            threadId,
-            providerSessionId: "provider-session-recipe-mcp-live",
-            providerInstanceId,
-            capabilities: new Set<McpInvocationContext.McpCapability>(),
+            requestNamespace: "provider-session-recipe-mcp-live",
+            thread: {
+              threadId,
+              providerSessionId: "provider-session-recipe-mcp-live",
+              providerInstanceId,
+            },
+            client: undefined,
+            capabilities: new Set<McpInvocationContext.McpCapability>(["orchestration"]),
             issuedAt: 1,
           }),
           Effect.provideService(McpSchema.McpServerClient, client),

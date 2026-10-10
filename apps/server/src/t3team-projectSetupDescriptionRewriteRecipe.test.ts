@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- The launch/resume API is promise-shaped; the broker layer is bridged once, like its siblings. */
 // @effect-diagnostics nodeBuiltinImport:off - writes the scaffolded workflow to a temp runs root.
 /**
  * Executes the SCAFFOLDED `describe-rewrite` body — the exact string
@@ -7,8 +6,8 @@
  * A rendered workflow is not typechecked, so running it is the only thing that keeps it honest.
  * Everything under the fixture is production wiring: the real `T3TeamToolBrokerLive` (hence the
  * real `publishDraft`), the real `launchWorkflowRecipe`, the real suspend/resume machinery. Only
- * the orchestration engine is a recording stub, and the human/agent reply(ies) are supplied the
- * way the reactor supplies them: NONE when the caller already supplied intent (the body skips
+ * the workflow host and the thread artifacts store are recording stubs, and the human/agent
+ * reply(ies) are supplied the way the reactor supplies them: NONE when the caller already supplied intent (the body skips
  * `askUser` entirely and runs straight to the writer turn), exactly ONE `askUser` reply when it
  * didn't, then always the writer's `askAgent` reply.
  */
@@ -18,37 +17,31 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { afterAll, describe, expect, it } from "vite-plus/test";
-import {
-  type OrchestrationCommand,
-  ProjectId,
-  ProviderInstanceId,
-  type T3TeamMessageExt,
-} from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { deriveWorkflowShape } from "@t3team/sdk";
-import * as Effect from "effect/Effect";
-import * as Stream from "effect/Stream";
 
-import { type OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
-import { T3TeamToolBroker, type T3TeamToolBrokerShape } from "./t3team-toolBroker.ts";
-import {
-  createThreadToolContext,
-  makeBrokerLayer,
-  threadId,
-} from "./t3team-toolBrokerTestUtils.ts";
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
+
+import { threadId } from "./t3team-toolBrokerTestUtils.ts";
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import {
   makeWorkflowEngineRegistry,
   type T3TeamWorkflowEngineRegistryShape,
 } from "./t3team-workflowEngineRegistry.ts";
-import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
+import {
+  findDraftArtifact,
+  makeRecordingDraftBroker,
+  WORKFLOW_DRAFT_TOOL as DRAFT_TOOL,
+} from "./t3team-workflowHostDraft.fixtures.ts";
+import { makeT3TeamWorkflowHostToolClient } from "./t3team-workflowHostTools.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 import {
   DESCRIPTION_REWRITE_RECIPE_ID,
   renderDescriptionRewriteWorkflow,
 } from "./t3team-projectSetupDescriptionRewriteRecipe.ts";
 import { renderBundledRecipeSetupFiles } from "./t3team-projectSetupRecipes.ts";
 
-const DRAFT_TOOL = "t3team.work_item.description.draft_update";
 const WRITTEN_DESCRIPTION =
   "## Goal\nCheckout must round to two decimals.\n\n## Acceptance criteria\n- Totals match the invoice.";
 const WRITTEN = { description: WRITTEN_DESCRIPTION };
@@ -63,38 +56,6 @@ const projectId = ProjectId.make("project-1");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
 const ISO = "2026-07-27T00:00:00.000Z";
 
-async function makeBrokerWithSeededThread(): Promise<{
-  readonly broker: T3TeamToolBrokerShape;
-  readonly brokerDispatched: ReadonlyArray<OrchestrationCommand>;
-}> {
-  const brokerDispatched: OrchestrationCommand[] = [];
-  const orchestrationMock: OrchestrationEngineShape = {
-    readEvents: () => Stream.empty,
-    readThreadEvents: () => Stream.empty,
-    getThreadReplayStats: () => Effect.die("unused"),
-    dispatch: (command) => {
-      brokerDispatched.push(command);
-      return Effect.succeed({ sequence: brokerDispatched.length });
-    },
-    streamDomainEvents: Stream.empty,
-    subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
-    latestSequence: Effect.succeed(0),
-  };
-  const broker = await Effect.runPromise(
-    Effect.gen(function* () {
-      const resolved = yield* T3TeamToolBroker;
-      yield* resolved.bindSession({
-        threadId,
-        toolContext: createThreadToolContext({
-          tools: [{ id: DRAFT_TOOL, label: "Draft description", capabilities: ["write"] }],
-        }),
-      });
-      return resolved;
-    }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
-  );
-  return { broker, brokerDispatched };
-}
-
 /** Answer whatever the run is currently parked on, the way the reactor does. */
 async function reply(registry: T3TeamWorkflowEngineRegistryShape, runId: string, value: unknown) {
   const pending = registry.peekPending(threadId);
@@ -103,30 +64,15 @@ async function reply(registry: T3TeamWorkflowEngineRegistryShape, runId: string,
   return pending;
 }
 
-function turnPrompts(commands: ReadonlyArray<OrchestrationCommand>): ReadonlyArray<string> {
-  return commands.flatMap((command) =>
-    command.type === "thread.turn.start" ? [command.message.text] : [],
-  );
-}
+type RunHost = ReturnType<typeof makeFakeWorkflowHost>;
 
-function userQuestions(commands: ReadonlyArray<OrchestrationCommand>): ReadonlyArray<string> {
-  return commands.flatMap((command) =>
-    command.type === "thread.message.upsert" &&
-    command.message.t3teamExt?.status === "waiting-for-input"
-      ? [command.message.text]
-      : [],
-  );
-}
+const turnPrompts = (host: RunHost): ReadonlyArray<string> => host.turns().map((turn) => turn.text);
 
-function draftCarrier(commands: ReadonlyArray<OrchestrationCommand>) {
-  for (const command of commands) {
-    if (command.type !== "thread.message.upsert") continue;
-    const ext: T3TeamMessageExt | undefined = command.message.t3teamExt;
-    const attachment = ext?.attachments?.find((entry) => entry.kind === "draft-mutation");
-    if (attachment !== undefined) return { command, attachment };
-  }
-  return undefined;
-}
+const userQuestions = (host: RunHost): ReadonlyArray<string> =>
+  host
+    .messages()
+    .filter((message) => message.ext?.status === "waiting-for-input")
+    .map((message) => message.text);
 
 async function runRewrite(input: {
   readonly runId: string;
@@ -138,8 +84,8 @@ async function runRewrite(input: {
   // turn), so a pended first reply needs a second, clean one. Defaults to the single clean reply.
   readonly writerReplies?: ReadonlyArray<unknown>;
 }) {
-  const { broker, brokerDispatched } = await makeBrokerWithSeededThread();
-  const runDispatched: OrchestrationCommand[] = [];
+  const { broker, artifacts } = await makeRecordingDraftBroker();
+  const host = makeFakeWorkflowHost();
   const registry = makeWorkflowEngineRegistry();
   const completed: unknown[] = [];
   const errors: unknown[] = [];
@@ -156,12 +102,10 @@ async function runRewrite(input: {
     runtimeMode: "full-access",
     interactionMode: "default",
     registry,
-    dispatch: async (command) => {
-      runDispatched.push(command);
-    },
+    host: host.host,
     newId: () => `${input.runId}-id-${(seq += 1)}`,
     nowIso: () => ISO,
-    hostToolClient: makeT3TeamWorkflowHostDraftToolClient({ broker, launchThreadId: threadId })!,
+    hostToolClient: makeT3TeamWorkflowHostToolClient({ broker, launchThreadId: threadId })!,
     onComplete: async (output) => {
       completed.push(output);
     },
@@ -189,8 +133,8 @@ async function runRewrite(input: {
     writer,
     completed,
     errors,
-    runDispatched,
-    brokerDispatched,
+    host,
+    artifacts,
   };
 }
 
@@ -211,19 +155,19 @@ describe("describe-rewrite bundled workflow", () => {
     // No confirmation card at all: supplying instructions already IS the human stating intent,
     // so asking again would cost a click and gather nothing new.
     expect(run.gates).toHaveLength(0);
-    expect(userQuestions(run.runDispatched)).toHaveLength(0);
-    // The writer runs on the LAUNCH thread — never a spawned child. `thread.create` would be the
+    expect(userQuestions(run.host)).toHaveLength(0);
+    // The writer runs on the LAUNCH thread — never a spawned child. `createThread` would be the
     // fingerprint of `agent()`/`spawnThread()`, whose draft would land where nobody can see it.
     expect(run.writer[0]?.kind).toBe("thread.turn");
-    const turns = run.runDispatched.filter((command) => command.type === "thread.turn.start");
+    const turns = run.host.turns();
     expect(turns).toHaveLength(1);
     expect(turns[0]?.threadId).toBe(threadId);
-    expect(run.runDispatched.some((command) => command.type === "thread.create")).toBe(false);
+    expect(run.host.ops()).not.toContain("createThread");
     expect(run.errors).toHaveLength(0);
     expect(run.completed[0]).toMatchObject({ issueIdOrKey: "T3-42", proposed: true });
 
     // The writer is told to return a structured value and touch nothing.
-    const prompt = turnPrompts(run.runDispatched)[0] ?? "";
+    const prompt = turnPrompts(run.host)[0] ?? "";
     expect(prompt).toContain("T3-42");
     expect(prompt).toContain("Rounding is wrong.");
     expect(prompt).toContain("Add acceptance criteria.");
@@ -232,15 +176,15 @@ describe("describe-rewrite bundled workflow", () => {
     // …and WHERE to read the item from: the work tracker is mirrored to disk, so a writer left to
     // guess searches the workspace, finds nothing, and writes filler. The file name is the key
     // lowercased with non-alphanumerics collapsed, exactly as the context sync writes it.
-    expect(prompt).toContain(".t3team/context/work-items/t3-42.json");
-    expect(prompt).toContain(".t3team/context/work-items/index.json");
+    expect(prompt).toContain(`${PROJECT_STATE_DIR}/context/work-items/t3-42.json`);
+    expect(prompt).toContain(`${PROJECT_STATE_DIR}/context/work-items/index.json`);
     expect(prompt).toContain("availability");
     expect(prompt).toContain("fullBundleRootRelativePath");
     expect(prompt).toContain("ticketEntryPointRelativePath");
 
     // The BODY proposed only the structured description field, never an agent preamble.
-    const carrier = draftCarrier(run.brokerDispatched);
-    expect(carrier?.command.threadId).toBe(threadId);
+    const carrier = findDraftArtifact(run.artifacts);
+    expect(carrier?.threadId).toBe(threadId);
     expect(carrier?.attachment).toMatchObject({
       kind: "draft-mutation",
       draft: {
@@ -269,15 +213,15 @@ describe("describe-rewrite bundled workflow", () => {
 
     // Annotating and submitting already stated the intent, so no confirmation card is asked for.
     expect(run.gates).toHaveLength(0);
-    expect(userQuestions(run.runDispatched)).toHaveLength(0);
+    expect(userQuestions(run.host)).toHaveLength(0);
 
     // Both anchored notes reach the writer as targeted instructions — not just the last one.
-    const prompt = turnPrompts(run.runDispatched)[0] ?? "";
+    const prompt = turnPrompts(run.host)[0] ?? "";
     expect(prompt).toContain('On "Users log in.": Say which identity provider.');
     expect(prompt).toContain('On "log in": Cover the SSO failure path too.');
 
     expect(run.errors).toHaveLength(0);
-    expect(draftCarrier(run.brokerDispatched)?.attachment).toMatchObject({
+    expect(findDraftArtifact(run.artifacts)?.attachment).toMatchObject({
       draft: { target: { issueIdOrKey: "T3-77" }, patch: { description: WRITTEN_DESCRIPTION } },
     });
   });
@@ -308,13 +252,13 @@ describe("describe-rewrite bundled workflow", () => {
     expect(run.errors).toHaveLength(0);
     expect(run.completed[0]).toMatchObject({ issueIdOrKey: "T3-42", proposed: true });
 
-    const turns = turnPrompts(run.runDispatched);
+    const turns = turnPrompts(run.host);
     expect(turns).toHaveLength(2);
     expect(turns[0]).not.toContain("previous reply did not match");
     expect(turns[1]).toContain("previous reply did not match the required schema");
 
     // The preamble stayed out of the draft: only the structured field's value was proposed.
-    expect(draftCarrier(run.brokerDispatched)?.attachment).toMatchObject({
+    expect(findDraftArtifact(run.artifacts)?.attachment).toMatchObject({
       draft: {
         target: { issueIdOrKey: "T3-42" },
         patch: { description: WRITTEN_DESCRIPTION },
@@ -343,13 +287,19 @@ describe("describe-rewrite bundled workflow", () => {
   it("ships to a workspace as a workflow-backed bundled recipe, with no authoring by the user", () => {
     const files = renderBundledRecipeSetupFiles();
     const paths = files.map((file) => file.relativePath);
-    expect(paths).toContain(`.t3team/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/workflow.ts`);
-    expect(paths).toContain(`.t3team/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/recipe.ts`);
+    expect(paths).toContain(
+      `${PROJECT_STATE_DIR}/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/workflow.ts`,
+    );
+    expect(paths).toContain(
+      `${PROJECT_STATE_DIR}/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/recipe.ts`,
+    );
 
     // The recipe module must point its default action at that workflow, or discovery would treat
     // the recipe as prompt-backed and the body would never run.
     const module = files.find(
-      (file) => file.relativePath === `.t3team/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/recipe.ts`,
+      (file) =>
+        file.relativePath ===
+        `${PROJECT_STATE_DIR}/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/recipe.ts`,
     );
     expect(module?.contents).toContain('defineWorkflow<typeof Workflow>("./workflow.ts")');
     expect(module?.contents).toContain('"mutation.draft"');
@@ -368,11 +318,11 @@ describe("describe-rewrite bundled workflow", () => {
     // With nothing supplied, the deterministic gate is a single user.input ask — not an agent turn.
     expect(run.gates).toHaveLength(1);
     expect(run.gates[0]?.kind).toBe("user.input");
-    const question = userQuestions(run.runDispatched)[0] ?? "";
+    const question = userQuestions(run.host)[0] ?? "";
     expect(question).toBe("What should change in the description of T3-9?");
 
     // The reply becomes the intent that reaches the writer.
-    const prompt = turnPrompts(run.runDispatched)[0] ?? "";
+    const prompt = turnPrompts(run.host)[0] ?? "";
     expect(prompt).toContain("Explain the retry behavior.");
     expect(run.errors).toHaveLength(0);
     expect(run.completed[0]).toMatchObject({ issueIdOrKey: "T3-9", proposed: true });

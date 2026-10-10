@@ -59,7 +59,7 @@ export function InboxThreadAttribution({ threadId }: { threadId: string }): Reac
     <span
       data-t3team-inbox-attribution
       title={attribution.title || attribution.displayId}
-      className="shrink-0 truncate rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium text-sidebar-muted-foreground"
+      className="shrink-0 truncate rounded-sm bg-sidebar-control-surface px-1 text-2xs font-medium text-sidebar-muted-foreground"
     >
       {attribution.displayId}
     </span>
@@ -100,8 +100,8 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
     ? `${counts.running} active ${noun(counts.running)}${settledCount > 0 ? ` · ${settledCount} settled` : ""}`
     : `${settledCount} ${noun(settledCount)}`;
   const chipClass = active
-    ? "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium tabular-nums text-sidebar-muted-foreground hover:text-sidebar-foreground"
-    : "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium tabular-nums text-sidebar-muted-foreground/60 hover:text-sidebar-muted-foreground/90";
+    ? "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-2xs font-medium tabular-nums text-sidebar-muted-foreground hover:text-sidebar-foreground"
+    : "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-2xs font-medium tabular-nums text-sidebar-muted-foreground/60 hover:text-sidebar-muted-foreground/90";
   return (
     <button
       type="button"
@@ -121,10 +121,8 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
     >
       <ListTreeIcon aria-hidden className="size-3 shrink-0" />
       {/* The count speaks the state: the working-row hue while any sub-run is
-          running (same 4-state color as the pill), muted otherwise. No dot,
-          no word — the word "Settled" was dropped: the fold can hold
-          terminal-but-not-yet-settled children, so it miscounted (owner,
-          2026-09-13). */}
+          running, muted otherwise. No dot — the fold can hold terminal children
+          that are not settled yet, so a "Settled" word miscounted. */}
       <span className={active ? resolveActivityStatePill("working").colorClass : undefined}>
         {active ? counts.running : settledCount}
       </span>

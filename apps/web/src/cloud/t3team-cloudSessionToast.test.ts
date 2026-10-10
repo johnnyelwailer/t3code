@@ -5,11 +5,11 @@ import {
 } from "@t3tools/contracts";
 import { EnvironmentRpcUnavailableError } from "@t3tools/client-runtime/rpc";
 import * as Cause from "effect/Cause";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { cloudSessionFailureDescription } from "./t3team-cloudSessionToast";
+import { cloudSessionFailureDescription } from "./t3team-cloudSessionFailureDescription";
 
 const failure = (error: unknown) => AsyncResult.failure(Cause.fail(error));
 

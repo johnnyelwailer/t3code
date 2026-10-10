@@ -33,6 +33,7 @@ export const TOOL_GROUP_IDS = [
   "view.state",
   "artifact.rw",
   "mutation.draft",
+  "mutation.change_request",
   "thread.handoff",
   "ui.render",
 ] as const;
@@ -61,18 +62,27 @@ export type EngineCapability =
   | "script"
   | "ui"
   | "workflow"
-  | "schedule";
+  | "schedule"
+  | "launch";
+
+/**
+ * A per-source capability: `"source:<name>"` gates both `getSignalSource(source)` and
+ * `watermark(name)` for that one source (design 42 §Security). Open-ended by design — the
+ * source catalog is not a closed set.
+ */
+export type SourceCapability = `source:${string}`;
 
 /**
  * A typed reference to a tool group, declared via `defineToolGroup`. Carries the `label` /
  * `description` the pre-execution permission UI renders (Epic 25 §Capability gating).
  */
 /**
- * ONE capability, in any of the three forms the surface accepts: an engine feature string, a tool
- * group as a typed ref, or that same group as its id string. This is the vocabulary shared by
- * `meta.capabilities`, a recipe's `allowedToolGroups`, and a child's `capabilities`.
+ * ONE capability, in any of the forms the surface accepts: an engine feature string, a per-source
+ * capability, a tool group as a typed ref, or that same group as its id string. This is the
+ * vocabulary shared by `meta.capabilities`, a recipe's `allowedToolGroups`, and a child's
+ * `capabilities`.
  */
-export type WorkflowCapability = EngineCapability | ToolGroupId | ToolGroupRef;
+export type WorkflowCapability = EngineCapability | SourceCapability | ToolGroupId | ToolGroupRef;
 
 /**
  * A child's capabilities — REQUIRED wherever a workflow creates a subagent (`agent`,

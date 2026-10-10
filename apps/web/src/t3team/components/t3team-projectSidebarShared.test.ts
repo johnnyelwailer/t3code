@@ -13,7 +13,6 @@ function makeThread(overrides: Partial<ProjectThread>): ProjectThread {
     id: "t1",
     projectId: "p1",
     title: "Weekly triage",
-    messageCount: 0,
     lastMessageAt: "2026-06-14T00:00:00.000Z",
     createdAt: "2026-06-14T00:00:00.000Z",
     status: "idle",
@@ -56,7 +55,7 @@ describe("resolveThreadStatusPill — sleeping (Epic 27)", () => {
 describe("resolveThreadStatusPill — durable workflow run", () => {
   const at = "2026-06-14T08:00:00.000Z";
 
-  it("shows a suspended agent turn as waiting, not running", () => {
+  it("shows a suspended agent turn as alive-and-waiting, not running", () => {
     const pill = resolveThreadStatusPill(
       makeThread({
         status: "running",
@@ -69,8 +68,26 @@ describe("resolveThreadStatusPill — durable workflow run", () => {
       }),
     );
     expect(pill?.label).toBe("Waiting for agent");
+    // The thread is still live: it pulses with the slower "waiting" motion so
+    // the dot reads as alive-but-parked, not stopped.
+    expect(pill?.pulse).toBe(true);
+    expect(pill?.pulseClass).toBe("animate-status-pulse-slow");
+    expect(pill?.detail).toMatch(/^since /);
+  });
+
+  it("keeps the user-input wait static — it is parked on a person, not on work", () => {
+    const pill = resolveThreadStatusPill(
+      makeThread({
+        workflowRunStatus: {
+          status: "suspended",
+          pendingKind: "user.input",
+          wakeAt: null,
+          updatedAt: at,
+        },
+      }),
+    );
+    expect(pill?.label).toBe("Waiting for your answer");
     expect(pill?.pulse).toBe(false);
-    expect(pill?.detail).toMatch(/^Waiting since /);
   });
 
   it("uses plain durable labels for each terminal and scheduled state", () => {

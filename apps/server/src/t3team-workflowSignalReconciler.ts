@@ -3,7 +3,8 @@
  * derives the LIVE SET of source instances from the journaled registrations and reconciles it
  * against what is actually running. The reconcile / emit-boundary / cursor logic lives in
  * t3team-workflowSignalReconcilerCore.ts; this layer is the thin Effect wrapper: services, the
- * boot cross-check, the boot reconcile, the sweep cadence, and the shutdown finalizer.
+ * boot cross-check, the boot reconcile, the sweep (a due-work source on the server's
+ * `Scheduler`, run at most once per sweep interval), and the shutdown finalizer.
  *
  *   desired = { (source, params) : some live run holds a registration on it }
  *   reconcile(desired, actual) → start what is missing, stop what is orphaned
@@ -14,6 +15,7 @@
  * catch up after crashes (each source's durable cursor bridges the host-down window).
  */
 
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -25,24 +27,27 @@ import * as EffectFileSystem from "effect/FileSystem";
 import { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
 
 import { T3TeamWorkflowSignalDelivery } from "./t3team-workflowSignalDelivery.ts";
-import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
 import {
   assertCatalogCoversDeclarations,
   makeWorkflowSignalSourceCatalog,
 } from "./t3team-workflowSignalCatalog.ts";
-import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
+import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
+import * as GitHubCli from "./sourceControl/GitHubCli.ts";
+import { loadViewerPrRead } from "./t3team-myworkViewerPrLoader.ts";
 import { makeReconcilerCore } from "./t3team-workflowSignalReconcilerCore.ts";
 import {
-  providerForAccount,
-  providerForPersistedAuths,
-} from "./t3team-atlassian-auth-store.ts";
+  T3TeamWorkflowSignalRehydrateGate,
+  T3TeamWorkflowSignalRehydrateGateLive,
+} from "./t3team-workflowSignalRehydrateGate.ts";
+import * as Scheduler from "./scheduling/Scheduler.ts";
+import { providerForAccount, providerForPersistedAuths } from "./t3team-atlassian-auth-store.ts";
 import * as ServerConfig from "./config.ts";
 
 /** The periodic sweep cadence: catch orphaned instances + GC without hammering the DB. */
-export const WORKFLOW_SIGNAL_SWEEP_MS = 60_000;
+const WORKFLOW_SIGNAL_SWEEP_MS = 60_000;
 /** Delivered inbox entries older than this are GC'd by the sweep (design 42 §7: entries expire). */
-export const WORKFLOW_SIGNAL_INBOX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const WORKFLOW_SIGNAL_INBOX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** The ambient services the Atlassian auth read needs (provided by the app composition). */
 type AtlassianAuthServices =
@@ -57,8 +62,6 @@ export interface WorkflowSignalReconcilerShape {
   readonly reconcile: () => Promise<void>;
   /** Periodic sweep: reconcile + terminal-binding purge + inbox GC. */
   readonly sweep: () => Promise<void>;
-  /** Stop the sweep timer (shutdown). */
-  readonly stop: () => void;
   /** Stop every live instance (host shutdown finalizer). */
   readonly stopAll: () => Promise<void>;
 }
@@ -75,6 +78,12 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
     const store = yield* WorkflowSignalStore;
     const delivery = yield* T3TeamWorkflowSignalDelivery;
     const pullRequestService = yield* PullRequestService;
+    const gitHubCli = yield* GitHubCli.GitHubCli;
+    // Boot ordering (GHE #332 review): no source instance may start — and so DELIVER — before
+    // boot rehydration has rebuilt the watching-run controllers, or a first tick would hit the
+    // delivery port's orphan branch and fail a healthy parked run. Rehydration runs with the
+    // workflow host at the app level; every reconcile here waits for it through the gate.
+    const { completed: rehydrated } = yield* T3TeamWorkflowSignalRehydrateGate;
     // The work-item source's per-tick auth resolution reuses the ambient host context (the
     // same narrowing the pack driver bridge uses): the Atlassian auth read needs the services
     // the app composition provides ambiently to this layer.
@@ -90,6 +99,7 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
     };
     const catalog = makeWorkflowSignalSourceCatalog({
       pullRequestService,
+      readViewerPrs: loadViewerPrRead().pipe(Effect.provideService(GitHubCli.GitHubCli, gitHubCli)),
       resolveWorkItemProvider,
     });
     // Loud boot cross-check: a renamed/missing catalog entry breaks boot, not a parked body.
@@ -103,7 +113,6 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
       catalog,
       delivery,
       store,
-      sweepMs: WORKFLOW_SIGNAL_SWEEP_MS,
       inboxCutoffIso: () =>
         DateTime.formatIso(
           DateTime.subtract(DateTime.nowUnsafe(), { milliseconds: WORKFLOW_SIGNAL_INBOX_TTL_MS }),
@@ -112,31 +121,44 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
       log,
     });
 
-    // Boot reconcile: instances bound before this uptime come back now; each source's durable
-    // cursor bridges the host-down window (the catch-up sweep inside its start).
-    yield* Effect.promise(
-      () =>
-        core.reconcile().catch((error) => {
-          void Effect.runPromise(
-            log("boot reconcile failed", { error: String(error) }),
-          );
+    // Boot reconcile, once rehydration is done: instances bound before this uptime come back;
+    // each source's durable cursor bridges the host-down window (the catch-up inside its start).
+    let booted = false;
+    yield* Effect.promise(() =>
+      rehydrated
+        .then(() => core.reconcile())
+        .catch((error) => {
+          void Effect.runPromise(log("boot reconcile failed", { error: String(error) }));
+        })
+        .finally(() => {
+          booted = true;
         }),
-    );
+    ).pipe(Effect.forkScoped);
+
+    // The periodic sweep rides the server's due-work tick, gated to once per sweep interval
+    // (the first one interval after boot) and shut until the boot reconcile ran.
+    let lastSweepMs = yield* Clock.currentTimeMillis;
+    const sweepIfDue = Effect.gen(function* () {
+      const nowMs = yield* Clock.currentTimeMillis;
+      if (!booted || nowMs - lastSweepMs < WORKFLOW_SIGNAL_SWEEP_MS) return;
+      lastSweepMs = nowMs;
+      yield* Effect.promise(() =>
+        core.sweep().catch((error) => {
+          void Effect.runPromise(log("signal sweep failed", { error: String(error) }));
+        }),
+      );
+    });
+    yield* (yield* Scheduler.Scheduler).register("t3team-workflow-signal-sweep", sweepIfDue);
 
     yield* Effect.addFinalizer(() => Effect.promise(() => core.stopAll()));
     return {
-      reconcile: () => core.reconcile(),
-      sweep: () => core.sweep(),
-      stop: () => core.stop(),
+      reconcile: () => rehydrated.then(() => core.reconcile()),
+      sweep: () => rehydrated.then(() => core.sweep()),
       stopAll: () => core.stopAll(),
     };
   }),
 ).pipe(
-  // Boot ordering (GHE #332 review): the source instances the boot reconcile starts must only
-  // be able to DELIVER after rehydration has rebuilt the watching-run controllers — otherwise
-  // a first tick that lands before the controllers exist hits the delivery port's orphan branch
-  // and fails a healthy parked run. Providing `T3TeamWorkflowEngineRehydrateLive` runs that
-  // layer's rehydration effect to completion before this one starts; the layer is memoized by
-  // reference, so the app's mergeAll sibling does not re-run the rehydration.
-  Layer.provide(T3TeamWorkflowEngineRehydrateLive),
+  Layer.provide(Scheduler.layer),
+  // The same gate reference the rehydrate layer and the delivery port use (memoized: one flag).
+  Layer.provide(T3TeamWorkflowSignalRehydrateGateLive),
 );

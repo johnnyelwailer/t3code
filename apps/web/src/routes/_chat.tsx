@@ -5,17 +5,16 @@ import { useEffect } from "react";
 import { isCommandPaletteOpen } from "../commandPaletteBus";
 import { ThreadRouteView } from "../components/ThreadRouteView";
 import { resolveThreadRouteTarget } from "../threadRoutes";
-import { useClientSettings, useLegacySidebarEnabled } from "../hooks/useSettings";
-import { openCommandPalette } from "../commandPaletteBus";
-import { useProjects } from "../state/entities";
 import { usePrimaryEnvironmentId } from "../state/environments";
-import { selectProjectGroupingSettings } from "../logicalProject";
-import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
 import { dispatchPreviewAction } from "../components/preview/previewActionBus";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { useScratchProject } from "../hooks/useScratchProject";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
+import { isEditableFocused } from "../lib/editableFocus";
+import { isModelPickerOpen } from "../modelPickerVisibility";
+import { undoLatestThreadAction } from "../hooks/showThreadUndoNotice";
 import { resolveShortcutCommand } from "../keybindings";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { isPreviewSupportedInRuntime } from "../previewStateStore";
@@ -25,13 +24,21 @@ import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { primaryServerKeybindingsAtom } from "~/state/server";
 import { readThreadShells } from "../state/entities";
 import { translateUpstreamPath } from "../t3team/t3team-upstreamRouteBridge";
+import { appAtomRegistry } from "../rpc/atomRegistry";
+import { primaryEnvironmentIdAtom } from "../state/primaryEnvironment";
+import { useT3TeamAppBaseName } from "~/t3team/t3team-appBrandName";
 
 function ChatRouteGlobalShortcuts() {
+  const appName = useT3TeamAppBaseName();
   const clearSelection = useThreadSelectionStore((state) => state.clearSelection);
   const selectedThreadKeysSize = useThreadSelectionStore((state) => state.selectedThreadKeys.size);
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread, routeThreadRef } =
     useHandleNewThread();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  // t3team: `chat.new` is collapsed into the contextual create below (no "new-thread-in" palette
+  // detour in the Team shell), so only upstream's scratch-thread inputs are needed here.
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const { scratchEnvironmentId, startScratchThread } = useScratchProject();
   const terminalOpen = useTerminalUiStateStore((state) =>
     routeThreadRef
       ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, routeThreadRef).terminalOpen
@@ -54,10 +61,21 @@ function ChatRouteGlobalShortcuts() {
           terminalOpen,
           previewFocus: isPreviewFocused(),
           previewOpen,
+          editableFocus: isEditableFocused(event.target),
+          modelPickerOpen: isModelPickerOpen(),
         },
       });
 
       if (isCommandPaletteOpen()) {
+        return;
+      }
+
+      if (command === "thread.undo") {
+        if (event.repeat || isModelPickerOpen()) return;
+        if (undoLatestThreadAction()) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
         return;
       }
 
@@ -79,6 +97,17 @@ function ChatRouteGlobalShortcuts() {
         return;
       }
 
+      if (command === "chat.newWithoutProject") {
+        const environmentId = scratchEnvironmentId(
+          activeThread?.environmentId ?? activeDraftThread?.environmentId ?? primaryEnvironmentId,
+        );
+        if (environmentId === null) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void startScratchThread(environmentId);
+        return;
+      }
+
       if (command === "preview.toggle") {
         event.preventDefault();
         event.stopPropagation();
@@ -88,7 +117,7 @@ function ChatRouteGlobalShortcuts() {
             stackedThreadToast({
               type: "info",
               title: "Preview is desktop-only",
-              description: "Open T3 Code in the desktop app to use the in-app preview.",
+              description: `Open ${appName} in the desktop app to use the in-app preview.`,
             }),
           );
           return;
@@ -130,13 +159,17 @@ function ChatRouteGlobalShortcuts() {
   }, [
     activeDraftThread,
     activeThread,
+    appName,
     clearSelection,
     handleNewThread,
     keybindings,
     defaultProjectRef,
     previewOpen,
+    primaryEnvironmentId,
     routeThreadRef,
+    scratchEnvironmentId,
     selectedThreadKeysSize,
+    startScratchThread,
     terminalOpen,
   ]);
 
@@ -188,6 +221,7 @@ export const Route = createFileRoute("/_chat")({
         // unique thread id is still enough to place the thread.
         readThreadShells().find((shell) => shell.id === threadId)?.projectId ??
         null,
+      primaryEnvironmentId: appAtomRegistry.get(primaryEnvironmentIdAtom),
     });
     if (translation.kind === "target") {
       throw redirect(translation.target);

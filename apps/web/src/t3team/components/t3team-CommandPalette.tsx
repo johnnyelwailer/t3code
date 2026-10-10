@@ -1,6 +1,6 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { APP_DISPLAY_NAME } from "~/t3team/t3team-branding";
+import { useT3TeamAppDisplayName } from "~/t3team/t3team-appBrandName";
 import { useServerKeybindings } from "~/t3team/t3team-serverState";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import {
@@ -56,6 +56,7 @@ export function T3TeamCommandPalette(props: T3TeamCommandPaletteProps) {
     onOpenCreateProject,
   } = props;
 
+  const appName = useT3TeamAppDisplayName();
   const keybindings = useServerKeybindings();
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
@@ -144,8 +145,8 @@ export function T3TeamCommandPalette(props: T3TeamCommandPaletteProps) {
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandDialogPopup
-        aria-label={`${APP_DISPLAY_NAME} search`}
-        className="overflow-hidden p-0"
+        aria-label={`${appName} search`}
+        className="overflow-hidden"
         finalFocus={() => false}
         onBackdropPointerDown={() => {
           onOpenChange(false);
@@ -153,7 +154,7 @@ export function T3TeamCommandPalette(props: T3TeamCommandPaletteProps) {
       >
         <Command
           key={isSubmenu ? "submenu" : "root"}
-          aria-label={`${APP_DISPLAY_NAME} command palette`}
+          aria-label={`${appName} command palette`}
           autoHighlight="always"
           mode="none"
           onItemHighlighted={(value) => {

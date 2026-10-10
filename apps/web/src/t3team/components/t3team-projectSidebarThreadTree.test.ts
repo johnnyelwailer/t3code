@@ -17,7 +17,6 @@ function createThread(overrides: Partial<ProjectThread> = {}): ProjectThread {
     projectId: overrides.projectId ?? "project-1",
     title: overrides.title ?? "Thread",
     status: overrides.status ?? "idle",
-    messageCount: overrides.messageCount ?? 0,
     lastMessageAt: overrides.lastMessageAt ?? "2026-05-26T12:00:00.000Z",
     createdAt: overrides.createdAt ?? "2026-05-26T12:00:00.000Z",
     ...overrides,
@@ -63,7 +62,7 @@ describe("buildProjectSidebarThreadTree", () => {
     expect(countProjectSidebarThreadBranches([parent], tree)).toBe(3);
   });
 
-  it("renders descendant controls expanded by default", () => {
+  it("renders root threads and leaves classified children off the nav", () => {
     const parent = createThread({ id: "parent", title: "Parent" });
     const child = createThread({ id: "child", title: "Child", parentThreadId: "parent" });
     const tree = buildProjectSidebarThreadTree([parent, child]);
@@ -80,9 +79,9 @@ describe("buildProjectSidebarThreadTree", () => {
       }),
     );
 
-    expect(markup).toContain('aria-label="Collapse child threads for Parent"');
-    expect(markup).toContain('aria-expanded="true"');
-    expect(markup).toContain("Child");
+    expect(markup).toContain("Parent");
+    expect(markup).not.toContain("Child");
+    expect(markup).not.toContain("Collapse child threads");
   });
 });
 

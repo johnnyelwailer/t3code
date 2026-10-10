@@ -1,8 +1,5 @@
-import { type ClientOrchestrationCommand } from "@t3tools/contracts";
-
 import { resolveInitialPrimaryEnvironmentDescriptor } from "~/environments/primary";
 import { readPrimaryServerConfig } from "~/t3team/t3team-serverState";
-import { runT3TeamOrchestrationDispatch } from "~/t3team/t3team-orchestrationDispatch";
 import type { BackendApi, BackendState } from "./t3team-types";
 import {
   createAtlassianBackendApi,
@@ -12,6 +9,8 @@ import {
 import { createAtlassianPollingBackendApi } from "./t3team-pollingBackend";
 import { createAtlassianProjectIssuesBackendApi } from "./t3team-projectIssuesBackend";
 import { createMyWorkDigestBackendApi } from "./t3team-myworkDigestBackendApi";
+import { createMyWorkDigestArrangementApi } from "./t3team-myworkDigestArrangementApi";
+import { createPrimaryEnvironmentOrchestrationApi } from "./t3team-orchestrationApi";
 import { postJson, resolveHttpBaseUrl, resolveWsUrl } from "./t3team-t3BackendHttp";
 import type {
   LaunchProjectRecipeWorkflowRequest,
@@ -50,18 +49,6 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
   async function disconnect() {
     const nextState = state as Writable<BackendState>;
     nextState.connectionStatus = "connecting";
-  }
-
-  async function dispatch(command: ClientOrchestrationCommand) {
-    await runT3TeamOrchestrationDispatch(command);
-  }
-
-  async function forkThread(input: Parameters<BackendApi["forkThread"]>[0]) {
-    return postJson<typeof input, Awaited<ReturnType<BackendApi["forkThread"]>>>(
-      httpBaseUrl,
-      "/api/t3team/thread/fork",
-      input,
-    );
   }
 
   async function listThreadPlacements(input: Parameters<BackendApi["listThreadPlacements"]>[0]) {
@@ -122,6 +109,7 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     ...createAtlassianPollingBackendApi(httpBaseUrl),
     ...createAtlassianProjectIssuesBackendApi(httpBaseUrl),
     ...createMyWorkDigestBackendApi(httpBaseUrl),
+    ...createMyWorkDigestArrangementApi(httpBaseUrl),
   };
   const github = createGitHubBackendApi(httpBaseUrl);
   const projectWorkspace = createProjectWorkspaceBackendApi(httpBaseUrl);
@@ -133,8 +121,7 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     },
     connect,
     disconnect,
-    dispatchCommand: dispatch,
-    forkThread,
+    orchestration: createPrimaryEnvironmentOrchestrationApi(),
     launchRecipeWorkflow,
     submitRecipeCardAction,
     resolveWorkflowInput,

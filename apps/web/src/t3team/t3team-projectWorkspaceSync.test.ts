@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH } from "~/t3team/t3team-projectSetup";
+import {
+  T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
+  T3TEAM_PROJECT_CONTEXT_ROOT,
+} from "~/t3team/t3team-projectSetup";
+import { T3TEAM_PROJECT_PROFILE_MANIFEST_PATH } from "@t3tools/t3team-skill-packs";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import {
@@ -101,18 +105,22 @@ describe("buildProjectWorkspaceSyncFiles", () => {
     expect(files.some((file) => file.relativePath === T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH)).toBe(
       true,
     );
-    expect(files.some((file) => file.relativePath === ".t3team/context/metadata.json")).toBe(true);
-    expect(files.some((file) => file.relativePath === ".t3team/context/project.json")).toBe(false);
+    expect(
+      files.some((file) => file.relativePath === `${T3TEAM_PROJECT_CONTEXT_ROOT}/metadata.json`),
+    ).toBe(true);
+    expect(
+      files.some((file) => file.relativePath === `${T3TEAM_PROJECT_CONTEXT_ROOT}/project.json`),
+    ).toBe(false);
 
     const entrypoint = files.find(
       (file) => file.relativePath === T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
     );
     expect(JSON.parse(entrypoint?.contents ?? "{}")).toMatchObject({
-      contextRoot: ".t3team/context",
-      projectEntryPointPath: ".t3team/context/entrypoint.json",
-      profilePath: ".t3team/setup/profile.json",
+      contextRoot: T3TEAM_PROJECT_CONTEXT_ROOT,
+      projectEntryPointPath: T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
+      profilePath: T3TEAM_PROJECT_PROFILE_MANIFEST_PATH,
       paths: {
-        metadata: ".t3team/context/metadata.json",
+        metadata: `${T3TEAM_PROJECT_CONTEXT_ROOT}/metadata.json`,
       },
     });
   });
@@ -266,5 +274,41 @@ describe("syncProjectWorkspaceContext", () => {
     expect(backendHarness.writeContextFiles).toHaveBeenCalledTimes(2);
     const finalFiles = backendHarness.writeContextFiles.mock.calls[1]?.[0].files ?? [];
     expect(finalFiles.some((file) => file.relativePath.endsWith("/proj-2.json"))).toBe(true);
+  });
+
+  it("bootstraps only when the linked repositories change, not on every context sync", async () => {
+    const backendHarness = createBackendHarness();
+    const backend = {
+      projectWorkspace: {
+        bootstrapWorkspace: backendHarness.bootstrapWorkspace,
+        writeContextFiles: backendHarness.writeContextFiles,
+      },
+    } as unknown as BackendApi;
+    const sync = async (ticket: string, urls: ReadonlyArray<string>) => {
+      const pending = syncProjectWorkspaceContext({
+        backend,
+        project: createProject(),
+        linkedRepositoryUrls: urls,
+        projectTickets: [createTicket(ticket)],
+      });
+      await vi.advanceTimersByTimeAsync(150);
+      await pending;
+    };
+    const urls = ["https://github.com/example/project-alpha"];
+
+    await sync("PROJ-1", urls);
+    await sync("PROJ-2", urls);
+    await sync("PROJ-3", urls);
+    expect(backendHarness.bootstrapWorkspace).toHaveBeenCalledTimes(1);
+    expect(backendHarness.writeContextFiles).toHaveBeenCalledTimes(3);
+
+    await sync("PROJ-3", [...urls, "https://github.com/example/project-beta"]);
+    expect(backendHarness.bootstrapWorkspace).toHaveBeenCalledTimes(2);
+
+    // Unchanged inputs still re-bootstrap after the refresh window, so the server can requeue
+    // syncs a restart dropped.
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    await sync("PROJ-3", [...urls, "https://github.com/example/project-beta"]);
+    expect(backendHarness.bootstrapWorkspace).toHaveBeenCalledTimes(3);
   });
 });

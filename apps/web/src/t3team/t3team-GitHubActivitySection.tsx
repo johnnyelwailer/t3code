@@ -1,10 +1,12 @@
 import { LinkExternalIcon } from "@primer/octicons-react";
 import { ExternalLink } from "lucide-react";
+import { WatchedPullRequestIndicator } from "~/components/pullRequest/t3team-WatchedPullRequestIndicator";
 import { Skeleton } from "~/t3team/components/ui/t3team-skeleton";
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { useT3TeamAgentContextDrag } from "~/t3team/t3team-agentContextDrag";
 import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
+import { pullRequestIdentityOfActivityItem } from "~/t3team/t3team-githubActivityPullRequestIdentity";
 import { GitHubActivityTooltipContent } from "~/t3team/t3team-GitHubActivityTooltipContent";
 import type { AgentContextCapabilities } from "~/t3team/t3team-agentContext";
 import {
@@ -36,6 +38,7 @@ function GitHubActivitySectionRow({
   const visual = getGitHubActivityVisual(item);
   const updatedAt = renderRelativeUpdatedAt(item.updatedAt);
   const linkTarget = item.subjectUrl ?? item.repositoryUrl;
+  const identity = pullRequestIdentityOfActivityItem(item);
   const summaryLabel = isActiveReviewRequested(item)
     ? "Review requested"
     : !isRedundantPullRequestReason(item)
@@ -48,11 +51,12 @@ function GitHubActivitySectionRow({
         <div className="text-xs font-medium text-foreground/90">
           {item.subjectTitle ?? item.repository}
         </div>
-        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-2xs text-muted-foreground">
           {summaryLabel ? <span>{summaryLabel}</span> : null}
           {updatedAt ? <span>{updatedAt}</span> : null}
         </div>
       </div>
+      {identity ? <WatchedPullRequestIndicator {...identity} className="mt-0.5" /> : null}
       {linkTarget ? (
         <LinkExternalIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/70" />
       ) : null}
@@ -128,7 +132,7 @@ export function GitHubActivitySection({
     <T3SurfacePanel tone="muted" className="p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        <div className="text-[11px] text-muted-foreground">
+        <div className="text-2xs text-muted-foreground">
           {host ? <span>{host}</span> : null}
           {account ? <span> · {account}</span> : null}
         </div>
@@ -139,7 +143,7 @@ export function GitHubActivitySection({
         unreadable on a light background regardless.
       */}
       {warning ? (
-        <div className="mb-2 rounded border border-warning/30 bg-warning/10 px-2 py-1 text-[11px] text-warning-foreground">
+        <div className="mb-2 rounded border border-warning/30 bg-warning/10 px-2 py-1 text-2xs text-warning-foreground">
           {warning}
         </div>
       ) : null}
@@ -167,7 +171,7 @@ export function GitHubActivitySection({
         </div>
       ) : null}
       {suggestedRepositoryCount && suggestedRepositoryCount > 0 ? (
-        <div className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
+        <div className="mt-2 flex items-center gap-1 text-2xs text-muted-foreground">
           <ExternalLink className="size-3" />
           {suggestedRepositoryCount} suggested repositories available
         </div>

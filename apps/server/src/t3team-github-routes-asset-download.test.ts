@@ -1,8 +1,8 @@
 /* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import * as Effect from "effect/Effect";
-import { ChildProcessSpawner } from "effect/unstable/process";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { ChildProcessSpawner } from "effect/process";
+import { HttpClient, HttpClientResponse } from "effect/http";
 
 import type { VcsProcessOutput, VcsProcessShape } from "./t3team-vcsProcessShape.ts";
 import { downloadGitHubAsset } from "./t3team-github-routes-asset-download.ts";

@@ -22,6 +22,19 @@ const noopResolver: ReplyResolver = { resolve: () => {}, reject: () => {} };
  */
 export const REFIRABLE_ASK_KINDS: ReadonlySet<string> = new Set(["thread.turn", "user.input"]);
 
+/**
+ * Host requests the broker settles before `send` returns, and that are idempotent by
+ * construction (fork `launchThread` / `getConfig`: derived ids, deterministic command ids). A
+ * recorded `sent` without a reply can only mean the process died mid-request, so a replay sends
+ * it again instead of parking on a reply that will never come.
+ */
+export const SELF_SETTLING_IDEMPOTENT_KINDS: ReadonlySet<string> = new Set([
+  "thread.launch",
+  "thread.launched",
+  "run.facts",
+  "config.resolve",
+]);
+
 export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
   // Unique synthetic ids for black-boxed sends (inside parallel/pipeline). These execute live
   // and are never journaled/replayed, so the counter only has to stay unique within one run —
@@ -181,8 +194,14 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
       const recordedId = recorded.correlationId ?? correlationId;
       // Replay: the side effect already fired — do NOT re-fire the broker, unless the host named
       // this very ask as the run's one-shot re-fire target.
-      if (!isRefireTarget(recordedId)) return recordedId;
-      return await refireRecorded(currentSeq, recordedId, call);
+      if (isRefireTarget(recordedId)) return await refireRecorded(currentSeq, recordedId, call);
+      if (
+        SELF_SETTLING_IDEMPOTENT_KINDS.has(call.kind) &&
+        seat.resolvedFor(recordedId) === undefined
+      ) {
+        await fireObserved(currentSeq, recordedId, call, { redelivery: true });
+      }
+      return recordedId;
     }
     if (currentSeq <= seat.maxRecordedSeq)
       gapDrift(currentSeq, call.kind, call.refId, seat.filePath);

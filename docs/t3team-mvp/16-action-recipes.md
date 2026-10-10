@@ -96,9 +96,7 @@ export default defineRecipe({
 
   // The workflow. May be inlined or referenced from ./workflow.ts.
   workflow: defineWorkflow({
-    steps: [
-      /* ... */
-    ],
+    steps: [/* ... */],
   }),
 
   // Capability scope for everything this recipe runs — agent, scripts, and views.
@@ -407,8 +405,7 @@ loading state to the UI:
 
 ```ts
 type VisibilityResult =
-  | boolean
-  | { visible: boolean; pending?: boolean; rank?: number; reason?: string };
+  boolean | { visible: boolean; pending?: boolean; rank?: number; reason?: string };
 ```
 
 `pending: true` lets the action list show a skeleton or a faint indicator instead of
@@ -683,10 +680,9 @@ The flags give you three useful cases:
 | ✗               | ✓                | hidden agent context (orchestration-injected instructions, structured input) |
 
 System messages are **mutable**. An orchestration may update body/attachments/status until the
-message reaches its terminal `completed` state. While it is still in progress, `status`
-captures whether the message is actively progressing or paused on user input. This
-subsumes the former `activity.phase: presented → updated → completed` pattern; the upsert
-semantics live on the message itself.
+message reaches its terminal `completed` state: re-posting the same message id updates the
+message, and its `message-ext` artifact, in place. While it is still in progress, `status`
+captures whether the message is actively progressing or paused on user input.
 
 ### Attachments
 
@@ -740,30 +736,32 @@ blocks, OpenAI developer role, or `user` with a tag). The conversation model com
 
 ### Additive seam
 
-The three-author model is added without forking upstream message types. The seam is a
-single optional field on `Message`:
+The three-author model is added without forking upstream message types. Orchestration V2
+messages carry text plus an opaque `context`; the fork's ext rides them in two places:
 
 ```ts
-// packages/contracts/src/model.ts  (already allowlisted)
-export type Message = {
-  // ...existing upstream fields
-  t3teamExt?: T3TeamMessageExt;
-};
-
-// packages/contracts/src/t3team-message-ext.ts  (new, prefix-compliant)
+// packages/contracts/src/t3team-message-ext.ts  (prefix-compliant)
 export type T3TeamMessageExt = {
-  author?: { kind: "system"; source?: { workflowRunId: string; stepId?: string } };
+  author?: T3TeamMessageAuthor; // e.g. { kind: "workflow", workflowRunId, stepId, label }
   visibleToUser?: boolean;
   visibleToAgent?: boolean;
-  attachments?: ReadonlyArray<MessageAttachment>; // file | image | resource | artifact | view
+  attachments?: ReadonlyArray<MessageAttachment>; // file | image | resource | artifact | view | widget
   status?: "active" | "waiting-for-input" | "completed";
   updatedAt?: string;
 };
 ```
 
-All rendering, persistence, and LLM-mapping logic lives in `t3team-`-prefixed files. The
-upstream `Message` type gains one optional field. See [Epic 02 — Additive Extension
-Pattern](./02-additive-architecture.md#additive-extension-pattern).
+- The **small fields** (author, status, visibility) ride the V2 message's `context`
+  (`withT3TeamMessageExtContext` / `readT3TeamMessageExtContext` in
+  `packages/contracts/src/t3team-messageExtContext.ts`), so every reader of the message sees who
+  wrote it and whether it waits for input.
+- The **attachments** ride the fork's thread artifacts side store: widgets as `widget` artifacts,
+  everything else (decision cards, resource refs, plan views, draft refs) as one `message-ext`
+  artifact keyed `message-ext:<messageId>`, rendered next to the message it belongs to.
+
+A system message is a run-less V2 message (no turn starts), written by the fork's thread message
+recorder. All rendering, persistence, and LLM-mapping logic lives in `t3team-`-prefixed files. See
+[Epic 02 — Additive Extension Pattern](./02-additive-architecture.md#additive-extension-pattern).
 
 ## Orchestrations
 
@@ -1031,7 +1029,7 @@ isolated thread whose typed result lives as a normal variable in the orchestrati
 ```ts
 const summary = await agent(`Summarize this diff:\n\n${pr.diff}`, {
   schema: SummarySchema, // Effect Schema; typed return
-  model: { provider: "anthropic-primary", model: models.anthropic.claudeHaiku45 },
+  model: "<instanceId>/<modelSlug>", // exact values from the live runtime catalog
 });
 // summary is Schema.Schema.Type<typeof SummarySchema>
 ```
@@ -1316,8 +1314,10 @@ the orchestration advances. Subsequent orchestration turns appear as additional 
 Launch is dynamic, decided by the orchestration, not by a web-only special case: some recipes
 auto-run the first agent turn immediately; others present a `collect-input` step and wait.
 If the orchestration pauses for input, the first user reply resumes the orchestration path — the
-reply is a normal `user` message in the conversation history, but orchestration launch
-semantics own the transition (it is not a plain `thread.turn.start`).
+reply is a normal `user` message in the conversation history (it also starts the agent's own
+turn, like any message a person sends), but the workflow reactor is what resumes the paused run
+with it: a person's message answers the pending `askUser`, and a decision card's reply carries
+its structured value pinned to that ask.
 
 ### Kickoff submission
 
@@ -1415,9 +1415,7 @@ export default defineRecipe({
       {
         kind: "collect-input",
         id: "ask-surface",
-        request: {
-          /* "which surface should this recipe appear on?" */
-        },
+        request: {/* "which surface should this recipe appear on?" */},
       },
       {
         kind: "script",
@@ -1440,16 +1438,12 @@ export default defineRecipe({
       {
         kind: "present-message",
         id: "preview",
-        message: {
-          /* shows the draft + diff; carries a "Save" view */
-        },
+        message: {/* shows the draft + diff; carries a "Save" view */},
       },
       {
         kind: "collect-input",
         id: "confirm-save",
-        request: {
-          /* awaits the Save view action */
-        },
+        request: {/* awaits the Save view action */},
       },
       {
         kind: "script",

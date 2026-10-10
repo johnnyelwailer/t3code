@@ -4,14 +4,14 @@ import { CheckCircle2Icon, LoaderCircleIcon } from "lucide-react";
 import {
   isProjectRecipeWorkflowCardActivityPayload,
   PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_CARD,
-  PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION,
-  PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE,
   type ProjectRecipeWorkflowCardActivityPayload,
 } from "@t3tools/project-recipes";
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import type { ChatMessage } from "~/types";
+
+import { isMessageViewAttachment } from "./t3team-messageViewRegistry";
 
 export { T3TeamMessageAttachmentList } from "./t3team-messageAttachmentList";
 
@@ -41,16 +41,12 @@ export function getT3TeamWorkflowCardAttachment(
   return null;
 }
 
+/** Attachments the generic attachment list draws: not widgets, not registered message views. */
 export function getT3TeamRenderableAttachments(
   message: Pick<ChatMessage, "t3teamExt">,
 ): ReadonlyArray<import("@t3tools/contracts").T3TeamMessageAttachment> {
   return (message.t3teamExt?.attachments ?? []).filter(
-    (attachment) =>
-      attachment.kind !== "widget" &&
-      (attachment.kind !== "view" ||
-        (attachment.miniappId !== PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_CARD &&
-          attachment.miniappId !== PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION &&
-          attachment.miniappId !== PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE)),
+    (attachment) => attachment.kind !== "widget" && !isMessageViewAttachment(attachment),
   );
 }
 
@@ -82,7 +78,7 @@ function renderWorkflowCardFields(workflowCard: ProjectRecipeWorkflowCardActivit
               className="flex items-center gap-2 text-sm text-muted-foreground"
             >
               {checked ? (
-                <CheckCircle2Icon className="size-4 text-emerald-600" />
+                <CheckCircle2Icon className="size-4 text-success-foreground" />
               ) : (
                 <div className="size-4 rounded-full border border-border/70" />
               )}

@@ -16,6 +16,14 @@ const settingsState = vi.hoisted(() => ({
   activityLabelsEnabled: true,
 }));
 
+const serverConfigsState = vi.hoisted(() => ({
+  configs: new Map<string, unknown>(),
+}));
+
+vi.mock("~/state/entities", () => ({
+  useServerConfigs: () => serverConfigsState.configs,
+}));
+
 vi.mock("~/hooks/useSettings", () => ({
   usePrimarySettings: (selector?: (settings: Record<string, unknown>) => unknown) =>
     selector ? selector({ t3teamActivityLabelsEnabled: settingsState.activityLabelsEnabled }) : {},
@@ -31,7 +39,6 @@ function createThread(overrides: Partial<ProjectThread> = {}): ProjectThread {
     projectId: overrides.projectId ?? "project-1",
     title: overrides.title ?? "Sub-run thread",
     status: overrides.status ?? "running",
-    messageCount: overrides.messageCount ?? 0,
     lastMessageAt: overrides.lastMessageAt ?? new Date().toISOString(),
     createdAt: overrides.createdAt ?? new Date().toISOString(),
     ...overrides,
@@ -65,6 +72,27 @@ function ringSvg(): SVGSVGElement | null {
   );
 }
 
+/** Pack-provided providers ship `iconDataUrl`; built-ins have no data URL. */
+function setProviders(
+  providers: ReadonlyArray<{
+    instanceId: string;
+    driver: string;
+    displayName: string;
+    iconDataUrl?: string;
+  }>,
+) {
+  serverConfigsState.configs = new Map([["env-1", { providers }]]);
+}
+
+/** The folded row for one sub-run title (the fold's own toggle button is not a row). */
+function foldRowByTitle(title: string): HTMLElement {
+  return Array.from(container!.querySelectorAll("[data-t3team-settled-fold] button")).find((b) =>
+    (b.textContent ?? "").includes(title),
+  ) as HTMLElement;
+}
+
+const NEXPLORE_ICON = "data:image/png;base64,bmV4cGxvcmUtbg==";
+
 afterEach(() => {
   if (root) {
     act(() => root!.unmount());
@@ -72,6 +100,7 @@ afterEach(() => {
   }
   container?.remove();
   container = null;
+  serverConfigsState.configs = new Map();
 });
 
 describe("T3TeamAgentsPanelSubRunTree status language (GHE #254)", () => {
@@ -81,7 +110,9 @@ describe("T3TeamAgentsPanelSubRunTree status language (GHE #254)", () => {
     expect(container!.textContent).toContain("Question awaiting answer");
     // …and the amber question-mark glyph outranks the lifecycle icon.
     const svgs = Array.from(container!.querySelectorAll("button svg")) as SVGSVGElement[];
-    const questionSvg = svgs.find((svg) => svg.className.baseVal.includes("text-amber-600"));
+    const questionSvg = svgs.find((svg) =>
+      svg.className.baseVal.includes("text-warning-foreground"),
+    );
     expect(questionSvg, "amber question-mark icon present").toBeTruthy();
     expect(questionSvg!.className.baseVal).toContain("size-3");
   });
@@ -92,7 +123,9 @@ describe("T3TeamAgentsPanelSubRunTree status language (GHE #254)", () => {
     render([node(createThread({ status: "completed", awaitingParent: true }))]);
     expect(container!.textContent).toContain("Plan awaiting approval");
     const svgs = Array.from(container!.querySelectorAll("button svg")) as SVGSVGElement[];
-    const pendingSvg = svgs.find((svg) => svg.className.baseVal.includes("text-amber-600"));
+    const pendingSvg = svgs.find((svg) =>
+      svg.className.baseVal.includes("text-warning-foreground"),
+    );
     expect(pendingSvg, "amber pending icon present").toBeTruthy();
   });
 
@@ -178,7 +211,7 @@ describe("T3TeamAgentsPanelSubRunTree status language (GHE #254)", () => {
   });
 });
 
-describe("T3TeamAgentsPanelSubRunTree live status text (GHE #208 seam)", () => {
+describe("T3TeamAgentsPanelSubRunTree live status text (GHE #40 seam)", () => {
   const statusText = () => container!.querySelector("button .font-mono")?.textContent ?? "";
 
   it("a running sub-run with an LLM label shows the label (shared resolution, flag on)", () => {
@@ -186,7 +219,6 @@ describe("T3TeamAgentsPanelSubRunTree live status text (GHE #208 seam)", () => {
       node(
         createThread({
           status: "running",
-          activityState: "writing",
           activityLabel: "Editing the router",
         }),
       ),
@@ -194,19 +226,23 @@ describe("T3TeamAgentsPanelSubRunTree live status text (GHE #208 seam)", () => {
     expect(statusText()).toBe("Editing the router");
   });
 
-  it("a running sub-run with only a state word shows the word (flag off drops the label)", () => {
+  it("a running sub-run shows the stable label when the flag drops the LLM label", () => {
     settingsState.activityLabelsEnabled = false;
     render([
       node(
         createThread({
           status: "running",
-          activityState: "writing",
           activityLabel: "Editing the router",
         }),
       ),
     ]);
-    expect(statusText()).toBe("Writing");
+    expect(statusText()).toBe("Running");
     settingsState.activityLabelsEnabled = true;
+  });
+
+  it("a running sub-run between LLM labels shows the child-status summary, not bare Running", () => {
+    render([node(createThread({ status: "running", childStatus: "Ran the web test suite" }))]);
+    expect(statusText()).toBe("Ran the web test suite");
   });
 
   it("a running sub-run with neither falls back to the stable label; dots are untouched", () => {
@@ -214,5 +250,89 @@ describe("T3TeamAgentsPanelSubRunTree live status text (GHE #208 seam)", () => {
     expect(statusText()).toBe("Running");
     // the running dot/icon language from GHE #254 is unchanged
     expect(ringSvg(), "running sub-run still carries the pulsing ring").toBeTruthy();
+  });
+});
+
+describe("T3TeamAgentsPanelSubRunTree provider mark on finished sub-runs", () => {
+  it("a settled (folded) finished Nexplore sub-run keeps the pack 'n' logo", () => {
+    setProviders([
+      {
+        instanceId: "nexplore-default",
+        driver: "nexplore",
+        displayName: "Nexplore AI",
+        iconDataUrl: NEXPLORE_ICON,
+      },
+    ]);
+    render([
+      node(
+        createThread({
+          id: "set-nx",
+          title: "Settled Nexplore run",
+          status: "completed",
+          settled: true,
+          providerInstanceId: "nexplore-default",
+        }),
+      ),
+    ]);
+    const disclosure = Array.from(container!.querySelectorAll("button")).find((b) =>
+      (b.textContent ?? "").includes("Settled (1)"),
+    )!;
+    act(() => disclosure.click());
+    const foldRow = foldRowByTitle("Settled Nexplore run");
+    const logo = foldRow.querySelector("img");
+    expect(logo, "folded row carries the provider logo").toBeTruthy();
+    expect(logo!.getAttribute("src")).toBe(NEXPLORE_ICON);
+    // The status glyph still follows the logo in the same row.
+    expect(foldRow.querySelector("svg.size-2\\.5"), "folded check glyph kept").toBeTruthy();
+  });
+
+  it("a finished (unsettled) Nexplore sub-run keeps the same 'n' logo in its visible row", () => {
+    setProviders([
+      {
+        instanceId: "nexplore-default",
+        driver: "nexplore",
+        displayName: "Nexplore AI",
+        iconDataUrl: NEXPLORE_ICON,
+      },
+    ]);
+    render([
+      node(
+        createThread({
+          id: "done-nx",
+          title: "Finished Nexplore run",
+          status: "completed",
+          providerInstanceId: "nexplore-default",
+        }),
+      ),
+    ]);
+    const row = Array.from(container!.querySelectorAll("button")).find((b) =>
+      (b.textContent ?? "").includes("Finished Nexplore run"),
+    )!;
+    expect(row.querySelector("img")!.getAttribute("src")).toBe(NEXPLORE_ICON);
+  });
+
+  it("a settled built-in provider (no data URL) folds with its glyph, not the bot fallback", () => {
+    setProviders([{ instanceId: "claudeAgent", driver: "claudeAgent", displayName: "Claude" }]);
+    render([
+      node(
+        createThread({
+          id: "set-claude",
+          title: "Settled Claude run",
+          status: "completed",
+          settled: true,
+          providerInstanceId: "claudeAgent",
+        }),
+      ),
+    ]);
+    const disclosure = Array.from(container!.querySelectorAll("button")).find((b) =>
+      (b.textContent ?? "").includes("Settled (1)"),
+    )!;
+    act(() => disclosure.click());
+    const foldRow = foldRowByTitle("Settled Claude run");
+    expect(foldRow.querySelector("img")).toBeNull();
+    // ProviderInstanceIcon's root span is the first child; its built-in glyph is an svg.
+    const markSvg = foldRow.querySelector("span.isolate svg");
+    expect(markSvg, "built-in provider glyph rendered in the fold").toBeTruthy();
+    expect(markSvg!.getAttribute("class")).toContain("size-2.5");
   });
 });

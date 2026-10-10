@@ -19,9 +19,9 @@ const makeTree = () => {
   };
 };
 
-const writeState = (homeDir: string, bytes: number) => {
+const writeState = (homeDir: string, bytes: number, file = "state.sqlite") => {
   NodeFS.mkdirSync(NodePath.join(homeDir, "userdata"), { recursive: true });
-  NodeFS.writeFileSync(NodePath.join(homeDir, "userdata", "state.sqlite"), Buffer.alloc(bytes));
+  NodeFS.writeFileSync(NodePath.join(homeDir, "userdata", file), Buffer.alloc(bytes));
 };
 
 const run = (legacyDir: string, brandedDir: string) =>
@@ -104,6 +104,40 @@ describe("migrateLegacyHomeIfNeeded", () => {
       writeState(legacyDir, REAL_DB_BYTES);
       assert.strictEqual(run(legacyDir, legacyDir), legacyDir);
       assert.isFalse(NodeFS.existsSync(NodePath.join(legacyDir, "userdata.empty-testcase")));
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("adopts a legacy home that only has the V2 database", () => {
+    // A fresh V2 install never creates state.sqlite; its workspace lives in statev2.sqlite.
+    const { legacyDir, brandedDir, cleanup } = makeTree();
+    try {
+      writeState(legacyDir, REAL_DB_BYTES, "statev2.sqlite");
+
+      assert.strictEqual(run(legacyDir, brandedDir), brandedDir);
+      assert.strictEqual(
+        NodeFS.statSync(NodePath.join(brandedDir, "userdata", "statev2.sqlite")).size,
+        REAL_DB_BYTES,
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("never clobbers a branded home whose workspace is only in the V2 database", () => {
+    const { legacyDir, brandedDir, cleanup } = makeTree();
+    try {
+      writeState(legacyDir, REAL_DB_BYTES);
+      writeState(brandedDir, REAL_DB_BYTES * 2, "statev2.sqlite");
+
+      assert.strictEqual(run(legacyDir, brandedDir), brandedDir);
+      assert.strictEqual(
+        NodeFS.statSync(NodePath.join(brandedDir, "userdata", "statev2.sqlite")).size,
+        REAL_DB_BYTES * 2,
+      );
+      assert.isFalse(NodeFS.existsSync(NodePath.join(brandedDir, "userdata.empty-testcase")));
+      assert.isTrue(NodeFS.existsSync(NodePath.join(legacyDir, "userdata", "state.sqlite")));
     } finally {
       cleanup();
     }

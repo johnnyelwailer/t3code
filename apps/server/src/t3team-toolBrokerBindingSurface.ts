@@ -17,19 +17,16 @@ import { TOOL_SPECS, foldResource, resourceResult } from "./t3team-toolBrokerHel
 import { buildBindingState, permissionMessage } from "./t3team-toolBrokerBindingPermissions.ts";
 import { dispatchT3TeamToolCall } from "./t3team-toolBrokerBindingDispatch.ts";
 import type { T3TeamRecipeToolHandlers } from "./t3team-toolBrokerBindingRecipes.ts";
+import type { T3TeamMyWorkToolHandlers } from "./t3team-toolBrokerBindingMyWork.ts";
 import type { T3TeamWorkflowRunToolHandlers } from "./t3team-toolBrokerWorkflowRunTools.ts";
 import type { T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
 import type { T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
 import type { T3TeamWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowControlTool.ts";
+import type { T3TeamChangeRequestToolHandlers } from "./t3team-toolBrokerBindingChangeRequest.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
 import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 
-export type CreateBindingInput<
-  TRenameError = never,
-  TStartChildError = never,
-  TReadError = never,
-  TBacklogAssigneeFilterError = never,
-> = {
+export type CreateBindingInput<TReadError = never, TBacklogAssigneeFilterError = never> = {
   readonly availableToolIds: ReadonlyArray<string>;
   readonly allowedToolGroups?: ReadonlyArray<string> | undefined;
   readonly scopeLabel: string;
@@ -37,18 +34,17 @@ export type CreateBindingInput<
   readonly threadId?: ThreadId;
   readonly toolContext?: T3TeamTurnToolContext;
   readonly readView: () => Effect.Effect<unknown, TReadError>;
-  readonly renameThread?: (title: string) => Effect.Effect<unknown, TRenameError>;
-  readonly renameThreadResult?: (title: string) => unknown;
-  readonly startChild?: (arguments_: unknown) => Effect.Effect<unknown, TStartChildError>;
   readonly setBacklogAssigneeFilter?: (
     mode: "current-user",
   ) => Effect.Effect<unknown, TBacklogAssigneeFilterError>;
   readonly refreshContextBundle?: T3TeamContextRefreshServiceShape;
   readonly recipeTools?: T3TeamRecipeToolHandlers;
+  readonly myWorkTools?: T3TeamMyWorkToolHandlers;
   readonly workflowRunTools?: T3TeamWorkflowRunToolHandlers;
   readonly workflowStatusTools?: T3TeamWorkflowStatusToolHandlers;
   readonly workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
   readonly workflowControlTools?: T3TeamWorkflowControlToolHandlers;
+  readonly changeRequestTools?: T3TeamChangeRequestToolHandlers;
   readonly showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   /** Search the full transcript of the thread this one was forked from. */
   readonly searchSourceThread?: (
@@ -70,22 +66,11 @@ export type CreateBindingInput<
     toolArgs: unknown,
     callerThreadId: ThreadId,
   ) => Effect.Effect<T3TeamToolCallResult>;
-  readonly readRuntimeModels?: () => Effect.Effect<T3TeamToolCallResult>;
   readonly readProviderUsage?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   readonly publishDraft?: T3TeamDraftMutationPublisher;
 };
-export function createToolSurface<
-  TRenameError,
-  TStartChildError,
-  TReadError,
-  TBacklogAssigneeFilterError,
->(
-  input: CreateBindingInput<
-    TRenameError,
-    TStartChildError,
-    TReadError,
-    TBacklogAssigneeFilterError
-  >,
+export function createToolSurface<TReadError, TBacklogAssigneeFilterError>(
+  input: CreateBindingInput<TReadError, TBacklogAssigneeFilterError>,
 ) {
   const toErrorMessage = (cause: unknown) =>
     cause instanceof Error ? cause.message : String(cause);
@@ -105,14 +90,6 @@ export function createToolSurface<
       ...(input.threadId ? { threadId: input.threadId } : {}),
       ...(input.toolContext ? { toolContext: input.toolContext } : {}),
       readView: () => input.readView().pipe(Effect.mapError(toErrorMessage)),
-      ...(input.renameThread ? { renameThread: input.renameThread } : {}),
-      ...(input.renameThreadResult ? { renameThreadResult: input.renameThreadResult } : {}),
-      ...(input.startChild
-        ? {
-            startChild: (arguments_: unknown) =>
-              input.startChild!(arguments_).pipe(Effect.mapError(toErrorMessage)),
-          }
-        : {}),
       ...(input.setBacklogAssigneeFilter
         ? {
             setBacklogAssigneeFilter: (mode: "current-user") =>
@@ -121,10 +98,12 @@ export function createToolSurface<
         : {}),
       ...(input.refreshContextBundle ? { refreshContextBundle: input.refreshContextBundle } : {}),
       ...(input.recipeTools ? { recipeTools: input.recipeTools } : {}),
+      ...(input.myWorkTools ? { myWorkTools: input.myWorkTools } : {}),
       ...(input.workflowRunTools ? { workflowRunTools: input.workflowRunTools } : {}),
       ...(input.workflowStatusTools ? { workflowStatusTools: input.workflowStatusTools } : {}),
       ...(input.workflowResumeTools ? { workflowResumeTools: input.workflowResumeTools } : {}),
       ...(input.workflowControlTools ? { workflowControlTools: input.workflowControlTools } : {}),
+      ...(input.changeRequestTools ? { changeRequestTools: input.changeRequestTools } : {}),
       ...(input.showWidget ? { showWidget: input.showWidget } : {}),
       ...(input.searchSourceThread && input.threadId
         ? {
@@ -149,7 +128,6 @@ export function createToolSurface<
               input.manageChildren!(toolArgs, callerThreadId),
           }
         : {}),
-      ...(input.readRuntimeModels ? { readRuntimeModels: input.readRuntimeModels } : {}),
       ...(input.readProviderUsage ? { readProviderUsage: input.readProviderUsage } : {}),
       ...(input.publishDraft ? { publishDraft: input.publishDraft } : {}),
     });

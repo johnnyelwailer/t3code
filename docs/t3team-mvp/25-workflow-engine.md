@@ -14,10 +14,11 @@ change, not a cleanup:
 - **Engine internals** — module filenames (`t3team-workflow*.ts`), exported symbols, DB tables
   and columns, journal `refId` / `PrimitiveKind` strings (replay-stable: renaming them breaks
   resume of in-flight runs), and the `handoff: 'workflow-ui'` wire literal.
-- **The old tool ids remain as deprecated aliases.** `t3team_workflow_run` / `_status` /
-  `_resume` (MCP) and `t3team.workflow.run` / `.status` / `.resume` (canonical broker) resolve
-  to the `t3team_orchestration_*` / `t3team.orchestration.*` names and dispatch to the same
-  handlers, so pack configs and already-running agents keep working. Prefer the new names.
+- **Old broker ids still resolve; the old MCP names are gone.** The canonical broker ids
+  `t3team.workflow.run` / `.status` / `.resume` resolve to `t3team.orchestration.*` before the
+  permission gate (stored widget allowlists may carry them; they never appear in a catalog). The
+  MCP tools `t3team_workflow_run` / `_status` / `_resume` were removed: each was a second full
+  tool definition in every agent's context. Agents and packs call `t3_orchestration_*` (formerly `t3team_orchestration_*`, now a deprecated alias).
 
 ## Purpose
 
@@ -174,7 +175,6 @@ export const meta = {
   outputs?: Schema.Schema<unknown>;      // Effect Schema; validated before result is returned
   capabilities?: ReadonlyArray<EngineCapability | ToolGroupRef>;   // see §Capability gating
   phases?: ReadonlyArray<{ title: string; detail?: string }>;       // progress UI groups; declare with `as const` for typed phase() calls
-  model?: ModelSelection;                // default model for agent / askAgent calls
 };
 ```
 
@@ -194,7 +194,6 @@ What's allowed in `meta`:
 - Value imports from the engine's pure-modules allowlist:
   - `effect` (Schema combinators, etc.)
   - `@t3team/sdk/groups` (typed `ToolGroupRef`s)
-  - `@t3team/sdk/models` (typed `ModelRef`s; see [§Model selection](#model-selection))
   - `@t3team/sdk/surfaces` (typed surface placement consts — optional; raw `RecipeSurface`
     literal strings also work since they're a closed-set Schema.Literals union)
   - any other modules the SDK adds to the allowlist in future releases
@@ -213,32 +212,32 @@ What's forbidden in `meta`:
 
 ### Model selection
 
-`meta.model` selects the default LLM for `agent` / `askAgent` calls. Per the
-type-safety principle, the model identifier is a typed `ModelRef` from the SDK's
-`models.*` registry, not a free-form string. Provider instance ids stay as strings
-because they reference user-configured provider instances (dynamic per installation,
-not knowable at SDK build time):
+`model` is a plain string: `"<instanceId>/<modelSlug>"` for an exact model, or
+`"<instanceId>"` for that instance's latest available model. Instance ids and model slugs
+come from the live runtime catalog (`orchestrator_capabilities`, or the catalog the author's
+kickoff carries); copy them verbatim rather than
+guessing from a provider name. The SDK keeps no static model catalog.
 
 ```ts
-import { models } from "@t3team/sdk/models";
-
-export const meta = {
-  // …
-  model: {
-    provider: "anthropic-primary", // project-configured provider instance id (string)
-    model: models.anthropic.claudeHaiku45, // typed ModelRef — autocomplete + typo-safe
-  },
-} as const;
+await agent("Review this change", {
+  capabilities: "inherit",
+  model: "<instanceId>/<modelSlug>", // exact live instance id and its catalog slug
+  effort: "high",
+});
 ```
 
-`models.*` is a typed tree (imported from `@t3team/sdk`) mirroring the providers and model slugs the SDK knows
-about (`models.anthropic.claudeOpus47`, `models.openai.gpt5_4`, etc.). Each leaf is a
-`ModelRef` whose `id` is the canonical provider-scoped slug. The engine still passes the
-string slug to the provider adapter; the type is what authors interact with.
+When no exact model is supplied, latest means only the provider-declared non-legacy default
+(`isDefault`). If that instance declares none and it is the current instance, the current model
+is kept. Any other instance with no declared default fails and lists its valid slugs. An
+explicitly requested legacy slug still works.
+Unknown instance ids or slugs fail with the valid choices verbatim, so the next edit can
+use an exact catalog value. The runtime does not infer slugs from natural-language names.
 
-`meta.model` is the orchestration-wide default. Individual `agent(prompt, { model })` /
-`askAgent(prompt, { model })` calls can override per-call (same `{ provider, model: ModelRef }`
-shape).
+Individual `agent(prompt, { model })` / `askAgent(prompt, { model })` calls and
+`spawnThread({ model })` can use the same string
+form. Omit `model` to use the current instance's declared default, or to keep the current
+model when that instance declares none. `effort` is
+independent: use `"light"`, `"standard"`, or `"high"` when the task needs a thinking tier.
 
 #### Model cascade — `models: [...]`
 
@@ -250,10 +249,9 @@ against the live provider registry, first available one wins.
 await agent("Judge this gate", {
   label: "Judge gate",
   models: [
-    { instanceId: "nexplore", model: "minimax-m2.7-reap-139b-q4-160k" }, // instance + model
-    { instanceId: "nexplore", model: "qwen3.6-35b-a3b-q6-192k:nothink" },
-    { instanceId: "claudeAgent" }, // instance only — its default/matching model
-    { model: models.anthropic.claudeOpus48 }, // model only — the run's CURRENT instance
+    { instanceId: "<primary instanceId>", model: "<slug for that instance>" },
+    { instanceId: "<fallback instanceId>" }, // its declared default, or the current model on the current instance
+    { model: "<slug for the current instance>" },
   ],
   effort: "high",
 });
@@ -261,8 +259,8 @@ await agent("Judge this gate", {
 
 Rules:
 
-- **Availability** is exactly `t3team.thread.start_child`'s definition (same resolver,
-  `resolveStartChildModelSelection`): the instance exists, its driver is available, it is
+- **Availability** uses the shared child model resolver (`resolveStartChildModelSelection`):
+  the instance exists, its driver is available, it is
   installed and enabled, and it owns the requested model. A rung that fails any of these falls
   through — it is a skip, not an error.
 - **Nothing available** → the run's current/default selection is kept. A cascade is a preference
@@ -392,18 +390,18 @@ The author's LLM surface is the **Thread model** (see [§The thread model](#the-
 there is **no** separate `agent.task` (deleted — "structured compute, no chat" is just
 `await agent("…", { schema })`). The composition primitives below are unchanged.
 
-| Import                   | Returns                       | Notes                                                                                                                                                                                                                                                                                               |
+| Import | Returns | Notes |
 | ------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
-| `getThread()`            | `Thread \| undefined`         | The chat the user launched from; `undefined` when headless (cron/automation). An accessor, not a binding — see [§How an imported verb finds its run](#how-an-imported-verb-finds-its-run).                                                                                                          |     |
-| `spawnThread(opts?)`     | `Thread`                      | Create a new isolated thread; returns a `Thread` bound to it.                                                                                                                                                                                                                                       |
-| `agent(prompt, opts?)`   | `Promise<string \| T>`        | One-shot shortcut for `spawnThread(opts).askAgent(prompt, opts)`. With `schema: Schema<T>`, returns a validated `T`; the thread is not retained.                                                                                                                                                    |
-| `parallel(thunks)`       | `Promise<R[]>`                | Concurrent fanout with a barrier. Failing thunks resolve to `null`.                                                                                                                                                                                                                                 |
-| `pipeline(items, …stgs)` | `Promise<R[]>`                | Per-item pipelined fanout — no barrier between stages.                                                                                                                                                                                                                                              |
-| `workflow(ref, args?)`   | `Promise<O>`                  | Run another orchestration inline as a sub-step, in this run's own journal sequence. `ref` must be a typed `WorkflowRef` (no string form — declare refs via `defineWorkflow`). Any depth; recursion refused by name. See [§Sub-orchestrations are first class](#sub-orchestrations-are-first-class). |
-| `phase(title)`           | `void`                        | Start a progress group. `title` is typed as the union of `meta.phases[].title` literals when `meta.phases` is declared `as const` (recommended). Calling with a title outside that union is a compile-time error.                                                                                   |
-| `log(message)`           | `void`                        | Emit a narrator line above the progress tree.                                                                                                                                                                                                                                                       |
-| `args`                   | `unknown`                     | The orchestration's input; validated against `meta.inputs` before the body runs.                                                                                                                                                                                                                    |
-| `budget`                 | `{ total, spent, remaining }` | Token accumulator. Thread-turn token rollup is deferred (§Out of scope), so `spent()` currently reads 0.                                                                                                                                                                                            |
+| `getThread()` | `Thread \| undefined` | The chat the user launched from; `undefined` when headless (cron/automation). An accessor, not a binding — see [§How an imported verb finds its run](#how-an-imported-verb-finds-its-run). | |
+| `spawnThread(opts?)` | `Thread` | Create a new isolated thread; returns a `Thread` bound to it. |
+| `agent(prompt, opts?)` | `Promise<string \| T>` | One-shot shortcut for `spawnThread(opts).askAgent(prompt, opts)`. With `schema: Schema<T>`, returns a validated `T`; the thread is not retained. |
+| `parallel(thunks)` | `Promise<R[]>` | Concurrent fanout with a barrier. Failing thunks resolve to `null`. |
+| `pipeline(items, …stgs)` | `Promise<R[]>` | Per-item pipelined fanout — no barrier between stages. |
+| `workflow(ref, args?)` | `Promise<O>` | Run another orchestration inline as a sub-step, in this run's own journal sequence. `ref` must be a typed `WorkflowRef` (no string form — declare refs via `defineWorkflow`). Any depth; recursion refused by name. See [§Sub-orchestrations are first class](#sub-orchestrations-are-first-class). |
+| `phase(title)` | `void` | Start a progress group. `title` is typed as the union of `meta.phases[].title` literals when `meta.phases` is declared `as const` (recommended). Calling with a title outside that union is a compile-time error. |
+| `log(message)` | `void` | Emit a narrator line above the progress tree. |
+| `args` | `unknown` | The orchestration's input; validated against `meta.inputs` before the body runs. |
+| `budget` | `{ total, spent, remaining }` | Token accumulator. Thread-turn token rollup is deferred (§Out of scope), so `spent()` currently reads 0. |
 
 > **Black-box journaling boundary.** `parallel` and `pipeline` are each journaled as **one**
 > entry; primitive calls made inside their thunks/stages are **not** individually journaled —
@@ -513,10 +511,19 @@ await thread.askAgent("respond to their question"); // interactive, in the launc
 const ok = await thread.askUser("approve?", { schema: Approve }); // typed user escalation
 ```
 
-Each verb maps onto orchestration via the host broker: `spawnThread` → `thread.create`,
-`askAgent`/`agent` → `thread.turn.start` (resolved on turn-done), `notifyAgent`/`notifyUser`
-→ `thread.message.upsert` (one-way), `askUser` → a system message requesting input (resolved
-on the user's reply). See [§Agents vs. orchestrations](#agents-vs-orchestrations).
+Each verb maps onto orchestration V2 through the server's workflow host
+(`apps/server/src/t3team-workflowHost.ts`), the only place the engine touches orchestration:
+`spawnThread` / `agent` → a thread linked under the launch thread as a `subagent` child;
+`askAgent` / `agent` → a prompt message queued after any active run (resolved when the run that
+prompt starts ends — with its last assistant message, never an opening preamble — and re-driven a
+bounded number of times when that run fails or is interrupted); `notifyAgent` → a queued prompt
+that starts a turn (one-way: nothing waits for the reply); `notifyUser` → a run-less system
+message (the run's own completion or failure notice is held while the launch thread has an active
+run, so it lands after that run instead of inside it); `askUser` → a
+run-less system message tagged `waiting-for-input` (resolved on the next message a person posts on
+the thread, or on the decision card's structured reply pinned to that ask). Rich parts that V2
+messages cannot carry — decision cards, plan views, step pips, run status — ride the fork's thread
+artifacts and facts side stores. See [§Agents vs. orchestrations](#agents-vs-orchestrations).
 
 ### Other primitives — durable timers and journaled side effects
 
@@ -1042,8 +1049,16 @@ type ScriptHandlerCtx = {
     exists(rel: string):    Promise<boolean>;
   };
   callTool: <I, R>(ref: ToolRef<I, R>, args: I) => Promise<R>;   // typed cross-tool dispatch
+  store?: ScriptPackStore;              // the recipe's own pack store, iff the pack has store:v1
+  changeRequests?: ChangeRequestReader; // list/detail/diff of the run project's repositories,
+                                        // iff the recipe declares integration.read
 };
 ```
+
+`store` and `changeRequests` are host-built per run (`apps/server/src/t3team-scriptHost*.ts`).
+Neither takes a pack id or a provider URL: the store is bound to the recipe's pack, and a
+change request outside the project's linked repositories is refused with
+`ChangeRequestScopeError`.
 
 Scripts can call tools (`ctx.callTool`) so the line between "a tool that does
 project-specific work" and "a script that uses host tools" is the registration shape,
@@ -1074,17 +1089,11 @@ export const requestChanges = defineWorkflow<typeof RequestChanges>(
 
 export default defineRecipe({
   id: "pr-review",
-  applicability: {
-    /* … */
-  },
+  applicability: {/* … */},
   surfaces: ["project.dashboard.myWork", "thread.context"],
   defaultAction: startReview, // typed binding
-  sidecarSection: defineSidecarSection({
-    /* … */
-  }),
-  conversationCard: defineConversationCard({
-    /* … */
-  }),
+  sidecarSection: defineSidecarSection({/* … */}),
+  conversationCard: defineConversationCard({/* … */}),
 });
 ```
 
@@ -1168,15 +1177,15 @@ inbound message; the orchestration does the suspension.
 
 The step-union runtime has been **deleted** — the durable engine is the only orchestration runtime.
 
-| Phase | Scope                                                                                                                                                                                                                                                                                                                                                    | Status      |
-| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| 25.1  | `.workflow.ts` file loader + `meta` static extractor + `defineWorkflow` / `defineTool` / `defineToolGroup` / `defineScript` SDK + ambient `tools.*` / `scripts.*` trees + ambient types                                                                                                                                                                  | Implemented |
-| 25.2  | Durable-execution engine: journal, replay, `argsHash`, `ReplayDriftError`                                                                                                                                                                                                                                                                                | Implemented |
-| 25.3  | Composition primitives: `parallel`, `pipeline`, `phase`, `log`, `args`, `budget`, `workflow`; plus the journaled-value primitives `random`, `now`, `uuid`, `wait`, and the `script` / `tool` invocation primitives                                                                                                                                       | Implemented |
-| 25.4  | Handle pattern: the `sent`/`resolved` journal split, deterministic `correlationId`, durable suspension (`SuspendedResult`), and the `MessageBroker` host seam                                                                                                                                                                                            | Implemented |
-| 25.x  | **Thread model + host wiring + legacy deletion:** `thread`/`spawnThread`/`agent` + the `Thread` verbs over the Handle pattern; the orchestration-backed broker, the launch path (`startWorkflow`), and the resume reactor (turn-done / user-reply → `appendResolvedEntry` + `resumeWorkflow`); the step-union runtime, its routes, and its tests removed | Implemented |
-| 25.x  | **DB-backed durability:** the `JournalStore` seam (default `FsJournalStore`), the server's SQLite store (`workflow_journal`) + `WorkflowRunRepository` (`workflow_runs`), launch/broker write-through, and boot rehydration of suspended runs (§Open question 2). The in-memory registry is now a hot index over a durable DB source of truth            | Implemented |
-| 25.5  | Determinism enforcement: lint rules flagging nondeterminism patterns, capability gating at load time                                                                                                                                                                                                                                                     | Planned     |
+| Phase | Scope                                                                                                                                                                                                                                                                                                                                                         | Status      |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| 25.1  | `.workflow.ts` file loader + `meta` static extractor + `defineWorkflow` / `defineTool` / `defineToolGroup` / `defineScript` SDK + ambient `tools.*` / `scripts.*` trees + ambient types                                                                                                                                                                       | Implemented |
+| 25.2  | Durable-execution engine: journal, replay, `argsHash`, `ReplayDriftError`                                                                                                                                                                                                                                                                                     | Implemented |
+| 25.3  | Composition primitives: `parallel`, `pipeline`, `phase`, `log`, `args`, `budget`, `workflow`; plus the journaled-value primitives `random`, `now`, `uuid`, `wait`, and the `script` / `tool` invocation primitives                                                                                                                                            | Implemented |
+| 25.4  | Handle pattern: the `sent`/`resolved` journal split, deterministic `correlationId`, durable suspension (`SuspendedResult`), and the `MessageBroker` host seam                                                                                                                                                                                                 | Implemented |
+| 25.x  | **Thread model + host wiring + legacy deletion:** `thread`/`spawnThread`/`agent` + the `Thread` verbs over the Handle pattern; the orchestration-backed broker, the launch path (`startWorkflow`), and the resume reactor (step run ended / user reply → `appendResolvedEntry` + `resumeWorkflow`); the step-union runtime, its routes, and its tests removed | Implemented |
+| 25.x  | **DB-backed durability:** the `JournalStore` seam (default `FsJournalStore`), the server's SQLite store (`workflow_journal`) + `WorkflowRunRepository` (`workflow_runs`), launch/broker write-through, and boot rehydration of suspended runs (§Open question 2). The in-memory registry is now a hot index over a durable DB source of truth                 | Implemented |
+| 25.5  | Determinism enforcement: lint rules flagging nondeterminism patterns, capability gating at load time                                                                                                                                                                                                                                                          | Planned     |
 
 Every recipe is authored against the engine (`recipe.ts` + `*.workflow.ts`); there is no
 longer a `recipe.json` / step-union path.
@@ -1186,7 +1195,10 @@ longer a `recipe.json` / step-union path.
 The engine already has a **reactive** repair path: `t3team-workflowSelfHeal.ts`,
 `t3team-workflowEngineRepair.ts`, and `t3team-workflowRepair{Generate,Guardrails,Policy,Prompt}.ts`,
 with a distribution-tunable `t3team-pack-workflowRepairPolicy.ts`. It fires _after_ a run fails,
-hands a no-tools structured repair model the failure plus `T3TEAM_WORKFLOW_MANUAL`, and retries.
+hands a no-tools structured repair model the failure plus the generated author reference
+(`WORKFLOW_AUTHOR_REFERENCE`), and retries. Built 2026-10 (fork #349): the proactive counterpart is the
+encapsulated author agent (`t3team-workflowAuthorLaunch.ts`), and runtime repairs go back to that
+same author conversation first (`t3team-workflowAuthorRepair.ts`).
 
 The intent is a **proactive** counterpart that reuses the same machinery:
 
@@ -1297,9 +1309,9 @@ decides whether a human is needed. Small migration, large payoff.
 **Hazards.**
 
 - Routing to `agent` starts a turn, so it needs a loop bound (report → agent → repair → report …).
-- It must never land on a thread with an in-flight turn. That is the same failure as
-  `nexi-distribution#317`, where a message sent into a busy child stranded the server's
-  turn-tracking. Building this promotes #317 from "file for later" to a blocker.
+- It must never interrupt a thread's in-flight run. On orchestration V2 the workflow host queues
+  every prompt after the thread's active run (`queue_after_active`), so routing to `agent` must go
+  through the host rather than dispatching a turn directly.
 
 ## Open questions
 
@@ -1323,19 +1335,21 @@ decides whether a human is needed. Small migration, large payoff.
    to the same DB, so there is no split-brain where the DB says "resume" but the journal is gone.
    On boot, `rehydrateSuspendedWorkflowRuns` reads `workflow_runs WHERE status='suspended'` and
    rebuilds each run's resume closure: DATA (orchestration path, args, project/model/mode, pending
-   ask) from the row, CODE (broker, dispatch, store, registry, lifecycle) reconstructed from host
-   layers, then `registry.registerRun` + restore the pending ask. The reactor then resolves it
-   identically whether the ask was set this uptime or a prior one. Journal compaction/retention
+   ask) from the row, CODE (broker, workflow host, store, registry, lifecycle) reconstructed from
+   host layers, then `registry.registerRun` + restore the pending ask. The reactor then resolves
+   it identically whether the ask was set this uptime or a prior one: a restored `askAgent` ask
+   finds its prompt again by the workflow author stamp on the prompt message, and the bounded
+   re-drive budget comes back from the run row. Journal compaction/retention
    for completed runs, and multi-instance locking, remain future work (single-instance assumed).
 
    `rehydrateSuspendedWorkflowRuns` is wired into server boot via
-   `T3TeamWorkflowEngineRehydrateLive`, sequenced after the reactor layer, in both
-   `apps/server/src/server.ts` and `apps/server/src/t3team-server.ts`.
+   `T3TeamWorkflowEngineRehydrateLive`, sequenced after the reactor layer, in
+   `apps/server/src/server.ts`.
 
-3. **Per-call model selection for cost discipline.** When `meta.model` declares a default and
-   a single `agent` / `askAgent` call wants a cheaper model, the per-call `model:` override
-   should be a strict subset of the orchestration's declared capability for that provider. Surface
-   the rule in the lint.
+3. **Per-call model selection for cost discipline.** A per-call `model:` string overrides the
+   child's declared latest model, or the launch thread's current selection. Whether a cheaper
+   override must stay inside the orchestration's declared capability is still open; surface the
+   rule in the lint.
 4. **Cancellation semantics for spawned-thread orphans.** When a parent orchestration throws without
    resolving a spawned thread's pending turn, does the engine cascade-cancel the child? Default
    proposal: yes, on parent failure or cancellation, propagate `CancelledError` to all open

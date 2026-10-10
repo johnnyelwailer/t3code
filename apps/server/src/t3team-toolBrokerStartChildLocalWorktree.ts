@@ -1,8 +1,7 @@
 /**
- * Local-repository worktree resolution for `t3team.thread.start_child`
- * isolation (split out of `t3team-toolBrokerStartChildContext.ts` for the
- * additive LOC budget): creates a dedicated worktree of the LOCAL repository
- * (or adopted meta-repo) at the project workspace root. Behavior unchanged.
+ * Local-repository worktree resolution for delegate_task workspace isolation
+ * (`t3team-delegateTaskWorkspace.ts`): creates a dedicated worktree of the LOCAL
+ * repository (or adopted meta-repo) at the project workspace root.
  *
  * @module t3team-toolBrokerStartChildLocalWorktree
  */
@@ -14,7 +13,7 @@ import { ensureWorkspaceGitignore } from "./t3team-project-repository-services.t
 import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
-  META_REPOSITORY_GITIGNORE_ENTRIES,
+  MAIN_REPOSITORY_GITIGNORE_ENTRIES,
   REFERENCES_DIR_NAME,
 } from "./t3team-project-repository-utils.ts";
 import {
@@ -22,14 +21,16 @@ import {
   buildScopedChildWorktreePath,
 } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 import {
-  metaRepositoryFromManifestJson,
+  mainRepositoryFromManifestJson,
   type T3TeamStartChildLinkedRepositoryServices,
 } from "./t3team-toolBrokerStartChildContext.ts";
 
+import { readNormalizedReferenceManifest } from "./t3team-referenceManifestNormalization.ts";
+
 /** Creates a dedicated worktree of the LOCAL repository (or submodule) at the project
  * workspace root — the isolation path for workspaces without a linked-repository manifest, and
- * for adopted meta-repos (monorepo projects, GHE #42) whose sub-work happens in worktrees of
- * the meta-repo itself. Mirrors `resolveLinkedRepositoryWorktree`: same branch naming, same
+ * for adopted main repositories (monorepo projects, GHE #42) whose sub-work happens in worktrees of
+ * the main repository itself. Mirrors `resolveLinkedRepositoryWorktree`: same branch naming, same
  * scoped path layout under `.t3team/child-session-worktrees/`, same base-ref resolution.
  * Ensures `.t3team/` is gitignored so the worktree stays invisible to the shared checkout. */
 export const resolveLocalRepositoryWorktree = (input: {
@@ -37,12 +38,12 @@ export const resolveLocalRepositoryWorktree = (input: {
   readonly projectWorkspaceRoot: string;
   readonly repoRef?: string;
   readonly sessionName: string;
-  readonly childThreadId: string;
+  readonly worktreeKey: string;
   /** Display name for the scoped worktree directory; defaults to the workspace directory name. */
   readonly repositoryName?: string;
 }) =>
   Effect.gen(function* () {
-    const { fileSystem, path, gitWorkflow, sourceControlProviders } = input.services;
+    const { fileSystem, path, sourceControlProviders } = input.services;
     const workspaceRoot = input.projectWorkspaceRoot;
 
     const provider = yield* sourceControlProviders
@@ -61,24 +62,25 @@ export const resolveLocalRepositoryWorktree = (input: {
         .pipe(Effect.orElseSucceed(() => "main"))) ||
         "main");
 
-    // An adopted meta-repo keeps only its machine-local subpaths ignored so committed team
+    // An adopted main repository keeps only its machine-local subpaths ignored so committed team
     // state under `.t3team/` survives (GHE #42); legacy workspaces keep the full entry.
-    const metaRepositoryManifestPath = path.join(
+    const mainRepositoryManifestPath = path.join(
       workspaceRoot,
       HIDDEN_T3TEAM_DIR,
       REFERENCES_DIR_NAME,
       MANIFEST_FILE_NAME,
     );
-    const metaRepositoryManifestExists = yield* fileSystem
-      .exists(metaRepositoryManifestPath)
+    const mainRepositoryManifestExists = yield* fileSystem
+      .exists(mainRepositoryManifestPath)
       .pipe(Effect.orElseSucceed(() => false));
     let gitignoreEntries: ReadonlyArray<string> | undefined;
-    if (metaRepositoryManifestExists) {
-      const manifestText = yield* fileSystem
-        .readFileString(metaRepositoryManifestPath)
-        .pipe(Effect.orElseSucceed(() => ""));
-      if (metaRepositoryFromManifestJson(manifestText)) {
-        gitignoreEntries = META_REPOSITORY_GITIGNORE_ENTRIES;
+    if (mainRepositoryManifestExists) {
+      const manifestText = yield* readNormalizedReferenceManifest(
+        fileSystem,
+        mainRepositoryManifestPath,
+      );
+      if (mainRepositoryFromManifestJson(manifestText)) {
+        gitignoreEntries = MAIN_REPOSITORY_GITIGNORE_ENTRIES;
       }
     }
 
@@ -95,21 +97,55 @@ export const resolveLocalRepositoryWorktree = (input: {
           ? input.repositoryName
           : path.basename(workspaceRoot),
       repoRef: baseRef,
-      childThreadId: input.childThreadId,
+      worktreeKey: input.worktreeKey,
     });
 
     yield* fileSystem.makeDirectory(path.dirname(scopedWorktreePath), { recursive: true });
 
-    const worktree = yield* gitWorkflow.createWorktree({
+    const worktree = yield* createOrReuseChildWorktree({
+      services: input.services,
       cwd: workspaceRoot,
-      refName: baseRef.trim().length > 0 ? baseRef.trim() : "main",
-      newRefName: buildChildBranchName(input.sessionName),
-      path: scopedWorktreePath,
+      baseRef,
+      sessionName: input.sessionName,
+      worktreePath: scopedWorktreePath,
     });
 
+    return { repoRef: baseRef, ...worktree };
+  }).pipe(Effect.mapError((error) => (error instanceof Error ? error.message : String(error))));
+
+/** Creates the child's worktree on a new branch, or reuses the one a retried delegation
+ * (same request key, so same scoped path) already created. `created` tells which, so only the
+ * call that created a worktree undoes it when its delegation fails (`releaseDelegatedWorkspace`). */
+export const createOrReuseChildWorktree = (input: {
+  readonly services: Pick<T3TeamStartChildLinkedRepositoryServices, "fileSystem" | "gitWorkflow">;
+  readonly cwd: string;
+  readonly baseRef: string;
+  readonly sessionName: string;
+  readonly worktreePath: string;
+}) =>
+  Effect.gen(function* () {
+    const { fileSystem, gitWorkflow } = input.services;
+    if (yield* fileSystem.exists(input.worktreePath).pipe(Effect.orElseSucceed(() => false))) {
+      const status = yield* gitWorkflow.localStatus({ cwd: input.worktreePath });
+      if (status.isRepo && status.refName !== null) {
+        return {
+          branch: status.refName,
+          worktreePath: input.worktreePath,
+          repositoryPath: input.cwd,
+          created: false,
+        };
+      }
+    }
+    const worktree = yield* gitWorkflow.createWorktree({
+      cwd: input.cwd,
+      refName: input.baseRef.trim().length > 0 ? input.baseRef.trim() : "main",
+      newRefName: buildChildBranchName(input.sessionName),
+      path: input.worktreePath,
+    });
     return {
-      repoRef: baseRef,
       branch: worktree.worktree.refName,
       worktreePath: worktree.worktree.path,
+      repositoryPath: input.cwd,
+      created: true,
     };
-  }).pipe(Effect.mapError((error) => (error instanceof Error ? error.message : String(error))));
+  });

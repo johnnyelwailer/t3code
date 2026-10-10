@@ -80,8 +80,7 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
     launchThreadId: input.launchThreadId,
     workflowPath: input.workflowPath,
     runId: input.runId,
-    nowIso,
-    dispatch: deps.dispatch,
+    host: deps.host,
   });
   if (input.onAdmitted !== undefined) {
     yield* Effect.promise(input.onAdmitted);
@@ -102,7 +101,9 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
       args: input.args,
       ...(input.scripts === undefined ? {} : { scripts: input.scripts }),
       ...(input.hostToolClient === undefined ? {} : { hostToolClient: input.hostToolClient }),
+      ...(input.scriptHost === undefined ? {} : { scriptHost: input.scriptHost }),
       runsRoot: `${input.workspaceRoot}/.t3team-runs`,
+      ...(input.recipePath == null ? {} : { recipePath: input.recipePath }),
       launchThreadId: input.launchThreadId,
       projectId: input.projectId,
       modelSelection: input.modelSelection,
@@ -110,7 +111,7 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
       runtimeMode: input.runtimeMode,
       interactionMode: input.interactionMode,
       registry: deps.registry,
-      dispatch: deps.dispatch,
+      host: deps.host,
       newId: () => t3teamRandomUUID(),
       nowIso,
       store: deps.journalStore,

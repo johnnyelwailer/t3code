@@ -7,11 +7,13 @@ import { PermissionDeniedError } from "@runbook/core/errors";
 import type { HandleDispatch } from "@runbook/core/handles";
 import { createModelCascadeResolver, createThreadCascadeAsk } from "./modelCascade.ts";
 import { type ThreadDefaults, withThreadDefaults } from "./defaults.ts";
+import { showViewInputProblem } from "./showView.ts";
 import { workflowChildTitleFromPrompt } from "./titles.ts";
 import type {
   AgentOpts,
   AskOpts,
   AskUserOpts,
+  ShowViewInput,
   ShowWidgetInput,
   SpawnThreadOpts,
   Thread,
@@ -44,6 +46,7 @@ export type {
   AskUserOpts,
   ModelCascade,
   ModelCascadeEntry,
+  ShowViewInput,
   ShowWidgetInput,
   SpawnThreadOpts,
   Thread,
@@ -93,6 +96,22 @@ export function createThreadPrimitives<Capabilities = WorkflowChildCapabilities>
     });
   };
 
+  // Rides the same one-way `thread.message` envelope as a widget, so a host that predates views
+  // sees an unknown field rather than an unknown verb. Invalid input throws HERE, at the author's
+  // call site, before anything is journaled.
+  const showView = (threadId: string, input: ShowViewInput): void => {
+    const problem = showViewInputProblem(input);
+    if (problem !== null) throw new TypeError(`showView: ${problem}`);
+    const view = { key: input.key, viewId: input.viewId, props: input.props };
+    const payload = { threadId, recipient: "user" as const, text: "", view };
+    dispatch.sendOneWay({
+      kind: "thread.message",
+      refId: "thread.showView",
+      args: payload,
+      fire: fireEnvelope("thread.message", payload),
+    });
+  };
+
   const denied =
     (cap: string, verb: string): (() => never) =>
     () => {
@@ -124,6 +143,9 @@ export function createThreadPrimitives<Capabilities = WorkflowChildCapabilities>
       showWidget: has("user")
         ? (input: ShowWidgetInput) => showWidget(threadId, input)
         : (denied("user", "showWidget") as Thread["showWidget"]),
+      showView: has("ui.render")
+        ? (input: ShowViewInput) => showView(threadId, input)
+        : (denied("ui.render", "showView") as Thread["showView"]),
     };
   };
 
@@ -159,15 +181,17 @@ export function createThreadPrimitives<Capabilities = WorkflowChildCapabilities>
               threadId: correlationId,
               ...(opts.name === undefined ? {} : { name: opts.name }),
               ...(model === undefined ? {} : { model }),
+              ...(model !== undefined && opts.model === undefined ? { modelIsDefault: true } : {}),
               ...(opts.effort === undefined ? {} : { effort: opts.effort }),
               retention,
               capabilities,
+              ...(opts.checkout === "launch-thread" ? { checkout: opts.checkout } : {}),
             },
           },
           resolver,
         ),
     });
-    return makeThread(threadId, { model, models: opts.models, effort: opts.effort });
+    return makeThread(threadId, { model: opts.model, models: opts.models, effort: opts.effort });
   };
 
   // `models` rides through to the spawned thread so `agent()`'s create + turn share ONE
@@ -180,6 +204,7 @@ export function createThreadPrimitives<Capabilities = WorkflowChildCapabilities>
       ...(opts.model === undefined ? {} : { model: opts.model }),
       ...(opts.models === undefined ? {} : { models: opts.models }),
       ...(opts.effort === undefined ? {} : { effort: opts.effort }),
+      ...(opts.checkout === undefined ? {} : { checkout: opts.checkout }),
     }).askAgent(withAgentStepContract(prompt), opts);
   };
 
@@ -188,6 +213,8 @@ export function createThreadPrimitives<Capabilities = WorkflowChildCapabilities>
       deps.launchThreadId === undefined
         ? undefined
         : makeThread(deps.launchThreadId, {
+            // The launch thread is the user's thread. Its omitted asks keep the
+            // current selection; only spawned children resolve a declared latest.
             model: deps.defaultModel,
             models: undefined,
             effort: undefined,

@@ -1,6 +1,6 @@
 /**
  * The t3team-side environment of a per-run workflow controller: the
- * dispatch-based broker, the live step-activity emitter, the authored-phase
+ * host-backed broker, the live step-activity emitter, the authored-phase
  * cell, the composition-branch failure log, and the assembled
  * `WorkflowRunOptions`.
  *
@@ -15,13 +15,14 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
 import { createWorkflowEngineBroker } from "./t3team-workflowEngineBroker.ts";
+import { takeFirstBranchEntry, tupleOfBranch } from "./t3team-workflowSignalWatchMatch.ts";
 import {
   createCompositionBranchFailureHandler,
   type WorkflowCompositionBranchFailure,
 } from "./t3team-workflowEngineCompositionFailure.ts";
 import { createWorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
 import { toWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
-import { t3teamWorkflowHostToolRunOptions } from "./t3team-workflowHostDraftTools.ts";
+import { t3teamWorkflowHostToolRunOptions } from "./t3team-workflowHostTools.ts";
 
 import type { WorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
 import type { LaunchWorkflowRecipeInput } from "./t3team-workflowEngineLaunchTypes.ts";
@@ -57,13 +58,12 @@ export function createWorkflowRunControllerEnv(
   // The live step-status emitter (UX slice 1). Terminal run activities are emitted in the
   // controller's host sinks (completed/failed), not in the durability lifecycle: the
   // controller is the single funnel BOTH the live launch and boot rehydration drive through,
-  // and it already holds `dispatch` + `launchThreadId`.
+  // and it already holds the host + `launchThreadId`.
   const stepActivities = createWorkflowStepActivityEmitter({
     runId: input.runId,
     projectId: input.projectId,
     launchThreadId: input.launchThreadId,
-    dispatch: input.dispatch,
-    newId: input.newId,
+    host: input.host,
     nowIso: input.nowIso,
   });
   const broker = createWorkflowEngineBroker({
@@ -72,11 +72,12 @@ export function createWorkflowRunControllerEnv(
     runId: input.runId,
     ...(input.launchThreadId === undefined ? {} : { launchThreadId: input.launchThreadId }),
     projectId: input.projectId,
+    ...(input.recipePath === undefined ? {} : { recipePath: input.recipePath }),
     modelSelection: input.modelSelection,
     runtimeMode: input.runtimeMode,
     interactionMode: input.interactionMode,
     registry: input.registry,
-    dispatch: input.dispatch,
+    host: input.host,
     newId: input.newId,
     nowIso: input.nowIso,
     ...(input.lifecycle === undefined
@@ -91,8 +92,8 @@ export function createWorkflowRunControllerEnv(
           },
         }),
     // Signal-source hooks (GHE #332): the binding FACT upserts into the durable registrations
-    // table then pokes the reconciler; a `signal.wait` live-drains the durable inbox (first-wins
-    // take). Absent on the fs/in-memory path — the signal verbs then no-op.
+    // table then pokes the reconciler; a `signal.wait` / `signal.waitAny` live-drains the durable
+    // inbox (first-wins take). Absent on the fs/in-memory path — the signal verbs then no-op.
     ...(input.signalStore === undefined
       ? {}
       : {
@@ -118,6 +119,14 @@ export function createWorkflowRunControllerEnv(
                 deliveredAt: input.nowIso(),
               }),
             ).then((entry) => (Option.isSome(entry) ? entry.value.payload : undefined)),
+          drainSignalWaitAny: (wait) =>
+            Effect.runPromise(
+              takeFirstBranchEntry(
+                input.signalStore!,
+                wait.branches.map(tupleOfBranch),
+                input.nowIso(),
+              ),
+            ).then(Option.getOrUndefined),
         }),
   });
   const options: WorkflowRunOptions = {
@@ -140,6 +149,7 @@ export function createWorkflowRunControllerEnv(
     }),
     ...t3teamWorkflowHostToolRunOptions(input.hostToolClient),
     scripts: input.scripts ?? {},
+    ...(input.scriptHost === undefined ? {} : { scriptHost: input.scriptHost }),
     defaultModel: toWorkflowModelSelection(
       input.defaultAgentModelSelection ?? input.modelSelection,
     ),

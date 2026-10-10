@@ -53,7 +53,7 @@ export function WorkItemIssueRow({
   const content = (
     <>
       {relationLabel ? (
-        <span className="shrink-0 text-[0.6875rem] text-muted-foreground @md/issue-list:w-24">
+        <span className="shrink-0 text-2xs text-muted-foreground @md/issue-list:w-24">
           {relationLabel}
         </span>
       ) : null}

@@ -11,7 +11,6 @@ import { Input } from "~/t3team/components/ui/t3team-input";
 import { ProjectBacklogOverviewAssigneeFilter } from "~/t3team/t3team-ProjectBacklogOverviewAssigneeFilter";
 import { ProjectBacklogOverviewJiraFiltersMenu } from "~/t3team/t3team-ProjectBacklogOverviewJiraFiltersMenu";
 import { ProjectBacklogOverviewLabelsFilter } from "~/t3team/t3team-ProjectBacklogOverviewLabelsFilter";
-import { ProjectBacklogOverviewViewSwitch } from "~/t3team/t3team-ProjectBacklogOverviewViewSwitch";
 import { ProjectBacklogOptionsMenu } from "~/t3team/t3team-ProjectBacklogOptionsMenu";
 import type { ProjectBacklogViewMode } from "~/t3team/t3team-projectBacklogPresentation";
 import type {
@@ -119,7 +118,8 @@ export function ProjectBacklogOverviewFilters({
         value={query}
         onChange={(event) => onQueryChange(event.target.value)}
         placeholder="Search issues"
-        className="h-8 w-full border-border/80 bg-background/95 text-xs sm:w-[13rem] lg:w-[15rem]"
+        size="compact"
+        className="w-full sm:w-52 lg:w-60"
       />
 
       <ProjectBacklogOverviewAssigneeFilter
@@ -152,13 +152,12 @@ export function ProjectBacklogOverviewFilters({
           <div
             role="status"
             aria-live="polite"
-            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"
+            className="inline-flex items-center gap-1 text-2xs text-muted-foreground"
           >
             <Loader2 className="size-3 animate-spin" />
             <span>Updating backlog…</span>
           </div>
         ) : null}
-        <ProjectBacklogOverviewViewSwitch viewMode={viewMode} onViewModeChange={onViewModeChange} />
         <ProjectBacklogOptionsMenu
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}

@@ -20,13 +20,14 @@ import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
-import { WorkflowRunRepository, type WorkflowRun } from "./persistence/Services/WorkflowRuns.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
+import { WorkflowRunRepository, type WorkflowRun } from "./persistence/WorkflowRuns.ts";
 import { buildRunningWorkflowRunRow } from "./t3team-workflowEngineDurability.ts";
 import { buildPreparedWorkflowLifecycle } from "./t3team-workflowEphemeralLifecycle.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 
 const projectId = ProjectId.make("project-intent");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
@@ -133,7 +134,7 @@ layer("workflow run intent persistence (migration 051)", (it) => {
           runRepository: repo,
           journalStore: {} as never,
           rearmScheduler: async () => {},
-          dispatch: async () => {},
+          host: makeFakeWorkflowHost().host,
         },
         run: {
           runId: "run-intent-funnel",

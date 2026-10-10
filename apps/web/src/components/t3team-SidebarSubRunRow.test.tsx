@@ -4,7 +4,7 @@
  * child / sub-run rows must render the SAME status treatment as parent rows —
  * the ring icon (ThreadActivityMorphIcon, sm variant) and the live status
  * summary derived by the parent's verbatim pipeline
- * (resolveActivityPillDisplay over activityState + activityLabel, gated by
+ * (resolveActivityPillDisplay over activityLabel, gated by
  * `t3teamActivityLabelsEnabled` on the detail only). Before the fix the
  * running child row rendered a plain `size-1.5 rounded-full` dot and never
  * showed any status summary.
@@ -31,7 +31,6 @@ function createThread(overrides: Partial<ProjectThread> = {}): ProjectThread {
     projectId: overrides.projectId ?? "project-1",
     title: overrides.title ?? "Sub-run thread",
     status: overrides.status ?? "running",
-    messageCount: overrides.messageCount ?? 0,
     lastMessageAt: overrides.lastMessageAt ?? new Date().toISOString(),
     createdAt: overrides.createdAt ?? new Date().toISOString(),
     ...overrides,
@@ -107,34 +106,32 @@ describe("SidebarSubRunRow status treatment", () => {
     expect(container!.querySelector("button .size-1\\.5")).toBeNull();
   });
 
-  it("shows the live status summary the parent row shows: LLM label replaces the state word (flag on)", () => {
+  it("shows the live status summary the parent row shows: the LLM label (flag on)", () => {
     render(
       createThread({
         status: "running",
-        activityState: "thinking",
         activityLabel: "Reading contracts",
       }),
     );
     const text = button().textContent ?? "";
     expect(text).toContain("Reading contracts");
-    // replace, never append: the state word does not render next to the label
-    expect(text).not.toContain("Thinking");
+    // replace, never append: the status word does not render next to the label
+    expect(text).not.toContain("Working");
     expect(text).not.toContain("·");
     // the summary shimmers, same as the parent's live label
     expect(container!.querySelector("span.t3team-label-shimmer")).not.toBeNull();
   });
 
-  it("gates the LLM detail on activityLabelsEnabled exactly like the parent (state word stays)", () => {
+  it("gates the LLM detail on activityLabelsEnabled exactly like the parent", () => {
     settingsState.activityLabelsEnabled = false;
     render(
       createThread({
         status: "running",
-        activityState: "waiting",
         activityLabel: "Reading contracts",
       }),
     );
     const text = button().textContent ?? "";
-    expect(text).toContain("Waiting");
+    expect(text).toContain("Working");
     expect(text).not.toContain("Reading contracts");
   });
 
@@ -181,7 +178,7 @@ describe("SidebarSubRunRow status treatment", () => {
 describe("SidebarSubRunRow — child-ask surfacing (pendingUserInput)", () => {
   it("a running child with a docked question shows the amber question mark INSTEAD of the running ring", () => {
     render(createThread({ status: "running", pendingUserInput: true }));
-    const mark = container!.querySelector("button .text-amber-600");
+    const mark = container!.querySelector("button .text-warning-foreground");
     expect(mark, "amber question-mark wrapper present").not.toBeNull();
     expect(mark!.querySelector("svg"), "question-mark icon rendered").not.toBeNull();
     // the mark outranks the lifecycle glyph: no dashed running ring
@@ -190,17 +187,20 @@ describe("SidebarSubRunRow — child-ask surfacing (pendingUserInput)", () => {
 
   it("an idle child with a docked question also shows the amber mark (not the faded idle ring)", () => {
     render(createThread({ status: "idle", pendingUserInput: true }));
-    expect(container!.querySelector("button .text-amber-600"), "amber mark present").not.toBeNull();
+    expect(
+      container!.querySelector("button .text-warning-foreground"),
+      "amber mark present",
+    ).not.toBeNull();
     expect(ringSvg(), "idle ring suppressed in favor of the question mark").toBeNull();
   });
 
   it("no amber mark when the flag is absent or false (lifecycle glyphs untouched)", () => {
     render(createThread({ status: "running" }));
-    expect(container!.querySelector("button .text-amber-600")).toBeNull();
+    expect(container!.querySelector("button .text-warning-foreground")).toBeNull();
     expect(ringSvg(), "running ring still rendered").not.toBeNull();
 
     render(createThread({ status: "running", pendingUserInput: false }));
-    expect(container!.querySelector("button .text-amber-600")).toBeNull();
+    expect(container!.querySelector("button .text-warning-foreground")).toBeNull();
     expect(ringSvg(), "running ring still rendered").not.toBeNull();
   });
 });

@@ -9,6 +9,8 @@ const MAX_DOTS = 3;
 type ClaimFreshness = "fresh" | "idle" | "stale";
 
 function claimFreshness(claim: DigestClaim, nowMs: number): ClaimFreshness {
+  if (claim.running) return "fresh";
+  if (claim.finished) return "stale";
   const ageMs = nowMs - Date.parse(claim.lastActivityAt);
   if (ageMs <= FRESH_MS) return "fresh";
   if (ageMs <= STALE_MS) return "idle";
@@ -31,7 +33,8 @@ function dotClassName(freshness: ClaimFreshness): string {
 }
 
 function claimTooltip(claim: DigestClaim, nowMs: number): string {
-  return `${claim.agent} · ${claim.threadTitle} · updated ${formatDigestAgo(nowMs, claim.lastActivityAt)}`;
+  const state = claim.running ? "working" : claim.finished ? "finished" : "updated";
+  return `${claim.threadTitle} · ${state} ${formatDigestAgo(nowMs, claim.lastActivityAt)} ago`;
 }
 
 /**
@@ -92,7 +95,7 @@ export function DigestAgentDots({
           return <span key={claim.threadId}>{tooltip}</span>;
         })}
       </span>
-      {rest > 0 ? <span className="ml-1 text-[10px] text-muted-foreground">+{rest}</span> : null}
+      {rest > 0 ? <span className="ml-1 text-3xs text-muted-foreground">+{rest}</span> : null}
     </span>
   );
 }

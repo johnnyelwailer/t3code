@@ -133,8 +133,12 @@ a replay over a recorded `sent` entry never re-fires. But a crash can land betwe
 write and the fire (the effect never happened) or between the fire and the out-of-band
 `resolved` write (the effect happened, the reply is missing). In both windows the host retries
 the dispatch with the SAME `correlationId`, so the host broker MUST be idempotent — dedupe by
-`correlationId` so one external effect lands per dispatch. The Nexi host provides that
-idempotency; a host that cannot must treat delivery as at-least-once and dedupe downstream.
+`correlationId` so one external effect lands per dispatch. The T3 Code workflow host
+(`apps/server/src/t3team-workflowHost.ts`) derives each child thread's create command and each
+one-way note's message id from the correlation id, so orchestration V2 dedupes a re-fire; a step
+prompt that never reached its thread before a crash is detected on restore (no message carries the
+step's workflow author stamp) and fails the run loudly instead of re-firing silently. A host that
+cannot dedupe must treat delivery as at-least-once and dedupe downstream.
 Covered by `packages/runbook-threads/src/agentTransport.test.ts`: a replay over the journaled
 pair settles from the record with zero broker sends, and both crash windows (after intent before
 fire; after fire before resolved) apply exactly one external effect through an idempotent fake.
@@ -158,5 +162,6 @@ Mastra/Temporal are private adapters of the bridge, never of core.
   `createDurableWorkflowRuntime` → the durable primitive seat.
 - `emit` is bound into the body globals and exported as an ordinary import from `@t3team/sdk`
   (Epic 25 engine API), so bodies typecheck and stay analysable by binding.
-- The host's step-activity emitter (`thread.activity.append`) is a separate concern and can migrate
-  to the event sink later; nothing here changes its behavior.
+- The host's step-activity emitter (a keyed `t3team.recipe.workflow.step` thread artifact per step,
+  upserted through the workflow host) is a separate concern and can migrate to the event sink
+  later; nothing here changes its behavior.

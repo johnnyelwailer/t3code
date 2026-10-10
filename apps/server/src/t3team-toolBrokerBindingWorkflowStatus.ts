@@ -8,6 +8,7 @@ import * as Effect from "effect/Effect";
 import type { T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 import { errorResult, foldResult, okResult } from "./t3team-toolBrokerHelpers.ts";
 import type { T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
+import { mcpToolNameOf } from "./t3team-mcpCanonicalToolMap.ts";
 
 export const T3TEAM_WORKFLOW_STATUS_TOOL_ID = "t3team.orchestration.status";
 
@@ -27,11 +28,13 @@ export function callT3TeamWorkflowStatusTool(input: {
   const handlers = input.workflowStatusTools;
   if (!handlers) {
     return Effect.succeed(
-      errorResult(`Tool '${T3TEAM_WORKFLOW_STATUS_TOOL_ID}' is not enabled ${input.scopeLabel}.`),
+      errorResult(
+        `Tool '${mcpToolNameOf(T3TEAM_WORKFLOW_STATUS_TOOL_ID)}' is not enabled ${input.scopeLabel}.`,
+      ),
     );
   }
 
   return foldResult(handlers.getStatus({ runId: readRunId(input.toolArgs) }), okResult, (message) =>
-    errorResult(`Failed to read ${T3TEAM_WORKFLOW_STATUS_TOOL_ID}: ${message}`),
+    errorResult(`Failed to read ${mcpToolNameOf(T3TEAM_WORKFLOW_STATUS_TOOL_ID)}: ${message}`),
   );
 }

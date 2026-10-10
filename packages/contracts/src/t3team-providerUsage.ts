@@ -1,20 +1,12 @@
 /**
- * Provider usage-limit contract.
+ * Provider usage-limit view for agents (`t3team.runtime.provider_usage`) and
+ * the shared severity rule the usage watcher applies.
  *
- * Complements {@link UsageSummary} (`usage.ts`): that contract tracks
- * CONSUMPTION aggregated from provider transcript files. This one tracks
- * PLAN LIMITS — the rolling rate-limit windows the provider itself reports
- * (Anthropic's OAuth usage API for Claude, the Codex app-server's
- * `account/rateLimits/read` for Codex). The two are different sources of
- * truth and must not be mixed: consumption is historical, limits are live.
- *
- * A sample is always about one rolling window of one provider instance:
- *
- * - `window: "primary"` is the provider's short rolling window (5 hours for
- *   Claude and Codex today), `"secondary"` the longer one (7 days).
- * - `percentUsed` is how much of the window was consumed (0..100).
- * - `severity` is the host's verdict on that percentage against the
- *   configured thresholds, so clients never re-derive it themselves.
+ * The data is upstream's: every provider instance publishes
+ * `ServerProvider.usageLimits` (probe + live `account.rate-limits.updated`
+ * merges), and CLIProxyAPI hubs publish `UsageLimitSourceSnapshot`s. This
+ * module only projects that data per INSTANCE (per account) and names how
+ * close each window is to exhaustion — it never samples anything itself.
  *
  * @module providerUsage
  */
@@ -22,90 +14,102 @@ import * as Schema from "effect/Schema";
 
 import { IsoDateTime, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
+import {
+  ServerProviderUsageWindow,
+  type ServerProviderUsageLimits,
+} from "./providerUsageLimits.ts";
+import { UsageLimitSourceId } from "./usageLimitSourceId.ts";
 
-/**
- * Bumped whenever the shape of {@link ProviderUsageSample} /
- * {@link ProviderUsageReport} changes incompatibly. Consumers that understand
- * an older version should render the reports they can and drop the rest,
- * mirroring `USAGE_MERGE_COMPATIBLE_SINCE` in `usage.ts`.
- */
-export const PROVIDER_USAGE_CONTRACT_VERSION = 1 as const;
+/** Bumped whenever {@link ProviderUsageQueryResult} changes incompatibly. */
+export const PROVIDER_USAGE_CONTRACT_VERSION = 2 as const;
 
-export const ProviderUsageWindowKind = Schema.Literals(["primary", "secondary"]);
-export type ProviderUsageWindowKind = typeof ProviderUsageWindowKind.Type;
+/** Used-percent at which a window counts as approaching its limit. */
+export const PROVIDER_USAGE_WARNING_PERCENT = 80;
+/** Used-percent at which a window counts as exhausted. */
+export const PROVIDER_USAGE_CRITICAL_PERCENT = 100;
 
-/**
- * The host's verdict on how close a window is to exhaustion, derived from the
- * configured warning/critical thresholds. Providers that pre-digest severity
- * (Claude's `limits[]`) report it directly; the rest is computed from
- * `percentUsed`.
- */
 export const ProviderUsageSeverity = Schema.Literals(["normal", "warning", "critical"]);
 export type ProviderUsageSeverity = typeof ProviderUsageSeverity.Type;
 
-export const ProviderUsagePercentUsed = Schema.Number.check(
-  Schema.isFinite(),
-  Schema.isBetween({ minimum: 0, maximum: 100 }),
-);
-export type ProviderUsagePercentUsed = typeof ProviderUsagePercentUsed.Type;
+export const providerUsageSeverity = (usedPercent: number): ProviderUsageSeverity =>
+  usedPercent >= PROVIDER_USAGE_CRITICAL_PERCENT
+    ? "critical"
+    : usedPercent >= PROVIDER_USAGE_WARNING_PERCENT
+      ? "warning"
+      : "normal";
+
+/** Limits that carry real window data; `unavailable` or empty means "no data". */
+export const hasUsageData = (
+  limits: ServerProviderUsageLimits | undefined,
+): limits is ServerProviderUsageLimits =>
+  limits !== undefined && limits.unavailable === undefined && limits.windows.length > 0;
 
 /**
- * One rolling usage window of one provider instance, sampled at one instant.
- *
- * `provider` is the DRIVER KIND (`claudeAgent`, `codex`, …) that produced the
- * sample, not the instance routing key: limits live at the account level, and
- * two instances of the same driver on one machine share the same account
- * windows. The report-level `providerInstanceId` names which configured
- * instance sampled it, when known.
+ * The account's short rolling window: `kind: "session"` first, else the
+ * shortest known `windowDurationMins`. Null when there is no data.
  */
-export const ProviderUsageSample = Schema.Struct({
-  provider: ProviderDriverKind,
-  window: ProviderUsageWindowKind,
-  percentUsed: ProviderUsagePercentUsed,
-  /** Epoch moment the window resets; null when the provider does not report one. */
-  resetsAt: Schema.NullOr(IsoDateTime),
+export const sessionUsageWindow = (
+  limits: ServerProviderUsageLimits | undefined,
+): ServerProviderUsageWindow | null => {
+  if (!hasUsageData(limits)) return null;
+  const session = limits.windows.find((window) => window.kind === "session");
+  if (session !== undefined) return session;
+  const timed = limits.windows.filter((window) => window.windowDurationMins !== undefined);
+  if (timed.length === 0) return null;
+  return timed.reduce((shortest, window) =>
+    window.windowDurationMins! < shortest.windowDurationMins! ? window : shortest,
+  );
+};
+
+/** Windows at or above the critical threshold (any kind — a weekly wall blocks too). */
+export const exhaustedUsageWindows = (
+  limits: ServerProviderUsageLimits | undefined,
+): ReadonlyArray<ServerProviderUsageWindow> =>
+  hasUsageData(limits)
+    ? limits.windows.filter((window) => window.usedPercent >= PROVIDER_USAGE_CRITICAL_PERCENT)
+    : [];
+
+export const ProviderUsageWindowView = Schema.Struct({
+  ...ServerProviderUsageWindow.fields,
   severity: ProviderUsageSeverity,
-  /**
-   * Where the number came from, e.g. `anthropic-oauth-usage` or
-   * `codex-app-server:account/rateLimits/read`. Human-debug context only —
-   * clients must not branch on it.
-   */
-  source: TrimmedNonEmptyString,
-  sampledAt: IsoDateTime,
 });
-export type ProviderUsageSample = typeof ProviderUsageSample.Type;
+export type ProviderUsageWindowView = typeof ProviderUsageWindowView.Type;
 
-/**
- * Per-provider summary: every window the sampler knows about for one driver
- * kind at one sampling instant.
- */
-export const ProviderUsageReport = Schema.Struct({
-  provider: ProviderDriverKind,
-  providerInstanceId: Schema.optional(ProviderInstanceId),
-  /** Provider-reported plan tier, when the source carries one (e.g. Codex `planType`). */
+/** One configured provider instance (one account) and its windows. */
+export const ProviderUsageInstanceReport = Schema.Struct({
+  providerInstanceId: ProviderInstanceId,
+  driver: ProviderDriverKind,
+  displayName: Schema.optional(TrimmedNonEmptyString),
+  checkedAt: Schema.optional(IsoDateTime),
+  /** Severity of the session window; null when the instance reports no data. */
+  sessionSeverity: Schema.NullOr(ProviderUsageSeverity),
+  windows: Schema.Array(ProviderUsageWindowView),
+  /** Why no windows are reported (`unsupported` account, failed probe, never probed). */
+  unavailable: Schema.optional(TrimmedNonEmptyString),
+});
+export type ProviderUsageInstanceReport = typeof ProviderUsageInstanceReport.Type;
+
+/** One account a usage-limit hub (CLIProxyAPI) reports on; not runnable here. */
+export const ProviderUsageHubAccount = Schema.Struct({
+  sourceId: UsageLimitSourceId,
+  sourceLabel: TrimmedNonEmptyString,
+  accountId: TrimmedNonEmptyString,
+  driver: ProviderDriverKind,
   plan: Schema.optional(TrimmedNonEmptyString),
-  windows: Schema.Array(ProviderUsageSample),
+  checkedAt: IsoDateTime,
+  sessionSeverity: Schema.NullOr(ProviderUsageSeverity),
+  windows: Schema.Array(ProviderUsageWindowView),
 });
-export type ProviderUsageReport = typeof ProviderUsageReport.Type;
+export type ProviderUsageHubAccount = typeof ProviderUsageHubAccount.Type;
 
-/**
- * One requested instance that could not be sampled. Kept separate from the
- * reports so a single unavailable provider never degrades the others.
- */
-export const ProviderUsageUnavailable = Schema.Struct({
-  provider: ProviderDriverKind,
-  providerInstanceId: Schema.optional(ProviderInstanceId),
-  reason: TrimmedNonEmptyString,
-});
-export type ProviderUsageUnavailable = typeof ProviderUsageUnavailable.Type;
-
-/**
- * The full answer to one `t3team.runtime.provider_usage` call: one report per
- * driver kind sampled, plus the instances that could not be sampled.
- */
+/** The full answer to one `t3team.runtime.provider_usage` call. */
 export const ProviderUsageQueryResult = Schema.Struct({
   contractVersion: Schema.Literal(PROVIDER_USAGE_CONTRACT_VERSION),
-  reports: Schema.Array(ProviderUsageReport),
-  unavailable: Schema.Array(ProviderUsageUnavailable),
+  instances: Schema.Array(ProviderUsageInstanceReport),
+  hubAccounts: Schema.Array(ProviderUsageHubAccount),
+  /** Hubs that could not be read this time, with their error. */
+  hubErrors: Schema.Array(
+    Schema.Struct({ sourceId: UsageLimitSourceId, error: TrimmedNonEmptyString }),
+  ),
 });
 export type ProviderUsageQueryResult = typeof ProviderUsageQueryResult.Type;

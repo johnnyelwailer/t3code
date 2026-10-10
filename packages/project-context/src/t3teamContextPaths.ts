@@ -1,4 +1,6 @@
-export const T3TEAM_PROJECT_CONTEXT_ROOT = ".t3team/context";
+import { PROJECT_STATE_DIR } from "./t3teamProjectStateDir.ts";
+
+export const T3TEAM_PROJECT_CONTEXT_ROOT = `${PROJECT_STATE_DIR}/context`;
 export const T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH = `${T3TEAM_PROJECT_CONTEXT_ROOT}/entrypoint.json`;
 export const T3TEAM_WORK_ITEMS_INDEX_PATH = `${T3TEAM_PROJECT_CONTEXT_ROOT}/work-items/index.json`;
 

@@ -14,6 +14,7 @@ import {
   buildT3TeamWidgetAttachment,
   parseT3TeamWidgetShowInput,
 } from "./t3team-widgetShowCore.ts";
+import { T3TEAM_WIDGET_BUILDER_UNAVAILABLE } from "./t3team-widgetBuilder.ts";
 
 import type { WorkflowEngineBrokerDeps } from "./t3team-workflowEngineBrokerTypes.ts";
 import type { createWorkflowLiveSettlement } from "./t3team-workflowLiveSettlement.ts";
@@ -57,17 +58,26 @@ export const TRUSTED_HTML_FRAGMENT = /<\/?[a-z][^>]*>/i;
 export function workflowWidgetAttachment(input: {
   readonly widgetId: string;
   readonly title: string;
-  readonly widgetCode: string;
+  readonly widgetCode?: string;
+  readonly intent?: string;
   readonly format?: "html" | "svg";
   readonly loadingMessages?: ReadonlyArray<string>;
 }) {
   const parsed = parseT3TeamWidgetShowInput({
     title: input.title,
-    widget_code: input.widgetCode,
+    ...(input.widgetCode === undefined || input.widgetCode.length === 0
+      ? {}
+      : { widget_code: input.widgetCode }),
+    ...(input.intent === undefined || input.intent.length === 0 ? {} : { intent: input.intent }),
     ...(input.format === undefined ? {} : { format: input.format }),
     ...(input.loadingMessages === undefined ? {} : { loading_messages: input.loadingMessages }),
   });
   if ("error" in parsed) throw new Error(`Invalid workflow widget: ${parsed.error}`);
+  // Intent-only needs the builder (MCP show path). Workflow showWidget must pass widgetCode
+  // for deterministic replay until the builder journals authored bodies.
+  if (parsed.widgetCode.length === 0) {
+    throw new Error(T3TEAM_WIDGET_BUILDER_UNAVAILABLE);
+  }
   return buildT3TeamWidgetAttachment({
     widgetId: input.widgetId,
     parsed,

@@ -42,7 +42,7 @@ export const PAYLOAD_ISSUE_FAILED_TEXT = "Could not prepare the session credenti
  * Title prefix of a session's credential payload issue. The dispatch tag is
  * appended in brackets; the VM's lookup must match this byte for byte.
  */
-export const PAYLOAD_ISSUE_TITLE_PREFIX = "nexi-session payload";
+const PAYLOAD_ISSUE_TITLE_PREFIX = "nexi-session payload";
 
 export const payloadIssueTitle = (tag: string): string => `${PAYLOAD_ISSUE_TITLE_PREFIX} [${tag}]`;
 
@@ -89,7 +89,7 @@ export const isSessionCredentialIssueEnabled = Effect.fn("cloud.session.credenti
   function* () {
     // `Effect.option` drops the ConfigError channel: the flag is read-only and a
     // malformed value is indistinguishable from "unset", so both default ON.
-    const raw = yield* Effect.option(Config.string(SESSION_CREDENTIAL_ISSUE_FLAG_ENV));
+    const raw = yield* Effect.option(Config.String(SESSION_CREDENTIAL_ISSUE_FLAG_ENV));
     if (Option.isNone(raw)) return true;
     const normalized = raw.value.trim().toLowerCase();
     return !(normalized === "0" || normalized === "false");

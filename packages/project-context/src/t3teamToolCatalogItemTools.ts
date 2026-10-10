@@ -84,7 +84,6 @@ const PLANNED_WORK_ITEM_GITHUB_THREAD_TOOL_ENTRIES = [
     surfaces: ["thread"],
     ids: [
       "t3team.thread.create_context_bound",
-      "t3team.thread.start_child",
       "t3team.thread.send_cross_thread_message",
       "t3team.thread.attach_context",
       "t3team.thread.open_full_page",

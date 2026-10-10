@@ -30,7 +30,6 @@ function readDocumentedToolIds(): ReadonlyArray<string> {
 describe("t3teamToolCatalog", () => {
   it("lists the implemented tools in catalog order", () => {
     expect(listImplementedT3TeamToolCatalogEntries().map((tool) => tool.id)).toEqual([
-      "t3team.runtime.models",
       "t3team.runtime.provider_usage",
       "t3team.widget.show",
       "t3team.backlog.set_assignee_filter",
@@ -42,12 +41,10 @@ describe("t3teamToolCatalog", () => {
       "t3team.orchestration.resume",
       "t3team.orchestration.pause",
       "t3team.orchestration.stop",
-      "t3team.thread.rename",
       "t3team.thread.search",
       "t3team.thread.search_source",
       "t3team.thread.read_message",
       "t3team.thread.ask_user",
-      "t3team.thread.start_child",
       "t3team.thread.children",
       "t3team.work_item.refresh_context_bundle",
       "t3team.project.refresh_context_bundle",
@@ -62,12 +59,14 @@ describe("t3teamToolCatalog", () => {
       "t3team.work_item.subtask.draft_create",
       "t3team.work_item.link.draft_create",
       "t3team.work_item.link.draft_remove",
+      "t3team.mywork.digest.read",
+      "t3team.mywork.arrange",
+      "t3team.change_request.publish",
     ]);
   });
 
   it("defaults thread tool selection from the catalog", () => {
     expect(DEFAULT_T3TEAM_THREAD_TOOL_IDS).toEqual([
-      "t3team.runtime.models",
       "t3team.runtime.provider_usage",
       "t3team.widget.show",
       "t3team.view.read",
@@ -78,12 +77,10 @@ describe("t3teamToolCatalog", () => {
       "t3team.orchestration.resume",
       "t3team.orchestration.pause",
       "t3team.orchestration.stop",
-      "t3team.thread.rename",
       "t3team.thread.search",
       "t3team.thread.search_source",
       "t3team.thread.read_message",
       "t3team.thread.ask_user",
-      "t3team.thread.start_child",
       "t3team.thread.children",
       "t3team.work_item.refresh_context_bundle",
     ]);
@@ -92,9 +89,9 @@ describe("t3teamToolCatalog", () => {
   it("enables t3team.orchestration.status by default wherever t3team.orchestration.run is enabled", () => {
     // Regression: a run launched via t3team.orchestration.run is fire-and-forget
     // (`status: "accepted"`) and can fail asynchronously afterwards. An agent that can launch a
-    // run must also be able to observe it, or it is blind to that failure — see
-    // apps/server/src/t3team-workflowManual.ts's "on 'failed', read 'error' ... " advice, which
-    // is unreachable without this tool.
+    // run must also be able to observe it, or it is blind to that failure — the
+    // t3_orchestration_resume description's "reading a failure" advice is unreachable
+    // without this tool.
     const runEnabled = DEFAULT_T3TEAM_THREAD_TOOL_IDS.includes("t3team.orchestration.run");
     expect(runEnabled).toBe(true);
     expect(DEFAULT_T3TEAM_THREAD_TOOL_IDS).toContain("t3team.orchestration.status");

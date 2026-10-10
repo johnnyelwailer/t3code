@@ -2,13 +2,17 @@ import { assert, it } from "@effect/vitest";
 import type { ResourcePage } from "@t3tools/project-context";
 import * as Effect from "effect/Effect";
 
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import {
   hasMirrorRowsForProject,
+  readCachedBacklogIssueRowsByIds,
   readMyWorkIssueRows,
 } from "./t3team-atlassian-backlog-cacheQueries.ts";
 import type { BacklogResourceRef } from "./t3team-atlassian-backlog-cacheShared.ts";
-import { writeCachedT3TeamAtlassianBacklog } from "./t3team-atlassian-backlog-cache.ts";
+import {
+  readCachedT3TeamAtlassianBacklog,
+  writeCachedT3TeamAtlassianBacklog,
+} from "./t3team-atlassian-backlog-cache.ts";
 
 const cacheQueriesLayer = it.layer(SqlitePersistenceMemory);
 
@@ -312,6 +316,53 @@ hasMirrorRowsLayer("t3team Atlassian mirror hasMirrorRowsForProject", (it) => {
       });
       assert.deepStrictEqual(projection.assigned, []);
       assert.deepStrictEqual(projection.parents, []);
+    }),
+  );
+});
+
+cacheQueriesLayer("t3team Atlassian backlog view read", (it) => {
+  const identity = {
+    provider: "atlassian",
+    accountId: "account-1",
+    externalProjectId: "project-view-read",
+  };
+  const writeView = (sprintId: string, ids: ReadonlyArray<string>) =>
+    writeCachedT3TeamAtlassianBacklog({
+      ...identity,
+      requestSelection: { sprintId },
+      response: {
+        page: {
+          items: ids.map((id) => createIssue({ id, displayId: id })),
+          totalCount: ids.length,
+        },
+        capabilities: { canCreateSubtasks: true },
+        boards: [],
+        sprints: [],
+        savedFilters: [],
+        quickFilters: [],
+        selectedSprintId: sprintId,
+      },
+    });
+
+  it.effect("reads only the view's own issues, in view order, from a larger mirror", () =>
+    Effect.gen(function* () {
+      yield* writeView("1", ["PROJ-3", "PROJ-1"]);
+      yield* writeView("2", ["PROJ-2", "PROJ-4"]);
+
+      const rows = yield* readCachedBacklogIssueRowsByIds({
+        ...identity,
+        issueIds: ["PROJ-3", "PROJ-1"],
+      });
+      assert.deepStrictEqual(rows.map((row) => row.issueId).sort(), ["PROJ-1", "PROJ-3"]);
+
+      const cached = yield* readCachedT3TeamAtlassianBacklog({
+        ...identity,
+        selection: { sprintId: "1" },
+      });
+      assert.deepStrictEqual(
+        cached?.response.page.items.map((item) => item.id),
+        ["PROJ-3", "PROJ-1"],
+      );
     }),
   );
 });

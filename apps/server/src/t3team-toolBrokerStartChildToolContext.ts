@@ -43,13 +43,6 @@ export function readTicketIdFromThreadToolContext(
   return ticketId.length > 0 ? ticketId : undefined;
 }
 
-export function readThreadDisplayModeFromToolContext(
-  toolContext: T3TeamTurnToolContext | undefined,
-): "embedded" | "thread" | undefined {
-  const displayMode = readThreadToolContextView(toolContext)?.displayMode;
-  return displayMode === "embedded" || displayMode === "thread" ? displayMode : undefined;
-}
-
 export function createChildThreadToolContext(input: {
   readonly parentToolContext: T3TeamTurnToolContext | undefined;
   readonly projectId: string;

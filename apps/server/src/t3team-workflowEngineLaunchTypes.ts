@@ -8,7 +8,6 @@
  */
 import type {
   ModelSelection,
-  OrchestrationCommand,
   ProjectId,
   ProviderInteractionMode,
   RuntimeMode,
@@ -17,6 +16,7 @@ import type {
   AbortedResult,
   AnyScriptRef,
   JournalStore,
+  ScriptHostContext,
   SuspendedResult,
   T3TeamToolHandlerClient,
   WorkflowRef,
@@ -27,9 +27,10 @@ import type {
 
 import type { WorkflowRunLifecycle } from "./t3team-workflowEngineBrokerTypes.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
-import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 import type { WorkflowRepairIntent } from "./t3team-workflowSelfHeal.ts";
 import type { WorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 
 export type WorkflowLaunchStatus = "completed" | "suspended" | "failed";
 
@@ -40,10 +41,15 @@ export interface LaunchWorkflowRecipeInput {
   readonly args: unknown;
   /** The launching recipe's private scripts; bodies see them as `scripts.*` (Epic 25 §Scripts). */
   readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
-  /** Per-run bridge to the broker's work-item draft tools, built by the caller from the launch
-   * thread (t3team-workflowHostDraftTools.ts). Absent leaves those refs bound but uncallable. */
+  /** Per-run bridge to the broker's host tools (drafts, change-request publishing), built by the
+   * caller from the launch thread (t3team-workflowHostTools.ts). Absent leaves those refs bound
+   * but uncallable. */
   readonly hostToolClient?: T3TeamToolHandlerClient;
+  /** The run's `ctx.store` / `ctx.changeRequests` for its scripts (t3team-scriptHostContext.ts). */
+  readonly scriptHost?: ScriptHostContext;
   readonly runsRoot: string;
+  /** The launching recipe's directory; scopes `launchThread` keys to the recipe (absent: the run). */
+  readonly recipePath?: string | undefined;
   /** The chat the user launched from; `undefined` for a headless run (`thread` is undefined). */
   readonly launchThreadId: string | undefined;
   readonly projectId: ProjectId;
@@ -53,7 +59,8 @@ export interface LaunchWorkflowRecipeInput {
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;
   readonly registry: T3TeamWorkflowEngineRegistryShape;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
+  /** The thread operations the run performs (`T3TeamWorkflowHost`). */
+  readonly host: WorkflowHostPort;
   readonly newId: () => string;
   readonly nowIso: () => string;
   /** DB-backed journal store; defaults to the fs store rooted at `runsRoot` when absent. */
@@ -122,11 +129,6 @@ export interface WorkflowRunController {
   readonly stepActivities: WorkflowStepActivityEmitter;
   readonly isCancelled: () => boolean;
 }
-
-export {
-  awaitWorkflowRepairChildReply,
-  remainingWorkflowRepairBudget,
-} from "./t3team-workflowEngineRepair.ts";
 
 /**
  * Build the per-run broker + resume closure and register the run, WITHOUT starting it. Shared

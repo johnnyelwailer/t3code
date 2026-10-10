@@ -1,8 +1,7 @@
 import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import { HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
-import { browserApiCorsHeaders } from "./httpCors.ts";
+import { HttpServerRequest, HttpServerResponse } from "effect/http";
 
 export const ATLASSIAN_REQUEST_TIMEOUT_MS = 12_000;
 
@@ -61,8 +60,9 @@ export function tryAtlassianPromise<T>(thunk: () => Promise<T>, message: string)
   );
 }
 
+// No per-response CORS headers: upstream's global CORS layer (http.ts) owns that policy.
 export function okJson(body: unknown) {
-  return HttpServerResponse.jsonUnsafe(body, { status: 200, headers: browserApiCorsHeaders });
+  return HttpServerResponse.jsonUnsafe(body, { status: 200 });
 }
 
 /**
@@ -70,10 +70,7 @@ export function okJson(body: unknown) {
  * `errorResponse` (502) so a malformed request is not reported to the user as an outage.
  */
 export function badRequestJson(message: string) {
-  return HttpServerResponse.jsonUnsafe(
-    { error: message },
-    { status: 400, headers: browserApiCorsHeaders },
-  );
+  return HttpServerResponse.jsonUnsafe({ error: message }, { status: 400 });
 }
 
 export function errorResponse(error: unknown) {
@@ -89,7 +86,7 @@ export function errorResponse(error: unknown) {
     HttpServerResponse.jsonUnsafe(
       isSessionExpired ? { error: message, code: JIRA_SESSION_EXPIRED_CODE } : { error: message },
       // 401 rather than 502: the upstream is fine, this account's session is what is dead.
-      { status: isSessionExpired ? 401 : 502, headers: browserApiCorsHeaders },
+      { status: isSessionExpired ? 401 : 502 },
     ),
   );
 }

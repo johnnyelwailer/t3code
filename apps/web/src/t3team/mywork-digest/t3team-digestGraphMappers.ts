@@ -7,6 +7,7 @@
  * the view layer memoizes over the returned graph.
  */
 
+import { withSharedFaces } from "./t3team-digestPeopleFaces";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import type {
@@ -14,10 +15,14 @@ import type {
   MyWorkDigestProjectInput,
 } from "~/t3team/backend/t3team-myworkDigestBackendApi";
 import { resourceRefToProjectTicket } from "~/t3team/t3team-ticketMappers";
+import {
+  digestDependencies,
+  digestReviewRequests,
+  digestTicketChangeRequests,
+} from "./t3team-digestGraphPrJoins";
 import type {
   DigestBlocker,
   DigestClaim,
-  DigestChangeRequest,
   DigestDecision,
   DigestGraph,
   DigestSprint,
@@ -25,36 +30,21 @@ import type {
 } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
+import { digestYesterday } from "./t3team-digestGraphYesterday";
+import {
+  buildTicketIndex,
+  digestSprintGoals,
+  oldestJiraSync,
+  resolveIndexedTicketId,
+  type DigestTicketRefLike,
+  type TicketIndex,
+} from "./t3team-digestGraphHelpers";
+
 export type DigestViewer = {
   readonly name: string;
   readonly role: string;
   readonly lastVisitAt: string;
 };
-
-type TicketIndex = Map<string, string>;
-
-function buildTicketIndex(
-  tickets: readonly ProjectTicket[],
-  ids: ReadonlyArray<string>,
-): TicketIndex {
-  const index: TicketIndex = new Map();
-  tickets.forEach((ticket, position) => {
-    const refId = ids[position];
-    if (refId !== undefined) index.set(refId.toUpperCase(), ticket.id);
-    const key = ticket.ref.displayId.toUpperCase();
-    if (key !== "") index.set(key, ticket.id);
-  });
-  return index;
-}
-
-/** Split a Jira sprint goal (one string, possibly bulleted) into goal lines. */
-export function digestSprintGoals(goal: string | undefined): readonly string[] {
-  if (goal === undefined) return [];
-  return goal
-    .split(/\r?\n/)
-    .map((line) => line.replace(/^[-•*\s]+/, "").trim())
-    .filter((line) => line !== "");
-}
 
 /**
  * Joins one server payload into the `DigestGraph` the views consume.
@@ -106,8 +96,11 @@ export function payloadToDigestGraph(input: {
     // view hides the sprint row entirely (the contract carries one sprint).
     if (sprint === undefined && data.sprint !== undefined) {
       const now = new Date().toISOString();
+      // Missing dates collapse to one instant (`start === end`); `digestSprintProgress` reads
+      // that as "unknown" and the header hides its progress row.
       sprint = {
         name: data.sprint.name,
+        ...(data.sprint.state !== undefined ? { state: data.sprint.state } : {}),
         goal: digestSprintGoals(data.sprint.goal),
         startDate: data.sprint.startDate ?? now,
         endDate: data.sprint.endDate ?? now,
@@ -115,37 +108,16 @@ export function payloadToDigestGraph(input: {
     }
   });
 
-  const resolveTicketId = (
-    position: number,
-    ref: { readonly issueId?: string; readonly issueKey?: string },
-  ): string => {
-    const index = indexByProject[position]?.index;
-    if (index === undefined) return "";
-    if (ref.issueId !== undefined) {
-      const byId = index.get(ref.issueId.toUpperCase());
-      if (byId !== undefined) return byId;
-    }
-    if (ref.issueKey !== undefined) {
-      const byKey = index.get(ref.issueKey.toUpperCase());
-      if (byKey !== undefined) return byKey;
-    }
-    return "";
-  };
+  const resolveTicketId = (position: number, ref: DigestTicketRefLike): string =>
+    resolveIndexedTicketId(indexByProject[position]?.index, ref);
 
   const claims: DigestClaim[] = [];
   const decisions: DigestDecision[] = [];
-  const changeRequests: DigestChangeRequest[] = [];
   const blockers: DigestBlocker[] = [];
   const transitions: DigestTransition[] = [];
   let burndown: DigestGraph["burndown"];
 
-  // "Unhandled" = unresolved AND newer than the last visit; untimed threads count always.
   const lastVisitMs = Date.parse(input.viewer.lastVisitAt);
-  const unhandledCount = (threads: ReadonlyArray<{ readonly lastCommentAt?: string }>): number =>
-    threads.reduce((count, thread) => {
-      const at = thread.lastCommentAt !== undefined ? Date.parse(thread.lastCommentAt) : NaN;
-      return Number.isNaN(at) ? count + 1 : at > lastVisitMs ? count + 1 : count;
-    }, 0);
 
   input.payload.projects.forEach((data, position) => {
     for (const claim of data.claims) {
@@ -170,24 +142,6 @@ export function payloadToDigestGraph(input: {
         // TODO(digest): requiredRole has no server source yet — empty for now.
         requiredRole: "",
         askedAt: decision.askedAt,
-      });
-    }
-    for (const pr of data.changeRequests) {
-      if (pr.workItemKey === undefined) continue;
-      const ticketId = resolveTicketId(position, { issueKey: pr.workItemKey });
-      if (ticketId === "") continue;
-      changeRequests.push({
-        id: pr.id,
-        ticketId,
-        repo: pr.repo,
-        number: pr.number,
-        state: pr.state,
-        updatedAt: pr.updatedAt,
-        // TODO(digest-data): per-reviewer verdicts have no host source yet; PR-level only.
-        reviewers: pr.reviewers ?? [],
-        ...(pr.unhandledReviewThreads !== undefined
-          ? { unhandledComments: unhandledCount(pr.unhandledReviewThreads) }
-          : {}),
       });
     }
     for (const blocker of data.blockers ?? []) {
@@ -221,9 +175,23 @@ export function payloadToDigestGraph(input: {
     return { id, name: title !== "" ? title : data.project.name };
   });
 
-  return {
+  const jiraSyncedAt = oldestJiraSync(input.payload.projects);
+  // Only a stale read (the host rate-limited it) is worth a header notice; other notes describe
+  // hosts that cannot be browsed at all, which the PR lanes already show by being empty.
+  const changeRequestNote = input.payload.projects.find(
+    (data) => data.changeRequestsStale === true,
+  )?.changeRequestNote;
+  const projectIdAt = (at: number) => projects[at]?.id ?? "";
+  const joins = [input.payload.projects, resolveTicketId] as const;
+  const changeRequests = digestTicketChangeRequests(...joins, projectIdAt, lastVisitMs);
+  const reviewRequests = digestReviewRequests(...joins, projectIdAt);
+  const dependencies = digestDependencies(...joins);
+  const yesterday = digestYesterday(...joins, projectIdAt);
+  return withSharedFaces({
     scope: input.payload.scope,
     projects,
+    ...(jiraSyncedAt !== undefined ? { jiraSyncedAt } : {}),
+    ...(changeRequestNote !== undefined ? { changeRequestNote } : {}),
     viewer: input.viewer,
     ...(sprint !== undefined ? { sprint } : {}),
     ...(burndown !== undefined ? { burndown } : {}),
@@ -231,7 +199,11 @@ export function payloadToDigestGraph(input: {
     claims,
     decisions,
     changeRequests,
+    reviewRequests,
+    dependencies,
+    ...(yesterday !== undefined ? { yesterday } : {}),
+    ...(input.payload.arrangement !== undefined ? { arrangement: input.payload.arrangement } : {}),
     transitions,
     blockers,
-  };
+  });
 }

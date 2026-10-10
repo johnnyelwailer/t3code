@@ -48,9 +48,7 @@ export async function resumeWorkflowRunFromJournal(
       registry: input.registry,
       lifecycle: input.lifecycle,
       stepActivities: controller.stepActivities,
-      dispatch: input.dispatch,
-      newId: input.newId,
-      nowIso: input.nowIso,
+      host: input.host,
       onError: input.onError,
       phase: "rehydration",
     });

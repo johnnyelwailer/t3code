@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import {
+  buildJiraTicketAttachmentAssetPath,
+  buildJiraTicketAttachmentsIndexPath,
+  buildJiraTicketEntryPoint,
+} from "@t3tools/project-context/t3teamContextPaths";
 
 const ticketGraphHarness = vi.hoisted(() => ({
   buildTicketContextGraph: vi.fn(),
@@ -18,6 +23,15 @@ import {
 
 beforeEach(() => {
   ticketGraphHarness.buildTicketContextGraph.mockReset();
+});
+
+const ATTACHMENT_INDEX = buildJiraTicketAttachmentsIndexPath("Project Alpha", "PROJ-7");
+const ROOT_ENTRY = buildJiraTicketEntryPoint("Project Alpha", "PROJ-7");
+const ATTACHMENT_ASSET = buildJiraTicketAttachmentAssetPath({
+  projectId: "Project Alpha",
+  ticketKey: "PROJ-7",
+  attachmentId: "att-1",
+  filename: "screenshot-1.png",
 });
 
 describe("buildTicketContextBundle attachments", () => {
@@ -74,16 +88,13 @@ describe("buildTicketContextBundle attachments", () => {
     });
     expect(bundle.fileReferences).toContainEqual({
       label: "Attachment index",
-      relativePath: ".t3team/context/jira/project-alpha/items/proj-7/attachments/index.json",
+      relativePath: ATTACHMENT_INDEX,
     });
 
-    const entryPoint = bundle.files.find(
-      (file) =>
-        file.relativePath === ".t3team/context/jira/project-alpha/items/proj-7/entrypoint.json",
-    );
+    const entryPoint = bundle.files.find((file) => file.relativePath === ROOT_ENTRY);
     expect(JSON.parse(entryPoint?.contents ?? "{}")).toMatchObject({
       paths: {
-        attachments: ".t3team/context/jira/project-alpha/items/proj-7/attachments/index.json",
+        attachments: ATTACHMENT_INDEX,
       },
       attachmentSummary: {
         count: 1,
@@ -91,11 +102,7 @@ describe("buildTicketContextBundle attachments", () => {
       },
     });
 
-    const attachmentIndex = bundle.files.find(
-      (file) =>
-        file.relativePath ===
-        ".t3team/context/jira/project-alpha/items/proj-7/attachments/index.json",
-    );
+    const attachmentIndex = bundle.files.find((file) => file.relativePath === ATTACHMENT_INDEX);
     expect(JSON.parse(attachmentIndex?.contents ?? "{}")).toMatchObject({
       attachmentCount: 1,
       downloadedCount: 1,
@@ -105,16 +112,14 @@ describe("buildTicketContextBundle attachments", () => {
           id: "att-1",
           filename: "screenshot-1.png",
           mimeType: "image/png",
-          localPath:
-            ".t3team/context/jira/project-alpha/items/proj-7/attachments/files/att-1-screenshot-1.png",
+          localPath: ATTACHMENT_ASSET,
           status: "downloaded",
         },
       ],
     });
 
     expect(bundle.files).toContainEqual({
-      relativePath:
-        ".t3team/context/jira/project-alpha/items/proj-7/attachments/files/att-1-screenshot-1.png",
+      relativePath: ATTACHMENT_ASSET,
       contents: "AQIDBA==",
       encoding: "base64",
       sizeBytes: 4,

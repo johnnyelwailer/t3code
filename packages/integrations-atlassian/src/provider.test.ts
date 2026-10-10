@@ -474,7 +474,7 @@ describe("AtlassianIntegrationProvider", () => {
 
       if (url.includes("/rest/api/3/search/jql")) {
         expect(url).toContain(
-          encodeURIComponent('project = "PROJ" AND statusCategory != Done ORDER BY updated DESC'),
+          encodeURIComponent('project = "PROJ" AND statusCategory != Done ORDER BY Rank ASC'),
         );
         expect(url).not.toContain(encodeURIComponent("assignee = currentUser()"));
         return Response.json({
@@ -587,7 +587,7 @@ describe("AtlassianIntegrationProvider", () => {
       if (url.includes("/rest/api/3/search/jql")) {
         expect(url).toContain(
           encodeURIComponent(
-            'project = "PROJ" AND statusCategory != Done AND (assignee = currentUser()) AND (updated >= -1d) ORDER BY updated DESC',
+            'project = "PROJ" AND statusCategory != Done AND (assignee = currentUser()) AND (updated >= -1d) ORDER BY Rank ASC',
           ),
         );
         return Response.json({ total: 0, issues: [] });
@@ -1016,7 +1016,7 @@ describe("AtlassianIntegrationProvider", () => {
       if (url.includes("/rest/api/3/search/jql")) {
         expect(url).toContain(
           encodeURIComponent(
-            '(assignee = currentUser() AND labels = "planning") AND project = "PROJ" AND statusCategory != Done AND Sprint = 4488 ORDER BY updated DESC',
+            '(assignee = currentUser() AND labels = "planning") AND project = "PROJ" AND Sprint = 4488 ORDER BY Rank ASC',
           ),
         );
         return Response.json({ total: 0, issues: [] });

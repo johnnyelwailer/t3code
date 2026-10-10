@@ -19,6 +19,10 @@ import * as DesktopConfig from "./DesktopConfig.ts";
 import { resolveLinuxDesktopEntryName } from "./DesktopEarlyElectronStartup.ts";
 import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePaths.ts";
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
+import {
+  applyDistributionProductName,
+  readDistributionProductNameFromEnv,
+} from "./t3team-desktopDistributionBrand.ts";
 import type { OtlpProtocol } from "@t3tools/shared/observability";
 
 export interface MakeDesktopEnvironmentInput {
@@ -69,6 +73,8 @@ export class DesktopEnvironment extends Context.Service<
     readonly clientAssetsDir: string;
     readonly backendCwd: string;
     readonly preloadPath: string;
+    // Preload that turns on the V8 compile cache for the local backend.
+    readonly compileCachePath: string;
     readonly appUpdateYmlPath: string;
     readonly devServerUrl: Option.Option<URL>;
     readonly devRemoteT3ServerEntryPath: Option.Option<string>;
@@ -76,6 +82,8 @@ export class DesktopEnvironment extends Context.Service<
     readonly commitHashOverride: Option.Option<string>;
     readonly desktopIconPngOverride: Option.Option<string>;
     readonly otlpTracesUrl: Option.Option<string>;
+    readonly otlpMetricsUrl: Option.Option<string>;
+    readonly otlpLogsUrl: Option.Option<string>;
     readonly otlpExportIntervalMs: number;
     readonly otlpHeaders: Option.Option<Record<string, string>>;
     readonly otlpProtocol: OtlpProtocol;
@@ -86,6 +94,7 @@ export class DesktopEnvironment extends Context.Service<
     readonly linuxWmClass: string;
     readonly linuxApplicationsDir: string;
     readonly appImagePath: Option.Option<string>;
+    /** t3team: app-data directory name, overridable by packaged branding. */
     readonly userDataDirName: string;
     readonly legacyUserDataDirName: string;
     readonly defaultDesktopSettings: DesktopAppSettings.DesktopSettings;
@@ -203,10 +212,13 @@ const make = Effect.fn("desktop.environment.make")(function* (
     input.isPackaged && input.platform === "win32"
       ? path.join(input.resourcesPath, "server.asar")
       : appRoot;
-  const branding = resolveDesktopAppBranding({
-    isDevelopment,
-    appVersion: input.appVersion,
-  });
+  const branding = applyDistributionProductName(
+    resolveDesktopAppBranding({
+      isDevelopment,
+      appVersion: input.appVersion,
+    }),
+    readDistributionProductNameFromEnv(),
+  );
   const packagedBranding = input.isPackaged
     ? readPackagedDesktopBranding(input.resourcesPath)
     : undefined;
@@ -217,6 +229,8 @@ const make = Effect.fn("desktop.environment.make")(function* (
     joinPath: path.join,
     t3Home: config.t3Home,
   });
+  // t3team: branded installs keep their own app-data directory names (read by the
+  // branded T3 home in DesktopBackendConfiguration).
   const userDataDirName =
     packagedBranding?.userDataDirName?.trim() || (isDevelopment ? "t3code-dev" : "t3code");
   const legacyUserDataDirName =
@@ -261,6 +275,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
     clientAssetsDir: path.join(serverRoot, "apps/server/dist/client"),
     backendCwd: input.isPackaged ? homeDirectory : appRoot,
     preloadPath: path.join(input.dirname, "preload.cjs"),
+    compileCachePath: path.join(input.dirname, "compileCache.cjs"),
     appUpdateYmlPath: input.isPackaged
       ? path.join(resourcesPath, "app-update.yml")
       : path.join(input.appPath, "dev-app-update.yml"),
@@ -270,6 +285,8 @@ const make = Effect.fn("desktop.environment.make")(function* (
     commitHashOverride: config.commitHashOverride,
     desktopIconPngOverride: config.desktopIconPngOverride,
     otlpTracesUrl: config.otlpTracesUrl,
+    otlpMetricsUrl: config.otlpMetricsUrl,
+    otlpLogsUrl: config.otlpLogsUrl,
     otlpExportIntervalMs: config.otlpExportIntervalMs,
     otlpHeaders: config.otlpHeaders,
     otlpProtocol: config.otlpProtocol,
@@ -285,7 +302,8 @@ const make = Effect.fn("desktop.environment.make")(function* (
       isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code",
     ),
     linuxDesktopEntryName:
-      packagedBranding?.linuxDesktopEntryName?.trim() || resolveLinuxDesktopEntryName(isDevelopment),
+      packagedBranding?.linuxDesktopEntryName?.trim() ||
+      resolveLinuxDesktopEntryName(isDevelopment),
     linuxWmClass:
       packagedBranding?.linuxWmClass?.trim() || (isDevelopment ? "t3code-dev" : "t3code"),
     linuxApplicationsDir,

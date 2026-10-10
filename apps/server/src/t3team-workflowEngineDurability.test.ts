@@ -21,7 +21,7 @@ import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 
 import { assert, it } from "@effect/vitest";
-import { type OrchestrationCommand, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import type { JournalStore } from "@t3team/sdk";
 import * as Effect from "effect/Effect";
@@ -29,15 +29,15 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import { afterAll } from "vite-plus/test";
 
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
-import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
-import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
+import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
 import {
   type WorkflowRun,
   WorkflowRunRepository,
   type WorkflowRunRepositoryShape,
-} from "./persistence/Services/WorkflowRuns.ts";
+} from "./persistence/WorkflowRuns.ts";
 import {
   buildRunningWorkflowRunRow,
   makeWorkflowRunLifecycle,
@@ -47,6 +47,8 @@ import {
   launchWorkflowRecipe,
 } from "./t3team-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 
 const workflowPath = NodeURL.fileURLToPath(
   new URL("../__fixtures__/t3team-exampleReview.workflow.ts", import.meta.url),
@@ -57,7 +59,7 @@ afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));
 const projectId = ProjectId.make("proj-durable");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
 const nowIso = (): string => "2026-06-08T00:00:00.000Z";
-const noopDispatch = (_command: OrchestrationCommand): Promise<void> => Promise.resolve();
+const noopHost = makeFakeWorkflowHost().host;
 
 const durabilityLayer = it.layer(
   Layer.mergeAll(
@@ -114,11 +116,8 @@ durabilityLayer("workflow durability — DB-backed suspend survives a restart", 
       const runId = "durable-askuser";
       const launchThreadId = "launch-askuser";
       const args = { prTitle: "Fix the billing rounding bug" };
-      const dispatched: OrchestrationCommand[] = [];
-      const dispatch = (command: OrchestrationCommand): Promise<void> => {
-        dispatched.push(command);
-        return Promise.resolve();
-      };
+      const fake = makeFakeWorkflowHost();
+      const host = fake.host;
       let seq = 0;
       const newId = (): string => `id-${(seq += 1)}`;
 
@@ -151,7 +150,7 @@ durabilityLayer("workflow durability — DB-backed suspend survives a restart", 
           runtimeMode: "full-access",
           interactionMode: "default",
           registry,
-          dispatch,
+          host,
           newId,
           nowIso,
           store,
@@ -183,7 +182,7 @@ durabilityLayer("workflow durability — DB-backed suspend survives a restart", 
 
       // ── Simulate restart: throw away the in-memory registry, rebuild from the DB ──
       const completed: Array<Record<string, unknown>> = [];
-      const restarted = yield* rebuildFromDb(repo, store, dispatch, newId, (output) => {
+      const restarted = yield* rebuildFromDb(repo, store, host, newId, (output) => {
         completed.push(output as Record<string, unknown>);
         return Promise.resolve();
       });
@@ -216,7 +215,7 @@ durabilityLayer("workflow durability — DB-backed suspend survives a restart", 
       const runId = "durable-agent";
       const launchThreadId = "launch-agent";
       const args = { prTitle: "Tighten the retry backoff" };
-      const dispatch = noopDispatch;
+      const host = noopHost;
       let seq = 0;
       const newId = (): string => `id-${(seq += 1)}`;
 
@@ -233,7 +232,7 @@ durabilityLayer("workflow durability — DB-backed suspend survives a restart", 
           runtimeMode: "full-access",
           interactionMode: "default",
           registry,
-          dispatch,
+          host,
           newId,
           nowIso,
           store,
@@ -265,7 +264,7 @@ durabilityLayer("workflow durability — DB-backed suspend survives a restart", 
 
       // ── Restart BEFORE resolving the agent turn: rebuild from the DB ──
       const completed: Array<Record<string, unknown>> = [];
-      const restarted = yield* rebuildFromDb(repo, store, dispatch, newId, (output) => {
+      const restarted = yield* rebuildFromDb(repo, store, host, newId, (output) => {
         completed.push(output as Record<string, unknown>);
         return Promise.resolve();
       });
@@ -307,20 +306,12 @@ durabilityLayer("workflow durability — DB-backed suspend survives a restart", 
       const runId = "durable-shell-push";
       const launchThreadId = "launch-shell-push";
       const args = { prTitle: "Push the shell on every real transition" };
-      const dispatched: OrchestrationCommand[] = [];
-      const dispatch = (command: OrchestrationCommand): Promise<void> => {
-        dispatched.push(command);
-        return Promise.resolve();
-      };
+      const fake = makeFakeWorkflowHost();
+      const host = fake.host;
       let seq = 0;
       const newId = (): string => `id-${(seq += 1)}`;
       const shellPushes = () =>
-        dispatched.filter(
-          (command) =>
-            command.type === "thread.meta.update" &&
-            command.threadId === launchThreadId &&
-            command.commandId.startsWith("t3team-wf-shell-push:"),
-        );
+        fake.calls.filter((call) => call.op === "syncRunFacts" && call.input === launchThreadId);
 
       const registry = makeWorkflowEngineRegistry();
       const launchLifecycle = makeWorkflowRunLifecycle({
@@ -337,8 +328,7 @@ durabilityLayer("workflow durability — DB-backed suspend survives a restart", 
           nowIso: nowIso(),
         }),
         nowIso,
-        dispatch,
-        newId,
+        host,
       });
       const launched = yield* Effect.promise(() =>
         launchWorkflowRecipe({
@@ -352,7 +342,7 @@ durabilityLayer("workflow durability — DB-backed suspend survives a restart", 
           runtimeMode: "full-access",
           interactionMode: "default",
           registry,
-          dispatch,
+          host,
           newId,
           nowIso,
           store,
@@ -400,12 +390,12 @@ durabilityLayer("workflow durability — DB-backed suspend survives a restart", 
  * Play boot rehydration's role: read every `suspended` run from the DB and rebuild its resume
  * closure into a FRESH registry using the production builders, restoring the pending ask. This
  * is `rehydrateSuspendedWorkflowRuns` minus the orchestration/config resolution, with the
- * test's dispatch + an `onComplete` sink so the completed result can be asserted.
+ * test's host + an `onComplete` sink so the completed result can be asserted.
  */
 const rebuildFromDb = (
   repo: WorkflowRunRepositoryShape,
   store: JournalStore,
-  dispatch: (command: OrchestrationCommand) => Promise<void>,
+  host: WorkflowHostPort,
   newId: () => string,
   onComplete: (output: unknown) => Promise<void>,
 ) =>
@@ -432,7 +422,7 @@ const rebuildFromDb = (
         runtimeMode: row.runtimeMode,
         interactionMode: row.interactionMode,
         registry,
-        dispatch,
+        host,
         newId,
         nowIso,
         store,

@@ -1,85 +1,49 @@
 /**
- * `t3team.thread.children` — ONE meta tool for managing this thread's child
- * sessions, selected by an `op` parameter (GHE #55).
- *
- * The design is deliberately a single tool with an `op` discriminator rather
- * than five tools: the context cost is one compact description (op vocabulary +
- * one line each) no matter how many ops exist, and per-op detail is discovered
- * on demand via `help` or carried in a malformed call's error message.
- *
- * This tool is STATE, not content: child→parent content still flows through
- * `send_message`. Read-only state (list/status) is derived by the shared
- * `deriveThreadRunStatus` primitive (packages/shared/threadRunStatus) — the same
- * source the sidebar needs (#52). `wait` is a DURABLE wait (a registered
- * activity + a reactor that resolves it on the child's terminal event or a
- * timeout), not a poll loop; see t3team-childWait.ts.
+ * `t3team.thread.children` — ONE meta tool for the child-thread operations
+ * upstream does not have, selected by an `op` parameter (one compact
+ * description no matter how many ops exist; per-op detail via `help`).
  *
  * Ops:
- *   list   — this thread's children with live state (`all: true` = whole project)
- *   status — one child's current turn state, in-progress work, elapsed, activity tail
- *   wait   — durably resume this turn when a child reaches a terminal state
- *   watch  — silence-watch a thread: notified when it has no activity for a
- *            per-subscription timeout (GHE #63); re-notified at each multiple
- *   unwatch — cancel all silence watches this thread has on the target
- *   stop   — halt a child's running turn
- *   close  — mark a child done from this side (bookkeeping)
- *   sweep  — settle terminal threads in bulk (verify first; cleanup protocol)
- *   drain  — claim THIS thread's own pending inter-agent mailbox now (no args)
- *   environments — read-only: which environments start_child `environment`
- *                  can target (own environment + recorded cross-env bindings)
- *   help   — the exact schema for one op
+ *   watch / unwatch — silence-watch a thread (notified when it goes quiet)
+ *   sweep          — settle finished threads in bulk (verify first)
+ *   drain          — claim THIS thread's own pending inter-agent mailbox now
+ *   environments   — read-only: which environments delegate_task can target
+ *   help           — the exact usage for one op
  *
- * This module is the entry point: it validates the `op` and dispatches to the
- * op implementations in the sibling modules.
+ * Removed ops (list / status / wait / stop / close) answer with the upstream
+ * tool that replaced them.
  *
  * @module t3team-toolBrokerChildren
  */
 import * as Effect from "effect/Effect";
 
-import { okResult, errorResult } from "./t3team-toolBrokerHelpers.ts";
-import { opUsage, readString } from "./t3team-toolBrokerChildrenShared.ts";
-import { opList, opStatus } from "./t3team-toolBrokerChildrenStatus.ts";
-import { opEnvironments } from "./t3team-toolBrokerChildrenEnvironments.ts";
-import { opSweep } from "./t3team-toolBrokerChildrenSweep.ts";
-import { opDrain } from "./t3team-toolBrokerChildrenDrain.ts";
-import {
-  opClose,
-  opStop,
-  opUnwatch,
-  opWatch,
-  opWait,
-} from "./t3team-toolBrokerChildrenLifecycle.ts";
-import {
-  T3TEAM_CHILD_OPS,
-  T3TEAM_CHILDREN_TOOL_ID,
-  type ChildrenArgs,
-  type T3TeamChildOp,
-  type T3TeamChildrenToolDeps,
-} from "./t3team-toolBrokerChildrenTypes.ts";
 import { type T3TeamToolCallResult } from "./t3team-toolBroker.ts";
-
-export {
+import { opDrain } from "./t3team-toolBrokerChildrenDrain.ts";
+import { opEnvironments } from "./t3team-toolBrokerChildrenEnvironments.ts";
+import { opUsage, readString } from "./t3team-toolBrokerChildrenShared.ts";
+import { opSweep } from "./t3team-toolBrokerChildrenSweep.ts";
+import {
   T3TEAM_CHILD_OPS,
-  T3TEAM_CHILD_WAIT_OUTCOMES,
   T3TEAM_CHILDREN_TOOL_ID,
-  type ChildThreadActivity,
-  type ChildThreadDetail,
-  type ChildThreadMessage,
-  type ChildThreadShell,
   type ChildrenArgs,
   type T3TeamChildOp,
-  type T3TeamChildWaitOutcome,
   type T3TeamChildrenToolDeps,
 } from "./t3team-toolBrokerChildrenTypes.ts";
-export type { ThreadRunState } from "./t3team-toolBrokerChildrenTypes.ts";
+import { opUnwatch, opWatch } from "./t3team-toolBrokerChildrenWatch.ts";
+import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
+import { mcpToolNameOf } from "./t3team-mcpCanonicalToolMap.ts";
+
+export type { ChildrenArgs, T3TeamChildrenToolDeps } from "./t3team-toolBrokerChildrenTypes.ts";
+
+const isOp = (value: string): value is T3TeamChildOp =>
+  (T3TEAM_CHILD_OPS as ReadonlyArray<string>).includes(value);
 
 function opHelp(args: ChildrenArgs): T3TeamToolCallResult {
   const opName = readString(args.op_name);
-  if (opName !== undefined && !(T3TEAM_CHILD_OPS as readonly string[]).includes(opName)) {
-    return errorResult(opUsage(opName));
-  }
   if (opName !== undefined) {
-    return okResult({ ok: true, op: opName, usage: opUsage(opName) });
+    return isOp(opName)
+      ? okResult({ ok: true, op: opName, usage: opUsage(opName) })
+      : errorResult(opUsage(opName));
   }
   return okResult({
     ok: true,
@@ -91,45 +55,30 @@ export function callT3TeamChildrenTool(input: {
   readonly toolArgs: unknown;
   readonly deps: T3TeamChildrenToolDeps;
 }): Effect.Effect<T3TeamToolCallResult, never> {
-  const { toolArgs, deps } = input;
-  const args = (toolArgs ?? {}) as ChildrenArgs;
+  const { deps } = input;
+  const args = (input.toolArgs ?? {}) as ChildrenArgs;
   const op = readString(args.op);
   if (!op) {
     return Effect.succeed(
       errorResult(
-        `${T3TEAM_CHILDREN_TOOL_ID} requires an 'op'. Valid ops: ${T3TEAM_CHILD_OPS.join(", ")}. ` +
-          `Call children({ op: "help" }) for per-op schemas.`,
+        `${mcpToolNameOf(T3TEAM_CHILDREN_TOOL_ID)} requires an 'op'. Valid ops: ${T3TEAM_CHILD_OPS.join(", ")}. ` +
+          `Call t3_task_ops({ op: "help" }) for per-op usage.`,
       ),
     );
   }
-  if (!(T3TEAM_CHILD_OPS as readonly string[]).includes(op)) {
-    return Effect.succeed(errorResult(opUsage(op)));
-  }
-
-  switch (op as T3TeamChildOp) {
+  if (!isOp(op)) return Effect.succeed(errorResult(opUsage(op)));
+  switch (op) {
     case "help":
       return Effect.succeed(opHelp(args));
-    case "list":
-      return opList(deps, args);
-    case "status":
-      return opStatus(deps, args);
-    case "wait":
-      return opWait(deps, args);
     case "watch":
       return opWatch(deps, args);
     case "unwatch":
       return opUnwatch(deps, args);
-    case "stop":
-      return opStop(deps, args);
-    case "close":
-      return opClose(deps, args);
     case "sweep":
       return opSweep(deps, args);
     case "drain":
       return opDrain(deps, args);
     case "environments":
-      return opEnvironments(deps, args);
-    default:
-      return Effect.succeed(errorResult(opUsage(op)));
+      return opEnvironments(deps);
   }
 }

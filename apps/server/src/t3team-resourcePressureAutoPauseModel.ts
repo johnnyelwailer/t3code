@@ -66,7 +66,7 @@ export interface ResumedThread {
   readonly heldTurnCount: number;
 }
 
-export function resumeNote(pausedMs: number, level: ResourcePressureLevel): string {
+function resumeNote(pausedMs: number, level: ResourcePressureLevel): string {
   return `Paused ${Math.round(pausedMs / 1000)} s for memory pressure; current level ${level}.`;
 }
 

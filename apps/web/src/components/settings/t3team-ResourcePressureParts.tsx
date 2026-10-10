@@ -32,9 +32,9 @@ export function Ago({ at }: { at: number }) {
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="min-w-0 rounded-lg border border-border/60 px-3 py-2">
-      <div className="text-[11px] text-muted-foreground/70">{label}</div>
+      <div className="text-2xs text-muted-foreground/70">{label}</div>
       <div className="truncate font-mono text-sm tabular-nums">{value}</div>
-      {hint ? <div className="truncate text-[11px] text-muted-foreground/60">{hint}</div> : null}
+      {hint ? <div className="truncate text-2xs text-muted-foreground/60">{hint}</div> : null}
     </div>
   );
 }
@@ -114,7 +114,7 @@ export function PressureEventList({ events }: { events: ReadonlyArray<ResourcePr
   if (events.length === 0) return null;
   return (
     <div className="space-y-1 text-xs">
-      <div className="text-[11px] text-muted-foreground/70">Recent pressure changes</div>
+      <div className="text-2xs text-muted-foreground/70">Recent pressure changes</div>
       {events.map((event) => (
         <div key={event.id} className="flex gap-3">
           <span className="w-24 shrink-0 text-muted-foreground/60">

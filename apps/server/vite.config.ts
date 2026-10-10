@@ -7,6 +7,7 @@ import packageJson from "./package.json" with { type: "json" };
 import { t3teamRawTextPackPlugin } from "./scripts/t3team-rawTextPackPlugin.ts";
 import { t3teamDistributionPackPlugin } from "./scripts/t3team-distributionPackPlugin.ts";
 import { t3teamTypescriptLibPackPlugin } from "./scripts/t3team-typescriptLibPackPlugin.ts";
+import { WeightedShardSequencer } from "./src/testUtils/weightedShardSequencer.ts";
 
 // The bundle used to inline only workspace packages, leaving every third-party
 // runtime dep external. External deps must exist on the real filesystem (the WSL
@@ -80,9 +81,17 @@ export default mergeConfig(
     pack: {
       // The executable embeds one entry; the history worker becomes a hidden
       // subcommand there instead of a sibling script.
+      // The two host-module entries are what the recipe-module resolver falls back to when
+      // `effect` and `@t3team/sdk` are inlined and not installed (a published bundle in a session).
       entry: packExecutable
         ? ["src/bin.ts"]
-        : ["src/bin.ts", "src/t3team-bin.ts", "src/claude-history-worker.ts"],
+        : [
+            "src/bin.ts",
+            "src/t3team-bin.ts",
+            "src/claude-history-worker.ts",
+            "src/t3team-hostEffect.ts",
+            "src/t3team-hostSdk.ts",
+          ],
       // `?raw` is a vite feature; pack is tsdown/rolldown and has no asset pipeline of its own.
       // Without this, source that ships as TEXT could not be authored as a typechecked module.
       // The distribution plugin inlines the compiled-in distribution (see
@@ -119,8 +128,8 @@ export default mergeConfig(
         // (declared deps are external by default, which is what this change is
         // undoing). `neverBundle` forces the native packages out: returning
         // false from `alwaysBundle` only means "no opinion", so a transitive
-        // dependency would still be bundled — which silently inlined
-        // msgpackr-extract and its loader, losing native acceleration.
+        // dependency would still be bundled — which silently inlined native
+        // loaders such as node-gyp-build, losing native acceleration.
         alwaysBundle: shouldBundleCliDependency,
         neverBundle: (id: string) => isExternalCliDependency(id),
         onlyBundle: false,
@@ -166,6 +175,8 @@ export default mergeConfig(
       // The server suite exercises sqlite, git, temp worktrees, and orchestration
       // runtimes heavily. Running files in parallel introduces load-sensitive flakes.
       fileParallelism: false,
+      // CI runs the suite as `--shard` runs of equal recorded duration.
+      sequence: { sequencer: WeightedShardSequencer },
       // Appended to the root setup, which mergeConfig concatenates.
       setupFiles: ["./src/testUtils/gitConfig.setup.ts"],
       // Server integration tests exercise sqlite, git, and orchestration together.

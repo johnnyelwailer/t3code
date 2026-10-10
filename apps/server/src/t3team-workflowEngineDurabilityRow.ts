@@ -13,7 +13,7 @@ import {
 } from "@t3tools/contracts";
 import { hashArgs } from "@t3team/sdk";
 
-import type { WorkflowRun } from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowRun } from "./persistence/WorkflowRuns.ts";
 
 export interface BuildRunningRowInput {
   readonly runId: string;

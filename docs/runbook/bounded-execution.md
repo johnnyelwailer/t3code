@@ -95,6 +95,43 @@ that cursor rather than scanning already processed input. Source registration, d
 and catch-up reuse the signal-source model from distro GHE #332; `watermark` is not a second trigger
 system.
 
+A watermark loop that watches several sources parks each iteration on whichever event lands first:
+
+```ts
+while ((cursor.current()?.done ?? false) === false) {
+  const watch = await getSignalSource(ScmChangeRequestWatch, params);
+  const checks = await getSignalSource(ScmChangeRequestChecks, params);
+  const hit = await waitForAny([
+    watch.on(ScmChangeRequestMerged, { key }),
+    checks.on(ScmChangeRequestChecksConcluded, { key }),
+  ]);
+  await cursor.advance(next(cursor.current(), hit)); // hit: { index, signal, payload }
+}
+```
+
+`waitForAny` is ONE ask-shaped handle per wait (`awaitAny` in `@runbook/core/handlesAny`), never one
+handle per branch:
+
+- `sent` at the wait's own seq, with args `{ branches: [...] }`. The hash pins the branch list, so a
+  re-driven body that reorders or changes its branches fails with replay drift instead of reading
+  the winner against a different list.
+- `resolved`, keyed by that correlation, with reply `{ index, reply }`. The host writes it for the
+  first branch to land, and first-write-wins refuses every later candidate.
+
+The winner is journaled because "first" is a fact about the past that replay cannot recompute. By
+the time a resume re-drives the body, other branches may have fired as well; choosing at replay —
+lowest index among the resolved branches, or the earliest timestamp — could pick a different branch
+than the drive that advanced the cursor, and the cursor and the body would disagree. Because the
+wait has a single correlation, the sticky suspension latch, abort, the `parallel()`/`pipeline()`
+black-box rule, and checkpoint-window replay apply to it unchanged.
+
+A branch that loses never becomes journal state: no open correlation exists for it. When its event
+arrives later, the host delivers it to the park the run is on at that moment — the next
+iteration's wait, which includes the same branch — or bridges it to the durable inbox, which the
+next wait drains (oldest event first) before parking. Delivery decides only once no drive of the
+run is in flight and re-reads the run's park (`WorkflowRunHost.offer`), so two branches firing
+together cannot both answer one wait, and the second is not dropped.
+
 ### `reduce` / `accumulate` — data + bounded state
 
 Fold observations into a compact current state, optionally retaining the last `N` observations.
@@ -113,20 +150,43 @@ A journaled retry policy with explicit attempt and delay bounds. It replaces han
 loops whose attempts silently expand the journal. Exhaustion remains an ordinary typed workflow
 failure.
 
+Implemented in `packages/runbook-core/src/retryBackoff.ts` as
+`retry(fn, { maxAttempts, backoff, classify? })`, kind `"retry"`:
+
+- one `retry.start` entry (args: the attempt bound), then one `retry.attempt` settlement per
+  attempt carrying its outcome, the last classified failure, and — for a retryable failure — the
+  backoff deadline. `classify` and `backoff` run black-boxed inside the live settlement only, so
+  jitter takes no seq and a replay never reads the live clock;
+- the delay is the existing durable `waitUntil`, so the SDK gates `retry` on `"schedule"`;
+- attempts run inline in the run's sequence (like `workflow()`), so `fn` may call `agent()` or
+  `workflow()`; a replay re-drives each attempt against the journal, so its effects replay
+  instead of re-firing, its closure writes are rebuilt, and an unfinished attempt resumes part-way;
+- a primitive that threw inside an attempt left no journal line, so its replay raises a gap drift.
+  Inside a settled attempt that gap is resolved by the journaled settlement; anywhere else, and for
+  any changed call identity or args, drift stays loud. This holds when the failure escapes `fn`:
+  an `fn` that catches and absorbs a primitive's failure sees the gap drift in its own catch on
+  replay, the same hazard as a bare body catching one;
+- giving up raises `RetryExhaustedError` with `attempts`, `maxAttempts`, and `lastFailure`.
+
+Settlements never accumulate an attempt history. Pruning a settled sequence's attempt detail is a
+journal-backend capability, as it is for `checkpoint`. Do not call `checkpoint()` inside `fn`, and
+do not use `retry` inside `parallel()`/`pipeline()`: the backoff `waitUntil` cannot durably park
+in a black box, exactly as for a bare `waitUntil` there.
+
 Already-completed fan-out items do not require a new primitive: recorded `sent` / `resolved` pairs
 already prevent replay from repeating a completed dispatch. Checkpointing only collapses the
 completed prefix once it is no longer needed for active replay.
 
 Each primitive must make the three-part contract concrete:
 
-| Primitive | Durable journal shape | Replay rule | Retention policy |
-| --- | --- | --- | --- |
-| `checkpoint` | Boundary seq, compact state, policy, schema/version integrity | Restore the latest valid state and replay its suffix | Archive or prune the superseded prefix only after commit |
-| `recurring` | Iteration, carried state, next wake, compact result | Resume the active iteration from its checkpoint | Keep compact state plus `history(n)` |
-| `watermark` | Source identity, cursor, observation time | Read strictly after the durable cursor | Replace the prior cursor; retain bounded diagnostics |
-| `reduce` / `accumulate` | Reducer identity, current state, optional observation | Continue folding from the recorded state | Replace prior state plus an optional last-`N` ring |
-| `history(n)` | Ring capacity and ordered retained outputs | Rehydrate the recorded ring without scanning old detail | Evict oldest output when capacity is exceeded |
-| `retry` / `backoff` | Attempt, journaled deadline, last classified failure | Resume the current attempt or delay; never rerun a settled attempt | Keep the configured attempt bound and final outcome |
+| Primitive               | Durable journal shape                                         | Replay rule                                                        | Retention policy                                         |
+| ----------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------- |
+| `checkpoint`            | Boundary seq, compact state, policy, schema/version integrity | Restore the latest valid state and replay its suffix               | Archive or prune the superseded prefix only after commit |
+| `recurring`             | Iteration, carried state, next wake, compact result           | Resume the active iteration from its checkpoint                    | Keep compact state plus `history(n)`                     |
+| `watermark`             | Source identity, cursor, observation time                     | Read strictly after the durable cursor                             | Replace the prior cursor; retain bounded diagnostics     |
+| `reduce` / `accumulate` | Reducer identity, current state, optional observation         | Continue folding from the recorded state                           | Replace prior state plus an optional last-`N` ring       |
+| `history(n)`            | Ring capacity and ordered retained outputs                    | Rehydrate the recorded ring without scanning old detail            | Evict oldest output when capacity is exceeded            |
+| `retry` / `backoff`     | Attempt, journaled deadline, last classified failure          | Resume the current attempt or delay; never rerun a settled attempt | Keep the configured attempt bound and final outcome      |
 
 ### Proposed API
 
@@ -269,14 +329,14 @@ audit material and must not be independently replayed.
 
 ## Phasing
 
-| Phase | Scope | Exit condition |
-| --- | --- | --- |
-| 1 | Checkpoint contract: entry shape, replay rule, retention vocabulary, continuation proof | Conformance tests show crash-safe checkpoint commit and identical result before/after resume |
-| 2 | `JournalStore` replay windows + checkpoint-aware `inspectRun` | Full durable record may grow while active replay/materialization stays bounded |
-| 3 | `history(n)` projection and physical archive/prune capability | Bounded UI/status reads; cleanup is retryable and never loses pending effects |
-| 4 | `recurring` and completed fan-out collapse | Long-lived routines replay in `O(checkpoint suffix)` without changing author intent |
-| 5 | `watermark`, `reduce` / `accumulate`, `retry` / `backoff` | Data cursors and bounded folds reuse the same checkpoint contract |
-| 6 | Runaway breaker and operational policy | Operators can detect/stop pathological wake rates independently of compaction |
+| Phase | Scope                                                                                   | Exit condition                                                                               |
+| ----- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 1     | Checkpoint contract: entry shape, replay rule, retention vocabulary, continuation proof | Conformance tests show crash-safe checkpoint commit and identical result before/after resume |
+| 2     | `JournalStore` replay windows + checkpoint-aware `inspectRun`                           | Full durable record may grow while active replay/materialization stays bounded               |
+| 3     | `history(n)` projection and physical archive/prune capability                           | Bounded UI/status reads; cleanup is retryable and never loses pending effects                |
+| 4     | `recurring` and completed fan-out collapse                                              | Long-lived routines replay in `O(checkpoint suffix)` without changing author intent          |
+| 5     | `watermark`, `reduce` / `accumulate`, `retry` / `backoff`                               | Data cursors and bounded folds reuse the same checkpoint contract                            |
+| 6     | Runaway breaker and operational policy                                                  | Operators can detect/stop pathological wake rates independently of compaction                |
 
 Phase 1 is load-bearing. No higher-level primitive should ship with a private compaction format
 while its continuation and crash semantics remain unresolved.

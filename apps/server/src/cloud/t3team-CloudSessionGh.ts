@@ -18,6 +18,7 @@ import {
   type CloudSessionRepoRef,
   type GhInvocation,
 } from "./t3team-githubActionsSessionClient.ts";
+import { sessionRunsForLogin } from "./t3team-cloudSessionRunOwnership.ts";
 import { toCloudSessionFailure } from "./t3team-CloudSessionErrors.ts";
 
 /** Recent runs worth considering; also the window `cancel` checks membership against. */
@@ -69,7 +70,7 @@ export function makeSessionGh(
             }),
           );
         }
-        return Effect.succeed(parsed);
+        return Effect.succeed(sessionRunsForLogin(parsed, login));
       }),
     );
 

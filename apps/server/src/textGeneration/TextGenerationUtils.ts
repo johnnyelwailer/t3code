@@ -9,7 +9,13 @@ const decodeJsonThreadTitle = Schema.decodeOption(
 
 /** Convert an Effect Schema to a flat JSON Schema object, inlining `$defs` when present. */
 export function toJsonSchemaObject(schema: Schema.Top): unknown {
-  const document = Schema.toJsonSchemaDocument(Schema.toType(schema));
+  // The type side, so decoding defaults do not turn required fields into
+  // optional ones, and closed objects (`additionalProperties: false`):
+  // structured-output modes require both, and closed was the generator
+  // default before effect rc.113.
+  const document = Schema.toJsonSchemaDocument(Schema.toType(schema), {
+    onExcessProperty: "error",
+  });
   if (document.definitions && Object.keys(document.definitions).length > 0) {
     return { ...document.schema, $defs: document.definitions };
   }
@@ -84,7 +90,7 @@ export function sanitizeActivityLabel(raw: string): string {
     .trim()
     .split(/\r?\n/g)[0]
     ?.trim()
-    .replace(/^["'`\[>+]+|["'`\]][\s\S]*$/g, "")
+    .replace(/^["'`[>+]+|["'`\]][\s\S]*$/g, "")
     .trim()
     .replace(/\s+/g, " ");
 
@@ -96,7 +102,7 @@ export function sanitizeActivityLabel(raw: string): string {
   // a compact phrase, and a runaway sentence would read as a different status.
   const words = normalized.split(" ");
   const capped = (words.length > 6 ? words.slice(0, 6).join(" ") : normalized).slice(0, 40);
-  const trimmed = capped.replace(/[\.,;:!?]+$/g, "").trim();
+  const trimmed = capped.replace(/[.,;:!?]+$/g, "").trim();
   const nonEmpty = trimmed.split(" ").filter((word) => word.length > 0);
   return nonEmpty.length >= 2 ? nonEmpty.join(" ") : trimmed;
 }

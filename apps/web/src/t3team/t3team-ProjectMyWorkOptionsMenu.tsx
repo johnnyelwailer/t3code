@@ -1,11 +1,13 @@
 import { EllipsisIcon } from "lucide-react";
 
+import { Button } from "~/t3team/components/ui/t3team-button";
 import { Menu, MenuPopup, MenuTrigger } from "~/t3team/components/ui/t3team-menu";
 import { ProjectMyWorkOptionsMenuFilterSections } from "~/t3team/t3team-ProjectMyWorkOptionsMenuFilterSections";
 import { ProjectMyWorkOptionsMenuViewSection } from "~/t3team/t3team-ProjectMyWorkOptionsMenuViewSection";
 import type { ProjectMyWorkOptionsMenuProps } from "~/t3team/t3team-projectMyWorkOptionsMenuTypes";
 
 export function ProjectMyWorkOptionsMenu({
+  lens,
   activeOptionsCount,
   viewMode,
   onViewModeChange,
@@ -35,21 +37,15 @@ export function ProjectMyWorkOptionsMenu({
 }: ProjectMyWorkOptionsMenuProps) {
   return (
     <Menu>
-      <MenuTrigger
-        className="relative inline-flex size-8 items-center justify-center rounded-md border border-border/70 bg-background/90 text-muted-foreground transition-[border-color,background-color,color] hover:border-border hover:bg-accent/70 hover:text-foreground"
-        aria-label="My work options"
-      >
+      <MenuTrigger render={<Button variant="outline" size="icon" />} aria-label="My work options">
         <EllipsisIcon className="size-4" />
         {activeOptionsCount > 0 ? (
           <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-foreground/80" />
         ) : null}
       </MenuTrigger>
-      <MenuPopup
-        align="end"
-        side="bottom"
-        className="min-w-[17rem] border-border/80 bg-background/95"
-      >
+      <MenuPopup align="end" side="bottom" className="min-w-68">
         <ProjectMyWorkOptionsMenuViewSection
+          lens={lens}
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}
           groupMode={groupMode}

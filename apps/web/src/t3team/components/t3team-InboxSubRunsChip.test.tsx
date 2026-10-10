@@ -38,7 +38,6 @@ function makeThread(
     projectId: "project-1",
     ...(parentThreadId !== undefined ? { parentThreadId } : {}),
     title: `thread ${id}`,
-    messageCount: 1,
     lastMessageAt: "2026-08-29T12:00:00.000Z",
     createdAt: "2026-08-29T11:00:00.000Z",
     status,
@@ -124,22 +123,21 @@ describe("InboxSubRunsChip — 3-state, one handle", () => {
     seedFromThreads([makeThread("active-1", "running", "parent")]);
     const { chip } = renderChip("parent");
     expect(chip).not.toBeNull();
-    // No dot any more: the number itself carries the state color.
+    // No dot: the number itself carries the state color.
     expect(chip!.querySelector("span.rounded-full")).toBeNull();
     const count = Array.from(chip!.querySelectorAll("span")).find(
       (span) => span.textContent === "1",
     );
     expect(count, "the count span renders").not.toBeUndefined();
     const classes = count!.className;
-    // sky text = "in motion" (same hue as the Working pill), not the accent.
     expect(classes).toContain("text-sky-600");
     expect(classes).not.toContain("text-primary");
   });
 
   it("state 2: 0 active + 189 settled → muted bare '189' chip, no 'Settled' word", () => {
-    seedFromThreads([
-      ...Array.from({ length: 189 }, (_, i) => makeThread(`settled-${i}`, "idle", "parent")),
-    ]);
+    seedFromThreads(
+      Array.from({ length: 189 }, (_, i) => makeThread(`settled-${i}`, "idle", "parent")),
+    );
     const { chip } = renderChip("parent");
     expect(chip, "settled-only parent still gets a visible handle").not.toBeNull();
     expect(chip!.textContent).toContain("189");
@@ -167,9 +165,9 @@ describe("InboxSubRunsChip — 3-state, one handle", () => {
   });
 
   it("state 2: clicking the chip toggles the section (expand, then collapse again)", () => {
-    seedFromThreads([
-      ...Array.from({ length: 189 }, (_, i) => makeThread(`settled-${i}`, "idle", "parent")),
-    ]);
+    seedFromThreads(
+      Array.from({ length: 189 }, (_, i) => makeThread(`settled-${i}`, "idle", "parent")),
+    );
     const { chip } = renderChip("parent");
     expect(chip).not.toBeNull();
     expect(chip!.getAttribute("aria-expanded")).toBe("false");

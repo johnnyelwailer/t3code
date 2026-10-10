@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
+  CLOUD_SESSION_IDLE_REFRESH_INTERVAL_MS,
   CLOUD_SESSION_MIN_REFRESH_GAP_MS,
+  cloudSessionPollIntervalMs,
   createRefreshGate,
   startCloudSessionListPolling,
 } from "./t3team-cloudSessionPolling";
@@ -78,6 +80,46 @@ describe("startCloudSessionListPolling", () => {
       notify();
       vi.advanceTimersByTime(60_000);
       expect(refresh).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("cloudSessionPollIntervalMs", () => {
+  it("polls at the busy cadence only while a session is provisioning", () => {
+    expect(cloudSessionPollIntervalMs([{ phase: "preparing" }, { phase: "ready" }], 5000)).toBe(
+      5000,
+    );
+    expect(cloudSessionPollIntervalMs([{ phase: "ready" }, { phase: "failed" }], 5000)).toBe(
+      CLOUD_SESSION_IDLE_REFRESH_INTERVAL_MS,
+    );
+    expect(cloudSessionPollIntervalMs([], 5000)).toBe(CLOUD_SESSION_IDLE_REFRESH_INTERVAL_MS);
+    expect(CLOUD_SESSION_IDLE_REFRESH_INTERVAL_MS).toBeGreaterThanOrEqual(30_000);
+    expect(CLOUD_SESSION_IDLE_REFRESH_INTERVAL_MS).toBeLessThanOrEqual(60_000);
+  });
+
+  it("never lets the busy cadence drop below the shared floor", () => {
+    expect(cloudSessionPollIntervalMs([{ phase: "queued" }], 1000)).toBe(
+      CLOUD_SESSION_MIN_REFRESH_GAP_MS,
+    );
+  });
+
+  it("backs an idle list off to one refresh per idle interval", () => {
+    vi.useFakeTimers();
+    try {
+      const refresh = vi.fn();
+      const stop = startCloudSessionListPolling(
+        refresh,
+        cloudSessionPollIntervalMs([{ phase: "ready" }], 5000),
+      );
+      expect(refresh).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(CLOUD_SESSION_IDLE_REFRESH_INTERVAL_MS - 1);
+      // No 5 s ticks while nothing is provisioning.
+      expect(refresh).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(1);
+      expect(refresh).toHaveBeenCalledTimes(2);
+      stop();
     } finally {
       vi.useRealTimers();
     }

@@ -4,25 +4,21 @@
  * the run-level activity), scoped to the calling thread.
  */
 import { assert, it } from "@effect/vitest";
-import {
-  type OrchestrationCommand,
-  ProjectId,
-  ProviderInstanceId,
-  ThreadId,
-} from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { makeWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowControlTool.ts";
 import { buildRunningWorkflowRunRow } from "./t3team-workflowEngineDurability.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { makeFakeWorkflowHostLayer } from "./t3team-workflowHostFake.fixtures.ts";
 import { controlWorkflowRun } from "./t3team-workflowRunControl.ts";
-import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 
 const projectId = ProjectId.make("proj-control-tool");
@@ -73,11 +69,13 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
         correlationId: `${runId}:2`,
         kind: "thread.turn",
       });
-      const dispatched: OrchestrationCommand[] = [];
+      const fakeHost = makeFakeWorkflowHostLayer();
+      const host = fakeHost.service;
       const redriven: Array<{ threadId: string; correlationId: string }> = [];
       let rearmed = 0;
       const turnRedrive: InterruptedTurnRetry = {
         settleNoText: () => Effect.void,
+        releaseHeldRun: () => Effect.succeed(true),
         settleFailedTurn: () => Effect.void,
         processTurnRetry: (input) => {
           redriven.push(input);
@@ -91,10 +89,7 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
           rearmed += 1;
           return Promise.resolve();
         },
-        dispatch: (command: OrchestrationCommand) => {
-          dispatched.push(command);
-          return Effect.succeed({ sequence: dispatched.length });
-        },
+        host,
         turnRedrive,
       };
       const handlers = makeWorkflowControlToolHandlers(controlDeps);
@@ -102,7 +97,7 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
         repo,
         registry,
         handlers,
-        dispatched,
+        fakeHost,
         wasCancelled: () => cancelled,
         rearmed: () => rearmed,
         redriven,
@@ -117,14 +112,15 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
       const value = yield* h.handlers(launchThreadId).controlWorkflowRun("pause", { runId });
 
       assert.strictEqual(value.status, "paused");
-      assert.match(value.hint, /t3team\.orchestration\.resume/);
+      // The agent's name for the tool, never the broker id it cannot call.
+      assert.match(value.hint, /t3_orchestration_resume/);
+      assert.notMatch(value.hint, /t3team\.orchestration\./);
       assert.strictEqual(Option.getOrThrow(yield* h.repo.getById({ runId })).status, "paused");
       assert.strictEqual(h.registry.peekPending(`${runId}:child`), undefined);
       assert.strictEqual(h.rearmed(), 1);
-      const activity = h.dispatched.find((command) => command.type === "thread.activity.append");
-      assert.ok(activity !== undefined && activity.type === "thread.activity.append");
-      assert.strictEqual(activity.activity.summary, "Workflow paused");
-      assert.strictEqual(String(activity.threadId), String(launchThreadId));
+      const activity = h.fakeHost.activities().find((input) => input.id.endsWith(`${runId}:run`));
+      assert.strictEqual(activity?.summary, "Workflow paused");
+      assert.strictEqual(activity?.threadId, String(launchThreadId));
     }),
   );
 
@@ -147,8 +143,8 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
         runId,
         correlationId: `${runId}:2`,
         kind: "thread.turn",
+        // The journaled budget comes back; the re-drive itself (stubbed here) flags its schedule.
         turnRetries: 2,
-        redriveArmed: true,
       });
       assert.deepStrictEqual(h.redriven, [
         { threadId: `${runId}:child`, correlationId: `${runId}:2` },
@@ -156,81 +152,95 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
     }),
   );
 
-  it.effect("pause/resume on a signal-parked run lands back in watching and drains its bridged event", () =>
-    Effect.gen(function* () {
-      const runId = "ctl-resume-signal";
-      const h = yield* seed(runId);
-      // Re-park the row on a signal event instead of a thread ask (design 42): clears the
-      // thread + timer pending columns, records the awaited (signal, key) tuple.
-      yield* h.repo.setWatching({
-        runId,
-        correlationId: `${runId}:w`,
-        watchSourceName: "scm.change-request.watch",
-        watchParamsHash: "hash-1",
-        watchSignalName: "scm.pull-request.merged",
-        watchSignalKey: "42",
-        updatedAt: nowIso(),
-      });
-      // A bridged inbox entry that the delivery port wrote while the run was (about to be) paused.
-      const taken: Array<{ sourceName: string; paramsHash: string; signalName: string; key: string; deliveredAt: string }> = [];
-      let open = true;
-      const signalStore = {
-        takeOpenInboxEntry: (input: { sourceName: string; paramsHash: string; signalName: string; key: string; deliveredAt: string }) => {
-          taken.push(input);
-          if (!open) return Effect.succeed(Option.none());
-          open = false;
-          return Effect.succeed(
-            Option.some({
-              id: 1,
-              sourceName: input.sourceName,
-              paramsHash: input.paramsHash,
-              signalName: input.signalName,
-              key: input.key,
-              payload: { merged: true },
-              delivered: true,
-              createdAt: nowIso(),
-              deliveredAt: nowIso(),
-            }),
-          );
-        },
-      } as unknown as WorkflowSignalStoreShape;
-      // The controller a live launch (or boot rehydration) registered for the parked run.
-      const resumed: Array<{ correlationId: string; reply: unknown }> = [];
-      h.registry.registerRun(runId, {
-        resume: (correlationId, reply) => {
-          resumed.push({ correlationId, reply });
-          return Promise.resolve();
-        },
-        cancel: () => {},
-      });
+  it.effect(
+    "pause/resume on a signal-parked run lands back in watching and drains its bridged event",
+    () =>
+      Effect.gen(function* () {
+        const runId = "ctl-resume-signal";
+        const h = yield* seed(runId);
+        // Re-park the row on a signal event instead of a thread ask (design 42): clears the
+        // thread + timer pending columns, records the awaited (signal, key) tuple.
+        yield* h.repo.setWatching({
+          runId,
+          correlationId: `${runId}:w`,
+          watchSourceName: "scm.change-request.watch",
+          watchParamsHash: "hash-1",
+          watchSignalName: "scm.pull-request.merged",
+          watchSignalKey: "42",
+          updatedAt: nowIso(),
+        });
+        // A bridged inbox entry that the delivery port wrote while the run was (about to be) paused.
+        const taken: Array<{
+          sourceName: string;
+          paramsHash: string;
+          signalName: string;
+          key: string;
+          deliveredAt: string;
+        }> = [];
+        let open = true;
+        const signalStore = {
+          takeOpenInboxEntry: (input: {
+            sourceName: string;
+            paramsHash: string;
+            signalName: string;
+            key: string;
+            deliveredAt: string;
+          }) => {
+            taken.push(input);
+            if (!open) return Effect.succeed(Option.none());
+            open = false;
+            return Effect.succeed(
+              Option.some({
+                id: 1,
+                sourceName: input.sourceName,
+                paramsHash: input.paramsHash,
+                signalName: input.signalName,
+                key: input.key,
+                payload: { merged: true },
+                delivered: true,
+                createdAt: nowIso(),
+                deliveredAt: nowIso(),
+              }),
+            );
+          },
+        } as unknown as WorkflowSignalStoreShape;
+        // The controller a live launch (or boot rehydration) registered for the parked run.
+        const resumed: Array<{ correlationId: string; reply: unknown }> = [];
+        h.registry.registerRun(runId, {
+          resume: (correlationId, reply) => {
+            resumed.push({ correlationId, reply });
+            return Promise.resolve();
+          },
+          cancel: () => {},
+        });
 
-      yield* h.handlers(launchThreadId).controlWorkflowRun("pause", { runId });
-      const paused = Option.getOrThrow(yield* h.repo.getById({ runId }));
-      assert.strictEqual(paused.status, "paused");
+        yield* h.handlers(launchThreadId).controlWorkflowRun("pause", { runId });
+        const paused = Option.getOrThrow(yield* h.repo.getById({ runId }));
+        assert.strictEqual(paused.status, "paused");
 
-      const value = yield* controlWorkflowRun(
-        { ...h.controlDeps, signalStore, nowIso, stopOrigin: "user" },
-        paused,
-        { threadId: String(launchThreadId), action: "resume" },
-      );
+        const value = yield* controlWorkflowRun(
+          { ...h.controlDeps, signalStore, nowIso, stopOrigin: "user" },
+          paused,
+          { threadId: String(launchThreadId), action: "resume" },
+        );
 
-      // The regression (GHE #332 re-review): this used to fail with "Paused workflow has no
-      // continuation." because a signal park has neither a pending thread nor a wake_at.
-      assert.strictEqual(value.status, "watching");
-      const row = Option.getOrThrow(yield* h.repo.getById({ runId }));
-      assert.strictEqual(row.status, "watching");
-      // The bridged event was consumed and delivered to the run's parked correlation.
-      assert.deepStrictEqual(taken, [
-        {
-          sourceName: "scm.change-request.watch",
-          paramsHash: "hash-1",
-          signalName: "scm.pull-request.merged",
-          key: "42",
-          deliveredAt: nowIso(),
-        },
-      ]);
-      assert.deepStrictEqual(resumed, [{ correlationId: `${runId}:w`, reply: { merged: true } }]);
-    }),
+        // The regression (GHE #332 re-review): this used to fail with "Paused workflow has no
+        // continuation." because a signal park has neither a pending thread nor a wake_at.
+        assert.strictEqual(value.status, "watching");
+        const row = Option.getOrThrow(yield* h.repo.getById({ runId }));
+        assert.strictEqual(row.status, "watching");
+        // The bridged event was consumed and delivered to the run's parked correlation.
+        assert.deepStrictEqual(taken, [
+          {
+            sourceName: "scm.change-request.watch",
+            paramsHash: "hash-1",
+            signalName: "scm.pull-request.merged",
+            key: "42",
+            deliveredAt: nowIso(),
+          },
+        ]);
+        assert.deepStrictEqual(resumed, [{ correlationId: `${runId}:w`, reply: { merged: true } }]);
+      }),
   );
 
   it.effect("stop cancels the run and interrupts its child turns as automation, not the user", () =>
@@ -244,13 +254,12 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
       const row = Option.getOrThrow(yield* h.repo.getById({ runId }));
       assert.strictEqual(row.status, "cancelled");
       assert.strictEqual(row.pendingCorrelationId, null);
-      const interrupt = h.dispatched.find((command) => command.type === "thread.turn.interrupt");
-      assert.ok(interrupt !== undefined && interrupt.type === "thread.turn.interrupt");
-      assert.strictEqual(String(interrupt.threadId), `${runId}:child`);
-      assert.strictEqual(interrupt.t3teamStopOrigin, "system");
-      const activity = h.dispatched.find((command) => command.type === "thread.activity.append");
-      assert.ok(activity !== undefined && activity.type === "thread.activity.append");
-      assert.strictEqual(activity.activity.summary, "Workflow stopped");
+      const interrupt = h.fakeHost.calls.find((call) => call.op === "interrupt");
+      assert.ok(interrupt !== undefined && interrupt.op === "interrupt");
+      assert.strictEqual(interrupt.input.threadId, `${runId}:child`);
+      assert.strictEqual(interrupt.input.origin, "system");
+      const activity = h.fakeHost.activities().find((input) => input.id.endsWith(`${runId}:run`));
+      assert.strictEqual(activity?.summary, "Workflow stopped");
     }),
   );
 
@@ -270,7 +279,7 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
       assert.match(unknown, /No orchestration run found for runId 'ctl-nope'/);
       // Nothing moved.
       assert.strictEqual(Option.getOrThrow(yield* h.repo.getById({ runId })).status, "suspended");
-      assert.strictEqual(h.dispatched.length, 0);
+      assert.strictEqual(h.fakeHost.calls.length, 0);
     }),
   );
 

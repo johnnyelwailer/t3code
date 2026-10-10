@@ -11,7 +11,7 @@ import {
   useNavigate,
   useRouter,
 } from "@tanstack/react-router";
-import { CheckIcon, CopyIcon } from "lucide-react";
+import { Check, Copy } from "lucide";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import { APP_BASE_NAME, APP_DISPLAY_NAME, APP_STAGE_LABEL, APP_VERSION } from "../branding";
@@ -26,15 +26,22 @@ import { RelayClientInstallDialog } from "../components/cloud/RelayClientInstall
 import { SshPasswordPromptDialog } from "../components/desktop/SshPasswordPromptDialog";
 import { SnapShotCoordinator } from "../components/desktop/SnapShotCoordinator";
 import { DesktopAppActivationCoordinator } from "../components/desktop/DesktopAppActivationCoordinator";
+import { RunningThreadKeepAlive } from "../components/desktop/RunningThreadKeepAlive";
 import { ProviderUpdateLaunchNotification } from "../components/ProviderUpdateLaunchNotification";
+import { NightlyMobileBetaNotice } from "../components/NightlyMobileBeta";
+import { LegacyThreadMigrationToast } from "../components/LegacyThreadMigrationToast";
 import { ThreadNotificationCoordinator } from "../components/ThreadNotificationCoordinator";
 import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoordinator";
 import { SlowRpcRequestToastCoordinator } from "../components/SlowRpcRequestToastCoordinator";
+import { ChatGptWelcomeCoordinator } from "../components/settings/ChatGptWelcomeCoordinator";
+import { ProviderAuthCallbackCoordinator } from "../components/settings/ProviderAuthCallbackCoordinator";
 import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useDefaultThemeAdoption } from "../hooks/useDefaultTheme";
 import { useEnvironmentThemeSync } from "../hooks/useEnvironmentTheme";
 import { Button } from "../components/ui/button";
+import { MorphIcon } from "~/components/MorphIcon";
+import { StandalonePage, StandalonePageHeader } from "../components/ui/standalone-page";
 import {
   AnchoredToastProvider,
   stackedThreadToast,
@@ -42,10 +49,11 @@ import {
   toastManager,
 } from "../components/ui/toast";
 import { resolveAndPersistPreferredEditor } from "../editorPreferences";
+import { isElectron } from "../env";
+import { cn } from "../lib/utils";
 import { applyAppearanceFontVariables } from "~/appearanceFonts";
 import { applyAppearanceContrast } from "~/appearanceContrast";
 import { useClientSettings } from "../hooks/useSettings";
-import { PlanAgentSelectionHeal } from "../planAgentSelectionHeal";
 import {
   deriveLogicalProjectKeyFromSettings,
   derivePhysicalProjectKeyFromPath,
@@ -58,10 +66,15 @@ import { resolveInitialServerAuthGateState } from "../environments/primary";
 import { hasHostedPairingRequest, isHostedStaticApp } from "../hostedPairing";
 import { isAtlassianOAuthCallbackPath } from "../t3team/hooks/t3team-atlassianOAuthRedirect";
 import { isT3TeamShellPath } from "../t3team/t3team-upstreamRouteBridge";
+import { isDetachedSurfacePath } from "@t3tools/shared/t3team-detachedSurface";
 import { useUpstreamRouteBridge } from "../t3team/t3team-useUpstreamRouteBridge";
 import { T3TeamPackAppearanceDefaultsSync } from "../t3team/t3team-PackAppearanceDefaultsSync";
 import { T3TeamPackAppearanceSync } from "../t3team/t3team-PackAppearanceSync";
+import { CloudSessionSignInDialogHost } from "../cloud/t3team-CloudSessionSignInDialogHost";
+import { t3teamPackProductName, useT3TeamAppDisplayName } from "../t3team/t3team-appBrandName";
 import { useT3TeamPackAppearance } from "../t3team/t3team-packAppearance";
+// Registers the composing heartbeat with the composer draft store's sink (side effect only).
+import "../t3team/chat/t3team-threadComposingSignal";
 import { isLocalEnvironmentDisabled } from "../localEnvironment";
 import { shellEnvironment } from "../state/shell";
 import { useAtomValue } from "@effect/atom-react";
@@ -130,13 +143,14 @@ export const Route = createRootRoute({
 });
 
 function RootRouteNotFoundView() {
+  const appName = useT3TeamAppDisplayName();
   return (
     <main className="flex min-h-0 min-w-0 flex-1 items-center justify-center p-6">
       <div className="flex max-w-sm flex-col items-center gap-4 text-center">
         <h1 className="text-lg font-medium text-foreground">Page not found</h1>
         <p className="text-sm text-muted-foreground">
-          This link doesn't point to a page in {APP_DISPLAY_NAME}. Go home to choose a project or
-          start a thread.
+          This link doesn't point to a page in {appName}. Go home to choose a project or start a
+          thread.
         </p>
         <Button render={<Link to="/" replace />}>Go home</Button>
       </div>
@@ -179,11 +193,14 @@ function RootRouteView() {
     pathname === "/pair" ||
     pathname === "/connect" ||
     pathname.startsWith("/connect/") ||
+    pathname === "/connect-agent" ||
     isAtlassianOAuthCallbackPath(pathname)
   ) {
     return (
       <>
         <DocumentTitleSync />
+        <T3TeamPackAppearanceSync />
+        <T3TeamPackAppearanceDefaultsSync />
         <Outlet />
       </>
     );
@@ -200,12 +217,14 @@ function RootRouteView() {
           <EnvironmentThemeSync />
           <GlassAppearanceSync />
           <FontAppearanceSync />
+          <ProviderAuthCallbackCoordinator />
           {/* t3team: the wizard page short-circuits the main tree, so the pack syncs
               mount here too — otherwise a first-run user sees generic branding in
               the very wizard they are completing. */}
           <T3TeamPackAppearanceSync />
           <T3TeamPackAppearanceDefaultsSync />
           <CustomSnoozeDialogHost />
+          <CloudSessionSignInDialogHost />
           <CommandPalette>
             <AppSidebarLayout>
               <Outlet />
@@ -220,8 +239,31 @@ function RootRouteView() {
     return (
       <>
         <DocumentTitleSync />
+        <T3TeamPackAppearanceSync />
+        <T3TeamPackAppearanceDefaultsSync />
         <Outlet />
       </>
+    );
+  }
+
+  // t3team: a detached surface is a second window onto an app that is already running. It
+  // gets the providers and appearance, and none of the once-per-app coordinators (startup
+  // navigation, notifications, activation, capture) — the main window already runs those, and
+  // a second copy would steer this window away or say everything twice. It sets its own title.
+  if (isDetachedSurfacePath(pathname)) {
+    return (
+      <ToastProvider>
+        <AnchoredToastProvider>
+          <ContrastAppearanceSync />
+          <EnvironmentThemeSync />
+          <GlassAppearanceSync />
+          <FontAppearanceSync />
+          <T3TeamPackAppearanceSync />
+          <T3TeamPackAppearanceDefaultsSync />
+          <ConfirmDialogHost />
+          <Outlet />
+        </AnchoredToastProvider>
+      </ToastProvider>
     );
   }
 
@@ -249,6 +291,8 @@ function RootRouteView() {
         <EnvironmentThemeSync />
         <GlassAppearanceSync />
         <FontAppearanceSync />
+        <ProviderAuthCallbackCoordinator />
+        <ChatGptWelcomeCoordinator />
         {/* t3team: pack appearance sync must run OUTSIDE the first-run gate — the
             gate holds back its children on a fresh install, and the pack is what
             brands the onboarding surface itself (title, theme tokens, provider
@@ -263,7 +307,9 @@ function RootRouteView() {
         >
           {primaryEnvironmentAuthenticated ? <AuthenticatedTracingBootstrap /> : null}
           {primaryEnvironmentAuthenticated ? <DesktopAppActivationCoordinator /> : null}
+          {isElectron ? <RunningThreadKeepAlive /> : null}
           <RelayClientInstallDialog />
+          <CloudSessionSignInDialogHost />
           <ConnectOnboardingDialog />
           <SshPasswordPromptDialog />
           <SnapShotCoordinator />
@@ -271,13 +317,15 @@ function RootRouteView() {
           <ConfirmDialogHost />
           <CustomSnoozeDialogHost />
           <SlowRpcRequestToastCoordinator />
+          {primaryEnvironmentAuthenticated ? <LegacyThreadMigrationToast /> : null}
           <ProjectCloneToastCoordinator />
           <HostedStaticEnvironmentBootstrap />
           {primaryEnvironmentAuthenticated ? (
             <EventRouter skipInitialBootstrapNavigation={returningFromWelcomeRef.current} />
           ) : null}
-          {primaryEnvironmentAuthenticated ? <PlanAgentSelectionHeal /> : null}
           {primaryEnvironmentAuthenticated ? <ProviderUpdateLaunchNotification /> : null}
+          {/* Hosted Nightly is "hosted-static", not authenticated, and needs it too. */}
+          <NightlyMobileBetaNotice />
           {appShell}
           {/* Above the router: a theme draft is judged by walking the app, so the
               editor has to survive navigation away from settings. */}
@@ -304,6 +352,11 @@ function ContrastAppearanceSync() {
   useEffect(() => {
     document.documentElement.dataset.diffColorScheme = diffColorScheme;
   }, [diffColorScheme]);
+
+  const chatWidth = useClientSettings((settings) => settings.chatWidth);
+  useEffect(() => {
+    document.documentElement.dataset.chatWidth = chatWidth;
+  }, [chatWidth]);
 
   useEffect(() => {
     applyAppearanceContrast(document.documentElement, appearanceContrast);
@@ -363,7 +416,7 @@ function FontAppearanceSync() {
 function DocumentTitleSync() {
   const primaryServerVersion =
     useAtomValue(primaryServerConfigAtom)?.environment.serverVersion ?? null;
-  const packAppName = useT3TeamPackAppearance()?.labels?.appName;
+  const packAppName = t3teamPackProductName(useT3TeamPackAppearance());
   const title = resolveServerBackedAppDisplayName({
     baseName: packAppName ?? APP_BASE_NAME,
     fallbackDisplayName: packAppName ?? APP_DISPLAY_NAME,
@@ -408,45 +461,33 @@ function HostedStaticEnvironmentBootstrap() {
 
 function RootRouteErrorView({ error }: ErrorComponentProps) {
   const router = useRouter();
+  const appName = useT3TeamAppDisplayName();
   const message = errorMessage(error);
   // Router pathname rather than window.location: desktop uses hash history, where the window path is always "/".
   const pathname = useLocation({ select: (location) => location.pathname });
-  const report = useMemo(() => errorReport(error, pathname), [error, pathname]);
+  const report = useMemo(() => errorReport(error, pathname, appName), [appName, error, pathname]);
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-10 text-foreground sm:px-6">
-      <div className="pointer-events-none absolute inset-0 opacity-80">
-        <div className="absolute inset-x-0 top-0 h-44 bg-[radial-gradient(44rem_16rem_at_top,color-mix(in_srgb,var(--color-red-500)_16%,transparent),transparent)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(145deg,color-mix(in_srgb,var(--background)_90%,var(--color-black))_0%,var(--background)_55%)]" />
+    <StandalonePage tone="error">
+      <StandalonePageHeader eyebrow={appName} title="Something went wrong." description={message} />
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        <Button size="sm" onClick={() => void router.invalidate()}>
+          Try again
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
+          Reload app
+        </Button>
+        <CopyErrorButton report={report} />
       </div>
 
-      <section className="relative w-full max-w-xl rounded-2xl border border-border/80 bg-card/90 p-6 shadow-2xl shadow-black/20 backdrop-blur-md sm:p-8">
-        <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
-          {APP_DISPLAY_NAME}
-        </p>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">
-          Something went wrong.
-        </h1>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{message}</p>
-
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => void router.invalidate()}>
-            Try again
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
-            Reload app
-          </Button>
-          <CopyErrorButton report={report} />
-        </div>
-
-        <div className="mt-5 overflow-hidden rounded-lg border border-border/70 bg-background/55">
-          <p className="px-3 py-1.5 text-xs font-medium text-muted-foreground">Error report</p>
-          <pre className="max-h-64 overflow-auto border-t border-border/70 bg-background/80 px-3 py-2 text-xs whitespace-pre-wrap text-foreground/85">
-            {report}
-          </pre>
-        </div>
-      </section>
-    </div>
+      <div className="mt-5 overflow-hidden rounded-lg border border-border/70 bg-background/55">
+        <p className="px-3 py-1.5 text-xs font-medium text-muted-foreground">Error report</p>
+        <pre className="max-h-64 overflow-auto border-t border-border/70 bg-background/80 px-3 py-2 text-xs whitespace-pre-wrap text-foreground/85">
+          {report}
+        </pre>
+      </div>
+    </StandalonePage>
   );
 }
 
@@ -456,7 +497,7 @@ function CopyErrorButton({ report }: { report: string }) {
 
   return (
     <Button size="sm" variant="outline" onClick={() => copyToClipboard(report)}>
-      {isCopied ? <CheckIcon className="text-success" /> : <CopyIcon />}
+      <MorphIcon className={cn(isCopied && "text-success")} icon={isCopied ? Check : Copy} />
       {isCopied ? "Copied" : "Copy error"}
     </Button>
   );
@@ -497,9 +538,9 @@ const MAX_ERROR_CAUSE_DEPTH = 5;
  * and any cause chain. Takes the pathname only so tokens in the query never
  * land on the clipboard.
  */
-function errorReport(error: unknown, pathname: string): string {
+function errorReport(error: unknown, pathname: string, appName: string): string {
   const lines = [
-    `${APP_DISPLAY_NAME} ${APP_VERSION}`,
+    `${appName} ${APP_VERSION}`,
     `Path: ${pathname}`,
     `Time: ${new Date().toISOString()}`,
     "",

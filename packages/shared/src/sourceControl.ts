@@ -146,6 +146,10 @@ export function isSshRemoteUrl(remoteUrl: string): boolean {
   return SCP_SSH_REMOTE_PATTERN.test(trimmed) || trimmed.toLowerCase().startsWith("ssh://");
 }
 
+/**
+ * Extracts the normalized host used for provider detection. SCP-style and SSH remotes return the
+ * hostname only, while other URL schemes retain explicit ports for non-default web endpoints.
+ */
 function parseRemoteHost(remoteUrl: string): string | null {
   const trimmed = remoteUrl.trim();
   if (trimmed.length === 0) {
@@ -158,7 +162,8 @@ function parseRemoteHost(remoteUrl: string): string | null {
   }
 
   try {
-    return new URL(trimmed).host.toLowerCase();
+    const url = new URL(trimmed);
+    return (url.protocol === "ssh:" ? url.hostname : url.host).toLowerCase();
   } catch {
     return null;
   }
@@ -181,7 +186,7 @@ function hasDnsLabel(host: string, label: string): boolean {
 }
 
 const GITHUB_ENTERPRISE_HOST_SUFFIXES: ReadonlyArray<string> = [".ghe.com", ".ghe.localhost"];
-const GITHUB_HOST_LABELS: ReadonlyArray<string> = ["github", "ghe"];
+const GITHUB_HOST_LABELS: ReadonlySet<string> = new Set(["github", "ghe"]);
 
 /**
  * Matches github.com, its subdomains, GitHub's managed `.ghe.com` /
@@ -203,7 +208,7 @@ function isGitHubHost(host: string): boolean {
   if (GITHUB_ENTERPRISE_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix))) {
     return true;
   }
-  return host.split(".").some((label) => GITHUB_HOST_LABELS.includes(label));
+  return host.split(".").some((label) => GITHUB_HOST_LABELS.has(label));
 }
 
 function isGitLabHost(host: string): boolean {

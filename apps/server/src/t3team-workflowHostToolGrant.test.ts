@@ -12,8 +12,9 @@
  *   2. a run launched WITH it keeps it, and keeps its group scope.
  *
  * Real `T3TeamToolBrokerLive`, real repository/journal over in-memory SQLite, real
- * `rehydrateSuspendedWorkflowRuns`. The probe body parks on `askUser`, so the draft call happens
- * strictly AFTER the simulated restart.
+ * `rehydrateSuspendedWorkflowRuns`, a recording fake workflow host. The probe body parks on
+ * `askUser`, so the draft call happens strictly AFTER the simulated restart; a proposed draft is
+ * observed where it lands, as a `draft-mutation` thread artifact.
  */
 
 import * as NodeFS from "node:fs";
@@ -23,33 +24,22 @@ import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import { afterAll } from "vite-plus/test";
-import {
-  type OrchestrationCommand,
-  ProjectId,
-  ProviderInstanceId,
-  type T3TeamMessageExt,
-  ThreadId,
-} from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
-import * as Stream from "effect/Stream";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { ServerConfig } from "./config.ts";
-import {
-  OrchestrationEngineService,
-  type OrchestrationEngineShape,
-} from "./orchestration/Services/OrchestrationEngine.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
-import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
-import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
+import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
-import { createThreadToolContext, threadId } from "./t3team-toolBrokerTestUtils.ts";
-import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
+import { makeBrokerLayer, threadId } from "./t3team-toolBrokerTestUtils.ts";
+import type { T3TeamThreadArtifactInput } from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import {
   buildRunningWorkflowRunRow,
   makeWorkflowRunLifecycle,
@@ -62,10 +52,13 @@ import {
   T3TeamWorkflowEngineRegistryLive,
 } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
-import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
-import { makeBrokerLayer } from "./t3team-toolBrokerTestLayers.ts";
+import { draftToolContext, findDraftArtifact } from "./t3team-workflowHostDraft.fixtures.ts";
+import { makeT3TeamWorkflowHostToolClient } from "./t3team-workflowHostTools.ts";
+import {
+  makeFakeWorkflowHost,
+  makeFakeWorkflowHostLayer,
+} from "./t3team-workflowHostFake.fixtures.ts";
 
-const DRAFT_TOOL = "t3team.work_item.description.draft_update";
 const cwd = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-grant-"));
 afterAll(() => NodeFS.rmSync(cwd, { recursive: true, force: true }));
 
@@ -97,30 +90,8 @@ const projectId = ProjectId.make("project-1");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
 const nowIso = (): string => "2026-07-27T00:00:00.000Z";
 
-/** Recording sink for the broker's own dispatch — where a published draft carrier would land. */
-const brokerDispatched: OrchestrationCommand[] = [];
-const brokerEngineMock: OrchestrationEngineShape = {
-  readEvents: () => Stream.empty,
-  readThreadEvents: () => Stream.empty,
-  getThreadReplayStats: () => Effect.die("unused"),
-  dispatch: (command) => {
-    brokerDispatched.push(command);
-    return Effect.succeed({ sequence: brokerDispatched.length });
-  },
-  streamDomainEvents: Stream.empty,
-  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
-  latestSequence: Effect.succeed(0),
-};
-
-const stubEngine: OrchestrationEngineShape = {
-  readEvents: () => Stream.empty,
-  readThreadEvents: () => Stream.empty,
-  getThreadReplayStats: () => Effect.die("unused"),
-  dispatch: () => Effect.succeed({ sequence: 0 }),
-  streamDomainEvents: Stream.never,
-  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
-  latestSequence: Effect.succeed(0),
-};
+/** Every thread artifact the broker writes — where a proposed draft lands. */
+const brokerArtifacts: T3TeamThreadArtifactInput[] = [];
 
 const DurabilityTestLive = T3TeamWorkflowSchedulerLive.pipe(
   Layer.provideMerge(
@@ -137,20 +108,13 @@ const DurabilityTestLive = T3TeamWorkflowSchedulerLive.pipe(
 // what makes the no-grant case meaningful rather than vacuous.
 const TestLayer = Layer.mergeAll(
   DurabilityTestLive,
-  Layer.succeed(OrchestrationEngineService, stubEngine),
-  makeBrokerLayer(brokerEngineMock),
+  makeFakeWorkflowHostLayer().layer,
+  makeBrokerLayer(undefined, { onArtifact: (artifact) => brokerArtifacts.push(artifact) }),
   ServerConfig.layerTest(cwd, { prefix: "t3-grant-test-" }),
   SqlitePersistenceMemory, // same reference as DurabilityTestLive's, so it's memoized — exposes SqlClient below.
 ).pipe(Layer.provideMerge(NodeServices.layer));
 
-function draftCarrier() {
-  for (const command of brokerDispatched) {
-    if (command.type !== "thread.message.upsert") continue;
-    const ext: T3TeamMessageExt | undefined = command.message.t3teamExt;
-    if (ext?.attachments?.some((entry) => entry.kind === "draft-mutation")) return command;
-  }
-  return undefined;
-}
+const draftCarrier = () => findDraftArtifact(brokerArtifacts);
 
 /** Launch the probe, park it on `askUser`, and leave the DB holding a suspended run. */
 const parkProbe = Effect.fn("parkProbe")(function* (input: {
@@ -168,14 +132,12 @@ const parkProbe = Effect.fn("parkProbe")(function* (input: {
   // Seed the launch thread's tool context, as the web composer does before a turn.
   yield* broker.bindSession({
     threadId: runThreadId,
-    toolContext: createThreadToolContext({
-      tools: [{ id: DRAFT_TOOL, label: "Draft description", capabilities: ["write"] }],
-    }),
+    toolContext: draftToolContext(),
   });
 
   const hostToolGrant = input.granted ? { toolGroups: ["mutation.draft"] } : undefined;
   const hostToolClient = input.granted
-    ? makeT3TeamWorkflowHostDraftToolClient({
+    ? makeT3TeamWorkflowHostToolClient({
         broker,
         launchThreadId: runThreadId,
         allowedToolGroups: ["mutation.draft"],
@@ -196,7 +158,7 @@ const parkProbe = Effect.fn("parkProbe")(function* (input: {
       interactionMode: "default",
       // A throwaway registry: this uptime dies with the "restart".
       registry: makeWorkflowEngineRegistry(),
-      dispatch: () => Promise.resolve(),
+      host: makeFakeWorkflowHost().host,
       newId: () => `${input.runId}-id-${(seq += 1)}`,
       nowIso,
       store,
@@ -226,7 +188,7 @@ const parkProbe = Effect.fn("parkProbe")(function* (input: {
 
 it.effect("a run launched WITHOUT host tools does not acquire them across rehydration", () =>
   Effect.gen(function* () {
-    brokerDispatched.length = 0;
+    brokerArtifacts.length = 0;
     const runId = "grant-absent";
     const row = yield* parkProbe({ runId, granted: false });
     // Nothing was granted, so nothing is recorded — this is what rehydration reads.
@@ -249,7 +211,7 @@ it.effect("a run launched WITHOUT host tools does not acquire them across rehydr
 
 it.effect("a PAUSED run honours the grant too — the shared rebuild path, not just suspended", () =>
   Effect.gen(function* () {
-    brokerDispatched.length = 0;
+    brokerArtifacts.length = 0;
     const repo = yield* WorkflowRunRepository;
     const runId = "grant-paused";
     const row = yield* parkProbe({ runId, granted: false });
@@ -276,7 +238,7 @@ it.effect("a PAUSED run honours the grant too — the shared rebuild path, not j
 
 it.effect("a run launched WITH a host-tool grant keeps it, and its scope, across rehydration", () =>
   Effect.gen(function* () {
-    brokerDispatched.length = 0;
+    brokerArtifacts.length = 0;
     const runId = "grant-present";
     const row = yield* parkProbe({ runId, granted: true });
     assert.deepStrictEqual(row.hostToolGrant, { toolGroups: ["mutation.draft"] });
@@ -300,7 +262,7 @@ it.effect(
   "a malformed host_tool_grant rehydrates only that row ungranted — siblings in the same scan are unaffected",
   () =>
     Effect.gen(function* () {
-      brokerDispatched.length = 0;
+      brokerArtifacts.length = 0;
       const sql = yield* SqlClient.SqlClient;
 
       const bad1 = {
@@ -311,10 +273,8 @@ it.effect(
         runId: "grant-malformed-shape",
         thread: ThreadId.make("thread-malformed-shape"),
       };
-      const good = {
-        runId: "grant-malformed-sibling-good",
-        thread: ThreadId.make("thread-malformed-good"),
-      };
+      // The good sibling runs its draft on the broker fixture's one known thread.
+      const good = { runId: "grant-malformed-sibling-good", thread: threadId };
 
       // Park all three, then bypass the repo's encoder (it would reject these) with a raw write.
       yield* parkProbe({ runId: bad1.runId, granted: false, launchThreadId: bad1.thread });

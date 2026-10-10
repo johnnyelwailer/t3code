@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { isT3TeamShellPath, translateUpstreamPath } from "./t3team-upstreamRouteBridge.ts";
+import {
+  buildUpstreamBridgeNavigation,
+  isT3TeamShellPath,
+  isTeamShellEnvironment,
+  translateUpstreamPath,
+} from "./t3team-upstreamRouteBridge.ts";
 
-const deps = (projectId: string | null) => ({
+const deps = (projectId: string | null, primaryEnvironmentId: string | null = "local") => ({
   resolveProjectIdForThread: () => projectId,
+  primaryEnvironmentId,
 });
 
 describe("isT3TeamShellPath", () => {
@@ -27,6 +33,7 @@ describe("translateUpstreamPath", () => {
       "/pair",
       "/connect",
       "/connect_/callback",
+      "/connect-agent",
       // FirstRunGate owns the onboarding wizard's navigation; bouncing
       // /welcome onto /t3team is an infinite redirect loop.
       "/welcome",
@@ -36,6 +43,14 @@ describe("translateUpstreamPath", () => {
     ]) {
       expect(translateUpstreamPath(pathname, deps("p1"))).toEqual({ kind: "ignore" });
     }
+  });
+
+  it("leaves the MCP OAuth approval page alone", () => {
+    // Regression: "/connect" matching is exact-or-"/connect/…", so "/connect-agent" was read as
+    // unhandled and bounced to /t3team's pairing gate mid OAuth approval.
+    expect(translateUpstreamPath("/connect-agent", deps("p1"))).toEqual({ kind: "ignore" });
+    expect(translateUpstreamPath("/connect-agent", deps(null))).toEqual({ kind: "ignore" });
+    expect(translateUpstreamPath("/connect-agents", deps("p1"))).toEqual({ kind: "unhandled" });
   });
 
   it("maps upstream's root to the team dashboard", () => {
@@ -56,7 +71,7 @@ describe("translateUpstreamPath", () => {
   });
 
   it("decodes escaped id segments", () => {
-    expect(translateUpstreamPath("/env%2Fa/thread%2Fb", deps("project-3"))).toEqual({
+    expect(translateUpstreamPath("/env%2Fa/thread%2Fb", deps("project-3", "env/a"))).toEqual({
       kind: "target",
       target: {
         to: "/t3team/projects/$projectId/threads/$threadId",
@@ -79,7 +94,7 @@ describe("translateUpstreamPath", () => {
     // `environmentId` is an opaque non-empty string, so "draft" is a legal
     // environment name. Resolving the thread first keeps that thread reachable
     // instead of hijacking it into a draft that does not exist.
-    expect(translateUpstreamPath("/draft/thread-7", deps("project-3"))).toEqual({
+    expect(translateUpstreamPath("/draft/thread-7", deps("project-3", "draft"))).toEqual({
       kind: "target",
       target: {
         to: "/t3team/projects/$projectId/threads/$threadId",
@@ -95,6 +110,26 @@ describe("translateUpstreamPath", () => {
     });
   });
 
+  it("leaves a thread on another machine on upstream's environment-scoped route", () => {
+    // The Team thread view talks to the primary server only: translating a cloud-session thread
+    // made it look the thread up locally, miss, and re-create it there ("project does not exist").
+    expect(translateUpstreamPath("/cloud/thread-7", deps("project-3"))).toEqual({ kind: "ignore" });
+    // "draft" is not the primary id either, but no thread resolves: still the draft route.
+    expect(translateUpstreamPath("/draft/draft-9", deps(null))).toEqual({
+      kind: "target",
+      target: { to: "/t3team/drafts/$draftId", params: { draftId: "draft-9" } },
+    });
+  });
+
+  it("does not move a thread into the Team shell before the primary environment is known", () => {
+    // Once on a Team route the bridge is off, so a remote thread translated early would be stuck.
+    expect(translateUpstreamPath("/local/thread-7", deps("project-3", null))).toEqual({
+      kind: "ignore",
+    });
+    expect(isTeamShellEnvironment("local", null)).toBe(false);
+    expect(isTeamShellEnvironment("local", "local")).toBe(true);
+  });
+
   it("reports unhandled when the thread's project is unknown", () => {
     expect(translateUpstreamPath("/local/thread-7", deps(null))).toEqual({ kind: "unhandled" });
   });
@@ -103,5 +138,30 @@ describe("translateUpstreamPath", () => {
     for (const pathname of ["/threads", "/a/b/c", "/local/thread/extra"]) {
       expect(translateUpstreamPath(pathname, deps("p1"))).toEqual({ kind: "unhandled" });
     }
+  });
+});
+
+describe("buildUpstreamBridgeNavigation", () => {
+  it("always replaces so Back cannot re-enter the upstream thread path", () => {
+    expect(
+      buildUpstreamBridgeNavigation({
+        kind: "target",
+        target: {
+          to: "/t3team/projects/$projectId/threads/$threadId",
+          params: { projectId: "project-3", threadId: "thread-7" },
+        },
+      }),
+    ).toEqual({
+      to: "/t3team/projects/$projectId/threads/$threadId",
+      params: { projectId: "project-3", threadId: "thread-7" },
+      replace: true,
+    });
+  });
+
+  it("replaces unhandled upstream paths onto the team dashboard", () => {
+    expect(buildUpstreamBridgeNavigation({ kind: "unhandled" })).toEqual({
+      to: "/t3team",
+      replace: true,
+    });
   });
 });

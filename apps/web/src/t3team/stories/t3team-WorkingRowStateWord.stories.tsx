@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { useEffect } from "react";
 
-import type { TurnId } from "@t3tools/contracts";
+import type { RunId } from "@t3tools/contracts";
 import { TimelineRowActivityCtx, WorkingTimelineRow } from "~/components/chat/MessagesTimeline";
 import type { ActivityState } from "~/t3team/t3team-activityStateDisplay";
 
@@ -43,16 +43,16 @@ function Row({
     <TimelineRowActivityCtx.Provider
       value={{
         isWorking: true,
+        activeTurnInProgress: true,
         isPreparingWorktree: false,
         isCompacting: false,
         isRevertingCheckpoint: false,
-        latestTurnId: "turn-working-state-word" as TurnId,
+        latestRunId: "turn-working-state-word" as RunId,
         workingStepLabel,
         activeAgents: [],
         backgroundJobs: [],
         onOpenAgents: () => {},
         threadActivityState,
-        unsettledTurnId: null,
         backgroundWorktreeSetup: null,
       }}
     >
@@ -85,7 +85,7 @@ function Card({
     <div className="w-[560px] rounded-xl border border-border/70 bg-card p-4 shadow-sm">
       <div className="mb-3 text-xs font-medium text-muted-foreground">{title}</div>
       <div className="flex flex-col gap-3">{children}</div>
-      {footnote ? <div className="text-[10px] text-muted-foreground/70">{footnote}</div> : null}
+      {footnote ? <div className="text-3xs text-muted-foreground/70">{footnote}</div> : null}
     </div>
   );
 }

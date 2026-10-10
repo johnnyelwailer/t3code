@@ -7,6 +7,12 @@ import type { EnvironmentSetupProfile } from "@t3tools/contracts";
 import type { T3TeamProfile } from "@t3tools/t3team-skill-packs";
 
 import type { WorkspacePackHostDiagnostic } from "./t3team-pack-host.ts";
+import { inertPackActivationContext } from "./t3team-pack-activationContext.ts";
+import {
+  isSetupProfileDefault,
+  resolveSetupProfileDefaultOverrideId,
+} from "./t3team-pack-setupProfileDefault.ts";
+import { isWorkProfileChooserEnabled } from "./t3team-workProfileChooserFlag.ts";
 
 const SETUP_PROFILE_CAPABILITY = "setup-profile:v1";
 
@@ -19,13 +25,18 @@ export function setPackSetupProfileOverlay(
 }
 
 /** Full definitions (incl. behavior) for the server-side profile resolver. */
-export function getPackSetupProfiles(): readonly SetupProfileDefinition[] | undefined {
+function getPackSetupProfiles(): readonly SetupProfileDefinition[] | undefined {
   return overlay;
 }
 
 /** Behavior view mapped to the skill-packs profile shape for the setup resolver. */
 export function getPackProfilesForResolver(): Readonly<Record<string, T3TeamProfile>> | undefined {
   if (!overlay) return undefined;
+  // Read live: the flag is toggleable per process, so the default must follow it without a restart.
+  const defaultOverrideId = resolveSetupProfileDefaultOverrideId(
+    overlay,
+    isWorkProfileChooserEnabled(),
+  );
   const map: Record<string, T3TeamProfile> = {};
   for (const profile of overlay) {
     map[profile.id] = {
@@ -44,7 +55,7 @@ export function getPackProfilesForResolver(): Readonly<Record<string, T3TeamProf
       hideImplementationComplexity: profile.hideImplementationComplexity,
       // Must survive the mapping: the resolver preselects the pack default when
       // no profileId is stored. Dropping it here made the bundled default win.
-      ...(profile.default ? { default: true } : {}),
+      ...(isSetupProfileDefault(profile, defaultOverrideId) ? { default: true } : {}),
     };
   }
   return map;
@@ -52,6 +63,10 @@ export function getPackProfilesForResolver(): Readonly<Record<string, T3TeamProf
 
 /** Presentation subset for the environment descriptor served to the web wizard. */
 export function getPackSetupProfileDescriptors(): readonly EnvironmentSetupProfile[] | undefined {
+  const defaultOverrideId = resolveSetupProfileDefaultOverrideId(
+    overlay,
+    isWorkProfileChooserEnabled(),
+  );
   return overlay?.map((profile) => ({
     id: profile.id,
     title: profile.title,
@@ -60,7 +75,7 @@ export function getPackSetupProfileDescriptors(): readonly EnvironmentSetupProfi
     bullets: profile.bullets,
     category: profile.category,
     ...(profile.iconDataUrl ? { iconDataUrl: profile.iconDataUrl } : {}),
-    ...(profile.default ? { default: true } : {}),
+    ...(isSetupProfileDefault(profile, defaultOverrideId) ? { default: true } : {}),
   }));
 }
 
@@ -78,9 +93,7 @@ export const loadPackSetupProfileOverlay = async (
   const collected: SetupProfileDefinition[] = [];
   for (const pack of packs) {
     await activateWorkspacePack(pack, {
-      defineAgentProvider: () => undefined,
-      defineProviderDriver: () => undefined,
-      defineTheme: () => undefined,
+      ...inertPackActivationContext,
       defineSetupProfile: (definition) => {
         if (!pack.manifest.capabilities.includes(SETUP_PROFILE_CAPABILITY)) {
           throw new Error(
@@ -88,12 +101,6 @@ export const loadPackSetupProfileOverlay = async (
           );
         }
         collected.push(decodeSetupProfileDefinition(definition));
-      },
-      defineWorkflowRepairPolicy: () => undefined,
-      defineWorkflowAgentModelPolicy: () => undefined,
-      defineWorkflowEphemeralConcurrencyPolicy: () => undefined,
-      resolveAssetDataUrl: async () => {
-        throw new Error("Asset resolution is only available to pack activation code");
       },
     });
   }

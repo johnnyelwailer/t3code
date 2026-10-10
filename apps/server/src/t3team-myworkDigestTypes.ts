@@ -8,8 +8,27 @@
  * so the ticket mapping (`resourceRefToProjectTicket`) stays where it lives.
  */
 
+import type { T3TeamMyWorkDigestPlan } from "@t3tools/contracts";
+
 import type { BacklogResourceRef } from "./t3team-atlassian-backlog-cacheShared.ts";
 import type { T3TeamPollEnvelope } from "./t3team-integration-polling.ts";
+import type {
+  T3TeamDigestChangeRequest,
+  T3TeamDigestPerson,
+} from "./t3team-myworkDigestTypesPrs.ts";
+import type { T3TeamDigestDependency } from "./t3team-myworkDigestDependencies.ts";
+import type { T3TeamDigestYesterday } from "./t3team-myworkDigestTypesYesterday.ts";
+
+export type {
+  T3TeamDigestChangeRequest,
+  T3TeamDigestChangeRequestState,
+} from "./t3team-myworkDigestTypesPrs.ts";
+export type { T3TeamDigestDependency } from "./t3team-myworkDigestDependencies.ts";
+export type {
+  T3TeamDigestYesterday,
+  T3TeamDigestYesterdayMerged,
+  T3TeamDigestYesterdayMoved,
+} from "./t3team-myworkDigestTypesYesterday.ts";
 
 export type T3TeamMyWorkDigestAccountRef = {
   readonly id: string;
@@ -36,6 +55,8 @@ export type T3TeamMyWorkDigestInput = {
   readonly projects: ReadonlyArray<T3TeamMyWorkDigestProjectInput>;
   /** The viewer's Jira display name; drives the personal burndown when present. */
   readonly viewer?: { readonly name?: string };
+  /** The viewer's IANA time zone: "yesterday" is their previous working day. Absent = the server's. */
+  readonly timeZone?: string;
 };
 
 export type T3TeamMyWorkDigestPollInput = T3TeamMyWorkDigestInput & {
@@ -65,29 +86,6 @@ export type T3TeamDigestDecision = {
   readonly askedAt: string;
 };
 
-/** Mirrors the web `DigestChangeRequest.state` union one-to-one. */
-export type T3TeamDigestChangeRequestState =
-  | "draft"
-  | "open"
-  | "needs-you"
-  | "changes-requested"
-  | "ci-failing"
-  | "approved"
-  | "merged";
-
-export type T3TeamDigestChangeRequest = {
-  readonly id: string;
-  readonly repo: string;
-  readonly number: number;
-  readonly state: T3TeamDigestChangeRequestState;
-  readonly updatedAt: string;
-  /** The matched ticket's key, when the PR title/branch names one of this project's issues. */
-  readonly workItemKey?: string;
-  /** Open PRs only, off the cached detail/activity reads. */
-  readonly reviewers?: ReadonlyArray<{ readonly name: string; readonly login: string }>;
-  readonly unhandledReviewThreads?: ReadonlyArray<{ readonly lastCommentAt?: string }>;
-};
-
 export type T3TeamDigestTransition = {
   readonly ticketRef: T3TeamDigestTicketRef;
   readonly from: string;
@@ -111,6 +109,8 @@ export type T3TeamDigestBurndown = {
 
 export type T3TeamDigestSprint = {
   readonly name: string;
+  /** Jira's sprint state (`active` / `closed` / `future`), so a stale `active` can be labelled. */
+  readonly state?: string;
   readonly goal?: string;
   readonly startDate?: string;
   readonly endDate?: string;
@@ -128,6 +128,14 @@ export type T3TeamDigestProjectData = {
   readonly burndown?: T3TeamDigestBurndown;
   /** Set when the PR host could not be read this round (the list degrades, it does not fail). */
   readonly changeRequestNote?: string;
+  /** The PRs are the last good read, shown while the host rate-limits reads. */
+  readonly changeRequestsStale?: boolean;
+  /** When the project's Jira tickets last matched Jira (ISO); absent before any sync. */
+  readonly jiraSyncedAt?: string;
+  /** Who the viewer's tickets hang together with (Jira links, same story). */
+  readonly dependencies?: ReadonlyArray<T3TeamDigestDependency>;
+  /** What the viewer merged and moved in the previous working day; absent when neither. */
+  readonly yesterday?: T3TeamDigestYesterday;
 };
 
 export type T3TeamMyWorkDigestPayload = {
@@ -136,8 +144,22 @@ export type T3TeamMyWorkDigestPayload = {
   /**
    * The viewer as the server resolved them: display name from the mirror;
    * `unresolved` when a project had no Jira identity (stale or missing token).
+   * `lastVisitAt` is the server's visit receipt from the previous CHANGED round
+   * (see t3team-myworkDigestLastVisit) — the "since last visit" cutoff.
    */
-  readonly viewer?: { readonly name?: string; readonly unresolved?: true };
+  readonly viewer?: {
+    readonly name?: string;
+    readonly unresolved?: true;
+    readonly lastVisitAt?: string;
+  };
+  /** A first change-request read is still running; the client re-polls soon for it. */
+  readonly changeRequestsPending?: true;
+  /**
+   * The layout an agent stored for this viewer and scope (t3team-myworkDigestArrangement);
+   * absent means the client's heuristic default. Part of the fingerprint: a new arrangement
+   * is a changed digest.
+   */
+  readonly arrangement?: T3TeamMyWorkDigestPlan;
 };
 
 /**
@@ -163,13 +185,20 @@ export type T3TeamDigestProjectSource = {
     readonly isDraft: boolean;
     readonly updatedAt: string;
     readonly viewerReviewRequested: boolean;
+    /** The viewer wrote it; set by the host-wide search, absent on a repository listing. */
+    readonly viewerAuthored?: boolean;
+    readonly authorLogin?: string;
+    readonly author?: T3TeamDigestPerson;
     readonly reviewDecision?: string;
     readonly checksState?: string;
     /** Open PRs only, from the cached detail/activity reads. */
-    readonly reviewers?: ReadonlyArray<{ readonly name: string; readonly login: string }>;
+    readonly reviewers?: ReadonlyArray<T3TeamDigestPerson>;
     readonly unhandledReviewThreads?: ReadonlyArray<{ readonly lastCommentAt?: string }>;
     /** The PR body, for open PRs only (the blocker mention source). */
     readonly body?: string;
+    readonly engaged?: ReadonlyArray<T3TeamDigestPerson>;
+    readonly additions?: number;
+    readonly deletions?: number;
   }>;
   readonly transitions: ReadonlyArray<T3TeamDigestTransition>;
   /**
@@ -191,6 +220,11 @@ export type T3TeamDigestProjectSource = {
   }>;
   /** Set when the PR host could not be read this round; carried to the payload. */
   readonly changeRequestNote?: string;
+  readonly changeRequestsStale?: boolean;
+  readonly jiraSyncedAt?: string;
+  /** Who the viewer's tickets hang together with (Jira links, same story). */
+  readonly dependencies?: ReadonlyArray<T3TeamDigestDependency>;
+  readonly yesterday?: T3TeamDigestYesterday;
   /** The round's clock, so the burndown "today" and unhandled-comment cutoffs are deterministic. */
   readonly nowIso: string;
 };

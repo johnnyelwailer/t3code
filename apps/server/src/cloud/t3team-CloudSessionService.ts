@@ -1,5 +1,6 @@
 import {
   type CloudSession,
+  type CloudSessionCreateInput,
   CloudSessionFailedError,
   type CloudSessionListResult,
 } from "@t3tools/contracts";
@@ -15,12 +16,24 @@ import * as CliTokenManager from "./CliTokenManager.ts";
 import { cancelRunInvocation } from "./t3team-githubActionsSessionClient.ts";
 import { isSessionCredentialIssueEnabled } from "./t3team-CloudSessionCredential.ts";
 import { makeSessionGh } from "./t3team-CloudSessionGh.ts";
-import { resolveFleetConfig } from "./t3team-CloudSessionFleet.ts";
+import { resolveFleetConfig, workflowHistoryUrl } from "./t3team-CloudSessionFleet.ts";
+import { makeFailureReasonCache } from "./t3team-cloudSessionFailureReason.ts";
 import { ConnectCredentialMinter } from "./t3team-ConnectCredentialMinter.ts";
 import { dispatchAndDiscoverSession } from "./t3team-CloudSessionDispatch.ts";
+import { sessionWorkspaceName, standbyPoolKey } from "./t3team-cloudSessionMachineNames.ts";
 import { dispatchCredentialHandoff } from "./t3team-CloudSessionMintGate.ts";
 import { makePayloadIssueCleanup } from "./t3team-CloudSessionPayloadCleanup.ts";
-import { makeSessionTag, projectCloudSession } from "./t3team-CloudSessionProjection.ts";
+import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
+import { makeSessionTag } from "./t3team-cloudSessionName.ts";
+import { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
+import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
+import { isMachineSetupEnabled } from "./t3team-machineSetupFlag.ts";
+import {
+  claimStandby,
+  claimedSessions,
+  isClaimed,
+  makeClaimLedger,
+} from "./t3team-CloudSessionClaim.ts";
 
 /**
  * Starts and tracks *cloud sessions*: full Nexi workspaces provisioned on
@@ -52,29 +65,33 @@ export class CloudSessionService extends Context.Service<
   CloudSessionService,
   {
     readonly list: Effect.Effect<CloudSessionListResult, CloudSessionFailedError>;
-    readonly create: (input: {
-      readonly durationSeconds: number;
-    }) => Effect.Effect<CloudSession, CloudSessionFailedError>;
+    readonly create: (
+      input: CloudSessionCreateInput,
+    ) => Effect.Effect<CloudSession, CloudSessionFailedError>;
     readonly cancel: (input: {
       readonly sessionId: string;
     }) => Effect.Effect<void, CloudSessionFailedError>;
   }
 >()("t3/cloud/t3team-CloudSessionService/CloudSessionService") {}
 
-export const make = Effect.fn("cloud.session_service.make")(function* () {
+const make = Effect.fn("cloud.session_service.make")(function* () {
   const github = yield* GitHubCli.GitHubCli;
   const cloudCli = yield* CliTokenManager.CloudCliTokenManager;
   const minter = yield* ConnectCredentialMinter;
+  const broker = yield* NexiBrokerService;
+  const machines = yield* CloudSessionMachines;
   const handoffEnabled = yield* isSessionCredentialIssueEnabled();
   const { repoRef, machineLabel } = yield* resolveFleetConfig();
 
   // `gh` needs a cwd; irrelevant for `gh api --hostname`, but the process starts somewhere.
-  const cwd = yield* Config.string("HOME").pipe(Config.withDefault("/"));
+  const cwd = yield* Config.String("HOME").pipe(Config.withDefault("/"));
 
   // The gh-execution half (run / listRunsFor / resolveLogin) lives in
   // `t3team-CloudSessionGh`; here we only orchestrate list/create/cancel on top.
   const gh = makeSessionGh(github, repoRef, cwd);
   const payloadCleanup = yield* makePayloadIssueCleanup(repoRef, gh.run);
+  const failureReasons = makeFailureReasonCache();
+  const claims = yield* makeClaimLedger();
 
   const list: CloudSessionService["Service"]["list"] = Effect.gen(function* () {
     // Hard isolation: resolve who the caller is BEFORE fetching, and scope the
@@ -86,15 +103,30 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
     const projected = yield* Effect.forEach(
       runs.slice(0, SESSION_DISPLAY_LIMIT),
       (run) =>
-        projectCloudSession(run, nowMs, machineLabel, repoRef, gh.run).pipe(
+        projectCloudSession(run, nowMs, machineLabel, repoRef, gh.run, failureReasons).pipe(
           Effect.map((session) => ({ run, session })),
         ),
       { concurrency: 4 },
     );
     // Delete the credential payloads of sessions that have spent them.
     yield* payloadCleanup.sweep(projected);
-    const sessions = projected.map((entry) => entry.session);
-    return { sessions, configured: true } satisfies CloudSessionListResult;
+    const dispatched = projected.map((entry) => entry.session);
+    // Claimed standbys run under the pool controller, not this login: the broker knows them.
+    const brokerSessions = broker.enabled
+      ? yield* broker.sessions.pipe(Effect.orElseSucceed(() => []))
+      : [];
+    const claimed = yield* claimedSessions({
+      ledger: claims,
+      login,
+      brokerSessions,
+      knownRunIds: new Set(dispatched.map((session) => session.sessionId)),
+      nowMs,
+      machineLabel,
+      repoRef,
+    });
+    const sessions = [...claimed, ...dispatched];
+    const historyUrl = workflowHistoryUrl(repoRef, login);
+    return { sessions, configured: true, historyUrl } satisfies CloudSessionListResult;
   }).pipe(
     // A server with no `gh` at all cannot ever start a session, so report it as
     // unconfigured and let the client offer setup.
@@ -122,21 +154,121 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
       // "newest run we had not seen" instead is wrong under concurrency — two
       // users dispatching in the same second can each be handed the other's
       // session, and then cancelling yours kills theirs.
-      const sessionTag = yield* makeSessionTag;
+      //
+      // Project machine (#562), resolved before any side effect; null means a plain session. Its
+      // repository token reaches the session only as a broker-held secret, so it needs the broker.
+      const wantsSetup = input.machineSetup === true;
+      if (wantsSetup && !isMachineSetupEnabled()) {
+        return yield* new CloudSessionFailedError({
+          reason: "machine_unavailable",
+          message: "Setting up a project machine is turned off on this server.",
+        });
+      }
+      if (wantsSetup && input.projectId === undefined) {
+        return yield* new CloudSessionFailedError({
+          reason: "machine_unavailable",
+          message: "Set up a machine from a project.",
+        });
+      }
+      const machine =
+        wantsSetup || input.projectId === undefined
+          ? null
+          : yield* machines.resolve(input.projectId);
+      const setup =
+        wantsSetup && input.projectId !== undefined
+          ? yield* machines.resolveSetup(input.projectId)
+          : null;
+      // The caller's name for it, else its repository's (t3team-cloudSessionName.ts).
+      const sessionTag = yield* makeSessionTag(
+        input.name ?? machine?.repository.name ?? setup?.repository.name ?? null,
+      );
+      if ((machine !== null || setup !== null) && !broker.enabled) {
+        return yield* new CloudSessionFailedError({
+          reason: "machine_unavailable",
+          message:
+            "Project machines need the cloud-session broker and its account sign-in, which this build does not have.",
+        });
+      }
+
+      // A warm standby of the project, when the broker has one idle: seconds instead of minutes.
+      const workspace = sessionWorkspaceName(
+        login,
+        machine?.repository ?? setup?.repository ?? null,
+      );
+      if (machine !== null) {
+        // The project is in use: the broker warms its next machine now, not at the next report.
+        yield* broker.reportInterest([standbyPoolKey(machine.repository)]).pipe(Effect.ignore);
+        const nowMs = yield* Clock.currentTimeMillis;
+        const claimedRun = yield* claimStandby({
+          broker,
+          machine,
+          workspace,
+          login,
+          name: input.name ?? machine.repository.name,
+          ledger: claims,
+          nowMs,
+        });
+        // Claimed: this is the session. Never also dispatch one — the standby is spent.
+        if (claimedRun !== null) {
+          const pending = yield* claimedSessions({
+            ledger: claims,
+            login,
+            brokerSessions: [],
+            knownRunIds: new Set(),
+            nowMs,
+            machineLabel,
+            repoRef,
+          });
+          const session = pending.find((item) => item.sessionId === claimedRun);
+          if (session === undefined) {
+            return yield* new CloudSessionFailedError({
+              reason: "unknown_session",
+              message: "The claimed machine could not be listed; it will appear shortly.",
+            });
+          }
+          return session;
+        }
+      }
+
+      // Broker mode: a grant only a run this login dispatched can redeem replaces the whole T3
+      // Connect handoff. Fails with `broker_sign_in_required` before any dispatch when signed out.
+      const access = machine ?? setup;
+      const brokerGrant = broker.enabled
+        ? yield* broker.requestGrant(
+            login,
+            access
+              ? {
+                  GIT_TOKEN: access.token,
+                  GIT_AUTHOR_NAME: access.author.name,
+                  GIT_AUTHOR_EMAIL: access.author.email,
+                }
+              : undefined,
+            machine ? standbyPoolKey(machine.repository) : undefined,
+            machine && machine.teamSecretNames.length > 0
+              ? {
+                  repository: `${machine.repository.owner}/${machine.repository.name}`,
+                  names: machine.teamSecretNames,
+                }
+              : undefined,
+          )
+        : null;
 
       // Credential handoff, with the in-app mint fallback: if this machine
       // has no usable T3 Connect credential yet, the mint (a browser
       // round-trip, zero manual steps) gets a bounded chance to finish here;
       // otherwise the user is told their sign-in is pending in the browser.
-      const payloadIssue = yield* dispatchCredentialHandoff({
-        repoRef,
-        sessionTag,
-        run: gh.run,
-        enabled: handoffEnabled,
-        readCredential: cloudCli.getExisting,
-        mint: minter.mint,
-        mintTimeout: CREATE_MINT_WAIT,
-      });
+      const payloadIssue =
+        brokerGrant !== null
+          ? null
+          : yield* dispatchCredentialHandoff({
+              repoRef,
+              sessionTag,
+              run: gh.run,
+              enabled: handoffEnabled,
+              readCredential: cloudCli.getExisting,
+              mint: minter.mint,
+              mintTimeout: CREATE_MINT_WAIT,
+            });
       if (payloadIssue !== null) yield* payloadCleanup.track(sessionTag, payloadIssue);
 
       return yield* dispatchAndDiscoverSession({
@@ -147,6 +279,10 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
         run: gh.run,
         listRuns: gh.listRunsFor(login),
         discoveryAttempts: DISPATCH_DISCOVERY_ATTEMPTS,
+        brokerGrant,
+        machine,
+        setup,
+        workspace,
       });
     });
 
@@ -169,14 +305,45 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
       // session at all and from cancelling another user's session.
       const login = yield* gh.resolveLogin;
       const sessionRuns = yield* gh.listRunsFor(login);
-      if (!sessionRuns.some((item) => item.id === runId)) {
+      const sessionRun = sessionRuns.find((item) => item.id === runId);
+      // A claimed standby runs under the pool controller: this server's own claim proves it is
+      // this user's session.
+      // After a restart this server's ledger is empty; the broker still lists the user's sessions.
+      const claimedHere =
+        sessionRun === undefined &&
+        ((yield* isClaimed(claims, input.sessionId, login)) ||
+          (broker.enabled &&
+            (yield* broker.sessions.pipe(Effect.orElseSucceed(() => []))).some(
+              (session) => session.runId === input.sessionId,
+            )));
+      if (claimedHere) {
+        return yield* gh.run(cancelRunInvocation(repoRef, runId)).pipe(Effect.asVoid);
+      }
+      if (sessionRun === undefined) {
         return yield* new CloudSessionFailedError({
           reason: "unknown_session",
           message: "That session does not exist.",
         });
       }
+      // Already over (an earlier stop, or its time ran out): stopping is done, not an error.
+      // GitHub refuses to cancel a completed run, which used to surface as "GitHub CLI failed".
+      if (sessionRun.status === "completed") return;
 
-      yield* gh.run(cancelRunInvocation(repoRef, runId)).pipe(Effect.asVoid);
+      yield* gh.run(cancelRunInvocation(repoRef, runId)).pipe(
+        Effect.asVoid,
+        // It can end between the listing and the cancel; only a run still going is a failure.
+        Effect.catch((error) =>
+          gh
+            .listRunsFor(login)
+            .pipe(
+              Effect.flatMap((runs) =>
+                runs.find((item) => item.id === runId)?.status === "completed"
+                  ? Effect.void
+                  : Effect.fail(error),
+              ),
+            ),
+        ),
+      );
     });
 
   return { list, create, cancel } as const;

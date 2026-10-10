@@ -2,124 +2,58 @@
 // @effect-diagnostics missingEffectContext:off - route server boot is fully provided before runPromise.
 // @effect-diagnostics unsafeEffectTypeAssertion:off - scoped HTTP test layer is provided before execution.
 /**
- * A reviewer's verdict, end to end and durable: the REAL publish path writes the carrier, the REAL
- * route records the verdict, and the PROJECTION — the same source the client's thread re-read is
- * built from — is what the assertions read.
+ * A reviewer's verdict, end to end and durable: the REAL publisher writes the draft artifact, the
+ * REAL route records the verdict, and the STORE — the same source the client's
+ * `t3team.subscribeThreadArtifacts` snapshot is built from — is what the assertions read.
  *
- * The bug this closes: the carrier said `draft` forever, so an accepted rewrite came back as pending
- * review after a reload. The verdict now survives the round trip, and the carrier stays hidden while
- * doing so — a status change that surfaced the carrier would put an empty message in the chat.
+ * The bug this closes: a draft said `draft` forever, so an accepted rewrite came back as pending
+ * review after a reload. The verdict now survives the round trip without creating a second row.
  */
 
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert } from "@effect/vitest";
 import { it } from "vite-plus/test";
-import {
-  ProjectId,
-  ProviderInstanceId,
-  ThreadId,
-  type T3TeamMessageDraftMutationAttachment,
-} from "@t3tools/contracts";
-import { CommandId } from "@t3tools/contracts";
-import { createModelSelection } from "@t3tools/shared/model";
+import { ThreadId, type T3TeamMessageDraftMutationAttachment } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import { HttpBody, HttpClient, HttpRouter } from "effect/unstable/http";
+import { HttpBody, HttpClient, HttpRouter } from "effect/http";
 
-import { OrchestrationCommandReceiptRepositoryLive } from "./persistence/Layers/OrchestrationCommandReceipts.ts";
-import { OrchestrationEventStoreLive } from "./persistence/Layers/OrchestrationEventStore.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { OrchestrationEngineLive } from "./orchestration/Layers/OrchestrationEngine.ts";
-import { OrchestrationProjectionPipelineLive } from "./orchestration/Layers/ProjectionPipeline.ts";
-import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery.ts";
-import * as ThreadBackgroundLiveness from "./orchestration/ThreadBackgroundLiveness.ts";
-import * as ThreadPlanProgress from "./orchestration/ThreadPlanProgress.ts";
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
-import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
-import { ServerConfig } from "./config.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { makeT3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 import { t3teamThreadDraftMutationStatusRouteLayer } from "./t3team-thread-draftMutation-status-route.ts";
+import * as ThreadArtifactsStore from "./t3team-v2/t3team-threadArtifactsStore.ts";
 
-const projectId = ProjectId.make("proj-draft-status");
-const threadId = "thread-draft-status";
-const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
-const ISO = "2026-07-28T00:00:00.000Z";
+const threadId = ThreadId.make("thread-draft-status");
 const PATCH = { description: "## Goal\nCheckout must round to two decimals." };
 
-const EngineLive = OrchestrationEngineLive.pipe(
-  // The engine itself reads background liveness per thread (#475 shell mapping).
-  Layer.provideMerge(ThreadBackgroundLiveness.layer),
-  // Upstream's shell mapper reads background liveness + plan progress per thread;
-  // both are provided INTO the snapshot query so the requirement is discharged here.
-  Layer.provideMerge(
-    OrchestrationProjectionSnapshotQueryLive.pipe(
-      Layer.provide(ThreadBackgroundLiveness.layer),
-      Layer.provide(ThreadPlanProgress.layer),
-    ),
-  ),
-  Layer.provide(OrchestrationProjectionPipelineLive),
-  Layer.provide(OrchestrationEventStoreLive),
-  Layer.provide(OrchestrationCommandReceiptRepositoryLive),
-  Layer.provide(RepositoryIdentityResolver.layer),
+const StoreLive = ThreadArtifactsStore.layer.pipe(
   Layer.provideMerge(SqlitePersistenceMemory),
-  Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-draft-status-" })),
   Layer.provideMerge(NodeServices.layer),
 );
 
-/** ONE engine instance behind both the served route and the test body's own reads. */
+/** ONE store instance behind both the served route and the test body's own reads. */
 const testLayer = HttpRouter.serve(t3teamThreadDraftMutationStatusRouteLayer, {
   disableListenLog: true,
   disableLogger: true,
-}).pipe(Layer.provideMerge(EngineLive), Layer.provideMerge(NodeHttpServer.layerTest));
+}).pipe(Layer.provideMerge(StoreLive), Layer.provideMerge(NodeHttpServer.layerTest));
 
 const runTest = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.runPromise(
     Effect.scoped(effect).pipe(Effect.provide(testLayer)) as Effect.Effect<A, E, never>,
   );
 
-const seed = Effect.gen(function* () {
-  const orchestration = yield* OrchestrationEngineService;
-  yield* orchestration.dispatch({
-    type: "project.create",
-    commandId: CommandId.make("draft-status-project"),
-    projectId,
-    title: "Draft Status Project",
-    workspaceRoot: "/tmp/draft-status",
-    defaultModelSelection: modelSelection,
-    createdAt: ISO,
-  });
-  yield* orchestration.dispatch({
-    type: "thread.create",
-    commandId: CommandId.make("draft-status-thread"),
-    threadId: ThreadId.make(threadId),
-    projectId,
-    title: "Review thread",
-    modelSelection,
-    runtimeMode: "full-access",
-    interactionMode: "default",
-    branch: null,
-    worktreePath: null,
-    createdAt: ISO,
-  });
-});
-
-/** Publish a carrier the way a draft tool result does — the real publisher, not a hand-built message. */
-const publishCarrier = Effect.gen(function* () {
-  const orchestration = yield* OrchestrationEngineService;
-  const publish = makeT3TeamDraftMutationPublisher({
-    threadId,
-    dispatch: (command) => orchestration.dispatch(command),
-  });
+/** Publish a draft the way a draft tool result does — the real publisher, not a hand-built row. */
+const publishDraft = Effect.gen(function* () {
+  const store = yield* ThreadArtifactsStore.T3TeamThreadArtifactsStore;
+  const publish = makeT3TeamDraftMutationPublisher({ threadId, recordArtifact: store.upsert });
   yield* publish({
     content: [{ type: "text", text: "{}" }],
     structuredContent: {
       draftMutation: {
         kind: "jira-work-item-draft",
         tool: "t3team.work_item.description.draft_update",
-        target: { provider: "jira", issueIdOrKey: "NXAI-6" },
+        target: { provider: "jira", issueIdOrKey: "PROJ-6" },
         field: "description",
         patch: PATCH,
         status: "draft",
@@ -130,18 +64,13 @@ const publishCarrier = Effect.gen(function* () {
   });
 });
 
-const readCarrier = Effect.gen(function* () {
-  const query = yield* ProjectionSnapshotQuery;
-  const thread = Option.getOrThrow(yield* query.getThreadDetailById(ThreadId.make(threadId)));
-  const carrier = thread.messages.find((message) =>
-    (message.t3teamExt?.attachments ?? []).some(
-      (attachment) => attachment.kind === "draft-mutation",
-    ),
-  );
-  const attachment = (carrier?.t3teamExt?.attachments ?? []).find(
-    (entry): entry is T3TeamMessageDraftMutationAttachment => entry.kind === "draft-mutation",
-  );
-  return { thread, carrier, draft: attachment?.draft };
+const readDrafts = Effect.gen(function* () {
+  const store = yield* ThreadArtifactsStore.T3TeamThreadArtifactsStore;
+  const rows = yield* store.listByThread(threadId);
+  return rows.map((row) => ({
+    row,
+    draft: (row.payload as T3TeamMessageDraftMutationAttachment).draft,
+  }));
 });
 
 const postStatus = (body: unknown) =>
@@ -153,46 +82,39 @@ const postStatus = (body: unknown) =>
     return { status: response.status, body: (yield* response.json) as Record<string, unknown> };
   });
 
-it("records a verdict on the carrier so a re-read stops presenting it as pending review", async () => {
+it("records a verdict on the draft so a re-read stops presenting it as pending review", async () => {
   await runTest(
     Effect.gen(function* () {
       yield* Layer.build(testLayer);
-      yield* seed;
-      yield* publishCarrier;
+      yield* publishDraft;
 
-      // As published: exactly the shape every carrier written before this slice had, and it decodes.
-      const published = yield* readCarrier;
-      assert.strictEqual(published.draft?.status, "draft");
-      assert.strictEqual(published.carrier?.role, "system");
-      assert.strictEqual(published.carrier?.text, "");
-      assert.strictEqual(published.carrier?.t3teamExt?.visibleToUser, false);
-      const draftId = published.draft?.id ?? "";
-      assert.strictEqual(draftId, `jira-draft:${published.carrier?.id ?? ""}`);
-      const messageCount = published.thread.messages.length;
+      const [published] = yield* readDrafts;
+      assert.strictEqual(published?.row.kind, "draft-mutation");
+      assert.strictEqual(published?.draft.status, "draft");
+      const draftId = published?.draft.id ?? "";
+      assert.strictEqual(draftId, published?.row.id);
 
       // The reviewer accepts.
       const accepted = yield* postStatus({ threadId, draftId, status: "applied" });
       assert.strictEqual(accepted.status, 200);
       assert.deepStrictEqual(accepted.body, { ok: true, draftId, status: "applied" });
 
-      // The verdict is in the PROJECTION — what a thread re-read returns.
-      const settled = yield* readCarrier;
-      assert.strictEqual(settled.draft?.status, "applied");
-      assert.strictEqual(settled.draft?.id, draftId);
-      // A verdict never rewrites the proposal it settles.
-      assert.deepStrictEqual(settled.draft?.patch, PATCH);
-      // Still ONE hidden carrier, not a new visible chat message.
-      assert.strictEqual(settled.thread.messages.length, messageCount);
-      assert.strictEqual(settled.carrier?.id, published.carrier?.id);
-      assert.strictEqual(settled.carrier?.role, "system");
-      assert.strictEqual(settled.carrier?.text, "");
-      assert.strictEqual(settled.carrier?.t3teamExt?.visibleToUser, false);
-      assert.strictEqual(settled.carrier?.t3teamExt?.visibleToAgent, false);
+      // The verdict is in the store, on the same single row, with the proposal untouched.
+      const settled = yield* readDrafts;
+      assert.strictEqual(settled.length, 1);
+      assert.strictEqual(settled[0]?.draft.status, "applied");
+      assert.strictEqual(settled[0]?.draft.id, draftId);
+      assert.deepStrictEqual(settled[0]?.draft.patch, PATCH);
 
-      // A dismissal rides the same path…
-      const dismissed = yield* postStatus({ threadId, draftId, status: "dismissed" });
+      // A dismissal rides the same path, also when addressed by the bare id.
+      const bareId = draftId.slice("jira-draft:".length);
+      const dismissed = yield* postStatus({
+        threadId,
+        carrierMessageId: bareId,
+        status: "dismissed",
+      });
       assert.strictEqual(dismissed.status, 200);
-      assert.strictEqual((yield* readCarrier).draft?.status, "dismissed");
+      assert.strictEqual((yield* readDrafts)[0]?.draft.status, "dismissed");
     }),
   );
 });
@@ -201,16 +123,24 @@ it("refuses a verdict it cannot address instead of reporting a silent success", 
   await runTest(
     Effect.gen(function* () {
       yield* Layer.build(testLayer);
-      yield* seed;
-      yield* publishCarrier;
+      yield* publishDraft;
+      const [published] = yield* readDrafts;
 
-      const unknownCarrier = yield* postStatus({
+      const unknownDraft = yield* postStatus({
         threadId,
         draftId: "jira-draft:does-not-exist",
         status: "applied",
       });
-      assert.strictEqual(unknownCarrier.status, 502);
-      assert.include(String(unknownCarrier.body.error), "No draft carrier");
+      assert.strictEqual(unknownDraft.status, 502);
+      assert.include(String(unknownDraft.body.error), "No draft");
+
+      // A draft is only addressable from the thread that proposed it.
+      const wrongThread = yield* postStatus({
+        threadId: "thread-other",
+        draftId: published?.draft.id,
+        status: "applied",
+      });
+      assert.strictEqual(wrongThread.status, 502);
 
       const badStatus = yield* postStatus({
         threadId,

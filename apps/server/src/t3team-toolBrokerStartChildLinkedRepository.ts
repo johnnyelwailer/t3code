@@ -3,12 +3,13 @@ import { t3teamRandomHex } from "./t3team-random.ts";
 import type * as Path from "effect/Path";
 
 import {
+  CHILD_WORKTREES_DIR_NAME,
   deriveReferenceDirectoryName,
   HIDDEN_T3TEAM_DIR,
   type LinkedRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
 
-export function normalizeRepositoryLookupKey(value: string): string {
+function normalizeRepositoryLookupKey(value: string): string {
   const trimmed = value.trim().replace(/\.git$/i, "");
   const sshMatch = /^git@([^:]+):(.+)$/i.exec(trimmed);
   if (sshMatch) {
@@ -35,6 +36,18 @@ export function repositoryLookupCandidates(value: string): ReadonlyArray<string>
     candidates.add(normalized.slice(firstSlashIndex + 1));
   }
   return [...candidates];
+}
+
+const HAS_HOST = /^(?:[a-z][a-z0-9+.-]*:\/\/|git@)/i;
+
+/** Two spellings of one repository (https vs ssh, with or without `.git`). When both name a
+ * host, hosts must match too: `github.com/a/b` and `gitlab.com/a/b` are different repositories. */
+export function isSameRepository(left: string, right: string): boolean {
+  if (HAS_HOST.test(left.trim()) && HAS_HOST.test(right.trim())) {
+    return repositoryLookupCandidates(left)[0] === repositoryLookupCandidates(right)[0];
+  }
+  const candidates = new Set(repositoryLookupCandidates(left));
+  return repositoryLookupCandidates(right).some((candidate) => candidates.has(candidate));
 }
 
 export function findLinkedRepository(
@@ -67,16 +80,16 @@ export function buildScopedChildWorktreePath(input: {
   readonly projectWorkspaceRoot: string;
   readonly repoFullName: string;
   readonly repoRef: string;
-  readonly childThreadId: string;
+  readonly worktreeKey: string;
 }): string {
   const repoDirectory = deriveReferenceDirectoryName(input.repoFullName);
   const refDirectory = sanitizeScopedPathSegment(input.repoRef) || "default";
-  const childDirectory = input.childThreadId.slice(0, 8).toLowerCase();
+  const childDirectory = input.worktreeKey.slice(0, 8).toLowerCase();
 
   return input.path.join(
     input.projectWorkspaceRoot,
     HIDDEN_T3TEAM_DIR,
-    "child-session-worktrees",
+    CHILD_WORKTREES_DIR_NAME,
     repoDirectory,
     `${refDirectory}-${childDirectory}`,
   );

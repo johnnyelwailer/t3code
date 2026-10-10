@@ -1,6 +1,6 @@
 /**
  * Broker-side wiring for `t3team.widget.show`: captures the optional services the widget
- * pipeline needs (registry + CAS persistence) at layer-build time and produces the
+ * pipeline needs (registry, thread artifacts store, CAS persistence) at layer-build time and produces the
  * per-thread `showWidget` dispatch callback. Kept out of `t3team-toolBrokerLive.ts` so the
  * broker layer stays small.
  */
@@ -10,13 +10,13 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
-import type { OrchestrationCommand } from "@t3tools/contracts";
-
+import * as HtmlRender from "./htmlRender/HtmlRender.ts";
 import { WorkspacePaths } from "./workspace/WorkspacePaths.ts";
 import type { T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 import { errorResult } from "./t3team-toolBrokerHelpers.ts";
+import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import { T3TeamWidgetRegistry, type T3TeamWidgetRegistryShape } from "./t3team-widgetRegistry.ts";
 import {
   callT3TeamWidgetShowTool,
@@ -25,16 +25,20 @@ import {
 
 export interface T3TeamWidgetShowRuntime {
   readonly registry: T3TeamWidgetRegistryShape | undefined;
+  readonly artifacts: T3TeamThreadArtifactsStore["Service"] | undefined;
   readonly persistenceContext: Context.Context<T3TeamWidgetPersistenceServices> | undefined;
+  readonly htmlRender: HtmlRender.HtmlRender["Service"] | undefined;
 }
 
 /** Capture the widget pipeline's optional services from the ambient layer context. */
 const captureT3TeamWidgetShowRuntime = Effect.fnUntraced(function* () {
   const registry = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamWidgetRegistry));
+  const artifacts = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamThreadArtifactsStore));
   const fileSystem = Option.getOrUndefined(yield* Effect.serviceOption(FileSystem.FileSystem));
   const path = Option.getOrUndefined(yield* Effect.serviceOption(Path.Path));
   const sqlClient = Option.getOrUndefined(yield* Effect.serviceOption(SqlClient.SqlClient));
   const workspacePaths = Option.getOrUndefined(yield* Effect.serviceOption(WorkspacePaths));
+  const htmlRender = Option.getOrUndefined(yield* Effect.serviceOption(HtmlRender.HtmlRender));
 
   // The CAS artifact write needs all four services; persistence degrades to an inline-only
   // widget when any is missing in this runtime.
@@ -48,18 +52,18 @@ const captureT3TeamWidgetShowRuntime = Effect.fnUntraced(function* () {
         )
       : undefined;
 
-  return { registry, persistenceContext } satisfies T3TeamWidgetShowRuntime;
+  return { registry, artifacts, persistenceContext, htmlRender } satisfies T3TeamWidgetShowRuntime;
 });
 
 /** One-shot binder: capture the runtime once at layer build, then mint per-thread callbacks. */
 export const makeT3TeamWidgetShowBinder = Effect.fnUntraced(function* () {
   const runtime = yield* captureT3TeamWidgetShowRuntime();
-  return <TLoadError, TDispatchError>(
-    input: Omit<Parameters<typeof makeT3TeamShowWidget<TLoadError, TDispatchError>>[0], "runtime">,
+  return <TLoadError>(
+    input: Omit<Parameters<typeof makeT3TeamShowWidget<TLoadError>>[0], "runtime">,
   ) => makeT3TeamShowWidget({ ...input, runtime });
 });
 
-export function makeT3TeamShowWidget<TLoadError, TDispatchError>(input: {
+export function makeT3TeamShowWidget<TLoadError>(input: {
   readonly runtime: T3TeamWidgetShowRuntime;
   readonly threadId: string;
   /** Resolves the owning project (for the artifact workspace root); failures degrade to an
@@ -68,12 +72,11 @@ export function makeT3TeamShowWidget<TLoadError, TDispatchError>(input: {
     { readonly project: { readonly workspaceRoot: string } },
     TLoadError
   >;
-  readonly dispatch: (command: OrchestrationCommand) => Effect.Effect<unknown, TDispatchError>;
 }): (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult> {
   return (toolArgs) =>
     Effect.gen(function* () {
-      const registry = input.runtime.registry;
-      if (!registry) {
+      const { registry, artifacts } = input.runtime;
+      if (!registry || !artifacts) {
         return errorResult("Widget rendering is not available in this runtime.");
       }
       const workspaceRoot = yield* input.loadThreadProject().pipe(
@@ -87,9 +90,9 @@ export function makeT3TeamShowWidget<TLoadError, TDispatchError>(input: {
           threadId: input.threadId,
           workspaceRoot,
           registry,
-          dispatch: (command) =>
-            input.dispatch(command).pipe(Effect.mapError((cause) => String(cause))),
+          recordArtifact: artifacts.upsert,
           persistenceContext: input.runtime.persistenceContext,
+          htmlRender: input.runtime.htmlRender,
         },
       });
     });

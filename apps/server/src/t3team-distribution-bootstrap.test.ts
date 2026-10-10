@@ -51,7 +51,7 @@ vi.mock("@t3code/distribution", () => ({
       },
     });
     context.defineProviderDriver({
-      schemaVersion: 1,
+      schemaVersion: 2,
       driver: "nexplore",
       displayName: "Nexplore AI",
       create: async () => {
@@ -96,6 +96,7 @@ vi.mock("@t3code/distribution", () => ({
     colors: { light: {}, dark: {} },
   },
   distributionBranding: undefined,
+  distributionPersistence: [],
 }));
 
 describe("compiled-in distribution bootstrap", () => {

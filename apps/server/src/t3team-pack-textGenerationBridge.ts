@@ -7,7 +7,7 @@
  * is already covered by `t3team-pack-textGenerationBridge.test.ts`.
  */
 import { ProviderDriverKind, TextGenerationError } from "@t3tools/contracts";
-import type { PackProviderDriverDefinition } from "@t3team/packs";
+import type { PackProviderDriverDefinition } from "@t3team/pack-api";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -18,9 +18,7 @@ import type { TextGeneration } from "./textGeneration/TextGeneration.ts";
 const errorDetail = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
-export const unsupportedTextGeneration = (
-  driver: ProviderDriverKind,
-): TextGeneration["Service"] => {
+const unsupportedTextGeneration = (driver: ProviderDriverKind): TextGeneration["Service"] => {
   const fail = (operation: string) =>
     Effect.fail(
       new TextGenerationError({

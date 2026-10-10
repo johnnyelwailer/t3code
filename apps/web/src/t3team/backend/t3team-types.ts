@@ -1,9 +1,4 @@
-import type {
-  ClientOrchestrationCommand,
-  ServerConfig,
-  ServerProvider,
-  ThreadId,
-} from "@t3tools/contracts";
+import type { ServerConfig, ServerProvider, ThreadId } from "@t3tools/contracts";
 import type {
   ProjectWorkspaceRefreshWorkItemContextResult,
   ProjectWorkspaceRefreshWorkItemSliceContextResult,
@@ -18,6 +13,7 @@ import type {
 } from "@t3tools/project-recipes";
 import type { AtlassianBackendApi } from "./t3team-atlassianBackendTypes";
 import type { GitHubBackendApi } from "./t3team-githubBackendTypes";
+import type { T3TeamOrchestrationApi } from "./t3team-orchestrationApi";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
@@ -40,13 +36,8 @@ export interface BackendApi {
   readonly state: BackendState;
   readonly connect: () => Promise<void>;
   readonly disconnect: () => Promise<void>;
-  readonly dispatchCommand: (command: ClientOrchestrationCommand) => Promise<void>;
-  readonly forkThread: (input: {
-    readonly threadId: string;
-    readonly title?: string;
-    /** Fork branch point: copy messages up to and including this message id. */
-    readonly upToMessageId?: string;
-  }) => Promise<{ readonly ok: true; readonly childThreadId: string }>;
+  /** Thread and project writes (V2 client operations) on the primary environment. */
+  readonly orchestration: T3TeamOrchestrationApi;
   readonly launchRecipeWorkflow: (
     input: LaunchProjectRecipeWorkflowRequest,
   ) => Promise<LaunchProjectRecipeWorkflowResponse>;
@@ -89,11 +80,15 @@ export interface BackendApi {
   readonly projectWorkspace: ProjectWorkspaceBackendApi;
 }
 
+/** One linked repository. `status` is its checkout's last settled state (`pending` until the
+ * first clone lands); `syncState` is set while a background clone/fetch is queued or running. */
 export type LinkedRepositorySyncResult = {
   readonly url: string;
   readonly localPath: string;
-  readonly status: "cloned" | "updated" | "failed";
+  readonly status: "pending" | "cloned" | "updated" | "failed";
   readonly error?: string;
+  readonly syncedAt?: string;
+  readonly syncState?: "queued" | "cloning" | "updating";
 };
 
 export interface ProjectWorkspaceBackendApi {
@@ -101,8 +96,20 @@ export interface ProjectWorkspaceBackendApi {
     readonly workspaceRoot: string;
     readonly linkedRepositoryUrls?: ReadonlyArray<string>;
     readonly setupProfileId?: string;
+    /** An explicit save: refetch every linked repository instead of honoring the throttle. */
+    readonly refreshLinkedRepositories?: boolean;
     readonly customProfile?: import("@t3tools/t3team-skill-packs").T3TeamProfile;
   }) => Promise<ProjectWorkspaceBootstrapResult>;
+  /** The linked repositories' recorded state plus live background-sync phases. No git work. */
+  readonly readLinkedRepositoryStatus: (input: {
+    readonly workspaceRoot: string;
+  }) => Promise<{ readonly linkedRepositories: ReadonlyArray<LinkedRepositorySyncResult> }>;
+  /** Sets the project's main repository (`url: null` = the project's own workspace). */
+  readonly setMainRepository: (input: {
+    readonly projectId: string;
+    readonly url: string | null;
+    readonly selection?: "user" | "detected";
+  }) => Promise<ProjectMainRepositorySwitchResult>;
   readonly discoverRecipes: (
     input: DiscoverProjectRecipesRequest,
   ) => Promise<DiscoverProjectRecipesResponse>;
@@ -182,11 +189,13 @@ export interface T3TeamAuthProviderProps {
 
 // Workspace bootstrap shapes live in their own module; re-exported so importers are unaffected.
 import type {
+  ProjectMainRepositorySwitchResult,
   ProjectWorkspaceBootstrapResult,
   ProjectWorkspaceContextFile,
   ProjectWorkspaceWriteContextFilesResult,
 } from "~/t3team/backend/t3team-projectWorkspaceTypes";
 export type {
+  ProjectMainRepositorySwitchResult,
   ProjectWorkspaceBootstrapResult,
   ProjectWorkspaceContextFile,
   ProjectWorkspaceWriteContextFilesResult,

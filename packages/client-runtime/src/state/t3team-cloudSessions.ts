@@ -1,5 +1,5 @@
 import { WS_METHODS } from "@t3tools/contracts";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 import {
@@ -32,6 +32,9 @@ export const CLOUD_SESSION_REFRESH_INTERVAL_MS = 5_000;
 /** Serve a cached list briefly so switching surfaces does not refetch. */
 const CLOUD_SESSION_STALE_TIME_MS = 2_000;
 
+/** Discovery reads files on disk; serve the last answer for this long before re-reading. */
+const PROJECT_MACHINE_STALE_TIME_MS = 30_000;
+
 export function createCloudSessionAtoms<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | R, E>,
 ) {
@@ -60,6 +63,17 @@ export function createCloudSessionAtoms<R, E>(
         mode: "serial" as const,
         key: ({ environmentId }: { readonly environmentId: string }) => environmentId,
       },
+    }),
+
+    /**
+     * The machine a new cloud session from this project builds (its default template), read from
+     * the project's checkouts on the environment that holds it. A committed definition changes
+     * rarely; remounting the surface that shows it revalidates.
+     */
+    projectMachine: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:cloud-sessions:project-machine",
+      tag: WS_METHODS.projectMachineDiscover,
+      staleTimeMs: PROJECT_MACHINE_STALE_TIME_MS,
     }),
 
     cancel: createEnvironmentRpcCommand(runtime, {

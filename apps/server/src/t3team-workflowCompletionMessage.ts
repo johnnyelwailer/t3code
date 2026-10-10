@@ -1,26 +1,16 @@
 // @effect-diagnostics globalConsole:off -- fire-and-forget delivery failure log in a plain Promise path, outside any Effect runtime.
-import {
-  CommandId,
-  MessageId,
-  type OrchestrationCommand,
-  type T3TeamMessageAttachment,
-  ThreadId,
-} from "@t3tools/contracts";
-import { renderWorkflowValueAsDisplayText } from "@t3tools/shared/t3team-workflowOutputText";
+import type { T3TeamMessageAttachment } from "@t3tools/contracts";
+import { frameWorkflowOutputData } from "@t3tools/shared/t3team-workflowOutputData";
 
 import { workflowCompletionDraftRef } from "./t3team-workflowCompletionDraftRef.ts";
 import { workflowStepDetailSnippet } from "./t3team-workflowEngineStepActivities.ts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 
-/**
- * Formats a run's output as the terminal chat message's text — BEFORE it is ever stored (see
- * `postTerminalMessage` below). The rich record rendering (never dropping a nested field,
- * truncating visibly) lives in the shared `renderWorkflowRecordAsDisplayText`, also used by the
- * web client's `t3team-workflowCompletionDisplayText.ts` for re-rendering legacy raw-JSON text.
- */
+type TerminalHost = Pick<WorkflowHostPort, "postMessage">;
+
+/** Relay the run's structured output as bounded data, preserving the instruction boundary. */
 export function formatWorkflowOutput(output: unknown): string {
-  // Arrays and deep objects render as tables / nested bullets — a run's structured result never
-  // reaches the thread as raw JSON (GHE #418).
-  return renderWorkflowValueAsDisplayText(output, { emptyFallback: "Workflow completed." });
+  return frameWorkflowOutputData(output);
 }
 
 /**
@@ -29,26 +19,11 @@ export function formatWorkflowOutput(output: unknown): string {
  * lands last overwrites the other — a transient failure notice can never sit
  * contradicting a later success (or vice versa) in the same thread.
  *
- * Re-posting the SAME text under a fresh timestamp is how a terminal notice is
- * RE-SURFACED: live incident — a run died 30 ms after launch, the notice posted
- * while the launch turn was still active, and it was buried for 40 minutes until
- * the user opened the card. When the launch turn ends, the reactor re-posts it so
- * it lands AFTER the turn instead of inside it.
+ * The message waits for the launch thread's active run to end before it posts
+ * (`afterActiveRun`): live incident — a run died 30 ms after launch, the notice
+ * posted while the launch turn was still active, and it was buried inside that
+ * turn for 40 minutes until the user opened the card. Held, it lands AFTER the turn.
  */
-export async function postWorkflowTerminalNotice(input: {
-  readonly launchThreadId: string | undefined;
-  readonly workflowRunId: string;
-  readonly kind: "complete" | "failed";
-  readonly text: string;
-  /** Structured card data for clients that render one; the text stays the fallback. */
-  readonly attachments?: ReadonlyArray<T3TeamMessageAttachment>;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
-  readonly newId: () => string;
-  readonly nowIso: () => string;
-}): Promise<void> {
-  await postTerminalMessage(input);
-}
-
 async function postTerminalMessage(input: {
   readonly launchThreadId: string | undefined;
   readonly workflowRunId: string;
@@ -56,27 +31,19 @@ async function postTerminalMessage(input: {
   readonly text: string;
   /** Structured card data for clients that render one; the text stays the fallback. */
   readonly attachments?: ReadonlyArray<T3TeamMessageAttachment>;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
-  readonly newId: () => string;
-  readonly nowIso: () => string;
+  readonly host: TerminalHost;
 }): Promise<void> {
   if (input.launchThreadId === undefined) return;
-  await input
-    .dispatch({
-      type: "thread.message.upsert",
-      commandId: CommandId.make(`t3team-wf:${input.kind}:${input.newId()}`),
-      threadId: ThreadId.make(input.launchThreadId),
-      message: {
-        messageId: MessageId.make(`t3team-wf-result:${input.workflowRunId}`),
-        role: "assistant",
-        text: input.text,
-        turnId: null,
-        streaming: false,
-        ...(input.attachments === undefined || input.attachments.length === 0
-          ? {}
-          : { t3teamExt: { attachments: input.attachments } }),
-      },
-      createdAt: input.nowIso(),
+  await input.host
+    .postMessage({
+      threadId: input.launchThreadId,
+      messageId: `t3team-wf-result:${input.workflowRunId}`,
+      role: "assistant",
+      text: input.text,
+      ...(input.attachments === undefined || input.attachments.length === 0
+        ? {}
+        : { ext: { attachments: [...input.attachments] } }),
+      afterActiveRun: true,
     })
     .catch((error: unknown) => {
       // Never fail the caller over a notification, but never swallow silently
@@ -95,12 +62,10 @@ export async function deliverWorkflowCompletion(input: {
   readonly output: unknown;
   /** The run's project, so a proposal card can navigate to the work item. */
   readonly projectId?: string;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
-  readonly newId: () => string;
-  readonly nowIso: () => string;
+  readonly host: TerminalHost;
 }): Promise<void> {
   // A run that proposed a draft also carries a card ref (see t3team-workflowCompletionDraftRef.ts).
-  // The TEXT is unchanged either way: a client that renders no card still reads the same summary.
+  // Clients without a card still receive the framed result as text.
   const draftRef = workflowCompletionDraftRef(input.output, input.projectId);
   await postTerminalMessage({
     launchThreadId: input.launchThreadId,
@@ -108,9 +73,7 @@ export async function deliverWorkflowCompletion(input: {
     kind: "complete",
     text: formatWorkflowOutput(input.output),
     ...(draftRef === undefined ? {} : { attachments: [draftRef] }),
-    dispatch: input.dispatch,
-    newId: input.newId,
-    nowIso: input.nowIso,
+    host: input.host,
   });
 }
 
@@ -128,9 +91,8 @@ export async function deliverWorkflowCompletion(input: {
  *
  * A BUNDLED or project recipe is shipped code. Its run was started by a human clicking a button, and
  * that human cannot edit the recipe's source; self-heal does not apply either (`repairIntent` is only
- * set for the ephemeral case). Handing them "Fix the orchestration source … call
- * t3team_help("agent-orchestration")" is agent-facing text pointed at the one reader who has no way to
- * comply, and it hides the only thing they can do.
+ * set for the ephemeral case). Handing them "Fix the orchestration source" is agent-facing text
+ * pointed at the one reader who has no way to comply, and it hides the only thing they can do.
  */
 /**
  * `errorText` sometimes carries a raw JSON object as its message (a thrown HTTP/tool error whose
@@ -205,9 +167,7 @@ export async function deliverWorkflowFailure(input: {
   readonly launchThreadId: string | undefined;
   readonly workflowRunId: string;
   readonly errorText: string;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
-  readonly newId: () => string;
-  readonly nowIso: () => string;
+  readonly host: TerminalHost;
   /** Defaults to the agent-authored wording, so a funnel that cannot tell keeps today's text. */
   readonly hostOwnsSource?: boolean;
   /** See {@link buildWorkflowFailureText}. Defaults to `false` for funnels that cannot tell. */
@@ -222,8 +182,6 @@ export async function deliverWorkflowFailure(input: {
       hostOwnsSource: input.hostOwnsSource ?? true,
       resumable: input.resumable ?? false,
     }),
-    dispatch: input.dispatch,
-    newId: input.newId,
-    nowIso: input.nowIso,
+    host: input.host,
   });
 }

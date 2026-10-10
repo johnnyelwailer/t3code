@@ -1,8 +1,8 @@
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
-import { SqlitePersistenceMemory } from "../Layers/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "../Sqlite.ts";
 import { serializeBacklogCacheJson } from "../../t3team-atlassian-backlog-cacheQueries.ts";
 import Migration0037 from "./t3team-037_BackfillAssigneeAccountId.ts";
 

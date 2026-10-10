@@ -13,18 +13,15 @@
  * controller invokes them — outside any surrounding fiber.
  */
 
-import type { OrchestrationCommand } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import type {
-  WorkflowRun,
-  WorkflowRunRepositoryShape,
-} from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowRun, WorkflowRunRepositoryShape } from "./persistence/WorkflowRuns.ts";
 import type { WorkflowRunLifecycle } from "./t3team-workflowEngineLaunch.ts";
 import { makeOrphanIfSleeping } from "./t3team-workflowEngineDurabilityOrphan.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 import { createWorkflowRunShellPusher } from "./t3team-workflowRunShellPush.ts";
 
 // The initial-row builder lives in its own module (LOC cap); re-exported so importers stay valid.
@@ -39,18 +36,17 @@ function isoFromMillis(millis: number): string {
 }
 
 /** Adapt the Effect repo into the Promise-based lifecycle the launch controller drives.
- * `onSleep` (Epic 27) is a best-effort poke fired after a clock park is recorded, so the
- * scheduler re-arms its soonest-deadline timer for the freshly-slept run. */
+ * `onSleep` (Epic 27) is a best-effort poke fired after a clock park is recorded; the
+ * scheduler's sweep then picks the deadline up from the row on its next tick. */
 export function makeWorkflowRunLifecycle(opts: {
   readonly repo: WorkflowRunRepositoryShape;
   readonly row: WorkflowRun;
   readonly nowIso: () => string;
   readonly onSleep?: () => void;
-  /** Present when the caller can post to the launching thread: orphaned runs
-   * (crash-recovered clock parks) then notify the conversation instead of
-   * failing silently with only a server log line. */
-  readonly dispatch?: (command: OrchestrationCommand) => Promise<void>;
-  readonly newId?: () => string;
+  /** Present when the caller runs against the workflow host: run transitions then refresh the
+   * launch thread's status facts, and orphaned runs (crash-recovered clock parks) notify the
+   * conversation instead of failing silently with only a server log line. */
+  readonly host?: WorkflowHostPort;
 }): WorkflowRunLifecycle {
   const { repo, row } = opts;
   const admissionManaged = row.origin === "ephemeral";
@@ -62,8 +58,7 @@ export function makeWorkflowRunLifecycle(opts: {
   // this dedup.
   const pushIfTransitioned = createWorkflowRunShellPusher({
     launchThreadId: row.launchThreadId,
-    dispatch: opts.dispatch,
-    newId: opts.newId,
+    host: opts.host,
   });
   return {
     recordRunning: () =>
@@ -136,6 +131,7 @@ export function makeWorkflowRunLifecycle(opts: {
           watchParamsHash: watch.paramsHash,
           watchSignalName: watch.watchSignalName,
           watchSignalKey: watch.watchSignalKey,
+          ...(watch.branches === undefined ? {} : { watchAny: watch.branches }),
           updatedAt: opts.nowIso(),
         }),
       ).then(() => {
@@ -176,8 +172,7 @@ export function makeWorkflowRunLifecycle(opts: {
       row,
       nowIso: opts.nowIso,
       releaseAdmission,
-      ...(opts.dispatch === undefined ? {} : { dispatch: opts.dispatch }),
-      ...(opts.newId === undefined ? {} : { newId: opts.newId }),
+      ...(opts.host === undefined ? {} : { host: opts.host }),
     }),
   };
 }

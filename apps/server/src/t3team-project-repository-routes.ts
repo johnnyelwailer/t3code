@@ -1,9 +1,9 @@
-import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as EffectOption from "effect/Option";
-import { HttpRouter } from "effect/unstable/http";
+import { HttpRouter } from "effect/http";
 import {
   readPersistedT3TeamProjectSetupState,
   renderT3TeamProjectSetupFiles,
@@ -21,32 +21,20 @@ import {
 import {
   ensureWorkspaceGitRepository,
   ensureWorkspaceGitignore,
-  detectMetaRepository,
-  writeReferenceManifest,
+  detectMainRepository,
 } from "./t3team-project-repository-services.ts";
 import {
-  HIDDEN_T3TEAM_DIR,
-  META_REPOSITORY_GITIGNORE_ENTRIES,
-  MANIFEST_FILE_NAME,
+  MAIN_REPOSITORY_GITIGNORE_ENTRIES,
   normalizeT3TeamWorkspaceRoot,
-  normalizeRepositoryUrls,
-  REFERENCES_DIR_NAME,
   toT3TeamError,
-} from "./t3team-project-repository-utils.ts";
-import {
   type BootstrapWorkspaceRequest,
-  type BootstrapWorkspaceResponse,
-  type MetaRepositoryBootstrapResult,
-  type ReferenceManifestFile,
+  type MainRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
-import { repositoryLookupCandidates } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
-import {
-  readPreservedLinkedRepositories,
-  syncLinkedRepositoriesForBootstrap,
-} from "./t3team-project-repository-routesBootstrap.ts";
+import { bootstrapWorkspaceReferences } from "./t3team-project-repository-routesReferences.ts";
+import { t3teamLinkedRepositoryStatusRouteLayer } from "./t3team-project-repository-routesStatus.ts";
 
-export const t3teamProjectWorkspaceBootstrapRouteLayer = HttpRouter.add(
+const bootstrapRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3team/project/workspace/bootstrap",
   Effect.gen(function* () {
@@ -138,12 +126,12 @@ export const t3teamProjectWorkspaceBootstrapRouteLayer = HttpRouter.add(
 
     const workspaceRepositoryInitialized = yield* ensureWorkspaceGitRepository(workspaceRoot);
     // A workspace that is ALREADY a git repository (monorepo, wrapper repo) is adopted as the
-    // project meta-repo instead of being wrapped with reference clones (GHE #42): sub-work
-    // happens in worktrees of the meta-repo itself, and only the machine-local `.t3team/`
+    // project main repository instead of being wrapped with reference clones (GHE #42): sub-work
+    // happens in worktrees of the main repository itself, and only the machine-local `.t3team/`
     // subpaths stay gitignored so committed team state can live in the repository.
-    const metaRepository: MetaRepositoryBootstrapResult | undefined = workspaceRepositoryInitialized
+    const mainRepository: MainRepositoryBootstrapResult | undefined = workspaceRepositoryInitialized
       ? undefined
-      : yield* detectMetaRepository({
+      : yield* detectMainRepository({
           workspaceRoot,
           ...(EffectOption.isSome(sourceControlProvidersOption)
             ? { sourceControlProviders: sourceControlProvidersOption.value }
@@ -151,61 +139,26 @@ export const t3teamProjectWorkspaceBootstrapRouteLayer = HttpRouter.add(
         });
     yield* ensureWorkspaceGitignore(
       workspaceRoot,
-      metaRepository ? META_REPOSITORY_GITIGNORE_ENTRIES : undefined,
+      mainRepository ? MAIN_REPOSITORY_GITIGNORE_ENTRIES : undefined,
     );
 
-    const referencesRoot = path.join(workspaceRoot, HIDDEN_T3TEAM_DIR, REFERENCES_DIR_NAME);
-    yield* fileSystem
-      .makeDirectory(referencesRoot, { recursive: true })
-      .pipe(Effect.mapError(toAtlassianError("Failed to create repository references directory.")));
-
-    // Auto-detection (GHE #42 item 2): a linked URL matching the meta-repo's own remote is the
-    // meta-repo itself, not a reference clone — skip wrapping it.
-    const metaRepositoryLookupCandidates = metaRepository?.url
-      ? [...repositoryLookupCandidates(metaRepository.url)]
-      : undefined;
-    const linkedRepositoryUrls = normalizeRepositoryUrls(input.linkedRepositoryUrls).filter(
-      (url) =>
-        !metaRepositoryLookupCandidates?.some((candidate) =>
-          repositoryLookupCandidates(url).includes(candidate),
-        ),
-    );
-    const linkedRepositories = yield* syncLinkedRepositoriesForBootstrap({
-      workspaceRoot,
-      referencesRoot,
-      urls: linkedRepositoryUrls,
-    });
-
-    const response: BootstrapWorkspaceResponse = {
+    const response = yield* bootstrapWorkspaceReferences({
       workspaceRoot,
       workspaceRepositoryInitialized,
-      referencesRoot,
-      linkedRepositories,
-      ...(metaRepository ? { metaRepository } : {}),
-    };
-    const manifest: ReferenceManifestFile = {
-      ...response,
-      updatedAt: DateTime.formatIso(yield* DateTime.now),
-    };
-
-    // An adopted meta-repo may already carry a reference manifest from an earlier
-    // bootstrap (linked repositories registered after adoption): preserve those entries so
-    // re-bootstrapping never drops them.
-    const preservedEntries = yield* readPreservedLinkedRepositories(
-      path.join(referencesRoot, MANIFEST_FILE_NAME),
-    );
-    let nextManifest = manifest;
-    if (preservedEntries.length > 0) {
-      nextManifest = {
-        ...manifest,
-        linkedRepositories: [...preservedEntries, ...linkedRepositories],
-      };
-    }
-
-    yield* writeReferenceManifest(referencesRoot, nextManifest);
+      detectedMainRepository: mainRepository,
+      linkedRepositoryUrls: input.linkedRepositoryUrls,
+      ...(input.refreshLinkedRepositories ? { refreshLinkedRepositories: true } : {}),
+    });
     return okJson(response);
   }).pipe(
     Effect.mapError((cause) => toT3TeamError(cause, "Failed to bootstrap project workspace.")),
     Effect.catch(errorResponse),
   ),
+);
+
+/** The bootstrap and linked-repository status routes. Both read `T3TeamLinkedRepositorySync`,
+ * provided once in `server.ts`: the status route reports the phases of the syncs bootstrap queued. */
+export const t3teamProjectWorkspaceBootstrapRouteLayer = Layer.mergeAll(
+  bootstrapRouteLayer,
+  t3teamLinkedRepositoryStatusRouteLayer,
 );

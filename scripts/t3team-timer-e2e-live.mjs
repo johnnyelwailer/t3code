@@ -62,7 +62,7 @@ async function main() {
 
   await fetchJson(baseUrl, "/api/t3team/project/workspace/bootstrap", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", cookie },
     body: JSON.stringify({ workspaceRoot }),
   });
 
@@ -71,7 +71,7 @@ async function main() {
     "/api/t3team/project/workspace/recipes/discover",
     {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", cookie },
       body: JSON.stringify({
         workspaceRoot,
         context: buildDiscoverContext(workspaceRoot),

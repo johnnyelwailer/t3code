@@ -1,5 +1,10 @@
 import { useMemo, useState } from "react";
-import { Sidebar, SidebarProvider, SidebarRail } from "~/t3team/components/ui/t3team-sidebar";
+import {
+  Sidebar,
+  SidebarInset,
+  SidebarProvider,
+  SidebarRail,
+} from "~/t3team/components/ui/t3team-sidebar";
 import { AppContentPane } from "~/t3team/t3team-AppContentPane";
 import { AppSidebarLens } from "~/t3team/components/t3team-AppSidebarLens";
 import { useProjectSidebarState } from "~/t3team/hooks/t3team-useProjectSidebarState";
@@ -8,10 +13,14 @@ import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import { readProjectIdFromView } from "~/t3team/t3team-types";
 import { resolveViewStoredProject } from "~/t3team/t3team-appMainContentResolution";
 import { AppOverlays } from "~/t3team/t3team-AppOverlays";
+import { CreateProjectRoute } from "~/t3team/t3team-CreateProjectRoute";
+import { resolveManageRepositoriesProject } from "~/t3team/t3team-manageRepositoriesProject";
 import { T3TeamLeftSidebarDesktopToggle } from "~/t3team/t3team-LeftSidebarDesktopToggle";
-import { useLocalProviderSessionThreadFilter } from "~/t3team/hooks/t3team-useLocalProviderSessionThreadFilter";
 import { useAppHandlers } from "~/t3team/t3team-useAppHandlers";
-import { useResolvedViewSync } from "~/t3team/t3team-useResolvedViewSync";
+import {
+  useMergedRouteAndStoreView,
+  useResolvedViewSync,
+} from "~/t3team/t3team-useResolvedViewSync";
 import { useHydratePinnedSidebarItems } from "~/t3team/hooks/t3team-useHydratePinnedSidebarItems";
 import {
   T3TEAM_LEFT_SIDEBAR_MIN_WIDTH,
@@ -46,24 +55,19 @@ export function App({
 
   const showCreate = showCreateProp ?? showCreateInternal;
   const setShowCreate = onCreateOpenChange ?? setShowCreateInternal;
-  const activeView = view ?? store.view;
+  // The route view wins; while URL navigation lags the store, the merged view
+  // keeps the store's embedded thread visible so sidebar chat survives a
+  // dashboard-mode switch (see mergeRouteAndStoreView).
+  const activeView = useMergedRouteAndStoreView(view, store.view);
   const resolvedView = useMemo(
     () => resolveViewStoredProject(activeView, store.resolveProjectId),
     [activeView, store.resolveProjectId],
   );
   const activeDashboardMode = dashboardMode ?? "my-work";
   const selectedProjectId = readProjectIdFromView(resolvedView ?? null) ?? store.selectedProjectId;
-  const manageRepositoriesProject = manageRepositoriesProjectId
-    ? (store.projects.find((candidate) => candidate.id === manageRepositoriesProjectId) ?? null)
-    : null;
-  // "Local provider sessions" display filter: OFF hides already-adopted sessions from the
-  // shell's thread lists; ON brings them back (see the hook docs). Selection/resolution
-  // keep the full store.
-  const { filter: filterVisibleThreads, filterForProject: getVisibleThreadsForProject } =
-    useLocalProviderSessionThreadFilter(store.getThreadsForProject);
-  const visibleThreads = useMemo(
-    () => filterVisibleThreads(store.threads),
-    [filterVisibleThreads, store.threads],
+  const manageRepositoriesProject = resolveManageRepositoriesProject(
+    store,
+    manageRepositoriesProjectId,
   );
   const {
     handleSelectProject,
@@ -75,6 +79,7 @@ export function App({
     handleCreateThread,
     handleCreateProjectKickoffThread,
     handleCreateTicketKickoffThread,
+    handleCreateTicketKickoffThreadBeside,
     handleCreateTicketThreadFromSidebar,
     handleThreadKickoffConsumed,
     handleDeleteProject,
@@ -107,7 +112,7 @@ export function App({
       <Sidebar
         side="left"
         collapsible="offcanvas"
-        className="min-h-0 overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+        className="min-h-0 overflow-hidden"
         resizable={{
           minWidth: T3TEAM_LEFT_SIDEBAR_MIN_WIDTH,
           shouldAcceptWidth: ({ nextWidth, wrapper }) =>
@@ -121,8 +126,8 @@ export function App({
             looseWorkspaceProjects={store.looseWorkspaceProjects}
             selectedId={selectedProjectId}
             expandedIds={store.expandedProjectIds}
-            threads={visibleThreads}
-            getThreadsForProject={getVisibleThreadsForProject}
+            threads={store.threads}
+            getThreadsForProject={store.getThreadsForProject}
             view={resolvedView}
             projectSortOrder={sidebarState.projectSortOrder}
             threadSortOrder={sidebarState.threadSortOrder}
@@ -160,31 +165,42 @@ export function App({
       </Sidebar>
       <T3TeamLeftSidebarDesktopToggle />
 
-      <AppContentPane
-        activeDashboardMode={activeDashboardMode}
-        resolvedView={resolvedView}
-        store={store}
-        reopenInitialSetup={reopenInitialSetup ?? false}
-        onCreate={() => setShowCreate(true)}
-        onOpenTicket={handleSelectTicket}
-        onOpenThread={handleSelectThread}
-        onOpenFullThread={handleOpenFullThread}
-        onOpenEmbeddedThread={handleOpenEmbeddedThread}
-        {...(onCloseEmbeddedThread ? { onCloseEmbeddedThread } : {})}
-        onKickoffProjectThread={handleCreateProjectKickoffThread}
-        onKickoffTicketThread={handleCreateTicketKickoffThread}
-        onThreadKickoffConsumed={handleThreadKickoffConsumed}
-        onThreadDisplayModeChange={store.updateThreadDisplayMode}
-        onBackToDashboard={handleSelectProject}
-        onManageRepositories={setManageRepositoriesProjectId}
-      />
+      {showCreate ? (
+        <SidebarInset className="h-full min-h-0 overflow-hidden">
+          <CreateProjectRoute
+            onCreated={(project) => {
+              store.addProject(project);
+              if (onProjectCreated) onProjectCreated(project);
+              else setShowCreate(false);
+            }}
+          />
+        </SidebarInset>
+      ) : (
+        <AppContentPane
+          activeDashboardMode={activeDashboardMode}
+          resolvedView={resolvedView}
+          store={store}
+          reopenInitialSetup={reopenInitialSetup ?? false}
+          onCreate={() => setShowCreate(true)}
+          onOpenTicket={handleSelectTicket}
+          onOpenThread={handleSelectThread}
+          onOpenFullThread={handleOpenFullThread}
+          onOpenEmbeddedThread={handleOpenEmbeddedThread}
+          {...(onCloseEmbeddedThread ? { onCloseEmbeddedThread } : {})}
+          onKickoffProjectThread={handleCreateProjectKickoffThread}
+          onKickoffTicketThread={handleCreateTicketKickoffThread}
+          onKickoffTicketThreadBeside={handleCreateTicketKickoffThreadBeside}
+          onThreadKickoffConsumed={handleThreadKickoffConsumed}
+          onThreadDisplayModeChange={store.updateThreadDisplayMode}
+          onBackToDashboard={handleSelectProject}
+          onManageRepositories={setManageRepositoriesProjectId}
+        />
+      )}
 
       <AppOverlays
-        showCreate={showCreate}
         setShowCreate={setShowCreate}
-        addProject={store.addProject}
         projects={store.projects}
-        threads={visibleThreads}
+        threads={store.threads}
         threadSortOrder={sidebarState.threadSortOrder}
         getTicketsForProject={store.getTicketsForProject}
         onSelectProject={handleSelectProject}
@@ -195,7 +211,6 @@ export function App({
         manageRepositoriesProject={manageRepositoriesProject}
         setManageRepositoriesProjectId={setManageRepositoriesProjectId}
         updateProject={store.updateProject}
-        {...(onProjectCreated ? { onProjectCreated } : {})}
         {...(onOpenSettings ? { onOpenSettings } : {})}
       />
     </SidebarProvider>
