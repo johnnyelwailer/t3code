@@ -151,7 +151,8 @@ describe("buildT3TeamWidgetSrcdoc", () => {
     expect(srcdoc).toContain("event.source !== window.parent");
     expect(srcdoc).toContain("data.nonce !== nonce");
     expect(srcdoc).toContain("ResizeObserver");
-    expect(srcdoc).toContain("document.documentElement.scrollHeight");
+    expect(srcdoc).toContain("root.scrollHeight");
+    expect(srcdoc).toContain("t3teamWidgetOverflow =");
   });
 });
 
