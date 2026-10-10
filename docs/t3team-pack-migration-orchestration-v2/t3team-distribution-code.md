@@ -61,7 +61,7 @@ vendor name; brand assets are embedded in code. Regenerate the list with
 | `scripts/build-desktop-artifact.ts`; `.gitignore`                                    | state dir `.nexi-dev/desktop-installer`; branded-build comments |
 | `scripts/lib/cli-external-packages.ts`, `scripts/lib/t3team-distributionWebIcons.ts` | vendor names in comments                                        |
 | `.env.example`                                                                       | installer-build comment naming "Nexi Work"                      |
-| `AGENTS.md`, `SYNC-RUNBOOK.md`, `.agents/skills/test-t3-app/SKILL.md`                | host names, local distribution path, fork rules                 |
+| `AGENTS.md`, `docs/operations/upstream-sync.md`, `.agents/skills/test-t3-app/SKILL.md`                | host names, local distribution path, fork rules                 |
 
 ## Tests, fixtures, docs
 
