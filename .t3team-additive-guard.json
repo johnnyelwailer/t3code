@@ -619,6 +619,7 @@
     "apps/web/src/routes/settings.connected-tools.tsx",
     "apps/web/src/routes/t3team.tsx",
     "apps/web/src/types/*.d.ts",
+    "docs/operations/upstream-sync.md",
     "docs/runbook/**",
     "docs/t3team-additive-whitelist.md",
     "docs/t3team-company-agentic-shell-handoff.md",
