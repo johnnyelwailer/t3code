@@ -60,7 +60,9 @@ export function makeThreadSilenceWatchStopRecheck(deps: {
       const observed = yield* readStatus(threadId);
       if (!shouldStopSilenceWatch(observed?.status, liveness)) continue;
       yield* deps.resolveStopped(threadId, observed!.status, observed!.sequence);
-      latestByThread.delete(threadId);
+      // resolveStopped may keep the watch armed (a ready target with a queued
+      // turn start): keep the observation so a later sweep can still close it.
+      forgetIfUnwatched(threadId);
     }
   });
 

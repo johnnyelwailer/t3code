@@ -34,7 +34,8 @@ export interface ThreadSilenceWatchClock {
   readonly clearTimer: (handle: unknown) => void;
 }
 
-const defaultClock: ThreadSilenceWatchClock = {
+/** The host wall clock + interval timer (shared with the queued-turn stall sweeper). */
+export const defaultClock: ThreadSilenceWatchClock = {
   now: () => DateTime.nowUnsafe().epochMilliseconds,
   setTimer: (callback, delayMs) => setInterval(callback, delayMs),
   clearTimer: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),

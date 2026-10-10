@@ -35,6 +35,7 @@ export const emitSilenceDetected = (
   record: ThreadSilenceWatchRecord,
   payload: ThreadSilenceDetectedPayload,
   nowIso: string,
+  urgency: "urgent" | "normal" = "urgent",
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
     const target = Option.getOrUndefined(
@@ -55,7 +56,11 @@ export const emitSilenceDetected = (
         fromTitle: target?.title ?? record.targetTitle,
         fromProjectId: target ? target.projectId : ProjectId.make(record.watcherThreadId),
         text,
-        urgency: "normal",
+        // Urgent by default: a breach must wake the watcher now. Under the
+        // normal 60s coalescing window the wake could be folded and delayed
+        // behind the very provider backlog that stalled the target. Episode
+        // re-notifications pass "normal" (t3team-threadSilenceWatchEmit.ts).
+        urgency,
         hopCount: NonNegativeInt.make(0),
         rootThreadId: ThreadId.make(record.watcherThreadId),
         createdAt: nowIso,
