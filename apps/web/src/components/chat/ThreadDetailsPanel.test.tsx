@@ -24,6 +24,9 @@ vi.mock("../ProjectScriptsControl", () => ({
 vi.mock("./ThreadAutomationsPanel", () => ({
   ThreadAutomationsPanel: () => null,
 }));
+vi.mock("../../t3team/components/t3team-ThreadOrchestrationPanel", () => ({
+  ThreadOrchestrationPanel: () => null,
+}));
 vi.mock("./ThreadRelationshipsControl", () => ({
   ThreadRelationshipsPanel: () => null,
 }));

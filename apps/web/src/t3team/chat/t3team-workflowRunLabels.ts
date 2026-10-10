@@ -14,6 +14,15 @@ import type {
   T3TeamWorkflowStepEntry,
 } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 
+/**
+ * Copy for a run that has not begun executing yet. One source of truth shared by the sidebar
+ * status pill, the live plan card, and the thread-details orchestration card so the three
+ * surfaces can never drift again (GHE: authoring used to borrow the capacity-queued line and
+ * read as "Queued · starts when capacity is free", which was a lie — nothing was queued).
+ */
+export const WORKFLOW_AUTHORING_HEADLINE = "Authoring the orchestration";
+export const WORKFLOW_QUEUED_CAPACITY_DETAIL = "Starts when capacity is free";
+
 export function relativeAge(iso: string): string {
   const minutes = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60_000));
   if (minutes < 1) return "just now";

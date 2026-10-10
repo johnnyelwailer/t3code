@@ -30,6 +30,8 @@ import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
 import { useT3TeamRunOnCloudSessionProps } from "../cloud/t3team-useRunOnCloudSessionProps";
+import { ThreadOrchestrationPanel } from "../../t3team/components/t3team-ThreadOrchestrationPanel";
+import type { T3TeamActiveWorkflowDockItem } from "../../t3team/chat/t3team-activeWorkflowDock";
 
 interface VersionMismatchIssue {
   readonly clientVersion: string;
@@ -79,6 +81,12 @@ export interface ThreadDetailsPanelProps extends Pick<
     input: NewProjectScriptInput,
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
+  /** t3team: the thread's live orchestration runs (name, steps, scroll target) for the panel's
+   * orchestration section. Omitted on surfaces without a chat timeline (e.g. the draft panel). */
+  orchestration?: {
+    readonly dockItems: ReadonlyArray<T3TeamActiveWorkflowDockItem>;
+    readonly onLocate: (item: T3TeamActiveWorkflowDockItem) => void;
+  };
 }
 
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
@@ -230,6 +238,15 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 ) : null}
               </div>
             </ThreadDetailsSection>
+          ) : null}
+
+          {density === "full" && !props.draftId ? (
+            <ThreadOrchestrationPanel
+              environmentId={props.environmentId}
+              threadId={props.threadId}
+              dockItems={props.orchestration?.dockItems ?? []}
+              {...(props.orchestration?.onLocate ? { onLocate: props.orchestration.onLocate } : {})}
+            />
           ) : null}
 
           {density === "full" && !props.draftId ? (
