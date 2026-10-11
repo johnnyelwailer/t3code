@@ -226,7 +226,7 @@ export type DigestSection = {
   readonly kind: "items" | "reviews" | "graph" | "widget";
   /** The `dashboard.widget` that renders it; absent means the default for its `kind`. */
   readonly widget?: string;
-  /** Sandboxed markup for a `widget` section. Data comes from `window.digest`, not the network. */
+  /** Sandboxed markup for a `widget` section. Data comes from `window.viewData`, not the network. */
   readonly widgetHtml?: string;
   readonly reviewIds?: readonly string[];
   readonly placement: DigestPlacement;

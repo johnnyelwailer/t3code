@@ -7,6 +7,7 @@ export type DigestWidgetSnapshot = {
   readonly heading: string;
   readonly tickets: ReadonlyArray<{
     readonly id: string;
+    readonly key: string;
     readonly title: string;
     readonly status: string;
   }>;
@@ -15,7 +16,10 @@ export type DigestWidgetSnapshot = {
 
 const SNAPSHOT_CAP = 40;
 
-export function digestWidgetSnapshot(section: DigestSection, graph: DigestGraph): DigestWidgetSnapshot {
+export function digestWidgetSnapshot(
+  section: DigestSection,
+  graph: DigestGraph,
+): DigestWidgetSnapshot {
   const wanted = new Set(section.items.map((item) => item.ticketId));
   const ranked = [...graph.tickets].sort((left, right) => {
     const leftWanted = wanted.has(left.id) ? 0 : 1;
@@ -27,7 +31,8 @@ export function digestWidgetSnapshot(section: DigestSection, graph: DigestGraph)
     heading: section.heading,
     tickets: ranked.slice(0, SNAPSHOT_CAP).map((ticket) => ({
       id: ticket.id,
-      title: ticket.title,
+      key: ticket.ref.displayId,
+      title: ticket.ref.title,
       status: ticket.status,
     })),
     reviews: (graph.reviewRequests ?? []).slice(0, SNAPSHOT_CAP).map((review) => ({
