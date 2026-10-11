@@ -1,4 +1,4 @@
-import { digestTicketIdSignature } from "./t3team-myworkArrangeDrift.ts";
+import { DIGEST_TICKET_SIGNATURE_SOURCE } from "./t3team-myworkArrangeDrift.ts";
 import type { MyWorkArrangeRecipeSpec } from "./t3team-myworkArrangeRecipeSpec.ts";
 import { MY_WORK_ARRANGEMENT_SURFACE } from "./t3team-myworkDigestArrangementDraft.ts";
 import { renderViewRecipe } from "./t3team-viewRecipeTemplate.ts";
@@ -25,6 +25,6 @@ export function renderMyWorkArrangeRecipe(spec: MyWorkArrangeRecipeSpec): {
     everyHours: spec.everyHours,
     maintainPrompt,
     readCall: `t3team.mywork.digest.read(${scopeArgs})`,
-    signatureFunctionSource: digestTicketIdSignature.toString(),
+    signatureFunctionSource: DIGEST_TICKET_SIGNATURE_SOURCE,
   });
 }

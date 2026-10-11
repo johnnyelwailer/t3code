@@ -37,6 +37,7 @@ export const makeMyWorkToolHandlers = Effect.fn("t3team.myWorkTools.make")(funct
         Effect.mapError(message),
       ),
     runStore: (effect) => effect.pipe(Effect.provideContext(context), Effect.mapError(message)),
-    writeRecipe: (workspaceRoot, spec) => writeMyWorkArrangeRecipe(workspaceRoot, spec),
+    writeRecipe: (workspaceRoot, spec) =>
+      writeMyWorkArrangeRecipe(workspaceRoot, spec).pipe(Effect.provideContext(context)),
   });
 });
