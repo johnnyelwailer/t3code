@@ -317,7 +317,7 @@ describe("live card header — two-row layout", () => {
     );
   }
 
-  it("puts the title alone on row 1, and the slug + live status together on row 2", async () => {
+  it("puts the title in the header row, and the slug + live status in the body meta row", async () => {
     const markup = await renderHeaderCard([
       {
         id: EventId.make("activity-header-waiting"),
@@ -343,15 +343,19 @@ describe("live card header — two-row layout", () => {
     // the uninformative, width-wasting suffix is gone.
     expect(markup).not.toContain("since just now");
     expect(markup).not.toContain("Waiting for your answer since");
-    // structural: the slug (a row-2 element) is not inside the title's own row — it shows up
-    // strictly after the title's clamp/tooltip markup closes, not interleaved with it.
-    const titleIndex = markup.indexOf("line-clamp-2");
+    // structural: the title leads the header row, and the slug (a body meta-row element) shows
+    // up strictly after it — the header row never interleaves machine text with the title.
+    const titleIndex = markup.indexOf("three askUser shapes in sequence");
     const chipIndex = markup.indexOf("font-mono");
     expect(titleIndex).toBeGreaterThan(-1);
     expect(chipIndex).toBeGreaterThan(titleIndex);
-    // row 2 carries the narrow-container fallback (stack instead of squeeze) — proves the fix
-    // uses the container-query infrastructure rather than a fixed one-row layout.
+    // the meta row carries the narrow-container fallback (stack instead of squeeze) — proves
+    // the layout uses the container-query infrastructure rather than a fixed one-row layout.
     expect(markup).toContain("@sm/workflow-live-card:flex-row");
+    // a run parked on the user's answer is pinned open: the body track is not inert, and the
+    // pinned row offers no chevron and no toggle.
+    expect(markup).not.toContain('inert=""');
+    expect(markup).not.toContain("lucide-chevron-down");
   });
 
   it("hides the machine slug (and its separator) below the narrow-container breakpoint", async () => {
@@ -399,12 +403,14 @@ describe("live card header — two-row layout", () => {
     ]);
 
     expect(markup).toContain("three askUser shapes in sequence: boolean, literals, struct form");
-    // a completed run stays collapsed: the header's live pill is gone and the terminal status
-    // word lives in the disclosure row's end slot instead — the slug still shows on row 2 even
-    // with no live status and no controls beside it.
+    // a completed run stays collapsed: the header row carries the terminal status chip, and the
+    // banner renders inside the collapsed (inert) body track — never in the row itself. The
+    // slug still shows on the meta row even with no live status and no controls beside it.
     expect(markup).toContain("qa-ask-forms");
     expect(markup).toContain('data-workflow-live-card-expanded="false"');
     expect(markup).toContain('data-run-live-status="Completed"');
-    expect(markup).not.toContain('data-run-status="completed"');
+    const inertIndex = markup.indexOf('inert=""');
+    expect(inertIndex).toBeGreaterThan(-1);
+    expect(markup.indexOf('data-run-status="completed"')).toBeGreaterThan(inertIndex);
   });
 });

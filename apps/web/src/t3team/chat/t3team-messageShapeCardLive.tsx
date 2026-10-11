@@ -15,29 +15,25 @@
  * A `waiting` row shows ONLY the waiting state — the ask itself is rendered by the sibling
  * decision card ({@link ./t3team-messageDecisionCard.tsx}); no duplication here.
  *
- * COLLAPSED BY DEFAULT and never hidden (the house observability-over-gates rule):
- * the collapsed view shows the one-line description, the run's current step, and the run
- * status; the full step list is one click away (row click or chevron, the
- * `T3TeamWorkflowStepGroupRow` disclosure pattern). There is no per-run persistence — the
+ * ONE-LINE COLLAPSE: the collapsed state is a single compact row — chevron, the run title
+ * (the description, the slug when there is none), the run status chip, and the current step's
+ * label if it still fits on the line (ellipsised otherwise). No banner, no description line,
+ * no nested disclosure. The whole row is the hit target; the chevron rotates 180° with state
+ * and the card body animates open/closed through a CSS `grid-template-rows: 0fr → 1fr` height
+ * transition (instant under `prefers-reduced-motion`). There is no per-run persistence — the
  * expansion is local state that resets on remount, like the other disclosures in this card.
  * A problem card never hides its reason: a FAILED run, or one WAITING ON THE USER
- * (decision/ask state), auto-expands and cannot be collapsed back.
+ * (decision/ask state), auto-expands and cannot be collapsed back — its row offers no
+ * chevron and no toggle.
  */
-import {
-  ChevronDownIcon,
-  ChevronUpIcon,
-  CircleDashedIcon,
-  ClockIcon,
-  RouteIcon,
-} from "lucide-react";
+import { ChevronDownIcon, CircleDashedIcon, ClockIcon } from "lucide-react";
 import type { OrchestrationWorkflowRunStatus } from "@t3tools/contracts";
 import type { ProjectRecipeWorkflowShapePayload } from "@t3tools/project-recipes";
 import { useState } from "react";
 
-import {
-  T3TeamWorkflowCardHeadline,
-  T3TeamWorkflowNameChip,
-} from "~/t3team/chat/t3team-workflowCardHeadline";
+import { cn } from "~/lib/utils";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
+import { T3TeamWorkflowNameChip } from "~/t3team/chat/t3team-workflowCardHeadline";
 import {
   T3TeamWorkflowRunControls,
   T3TeamWorkflowRunControlStatus,
@@ -58,6 +54,25 @@ import {
 } from "~/t3team/chat/t3team-workflowShapeLiveState";
 
 export { workflowControlErrorMessage };
+
+/** The collapsed row's status chip and the expanded meta row share one status rendering: a
+ * small icon plus the live label, never wrapping (the label is the one mutable part of the
+ * card's chrome and the row must stay one line). */
+function WorkflowRunStatusChip({ label, icon }: { label: string; icon: "clock" | "dashed" }) {
+  return (
+    <span
+      data-run-live-status={label}
+      className="flex shrink-0 items-center gap-1 text-2xs font-medium text-muted-foreground"
+    >
+      {icon === "clock" ? (
+        <ClockIcon className="size-3 shrink-0" />
+      ) : (
+        <CircleDashedIcon className="size-3 shrink-0" />
+      )}
+      <span className="max-w-44 truncate">{label}</span>
+    </span>
+  );
+}
 
 export function T3TeamWorkflowShapeLiveCard({
   shape,
@@ -112,16 +127,23 @@ export function T3TeamWorkflowShapeLiveCard({
 
   const showLiveStatus = progress.run === null || progress.run.phase === "started";
 
-  // Collapsed by default: the disclosure row (current step + status + chevron) stands in for
-  // the step list until the reader asks for it.
-  const [expandedByUser, setExpandedByUser] = useState(initiallyExpanded ?? false);
   // A problem card never hides its reason: a failed run, or one parked on the user's answer
   // (decision/ask state), auto-expands and cannot be collapsed back.
   const waitingOnUser = progress.steps.some(
     (step) => step.stepKind === "user.input" && step.phase === "waiting",
   );
   const autoExpanded = status === "failed" || waitingOnUser;
+  const [expandedByUser, setExpandedByUser] = useState(initiallyExpanded ?? false);
   const expanded = expandedByUser || autoExpanded;
+
+  // The run's title: the human description leads, the machine slug stands in when there is
+  // none (never an empty row). The full text always stays reachable in the tooltip.
+  const title = shape.description || shape.name || "Workflow run";
+  // The chip the collapsed row shows. `liveLabel` would misread a pre-run state as "Running"
+  // (it has no steps yet), so queued/authoring get their own honest words — the same split
+  // the sidebar pill and the pre-run copy below use.
+  const chipLabel =
+    status === "queued" ? "Queued" : status === "authoring" ? "Authoring" : liveLabel;
 
   // The run's CURRENT STEP: the last in-progress (started) row in display order — the authored
   // plan label when the row matched an authored step, otherwise the row's own human fallback.
@@ -138,204 +160,195 @@ export function T3TeamWorkflowShapeLiveCard({
     return terminalStatus ? undefined : progress.run?.phase;
   })();
 
+  const titleNode = (
+    <Tooltip>
+      <TooltipTrigger
+        render={<span className="min-w-0 truncate text-sm font-medium leading-5 text-foreground" />}
+      >
+        {title}
+      </TooltipTrigger>
+      <TooltipPopup side="top" align="start" className="max-w-84">
+        {title}
+      </TooltipPopup>
+    </Tooltip>
+  );
+  const stepNode = currentStep ? (
+    <span className="min-w-0 truncate text-2xs font-medium text-muted-foreground">
+      {currentStep}
+    </span>
+  ) : null;
+
   return (
     <div
-      className="@container/workflow-live-card rounded-lg border border-primary/35 bg-background/65 px-4 py-3"
+      className={cn(
+        "@container/workflow-live-card rounded-lg bg-background/65",
+        expanded ? "border border-primary/35 px-4 py-3" : "border border-primary/25 px-3 py-1.5",
+      )}
       data-workflow-live-card-expanded={expanded ? "true" : "false"}
     >
       {/*
-        Pre-run copy, split by actual state: only `queued` is genuinely capacity-parked, so only
-        it may say so. `authoring` is the hidden author writing the plan — it reads with the same
-        words as the sidebar pill (one shared source in `t3team-workflowRunLabels`), never the
-        capacity line, which was the lie this card used to tell for both.
+        The one-line header. Collapsed it IS the whole card; expanded it is the card's toggle.
+        The whole row is the hit target. Pinned-open (auto-expanded) rows render no chevron and
+        no toggle at all — a problem card never hides its reason behind a disabled control.
       */}
-      {status === "queued" ? (
-        <div className="mb-2 text-xs font-medium text-muted-foreground">
-          Queued · {WORKFLOW_QUEUED_CAPACITY_DETAIL}
-        </div>
-      ) : status === "authoring" ? (
-        <div className="mb-2 text-xs font-medium text-muted-foreground">
-          {WORKFLOW_AUTHORING_HEADLINE}
-        </div>
-      ) : null}
-      <T3TeamWorkflowRunControlStatus
-        pending={controlPending}
-        error={controlError}
-        isRetry={isRetry}
-      />
-      {/*
-        Two rows, not one: the title, the slug, and the live status were all fighting for the
-        same line — the title clamped to two lines and still truncated, the slug interrupted it,
-        and the status wrapped to three lines of its own. Giving the title the full first row
-        means its two-line clamp is a genuine fallback for a long description, not something that
-        triggers on every card; the slug and status share a second, muted, single-line row with
-        the controls — small, subordinate, and never wrapping.
-      */}
-      <div className="mb-2 flex min-w-0 items-start gap-1.5 text-primary">
-        <RouteIcon className="mt-0.5 size-3.5 shrink-0" />
-        <T3TeamWorkflowCardHeadline
-          shape={shape}
-          className="min-w-0"
-          showNameChip={false}
-          descriptionLines={expanded ? 2 : 1}
-        />
-      </div>
-      {/*
-        At a narrow container width even this muted second row stacks rather than squeezing the
-        meta text against the controls — full width for each instead of both truncating at once.
-      */}
-      <div className="mb-2 flex min-w-0 flex-col items-start gap-1 @sm/workflow-live-card:flex-row @sm/workflow-live-card:items-center @sm/workflow-live-card:justify-between">
-        <div className="flex min-w-0 items-center gap-1.5 text-2xs font-medium text-muted-foreground">
-          {/*
-            Below the narrow-container breakpoint the row stacks instead of a squeezed single
-            line, and the slug + status were what overflowed past the card's own edge. There the
-            machine slug is dropped (hidden, not deleted — the tooltip and the wide layout keep
-            it) so only the live status shows; at >=sm the card is wide enough for both on one
-            row and the slug reappears. The "·" separator hides with it so a lone dot never dangles.
-          */}
-          {shape.description && shape.name ? (
-            <T3TeamWorkflowNameChip
-              name={shape.name}
-              className="hidden @sm/workflow-live-card:inline"
-            />
-          ) : null}
-          {shape.description && shape.name && showLiveStatus ? (
-            <span
-              aria-hidden
-              className="hidden shrink-0 text-muted-foreground/50 @sm/workflow-live-card:inline"
-            >
-              ·
-            </span>
-          ) : null}
-          {showLiveStatus ? (
-            <span
-              data-run-live-status={liveLabel}
-              className="flex min-w-0 items-center gap-1 truncate"
-            >
-              {liveLabel === "Scheduled" ? (
-                <ClockIcon className="size-3 shrink-0" />
-              ) : (
-                <CircleDashedIcon className="size-3 shrink-0" />
-              )}
-              <span className="truncate">{liveLabel}</span>
-            </span>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <T3TeamWorkflowRunControls
-            canPause={canPause}
-            canResume={canResume}
-            isRetry={isRetry}
-            canStop={canStop}
-            pending={controlPending}
-            className="flex items-center gap-1"
-            {...(shape.capabilities ? { capabilities: shape.capabilities } : {})}
-            {...(onControlWorkflow
-              ? { onControl: (action: WorkflowRunControlAction) => void control(action) }
-              : {})}
+      {autoExpanded ? (
+        <div className="flex min-w-0 items-center gap-2">
+          {titleNode}
+          <WorkflowRunStatusChip
+            label={chipLabel}
+            icon={chipLabel === "Scheduled" ? "clock" : "dashed"}
           />
+          {stepNode}
         </div>
-      </div>
-      {expanded ? (
-        <>
-          {repair ? (
-            <RepairStatusStrip
-              repair={repair}
-              {...(onOpenThread ? { onOpenThread } : {})}
-              {...(currentThreadId ? { currentThreadId } : {})}
-            />
-          ) : null}
-          {/*
-            No collapse affordance while a problem state pins the card open: hiding the reason
-            behind a control that cannot be used is worse than not showing the control.
-          */}
-          {!autoExpanded ? (
-            <div className="mt-3 flex justify-end">
-              <button
-                type="button"
-                aria-expanded={true}
-                aria-label="Collapse workflow card"
-                data-workflow-live-card-collapse
-                onClick={() => setExpandedByUser(false)}
-                className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-2xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <ChevronUpIcon className="size-3" aria-hidden="true" />
-                Hide steps
-              </button>
-            </div>
-          ) : null}
-          {rows.length > 0 ? (
-            <T3TeamWorkflowShapeStepRows
-              rows={rows}
-              status={status}
-              scheduledPlanRow={scheduledPlanRow}
-              activeWaitAt={activeWaitAt}
-              {...(childStatuses ? { childStatuses } : {})}
-              {...(onOpenThread ? { onOpenThread } : {})}
-              {...(currentThreadId ? { currentThreadId } : {})}
-            />
-          ) : (
-            <p className="mt-3 text-xs text-muted-foreground/70">No steps to preview.</p>
-          )}
-
-          {progress.run ? (
-            <RunStatusBanner
-              run={progress.run}
-              {...(outcomeSummary ? { outcomeSummary } : {})}
-              // The durable row's `updatedAt` is the pause instant (nothing else writes a paused
-              // row); the pause activity's timestamp is the fallback for a card without run status.
-              pausedAt={
-                workflowRunStatus?.status === "paused"
-                  ? workflowRunStatus.updatedAt
-                  : progress.run.updatedAt
-              }
-              {...(canResume && onControlWorkflow
-                ? { onResume: () => void control("resume") }
-                : {})}
-              resumePending={controlPending === "resume"}
-            />
-          ) : null}
-        </>
       ) : (
-        // The collapsed view: one-line description (the headline above), the run's current step,
-        // the run status, and the chevron — the step list is one click away, never hidden.
         <button
           type="button"
-          aria-expanded={false}
-          aria-label="Expand workflow card"
-          data-workflow-live-card-expand
-          onClick={() => setExpandedByUser(true)}
-          className="mt-3 flex w-full items-center gap-2 rounded-md border border-border/60 bg-muted/25 px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-expanded={expanded}
+          aria-label={expanded ? "Collapse workflow card" : "Expand workflow card"}
+          {...(expanded
+            ? { "data-workflow-live-card-collapse": "" }
+            : { "data-workflow-live-card-expand": "" })}
+          onClick={() => setExpandedByUser((value) => !value)}
+          className="-mx-1.5 flex w-[calc(100%+0.75rem)] min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {currentStep ? (
-            <span className="min-w-0 flex-1 truncate font-medium text-foreground/80">
-              {currentStep}
-            </span>
-          ) : (
-            <span className="min-w-0 flex-1" aria-hidden="true" />
-          )}
-          {/*
-            The header's live-status pill covers every live run; a terminal run hides that pill
-            (the banner would have said it — and the banner is expanded-only), so the collapsed
-            view carries the terminal status itself. A paused/suspended run is not terminal:
-            its lifecycle word (the current-step slot) is the position report.
-          */}
-          {terminalStatus && !showLiveStatus ? (
-            <span
-              className="flex shrink-0 items-center gap-1 text-2xs font-medium"
-              data-run-live-status={liveLabel}
-            >
-              {liveLabel === "Scheduled" ? (
-                <ClockIcon className="size-3 shrink-0" />
-              ) : (
-                <CircleDashedIcon className="size-3 shrink-0" />
-              )}
-              <span className="truncate">{liveLabel}</span>
-            </span>
-          ) : null}
-          <ChevronDownIcon className="size-3.5 shrink-0" aria-hidden="true" />
+          <ChevronDownIcon
+            className={cn(
+              "size-3.5 shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
+              expanded ? "rotate-180" : undefined,
+            )}
+            aria-hidden="true"
+          />
+          {titleNode}
+          <WorkflowRunStatusChip
+            label={chipLabel}
+            icon={chipLabel === "Scheduled" ? "clock" : "dashed"}
+          />
+          {stepNode}
         </button>
       )}
+      {/*
+        The card body: everything the expanded card shows — pre-run copy, the slug + live
+        status + controls row, the repair strip, the step rows, the terminal banner. It stays
+        mounted so the grid-template-rows transition can animate BOTH directions; while
+        collapsed the zero-height track hides it and `inert` keeps it out of the a11y tree and
+        the tab order. Under `prefers-reduced-motion` the transition is disabled and the state
+        flips instantly.
+      */}
+      <div
+        className={cn(
+          "grid w-full transition-[grid-template-rows] duration-200 ease-in-out motion-reduce:transition-none",
+          expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+        <div inert={!expanded} className="min-h-0 overflow-hidden">
+          <div className="pt-1.5">
+            {/*
+            Pre-run copy, split by actual state: only `queued` is genuinely capacity-parked, so
+            only it may say so. `authoring` is the hidden author writing the plan — it reads
+            with the same words as the sidebar pill (one shared source in
+            `t3team-workflowRunLabels`), never the capacity line, which was the lie this card
+            used to tell for both.
+          */}
+            {status === "queued" ? (
+              <div className="mb-2 mt-1 text-xs font-medium text-muted-foreground">
+                Queued · {WORKFLOW_QUEUED_CAPACITY_DETAIL}
+              </div>
+            ) : status === "authoring" ? (
+              <div className="mb-2 mt-1 text-xs font-medium text-muted-foreground">
+                {WORKFLOW_AUTHORING_HEADLINE}
+              </div>
+            ) : null}
+            <T3TeamWorkflowRunControlStatus
+              pending={controlPending}
+              error={controlError}
+              isRetry={isRetry}
+            />
+            {/*
+            The slug, the live status, and the controls share one muted, single-line row —
+            small, subordinate, and never wrapping. At a narrow container width the row stacks
+            instead of squeezing the meta text against the controls; there the machine slug is
+            dropped (hidden, not deleted — the wide layout keeps it) so only the live status
+            shows. The "·" separator hides with it so a lone dot never dangles.
+          */}
+            <div className="mb-2 flex min-w-0 flex-col items-start gap-1 @sm/workflow-live-card:flex-row @sm/workflow-live-card:items-center @sm/workflow-live-card:justify-between">
+              <div className="flex min-w-0 items-center gap-1.5 text-2xs font-medium text-muted-foreground">
+                {shape.description && shape.name ? (
+                  <T3TeamWorkflowNameChip
+                    name={shape.name}
+                    className="hidden @sm/workflow-live-card:inline"
+                  />
+                ) : null}
+                {shape.description && shape.name && showLiveStatus ? (
+                  <span
+                    aria-hidden
+                    className="hidden shrink-0 text-muted-foreground/50 @sm/workflow-live-card:inline"
+                  >
+                    ·
+                  </span>
+                ) : null}
+                {showLiveStatus ? (
+                  <WorkflowRunStatusChip
+                    label={liveLabel}
+                    icon={liveLabel === "Scheduled" ? "clock" : "dashed"}
+                  />
+                ) : null}
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <T3TeamWorkflowRunControls
+                  canPause={canPause}
+                  canResume={canResume}
+                  isRetry={isRetry}
+                  canStop={canStop}
+                  pending={controlPending}
+                  className="flex items-center gap-1"
+                  {...(shape.capabilities ? { capabilities: shape.capabilities } : {})}
+                  {...(onControlWorkflow
+                    ? { onControl: (action: WorkflowRunControlAction) => void control(action) }
+                    : {})}
+                />
+              </div>
+            </div>
+            {repair ? (
+              <RepairStatusStrip
+                repair={repair}
+                {...(onOpenThread ? { onOpenThread } : {})}
+                {...(currentThreadId ? { currentThreadId } : {})}
+              />
+            ) : null}
+            {rows.length > 0 ? (
+              <T3TeamWorkflowShapeStepRows
+                rows={rows}
+                status={status}
+                scheduledPlanRow={scheduledPlanRow}
+                activeWaitAt={activeWaitAt}
+                {...(childStatuses ? { childStatuses } : {})}
+                {...(onOpenThread ? { onOpenThread } : {})}
+                {...(currentThreadId ? { currentThreadId } : {})}
+              />
+            ) : (
+              <p className="mt-3 text-xs text-muted-foreground/70">No steps to preview.</p>
+            )}
+
+            {progress.run ? (
+              <RunStatusBanner
+                run={progress.run}
+                {...(outcomeSummary ? { outcomeSummary } : {})}
+                // The durable row's `updatedAt` is the pause instant (nothing else writes a paused
+                // row); the pause activity's timestamp is the fallback for a card without run status.
+                pausedAt={
+                  workflowRunStatus?.status === "paused"
+                    ? workflowRunStatus.updatedAt
+                    : progress.run.updatedAt
+                }
+                {...(canResume && onControlWorkflow
+                  ? { onResume: () => void control("resume") }
+                  : {})}
+                resumePending={controlPending === "resume"}
+              />
+            ) : null}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

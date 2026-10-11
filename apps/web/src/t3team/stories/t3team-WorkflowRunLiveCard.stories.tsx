@@ -2,9 +2,12 @@
  * Live workflow-run plan card (recipe UX "no black box" slice) — the plan (shape) card
  * overlaid with live step status derived from `t3team.recipe.workflow.step` activities.
  *
- * The card is COLLAPSED BY DEFAULT: one-line description + current step + run status, with the
- * full step list one click away. It auto-expands — and cannot be collapsed back — while the run
- * has FAILED or is WAITING ON THE USER, so a problem card never hides its reason.
+ * The card is COLLAPSED TO ONE COMPACT ROW BY DEFAULT: chevron + run title + status chip +
+ * the current step (ellipsed when it no longer fits) — no banner, no description line, no
+ * nested disclosure. Clicking the row animates the card body open; the chevron rotates with
+ * state. It auto-expands — and cannot be collapsed back — while the run has FAILED or is
+ * WAITING ON THE USER, so a problem card never hides its reason (pinned-open rows carry no
+ * chevron and no toggle).
  *
  * The mid-flight story shows the live states at once: completed steps, one waiting on the
  * user (`user.input`), one sleeping (`wait.until`) — and it demonstrates REACHABILITY: the
@@ -104,8 +107,9 @@ export const MidFlight: Story = {
 };
 
 /**
- * Collapsed BY DEFAULT: a healthy in-flight run shows only the one-line description, the current
- * step, and the run status — the full step list is one click away (row click or chevron).
+ * Collapsed BY DEFAULT: a healthy in-flight run is a single compact row — chevron, run title,
+ * status chip, and the current step (ellipsed if it no longer fits on the line). Clicking the
+ * row animates the card body open; the chevron rotates with state.
  */
 export const Collapsed: Story = {
   args: {
@@ -218,7 +222,9 @@ export const FailedRun: Story = {
 
 /**
  * A failed run overrides the collapsed default: the card auto-expands and keeps the failure
- * reason (banner + failed row) visible even though `initiallyExpanded` is false.
+ * reason (banner + failed row) visible even though `initiallyExpanded` is false. The pinned-open
+ * header row carries no chevron and no toggle — a problem card never hides its reason behind
+ * a disabled control.
  */
 export const CollapsedByDefaultAutoExpandedOnFailure: Story = {
   args: {
