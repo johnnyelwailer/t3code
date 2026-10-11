@@ -51,11 +51,17 @@ export const detectMainRepositoryCandidates = Effect.fn("detectMainRepositoryCan
 /** Entries never copied by a migration: reference clones and child worktrees stay where they
  * are (the copied reference manifest keeps pointing at them by absolute path), and copying a
  * git worktree would orphan it. */
-const isMigrationExcluded = (relativeSegments: ReadonlyArray<string>): boolean => {
+export const isMigrationExcluded = (relativeSegments: ReadonlyArray<string>): boolean => {
   const [top, second] = relativeSegments;
   if (top === CHILD_WORKTREES_DIR_NAME) return true;
   return top === REFERENCES_DIR_NAME && second !== undefined && second !== MANIFEST_FILE_NAME;
 };
+
+/** {@link isMigrationExcluded} spelled out for a migration thread that copies with its own tools. */
+export const MIGRATION_EXCLUDES: ReadonlyArray<string> = [
+  `${CHILD_WORKTREES_DIR_NAME}/`,
+  `${REFERENCES_DIR_NAME}/* (except ${REFERENCES_DIR_NAME}/${MANIFEST_FILE_NAME})`,
+];
 
 /** Copies `fromRoot`'s state dir into `toRoot`. Existing target files win; the source is
  * untouched. `failed` is set when a copy or context-JSON rewrite did not land. */

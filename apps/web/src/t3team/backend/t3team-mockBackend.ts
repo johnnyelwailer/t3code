@@ -127,6 +127,7 @@ export function createMockBackend(): BackendApi {
       setMainRepository: async () => {
         throw new Error("Main repositories are not available in the mock backend.");
       },
+      readMainRepositoryMigrationStatus: async () => ({ migration: null }),
       discoverRecipes: async (input) => ({
         workspaceRoot: input.workspaceRoot,
         hasProjectLocalRecipes: false,

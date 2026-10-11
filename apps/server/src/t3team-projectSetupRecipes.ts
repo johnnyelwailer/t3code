@@ -9,6 +9,7 @@ import {
   DESCRIPTION_REWRITE_RECIPE_ID,
   descriptionRewriteSetupFiles,
 } from "./t3team-projectSetupDescriptionRewriteRecipe.ts";
+import { stateMigrationRecipeSetupFiles } from "./t3team-projectSetupStateMigrationRecipe.ts";
 
 function renderBundledRecipePrompt(
   recipe: ReturnType<typeof listBundledT3TeamRecipes>[number],
@@ -19,6 +20,10 @@ function renderBundledRecipePrompt(
 }
 
 export function renderBundledRecipeSetupFiles(): ReadonlyArray<T3TeamProjectSetupFile> {
+  return [...renderCatalogRecipeSetupFiles(), ...stateMigrationRecipeSetupFiles()];
+}
+
+function renderCatalogRecipeSetupFiles(): ReadonlyArray<T3TeamProjectSetupFile> {
   return listBundledT3TeamRecipes().flatMap((recipe) => {
     const files: Array<T3TeamProjectSetupFile> = [
       {

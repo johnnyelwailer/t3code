@@ -1,7 +1,8 @@
 /**
  * Saving a project's linked repositories (and, behind `NEXI_FF_MAIN_REPOSITORY`, its main
  * repository): refresh the workspace references, then either apply the user's main-repository
- * choice or let auto-detection run on the freshly linked clones.
+ * choice or let auto-detection run on the freshly linked clones. No step waits on a state-dir
+ * copy: the server hands a large one to a migration thread.
  */
 import type { ProjectShellProject } from "@t3tools/project-context";
 
@@ -66,4 +67,27 @@ export async function saveProjectRepositories(input: {
     linkedRepositoryUrls,
   });
   return applyWorkspaceBootstrapToProject(project, rooted);
+}
+
+/**
+ * {@link saveProjectRepositories} with an optimistic update: the new linked list is published at
+ * once, the server's result reconciles it, and a failed save rolls back to `project` (and throws).
+ * A large state migration does not hold the save: the switch hands it to a thread and the caller
+ * polls its status.
+ */
+export async function saveProjectRepositoriesOptimistically(
+  input: Parameters<typeof saveProjectRepositories>[0] & {
+    readonly onProjectUpdated: (project: ProjectShellProject) => void;
+  },
+): Promise<ProjectShellProject> {
+  const { onProjectUpdated, ...save } = input;
+  onProjectUpdated(replaceLinkedRepositoryUrlsInProject(input.project, input.linkedRepositoryUrls));
+  try {
+    const saved = await saveProjectRepositories(save);
+    onProjectUpdated(saved);
+    return saved;
+  } catch (error) {
+    onProjectUpdated(input.project);
+    throw error;
+  }
 }

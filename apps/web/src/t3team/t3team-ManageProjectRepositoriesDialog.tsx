@@ -16,9 +16,11 @@ import {
   readMainRepositoryCandidatesFromProject,
   readMainRepositoryFromProject,
 } from "~/t3team/hooks/t3team-projectMainRepository";
-import { saveProjectRepositories } from "~/t3team/hooks/t3team-saveProjectRepositories";
+import { saveProjectRepositoriesOptimistically } from "~/t3team/hooks/t3team-saveProjectRepositories";
 import { useLinkedRepositorySyncStatus } from "~/t3team/hooks/t3team-useLinkedRepositorySyncStatus";
+import { useProjectStateMigrationStatus } from "~/t3team/hooks/t3team-useProjectStateMigrationStatus";
 import { LinkedRepositorySyncStatusLine } from "~/t3team/components/t3team-LinkedRepositorySyncStatusLine";
+import { ProjectStateMigrationStatusLine } from "~/t3team/components/t3team-ProjectStateMigrationStatusLine";
 import { useGitHubRepositoryDiscovery } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
 import { useServerConfig } from "~/t3team/t3team-serverState";
 
@@ -46,6 +48,11 @@ export function ManageProjectRepositoriesDialog({
     enabled: true,
   });
   const mainRepositoryEnabled = useServerConfig()?.mainRepository === true;
+  // A switch hands a large state migration to a thread; its progress shows under the picker.
+  const stateMigration = useProjectStateMigrationStatus({
+    workspaceRoot: project.workspace?.rootPath,
+    enabled: mainRepositoryEnabled,
+  });
   // An adopted workspace repository is the project workspace itself, not a linked repository.
   const currentMain = readMainRepositoryFromProject(project);
   const initialMainUrl = currentMain?.status === "adopted" ? null : (currentMain?.url ?? null);
@@ -89,19 +96,21 @@ export function ManageProjectRepositoriesDialog({
     setSaveError(null);
     setSaving(true);
     try {
-      const nextProject = await saveProjectRepositories({
+      // The new list shows at once; a failed save rolls it back.
+      await saveProjectRepositoriesOptimistically({
         backend,
         project,
         linkedRepositoryUrls,
+        onProjectUpdated,
         // Show clone progress while the save waits on the chosen main repository's clone.
         onSaved: () => syncStatus.refresh(),
         ...(mainRepositoryEnabled && mainRepositoryUrl !== initialMainUrl
           ? { mainRepositoryUrl }
           : {}),
       });
-      onProjectUpdated(nextProject);
       setSaved({ urls: linkedRepositoryUrls, main: mainRepositoryUrl });
       syncStatus.refresh();
+      stateMigration.refresh();
     } catch (error) {
       setSaveError(error);
     } finally {
@@ -152,6 +161,7 @@ export function ManageProjectRepositoriesDialog({
               onChange={setMainRepositoryUrl}
               disabled={saving}
             />
+            <ProjectStateMigrationStatusLine migration={stateMigration.migration} />
           </div>
         ) : null}
 

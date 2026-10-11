@@ -1,4 +1,9 @@
-import type { ServerConfig, ServerProvider, ThreadId } from "@t3tools/contracts";
+import type {
+  ProjectStateMigration,
+  ServerConfig,
+  ServerProvider,
+  ThreadId,
+} from "@t3tools/contracts";
 import type {
   ProjectWorkspaceRefreshWorkItemContextResult,
   ProjectWorkspaceRefreshWorkItemSliceContextResult,
@@ -119,6 +124,11 @@ export interface ProjectWorkspaceBackendApi {
     readonly url: string | null;
     readonly selection?: "user" | "detected";
   }) => Promise<ProjectMainRepositorySwitchResult>;
+  /** The state migration a main-repository switch handed to a thread, for the workspace it
+   * migrates into; `null` when there is none. One file read on the server. */
+  readonly readMainRepositoryMigrationStatus: (input: {
+    readonly workspaceRoot: string;
+  }) => Promise<{ readonly migration: ProjectStateMigration | null }>;
   readonly discoverRecipes: (
     input: DiscoverProjectRecipesRequest,
   ) => Promise<DiscoverProjectRecipesResponse>;
