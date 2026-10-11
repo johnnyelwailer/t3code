@@ -9,6 +9,7 @@ import {
 } from "@t3tools/project-context/t3teamFeatureFlags";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import { isMachineSetupEnabled } from "./cloud/t3team-machineSetupFlag.ts";
+import { isRepositorySecretSetEnabled } from "./t3team-repositorySecretFlag.ts";
 import { isWorkProfileChooserEnabled } from "./t3team-workProfileChooserFlag.ts";
 import {
   PROJECT_STATE_DIR,
@@ -52,6 +53,15 @@ describe("feature flag layering", () => {
     expect(isMachineSetupEnabled(() => "1")).toBe(true);
   });
 
+  test("REPOSITORY_SECRET_SET is off by default, on from the DB, and the env wins either way", () => {
+    expect(isRepositorySecretSetEnabled(noEnv)).toBe(false);
+    replaceFeatureFlagDatabaseValues(new Map([["REPOSITORY_SECRET_SET", true]]));
+    expect(isRepositorySecretSetEnabled(noEnv)).toBe(true);
+    expect(isRepositorySecretSetEnabled(() => "0")).toBe(false);
+    replaceFeatureFlagDatabaseValues(new Map());
+    expect(isRepositorySecretSetEnabled(() => "1")).toBe(true);
+  });
+
   test("WORK_PROFILE_CHOOSER defaults off, env and DB can turn it on live", () => {
     expect(isWorkProfileChooserEnabled(noEnv)).toBe(false);
     expect(isWorkProfileChooserEnabled(() => "")).toBe(false);
@@ -84,6 +94,7 @@ describe("feature flag layering", () => {
         description: expect.stringContaining("next server start"),
       }),
       expect.objectContaining({ key: "MACHINE_SETUP", requiresRestart: false }),
+      expect.objectContaining({ key: "REPOSITORY_SECRET_SET", requiresRestart: false }),
       expect.objectContaining({
         key: "WORK_PROFILE_CHOOSER",
         requiresRestart: false,

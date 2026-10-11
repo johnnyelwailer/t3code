@@ -17,6 +17,12 @@ export const FEATURE_FLAG_DEFINITIONS = {
     description:
       "Set up a project machine from the first message of a cloud session for a project that has none. Changes apply immediately.",
   },
+  REPOSITORY_SECRET_SET: {
+    defaultEnabled: false,
+    requiresRestart: false,
+    description:
+      "Dock a masked secret input and write the value as a repository Actions secret (agent never sees the value). Off: machine-setup only names secrets to set by hand.",
+  },
   // Temporarily disabled 2026-10-07: the work profiles are too dev-focused (only the developer
   // profile is actually tailored), so the chooser costs a setup step without changing the UX.
   // Relanding is tracked in https://nexplore.ghe.com/hive/nx-nexi/issues/60 — turn it back on

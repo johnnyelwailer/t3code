@@ -611,6 +611,20 @@ watch the change request's signals. A workflow body reaches it as
 `getTools().t3team.changeRequest.publish(...)` when both the body's `meta.capabilities` and the
 recipe's `allowedToolGroups` name `mutation.change_request`.
 
+Mutation tools (group `mutation.repository_secret`, off by default; feature flag
+`REPOSITORY_SECRET_SET`):
+
+```text
+t3team.repository_secret.set
+```
+
+`set` docks a masked secret card on the calling thread (the agent never sees the value). When the
+user saves, it writes the value as a repository Actions secret on the checkout's `origin` host via
+`gh secret set` (value on stdin only). If the secret already exists it returns `already_present`
+without asking; if the signed-in account lacks admin permission it returns `permission_denied`. A
+workflow body reaches it as `getTools().t3team.repositorySecret.set(...)` when both the body's
+`meta.capabilities` and the recipe's `allowedToolGroups` name `mutation.repository_secret`.
+
 ## Thread And Handoff Tools
 
 Context-bound chat and standalone chat share thread tools.

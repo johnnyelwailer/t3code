@@ -15,6 +15,7 @@ import type { ResourcePressureMonitorShape } from "./t3team-resourcePressureMoni
 import type { T3TeamThreadToolContextStoreShape } from "./t3team-threadToolContextStore.ts";
 import type { T3TeamToolCallResult, T3TeamTurnToolContext } from "./t3team-toolBroker.ts";
 import type { T3TeamChangeRequestToolHandlers } from "./t3team-toolBrokerBindingChangeRequest.ts";
+import type { T3TeamRepositorySecretToolHandlers } from "./t3team-toolBrokerBindingRepositorySecret.ts";
 import type { ReadMessageMailboxEntry } from "./t3team-toolBrokerBindingReadMessage.ts";
 import type { T3TeamMyWorkToolHandlers } from "./t3team-toolBrokerBindingMyWork.ts";
 import type { T3TeamRecipeToolHandlers } from "./t3team-toolBrokerBindingRecipes.ts";
@@ -75,5 +76,9 @@ export interface BindSessionDeps {
   /** `t3team.change_request.publish`, bound to the thread's checkout; absent without git. */
   readonly changeRequestToolsForThread?:
     | ((threadId: ThreadIdType) => T3TeamChangeRequestToolHandlers)
+    | undefined;
+  /** `t3team.repository_secret.set`, bound to the thread's checkout; absent without the publisher. */
+  readonly repositorySecretToolsForThread?:
+    | ((threadId: ThreadIdType) => T3TeamRepositorySecretToolHandlers)
     | undefined;
 }

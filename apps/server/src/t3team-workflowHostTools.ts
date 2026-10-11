@@ -9,7 +9,9 @@
  *     human accepts in the review UI;
  *   • `t3team.change_request.publish` (`mutation.change_request`): it DOES write — a commit, a
  *     push and a change request on the repository's host — so it has its own group, and a body
- *     reaches it only when both the body and its recipe name that group.
+ *     reaches it only when both the body and its recipe name that group;
+ *   • `t3team.repository_secret.set` (`mutation.repository_secret`): docks a masked secret card
+ *     and writes a repository Actions secret (agent never sees the value).
  *
  * WHICH THREAD THE PROPOSAL LANDS ON: the client binds the LAUNCH thread per call, and a
  * thread-bound binding carries `publishDraft` pinned to that same thread id (`t3team-toolBrokerLive.ts`
@@ -36,58 +38,17 @@ import * as Schema from "effect/Schema";
 
 import { getProjectRecipeToolGroupForToolId } from "@t3tools/project-recipes";
 
-import {
-  defineTool,
-  defineToolGroup,
-  type T3TeamToolHandlerClient,
-  type ToolRef,
-} from "@t3team/sdk";
+import { defineTool, type T3TeamToolHandlerClient, type ToolRef } from "@t3team/sdk";
 
 import {
   T3TEAM_MCP_SERVER_NAME,
   type T3TeamToolBrokerShape,
   type T3TeamToolCallResult,
 } from "./t3team-toolBroker.ts";
-
-/**
- * Reuses the id of the broker-side draft classification (`PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP`)
- * so bodies, the permission UI and the audit log speak ONE vocabulary.
- */
-const T3TEAM_WORKFLOW_DRAFT_TOOL_GROUP = defineToolGroup({
-  id: "mutation.draft",
-  label: "Propose work-item drafts",
-  description:
-    "Prepare reviewable work-item drafts (description, comment, assignee, estimate, status, subtask, links). A human accepts the draft before anything is written to the tracker.",
-});
-
-/** Same id as `PROJECT_RECIPE_MUTATION_CHANGE_REQUEST_TOOL_GROUP`. */
-const T3TEAM_WORKFLOW_CHANGE_REQUEST_TOOL_GROUP = defineToolGroup({
-  id: "mutation.change_request",
-  label: "Publish change requests",
-  description:
-    "Commit the listed files, push a branch, and open a pull or merge request on the repository's host. This writes immediately; there is no review step.",
-});
-
-const T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_IDS = [
-  "t3team.work_item.description.draft_update",
-  "t3team.work_item.comment.draft_create",
-  "t3team.work_item.assignee.draft_update",
-  "t3team.work_item.estimate.draft_update",
-  "t3team.work_item.status.draft_update",
-  "t3team.work_item.subtask.draft_create",
-  "t3team.work_item.link.draft_create",
-  "t3team.work_item.link.draft_remove",
-] as const;
-
-/** The exact broker tools reachable from a workflow body, each with the group a body must declare
- * to call it. Nothing outside this table is reachable. */
-const T3TEAM_WORKFLOW_HOST_TOOLS = [
-  ...T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_IDS.map((id) => ({
-    id,
-    group: T3TEAM_WORKFLOW_DRAFT_TOOL_GROUP,
-  })),
-  { id: "t3team.change_request.publish", group: T3TEAM_WORKFLOW_CHANGE_REQUEST_TOOL_GROUP },
-];
+import {
+  T3TEAM_WORKFLOW_HOST_TOOLS,
+  type T3TeamWorkflowHostToolEntry,
+} from "./t3team-workflowHostToolCatalog.ts";
 
 const HOST_TOOL_ID_SET: ReadonlySet<string> = new Set(T3TEAM_WORKFLOW_HOST_TOOLS.map((t) => t.id));
 
@@ -101,7 +62,7 @@ function resultText(result: T3TeamToolCallResult): string {
   return result.content.map((entry) => entry.text).join("\n") || "The host tool call failed.";
 }
 
-function hostToolRef(tool: (typeof T3TEAM_WORKFLOW_HOST_TOOLS)[number]): ToolRef<unknown, unknown> {
+function hostToolRef(tool: T3TeamWorkflowHostToolEntry): ToolRef<unknown, unknown> {
   const { id, group } = tool;
   return defineTool({
     id,

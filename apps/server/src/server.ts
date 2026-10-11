@@ -280,6 +280,7 @@ import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 import { T3TeamWorkflowSchedulerSweepLive } from "./t3team-workflowSchedulerSweepLive.ts";
 import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
 import * as T3TeamChangeRequestPublisher from "./t3team-changeRequestPublisher.ts";
+import * as T3TeamRepositorySecretPublisher from "./t3team-repositorySecretPublisher.ts";
 import * as T3TeamScriptHost from "./t3team-scriptHostContext.ts";
 import * as HtmlRender from "./htmlRender/HtmlRender.ts";
 import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
@@ -680,6 +681,13 @@ const T3TeamToolBrokerLayerLive = T3TeamToolBrokerLive.pipe(
     T3TeamChangeRequestPublisher.layer.pipe(
       Layer.provide(layerGit),
       Layer.provide(WorkspacePaths.layer),
+    ),
+  ),
+  // t3team: `t3team.repository_secret.set` docks a secret card and writes Actions secrets via gh.
+  Layer.provide(
+    T3TeamRepositorySecretPublisher.layer.pipe(
+      Layer.provide(layerGit),
+      Layer.provide(GitHubCli.layer),
     ),
   ),
 );
