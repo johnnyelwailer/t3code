@@ -5,6 +5,10 @@
  * name segment), `agent` (`agent`/`askAgent`), `ask` (`askUser`) — tracking the current `phase()`
  * group. Pure source inspection; it never executes the body. Split out to keep each module under
  * the additive-guard LOC ceiling.
+ *
+ * LABEL CONTRACT: the step `label` is always the human title the plan card shows. An unlabeled
+ * tool/script step gets the generic kind fallback ("Tool"/"Script") and carries its technical
+ * callee path in `detail` — the raw path never becomes the row's primary title.
  */
 
 import type * as TsApi from "typescript";
@@ -108,7 +112,9 @@ function rootIdentifier(ts: typeof TsApi, expr: TsApi.Expression): string | null
 
 interface CallSink {
   readonly onPhase: (title: string) => void;
-  readonly onStep: (kind: WorkflowStepKind, label: string) => void;
+  /** `detail` carries the technical callee of a tool/script step (reachable on demand); the
+   * `label` is always the human title the plan card shows. */
+  readonly onStep: (kind: WorkflowStepKind, label: string, detail?: string) => void;
 }
 
 /** Classify a single call expression against the primitive vocabulary, routing it to the sink. */
@@ -166,7 +172,14 @@ function classifyCall(
   // (`const s = getScripts()` → `s.computeStats()` is still a script step).
   const rootKind = root === "tools" || root === "scripts" ? root : bindings.roots.get(root);
   if (rootKind !== undefined) {
-    sink.onStep(classifyToolScript(name), truncate(callee.getText(sf).slice(root.length + 1)));
+    // The plan card never shows a raw `tools.*`/`scripts.*` path as the step title: the
+    // unlabeled step gets the generic human kind label, and the technical callee stays
+    // reachable on demand through the step's detail (tooltip / step details).
+    sink.onStep(
+      classifyToolScript(name),
+      rootKind === "scripts" ? "Script" : "Tool",
+      truncate(callee.getText(sf).slice(root.length + 1)),
+    );
   }
 }
 
@@ -186,7 +199,13 @@ export function scanSteps(
       currentPhase = title;
       if (!phaseTitles.includes(title)) phaseTitles.push(title);
     },
-    onStep: (kind, label) => steps.push({ phase: currentPhase, kind, label }),
+    onStep: (kind, label, detail) =>
+      steps.push({
+        phase: currentPhase,
+        kind,
+        label,
+        ...(detail === undefined ? {} : { detail }),
+      }),
   };
 
   const visit = (node: TsApi.Node): void => {

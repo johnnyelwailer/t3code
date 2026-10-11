@@ -1,8 +1,14 @@
 /**
  * Live workflow-run plan card (recipe UX "no black box" slice) — the plan (shape) card
  * overlaid with live step status derived from `t3team.recipe.workflow.step` activities.
+ *
+ * The card is COLLAPSED BY DEFAULT: one-line description + current step + run status, with the
+ * full step list one click away. It auto-expands — and cannot be collapsed back — while the run
+ * has FAILED or is WAITING ON THE USER, so a problem card never hides its reason.
+ *
  * The mid-flight story shows every status at once: completed steps, one waiting on the
- * user (`user.input`), one sleeping (`wait.until`), and one failed.
+ * user (`user.input`), one sleeping (`wait.until`), and one failed — and auto-expands on the
+ * user-waiting step.
  */
 import type { Meta, StoryObj } from "@storybook/react";
 
@@ -31,17 +37,20 @@ const shape = {
   name: "shape.release-train",
   description: "Collect the changelog, wait for the release window, then ship after sign-off.",
   phases: [{ title: "Prepare" }, { title: "Gate" }, { title: "Ship" }],
+  // Tool/script steps carry the generic human title; the technical callee stays in `detail`
+  // (tooltip / step details), never the row's primary title.
   steps: [
-    { phase: "Prepare", kind: "read", label: "github.releases.collectChangelog" },
+    { phase: "Prepare", kind: "read", label: "Tool", detail: "github.releases.collectChangelog" },
     { phase: "Prepare", kind: "agent", label: "Draft the release notes" },
     { phase: "Gate", kind: "ask", label: "Sign off the release notes?" },
     { phase: "Gate", kind: "agent", label: "Wait for the release window" },
-    { phase: "Ship", kind: "act", label: "github.release.publish" },
+    { phase: "Ship", kind: "act", label: "Tool", detail: "github.release.publish" },
   ],
   workflowRunId: "run-release-42",
 } as const;
 
-/** Mid-flight: Agent rows use the titled robot icon, while ASK remains a visible action tag. */
+/** Mid-flight: auto-expands on the waiting `user.input` step — a problem card never hides its
+ * state. Agent rows use the titled robot icon, while ASK remains a visible action tag. */
 export const MidFlight: Story = {
   args: {
     shape,
@@ -89,10 +98,44 @@ export const MidFlight: Story = {
   },
 };
 
-/** Loop iterations executed beyond the static plan land as appended extra rows. */
+/**
+ * Collapsed BY DEFAULT: a healthy in-flight run shows only the one-line description, the current
+ * step, and the run status — the full step list is one click away (row click or chevron).
+ */
+export const Collapsed: Story = {
+  args: {
+    shape,
+    progress: {
+      runId: "run-release-42",
+      steps: [
+        { stepId: "run-release-42:1", seq: 1, stepKind: "tool.call", phase: "completed" },
+        {
+          stepId: "run-release-42:2",
+          seq: 2,
+          stepKind: "thread.turn",
+          phase: "started",
+          detail: "Draft the release notes",
+        },
+      ],
+      run: null,
+    },
+  },
+};
+
+/** Expanded variant of the same healthy run — `initiallyExpanded` seeds the local state. */
+export const Expanded: Story = {
+  args: {
+    ...Collapsed.args,
+    initiallyExpanded: true,
+  },
+};
+
+/** Loop iterations executed beyond the static plan land as appended extra rows (expanded to keep
+ * the rows in view — the collapsed default hides them behind one click). */
 export const WithExtraSteps: Story = {
   args: {
     shape,
+    initiallyExpanded: true,
     progress: {
       runId: "run-release-42",
       steps: [
@@ -114,7 +157,8 @@ export const WithExtraSteps: Story = {
   },
 };
 
-/** Terminal run: the run-level activity drives the failed banner. */
+/** Terminal run: the run-level activity drives the failed banner — and auto-expands the card, a
+ * problem card never hides its reason. */
 export const FailedRun: Story = {
   args: {
     shape,
@@ -135,10 +179,22 @@ export const FailedRun: Story = {
   },
 };
 
-/** Every row keeps the same end slot; the child-thread row is a keyboard link with a chevron. */
+/**
+ * A failed run overrides the collapsed default: the card auto-expands and keeps the failure
+ * reason (banner + failed row) visible even though `initiallyExpanded` is false.
+ */
+export const CollapsedByDefaultAutoExpandedOnFailure: Story = {
+  args: {
+    ...FailedRun.args,
+  },
+};
+
+/** Every row keeps the same end slot; the child-thread row is a keyboard link with a chevron
+ * (expanded — the collapsed default would hide the row this story documents). */
 export const ChildThread: Story = {
   args: {
     shape,
+    initiallyExpanded: true,
     progress: {
       runId: "run-release-42",
       steps: [

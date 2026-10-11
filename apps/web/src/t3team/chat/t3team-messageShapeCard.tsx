@@ -125,6 +125,9 @@ export function T3TeamShapeStepRow({
           "min-w-0 flex-1 truncate text-sm",
           muted ? "text-muted-foreground/60 line-through" : "text-foreground/90",
         )}
+        // An unlabeled tool/script step shows the generic "Tool"/"Script" title; the raw
+        // callee path stays reachable on demand here, never as the row title.
+        title={step.detail ?? undefined}
       >
         {step.label}
       </span>

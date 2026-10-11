@@ -65,10 +65,13 @@ export function T3TeamWorkflowCardHeadline({
   shape,
   className,
   showNameChip = true,
+  descriptionLines = 2,
 }: {
   shape: Pick<ProjectRecipeWorkflowShapePayload, "name" | "description">;
   className?: string;
   showNameChip?: boolean;
+  /** The collapsed live card clamps the description to one line; the expanded card keeps two. */
+  descriptionLines?: 1 | 2;
 }) {
   const headline = shape.description ?? (shape.name || undefined);
   if (!headline) return null;
@@ -77,7 +80,12 @@ export function T3TeamWorkflowCardHeadline({
       <Tooltip>
         <TooltipTrigger
           render={
-            <span className="min-w-0 flex-1 line-clamp-2 text-sm font-semibold leading-5 text-foreground" />
+            <span
+              className={cn(
+                "min-w-0 flex-1 text-sm font-semibold leading-5 text-foreground",
+                descriptionLines === 1 ? "line-clamp-1" : "line-clamp-2",
+              )}
+            />
           }
         >
           {headline}

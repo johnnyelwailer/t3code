@@ -20,7 +20,12 @@ export const ProjectRecipeWorkflowShapeStep = Schema.Struct({
   /** The `phase()` group this step runs under, or null when it precedes any `phase()`. */
   phase: Schema.NullOr(Schema.String),
   kind: ProjectRecipeWorkflowStepKind,
+  /** The human title the plan card shows — an unlabeled tool/script step gets a generic
+   * fallback ("Tool"/"Script"), never the raw callee path. */
   label: Schema.String,
+  /** The technical identity of the step (the static callee path of a tool/script step),
+   * reachable on demand (tooltip / step details), never the row's primary title. */
+  detail: Schema.optional(Schema.String),
 });
 export type ProjectRecipeWorkflowShapeStep = typeof ProjectRecipeWorkflowShapeStep.Type;
 

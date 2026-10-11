@@ -35,7 +35,11 @@ function stepMatchesPlan(
   if (["thread.create", "thread.turn", "user.input"].includes(runtime.stepKind)) return false;
   if (plan.kind === runtime.stepKind) return true;
 
-  const label = plan.label.toLowerCase();
+  // Tool/script plan steps carry their technical callee in `detail` — the primary label is a
+  // generic fallback ("Tool"/"Script") that must never drive matching (it would light up the
+  // first tool step of any run). Legacy payloads (emitted before `detail` existed) carry the
+  // technical path in `label`, so fall back to it.
+  const label = (plan.detail ?? plan.label).toLowerCase();
   return (
     runtime.stepKind.toLowerCase().includes(label) ||
     (runtime.detail?.toLowerCase().includes(label) ?? false)

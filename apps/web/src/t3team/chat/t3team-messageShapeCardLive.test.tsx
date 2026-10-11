@@ -118,7 +118,7 @@ describe("live workflow step overlay on the plan card", () => {
     expect(formatWorkflowStepDue("2026-04-06T09:00:00.000Z", options)).toBe("Mon, Apr 6");
   });
 
-  it("overlays plan steps with live statuses and keeps unexecuted steps neutral", async () => {
+  it("collapses a healthy in-flight run to its current step and run status", async () => {
     const markup = await renderTimeline([
       stepActivity(step(1, "read", "completed", { detail: "github.pullRequest.get" }), {
         sequence: 1,
@@ -130,23 +130,59 @@ describe("live workflow step overlay on the plan card", () => {
     expect(markup).toContain("shape.pr-review");
     expect(markup).not.toContain("The plan");
     expect(markup).not.toContain(">System<");
-    // step 1 completed, step 2 is actively running, steps 3+4 not executed yet
+    // COLLAPSED BY DEFAULT: the step list is one click away, never hidden. The disclosure row
+    // carries the current step (the in-progress plan label), the run status lives in the
+    // header's live pill, and the description clamps to one line while collapsed.
+    expect(markup).toContain('data-workflow-live-card-expanded="false"');
+    expect(markup).toContain("data-workflow-live-card-expand");
+    expect(markup).toContain("line-clamp-1");
+    expect(markup).toContain("Summarize the risk");
+    expect(markup).toContain("Waiting for agent");
+    // the step rows themselves are not rendered while collapsed — and no banner: the run is
+    // not terminal yet.
+    expect(markup).not.toContain("data-step-status");
+    expect(markup).not.toContain("data-run-status");
+    expect(markup).not.toContain("animate-spin");
+  }, 30000);
+
+  it("expands a healthy run from the seeded local state and offers the collapse affordance", async () => {
+    const activities = [
+      stepActivity(step(1, "read", "completed", { detail: "github.pullRequest.get" }), {
+        sequence: 1,
+      }),
+      stepActivity(step(2, "thread.turn", "started"), { sequence: 2 }),
+    ];
+    const progress = deriveT3TeamWorkflowStepRuns(activities).get(RUN_ID)!;
+    const markup = renderToStaticMarkup(
+      <T3TeamWorkflowShapeLiveCard
+        shape={TEST_WORKFLOW_SHAPE}
+        progress={progress}
+        initiallyExpanded
+      />,
+    );
+
+    expect(markup).toContain('data-workflow-live-card-expanded="true"');
+    expect(markup).toContain("data-workflow-live-card-collapse");
+    expect(markup).not.toContain("data-workflow-live-card-expand");
+    expect(markup).toContain("line-clamp-2");
+    // the full step list renders again: step 1 completed, step 2 running, steps 3+4 pending
     expect(countOccurrences(markup, 'data-step-status="completed"')).toBe(1);
-    expect(countOccurrences(markup, 'data-step-status="waiting"')).toBe(0);
     expect(countOccurrences(markup, 'data-step-status="started"')).toBe(1);
     expect(countOccurrences(markup, 'data-step-status="pending"')).toBe(2);
-    expect(countOccurrences(markup, "animate-spin")).toBe(1);
-    expect(markup).not.toContain("lucide-clock");
-    // Rows with no human detail stay plain. They must not become expandable just to show
-    // `thread.turn` or another journal implementation name.
-    expect(countOccurrences(markup, 'data-step-row-shell="interactive"')).toBe(0);
-    expect(countOccurrences(markup, 'data-step-row-shell="static"')).toBe(4);
-    expect(countOccurrences(markup, "data-step-row-navigation-slot")).toBe(4);
-    expect(markup).not.toContain("lucide-chevron-right");
-    expect(countOccurrences(markup, "rounded-md px-1 py-0.5")).toBe(4);
-    // run not terminal yet — no banner
-    expect(markup).not.toContain("data-run-status");
-    expect(markup).toContain("Waiting for agent");
+  });
+
+  it("auto-expands — and pins open — a run that is waiting on the user", async () => {
+    const markup = await renderTimeline([
+      stepActivity(step(1, "read", "completed"), { sequence: 1 }),
+      stepActivity(step(2, "user.input", "waiting", { detail: "Merge it?" }), { sequence: 2 }),
+    ]);
+
+    // a problem card never hides its state: the card opens on its own even though the default
+    // is collapsed, and the collapse affordance is not offered while the run is parked on the
+    // user's answer.
+    expect(markup).toContain('data-workflow-live-card-expanded="true"');
+    expect(markup).not.toContain("data-workflow-live-card-collapse");
+    expect(countOccurrences(markup, 'data-step-status="waiting"')).toBe(1);
   }, 30000);
 
   it("makes a child step row the thread navigation target and hides journal implementation names", async () => {
@@ -159,6 +195,7 @@ describe("live workflow step overlay on the plan card", () => {
             threadId: "child-1",
           }),
         ),
+        runActivity("failed", "boom"),
       ],
       () => {},
     );
@@ -193,6 +230,7 @@ describe("live workflow step overlay on the plan card", () => {
         shape={TEST_WORKFLOW_SHAPE}
         progress={progress}
         childStatuses={{ "child-1": "Checking retry behavior" }}
+        initiallyExpanded
       />,
     );
 
@@ -229,6 +267,7 @@ describe("live workflow step overlay on the plan card", () => {
       stepActivity(step(5, "thread.turn", "started", { detail: "Retry the merge" }), {
         sequence: 5,
       }),
+      runActivity("failed", "boom"),
     ]);
 
     expect(markup).not.toContain("Additional steps");
@@ -244,7 +283,9 @@ describe("live workflow step overlay on the plan card", () => {
       [
         stepActivity(
           step(1, "wait.until", "started", { detail: "Sleep until 2026-07-20T09:00:00.000Z" }),
+          { sequence: 1 },
         ),
+        stepActivity(step(2, "user.input", "waiting"), { sequence: 2 }),
       ],
       undefined,
       { status: "sleeping" },
@@ -258,13 +299,19 @@ describe("live workflow step overlay on the plan card", () => {
 
   it("spins only the individual row that is actively working", async () => {
     const activeMarkup = await renderTimeline([
-      stepActivity(step(1, "read", "started", { detail: "github.pullRequest.get" })),
+      stepActivity(step(1, "read", "started", { detail: "github.pullRequest.get" }), {
+        sequence: 1,
+      }),
+      stepActivity(step(2, "user.input", "waiting"), { sequence: 2 }),
     ]);
     expect(countOccurrences(activeMarkup, "animate-spin")).toBe(1);
-    expect(activeMarkup).toContain('data-run-live-status="Running');
+    expect(activeMarkup).toContain('data-run-live-status="Waiting for your answer"');
 
     const waitingMarkup = await renderTimeline([
-      stepActivity(step(1, "thread.turn", "started", { detail: "Summarize the risk" })),
+      stepActivity(step(1, "thread.turn", "started", { detail: "Summarize the risk" }), {
+        sequence: 1,
+      }),
+      stepActivity(step(2, "user.input", "waiting"), { sequence: 2 }),
     ]);
     expect(countOccurrences(waitingMarkup, "animate-spin")).toBe(1);
     expect(waitingMarkup).not.toContain("lucide-clock");
@@ -272,14 +319,20 @@ describe("live workflow step overlay on the plan card", () => {
 
   it("animates preparation but keeps starting and terminal setup states static", async () => {
     const preparingMarkup = await renderTimeline([
-      stepActivity(step(1, "workflow.self-heal", "started", { detail: "Repairing workflow" })),
+      stepActivity(step(1, "workflow.self-heal", "started", { detail: "Repairing workflow" }), {
+        sequence: 1,
+      }),
+      stepActivity(step(2, "user.input", "waiting"), { sequence: 2 }),
     ]);
     expect(preparingMarkup).toContain("Getting orchestration ready");
     expect(preparingMarkup).not.toContain(">Repairing orchestration<");
     expect(countOccurrences(preparingMarkup, "animate-spin")).toBe(1);
 
     const startingMarkup = await renderTimeline([
-      stepActivity(step(1, "workflow.self-heal", "started", { detail: "Resuming workflow" })),
+      stepActivity(step(1, "workflow.self-heal", "started", { detail: "Resuming workflow" }), {
+        sequence: 1,
+      }),
+      stepActivity(step(2, "user.input", "waiting"), { sequence: 2 }),
     ]);
     expect(startingMarkup).toContain("Starting orchestration");
     expect(countOccurrences(startingMarkup, "animate-spin")).toBe(0);
@@ -317,6 +370,7 @@ describe("live workflow step overlay on the plan card", () => {
           }),
           { sequence: 2 },
         ),
+        stepActivity(step(3, "user.input", "waiting"), { sequence: 3 }),
       ],
       () => {},
     );
@@ -349,6 +403,7 @@ describe("live workflow step overlay on the plan card", () => {
     const markup = await renderTimeline([
       stepActivity(step(1, "thread.turn", "started"), { sequence: 1 }),
       stepActivity(step(1, "thread.turn", "completed"), { sequence: 2 }),
+      runActivity("failed", "boom"),
     ]);
 
     expect(countOccurrences(markup, 'data-step-status="completed"')).toBe(1);
@@ -361,13 +416,19 @@ describe("live workflow step overlay on the plan card", () => {
       stepActivity(step(1, "read", "completed"), { sequence: 1 }),
       runActivity("completed"),
     ]);
-    expect(completedMarkup).toContain('data-run-status="completed"');
-    expect(completedMarkup).toContain("Run completed");
+    // a completed run is healthy: it stays collapsed, and the terminal status word moves into
+    // the disclosure row's end slot (the banner is expanded-only) — no duplicate status.
+    expect(completedMarkup).toContain('data-workflow-live-card-expanded="false"');
+    expect(completedMarkup).toContain('data-run-live-status="Completed"');
+    expect(completedMarkup).not.toContain("data-run-status");
+    expect(completedMarkup).not.toContain("data-step-status");
 
     const failedMarkup = await renderTimeline([
       stepActivity(step(1, "read", "failed", { error: "boom" }), { sequence: 1 }),
       runActivity("failed", "boom"),
     ]);
+    // a failed run auto-expands — the failure reason (banner + failed row) stays visible.
+    expect(failedMarkup).toContain('data-workflow-live-card-expanded="true"');
     expect(failedMarkup).toContain('data-run-status="failed"');
     expect(failedMarkup).toContain("Run failed");
     expect(failedMarkup).toContain("boom");
@@ -386,9 +447,17 @@ describe("live workflow step overlay on the plan card", () => {
     expect(runningMarkup).toContain('aria-label="More orchestration actions"');
     expect(runningMarkup).not.toContain('aria-label="Stop workflow"');
 
-    const pausedMarkup = await renderTimeline([...waiting, runActivity("paused")], undefined, {
-      status: "paused",
-    });
+    const pausedMarkup = await renderTimeline(
+      [
+        ...waiting,
+        stepActivity(step(2, "user.input", "waiting"), { sequence: 2 }),
+        runActivity("paused"),
+      ],
+      undefined,
+      {
+        status: "paused",
+      },
+    );
     expect(pausedMarkup).toContain('aria-label="Resume orchestration"');
     expect(pausedMarkup).toContain('aria-label="More orchestration actions"');
     // The banner says WHEN it was paused and offers Resume right there (GHE #403 §2).
@@ -408,9 +477,17 @@ describe("live workflow step overlay on the plan card", () => {
     expect(failedRetryMarkup).toContain("data-run-resume");
     expect(failedRetryMarkup).toContain(">Retry<");
 
-    const stoppedMarkup = await renderTimeline([...waiting, runActivity("cancelled")], undefined, {
-      status: "cancelled",
-    });
+    const stoppedMarkup = await renderTimeline(
+      [
+        ...waiting,
+        stepActivity(step(2, "user.input", "waiting"), { sequence: 2 }),
+        runActivity("cancelled"),
+      ],
+      undefined,
+      {
+        status: "cancelled",
+      },
+    );
     expect(stoppedMarkup).toContain("Run stopped");
     expect(stoppedMarkup).toContain('data-step-status="cancelled"');
     expect(stoppedMarkup).not.toContain('data-step-status="started"');
@@ -443,6 +520,7 @@ describe("live workflow step overlay on the plan card", () => {
         }),
         { sequence: 4 },
       ),
+      stepActivity(step(5, "user.input", "waiting"), { sequence: 5 }),
     ]);
 
     expect(markup).toContain('data-workflow-repair-status="Needs attention"');
