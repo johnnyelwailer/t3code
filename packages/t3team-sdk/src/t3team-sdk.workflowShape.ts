@@ -23,7 +23,14 @@ export interface WorkflowShapeStep {
   /** The `phase()` group this step runs under, or null if it precedes any `phase()` call. */
   readonly phase: string | null;
   readonly kind: WorkflowStepKind;
+  /** The human title the plan card shows. An unlabeled tool/script step gets the humanized
+   * last segment of its callee ("Collect changelog") — never the raw callee path; the bare
+   * "Tool"/"Script" word is the last-resort fallback only. */
   readonly label: string;
+  /** The technical identity of the step (the static callee path of a tool/script step),
+   * reachable on demand via the step's details/tooltip. Absent for steps whose label is
+   * already human (agent/ask/composition). */
+  readonly detail?: string;
 }
 
 /**

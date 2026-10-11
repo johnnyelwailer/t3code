@@ -49,10 +49,12 @@ export const TEST_WORKFLOW_SHAPE: ProjectRecipeWorkflowShapePayload = {
   name: "shape.pr-review",
   phases: [{ title: "Review" }, { title: "Decide" }],
   steps: [
-    { phase: "Review", kind: "read", label: "github.pullRequest.get" },
+    // The data layer derives the display label from the callee; the raw path lives in `detail`
+    // (reachable on demand via the row tooltip / step details), never as the title.
+    { phase: "Review", kind: "read", label: "Get", detail: "github.pullRequest.get" },
     { phase: "Review", kind: "agent", label: "Summarize the risk" },
     { phase: "Decide", kind: "ask", label: "Merge it?" },
-    { phase: "Decide", kind: "act", label: "github.pullRequest.merge" },
+    { phase: "Decide", kind: "act", label: "Merge", detail: "github.pullRequest.merge" },
   ],
   workflowRunId: RUN_ID,
 };

@@ -6,6 +6,13 @@
  * status rule is subtle enough to deserve reading on its own: a local, optimistic status wins over
  * the server's while a control call is in flight, EXCEPT once the server reports a terminal state —
  * otherwise a stale optimistic value would keep a spinner alive after Stop already succeeded.
+ *
+ * REACHABLE STEPS ONLY: `rows` is filtered to the steps the run has actually reached. A static
+ * shape step with no live event yet (a branch side, a later phase) is not rendered — no dimmed
+ * "planned" placeholder, no "N more to go" counter; an all-unreached phase draws no header. The
+ * single exception is the scheduled-wait row: `wait.until` activities are deliberately kept out
+ * of the rows, so a plan row bound to an active wait renders reached (as the scheduled row) even
+ * though it carries no runtime step of its own.
  */
 import { useEffect, useState } from "react";
 import type { ProjectRecipeWorkflowShapePayload } from "@t3tools/project-recipes";
@@ -85,6 +92,13 @@ export function useT3TeamWorkflowShapeLiveState(input: {
     activeWaitAt === undefined
       ? -1
       : rows.findIndex((row) => row.planStep !== undefined && row.runtimeStep === undefined);
+  // Reachable steps only (see the module doc): a plan step the run has not reached carries no
+  // live event and is not rendered. Rows before `scheduledPlanRow` all carry a runtime step (it
+  // is the FIRST plan-only row), so keeping the scheduled row by pre-filter index lands it at the
+  // same index in the filtered array the step rows expect.
+  const reachedRows = rows.filter(
+    (row, index) => row.runtimeStep !== undefined || index === scheduledPlanRow,
+  );
 
   useEffect(() => {
     if (localStatus === undefined || workflowRunStatus === undefined) return;
@@ -143,7 +157,7 @@ export function useT3TeamWorkflowShapeLiveState(input: {
   };
 
   return {
-    rows,
+    rows: reachedRows,
     activeWaitAt,
     scheduledPlanRow,
     status,

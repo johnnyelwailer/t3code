@@ -120,6 +120,26 @@ describe("workflow card headline — description leads, slug demoted", () => {
 });
 
 describe("workflow card terminal outcome fold-in", () => {
+  // A completed card is collapsed by default; the banner (the outcome's home) renders only
+  // when expanded. These tests drive the auto-expand trigger — a run parked on the user's
+  // answer — so the terminal banner renders; the assertions are about the banner itself.
+  function userInputWaiting(): T3TeamThreadActivityRecord {
+    return {
+      id: EventId.make("activity-outcome-waiting"),
+      tone: "info",
+      kind: PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
+      summary: "waiting",
+      payload: {
+        workflowRunId: RUN_ID,
+        stepId: `${RUN_ID}:0`,
+        stepKind: "user.input",
+        phase: "waiting",
+      },
+      turnId: null,
+      createdAt: "2026-07-17T10:04:00.000Z",
+    };
+  }
+
   function resultMessage(text: string): ChatMessage {
     return {
       id: MessageId.make(`t3team-wf-result:${RUN_ID}`),
@@ -180,7 +200,7 @@ describe("workflow card terminal outcome fold-in", () => {
 
   it("adds a short, honest outcome to the banner when the result is already short and plain", async () => {
     const markup = await renderShapeAndResult(
-      [runActivity("completed")],
+      [userInputWaiting(), runActivity("completed")],
       resultMessage("**Decision:** approved"),
     );
 
@@ -204,7 +224,7 @@ describe("workflow card terminal outcome fold-in", () => {
       "- `applyDiscount` (function): mutates the cart in place",
     ].join("\n");
     const markup = await renderShapeAndResult(
-      [runActivity("completed")],
+      [userInputWaiting(), runActivity("completed")],
       resultMessage(longMarkdown),
     );
 
@@ -223,7 +243,7 @@ describe("workflow card terminal outcome fold-in", () => {
 
   it("keeps a plain 'Run completed' banner when the run genuinely returned nothing readable", async () => {
     const markup = await renderShapeAndResult(
-      [runActivity("completed")],
+      [userInputWaiting(), runActivity("completed")],
       resultMessage("Workflow completed."),
     );
 
@@ -379,9 +399,12 @@ describe("live card header — two-row layout", () => {
     ]);
 
     expect(markup).toContain("three askUser shapes in sequence: boolean, literals, struct form");
-    // the slug still shows on row 2 even with no live status and no controls beside it.
+    // a completed run stays collapsed: the header's live pill is gone and the terminal status
+    // word lives in the disclosure row's end slot instead — the slug still shows on row 2 even
+    // with no live status and no controls beside it.
     expect(markup).toContain("qa-ask-forms");
-    expect(markup).not.toContain("data-run-live-status");
-    expect(markup).toContain('data-run-status="completed"');
+    expect(markup).toContain('data-workflow-live-card-expanded="false"');
+    expect(markup).toContain('data-run-live-status="Completed"');
+    expect(markup).not.toContain('data-run-status="completed"');
   });
 });
