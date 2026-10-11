@@ -152,7 +152,8 @@ export const IMPLEMENTED_T3TEAM_MY_WORK_TOOL_CATALOG = {
         },
         reset: {
           type: "boolean",
-          description: "true: drop the stored arrangement and any draft, back to the default layout.",
+          description:
+            "true: drop the stored arrangement and any draft, back to the default layout.",
         },
         promote: {
           type: "boolean",
@@ -182,7 +183,16 @@ export const IMPLEMENTED_T3TEAM_MY_WORK_TOOL_CATALOG = {
             noise: { type: "string" },
             everyHours: { type: "number" },
           },
-          required: ["id", "title", "shortDescription", "digestScope", "density", "focus", "noise", "everyHours"],
+          required: [
+            "id",
+            "title",
+            "shortDescription",
+            "digestScope",
+            "density",
+            "focus",
+            "noise",
+            "everyHours",
+          ],
         },
       },
     },

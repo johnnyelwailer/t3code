@@ -48,11 +48,13 @@ describe("T3TeamMyWorkDigestPlan", () => {
       placement: "side" as const,
       heading: "Pulse",
       items: [],
-      widgetHtml: "<p style=\"color:var(--foreground)\">Today</p>",
+      widgetHtml: '<p style="color:var(--foreground)">Today</p>',
     };
     expect(decode({ ...plan, sections: [widget] }).sections[0]?.kind).toBe("widget");
     expect(digestWidgetHtmlIssues(widget.widgetHtml)).toEqual([]);
-    expect(digestWidgetHtmlIssues("<script src=\"https://cdn.example/a.js\"></script>").length).toBeGreaterThan(0);
+    expect(
+      digestWidgetHtmlIssues('<script src="https://cdn.example/a.js"></script>').length,
+    ).toBeGreaterThan(0);
   });
 
   it("rejects an empty ticket id and too many sections", () => {

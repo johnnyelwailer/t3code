@@ -25,7 +25,9 @@ const text = (value: unknown, max: number): string | undefined => {
 
 export function parseMyWorkArrangeRecipeSpec(
   input: unknown,
-): { readonly ok: true; readonly spec: MyWorkArrangeRecipeSpec } | { readonly ok: false; readonly message: string } {
+):
+  | { readonly ok: true; readonly spec: MyWorkArrangeRecipeSpec }
+  | { readonly ok: false; readonly message: string } {
   const record = asRecord(input);
   if (record === undefined) return { ok: false, message: "recipe must be an object." };
   const id = text(record.id, 41);
@@ -36,7 +38,12 @@ export function parseMyWorkArrangeRecipeSpec(
   const shortDescription = text(record.shortDescription, 200);
   const focus = text(record.focus, 400);
   const noise = text(record.noise, 400);
-  if (title === undefined || shortDescription === undefined || focus === undefined || noise === undefined) {
+  if (
+    title === undefined ||
+    shortDescription === undefined ||
+    focus === undefined ||
+    noise === undefined
+  ) {
     return { ok: false, message: "recipe needs title, shortDescription, focus, and noise." };
   }
   if (record.digestScope !== "project" && record.digestScope !== "all") {
@@ -46,7 +53,12 @@ export function parseMyWorkArrangeRecipeSpec(
     return { ok: false, message: "recipe.density must be 'compact' or 'comfortable'." };
   }
   const everyHours = record.everyHours;
-  if (typeof everyHours !== "number" || !Number.isInteger(everyHours) || everyHours < 1 || everyHours > 168) {
+  if (
+    typeof everyHours !== "number" ||
+    !Number.isInteger(everyHours) ||
+    everyHours < 1 ||
+    everyHours > 168
+  ) {
     return { ok: false, message: "recipe.everyHours must be an integer from 1 to 168." };
   }
   return {

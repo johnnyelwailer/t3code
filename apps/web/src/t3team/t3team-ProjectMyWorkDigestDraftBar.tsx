@@ -28,12 +28,22 @@ export function DigestDraftBar({
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
       <span>Draft arrangement · {formatDigestAgo(nowMs, producedAt)} ago</span>
       {onPromote ? (
-        <Button size="sm" variant="outline" disabled={pending !== null} onClick={() => run("keep", onPromote)}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={pending !== null}
+          onClick={() => run("keep", onPromote)}
+        >
           Keep
         </Button>
       ) : null}
       {onDiscard ? (
-        <Button size="sm" variant="ghost" disabled={pending !== null} onClick={() => run("discard", onDiscard)}>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={pending !== null}
+          onClick={() => run("discard", onDiscard)}
+        >
           Discard
         </Button>
       ) : null}

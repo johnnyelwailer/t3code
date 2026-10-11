@@ -47,7 +47,9 @@ const widgetSectionIssues = (section: T3TeamMyWorkDigestSection): ReadonlyArray<
     );
   }
   if (section.items.length > 0 || (section.reviewIds?.length ?? 0) > 0) {
-    issues.push(`Section '${section.id}': a 'widget' section lists nothing; it reads window.digest.`);
+    issues.push(
+      `Section '${section.id}': a 'widget' section lists nothing; it reads window.digest.`,
+    );
   }
   if (section.widgetHtml === undefined) {
     issues.push(`Section '${section.id}': a 'widget' section must include widgetHtml.`);
@@ -55,7 +57,9 @@ const widgetSectionIssues = (section: T3TeamMyWorkDigestSection): ReadonlyArray<
   }
   return [
     ...issues,
-    ...digestWidgetHtmlIssues(section.widgetHtml).map((issue) => `Section '${section.id}': ${issue}`),
+    ...digestWidgetHtmlIssues(section.widgetHtml).map(
+      (issue) => `Section '${section.id}': ${issue}`,
+    ),
   ];
 };
 

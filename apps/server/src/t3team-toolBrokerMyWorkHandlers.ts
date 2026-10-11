@@ -150,7 +150,9 @@ export const makeMyWorkHandlers = (input: {
         const producedAt = DateTime.formatIso(DateTime.makeUnsafe(yield* Clock.currentTimeMillis));
         const agentPlan = withAgentDefaults(args.plan, producedAt);
         if (agentPlan === undefined) {
-          return yield* Effect.fail("An arrangement stored by an agent must have producer 'agent'.");
+          return yield* Effect.fail(
+            "An arrangement stored by an agent must have producer 'agent'.",
+          );
         }
         const stored = yield* input.runStore(
           mode.mode.channel === "draft"

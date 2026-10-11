@@ -36,7 +36,9 @@ export const T3TeamMyWorkDigestSection = Schema.Struct({
   id: TrimmedNonEmptyString.check(Schema.isMaxLength(80)),
   kind: Schema.Literals(["items", "reviews", "graph", "widget"]),
   widget: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(120))),
-  widgetHtml: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(T3TEAM_MY_WORK_WIDGET_HTML_MAX))),
+  widgetHtml: Schema.optionalKey(
+    Schema.String.check(Schema.isMaxLength(T3TEAM_MY_WORK_WIDGET_HTML_MAX)),
+  ),
   placement: T3TeamMyWorkDigestPlacement,
   heading: TrimmedNonEmptyString.check(Schema.isMaxLength(120)),
   hint: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(400))),

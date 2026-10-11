@@ -31,7 +31,9 @@ export function DigestWidgetSection({
       <h2 className="text-sm font-medium text-foreground">{section.heading}</h2>
       {section.hint ? <p className="text-xs text-muted-foreground">{section.hint}</p> : null}
       {srcdoc === undefined ? (
-        <p className="text-xs text-muted-foreground">This widget was blocked because it reaches the network.</p>
+        <p className="text-xs text-muted-foreground">
+          This widget was blocked because it reaches the network.
+        </p>
       ) : (
         <iframe
           title={section.heading}
