@@ -26,7 +26,7 @@ function discoveryWithGitHubAuth(
 }
 
 describe("parseGitHubAuth", () => {
-  it("surfaces every authenticated host when signed in to more than one", () => {
+  it("surfaces every authenticated host when signed in to more than one, and drops refused logins", () => {
     const result = parseGitHubAuth(
       discoveryWithGitHubAuth({
         status: "authenticated",
@@ -34,8 +34,14 @@ describe("parseGitHubAuth", () => {
         host: Option.some("github.com"),
         detail: Option.none(),
         accounts: [
-          { host: "github.com", account: Option.some("octocat"), active: true },
-          { host: "nexplore.ghe.com", account: Option.some("octocat-work"), active: false },
+          { host: "github.com", account: "octocat", active: true, authenticated: true },
+          {
+            host: "nexplore.ghe.com",
+            account: "octocat-work",
+            active: false,
+            authenticated: true,
+          },
+          { host: "refused.example", account: "stale", active: false, authenticated: false },
         ],
       }),
     );
@@ -55,7 +61,7 @@ describe("parseGitHubAuth", () => {
         account: Option.some("octocat"),
         host: Option.some("github.com"),
         detail: Option.none(),
-        accounts: [{ host: "github.com", account: Option.some("octocat"), active: true }],
+        accounts: [{ host: "github.com", account: "octocat", active: true, authenticated: true }],
       }),
     );
 

@@ -14,11 +14,12 @@ import { ServerConfig } from "./config.ts";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
-import { GitHubCli } from "./sourceControl/GitHubCli.ts";
+import { GitHubApi } from "./sourceControl/GitHubApi.ts";
 import { T3TeamChildThreadMetadata } from "./t3team-childThreadMetadata.ts";
 import type { loadT3TeamMyWorkDigestGraph } from "./t3team-myworkDigest.ts";
 import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts";
 import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
+import { VcsProcess } from "./vcs/VcsProcess.ts";
 
 /** Everything `loadT3TeamMyWorkDigestGraph` asks of its context. */
 export type DigestServices = Effect.Services<ReturnType<typeof loadT3TeamMyWorkDigestGraph>>;
@@ -28,7 +29,8 @@ export const resolveDigestContext = (threads: ThreadManagementService["Service"]
     const sql = yield* Effect.serviceOption(SqlClient.SqlClient);
     const runs = yield* Effect.serviceOption(WorkflowRunRepository);
     const pullRequests = yield* Effect.serviceOption(PullRequestService);
-    const gitHubCli = yield* Effect.serviceOption(GitHubCli);
+    const gitHubApi = yield* Effect.serviceOption(GitHubApi);
+    const vcsProcess = yield* Effect.serviceOption(VcsProcess);
     const serverConfig = yield* Effect.serviceOption(ServerConfig);
     const childMetadata = yield* Effect.serviceOption(T3TeamChildThreadMetadata);
     const facts = yield* Effect.serviceOption(T3TeamThreadFactsStore);
@@ -39,7 +41,8 @@ export const resolveDigestContext = (threads: ThreadManagementService["Service"]
       Option.isNone(sql) ||
       Option.isNone(runs) ||
       Option.isNone(pullRequests) ||
-      Option.isNone(gitHubCli) ||
+      Option.isNone(gitHubApi) ||
+      Option.isNone(vcsProcess) ||
       Option.isNone(serverConfig) ||
       Option.isNone(childMetadata) ||
       Option.isNone(facts) ||
@@ -56,7 +59,8 @@ export const resolveDigestContext = (threads: ThreadManagementService["Service"]
     ).pipe(
       Context.add(WorkflowRunRepository, runs.value),
       Context.add(PullRequestService, pullRequests.value),
-      Context.add(GitHubCli, gitHubCli.value),
+      Context.add(GitHubApi, gitHubApi.value),
+      Context.add(VcsProcess, vcsProcess.value),
       Context.add(ServerConfig, serverConfig.value),
       Context.add(T3TeamChildThreadMetadata, childMetadata.value),
       Context.add(T3TeamThreadFactsStore, facts.value),

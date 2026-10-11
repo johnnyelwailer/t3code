@@ -1,5 +1,6 @@
 /** T3Team's typed adapter over the host-neutral workflow composition primitives. */
 
+// @effect-diagnostics nodeBuiltinImport:off -- Plain Promise-based SDK primitive, not Effect code; no Effect runtime is available at this boundary.
 import * as NodeTimersPromises from "node:timers/promises";
 
 import {

@@ -2,9 +2,7 @@ import { type CloudSession, CloudSessionFailedError } from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { ChildProcessSpawner } from "effect/process";
 
-import type * as VcsProcess from "../vcs/VcsProcess.ts";
 import {
   makePayloadIssueCleanup,
   parseCreatedPayloadIssue,
@@ -12,7 +10,7 @@ import {
 } from "./t3team-CloudSessionPayloadCleanup.ts";
 import type {
   CloudSessionRepoRef,
-  GhInvocation,
+  GitHubActionsRequest,
   WorkflowRunSummary,
 } from "./t3team-githubActionsSessionClient.ts";
 
@@ -23,26 +21,18 @@ const repoRef: CloudSessionRepoRef = {
   workflowFileName: "session.yml",
 };
 
-const PatchJson = Schema.Struct({ state: Schema.String, body: Schema.String });
-const decodePatch = Schema.decodeSync(Schema.fromJsonString(PatchJson));
 const CreatedIssueJson = Schema.Struct({ number: Schema.Finite, node_id: Schema.String });
 const encodeCreatedIssue = Schema.encodeSync(Schema.fromJsonString(CreatedIssueJson));
 
-const ok: VcsProcess.VcsProcessOutput = {
-  exitCode: ChildProcessSpawner.ExitCode(0),
-  stdout: "{}",
-  stderr: "",
-  stdoutTruncated: false,
-  stderrTruncated: false,
-};
+const ok = { body: "{}", truncated: false };
 
-/** Records every gh call; `failDelete` makes the GraphQL delete refuse (no admin). */
+/** Records every request; `failDelete` makes the GraphQL delete refuse (no admin). */
 const makeGh = (options: { failDelete?: boolean } = {}) => {
-  const calls: GhInvocation[] = [];
-  const run = (invocation: GhInvocation) =>
+  const calls: GitHubActionsRequest[] = [];
+  const run = (request: GitHubActionsRequest) =>
     Effect.suspend(() => {
-      calls.push(invocation);
-      return options.failDelete && invocation.args.includes("graphql")
+      calls.push(request);
+      return options.failDelete && request.kind === "graphql"
         ? Effect.fail(new CloudSessionFailedError({ reason: "rejected", message: "no admin" }))
         : Effect.succeed(ok);
     });
@@ -70,9 +60,11 @@ describe("cloud session payload issue cleanup", () => {
       yield* cleanup.sweep([entry("s1", "ready")]);
       yield* cleanup.sweep([entry("s1", "ready")]);
       assert.strictEqual(gh.calls.length, 1);
-      const args = gh.calls[0]?.args ?? [];
-      assert.include(args.join(" "), "deleteIssue");
-      assert.include(args, `issueId=${issue.nodeId}`);
+      const deletion = gh.calls[0];
+      assert.strictEqual(deletion?.kind, "graphql");
+      if (deletion?.kind !== "graphql") return;
+      assert.include(deletion.query, "deleteIssue");
+      assert.deepStrictEqual(deletion.variables, { issueId: issue.nodeId });
     }),
   );
 
@@ -86,9 +78,11 @@ describe("cloud session payload issue cleanup", () => {
       yield* cleanup.sweep([entry("s2", "failed")]);
       assert.strictEqual(gh.calls.length, 2);
       const patch = gh.calls[1];
-      assert.include(patch?.args ?? [], "repos/hive/nx-nexi/issues/12");
-      assert.include(patch?.args ?? [], "PATCH");
-      assert.deepStrictEqual(decodePatch(patch?.stdin ?? "{}"), {
+      assert.strictEqual(patch?.kind, "rest");
+      if (patch?.kind !== "rest") return;
+      assert.strictEqual(patch.path, "repos/hive/nx-nexi/issues/12");
+      assert.strictEqual(patch.method, "PATCH");
+      assert.deepStrictEqual(patch.body, {
         state: "closed",
         body: SCRUBBED_PAYLOAD_BODY,
       });

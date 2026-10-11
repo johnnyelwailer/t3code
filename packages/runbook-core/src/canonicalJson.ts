@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off -- Synchronous, deterministic SHA-256 for journal hashing; runs outside Effect in replay-critical code.
 /**
  * Deterministic canonical JSON + argument hashing for the workflow journal.
  *

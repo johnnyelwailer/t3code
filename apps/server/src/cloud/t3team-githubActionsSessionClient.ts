@@ -1,21 +1,20 @@
 /**
- * Argv builders and response parsers for driving one cloud-session workflow
- * through the `gh` CLI.
+ * Request builders for driving one cloud-session workflow through GitHub's API. The parsers for
+ * what they bring back live in `t3team-githubActionsSessionParse.ts`.
  *
  * Pure on purpose: no I/O, no Effect, no network. The service layer owns
- * execution via `GitHubCli.execute`, which is how the rest of this repo talks
- * to GitHub (see `GitHubPullRequestCli`) — so a cloud session inherits the
- * user's existing `gh` login and needs no credential of its own.
+ * execution via `GitHubApi`, which is how the rest of this repo talks to
+ * GitHub — so a cloud session inherits the user's existing credential for the
+ * host (a `gh` login, a token in Settings or the environment) and needs none
+ * of its own.
  *
  * Vendor-named deliberately: the provisioning mechanics here genuinely are
  * GitHub Actions'. The neutral vocabulary lives one layer up, in the
  * `cloudSession` contract and `CloudSessionService`.
  */
 
-import { actorLogin } from "./t3team-cloudSessionRunOwnership.ts";
-
 export interface CloudSessionRepoRef {
-  /** GitHub host, e.g. "nexplore.ghe.com". Passed to `gh --hostname`. */
+  /** GitHub host, e.g. "nexplore.ghe.com". Picks the credential and the API base URL. */
   readonly host: string;
   readonly owner: string;
   readonly repo: string;
@@ -47,36 +46,48 @@ export interface WorkflowJobStep {
   readonly conclusion: string | null;
 }
 
-/** `gh api` reads a JSON body from stdin with `--input -`, keeping payloads out of argv. */
-export interface GhInvocation {
-  readonly args: ReadonlyArray<string>;
-  readonly stdin?: string;
+/**
+ * One request against the session's host. A payload rides in `body`, never in a URL or an argv,
+ * so a credential or a session payload cannot surface in a process listing or a trace.
+ */
+export type GitHubActionsRequest =
+  | {
+      readonly kind: "rest";
+      /** Names the call in traces and rate-limit accounting. */
+      readonly operation: string;
+      readonly method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+      /** Relative to the host's API root, e.g. `repos/acme/fleet/actions/runs`. */
+      readonly path: string;
+      readonly body?: unknown;
+    }
+  | {
+      readonly kind: "graphql";
+      readonly operation: string;
+      readonly query: string;
+      readonly variables?: Readonly<Record<string, unknown>>;
+    };
+
+/** What an executed request looks like to the parsers here. */
+export interface GitHubActionsResponse {
+  readonly body: string;
+  /** The answer was cut at the transport's size limit, so it must not be read as complete. */
+  readonly truncated: boolean;
 }
 
-export const apiArgs = (ref: CloudSessionRepoRef, path: string): ReadonlyArray<string> => [
-  "api",
-  "--hostname",
-  ref.host,
-  path,
-];
+export const repoApiPath = (ref: CloudSessionRepoRef, suffix: string): string =>
+  `repos/${ref.owner}/${ref.repo}/${suffix}`;
 
-export function dispatchSessionInvocation(
+export function dispatchSessionRequest(
   ref: CloudSessionRepoRef,
   inputs: Readonly<Record<string, string>>,
-): GhInvocation {
+): GitHubActionsRequest {
   return {
-    args: [
-      ...apiArgs(
-        ref,
-        `repos/${ref.owner}/${ref.repo}/actions/workflows/${ref.workflowFileName}/dispatches`,
-      ),
-      "--method",
-      "POST",
-      "--input",
-      "-",
-    ],
+    kind: "rest",
+    operation: "cloudSession.dispatch",
+    method: "POST",
+    path: repoApiPath(ref, `actions/workflows/${ref.workflowFileName}/dispatches`),
     // The endpoint answers 204 with an empty body; nothing to parse.
-    stdin: JSON.stringify({ ref: "main", inputs }),
+    body: { ref: "main", inputs },
   };
 }
 
@@ -84,134 +95,44 @@ export function dispatchSessionInvocation(
  * List session-workflow runs. `actor=` is included, but this GHE ignores it
  * (`created_by` too); `sessionRunsForLogin` is what actually scopes the list.
  */
-export function listRunsInvocation(
+export function listRunsRequest(
   ref: CloudSessionRepoRef,
   limit: number,
   actor?: string,
-): GhInvocation {
+): GitHubActionsRequest {
   const query =
     actor === undefined
       ? `per_page=${limit}`
       : `per_page=${limit}&actor=${encodeURIComponent(actor)}`;
-  const path = `repos/${ref.owner}/${ref.repo}/actions/workflows/${ref.workflowFileName}/runs?${query}`;
-  return { args: ["api", "--hostname", ref.host, "--jq", RUN_FIELDS_JQ, path] };
-}
-
-/**
- * Only the fields `toRun` reads. A full run carries the repository twice and runs to about 12 KB,
- * so a hundred of them pass the 1 MB a `gh` call may print; the truncated list then fails as
- * unreadable. These fields are about 300 bytes a run.
- */
-export const RUN_FIELDS_JQ =
-  "{workflow_runs: [.workflow_runs[] | {id, status, conclusion, created_at, updated_at, html_url, name, display_title, actor: {login: .actor.login}}]}";
-
-/**
- * Resolve the GitHub login the current `gh` credential is signed in as, on the
- * fleet host. `--jq .login` prints the bare login, so the whole stdout is the
- * answer. Same host + keyring token as dispatch, so a run's `actor` matches it
- * exactly — what makes scoping the list to "my sessions" sound.
- */
-export function currentLoginInvocation(ref: CloudSessionRepoRef): GhInvocation {
-  return { args: ["api", "--hostname", ref.host, "user", "--jq", ".login"] };
-}
-
-export function jobStepsInvocation(ref: CloudSessionRepoRef, runId: number): GhInvocation {
-  return { args: apiArgs(ref, `repos/${ref.owner}/${ref.repo}/actions/runs/${runId}/jobs`) };
-}
-
-export function cancelRunInvocation(ref: CloudSessionRepoRef, runId: number): GhInvocation {
   return {
-    args: [
-      ...apiArgs(ref, `repos/${ref.owner}/${ref.repo}/actions/runs/${runId}/cancel`),
-      "--method",
-      "POST",
-    ],
-  };
-}
-
-function asString(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-function asNullableString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
-}
-
-function toRun(raw: Record<string, unknown>): WorkflowRunSummary {
-  return {
-    id: typeof raw["id"] === "number" ? raw["id"] : 0,
-    status: asString(raw["status"]),
-    conclusion: asNullableString(raw["conclusion"]),
-    createdAt: asString(raw["created_at"]),
-    updatedAt: asString(raw["updated_at"]),
-    htmlUrl: asString(raw["html_url"]),
-    name: asString(raw["name"]) || asString(raw["display_title"]),
-    actor: actorLogin(raw["actor"]),
+    kind: "rest",
+    operation: "cloudSession.listRuns",
+    path: repoApiPath(ref, `actions/workflows/${ref.workflowFileName}/runs?${query}`),
   };
 }
 
 /**
- * The login is the whole stdout (`--jq .login` prints a bare string, minus the trailing newline `gh` appends); `null` when empty — the caller must fail closed, never read a blank answer as "no sessions".
+ * Resolve the GitHub login the fleet host's credential belongs to. Same host and same credential
+ * as dispatch, so a run's `actor` matches it exactly — what makes scoping the list to "my
+ * sessions" sound.
  */
-export function parseLogin(stdout: string): string | null {
-  const login = stdout.trim();
-  return login === "" ? null : login;
+export function currentLoginRequest(_ref: CloudSessionRepoRef): GitHubActionsRequest {
+  return { kind: "rest", operation: "cloudSession.viewer", path: "user" };
 }
 
-/**
- * Parse `GET /actions/workflows/{file}/runs`.
- *
- * Returns `null` — never `[]` — when the response is not the shape we expect.
- * The distinction is load-bearing: an empty list is an authoritative "no
- * sessions", while unparseable output means we do not know. Collapsing the two
- * would let a truncated or error response read as "nothing is running", which
- * both hides live sessions and lets a stale run be mistaken for a new one.
- */
-export function parseRunsResponse(stdout: string): readonly WorkflowRunSummary[] | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(stdout);
-  } catch {
-    return null;
-  }
-  if (typeof parsed !== "object" || parsed === null) return null;
-  const runs = (parsed as { workflow_runs?: unknown }).workflow_runs;
-  if (!Array.isArray(runs)) return null;
-  return runs
-    .filter((run): run is Record<string, unknown> => typeof run === "object" && run !== null)
-    .map(toRun);
+export function jobStepsRequest(ref: CloudSessionRepoRef, runId: number): GitHubActionsRequest {
+  return {
+    kind: "rest",
+    operation: "cloudSession.jobSteps",
+    path: repoApiPath(ref, `actions/runs/${runId}/jobs`),
+  };
 }
 
-/**
- * Parse `GET /actions/runs/{id}/jobs`, flattening steps across jobs in order.
- *
- * The session workflow has exactly one job today, but step order is what phase
- * derivation reads, so the flattening must preserve it.
- *
- * `null` on an unreadable response, for the same reason as `parseRunsResponse`:
- * treating it as "no steps" would drag a running session's phase backwards to
- * `requested` on one flaky poll.
- */
-export function parseJobStepsResponse(stdout: string): readonly WorkflowJobStep[] | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(stdout);
-  } catch {
-    return null;
-  }
-  if (typeof parsed !== "object" || parsed === null) return null;
-  const jobs = (parsed as { jobs?: unknown }).jobs;
-  if (!Array.isArray(jobs)) return null;
-  return jobs.flatMap((job) => {
-    if (typeof job !== "object" || job === null) return [];
-    const steps = (job as { steps?: unknown }).steps;
-    if (!Array.isArray(steps)) return [];
-    return steps
-      .filter((step): step is Record<string, unknown> => typeof step === "object" && step !== null)
-      .map((step) => ({
-        name: asString(step["name"]),
-        status: asString(step["status"]),
-        conclusion: asNullableString(step["conclusion"]),
-      }));
-  });
+export function cancelRunRequest(ref: CloudSessionRepoRef, runId: number): GitHubActionsRequest {
+  return {
+    kind: "rest",
+    operation: "cloudSession.cancelRun",
+    method: "POST",
+    path: repoApiPath(ref, `actions/runs/${runId}/cancel`),
+  };
 }

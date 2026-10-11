@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off -- Plain sync sha256 hash; content-addressed blob keys must stay byte-identical, not become an Effect requiring Crypto.
 import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as NodeCrypto from "node:crypto";
 

@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off -- Plain sync sha256 hash; the poll fingerprint must stay byte-identical across client/server, not become an Effect requiring Crypto.
 import * as NodeCrypto from "node:crypto";
 
 export type T3TeamPollEnvelope = {

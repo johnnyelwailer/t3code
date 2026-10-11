@@ -11,7 +11,13 @@ import * as Effect from "effect/Effect";
 import { modelSelectionCommandType } from "@t3tools/shared/model";
 
 import * as McpToolAccess from "../../McpToolAccess.ts";
-import { newCommandId, readCaller, readThread, unavailable } from "../../threadAccess.ts";
+import {
+  dispatchFailure,
+  newCommandId,
+  readCaller,
+  readThread,
+  unavailable,
+} from "../../threadAccess.ts";
 import * as ThreadSearch from "../../../orchestration-v2/ThreadSearch.ts";
 import * as ScheduledTasks from "../../../scheduledTasks/ScheduledTaskService.ts";
 import { queuedRunsInDeliveryOrder } from "../../../orchestration-v2/QueuedRunOrder.ts";
@@ -39,7 +45,7 @@ const dispatch = Effect.fn("mcp.dispatchThreadCommand")(function* (
   const { threads, projection } = yield* readThread(threadId);
   const result = yield* threads
     .dispatch(command({ commandId: yield* newCommandId(), threadId: projection.thread.id }))
-    .pipe(Effect.mapError(unavailable));
+    .pipe(Effect.mapError(dispatchFailure));
   return { sequence: result.sequence };
 });
 
@@ -124,7 +130,7 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
           createdBy: "agent",
           creationSource: "mcp",
         })
-        .pipe(Effect.mapError(unavailable));
+        .pipe(Effect.mapError(dispatchFailure));
       return { sequence: result.sequence, targetThreadId };
     }),
   ),
@@ -144,7 +150,7 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
             createdBy: "agent",
             creationSource: "mcp",
           })
-          .pipe(Effect.mapError(unavailable));
+          .pipe(Effect.mapError(dispatchFailure));
         return { sequence: result.sequence, targetThreadId: input.targetThreadId };
       }),
   ),
@@ -190,7 +196,7 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
           commandId: yield* newCommandId(),
           modelSelection: input.modelSelection,
         })
-        .pipe(Effect.mapError(unavailable));
+        .pipe(Effect.mapError(dispatchFailure));
       return { sequence: result.sequence };
     }),
   ),
@@ -221,7 +227,7 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
           requestId: input.requestId,
           answers: input.answers,
         })
-        .pipe(Effect.mapError(unavailable));
+        .pipe(Effect.mapError(dispatchFailure));
       return { sequence: result.sequence };
     }),
   ),
@@ -309,7 +315,7 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
         default:
           command = { ...common, type: `thread.${input.action}` };
       }
-      const result = yield* threads.dispatch(command).pipe(Effect.mapError(unavailable));
+      const result = yield* threads.dispatch(command).pipe(Effect.mapError(dispatchFailure));
       return { sequence: result.sequence };
     }),
   ),

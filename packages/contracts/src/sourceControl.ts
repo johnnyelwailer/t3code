@@ -29,6 +29,8 @@ export const ChangeRequest = Schema.Struct({
   url: Schema.String,
   baseRefName: TrimmedNonEmptyString,
   headRefName: TrimmedNonEmptyString,
+  /** The head commit, when the provider's read includes it. */
+  headSha: Schema.optional(TrimmedNonEmptyString),
   state: ChangeRequestState,
   /** Present when the provider can tell that an open change request is still a draft. */
   isDraft: Schema.optional(Schema.Boolean),
@@ -118,10 +120,19 @@ export const SourceControlProviderAuthStatus = Schema.Literals([
 ]);
 export type SourceControlProviderAuthStatus = typeof SourceControlProviderAuthStatus.Type;
 
+/**
+ * One login the provider CLI holds for a host. GitHub reports these today, across every host it
+ * is signed in to (e.g. both `github.com` and a GitHub Enterprise host), so callers can offer a
+ * host/account picker instead of only seeing the single active selection.
+ */
 export const SourceControlProviderAuthAccount = Schema.Struct({
   host: TrimmedNonEmptyString,
-  account: Schema.Option(TrimmedNonEmptyString),
+  account: TrimmedNonEmptyString,
   active: Schema.Boolean,
+  authenticated: Schema.Boolean,
+  error: Schema.optionalKey(TrimmedNonEmptyString),
+  /** Set when the login comes from a token variable such as `GH_TOKEN`, which wins over Settings. */
+  environmentVariable: Schema.optionalKey(TrimmedNonEmptyString),
 });
 export type SourceControlProviderAuthAccount = typeof SourceControlProviderAuthAccount.Type;
 
@@ -130,13 +141,8 @@ export const SourceControlProviderAuth = Schema.Struct({
   account: Schema.Option(TrimmedNonEmptyString),
   host: Schema.Option(TrimmedNonEmptyString),
   detail: Schema.Option(TrimmedNonEmptyString),
-  /**
-   * Every authenticated host/account discovered for this provider (e.g. both `github.com` and a
-   * GitHub Enterprise host from `gh auth status`). Optional and additive — `host`/`account` above
-   * remain the single active-host selection for backwards compatibility; callers that only need
-   * one host can ignore this field entirely.
-   */
-  accounts: Schema.optional(Schema.Array(SourceControlProviderAuthAccount)),
+  /** Every login the provider CLI holds, across hosts. Only GitHub reports these today. */
+  accounts: Schema.optionalKey(Schema.Array(SourceControlProviderAuthAccount)),
 });
 export type SourceControlProviderAuth = typeof SourceControlProviderAuth.Type;
 

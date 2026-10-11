@@ -13,6 +13,7 @@ import {
   type PreviewAutomationOpenInput,
   type PreviewAutomationRecordingStatus,
   type PreviewAutomationResizeResult,
+  type PreviewAutomationSelectResult,
   type PreviewAutomationSetColorSchemeResult,
   type PreviewAutomationSnapshot,
   type PreviewAutomationStatus,
@@ -189,6 +190,9 @@ export const claimPreviewRecording = Effect.fn("PreviewToolkit.claimRecording")(
 });
 
 const handlers = {
+  preview_dialog: McpToolAccess.actsAsCaller((input) =>
+    invokeTargeted<PreviewAutomationStatus>("dialog", input),
+  ),
   preview_status: McpToolAccess.readsAsCaller((input) =>
     invokeTargeted<PreviewAutomationStatus>("status", input ?? {}),
   ),
@@ -214,6 +218,18 @@ const handlers = {
   ),
   preview_type: McpToolAccess.actsAsCaller((input) =>
     invokeTargeted<object>("type", input, input.timeoutMs),
+  ),
+  preview_hover: McpToolAccess.actsAsCaller((input) =>
+    invokeTargeted<object>("hover", input, input.timeoutMs),
+  ),
+  preview_select: McpToolAccess.actsAsCaller((input) =>
+    invokeTargeted<PreviewAutomationSelectResult>("select", input, input.timeoutMs),
+  ),
+  preview_drag: McpToolAccess.actsAsCaller((input) =>
+    invokeTargeted<object>("drag", input, input.timeoutMs),
+  ),
+  preview_upload: McpToolAccess.actsAsCaller((input) =>
+    invokeTargeted<object>("upload", input, input.timeoutMs),
   ),
   preview_press: McpToolAccess.actsAsCaller((input) => invokeTargeted<object>("press", input)),
   preview_scroll: McpToolAccess.actsAsCaller((input) => invokeTargeted<object>("scroll", input)),

@@ -37,6 +37,7 @@ function Row({
         isPreparingWorktree: false,
         isCompacting: false,
         isRevertingCheckpoint: false,
+        awaitingUser: false,
         latestRunId: "turn-long-timer" as RunId,
         workingStepLabel,
         activeAgents: [],

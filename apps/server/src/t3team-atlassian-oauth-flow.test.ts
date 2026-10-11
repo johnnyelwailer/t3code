@@ -67,7 +67,7 @@ it.effect("issues an authorize URL bound to a fresh state and keeps the verifier
     assert.isDefined(stored);
     assert.isFalse(begun.authorizeUrl.includes(stored!.codeVerifier));
     assert.notInclude(Object.values(begun).join(" "), stored!.codeVerifier);
-  }),
+  }).pipe(Effect.provide(NodeServices.layer)),
 );
 
 it.effect("issues an unguessable, distinct state per flow", () =>
@@ -78,7 +78,7 @@ it.effect("issues an unguessable, distinct state per flow", () =>
     assert.notEqual(first.state, second.state);
     assert.match(first.state, /^[0-9a-f]{32}$/);
     assert.equal(pendingAtlassianOAuthFlowCount(), 2);
-  }),
+  }).pipe(Effect.provide(NodeServices.layer)),
 );
 
 it.effect("refuses to begin without a redirect URI", () =>
@@ -87,7 +87,7 @@ it.effect("refuses to begin without a redirect URI", () =>
 
     assert.equal(error.message, "Atlassian OAuth redirect URI is missing from the request.");
     assert.equal(pendingAtlassianOAuthFlowCount(), 0);
-  }),
+  }).pipe(Effect.provide(NodeServices.layer)),
 );
 
 it.effect("explains an unconfigured client instead of issuing a useless link", () =>
@@ -100,7 +100,7 @@ it.effect("explains an unconfigured client instead of issuing a useless link", (
     const error = yield* beginAtlassianOAuthFlow({ redirectUri: REDIRECT_URI }).pipe(Effect.flip);
 
     assert.include(error.message, "Atlassian OAuth is not configured.");
-  }),
+  }).pipe(Effect.provide(NodeServices.layer)),
 );
 
 it.effect("redirects only to the authorize URL it stored, and only while the state lives", () =>
@@ -113,7 +113,7 @@ it.effect("redirects only to the authorize URL it stored, and only while the sta
 
     consumePendingAtlassianOAuthFlow(begun.state, 0);
     assert.isUndefined(yield* resolveAtlassianOAuthAuthorizeUrl(begun.state));
-  }),
+  }).pipe(Effect.provide(NodeServices.layer)),
 );
 
 it.effect("reports an unknown state as a flow outcome, not a server failure", () =>
@@ -245,5 +245,5 @@ it.effect("reports unknown for a state once it expires, distinct from never havi
     // Same outcome as a state that was never issued: a poller cannot and should not tell the two
     // apart, only that this link can no longer finish and a fresh one is the way forward.
     assert.equal(yield* resolveAtlassianOAuthFlowStatus(begun.state), "unknown");
-  }),
+  }).pipe(Effect.provide(NodeServices.layer)),
 );

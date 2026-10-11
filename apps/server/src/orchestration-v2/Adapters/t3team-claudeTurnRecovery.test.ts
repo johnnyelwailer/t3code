@@ -17,6 +17,7 @@ import {
 } from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
+import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -151,6 +152,7 @@ const makeHarness = Effect.gen(function* () {
     attachmentsDir,
     fileSystem,
     path: yield* Path.Path,
+    crypto: yield* Crypto.Crypto,
     idAllocator: yield* IdAllocator.IdAllocatorV2,
     continuationRequests: { offer: () => Effect.void },
     queryRunner: {

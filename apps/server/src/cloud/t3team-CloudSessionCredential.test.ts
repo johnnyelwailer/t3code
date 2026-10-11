@@ -4,13 +4,15 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
-import { ChildProcessSpawner } from "effect/process";
 
 import { CloudSessionFailedError } from "@t3tools/contracts";
-import * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as CliTokenManager from "./CliTokenManager.ts";
 import * as Credential from "./t3team-CloudSessionCredential.ts";
-import type { CloudSessionRepoRef, GhInvocation } from "./t3team-githubActionsSessionClient.ts";
+import type {
+  CloudSessionRepoRef,
+  GitHubActionsRequest,
+  GitHubActionsResponse,
+} from "./t3team-githubActionsSessionClient.ts";
 
 const REF: CloudSessionRepoRef = {
   host: "nexplore.ghe.com",
@@ -26,19 +28,11 @@ const TOKEN: CliTokenManager.PersistedToken = {
   identity: "me@nexplore.ch",
 };
 
-const ghOut = (stdout: string): VcsProcess.VcsProcessOutput => ({
-  exitCode: ChildProcessSpawner.ExitCode(0),
-  stdout,
-  stderr: "",
-  stdoutTruncated: false,
-  stderrTruncated: false,
-});
+const answer = (body: string): GitHubActionsResponse => ({ body, truncated: false });
 
-/** JSON shapes the fake gh emits/consumes; encoded and decoded through effect/Schema. */
+/** JSON shapes the fake host emits; encoded through effect/Schema. */
 const GitHubIssueCreateJson = Schema.Struct({ number: Schema.Number });
 const encodeGitHubIssueCreate = Schema.encodeSync(Schema.fromJsonString(GitHubIssueCreateJson));
-const GhPayloadIssueJson = Schema.Struct({ title: Schema.String, body: Schema.String });
-const decodeGhPayloadIssue = Schema.decodeSync(Schema.fromJsonString(GhPayloadIssueJson));
 
 const FLAG = Credential.SESSION_CREDENTIAL_ISSUE_FLAG_ENV;
 
@@ -50,18 +44,16 @@ const pinFlag = (flag: string | undefined) =>
     ),
   );
 
-type RecordedCall = { args: readonly string[]; stdin?: string | undefined };
-
-/** A fake gh executor that records every invocation and answers from a config. */
+/** A fake executor that records every request and answers from a config. */
 const makeFakeRun = (behavior: {
-  readonly createResult?: VcsProcess.VcsProcessOutput;
+  readonly createResult?: GitHubActionsResponse;
   readonly createError?: CloudSessionFailedError;
-}): { run: Credential.CredentialGhExecutor; calls: RecordedCall[] } => {
-  const calls: RecordedCall[] = [];
-  const run: Credential.CredentialGhExecutor = (invocation: GhInvocation) => {
-    calls.push({ args: invocation.args, stdin: invocation.stdin });
+}): { run: Credential.CredentialGhExecutor; calls: GitHubActionsRequest[] } => {
+  const calls: GitHubActionsRequest[] = [];
+  const run: Credential.CredentialGhExecutor = (request: GitHubActionsRequest) => {
+    calls.push(request);
     if (behavior.createError !== undefined) return Effect.fail(behavior.createError);
-    return Effect.succeed(behavior.createResult ?? ghOut(JSON.stringify({ number: 42 })));
+    return Effect.succeed(behavior.createResult ?? answer(JSON.stringify({ number: 42 })));
   };
   return { run, calls };
 };
@@ -71,27 +63,20 @@ describe("payload issue protocol", () => {
     expect(Credential.payloadIssueTitle("c9f4a2")).toBe("nexi-session payload [c9f4a2]");
   });
 
-  it("creates the payload issue by POSTing title and body on stdin, never argv", () => {
-    const invocation = Credential.createPayloadIssueInvocation(REF, {
+  it("creates the payload issue by POSTing title and body in the body, never the path", () => {
+    const request = Credential.createPayloadIssueRequest(REF, {
       title: Credential.payloadIssueTitle("c9f4a2"),
       body: "ZXg=",
     });
-    expect(invocation.args).toEqual([
-      "api",
-      "--hostname",
-      "nexplore.ghe.com",
-      "repos/hive/nx-nexi/issues",
-      "--method",
-      "POST",
-      "--input",
-      "-",
-    ]);
-    expect(JSON.parse(invocation.stdin ?? "")).toEqual({
-      title: "nexi-session payload [c9f4a2]",
-      body: "ZXg=",
+    expect(request).toEqual({
+      kind: "rest",
+      operation: "cloudSession.createPayloadIssue",
+      method: "POST",
+      path: "repos/hive/nx-nexi/issues",
+      body: { title: "nexi-session payload [c9f4a2]", body: "ZXg=" },
     });
-    // The credential body must never appear in the argument vector.
-    expect(invocation.args.join(" ")).not.toContain("ZXg=");
+    // The credential body must never appear in the request path.
+    expect(request.kind === "rest" ? request.path : "").not.toContain("ZXg=");
   });
 
   it("encodes the payload as base64 of the full PersistedToken JSON (refresh token kept)", () => {
@@ -128,7 +113,7 @@ describe("runCredentialHandoff", () => {
     () =>
       Effect.gen(function* () {
         const { run, calls } = makeFakeRun({
-          createResult: ghOut(encodeGitHubIssueCreate({ number: 42 })),
+          createResult: answer(encodeGitHubIssueCreate({ number: 42 })),
         });
         yield* Credential.runCredentialHandoff({
           repoRef: REF,
@@ -138,10 +123,13 @@ describe("runCredentialHandoff", () => {
           readCredential: Effect.succeed(Option.some(TOKEN)),
         });
         assert.equal(calls.length, 1);
-        assert.include([...(calls[0]?.args ?? [])], "repos/hive/nx-nexi/issues");
-        const parsed = decodeGhPayloadIssue(calls[0]?.stdin ?? "{}");
-        assert.equal(parsed.title, "nexi-session payload [c9f4a2]");
-        assert.equal(parsed.body, Credential.sessionCredentialPayloadBody(TOKEN));
+        const call = calls[0];
+        assert.isTrue(call?.kind === "rest");
+        if (call?.kind !== "rest") return;
+        assert.equal(call.path, "repos/hive/nx-nexi/issues");
+        const sent = call.body as { title: string; body: string };
+        assert.equal(sent.title, "nexi-session payload [c9f4a2]");
+        assert.equal(sent.body, Credential.sessionCredentialPayloadBody(TOKEN));
       }),
   );
 
@@ -191,7 +179,10 @@ describe("runCredentialHandoff", () => {
   it.effect("fails with payload_issue_failed when the issue write errors", () =>
     Effect.gen(function* () {
       const { run, calls } = makeFakeRun({
-        createError: new CloudSessionFailedError({ reason: "rejected", message: "gh: HTTP 403" }),
+        createError: new CloudSessionFailedError({
+          reason: "rejected",
+          message: "GitHub returned HTTP 403.",
+        }),
       });
       const result = yield* Effect.result(
         Credential.runCredentialHandoff({
@@ -211,7 +202,7 @@ describe("runCredentialHandoff", () => {
     }),
   );
 
-  it.effect("skips the whole handoff when the flag is off (no gh call)", () =>
+  it.effect("skips the whole handoff when the flag is off (no request)", () =>
     Effect.gen(function* () {
       const { run, calls } = makeFakeRun({});
       yield* Credential.runCredentialHandoff({

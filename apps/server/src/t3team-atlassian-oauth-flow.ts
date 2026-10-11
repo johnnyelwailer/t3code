@@ -1,7 +1,6 @@
-import * as NodeCrypto from "node:crypto";
-
 import { buildAuthorizeUrl, generatePkce } from "@t3tools/integrations-atlassian";
 import * as Clock from "effect/Clock";
+import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 
 import { T3TeamAtlassianError, tryAtlassianPromise } from "./t3team-atlassian-http.ts";
@@ -34,9 +33,11 @@ export type AtlassianOAuthBeginResult = {
  * finish this sign-in, so it has to be unguessable rather than merely unique — a UUID would do, but
  * nothing derived from time or a counter would.
  */
-function newFlowState(): string {
-  return NodeCrypto.randomBytes(16).toString("hex");
-}
+const newFlowState: Effect.Effect<string, never, Crypto.Crypto> = Effect.gen(function* () {
+  const crypto = yield* Crypto.Crypto;
+  const bytes = yield* crypto.randomBytes(16).pipe(Effect.orDie);
+  return Buffer.from(bytes).toString("hex");
+});
 
 function requiredClientId(): string {
   const clientId = readAtlassianOAuthClientId();
@@ -102,7 +103,7 @@ export function beginAtlassianOAuthFlow(input: { readonly redirectUri: string })
       () => generatePkce(),
       "Failed to prepare the Atlassian sign-in request.",
     );
-    const state = newFlowState();
+    const state = yield* newFlowState;
     const authorizeUrl = buildAuthorizeUrl({ clientId, redirectUri }, pkce, state);
     const createdAtMs = yield* Clock.currentTimeMillis;
 

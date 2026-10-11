@@ -74,6 +74,7 @@ function RealWorkingRow({
         isPreparingWorktree: false,
         isCompacting: false,
         isRevertingCheckpoint: false,
+        awaitingUser: false,
         latestRunId: "turn-design-pass" as RunId,
         workingStepLabel,
         activeAgents,

@@ -164,6 +164,7 @@ function pullRequestServiceLayer(
     watchFingerprint: () => Effect.die("not used"),
     summary: () => Effect.die("not used"),
     subscribeMerges: Effect.die("not used"),
+    subscribeStateChanges: Effect.die("not used"),
     subscribeRefreshes: Stream.empty,
     refreshAfterTurn: () => Effect.void,
     routing: () => Effect.die("not used"),

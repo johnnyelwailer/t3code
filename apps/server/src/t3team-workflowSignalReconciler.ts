@@ -33,7 +33,8 @@ import {
 } from "./t3team-workflowSignalCatalog.ts";
 import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
-import * as GitHubCli from "./sourceControl/GitHubCli.ts";
+import * as GitHubApi from "./sourceControl/GitHubApi.ts";
+import * as VcsProcess from "./vcs/VcsProcess.ts";
 import { loadViewerPrRead } from "./t3team-myworkViewerPrLoader.ts";
 import { makeReconcilerCore } from "./t3team-workflowSignalReconcilerCore.ts";
 import {
@@ -78,7 +79,8 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
     const store = yield* WorkflowSignalStore;
     const delivery = yield* T3TeamWorkflowSignalDelivery;
     const pullRequestService = yield* PullRequestService;
-    const gitHubCli = yield* GitHubCli.GitHubCli;
+    const gitHubApi = yield* GitHubApi.GitHubApi;
+    const vcsProcess = yield* VcsProcess.VcsProcess;
     // Boot ordering (GHE #332 review): no source instance may start — and so DELIVER — before
     // boot rehydration has rebuilt the watching-run controllers, or a first tick would hit the
     // delivery port's orphan branch and fail a healthy parked run. Rehydration runs with the
@@ -99,7 +101,10 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
     };
     const catalog = makeWorkflowSignalSourceCatalog({
       pullRequestService,
-      readViewerPrs: loadViewerPrRead().pipe(Effect.provideService(GitHubCli.GitHubCli, gitHubCli)),
+      readViewerPrs: loadViewerPrRead().pipe(
+        Effect.provideService(GitHubApi.GitHubApi, gitHubApi),
+        Effect.provideService(VcsProcess.VcsProcess, vcsProcess),
+      ),
       resolveWorkItemProvider,
     });
     // Loud boot cross-check: a renamed/missing catalog entry breaks boot, not a parked body.

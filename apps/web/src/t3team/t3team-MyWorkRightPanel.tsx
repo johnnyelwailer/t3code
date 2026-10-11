@@ -7,9 +7,11 @@ import type { EnvironmentId, PullRequestRef } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { type ReactNode, useEffect } from "react";
 
+import { isElectron } from "~/env";
 import { RightPanelTabs } from "~/components/RightPanelTabs";
 import { isPreviewSupportedInRuntime } from "~/previewStateStore";
 import { usePrimaryEnvironmentId } from "~/state/environments";
+import { useServerKeybindings } from "./t3team-serverState";
 import {
   MY_WORK_PANEL_REF,
   selectSelectedRightPanelSurface,
@@ -39,6 +41,15 @@ function openMyWorkPullRequest(reference: PullRequestRef, environmentId: Environ
   useRightPanelStore.getState().show(MY_WORK_PANEL_REF);
 }
 
+const MY_WORK_SHORTCUT_CONTEXT = () => ({
+  terminalFocus: false,
+  terminalOpen: false,
+  previewFocus: false,
+  previewOpen: false,
+  isWeb: !isElectron,
+  isDesktop: isElectron,
+});
+
 export function MyWorkRightPanel({
   project,
   projectThreads,
@@ -52,6 +63,7 @@ export function MyWorkRightPanel({
   kickoff: ReactNode;
 }) {
   const environmentId = usePrimaryEnvironmentId();
+  const keybindings = useServerKeybindings();
   const panelState = useRightPanelStore((state) =>
     selectThreadRightPanelState(state.byThreadKey, MY_WORK_PANEL_REF),
   );
@@ -106,6 +118,9 @@ export function MyWorkRightPanel({
   return (
     <RightPanelTabs
       mode="embedded"
+      keybindings={keybindings}
+      // The aside has no terminal, preview or composer of its own to be focused.
+      getShortcutContext={MY_WORK_SHORTCUT_CONTEXT}
       surfaces={panelState.surfaces}
       environmentId={environmentId}
       activeSurfaceId={activeSurface?.id ?? null}

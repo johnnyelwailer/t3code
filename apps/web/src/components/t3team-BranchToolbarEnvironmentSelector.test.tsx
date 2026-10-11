@@ -64,8 +64,14 @@ vi.mock("./ui/select", () => ({
 }));
 // The trigger is upstream's `ThreadDetailsSelectControl`, a Base UI `Select.Trigger` that needs
 // the real Select root; the Select is mocked above, so the trigger is too.
+// The trigger is either row control, by display mode; both render as the same stand-in.
 vi.mock("./chat/ThreadDetailsControl", () => ({
-  ThreadDetailsSelectControl: ({ children }: { children?: ReactNode }) => (
+  ThreadDetailsControl: ({ children }: { children?: ReactNode }) => (
+    <div data-testid="trigger">{children}</div>
+  ),
+}));
+vi.mock("./chat/ComposerControl", () => ({
+  ComposerSelectControl: ({ children }: { children?: ReactNode }) => (
     <div data-testid="trigger">{children}</div>
   ),
 }));

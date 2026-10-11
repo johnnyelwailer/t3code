@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off
 /**
  * Identity of the threads a workflow launches (`launchThread`). A thread id is derived from the
  * project, the run's launch scope and the author's key, so the same key reaches the same thread

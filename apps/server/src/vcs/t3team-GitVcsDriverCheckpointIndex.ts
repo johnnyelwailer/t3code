@@ -8,9 +8,9 @@
  * adds them through a NUL-separated pathspec FILE (argv has a length limit),
  * and skips the unindexable paths instead of failing the whole capture.
  */
+import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
-import * as NodeCrypto from "node:crypto";
 import * as Path from "effect/Path";
 
 import { VcsError, VcsProcessExitError } from "@t3tools/contracts";
@@ -112,7 +112,7 @@ export const indexCheckpointPaths = (deps: {
   readonly addPrefixArgs?: readonly string[];
   /** Extra `git add` flags placed before `-A` (upstream passes `--sparse` for sparse checkouts). */
   readonly addFlags?: readonly string[];
-}): Effect.Effect<void, VcsError> =>
+}): Effect.Effect<void, VcsError, Crypto.Crypto> =>
   Effect.gen(function* () {
     const { operation, cwd, gitCommonDir, env, execute, fileSystem, path, timeoutMs } = deps;
     const addPrefixArgs = deps.addPrefixArgs ?? [];
@@ -164,10 +164,9 @@ export const indexCheckpointPaths = (deps: {
       );
     }
 
-    const pathspecPath = path.join(
-      gitCommonDir,
-      `t3-checkpoint-pathspec-${NodeCrypto.randomUUID()}`,
-    );
+    const crypto = yield* Crypto.Crypto;
+    const pathspecUuid = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
+    const pathspecPath = path.join(gitCommonDir, `t3-checkpoint-pathspec-${pathspecUuid}`);
     const cleanupPathspec = fileSystem.remove(pathspecPath, { force: true }).pipe(Effect.ignore);
 
     const writePathspec = (paths: readonly string[]) =>
