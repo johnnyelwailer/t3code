@@ -14,12 +14,14 @@ const EXCLUSIVE =
 
 export function myWorkArrangeMode(args: {
   readonly plan?: unknown;
-  readonly reset?: boolean;
-  readonly promote?: boolean;
-  readonly discardDraft?: boolean;
+  readonly reset?: boolean | undefined;
+  readonly promote?: boolean | undefined;
+  readonly discardDraft?: boolean | undefined;
   readonly recipe?: unknown;
-  readonly channel?: string;
-}): { readonly ok: true; readonly mode: MyWorkArrangeMode } | { readonly ok: false; readonly message: string } {
+  readonly channel?: string | undefined;
+}):
+  | { readonly ok: true; readonly mode: MyWorkArrangeMode }
+  | { readonly ok: false; readonly message: string } {
   const selected = [
     args.plan !== undefined,
     args.reset === true,
@@ -35,7 +37,10 @@ export function myWorkArrangeMode(args: {
     return { ok: false, message: "channel applies only when a plan is stored." };
   }
   if (args.plan !== undefined) {
-    return { ok: true, mode: { type: "plan", channel: args.channel === "draft" ? "draft" : "live" } };
+    return {
+      ok: true,
+      mode: { type: "plan", channel: args.channel === "draft" ? "draft" : "live" },
+    };
   }
   if (args.reset === true) return { ok: true, mode: { type: "reset" } };
   if (args.promote === true) return { ok: true, mode: { type: "promote" } };

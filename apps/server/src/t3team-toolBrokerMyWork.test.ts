@@ -197,6 +197,49 @@ it.layer(SqlitePersistenceMemory)("t3team.mywork.* tools", (it) => {
       assert.include(asText(both), "exactly one of 'plan'");
     }),
   );
+
+  it.effect("a draft shows beside the live plan until it is promoted or discarded", () =>
+    Effect.gen(function* () {
+      const { call } = yield* makeBinding;
+      type Read = {
+        arrangement?: { sections: ReadonlyArray<{ heading: string }> };
+        draftArrangement?: { sections: ReadonlyArray<{ heading: string }> };
+      };
+      const read = () =>
+        call(DIGEST, { projectId: "app-2" }).pipe(
+          Effect.map((result) => result.structuredContent as Read),
+        );
+
+      yield* call(ARRANGE, { projectId: "app-2", plan: plan("Live") });
+      const drafted = yield* call(ARRANGE, {
+        projectId: "app-2",
+        plan: plan("Draft"),
+        channel: "draft",
+      });
+      assert.isUndefined(drafted.isError);
+      const withDraft = yield* read();
+      assert.equal(withDraft.arrangement?.sections[0]?.heading, "Live");
+      assert.equal(withDraft.draftArrangement?.sections[0]?.heading, "Draft");
+
+      yield* call(ARRANGE, { projectId: "app-2", promote: true });
+      const promoted = yield* read();
+      assert.equal(promoted.arrangement?.sections[0]?.heading, "Draft");
+      assert.isUndefined(promoted.draftArrangement);
+
+      const nothing = yield* call(ARRANGE, { projectId: "app-2", promote: true });
+      assert.include(asText(nothing), "No draft arrangement to promote");
+
+      yield* call(ARRANGE, { projectId: "app-2", plan: plan("Again"), channel: "draft" });
+      yield* call(ARRANGE, { projectId: "app-2", discardDraft: true });
+      assert.isUndefined((yield* read()).draftArrangement);
+
+      const misplaced = yield* call(ARRANGE, { projectId: "app-2", reset: true, channel: "draft" });
+      assert.include(asText(misplaced), "channel applies only when a plan is stored");
+      // Recipe writes need a runtime that can write files; this one cannot.
+      const recipe = yield* call(ARRANGE, { projectId: "app-2", recipe: { id: "x" } });
+      assert.include(asText(recipe), "not enabled");
+    }),
+  );
 });
 
 it.effect("honors the recipe's tool groups: read is integration.read, arrange is view.state", () =>

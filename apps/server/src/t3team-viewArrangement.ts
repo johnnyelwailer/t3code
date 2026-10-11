@@ -4,8 +4,24 @@
  * The plan JSON is opaque here; the surface validates it before store.
  */
 import * as Clock from "effect/Clock";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
+
+/** An arrangement write the caller can fix: too large, or nothing to promote. */
+export class T3TeamViewArrangementError extends Data.TaggedError("T3TeamViewArrangementError")<{
+  readonly reason: string;
+}> {
+  override get message(): string {
+    return this.reason;
+  }
+}
+
+const PlanJson = Schema.fromJsonString(Schema.Unknown);
+const decodePlanJson = Schema.decodeUnknownOption(PlanJson);
+const encodePlanJson = Schema.encodeUnknownOption(PlanJson);
 
 export type ViewArrangementChannel = "live" | "draft";
 
@@ -39,14 +55,6 @@ const ensureViewArrangementTable = Effect.fn("t3team.viewArrangement.ensureTable
   `;
 });
 
-const parsePlanJson = (planJson: string): unknown => {
-  try {
-    return JSON.parse(planJson) as unknown;
-  } catch {
-    return undefined;
-  }
-};
-
 export function readViewArrangement(key: ViewArrangementKey) {
   return Effect.gen(function* () {
     yield* ensureViewArrangementTable();
@@ -61,16 +69,18 @@ export function readViewArrangement(key: ViewArrangementKey) {
     `;
     const row = rows[0];
     if (row === undefined) return null;
-    return parsePlanJson(row.planJson) ?? null;
+    return Option.getOrNull(decodePlanJson(row.planJson));
   });
 }
 
 /** Upsert a plan the caller has already validated. */
 export function storeViewArrangement(key: ViewArrangementKey, plan: unknown) {
   return Effect.gen(function* () {
-    const planJson = JSON.stringify(plan);
-    if (planJson.length > PLAN_JSON_MAX) {
-      return yield* Effect.fail(new Error("Arrangement plan is too large."));
+    const planJson = Option.getOrUndefined(encodePlanJson(plan));
+    if (planJson === undefined || planJson.length > PLAN_JSON_MAX) {
+      return yield* new T3TeamViewArrangementError({
+        reason: "Arrangement plan is too large or not JSON.",
+      });
     }
     yield* ensureViewArrangementTable();
     const sql = yield* SqlClient.SqlClient;

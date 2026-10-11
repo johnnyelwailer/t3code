@@ -22,6 +22,7 @@ import {
   deleteViewArrangement,
   readViewArrangement,
   storeViewArrangement,
+  T3TeamViewArrangementError,
   type ViewArrangementChannel,
 } from "./t3team-viewArrangement.ts";
 
@@ -82,7 +83,7 @@ export function promoteDigestDraft(identity: T3TeamBacklogCacheIdentity, scope: 
   return Effect.gen(function* () {
     const draft = yield* readDigestDraft(identity, scope);
     if (draft === null) {
-      return yield* Effect.fail(new Error("No draft arrangement to promote."));
+      return yield* new T3TeamViewArrangementError({ reason: "No draft arrangement to promote." });
     }
     const stored = yield* storeMyWorkLiveArrangement(identity, scope, draft);
     yield* discardDigestDraft(identity, scope);
