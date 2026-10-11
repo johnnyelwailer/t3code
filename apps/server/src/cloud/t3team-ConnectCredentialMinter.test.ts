@@ -271,6 +271,81 @@ describe("ConnectCredentialMinter", () => {
     }).pipe(provideTestEnv),
   );
 
+  it.effect("keeps the sign-in listening after a short caller wait gives up", () =>
+    Effect.gen(function* () {
+      // cloud.session.create waits only briefly, then tells the user to
+      // confirm in the browser and retry. The listener must still be there
+      // when they do — the 2026-09-28 E2E got ERR_CONNECTION_REFUSED.
+      const requests: Array<RecordedTokenRequest> = [];
+      const opened: Array<string> = [];
+      const configLayer = yield* buildStateDirLayer("connect-minter-outlives-");
+      const layer = makeMinterLayer(
+        requests,
+        (url) => Effect.sync(() => opened.push(url)),
+        configLayer,
+      );
+
+      yield* Effect.gen(function* () {
+        const minter = yield* ConnectCredentialMinter.ConnectCredentialMinter;
+        const mintError = yield* minter.mint({ timeout: Duration.millis(300) }).pipe(Effect.flip);
+        assert.equal(mintError.reason, "browser_callback_timeout");
+
+        // The user confirms AFTER the caller gave up.
+        const request = readConnectAuthorizeRequest(new URL(opened[0]!));
+        assert.isNotNull(request);
+        const status = yield* Effect.gen(function* () {
+          const client = yield* HttpClient.HttpClient;
+          const response = yield* client.execute(
+            HttpClientRequest.get(
+              `http://127.0.0.1:${LOOPBACK_PORT}/callback?code=late-code&state=${encodeURIComponent(
+                request!.state,
+              )}`,
+            ),
+          );
+          return response.status;
+        }).pipe(
+          Effect.provide(FetchHttpClient.layer),
+          Effect.orElseSucceed(() => -1),
+        );
+        assert.equal(status, 200);
+
+        // ...and the background round-trip still exchanges and stores it.
+        const cli = yield* CliTokenManager.CloudCliTokenManager;
+        const existing = yield* cli.getExisting.pipe(
+          Effect.flatMap((token) =>
+            Option.isSome(token) ? Effect.succeed(token) : Effect.fail("not yet" as const),
+          ),
+          Effect.retry(Schedule.spaced(Duration.millis(50)).pipe(Schedule.upTo({ times: 40 }))),
+          Effect.orElseSucceed(() => Option.none()),
+        );
+        assert.isTrue(Option.isSome(existing));
+        assert.equal(requests[0]?.params.get("code"), "late-code");
+      }).pipe(Effect.provide(layer), TestClock.withLive);
+    }).pipe(provideTestEnv),
+  );
+
+  it.effect("fails fast, never as a pending sign-in, when its layer has already closed", () =>
+    Effect.gen(function* () {
+      // A minter built by a short-lived layer (ws.ts builds per-connection
+      // services with Effect.provide around a setup effect) has a closed scope
+      // by the time a request calls mint(). The round-trip cannot run there;
+      // saying so beats telling the user to confirm a sign-in that never opened.
+      const configLayer = yield* buildStateDirLayer("connect-minter-closed-scope-");
+      const opened: Array<string> = [];
+      const layer = makeMinterLayer([], launchAndRedirect(opened), configLayer);
+
+      const minter = yield* Effect.service(ConnectCredentialMinter.ConnectCredentialMinter).pipe(
+        Effect.provide(layer),
+      );
+      const mintError = yield* minter
+        .mint({ timeout: Duration.seconds(5) })
+        .pipe(Effect.flip, Effect.timeout(Duration.seconds(2)), TestClock.withLive);
+
+      assert.equal(mintError.reason, "connect_unavailable");
+      assert.lengthOf(opened, 0);
+    }).pipe(provideTestEnv),
+  );
+
   it.effect("concurrent mints share one browser round-trip", () =>
     Effect.gen(function* () {
       const requests: Array<RecordedTokenRequest> = [];
