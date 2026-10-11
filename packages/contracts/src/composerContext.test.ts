@@ -118,6 +118,17 @@ const knownRecords: Record<(typeof COMPOSER_CONTEXT_KINDS)[number], Record<strin
     threadId: "thread-1",
     title: "Fix login flow",
   },
+  "work-item": {
+    ...base,
+    kind: "work-item",
+    label: "NXAI-8",
+    key: "NXAI-8",
+    jiraProjectKey: "NXAI",
+    title: "Composer work-item references",
+    status: "In Progress",
+    url: "https://example.atlassian.net/browse/NXAI-8",
+    capturedAt: "2026-10-10T09:00:00.000Z",
+  },
 };
 
 describe("ComposerContextRecord", () => {
@@ -169,6 +180,11 @@ describe("ComposerContextRecord", () => {
     );
     expect(Option.isNone(decodeRecord({ ...knownRecords.skill, version: 2 }))).toBe(true);
     expect(Option.isNone(decodeRecord({ ...knownRecords.skill, kind: "Bad Kind" }))).toBe(true);
+  });
+
+  it("enforces the work-item metadata instead of treating it as an unknown payload", () => {
+    const { key: _key, ...withoutKey } = knownRecords["work-item"] as Record<string, unknown>;
+    expect(Option.isNone(decodeRecord(withoutKey))).toBe(true);
   });
 });
 

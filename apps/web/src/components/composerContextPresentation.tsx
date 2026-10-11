@@ -15,6 +15,7 @@ import {
   type AttachmentUploadState,
 } from "~/lib/attachmentUploadState";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
+import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import {
   fileContextReference,
   imageContextReference,
@@ -27,6 +28,9 @@ import {
   reviewCommentContextLabel,
   terminalContextReference,
   uploadedAttachmentContextRecord,
+  workItemContextChipKind,
+  workItemContextId,
+  type WorkItemContextDraft,
 } from "~/lib/composerContextRecords";
 import type { TerminalContextDraft } from "~/lib/terminalContext";
 import type { ReviewCommentContext } from "~/reviewCommentContext";
@@ -58,7 +62,8 @@ export type ComposerDraftContextRecord =
   | { kind: "preview-annotation"; record: PreviewAnnotationPayload }
   | { kind: "image"; record: ComposerImageAttachment; upload?: AttachmentUploadState | undefined }
   | { kind: "file"; record: ComposerFileAttachment; upload?: AttachmentUploadState | undefined }
-  | { kind: "thread"; record: ThreadContextRecord };
+  | { kind: "thread"; record: ThreadContextRecord }
+  | { kind: "work-item"; record: WorkItemContextDraft };
 
 /** What a chip can do beyond showing itself; the composer supplies the handlers. */
 export interface ComposerContextActions {
@@ -97,6 +102,7 @@ export function composerContextRecordsFromDraft(input: {
   reviewComments?: ReadonlyArray<ReviewCommentContext>;
   previewAnnotations?: ReadonlyArray<PreviewAnnotationPayload>;
   threadContexts?: ReadonlyArray<ThreadContextRecord>;
+  workItems?: ReadonlyArray<WorkItemContextDraft>;
   images?: ReadonlyArray<ComposerImageAttachment>;
   files?: ReadonlyArray<ComposerFileAttachment>;
   uploadsByImageId?: Readonly<Record<string, AttachmentUploadState>>;
@@ -127,6 +133,9 @@ export function composerContextRecordsFromDraft(input: {
   }
   for (const record of input.threadContexts ?? []) {
     records.set(record.contextId, { kind: "thread", record });
+  }
+  for (const record of input.workItems ?? []) {
+    records.set(workItemContextId(record.key), { kind: "work-item", record });
   }
   return records;
 }
@@ -324,6 +333,24 @@ function UnresolvedContextChip(props: { label: string }) {
   );
 }
 
+function workItemChipTooltip(record: WorkItemContextDraft): string {
+  const lines = [record.title, record.status, record.url];
+  return lines.filter((line) => line.trim()).join("\n");
+}
+
+function WorkItemContextChip(props: { record: WorkItemContextDraft }) {
+  const { record } = props;
+  return (
+    <ContextChipShell
+      kind={workItemContextChipKind(record.status)}
+      icon={<JiraIssueTypeIcon issueType={undefined} />}
+      label={record.key}
+      aria-label={`Work item ${record.key}, ${record.status}`}
+      tooltip={workItemChipTooltip(record)}
+    />
+  );
+}
+
 interface ComposerContextRenderContext {
   label: string;
 }
@@ -333,7 +360,15 @@ const composerContextPresentationRegistry = createContextPresentationRegistry<
   ComposerContextRenderContext,
   ReactElement
 >({
-  requiredKinds: ["image", "file", "terminal", "review-comment", "preview-annotation", "thread"],
+  requiredKinds: [
+    "image",
+    "file",
+    "terminal",
+    "review-comment",
+    "preview-annotation",
+    "thread",
+    "work-item",
+  ],
   handlers: [
     {
       kind: "terminal",
@@ -420,6 +455,16 @@ const composerContextPresentationRegistry = createContextPresentationRegistry<
       render: (entry, context) =>
         entry.kind === "thread" ? (
           <ThreadContextChip record={entry.record} />
+        ) : (
+          <UnresolvedContextChip label={context.label} />
+        ),
+    },
+    {
+      kind: "work-item",
+      canRender: (entry) => entry.kind === "work-item",
+      render: (entry, context) =>
+        entry.kind === "work-item" ? (
+          <WorkItemContextChip record={entry.record} />
         ) : (
           <UnresolvedContextChip label={context.label} />
         ),
