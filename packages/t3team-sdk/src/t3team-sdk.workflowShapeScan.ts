@@ -6,15 +6,19 @@
  * group. Pure source inspection; it never executes the body. Split out to keep each module under
  * the additive-guard LOC ceiling.
  *
- * LABEL CONTRACT: the step `label` is always the human title the plan card shows. An unlabeled
- * tool/script step gets the generic kind fallback ("Tool"/"Script") and carries its technical
- * callee path in `detail` — the raw path never becomes the row's primary title.
+ * LABEL CONTRACT: the step `label` is always a human title — every step entry has one. An
+ * unlabeled tool/script step gets the humanized last segment of its callee
+ * (`github.releases.collectChangelog` → "Collect changelog"; see
+ * `t3team-sdk.workflowShapeScanLabel.ts`) and carries the full technical callee in `detail` —
+ * the raw path never becomes the row's primary title. The bare generic "Tool"/"Script" word is
+ * the last-resort fallback, only when the callee's last segment yields no words.
  */
 
 import type * as TsApi from "typescript";
 
 import { findMetaStatement } from "./t3team-sdk.transpile.ts";
 import { classifyCompositionVerb } from "./t3team-sdk.workflowShapeScanComposition.ts";
+import { humanizedCalleeLabel } from "./t3team-sdk.workflowShapeScanLabel.ts";
 import {
   collectWorkflowBodyBindings,
   resolveVerb,
@@ -112,8 +116,8 @@ function rootIdentifier(ts: typeof TsApi, expr: TsApi.Expression): string | null
 
 interface CallSink {
   readonly onPhase: (title: string) => void;
-  /** `detail` carries the technical callee of a tool/script step (reachable on demand); the
-   * `label` is always the human title the plan card shows. */
+  /** `detail` carries the full technical callee of a tool/script step (reachable on demand);
+   * the `label` is always a human title — derived from the callee, never the raw path. */
   readonly onStep: (kind: WorkflowStepKind, label: string, detail?: string) => void;
 }
 
@@ -172,12 +176,14 @@ function classifyCall(
   // (`const s = getScripts()` → `s.computeStats()` is still a script step).
   const rootKind = root === "tools" || root === "scripts" ? root : bindings.roots.get(root);
   if (rootKind !== undefined) {
-    // The plan card never shows a raw `tools.*`/`scripts.*` path as the step title: the
-    // unlabeled step gets the generic human kind label, and the technical callee stays
-    // reachable on demand through the step's detail (tooltip / step details).
+    // The plan card never shows a raw `tools.*`/`scripts.*` path as the step title: an
+    // authored `label:` option wins, else the unlabeled step gets the humanized last segment
+    // of its callee as the display label, and the full technical callee stays reachable on
+    // demand through the step's detail (tooltip / step details).
+    const fallback = rootKind === "scripts" ? "Script" : "Tool";
     sink.onStep(
       classifyToolScript(name),
-      rootKind === "scripts" ? "Script" : "Tool",
+      explicitCallLabel(ts, call, sf) ?? humanizedCalleeLabel(name, fallback),
       truncate(callee.getText(sf).slice(root.length + 1)),
     );
   }

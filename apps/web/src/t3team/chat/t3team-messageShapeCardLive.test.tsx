@@ -165,10 +165,14 @@ describe("live workflow step overlay on the plan card", () => {
     expect(markup).toContain("data-workflow-live-card-collapse");
     expect(markup).not.toContain("data-workflow-live-card-expand");
     expect(markup).toContain("line-clamp-2");
-    // the full step list renders again: step 1 completed, step 2 running, steps 3+4 pending
+    // REACHABILITY: the two reached steps render — step 1 completed, step 2 running. Steps 3+4
+    // are unreached: no live event has touched them, so they are NOT rendered (no dimmed
+    // "planned" placeholders, no pending counters) and their phase header ("Decide") disappears.
     expect(countOccurrences(markup, 'data-step-status="completed"')).toBe(1);
     expect(countOccurrences(markup, 'data-step-status="started"')).toBe(1);
-    expect(countOccurrences(markup, 'data-step-status="pending"')).toBe(2);
+    expect(countOccurrences(markup, 'data-step-status="pending"')).toBe(0);
+    expect(markup).not.toContain("Merge it?");
+    expect(markup).not.toContain(">Decide<");
   });
 
   it("auto-expands — and pins open — a run that is waiting on the user", async () => {
@@ -408,7 +412,8 @@ describe("live workflow step overlay on the plan card", () => {
 
     expect(countOccurrences(markup, 'data-step-status="completed"')).toBe(1);
     expect(countOccurrences(markup, 'data-step-status="started"')).toBe(0);
-    expect(countOccurrences(markup, 'data-step-status="pending"')).toBe(3);
+    // the other three plan steps are unreached — no live event — and are not rendered at all.
+    expect(countOccurrences(markup, 'data-step-status="pending"')).toBe(0);
   }, 30000);
 
   it("renders the run-level terminal banner (completed and failed)", async () => {

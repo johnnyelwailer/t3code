@@ -6,8 +6,10 @@
  * full step list one click away. It auto-expands — and cannot be collapsed back — while the run
  * has FAILED or is WAITING ON THE USER, so a problem card never hides its reason.
  *
- * The mid-flight story shows every status at once: completed steps, one waiting on the
- * user (`user.input`), one sleeping (`wait.until`), and one failed — and auto-expands on the
+ * The mid-flight story shows the live states at once: completed steps, one waiting on the
+ * user (`user.input`), one sleeping (`wait.until`) — and it demonstrates REACHABILITY: the
+ * unreached Ship step ("Publish release") has no live event, so it is not rendered at all
+ * (no dimmed placeholder, no "N more to go", and no Ship phase header). It auto-expands on the
  * user-waiting step.
  */
 import type { Meta, StoryObj } from "@storybook/react";
@@ -37,20 +39,28 @@ const shape = {
   name: "shape.release-train",
   description: "Collect the changelog, wait for the release window, then ship after sign-off.",
   phases: [{ title: "Prepare" }, { title: "Gate" }, { title: "Ship" }],
-  // Tool/script steps carry the generic human title; the technical callee stays in `detail`
-  // (tooltip / step details), never the row's primary title.
+  // Tool/script steps carry the DERIVED human title (the humanized last segment of the callee);
+  // the full technical callee stays in `detail` (tooltip / step details), never the row title.
   steps: [
-    { phase: "Prepare", kind: "read", label: "Tool", detail: "github.releases.collectChangelog" },
+    {
+      phase: "Prepare",
+      kind: "read",
+      label: "Collect changelog",
+      detail: "github.releases.collectChangelog",
+    },
     { phase: "Prepare", kind: "agent", label: "Draft the release notes" },
     { phase: "Gate", kind: "ask", label: "Sign off the release notes?" },
     { phase: "Gate", kind: "agent", label: "Wait for the release window" },
-    { phase: "Ship", kind: "act", label: "Tool", detail: "github.release.publish" },
+    // UNREACHED in the mid-flight story: the run has not reached this step yet, so the card
+    // renders it nowhere — no placeholder row, no Ship header, no counter.
+    { phase: "Ship", kind: "act", label: "Publish release", detail: "github.release.publish" },
   ],
   workflowRunId: "run-release-42",
 } as const;
 
 /** Mid-flight: auto-expands on the waiting `user.input` step — a problem card never hides its
- * state. Agent rows use the titled robot icon, while ASK remains a visible action tag. */
+ * state. The unreached Ship step is absent (reachable steps only). Agent rows use the titled
+ * robot icon, while ASK remains a visible action tag. */
 export const MidFlight: Story = {
   args: {
     shape,
@@ -85,13 +95,8 @@ export const MidFlight: Story = {
           phase: "waiting",
           detail: "sleeping until 2026-07-18T06:00Z",
         },
-        {
-          stepId: "run-release-42:5",
-          seq: 5,
-          stepKind: "tool.call",
-          phase: "failed",
-          error: "release window check failed",
-        },
+        // Note what is NOT here: the Ship step has no live event, so it does not appear in the
+        // card at all — the run has not reached it.
       ],
       run: null,
     },
@@ -108,7 +113,13 @@ export const Collapsed: Story = {
     progress: {
       runId: "run-release-42",
       steps: [
-        { stepId: "run-release-42:1", seq: 1, stepKind: "tool.call", phase: "completed" },
+        {
+          stepId: "run-release-42:1",
+          seq: 1,
+          stepKind: "tool.call",
+          phase: "completed",
+          detail: "github.releases.collectChangelog",
+        },
         {
           stepId: "run-release-42:2",
           seq: 2,
@@ -131,7 +142,8 @@ export const Expanded: Story = {
 };
 
 /** Loop iterations executed beyond the static plan land as appended extra rows (expanded to keep
- * the rows in view — the collapsed default hides them behind one click). */
+ * the rows in view — the collapsed default hides them behind one click). The two tool steps carry
+ * their callee in `detail` so they light up the plan steps instead of rendering as extras. */
 export const WithExtraSteps: Story = {
   args: {
     shape,
@@ -139,11 +151,29 @@ export const WithExtraSteps: Story = {
     progress: {
       runId: "run-release-42",
       steps: [
-        { stepId: "run-release-42:1", seq: 1, stepKind: "tool.call", phase: "completed" },
-        { stepId: "run-release-42:2", seq: 2, stepKind: "thread.turn", phase: "completed" },
+        {
+          stepId: "run-release-42:1",
+          seq: 1,
+          stepKind: "tool.call",
+          phase: "completed",
+          detail: "github.releases.collectChangelog",
+        },
+        {
+          stepId: "run-release-42:2",
+          seq: 2,
+          stepKind: "thread.turn",
+          phase: "completed",
+          detail: "Draft the release notes",
+        },
         { stepId: "run-release-42:3", seq: 3, stepKind: "user.input", phase: "completed" },
         { stepId: "run-release-42:4", seq: 4, stepKind: "wait.until", phase: "completed" },
-        { stepId: "run-release-42:5", seq: 5, stepKind: "tool.call", phase: "completed" },
+        {
+          stepId: "run-release-42:5",
+          seq: 5,
+          stepKind: "tool.call",
+          phase: "completed",
+          detail: "github.release.publish",
+        },
         {
           stepId: "run-release-42:6",
           seq: 6,
@@ -165,12 +195,19 @@ export const FailedRun: Story = {
     progress: {
       runId: "run-release-42",
       steps: [
-        { stepId: "run-release-42:1", seq: 1, stepKind: "tool.call", phase: "completed" },
+        {
+          stepId: "run-release-42:1",
+          seq: 1,
+          stepKind: "tool.call",
+          phase: "completed",
+          detail: "github.releases.collectChangelog",
+        },
         {
           stepId: "run-release-42:2",
           seq: 2,
           stepKind: "thread.turn",
           phase: "failed",
+          detail: "Draft the release notes",
           error: "model refused the draft",
         },
       ],
@@ -198,7 +235,13 @@ export const ChildThread: Story = {
     progress: {
       runId: "run-release-42",
       steps: [
-        { stepId: "run-release-42:1", seq: 1, stepKind: "tool.call", phase: "completed" },
+        {
+          stepId: "run-release-42:1",
+          seq: 1,
+          stepKind: "tool.call",
+          phase: "completed",
+          detail: "github.releases.collectChangelog",
+        },
         {
           stepId: "run-release-42:2",
           seq: 2,

@@ -56,7 +56,7 @@ describe("buildWorkflowShapePreviewMessage", () => {
       description: "Read an issue then ask the user.",
       phases: [{ title: "Look" }, { title: "Ask" }],
       steps: [
-        { phase: "Look", kind: "read", label: "Tool", detail: "jira.issue.get" },
+        { phase: "Look", kind: "read", label: "Get", detail: "jira.issue.get" },
         { phase: "Ask", kind: "ask", label: "Proceed?" },
       ],
       workflowRunId: "run-1",

@@ -5,8 +5,10 @@
  *   • `tools.*.get` → read, `agent` → agent, `thread.askUser` → ask, `tools.*.merge` → act;
  *   • steps carry the `phase()` group they run under;
  *   • labels come from the prompt's first line / an explicit `label` option (best-effort);
- *   • unlabeled tool/script steps get a generic human title ("Tool"/"Script") and keep the
- *     technical callee path in `detail`, reachable on demand — never the row's primary title.
+ *   • unlabeled tool/script steps get the humanized last segment of their callee
+ *     ("Collect changelog") and keep the full technical callee in `detail`, reachable on
+ *     demand — the raw path is never the row's primary title; the bare "Tool"/"Script" word
+ *     is the last-resort fallback only.
  */
 
 import * as NodeFS from "node:fs";
@@ -31,10 +33,10 @@ describe("deriveWorkflowShape", () => {
     expect(shape.description).toBe("Summarize a PR, then ask the user whether to merge it.");
     expect(shape.phases).toEqual([{ title: "Review" }, { title: "Decide" }]);
     expect(shape.steps).toEqual([
-      { phase: "Review", kind: "read", label: "Tool", detail: "github.pullRequest.get" },
+      { phase: "Review", kind: "read", label: "Get", detail: "github.pullRequest.get" },
       { phase: "Review", kind: "agent", label: "Summarize the risk of:" },
       { phase: "Decide", kind: "ask", label: 'Merge ""?' },
-      { phase: "Decide", kind: "act", label: "Tool", detail: "github.pullRequest.merge" },
+      { phase: "Decide", kind: "act", label: "Merge", detail: "github.pullRequest.merge" },
     ]);
   });
 
@@ -53,7 +55,7 @@ describe("deriveWorkflowShape", () => {
     expect(shape.phases).toEqual([{ title: "Only" }]);
     expect(shape.steps).toEqual([
       { phase: "Only", kind: "agent", label: "do a thing" },
-      { phase: "Only", kind: "act", label: "Script", detail: "publishNotes" },
+      { phase: "Only", kind: "act", label: "Publish notes", detail: "publishNotes" },
     ]);
   });
 
@@ -99,7 +101,7 @@ describe("deriveWorkflowShape", () => {
 
     expect(shape.phases).toEqual([]);
     expect(shape.steps).toEqual([
-      { phase: null, kind: "read", label: "Tool", detail: "jira.issue.search" },
+      { phase: null, kind: "read", label: "Search", detail: "jira.issue.search" },
       // a dynamic (non-literal) prompt falls back to the generic verb label
       { phase: null, kind: "ask", label: "Ask the user" },
     ]);
@@ -139,7 +141,60 @@ describe("deriveWorkflowShape", () => {
     expect(shape.steps).toEqual([{ phase: "Umfang", kind: "act", label: "Run sub-workflow" }]);
   });
 
-  it("gives unlabeled tool/script steps a generic title and keeps the technical callee in detail", () => {
+  it("humanizes the last callee segment into a display label, keeping the raw callee in detail", () => {
+    const shape = deriveWorkflowShape({
+      absolutePath: "/virtual/tool-labels.workflow.ts",
+      sourceText: [
+        `export const meta = { name: "x.tool-labels" } as const;`,
+        `await tools.github.releases.collectChangelog({});`,
+        `await scripts.publishRelease({});`,
+        `await tools.jira.issue.get({ id: "BUG-1" });`,
+      ].join("\n"),
+    });
+
+    expect(shape.steps).toEqual([
+      {
+        phase: null,
+        kind: "read",
+        label: "Collect changelog",
+        detail: "github.releases.collectChangelog",
+      },
+      { phase: null, kind: "act", label: "Publish release", detail: "publishRelease" },
+      { phase: null, kind: "read", label: "Get", detail: "jira.issue.get" },
+    ]);
+  });
+
+  it("lets an authored label on a tool step win over the derived one, with the callee still in detail", () => {
+    const shape = deriveWorkflowShape({
+      absolutePath: "/virtual/tool-authored-label.workflow.ts",
+      sourceText: [
+        `export const meta = { name: "x.tool-authored-label" } as const;`,
+        `await tools.github.pullRequest.get({}, { label: "Fetch the PR" });`,
+      ].join("\n"),
+    });
+
+    expect(shape.steps).toEqual([
+      { phase: null, kind: "read", label: "Fetch the PR", detail: "github.pullRequest.get" },
+    ]);
+  });
+
+  it("falls back to the generic kind word only when the callee's last segment yields no words", () => {
+    const shape = deriveWorkflowShape({
+      absolutePath: "/virtual/tool-degenerate.workflow.ts",
+      sourceText: [
+        `export const meta = { name: "x.tool-degenerate" } as const;`,
+        `await tools.__({});`,
+        `await scripts.__({});`,
+      ].join("\n"),
+    });
+
+    expect(shape.steps).toEqual([
+      { phase: null, kind: "act", label: "Tool", detail: "__" },
+      { phase: null, kind: "act", label: "Script", detail: "__" },
+    ]);
+  });
+
+  it("gives unlabeled tool/script steps a derived title and keeps the technical callee in detail", () => {
     const shape = deriveWorkflowShape({
       absolutePath: "/virtual/tool-fallback.workflow.ts",
       sourceText: [
@@ -151,8 +206,8 @@ describe("deriveWorkflowShape", () => {
     });
 
     expect(shape.steps).toEqual([
-      { phase: null, kind: "read", label: "Tool", detail: "github.pullRequest.get" },
-      { phase: null, kind: "act", label: "Script", detail: "deploy" },
+      { phase: null, kind: "read", label: "Get", detail: "github.pullRequest.get" },
+      { phase: null, kind: "act", label: "Deploy", detail: "deploy" },
       // an authored label on an agent step still wins over every fallback
       { phase: null, kind: "agent", label: "Review changes" },
     ]);
@@ -261,7 +316,7 @@ describe("verb resolution by imported binding", () => {
 
     expect(shape.phases).toEqual([{ title: "Compute" }]);
     expect(shape.steps).toEqual([
-      { phase: "Compute", kind: "act", label: "Script", detail: "computeStats" },
+      { phase: "Compute", kind: "act", label: "Compute stats", detail: "computeStats" },
     ]);
   });
 

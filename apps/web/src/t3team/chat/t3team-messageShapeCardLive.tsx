@@ -2,14 +2,15 @@
  * Live plan-card overlay (recipe UX "no black box" slice). Renders the same plan chrome as
  * {@link ./t3team-messageShapeCard.tsx} but overlays each step with its live runtime status
  * derived from `t3team.recipe.workflow.step` activities (spinner=active, check=completed,
- * clock=scheduled timer, dashed circle=pending, error=failed).
+ * clock=scheduled timer, error=failed).
  *
  * RECONCILIATION: the shape is a static AST-derived plan; runtime steps arrive by journal seq
  * and may not match 1:1 (loops, parallel branches). The plan is treated as a skeleton —
  * executed steps map onto plan steps by order (i-th executed step ↔ i-th plan step in display
  * order); unknown runtime steps remain in their journal position with a human fallback label;
- * plan steps not yet executed stay neutral. The run-level terminal activity drives the
- * completed/failed banner.
+ * REACHABLE STEPS ONLY: plan steps the run has not reached yet (branch sides, later phases)
+ * are not rendered at all — no dimmed placeholders, no counters — and an all-unreached phase
+ * draws no header. The run-level terminal activity drives the completed/failed banner.
  *
  * A `waiting` row shows ONLY the waiting state — the ask itself is rendered by the sibling
  * decision card ({@link ./t3team-messageDecisionCard.tsx}); no duplication here.
