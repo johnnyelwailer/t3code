@@ -40,6 +40,7 @@ export * from "./t3team-message-ext.ts";
 export * from "./t3team-messageExtContext.ts";
 export * from "./t3team-projectMainRepository.ts";
 export * from "./t3team-widget-bridge.ts";
+export * from "./t3team-transientRecovery.ts";
 export * from "./projectClone.ts";
 export * from "./pullRequest.ts";
 export * from "./orchestrationDispatch.ts";

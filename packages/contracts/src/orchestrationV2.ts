@@ -38,6 +38,10 @@ import {
 } from "./baseSchemas.ts";
 import { ChatAttachment } from "./chatAttachment.ts";
 import {
+  OrchestrationV2TransientRecovery,
+  OrchestrationV2TransientRecoveryUpdate,
+} from "./t3team-transientRecovery.ts";
+import {
   OrchestrationGetFullThreadDiffInput,
   OrchestrationGetFullThreadDiffResult,
   OrchestrationGetTurnDiffInput,
@@ -417,6 +421,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   snoozedUntil: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   snoozedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecovery)),
+  /** t3team: transient-failure auto-resume; optional so older threads still decode. */
+  transientRecovery: Schema.optional(Schema.NullOr(OrchestrationV2TransientRecovery)),
   /** t3team: optional so threads written before the mirror still decode. */
   pendingWorkflowAsk: Schema.optional(Schema.NullOr(OrchestrationV2PendingWorkflowAsk)),
   pinnedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
@@ -2760,6 +2766,8 @@ export const OrchestrationV2Command = Schema.Union([
     /** Reject unless no message or run has landed on this thread. */
     expectedEmpty: Schema.optional(Schema.Boolean),
     limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecoveryUpdate)),
+    /** t3team: arm, reschedule or toggle the transient-failure auto-resume. */
+    transientRecovery: Schema.optional(OrchestrationV2TransientRecoveryUpdate),
     /** Link (object) or unlink (null) a pull request (#8160); absent leaves it unchanged. */
     linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   }),

@@ -287,6 +287,10 @@
       "types": "./src/state/t3team-threadArtifacts.ts",
       "default": "./src/state/t3team-threadArtifacts.ts"
     },
+    "./state/provider-retry": {
+      "types": "./src/state/t3team-providerRetry.ts",
+      "default": "./src/state/t3team-providerRetry.ts"
+    },
     "./state/pack-documents": {
       "types": "./src/state/t3team-packDocuments.ts",
       "default": "./src/state/t3team-packDocuments.ts"

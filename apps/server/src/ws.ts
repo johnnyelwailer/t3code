@@ -156,6 +156,7 @@ import { isMachineSetupEnabled } from "./cloud/t3team-machineSetupFlag.ts";
 import { isKanbanSemanticZoomEnabled } from "./t3team-kanbanZoomFlag.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import { isMyWorkRightPanelEnabled } from "./t3team-myWorkRightPanelFlag.ts";
+import { isTransientAutoResumeEnabled } from "./t3team-transientAutoResumeFlag.ts";
 import { isWorkProfileChooserEnabled } from "./t3team-workProfileChooserFlag.ts";
 import { isNexiStateDirSelectedAtStartup } from "@t3tools/project-context/t3teamProjectStateDir";
 import {
@@ -1841,6 +1842,9 @@ const layerWsRpc = (
             // Runtime feature flag (env NEXI_FF_MYWORK_RIGHT_PANEL, default on): My Work aside
             // uses RightPanelTabs; off keeps the legacy DigestPrAside swap.
             myWorkRightPanel: isMyWorkRightPanelEnabled(),
+            // Runtime feature flag (env NEXI_FF_TRANSIENT_AUTO_RESUME, default on): transient
+            // failure auto-resume and its composer banner.
+            transientAutoResume: isTransientAutoResumeEnabled(),
             nexiStateDir: isNexiStateDirSelectedAtStartup(),
           };
         });
