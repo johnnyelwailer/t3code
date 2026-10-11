@@ -430,6 +430,7 @@ import {
 } from "~/t3team/t3team-messageContextAttachments";
 import { useT3TeamTimelineArtifacts } from "~/t3team/chat/t3team-useTimelineArtifacts";
 import { useResourcePressureBannerItem } from "./chat/t3team-ResourcePressureThreadBanner";
+import { useProviderRetryBannerItem } from "./chat/t3team-ProviderRetryBanner";
 import { useT3TeamChatTimelineProps } from "~/t3team/chat/t3team-useChatTimelineProps";
 import { useT3TeamStopCascade } from "~/t3team/chat/t3team-useStopCascade";
 import { useT3TeamActiveAgents } from "~/t3team/chat/t3team-useActiveAgents";
@@ -7678,8 +7679,15 @@ export default function ChatView(props: ChatViewProps) {
           },
         })
       : null;
+  // t3team: live provider retry + transient-failure auto-resume (flag TRANSIENT_AUTO_RESUME).
+  const providerRetryBanner = useProviderRetryBannerItem({
+    enabled: serverConfig?.transientAutoResume === true,
+    environmentId,
+    threadId: activeThreadId,
+    projection: serverProjection,
+  });
   const composerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
-    const limitRecoveryItems = limitRecoveryBanner === null ? [] : [limitRecoveryBanner];
+    const limitRecoveryItems = [limitRecoveryBanner, providerRetryBanner].filter((i) => i !== null);
     const backgroundWorkItems = [goalBannerItem, backgroundWorkBannerItem].filter(
       (item) => item !== null,
     );
@@ -7758,6 +7766,7 @@ export default function ChatView(props: ChatViewProps) {
     serverRuntime?.usageLimitResetAt,
     feedbackBannerItems,
     limitRecoveryBanner,
+    providerRetryBanner,
     handleRestoreThreadBranch,
     isRestoringThreadBranch,
     backgroundWorkBannerItem,

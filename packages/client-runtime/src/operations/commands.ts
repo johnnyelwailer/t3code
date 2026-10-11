@@ -128,6 +128,7 @@ export type MarkThreadUnreadInput = ThreadCommandInput;
 
 export interface UpdateThreadMetadataInput extends ThreadCommandInput {
   readonly limitRecovery?: import("@t3tools/contracts").OrchestrationV2LimitRecoveryUpdate | null;
+  readonly transientRecovery?: import("@t3tools/contracts").OrchestrationV2TransientRecoveryUpdate;
   readonly title?: string;
   readonly modelSelection?: ModelSelection;
   readonly branch?: string | null;
@@ -576,11 +577,15 @@ export const updateThreadMetadata = Effect.fn("EnvironmentCommands.updateThreadM
       input.worktreePath !== undefined ||
       input.regenerateTitle !== undefined ||
       input.linkedPullRequest !== undefined ||
-      input.limitRecovery !== undefined
+      input.limitRecovery !== undefined ||
+      input.transientRecovery !== undefined
     ) {
       result = yield* dispatch({
         type: "thread.metadata.update",
         ...(input.limitRecovery === undefined ? {} : { limitRecovery: input.limitRecovery }),
+        ...(input.transientRecovery === undefined
+          ? {}
+          : { transientRecovery: input.transientRecovery }),
         commandId,
         threadId: input.threadId,
         ...(input.title === undefined ? {} : { title: input.title }),

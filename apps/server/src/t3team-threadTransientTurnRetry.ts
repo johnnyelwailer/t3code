@@ -4,8 +4,9 @@
  * Classification: `orchestration-v2/t3team-transientRunFailure.ts`; policy
  * (budget, backoff, note texts): `t3team-threadTransientTurnRetryPolicy.ts`;
  * durable attempt counting: `t3team-threadTransientTurnRetryPlan.ts`; the
- * Live layer: `t3team-threadTransientTurnRetryReactor.ts`.
+ * failed-run handling: `t3team-threadTransientTurnRetryReactor.ts`; Live layer:
+ * `t3team-threadTransientTurnRetryLive.ts`.
  *
  * @module t3team-threadTransientTurnRetry
  */
-export { T3TeamThreadTransientTurnRetryLive } from "./t3team-threadTransientTurnRetryReactor.ts";
+export { T3TeamThreadTransientTurnRetryLive } from "./t3team-threadTransientTurnRetryLive.ts";
