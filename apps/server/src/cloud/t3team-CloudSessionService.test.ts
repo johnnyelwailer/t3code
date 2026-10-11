@@ -291,8 +291,8 @@ describe("CloudSessionService.create credential handoff", () => {
       // A build without T3 Connect OAuth config fails the mint at once and
       // never opens a browser — telling the user to "confirm it there" sends
       // them looking for a tab that does not exist.
-      const { execute } = makeGithubMock();
-      const ghMock = Layer.mock(GitHubCli.GitHubCli)({ execute });
+      const { rest, graphql } = makeGithubMock();
+      const ghMock = Layer.mock(GitHubApi.GitHubApi)({ rest, graphql });
       const cloudCliMock = Layer.mock(CliTokenManager.CloudCliTokenManager)({
         getExisting: Effect.succeed(Option.none()),
       });
@@ -304,8 +304,9 @@ describe("CloudSessionService.create credential handoff", () => {
         ghMock,
         cloudCliMock,
         minterMock,
+        noMachines,
         configLayer,
-        Layer.succeed(Clock.Clock, realClock),
+        NexiBrokerService.layerDisabled,
       );
       const full = Layer.mergeAll(
         CloudSessionService.layer.pipe(Layer.provide(providers)),
