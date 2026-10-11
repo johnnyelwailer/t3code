@@ -32,7 +32,7 @@ import {
   STATE_MIGRATION_RECIPE_ID,
   stateMigrationRecipeSetupFiles,
 } from "./t3team-projectSetupStateMigrationRecipe.ts";
-import { MIGRATION_EXCLUDES } from "./t3team-projectMainRepositoryState.ts";
+import { migrationExcludes } from "./t3team-projectMainRepositoryState.ts";
 import {
   STATE_MIGRATION_RECORD_RELATIVE_PATH,
   writeStateMigrationRecord,
@@ -75,7 +75,7 @@ const pendingRecord = (toRoot: string, migrationId: string): ProjectStateMigrati
   fromRoot: "/projects/home",
   toRoot,
   stateDir: ".t3team",
-  excludes: [...MIGRATION_EXCLUDES],
+  excludes: migrationExcludes(),
   missingFilesAtLeast: 201,
   startedAt: "2026-10-11T00:00:00.000Z",
   updatedAt: "2026-10-11T00:00:00.000Z",
@@ -125,7 +125,7 @@ const runMigrationRecipe = (input: {
           fromRoot: "/projects/home",
           toRoot,
           stateDir: ".t3team",
-          excludes: [...MIGRATION_EXCLUDES],
+          excludes: migrationExcludes(),
           recordPath: STATE_MIGRATION_RECORD_RELATIVE_PATH,
           isGitCheckout: false,
           missingFilesAtLeast: 201,

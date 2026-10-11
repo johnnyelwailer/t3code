@@ -57,8 +57,12 @@ export const isMigrationExcluded = (relativeSegments: ReadonlyArray<string>): bo
   return top === REFERENCES_DIR_NAME && second !== undefined && second !== MANIFEST_FILE_NAME;
 };
 
-/** {@link isMigrationExcluded} spelled out for a migration thread that copies with its own tools. */
-export const MIGRATION_EXCLUDES: ReadonlyArray<string> = [
+/**
+ * {@link isMigrationExcluded} spelled out for a migration thread that copies with its own tools.
+ * A function, not a constant: the repository-utils import cycle leaves its names uninitialized
+ * while this module evaluates under the plain node loader.
+ */
+export const migrationExcludes = (): Array<string> => [
   `${CHILD_WORKTREES_DIR_NAME}/`,
   `${REFERENCES_DIR_NAME}/* (except ${REFERENCES_DIR_NAME}/${MANIFEST_FILE_NAME})`,
 ];

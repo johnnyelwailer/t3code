@@ -31,7 +31,7 @@ import * as Path from "effect/Path";
 import { ThreadLaunchService } from "./orchestration-v2/ThreadLaunchService.ts";
 import * as ServerSettings from "./serverSettings.ts";
 import { getConfiguredDefaultModelSelection } from "./t3team-configuredDefaultModelSelection.ts";
-import { MIGRATION_EXCLUDES } from "./t3team-projectMainRepositoryState.ts";
+import { migrationExcludes } from "./t3team-projectMainRepositoryState.ts";
 import {
   ensureStateMigrationRecipe,
   STATE_MIGRATION_RECIPE_ID,
@@ -141,7 +141,7 @@ export const recordPendingStateMigration = Effect.fn("recordPendingStateMigratio
       fromRoot: input.fromRoot,
       toRoot: input.toRoot,
       stateDir: PROJECT_STATE_DIR,
-      excludes: [...MIGRATION_EXCLUDES],
+      excludes: migrationExcludes(),
       missingFilesAtLeast: input.missingFilesAtLeast,
       startedAt: DateTime.formatIso(now),
       updatedAt: DateTime.formatIso(now),
