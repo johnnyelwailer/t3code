@@ -34,6 +34,10 @@ import {
   isClaimed,
   makeClaimLedger,
 } from "./t3team-CloudSessionClaim.ts";
+import {
+  mergeSecretsWithPending,
+  pendingRepositorySecretsForGrant,
+} from "../t3team-repositorySecretPending.ts";
 
 /**
  * Starts and tracks *cloud sessions*: full Nexi workspaces provisioned on
@@ -195,6 +199,11 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
         login,
         machine?.repository ?? setup?.repository ?? null,
       );
+      const pendingSecrets =
+        input.projectId !== undefined
+          ? yield* pendingRepositorySecretsForGrant(input.projectId)
+          : {};
+
       if (machine !== null) {
         // The project is in use: the broker warms its next machine now, not at the next report.
         yield* broker.reportInterest([standbyPoolKey(machine.repository)]).pipe(Effect.ignore);
@@ -207,6 +216,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
           name: input.name ?? machine.repository.name,
           ledger: claims,
           nowMs,
+          ...(Object.keys(pendingSecrets).length > 0 ? { extraSecrets: pendingSecrets } : {}),
         });
         // Claimed: this is the session. Never also dispatch one — the standby is spent.
         if (claimedRun !== null) {
@@ -233,16 +243,20 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       // Broker mode: a grant only a run this login dispatched can redeem replaces the whole T3
       // Connect handoff. Fails with `broker_sign_in_required` before any dispatch when signed out.
       const access = machine ?? setup;
+      const grantSecrets = mergeSecretsWithPending(
+        access
+          ? {
+              GIT_TOKEN: access.token,
+              GIT_AUTHOR_NAME: access.author.name,
+              GIT_AUTHOR_EMAIL: access.author.email,
+            }
+          : undefined,
+        pendingSecrets,
+      );
       const brokerGrant = broker.enabled
         ? yield* broker.requestGrant(
             login,
-            access
-              ? {
-                  GIT_TOKEN: access.token,
-                  GIT_AUTHOR_NAME: access.author.name,
-                  GIT_AUTHOR_EMAIL: access.author.email,
-                }
-              : undefined,
+            grantSecrets,
             machine ? standbyPoolKey(machine.repository) : undefined,
             machine && machine.teamSecretNames.length > 0
               ? {

@@ -13,6 +13,10 @@ import {
   listRepositorySecretNames,
   setRepositorySecretValue,
 } from "./t3team-repositorySecretGh.ts";
+import {
+  clearRepositorySecretPending,
+  holdRepositorySecretPending,
+} from "./t3team-repositorySecretPending.ts";
 import { promptRepositorySecret } from "./t3team-repositorySecretPrompt.ts";
 import { resolveRepositorySecretRemote } from "./t3team-repositorySecretRemote.ts";
 
@@ -119,15 +123,28 @@ const make = Effect.gen(function* () {
       value: prompted.value,
     }).pipe(Effect.result);
     if (written._tag === "Failure") {
+      if (written.failure.kind === "permission_denied") {
+        const held = yield* holdRepositorySecretPending({
+          projectId: input.projectId,
+          name,
+          value: prompted.value,
+        }).pipe(Effect.result);
+        return {
+          status: "permission_denied" as const,
+          name,
+          detail:
+            held._tag === "Success"
+              ? `Could not save \`${name}\` as a repository Actions secret (no admin permission). Kept it for your next cloud session on this project only — ask a repository admin to set \`${name}\` so it persists for the team.`
+              : `Could not save \`${name}\` as a repository Actions secret (no admin permission). Ask a repository admin to set it.`,
+        };
+      }
       return {
-        status:
-          written.failure.kind === "permission_denied"
-            ? ("permission_denied" as const)
-            : ("unavailable" as const),
+        status: "unavailable" as const,
         name,
         detail: written.failure.detail,
       };
     }
+    yield* clearRepositorySecretPending({ projectId: input.projectId, name }).pipe(Effect.ignore);
     return { status: "saved" as const, name };
   });
 

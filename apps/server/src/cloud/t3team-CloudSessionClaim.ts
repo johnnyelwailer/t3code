@@ -46,12 +46,15 @@ export const claimStandby = (input: {
   readonly name: string;
   readonly ledger: ClaimLedger;
   readonly nowMs: number;
+  /** Pending repo secrets held when Actions write was denied; GIT_* always win over these. */
+  readonly extraSecrets?: Readonly<Record<string, string>>;
 }) =>
   Effect.gen(function* () {
     const { machine } = input;
     const runId = yield* input.broker.claimStandby({
       poolKey: standbyPoolKey(machine.repository),
       secrets: {
+        ...(input.extraSecrets ?? {}),
         GIT_TOKEN: machine.token,
         GIT_AUTHOR_NAME: machine.author.name,
         GIT_AUTHOR_EMAIL: machine.author.email,

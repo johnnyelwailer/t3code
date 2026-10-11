@@ -13,6 +13,7 @@ import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import { ChildProcessSpawner } from "effect/process";
 
+import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as GitHubCli from "../sourceControl/GitHubCli.ts";
 import * as CliTokenManager from "./CliTokenManager.ts";
@@ -22,6 +23,39 @@ import * as NexiBrokerService from "./t3team-NexiBrokerService.ts";
 import { ConnectCredentialMintError } from "./t3team-ConnectCredentialMintError.ts";
 import * as CloudSessionService from "./t3team-CloudSessionService.ts";
 import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
+import { holdRepositorySecretPending } from "../t3team-repositorySecretPending.ts";
+
+/** Empty secret store: no pending repo secrets unless a test seeds them. */
+const emptySecretStore = Layer.mock(ServerSecretStore.ServerSecretStore)({
+  get: () => Effect.succeed(Option.none()),
+  set: () => Effect.void,
+  create: () => Effect.void,
+  getOrCreateRandom: () => Effect.die("unused"),
+  remove: () => Effect.void,
+});
+
+const memorySecretStore = () => {
+  const bags = new Map<string, Uint8Array>();
+  return Layer.mock(ServerSecretStore.ServerSecretStore)({
+    get: (key) => {
+      const value = bags.get(key);
+      return Effect.succeed(value === undefined ? Option.none() : Option.some(value));
+    },
+    set: (key, value) =>
+      Effect.sync(() => {
+        bags.set(key, value);
+      }),
+    create: (key, value) =>
+      Effect.sync(() => {
+        bags.set(key, value);
+      }),
+    getOrCreateRandom: () => Effect.die("unused"),
+    remove: (key) =>
+      Effect.sync(() => {
+        bags.delete(key);
+      }),
+  });
+};
 
 /** Sessions here are plain ones: no project, so the machine resolver is never consulted. */
 const noMachines = Layer.mock(CloudSessionMachines)({
@@ -452,9 +486,11 @@ describe("CloudSessionService.create over the Nexi broker", () => {
     execute: ReturnType<typeof makeGithubMock>["execute"],
     broker: ReturnType<typeof brokerMock>,
     machines: Layer.Layer<CloudSessionMachines> = noMachines,
+    secrets: Layer.Layer<ServerSecretStore.ServerSecretStore> = emptySecretStore,
   ) =>
     Layer.mergeAll(
       machines,
+      secrets,
       Layer.mock(GitHubCli.GitHubCli)({ execute }),
       Layer.mock(CliTokenManager.CloudCliTokenManager)({
         getExisting: Effect.succeed(Option.none()),
@@ -565,6 +601,56 @@ describe("CloudSessionService.create over the Nexi broker", () => {
         .join("\n");
       assert.notInclude(everything, "ghp_never-an-input");
       assert.deepEqual(team, [{ repository: "acme/api", names: ["NPM_TOKEN"] }]);
+    }),
+  );
+
+  it.effect("pending repo secrets (permission-denied hold) ride the grant; GIT_* still win", () =>
+    Effect.gen(function* () {
+      const { execute } = makeGithubMock();
+      const parked: Array<Readonly<Record<string, string>> | undefined> = [];
+      const projectId = ProjectId.make("p-pending");
+      const secrets = memorySecretStore();
+      yield* holdRepositorySecretPending({
+        projectId,
+        name: "NPM_TOKEN",
+        value: "npm-from-card",
+      }).pipe(Effect.provide(secrets));
+      const machines = Layer.mock(CloudSessionMachines)({
+        resolve: () =>
+          Effect.succeed({
+            repository: {
+              url: "https://nexplore.ghe.com/acme/api.git",
+              host: "nexplore.ghe.com",
+              owner: "acme",
+              name: "api",
+            },
+            commit: "a".repeat(40),
+            devcontainerPath: ".devcontainer/devcontainer.json",
+            healthCheck: null,
+            token: "ghp_real",
+            author: { name: "Pj", email: "pj@example.test" },
+            teamSecretNames: [],
+          }),
+        resolveSetup: () => Effect.die("this project has a machine"),
+        poolKeyOf: () => Effect.succeed(null),
+      });
+      const broker = brokerMock((_login, grantSecrets) =>
+        Effect.sync(() => {
+          parked.push(grantSecrets);
+          return "g";
+        }),
+      );
+      yield* runPastDiscoveryPoll(
+        create(providersWith(execute, broker, machines, secrets), projectId),
+      );
+      assert.deepEqual(parked, [
+        {
+          NPM_TOKEN: "npm-from-card",
+          GIT_TOKEN: "ghp_real",
+          GIT_AUTHOR_NAME: "Pj",
+          GIT_AUTHOR_EMAIL: "pj@example.test",
+        },
+      ]);
     }),
   );
 
