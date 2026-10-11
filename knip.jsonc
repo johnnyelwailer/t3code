@@ -131,6 +131,8 @@
         // the t3team-workflowEngine{DecisionCard,Reactor} integration tests, not imported.
         "__fixtures__/t3team-decisionChoice.workflow.ts",
         "__fixtures__/t3team-parallelAgentsAfterResume.workflow.ts",
+        // Embedded as `?raw` text into the bundled recipe; the workflow runtime reads its `meta`.
+        "src/t3team-stateMigration.workflow.ts",
       ],
       // Keep the transitive Effect runtime pinned for standalone npm installs.
       // The Vite+ web build prerequisite.

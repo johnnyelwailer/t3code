@@ -16,7 +16,7 @@ import * as Schema from "effect/Schema";
 import { writeFileStringAtomically } from "./atomicWrite.ts";
 import { HIDDEN_T3TEAM_DIR, REFERENCES_DIR_NAME } from "./t3team-project-repository-utils.ts";
 
-export const STATE_MIGRATION_RECORD_FILE = "state-migration.json";
+const STATE_MIGRATION_RECORD_FILE = "state-migration.json";
 
 /** Workspace-relative: the recipe's outcome script writes it through its workspace root. */
 export const STATE_MIGRATION_RECORD_RELATIVE_PATH = `${HIDDEN_T3TEAM_DIR}/${REFERENCES_DIR_NAME}/${STATE_MIGRATION_RECORD_FILE}`;

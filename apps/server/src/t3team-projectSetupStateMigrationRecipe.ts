@@ -26,14 +26,14 @@ export const STATE_MIGRATION_RECIPE_ID = "migrate-project-state";
 const WORKFLOW_FILE = "./t3team-stateMigration.workflow.ts";
 const SCRIPT_FILE = "./t3team-stateMigrationRecordOutcome.script.ts";
 
-export const STATE_MIGRATION_WORKFLOW_BODY = resolveModuleSourceText({
+const STATE_MIGRATION_WORKFLOW_BODY = resolveModuleSourceText({
   inlined: rawWorkflow,
   fileUrl: new URL(WORKFLOW_FILE, import.meta.url),
   marker: "export const meta",
   label: "migrate-project-state workflow body",
 });
 
-export const STATE_MIGRATION_RECORD_OUTCOME_SCRIPT = resolveModuleSourceText({
+const STATE_MIGRATION_RECORD_OUTCOME_SCRIPT = resolveModuleSourceText({
   inlined: rawScript,
   fileUrl: new URL(SCRIPT_FILE, import.meta.url),
   marker: "export default defineScript(",

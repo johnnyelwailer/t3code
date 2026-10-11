@@ -21,9 +21,9 @@ import {
 } from "./t3team-projectMainRepositoryState.ts";
 
 /** At most this many missing files are copied inline. */
-export const STATE_MIGRATION_INLINE_LIMIT = 200;
+const STATE_MIGRATION_INLINE_LIMIT = 200;
 /** Source files the scan visits before it stops and hands the migration off. */
-export const STATE_MIGRATION_SCAN_BUDGET = 2_000;
+const STATE_MIGRATION_SCAN_BUDGET = 2_000;
 
 export type ProjectStateMigrationPlan =
   | { readonly kind: "none" }
