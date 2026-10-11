@@ -7,6 +7,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 
+import { myWorkArrangeMode } from "./t3team-myworkArrangeMode.ts";
 import type { T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 import { errorResult, foldResult, okResult } from "./t3team-toolBrokerHelpers.ts";
 
@@ -20,8 +21,13 @@ export function isT3TeamMyWorkTool(tool: string): boolean {
 /** Model-supplied arguments of both tools; `plan` stays untyped until the store validates it. */
 const MyWorkToolArgs = Schema.Struct({
   projectId: Schema.optional(Schema.String),
+  scope: Schema.optional(Schema.Literals(["project", "all"])),
   plan: Schema.optional(Schema.Unknown),
+  channel: Schema.optional(Schema.String),
   reset: Schema.optional(Schema.Boolean),
+  promote: Schema.optional(Schema.Boolean),
+  discardDraft: Schema.optional(Schema.Boolean),
+  recipe: Schema.optional(Schema.Unknown),
 });
 type MyWorkToolArgs = typeof MyWorkToolArgs.Type;
 const decodeArgs = Schema.decodeUnknownExit(MyWorkToolArgs);
@@ -32,7 +38,7 @@ type CallerArgs = { readonly threadId?: string | undefined };
 
 export type T3TeamMyWorkToolHandlers = {
   readonly readDigest: (
-    args: Pick<MyWorkToolArgs, "projectId"> & CallerArgs,
+    args: Pick<MyWorkToolArgs, "projectId" | "scope"> & CallerArgs,
   ) => Effect.Effect<unknown, string>;
   readonly arrange: (args: MyWorkToolArgs & CallerArgs) => Effect.Effect<unknown, string>;
 };
@@ -55,14 +61,18 @@ export function callT3TeamMyWorkTool(input: {
   const args = { ...argsExit.value, threadId: input.threadId };
   if (tool === T3TEAM_MY_WORK_DIGEST_READ_TOOL_ID) {
     return foldResult(
-      myWorkTools.readDigest({ projectId: args.projectId, threadId: args.threadId }),
+      myWorkTools.readDigest({
+        projectId: args.projectId,
+        scope: args.scope,
+        threadId: args.threadId,
+      }),
       okResult,
       errorResult,
     );
   }
-  const wantsReset = args.reset === true;
-  if (wantsReset === (args.plan !== undefined)) {
-    return Effect.succeed(errorResult(`${tool} takes exactly one of 'plan' or 'reset: true'.`));
+  const mode = myWorkArrangeMode(args);
+  if (!mode.ok) {
+    return Effect.succeed(errorResult(`${tool} ${mode.message}`));
   }
   return foldResult(myWorkTools.arrange(args), okResult, errorResult);
 }

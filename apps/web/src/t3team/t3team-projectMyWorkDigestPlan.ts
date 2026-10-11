@@ -150,10 +150,13 @@ export function buildHeuristicDigestPlan(
   };
 }
 
-/** The plan a digest shows: the arrangement an agent stored for this scope, else the default. */
+/**
+ * The plan a digest shows. A draft overlays the live arrangement; both are refs, so a graph
+ * refresh re-resolves facts without another agent turn.
+ */
 export function buildDigestPlan(graph: DigestGraph, nowMs: number): ResolvedDigestPlan {
   return resolveDigestPlan(
-    graph.arrangement ?? buildHeuristicDigestPlan(graph, nowMs),
+    graph.draftArrangement ?? graph.arrangement ?? buildHeuristicDigestPlan(graph, nowMs),
     graph,
     nowMs,
   );
@@ -178,6 +181,7 @@ export function resolveDigestPlan(
     }))
     .filter((section) => {
       if (section.kind === "graph") return isDigestGraphSectionLive(section, graph);
+      if (section.kind === "widget") return (section.widgetHtml?.trim().length ?? 0) > 0;
       return section.kind === "reviews"
         ? (section.reviewIds?.length ?? 0) > 0
         : section.items.length > 0;

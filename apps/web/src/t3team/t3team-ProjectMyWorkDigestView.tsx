@@ -6,6 +6,7 @@ import {
 import { DashboardWidget } from "~/t3team/t3team-dashboardWidgetRegistry";
 import { MyWorkLoadingLanesPlaceholder } from "~/t3team/t3team-MyWorkLoadingAnimation";
 import { DigestArrangementBar } from "~/t3team/t3team-ProjectMyWorkDigestArrangementBar";
+import { DigestDraftBar } from "~/t3team/t3team-ProjectMyWorkDigestDraftBar";
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import {
   ProjectMyWorkDigestHeader,
@@ -22,6 +23,8 @@ export function ProjectMyWorkDigestView({
   burndownVariant = "off",
   updatedAtMs,
   onResetArrangement,
+  onPromoteDraft,
+  onDiscardDraft,
   refreshing = false,
   emptyStateAllowed = true,
 }: {
@@ -33,6 +36,10 @@ export function ProjectMyWorkDigestView({
   updatedAtMs?: number;
   /** Clears an agent-made arrangement for this scope (back to the default). */
   onResetArrangement?: (() => Promise<void>) | undefined;
+  /** Keep the draft overlay as the live arrangement. */
+  onPromoteDraft?: (() => Promise<void>) | undefined;
+  /** Drop the draft overlay. The live arrangement stays. */
+  onDiscardDraft?: (() => Promise<void>) | undefined;
   /** A revalidation is in flight over this content; the header's status strip says so. */
   refreshing?: boolean;
   /**
@@ -54,7 +61,14 @@ export function ProjectMyWorkDigestView({
       {...(updatedAtMs !== undefined ? { updatedAtMs } : {})}
     />
   );
-  const arranged = graph.arrangement ? (
+  const arranged = graph.draftArrangement ? (
+    <DigestDraftBar
+      producedAt={graph.draftArrangement.producedAt}
+      nowMs={nowMs}
+      onPromote={onPromoteDraft}
+      onDiscard={onDiscardDraft}
+    />
+  ) : graph.arrangement ? (
     <DigestArrangementBar
       arrangement={graph.arrangement}
       nowMs={nowMs}

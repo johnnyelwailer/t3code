@@ -192,9 +192,9 @@ it.layer(SqlitePersistenceMemory)("t3team.mywork.* tools", (it) => {
       assert.include(asText(human), "producer 'agent'");
 
       const neither = yield* call(ARRANGE, {});
-      assert.include(asText(neither), "exactly one of 'plan' or 'reset: true'");
+      assert.include(asText(neither), "exactly one of 'plan'");
       const both = yield* call(ARRANGE, { plan: plan("x"), reset: true });
-      assert.include(asText(both), "exactly one of 'plan' or 'reset: true'");
+      assert.include(asText(both), "exactly one of 'plan'");
     }),
   );
 });

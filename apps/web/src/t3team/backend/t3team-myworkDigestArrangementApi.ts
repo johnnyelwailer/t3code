@@ -14,6 +14,18 @@ export function createMyWorkDigestArrangementApi(httpBaseUrl: string) {
     }): Promise<{ readonly ok: true }> {
       return postJson(httpBaseUrl, "/api/t3team/mywork-digest/arrangement/reset", input);
     },
+    promoteMyWorkDigestArrangement(input: {
+      readonly scope: MyWorkDigestScope;
+      readonly projects: ReadonlyArray<MyWorkDigestProjectInput>;
+    }): Promise<{ readonly ok: true }> {
+      return postJson(httpBaseUrl, "/api/t3team/mywork-digest/arrangement/promote", input);
+    },
+    discardMyWorkDigestArrangement(input: {
+      readonly scope: MyWorkDigestScope;
+      readonly projects: ReadonlyArray<MyWorkDigestProjectInput>;
+    }): Promise<{ readonly ok: true }> {
+      return postJson(httpBaseUrl, "/api/t3team/mywork-digest/arrangement/discard", input);
+    },
   };
 }
 

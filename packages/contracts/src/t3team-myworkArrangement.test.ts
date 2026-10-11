@@ -1,7 +1,7 @@
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
-import { T3TeamMyWorkDigestPlan } from "./t3team-myworkArrangement.ts";
+import { digestWidgetHtmlIssues, T3TeamMyWorkDigestPlan } from "./t3team-myworkArrangement.ts";
 
 const decode = Schema.decodeUnknownSync(T3TeamMyWorkDigestPlan);
 
@@ -39,6 +39,20 @@ describe("T3TeamMyWorkDigestPlan", () => {
     ).toThrow();
     expect(() => decode({ ...plan, sections: [{ ...plan.sections[0], kind: "chart" }] })).toThrow();
     expect(() => decode({ ...plan, producer: "human" })).toThrow();
+  });
+
+  it("decodes a widget section and rejects network markup", () => {
+    const widget = {
+      id: "pulse",
+      kind: "widget" as const,
+      placement: "side" as const,
+      heading: "Pulse",
+      items: [],
+      widgetHtml: "<p style=\"color:var(--foreground)\">Today</p>",
+    };
+    expect(decode({ ...plan, sections: [widget] }).sections[0]?.kind).toBe("widget");
+    expect(digestWidgetHtmlIssues(widget.widgetHtml)).toEqual([]);
+    expect(digestWidgetHtmlIssues("<script src=\"https://cdn.example/a.js\"></script>").length).toBeGreaterThan(0);
   });
 
   it("rejects an empty ticket id and too many sections", () => {

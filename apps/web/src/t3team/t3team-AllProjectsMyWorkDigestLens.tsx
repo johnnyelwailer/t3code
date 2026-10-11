@@ -14,6 +14,8 @@ import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
 import { JiraSignInPanel } from "~/t3team/components/t3team-JiraSignInPanel";
 import { closeDigestPullRequest, openDigestTicket } from "~/t3team/t3team-digestPrAsideStore";
+import { useDigestArrangementDraft } from "~/t3team/mywork-digest/t3team-useDigestArrangementDraft";
+import { useDigestArrangementReset } from "~/t3team/mywork-digest/t3team-useDigestArrangementReset";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
 import { MyWorkLoadingAnimation } from "~/t3team/t3team-MyWorkLoadingAnimation";
 import { resolveMyWorkDigestRenderState } from "~/t3team/t3team-myWorkDigestRenderState";
@@ -32,6 +34,16 @@ export function AllProjectsMyWorkDigestLens({
 }) {
   const { flags } = useT3TeamBetaFlags();
   const digest = useMyWorkDigestGraph({ projects: boundProjects, scope: "all" });
+  const resetArrangement = useDigestArrangementReset({
+    scope: "all",
+    projects: boundProjects,
+    reload: digest.reload,
+  });
+  const draftArrangement = useDigestArrangementDraft({
+    scope: "all",
+    projects: boundProjects,
+    reload: digest.reload,
+  });
   // Minute-granular clock shared with the rest of the app: stable within a render, re-plans on tick.
   // useNowMinute yields UTC wall-clock text without a zone suffix; parse it as UTC.
   const nowMs = Date.parse(`${useNowMinute()}Z`);
@@ -78,6 +90,9 @@ export function AllProjectsMyWorkDigestLens({
       nowMs={nowMs}
       burndownVariant={flags.digestBurndownVariant}
       refreshing={digest.refreshing}
+      onResetArrangement={resetArrangement}
+      onPromoteDraft={draftArrangement?.promote}
+      onDiscardDraft={draftArrangement?.discard}
       emptyStateAllowed={digest.freshness === "fresh"}
       {...(digest.updatedAt !== undefined ? { updatedAtMs: digest.updatedAt } : {})}
       onOpenTicket={

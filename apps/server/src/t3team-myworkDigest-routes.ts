@@ -28,7 +28,7 @@ import { HttpRouter } from "effect/http";
 
 import { errorResponse, okJson, readJsonBody } from "./t3team-atlassian-http.ts";
 import { loadT3TeamMyWorkDigestGraph } from "./t3team-myworkDigest.ts";
-import { attachDigestArrangement } from "./t3team-myworkDigestArrangement.ts";
+import { attachDigestArrangementOverlay } from "./t3team-myworkDigestArrangementDraft.ts";
 import { t3teamMyWorkDigestArrangementRouteLayer } from "./t3team-myworkDigestArrangement-routes.ts";
 import {
   digestLastVisitIdentity,
@@ -64,7 +64,7 @@ const t3teamMyWorkDigestGraphRouteLayer = HttpRouter.add(
   "/api/t3team/mywork-digest/graph",
   Effect.gen(function* () {
     const input = yield* readJsonBody<T3TeamMyWorkDigestInput>();
-    const payload = yield* attachDigestArrangement(
+    const payload = yield* attachDigestArrangementOverlay(
       input,
       yield* loadT3TeamMyWorkDigestGraph(input),
     );
@@ -79,7 +79,7 @@ const t3teamMyWorkDigestGraphPollRouteLayer = HttpRouter.add(
   Effect.gen(function* () {
     const input = yield* readJsonBody<T3TeamMyWorkDigestPollInput>();
     // The stored arrangement is part of the digest: a new layout must answer CHANGED.
-    const payload = yield* attachDigestArrangement(
+    const payload = yield* attachDigestArrangementOverlay(
       input,
       yield* loadT3TeamMyWorkDigestGraph(input),
     );

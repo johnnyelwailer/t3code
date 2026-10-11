@@ -203,6 +203,9 @@ export function payloadToDigestGraph(input: {
     dependencies,
     ...(yesterday !== undefined ? { yesterday } : {}),
     ...(input.payload.arrangement !== undefined ? { arrangement: input.payload.arrangement } : {}),
+    ...(input.payload.draftArrangement !== undefined
+      ? { draftArrangement: input.payload.draftArrangement }
+      : {}),
     transitions,
     blockers,
   });

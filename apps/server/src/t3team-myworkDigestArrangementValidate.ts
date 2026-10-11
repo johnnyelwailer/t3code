@@ -6,7 +6,11 @@
  * `reviews` → reviews, `graph` → a widget that reads the digest itself, content `none`).
  */
 
-import { T3TeamMyWorkDigestPlan, type T3TeamMyWorkDigestSection } from "@t3tools/contracts";
+import {
+  digestWidgetHtmlIssues,
+  T3TeamMyWorkDigestPlan,
+  type T3TeamMyWorkDigestSection,
+} from "@t3tools/contracts";
 import { bundledDashboardWidget } from "@t3tools/t3team-skill-packs";
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
@@ -31,10 +35,32 @@ const DEFAULT_WIDGET_BY_KIND = {
   items: "my-work.tickets",
   reviews: "my-work.reviews",
   graph: undefined,
+  widget: undefined,
 } as const;
 const CONTENT_BY_KIND = { items: "tickets", reviews: "reviews", graph: "none" } as const;
 
+const widgetSectionIssues = (section: T3TeamMyWorkDigestSection): ReadonlyArray<string> => {
+  const issues: string[] = [];
+  if (section.widget !== undefined) {
+    issues.push(
+      `Section '${section.id}': a 'widget' section carries widgetHtml, not a bundled widget id.`,
+    );
+  }
+  if (section.items.length > 0 || (section.reviewIds?.length ?? 0) > 0) {
+    issues.push(`Section '${section.id}': a 'widget' section lists nothing; it reads window.digest.`);
+  }
+  if (section.widgetHtml === undefined) {
+    issues.push(`Section '${section.id}': a 'widget' section must include widgetHtml.`);
+    return issues;
+  }
+  return [
+    ...issues,
+    ...digestWidgetHtmlIssues(section.widgetHtml).map((issue) => `Section '${section.id}': ${issue}`),
+  ];
+};
+
 const sectionIssues = (section: T3TeamMyWorkDigestSection): ReadonlyArray<string> => {
+  if (section.kind === "widget") return widgetSectionIssues(section);
   const widgetId = section.widget ?? DEFAULT_WIDGET_BY_KIND[section.kind];
   if (widgetId === undefined) {
     return [`Section '${section.id}': a 'graph' section must name its widget.`];

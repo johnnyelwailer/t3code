@@ -12,6 +12,7 @@ import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
 import { JiraSignInPanel } from "~/t3team/components/t3team-JiraSignInPanel";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
+import { useDigestArrangementDraft } from "~/t3team/mywork-digest/t3team-useDigestArrangementDraft";
 import { useDigestArrangementReset } from "~/t3team/mywork-digest/t3team-useDigestArrangementReset";
 import { applyDigestFilters } from "~/t3team/mywork-digest/t3team-digestGraphFilter";
 import { closeDigestPullRequest, openDigestTicket } from "~/t3team/t3team-digestPrAsideStore";
@@ -61,6 +62,7 @@ export function ProjectMyWorkDigestContent({
     refreshing,
   } = useMyWorkDigestGraph({ projects, scope: "project" });
   const resetArrangement = useDigestArrangementReset({ scope: "project", projects, reload });
+  const draftArrangement = useDigestArrangementDraft({ scope: "project", projects, reload });
   const effectiveGraph = useMemo(
     () => applyDigestFilters(graph, digestFilters),
     [graph, digestFilters],
@@ -141,6 +143,8 @@ export function ProjectMyWorkDigestContent({
       burndownVariant={flags.digestBurndownVariant}
       onOpenTicket={openTicketInApp}
       onResetArrangement={resetArrangement}
+      onPromoteDraft={draftArrangement?.promote}
+      onDiscardDraft={draftArrangement?.discard}
       refreshing={refreshing}
       emptyStateAllowed={freshness === "fresh"}
       {...(updatedAt !== undefined ? { updatedAtMs: updatedAt } : {})}

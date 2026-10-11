@@ -11,6 +11,7 @@ import { ThreadId } from "@t3tools/contracts";
 import type { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
 import type { T3TeamThreadProject } from "./t3team-toolBrokerThreadReads.ts";
 import type { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
+import { writeMyWorkArrangeRecipe } from "./t3team-myworkArrangeRecipeWrite.ts";
 import { loadT3TeamMyWorkDigestGraph } from "./t3team-myworkDigest.ts";
 import { makeMyWorkHandlers } from "./t3team-toolBrokerMyWorkHandlers.ts";
 import { resolveDigestContext } from "./t3team-toolBrokerMyWorkContext.ts";
@@ -36,5 +37,6 @@ export const makeMyWorkToolHandlers = Effect.fn("t3team.myWorkTools.make")(funct
         Effect.mapError(message),
       ),
     runStore: (effect) => effect.pipe(Effect.provideContext(context), Effect.mapError(message)),
+    writeRecipe: (workspaceRoot, spec) => writeMyWorkArrangeRecipe(workspaceRoot, spec),
   });
 });

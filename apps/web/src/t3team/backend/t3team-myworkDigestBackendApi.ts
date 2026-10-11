@@ -58,6 +58,8 @@ export type MyWorkDigestPayload = {
   readonly scope: MyWorkDigestScope;
   /** The arrangement an agent stored for this scope; absent means the default. */
   readonly arrangement?: T3TeamMyWorkDigestPlan;
+  /** Draft overlay; the client renders it in place of `arrangement` until it is kept or dropped. */
+  readonly draftArrangement?: T3TeamMyWorkDigestPlan;
   /**
    * The viewer as the server resolved them; fills in when the client has no cached name.
    * `unresolved` means a project had no Jira identity (stale or missing token).

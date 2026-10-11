@@ -175,6 +175,8 @@ export type DigestGraph = {
   readonly yesterday?: DigestYesterday;
   /** The arrangement an agent stored for this scope (the arrange-my-work recipe); absent = default. */
   readonly arrangement?: DigestPlan;
+  /** A draft overlay. When set, the digest renders this plan until the user keeps or discards it. */
+  readonly draftArrangement?: DigestPlan;
 };
 
 /** A PR the viewer merged in the previous working day; `ticketId` when it names a held ticket. */
@@ -221,9 +223,11 @@ export type DigestPlacement = "side" | "main" | "footer";
  */
 export type DigestSection = {
   readonly id: string;
-  readonly kind: "items" | "reviews" | "graph";
+  readonly kind: "items" | "reviews" | "graph" | "widget";
   /** The `dashboard.widget` that renders it; absent means the default for its `kind`. */
   readonly widget?: string;
+  /** Sandboxed markup for a `widget` section. Data comes from `window.digest`, not the network. */
+  readonly widgetHtml?: string;
   readonly reviewIds?: readonly string[];
   readonly placement: DigestPlacement;
   readonly heading: string;

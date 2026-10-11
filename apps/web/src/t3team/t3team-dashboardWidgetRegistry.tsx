@@ -8,6 +8,7 @@ import { bundledDashboardWidget } from "@t3tools/t3team-skill-packs";
 import type { DashboardWidgetPlacement } from "@t3team/sdk/placements";
 import type { ReactNode } from "react";
 
+import { DigestWidgetSection } from "~/t3team/t3team-ProjectMyWorkDigestWidgetSection";
 import { DigestYesterdayWidget } from "~/t3team/t3team-ProjectMyWorkDigestYesterday";
 import { DigestReviewSection } from "~/t3team/t3team-ProjectMyWorkDigestReviewSection";
 import {
@@ -47,6 +48,9 @@ export function digestSectionWidgetId(section: DigestSection): string {
  * allow, renders nothing — an arrangement is data and must not be able to break the view.
  */
 export function DashboardWidget(props: DashboardWidgetProps) {
+  if (props.section.kind === "widget") {
+    return <DigestWidgetSection section={props.section} graph={props.graph} />;
+  }
   const definition = bundledDashboardWidget(digestSectionWidgetId(props.section));
   if (definition === undefined || !definition.placements.includes(props.placement)) return null;
   const Component = DASHBOARD_WIDGET_COMPONENTS[definition.component];

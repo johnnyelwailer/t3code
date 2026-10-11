@@ -20,7 +20,9 @@ const MY_WORK_DIGEST_READ_DESCRIPTION =
   "dependencies say which tickets wait on or are waited on by the viewer's. transitions are " +
   "recent status changes. yesterday is what the viewer merged and moved in the previous " +
   "working day (merged pull requests; tickets of theirs that moved or were updated). sprint is the active sprint. arrangement is the layout currently " +
-  "stored for this scope (absent = the default layout).";
+  "stored for this scope (absent = the default layout). draftArrangement, when present, is a draft " +
+  "overlay the user has not kept. Pass scope 'all' to read the viewer's cross-project digest even " +
+  "from a project thread.";
 
 const MY_WORK_ARRANGE_DESCRIPTION =
   "Arrange the viewer's My Work digest: store the layout it shows (or reset it). Call " +
@@ -37,8 +39,11 @@ const MY_WORK_ARRANGE_DESCRIPTION =
   "that moved in the previous working day (kind 'graph'). An unknown widget or a placement a " +
   "widget does not allow is rejected with the reason — fix and call again. Section ids must be " +
   "unique, at most 12 sections. The latest arrangement per project (or for all projects) " +
-  "replaces the previous one. Pass { reset: true } instead of a plan to return to the default " +
-  "layout.";
+  "replaces the previous one. A 'widget' section carries widgetHtml (sandboxed markup, no network) " +
+  "and empty items. Pass channel 'draft' with a plan to overlay the digest; { promote: true } " +
+  "keeps that draft; { discardDraft: true } drops it. Pass { reset: true } instead of a plan to " +
+  "return to the default layout (live and draft). Pass recipe instead of a plan to write a " +
+  "project-scoped maintain recipe. Pass scope 'all' to arrange the cross-project digest.";
 
 export const IMPLEMENTED_T3TEAM_MY_WORK_TOOL_CATALOG = {
   "t3team.mywork.digest.read": {
@@ -59,6 +64,11 @@ export const IMPLEMENTED_T3TEAM_MY_WORK_TOOL_CATALOG = {
           type: "string",
           description:
             "App project id. Omit for the calling thread's project (all Jira-bound projects when the thread has none).",
+        },
+        scope: {
+          type: "string",
+          enum: ["project", "all"],
+          description: "all: the viewer's cross-project digest, even from a project thread.",
         },
       },
     },
@@ -97,7 +107,12 @@ export const IMPLEMENTED_T3TEAM_MY_WORK_TOOL_CATALOG = {
                 additionalProperties: false,
                 properties: {
                   id: { type: "string", description: "Unique within the plan." },
-                  kind: { type: "string", enum: ["items", "reviews", "graph"] },
+                  kind: { type: "string", enum: ["items", "reviews", "graph", "widget"] },
+                  widgetHtml: {
+                    type: "string",
+                    description:
+                      "Sandboxed markup for a 'widget' section. No external network. Max 8000 characters.",
+                  },
                   widget: {
                     type: "string",
                     enum: ["my-work.tickets", "my-work.reviews", "my-work.yesterday"],
@@ -130,9 +145,44 @@ export const IMPLEMENTED_T3TEAM_MY_WORK_TOOL_CATALOG = {
           },
           required: ["sections"],
         },
+        channel: {
+          type: "string",
+          enum: ["live", "draft"],
+          description: "With a plan. draft overlays the digest until promote. Default live.",
+        },
         reset: {
           type: "boolean",
-          description: "true: drop the stored arrangement and return to the default layout.",
+          description: "true: drop the stored arrangement and any draft, back to the default layout.",
+        },
+        promote: {
+          type: "boolean",
+          description: "true: copy the draft onto the live arrangement and drop the draft.",
+        },
+        discardDraft: {
+          type: "boolean",
+          description: "true: drop the draft. The live arrangement stays.",
+        },
+        scope: {
+          type: "string",
+          enum: ["project", "all"],
+          description: "all: the viewer's cross-project digest, even from a project thread.",
+        },
+        recipe: {
+          type: "object",
+          additionalProperties: false,
+          description:
+            "Write a project-scoped maintain recipe. Exclusive with plan, reset, promote, and discardDraft.",
+          properties: {
+            id: { type: "string" },
+            title: { type: "string" },
+            shortDescription: { type: "string" },
+            digestScope: { type: "string", enum: ["project", "all"] },
+            density: { type: "string", enum: ["compact", "comfortable"] },
+            focus: { type: "string" },
+            noise: { type: "string" },
+            everyHours: { type: "number" },
+          },
+          required: ["id", "title", "shortDescription", "digestScope", "density", "focus", "noise", "everyHours"],
         },
       },
     },

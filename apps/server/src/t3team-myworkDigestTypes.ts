@@ -160,6 +160,11 @@ export type T3TeamMyWorkDigestPayload = {
    * is a changed digest.
    */
   readonly arrangement?: T3TeamMyWorkDigestPlan;
+  /**
+   * A draft overlay the user has not kept yet. When present the client renders this plan
+   * instead of `arrangement`. It is part of the poll fingerprint, same as `arrangement`.
+   */
+  readonly draftArrangement?: T3TeamMyWorkDigestPlan;
 };
 
 /**
