@@ -130,19 +130,24 @@ describe("live workflow step overlay on the plan card", () => {
     expect(markup).toContain("shape.pr-review");
     expect(markup).not.toContain("The plan");
     expect(markup).not.toContain(">System<");
-    // COLLAPSED BY DEFAULT: the step list is one click away, never hidden. The disclosure row
-    // carries the current step (the in-progress plan label), the run status lives in the
-    // header's live pill, and the description clamps to one line while collapsed.
+    // COLLAPSED = ONE COMPACT ROW: chevron + run title + status chip + the current step
+    // (the in-progress plan label), ellipsed if it no longer fits. No banner, no description
+    // line, no nested disclosure — the row IS the card, and the whole row is the hit target.
     expect(markup).toContain('data-workflow-live-card-expanded="false"');
-    expect(markup).toContain("data-workflow-live-card-expand");
-    expect(markup).toContain("line-clamp-1");
+    // the row (not the root's `-expanded` flag) carries the state-specific toggle marker:
+    expect(markup).toContain('data-workflow-live-card-expand=""');
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).toContain("lucide-chevron-down");
     expect(markup).toContain("Summarize the risk");
-    expect(markup).toContain("Waiting for agent");
-    // the step rows themselves are not rendered while collapsed — and no banner: the run is
-    // not terminal yet.
-    expect(markup).not.toContain("data-step-status");
+    expect(markup).toContain('data-run-live-status="Waiting for agent');
+    // the step rows and their spinner live in the card body — present only as the zero-height
+    // (inert) track behind the row, out of the a11y tree and tab order while collapsed. No
+    // banner: the run is not terminal yet.
+    const inertIndex = markup.indexOf('inert=""');
+    expect(inertIndex).toBeGreaterThan(-1);
+    expect(markup.indexOf("data-step-status")).toBeGreaterThan(inertIndex);
+    expect(markup.indexOf("animate-spin")).toBeGreaterThan(inertIndex);
     expect(markup).not.toContain("data-run-status");
-    expect(markup).not.toContain("animate-spin");
   }, 30000);
 
   it("expands a healthy run from the seeded local state and offers the collapse affordance", async () => {
@@ -162,9 +167,14 @@ describe("live workflow step overlay on the plan card", () => {
     );
 
     expect(markup).toContain('data-workflow-live-card-expanded="true"');
-    expect(markup).toContain("data-workflow-live-card-collapse");
-    expect(markup).not.toContain("data-workflow-live-card-expand");
-    expect(markup).toContain("line-clamp-2");
+    expect(markup).toContain('data-workflow-live-card-collapse=""');
+    // the expand marker is gone (match the full attribute: the root's `-expanded` flag is a
+    // prefix of it and must not satisfy this check).
+    expect(markup).not.toContain('data-workflow-live-card-expand=""');
+    expect(markup).toContain('aria-expanded="true"');
+    // expanded: the body track is open (no inert) and the chevron points up (rotated 180°).
+    expect(markup).not.toContain('inert=""');
+    expect(markup).toContain("rotate-180");
     // REACHABILITY: the two reached steps render — step 1 completed, step 2 running. Steps 3+4
     // are unreached: no live event has touched them, so they are NOT rendered (no dimmed
     // "planned" placeholders, no pending counters) and their phase header ("Decide") disappears.
@@ -182,10 +192,12 @@ describe("live workflow step overlay on the plan card", () => {
     ]);
 
     // a problem card never hides its state: the card opens on its own even though the default
-    // is collapsed, and the collapse affordance is not offered while the run is parked on the
-    // user's answer.
+    // is collapsed, and the pinned-open row offers no chevron and no toggle at all.
     expect(markup).toContain('data-workflow-live-card-expanded="true"');
     expect(markup).not.toContain("data-workflow-live-card-collapse");
+    expect(markup).not.toContain("lucide-chevron-down");
+    expect(markup).not.toContain("aria-expanded");
+    expect(markup).not.toContain('inert=""');
     expect(countOccurrences(markup, 'data-step-status="waiting"')).toBe(1);
   }, 30000);
 
@@ -309,7 +321,9 @@ describe("live workflow step overlay on the plan card", () => {
       stepActivity(step(2, "user.input", "waiting"), { sequence: 2 }),
     ]);
     expect(countOccurrences(activeMarkup, "animate-spin")).toBe(1);
-    expect(activeMarkup).toContain('data-run-live-status="Waiting for your answer"');
+    // the live status chip carries the waiting label (with its age suffix when the activity is
+    // not fresh — the test data is dated, so match without a closing quote).
+    expect(activeMarkup).toContain('data-run-live-status="Waiting for your answer');
 
     const waitingMarkup = await renderTimeline([
       stepActivity(step(1, "thread.turn", "started", { detail: "Summarize the risk" }), {
@@ -421,12 +435,14 @@ describe("live workflow step overlay on the plan card", () => {
       stepActivity(step(1, "read", "completed"), { sequence: 1 }),
       runActivity("completed"),
     ]);
-    // a completed run is healthy: it stays collapsed, and the terminal status word moves into
-    // the disclosure row's end slot (the banner is expanded-only) — no duplicate status.
+    // a completed run is healthy: it stays collapsed — the one-line row carries the terminal
+    // status chip. The completed banner still renders, but inside the collapsed (inert) body
+    // track, not in the row itself.
     expect(completedMarkup).toContain('data-workflow-live-card-expanded="false"');
     expect(completedMarkup).toContain('data-run-live-status="Completed"');
-    expect(completedMarkup).not.toContain("data-run-status");
-    expect(completedMarkup).not.toContain("data-step-status");
+    const inertIndex = completedMarkup.indexOf('inert=""');
+    expect(inertIndex).toBeGreaterThan(-1);
+    expect(completedMarkup.indexOf('data-run-status="completed"')).toBeGreaterThan(inertIndex);
 
     const failedMarkup = await renderTimeline([
       stepActivity(step(1, "read", "failed", { error: "boom" }), { sequence: 1 }),
@@ -441,13 +457,33 @@ describe("live workflow step overlay on the plan card", () => {
 
   it("shows pause only at parked boundaries, resume while paused, and stop while live", async () => {
     const waiting = [stepActivity(step(1, "thread.turn", "started"))];
-    const suspendedMarkup = await renderTimeline(waiting, undefined, { status: "suspended" });
+    // The controls live in the card body — invisible (inert) while a healthy run is collapsed
+    // to its one-line header. These two sub-cases are NOT auto-expanded, so they render the
+    // card directly with the seeded local state to assert against a visible body.
+    const renderOpen = (status: "suspended" | "running") =>
+      renderToStaticMarkup(
+        <T3TeamWorkflowShapeLiveCard
+          shape={TEST_WORKFLOW_SHAPE}
+          progress={deriveT3TeamWorkflowStepRuns(waiting).get(RUN_ID)!}
+          workflowRunStatus={{
+            runId: RUN_ID,
+            status,
+            pendingKind: status === "suspended" ? ("thread.turn" as const) : null,
+            wakeAt: null,
+            updatedAt: "2026-07-17T10:00:00.000Z",
+          }}
+          onControlWorkflow={async () => ({ status: "paused" })}
+          initiallyExpanded
+        />,
+      );
+
+    const suspendedMarkup = renderOpen("suspended");
     expect(suspendedMarkup).toContain('aria-label="Pause orchestration"');
     expect(suspendedMarkup).toContain('aria-label="More orchestration actions"');
     expect(suspendedMarkup).not.toContain('aria-label="Stop workflow"');
     expect(suspendedMarkup).not.toContain('aria-label="Resume orchestration"');
 
-    const runningMarkup = await renderTimeline(waiting, undefined, { status: "running" });
+    const runningMarkup = renderOpen("running");
     expect(runningMarkup).not.toContain('aria-label="Pause orchestration"');
     expect(runningMarkup).toContain('aria-label="More orchestration actions"');
     expect(runningMarkup).not.toContain('aria-label="Stop workflow"');
