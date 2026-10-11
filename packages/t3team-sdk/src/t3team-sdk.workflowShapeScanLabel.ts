@@ -30,8 +30,12 @@ export function splitIdentifierWords(segment: string): string[] {
  */
 export function humanizedCalleeLabel(lastSegment: string, fallback: string): string {
   const words = splitIdentifierWords(lastSegment).filter((word) => /[a-z]/i.test(word));
-  if (words.length === 0) return fallback;
-  const [first, ...rest] = words;
+  const first = words[0];
+  if (first === undefined) return fallback;
   const head = first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
-  return rest.length === 0 ? head : `${head} ${rest.map((word) => word.toLowerCase()).join(" ")}`;
+  const tail = words
+    .slice(1)
+    .map((word) => word.toLowerCase())
+    .join(" ");
+  return tail === "" ? head : `${head} ${tail}`;
 }
