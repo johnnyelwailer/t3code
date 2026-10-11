@@ -19,7 +19,7 @@ export function describeProjectStateMigration(migration: ProjectStateMigration):
         tone: "progress",
         label: "Moving the project state in the “Migrate project state” thread",
         ...(migration.missingFilesAtLeast
-          ? { detail: `at least ${migration.missingFilesAtLeast} files` }
+          ? { detail: `at least ${migration.missingFilesAtLeast.toLocaleString("en-US")} files` }
           : {}),
       };
     case "completed":

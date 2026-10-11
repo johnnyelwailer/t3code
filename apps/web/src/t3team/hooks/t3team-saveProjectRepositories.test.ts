@@ -107,7 +107,7 @@ describe("describeProjectStateMigration", () => {
     expect(describeProjectStateMigration(migration({ missingFilesAtLeast: 50_000 }))).toEqual({
       tone: "progress",
       label: "Moving the project state in the “Migrate project state” thread",
-      detail: "at least 50000 files",
+      detail: "at least 50,000 files",
     });
     expect(
       describeProjectStateMigration(migration({ status: "completed", conflicts: 2 })),
