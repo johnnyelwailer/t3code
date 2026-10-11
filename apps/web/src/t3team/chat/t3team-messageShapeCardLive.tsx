@@ -22,7 +22,13 @@
  * A problem card never hides its reason: a FAILED run, or one WAITING ON THE USER
  * (decision/ask state), auto-expands and cannot be collapsed back.
  */
-import { ChevronDownIcon, ChevronUpIcon, CircleDashedIcon, ClockIcon, RouteIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  CircleDashedIcon,
+  ClockIcon,
+  RouteIcon,
+} from "lucide-react";
 import type { OrchestrationWorkflowRunStatus } from "@t3tools/contracts";
 import type { ProjectRecipeWorkflowShapePayload } from "@t3tools/project-recipes";
 import { useState } from "react";
@@ -121,8 +127,7 @@ export function T3TeamWorkflowShapeLiveCard({
   // No in-progress step → the run-level lifecycle phase (where the run currently sits, e.g.
   // "paused"/"suspended"). A terminal run's position IS its status word — that word lives in
   // the row's end slot, so the step slot stays empty rather than repeating it.
-  const terminalStatus =
-    status === "completed" || status === "failed" || status === "cancelled";
+  const terminalStatus = status === "completed" || status === "failed" || status === "cancelled";
   const currentStep = (() => {
     for (let index = rows.length - 1; index >= 0; index -= 1) {
       const row = rows[index]!;
@@ -283,7 +288,9 @@ export function T3TeamWorkflowShapeLiveCard({
                   ? workflowRunStatus.updatedAt
                   : progress.run.updatedAt
               }
-              {...(canResume && onControlWorkflow ? { onResume: () => void control("resume") } : {})}
+              {...(canResume && onControlWorkflow
+                ? { onResume: () => void control("resume") }
+                : {})}
               resumePending={controlPending === "resume"}
             />
           ) : null}

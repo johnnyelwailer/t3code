@@ -260,7 +260,9 @@ describe("verb resolution by imported binding", () => {
     ]);
 
     expect(shape.phases).toEqual([{ title: "Compute" }]);
-    expect(shape.steps).toEqual([{ phase: "Compute", kind: "act", label: "Script", detail: "computeStats" }]);
+    expect(shape.steps).toEqual([
+      { phase: "Compute", kind: "act", label: "Script", detail: "computeStats" },
+    ]);
   });
 
   // A body with no SDK import has ambient verbs, so bare names must still be read as verbs.
