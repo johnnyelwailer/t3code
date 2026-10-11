@@ -40,6 +40,11 @@ import {
   type T3TeamChangeRequestToolHandlers,
 } from "./t3team-toolBrokerBindingChangeRequest.ts";
 import {
+  callT3TeamRepositorySecretSetTool,
+  T3TEAM_REPOSITORY_SECRET_SET_TOOL_ID,
+  type T3TeamRepositorySecretToolHandlers,
+} from "./t3team-toolBrokerBindingRepositorySecret.ts";
+import {
   tryDispatchThreadScopedToolCall,
   tryDispatchWorkflowToolCall,
 } from "./t3team-toolBrokerBindingDispatchBranches.ts";
@@ -62,6 +67,7 @@ export function dispatchT3TeamToolCall(input: {
   workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
   workflowControlTools?: T3TeamWorkflowControlToolHandlers;
   changeRequestTools?: T3TeamChangeRequestToolHandlers;
+  repositorySecretTools?: T3TeamRepositorySecretToolHandlers;
   showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   searchSourceThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   searchThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
@@ -121,6 +127,13 @@ export function dispatchT3TeamToolCall(input: {
       scopeLabel: input.scopeLabel,
       toolArgs,
       changeRequestTools: input.changeRequestTools,
+    });
+  }
+  if (tool === T3TEAM_REPOSITORY_SECRET_SET_TOOL_ID) {
+    return callT3TeamRepositorySecretSetTool({
+      scopeLabel: input.scopeLabel,
+      toolArgs,
+      repositorySecretTools: input.repositorySecretTools,
     });
   }
   const threadScopedToolCall = tryDispatchThreadScopedToolCall({

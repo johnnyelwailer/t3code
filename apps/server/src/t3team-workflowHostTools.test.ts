@@ -312,4 +312,30 @@ describe("workflow host tool client", () => {
       call({ tool: "t3team.change_request.publish", args: publishArgs }),
     ).rejects.toThrow(sentence);
   });
+
+  it("routes repository_secret.set under the recipe's groups and returns the broker's result", async () => {
+    const saved = { status: "saved", name: "NPM_TOKEN" };
+    const { broker, binds, calls } = makeStubBroker({ content: [], structuredContent: saved });
+    const call = hostCall(
+      makeT3TeamWorkflowHostToolClient({
+        broker,
+        launchThreadId: threadId,
+        allowedToolGroups: ["mutation.repository_secret"],
+      }),
+    );
+
+    const result = await call({
+      tool: "t3team.repository_secret.set",
+      args: { name: "NPM_TOKEN", label: "NPM_TOKEN", reason: "private packages" },
+    });
+
+    expect(result).toEqual(saved);
+    expect(binds).toEqual([["mutation.repository_secret"]]);
+    expect(calls).toEqual([
+      {
+        tool: "t3team.repository_secret.set",
+        args: { name: "NPM_TOKEN", label: "NPM_TOKEN", reason: "private packages" },
+      },
+    ]);
+  });
 });

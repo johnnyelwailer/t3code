@@ -58,6 +58,12 @@ export const PROJECT_RECIPE_MUTATION_CHANGE_REQUEST_TOOL_GROUP = defineToolGroup
   "Tools that commit listed files, push a branch, and open a change request on the repository's host.",
   false,
 );
+export const PROJECT_RECIPE_MUTATION_REPOSITORY_SECRET_TOOL_GROUP = defineToolGroup(
+  "mutation.repository_secret",
+  "mutation",
+  "Tools that ask for a secret through a masked card and write it as a repository Actions secret.",
+  false,
+);
 export const PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP = defineToolGroup(
   "thread.handoff",
   "external-convenience",
@@ -77,6 +83,7 @@ export const PROJECT_RECIPE_TOOL_GROUPS = [
   PROJECT_RECIPE_ARTIFACT_RW_TOOL_GROUP,
   PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP,
   PROJECT_RECIPE_MUTATION_CHANGE_REQUEST_TOOL_GROUP,
+  PROJECT_RECIPE_MUTATION_REPOSITORY_SECRET_TOOL_GROUP,
   PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP,
   PROJECT_RECIPE_UI_RENDER_TOOL_GROUP,
 ] as const;
@@ -143,6 +150,7 @@ export const PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID = {
   "t3team.mywork.digest.read": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.mywork.arrange": PROJECT_RECIPE_VIEW_STATE_TOOL_GROUP.id,
   "t3team.change_request.publish": PROJECT_RECIPE_MUTATION_CHANGE_REQUEST_TOOL_GROUP.id,
+  "t3team.repository_secret.set": PROJECT_RECIPE_MUTATION_REPOSITORY_SECRET_TOOL_GROUP.id,
 } as const satisfies Readonly<Record<string, ProjectRecipeToolGroupId>>;
 
 export function isProjectRecipeToolGroupId(value: string): value is ProjectRecipeToolGroupId {

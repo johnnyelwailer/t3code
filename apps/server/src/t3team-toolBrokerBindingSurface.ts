@@ -23,6 +23,7 @@ import type { T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkfl
 import type { T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
 import type { T3TeamWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowControlTool.ts";
 import type { T3TeamChangeRequestToolHandlers } from "./t3team-toolBrokerBindingChangeRequest.ts";
+import type { T3TeamRepositorySecretToolHandlers } from "./t3team-toolBrokerBindingRepositorySecret.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
 import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 
@@ -45,6 +46,7 @@ export type CreateBindingInput<TReadError = never, TBacklogAssigneeFilterError =
   readonly workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
   readonly workflowControlTools?: T3TeamWorkflowControlToolHandlers;
   readonly changeRequestTools?: T3TeamChangeRequestToolHandlers;
+  readonly repositorySecretTools?: T3TeamRepositorySecretToolHandlers;
   readonly showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   /** Search the full transcript of the thread this one was forked from. */
   readonly searchSourceThread?: (
@@ -104,6 +106,9 @@ export function createToolSurface<TReadError, TBacklogAssigneeFilterError>(
       ...(input.workflowResumeTools ? { workflowResumeTools: input.workflowResumeTools } : {}),
       ...(input.workflowControlTools ? { workflowControlTools: input.workflowControlTools } : {}),
       ...(input.changeRequestTools ? { changeRequestTools: input.changeRequestTools } : {}),
+      ...(input.repositorySecretTools
+        ? { repositorySecretTools: input.repositorySecretTools }
+        : {}),
       ...(input.showWidget ? { showWidget: input.showWidget } : {}),
       ...(input.searchSourceThread && input.threadId
         ? {

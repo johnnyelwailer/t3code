@@ -62,6 +62,7 @@ describe("t3teamToolCatalog", () => {
       "t3team.mywork.digest.read",
       "t3team.mywork.arrange",
       "t3team.change_request.publish",
+      "t3team.repository_secret.set",
     ]);
   });
 

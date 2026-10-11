@@ -22,6 +22,7 @@ import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts
 import { T3TeamToolBroker, type T3TeamToolBrokerShape } from "./t3team-toolBroker.ts";
 import { createT3TeamPrelaunchToolBinding } from "./t3team-toolBrokerBinding.ts";
 import { makeChangeRequestToolsForThread } from "./t3team-toolBrokerChangeRequestLive.ts";
+import { makeRepositorySecretToolsForThread } from "./t3team-toolBrokerRepositorySecretLive.ts";
 import { makeManageChildrenHandler } from "./t3team-toolBrokerChildrenLive.ts";
 import { makeBindSession } from "./t3team-toolBrokerLiveSession.ts";
 import { makeMyWorkToolHandlers } from "./t3team-toolBrokerMyWorkLive.ts";
@@ -120,6 +121,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     }),
     workflowTools,
     changeRequestToolsForThread: yield* makeChangeRequestToolsForThread(loadThreadProject),
+    repositorySecretToolsForThread: yield* makeRepositorySecretToolsForThread(loadThreadProject),
   });
 
   const bindReadOnly: T3TeamToolBrokerShape["bindReadOnly"] = ({
