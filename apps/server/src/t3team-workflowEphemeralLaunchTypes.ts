@@ -54,8 +54,10 @@ export interface PreparedWorkflowLaunchInput {
   readonly args: unknown;
   /** The launching recipe's private scripts (recipe launches only; Epic 25 §Scripts). */
   readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
-  /** Per-run bridge to the broker's work-item draft tools (t3team-workflowHostDraftTools.ts). */
+  /** Per-run bridge to the broker's host tools (t3team-workflowHostTools.ts). */
   readonly hostToolClient?: LaunchWorkflowRecipeInput["hostToolClient"];
+  /** The run's script host members; rebuilt from the run row on rehydration, never persisted. */
+  readonly scriptHost?: LaunchWorkflowRecipeInput["scriptHost"];
   /** The same grant in persistable form; recorded on the run row so boot rehydration restores
    * this bridge and its scope rather than inferring one (migration 047). */
   readonly hostToolGrant?: WorkflowRun["hostToolGrant"];
@@ -67,6 +69,10 @@ export interface PreparedWorkflowLaunchInput {
   /** Bounded host repair attempts; zero disables repair. */
   readonly repairMaxAttempts?: number;
   readonly workspaceRoot: string;
+  /** Where the run's `ctx.workspace` is rooted: the launch thread's checkout (its worktree when it
+   * has one). Absent means `workspaceRoot`. Distinct because `workspaceRoot` also anchors the runs
+   * scratch dir and ephemeral sources, which always live under the project root. */
+  readonly checkoutRoot?: string | undefined;
   readonly launchThreadId: string | undefined;
   readonly projectId: ProjectId;
   readonly modelSelection: ModelSelection;

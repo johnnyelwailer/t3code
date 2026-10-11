@@ -1,6 +1,8 @@
 /**
  * Wake bridge for a run parked on an event (GHE #332): drain the durable signal inbox the run's
- * awaited tuple has an open entry in, and resume the run with that payload.
+ * awaited tuple has an open entry in, and resume the run with that payload. A `waitForAny` park
+ * drains across every branch — the oldest open entry wins, whichever branch it is on — and
+ * resumes with that branch's `{ index, reply }` winner.
  *
  * Shared by every path that puts a run BACK into `watching` — boot rehydration (the boot-gap
  * bridge, t3team-workflowEngineRehydrate.ts) and the two explicit-resume entry points (the card's
@@ -25,6 +27,13 @@ import * as Result from "effect/Result";
 import type { WorkflowRun } from "./persistence/WorkflowRuns.ts";
 import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
+import {
+  isAnyWait,
+  parkedTuples,
+  replyForBranch,
+  takeFirstBranchEntry,
+  type SignalTuple,
+} from "./t3team-workflowSignalWatchMatch.ts";
 
 export interface SignalParkDrainResult {
   /** 1 when the run was woken by a bridged event, 0 otherwise (no open entry / no controller). */
@@ -35,6 +44,19 @@ export interface SignalParkDrainResult {
     | undefined;
 }
 
+/** Take the open entry a single park waits on, or the oldest across an any-wait's branches. */
+const takeParkEntry = (
+  signalStore: WorkflowSignalStoreShape,
+  run: WorkflowRun,
+  tuples: ReadonlyArray<SignalTuple>,
+  deliveredAt: string,
+) =>
+  isAnyWait(run)
+    ? takeFirstBranchEntry(signalStore, tuples, deliveredAt)
+    : signalStore
+        .takeOpenInboxEntry({ ...tuples[0]!, deliveredAt })
+        .pipe(Effect.map(Option.map((entry) => ({ index: 0, payload: entry.payload }))));
+
 /** Take the open inbox entry for the run's parked `(signal, key)` and resume the run with it. */
 export const drainSignalParkInbox = Effect.fn("drainSignalParkInbox")(function* (input: {
   readonly signalStore: WorkflowSignalStoreShape;
@@ -43,26 +65,13 @@ export const drainSignalParkInbox = Effect.fn("drainSignalParkInbox")(function* 
   readonly nowIso: () => string;
 }) {
   const { signalStore, registry, run, nowIso } = input;
-  if (
-    run.pendingCorrelationId == null ||
-    run.watchSourceName == null ||
-    run.watchParamsHash == null ||
-    run.watchSignalName == null ||
-    run.watchSignalKey == null
-  ) {
+  const tuples = parkedTuples(run);
+  if (run.pendingCorrelationId == null || tuples === undefined) {
     // Incomplete park (corrupt row): leave it to the next live event rather than pointing a
     // half-tuple at the inbox.
     return { drained: 0 } as const;
   }
-  const take = yield* signalStore
-    .takeOpenInboxEntry({
-      sourceName: run.watchSourceName,
-      paramsHash: run.watchParamsHash,
-      signalName: run.watchSignalName,
-      key: run.watchSignalKey,
-      deliveredAt: nowIso(),
-    })
-    .pipe(Effect.result);
+  const take = yield* takeParkEntry(signalStore, run, tuples, nowIso()).pipe(Effect.result);
   if (!Result.isSuccess(take)) {
     return {
       drained: 0,
@@ -76,8 +85,9 @@ export const drainSignalParkInbox = Effect.fn("drainSignalParkInbox")(function* 
   if (Option.isNone(pending)) return { drained: 0 } as const;
   const controller = registry.getRun(run.runId);
   if (controller === undefined) return { drained: 0 } as const;
+  const reply = replyForBranch(run, pending.value.index, pending.value.payload);
   const resumed = yield* Effect.promise(() =>
-    controller.resume(run.pendingCorrelationId!, pending.value.payload),
+    controller.resume(run.pendingCorrelationId!, reply),
   ).pipe(Effect.result);
   if (!Result.isSuccess(resumed)) {
     return {

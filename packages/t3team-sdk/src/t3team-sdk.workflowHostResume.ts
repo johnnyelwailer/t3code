@@ -60,6 +60,8 @@ export async function redriveWorkflowRunHost(
   }
 }
 
+/** Journal `reply` and replay. Resolves `true` iff THIS call wrote the reply line — the drive
+ * that follows may still fail the run, but the reply itself was consumed. */
 export async function resumeWorkflowRunHost(
   input: WorkflowReplayHostInput & {
     readonly correlationId: string;
@@ -74,7 +76,7 @@ export async function resumeWorkflowRunHost(
       | undefined;
     readonly onReplyJournaled: ((correlationId: string) => Promise<void> | void) | undefined;
   },
-): Promise<void> {
+): Promise<boolean> {
   const {
     runId,
     correlationId,
@@ -88,9 +90,9 @@ export async function resumeWorkflowRunHost(
     onReplyJournaled,
     settle,
   } = input;
+  let wrote = false;
   try {
-    if ((await lifecycle?.recordActive()) === false) return;
-    let wrote: boolean;
+    if ((await lifecycle?.recordActive()) === false) return false;
     try {
       wrote = await appendReply({ runId, correlationId, reply });
     } catch (firstError) {
@@ -107,7 +109,7 @@ export async function resumeWorkflowRunHost(
       // previous process died after journaling its reply.
       if (!(await retryResolvedReply?.(correlationId))) {
         await lifecycle?.orphanIfSleeping(correlationId);
-        return;
+        return false;
       }
     }
     await onReplyJournaled?.(correlationId);
@@ -115,4 +117,5 @@ export async function resumeWorkflowRunHost(
   } catch (error) {
     await failReplay(input, error);
   }
+  return wrote;
 }

@@ -35,7 +35,8 @@ import { FsJournalStore, type JournalStore } from "@runbook/core/journalStore";
  * at its journaled deadline rather than by an event. The signal-source pair (Epic 42):
  * `signal.register` journals a run's binding to a source instance (one-way — the engine's
  * reconciler derives the live source set from these); `signal.wait` parks the run on a
- * durable inbox slot the host fills when a source emits the awaited signal. */
+ * durable inbox slot the host fills when a source emits the awaited signal; `signal.waitAny` parks
+ * it on several such slots at once and settles with the `{ index, reply }` of the first to land. */
 export type HandleKind =
   | "thread.create"
   | "thread.turn"
@@ -44,7 +45,12 @@ export type HandleKind =
   | "wait.until"
   | "model.resolve"
   | "signal.register"
-  | "signal.wait";
+  | "signal.wait"
+  | "signal.waitAny"
+  | "thread.launch"
+  | "thread.launched"
+  | "run.facts"
+  | "config.resolve";
 
 /** What the host is handed for one fired side effect. `payload` carries the verb's data —
  * always a `threadId`, plus `prompt`/`question`/`text`/`name`/`model` per kind. */
@@ -171,6 +177,15 @@ export interface HostBrokerHandlers {
    * signal already has a durable inbox entry — that entry IS the primitive's journaled
    * reply, so a live drain suspends no one. */
   readonly "signal.wait"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
+  /** The same for several branches at once: a drained entry settles with its branch's index. */
+  readonly "signal.waitAny"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
+  /** Launch or find a top-level thread by key, act on one, or write the run's own facts. Each
+   * MUST settle the resolver itself: the host's answer IS the primitive's journaled reply. */
+  readonly "thread.launch"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
+  readonly "thread.launched"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
+  readonly "run.facts"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
+  /** Resolve the run's recipe config; settles the resolver with the journaled answer. */
+  readonly "config.resolve"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
 }
 
 /**
@@ -185,6 +200,17 @@ export function createHostBroker(handlers: HostBrokerHandlers): MessageBroker {
       // `signal.wait` may too (a durable inbox entry is the reply) — both get the resolver.
       if (envelope.kind === "model.resolve") return handlers["model.resolve"]?.(envelope, resolver);
       if (envelope.kind === "signal.wait") return handlers["signal.wait"]?.(envelope, resolver);
+      if (envelope.kind === "signal.waitAny") {
+        return handlers["signal.waitAny"]?.(envelope, resolver);
+      }
+      if (
+        envelope.kind === "thread.launch" ||
+        envelope.kind === "thread.launched" ||
+        envelope.kind === "run.facts" ||
+        envelope.kind === "config.resolve"
+      ) {
+        return handlers[envelope.kind]?.(envelope, resolver);
+      }
       await handlers[envelope.kind]?.(envelope);
     },
   };

@@ -54,10 +54,18 @@ export interface WorkflowHostLifecycle {
   readonly orphanIfSleeping: (correlationId: string) => Promise<void>;
 }
 
+/** What a {@link WorkflowRunHost.offer} decision journals: the parked correlation and its reply. */
+export interface WorkflowHostOfferTarget {
+  readonly correlationId: string;
+  readonly reply: unknown;
+}
+
 /** The per-run handle a host registry keeps so a parked run can be resumed
  * from whichever host surface the reply (or wake) arrives on. */
 export interface WorkflowHostRegisteredRun {
   readonly resume: (correlationId: string, reply: unknown) => Promise<void>;
+  /** Optional: see {@link WorkflowRunHost.offer}. */
+  readonly offer?: WorkflowRunHost["offer"];
   /** Optional: see {@link WorkflowRunHost.redrive}. */
   readonly redrive?: (opts?: WorkflowHostRedriveOptions) => Promise<void>;
   readonly cancel: () => void;
@@ -110,7 +118,8 @@ export interface WorkflowHostRedriveOptions {
  * another replay drive of the same run is still settling is DROPPED — it resolves immediately and
  * does nothing (no reply journaled, no replay, no re-fire). It is not queued, so the host must
  * serialize drives per run itself (the portal does, via its admission queue) and issue the next
- * one only after the previous call's promise settles.
+ * one only after the previous call's promise settles. `offer` is the one queued entry point: it
+ * waits out every in-flight drive, `start` included, instead of being dropped.
  */
 export interface WorkflowRunHost {
   readonly start: () => Promise<WorkflowLaunchStatus>;
@@ -123,6 +132,15 @@ export interface WorkflowRunHost {
    * to this call only — one left on the static `runOptions` is ignored by every drive. Dropped
    * while another drive is in flight (see the serialization note above). */
   readonly redrive: (opts?: WorkflowHostRedriveOptions) => Promise<void>;
+  /**
+   * Wake for a reply that can race other drives — several event sources feeding one parked run.
+   * Never dropped: it waits until no drive of this run is in flight, then asks `decide`, against
+   * the state that drive left behind, which parked correlation (if any) the reply now answers.
+   * Resolves `true` when it journaled the reply and drove the run; `false` when `decide` declined,
+   * the run is gone or cancelled, or the correlation was already settled. A `false` leaves the
+   * reply with the caller, who must not drop it.
+   */
+  readonly offer: (decide: () => Promise<WorkflowHostOfferTarget | undefined>) => Promise<boolean>;
   readonly fail: (error: unknown) => Promise<void>;
   readonly cancel: () => void;
   readonly isCancelled: () => boolean;

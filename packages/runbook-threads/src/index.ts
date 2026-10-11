@@ -18,5 +18,6 @@ export * from "./askRender.ts";
 export * from "./askVerb.ts";
 export * from "./modelCascade.ts";
 export * from "./broker.ts";
+export * from "./showView.ts";
 export * from "./primitives.ts";
 export * from "./titles.ts";

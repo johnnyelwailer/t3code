@@ -56,12 +56,16 @@ export const claimStandby = (input: {
         GIT_AUTHOR_NAME: machine.author.name,
         GIT_AUTHOR_EMAIL: machine.author.email,
       },
+      gheLogin: input.login,
       session: {
         workspace: input.workspace,
         repository: machine.repository.url,
         commit: machine.commit,
         devcontainer: machine.devcontainerPath,
         healthCheck: machine.healthCheck ?? "",
+        ...(machine.teamSecretNames.length > 0
+          ? { teamSecrets: machine.teamSecretNames.join(",") }
+          : {}),
       },
     });
     if (runId === null) return null;

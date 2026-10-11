@@ -16,6 +16,7 @@ import { readThreadBootstrapDispatchState } from "~/t3team/chat/t3team-threadBoo
 import { planThreadBootstrap } from "~/t3team/chat/t3team-threadBootstrapPlan";
 import { runThreadBootstrap } from "~/t3team/chat/t3team-runThreadBootstrap";
 import { createTicketThread } from "~/t3team/hooks/t3team-projectThreadFactories";
+import { embeddedKickoffInitialUserMessage } from "~/t3team/t3team-embeddedKickoffInitialUserMessage";
 import { buildThreadForProject } from "~/t3team/hooks/t3team-projectStoreUtils";
 import { buildT3TeamComposerKickoff } from "~/t3team/t3team-stagedComposerKickoff";
 import type { T3TeamStagedComposerAction } from "~/t3team/t3team-stagedComposerActionStore";
@@ -92,8 +93,7 @@ function backendSpy() {
 
 /** `ThreadChatView` + `useThreadBootstrap`, minus React: the same derivation and the same plan. */
 async function bootstrapMountedThread(thread: ProjectThread, backend: BackendApi) {
-  const initialUserMessage =
-    thread.kickoffPending && thread.kickoffMessage ? thread.kickoffMessage : undefined;
+  const initialUserMessage = embeddedKickoffInitialUserMessage(thread);
   const plan = planThreadBootstrap({
     currentState: readThreadBootstrapDispatchState(thread.id),
     threadId: thread.id,

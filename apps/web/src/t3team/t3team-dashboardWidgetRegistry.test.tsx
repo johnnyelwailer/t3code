@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { DashboardWidget, digestSectionWidgetId } from "./t3team-dashboardWidgetRegistry";
+import {
+  DashboardWidget,
+  dashboardWidgetResetKeys,
+  digestSectionWidgetId,
+} from "./t3team-dashboardWidgetRegistry";
 import type { DigestGraph, DigestSection } from "./t3team-projectMyWorkDigestPlan";
 
 const graph = {
@@ -42,5 +46,19 @@ describe("dashboard widget registry", () => {
         ...lane,
       }),
     ).toBeNull();
+  });
+});
+
+describe("dashboard widget reset keys", () => {
+  const keys = (extra: Partial<DigestSection>, placement: "main" | "side" = "main") =>
+    dashboardWidgetResetKeys("my-work.tickets", { section: section(extra), placement });
+
+  it("changes when the section's tickets or reviews change, so a refresh retries a failed widget", () => {
+    const base = keys({ items: [{ ticketId: "A-1" }] });
+    expect(keys({ items: [{ ticketId: "A-1" }] })).toEqual(base);
+    expect(keys({ items: [{ ticketId: "A-2" }] })).not.toEqual(base);
+    expect(keys({ kind: "reviews", reviewIds: ["r1"] })).not.toEqual(keys({ kind: "reviews" }));
+    expect(keys({ id: "other" })).not.toEqual(keys({}));
+    expect(keys({}, "side")).not.toEqual(keys({}));
   });
 });

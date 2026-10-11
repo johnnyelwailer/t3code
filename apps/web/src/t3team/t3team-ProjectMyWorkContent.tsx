@@ -4,6 +4,7 @@ import {
   ProjectDashboardKanban,
   type TicketHierarchy,
 } from "~/t3team/t3team-ProjectDashboardKanban";
+import type { KanbanZoomLevel } from "~/t3team/t3team-kanbanZoom";
 import { ProjectMyWorkHierarchyView } from "~/t3team/t3team-ProjectMyWorkHierarchyView";
 import { ProjectMyWorkSimpleViews } from "~/t3team/t3team-ProjectMyWorkSimpleViews";
 import { ProjectMyWorkLoadFailure } from "~/t3team/t3team-ProjectMyWorkLoadFailure";
@@ -46,6 +47,8 @@ export function ProjectMyWorkContent({
   tableSortDirection,
   kanbanColumns,
   parentChildGroups,
+  kanbanZoomLevel,
+  onKanbanZoomLevelChange,
   githubActivityByWorkItem,
   jiraLastCheckedAt,
   digestFilters,
@@ -69,6 +72,8 @@ export function ProjectMyWorkContent({
   tableSortDirection: ProjectMyWorkTableSortDirection;
   kanbanColumns: ProjectTicketKanbanColumns;
   parentChildGroups: TicketHierarchy;
+  kanbanZoomLevel?: KanbanZoomLevel;
+  onKanbanZoomLevelChange?: (level: KanbanZoomLevel) => void;
   githubActivityByWorkItem: ReadonlyMap<string, ReadonlyArray<GitHubWorkActivityItem>>;
   jiraLastCheckedAt?: number;
   digestFilters?: DigestFilterState | undefined;
@@ -140,6 +145,8 @@ export function ProjectMyWorkContent({
           parentChildGroups={parentChildGroups}
           {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
           projectId={project.id}
+          {...(kanbanZoomLevel !== undefined ? { kanbanZoomLevel } : {})}
+          {...(onKanbanZoomLevelChange ? { onKanbanZoomLevelChange } : {})}
           onOpenTicket={onOpenTicket}
           onTicketContextMenu={openTicketAgentContextMenu}
           renderTicketExtra={renderTicketExtra}

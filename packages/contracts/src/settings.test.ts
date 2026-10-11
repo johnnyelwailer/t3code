@@ -725,6 +725,17 @@ describe("ServerSettings thread settlement", () => {
   });
 });
 
+describe("ServerSettings usage-limit recovery", () => {
+  it("auto-resumes limited threads unless a stored value says otherwise", () => {
+    expect(decodeServerSettings({}).autoResumeLimitedThreads).toBe(true);
+    expect(DEFAULT_SERVER_SETTINGS.autoResumeLimitedThreads).toBe(true);
+    expect(decodeServerSettings({ autoResumeLimitedThreads: false }).autoResumeLimitedThreads).toBe(
+      false,
+    );
+    expect(decodeServerSettings({}).snoozeLimitedThreads).toBe(false);
+  });
+});
+
 describe("ClientSettings pull request merge methods", () => {
   it("defaults to no project overrides and accepts supported methods", () => {
     expect(decodeClientSettings({}).pullRequestMergeMethodOverrides).toEqual({});

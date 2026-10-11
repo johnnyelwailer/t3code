@@ -23,7 +23,7 @@ describe("presentCloudSession", () => {
   it("reads a user cancellation as 'Cancelled', not a provisioning failure", () => {
     const presentation = presentCloudSession(session({ phase: "cancelled" }));
     expect(presentation.title).toBe("Cancelled");
-    expect(presentation.detail).toBe("Stopped by you.");
+    expect(presentation.detail).toBe("by you");
     expect(presentation.actionLabel).toBe("Start another");
     expect(presentation.tone).toBe("idle");
   });
@@ -33,20 +33,19 @@ describe("presentCloudSession", () => {
       session({ phase: "stopped", elapsedSeconds: 99_999, durationSeconds: 4 * 3600 }),
     );
     // 4h of run time, not the session's 27h age.
-    expect(presentation.detail).toBe("Ran for 4h 0m.");
+    expect(presentation.detail).toBe("ran 4h 0m");
   });
 
   it("falls back to the session's age when no duration is reported", () => {
     const presentation = presentCloudSession(
       session({ phase: "stopped", elapsedSeconds: 154, durationSeconds: undefined }),
     );
-    expect(presentation.detail).toBe("Ran for 2m 34s.");
+    expect(presentation.detail).toBe("ran 2m 34s");
   });
 
   it("softens the 'starting' wording (no relay jargon)", () => {
     const presentation = presentCloudSession(session({ phase: "starting" }));
-    expect(presentation.title).toBe("Almost there");
-    expect(presentation.detail).toContain("Making it reachable");
+    expect(presentation.title).toBe("Connecting");
     expect(presentation.detail).not.toContain("relay");
   });
 
@@ -60,7 +59,7 @@ describe("presentCloudSession", () => {
     const presentation = presentCloudSession(
       session({ phase: "failed", failureReason: "The relay timed out." }),
     );
-    expect(presentation.title).toBe("Provisioning failed");
+    expect(presentation.title).toBe("Failed");
     expect(presentation.detail).toBe("The relay timed out.");
     // A fresh session, not a replay of the failed one — the label says so.
     expect(presentation.actionLabel).toBe("Start another");
@@ -81,21 +80,39 @@ describe("presentCloudSession for a project machine", () => {
 
   it("names each machine milestone instead of building the workspace", () => {
     expect(preparing({ projectMachine: true, machineStage: "building" })).toMatchObject({
-      title: "Building the project machine",
-      detail: "From its devcontainer · 1m 15s",
+      title: "Building machine",
+      detail: "1m 15s",
       tone: "working",
     });
     expect(preparing({ projectMachine: true, machineStage: "checking" }).title).toBe(
-      "Checking the project machine",
+      "Checking machine",
     );
     expect(preparing({ projectMachine: true, machineStage: "installing" }).title).toBe(
-      "Setting up Nexi in the machine",
+      "Installing Nexi",
     );
-    expect(preparing({ projectMachine: true }).title).toBe("Preparing the project machine");
+    expect(preparing({ projectMachine: true }).title).toBe("Starting machine");
   });
 
   it("keeps the plain session's words", () => {
-    expect(preparing({}).title).toBe("Building the workspace");
+    expect(preparing({}).title).toBe("Building workspace");
+  });
+
+  it("says a setup session is checking the project out for an agent to write the machine", () => {
+    expect(preparing({ machineSetup: true })).toMatchObject({
+      title: "Checking out project",
+    });
+    // Ready reads like any other session: no instruction rides on the row.
+    expect(
+      presentCloudSession(session({ phase: "ready", machineSetup: true, machineLabel: "ubuntu" }))
+        .detail,
+    ).toContain("ubuntu");
+  });
+
+  it("offers no plain session in place of an ended setup session", () => {
+    for (const phase of ["failed", "stopped", "cancelled"] as const) {
+      expect(presentCloudSession(session({ phase, machineSetup: true })).actionLabel).toBeNull();
+      expect(presentCloudSession(session({ phase })).actionLabel).toBe("Start another");
+    }
   });
 });
 

@@ -204,6 +204,44 @@ describe("resolveSubRunStatusLabel (GHE #40 panel/sidebar seam)", () => {
     expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: true })).toBe("Running");
   });
 
+  it("falls back to the child-status summary when no activity label flows", () => {
+    const thread = createThread({ status: "running", childStatus: "Ran the web test suite" });
+    expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: true })).toBe(
+      "Ran the web test suite",
+    );
+  });
+
+  it("prefers the activity label over the child-status summary (never stacked)", () => {
+    const thread = createThread({
+      status: "running",
+      activityLabel: "Editing the router",
+      childStatus: "Ran the web test suite",
+    });
+    expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: true })).toBe(
+      "Editing the router",
+    );
+  });
+
+  it("shows no child-status detail when activity labels are off", () => {
+    const thread = createThread({ status: "running", childStatus: "Ran the web test suite" });
+    expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: false })).toBe("Running");
+  });
+
+  it("keeps shell words and settled words over the child-status summary", () => {
+    const childStatus = "Ran the web test suite";
+    for (const [overrides, label] of [
+      [{ shellRunStatus: "starting" }, "Starting"],
+      [{ shellRunStatus: "queued" }, "Queued"],
+      [{ shellRunStatus: "waiting" }, "Waiting"],
+      [{ status: "idle" }, "Idle"],
+      [{ status: "completed" }, "Completed"],
+      [{ status: "error" }, "Failed"],
+    ] as const) {
+      const thread = createThread({ ...overrides, childStatus });
+      expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: true })).toBe(label);
+    }
+  });
+
   it("never shows a live word for settled states — the stable label stands", () => {
     for (const [status, label] of [
       ["idle", "Idle"],

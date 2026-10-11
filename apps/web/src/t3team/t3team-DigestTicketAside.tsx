@@ -1,14 +1,17 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { ExternalLink, Maximize2, MessageSquarePlus, XIcon } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { useAgentContext } from "~/t3team/hooks/t3team-useAgentContext";
 import { useWorkItemDetailViewModel } from "~/t3team/hooks/t3team-useWorkItemDetailViewModel";
+import {
+  digestAsideChatThreadId,
+  useDigestChatThreadStore,
+} from "~/t3team/t3team-digestChatThread";
 import { useDigestTicketChatActions } from "~/t3team/t3team-digestTicketChatContext";
 import { DigestTicketAsideChat } from "~/t3team/t3team-DigestTicketAsideChat";
 import { ToggleGroup } from "~/t3team/t3team-ToggleGroup";
-import { latestLiveTicketThreadId } from "~/t3team/t3team-ticketLookup";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { buildWorkItemDetailMainProps } from "~/t3team/workitem/t3team-buildWorkItemDetailMainProps";
 import { WorkItemBreadcrumb } from "~/t3team/workitem/t3team-WorkItemBreadcrumb";
@@ -40,14 +43,27 @@ export function DigestTicketAside({
   const chatActions = useDigestTicketChatActions();
   // Details first; Chat is the ticket page's own agent panel, with this ticket as its context.
   const [tab, setTab] = useState<"details" | "chat">("details");
-  // The ticket's live thread is its chat here, as on the ticket page: the Chat tab shows it, and the
-  // view model attaches the ticket's context to it. A thread started from the tab becomes it.
+  const pinnedThreadId = useDigestChatThreadStore((state) =>
+    state.projectId === project.id && state.ticketId === ticket.ticketId ? state.threadId : null,
+  );
+  // The ticket's live thread is its chat here, as on the ticket page. A kickoff from this aside
+  // pins the thread it just created so the Chat tab shows that one.
   const liveThreadId = useMemo(
-    () => latestLiveTicketThreadId(projectThreads, ticket.ticketId),
-    [projectThreads, ticket.ticketId],
+    () =>
+      digestAsideChatThreadId({
+        threads: projectThreads,
+        ticketId: ticket.ticketId,
+        pinnedThreadId,
+      }),
+    [pinnedThreadId, projectThreads, ticket.ticketId],
   );
   // "New chat" steps away from the live thread: the composer shows until a newer thread exists.
   const [setAsideThreadId, setSetAsideThreadId] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!pinnedThreadId) return;
+    setTab("chat");
+    setSetAsideThreadId(undefined);
+  }, [pinnedThreadId]);
   const ticketThreadId = liveThreadId === setAsideThreadId ? undefined : liveThreadId;
   const view = useWorkItemDetailViewModel({
     project,

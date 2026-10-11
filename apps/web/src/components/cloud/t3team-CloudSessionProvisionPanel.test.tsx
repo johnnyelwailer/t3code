@@ -104,13 +104,13 @@ describe("CloudSessionProvisionPanel", () => {
     );
 
     // Active: the live row and its action are shown.
-    expect(node.textContent).toContain("Building the workspace");
+    expect(node.textContent).toContain("Building workspace");
     expect(node.textContent).toContain("Cancel");
 
     // Finished: parked in history, counted, and not shown while collapsed.
     expect(node.textContent).toContain("History · 2");
     expect(node.textContent).not.toContain("Stopped");
-    expect(node.textContent).not.toContain("Provisioning failed");
+    expect(node.textContent).not.toContain("Failed");
     expect(onCreate).not.toHaveBeenCalled();
   });
 
@@ -147,8 +147,8 @@ describe("CloudSessionProvisionPanel", () => {
 
     expandHistory(node);
 
-    expect(node.textContent).toContain("Provisioning failed");
-    expect(node.textContent).toContain("Ran for 4h 0m");
+    expect(node.textContent).toContain("Failed");
+    expect(node.textContent).toContain("ran 4h 0m");
     // History rows have nothing to act on — no per-row buttons in the panel.
     const labels = Array.from(node.querySelectorAll("button")).map((button) => button.textContent);
     expect(labels.filter((label) => label === "Retry" || label === "Start another")).toEqual([]);
@@ -174,10 +174,10 @@ describe("CloudSessionProvisionPanel", () => {
 
     // Newest first in the server's list order: the five shown are h1..h5.
     for (let index = 1; index <= 5; index += 1) {
-      expect(node.textContent).toContain(`Ran for ${index}h 0m`);
+      expect(node.textContent).toContain(`ran ${index}h 0m`);
     }
-    expect(node.textContent).not.toContain("Ran for 6h 0m");
-    expect(node.textContent).not.toContain("Ran for 7h 0m");
+    expect(node.textContent).not.toContain("ran 6h 0m");
+    expect(node.textContent).not.toContain("ran 7h 0m");
     expect(node.textContent).toContain("2 older sessions hidden");
   });
 
@@ -265,7 +265,7 @@ describe("CloudSessionProvisionPanel", () => {
     );
     expandHistory(node);
 
-    expect(node.textContent).toContain("Failed at “Start t3 serve”.");
+    expect(node.textContent).toContain("at “Start t3 serve”.");
     const details = Array.from(node.querySelectorAll("a")).find(
       (anchor) => anchor.textContent === "Details",
     );
@@ -318,11 +318,11 @@ describe("CloudSessionProvisionPanel", () => {
         />,
       );
 
-      expect(node.textContent).toContain("Installing dependencies and building · 2m 35s");
+      expect(node.textContent).toContain("Building workspace · 2m 35s");
       act(() => {
         vi.advanceTimersByTime(3_000);
       });
-      expect(node.textContent).toContain("Installing dependencies and building · 2m 38s");
+      expect(node.textContent).toContain("Building workspace · 2m 38s");
     } finally {
       vi.useRealTimers();
     }

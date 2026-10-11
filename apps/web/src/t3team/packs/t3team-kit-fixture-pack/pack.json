@@ -1,0 +1,11 @@
+{
+  "id": "kitfixture",
+  "version": "1.0.0",
+  "packApiVersion": 1,
+  "name": "pack-ui kit fixture",
+  "description": "Renders every pack-ui primitive through @t3team/pack-ui, as a pack sees them. Storybook's pack-story glob picks up its stories.",
+  "compatibility": { "t3teamCore": "0.x", "hostCapabilities": ["pack-ui:1"] },
+  "contents": { "views": [{ "id": "web", "path": "web/t3team-kitFixtureWeb.ts" }] },
+  "capabilities": ["view:v1"],
+  "hashes": {}
+}

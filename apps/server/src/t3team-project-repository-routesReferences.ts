@@ -1,6 +1,7 @@
 /**
  * The reference-repository step of the project workspace bootstrap (split out of
- * `t3team-project-repository-routes.ts`): syncs linked clones, reports main-repository
+ * `t3team-project-repository-routes.ts`): queues background syncs of linked clones (it never
+ * waits on git), reports main-repository
  * candidates, and rewrites the reference manifest without dropping earlier entries.
  *
  * @module t3team-project-repository-routesReferences
@@ -15,14 +16,16 @@ import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import { writeReferenceManifest } from "./t3team-project-repository-services.ts";
 import {
   mergeLinkedRepositoryEntries,
+  planLinkedRepositoriesForBootstrap,
   readPreservedReferenceManifest,
-  syncLinkedRepositoriesForBootstrap,
 } from "./t3team-project-repository-routesBootstrap.ts";
+import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
   normalizeRepositoryUrls,
   REFERENCES_DIR_NAME,
+  withSyncState,
   type BootstrapWorkspaceResponse,
   type MainRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
@@ -35,6 +38,8 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
     readonly workspaceRepositoryInitialized: boolean;
     readonly detectedMainRepository: MainRepositoryBootstrapResult | undefined;
     readonly linkedRepositoryUrls: ReadonlyArray<string> | undefined;
+    /** An explicit save: refetch every linked repository, ignoring the refetch throttle. */
+    readonly refreshLinkedRepositories?: boolean;
   }) {
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -44,59 +49,81 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
       .makeDirectory(referencesRoot, { recursive: true })
       .pipe(Effect.mapError(toAtlassianError("Failed to create repository references directory.")));
 
-    // Earlier entries survive re-bootstraps; their clones are reused, including clones recorded
-    // under the previous workspace before a main-repository switch.
-    const preserved = yield* readPreservedReferenceManifest(
-      path.join(referencesRoot, MANIFEST_FILE_NAME),
-    );
-    // A switch records how this checkout became the main repository; keep that selection.
-    const mainRepository: MainRepositoryBootstrapResult | undefined =
-      detectedMainRepository && preserved.mainRepository?.localPath === workspaceRoot
-        ? { ...detectedMainRepository, status: preserved.mainRepository.status }
-        : detectedMainRepository;
+    const sync = yield* T3TeamLinkedRepositorySync;
+    const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
+    // Under the manifest lock: a background sync settling meanwhile records its outcome after this
+    // write, never under it.
+    return yield* sync.withManifestLock(
+      Effect.gen(function* () {
+        // Earlier entries survive re-bootstraps; their clones are reused, including clones
+        // recorded under the previous workspace before a main-repository switch.
+        const preserved = yield* readPreservedReferenceManifest(
+          path.join(referencesRoot, MANIFEST_FILE_NAME),
+        );
+        // A switch records how this checkout became the main repository; keep that selection.
+        const mainRepository: MainRepositoryBootstrapResult | undefined =
+          detectedMainRepository && preserved.mainRepository?.localPath === workspaceRoot
+            ? { ...detectedMainRepository, status: preserved.mainRepository.status }
+            : detectedMainRepository;
 
-    // A linked URL matching the main repository's own remote is the main repository itself, not
-    // a reference clone — skip wrapping it (GHE #42 item 2).
-    const mainRepositoryLookupCandidates = mainRepository?.url
-      ? [...repositoryLookupCandidates(mainRepository.url)]
-      : undefined;
-    const linkedRepositoryUrls = normalizeRepositoryUrls(input.linkedRepositoryUrls).filter(
-      (url) =>
-        !mainRepositoryLookupCandidates?.some((candidate) =>
-          repositoryLookupCandidates(url).includes(candidate),
-        ),
-    );
-    const linkedRepositories = yield* syncLinkedRepositoriesForBootstrap({
-      workspaceRoot,
-      referencesRoot,
-      urls: linkedRepositoryUrls,
-      preserved: preserved.linkedRepositories,
-    });
-    const manifestLinkedRepositories = mergeLinkedRepositoryEntries(
-      preserved.linkedRepositories,
-      linkedRepositories,
-    );
-    const mainRepositoryCandidates =
-      !mainRepository && isMainRepositoryEnabled()
-        ? yield* detectMainRepositoryCandidates(manifestLinkedRepositories)
-        : [];
+        // A linked URL matching the main repository's own remote is the main repository itself,
+        // not a reference clone — skip wrapping it (GHE #42 item 2).
+        const mainRepositoryLookupCandidates = mainRepository?.url
+          ? [...repositoryLookupCandidates(mainRepository.url)]
+          : undefined;
+        const linkedRepositoryUrls = normalizeRepositoryUrls(input.linkedRepositoryUrls).filter(
+          (url) =>
+            !mainRepositoryLookupCandidates?.some((candidate) =>
+              repositoryLookupCandidates(url).includes(candidate),
+            ),
+        );
+        // No git here: clones and fetches are queued and run in the background.
+        const planned = yield* planLinkedRepositoriesForBootstrap({
+          referencesRoot,
+          urls: linkedRepositoryUrls,
+          preserved: preserved.linkedRepositories,
+          refresh: input.refreshLinkedRepositories === true,
+          phaseOf: sync.phase,
+          nowMs,
+        });
+        const manifestLinkedRepositories = mergeLinkedRepositoryEntries(
+          preserved.linkedRepositories,
+          planned.map((item) => item.entry),
+        );
+        const mainRepositoryCandidates =
+          !mainRepository && isMainRepositoryEnabled()
+            ? yield* detectMainRepositoryCandidates(manifestLinkedRepositories)
+            : [];
 
-    const response: BootstrapWorkspaceResponse = {
-      workspaceRoot,
-      workspaceRepositoryInitialized: input.workspaceRepositoryInitialized,
-      referencesRoot,
-      linkedRepositories,
-      ...(mainRepository ? { mainRepository } : {}),
-      ...(mainRepositoryCandidates.length > 0 ? { mainRepositoryCandidates } : {}),
-    };
-    yield* writeReferenceManifest(referencesRoot, {
-      workspaceRoot,
-      workspaceRepositoryInitialized: input.workspaceRepositoryInitialized,
-      referencesRoot,
-      linkedRepositories: manifestLinkedRepositories,
-      ...(mainRepository ? { mainRepository } : {}),
-      updatedAt: DateTime.formatIso(yield* DateTime.now),
-    });
-    return response;
+        yield* writeReferenceManifest(referencesRoot, {
+          workspaceRoot,
+          workspaceRepositoryInitialized: input.workspaceRepositoryInitialized,
+          referencesRoot,
+          linkedRepositories: manifestLinkedRepositories,
+          ...(mainRepository ? { mainRepository } : {}),
+          updatedAt: DateTime.formatIso(yield* DateTime.now),
+        });
+        for (const item of planned) {
+          if (!item.request) continue;
+          yield* sync.request({
+            referencesRoot,
+            url: item.entry.url,
+            localPath: item.entry.localPath,
+          });
+        }
+
+        const response: BootstrapWorkspaceResponse = {
+          workspaceRoot,
+          workspaceRepositoryInitialized: input.workspaceRepositoryInitialized,
+          referencesRoot,
+          linkedRepositories: planned.map((item) =>
+            withSyncState(item.entry, sync.phase(item.entry.localPath)),
+          ),
+          ...(mainRepository ? { mainRepository } : {}),
+          ...(mainRepositoryCandidates.length > 0 ? { mainRepositoryCandidates } : {}),
+        };
+        return response;
+      }),
+    );
   },
 );

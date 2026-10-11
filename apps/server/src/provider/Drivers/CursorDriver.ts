@@ -215,9 +215,11 @@ export const CursorDriver: ProviderDriver<CursorSettings, CursorDriverEnv> = {
               snapshot.auth.status === "authenticated"
                 ? serverSettings.getSettings.pipe(
                     Effect.flatMap((settings) =>
+                      // Fork fix for upstream pingdotgg/t3code#15906; take upstream's version on sync.
+                      // A browser sign-in key must not hide the CLI login, so pass only a configured key.
                       readCursorUsageLimits(
                         effectiveConfig,
-                        { ...processEnv, CURSOR_API_KEY: apiKey },
+                        processEnv,
                         settings.cursorKeychainUsageEnabled,
                       ),
                     ),

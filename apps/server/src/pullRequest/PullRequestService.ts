@@ -92,6 +92,10 @@ import {
   type PullRequestProviderApi,
   PullRequestProviderError,
 } from "./PullRequestProvider.ts";
+import type {
+  PullRequestFileAtRevisionInput,
+  PullRequestFileAtRevisionResult,
+} from "./t3team-fileAtRevision.ts";
 import * as PullRequestReadCache from "./PullRequestReadCache.ts";
 import * as PullRequestProviderRegistry from "./PullRequestProviderRegistry.ts";
 import { readProjectLinkedRepositories } from "./t3team-LinkedRepositories.ts";
@@ -251,6 +255,18 @@ export class PullRequestService extends Context.Service<
     readonly subscribeRefreshes: Stream.Stream<number>;
     readonly refreshAfterTurn: (projectId: ProjectId) => Effect.Effect<void>;
     readonly detail: (input: PullRequestRef) => Effect.Effect<PullRequestDetail, PullRequestError>;
+    /**
+     * t3team: the repositories a project's change requests can be read from — its own remote and
+     * its linked repositories, on hosts this build can read — resolved exactly as a listing does.
+     */
+    readonly projectRepositories: (projectId: ProjectId) => Effect.Effect<
+      ReadonlyArray<{
+        readonly host: string;
+        readonly repository: string;
+        readonly provider: SourceControlProviderKind;
+      }>,
+      PullRequestError
+    >;
     readonly preview: (
       input: PullRequestRef,
     ) => Effect.Effect<PullRequestPreview, PullRequestError>;
@@ -276,6 +292,13 @@ export class PullRequestService extends Context.Service<
     readonly diffFileContents: (
       input: PullRequestDiffFileContentsInput,
     ) => Effect.Effect<PullRequestDiffFileContentsResult, PullRequestError>;
+    /**
+     * t3team: one file of one of the project's repositories at one commit sha. `unsupported` is a
+     * host that cannot read a file at a revision, as opposed to a file that is not there.
+     */
+    readonly fileAtRevision: (
+      input: PullRequestFileAtRevisionInput,
+    ) => Effect.Effect<PullRequestFileAtRevisionResult, PullRequestError>;
     readonly filesViewed: (
       input: PullRequestRef,
     ) => Effect.Effect<PullRequestFilesViewedResult, PullRequestError>;
@@ -646,6 +669,9 @@ function withRateLimitBackoff(
     ...(api.getDiffFileContents === undefined
       ? {}
       : { getDiffFileContents: wrap("getDiffFileContents", api.getDiffFileContents) }),
+    ...(api.readFileAtRevision === undefined
+      ? {}
+      : { readFileAtRevision: wrap("readFileAtRevision", api.readFileAtRevision) }),
     ...(api.getFilesViewed === undefined
       ? {}
       : { getFilesViewed: wrap("getFilesViewed", api.getFilesViewed) }),
@@ -967,7 +993,9 @@ export const make = Effect.gen(function* () {
    * targeting can fall back to another checkout on the host. Azure derives its organization
    * from the checkout, so it requires a matching repository.
    */
-  const requireProject = (ref: PullRequestRef): Effect.Effect<SupportedProject, PullRequestError> =>
+  const requireProject = (
+    ref: Pick<PullRequestRef, "projectId" | "repository" | "host">,
+  ): Effect.Effect<SupportedProject, PullRequestError> =>
     listWorkspaceProjects({ projectId: ref.projectId }).pipe(
       Effect.flatMap(({ supported }): Effect.Effect<SupportedProject, PullRequestError> => {
         const own = supported[0];
@@ -1849,6 +1877,13 @@ export const make = Effect.gen(function* () {
               ? {}
               : { headRepositoryNameWithOwner: changeRequest.headRepositoryNameWithOwner }),
             ...(changeRequest.headSha ? { headSha: changeRequest.headSha } : {}),
+            ...(changeRequest.baseSha ? { baseSha: changeRequest.baseSha } : {}),
+            ...(changeRequest.isCrossRepository === undefined
+              ? {}
+              : { isCrossRepository: changeRequest.isCrossRepository }),
+            ...(changeRequest.authorAssociation
+              ? { authorAssociation: changeRequest.authorAssociation }
+              : {}),
             baseBranch: changeRequest.baseBranch,
             createdAt: changeRequest.createdAt,
             updatedAt: changeRequest.updatedAt,
@@ -2008,6 +2043,28 @@ export const make = Effect.gen(function* () {
                 operation: "diffFileContents",
                 detail: "This host cannot expand unchanged pull request lines.",
               }),
+            );
+      }),
+    );
+
+  const fileAtRevision: PullRequestService["Service"]["fileAtRevision"] = (input) =>
+    requireProject(input).pipe(
+      Effect.flatMap((project) => {
+        const read = project.api.readFileAtRevision;
+        return read === undefined
+          ? Effect.succeed<PullRequestFileAtRevisionResult>({ kind: "unsupported" })
+          : read({
+              cwd: project.project.workspaceRoot,
+              repository: project.repository,
+              host: project.host,
+              revision: input.revision,
+              path: input.path,
+              maxBytes: input.maxBytes,
+            }).pipe(
+              Effect.mapError(toPullRequestError("readFileAtRevision")),
+              Effect.map((file): PullRequestFileAtRevisionResult =>
+                file === null ? { kind: "missing" } : { kind: "file", file },
+              ),
             );
       }),
     );
@@ -3529,6 +3586,12 @@ export const make = Effect.gen(function* () {
     ),
     refreshAfterTurn,
     detail: credentialCached(detail),
+    projectRepositories: (projectId) =>
+      listWorkspaceProjects({ projectId }).pipe(
+        Effect.map(({ supported }) =>
+          supported.map(({ host, repository, api }) => ({ host, repository, provider: api.kind })),
+        ),
+      ),
     checks: credentialCached((input) => Cache.get(checksCache, refCacheKey(input))),
     watchFingerprint: credentialCached((input) =>
       Cache.get(watchFingerprintCache, refCacheKey(input)),
@@ -3538,6 +3601,7 @@ export const make = Effect.gen(function* () {
     threadComments,
     diff: credentialCached(diff),
     diffFileContents,
+    fileAtRevision,
     filesViewed: credentialCached(filesViewed),
     setFilesViewed,
     runAction: runActionAndInvalidate,

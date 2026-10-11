@@ -31,5 +31,6 @@ export async function createWorkflowChild(
     interactionMode: deps.interactionMode,
     retention: payload.retention ?? "ephemeral",
     ...(deps.launchThreadId === undefined ? {} : { parentThreadId: deps.launchThreadId }),
+    ...(payload.checkout === "launch-thread" ? { inheritCheckout: true } : {}),
   });
 }

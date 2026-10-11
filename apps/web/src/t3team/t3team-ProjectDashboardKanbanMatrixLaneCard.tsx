@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from "react";
 
 import { ProjectDashboardKanbanDraggableCard } from "~/t3team/t3team-ProjectDashboardKanbanDndUi";
 import { TicketWorkItemCard } from "~/t3team/t3team-ProjectDashboardItemViews";
+import type { KanbanZoomVisual } from "~/t3team/t3team-kanbanZoom";
 import type { ProjectDashboardKanbanOptimisticMove } from "~/t3team/t3team-projectDashboardKanbanDnd";
 import {
   getProjectDashboardKanbanMatrixRowSpanForHeight,
@@ -18,6 +19,7 @@ export function ProjectDashboardKanbanMatrixLaneCard({
   rowHeightPx,
   rowGapPx,
   onMeasuredRowSpan,
+  zoomVisual,
   jiraLastCheckedAt,
   onOpenTicket,
   onTicketContextMenu,
@@ -33,6 +35,7 @@ export function ProjectDashboardKanbanMatrixLaneCard({
   rowHeightPx: number;
   rowGapPx: number;
   onMeasuredRowSpan?: (ticketId: string, rowSpan: number) => void;
+  zoomVisual: KanbanZoomVisual;
   jiraLastCheckedAt?: number;
   onOpenTicket: (projectId: string, ticketId: string) => void;
   onTicketContextMenu: (event: React.MouseEvent, ticket: ProjectTicket) => void;
@@ -63,13 +66,27 @@ export function ProjectDashboardKanbanMatrixLaneCard({
     return () => observer.disconnect();
   }, [onMeasuredRowSpan, placement.placementKey, rowGapPx, rowHeightPx]);
 
+  const inset = zoomVisual.matrixCardInsetPx;
+  // Keep cards inside the shell curve: group headers get a touch more top room; children nest in.
+  const padStyle = groupParent
+    ? { paddingLeft: inset, paddingRight: inset, paddingTop: Math.max(6, inset - 2) }
+    : inlineChild
+      ? {
+          paddingLeft: inset + 4,
+          paddingRight: inset,
+          paddingTop: 2,
+          marginTop: -2,
+        }
+      : { paddingLeft: inset, paddingRight: inset, paddingTop: 2 };
+
   return (
     <div
       data-ticket-id={ticket.id}
-      className={`relative z-20 min-h-0 self-start ${groupParent ? "px-2" : inlineChild ? "-mt-1 pl-1.5 pr-2.5" : "px-2"}`}
+      className="relative z-20 min-h-0 self-start"
       style={{
         gridColumn: `${placement.columnIndex + 1} / span ${placement.columnSpan}`,
         gridRow: `${placement.rowStart} / span ${placement.rowSpan}`,
+        ...padStyle,
       }}
     >
       <div ref={contentRef} className="w-full">
@@ -82,6 +99,7 @@ export function ProjectDashboardKanbanMatrixLaneCard({
             ticket={ticket}
             compact
             flat
+            zoomVisual={zoomVisual}
             {...(groupParent ? { groupParent: true } : {})}
             {...(inlineParent ? { inlineParent: true } : {})}
             {...(inlineChild ? { inlineChild: true } : {})}

@@ -69,7 +69,7 @@ export function T3TeamSidecarSectionInstance({
   readonly pinItem: (sectionId: string, itemId: string) => void;
   readonly unpinItem: (sectionId: string, itemId: string) => void;
 }) {
-  const SectionComponent = getT3TeamSidecarSectionComponent(definition.component);
+  const SectionComponent = getT3TeamSidecarSectionComponent(definition.id);
   const collapsed = sectionState.collapsed === true;
   const fallback = (
     <p className="rounded-md border border-dashed border-border/60 bg-background/40 px-3 py-2 text-xs text-muted-foreground/70">

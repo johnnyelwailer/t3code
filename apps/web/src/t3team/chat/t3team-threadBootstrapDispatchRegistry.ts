@@ -62,8 +62,13 @@ export function readThreadBootstrapDispatchState(threadId: string): ThreadBootst
  * conversation appear and no run ever start.
  */
 export function resetThreadBootstrapDispatchState(threadId: string): void {
+  const kickoffFailed = dispatchStatesByThreadId.get(threadId)?.kickoffFailed === true;
   dispatchStatesByThreadId.delete(threadId);
   releaseRecipeWorkflowLaunchClaim(threadId);
+  if (kickoffFailed) {
+    // The failed kickoff may have left a server shell, which otherwise plans `none` forever.
+    readThreadBootstrapDispatchState(threadId).kickoffRetry = true;
+  }
 }
 
 /** Test-only: clears every claim so cases cannot leak state into each other. */

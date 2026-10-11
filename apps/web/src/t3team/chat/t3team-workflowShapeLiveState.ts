@@ -116,8 +116,10 @@ export function useT3TeamWorkflowShapeLiveState(input: {
         : status === "failed"
           ? "Failed"
           : liveRunLabel(progress.steps);
-  // Authoring is "not started yet" for every control the card offers, exactly like queued.
-  const queued = status === "queued" || status === "authoring";
+  // Authoring is "not started yet" for every CONTROL the card offers, exactly like queued — but
+  // only `queued` is actually capacity-parked, so the two diverge for user-facing copy (the card
+  // decides that from `status` directly). This flag stays control-only: never a copy signal.
+  const notStarted = status === "queued" || status === "authoring";
   const canPause = status === "suspended" || status === "sleeping";
   // A failed run is resumable too (GHE #344 journal re-drive): the server is the source of
   // truth on whether a given run can actually replay, and answers a non-resumable one with a
@@ -147,13 +149,12 @@ export function useT3TeamWorkflowShapeLiveState(input: {
     status,
     repair,
     liveLabel,
-    queued,
     canPause,
     canResume,
     isRetry,
     // Not `canResume`: a failed run is retryable but has no live controller to stop until that
     // retry starts, at which point `status` is the optimistic "running" already covered here.
-    canStop: queued || status === "running" || canPause || status === "paused",
+    canStop: notStarted || status === "running" || canPause || status === "paused",
     control,
     controlPending,
     controlError,

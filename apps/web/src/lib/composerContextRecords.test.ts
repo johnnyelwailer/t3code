@@ -36,6 +36,9 @@ import {
   terminalContextReference,
   terminalContextDraftFromRecord,
   uploadedAttachmentContextRecord,
+  workItemContextChipKind,
+  workItemContextReference,
+  workItemContextRecord,
 } from "./composerContextRecords";
 
 const decodeMessageContext = Schema.decodeUnknownSync(OrchestrationMessageContext);
@@ -589,6 +592,41 @@ describe("composerContextRecords", () => {
     expect(
       buildMessageContext({ terminalContexts: [], reviewComments: [], previewAnnotations: [] }),
     ).toBeUndefined();
+  });
+
+  it("builds work-item records and references keyed by the issue key", () => {
+    const draft = {
+      key: "NXAI-8",
+      jiraProjectKey: "NXAI",
+      title: "Composer work-item references",
+      status: "In Progress",
+      url: "https://example.atlassian.net/browse/NXAI-8",
+      capturedAt: "2026-10-10T09:00:00.000Z",
+    };
+    const record = workItemContextRecord(draft);
+    expect(record).toMatchObject({
+      kind: "work-item",
+      contextId: "work-item_NXAI-8",
+      label: "NXAI-8",
+      key: "NXAI-8",
+    });
+    expect(workItemContextReference(draft)).toEqual({
+      kind: "work-item",
+      contextId: "work-item_NXAI-8",
+      label: "NXAI-8",
+    });
+    const context = buildMessageContext({
+      terminalContexts: [],
+      reviewComments: [],
+      previewAnnotations: [],
+      workItems: [draft],
+    });
+    expect(context?.records.map((item) => item.contextId)).toEqual(["work-item_NXAI-8"]);
+    expect([
+      workItemContextChipKind("Done"),
+      workItemContextChipKind("In Progress"),
+      workItemContextChipKind("To Do"),
+    ]).toEqual(["work-item-done", "work-item-progress", "work-item"]);
   });
 
   it("resolves structured context directly and upgrades legacy text otherwise", () => {

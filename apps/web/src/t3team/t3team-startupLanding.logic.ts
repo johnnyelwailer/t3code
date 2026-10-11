@@ -41,7 +41,10 @@ export function decideStartupLanding(input: {
 export function deriveStartupMyWorkProbe(input: {
   /** `null` while the stored/live project lists are still loading. */
   readonly boundProjects: ReadonlyArray<unknown> | null;
-  readonly digest: Pick<UseMyWorkDigestGraphResult, "graph" | "status" | "sessionExpired">;
+  readonly digest: Pick<
+    UseMyWorkDigestGraphResult,
+    "graph" | "status" | "sessionExpired" | "freshness"
+  >;
   readonly lens: ProjectMyWorkLens;
   readonly nowMs: number;
 }): StartupMyWorkProbe {
@@ -54,19 +57,25 @@ export function deriveStartupMyWorkProbe(input: {
   });
   if (boundProjects.length === 0 || digest.sessionExpired) return settled(0);
   if (digest.graph !== null) {
-    return settled(
+    const itemCount =
       input.lens === "digest"
         ? buildDigestPlan(digest.graph, input.nowMs).sections.length
-        : digest.graph.tickets.length,
-    );
+        : digest.graph.tickets.length;
+    // A cached graph WITH items opens My Work at once — it paints from that same cache, and a
+    // fresh round cannot make the answer worse than "the landing". A cached graph with NOTHING in
+    // it is last session's answer: wait for the server rather than send the user to the landing
+    // on it, and fall back at the deadline like any other slow round.
+    if (digest.freshness === "fresh" || itemCount > 0) return settled(itemCount);
+    return { status: "pending" };
   }
   // A failing fetch renders a retry/error state, never items: do not wait it out.
   return digest.status === "loading" ? { status: "pending" } : settled(0);
 }
 
 /**
- * True when the document was loaded on the index route — the cold start. Browser history routes
- * on the pathname; the desktop shell uses hash history, so its route lives in the hash.
+ * True when the document was loaded on the index route — the cold start. `/` is bridged to the
+ * Team home `/t3team`, so a reload there is a cold start too. Browser history routes on the
+ * pathname; the desktop shell uses hash history, so its route lives in the hash.
  */
 export function isIndexBootUrl(url: string, hashRouting: boolean): boolean {
   let parsed: URL;
@@ -76,7 +85,7 @@ export function isIndexBootUrl(url: string, hashRouting: boolean): boolean {
     return false;
   }
   const path = hashRouting ? parsed.hash.replace(/^#/, "").split("?")[0] : parsed.pathname;
-  return path === "" || path === "/";
+  return path === "" || path === "/" || path === "/t3team" || path === "/t3team/";
 }
 
 /** The URL this document was loaded from, independent of any client-side navigation since. */
@@ -102,7 +111,22 @@ export function markStartupLandingDecided(): void {
   startupLandingDecided = true;
 }
 
+/**
+ * The gate itself also runs once: the home can unmount and remount within one shell mount (pick a
+ * project, then clear it), and that later home must not probe again.
+ */
+let startupGateClaimed = false;
+
+export function isStartupGateUnclaimed(): boolean {
+  return !startupGateClaimed;
+}
+
+export function claimStartupGate(): void {
+  startupGateClaimed = true;
+}
+
 /** Test-only: start a fresh app session. */
 export function resetStartupLandingSessionForTests(): void {
   startupLandingDecided = false;
+  startupGateClaimed = false;
 }

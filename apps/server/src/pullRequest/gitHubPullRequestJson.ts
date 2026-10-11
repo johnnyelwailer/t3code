@@ -429,6 +429,9 @@ const RawDetailSchema = Schema.Struct({
   headRepositoryOwner: Schema.optional(Schema.NullOr(Schema.Struct({ login: Schema.String }))),
   /** The exact head revision, used to find workflow runs that GitHub has not started yet. */
   headRefOid: Schema.optional(Schema.NullOr(Schema.String)),
+  /** The base commit and the author's standing, which a launch policy reads off the detail. */
+  baseRefOid: Schema.optional(Schema.NullOr(Schema.String)),
+  authorAssociation: Schema.optional(Schema.NullOr(Schema.String)),
   body: Schema.optional(Schema.String),
   changedFiles: Schema.optional(Schema.Int),
   closedAt: Schema.optional(Schema.NullOr(Schema.String)),
@@ -828,7 +831,7 @@ export const pullRequestCoreGraphQlQuery = (host: string) => {
     pullRequest(number: $number) {
       number title url body state isDraft mergeable reviewDecision
       additions deletions changedFiles createdAt updatedAt mergedAt closedAt
-      headRefName baseRefName headRefOid isCrossRepository
+      headRefName baseRefName headRefOid baseRefOid isCrossRepository authorAssociation
       headRepositoryOwner { login }
       author { login avatarUrl ... on User { id name } }
       autoMergeRequest { mergeMethod }
@@ -1341,6 +1344,8 @@ export interface GitHubPullRequestDetail extends GitHubPullRequestListItem {
   /** The owner of the head branch's repository; null where `gh` did not say. */
   readonly headRepositoryOwner: string | null;
   readonly headSha?: string | null;
+  readonly baseSha?: string | null;
+  readonly authorAssociation?: string | null;
   readonly body: string;
   readonly changedFiles: number;
   readonly mergedAt: string | null;
@@ -1756,6 +1761,8 @@ function toDetail(raw: Schema.Schema.Type<typeof RawDetailSchema>): GitHubPullRe
       : {}),
     headRepositoryOwner: trimmed(raw.headRepositoryOwner?.login),
     headSha: trimmed(raw.headRefOid),
+    baseSha: trimmed(raw.baseRefOid),
+    authorAssociation: trimmed(raw.authorAssociation),
     body: raw.body ?? "",
     changedFiles: raw.changedFiles ?? 0,
     mergedAt: trimmed(raw.mergedAt),

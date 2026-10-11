@@ -741,6 +741,7 @@ export function BranchToolbarBranchSelector({
         {displayMode !== "panel" ? (
           <ThreadPullRequestBadgeControl
             render={<ComposerControl size="xs" />}
+            threadRef={threadRef}
             badge={prBadge}
             pullRequests={serverThread?.pullRequests ?? []}
             number={prNumber}

@@ -33,6 +33,7 @@ export const TOOL_GROUP_IDS = [
   "view.state",
   "artifact.rw",
   "mutation.draft",
+  "mutation.change_request",
   "thread.handoff",
   "ui.render",
 ] as const;
@@ -61,7 +62,8 @@ export type EngineCapability =
   | "script"
   | "ui"
   | "workflow"
-  | "schedule";
+  | "schedule"
+  | "launch";
 
 /**
  * A per-source capability: `"source:<name>"` gates both `getSignalSource(source)` and

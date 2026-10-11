@@ -12,6 +12,7 @@ import {
   ProjectDashboardKanbanCollapsedColumn,
   ProjectDashboardKanbanColumnHeader,
 } from "~/t3team/t3team-ProjectDashboardKanbanColumnChrome";
+import type { KanbanZoomVisual } from "~/t3team/t3team-kanbanZoom";
 import type { ProjectTicketKanbanColumnId } from "~/t3team/t3team-projectTicketStatus";
 
 const lanePrefix = "kanban-lane:";
@@ -41,6 +42,7 @@ export function ProjectDashboardKanbanDroppableLane({
   dragging,
   collapsed = false,
   onToggleCollapsed,
+  zoomVisual,
   children,
 }: {
   columnId: ProjectTicketKanbanColumnId;
@@ -49,15 +51,20 @@ export function ProjectDashboardKanbanDroppableLane({
   dragging: boolean;
   collapsed?: boolean;
   onToggleCollapsed?: (collapsed: boolean) => void;
+  /** Continuous zoom visual. Omitted renders today's full-width lane. */
+  zoomVisual?: KanbanZoomVisual;
   children: React.ReactNode;
 }) {
   // A collapsed strip stays a drop target: dropping on it moves the ticket into that status.
   const { isOver, setNodeRef } = useDroppable({ id: `${lanePrefix}${columnId}` });
+  const laneMinWidthRem = zoomVisual?.laneMinWidthRem ?? 17;
+  const borderOpacity = zoomVisual?.laneHeaderBorderOpacity ?? 1;
 
   return (
     <div
       ref={setNodeRef}
-      className={collapsed ? "w-11 self-stretch" : "min-w-[17rem] self-stretch"}
+      className={collapsed ? "w-11 self-stretch" : "self-stretch"}
+      style={collapsed ? undefined : { minWidth: `${laneMinWidthRem}rem` }}
     >
       <T3SurfacePanel
         tone="soft"
@@ -74,6 +81,7 @@ export function ProjectDashboardKanbanDroppableLane({
             <ProjectDashboardKanbanColumnHeader
               title={title}
               count={count}
+              headerBorderOpacity={borderOpacity}
               {...(onToggleCollapsed ? { onCollapse: () => onToggleCollapsed(true) } : {})}
             />
             <div className="min-h-[12rem] flex-1">{children}</div>
@@ -93,6 +101,8 @@ export function ProjectDashboardKanbanDroppableColumnBody({
   onToggleCollapsed,
   className,
   style,
+  laneMinWidthRem = 17,
+  headerBorderOpacity = 1,
 }: {
   columnId: ProjectTicketKanbanColumnId;
   title: string;
@@ -102,14 +112,16 @@ export function ProjectDashboardKanbanDroppableColumnBody({
   onToggleCollapsed?: (collapsed: boolean) => void;
   className?: string;
   style?: React.CSSProperties;
+  laneMinWidthRem?: number;
+  headerBorderOpacity?: number;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: `${lanePrefix}${columnId}` });
 
   return (
     <div
       ref={setNodeRef}
-      className={`relative self-stretch ${collapsed ? "w-11" : "min-w-[17rem]"} ${className ?? ""}`}
-      style={style}
+      className={`relative self-stretch ${collapsed ? "w-11" : ""} ${className ?? ""}`}
+      style={collapsed ? style : { ...style, minWidth: `${laneMinWidthRem}rem` }}
     >
       <T3SurfacePanel
         tone="soft"
@@ -126,6 +138,7 @@ export function ProjectDashboardKanbanDroppableColumnBody({
             <ProjectDashboardKanbanColumnHeader
               title={title}
               count={count}
+              headerBorderOpacity={headerBorderOpacity}
               {...(onToggleCollapsed ? { onCollapse: () => onToggleCollapsed(true) } : {})}
             />
             <div className="min-h-[12rem] flex-1" />

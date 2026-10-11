@@ -84,7 +84,7 @@ export const runT3TeamServerCommand = (
       }).pipe(
         Effect.tap((collections) =>
           Effect.try({
-            try: () => registerPackCollections(collections),
+            try: () => registerPackCollections(collections, "runtime"),
             catch: (cause) => new WorkspacePackLoadError({ cause }),
           }),
         ),

@@ -160,5 +160,8 @@ export const T3TeamToolkitHandlersLive = McpToolAccess.toLayer(T3TeamToolkit, {
   t3_mywork_arrange: McpToolAccess.readsAsCaller((input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_mywork_arrange, input),
   ),
+  t3_change_request_publish: McpToolAccess.actsAsCaller((input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_change_request_publish, input),
+  ),
   t3team_thread_skill_metadata: McpToolAccess.readsAsCaller((input) => threadSkillMetadata(input)),
 } satisfies McpToolAccess.Handlers<typeof T3TeamToolkit.tools>);

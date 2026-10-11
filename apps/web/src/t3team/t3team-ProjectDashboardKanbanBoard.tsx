@@ -5,12 +5,19 @@ import { projectDashboardKanbanLaneCollisionDetection } from "~/t3team/t3team-Pr
 import { ProjectDashboardKanbanMatrixBoard } from "~/t3team/t3team-ProjectDashboardKanbanMatrixBoard";
 import { ProjectDashboardKanbanLane } from "~/t3team/t3team-ProjectDashboardKanbanLane";
 import {
+  kanbanZoomLevelToProgress,
+  resolveKanbanZoomVisual,
+  type KanbanZoomLevel,
+} from "~/t3team/t3team-kanbanZoom";
+import {
   buildKanbanGridTemplateColumns,
   type ProjectDashboardKanbanColumnCollapse,
 } from "~/t3team/t3team-projectDashboardKanbanCollapse";
 import type { TicketHierarchy } from "~/t3team/t3team-projectDashboardKanbanHierarchy";
 import type { ProjectTicketKanbanColumns } from "~/t3team/t3team-projectTicketStatus";
 import type { ProjectTicket } from "~/t3team/t3team-types";
+import { useKanbanSemanticZoomFlag } from "~/t3team/t3team-useKanbanSemanticZoomFlag";
+import { useKanbanZoomGesture } from "~/t3team/t3team-useKanbanZoomGesture";
 import { useProjectDashboardKanbanDnd } from "~/t3team/t3team-useProjectDashboardKanbanDnd";
 
 export {
@@ -25,6 +32,8 @@ export function ProjectDashboardKanbanBoard({
   parentChildGroups,
   jiraLastCheckedAt,
   projectId,
+  kanbanZoomLevel,
+  onKanbanZoomLevelChange,
   onOpenTicket,
   onTicketContextMenu,
   renderTicketExtra,
@@ -37,6 +46,9 @@ export function ProjectDashboardKanbanBoard({
   parentChildGroups: TicketHierarchy;
   jiraLastCheckedAt?: number;
   projectId: string;
+  /** Semantic zoom snap (flat + hierarchy/matrix; ignored when the flag is off). */
+  kanbanZoomLevel?: KanbanZoomLevel;
+  onKanbanZoomLevelChange?: (level: KanbanZoomLevel) => void;
   onOpenTicket: (projectId: string, ticketId: string) => void;
   onTicketContextMenu: (event: React.MouseEvent, ticket: ProjectTicket) => void;
   renderTicketExtra?: (ticket: ProjectTicket, compact: boolean) => React.ReactNode;
@@ -57,6 +69,17 @@ export function ProjectDashboardKanbanBoard({
     onMoveTicketToStatus,
   });
 
+  const zoomFlagEnabled = useKanbanSemanticZoomFlag();
+  const zoomLevel = zoomFlagEnabled ? (kanbanZoomLevel ?? "full") : "full";
+  const zoomEnabled = zoomFlagEnabled && onKanbanZoomLevelChange !== undefined;
+  const { containerRef: zoomGestureRef, progress: zoomProgress } = useKanbanZoomGesture({
+    enabled: zoomEnabled,
+    level: zoomLevel,
+    onLevelChange: onKanbanZoomLevelChange ?? (() => {}),
+  });
+  const visualProgress = zoomEnabled ? zoomProgress : kanbanZoomLevelToProgress(zoomLevel);
+  const zoomVisual = resolveKanbanZoomVisual(visualProgress);
+
   return (
     <>
       {moveError ? <T3TeamErrorState error={moveError} className="mb-3" /> : null}
@@ -68,29 +91,34 @@ export function ProjectDashboardKanbanBoard({
         onDragCancel={clearDrag}
       >
         {isHierarchyMode ? (
-          <ProjectDashboardKanbanMatrixBoard
-            kanbanColumns={displayColumns}
-            {...(allTickets ? { allTickets } : {})}
-            dragging={activeTicketId !== null}
-            parentChildGroups={parentChildGroups}
-            {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
-            projectId={projectId}
-            onOpenTicket={onOpenTicket}
-            onTicketContextMenu={onTicketContextMenu}
-            {...(renderTicketExtra ? { renderTicketExtra } : {})}
-            {...(onMoveTicketToStatus ? { onMoveTicketToStatus } : {})}
-            optimisticMoves={optimisticMoves}
-            {...(columnCollapse ? { columnCollapse } : {})}
-          />
+          <div ref={zoomGestureRef}>
+            <ProjectDashboardKanbanMatrixBoard
+              kanbanColumns={displayColumns}
+              {...(allTickets ? { allTickets } : {})}
+              dragging={activeTicketId !== null}
+              parentChildGroups={parentChildGroups}
+              {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
+              projectId={projectId}
+              zoomVisual={zoomVisual}
+              onOpenTicket={onOpenTicket}
+              onTicketContextMenu={onTicketContextMenu}
+              {...(renderTicketExtra ? { renderTicketExtra } : {})}
+              {...(onMoveTicketToStatus ? { onMoveTicketToStatus } : {})}
+              optimisticMoves={optimisticMoves}
+              {...(columnCollapse ? { columnCollapse } : {})}
+            />
+          </div>
         ) : (
-          <div className="overflow-x-auto pb-2">
+          <div ref={zoomGestureRef} className="overflow-x-auto pb-2">
             <div
-              className="grid min-w-full grid-flow-col gap-3"
+              className="grid min-w-full grid-flow-col"
               style={{
                 gridTemplateColumns: buildKanbanGridTemplateColumns(
                   displayColumns,
                   columnCollapse?.collapsedIds,
+                  zoomVisual.laneMinWidthRem,
                 ),
+                columnGap: `${zoomVisual.columnGapRem}rem`,
               }}
             >
               {displayColumns.map((column) => (
@@ -102,6 +130,7 @@ export function ProjectDashboardKanbanBoard({
                   parentChildGroups={parentChildGroups}
                   {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
                   projectId={projectId}
+                  zoomVisual={zoomVisual}
                   onOpenTicket={onOpenTicket}
                   onTicketContextMenu={onTicketContextMenu}
                   {...(renderTicketExtra ? { renderTicketExtra } : {})}

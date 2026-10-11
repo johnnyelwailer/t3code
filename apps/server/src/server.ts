@@ -24,6 +24,7 @@ import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 
 import { activateCompiledInDistribution } from "./t3team-distribution-bootstrap.ts";
+import { activatePackRecipeSources } from "./t3team-packRecipeSourcesFromEnv.ts";
 
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as HostPowerMonitor from "./background/HostPowerMonitor.ts";
@@ -222,6 +223,11 @@ import {
   t3teamThreadRecipeWorkflowLaunchRouteLayer,
   t3teamThreadWorkflowResolveInputRouteLayer,
 } from "./t3team-thread-recipe-workflow-routes.ts";
+import { t3teamRecipeHeadlessLaunchRouteLayer } from "./t3team-recipeHeadlessLaunchRoutes.ts";
+import {
+  T3TeamRecipeTriggerRunner,
+  T3TeamRecipeTriggerRunnerLive,
+} from "./t3team-recipeTriggerRunner.ts";
 import { t3teamThreadDraftMutationStatusRouteLayer } from "./t3team-thread-draftMutation-status-route.ts";
 import { t3teamThreadJobsRouteLayer } from "./t3team-thread-jobs-route.ts";
 import { t3teamThreadWorkflowControlRouteLayer } from "./t3team-thread-workflow-control-route.ts";
@@ -232,6 +238,7 @@ import {
   t3teamGitHubPullRequestContextRouteLayer,
 } from "./t3team-github-routes.ts";
 import { t3teamProjectWorkspaceBootstrapRouteLayer } from "./t3team-project-repository-routes.ts";
+import { T3TeamLinkedRepositorySyncLive } from "./t3team-linkedRepositorySync.ts";
 import { t3teamProjectMainRepositoryRouteLayer } from "./t3team-projectMainRepositoryRoute.ts";
 import { t3teamThreadToolContextRouteLayer } from "./t3team-thread-tool-context-routes.ts";
 import { t3teamThreadPlacementRouteLayer } from "./t3team-thread-placement-routes.ts";
@@ -265,12 +272,15 @@ import {
   T3TeamThreadSilenceWatchReactorLive,
 } from "./t3team-threadSilenceWatchReactorLive.ts";
 import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
+import { T3TeamKickoffRecipeLive } from "./t3team-kickoffRecipe.ts";
 import { T3TeamWorkflowSignalDeliveryLive } from "./t3team-workflowSignalDelivery.ts";
 import { T3TeamWorkflowSignalReconcilerLive } from "./t3team-workflowSignalReconciler.ts";
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 import { T3TeamWorkflowSchedulerSweepLive } from "./t3team-workflowSchedulerSweepLive.ts";
 import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
+import * as T3TeamChangeRequestPublisher from "./t3team-changeRequestPublisher.ts";
+import * as T3TeamScriptHost from "./t3team-scriptHostContext.ts";
 import * as HtmlRender from "./htmlRender/HtmlRender.ts";
 import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
 import * as T3TeamWorkflowHost from "./t3team-workflowHost.ts";
@@ -614,6 +624,28 @@ const T3TeamProjectSourceIconReactorStartLive = Layer.effectDiscard(
 // single instance (layers memoize by reference).
 const T3TeamWorkflowHostLive = T3TeamWorkflowHost.layer.pipe(Layer.provide(T3TeamV2FoundationLive));
 
+// t3team: recipe triggers (S5b) — reconcile the per-project `trigger:<recipe>:<id>` signal
+// registrations, drain the signal inbox on a timer, and launch headless runs. One shared
+// runner per process; the engine chain below is the SAME singletons the tool broker and the
+// thread-bound launch use (layer references memoize). Defined after T3TeamWorkflowHostLive so
+// it can share that const instead of rebuilding the host layer.
+const T3TeamRecipeTriggerRunnerLayer = T3TeamRecipeTriggerRunnerLive.pipe(
+  Layer.provideMerge(WorkflowSignalSourcesLive),
+  Layer.provide(T3TeamWorkflowHostLive),
+  Layer.provide(T3TeamScriptHost.layer.pipe(Layer.provide(layerPullRequestService))),
+  Layer.provide(T3TeamV2FoundationLive),
+);
+
+// Start it the way upstream starts its own workers: one effectDiscard layer that parks the
+// timer loop and stops it on scope close.
+const T3TeamRecipeTriggerRunnerStartLive = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const runner = yield* T3TeamRecipeTriggerRunner;
+    yield* runner.start();
+    yield* Effect.addFinalizer(() => runner.stop());
+  }),
+).pipe(Layer.provide(T3TeamRecipeTriggerRunnerLayer));
+
 // The fork MCP tool broker and the in-memory stores it shares with the routes/reactors.
 const T3TeamToolBrokerLayerLive = T3TeamToolBrokerLive.pipe(
   Layer.provideMerge(T3TeamThreadToolContextStoreLive),
@@ -642,6 +674,14 @@ const T3TeamToolBrokerLayerLive = T3TeamToolBrokerLive.pipe(
   // Same HtmlRender + PreviewBrowser pair the MCP html_render toolkit uses.
   Layer.provide(HtmlRender.layer),
   Layer.provide(PreviewBrowser.layer),
+  // t3team: `t3team.change_request.publish` commits, pushes and opens the change request through
+  // the same git stack the Git panel uses (memoized layer references).
+  Layer.provide(
+    T3TeamChangeRequestPublisher.layer.pipe(
+      Layer.provide(layerGit),
+      Layer.provide(WorkspacePaths.layer),
+    ),
+  ),
 );
 
 // Webhook URLs go through the relay only when the managed tunnel it forwards
@@ -783,6 +823,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   ReplayMarkers.layer,
   T3TeamThreadToolContextEvictionReactorStartLive,
   T3TeamProjectSourceIconReactorStartLive,
+  T3TeamRecipeTriggerRunnerStartLive,
   // t3team: the ONE project-mutation source hook (binding table + keyed claim lock, critic C13).
   T3TeamProjectSourceBindingsLive,
   // t3team: shared V2 foundation (facts/artifacts side stores, run-less message + lineage writers).
@@ -985,6 +1026,7 @@ const layerMakeRoutes = Layer.mergeAll(
     t3teamProjectWorkspaceRefreshWorkItemContextRouteLayer,
     t3teamProjectWorkspaceRefreshWorkItemSliceContextRouteLayer,
     t3teamThreadRecipeWorkflowLaunchRouteLayer,
+    t3teamRecipeHeadlessLaunchRouteLayer,
     t3teamThreadWorkflowControlRouteLayer,
     t3teamThreadJobsRouteLayer,
     t3teamThreadDraftMutationStatusRouteLayer,
@@ -1058,6 +1100,9 @@ const layerMakeServer = Layer.unwrap(
         }),
       ),
     );
+
+    // Recipes of the pack on disk (T3TEAM_PACKS_DIR), for a host that compiles its distribution in.
+    yield* activatePackRecipeSources;
 
     const layerHttpListening = Layer.effectDiscard(
       Effect.gen(function* () {
@@ -1430,6 +1475,8 @@ const layerMakeServer = Layer.unwrap(
       T3TeamThreadSilenceWatchReactorLive,
       T3TeamThreadTransientTurnRetryLive,
       T3TeamWorkflowEngineRehydrateLive,
+      // t3team: a recipe the first user message on the bootstrap thread starts (T3CODE_KICKOFF_RECIPE).
+      T3TeamKickoffRecipeLive,
       layerCloudDesiredLinkReconcile,
       HeapSnapshot.layer,
     );
@@ -1444,6 +1491,12 @@ const layerMakeServer = Layer.unwrap(
       // so it is provided again here, ahead of the rest of this pipe. The pr-context route's
       // own project resolver also reads PullRequestProviderRegistry directly, same story.
       Layer.provide(layerPullRequestService),
+      // t3team: recipe scripts' `ctx.store` / `ctx.changeRequests`, for the recipe launch route
+      // (served at this level, like the PR context route above) and boot rehydration.
+      Layer.provide(T3TeamScriptHost.layer.pipe(Layer.provide(layerPullRequestService))),
+      // t3team: background linked-repository clones/fetches, shared by the workspace bootstrap and
+      // linked-repository status routes (served at this level, like the PR context route above).
+      Layer.provide(T3TeamLinkedRepositorySyncLive),
       Layer.provide(PullRequestProviderRegistry.layer),
       Layer.provideMerge(layerRuntimeServices),
       Layer.provideMerge(

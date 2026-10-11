@@ -4,16 +4,13 @@ import {
   type RecipeSurface,
   type SidecarComposition,
 } from "@t3tools/project-recipes";
-import {
-  DEFAULT_SIDECAR_COMPOSITION,
-  getT3TeamProfile,
-  listBundledSidecarSections,
-} from "@t3tools/t3team-skill-packs";
+import { DEFAULT_SIDECAR_COMPOSITION, getT3TeamProfile } from "@t3tools/t3team-skill-packs";
 
 import { useT3TeamSidecarComposition } from "~/t3team/hooks/t3team-useSidecarComposition";
 import type { SidecarSectionHost } from "~/t3team/t3team-sidecarSectionHost";
 import { useRunT3TeamDeterministicWorkflowLaunch } from "~/t3team/t3team-inlineRecipeLaunch";
 import { T3TeamSidecarSectionInstance } from "~/t3team/t3team-sidecarSectionInstance";
+import { listT3TeamSidecarSections } from "~/t3team/t3team-sidecarSectionRegistry";
 
 type T3TeamSidecarCompositionProps = {
   readonly surface: RecipeSurface;
@@ -33,8 +30,8 @@ export function T3TeamSidecarComposition({
   emptyState,
 }: T3TeamSidecarCompositionProps) {
   const profileDefault = getT3TeamProfile(profileId).sidecarSections;
-  const bundledSectionsById = useMemo(
-    () => new Map(listBundledSidecarSections().map((section) => [section.id, section])),
+  const sectionsById = useMemo(
+    () => new Map(listT3TeamSidecarSections().map((section) => [section.id, section])),
     [],
   );
   const defaultComposition = useMemo(
@@ -63,7 +60,7 @@ export function T3TeamSidecarComposition({
   });
 
   const visibleSections = composition.sections.flatMap((sectionState) => {
-    const definition = bundledSectionsById.get(sectionState.sectionId);
+    const definition = sectionsById.get(sectionState.sectionId);
     if (!definition || !definition.surfaces.includes(surface)) {
       return [];
     }

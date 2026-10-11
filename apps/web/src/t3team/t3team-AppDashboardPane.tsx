@@ -5,15 +5,22 @@ import type { ProjectKickoffThreadInput } from "~/t3team/t3team-kickoffTypes";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
 import { ProjectDashboardKickoffAside } from "~/t3team/t3team-ProjectDashboardKickoffAside";
 import { DigestPrAside } from "~/t3team/t3team-DigestPrAside";
+import { MyWorkRightPanel } from "~/t3team/t3team-MyWorkRightPanel";
 import { closeDigestPullRequest, useDigestPrAsideStore } from "~/t3team/t3team-digestPrAsideStore";
 import { DigestRecipeCatalogProvider } from "~/t3team/t3team-digestRecipeCatalog";
 import { useDigestRecipeLaunchStore } from "~/t3team/t3team-digestRecipeLaunchStore";
 import { T3TeamDashboardRecipeActionProvider } from "~/t3team/t3team-dashboardRecipeActions";
 import { useProjectWorkspaceAutoSync } from "~/t3team/hooks/t3team-useProjectWorkspaceAutoSync";
+import { useT3TeamMyWorkRightPanelEnabled } from "~/t3team/t3team-myWorkRightPanelFlag";
 import { ResizableRightSidebarLayout } from "~/t3team/t3team-ResizableRightSidebarLayout";
 import { T3TeamDashboardRecipeViewProvider } from "~/t3team/t3team-dashboardRecipeViewContext";
 import { getProjectDashboardRightSidebarCollapsedStorageKey } from "~/t3team/t3team-rightSidebarPersistence";
 import type { ProjectThread } from "~/t3team/t3team-types";
+import {
+  MY_WORK_PANEL_REF,
+  selectThreadRightPanelState,
+  useRightPanelStore,
+} from "~/rightPanelStore";
 
 export function AppDashboardPane({
   activeDashboardMode,
@@ -64,6 +71,7 @@ export function AppDashboardPane({
     onRememberEmbeddedThread(activeThread.id);
   }, [activeThread, onRememberEmbeddedThread]);
 
+  const myWorkRightPanelEnabled = useT3TeamMyWorkRightPanelEnabled();
   // Opening a PR, or staging a recipe, from the digest raises the drawer where the aside cannot
   // sit beside the view.
   // Only this project's: a detail opened on another project's dashboard neither labels nor raises
@@ -75,13 +83,69 @@ export function AppDashboardPane({
   const openedTicket = useDigestPrAsideStore((state) =>
     state.ticket?.projectId === projectId ? state.ticket : null,
   );
+  const myWorkPanelSurfaces = useRightPanelStore(
+    (state) => selectThreadRightPanelState(state.byThreadKey, MY_WORK_PANEL_REF).surfaces,
+  );
   // Picking a thread hands the aside to it: an open PR or ticket would otherwise hide the chat.
   useEffect(() => {
-    if (activeThreadId !== null) closeDigestPullRequest();
-  }, [activeThreadId]);
+    if (activeThreadId === null) return;
+    closeDigestPullRequest();
+    if (myWorkRightPanelEnabled) {
+      useRightPanelStore.getState().closeAllSurfaces(MY_WORK_PANEL_REF);
+    }
+  }, [activeThreadId, myWorkRightPanelEnabled]);
   // A detail belongs to the screen it was opened on: leaving the dashboard closes it.
-  useEffect(() => closeDigestPullRequest, []);
+  useEffect(
+    () => () => {
+      closeDigestPullRequest();
+      useRightPanelStore.getState().closeAllSurfaces(MY_WORK_PANEL_REF);
+    },
+    [],
+  );
   const recipeRequest = useDigestRecipeLaunchStore((state) => state.request);
+  const kickoffAside = (
+    <ProjectDashboardKickoffAside
+      // One composer per project: a recipe staged for project A's PR must not stay
+      // staged (and launch) once the dashboard shows project B.
+      key={project.id}
+      project={project}
+      dashboardMode={activeDashboardMode}
+      activeThread={activeThread}
+      providers={providers}
+      isConnected={isConnected}
+      onOpenThread={(threadId) => onOpenThread(project.id, threadId)}
+      onOpenFullThread={(threadId) => onOpenFullThread(project.id, threadId)}
+      onThreadKickoffConsumed={onThreadKickoffConsumed}
+      onKickoffThread={(
+        kickoffMessage,
+        kickoffPending,
+        kickoffModelSelection,
+        kickoffRuntimeMode,
+        kickoffInteractionMode,
+        selectedToolIds,
+        kickoffContextAttachments,
+        kickoffWorkflow,
+      ) => {
+        onKickoffProjectThread({
+          projectId: project.id,
+          dashboardMode: activeDashboardMode,
+          kickoffMessage,
+          ...(kickoffPending !== undefined ? { kickoffPending } : {}),
+          kickoffModelSelection,
+          kickoffRuntimeMode,
+          kickoffInteractionMode,
+          selectedToolIds,
+          kickoffContextAttachments,
+          ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
+        });
+      }}
+    />
+  );
+  const panelRevealRequest =
+    openedPullRequest ??
+    openedTicket ??
+    recipeRequest ??
+    (myWorkRightPanelEnabled && myWorkPanelSurfaces.length > 0 ? myWorkPanelSurfaces : null);
   return (
     <T3TeamDashboardRecipeViewProvider>
       <T3TeamDashboardRecipeActionProvider>
@@ -111,7 +175,7 @@ export function AppDashboardPane({
                     ? "Chat"
                     : "Agent"
             }
-            mobileAsideRequest={openedPullRequest ?? openedTicket ?? recipeRequest}
+            mobileAsideRequest={panelRevealRequest}
             asideThreadKey={activeThreadId}
             main={
               <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -119,49 +183,21 @@ export function AppDashboardPane({
               </div>
             }
             aside={
-              <DigestPrAside
-                project={project}
-                projectThreads={projectThreads}
-                onRememberEmbeddedThread={onRememberEmbeddedThread}
-                fallback={
-                  <ProjectDashboardKickoffAside
-                    // One composer per project: a recipe staged for project A's PR must not stay
-                    // staged (and launch) once the dashboard shows project B.
-                    key={project.id}
-                    project={project}
-                    dashboardMode={activeDashboardMode}
-                    activeThread={activeThread}
-                    providers={providers}
-                    isConnected={isConnected}
-                    onOpenThread={(threadId) => onOpenThread(project.id, threadId)}
-                    onOpenFullThread={(threadId) => onOpenFullThread(project.id, threadId)}
-                    onThreadKickoffConsumed={onThreadKickoffConsumed}
-                    onKickoffThread={(
-                      kickoffMessage,
-                      kickoffPending,
-                      kickoffModelSelection,
-                      kickoffRuntimeMode,
-                      kickoffInteractionMode,
-                      selectedToolIds,
-                      kickoffContextAttachments,
-                      kickoffWorkflow,
-                    ) => {
-                      onKickoffProjectThread({
-                        projectId: project.id,
-                        dashboardMode: activeDashboardMode,
-                        kickoffMessage,
-                        ...(kickoffPending !== undefined ? { kickoffPending } : {}),
-                        kickoffModelSelection,
-                        kickoffRuntimeMode,
-                        kickoffInteractionMode,
-                        selectedToolIds,
-                        kickoffContextAttachments,
-                        ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
-                      });
-                    }}
-                  />
-                }
-              />
+              myWorkRightPanelEnabled ? (
+                <MyWorkRightPanel
+                  project={project}
+                  projectThreads={projectThreads}
+                  onRememberEmbeddedThread={onRememberEmbeddedThread}
+                  kickoff={kickoffAside}
+                />
+              ) : (
+                <DigestPrAside
+                  project={project}
+                  projectThreads={projectThreads}
+                  onRememberEmbeddedThread={onRememberEmbeddedThread}
+                  fallback={kickoffAside}
+                />
+              )
             }
           />
         </DigestRecipeCatalogProvider>

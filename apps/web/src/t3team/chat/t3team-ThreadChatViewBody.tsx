@@ -1,17 +1,16 @@
-import { useMemo, useRef } from "react";
+import { useRef } from "react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import ChatView from "~/components/ChatView";
 import type { ChatComposerHandle } from "~/components/chat/ChatComposer";
 import { ComposerHandleContext, useComposerHandleContext } from "~/composerHandleContext";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
+import { resolveInChatLaunchStatus } from "~/t3team/chat/t3team-inChatLaunchStatus";
 import { ThreadPendingChat } from "~/t3team/chat/t3team-threadPendingChat";
 import type { ThreadBootstrapStatus } from "~/t3team/chat/t3team-useThreadBootstrap";
 import { useThreadChatComposerState } from "~/t3team/chat/t3team-useThreadChatComposerState";
+import { useT3TeamThreadOutboxDock } from "~/t3team/chat/t3team-useThreadOutboxDock";
 import { ThreadKickoffPlaceholder } from "~/t3team/chat/t3team-threadKickoffPlaceholder";
 import { T3TeamThreadComposerAccessory } from "~/t3team/chat/t3team-ThreadComposerAccessory";
-import { T3TeamOutboxQueueDock } from "~/t3team/outbox/t3team-outboxQueueDock";
-import { useT3TeamOutboxStore } from "~/t3team/outbox/t3team-outboxStore";
-import { useT3TeamOutboxDrain } from "~/t3team/outbox/t3team-useOutboxDrain";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 import type { ChatMessage } from "~/types";
 
@@ -37,23 +36,6 @@ export interface ThreadChatViewBodyProps {
   bootstrapStatus: ThreadBootstrapStatus;
   retryThreadBootstrap: () => void;
   composerState: ThreadChatComposerState;
-}
-
-/** Queued outbox entries for the viewed thread, plus the drain that delivers them on reconnect. */
-function useThreadOutbox(
-  environmentId: EnvironmentId,
-  threadId: string,
-  backend: BackendApi | null | undefined,
-) {
-  useT3TeamOutboxDrain({ environmentId, backend });
-  const snapshot = useT3TeamOutboxStore();
-  return useMemo(
-    () =>
-      snapshot.entries.filter(
-        (entry) => entry.environmentId === environmentId && entry.threadId === threadId,
-      ),
-    [snapshot.entries, environmentId, threadId],
-  );
 }
 
 /** Presentational body for {@link ThreadChatView}: kickoff placeholder + ChatView/pending-chat split. */
@@ -103,20 +85,7 @@ export function ThreadChatViewBody({
   // primary thread. An embedded peer thread scopes its own, or its composer hijacks the primary's.
   const appComposerHandleRef = useComposerHandleContext();
   const embeddedComposerHandleRef = useRef<ChatComposerHandle | null>(null);
-  const outboxEntries = useThreadOutbox(environmentId, threadId, backend);
-  const outboxSnapshot = useT3TeamOutboxStore();
-  // Re-built only when the outbox actually changes, so composer churn does not re-render it.
-  const outboxDock = useMemo(
-    () =>
-      outboxEntries.length === 0 ? undefined : (
-        <T3TeamOutboxQueueDock
-          entries={outboxEntries}
-          dispatchingEntryId={outboxSnapshot.dispatchingEntryId}
-          failures={outboxSnapshot.failures}
-        />
-      ),
-    [outboxEntries, outboxSnapshot.dispatchingEntryId, outboxSnapshot.failures],
-  );
+  const outboxDock = useT3TeamThreadOutboxDock(environmentId, threadId, backend);
   const controlWorkflow = backend?.controlWorkflow
     ? ({ workflowRunId, action }: { workflowRunId: string; action: "pause" | "resume" | "stop" }) =>
         backend.controlWorkflow!({ threadId, workflowRunId, action })
@@ -131,52 +100,51 @@ export function ThreadChatViewBody({
         {...(kickoffWorkflow ? { workflow: kickoffWorkflow } : {})}
       />
     ) : null;
+  const launchStatus = resolveInChatLaunchStatus({ hasServerThread, bootstrapStatus });
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-background">
+      {kickoffPlaceholder}
+      {launchStatus.show ? (
+        <ThreadPendingChat
+          bootstrapStatus={bootstrapStatus === "failed" ? "failed" : "running"}
+          phase={launchStatus.phase}
+          threadId={threadId}
+          onRetryLaunch={retryThreadBootstrap}
+          compact={hasServerThread}
+        />
+      ) : null}
       {hasServerThread ? (
-        <>
-          {kickoffPlaceholder}
-          <ComposerHandleContext
-            value={embeddedMode ? embeddedComposerHandleRef : appComposerHandleRef}
-          >
-            <ChatView
-              environmentId={environmentId}
-              threadId={threadId as never}
-              routeKind="server"
-              {...(kickoffHistoryMessage ? { syntheticMessages: [kickoffHistoryMessage] } : {})}
-              {...(onBack ? { onBack } : {})}
-              {...(titleBarControlsAccessory ? { titleBarControlsAccessory } : {})}
-              hideHeader={hideHeader || embeddedMode}
-              hideBranchToolbar={embeddedMode}
-              minimalComposer={embeddedMode}
-              beforeDispatchTurnStart={prepareTurnStart}
-              dispatchTurnStartOverride={dispatchTurnStartOverride}
-              enqueueOfflineTurnStart={enqueueOfflineTurnStart}
-              composerContextAttachmentSlot={contextAttachmentSlot}
-              composerContainerProps={composerDropTarget.composerContainerProps}
-              composerContainerOverlay={composerDropTarget.composerContainerOverlay}
-              composerContextAttachments={contextAttachments}
-              prepareComposerContextAttachments={prepareComposerContextAttachments}
-              onComposerContextAttachmentsConsumed={clearThreadAttachments}
-              onSubmitRecipeCardAction={submitRecipeCardAction}
-              dispatchWorkflowDecision={resolveWorkflowDecision}
-              {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
-              onOpenThread={onOpenThread}
-              {...(outboxDock ? { composerBannerLeading: outboxDock } : {})}
-            />
-          </ComposerHandleContext>
-        </>
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          {kickoffPlaceholder}
-          <ThreadPendingChat
-            bootstrapStatus={bootstrapStatus}
-            threadId={threadId}
-            onRetryLaunch={retryThreadBootstrap}
+        <ComposerHandleContext
+          value={embeddedMode ? embeddedComposerHandleRef : appComposerHandleRef}
+        >
+          <ChatView
+            environmentId={environmentId}
+            threadId={threadId as never}
+            routeKind="server"
+            {...(kickoffHistoryMessage ? { syntheticMessages: [kickoffHistoryMessage] } : {})}
+            {...(onBack ? { onBack } : {})}
+            {...(titleBarControlsAccessory ? { titleBarControlsAccessory } : {})}
+            hideHeader={hideHeader || embeddedMode}
+            hideBranchToolbar={embeddedMode}
+            minimalComposer={embeddedMode}
+            beforeDispatchTurnStart={prepareTurnStart}
+            dispatchTurnStartOverride={dispatchTurnStartOverride}
+            enqueueOfflineTurnStart={enqueueOfflineTurnStart}
+            composerContextAttachmentSlot={contextAttachmentSlot}
+            composerContainerProps={composerDropTarget.composerContainerProps}
+            composerContainerOverlay={composerDropTarget.composerContainerOverlay}
+            composerContextAttachments={contextAttachments}
+            prepareComposerContextAttachments={prepareComposerContextAttachments}
+            onComposerContextAttachmentsConsumed={clearThreadAttachments}
+            onSubmitRecipeCardAction={submitRecipeCardAction}
+            dispatchWorkflowDecision={resolveWorkflowDecision}
+            {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
+            onOpenThread={onOpenThread}
+            {...(outboxDock ? { composerBannerLeading: outboxDock } : {})}
           />
-        </div>
-      )}
+        </ComposerHandleContext>
+      ) : null}
     </div>
   );
 }

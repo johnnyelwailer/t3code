@@ -16,21 +16,6 @@ export function resolveWorkHomeProject(input: {
 }
 
 /**
- * Whether the bare home opens the all-projects My Work digest: nothing is selected, and there is
- * at least one work project to have work in. Without one, home stays the new-conversation view.
- */
-export function opensAllProjectsMyWorkHome(input: {
-  readonly allProjects: readonly ProjectShellProject[];
-  readonly selectedProjectId: string | null;
-  readonly showInitialSetup: boolean;
-  readonly hasRouteView: boolean;
-}): boolean {
-  if (input.showInitialSetup || input.hasRouteView || input.selectedProjectId !== null)
-    return false;
-  return input.allProjects.some(isWorkProject);
-}
-
-/**
  * Remaps a route view's project id onto the id the shell actually stores, so a
  * loose workspace and its stored counterpart resolve to one project.
  *

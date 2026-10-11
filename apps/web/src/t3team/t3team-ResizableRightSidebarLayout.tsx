@@ -207,10 +207,15 @@ export function ResizableRightSidebarLayout({
   return (
     <div
       ref={setContainerNode}
+      // Main-content headers key their right-edge reservation for the floating toggle off this.
+      data-right-sidebar={asideCollapsed ? "collapsed" : "expanded"}
       className={cn("relative h-full min-h-0 flex flex-1 overflow-hidden", className)}
       style={
         {
           "--right-sidebar-width": `${asideWidth}px`,
+          // The floating toggle's footprint from the right edge, for main-content headers.
+          "--right-sidebar-toggle-inset":
+            "calc(var(--workspace-controls-right) + var(--workspace-titlebar-control-size) + 0.5rem)",
         } as CSSProperties
       }
     >

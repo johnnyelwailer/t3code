@@ -1,4 +1,5 @@
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
+import { WatchedPullRequestIndicator } from "~/components/pullRequest/t3team-WatchedPullRequestIndicator";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
 /**
  * The thread details panel's pull request row: what the thread's pull request is, and the one
@@ -349,7 +350,19 @@ export function ThreadDetailsPrRow({
   const watching =
     onStopWatching !== undefined && (detail?.state ?? pr?.state ?? "open") === "open";
   const watchControl = (part: "secondary" | "icon") =>
-    watching ? (
+    watching && linkedReference ? (
+      // t3team: a linked reference gets the universal indicator (hover card, click pins; stop
+      // lives inside it). The legacy button below stays for rows without a host-level reference.
+      <ThreadDetailsControl render={<span />} variant="ghost" size="sm" part={part}>
+        <WatchedPullRequestIndicator
+          environmentId={environmentId}
+          host={linkedReference.host}
+          repository={linkedReference.repository}
+          number={linkedReference.number}
+          size="md"
+        />
+      </ThreadDetailsControl>
+    ) : watching ? (
       <Tooltip>
         <TooltipTrigger
           render={

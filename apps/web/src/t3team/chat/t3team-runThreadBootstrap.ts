@@ -33,6 +33,7 @@ type RunThreadBootstrapInput = {
   action: ThreadBootstrapAction;
   state: ThreadBootstrapDispatchState;
   onInitialUserMessageSent: (() => void) | undefined;
+  serverThreadExists?: boolean;
 };
 
 export async function runThreadBootstrap({
@@ -55,6 +56,7 @@ export async function runThreadBootstrap({
   action,
   state,
   onInitialUserMessageSent,
+  serverThreadExists,
 }: RunThreadBootstrapInput) {
   await ensureThreadBootstrapProject({
     backend,
@@ -90,6 +92,7 @@ export async function runThreadBootstrap({
       toolContext,
       createdAt,
       onInitialUserMessageSent,
+      ...(serverThreadExists === true ? { serverThreadExists } : {}),
     });
     return;
   }

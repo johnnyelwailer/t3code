@@ -10,7 +10,8 @@ import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecip
 
 import { T3TeamRecipeQuickStartBody } from "~/t3team/t3team-recipeActionView";
 
-const INTERACTIVE_SELECTOR = "button, input, select, textarea, a, [role='button'], label";
+const INTERACTIVE_SELECTOR =
+  "button, input, select, textarea, a, [role='button'], [role='switch'], label";
 const RECIPE_LIST_ANIMATION_OPTIONS = {
   duration: 180,
   easing: "ease-out",

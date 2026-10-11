@@ -263,7 +263,6 @@ describe("pack-provided recipe discovery", () => {
         // `visible` is authored inside the pack, but probes the user's project.
         yield* fileSystem.writeFileString(
           path.join(recipeRoot, "recipe.json"),
-          // @effect-diagnostics-next-line preferSchemaOverJson:off - Test fixture writes a recipe.json manifest to disk verbatim; not a domain payload.
           JSON.stringify({
             id: "triage",
             version: "0.1.0",

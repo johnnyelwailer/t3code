@@ -12,6 +12,7 @@ import * as Migrator from "effect/sql/Migrator";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { reconcileV2PreviewMigration } from "./reconcileV2PreviewMigration.ts";
+import { reconcileForkSprintLedger } from "./t3team-reconcileForkSprintLedger.ts";
 
 // Import all migrations statically
 import Migration0001 from "./Migrations/001_OrchestrationEvents.ts";
@@ -141,6 +142,8 @@ import Migration0099 from "./Migrations/t3team-077_RepairForkPortTables.ts";
 // Project main repository + feature flags: main's sprint migrations. Main originally registered
 // these at 84/85, which this fork's V2 sync already uses, so they move above the current maximum
 // id (101 at the time) to keep the ledger monotonic on every existing fork install.
+// Databases that already recorded them at 84/85 are relabelled before the Migrator runs; see
+// t3team-reconcileForkSprintLedger.ts.
 import Migration0100 from "./Migrations/t3team-064_ProjectionProjectsMainRepository.ts";
 import Migration0101 from "./Migrations/t3team-065_FeatureFlags.ts";
 // Skills-as-subagents Phase 1 (WI-1): delegate_task `extensions.skills` persists the
@@ -152,11 +155,13 @@ import Migration0102 from "./Migrations/t3team-078_SkillDelegationMetadata.ts";
 import Migration0103 from "./Migrations/057_ScheduledTaskWebhooks.ts";
 import Migration0104 from "./Migrations/058_WebhookRelayDeliveries.ts";
 import Migration0105 from "./Migrations/t3team-079_PackDocuments.ts";
+// Any-wait signal parks: the branch list a `waitForAny` run is parked on.
+import Migration0106 from "./Migrations/t3team-080_WorkflowRunWatchAny.ts";
 // New from the 2026-10-08 upstream sync (upstream 059/060). Appended above the fork's maximum id
 // rather than taking upstream's numbers, which this fork already uses — see the rule above. Fork
-// main shipped 105 (PackDocuments) first, so these take 106/107 rather than 105/106.
-import Migration0106 from "./Migrations/059_McpAppModelContext.ts";
-import Migration0107 from "./Migrations/060_ThreadSnapshotWindowIndexes.ts";
+// main shipped 105 (PackDocuments) and 106 (WorkflowRunWatchAny) first, so these take 107/108.
+import Migration0107 from "./Migrations/059_McpAppModelContext.ts";
+import Migration0108 from "./Migrations/060_ThreadSnapshotWindowIndexes.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -254,7 +259,7 @@ export const migrationEntries = [
   [83, "OrchestrationEventsTypeSequenceIndex", Migration0083],
   // Upstream 055/056 (orchestration V2) live at 84/85 in this fork's ledger; see the import comment.
   // Preserve this migration's schema. Future V2 schema changes need new migrations. A new
-  // migration must take an id ABOVE the highest id registered here (currently 107) — never one of
+  // migration must take an id ABOVE the highest id registered here (currently 108) — never one of
   // the gaps (88-89, 93-96): upgraded databases have recorded the maximum, and the Migrator skips
   // every id at or below it. Upstream's reconcileV2PreviewMigration stays a no-op on fork ledgers
   // (fork ids 53/54 are never named OrchestrationV2).
@@ -275,9 +280,10 @@ export const migrationEntries = [
   [103, "ScheduledTaskWebhooks", Migration0103],
   [104, "WebhookRelayDeliveries", Migration0104],
   [105, "PackDocuments", Migration0105],
-  // Upstream 059/060 live at 106/107 in this fork's ledger; see the import comment.
-  [106, "McpAppModelContext", Migration0106],
-  [107, "ThreadSnapshotWindowIndexes", Migration0107],
+  [106, "WorkflowRunWatchAny", Migration0106],
+  // Upstream 059/060 live at 107/108 in this fork's ledger; see the import comment.
+  [107, "McpAppModelContext", Migration0107],
+  [108, "ThreadSnapshotWindowIndexes", Migration0108],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
@@ -318,8 +324,13 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
     toMigrationInclusive === undefined || toMigrationInclusive >= 55
       ? yield* reconcileV2PreviewMigration()
       : [];
+  const sprintLedgerMigrations =
+    toMigrationInclusive === undefined || toMigrationInclusive >= 84
+      ? yield* reconcileForkSprintLedger()
+      : [];
   const executedMigrations = [
     ...previewMigrations,
+    ...sprintLedgerMigrations,
     ...(yield* run({ loader: makeMigrationLoader(toMigrationInclusive) })),
   ];
   const migrations = executedMigrations.map(([id, name]) => `${id}_${name}`);

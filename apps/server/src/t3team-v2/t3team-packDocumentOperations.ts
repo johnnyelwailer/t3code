@@ -66,7 +66,13 @@ export const bindPackDocumentStore = Effect.fnUntraced(
         Effect.flatMap((now) => query.touch(collection, key, now)),
         Effect.mapError(mapPackDocumentError("touch")),
       );
-    const writes = packDocumentWrites({ packId, query, write, validate });
+    const writes = packDocumentWrites({
+      packId,
+      quotaBytes: config.quotaBytes,
+      query,
+      write,
+      validate,
+    });
     return { get, list, touch, ...writes } satisfies PackDocumentStore;
   },
   Effect.mapError(mapPackDocumentError("forPack")),

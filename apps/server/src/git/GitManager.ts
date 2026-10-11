@@ -73,8 +73,10 @@ import * as ServerSettings from "../serverSettings.ts";
 import type { GitManagerServiceError } from "@t3tools/contracts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
+import type * as SourceControlProvider from "../sourceControl/SourceControlProvider.ts";
 import { detectPrTemplate } from "../sourceControl/PrTemplateDetection.ts";
 import type { ChangeRequest } from "@t3tools/contracts";
+import { resolvePullRequestCheckoutRoot } from "../t3team-pullRequestCheckoutRoot.ts";
 
 export interface GitActionProgressReporter {
   readonly publish: (event: GitActionProgressEvent) => Effect.Effect<void, never>;
@@ -98,6 +100,28 @@ export type GitBranchPullRequest = NonNullable<VcsStatusResult["pr"]> & {
   /** The pull request's head commit, when the host read reports it. */
   readonly headSha?: string | null;
 };
+
+export interface GitOpenChangeRequestInput {
+  readonly cwd: string;
+  /** The pushed head branch. */
+  readonly branch: string;
+  /** Target branch; the repository's default branch when absent. */
+  readonly baseBranch?: string | undefined;
+  readonly title: string;
+  readonly body: string;
+  readonly draft?: boolean | undefined;
+}
+
+export interface GitOpenChangeRequestResult {
+  readonly status: "created" | "opened_existing";
+  readonly provider: SourceControlProviderKind;
+  /** `owner/name` of the repository the change request targets, when the remote URL names one. */
+  readonly repository: string | null;
+  readonly url: string;
+  readonly number: number;
+  readonly baseBranch: string;
+  readonly headBranch: string;
+}
 
 interface SourceControlTextGenerationSettings {
   readonly modelSelection: ModelSelection;
@@ -139,6 +163,10 @@ export class GitManager extends Context.Service<
       input: GitRunStackedActionInput,
       options?: GitRunStackedActionOptions,
     ) => Effect.Effect<GitRunStackedActionResult, GitManagerServiceError>;
+    /** Open a change request for an already pushed branch, or return the one already open for it. */
+    readonly openChangeRequest: (
+      input: GitOpenChangeRequestInput,
+    ) => Effect.Effect<GitOpenChangeRequestResult, GitManagerServiceError>;
   }
 >()("t3/git/GitManager") {}
 
@@ -716,6 +744,16 @@ export const make = Effect.gen(function* () {
   const path = yield* Path.Path;
 
   const sourceControlProvider = (cwd: string) => sourceControlProviders.resolve({ cwd });
+  // A linked-repository project keeps its pull requests in clones its workspace root does not
+  // contain, so pull request operations run where the pull request's repository is.
+  const pullRequestCheckoutRoot = (
+    operation: string,
+    input: { readonly cwd: string; readonly reference: string },
+  ) =>
+    resolvePullRequestCheckoutRoot({ operation, sourceControlProviders, ...input }).pipe(
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, path),
+    );
   const serverSettingsService = yield* ServerSettings.ServerSettingsService;
   const threads = yield* ProjectionStore.ProjectionStoreV2;
   const projects = yield* ProjectStore.ProjectStoreV2;
@@ -1830,6 +1868,10 @@ export const make = Effect.gen(function* () {
       }
     }
 
+    return yield* resolveDefaultBaseBranch(cwd);
+  });
+
+  const resolveDefaultBaseBranch = Effect.fn("resolveDefaultBaseBranch")(function* (cwd: string) {
     const defaultFromProvider = yield* sourceControlProvider(cwd).pipe(
       Effect.flatMap((provider) => provider.getDefaultBranch({ cwd })),
       Effect.orElseSucceed(() => null),
@@ -2038,6 +2080,44 @@ export const make = Effect.gen(function* () {
     };
   });
 
+  // Providers read the body from a file, so it goes through a temp file that is always removed.
+  const createChangeRequestWithBody = Effect.fn("createChangeRequestWithBody")(function* (input: {
+    readonly provider: SourceControlProvider.SourceControlProvider["Service"];
+    readonly cwd: string;
+    readonly operation: string;
+    readonly baseBranch: string;
+    readonly headSelector: string;
+    readonly title: string;
+    readonly body: string;
+    readonly draft?: boolean | undefined;
+  }) {
+    const bodyFile = path.join(
+      tempDir,
+      `t3code-pr-body-${process.pid}-${yield* randomUUIDv4(input.cwd)}.md`,
+    );
+    yield* fileSystem.writeFileString(bodyFile, input.body).pipe(
+      Effect.mapError(
+        (cause) =>
+          new GitManagerError({
+            operation: input.operation,
+            cwd: input.cwd,
+            detail: "Failed to write pull request body temp file.",
+            cause,
+          }),
+      ),
+    );
+    yield* input.provider
+      .createChangeRequest({
+        cwd: input.cwd,
+        baseRefName: input.baseBranch,
+        headSelector: input.headSelector,
+        title: input.title,
+        bodyFile,
+        ...(input.draft === true ? { draft: true } : {}),
+      })
+      .pipe(Effect.ensuring(fileSystem.remove(bodyFile).pipe(Effect.ignore)));
+  });
+
   const runPrStep = Effect.fn("runPrStep")(function* (
     settings: SourceControlTextGenerationSettings,
     cwd: string,
@@ -2106,35 +2186,20 @@ export const make = Effect.gen(function* () {
       modelSelection: settings.modelSelection,
     });
 
-    const bodyFile = path.join(
-      tempDir,
-      `t3code-pr-body-${process.pid}-${yield* randomUUIDv4(cwd)}.md`,
-    );
-    yield* fileSystem.writeFileString(bodyFile, generated.body).pipe(
-      Effect.mapError(
-        (cause) =>
-          new GitManagerError({
-            operation: "runPrStep",
-            cwd,
-            detail: "Failed to write pull request body temp file.",
-            cause,
-          }),
-      ),
-    );
     yield* emit({
       kind: "phase_started",
       phase: "pr",
       label: `Creating ${terms.singular}...`,
     });
-    yield* provider
-      .createChangeRequest({
-        cwd,
-        baseRefName: baseBranch,
-        headSelector: headContext.preferredHeadSelector,
-        title: generated.title,
-        bodyFile,
-      })
-      .pipe(Effect.ensuring(fileSystem.remove(bodyFile).pipe(Effect.ignore)));
+    yield* createChangeRequestWithBody({
+      provider,
+      cwd,
+      operation: "runPrStep",
+      baseBranch,
+      headSelector: headContext.preferredHeadSelector,
+      title: generated.title,
+      body: generated.body,
+    });
 
     const created = yield* findOpenPr(cwd, headContext);
     if (!created) {
@@ -2354,7 +2419,11 @@ export const make = Effect.gen(function* () {
 
   const resolvePullRequest: GitManager["Service"]["resolvePullRequest"] = Effect.fn(
     "resolvePullRequest",
-  )(function* (input) {
+  )(function* (projectInput) {
+    const input = {
+      ...projectInput,
+      cwd: yield* pullRequestCheckoutRoot("resolvePullRequest", projectInput),
+    };
     const pullRequest = yield* (yield* sourceControlProvider(input.cwd))
       .getChangeRequest({
         cwd: input.cwd,
@@ -2367,7 +2436,20 @@ export const make = Effect.gen(function* () {
 
   const preparePullRequestThread: GitManager["Service"]["preparePullRequestThread"] = Effect.fn(
     "preparePullRequestThread",
-  )(function* (input) {
+  )(function* (projectInput) {
+    // Everything below acts on the pull request's repository; only the project-level lookups
+    // (setup script, settings, status caches) keep the project's own root.
+    const checkoutCwd = yield* pullRequestCheckoutRoot("preparePullRequestThread", projectInput);
+    const alreadyCheckedOutDetail =
+      checkoutCwd === projectInput.cwd
+        ? "This PR branch is already checked out in the main repo. Use Local, or switch the main repo off that branch before creating a worktree thread."
+        : `This PR branch is already checked out in ${checkoutCwd}. Switch that repository off the branch, then try again.`;
+    const input = {
+      ...projectInput,
+      cwd: checkoutCwd,
+      // A linked repository's pull request cannot be checked out "here", where the thread runs.
+      mode: checkoutCwd === projectInput.cwd ? projectInput.mode : ("worktree" as const),
+    };
     const maybeRunSetupScript = (worktreePath: string) => {
       if (!input.threadId) {
         return Effect.void;
@@ -2375,7 +2457,7 @@ export const make = Effect.gen(function* () {
       return projectSetupScriptRunner
         .runForThread({
           threadId: input.threadId,
-          projectCwd: input.cwd,
+          projectCwd: projectInput.cwd,
           worktreePath,
         })
         .pipe(
@@ -2580,8 +2662,7 @@ export const make = Effect.gen(function* () {
         return yield* new GitManagerError({
           operation: "preparePullRequestThread",
           cwd: input.cwd,
-          detail:
-            "This PR branch is already checked out in the main repo. Use Local, or switch the main repo off that branch before creating a worktree thread.",
+          detail: alreadyCheckedOutDetail,
         });
       }
 
@@ -2608,8 +2689,7 @@ export const make = Effect.gen(function* () {
         return yield* new GitManagerError({
           operation: "preparePullRequestThread",
           cwd: input.cwd,
-          detail:
-            "This PR branch is already checked out in the main repo. Use Local, or switch the main repo off that branch before creating a worktree thread.",
+          detail: alreadyCheckedOutDetail,
         });
       }
 
@@ -2622,7 +2702,7 @@ export const make = Effect.gen(function* () {
         {
           worktreesDirectory: yield* readWorktreesDirectory,
           // Best effort: a settings read failure falls back to the checkout's t3.json.
-          submodules: yield* projectSettingsFor(input).pipe(
+          submodules: yield* projectSettingsFor(projectInput).pipe(
             Effect.map((settings) => settings.worktreeSubmodules),
             Effect.orElseSucceed(() => null),
           ),
@@ -2637,7 +2717,13 @@ export const make = Effect.gen(function* () {
         worktreePath: worktree.worktree.path,
         isOnPullRequestHead: true,
       };
-    }).pipe(Effect.ensuring(invalidateStatus(input.cwd)));
+    }).pipe(
+      Effect.ensuring(
+        Effect.all([invalidateStatus(projectInput.cwd), invalidateStatus(checkoutCwd)], {
+          discard: true,
+        }),
+      ),
+    );
   });
 
   const runFeatureBranchStep = Effect.fn("runFeatureBranchStep")(function* (
@@ -2884,6 +2970,54 @@ export const make = Effect.gen(function* () {
     },
   );
 
+  const openChangeRequest: GitManager["Service"]["openChangeRequest"] = Effect.fn(
+    "openChangeRequest",
+  )(function* (input) {
+    const { cwd } = input;
+    const provider = yield* sourceControlProvider(cwd);
+    const headContext = yield* resolveBranchHeadContext(cwd, {
+      branch: input.branch,
+      upstreamRef: null,
+    });
+    const target = yield* resolveRemoteRepositoryContext(cwd, "origin");
+    const opened = (status: GitOpenChangeRequestResult["status"], pr: OpenPrInfo) =>
+      ({
+        status,
+        provider: provider.kind,
+        repository: target.repositoryNameWithOwner,
+        url: pr.url,
+        number: pr.number,
+        baseBranch: pr.baseRefName,
+        headBranch: pr.headRefName,
+      }) satisfies GitOpenChangeRequestResult;
+
+    const existing = yield* findOpenPr(cwd, headContext);
+    if (existing) return opened("opened_existing", existing);
+
+    yield* createChangeRequestWithBody({
+      provider,
+      cwd,
+      operation: "openChangeRequest",
+      baseBranch: input.baseBranch ?? (yield* resolveDefaultBaseBranch(cwd)),
+      headSelector: headContext.preferredHeadSelector,
+      title: input.title,
+      body: input.body,
+      draft: input.draft,
+    });
+    // The branch's cached status still says "no change request"; the next read must ask again.
+    yield* invalidateStatus(cwd);
+    const created = yield* findOpenPr(cwd, headContext);
+    if (!created) {
+      const terms = getChangeRequestTerminologyForKind(provider.kind);
+      return yield* new GitManagerError({
+        operation: "openChangeRequest",
+        cwd,
+        detail: `The ${terms.singular} for '${headContext.headBranch}' was created, but the host does not list it yet. Run again to fetch it.`,
+      });
+    }
+    return opened("created", created);
+  });
+
   return GitManager.of({
     createWorktree,
     localStatus,
@@ -2896,6 +3030,7 @@ export const make = Effect.gen(function* () {
     resolvePullRequest,
     preparePullRequestThread,
     runStackedAction,
+    openChangeRequest,
   });
 });
 

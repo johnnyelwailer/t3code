@@ -122,6 +122,12 @@ import {
   isClaudeInterruptedMessage,
   planClaudeGatewayRedrive,
 } from "./t3team-claudeTurnRecovery.ts";
+import {
+  applyClaudeTaskToolResult,
+  claudeTaskPlanSteps,
+  isClaudeTaskTool,
+  type ClaudeTaskState,
+} from "./t3team-claudeTasksPlan.ts";
 import { turnScopedSelectionTransition } from "../ProviderSelectionTransition.ts";
 import { providerMessageTextWithAttachmentPaths } from "../AttachmentPrompt.ts";
 import * as ProviderAdapter from "../ProviderAdapter.ts";
@@ -3069,6 +3075,9 @@ export function makeClaudeAdapterV2(
         const planIdsByNativeItem = yield* Ref.make(
           new Map<string, OrchestrationV2PlanArtifact["id"]>(),
         );
+        // Claude Tasks (TaskCreate/TaskUpdate/TaskList) mutate one session-wide
+        // list; each change re-projects the whole list as a todo_list plan.
+        const claudeTasksByThread = new Map<string, Map<string, ClaudeTaskState>>();
         const providerRetries = yield* Ref.make(
           new Map<OrchestrationV2ProviderTurn["id"], ActiveClaudeProviderRetry>(),
         );
@@ -6557,6 +6566,30 @@ export function makeClaudeAdapterV2(
             });
             yield* emitToolCallArtifacts(artifacts);
             toolCallsFor(context, toolCall).delete(toolCall.nativeItemId);
+            if (
+              isClaudeTaskTool(toolCall.toolName) &&
+              toolNonExecutionKind === undefined &&
+              !isClaudeToolResultError(toolResult)
+            ) {
+              const threadKey = String(context.input.threadId);
+              const tasks = claudeTasksByThread.get(threadKey) ?? new Map();
+              claudeTasksByThread.set(threadKey, tasks);
+              if (
+                applyClaudeTaskToolResult(
+                  tasks,
+                  toolCall.toolName,
+                  claudeNativeToolInputValue(toolCall.input),
+                  claudeNativeToolOutputValue(output),
+                )
+              ) {
+                yield* emitClaudePlanProjection({
+                  context,
+                  nativeItemId: toolCall.nativeItemId,
+                  kind: "todo_list",
+                  steps: claudeTaskPlanSteps(tasks),
+                }).pipe(Effect.orDie);
+              }
+            }
           }
 
           const assistantParentToolUseId = parentToolUseIdFromSdkMessage(message);

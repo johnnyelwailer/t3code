@@ -1,4 +1,5 @@
 import type { PromptRef } from "./t3team-sdk.prompt.ts";
+import type { Signal, SignalSourceRef } from "./t3team-sdk.signal.ts";
 import type { AnyScriptRef, WorkflowRef } from "./t3team-sdk.types.ts";
 
 /**
@@ -75,6 +76,53 @@ export type RecipeBrevity = "short" | "balanced" | "detailed";
 export type RecipeGuidanceStyle = "guided" | "balanced" | "expert";
 export type RecipeDetailDensity = "guided" | "balanced" | "expert";
 
+/**
+ * A recipe TRIGGER (S5b): a host-side, event-driven launch of one of the recipe's actions —
+ * one event becomes one headless run, with no chat thread and no forever-looping routine.
+ *
+ * `select` and `key` are trusted PACK CODE run in the server process (the S1 trust model,
+ * like `visible`): `select` is pure and synchronous, and returns the workflow's args or `null`
+ * to skip the event. The host applies every launch limit (debounce, interval, concurrency,
+ * daily cap) OUTSIDE this code, so a buggy `select` cannot cause a launch storm.
+ */
+/** The host-side settings a trigger's `select` can read (per-project overrides, host flags). */
+export type RecipeTriggerSelectContext = {
+  readonly settings: Readonly<Record<string, unknown>>;
+};
+
+/** One recipe trigger, host-applied limits first (S5b). */
+export interface RecipeTriggerSpec<Payload = unknown> {
+  /** Stable, unique within the recipe — the host's registration owner is `trigger:<recipe>:<id>`. */
+  readonly id: string;
+  /** The built-in signal source the trigger listens on (its host start behavior is engine-owned). */
+  readonly source: SignalSourceRef<unknown>;
+  /** The signal to react to; must be one of `source.emits`. */
+  readonly signal: Signal<Payload>;
+  /**
+   * Pure, synchronous; returns the workflow's args, or `null` to skip the event. Runs host-side
+   * per event — it cannot fetch, and a throwing `select` drops the event without stopping the
+   * trigger runner.
+   */
+  readonly select: (
+    payload: Payload,
+    ctx: RecipeTriggerSelectContext,
+  ) => Record<string, unknown> | null;
+  /** The dedupe/debounce key for an event (e.g. the change-request key); newest payload wins. */
+  readonly key: (payload: Payload) => string;
+  /** The recipe action to launch; absent (or `"default"`) runs `defaultAction`. */
+  readonly action?: string;
+  /** Trailing debounce per key; absent = 0 (launch as soon as the event settles). */
+  readonly debounceMs?: number;
+  /** Per-key rate limit measured from the last launch of that key; absent = 0. */
+  readonly minIntervalMs?: number;
+  /** Concurrent launches of this recipe per environment; absent = 1. */
+  readonly maxConcurrent?: number;
+  /** Launches per rolling 24 h for this recipe per environment; absent or `null` = none. */
+  readonly dailyCap?: number | null;
+  /** The author's default; the host shows it and a per-project toggle can override it. */
+  readonly defaultEnabled: boolean;
+}
+
 export interface RecipeApplicabilitySpec {
   readonly resourceKinds?: ReadonlyArray<string>;
   readonly projectSourceKinds?: ReadonlyArray<string>;
@@ -118,6 +166,9 @@ export interface RecipeRef<Inputs = unknown, Outputs = unknown> {
    * actions declare no workflow, so they add nothing to that set.
    */
   readonly actions?: Readonly<Record<string, AnyActionRef>>;
+  /** Host-side event triggers (S5b); the host reconciles the enabled ones into signal
+   * registrations and launches this recipe's actions headless — one event, one run. */
+  readonly triggers?: ReadonlyArray<RecipeTriggerSpec>;
   readonly defaults?: Partial<Inputs>;
   readonly Inputs?: Inputs;
   readonly Outputs?: Outputs;

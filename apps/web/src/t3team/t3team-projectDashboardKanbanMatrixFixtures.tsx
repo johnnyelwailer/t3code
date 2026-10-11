@@ -1,5 +1,9 @@
+import { useState } from "react";
+
 import { createProjectBacklogTestTicket as createTicket } from "~/t3team/t3team-projectBacklogTestUtils";
 import { ProjectDashboardKanban } from "~/t3team/t3team-ProjectDashboardKanban";
+import { ProjectDashboardKanbanZoomControl } from "~/t3team/t3team-ProjectDashboardKanbanZoomControl";
+import type { KanbanZoomLevel } from "~/t3team/t3team-kanbanZoom";
 import {
   buildProjectTicketKanbanColumns,
   type ProjectTicketKanbanBoardColumn,
@@ -204,6 +208,7 @@ export function ProjectDashboardKanbanMatrixFixtureView({
 }: {
   scenario: ProjectDashboardKanbanMatrixFixtureScenario;
 }) {
+  const [kanbanZoomLevel, setKanbanZoomLevel] = useState<KanbanZoomLevel>("full");
   const kanbanColumns = buildProjectTicketKanbanColumns(scenario.tickets, {
     boardColumns: projectDashboardKanbanMatrixFixtureBoardColumns,
   });
@@ -214,7 +219,24 @@ export function ProjectDashboardKanbanMatrixFixtureView({
       <div className="mx-auto max-w-7xl space-y-4">
         <div className="max-w-3xl space-y-1">
           <h2 className="text-lg font-semibold tracking-tight">{scenario.title}</h2>
-          <p className="text-sm text-muted-foreground">{scenario.description}</p>
+          <p className="text-sm text-muted-foreground">
+            {scenario.description} Pinch / Ctrl+wheel (or +/-) for semantic zoom — same snaps as the
+            flat board.
+          </p>
+        </div>
+        <div className="mb-4 flex flex-wrap items-center gap-1">
+          <div className="flex h-8 w-full items-center rounded-md border border-border/80 bg-background/95 px-3 text-xs text-muted-foreground sm:w-[15rem] lg:w-[18rem]">
+            Search your assigned work
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <ProjectDashboardKanbanZoomControl
+              level={kanbanZoomLevel}
+              onLevelChange={setKanbanZoomLevel}
+            />
+            <div className="inline-flex h-8 items-center rounded-md border border-border/70 px-2.5 text-xs text-muted-foreground">
+              Options
+            </div>
+          </div>
         </div>
         <ProjectDashboardKanban
           kanbanColumns={kanbanColumns}
@@ -222,6 +244,8 @@ export function ProjectDashboardKanbanMatrixFixtureView({
           isHierarchyMode
           parentChildGroups={parentChildGroups}
           projectId="storybook-project"
+          kanbanZoomLevel={kanbanZoomLevel}
+          onKanbanZoomLevelChange={setKanbanZoomLevel}
           onOpenTicket={() => undefined}
           onTicketContextMenu={() => undefined}
         />

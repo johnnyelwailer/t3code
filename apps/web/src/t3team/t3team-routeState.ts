@@ -7,6 +7,10 @@ import { parseProjectDashboardMyWorkRouteSearch } from "~/t3team/t3team-projectD
 import type { ProjectSidebarRouteSearch } from "~/t3team/t3team-projectSidebarState";
 import { parseProjectSidebarRouteSearch } from "~/t3team/t3team-projectSidebarState";
 import type { ViewState } from "~/t3team/t3team-types";
+import {
+  parseCreateProjectRouteSearch,
+  type CreateProjectRouteSearch,
+} from "~/t3team/t3team-createProjectRouteState";
 
 export const T3TEAM_BASE_PATH = "/t3team";
 export const T3TEAM_CREATE_PATH = "/t3team/new";
@@ -22,7 +26,8 @@ const T3TEAM_SETUP_WELCOME_VALUE = "welcome";
 export type T3TeamRouteSearch = ProjectDashboardBacklogRouteSearch &
   ProjectDashboardMyWorkRouteSearch &
   ProjectDashboardModeRouteSearch &
-  ProjectSidebarRouteSearch & {
+  ProjectSidebarRouteSearch &
+  CreateProjectRouteSearch & {
     chatThreadId?: string;
     setup?: "welcome";
   };
@@ -54,6 +59,7 @@ export function parseT3TeamRouteSearch(search: Record<string, unknown>): T3TeamR
     ...parseProjectDashboardMyWorkRouteSearch(search),
     ...parseProjectDashboardModeRouteSearch(search),
     ...parseProjectSidebarRouteSearch(search),
+    ...parseCreateProjectRouteSearch(search),
     ...(chatThreadId ? { chatThreadId } : {}),
     ...(setup ? { setup } : {}),
   };

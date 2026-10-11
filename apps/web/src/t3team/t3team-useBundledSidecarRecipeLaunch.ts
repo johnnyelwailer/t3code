@@ -9,7 +9,10 @@ import {
   type T3TeamSelectedRecipeQuickStart,
 } from "~/t3team/t3team-recipeQuickStartLaunch";
 import { type T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipes";
-import { launchBundledSidecarRecipeThread } from "~/t3team/t3team-sidecarRecipeLaunch";
+import {
+  launchBundledSidecarRecipeThread,
+  launchSidecarRecipeQuickStartThread,
+} from "~/t3team/t3team-sidecarRecipeLaunch";
 import { buildSidecarSectionHost } from "~/t3team/t3team-sidecarSectionHost";
 import { type T3TeamKickoffComposerHandle } from "~/t3team/t3team-TicketKickoffComposer";
 
@@ -101,6 +104,19 @@ export function useBundledSidecarRecipeLaunch(input: UseBundledSidecarRecipeLaun
             setSelectedRecipe(null);
           });
         },
+        launchQuickStart: (recipe) =>
+          launchSidecarRecipeQuickStartThread({
+            backend: input.backend,
+            environmentId: input.environmentId,
+            projectId: input.projectId,
+            quickStart: recipe,
+            launchConfig:
+              composerRef.current?.getLaunchConfig() ?? createDefaultT3TeamKickoffLaunchConfig(),
+            createThread: input.createThread,
+          }).then((launched) => {
+            if (launched) input.onLaunched?.();
+            return launched;
+          }),
         openThread: input.openThread,
       }),
     [

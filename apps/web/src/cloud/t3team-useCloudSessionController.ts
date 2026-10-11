@@ -21,6 +21,7 @@ import { useCloudSessionListRefresh } from "./t3team-useCloudSessionListRefresh"
 import { useCloudSessionConnect } from "./t3team-useCloudSessionConnect";
 import { liveCloudSessionForEnvironment } from "./t3team-cloudSessionEnvironmentMatch";
 import { useCloudSessionCreate } from "./t3team-useCloudSessionCreate";
+import { useCanManageRelay } from "./t3team-useCanManageRelay";
 
 /**
  * Drives the cloud session surfaces (settings panel + "Run on" menu): create,
@@ -29,6 +30,7 @@ import { useCloudSessionCreate } from "./t3team-useCloudSessionCreate";
  */
 export function useCloudSessionController() {
   const environmentId = usePrimaryEnvironmentId();
+  const canManageRelay = useCanManageRelay();
   const { environments: relayDiscovered } = useRelayEnvironmentDiscovery();
   const {
     sessions: serverSessions,
@@ -69,7 +71,7 @@ export function useCloudSessionController() {
     sessions,
   );
 
-  const { connectPendingSessionId, requestConnect } = useCloudSessionConnect({
+  const { connectPendingSessionId, connectFailure, requestConnect } = useCloudSessionConnect({
     sessions,
     relayCandidates,
     primaryEnvironmentId: environmentId,
@@ -77,8 +79,9 @@ export function useCloudSessionController() {
     register: registerRelayEnvironment,
   });
 
-  const { onCreate, createPending } = useCloudSessionCreate({
+  const { onCreate, createPending, createPendingSetup } = useCloudSessionCreate({
     environmentId,
+    canManageRelay,
     relayDiscovered,
     serverSessions,
     setRelayIdsBefore,
@@ -125,7 +128,8 @@ export function useCloudSessionController() {
         // "Start another": a fresh session at the remembered duration. The
         // record carries no requested hold (the runs API omits dispatch
         // inputs), so replaying the ended session's own is not possible.
-        onCreate();
+        // A setup session offers none: its record carries no project either.
+        if (session.machineSetup !== true) onCreate();
         return;
       }
       cancelRun(session, "cancel", "Cancelling that session…");
@@ -157,9 +161,11 @@ export function useCloudSessionController() {
     configured,
     historyUrl,
     createPending,
+    createPendingSetup,
     pendingSessionId,
     pendingKind,
     pendingLabel,
+    connectFailure,
     onCreate,
     onSessionAction,
     onSessionSecondaryAction,
@@ -170,7 +176,8 @@ export function useCloudSessionController() {
     ),
     onCloudMenuOpenChange: useCallback((open: boolean) => setCloudMenuOpen(open), []),
     onPanelVisibilityChange: useCallback((open: boolean) => setPanelVisible(open), []),
-    available: environmentId !== null,
+    // Starting a cloud session spends relay compute: without `relay:write` no entry offers it.
+    available: environmentId !== null && canManageRelay,
     /** Where sessions are created; a project must live here to run in its machine. */
     primaryEnvironmentId: environmentId,
   };

@@ -18,6 +18,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
+import { T3TeamChangeRequestPublisher } from "./t3team-changeRequestPublisher.ts";
 import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import {
@@ -39,6 +40,8 @@ export type TestDispatch = (command: OrchestrationV2ServerCommand) => Effect.Eff
 export interface BrokerLayerOptions {
   /** Sees every thread artifact the broker writes (a published draft, a widget). */
   readonly onArtifact?: (artifact: T3TeamThreadArtifactInput) => void;
+  /** Provides `t3team.change_request.publish` a publisher; absent, the tool is not wired. */
+  readonly changeRequestPublisher?: T3TeamChangeRequestPublisher["Service"];
 }
 
 const threadId = ThreadId.make("thread-1");
@@ -161,6 +164,9 @@ function makeBrokerLayerBase(
         T3TeamThreadToolContextStoreLive,
         WorkspacePaths.layer.pipe(Layer.provide(stubFileSystemPathLayer)),
         stubFileSystemPathLayer,
+        options.changeRequestPublisher === undefined
+          ? Layer.empty
+          : Layer.succeed(T3TeamChangeRequestPublisher, options.changeRequestPublisher),
       ),
     ),
   );

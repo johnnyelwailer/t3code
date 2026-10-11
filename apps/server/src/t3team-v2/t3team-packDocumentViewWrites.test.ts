@@ -87,6 +87,11 @@ it.layer(TestLayer)("Pack document view writes and removal", (it) => {
         service.subscribe({ packId: "pack-a", collection: "items", prefix: "page:" }),
         3,
       );
+      // Pack B watches the same collection and keys: none of pack A's removals may reach it.
+      const other = yield* collectAfterSnapshot(
+        service.subscribe({ packId: "pack-b", collection: "items", prefix: "page:" }),
+        2,
+      );
       assert.strictEqual(yield* a.remove("items", { prefix: "page:" }), 2);
       assert.strictEqual(yield* a.remove("items", "solo"), 1);
       assert.strictEqual(yield* a.remove("items", "solo"), 0);
@@ -95,6 +100,12 @@ it.layer(TestLayer)("Pack document view writes and removal", (it) => {
       assert.deepStrictEqual(collected.slice(1).toSorted(), ["removed:page:1", "removed:page:2"]);
       assert.deepStrictEqual(keysOf(yield* a.list("items")), []);
       assert.deepStrictEqual(keysOf(yield* b.list("items")), ["page:1"]);
+      // Delivery is ordered, so B's own removal arriving second proves A's never arrived before it.
+      assert.strictEqual(yield* b.remove("items", "page:1"), 1);
+      assert.deepStrictEqual(
+        (yield* Fiber.join(other)).map((event) => `${event.packId} ${eventSummary(event)}`),
+        ["pack-b snapshot:page:1", "pack-b removed:page:1"],
+      );
     }),
   );
 

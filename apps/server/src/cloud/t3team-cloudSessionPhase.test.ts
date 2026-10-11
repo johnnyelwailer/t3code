@@ -19,6 +19,7 @@ function run(overrides: Partial<WorkflowRunSummary> = {}): WorkflowRunSummary {
     updatedAt: CREATED_AT,
     htmlUrl: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/248523362",
     name: "hive/nx-nexi [main] [c9f4a2]",
+    actor: "pj",
     ...overrides,
   };
 }
@@ -228,6 +229,18 @@ describe("deriveMachineStage", () => {
 
   it("names the machine milestone, most advanced first", () => {
     expect(deriveMachineStage(machineSteps(["Checkout the t3code fork"]))).toBeUndefined();
+    // A standby skips secret redemption while it waits. That step is completed,
+    // but it did not run, so the machine is not building yet.
+    expect(
+      deriveMachineStage([
+        {
+          name: "Redeem the session's secrets from the broker",
+          status: "completed",
+          conclusion: "skipped",
+        },
+        { name: "Wait for a claim", status: "in_progress", conclusion: null },
+      ]),
+    ).toBeUndefined();
     expect(deriveMachineStage(machineSteps(["Bring up the project machine"]))).toBe("building");
     expect(deriveMachineStage(machineSteps(["Check the project machine's health"]))).toBe(
       "checking",

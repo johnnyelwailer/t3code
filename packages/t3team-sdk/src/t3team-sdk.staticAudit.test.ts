@@ -105,6 +105,32 @@ describe("static capability check", () => {
     expect(rules(withUser)).toEqual([]);
   });
 
+  it("gates an imported launchThread on the launch capability", () => {
+    const sourceText = (capabilities: string) =>
+      [
+        'import { launchThread } from "@t3team/sdk";',
+        `export const meta = { name: 'inline', capabilities: [${capabilities}] } as const;`,
+        "export default async function run() {",
+        "  await launchThread({ key: 'k', title: 't' });",
+        "}",
+      ].join("\n");
+    const absolutePath = NodePath.join(FIXTURES, "inline.workflow.ts");
+    const missing = auditWorkflowSourceStatic(
+      { absolutePath, sourceText: sourceText("") },
+      { declared: new Set() },
+    );
+    expect(missing.map((item) => [item.rule, item.construct])).toEqual([
+      ["missing-capability", "launchThread({ key: 'k', title: 't' })"],
+    ]);
+    expect(missing[0]?.message).toContain("'launch'");
+    expect(
+      auditWorkflowSourceStatic(
+        { absolutePath, sourceText: sourceText("'launch'") },
+        { declared: new Set(["launch"]) },
+      ),
+    ).toEqual([]);
+  });
+
   it("stays silent about a tools.* call whose group cannot be resolved", () => {
     const source = {
       absolutePath: NodePath.join(FIXTURES, "inline.workflow.ts"),
@@ -130,6 +156,20 @@ describe("static capability check", () => {
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain("'t3team.thread.write'");
     expect(findings[0]?.construct).toBe("tools.t3team.orchestration.run");
+  });
+
+  it("gates thread.showView on ui.render", () => {
+    const source = {
+      absolutePath: NodePath.join(FIXTURES, "inline.workflow.ts"),
+      sourceText: [
+        "export const meta = { name: 'inline', capabilities: ['user'] };",
+        "getThread()?.showView({ key: 'k', viewId: 'notes.card', props: {} });",
+        "return {};",
+      ].join("\n"),
+    };
+    const findings = auditWorkflowSourceStatic(source, { declared: new Set(["user"]) });
+    expect(findings.map((item) => item.message)).toEqual([expect.stringContaining("'ui.render'")]);
+    expect(auditWorkflowSourceStatic(source, { declared: new Set(["ui.render"]) })).toEqual([]);
   });
 
   it("skips capability rules when the capability set is unknowable", () => {
@@ -267,7 +307,8 @@ export default async function run() {
       "(prev: number) => prev + 1, async (prev: number) => prev + 1",
     );
     expect(auditWorkflowSourceStatic(typed, { declared: new Set(), typecheck: true })).toEqual([]);
-  });
+    // A cold typecheck parses the lib + effect declaration graph (~9s on CI runners).
+  }, 60_000);
 
   it("still scans expressions inside the options object", () => {
     const findings = auditWorkflowSourceStatic(source("process.pid + await waitUntil(1)"), {

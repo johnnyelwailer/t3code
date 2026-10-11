@@ -1,4 +1,5 @@
 import { Input } from "~/t3team/components/ui/t3team-input";
+import { ProjectDashboardKanbanZoomControl } from "~/t3team/t3team-ProjectDashboardKanbanZoomControl";
 import { ProjectMyWorkOptionsMenu } from "~/t3team/t3team-ProjectMyWorkOptionsMenu";
 import type { ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 import type {
@@ -6,6 +7,8 @@ import type {
   ProjectMyWorkTypeOption,
   ProjectMyWorkStatusCategory,
 } from "~/t3team/t3team-projectMyWork";
+import { useKanbanSemanticZoomFlag } from "~/t3team/t3team-useKanbanSemanticZoomFlag";
+import type { KanbanZoomLevel } from "~/t3team/t3team-kanbanZoom";
 import type {
   ProjectMyWorkTableSortBy,
   ProjectMyWorkTableSortDirection,
@@ -37,6 +40,8 @@ export function ProjectMyWorkFilterBar({
   selectedStatus,
   onSelectedStatusChange,
   statusOptions,
+  kanbanZoomLevel,
+  onKanbanZoomLevelChange,
   tableSortBy,
   onTableSortByChange,
   tableSortDirection,
@@ -67,12 +72,17 @@ export function ProjectMyWorkFilterBar({
   selectedStatus: string;
   onSelectedStatusChange: (value: string) => void;
   statusOptions: ReadonlyArray<string>;
+  kanbanZoomLevel: KanbanZoomLevel;
+  onKanbanZoomLevelChange: (value: KanbanZoomLevel) => void;
   tableSortBy: ProjectMyWorkTableSortBy;
   onTableSortByChange: (value: ProjectMyWorkTableSortBy) => void;
   tableSortDirection: ProjectMyWorkTableSortDirection;
   onTableSortDirectionChange: (value: ProjectMyWorkTableSortDirection) => void;
   onReset: () => void;
 }) {
+  const kanbanZoomEnabled = useKanbanSemanticZoomFlag();
+  const kanbanZoomVisible = kanbanZoomEnabled && (lens === "board" || viewMode === "kanban");
+
   return (
     <div className="mb-4 flex flex-wrap items-center gap-1">
       <Input
@@ -83,6 +93,12 @@ export function ProjectMyWorkFilterBar({
       />
 
       <div className="ml-auto flex items-center gap-2">
+        {kanbanZoomVisible ? (
+          <ProjectDashboardKanbanZoomControl
+            level={kanbanZoomLevel}
+            onLevelChange={onKanbanZoomLevelChange}
+          />
+        ) : null}
         <ProjectMyWorkOptionsMenu
           lens={lens}
           activeOptionsCount={activeOptionsCount}

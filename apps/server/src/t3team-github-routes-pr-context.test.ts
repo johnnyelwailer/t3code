@@ -164,6 +164,7 @@ function pullRequestServiceLayer(
     watchFingerprint: () => Effect.die("not used"),
     summary: () => Effect.die("not used"),
     subscribeMerges: Effect.die("not used"),
+    subscribeStateChanges: Effect.die("not used"),
     subscribeRefreshes: Stream.empty,
     refreshAfterTurn: () => Effect.void,
     routing: () => Effect.die("not used"),
@@ -173,6 +174,7 @@ function pullRequestServiceLayer(
     labelCandidates: () => Effect.die("not used"),
     setLabels: () => Effect.die("not used"),
     detail: () => Effect.succeed(detail),
+    projectRepositories: () => Effect.die("not used"),
     preview: () => Effect.die("not used"),
     filesViewed: () => Effect.die("not used"),
     setFilesViewed: () => Effect.die("not used"),
@@ -185,6 +187,7 @@ function pullRequestServiceLayer(
           truncated: false,
           nextCursor: null,
         } satisfies PullRequestDiffResult)),
+    fileAtRevision: () => Effect.die("not used"),
     diffFileContents: () =>
       Effect.succeed({
         oldContents: "export const value = 'old';\n",

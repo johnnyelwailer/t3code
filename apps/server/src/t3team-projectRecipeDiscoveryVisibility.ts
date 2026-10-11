@@ -18,6 +18,7 @@ import {
   isRelativePath,
   resolveWithinRoot,
 } from "./t3team-projectRecipeDiscoveryShared.ts";
+import { createWorkspaceFileAccess } from "./t3team-workspaceFileAccess.ts";
 import {
   createT3TeamPromiseToolApi,
   createUnavailableT3TeamPromiseToolApi,
@@ -120,26 +121,12 @@ const evaluateVisibleModule = Effect.fn("evaluateVisibleModule")(function* (inpu
         workspace: {
           rootPath: input.workspaceRoot,
           recipePath: input.recipePath,
-          readText: async (relativePath) =>
-            runPromise(
-              fileSystem.readFileString(
-                resolveWithinRoot(pathService, input.workspaceRoot, relativePath),
-              ),
-            ),
-          writeText: async (relativePath, content) => {
-            const targetPath = resolveWithinRoot(pathService, input.workspaceRoot, relativePath);
-            await runPromise(
-              fileSystem
-                .makeDirectory(pathService.dirname(targetPath), { recursive: true })
-                .pipe(Effect.andThen(fileSystem.writeFileString(targetPath, content))),
-            );
-          },
-          exists: async (relativePath) =>
-            runPromise(
-              fileSystem
-                .exists(resolveWithinRoot(pathService, input.workspaceRoot, relativePath))
-                .pipe(Effect.orElseSucceed(() => false)),
-            ),
+          ...createWorkspaceFileAccess({
+            fileSystem,
+            pathService,
+            rootPath: input.workspaceRoot,
+            runPromise,
+          }),
         },
         log: { info: () => undefined, warn: () => undefined, error: () => undefined },
         fetch,

@@ -68,6 +68,11 @@ const TOOL_GROUP_CAPABILITY_LABELS: Record<string, { label: string; description:
     description:
       "Prepare changes as drafts for you to accept or reject. Nothing is saved to your connected tools without your approval.",
   },
+  "mutation.change_request": {
+    label: "Publish change requests",
+    description:
+      "Commit the files it lists, push a branch, and open a pull or merge request on the repository's host. Nothing else in the checkout is committed.",
+  },
   "mutation.write": {
     label: "Save changes directly",
     description: "Write changes straight to your connected tools without a review step.",

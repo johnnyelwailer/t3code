@@ -8,17 +8,18 @@
  * Staged composer actions beat plain turns, mirroring the online dispatch
  * order: a preselected action is what the user chose the composer to run.
  */
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 
-import { useEnvironment } from "~/state/environments";
-import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { buildKickoffQueueKey } from "~/t3team/t3team-addToChatStore";
 import { isStagedComposerActionLaunchable } from "~/t3team/t3team-stagedComposerActionLaunch";
 import { useT3TeamStagedComposerActionStore } from "~/t3team/t3team-stagedComposerActionStore";
 import { makeT3TeamOutboxEntry } from "~/t3team/outbox/t3team-outboxModel";
 import { enqueueT3TeamOutboxEntry } from "~/t3team/outbox/t3team-outboxStore";
-import { toastManager } from "~/components/ui/toast";
+import {
+  useT3TeamWorkflowOutboxActions,
+  type T3TeamOutboxBackend,
+} from "~/t3team/outbox/t3team-useWorkflowOutboxActions";
 
 export type EnqueueOfflineTurnStart = (turnStart: {
   readonly threadId: string;
@@ -32,17 +33,8 @@ export type EnqueueOfflineTurnStart = (turnStart: {
   readonly hasAttachments: boolean;
 }) => boolean | Promise<boolean>;
 
-/** A workflow/card action failed to queue durably; surface it instead of dropping it silently. */
-function notifyOutboxPersistFailed(): void {
-  toastManager.add({
-    type: "warning",
-    title: "Couldn't queue that yet",
-    description: "The offline queue is unavailable. Reconnect to the environment and try again.",
-  });
-}
-
 export function useT3TeamOutboxSend(input: {
-  readonly backend: BackendApi | null | undefined;
+  readonly backend: T3TeamOutboxBackend | null | undefined;
   readonly environmentId: string | null;
   readonly projectId: string;
   readonly threadId: string;
@@ -50,10 +42,6 @@ export function useT3TeamOutboxSend(input: {
   readonly serverThreadExists: boolean;
   readonly waitingForRecipeInput: boolean;
 }) {
-  const environment = useEnvironment(input.environmentId as never);
-  const availableRef = useRef(false);
-  availableRef.current = environment?.connection.phase === "connected";
-
   const enqueueOfflineTurnStart: EnqueueOfflineTurnStart = useCallback(
     async (turnStart) => {
       if (
@@ -134,71 +122,11 @@ export function useT3TeamOutboxSend(input: {
     ],
   );
 
-  const resolveWorkflowDecision = useCallback(
-    async (decision: {
-      threadId: string;
-      messageId: string;
-      text: string;
-      value: unknown;
-      correlationId: string;
-    }) => {
-      if (!input.backend) return;
-      if (!availableRef.current && input.environmentId) {
-        const queued = enqueueT3TeamOutboxEntry(
-          makeT3TeamOutboxEntry(
-            "workflow-answer",
-            {
-              messageId: decision.messageId,
-              text: decision.text,
-              value: decision.value,
-              correlationId: decision.correlationId,
-            },
-            input.environmentId,
-            decision.threadId,
-          ),
-        );
-        if (!queued) notifyOutboxPersistFailed();
-        return;
-      }
-      await input.backend.resolveWorkflowInput({
-        threadId: decision.threadId,
-        text: decision.text,
-        messageId: decision.messageId,
-        value: decision.value,
-        correlationId: decision.correlationId,
-      });
-    },
-    [input.backend, input.environmentId],
-  );
-
-  const submitRecipeCardAction = useCallback(
-    async (action: { cardId: string; actionId: string; submit?: Record<string, unknown> }) => {
-      if (!input.backend) return;
-      if (!availableRef.current && input.environmentId) {
-        const queued = enqueueT3TeamOutboxEntry(
-          makeT3TeamOutboxEntry(
-            "recipe-card-action",
-            {
-              cardId: action.cardId,
-              actionId: action.actionId,
-              submit: action.submit ?? null,
-            },
-            input.environmentId,
-            input.threadId,
-          ),
-        );
-        if (!queued) notifyOutboxPersistFailed();
-        return;
-      }
-      await input.backend.submitRecipeCardAction({
-        threadId: input.threadId,
-        cardId: action.cardId,
-        actionId: action.actionId,
-        ...(action.submit ? { submit: action.submit } : {}),
-      });
-    },
-    [input.backend, input.threadId, input.environmentId],
-  );
+  const { resolveWorkflowDecision, submitRecipeCardAction } = useT3TeamWorkflowOutboxActions({
+    backend: input.backend,
+    environmentId: input.environmentId,
+    threadId: input.threadId,
+  });
 
   return { enqueueOfflineTurnStart, resolveWorkflowDecision, submitRecipeCardAction };
 }

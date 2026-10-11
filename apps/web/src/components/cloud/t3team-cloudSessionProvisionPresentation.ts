@@ -94,39 +94,35 @@ function cloudSessionProgress(elapsedSeconds: number): number {
   return Math.min(1, Math.max(0, elapsedSeconds / CLOUD_SESSION_TYPICAL_TOTAL_SECONDS));
 }
 
+/**
+ * An ended session offers a fresh one, not a replay of itself. Not for a setup session: its record
+ * keeps no project, so "another" would start a plain session; the Run-on menu starts setup again.
+ */
+function startAnotherLabel(session: CloudSession): string | null {
+  return session.machineSetup === true ? null : "Start another";
+}
+
 /** A project machine's milestones read as its own; a plain session builds the workspace. */
 function preparingWords(session: CloudSession): {
   readonly title: string;
   readonly detail: string;
 } {
   const elapsed = formatDuration(session.elapsedSeconds);
+  if (session.machineSetup === true) {
+    return { title: "Checking out project", detail: elapsed };
+  }
   if (session.projectMachine !== true) {
-    return {
-      title: "Building the workspace",
-      detail: `Installing dependencies and building · ${elapsed}`,
-    };
+    return { title: "Building workspace", detail: elapsed };
   }
   switch (session.machineStage) {
     case "building":
-      return {
-        title: "Building the project machine",
-        detail: `From its devcontainer · ${elapsed}`,
-      };
+      return { title: "Building machine", detail: elapsed };
     case "checking":
-      return {
-        title: "Checking the project machine",
-        detail: `Running its health check · ${elapsed}`,
-      };
+      return { title: "Checking machine", detail: elapsed };
     case "installing":
-      return {
-        title: "Setting up Nexi in the machine",
-        detail: `Installing the session server · ${elapsed}`,
-      };
+      return { title: "Installing Nexi", detail: elapsed };
     case undefined:
-      return {
-        title: "Preparing the project machine",
-        detail: `Starting the cloud machine · ${elapsed}`,
-      };
+      return { title: "Starting machine", detail: elapsed };
   }
 }
 
@@ -136,8 +132,8 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
   switch (session.phase) {
     case "requested":
       return {
-        title: "Requesting a machine",
-        detail: "Handing the session to the fleet.",
+        title: "Requesting",
+        detail: "sending to the fleet",
         tone: "working",
         progress: cloudSessionProgress(session.elapsedSeconds),
         actionLabel: "Cancel",
@@ -146,8 +142,8 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
       };
     case "queued":
       return {
-        title: "Waiting for a machine",
-        detail: `${session.machineLabel} · queued ${elapsed}`,
+        title: "Queued",
+        detail: elapsed,
         tone: "working",
         progress: cloudSessionProgress(session.elapsedSeconds),
         actionLabel: "Cancel",
@@ -165,8 +161,8 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
       };
     case "starting":
       return {
-        title: "Almost there",
-        detail: `Making it reachable · ${elapsed}`,
+        title: "Connecting",
+        detail: elapsed,
         tone: "working",
         progress: cloudSessionProgress(session.elapsedSeconds),
         actionLabel: "Cancel",
@@ -188,33 +184,37 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
       };
     case "failed":
       return {
-        title: "Provisioning failed",
-        detail: session.failureReason ?? "The session stopped before it became reachable.",
+        title: "Failed",
+        // The title already says "Failed"; "Failed at X." reads as "Failed · at X".
+        detail: (session.failureReason ?? "stopped before it became reachable").replace(
+          /^Failed\s+(?=at\b)/i,
+          "",
+        ),
         tone: "error",
         progress: null,
-        actionLabel: "Start another", // a fresh session, not a replay of this one
+        actionLabel: startAnotherLabel(session),
         secondaryActionLabel: null,
         liveElapsed: false,
       };
     case "stopped":
       return {
         title: "Stopped",
-        detail: `Ran for ${
+        detail: `ran ${
           session.durationSeconds === undefined ? elapsed : formatDuration(session.durationSeconds)
-        }.`,
+        }`,
         tone: "idle",
         progress: null,
-        actionLabel: "Start another",
+        actionLabel: startAnotherLabel(session),
         secondaryActionLabel: null,
         liveElapsed: false,
       };
     case "cancelled":
       return {
         title: "Cancelled",
-        detail: "Stopped by you.",
+        detail: "by you",
         tone: "idle",
         progress: null,
-        actionLabel: "Start another",
+        actionLabel: startAnotherLabel(session),
         secondaryActionLabel: null,
         liveElapsed: false,
       };

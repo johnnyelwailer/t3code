@@ -7,6 +7,7 @@
 @import "./t3team-index-aciStateMotion.css";
 @import "./t3team-index-aciLead.css";
 @import "./t3team-index-setupWelcome.css";
+@import "./t3team-index-myWorkLoading.css";
 @import "./t3team-statusOrb.css";
 
 /* Jira rich-text (ADF) lists: nested markers cycle like .chat-markdown's. */
@@ -31,41 +32,5 @@
 
   & ol ol {
     list-style-type: lower-roman;
-  }
-}
-
-/* Create-project wizard artwork: the sky glow above the header, and the full-page wizard's
- * warm (light) / deep-sky (dark) wash behind its panel. */
-@utility t3team-wizard-glow {
-  background-image: radial-gradient(
-    44rem 22rem at top,
-    color-mix(in srgb, var(--color-sky-400) 18%, transparent),
-    transparent
-  );
-}
-
-@utility t3team-wizard-glow-compact {
-  background-image: radial-gradient(
-    30rem 10rem at top,
-    color-mix(in srgb, var(--color-sky-400) 18%, transparent),
-    transparent
-  );
-}
-
-@utility t3team-wizard-backdrop {
-  background-image: linear-gradient(
-    140deg,
-    color-mix(in srgb, var(--background) 88%, white) 0%,
-    var(--background) 42%,
-    color-mix(in srgb, var(--background) 94%, var(--color-amber-100)) 100%
-  );
-
-  @variant dark {
-    background-image: linear-gradient(
-      140deg,
-      color-mix(in srgb, var(--background) 92%, black) 0%,
-      var(--background) 42%,
-      color-mix(in srgb, var(--background) 94%, var(--color-sky-950)) 100%
-    );
   }
 }

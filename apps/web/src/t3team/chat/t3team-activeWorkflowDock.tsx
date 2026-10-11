@@ -8,6 +8,7 @@ import { ComposerBanner } from "~/components/chat/ComposerBanner";
 import type { ChatMessage } from "~/types";
 import { getT3TeamWorkflowShapeAttachment } from "~/t3team/chat/t3team-messageShapeCard";
 import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
+import { WORKFLOW_AUTHORING_HEADLINE } from "~/t3team/chat/t3team-workflowRunLabels";
 
 export interface T3TeamActiveWorkflowDockItem {
   readonly runId: string;
@@ -70,7 +71,11 @@ export function deriveT3TeamActiveWorkflowDockItems(
       .map(summarizeStep);
 
     if (summaries.length === 0) {
-      if (matchingStatus === "queued") summaries.push("Waiting to start");
+      // Authoring is the hidden author writing the plan — say so, don't fall through to the
+      // generic "Running" (which read as a lie before the plan existed). Same words as the
+      // sidebar pill and the live card, from the one shared source.
+      if (matchingStatus === "authoring") summaries.push(WORKFLOW_AUTHORING_HEADLINE);
+      else if (matchingStatus === "queued") summaries.push("Waiting to start");
       else if (matchingStatus === "sleeping") summaries.push("Waiting: scheduled time");
       else if (matchingStatus === "paused" || progress?.run?.phase === "paused") {
         summaries.push("Paused");

@@ -9,6 +9,7 @@ import type {
   TicketKickoffThreadInput,
 } from "~/t3team/t3team-kickoffTypes";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
+import { settleBesideKickoffThread } from "~/t3team/t3team-besideKickoffThread";
 import { createProjectKickoffThread } from "~/t3team/t3team-useAppHandlers-kickoffThread";
 import { selectProjectDashboardMode } from "~/t3team/t3team-projectThreadViewState";
 import { useLocalWorkspaceCommands } from "~/t3team/hooks/t3team-useLocalWorkspaceCommands";
@@ -150,17 +151,25 @@ export function useAppHandlers({
     [backend, onOpenTicket, store],
   );
 
-  // A chat started from a ticket shown beside My Work stays where it is: no navigation. The new
-  // thread is the ticket's live thread, which that aside's Chat tab then shows (with the ticket's
-  // context attached) on a project dashboard and on the all-projects home alike.
+  // A chat started from a ticket shown beside My Work stays on My Work. The new thread is pinned
+  // for that aside's Chat tab; createThread's ticket view would be discarded on this route.
   const handleCreateTicketKickoffThreadBeside = useCallback(
-    (input: TicketKickoffThreadInput) =>
-      createTicketKickoffThread({
+    (input: TicketKickoffThreadInput) => {
+      const threadId = createTicketKickoffThread({
         backend,
         onOpenTicket: undefined,
         store,
         threadInput: input,
-      }),
+      });
+      settleBesideKickoffThread({
+        activeView: activeViewRef.current,
+        projectId: store.resolveProjectId(input.projectId),
+        ticketId: input.ticketId,
+        threadId,
+        setView: store.setView,
+      });
+      return threadId;
+    },
     [backend, store],
   );
 

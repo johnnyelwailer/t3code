@@ -314,3 +314,114 @@ describe("codexUsageLimitResetAt", () => {
     ).toBeNull();
   });
 });
+
+describe("Business monthly credit limit", () => {
+  // Shape of `account/rateLimits/read` from codex-cli 0.161.0 on a capped
+  // Business account, with the figures altered.
+  const business = {
+    limitId: "codex",
+    limitName: null,
+    primary: null,
+    secondary: null,
+    individualLimit: {
+      limit: "1000",
+      used: "1000.25",
+      remainingPercent: 0,
+      resetsAt: 1_793_491_200,
+    },
+    spendControlReached: true,
+    planType: "business",
+    rateLimitReachedType: "workspace_member_usage_limit_reached",
+  } as const;
+  const monthlyWindow = {
+    id: "individual",
+    kind: "monthly",
+    label: "Monthly credit limit",
+    usedPercent: 100,
+    resetsAt: "2026-11-01T00:00:00.000Z",
+  };
+  // What `account/rateLimits/updated` sends after every turn while the cap is set.
+  const turnNotification = {
+    limitId: "codex",
+    primary: null,
+    secondary: null,
+    individualLimit: null,
+    spendControlReached: null,
+    planType: "business",
+    rateLimitReachedType: null,
+  } as const;
+
+  it("reports the credit limit from the read response", () => {
+    expect(
+      codexRateLimitsToLimits({
+        checkedAt,
+        snapshot: business,
+        rateLimitsByLimitId: { codex: business },
+        resetCredits: { availableCount: 0, credits: [] },
+      }),
+    ).toEqual({ checkedAt, windows: [monthlyWindow], resetCredits: { availableCount: 0 } });
+  });
+
+  it("reports the credit limit from an update notification", () => {
+    expect(codexRateLimitsToUpdate(business)).toEqual({ windows: [monthlyWindow] });
+  });
+
+  it("emits nothing for a turn notification that does not report the cap", () => {
+    expect(codexRateLimitsToUpdate(turnNotification)).toBeUndefined();
+  });
+
+  it("uses remainingPercent unless the spend control says the cap is reached", () => {
+    const partial = { limit: "100", used: "30", remainingPercent: 70, resetsAt: 0 };
+    expect(codexRateLimitsToUpdate({ individualLimit: partial })?.windows).toEqual([
+      { id: "individual", kind: "monthly", label: "Monthly credit limit", usedPercent: 30 },
+    ]);
+    expect(
+      codexRateLimitsToUpdate({ individualLimit: partial, spendControlReached: true })?.windows[0]
+        ?.usedPercent,
+    ).toBe(100);
+  });
+
+  it("shows the credit limit beside primary/secondary windows", () => {
+    expect(
+      codexRateLimitsToUpdate({
+        primary: { usedPercent: 10, windowDurationMins: 300 },
+        individualLimit: { remainingPercent: 60, resetsAt: 0 },
+      })?.windows.map((window) => window.id),
+    ).toEqual(["primary", "individual"]);
+  });
+
+  it("names the monthly reset in the stop message", () => {
+    expect(codexUsageLimitMessage(business, "2026-10-08T00:00:00.000Z")).toBe(
+      "Codex usage limit reached. The monthly limit resets in 24d. The workspace spend limit is reached: ask your workspace owner to raise it, or send the message again once the limit resets.",
+    );
+  });
+
+  it("waits for the credit limit to reset before continuing", () => {
+    expect(codexUsageLimitResetAt(business)).toBe("2026-11-01T00:00:00.000Z");
+  });
+
+  it("keeps the known cap when a turn notification reports it as null", () => {
+    const merged = mergeCodexRateLimits(business, turnNotification);
+    expect(merged?.individualLimit).toEqual(business.individualLimit);
+    expect(merged?.spendControlReached).toBe(true);
+    expect(codexUsageLimitResetAt(merged)).toBe("2026-11-01T00:00:00.000Z");
+  });
+
+  it("drops the reached flag when spend control says so without a cap", () => {
+    const nearlyCapped = {
+      ...business,
+      individualLimit: { ...business.individualLimit, remainingPercent: 5 },
+    };
+    expect(codexRateLimitsToUpdate(nearlyCapped)?.windows[0]?.usedPercent).toBe(100);
+    const lifted = mergeCodexRateLimits(nearlyCapped, { spendControlReached: false });
+    expect(codexRateLimitsToUpdate(lifted!)?.windows[0]?.usedPercent).toBe(95);
+    expect(codexUsageLimitResetAt(lifted)).toBeNull();
+  });
+
+  it("takes a newer cap the notification does report", () => {
+    const reset = mergeCodexRateLimits(business, {
+      individualLimit: { remainingPercent: 100, resetsAt: 1_796_083_200 },
+    });
+    expect(codexRateLimitsToUpdate(reset!)?.windows[0]?.usedPercent).toBe(0);
+  });
+});

@@ -39,6 +39,7 @@ import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 
 import * as ServerSettings from "../serverSettings.ts";
+import * as McpAppModelContext from "../mcpApps/McpAppModelContext.ts";
 import * as CheckpointService from "./CheckpointService.ts";
 import * as EventSink from "./EventSink.ts";
 import * as IdAllocator from "./IdAllocator.ts";
@@ -160,6 +161,7 @@ const runScenario = (threadId: string, makeEvents: (ids: Ids) => ProviderAdapter
                 : Effect.succeed([]),
           }),
           ServerSettings.layerTest(),
+          McpAppModelContext.layerEmpty,
         ),
       ),
     );

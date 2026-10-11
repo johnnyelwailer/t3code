@@ -35,8 +35,18 @@ export function useBrowserViewportResize(options: {
   readonly containerSize: PreviewViewportSize;
   readonly deviceToolbarVisible: boolean;
   readonly aspectRatio: number | null;
+  /** Pins the fit-to-panel scale; see `resolveBrowserViewportLayout`. */
+  readonly heldScale?: number | undefined;
 }) {
-  const { tabId, viewport, zoomFactor, containerSize, deviceToolbarVisible, aspectRatio } = options;
+  const {
+    tabId,
+    viewport,
+    zoomFactor,
+    containerSize,
+    deviceToolbarVisible,
+    aspectRatio,
+    heldScale,
+  } = options;
   const dragCleanupRef = useRef<(() => void) | null>(null);
   const dragVersionRef = useRef(0);
   const keyboardCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -59,8 +69,8 @@ export function useBrowserViewportResize(options: {
     : containerSize;
   const layout =
     deviceToolbarVisible && effectiveViewport._tag !== "fill"
-      ? resolveBrowserDeviceViewportLayout(containerSize, effectiveViewport, zoomFactor)
-      : resolveBrowserViewportLayout(containerSize, effectiveViewport, zoomFactor);
+      ? resolveBrowserDeviceViewportLayout(containerSize, effectiveViewport, zoomFactor, heldScale)
+      : resolveBrowserViewportLayout(containerSize, effectiveViewport, zoomFactor, heldScale);
 
   useEffect(
     () => () => {

@@ -25,3 +25,14 @@ export const failAs =
       ),
       Effect.withSpan(`t3team.workflowHost.${operation}`),
     );
+
+/** `failAs` for a host read that answers: keeps the value. */
+export const failAsAnswer =
+  (operation: string) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, T3TeamWorkflowHostError, R> =>
+    effect.pipe(
+      Effect.mapError(
+        (cause) => new T3TeamWorkflowHostError({ operation, message: describe(cause) }),
+      ),
+      Effect.withSpan(`t3team.workflowHost.${operation}`),
+    );

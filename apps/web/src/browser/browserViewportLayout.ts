@@ -80,10 +80,15 @@ export function resolveBrowserDeviceViewportArea(container: {
   };
 }
 
+/**
+ * `heldScale` pins the fit-to-panel scale (e.g. while the panel edge is dragged) so the guest
+ * does not visibly rescale on every frame; the next unheld layout re-fits once.
+ */
 export function resolveBrowserViewportLayout(
   container: { readonly width: number; readonly height: number },
   setting: PreviewViewportSetting,
   zoomFactor = 1,
+  heldScale?: number,
 ): BrowserViewportLayout {
   const containerWidth = Math.max(1, Math.round(container.width));
   const containerHeight = Math.max(1, Math.round(container.height));
@@ -102,11 +107,8 @@ export function resolveBrowserViewportLayout(
   const normalizedZoomFactor = normalizeZoomFactor(zoomFactor);
   const renderedWidth = setting.width * normalizedZoomFactor;
   const renderedHeight = setting.height * normalizedZoomFactor;
-  const viewportScale = Math.min(
-    1,
-    containerWidth / renderedWidth,
-    containerHeight / renderedHeight,
-  );
+  const viewportScale =
+    heldScale ?? Math.min(1, containerWidth / renderedWidth, containerHeight / renderedHeight);
   const viewportWidth = renderedWidth * viewportScale;
   const viewportHeight = renderedHeight * viewportScale;
   return {
@@ -125,11 +127,13 @@ export function resolveBrowserDeviceViewportLayout(
   container: { readonly width: number; readonly height: number },
   setting: Exclude<PreviewViewportSetting, { readonly _tag: "fill" }>,
   zoomFactor = 1,
+  heldScale?: number,
 ): BrowserViewportLayout {
   const layout = resolveBrowserViewportLayout(
     resolveBrowserDeviceViewportArea(container),
     setting,
     zoomFactor,
+    heldScale,
   );
   return {
     ...layout,

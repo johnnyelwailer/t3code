@@ -41,6 +41,15 @@ export interface BackendApi {
   readonly launchRecipeWorkflow: (
     input: LaunchProjectRecipeWorkflowRequest,
   ) => Promise<LaunchProjectRecipeWorkflowResponse>;
+  /** Headless recipe launch (S5b): no thread — the run belongs to the project only. Optional so
+   * surface-scoped mock backends can omit it; `launchRecipe` rejects on its absence. */
+  readonly launchRecipeHeadless?: (input: {
+    readonly projectId: string;
+    readonly recipeId: string;
+    readonly action?: string;
+    readonly args?: Record<string, unknown>;
+    readonly surfaceContext?: Record<string, unknown>;
+  }) => Promise<{ readonly runId: string; readonly status: string }>;
   readonly submitRecipeCardAction: (
     input: SubmitProjectRecipeCardActionRequest,
   ) => Promise<SubmitProjectRecipeCardActionResponse>;
@@ -80,11 +89,15 @@ export interface BackendApi {
   readonly projectWorkspace: ProjectWorkspaceBackendApi;
 }
 
+/** One linked repository. `status` is its checkout's last settled state (`pending` until the
+ * first clone lands); `syncState` is set while a background clone/fetch is queued or running. */
 export type LinkedRepositorySyncResult = {
   readonly url: string;
   readonly localPath: string;
-  readonly status: "cloned" | "updated" | "failed";
+  readonly status: "pending" | "cloned" | "updated" | "failed";
   readonly error?: string;
+  readonly syncedAt?: string;
+  readonly syncState?: "queued" | "cloning" | "updating";
 };
 
 export interface ProjectWorkspaceBackendApi {
@@ -92,8 +105,14 @@ export interface ProjectWorkspaceBackendApi {
     readonly workspaceRoot: string;
     readonly linkedRepositoryUrls?: ReadonlyArray<string>;
     readonly setupProfileId?: string;
+    /** An explicit save: refetch every linked repository instead of honoring the throttle. */
+    readonly refreshLinkedRepositories?: boolean;
     readonly customProfile?: import("@t3tools/t3team-skill-packs").T3TeamProfile;
   }) => Promise<ProjectWorkspaceBootstrapResult>;
+  /** The linked repositories' recorded state plus live background-sync phases. No git work. */
+  readonly readLinkedRepositoryStatus: (input: {
+    readonly workspaceRoot: string;
+  }) => Promise<{ readonly linkedRepositories: ReadonlyArray<LinkedRepositorySyncResult> }>;
   /** Sets the project's main repository (`url: null` = the project's own workspace). */
   readonly setMainRepository: (input: {
     readonly projectId: string;

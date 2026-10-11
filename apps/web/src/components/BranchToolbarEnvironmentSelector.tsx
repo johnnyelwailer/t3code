@@ -3,8 +3,8 @@ import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
-import { CloudIcon, ScaleIcon, SettingsIcon } from "lucide-react";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { ScaleIcon, SettingsIcon } from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
 import { cn } from "../lib/utils";
@@ -16,7 +16,7 @@ import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import { RunOnCloudRow } from "./cloud/t3team-RunOnCloudRow";
 import { runOnRows } from "./cloud/t3team-runOnCloudRows";
-import { CloudSessionMachineHint } from "./cloud/t3team-CloudSessionMachineHint";
+import { NewCloudSessionItem } from "./cloud/t3team-NewCloudSessionItem";
 import {
   Select,
   SelectGroup,
@@ -61,11 +61,18 @@ export interface BranchToolbarEnvironmentSelectorProps {
    */
   onCreateCloudSession?: () => void;
   /**
+   * New cloud session for a project with no machine: starts a session that sets one up on its own
+   * thread. Absent when the flag is off, and then such a project starts a plain session.
+   */
+  onSetupProjectMachine?: () => void;
+  /**
    * t3team: a create is on its way to the server (resolving the machine, dispatching), which takes
    * seconds before the session's own row exists; the create row shows it at once and stops a
    * second click from starting a second machine.
    */
   cloudSessionCreatePending?: boolean;
+  /** True only while a "Set up a machine" create is the one in flight. */
+  cloudSessionSetupPending?: boolean;
   /**
    * The project "New cloud session" starts for, when it lives on the environment sessions are
    * created on: the item then says which machine (devcontainer) the session will run in.
@@ -84,6 +91,8 @@ export interface BranchToolbarEnvironmentSelectorProps {
    * configured; the same controller drives the Settings panel's Connect.
    */
   onCloudSessionAction?: (cloudSession: CloudSession) => void;
+  /** t3team: why the last connect attempt ended without connecting; the row shows it. */
+  cloudSessionConnectFailure?: { readonly sessionId: string; readonly message: string } | null;
   /** t3team: hides a surfaced failure from the menu once the user has seen it. */
   onDismissCloudSession?: (cloudSession: CloudSession) => void;
   /**
@@ -109,10 +118,13 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   connectedEnvironmentIds,
   cloudEnvironmentIds,
   onCreateCloudSession,
+  onSetupProjectMachine,
   cloudSessionCreatePending = false,
+  cloudSessionSetupPending = false,
   cloudSessionProject,
   onSetupCloudSessions,
   onCloudSessionAction,
+  cloudSessionConnectFailure,
   onDismissCloudSession,
   onCloudMenuOpenChange,
 }: BranchToolbarEnvironmentSelectorProps) {
@@ -167,9 +179,32 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   // registers for this project, it is selected and the menu closes. Until then the row says it
   // is connecting; a machine that connects without this project stops there, shown unavailable.
   const [selectWhenConnected, setSelectWhenConnected] = useState<string | null>(null);
+  // When that wait began, so the row can show how long it has been going.
+  const [connectStartedAt, setConnectStartedAt] = useState<number | null>(null);
+  // Why the wait ended without connecting, on the row it belongs to, until the next attempt.
+  const [connectFailure, setConnectFailure] = useState<{
+    readonly sessionId: string;
+    readonly message: string;
+  } | null>(null);
   // The machine the user just tried that turned out not to have this project: it stays listed,
   // saying why. Other projects' machines are not listed at all — nothing here can run on them.
   const [refusedEnvironmentId, setRefusedEnvironmentId] = useState<string | null>(null);
+  const cancelConnect = useCallback(() => {
+    setSelectWhenConnected(null);
+    setConnectStartedAt(null);
+  }, []);
+  // The connect itself failed (the toast says so too): stop waiting and say why on the row.
+  const handledConnectFailure = useRef(cloudSessionConnectFailure);
+  useEffect(() => {
+    if (selectWhenConnected === null || !cloudSessionConnectFailure) return;
+    // A failure acts once: a retry must not be cut short by the one it is retrying from.
+    if (handledConnectFailure.current === cloudSessionConnectFailure) return;
+    const waitingRow = cloudRows.find((row) => row.session.environmentId === selectWhenConnected);
+    if (waitingRow?.session.sessionId !== cloudSessionConnectFailure.sessionId) return;
+    handledConnectFailure.current = cloudSessionConnectFailure;
+    setConnectFailure(cloudSessionConnectFailure);
+    cancelConnect();
+  }, [cancelConnect, cloudRows, cloudSessionConnectFailure, selectWhenConnected]);
   useEffect(() => {
     if (selectWhenConnected === null || !projectEnvironmentIds.has(selectWhenConnected)) return;
     setSelectWhenConnected(null);
@@ -384,52 +419,31 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                       selectWhenConnected !== null &&
                       selectWhenConnected === row.session.environmentId
                     }
+                    connectingSince={connectStartedAt}
+                    connectError={
+                      connectFailure?.sessionId === row.session.sessionId
+                        ? connectFailure.message
+                        : null
+                    }
+                    onCancelConnect={cancelConnect}
                     onConnect={(session) => {
+                      setConnectFailure(null);
                       onCloudSessionAction?.(session);
                       if (session.environmentId !== undefined) {
+                        setConnectStartedAt(Date.now());
                         setSelectWhenConnected(session.environmentId);
                       }
                     }}
                     onDismiss={onDismissCloudSession}
                   />
                 ))}
-              {/* Mouse-only on purpose: dispatching a VM is a real cost, so this
-                  row is outside the arrow-key focus order (finding: one Enter
-                  must not provision a machine). */}
-              <button
-                type="button"
-                disabled={cloudSessionCreatePending}
-                aria-busy={cloudSessionCreatePending}
-                onClick={() => onCreateCloudSession?.()}
-                className={cn(
-                  "flex w-full items-start gap-1.5 rounded-sm px-2 py-1.5 text-foreground sm:text-sm",
-                  cloudSessionCreatePending
-                    ? "cursor-default text-muted-foreground"
-                    : "cursor-pointer hover:bg-muted",
-                )}
-              >
-                <CloudIcon
-                  className={cn(
-                    "mt-0.5 size-3 shrink-0 self-start",
-                    cloudSessionCreatePending && "animate-pulse",
-                  )}
-                  aria-hidden="true"
-                />
-                <span className="flex min-w-0 flex-col items-start text-left">
-                  <span>
-                    {cloudSessionCreatePending ? "Requesting a machine…" : "New cloud session"}
-                  </span>
-                  {cloudSessionCreatePending ? (
-                    <span className="max-w-full truncate text-muted-foreground text-xs">
-                      Asking the fleet; this takes a few seconds
-                    </span>
-                  ) : cloudSessionProject ? (
-                    <span className="max-w-full truncate text-muted-foreground text-xs">
-                      <CloudSessionMachineHint {...cloudSessionProject} />
-                    </span>
-                  ) : null}
-                </span>
-              </button>
+              <NewCloudSessionItem
+                project={cloudSessionProject}
+                pending={cloudSessionCreatePending}
+                setupPending={cloudSessionSetupPending}
+                onCreate={() => onCreateCloudSession?.()}
+                onSetup={onSetupProjectMachine}
+              />
             </>
           )}
           {onSetupCloudSessions && (

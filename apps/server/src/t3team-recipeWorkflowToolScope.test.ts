@@ -34,7 +34,7 @@ import type { T3TeamThreadArtifactInput } from "./t3team-v2/t3team-threadArtifac
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { draftToolContext, findDraftArtifact } from "./t3team-workflowHostDraft.fixtures.ts";
-import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
+import { makeT3TeamWorkflowHostToolClient } from "./t3team-workflowHostTools.ts";
 import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 import { resolveRecipeHostToolScope } from "./t3team-recipeWorkflowToolScope.ts";
 
@@ -122,7 +122,7 @@ const runUnderRecipeScope = Effect.fn("runUnderRecipeScope")(function* (input: {
   const scope = yield* resolveRecipeHostToolScope(input.recipe);
   const client =
     scope.kind === "granted"
-      ? makeT3TeamWorkflowHostDraftToolClient({
+      ? makeT3TeamWorkflowHostToolClient({
           broker,
           launchThreadId: threadId,
           allowedToolGroups: scope.toolGroups,

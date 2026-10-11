@@ -46,6 +46,8 @@ export interface ResizableWidthHandlers {
 export function useResizableWidth(options: UseResizableWidthOptions): {
   readonly width: number;
   readonly handlers: ResizableWidthHandlers;
+  /** True from pointer-down until the drag ends or is interrupted. */
+  readonly resizing: boolean;
 } {
   const { storageKey, defaultWidth, minWidth, maxWidth, edge } = options;
 
@@ -75,13 +77,15 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
   }
 
   const clampedWidth = clamp(widthState.width);
+  const [resizing, setResizing] = useState(false);
   const latestOptions = useRef({ clamp, storageKey });
   useLayoutEffect(() => {
     latestOptions.current = { clamp, storageKey };
   }, [clamp, storageKey]);
 
-  const handlers = useResizeDrag<HTMLElement>(
-    () => ({
+  const handlers = useResizeDrag<HTMLElement>(() => {
+    setResizing(true);
+    return {
       width: clampedWidth,
       edge,
       resize(value) {
@@ -97,9 +101,11 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
           console.error("Could not persist panel width.", error);
         }
       },
-    }),
-    storageKey,
-  );
+      cleanup() {
+        setResizing(false);
+      },
+    };
+  }, storageKey);
 
-  return { width: clampedWidth, handlers };
+  return { width: clampedWidth, handlers, resizing };
 }

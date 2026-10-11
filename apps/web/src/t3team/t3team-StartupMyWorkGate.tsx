@@ -1,38 +1,37 @@
 /**
- * Cold-start gate on the index route: opens My Work when it has something to show, otherwise
- * renders `children` (the draft landing) unchanged. Nothing paints while it decides, so the draft
- * landing never flashes before a redirect; the wait is bounded so a slow Jira never blocks startup.
+ * Cold-start gate on the Team home (`/` is bridged to `/t3team` before any index route renders):
+ * opens My Work when it has something to show, otherwise renders `children` (the new-conversation
+ * home) unchanged. The home never flashes before a redirect; the wait is bounded so a slow Jira
+ * never blocks startup.
  *
- * The probe reads the same inputs `AllProjectsMyWorkView` does — bound projects, the all-projects
- * digest graph, the resolved lens — and the digest hook caches its graph per scope, so My Work
- * paints from that cache right after the redirect instead of fetching again.
+ * While it decides it renders My Work's own loading animation — the same art My Work then shows
+ * for its first load, so the hand-off has nothing to jump between.
+ *
+ * The probe reads the same inputs `AllProjectsMyWorkView` does, through the SAME hook
+ * (`useMyWorkBoundProjects`) and the shell's own backend: one hydration, one project list,
+ * therefore one digest scope signature — which is what makes My Work paint from this probe's
+ * cached graph after the redirect instead of fetching again.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { isElectron } from "~/env";
 import { useNowMinute } from "~/hooks/useNowMinute";
-import { useAllEnvironmentShellsBootstrapped, useProjects } from "~/state/entities";
-import { BackendProvider, createT3Backend } from "~/t3team/backend/t3team-index";
-import { hydrateStoredProjects } from "~/t3team/hooks/t3team-projectStorePersistence";
-import {
-  deriveLooseWorkspaceProjects,
-  loadStoredProjects,
-  reconcileStoredProjectsWithLive,
-} from "~/t3team/hooks/t3team-projectStoreUtils";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
-import { selectBoundProjects } from "~/t3team/t3team-allProjectsMyWorkProjects";
+import { MyWorkLoadingAnimation } from "~/t3team/t3team-MyWorkLoadingAnimation";
+import { useMyWorkBoundProjects } from "~/t3team/t3team-myWorkBoundProjects";
 import {
   getProjectDashboardMyWorkStorageKey,
   readPersistedProjectDashboardMyWorkState,
   resolveProjectDashboardMyWorkState,
 } from "~/t3team/t3team-projectDashboardMyWorkState";
-import { resolveWsBaseUrl } from "~/t3team/t3team-route-surface-wsUrl";
 import {
+  claimStartupGate,
   decideStartupLanding,
   deriveStartupMyWorkProbe,
   isIndexBootUrl,
+  isStartupGateUnclaimed,
   isStartupLandingPending,
   markStartupLandingDecided,
   readBootUrl,
@@ -44,32 +43,42 @@ const STARTUP_MY_WORK_TIMEOUT_MS = 2_000;
 /** The All-projects My Work view keys its state under this pseudo project id. */
 const ALL_PROJECTS_MY_WORK_ID = "all";
 
-function readStartupLandingEligible(): boolean {
-  return isStartupLandingPending() && isIndexBootUrl(readBootUrl() ?? "", isElectron);
+/**
+ * Whether this mount is the session's cold start on the home. Call it where the Team shell's main
+ * content first mounts, whatever it shows: the first mount claims the session's one decision, so
+ * a later return to the home — after a deep link, a project dashboard, or leaving My Work on
+ * purpose — never redirects.
+ */
+export function useStartupLandingEligible(): boolean {
+  const [eligible] = useState(
+    () => isStartupLandingPending() && isIndexBootUrl(readBootUrl() ?? "", isElectron),
+  );
+  useEffect(() => {
+    markStartupLandingDecided();
+  }, []);
+  return eligible;
 }
 
-export function T3TeamStartupMyWorkGate({ children }: { readonly children: ReactNode }) {
-  const [eligible] = useState(readStartupLandingEligible);
+export function T3TeamStartupMyWorkGate({
+  eligible,
+  children,
+}: {
+  readonly eligible: boolean;
+  readonly children: ReactNode;
+}) {
+  const [active] = useState(() => eligible && isStartupGateUnclaimed());
   const [fellBack, setFellBack] = useState(false);
-  const [backend] = useState(() => (eligible ? createT3Backend(resolveWsBaseUrl()) : null));
   const fallBack = useCallback(() => setFellBack(true), []);
-  // Claim the session's one decision as soon as it starts: a user who clicks away mid-wait and
-  // later comes back to `/` chose the index, and must not be bounced to My Work then.
   useEffect(() => {
-    if (eligible) markStartupLandingDecided();
-  }, [eligible]);
-
-  if (!eligible || fellBack || backend === null) return children;
-  return (
-    <BackendProvider backend={backend}>
-      <StartupMyWorkProbe onFallback={fallBack} />
-    </BackendProvider>
-  );
+    if (active) claimStartupGate();
+  }, [active]);
+  if (!active || fellBack) return children;
+  return <StartupMyWorkProbe onFallback={fallBack} />;
 }
 
 function StartupMyWorkProbe({ onFallback }: { readonly onFallback: () => void }) {
   const navigate = useNavigate();
-  const boundProjects = useStartupBoundProjects();
+  const boundProjects = useMyWorkBoundProjects();
   const [lens] = useState(
     () =>
       resolveProjectDashboardMyWorkState({
@@ -108,34 +117,13 @@ function StartupMyWorkProbe({ onFallback }: { readonly onFallback: () => void })
     }
   }, [decision, navigate, onFallback]);
 
-  return null;
+  // The gap the animation fills: whichever way this lands, the next paint is My Work's first load
+  // or the draft landing, and neither should be preceded by a blank window.
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden p-4 sm:p-6">
+      <MyWorkLoadingAnimation />
+    </div>
+  );
 }
 
 const EMPTY_PROJECTS: ReadonlyArray<ProjectShellProject> = [];
-
-/** `AllProjectsMyWorkView`'s bound projects, or `null` until stored and live projects are loaded. */
-function useStartupBoundProjects(): ReadonlyArray<ProjectShellProject> | null {
-  const liveProjects = useProjects();
-  const bootstrapped = useAllEnvironmentShellsBootstrapped();
-  const [storedProjects, setStoredProjects] = useState<ProjectShellProject[] | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void hydrateStoredProjects()
-      .catch(() => loadStoredProjects())
-      .then((projects) => {
-        if (!cancelled) setStoredProjects(projects);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return useMemo(() => {
-    if (storedProjects === null || !bootstrapped) return null;
-    return selectBoundProjects([
-      ...reconcileStoredProjectsWithLive(storedProjects, liveProjects),
-      ...deriveLooseWorkspaceProjects(storedProjects, liveProjects),
-    ]);
-  }, [bootstrapped, liveProjects, storedProjects]);
-}

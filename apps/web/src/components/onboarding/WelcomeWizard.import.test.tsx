@@ -55,6 +55,8 @@ vi.mock("../../hooks/useCopyToClipboard", () => ({
 }));
 vi.mock("../../cloud/publicConfig", () => ({ hasCloudPublicConfig: () => false }));
 vi.mock("../clerk/useT3ConnectAuthPrompt", () => ({ useT3ConnectAuthPrompt: vi.fn() }));
+// t3team: the signed-in cloud session list reads the connection runtime this test stubs out.
+vi.mock("./t3team-WelcomeCloudSessions", () => ({ WelcomeCloudSessions: () => null }));
 vi.mock("../../onboarding/firstRun", () => ({
   useCompleteOnboarding: () => state.completeOnboarding,
 }));

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
-import { APP_DISPLAY_NAME, APP_STAGE_LABEL } from "../../branding";
+import { APP_STAGE_LABEL } from "../../branding";
+import { useT3TeamAppDisplayName } from "../../t3team/t3team-appBrandName";
 import { resolveSidebarStageBackdropVariant, StageBackdropArt } from "../SidebarStageBackdrop";
 import { StandalonePage } from "../ui/standalone-page";
 
@@ -8,6 +9,7 @@ import { StandalonePage } from "../ui/standalone-page";
  * Branded masthead for the CLI-connect authorize and callback pages.
  */
 export function AuthSurfaceShell({ children }: { readonly children: ReactNode }) {
+  const appName = useT3TeamAppDisplayName();
   const stageVariant = resolveSidebarStageBackdropVariant(APP_STAGE_LABEL);
 
   return (
@@ -28,7 +30,7 @@ export function AuthSurfaceShell({ children }: { readonly children: ReactNode })
           <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_20%,rgba(7,18,55,0.46)_100%)]" />
           <div className="relative h-full p-5 sm:p-6">
             <p className="text-3xs font-semibold tracking-widest text-white/80 uppercase">
-              {APP_DISPLAY_NAME}
+              {appName}
             </p>
           </div>
         </header>

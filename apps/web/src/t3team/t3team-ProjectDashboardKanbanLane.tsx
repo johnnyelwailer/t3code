@@ -6,6 +6,7 @@ import {
   ProjectDashboardKanbanDroppableLane,
 } from "~/t3team/t3team-ProjectDashboardKanbanDndUi";
 import { TicketWorkItemCard } from "~/t3team/t3team-ProjectDashboardItemViews";
+import type { KanbanZoomVisual } from "~/t3team/t3team-kanbanZoom";
 import type { ProjectDashboardKanbanOptimisticMove } from "~/t3team/t3team-projectDashboardKanbanDnd";
 import {
   buildProjectDashboardKanbanLaneHierarchy,
@@ -18,6 +19,7 @@ export function ProjectDashboardKanbanLane({
   column,
   dragging,
   isHierarchyMode,
+  zoomVisual,
   parentChildGroups,
   jiraLastCheckedAt,
   projectId,
@@ -32,6 +34,7 @@ export function ProjectDashboardKanbanLane({
   column: ProjectTicketKanbanColumn;
   dragging: boolean;
   isHierarchyMode: boolean;
+  zoomVisual: KanbanZoomVisual;
   parentChildGroups: TicketHierarchy;
   jiraLastCheckedAt?: number;
   projectId: string;
@@ -57,6 +60,7 @@ export function ProjectDashboardKanbanLane({
       title={column.title}
       count={column.items.length}
       dragging={dragging}
+      zoomVisual={zoomVisual}
       {...(collapsed !== undefined ? { collapsed } : {})}
       {...(onToggleCollapsed ? { onToggleCollapsed } : {})}
     >
@@ -70,7 +74,13 @@ export function ProjectDashboardKanbanLane({
             <T3SurfacePanel
               key={ticket.id}
               tone="default"
-              className="rounded-md bg-background/90 px-2.5 py-2"
+              className="rounded-md bg-background/90"
+              style={{
+                paddingLeft: `${zoomVisual.cardPaddingRem * 0.6 + 0.4}rem`,
+                paddingRight: `${zoomVisual.cardPaddingRem * 0.6 + 0.4}rem`,
+                paddingTop: `${zoomVisual.cardPaddingRem}rem`,
+                paddingBottom: `${zoomVisual.cardPaddingRem}rem`,
+              }}
             >
               <ProjectDashboardKanbanDraggableCard
                 ticketId={ticket.id}
@@ -81,6 +91,7 @@ export function ProjectDashboardKanbanLane({
                   ticket={ticket}
                   compact
                   flat
+                  zoomVisual={zoomVisual}
                   {...(jiraLastCheckedAt !== undefined ? { lastCheckedAt: jiraLastCheckedAt } : {})}
                   {...(isHierarchyMode ? { childCount: children.length } : {})}
                   onContextMenu={(event) => onTicketContextMenu(event, ticket)}

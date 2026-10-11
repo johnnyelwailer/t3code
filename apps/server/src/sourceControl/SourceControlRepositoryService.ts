@@ -145,7 +145,7 @@ function redactRemoteUrl(remoteUrl: string): string {
 const URL_WITH_USERINFO = /\b([a-z][a-z0-9+.-]*:\/\/)[^\s/]+@/gi;
 
 /** Drops `user:token@` from any URL embedded in free text. */
-function redactUrlCredentials(text: string): string {
+export function redactUrlCredentials(text: string): string {
   return text.replace(URL_WITH_USERINFO, "$1");
 }
 

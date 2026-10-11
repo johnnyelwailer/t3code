@@ -55,13 +55,13 @@ vendor name; brand assets are embedded in code. Regenerate the list with
 
 ## Scripts and repository files
 
-| Path                                                                                 | Vendor-specific content                                         |
-| ------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| `scripts/t3team-dev-nexi.ts`; `package.json` script `dev:nexi`                       | dev launcher for the full distribution                          |
-| `scripts/build-desktop-artifact.ts`; `.gitignore`                                    | state dir `.nexi-dev/desktop-installer`; branded-build comments |
-| `scripts/lib/cli-external-packages.ts`, `scripts/lib/t3team-distributionWebIcons.ts` | vendor names in comments                                        |
-| `.env.example`                                                                       | installer-build comment naming "Nexi Work"                      |
-| `AGENTS.md`, `SYNC-RUNBOOK.md`, `.agents/skills/test-t3-app/SKILL.md`                | host names, local distribution path, fork rules                 |
+| Path                                                                                   | Vendor-specific content                                         |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `scripts/t3team-dev-nexi.ts`; `package.json` script `dev:nexi`                         | dev launcher for the full distribution                          |
+| `scripts/build-desktop-artifact.ts`; `.gitignore`                                      | state dir `.nexi-dev/desktop-installer`; branded-build comments |
+| `scripts/lib/cli-external-packages.ts`, `scripts/lib/t3team-distributionWebIcons.ts`   | vendor names in comments                                        |
+| `.env.example`                                                                         | installer-build comment naming "Nexi Work"                      |
+| `AGENTS.md`, `docs/operations/upstream-sync.md`, `.agents/skills/test-t3-app/SKILL.md` | host names, local distribution path, fork rules                 |
 
 ## Tests, fixtures, docs
 

@@ -14,8 +14,20 @@ import type { TransientRunFailure } from "./orchestration-v2/t3team-transientRun
 /** Session-level retry budget for one failure episode. */
 export const MAX_SESSION_TRANSIENT_RETRIES = 3;
 
+/**
+ * Budget for a network outage (`TransientRunFailure.outage`): the ladder below spans ~18 min of
+ * waiting, enough to ride out a stalled VPN/tunnel, still bounded.
+ */
+export const MAX_OUTAGE_TRANSIENT_RETRIES = 6;
+
 /** Default backoff ladder (ms) between session-level retry attempts. */
 const DEFAULT_RETRY_BACKOFF_MS = [15_000, 30_000, 60_000] as const;
+
+/** Backoff ladder (ms) for a network outage; the last step repeats. */
+const OUTAGE_RETRY_BACKOFF_MS = [15_000, 30_000, 60_000, 120_000, 300_000, 600_000] as const;
+
+export const maxTransientRetries = (outage: boolean): number =>
+  outage ? MAX_OUTAGE_TRANSIENT_RETRIES : MAX_SESSION_TRANSIENT_RETRIES;
 
 /** Hard cap for the env override — a "transient" wait longer than 2min is a hang. */
 const MAX_RETRY_BACKOFF_OVERRIDE_MS = 120_000;
@@ -28,29 +40,36 @@ const MAX_DIRECTIVE_DELAY_SECONDS = 60;
  * (`T3TEAM_TRANSIENT_TURN_RETRY_BACKOFF_MS`) replaces the whole ladder for
  * e2e tests.
  */
-export function transientTurnRetryBackoffMs(attempt: number, overrideMs?: number): number {
+export function transientTurnRetryBackoffMs(
+  attempt: number,
+  overrideMs?: number,
+  outage = false,
+): number {
   if (overrideMs !== undefined && Number.isFinite(overrideMs) && overrideMs > 0) {
     return Math.min(Math.round(overrideMs), MAX_RETRY_BACKOFF_OVERRIDE_MS);
   }
-  const index = Math.max(0, Math.min(attempt - 1, DEFAULT_RETRY_BACKOFF_MS.length - 1));
-  return DEFAULT_RETRY_BACKOFF_MS[index]!;
+  const ladder = outage ? OUTAGE_RETRY_BACKOFF_MS : DEFAULT_RETRY_BACKOFF_MS;
+  const index = Math.max(0, Math.min(attempt - 1, ladder.length - 1));
+  return ladder[index]!;
 }
 
 /**
  * When the failure carries the gateway's `retry_after_seconds` directive, the
  * retry is scheduled AT that expiry (+5–15% cushion so it does not race the
  * reservation) instead of the blind ladder, capped at 60s so a bogus 1-hour
- * directive cannot stall the thread.
+ * directive cannot stall the thread. A network outage never carries a directive
+ * and takes its own, longer ladder.
  */
 export function transientTurnRetryDelayMs(
   attempt: number,
   directiveSeconds: number | null,
   overrideMs?: number,
   random: () => number = Math.random,
+  outage = false,
 ): number {
-  const ladder = transientTurnRetryBackoffMs(attempt, overrideMs);
+  const ladder = transientTurnRetryBackoffMs(attempt, overrideMs, outage);
   if (overrideMs !== undefined && Number.isFinite(overrideMs) && overrideMs > 0) return ladder;
-  if (directiveSeconds !== null) {
+  if (directiveSeconds !== null && !outage) {
     const ms = Math.min(directiveSeconds, MAX_DIRECTIVE_DELAY_SECONDS) * 1000;
     return Math.round(ms * (1.05 + 0.1 * random()));
   }
@@ -83,19 +102,27 @@ export function transientTurnReasonText(reason: string): string {
 export const transientRetryReason = (failure: TransientRunFailure): string =>
   transientTurnReasonText(failure.message);
 
+const waitText = (delayMs: number): string => {
+  const seconds = Math.max(1, Math.round(delayMs / 1000));
+  return seconds >= 120 ? `${Math.round(seconds / 60)}m` : `${seconds}s`;
+};
+
 /** "Retrying (n/N) — reason, next attempt in ~Ns" — the note while a retry waits. */
 export function transientRetryInFlightText(
   attempt: number,
   reason: string,
   delayMs: number,
+  max = MAX_SESSION_TRANSIENT_RETRIES,
 ): string {
-  const seconds = Math.max(1, Math.round(delayMs / 1000));
-  return `Retrying (${attempt}/${MAX_SESSION_TRANSIENT_RETRIES}) — ${reason}, next attempt in ~${seconds}s`;
+  return `Retrying (${attempt}/${max}) — ${reason}, next attempt in ~${waitText(delayMs)}`;
 }
 
 /** The note once the budget is spent. */
-export function transientRetryExhaustedText(reason: string): string {
-  return `${reason} — automatic retries exhausted (${MAX_SESSION_TRANSIENT_RETRIES} attempts)`;
+export function transientRetryExhaustedText(
+  reason: string,
+  max = MAX_SESSION_TRANSIENT_RETRIES,
+): string {
+  return `${reason} — automatic retries exhausted (${max} attempts)`;
 }
 
 /** The note on a delegated child's failed run: its parent was told and decides what happens next. */

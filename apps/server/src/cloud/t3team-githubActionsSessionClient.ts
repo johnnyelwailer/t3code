@@ -29,13 +29,10 @@ export interface WorkflowRunSummary {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly htmlUrl: string;
-  /**
-   * The run's display name. The workflow echoes the caller's `session_tag`
-   * into it, which is the only way to tell our own dispatch apart from one
-   * that another user started in the same second — `workflow_dispatch`
-   * answers 204 and never reveals the run id it created.
-   */
+  /** Display name. The workflow echoes `session_tag` here so a dispatch can find its run. */
   readonly name: string;
+  /** Who started the run. This GHE ignores `actor=` on the list query, so filter on this. */
+  readonly actor: string;
 }
 
 /** Wrap a correlation tag the way `run-name` renders it. */
@@ -95,13 +92,8 @@ export function dispatchSessionRequest(
 }
 
 /**
- * List the session workflow's runs, scoped to one login when `actor` is given
- * (server-side `actor=` filter — a user only sees runs THEY triggered; omit
- * `actor` for the pre-isolation "every run" behavior).
- *
- * The filter is `actor`, not `created_by`: on the fleet's GHE `created_by` is
- * silently ignored (verified live), while `actor` is honored, and for
- * `workflow_dispatch` the actor is exactly the user who started the run.
+ * List session-workflow runs. `actor=` is included, but this GHE ignores it
+ * (`created_by` too); `sessionRunsForLogin` is what actually scopes the list.
  */
 export function listRunsRequest(
   ref: CloudSessionRepoRef,

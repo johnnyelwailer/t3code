@@ -30,6 +30,7 @@ import {
   resolveWorkflowChildModel,
   resolveWorkflowModelCascade,
 } from "./t3team-workflowChildModel.ts";
+import { handleBrokerLaunchVerb, isBrokerLaunchVerb } from "./t3team-workflowEngineBrokerLaunch.ts";
 import { getChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
 import { toWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
 import { createWorkflowLiveSettlement } from "./t3team-workflowLiveSettlement.ts";
@@ -145,12 +146,22 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
       await runPrimitive(() => enqueueOneWay(() => createWorkflowChild(deps, p, modelSelection)));
       return;
     }
-    // Signal-source verbs (GHE #332): `signal.register` (one-way binding FACT) and `signal.wait`
-    // (event park — live-drains the durable inbox or records `watching` and suspends out of band).
-    // Gated on the kind so non-signal verbs stay on the synchronous prefix the ask verb relies
-    // on (an unconditional await here would yield a microtask before `setPending`).
-    if (sendCtx.kind === "signal.register" || sendCtx.kind === "signal.wait") {
+    // Signal-source verbs (GHE #332): `signal.register` (one-way binding FACT), `signal.wait` and
+    // `signal.waitAny` (event park — live-drains the durable inbox or records `watching` and
+    // suspends out of band). Gated on the kind so non-signal verbs stay on the synchronous prefix
+    // the ask verb relies on (an unconditional await here would yield a microtask before
+    // `setPending`).
+    if (
+      sendCtx.kind === "signal.register" ||
+      sendCtx.kind === "signal.wait" ||
+      sendCtx.kind === "signal.waitAny"
+    ) {
       if (await handleBrokerSignalVerb(core, sendCtx)) return;
+    }
+    // Gated on the kind, like the signal verbs, so the ask verb keeps its synchronous prefix.
+    if (isBrokerLaunchVerb(kind)) {
+      await handleBrokerLaunchVerb(core, sendCtx);
+      return;
     }
     if (await handleBrokerAskVerb(core, sendCtx)) return;
     await handleBrokerNotifyVerb(core, sendCtx);

@@ -20,6 +20,15 @@ export type UseMyWorkDigestGraphResult = {
   readonly graph: DigestGraph | null;
   /** "retrying" is a transient failure the poller is backing off; "error" is terminal. */
   readonly status: "loading" | "ready" | "retrying" | "error";
+  /**
+   * "cached" = painted from the stored graph for this scope, which is NOT an answer about it:
+   * the views may render work from it but must not conclude "nothing needs you". "fresh" = the
+   * server answered for this scope in this session (a changed round, or an `unchanged` one, which
+   * is the server confirming the cached graph).
+   */
+  readonly freshness: "cached" | "fresh";
+  /** A round is in flight. With a graph on screen this is a revalidation, not a first load. */
+  readonly refreshing: boolean;
   readonly error?: string;
   /** True when the server had no Jira identity for a project (stale or missing token). */
   readonly viewerUnresolved: boolean;

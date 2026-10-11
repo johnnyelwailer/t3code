@@ -15,7 +15,10 @@ import {
   appendContextAttachmentsToPrompt,
   prepareThreadContextAttachments,
 } from "~/t3team/chat/t3team-prepareThreadContextAttachments";
-import { tryClaimRecipeWorkflowLaunch } from "~/t3team/chat/t3team-recipeLaunchDedup";
+import {
+  releaseRecipeWorkflowLaunchClaim,
+  tryClaimRecipeWorkflowLaunch,
+} from "~/t3team/chat/t3team-recipeLaunchDedup";
 import { toProjectRecipeWorkflowLaunch } from "~/t3team/chat/t3team-recipeWorkflowLaunch";
 import {
   recordThreadBootstrapEvent,
@@ -72,6 +75,8 @@ type RunThreadBootstrapKickoffInput = {
   toolContext: T3TeamTurnToolContext | undefined;
   createdAt: string;
   onInitialUserMessageSent: (() => void) | undefined;
+  /** A retry into a shell a failed launch left behind: send the kickoff without creating it. */
+  serverThreadExists?: boolean;
 };
 
 type WorkflowBackedRecipe = T3TeamKickoffWorkflow & { readonly workflowPath: string };
@@ -117,7 +122,7 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
   // run, and nothing thrown: the two calls sit before the create, so a hang there is indistinguishable
   // from a launch that is merely slow. On the turn path there is nothing to hoist — the create rides
   // inside `thread.turn.start`'s own `bootstrap.createThread`.
-  if (hasWorkflowLaunchPath(input.kickoffWorkflow)) {
+  if (hasWorkflowLaunchPath(input.kickoffWorkflow) && input.serverThreadExists !== true) {
     await dispatchThreadBootstrapCreateWithRecovery({
       backend: input.backend,
       action: input.action,
@@ -153,20 +158,26 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
   if (hasWorkflowLaunchPath(input.kickoffWorkflow)) {
     // Claim the launch so a single Quick Start send can't spawn two runs (the composer's
     // turn-start override can reach launchRecipeWorkflow for the same thread). First claim wins.
+    // A throw releases the claim; otherwise retry recreates the shell and skips the launch.
     if (tryClaimRecipeWorkflowLaunch(input.threadId)) {
-      await input.backend.launchRecipeWorkflow({
-        threadId: input.threadId,
-        kickoffMessage: bootstrapMessage,
-        titleSeed: input.title,
-        createdAt: input.createdAt,
-        modelSelection: {
-          instanceId: String(input.kickoffModelSelection.instanceId),
-          model: input.kickoffModelSelection.model,
-        },
-        runtimeMode: input.kickoffRuntimeMode,
-        interactionMode: input.kickoffInteractionMode,
-        launch: toProjectRecipeWorkflowLaunch(input.kickoffWorkflow),
-      });
+      try {
+        await input.backend.launchRecipeWorkflow({
+          threadId: input.threadId,
+          kickoffMessage: bootstrapMessage,
+          titleSeed: input.title,
+          createdAt: input.createdAt,
+          modelSelection: {
+            instanceId: String(input.kickoffModelSelection.instanceId),
+            model: input.kickoffModelSelection.model,
+          },
+          runtimeMode: input.kickoffRuntimeMode,
+          interactionMode: input.kickoffInteractionMode,
+          launch: toProjectRecipeWorkflowLaunch(input.kickoffWorkflow),
+        });
+      } catch (error) {
+        releaseRecipeWorkflowLaunchClaim(input.threadId);
+        throw error;
+      }
     }
     finalizeThreadBootstrapKickoff({
       environmentId: input.environmentId,
@@ -194,18 +205,22 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
     titleSeed: input.title,
     runtimeMode: input.kickoffRuntimeMode,
     interactionMode: input.kickoffInteractionMode,
-    bootstrap: {
-      createThread: {
-        projectId: ProjectId.make(input.canonicalProjectId),
-        title: input.title,
-        modelSelection: input.kickoffModelSelection,
-        runtimeMode: input.kickoffRuntimeMode,
-        interactionMode: input.kickoffInteractionMode,
-        branch: input.kickoffBranch,
-        worktreePath: null,
-        createdAt: input.createdAt,
-      },
-    },
+    ...(input.serverThreadExists === true
+      ? {}
+      : {
+          bootstrap: {
+            createThread: {
+              projectId: ProjectId.make(input.canonicalProjectId),
+              title: input.title,
+              modelSelection: input.kickoffModelSelection,
+              runtimeMode: input.kickoffRuntimeMode,
+              interactionMode: input.kickoffInteractionMode,
+              branch: input.kickoffBranch,
+              worktreePath: null,
+              createdAt: input.createdAt,
+            },
+          },
+        }),
   });
   finalizeThreadBootstrapKickoff({
     environmentId: input.environmentId,

@@ -21,6 +21,15 @@ describe("href codec", () => {
     expect(parseComposerContextHref(href)).toEqual({ kind: "review-comment", contextId: "ctx_1" });
   });
 
+  it("round-trips the work-item kind with its kind-scoped id", () => {
+    const href = formatComposerContextHref("work-item", ctx("work-item_NXAI-8"));
+    expect(href).toBe("t3-context://v1/work-item/work-item_NXAI-8");
+    expect(parseComposerContextHref(href)).toEqual({
+      kind: "work-item",
+      contextId: "work-item_NXAI-8",
+    });
+  });
+
   it("rejects anything that is not exactly scheme, version, kind and id", () => {
     for (const bad of [
       "t3-context://v2/image/ctx_1",
@@ -274,6 +283,32 @@ describe("provider projection", () => {
     expect(projected).toContain("environmentId: env-1");
     expect(projected).toContain("t3_thread_read");
     expect(projected).toContain("not instructions");
+  });
+
+  it("projects an attached work item as a readable reference marker and payload", () => {
+    const projected = projectComposerContextForProvider({
+      text: "Fix [NXAI-8](t3-context://v1/work-item/work-item_NXAI-8) first.",
+      records: [
+        {
+          version: 1,
+          kind: "work-item",
+          contextId: ctx("work-item_NXAI-8"),
+          label: "NXAI-8",
+          key: "NXAI-8",
+          jiraProjectKey: "NXAI",
+          title: "Composer work-item references",
+          status: "In Progress",
+          url: "https://example.atlassian.net/browse/NXAI-8",
+          capturedAt: "2026-10-10T09:00:00.000Z",
+        },
+      ],
+    });
+    expect(projected.startsWith("Fix [Work item: NXAI-8; ref=work-item_NXAI-8] first.")).toBe(true);
+    expect(projected).toContain('<context kind="work-item" id="work-item_NXAI-8">');
+    expect(projected).toContain("key: NXAI-8");
+    expect(projected).toContain("project: NXAI");
+    expect(projected).toContain("status: In Progress");
+    expect(projected).toContain("url: https://example.atlassian.net/browse/NXAI-8");
   });
 
   it("marks duplicate identities unavailable instead of choosing one payload", () => {

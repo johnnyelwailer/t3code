@@ -14,15 +14,36 @@ export type BootstrapWorkspaceRequest = {
   readonly workspaceRoot: string;
   readonly linkedRepositoryUrls?: ReadonlyArray<string>;
   readonly setupProfileId?: string;
+  /** An explicit save: refetch every linked repository instead of honoring the refetch throttle. */
+  readonly refreshLinkedRepositories?: boolean;
   readonly customProfile?: import("@t3tools/t3team-skill-packs").T3TeamProfile;
 };
 
+/** One linked repository in the reference manifest. `status` is the checkout's last settled state:
+ * `pending` until a first clone lands, `cloned`/`updated` once usable, `failed` when no usable
+ * checkout exists. Clones and fetches run in the background (`t3team-linkedRepositorySync`);
+ * `syncState` is only set on responses, never persisted, while that work is queued or running. */
 export type LinkedRepositoryBootstrapResult = {
   readonly url: string;
   readonly localPath: string;
-  readonly status: "cloned" | "updated" | "failed";
+  readonly status: "pending" | "cloned" | "updated" | "failed";
   readonly error?: string;
+  /** When the last background clone/fetch settled (success or failure); throttles refetches. */
+  readonly syncedAt?: string;
+  readonly syncState?: LinkedRepositorySyncPhase;
 };
+
+export type LinkedRepositorySyncPhase = "queued" | "cloning" | "updating";
+
+/** A manifest entry as reported to a client: with its in-flight sync phase, if any. */
+export const withSyncState = (
+  entry: LinkedRepositoryBootstrapResult,
+  phase: LinkedRepositorySyncPhase | undefined,
+): LinkedRepositoryBootstrapResult => ({ ...entry, ...(phase ? { syncState: phase } : {}) });
+
+/** A usable checkout: anything a reader may branch from or read files in. */
+export const isLinkedRepositoryReady = (entry: LinkedRepositoryBootstrapResult): boolean =>
+  entry.status === "cloned" || entry.status === "updated";
 
 /** The workspace root is itself a git repository — the project's main repository: sub-work
  * happens in worktrees of this repository, not in reference clones. `adopted` when the workspace

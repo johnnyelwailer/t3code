@@ -1,4 +1,5 @@
 import * as Cause from "effect/Cause";
+import { EnvironmentNotConnectedError } from "~/t3team/backend/t3team-environmentTransientError";
 import { AsyncResult } from "effect/reactivity";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -218,6 +219,12 @@ describe("workflow-answer dispatch", () => {
     );
     const outcome = await run(workflowAnswerEntry(), permanent);
     expect(outcome.outcome).toBe("failed");
+  });
+
+  it("retries, rather than parks, an answer sent before the environment's connection is ready", async () => {
+    const fake = fakeDeps({ seen: false });
+    fake.resolveWorkflowInput.mockRejectedValue(new EnvironmentNotConnectedError());
+    expect(await run(workflowAnswerEntry(), fake)).toEqual({ outcome: "retry" });
   });
 });
 

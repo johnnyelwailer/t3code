@@ -67,6 +67,11 @@ import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import {
+  HIDDEN_T3TEAM_DIR,
+  MANIFEST_FILE_NAME,
+  REFERENCES_DIR_NAME,
+} from "../t3team-project-repository-utils.ts";
 import * as GitManager from "./GitManager.ts";
 
 const encodeCliJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
@@ -610,6 +615,7 @@ function createGitHubProviderWithFakeGh(scenario: FakeGhScenario = {}): {
             input.title,
             "--body-file",
             input.bodyFile,
+            ...(input.draft === true ? ["--draft"] : []),
           ],
         }).pipe(Effect.asVoid),
       getDefaultBranch: (input) =>
@@ -684,6 +690,16 @@ function resolvePullRequest(
   input: { cwd: string; reference: string },
 ) {
   return manager.resolvePullRequest(input);
+}
+
+/** The reference manifest a linked-repository project keeps at its workspace root. */
+function writeLinkedRepositories(workspaceDir: string, linkedRepositories: ReadonlyArray<object>) {
+  const referencesDir = NodePath.join(workspaceDir, HIDDEN_T3TEAM_DIR, REFERENCES_DIR_NAME);
+  NodeFS.mkdirSync(referencesDir, { recursive: true });
+  NodeFS.writeFileSync(
+    NodePath.join(referencesDir, MANIFEST_FILE_NAME),
+    encodeCliJson({ linkedRepositories }),
+  );
 }
 
 function preparePullRequestThread(
@@ -3849,6 +3865,93 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
   );
 
   it.effect(
+    "openChangeRequest returns the open change request for the branch without creating one",
+    () =>
+      Effect.gen(function* () {
+        const repoDir = yield* makeTempDir("t3code-git-manager-");
+        yield* initRepo(repoDir);
+        yield* runGit(repoDir, ["checkout", "-b", "machine/setup"]);
+        const remoteDir = yield* createBareRemote();
+        yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
+        yield* runGit(repoDir, ["push", "-u", "origin", "machine/setup"]);
+
+        const { manager, ghCalls } = yield* makeManager({
+          ghScenario: {
+            prListSequence: [
+              JSON.stringify([
+                {
+                  number: 42,
+                  title: "Existing PR",
+                  url: "https://github.com/pingdotgg/codething-mvp/pull/42",
+                  baseRefName: "main",
+                  headRefName: "machine/setup",
+                },
+              ]),
+            ],
+          },
+        });
+        const result = yield* manager.openChangeRequest({
+          cwd: repoDir,
+          branch: "machine/setup",
+          title: "Add machine setup",
+          body: "Body",
+        });
+
+        expect(result).toMatchObject({
+          status: "opened_existing",
+          provider: "github",
+          url: "https://github.com/pingdotgg/codething-mvp/pull/42",
+          number: 42,
+          baseBranch: "main",
+          headBranch: "machine/setup",
+        });
+        expect(ghCalls.some((call) => call.startsWith("pr create "))).toBe(false);
+      }),
+  );
+
+  it.effect("openChangeRequest creates a draft against the default branch and reads it back", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      yield* initRepo(repoDir);
+      const remoteDir = yield* createBareRemote();
+      yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
+      yield* runGit(repoDir, ["push", "-u", "origin", "main"]);
+      yield* runGit(repoDir, ["checkout", "-b", "machine/setup"]);
+      yield* runGit(repoDir, ["commit", "--allow-empty", "-m", "Setup"]);
+      yield* runGit(repoDir, ["push", "-u", "origin", "machine/setup"]);
+
+      const { manager, ghCalls } = yield* makeManager({
+        ghScenario: {
+          prListSequence: [
+            "[]",
+            JSON.stringify([
+              {
+                number: 43,
+                title: "Add machine setup",
+                url: "https://github.com/pingdotgg/codething-mvp/pull/43",
+                baseRefName: "main",
+                headRefName: "machine/setup",
+              },
+            ]),
+          ],
+        },
+      });
+      const result = yield* manager.openChangeRequest({
+        cwd: repoDir,
+        branch: "machine/setup",
+        title: "Add machine setup",
+        body: "Body",
+        draft: true,
+      });
+
+      expect(result).toMatchObject({ status: "created", number: 43, baseBranch: "main" });
+      const create = ghCalls.find((call) => call.startsWith("pr create "));
+      expect(create).toContain("--base main --head machine/setup --title Add machine setup");
+      expect(create).toMatch(/ --draft$/u);
+    }),
+  );
+
+  it.effect(
     "returns existing cross-repo PR metadata found under the bare branch name",
     () =>
       Effect.gen(function* () {
@@ -4858,6 +4961,101 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
         "--show-current",
       ])).stdout.trim();
       expect(worktreeBranch).toBe("feature/pr-worktree");
+    }),
+  );
+
+  it.effect(
+    "checks a pull request of a linked repository out of that repository's clone, not the project root",
+    () =>
+      Effect.gen(function* () {
+        // The project root is a container with no remote; the pull request lives in a clone the
+        // reference manifest points at.
+        const workspaceDir = yield* makeTempDir("t3code-git-manager-workspace-");
+        yield* initRepo(workspaceDir);
+        const cloneDir = yield* makeTempDir("t3code-git-manager-linked-");
+        yield* initRepo(cloneDir);
+        const remoteDir = yield* createBareRemote();
+        yield* runGit(cloneDir, ["remote", "add", "origin", remoteDir]);
+        yield* runGit(cloneDir, ["push", "-u", "origin", "main"]);
+        yield* runGit(cloneDir, ["checkout", "-b", "feature/linked-pr"]);
+        NodeFS.writeFileSync(NodePath.join(cloneDir, "linked.txt"), "linked\n");
+        yield* runGit(cloneDir, ["add", "linked.txt"]);
+        yield* runGit(cloneDir, ["commit", "-m", "Linked PR branch"]);
+        yield* runGit(cloneDir, ["push", "-u", "origin", "feature/linked-pr"]);
+        yield* runGit(cloneDir, ["push", "origin", "HEAD:refs/pull/88/head"]);
+        yield* runGit(cloneDir, ["checkout", "main"]);
+        writeLinkedRepositories(workspaceDir, [
+          {
+            url: "https://github.com/acme/linked-api.git",
+            localPath: cloneDir,
+            status: "cloned",
+          },
+        ]);
+
+        const { manager } = yield* makeManager({
+          ghScenario: {
+            pullRequest: {
+              number: 88,
+              title: "Linked PR",
+              url: "https://github.com/acme/linked-api/pull/88",
+              baseRefName: "main",
+              headRefName: "feature/linked-pr",
+              state: "open",
+            },
+          },
+        });
+
+        // "local" cannot mean the project root for another repository's pull request.
+        const result = yield* preparePullRequestThread(manager, {
+          cwd: workspaceDir,
+          reference: "https://github.com/acme/linked-api/pull/88",
+          mode: "local",
+        });
+
+        expect(result.branch).toBe("feature/linked-pr");
+        expect(result.worktreePath).not.toBeNull();
+        expect(
+          (yield* runGit(result.worktreePath as string, [
+            "branch",
+            "--show-current",
+          ])).stdout.trim(),
+        ).toBe("feature/linked-pr");
+        // The worktree belongs to the linked clone; the project root is untouched.
+        expect(
+          NodeFS.realpathSync(
+            (yield* runGit(result.worktreePath as string, [
+              "rev-parse",
+              "--path-format=absolute",
+              "--git-common-dir",
+            ])).stdout.trim(),
+          ),
+        ).toBe(NodeFS.realpathSync(NodePath.join(cloneDir, ".git")));
+        expect(
+          (yield* runGit(workspaceDir, ["worktree", "list"])).stdout.trim().split("\n"),
+        ).toHaveLength(1);
+      }),
+  );
+
+  it.effect("names the linked repository whose clone is missing instead of a provider error", () =>
+    Effect.gen(function* () {
+      const workspaceDir = yield* makeTempDir("t3code-git-manager-workspace-");
+      yield* initRepo(workspaceDir);
+      writeLinkedRepositories(workspaceDir, [
+        {
+          url: "https://github.com/acme/linked-api.git",
+          localPath: NodePath.join(workspaceDir, "gone"),
+          status: "cloned",
+        },
+      ]);
+      const { manager } = yield* makeManager();
+
+      const error = yield* preparePullRequestThread(manager, {
+        cwd: workspaceDir,
+        reference: "https://github.com/acme/linked-api/pull/88",
+        mode: "worktree",
+      }).pipe(Effect.flip);
+
+      expect(error.message).toContain("github.com/acme/linked-api.git is missing at");
     }),
   );
 

@@ -3,6 +3,8 @@ export type T3TeamToolKind =
   | "read"
   | "view-state"
   | "draft-mutation"
+  /** Writes outside the workspace (e.g. to the repository's host) with no review step. */
+  | "mutation"
   | "thread"
   | "external-convenience";
 export type T3TeamToolSurface =

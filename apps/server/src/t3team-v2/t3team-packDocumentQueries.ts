@@ -29,6 +29,10 @@ const RemovedRow = Schema.Struct({
 export const decodeRemovedRows = Schema.decodeUnknownEffect(Schema.Array(RemovedRow));
 export const removedColumns = `collection, doc_key AS "key", byte_size AS "bytes"`;
 
+const decodeUsage = Schema.decodeUnknownEffect(
+  Schema.Array(Schema.Struct({ total: Schema.Number, current: Schema.Number })),
+);
+
 export interface DocumentWrite {
   readonly json: string;
   readonly bytes: number;
@@ -99,5 +103,14 @@ export function packDocumentQueries(sql: SqlClient.SqlClient, packId: string) {
     sql`UPDATE t3team_pack_documents SET last_read_at = ${now}
       WHERE pack_id = ${packId} AND collection = ${collection} AND doc_key = ${key}
       AND ${live(now)}`.pipe(Effect.asVoid);
-  return { get, list, insert, update, purgeExpired, remove, touch };
+  /** Live bytes in the whole pack, and how many of them the given document holds now. */
+  const usage = (collection: string, key: string, now: string) =>
+    sql`SELECT COALESCE(SUM(byte_size), 0) AS "total",
+      COALESCE(SUM(CASE WHEN collection = ${collection} AND doc_key = ${key}
+        THEN byte_size END), 0) AS "current"
+      FROM t3team_pack_documents WHERE pack_id = ${packId} AND ${live(now)}`.pipe(
+      Effect.flatMap(decodeUsage),
+      Effect.map((rows) => rows[0] ?? { total: 0, current: 0 }),
+    );
+  return { get, list, insert, update, purgeExpired, remove, touch, usage };
 }

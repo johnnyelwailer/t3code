@@ -22,6 +22,7 @@ describe("classifyTransientRunFailure", () => {
     ).toEqual({
       message: '423: Reservation owner is busy {"retry_after_seconds": 20}',
       directiveSeconds: 20,
+      outage: false,
     });
     expect(
       classifyTransientRunFailure(failure({ message: "HTTP 503 service unavailable" })),
@@ -35,6 +36,41 @@ describe("classifyTransientRunFailure", () => {
         failure({ class: "transport_error", code: "turn_inactivity", retryable: true }),
       ),
     ).not.toBeNull();
+  });
+
+  it("treats Cursor network failures as transient outages", () => {
+    for (const over of [
+      { message: "[unknown] Failed to connect to API key exchange endpoint: fetch failed" },
+      { message: "Provider turn failed.", code: "connection_stalled" },
+      { message: "read ECONNRESET" },
+      { message: "ConnectError: [unavailable] upstream connect error" },
+    ]) {
+      expect(classifyTransientRunFailure(failure(over))).toMatchObject({ outage: true });
+    }
+    // a plain provider stall is transient but not an outage: it keeps the short ladder
+    expect(
+      classifyTransientRunFailure(
+        failure({ class: "transport_error", code: "turn_inactivity", retryable: true }),
+      ),
+    ).toMatchObject({ outage: false });
+  });
+
+  it("does not treat a stopped proxy or a hung-up MCP server as an outage", () => {
+    for (const message of ["connect ECONNREFUSED 127.0.0.1:8080", "MCP server connection closed"]) {
+      expect(classifyTransientRunFailure(failure({ message }))).toBeNull();
+    }
+  });
+
+  it("does not retry a Cursor usage limit even when the text mentions the network", () => {
+    expect(
+      classifyTransientRunFailure(
+        failure({
+          class: "usage_limit",
+          message: "fetch failed: out of usage",
+          resetAt: "2026-10-10T00:00:00.000Z",
+        }),
+      ),
+    ).toBeNull();
   });
 
   it("rejects usage limits, permission/validation errors, unanswered stops and plain errors", () => {

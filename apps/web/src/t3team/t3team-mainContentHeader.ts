@@ -25,6 +25,17 @@ import { cn } from "~/lib/utils";
  * stays available from the t3team sidebar header
  * (`t3team-ProjectSidebarHeader.tsx`), matching upstream's `SidebarChrome`.
  */
+/**
+ * While the right aside of a `ResizableRightSidebarLayout` is collapsed (desktop layout, `lg`+),
+ * its floating `.workspace-titlebar-controls` toggle sits over the main column's header. Reserve
+ * the toggle's footprint (`--right-sidebar-toggle-inset`, set on the layout root) so the header's right-edge content (e.g. the My Work / Backlog tab row)
+ * is never covered. Expanded, the toggle sits over the aside's own topbar band instead, so no
+ * reservation applies. The `wco:` copy outranks the base `wco:pr-(--workspace-native-controls-inset)`
+ * (in WCO, `--workspace-controls-right` already includes the native controls inset).
+ */
+export const COLLAPSED_RIGHT_SIDEBAR_TITLEBAR_INSET_CLASS =
+  "lg:[[data-right-sidebar=collapsed]_&]:pr-(--right-sidebar-toggle-inset) wco:lg:[[data-right-sidebar=collapsed]_&]:pr-(--right-sidebar-toggle-inset)";
+
 export function getT3TeamMainContentHeaderClassName(input?: {
   className?: string;
   shouldInsetDesktopHeader?: boolean;
@@ -36,6 +47,7 @@ export function getT3TeamMainContentHeaderClassName(input?: {
     shouldInsetDesktopHeader &&
       "pl-(--workspace-titlebar-content-left) sm:pl-(--workspace-titlebar-content-left)",
     "wco:h-[env(titlebar-area-height)] wco:pl-(--workspace-controls-left) wco:pr-(--workspace-native-controls-inset)",
+    COLLAPSED_RIGHT_SIDEBAR_TITLEBAR_INSET_CLASS,
     className,
   );
 }

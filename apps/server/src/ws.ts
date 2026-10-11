@@ -141,6 +141,7 @@ import {
   toShellApplicationEvent,
   type ShellApplicationEvent,
 } from "./orchestration-v2/ShellStream.ts";
+import { shownShell } from "./orchestration-v2/t3team-hiddenShellThreads.ts";
 import { ORCHESTRATION_V2_PROJECTION_SCHEMA_VERSION } from "./orchestration-v2/ProjectionStore.ts";
 import { bufferLiveStream } from "./orchestration-v2/LiveStreamBudget.ts";
 import { coalesceThreadLiveStream } from "./orchestration-v2/ThreadLiveEventCoalescer.ts";
@@ -151,7 +152,11 @@ import {
   threadReplayEncodedBytes,
   THREAD_RESUME_MAX_REPLAY_EVENTS,
 } from "./orchestration-v2/ThreadStream.ts";
+import { isMachineSetupEnabled } from "./cloud/t3team-machineSetupFlag.ts";
+import { isKanbanSemanticZoomEnabled } from "./t3team-kanbanZoomFlag.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
+import { isMyWorkRightPanelEnabled } from "./t3team-myWorkRightPanelFlag.ts";
+import { isWorkProfileChooserEnabled } from "./t3team-workProfileChooserFlag.ts";
 import { isNexiStateDirSelectedAtStartup } from "@t3tools/project-context/t3teamProjectStateDir";
 import {
   buildBoundedThreadProjection,
@@ -227,6 +232,7 @@ import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
 import { T3TeamActorMailbox } from "./t3team-actorMailboxService.ts";
 import { stopThreadCascade } from "./t3team-threadStopCascade.ts";
+import { makeSettleParkedWorkflowStop } from "./t3team-settleParkedWorkflowStopLive.ts";
 import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import * as PackDocumentStore from "./t3team-v2/t3team-packDocumentStore.ts";
 import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsStore.ts";
@@ -1074,7 +1080,7 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
               return yield* projectItem(stored);
             }
             const shell = yield* threadManagement.getThreadShell(stored.event.threadId);
-            return shellStreamItemFromThreadShell({ stored, shell });
+            return shellStreamItemFromThreadShell({ stored, shell: shownShell(shell) });
           }),
         { concurrency: 8 },
       );
@@ -1303,6 +1309,8 @@ const layerWsRpc = (
       );
       // t3team: the inter-agent mailbox the stop cascade holds (optional, as above).
       const actorMailbox = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamActorMailbox));
+      // t3team: a user's settle first stops the thread's parked workflow runs (outside the lock).
+      const stopParkedWorkflowRunsBeforeSettle = yield* makeSettleParkedWorkflowStop;
       const crypto = yield* Crypto.Crypto;
       const serverCommandId = (tag: string) =>
         crypto.randomUUIDv4.pipe(
@@ -1817,6 +1825,8 @@ const layerWsRpc = (
             threadResubscribeStagger: isThreadResubscribeStaggerEnabled(),
             // Runtime feature flag (env NEXI_FF_RESOURCE_PRESSURE, default off).
             resourcePressure: isResourcePressureEnabled(),
+            // Runtime feature flag (env NEXI_FF_KANBAN_SEMANTIC_ZOOM, default off).
+            kanbanSemanticZoom: isKanbanSemanticZoomEnabled(),
             ...Option.match(scratchWorkspaceRoot, {
               onNone: () => ({}),
               onSome: (root) => ({ scratchWorkspaceRoot: root }),
@@ -1825,6 +1835,13 @@ const layerWsRpc = (
             // Runtime feature flags (env NEXI_FF_MAIN_REPOSITORY / NEXI_FF_NEXI_STATE_DIR,
             // default on): project main repository, and the `.nexi` state dir name.
             mainRepository: isMainRepositoryEnabled(),
+            machineSetup: isMachineSetupEnabled(),
+            // Runtime feature flag (env NEXI_FF_WORK_PROFILE_CHOOSER, default off): the work
+            // profile chooser. Off means clients use the developer profile everywhere.
+            workProfileChooser: isWorkProfileChooserEnabled(),
+            // Runtime feature flag (env NEXI_FF_MYWORK_RIGHT_PANEL, default on): My Work aside
+            // uses RightPanelTabs; off keeps the legacy DigestPrAside swap.
+            myWorkRightPanel: isMyWorkRightPanelEnabled(),
             nexiStateDir: isNexiStateDirSelectedAtStartup(),
           };
         });
@@ -1873,13 +1890,14 @@ const layerWsRpc = (
               Effect.forEach(
                 coalesceStoredThreadEvents(Array.from(events)),
                 (stored) =>
-                  threadManagement
-                    .getThreadShell(stored.event.threadId)
-                    .pipe(
-                      Effect.map((shell) =>
-                        archivedShellStreamItemFromThreadShell({ stored, shell }),
-                      ),
+                  threadManagement.getThreadShell(stored.event.threadId).pipe(
+                    Effect.map((shell) =>
+                      archivedShellStreamItemFromThreadShell({
+                        stored,
+                        shell: shownShell(shell),
+                      }),
                     ),
+                  ),
                 { concurrency: 8 },
               ),
             ),
@@ -1929,12 +1947,15 @@ const layerWsRpc = (
                   // A retry also restarts the preparation work the launch owns.
                   (command.type === "prepared-run.retry"
                     ? threadLaunch.retryPreparation(command)
-                    : ThreadMessageIntake.dispatchCommand(
-                        ThreadManagementService.withCreationProvenance(command, {
-                          createdBy: "user",
-                          creationSource:
-                            "creationSource" in command ? command.creationSource : "web",
-                        }),
+                    : stopParkedWorkflowRunsBeforeSettle(
+                        command,
+                        ThreadMessageIntake.dispatchCommand(
+                          ThreadManagementService.withCreationProvenance(command, {
+                            createdBy: "user",
+                            creationSource:
+                              "creationSource" in command ? command.creationSource : "web",
+                          }),
+                        ),
                       )
                   ).pipe(Effect.provide(intakeContext)),
                 )

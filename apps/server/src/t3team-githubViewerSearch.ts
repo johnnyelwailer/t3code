@@ -57,10 +57,11 @@ export function searchHitMergedAt(item: GitHubSearchItem): string | null {
 
 /**
  * Every GitHub host `gh` holds an authenticated login for. Read from the CLI on each call: a
- * `gh auth login` or `gh auth logout` between rounds must apply on the next one.
+ * `gh auth login` or `gh auth logout` between rounds must apply on the next one. `ok` is false
+ * when `gh` could not say, which is not the same as "no hosts".
  */
-export const signedInGitHubHosts: Effect.Effect<
-  ReadonlyArray<string>,
+export const readSignedInGitHubHosts: Effect.Effect<
+  { readonly hosts: ReadonlyArray<string>; readonly ok: boolean },
   never,
   VcsProcess.VcsProcess
 > = Effect.gen(function* () {
@@ -74,10 +75,19 @@ export const signedInGitHubHosts: Effect.Effect<
       timeoutMs: 15_000,
     })
     .pipe(Effect.option);
-  if (Option.isNone(output)) return [];
+  if (Option.isNone(output)) return { hosts: [], ok: false };
   const status = parseGitHubAuthStatus(output.value.stdout);
-  return [...new Set(findAuthenticatedGitHubAccounts(status.accounts).map((a) => a.host))];
+  return {
+    hosts: [...new Set(findAuthenticatedGitHubAccounts(status.accounts).map((a) => a.host))],
+    ok: status.parsed,
+  };
 });
+
+export const signedInGitHubHosts: Effect.Effect<
+  ReadonlyArray<string>,
+  never,
+  VcsProcess.VcsProcess
+> = readSignedInGitHubHosts.pipe(Effect.map(({ hosts }) => hosts));
 
 /**
  * The login the server's credential for a host belongs to. GitHub's search API has no `@me`, so
@@ -104,25 +114,54 @@ export function viewerLoginFor(
   });
 }
 
+/** GitHub's search API stops answering past this many hits for one query. */
+export const SEARCH_RESULT_CEILING = 1000;
+
+/** What a search saw: `failed` — a page did not answer; `truncated` — it ran into the ceiling. */
+export interface SearchPullRequestsRead {
+  readonly items: ReadonlyArray<GitHubSearchItem>;
+  readonly failed: boolean;
+  readonly truncated: boolean;
+}
+
+/**
+ * `GET /search/issues`, following pages while they come back full, up to `maxPages`. An unreadable
+ * or refused page ends the read with `failed` set; the hits already read are still returned.
+ */
+export function searchPullRequestsRead(input: {
+  readonly host: string;
+  readonly operation: string;
+  readonly query: string;
+  readonly maxPages?: number;
+}): Effect.Effect<SearchPullRequestsRead, never, GitHubApi.GitHubApi> {
+  const maxPages = input.maxPages ?? 1;
+  return Effect.gen(function* () {
+    const api = yield* GitHubApi.GitHubApi;
+    const items: Array<GitHubSearchItem> = [];
+    for (let page = 1; page <= maxPages; page += 1) {
+      const result = yield* api
+        .rest({
+          host: input.host,
+          operation: input.operation,
+          path: `search/issues?q=${encodeURIComponent(input.query)}&per_page=${SEARCH_PAGE_SIZE}&page=${page}`,
+        })
+        .pipe(Effect.option);
+      const decoded = Option.isNone(result) ? Option.none() : decodeSearch(result.value.body);
+      if (Option.isNone(decoded)) return { items, failed: true, truncated: false };
+      items.push(...decoded.value.items);
+      if (decoded.value.items.length < SEARCH_PAGE_SIZE) break;
+    }
+    return { items, failed: false, truncated: items.length >= SEARCH_RESULT_CEILING };
+  });
+}
+
 /** One page of `GET /search/issues`; an unreadable or refused answer is no hits, not a failure. */
 export function searchPullRequests(input: {
   readonly host: string;
   readonly operation: string;
   readonly query: string;
 }): Effect.Effect<ReadonlyArray<GitHubSearchItem>, never, GitHubApi.GitHubApi> {
-  return Effect.gen(function* () {
-    const api = yield* GitHubApi.GitHubApi;
-    const result = yield* api
-      .rest({
-        host: input.host,
-        operation: input.operation,
-        path: `search/issues?q=${encodeURIComponent(input.query)}&per_page=${SEARCH_PAGE_SIZE}`,
-      })
-      .pipe(Effect.option);
-    if (Option.isNone(result)) return [];
-    const decoded = decodeSearch(result.value.body);
-    return Option.isNone(decoded) ? [] : decoded.value.items;
-  });
+  return searchPullRequestsRead(input).pipe(Effect.map((read) => read.items));
 }
 
 export function resetDigestViewerLoginsForTests(): void {

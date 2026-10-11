@@ -80,6 +80,7 @@ describe("sidecar section registry", () => {
               projectId: "project-1",
               stageKickoff,
               launchRecipe: () => undefined,
+              launchQuickStart: async () => false,
               openThread: () => undefined,
             }),
             props: {

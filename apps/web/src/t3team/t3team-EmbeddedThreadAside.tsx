@@ -2,6 +2,7 @@ import { ArrowUpRightIcon } from "lucide-react";
 import type { ProjectSource } from "@t3tools/project-context";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { ThreadChatView } from "~/t3team/chat/t3team-ThreadChatView";
+import { embeddedKickoffInitialUserMessage } from "~/t3team/t3team-embeddedKickoffInitialUserMessage";
 import { runT3TeamViewTransition } from "~/t3team/t3team-runViewTransition";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
@@ -26,6 +27,7 @@ export function EmbeddedThreadAside({
   onThreadKickoffConsumed,
   onOpenFullThread,
 }: EmbeddedThreadAsideProps) {
+  const initialUserMessage = embeddedKickoffInitialUserMessage(thread);
   return (
     <aside className="relative flex h-full min-h-0 flex-col overflow-hidden border-l border-border/70 bg-background [view-transition-name:t3team-right-sidebar-panel]">
       <div className="flex min-h-0 flex-1 flex-col">
@@ -56,9 +58,7 @@ export function EmbeddedThreadAside({
             ? { kickoffPending: thread.kickoffPending }
             : {})}
           {...(thread.kickoffWorkflow ? { kickoffWorkflow: thread.kickoffWorkflow } : {})}
-          {...(thread.kickoffPending && thread.kickoffMessage !== undefined
-            ? { initialUserMessage: thread.kickoffMessage }
-            : {})}
+          {...(initialUserMessage !== undefined ? { initialUserMessage } : {})}
           {...(thread.kickoffModelSelection
             ? { initialModelSelection: thread.kickoffModelSelection }
             : {})}

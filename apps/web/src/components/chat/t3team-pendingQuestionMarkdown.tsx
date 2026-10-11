@@ -5,7 +5,10 @@
  * markdown — context paragraphs, lists, code. The panel used to render the
  * raw text in a <p>, which is how a 1200-character question surfaced as an
  * unstyled wall of text. This renderer reuses the chat's ChatMarkdown
- * primitive so questions render the same way chat messages do.
+ * primitive so questions render the same way chat messages do. Single
+ * newlines are kept as line breaks (like user messages): agents write
+ * questions as plain multi-line prose, which CommonMark would otherwise
+ * fold into one run-on line.
  *
  * @module components/chat/t3team-pendingQuestionMarkdown
  */
@@ -22,6 +25,7 @@ export function T3TeamPendingQuestionMarkdown(props: {
       text={props.text}
       cwd={undefined}
       isStreaming={false}
+      lineBreaks
       className={cn("text-foreground/85", props.className)}
     />
   );

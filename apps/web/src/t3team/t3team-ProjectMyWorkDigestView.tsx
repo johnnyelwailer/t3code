@@ -4,6 +4,7 @@ import {
   digestShownTicketIds,
 } from "~/t3team/t3team-projectMyWorkDigestGroups";
 import { DashboardWidget } from "~/t3team/t3team-dashboardWidgetRegistry";
+import { MyWorkLoadingLanesPlaceholder } from "~/t3team/t3team-MyWorkLoadingAnimation";
 import { DigestArrangementBar } from "~/t3team/t3team-ProjectMyWorkDigestArrangementBar";
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import {
@@ -21,6 +22,8 @@ export function ProjectMyWorkDigestView({
   burndownVariant = "off",
   updatedAtMs,
   onResetArrangement,
+  refreshing = false,
+  emptyStateAllowed = true,
 }: {
   plan: ResolvedDigestPlan;
   graph: DigestGraph;
@@ -30,6 +33,14 @@ export function ProjectMyWorkDigestView({
   updatedAtMs?: number;
   /** Clears an agent-made arrangement for this scope (back to the default). */
   onResetArrangement?: (() => Promise<void>) | undefined;
+  /** A revalidation is in flight over this content; the header's status strip says so. */
+  refreshing?: boolean;
+  /**
+   * False until a fresh, successful round for this scope has landed: a plan with no sections is
+   * then "not known yet", not "nothing", so the lanes keep loading instead of claiming the user is
+   * free. Default true — fixtures and stories hand over a settled graph.
+   */
+  emptyStateAllowed?: boolean;
 }) {
   const graph = useDigestPrThreadClaims(serverGraph, nowMs);
   const ticketsById = new Map(graph.tickets.map((ticket) => [ticket.id, ticket]));
@@ -39,6 +50,7 @@ export function ProjectMyWorkDigestView({
       graph={graph}
       nowMs={nowMs}
       burndownVariant={burndownVariant}
+      refreshing={refreshing}
       {...(updatedAtMs !== undefined ? { updatedAtMs } : {})}
     />
   );
@@ -54,12 +66,16 @@ export function ProjectMyWorkDigestView({
       <div className="@container/digest space-y-8">
         {header}
         {arranged}
-        <T3SurfacePanel
-          tone="dashed"
-          className="px-6 py-10 text-center text-sm text-muted-foreground"
-        >
-          Nothing needs you
-        </T3SurfacePanel>
+        {emptyStateAllowed ? (
+          <T3SurfacePanel
+            tone="dashed"
+            className="px-6 py-10 text-center text-sm text-muted-foreground"
+          >
+            Nothing needs you
+          </T3SurfacePanel>
+        ) : (
+          <MyWorkLoadingLanesPlaceholder />
+        )}
       </div>
     );
   }
@@ -86,12 +102,16 @@ export function ProjectMyWorkDigestView({
       {header}
       {arranged}
       {lanesEmpty ? (
-        <T3SurfacePanel
-          tone="dashed"
-          className="px-6 py-6 text-center text-sm text-muted-foreground"
-        >
-          Nothing needs you right now
-        </T3SurfacePanel>
+        emptyStateAllowed ? (
+          <T3SurfacePanel
+            tone="dashed"
+            className="px-6 py-6 text-center text-sm text-muted-foreground"
+          >
+            Nothing needs you right now
+          </T3SurfacePanel>
+        ) : (
+          <MyWorkLoadingLanesPlaceholder />
+        )
       ) : (
         <div className={lanes.gridClassName}>
           {lanes.showSide ? (

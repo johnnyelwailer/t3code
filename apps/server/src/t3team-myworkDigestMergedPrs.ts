@@ -32,7 +32,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const utcDate = (ms: number): string => DateTime.formatIso(DateTime.makeUnsafe(ms)).slice(0, 10);
 
 /** The query one host answers: mine, merged, from a day before the window's UTC date. */
-export function mergedPrSearchQuery(login: string, window: DigestYesterdayWindow): string {
+function mergedPrSearchQuery(login: string, window: DigestYesterdayWindow): string {
   return `is:pr is:merged author:${login} merged:>=${utcDate(window.fromMs - DAY_MS)}`;
 }
 

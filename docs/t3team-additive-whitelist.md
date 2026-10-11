@@ -307,6 +307,31 @@ existing `docs/t3team-mvp/**` and `.claude/**` entries.
 - Additive `.test`, `.browser`, `.stories`, and `*Fixtures` files use a higher LOC ceiling because they are validation/demo artifacts rather than shipped runtime surfaces.
 - Remove entries when no longer needed.
 
+## Preview panel resize: row-based cap, scale held during drag (2026-10-08)
+
+The thread side panel stopped growing at 70% of the window even when the row had room, and
+device-viewport webviews rescaled on every frame of the drag.
+
+- `apps/web/src/hooks/usePreviewPanelInlineSize.ts` (+ `components/preview/PreviewPanelShell.test.ts`) — max width uses the measured row; the window fraction is only the unmeasured fallback.
+- `apps/web/src/hooks/useResizableWidth.ts` (+ test) — exposes `resizing` for the drag session.
+- `apps/web/src/hooks/useResizeDrag.ts` — a drag whose handle unmounts mid-drag (panel closed/maximized) ends on the window's pointer release instead of staying stuck.
+- `apps/web/src/components/preview/PreviewPanelShell.tsx` — publishes the drag to `browser/t3team-previewPanelResizeStore.ts`.
+- `apps/web/src/browser/browserViewportLayout.ts` (+ test), `useBrowserViewportResize.ts`, `HostedBrowserWebview.tsx` — hold the fit-to-panel scale while the panel is dragged; re-fit once on release.
+
+## Pack-configurable vendor branding (2026-10-07)
+
+Distribution appearance (`labels.appName`, product name, brand mark) has to reach the
+surfaces that still spelled the vendor name before a session existed, plus the desktop
+window title and the DMG background the desktop build rasterizes.
+
+- `apps/web/index.html` — boot splash title, label, and mark follow the pack descriptor when one is served.
+- `apps/web/src/lib/bootError.ts` — startup failure copy uses the same boot product name.
+- `apps/web/src/routes/_chat.index.tsx` — hosted empty state uses the pack product name.
+- `apps/web/src/components/auth/AuthSurfaceShell.tsx` — connect masthead uses the pack display name.
+- `apps/web/src/components/auth/PairingRouteSurface.tsx` — pairing eyebrows use the pack display name.
+- `apps/desktop/src/window/DesktopApplicationMenu.ts` — update dialog names the active product.
+- `apps/web/src/components/preview/PreviewPanel.tsx` — desktop-only preview notice names the active product.
+
 ## PR #344 main-repository port onto orchestration V2 (2026-10-05)
 
 Owner-approved 2026-10-05. Exact paths; each is upstream orchestration V2 surface, integrated via PR #344:
@@ -350,3 +375,11 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
 - `apps/server/src/auth/McpOAuth.ts`, `…/McpOAuth.test.ts`, `…/mcpOAuthHtml.ts`, `…/mcpOAuthHttp.ts`
 - `apps/web/src/components/auth/ConnectAgentSurface.tsx`, `apps/web/src/routes/connect-agent.tsx`
 - `oxlint-plugin-t3code/rules/no-raw-mcp-registration.ts`, `…/no-raw-mcp-registration.test.ts`
+
+## `changeRequest.summary` slot (T8)
+
+- `apps/web/src/components/pullRequest/PullRequestSummaryTab.tsx` — one import and one
+  `<ChangeRequestSummarySlot />` line between the meta section and Description; the slot renders
+  nothing until a view is registered, so the panel is unchanged without one.
+- `apps/web/src/components/pullRequest/PullRequestSummaryTab.test.tsx` — one case: a throwing
+  registered Summary view leaves the real panel standing.

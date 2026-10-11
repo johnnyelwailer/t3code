@@ -293,7 +293,9 @@ const makeFakes = () => {
     purgeTerminalRegistrations: voidFx,
     insertInboxEntry: () => Effect.succeed(0),
     takeOpenInboxEntry: () => Effect.succeed(Option.none()),
+    takeFirstOpenInboxEntry: () => Effect.succeed(Option.none()),
     deleteDeliveredInboxEntriesOlderThan: voidFx,
+    pruneUndeliveredInboxEntries: voidFx,
     getCursor: (key: string) =>
       Effect.succeed(
         cursors.has(key)
@@ -305,6 +307,9 @@ const makeFakes = () => {
           : Option.none(),
       ),
     upsertCursor: (i) => Effect.succeed<void>(void cursors.set(i.instanceKey, i.cursorValue)),
+    deleteRegistration: voidFx,
+    listTriggerRegistrations: () => Effect.succeed([]),
+    listUndeliveredInboxEntries: () => Effect.succeed([]),
   };
   return {
     emits,

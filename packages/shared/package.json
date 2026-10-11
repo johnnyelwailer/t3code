@@ -7,6 +7,10 @@
       "types": "./src/orchestrationV2ThreadError.ts",
       "import": "./src/orchestrationV2ThreadError.ts"
     },
+    "./t3team-manualContinuation": {
+      "types": "./src/t3team-manualContinuation.ts",
+      "import": "./src/t3team-manualContinuation.ts"
+    },
     "./t3team-githubActivity": {
       "types": "./src/t3team-githubActivity.ts",
       "import": "./src/t3team-githubActivity.ts"

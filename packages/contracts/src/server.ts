@@ -681,11 +681,38 @@ export const ServerConfig = Schema.Struct({
    */
   resourcePressure: Schema.optionalKey(Schema.Boolean),
   /**
+   * Whether the My Work kanban board advertises semantic zoom (continuous density progress with
+   * three soft-snap levels, steered from the toolbar or Ctrl/Cmd+wheel / trackpad pinch).
+   * Server-advertised runtime feature flag (env `NEXI_FF_KANBAN_SEMANTIC_ZOOM`, default off);
+   * absent on older servers.
+   */
+  kanbanSemanticZoom: Schema.optionalKey(Schema.Boolean),
+  /**
    * Whether a project can designate a linked repository as its MAIN repository (picker,
    * switch-with-migration, auto-detection, `start_child` default). Runtime feature flag (env
    * `NEXI_FF_MAIN_REPOSITORY`, default on); absent on older servers.
    */
   mainRepository: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Whether a cloud session for a project with no machine definition sets one up.
+   * Runtime feature flag (env `NEXI_FF_MACHINE_SETUP`, default off); absent on older servers.
+   */
+  machineSetup: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Whether the work profile chooser is offered (first-run setup surface, the add-project
+   * wizard's profile step, the Settings default-profile picker). Runtime feature flag (env
+   * `NEXI_FF_WORK_PROFILE_CHOOSER`, default OFF); absent on older servers, which clients must
+   * also treat as off. While off, clients use the developer profile and leave any stored
+   * profile choice untouched.
+   */
+  workProfileChooser: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Whether My Work hosts its aside through `RightPanelTabs` on a fixed panel ref (PR / thread /
+   * browser tabs, Agent kickoff when empty). Runtime feature flag (env `NEXI_FF_MYWORK_RIGHT_PANEL`,
+   * default on); absent on older servers, which clients treat as on (legacy DigestPrAside remains
+   * available when the flag is explicitly off).
+   */
+  myWorkRightPanel: Schema.optionalKey(Schema.Boolean),
   /**
    * Whether this server names the project state dir `.nexi` instead of `.t3team`. Runtime
    * feature flag (env `NEXI_FF_NEXI_STATE_DIR`, default on); absent on older servers.

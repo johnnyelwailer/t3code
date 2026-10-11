@@ -75,21 +75,32 @@ import {
   subagentThreadTitle,
 } from "../SubagentProjection.ts";
 import * as CursorAgentSdk from "./CursorAgentSdk.ts";
+import { cursorUsageLimitResetAt, isCursorUsageLimitText } from "./t3team-cursorUsageLimit.ts";
 export { cursorSdkModelSelection } from "../../provider/cursorSdkModel.ts";
 
 export const CURSOR_DRIVER_KIND = CursorAgentSdk.CURSOR_PROVIDER;
 export const CURSOR_DEFAULT_INSTANCE_ID = defaultInstanceIdForDriver(CURSOR_DRIVER_KIND);
 const DEFAULT_CURSOR_SETTINGS = Schema.decodeSync(CursorSettings)({});
 
+const cursorUsageLimitFailure = (message: string, nowMs: number) =>
+  isCursorUsageLimitText(message)
+    ? { class: "usage_limit" as const, resetAt: cursorUsageLimitResetAt(message, nowMs) }
+    : {};
+
 /** Pull message/code off Cursor SDK run errors so the UI is not stuck on the opaque default. */
-export function cursorRunResultFailure(error: unknown): {
+export function cursorRunResultFailure(
+  error: unknown,
+  nowMs: number,
+): {
   readonly message?: string;
   readonly code?: string | null;
   readonly retryable?: boolean | null;
+  readonly class?: "usage_limit";
+  readonly resetAt?: string;
 } {
   if (typeof error === "string") {
     const message = error.trim();
-    return message.length > 0 ? { message } : {};
+    return message.length > 0 ? { message, ...cursorUsageLimitFailure(message, nowMs) } : {};
   }
   if (typeof error !== "object" || error === null) {
     return {};
@@ -114,6 +125,7 @@ export function cursorRunResultFailure(error: unknown): {
       ...(message === undefined ? {} : { message }),
       ...(code === undefined ? {} : { code }),
       ...(retryable === undefined ? {} : { retryable }),
+      ...(message === undefined ? {} : cursorUsageLimitFailure(message, nowMs)),
     };
   } catch {
     return {};
@@ -2330,6 +2342,7 @@ export function makeCursorAdapterV2(
                   }
                   if (context !== null) {
                     const transportFailure = context.assistantReply.failure;
+                    const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
                     const status =
                       transportFailure === undefined ? terminalStatus(context, result) : "failed";
                     yield* finalizeTurn({
@@ -2339,17 +2352,17 @@ export function makeCursorAdapterV2(
                         ? {
                             failure: (() => {
                               const runError = (result as { readonly error?: unknown }).error;
-                              const fromRun =
+                              const fromRun: ReturnType<typeof cursorRunResultFailure> =
                                 transportFailure === undefined
-                                  ? cursorRunResultFailure(runError)
+                                  ? cursorRunResultFailure(runError, nowMs)
                                   : {};
                               return makeProviderFailure({
                                 cause: transportFailure ?? runError,
                                 ...fromRun,
                                 class:
-                                  transportFailure === undefined
-                                    ? "provider_error"
-                                    : "transport_error",
+                                  transportFailure !== undefined
+                                    ? "transport_error"
+                                    : (fromRun.class ?? "provider_error"),
                               });
                             })(),
                           }

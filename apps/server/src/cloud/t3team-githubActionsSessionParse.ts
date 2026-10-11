@@ -10,6 +10,7 @@
  * read this" must never be mistaken for it.
  */
 
+import { actorLogin } from "./t3team-cloudSessionRunOwnership.ts";
 import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
 
 function asString(value: unknown): string {
@@ -29,6 +30,7 @@ function toRun(raw: Record<string, unknown>): WorkflowRunSummary {
     updatedAt: asString(raw["updated_at"]),
     htmlUrl: asString(raw["html_url"]),
     name: asString(raw["name"]) || asString(raw["display_title"]),
+    actor: actorLogin(raw["actor"]),
   };
 }
 

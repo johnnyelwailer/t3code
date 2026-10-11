@@ -6,6 +6,8 @@
  * consumer handle. `handle.waitFor(signal, { key })` journals a `signal.wait` ask and parks
  * the run until the host delivers the awaited `(signal, key)` — either live from a running
  * source instance or from a durable inbox entry that landed while the run was not parked.
+ * `handle.on(signal, { key })` describes that same wait as a branch, without waiting, for
+ * `waitForAny` to park on several at once.
  *
  * Two engine-level guarantees, both replay-deterministic:
  *   • INSTANCE DEDUP — the register args are `{ source, params }` canonically hashed, so two
@@ -27,9 +29,11 @@ import {
   decodeSignalPayload,
   resolveSignalSourceParams,
   type Signal,
+  type SignalBranch,
   type SignalSourceHandle,
   type SignalSourceRef,
 } from "./t3team-sdk.signal.ts";
+import { createWaitForAny, type WaitForAny } from "./t3team-sdk.signalAny.ts";
 import { BUILTIN_SIGNAL_SOURCES } from "./t3team-sdk.builtinSignals.ts";
 import { PermissionDeniedError } from "./t3team-sdk.errors.ts";
 
@@ -46,6 +50,8 @@ export interface SignalPrimitives {
     source: SignalSourceRef<Params, Signals, unknown>,
     params: Params,
   ) => Promise<SignalSourceHandle<Signals>>;
+  /** Park on several `handle.on(...)` branches at once (see `t3team-sdk.signalAny.ts`). */
+  readonly waitForAny: WaitForAny;
 }
 
 export function createSignalPrimitives(deps: {
@@ -53,6 +59,9 @@ export function createSignalPrimitives(deps: {
   readonly broker: MessageBroker;
   readonly capabilities: ReadonlySet<string>;
 }): SignalPrimitives {
+  // Branches `handle.on` minted in this run: `waitForAny` accepts nothing else, so every branch
+  // it parks on is an instance this run registered under its `source:<name>` capability.
+  const minted = new WeakSet<object>();
   const getSignalSource = async <Params, Signals extends ReadonlyArray<Signal<unknown>>>(
     source: SignalSourceRef<Params, Signals, unknown>,
     params: Params,
@@ -127,11 +136,34 @@ export function createSignalPrimitives(deps: {
         decodeSignalPayload(signal, reply),
       );
     };
+    const on = (signal: Signal<unknown>, opts: { readonly key: string }): SignalBranch<unknown> => {
+      if (!declaresSignal(source, signal)) {
+        throw new Error(
+          `Signal '${signal.name}' is not declared in source '${source.name}''s emits.`,
+        );
+      }
+      const branch = Object.freeze({
+        kind: "signal.branch" as const,
+        source: source.name,
+        paramsHash,
+        signal,
+        key: opts.key,
+      });
+      minted.add(branch);
+      return branch;
+    };
     return {
       sourceName: source.name,
       paramsHash,
       waitFor: waitFor as SignalSourceHandle<Signals>["waitFor"],
+      on: on as SignalSourceHandle<Signals>["on"],
     };
   };
-  return { getSignalSource };
+  const waitForAny = createWaitForAny({
+    dispatch: deps.dispatch,
+    broker: deps.broker,
+    capabilities: deps.capabilities,
+    isMinted: (branch) => typeof branch === "object" && branch !== null && minted.has(branch),
+  });
+  return { getSignalSource, waitForAny };
 }

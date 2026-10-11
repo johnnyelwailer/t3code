@@ -17,7 +17,8 @@ import { randomUUID } from "~/lib/utils";
 import { environmentThreadShells } from "~/state/threads";
 import { useAtomCommand } from "~/state/use-atom-command";
 
-const stopThreadCascade = createT3TeamStopCascadeCommand(connectionAtomRuntime);
+/** The fork's "stop including sub-runs" command; also the indicator card's *Leave it*. */
+export const stopThreadCascade = createT3TeamStopCascadeCommand(connectionAtomRuntime);
 
 /**
  * ChatView's "Stop incl. sub-runs" (split stop button): offered while the server supports the

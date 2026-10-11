@@ -16,6 +16,11 @@ vi.mock("../ui/tooltip", () => ({
 }));
 
 import { PullRequestSummaryTab } from "./PullRequestSummaryTab";
+import { activateAppViewPacks } from "~/t3team/packs/t3team-appViewRegistry";
+import {
+  brokenPackWebModule,
+  ciInsightsPackWebModule,
+} from "~/t3team/packs/t3team-slotsPackFixtures";
 
 const detail: PullRequestDetailView = {
   provider: "github",
@@ -211,4 +216,30 @@ it("opens bot reports in pages without hiding human comments", () => {
   expect(
     renderer.root.findAllByType("p").some((p) => p.children.join("").startsWith("Bot report")),
   ).toBe(false);
+});
+
+it("keeps the panel when a registered Summary view throws", () => {
+  const descriptionHeading = () =>
+    renderer.root
+      .findAllByType("section")
+      .some((section) => section.props["aria-label"] === "Description");
+  act(() => {
+    renderer = create(render());
+  });
+  expect(
+    renderer.root
+      .findAllByType("p")
+      .some((p) => p.children.join("").includes("could not be shown")),
+  ).toBe(false);
+
+  const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+  activateAppViewPacks([ciInsightsPackWebModule, brokenPackWebModule]);
+  act(() => renderer.update(render()));
+
+  // The panel and the healthy card survive; the throwing view shows a one-line notice.
+  expect(descriptionHeading()).toBe(true);
+  const texts = renderer.root.findAllByType("p").map((p) => p.children.join(""));
+  expect(texts).toContain("broken.summary could not be shown.");
+  expect(texts.some((text) => text.includes("Flaky tests"))).toBe(true);
+  logged.mockRestore();
 });

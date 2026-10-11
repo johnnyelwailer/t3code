@@ -27,9 +27,8 @@ function normalizeWorkspaceDirectoryName(title: string): string {
 }
 
 /**
- * Also used by the review step (`t3team-CreateProjectDialogReviewStep.tsx`) to preview where the
- * project will land before it exists — exported rather than duplicated so the preview can never
- * drift from the path actually used at creation time.
+ * Exported so a surface can preview where a project will land before it exists without
+ * duplicating the path logic and drifting from the path actually used at creation time.
  */
 export const makeWorkspacePath = (title: string): string => {
   const maybeProcess = globalThis as typeof globalThis & {

@@ -34,7 +34,7 @@ import {
   makeRecordingDraftBroker,
   WORKFLOW_DRAFT_TOOL as DRAFT_TOOL,
 } from "./t3team-workflowHostDraft.fixtures.ts";
-import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
+import { makeT3TeamWorkflowHostToolClient } from "./t3team-workflowHostTools.ts";
 import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 import {
   DESCRIPTION_REWRITE_RECIPE_ID,
@@ -105,7 +105,7 @@ async function runRewrite(input: {
     host: host.host,
     newId: () => `${input.runId}-id-${(seq += 1)}`,
     nowIso: () => ISO,
-    hostToolClient: makeT3TeamWorkflowHostDraftToolClient({ broker, launchThreadId: threadId })!,
+    hostToolClient: makeT3TeamWorkflowHostToolClient({ broker, launchThreadId: threadId })!,
     onComplete: async (output) => {
       completed.push(output);
     },

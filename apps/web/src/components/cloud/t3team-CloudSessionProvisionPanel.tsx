@@ -4,10 +4,7 @@ import { type ReactNode, useCallback, useMemo } from "react";
 import { Button } from "../ui/button";
 import { CloudSessionHistoryDisclosure } from "./t3team-CloudSessionHistoryDisclosure";
 import { CloudSessionRow, CloudSessionRowsSkeleton } from "./t3team-CloudSessionProvisionRow";
-import {
-  formatDuration,
-  isCloudSessionProvisionPending,
-} from "./t3team-cloudSessionProvisionPresentation";
+import { isCloudSessionProvisionPending } from "./t3team-cloudSessionProvisionPresentation";
 import { splitCloudSessions } from "./t3team-cloudSessionSplit";
 
 /**
@@ -90,7 +87,7 @@ export function CloudSessionProvisionPanel({
           <h2 className="font-medium text-sm">Cloud sessions</h2>
           <p className="text-muted-foreground text-xs">
             {pendingCount > 0
-              ? `${pendingCount} starting · usually ready in about ${formatDuration(155)}`
+              ? `${pendingCount} starting`
               : "Start a Nexi machine in the cloud and work on it from here."}
           </p>
         </div>

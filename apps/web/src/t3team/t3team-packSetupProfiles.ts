@@ -1,7 +1,16 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentSetupProfile } from "@t3tools/contracts";
 
+import { appAtomRegistry } from "../rpc/atomRegistry";
 import { primaryServerConfigAtom, primaryServerWelcomeAtom } from "../state/server";
+
+function pickSetupProfiles(
+  welcome: readonly EnvironmentSetupProfile[] | undefined,
+  config: readonly EnvironmentSetupProfile[] | undefined,
+): readonly EnvironmentSetupProfile[] | undefined {
+  const profiles = welcome ?? config;
+  return profiles && profiles.length > 0 ? profiles : undefined;
+}
 
 /**
  * Setup profiles contributed by an active workspace pack, read from the primary
@@ -9,10 +18,18 @@ import { primaryServerConfigAtom, primaryServerWelcomeAtom } from "../state/serv
  * wizard falls back to the built-in generic catalog.
  */
 export function useT3TeamPackSetupProfiles(): readonly EnvironmentSetupProfile[] | undefined {
-  const config = useAtomValue(primaryServerConfigAtom)?.environment.setupProfiles;
-  const welcome = useAtomValue(primaryServerWelcomeAtom)?.environment.setupProfiles;
-  const profiles = welcome ?? config;
-  return profiles && profiles.length > 0 ? profiles : undefined;
+  return pickSetupProfiles(
+    useAtomValue(primaryServerWelcomeAtom)?.environment.setupProfiles,
+    useAtomValue(primaryServerConfigAtom)?.environment.setupProfiles,
+  );
+}
+
+/** Non-reactive read of the same descriptors, for call sites outside React. */
+export function readT3TeamPackSetupProfiles(): readonly EnvironmentSetupProfile[] | undefined {
+  return pickSetupProfiles(
+    appAtomRegistry.get(primaryServerWelcomeAtom)?.environment.setupProfiles,
+    appAtomRegistry.get(primaryServerConfigAtom)?.environment.setupProfiles,
+  );
 }
 
 /**
@@ -24,9 +41,4 @@ export function resolveT3TeamPackDefaultSetupProfileId(
   profiles: readonly EnvironmentSetupProfile[] | undefined,
 ): string | undefined {
   return profiles?.find((profile) => profile.default === true)?.id;
-}
-
-/** Live pack default profile id, or undefined when no pack declares one. */
-export function useT3TeamPackDefaultSetupProfileId(): string | undefined {
-  return resolveT3TeamPackDefaultSetupProfileId(useT3TeamPackSetupProfiles());
 }

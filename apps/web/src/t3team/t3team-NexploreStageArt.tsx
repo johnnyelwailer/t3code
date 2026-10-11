@@ -100,6 +100,9 @@ const ORB_FILL: Readonly<Record<"orb" | "orbAlt", string>> = {
   orbAlt: "var(--stage-nx-orb-alt, var(--stage-nx-orb, #f7cbed))",
 };
 
+/** Dark appearance dims the strip orb (token is 1 in light); the send-button field is unaffected. */
+const STRIP_ORB_OPACITY = "var(--stage-nx-strip-orb-opacity, 1)";
+
 const GROUND_FILL = "var(--stage-nx-ground, #f05a0a)";
 
 /**
@@ -174,7 +177,14 @@ export function T3TeamNexploreStripArt() {
     >
       <rect width="100%" height={STRIP_HEIGHT} style={{ fill: GROUND_FILL }} />
       <g className="stage-nexplore-orbs">
-        {orb ? <circle cx={orb.cx} cy={orb.cy} r={orb.r} style={{ fill: ORB_FILL.orb }} /> : null}
+        {orb ? (
+          <circle
+            cx={orb.cx}
+            cy={orb.cy}
+            r={orb.r}
+            style={{ fill: ORB_FILL.orb, opacity: STRIP_ORB_OPACITY }}
+          />
+        ) : null}
       </g>
       {/* Left-edge traffic-light wash (macOS + light appearance only; see t3team-NexploreTitlebarFade). */}
       {orb?.wash ? (

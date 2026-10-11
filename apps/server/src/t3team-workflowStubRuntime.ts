@@ -13,6 +13,7 @@ import { CommandId, EventId, ProjectId, ThreadId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 
 import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
 import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
@@ -23,6 +24,7 @@ import * as ThreadManagementService from "./orchestration-v2/ThreadManagementSer
 import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
 import { T3TeamWorkflowEngineReactorLayer } from "./t3team-workflowEngineReactor.ts";
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
+import { makeThreadLaunchFake } from "./t3team-threadLaunchFake.fixtures.ts";
 import * as T3TeamWorkflowHost from "./t3team-workflowHost.ts";
 import {
   makeWorkflowStubProvider,
@@ -46,8 +48,12 @@ export function makeWorkflowStubRuntime(options: {
     WorkflowJournalStoreLive,
     ProjectStore.layer,
   ).pipe(Layer.provide(database));
+  // `launchThread` creates top-level threads through ThreadLaunchService; the fake skips git.
+  const threadLaunch = makeThreadLaunchFake();
   const host = T3TeamWorkflowHost.layer.pipe(
-    Layer.provide(Layer.mergeAll(threads, foundation, database)),
+    Layer.provide(threadLaunch.layer.pipe(Layer.provideMerge(threads))),
+    // `getConfig()` reads the project's config files from its workspace.
+    Layer.provide(Layer.mergeAll(threads, foundation, database, persistence, NodeServices.layer)),
   );
   const core = Layer.mergeAll(
     orchestration,
@@ -64,6 +70,8 @@ export function makeWorkflowStubRuntime(options: {
     turns: provider.turns,
     /** End a held turn (see `makeWorkflowStubProvider`). */
     settle: provider.settle,
+    /** Every `launchThread` that created a thread, in order. */
+    launches: threadLaunch.launches,
   };
 }
 
@@ -104,6 +112,8 @@ export const createWorkflowStubThread = (input: {
   readonly threadId: string;
   readonly projectId: string;
   readonly title?: string;
+  /** A thread bound to its own git worktree; absent is a thread on the project root. */
+  readonly worktreePath?: string;
 }) =>
   Effect.flatMap(ThreadManagementService.ThreadManagementService, (threads) =>
     threads.dispatch({
@@ -116,7 +126,7 @@ export const createWorkflowStubThread = (input: {
       runtimeMode: "full-access",
       interactionMode: "default",
       branch: null,
-      worktreePath: null,
+      worktreePath: input.worktreePath ?? null,
       createdBy: "user",
       creationSource: "web",
     }),

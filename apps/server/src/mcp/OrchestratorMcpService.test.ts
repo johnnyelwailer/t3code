@@ -1807,3 +1807,250 @@ describe("OrchestratorMcpService provider resolution", () => {
     );
   });
 });
+
+describe("provider usage echo", () => {
+  const parentThreadId = ThreadId.make("thread:usage-echo-parent");
+  const parentRunId = RunId.make("run:usage-echo-parent");
+  const parentNodeId = NodeId.make("node:usage-echo-root");
+  const taskId = NodeId.make("node:usage-echo-task");
+  const childThreadId = ThreadId.make("thread:usage-echo-child");
+  const projectId = ProjectId.make("project:usage-echo");
+  const nexploreInstanceId = ProviderInstanceId.make("nexplore");
+  const claudeInstanceId = ProviderInstanceId.make("claudeAgent");
+  const rateLimitedInstanceId = ProviderInstanceId.make("codex");
+
+  const childProjection = {
+    thread: { id: childThreadId },
+    runs: [],
+    contextTransfers: [],
+    messages: [],
+    subagents: [],
+    providerThreads: [],
+    turnItems: [],
+  } as unknown as OrchestrationV2ThreadProjection;
+
+  const scope: McpInvocationScope = {
+    environmentId: EnvironmentId.make("environment:usage-echo"),
+    requestNamespace: "provider-session:usage-echo",
+    thread: {
+      threadId: parentThreadId,
+      providerSessionId: "provider-session:usage-echo",
+      providerInstanceId: nexploreInstanceId,
+    },
+    client: undefined,
+    capabilities: new Set(["orchestration"]),
+    issuedAt: 1,
+  };
+
+  const windows = [
+    {
+      id: "five_hour",
+      kind: "session" as const,
+      label: "Session",
+      usedPercent: 42,
+      resetsAt: "2026-09-28T18:00:00.000Z",
+    },
+    { id: "seven_day", kind: "weekly" as const, label: "Weekly", usedPercent: 90 },
+  ];
+
+  const snapshot = (input: {
+    readonly instanceId: ProviderInstanceId;
+    readonly driver: ProviderDriverKind;
+    readonly model?: string;
+    readonly enabled?: boolean;
+    readonly usage?: boolean;
+  }): ServerProvider =>
+    ({
+      instanceId: input.instanceId,
+      driver: input.driver,
+      enabled: input.enabled ?? true,
+      installed: true,
+      version: "test",
+      status: "ready",
+      auth: { status: "authenticated" },
+      checkedAt: "2026-09-28T00:00:00.000Z",
+      models:
+        input.model === undefined
+          ? []
+          : [{ slug: input.model, name: input.model, isCustom: false, capabilities: null }],
+      slashCommands: [],
+      skills: [],
+      ...(input.usage === true
+        ? { usageLimits: { checkedAt: "2026-09-28T10:00:00.000Z", windows } }
+        : {}),
+    }) as unknown as ServerProvider;
+
+  const nexplore = snapshot({
+    instanceId: nexploreInstanceId,
+    driver: ProviderDriverKind.make("nexplore"),
+    model: "conductor",
+  });
+  const claude = snapshot({
+    instanceId: claudeInstanceId,
+    driver: ProviderDriverKind.make("claudeAgent"),
+    model: "claude-sonnet-4-6",
+    usage: true,
+  });
+
+  const parentProjection = (
+    subagents: ReadonlyArray<unknown> = [],
+  ): OrchestrationV2ThreadProjection =>
+    ({
+      thread: {
+        id: parentThreadId,
+        projectId,
+        title: "Usage echo parent",
+        createdBy: "user",
+        creationSource: "web",
+        modelSelection: { instanceId: nexploreInstanceId, model: "conductor" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+      },
+      runs: [
+        {
+          id: parentRunId,
+          ordinal: 1,
+          status: "running",
+          rootNodeId: parentNodeId,
+          providerInstanceId: nexploreInstanceId,
+          modelSelection: { instanceId: nexploreInstanceId, model: "conductor" },
+        },
+      ],
+      contextTransfers: [],
+      subagents,
+    }) as unknown as OrchestrationV2ThreadProjection;
+
+  const adapterRegistryLayer = (instanceIds: ReadonlyArray<ProviderInstanceId>) =>
+    Layer.succeed(
+      ProviderAdapterRegistry.ProviderAdapterRegistryV2,
+      ProviderAdapterRegistry.ProviderAdapterRegistryV2.of({
+        list: () => Effect.succeed(instanceIds),
+        get: (instanceId) =>
+          instanceIds.includes(instanceId)
+            ? Effect.succeed({ instanceId } as unknown as ProviderAdapterV2Shape)
+            : Effect.fail(
+                new ProviderAdapterRegistry.ProviderAdapterRegistryLookupError({ instanceId }),
+              ),
+      }),
+    );
+
+  const baseLayers = (
+    providers: ReadonlyArray<ServerProvider>,
+    tms: Record<string, unknown> = {
+      getThreadRecords: () => Effect.succeed(parentProjection()),
+    },
+  ) =>
+    Layer.mergeAll(
+      NodeServices.layer,
+      Layer.mock(ThreadManagementService.ThreadManagementService)(tms as never),
+      Layer.mock(ProviderRegistry.ProviderRegistry)({
+        getProviders: Effect.succeed(providers),
+        refreshInstance: () => Effect.succeed(providers),
+      }),
+      adapterRegistryLayer(providers.map((provider) => provider.instanceId)),
+      Layer.mock(ProjectService.ProjectService)({}),
+      Layer.mock(SecretRequests.SecretRequests)({}),
+      Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+    );
+
+  it.effect("echoes a compact per-instance usage view in the capabilities catalog", () =>
+    Effect.gen(function* () {
+      const layer = baseLayers([nexplore, claude]);
+      yield* Effect.gen(function* () {
+        const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+        const result = yield* service.capabilities(scope);
+        assert.deepEqual(result.providerUsage, [
+          "nexplore: no usage data",
+          "claudeAgent: session 42% (resets 18:00Z) · weekly 90% · severity: warning",
+        ]);
+      }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layer))));
+    }),
+  );
+
+  it.effect("adds the target instance's usage to a successful delegate_task result", () =>
+    Effect.gen(function* () {
+      const childTask = {
+        id: taskId,
+        threadId: parentThreadId,
+        runId: parentRunId,
+        parentNodeId,
+        origin: "app_owned" as const,
+        createdBy: "agent" as const,
+        driver: ProviderDriverKind.make("claudeAgent"),
+        providerInstanceId: claudeInstanceId,
+        providerThreadId: null,
+        childThreadId,
+        nativeTaskRef: null,
+        prompt: "Summarize the diff.",
+        title: null,
+        model: "claude-sonnet-4-6",
+        status: "running" as const,
+        result: null,
+        startedAt: null,
+        completedAt: null,
+      };
+      const dispatched = yield* Ref.make<ReadonlyArray<unknown>>([]);
+      const layer = baseLayers([nexplore, claude], {
+        getThreadRecords: (threadId: unknown) =>
+          Effect.succeed(
+            threadId === parentThreadId ? parentProjection([childTask]) : childProjection,
+          ),
+        dispatch: (command: unknown) =>
+          Ref.update(dispatched, (commands) => [...commands, command]).pipe(
+            Effect.as({
+              sequence: 1,
+              storedEvents: [
+                {
+                  sequence: 1,
+                  commandId: null,
+                  event: { type: "subagent.updated", payload: childTask },
+                },
+              ],
+            } as never),
+          ),
+      });
+      yield* Effect.gen(function* () {
+        const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+        const result = yield* service.delegateTask(scope, {
+          task: "Summarize the diff.",
+          target: { providerInstanceId: claudeInstanceId, model: "claude-sonnet-4-6" },
+          mode: "async",
+          clientRequestId: "delegate-usage-1",
+        });
+        assert.equal(result.status, "running");
+        assert.equal(
+          result.providerUsage,
+          "claudeAgent: session 42% (resets 18:00Z) · weekly 90% · severity: warning",
+        );
+      }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layer))));
+    }),
+  );
+
+  it.effect(
+    "includes the target's windows when delegation fails because the provider is unavailable",
+    () =>
+      Effect.gen(function* () {
+        const rateLimited = snapshot({
+          instanceId: rateLimitedInstanceId,
+          driver: ProviderDriverKind.make("codex"),
+          model: "gpt-5.4",
+          enabled: false,
+          usage: true,
+        });
+        const layer = baseLayers([nexplore, rateLimited]);
+        const failure = yield* Effect.gen(function* () {
+          const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+          return yield* service
+            .delegateTask(scope, {
+              task: "Summarize the diff.",
+              target: { providerInstanceId: rateLimitedInstanceId, model: "gpt-5.4" },
+              mode: "async",
+              clientRequestId: "delegate-usage-fail-1",
+            })
+            .pipe(Effect.flip);
+        }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layer))));
+        assert.equal(failure.code, "provider_unavailable");
+        assert.match(failure.message, /current windows: codex: session 42% \(resets 18:00Z\)/);
+      }),
+  );
+});

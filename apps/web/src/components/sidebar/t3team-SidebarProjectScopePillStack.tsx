@@ -1,66 +1,31 @@
 import { FolderIcon } from "lucide-react";
-import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
+import type {
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  RefObject,
+} from "react";
 
 import type { SidebarProjectSnapshot } from "~/sidebarProjectGrouping";
-import type { JiraCatalogProject } from "~/t3team/hooks/t3team-jiraProjectCatalog.logic";
-import { requestT3TeamCreateProject } from "~/t3team/t3team-createProjectRequest";
 
-import { ProjectFavicon } from "../ProjectFavicon";
 import { T3TeamSidebarProjectScopeDisc } from "./t3team-SidebarProjectScopeDisc";
 import { JiraProjectGlyph } from "./t3team-SidebarProjectScopeJiraGlyph";
+import { T3TeamSidebarProjectScopePicker } from "./t3team-SidebarProjectScopePicker";
 import {
-  T3TeamSidebarProjectScopeOverflow,
-  type ScopeOverflowEntry,
-} from "./t3team-SidebarProjectScopeOverflow";
+  GroupIcon,
+  addDisabledReason,
+  addJiraProject,
+} from "./t3team-sidebarProjectScopePills.actions";
 import { type ScopePillItem } from "./t3team-sidebarProjectScopePills.items";
-import {
-  ADD_PILL_CLICK_BEHAVIOR,
-  projectScopeDiscDepth,
-} from "./t3team-sidebarProjectScopePills.logic";
+import { projectScopeDiscDepth } from "./t3team-sidebarProjectScopePills.logic";
 
-const ADD_DISABLED_REASON = "Not in the app yet. Add it from the Add project menu.";
-const addDisabledReason = ADD_PILL_CLICK_BEHAVIOR === "disabled" ? ADD_DISABLED_REASON : undefined;
-
-function addJiraProject(entry: JiraCatalogProject) {
-  requestT3TeamCreateProject({
-    accountId: entry.accountId,
-    externalProjectId: entry.externalProjectId,
-  });
-}
-
-function GroupIcon({ group }: { group: SidebarProjectSnapshot }) {
-  return <ProjectFavicon project={group} className="size-4 shrink-0" />;
-}
-
-function overflowEntry(
-  item: ScopePillItem,
-  onSelectScope: (scopeKey: string | null) => void,
-): ScopeOverflowEntry {
-  return item.kind === "app"
-    ? {
-        key: item.projectKey,
-        label: item.group.displayName,
-        kind: "app",
-        icon: <GroupIcon group={item.group} />,
-        onSelect: () => onSelectScope(item.projectKey),
-      }
-    : {
-        key: item.projectKey,
-        label: item.label,
-        kind: "add",
-        icon: <JiraProjectGlyph entry={item.entry} />,
-        disabledReason: addDisabledReason,
-        onSelect: () => addJiraProject(item.entry),
-      };
-}
-
-/** The All disc, the discs that fit, and the +N menu for the rest. */
+/** The All disc, the discs that fit, and the picker disc ("+N" or search) for every project. */
 export function T3TeamSidebarProjectScopePillStack({
   shown,
   overflow,
   activeScopeKey,
   onSelectScope,
   onProjectContextMenu,
+  pickerAnchor,
 }: {
   shown: ReadonlyArray<ScopePillItem>;
   overflow: ReadonlyArray<ScopePillItem>;
@@ -72,6 +37,7 @@ export function T3TeamSidebarProjectScopePillStack({
         projectGroup: SidebarProjectSnapshot,
       ) => void)
     | undefined;
+  pickerAnchor?: RefObject<HTMLElement | null> | undefined;
 }) {
   const activeIndex = shown.findIndex((item) => item.projectKey === activeScopeKey) + 1;
   const total = shown.length + 1;
@@ -80,7 +46,8 @@ export function T3TeamSidebarProjectScopePillStack({
     <div className="flex items-center">
       <T3TeamSidebarProjectScopeDisc
         label="All projects"
-        active={activeIndex === 0}
+        // A scope with no disc (no room at all) is still a scope: "All" is lit only when unscoped.
+        active={activeScopeKey === null}
         {...disc(0)}
         zIndex={total - disc(0).depth}
         first
@@ -121,8 +88,13 @@ export function T3TeamSidebarProjectScopePillStack({
           </T3TeamSidebarProjectScopeDisc>
         );
       })}
-      <T3TeamSidebarProjectScopeOverflow
-        entries={overflow.map((item) => overflowEntry(item, onSelectScope))}
+      <T3TeamSidebarProjectScopePicker
+        shown={shown}
+        overflow={overflow}
+        activeScopeKey={activeScopeKey}
+        onSelectScope={onSelectScope}
+        onProjectContextMenu={onProjectContextMenu}
+        anchor={pickerAnchor}
         zIndex={1}
       />
     </div>

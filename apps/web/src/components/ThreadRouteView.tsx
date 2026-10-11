@@ -3,7 +3,6 @@ import type { ScopedThreadRef } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
-import ChatView from "./ChatView";
 import { resolveDraftPromotionNavigationTarget, threadHasStarted } from "./ChatView.logic";
 import { waitForDraftHeroTransition } from "./chat/draftHeroTransition";
 import { SidebarInset } from "./ui/sidebar";
@@ -13,6 +12,7 @@ import {
   useBackgroundDraftSubmissionPending,
   useComposerDraftStore,
 } from "../composerDraftStore";
+import { T3TeamRouteChatView } from "../t3team/chat/t3team-RouteChatView";
 import { useSidebarPendingFileDropStore } from "../sidebarPendingFileDropStore";
 import { useEnvironmentThreadRefs, useThreadRefs, useThreadShell } from "../state/entities";
 import { useEnvironmentQuery } from "../state/query";
@@ -168,7 +168,7 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
   if (target.kind === "draft") {
     if (draftSession) {
       view = (
-        <ChatView
+        <T3TeamRouteChatView
           key={target.draftId}
           draftId={target.draftId}
           environmentId={draftSession.environmentId}
@@ -180,7 +180,7 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
     }
   } else if (renderState === "ready" || (renderState === "loading" && serverThreadShell !== null)) {
     view = (
-      <ChatView
+      <T3TeamRouteChatView
         key={nextChatViewKey?.key}
         environmentId={target.threadRef.environmentId}
         threadId={target.threadRef.threadId}

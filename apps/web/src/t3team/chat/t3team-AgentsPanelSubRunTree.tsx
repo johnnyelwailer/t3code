@@ -15,7 +15,7 @@ import {
   type SubRunNode,
   type SubRunOpenCallback,
 } from "./t3team-AgentsPanelForkSection.logic";
-import { SubRunRow } from "./t3team-AgentsPanelSubRunRow";
+import { SubRunDriverMark, SubRunRow } from "./t3team-AgentsPanelSubRunRow";
 import { SubRunStatusIcon } from "./t3team-AgentsPanelSubRunStatusIcon";
 
 const INDENT_CLASS = "ml-3 border-l border-border/40 pl-2";
@@ -144,6 +144,12 @@ function SettledSubRunDisclosure({
                 onClick={() => onOpen({ projectId: thread.projectId, threadId: thread.id })}
                 className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/80 hover:bg-accent/40"
               >
+                {thread.providerInstanceId ? (
+                  <SubRunDriverMark
+                    instanceId={thread.providerInstanceId}
+                    iconClassName="size-2.5"
+                  />
+                ) : null}
                 <SubRunStatusIcon status={thread.status} className="size-2.5" />
                 <span className="min-w-0 flex-1 truncate">{thread.title}</span>
                 <span className="shrink-0 font-mono text-3xs tabular-nums text-muted-foreground/60">

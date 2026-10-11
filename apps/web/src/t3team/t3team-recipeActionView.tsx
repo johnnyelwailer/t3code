@@ -6,6 +6,7 @@ import type { ProjectRecipeRenderContext } from "@t3tools/project-recipes";
 import { BoundedMap } from "~/t3team/lib/t3team-boundedMap";
 import { cn } from "~/t3team/lib/t3team-utils";
 import { RecipeLaunchControlsProvider } from "~/t3team/t3team-recipeActionLaunchControls";
+import { T3TeamRecipeActionViewContext } from "~/t3team/t3team-recipeActionViewContext";
 import type { T3TeamRecipeQuickStartLaunchCustomization } from "~/t3team/t3team-recipeQuickStartLaunch";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipes";
 import {
@@ -114,15 +115,17 @@ export function T3TeamRecipeQuickStartBody({
   }
 
   return (
-    <RecipeLaunchControlsProvider
-      {...(onCustomizationChange ? { onChange: onCustomizationChange } : {})}
-    >
-      <div className={cn("space-y-2", hasLoadError ? "opacity-90" : undefined)}>
-        <T3TeamCompiledRecipeActionView
-          Component={CompiledActionView}
-          context={recipe.actionView.context}
-        />
-      </div>
-    </RecipeLaunchControlsProvider>
+    <T3TeamRecipeActionViewContext.Provider value={recipe}>
+      <RecipeLaunchControlsProvider
+        {...(onCustomizationChange ? { onChange: onCustomizationChange } : {})}
+      >
+        <div className={cn("space-y-2", hasLoadError ? "opacity-90" : undefined)}>
+          <T3TeamCompiledRecipeActionView
+            Component={CompiledActionView}
+            context={recipe.actionView.context}
+          />
+        </div>
+      </RecipeLaunchControlsProvider>
+    </T3TeamRecipeActionViewContext.Provider>
   );
 }

@@ -1,0 +1,291 @@
+import { assert, it } from "@effect/vitest";
+import {
+  CommandId,
+  EventId,
+  ProjectId,
+  T3TEAM_LAUNCHED_BY_FACT_KEY,
+  ThreadId,
+} from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+
+import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
+import * as ProjectionStore from "./orchestration-v2/ProjectionStore.ts";
+import * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
+import * as ThreadArtifactsStore from "./t3team-v2/t3team-threadArtifactsStore.ts";
+import * as ThreadFactsStore from "./t3team-v2/t3team-threadFactsStore.ts";
+import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
+import {
+  createTestThread,
+  makeT3TeamV2TestLayer,
+  testModelSelection,
+} from "./t3team-v2/t3team-v2Orchestrator.testkit.ts";
+import { FAKE_LAUNCH_WORKTREE, makeThreadLaunchFake } from "./t3team-threadLaunchFake.fixtures.ts";
+import * as WorkflowHost from "./t3team-workflowHost.ts";
+import { launchedThreadIdentity } from "./t3team-workflowLaunchedThreadIds.ts";
+
+const { layer: ThreadLaunchFake, launches, crash } = makeThreadLaunchFake();
+
+const base = makeT3TeamV2TestLayer("t3team-workflow-host-launch");
+const services = Layer.mergeAll(
+  ThreadManagementService.layer,
+  ThreadArtifactsStore.layer,
+  ThreadFactsStore.layer,
+).pipe(Layer.provideMerge(base));
+const TestLayer = WorkflowHost.layer.pipe(
+  Layer.provideMerge(ThreadLaunchFake),
+  Layer.provideMerge(services),
+);
+
+const projectId = ProjectId.make("project:t3team-v2");
+const home = ThreadId.make("thread:recipe-home");
+// No recipe.ts behind these paths, so the scope falls back to the directory name.
+const recipePath = "/repo/.nexi/recipes/pr-watch";
+const scope = "recipe:pr-watch";
+const owner = {
+  runId: "run-1",
+  projectId,
+  recipePath,
+  runtimeMode: "full-access" as const,
+  interactionMode: "default" as const,
+};
+const key = "pr:github.com/acme/app#7";
+const url = "https://github.com/acme/app/pull/7";
+const launchInput = {
+  ...owner,
+  key,
+  launchThreadId: home,
+  title: "#7 Fix the thing",
+  message: "You watch one PR.",
+  modelSelection: testModelSelection,
+  threadRuntimeMode: "approval-required" as const,
+  threadInteractionMode: "default" as const,
+  workspace: { type: "worktree" as const, baseRef: "fix", branch: "fix", startFromOrigin: true },
+};
+
+const ok = <T>(answer: { ok: true; value: T } | { ok: false; error: string }): T => {
+  if (!answer.ok) throw new Error(answer.error);
+  return answer.value;
+};
+
+it.layer(TestLayer)("workflow host launchThread", (it) => {
+  it.effect("launches one top-level thread per key and records who launched it", () =>
+    Effect.gen(function* () {
+      const host = yield* WorkflowHost.T3TeamWorkflowHost;
+      const threads = yield* ThreadManagementService.ThreadManagementService;
+      const facts = yield* T3TeamThreadFactsStore;
+      yield* createTestThread(home, "Watch my PRs");
+      launches.length = 0;
+
+      const first = ok(yield* host.launchThread(launchInput));
+      assert.strictEqual(
+        first.threadId,
+        launchedThreadIdentity({ projectId, scope, key }).threadId,
+      );
+      assert.isTrue(first.created);
+      const again = ok(yield* host.launchThread({ ...launchInput, runId: "run-2", title: "x" }));
+      assert.deepStrictEqual(again, { threadId: first.threadId, created: false });
+      assert.strictEqual(launches.length, 1, "a known key never launches twice");
+      assert.strictEqual(launches[0]?.initialMessage?.text, "You watch one PR.");
+      assert.strictEqual(
+        launches[0]?.commandId,
+        launchedThreadIdentity({ projectId, scope, key }).commandId,
+      );
+
+      const shell = yield* threads.getThreadShell(ThreadId.make(first.threadId));
+      // Top-level, in its own worktree, within the run's modes.
+      assert.isNull(shell?.lineage.parentThreadId ?? null);
+      assert.strictEqual(shell?.worktreePath, FAKE_LAUNCH_WORKTREE);
+      assert.strictEqual(shell?.runtimeMode, "approval-required");
+      const launchedBy = (yield* facts.get(ThreadId.make(first.threadId)))?.extensions?.[
+        T3TEAM_LAUNCHED_BY_FACT_KEY
+      ];
+      assert.deepInclude(launchedBy as object, {
+        runId: "run-2",
+        launchThreadId: home,
+        scope: "recipe:pr-watch",
+        key,
+      });
+
+      // Another recipe's same key is another thread.
+      const other = ok(
+        yield* host.launchThread({ ...launchInput, recipePath: "/repo/.nexi/recipes/other" }),
+      );
+      assert.notStrictEqual(other.threadId, first.threadId);
+    }),
+  );
+
+  it.effect("a launch that crashed after creating the thread is finished on the next pass", () =>
+    Effect.gen(function* () {
+      const host = yield* WorkflowHost.T3TeamWorkflowHost;
+      const facts = yield* T3TeamThreadFactsStore;
+      const crashKey = "pr:github.com/acme/app#11";
+      const threadId = ThreadId.make(
+        launchedThreadIdentity({ projectId, scope, key: crashKey }).threadId,
+      );
+      launches.length = 0;
+      crash.afterCreate = true;
+      const crashed = yield* Effect.exit(host.launchThread({ ...launchInput, key: crashKey }));
+      assert.isTrue(crashed._tag === "Failure");
+      assert.isUndefined((yield* facts.get(threadId))?.extensions?.[T3TEAM_LAUNCHED_BY_FACT_KEY]);
+
+      // The thread exists but its launch never completed: launching again replays the service's
+      // receipts under the same command id, then records who launched it.
+      const replayed = ok(yield* host.launchThread({ ...launchInput, key: crashKey }));
+      assert.deepStrictEqual(replayed, { threadId, created: true });
+      assert.strictEqual(launches.length, 2);
+      assert.strictEqual(launches[0]?.commandId, launches[1]?.commandId);
+      assert.isDefined((yield* facts.get(threadId))?.extensions?.[T3TEAM_LAUNCHED_BY_FACT_KEY]);
+
+      // Once recorded, a known key does not launch again.
+      assert.isFalse(ok(yield* host.launchThread({ ...launchInput, key: crashKey })).created);
+      assert.strictEqual(launches.length, 2);
+    }),
+  );
+
+  it.effect("drives only threads its scope launched; watches count as the agent's", () =>
+    Effect.gen(function* () {
+      const host = yield* WorkflowHost.T3TeamWorkflowHost;
+      const { threadId } = ok(yield* host.launchThread(launchInput));
+      const op = (
+        op: Parameters<typeof host.launchedThread>[0]["op"],
+        overrides: Partial<{
+          key: string;
+          threadId: string;
+          recipePath: string;
+          projectId: ProjectId;
+        }> = {},
+        requestId = `req-${op.op}`,
+      ) => host.launchedThread({ ...owner, key, threadId, requestId, ...overrides, op });
+
+      ok(yield* op({ op: "watch", url, watching: true }));
+      const state = ok(yield* op({ op: "read" })) as {
+        pullRequests: Array<{ number: number; watching: boolean }>;
+        runtimeMode: string;
+      };
+      assert.deepStrictEqual(
+        state.pullRequests.map((pr) => [pr.number, pr.watching]),
+        [[7, true]],
+      );
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const link = (yield* orchestrator.getThreadProjection(ThreadId.make(threadId))).thread
+        .pullRequests?.[0];
+      assert.strictEqual(link?.source, "agent");
+
+      ok(yield* op({ op: "configure", runtimeMode: "approval-required" }));
+      ok(yield* op({ op: "facts", extensions: { "acme.chip": "own" } }));
+      const reserved = yield* op({ op: "facts", extensions: { "t3team.recipe": {} } });
+      assert.isFalse(reserved.ok);
+      const bulky = yield* op({ op: "facts", extensions: { "acme.blob": "x".repeat(20_000) } });
+      assert.isFalse(bulky.ok);
+
+      // A different key, scope or thread is not this recipe's to drive.
+      for (const overrides of [
+        { key: "pr:other#1" },
+        { recipePath: "/repo/.nexi/recipes/other" },
+        { projectId: ProjectId.make("project:other") },
+        { threadId: home },
+      ]) {
+        const refused = yield* op({ op: "send", text: "hi" }, overrides);
+        assert.isFalse(refused.ok, Object.keys(overrides).join());
+      }
+
+      ok(
+        yield* host.setRunFacts({
+          launchThreadId: home,
+          extensions: { "acme.summary": { watched: 1 } },
+        }),
+      );
+      const facts = yield* T3TeamThreadFactsStore;
+      assert.deepStrictEqual((yield* facts.get(home))?.extensions?.["acme.summary"], {
+        watched: 1,
+      });
+    }),
+  );
+
+  it.effect("a lower-mode run cannot hand work to a higher-mode thread of the same key", () =>
+    Effect.gen(function* () {
+      const host = yield* WorkflowHost.T3TeamWorkflowHost;
+      const key9 = "pr:github.com/acme/app#9";
+      const { threadId } = ok(
+        yield* host.launchThread({ ...launchInput, key: key9, threadRuntimeMode: "full-access" }),
+      );
+      const lower = {
+        ...owner,
+        runId: "run-supervised",
+        runtimeMode: "approval-required" as const,
+      };
+      const verb = (op: Parameters<typeof host.launchedThread>[0]["op"], requestId: string) =>
+        host.launchedThread({ ...lower, key: key9, threadId, requestId, op });
+      const sent = yield* verb({ op: "send", text: "fix it" }, "low-send");
+      assert.deepStrictEqual(sent, {
+        ok: false,
+        error: `Thread ${threadId} runs at full-access, above this run's approval-required.`,
+      });
+      assert.isFalse(
+        (yield* verb(
+          { op: "watch", url: "https://github.com/acme/app/pull/9", watching: true },
+          "low-watch",
+        )).ok,
+      );
+      // Reading and stopping a watch stay allowed: neither hands the thread work.
+      assert.isTrue((yield* verb({ op: "read" }, "low-read")).ok);
+      assert.isTrue(
+        (yield* verb(
+          { op: "watch", url: "https://github.com/acme/app/pull/9", watching: false },
+          "low-unwatch",
+        )).ok,
+      );
+    }),
+  );
+
+  it.effect("cannot re-watch after the user stopped the thread", () =>
+    Effect.gen(function* () {
+      const host = yield* WorkflowHost.T3TeamWorkflowHost;
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const { threadId: id } = ok(
+        yield* host.launchThread({ ...launchInput, key: "pr:github.com/acme/app#8" }),
+      );
+      const threadId = ThreadId.make(id);
+      const target = { ...owner, key: "pr:github.com/acme/app#8", threadId: id };
+      ok(
+        yield* host.launchedThread({
+          ...target,
+          requestId: "watch-8",
+          op: { op: "watch", url: "https://github.com/acme/app/pull/8", watching: true },
+        }),
+      );
+      // A message from the recipe starts a run; it finishes, then the user stops the thread.
+      ok(
+        yield* host.launchedThread({
+          ...target,
+          requestId: "send-8",
+          op: { op: "send", text: "go" },
+        }),
+      );
+      const run = (yield* orchestrator.getThreadProjection(threadId)).runs[0]!;
+      const now = yield* DateTime.now;
+      yield* projections.apply({
+        id: EventId.make("event:launch-stop:completed"),
+        type: "run.updated",
+        threadId,
+        runId: run.id,
+        occurredAt: now,
+        payload: { ...run, status: "completed", startedAt: now, completedAt: now },
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.stop",
+        commandId: CommandId.make("stop-launched"),
+        threadId,
+      });
+      const rewatch = yield* host.launchedThread({
+        ...target,
+        requestId: "rewatch-8",
+        op: { op: "watch", url: "https://github.com/acme/app/pull/8", watching: true },
+      });
+      assert.deepStrictEqual(rewatch, { ok: false, error: `Thread ${id} was stopped.` });
+    }),
+  );
+});

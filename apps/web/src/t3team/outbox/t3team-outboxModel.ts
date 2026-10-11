@@ -12,6 +12,7 @@
 import { isTransportConnectionErrorMessage } from "@t3tools/client-runtime/errors";
 import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 import type { T3TeamStagedComposerAction } from "~/t3team/t3team-stagedComposerActionStore";
+import { isEnvironmentTransientError } from "~/t3team/backend/t3team-environmentTransientError";
 import { randomUUID } from "~/lib/utils";
 
 export type T3TeamOutboxEntryKind =
@@ -198,6 +199,7 @@ function outboxErrorMessage(error: unknown): string | null {
  * invariant rejection) is permanent: the entry is surfaced as failed instead.
  */
 export function isTransientT3TeamOutboxError(error: unknown): boolean {
+  if (isEnvironmentTransientError(error)) return true;
   const message = outboxErrorMessage(error);
   if (message === null) return false;
   if (isTransportConnectionErrorMessage(message)) return true;

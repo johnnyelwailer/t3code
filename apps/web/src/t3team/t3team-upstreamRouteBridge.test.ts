@@ -33,6 +33,7 @@ describe("translateUpstreamPath", () => {
       "/pair",
       "/connect",
       "/connect_/callback",
+      "/connect-agent",
       // FirstRunGate owns the onboarding wizard's navigation; bouncing
       // /welcome onto /t3team is an infinite redirect loop.
       "/welcome",
@@ -42,6 +43,14 @@ describe("translateUpstreamPath", () => {
     ]) {
       expect(translateUpstreamPath(pathname, deps("p1"))).toEqual({ kind: "ignore" });
     }
+  });
+
+  it("leaves the MCP OAuth approval page alone", () => {
+    // Regression: "/connect" matching is exact-or-"/connect/…", so "/connect-agent" was read as
+    // unhandled and bounced to /t3team's pairing gate mid OAuth approval.
+    expect(translateUpstreamPath("/connect-agent", deps("p1"))).toEqual({ kind: "ignore" });
+    expect(translateUpstreamPath("/connect-agent", deps(null))).toEqual({ kind: "ignore" });
+    expect(translateUpstreamPath("/connect-agents", deps("p1"))).toEqual({ kind: "unhandled" });
   });
 
   it("maps upstream's root to the team dashboard", () => {

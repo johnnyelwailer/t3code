@@ -19,6 +19,16 @@ describe("ThreadPendingChat", () => {
     );
 
     expect(markup).toContain("Creating thread...");
+    expect(markup).toContain("Creating the conversation on the server.");
     expect(markup).toContain("disabled");
+  });
+
+  it("shows in-chat progress once the server shell exists and the run is still starting", () => {
+    const markup = renderToStaticMarkup(
+      <ThreadPendingChat bootstrapStatus="running" phase="preparing" compact />,
+    );
+
+    expect(markup).toContain("Starting the run...");
+    expect(markup).toContain("Preparing context and starting the run.");
   });
 });

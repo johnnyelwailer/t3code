@@ -24,7 +24,7 @@ import * as Layer from "effect/Layer";
 
 import type { T3TeamMessageWorkflowAuthor } from "@t3tools/contracts";
 
-import type { AskAffordance } from "@t3team/sdk";
+import type { AskAffordance, WorkflowRunHost } from "@t3team/sdk";
 import { makeWorkflowTurnRetryFiberMap } from "./t3team-workflowTurnRetryFibers.ts";
 
 /** Which ask kind a thread is parked on — selects the event that resolves it. */
@@ -78,6 +78,8 @@ export interface WorkflowRegisteredRun {
   /** Append the resolved reply for `correlationId` and replay the run to completion or its
    * next suspension. Created by the launch so it carries the ref + options. */
   readonly resume: (correlationId: string, reply: unknown) => Promise<void>;
+  /** The queued wake signal delivery uses (`WorkflowRunHost.offer`); optional for test doubles. */
+  readonly offer?: WorkflowRunHost["offer"];
   /** Prevent a detached controller from publishing a later terminal result. */
   readonly cancel: () => void;
   /**

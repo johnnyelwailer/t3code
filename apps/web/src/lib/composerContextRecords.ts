@@ -18,6 +18,7 @@ import type {
   TerminalContextRecord,
   ThreadContextRecord,
   ThreadId,
+  WorkItemContextRecord,
 } from "@t3tools/contracts";
 import { upgradeLegacyContextMessage } from "@t3tools/shared/composerContextLegacy";
 import { encodeComposerContextFragment } from "@t3tools/shared/composerContextClipboard";
@@ -179,6 +180,57 @@ export function threadContextRecord(ref: ScopedThreadRef, title: string): Thread
   };
 }
 
+/**
+ * Draft behind a work-item chip: the issue key is its identity, the rest is a display and
+ * projection snapshot taken when it was attached.
+ */
+export interface WorkItemContextDraft {
+  /** Jira issue key, e.g. `NXAI-8`. */
+  key: string;
+  /** The key's Jira project, e.g. `NXAI`. */
+  jiraProjectKey: string;
+  title: string;
+  status: string;
+  url: string;
+  /** When the snapshot was taken (ISO timestamp). */
+  capturedAt: string;
+}
+
+/** One chip per issue key: re-attaching the same work item reuses the chip. */
+export function workItemContextId(key: string): ComposerContextId {
+  return toKindScopedComposerContextId("work-item", key);
+}
+
+export function workItemContextReference(draft: WorkItemContextDraft): ComposerContextReference {
+  return { kind: "work-item", contextId: workItemContextId(draft.key), label: draft.key };
+}
+
+/** Chip color by status: done reads green, in-progress amber, everything else the neutral work-item tone. */
+export function workItemContextChipKind(
+  status: string | undefined,
+): "work-item" | "work-item-progress" | "work-item-done" {
+  const normalized = status?.trim().toLowerCase();
+  if (!normalized) return "work-item";
+  if (/done|closed|complete/.test(normalized)) return "work-item-done";
+  if (/progress|active|doing/.test(normalized)) return "work-item-progress";
+  return "work-item";
+}
+
+export function workItemContextRecord(draft: WorkItemContextDraft): WorkItemContextRecord {
+  return {
+    version: 1,
+    contextId: workItemContextId(draft.key),
+    kind: "work-item",
+    label: sanitizeComposerContextLabel(draft.key, "work-item"),
+    key: draft.key.trim(),
+    jiraProjectKey: draft.jiraProjectKey.trim(),
+    title: draft.title.slice(0, 2_048),
+    status: draft.status.slice(0, 2_048),
+    url: draft.url.slice(0, 2_048),
+    capturedAt: draft.capturedAt.slice(0, 64),
+  };
+}
+
 export function terminalContextRecord(context: TerminalContextDraft): TerminalContextRecord {
   return {
     version: 1,
@@ -320,6 +372,7 @@ export function buildMessageContext(input: {
   reviewComments: ReadonlyArray<ReviewCommentContext>;
   previewAnnotations: ReadonlyArray<PreviewAnnotationPayload>;
   threadContexts?: ReadonlyArray<ThreadContextRecord>;
+  workItems?: ReadonlyArray<WorkItemContextDraft>;
   attachments?: ReadonlyArray<BoundComposerAttachment>;
 }): OrchestrationMessageContext | undefined {
   // An annotation's screenshot travels as the image attachment that reuses its id.
@@ -332,6 +385,7 @@ export function buildMessageContext(input: {
     ...input.terminalContexts.map(terminalContextRecord),
     ...input.reviewComments.map(reviewCommentContextRecord),
     ...(input.threadContexts ?? []),
+    ...(input.workItems ?? []).map(workItemContextRecord),
     ...input.previewAnnotations.map((annotation) =>
       previewAnnotationContextRecord(annotation, {
         screenshotContextId: screenshotAttachmentIds.has(annotation.id) ? annotation.id : undefined,

@@ -2,7 +2,10 @@ import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3to
 import type { ProjectRecipeWorkflowDocument } from "@t3tools/project-recipes";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
-import { tryClaimRecipeWorkflowLaunch } from "~/t3team/chat/t3team-recipeLaunchDedup";
+import {
+  releaseRecipeWorkflowLaunchClaim,
+  tryClaimRecipeWorkflowLaunch,
+} from "~/t3team/chat/t3team-recipeLaunchDedup";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 
 type RecipeKickoffWorkflow = Extract<T3TeamKickoffWorkflow, { kind: "recipe" }>;
@@ -74,19 +77,24 @@ export async function launchPendingRecipeWorkflowTurn(input: {
     return true;
   }
 
-  await input.backend.launchRecipeWorkflow({
-    threadId: input.threadId,
-    kickoffMessage: input.kickoffMessage,
-    titleSeed: input.titleSeed,
-    createdAt: input.createdAt,
-    modelSelection: {
-      instanceId: String(input.modelSelection.instanceId),
-      model: input.modelSelection.model,
-    },
-    runtimeMode: input.runtimeMode,
-    interactionMode: input.interactionMode,
-    launch: toProjectRecipeWorkflowLaunch(input.kickoffWorkflow),
-  });
+  try {
+    await input.backend.launchRecipeWorkflow({
+      threadId: input.threadId,
+      kickoffMessage: input.kickoffMessage,
+      titleSeed: input.titleSeed,
+      createdAt: input.createdAt,
+      modelSelection: {
+        instanceId: String(input.modelSelection.instanceId),
+        model: input.modelSelection.model,
+      },
+      runtimeMode: input.runtimeMode,
+      interactionMode: input.interactionMode,
+      launch: toProjectRecipeWorkflowLaunch(input.kickoffWorkflow),
+    });
+  } catch (error) {
+    releaseRecipeWorkflowLaunchClaim(input.threadId);
+    throw error;
+  }
 
   return true;
 }

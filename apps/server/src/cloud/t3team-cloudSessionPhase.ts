@@ -32,7 +32,11 @@ export type CloudSessionPhase =
  * backwards, which reads as a bug even though the run is simply dying.
  */
 function reached(step: WorkflowJobStep | undefined): boolean {
-  return step !== undefined && (step.status === "in_progress" || step.status === "completed");
+  // Skipped is not reached. A standby's "Redeem the session's secrets" is
+  // completed-and-skipped while it waits for a claim; counting that as progress
+  // told the user their machine was already building.
+  if (step === undefined || step.conclusion === "skipped") return false;
+  return step.status === "in_progress" || step.status === "completed";
 }
 
 function findByPrefix(

@@ -24,6 +24,7 @@ export * from "./journalStoreConformance.ts";
 export * from "./journalWriter.ts";
 export * from "./handles.ts";
 export * from "./handlesDispatch.ts";
+export * from "./handlesAny.ts";
 export * from "./primitiveKinds.ts";
 export * from "./runtimeTypes.ts";
 export * from "./replayDrift.ts";

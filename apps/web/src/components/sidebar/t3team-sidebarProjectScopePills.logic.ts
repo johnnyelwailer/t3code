@@ -8,7 +8,7 @@ export const SCOPE_DISC_OVERLAP = 8;
  */
 const SCOPE_CHIP_LABEL_WIDTH = 124;
 
-/** How many project discs fit beside the always-present "All" disc in `width` px. */
+/** How many discs (projects plus the picker) fit beside the always-present "All" disc in `width` px. */
 export function projectScopeDiscCapacity(width: number): number {
   const remaining = width - SCOPE_DISC_SIZE - SCOPE_CHIP_LABEL_WIDTH;
   return remaining <= 0 ? 0 : Math.floor(remaining / (SCOPE_DISC_SIZE - SCOPE_DISC_OVERLAP));
@@ -46,18 +46,20 @@ export const ADD_PILL_CLICK_BEHAVIOR: "create" | "disabled" = "create";
 
 /**
  * Splits an ordered list of scope items into the discs that fit and the overflow behind "+N".
- * When everything fits there is no overflow disc; otherwise one slot is reserved for it. The
- * active scope keeps a disc even when it would have overflowed.
+ * `capacity` counts every slot after "All", and the picker disc always takes the last one: it
+ * shows "+N" or, when nothing overflows, a search glyph. The active scope keeps a disc even
+ * when it would have overflowed.
  */
 export function splitProjectScopePills<TItem extends { readonly projectKey: string }>(
   items: ReadonlyArray<TItem>,
   activeScopeKey: string | null,
   capacity: number,
 ): { readonly shown: ReadonlyArray<TItem>; readonly overflow: ReadonlyArray<TItem> } {
+  const slots = capacity - 1;
   // No room for a disc: every site is still one click away, behind the +N pill.
-  if (capacity <= 0) return { shown: [], overflow: items };
-  if (items.length <= capacity) return { shown: items, overflow: [] };
-  const shown = selectProjectScopePillGroups(items, activeScopeKey, capacity - 1);
+  if (slots <= 0) return { shown: [], overflow: items };
+  if (items.length <= slots) return { shown: items, overflow: [] };
+  const shown = selectProjectScopePillGroups(items, activeScopeKey, slots);
   const shownKeys = new Set(shown.map((item) => item.projectKey));
   return { shown, overflow: items.filter((item) => !shownKeys.has(item.projectKey)) };
 }

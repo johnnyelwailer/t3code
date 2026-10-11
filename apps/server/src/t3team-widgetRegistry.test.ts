@@ -59,7 +59,6 @@ describe("T3TeamWidgetToolCallRequest", () => {
         "not-an-object",
       ]) {
         const decoded = yield* decode(body).pipe(Effect.result);
-        // @effect-diagnostics-next-line preferSchemaOverJson:off - Assertion-failure label for a deliberately malformed fixture; not a domain payload.
         assert.strictEqual(decoded._tag, "Failure", JSON.stringify(body));
       }
     }),

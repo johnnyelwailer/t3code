@@ -5,7 +5,10 @@
  * pokes the reconciler so a newly-bound instance starts promptly. It never settles a resolver.
  *
  * `signal.wait` is ask-shaped: the run parks until the delivery port resolves its correlation
- * with the awaited `(signal, key)` payload. Two outcomes:
+ * with the awaited `(signal, key)` payload. `signal.waitAny` is the same ask over several branches
+ * at once (`waitForAny`): its drain takes the OLDEST open entry across every branch, its park
+ * records the whole branch list, and either way the reply is the `{ index, reply }` winner of the
+ * branch that landed first. Two outcomes, for both:
  *   • LIVE DRAIN — a durable inbox entry already matches this tuple (the event landed while no
  *     run was parked on it). The entry is settled SYNCHRONOUSLY, exactly like `model.resolve`:
  *     the payload becomes this primitive's `resolved` journal line, so a replay reuses the
@@ -15,9 +18,12 @@
  *     settle, no orchestration command (an event has no message) — the delivery port appends the
  *     resolved entry when the source fires.
  */
+import { anyWinner } from "@t3team/sdk";
+
 import type { BrokerCore, BrokerSend } from "./t3team-workflowEngineBrokerContext.ts";
 import type {
   SignalRegisterPayload,
+  SignalWaitAnyPayload,
   SignalWaitPayload,
 } from "./t3team-workflowEngineBrokerTypes.ts";
 
@@ -51,6 +57,32 @@ export async function handleBrokerSignalVerb(core: BrokerCore, s: BrokerSend): P
         paramsHash: p.paramsHash,
         watchSignalName: p.signal,
         watchSignalKey: p.key,
+      });
+    });
+    return true;
+  }
+  if (kind === "signal.waitAny") {
+    const p = payload as SignalWaitAnyPayload;
+    const label = p.branches.map((branch) => branch.signal).join(" | ");
+    const drained = await core.deps.drainSignalWaitAny?.(p);
+    if (drained !== undefined) {
+      // Live drain across the branches: the winner envelope is the journaled reply, so a replay
+      // reads the same branch back instead of draining the inbox again.
+      core.step(correlationId, kind, "completed", `Signal ${p.branches[drained.index]?.signal}`);
+      s.resolver.resolve(anyWinner(drained.index, drained.payload));
+      return true;
+    }
+    const first = p.branches[0];
+    if (first === undefined) return false; // the SDK refuses an empty any-wait before sending
+    core.step(correlationId, kind, "waiting", `Watch ${label}`);
+    await core.runPrimitive(async () => {
+      await core.deps.recordWatching?.({
+        correlationId,
+        sourceName: first.source,
+        paramsHash: first.paramsHash,
+        watchSignalName: first.signal,
+        watchSignalKey: first.key,
+        branches: p.branches,
       });
     });
     return true;

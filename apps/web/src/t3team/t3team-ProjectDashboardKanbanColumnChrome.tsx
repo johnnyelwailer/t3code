@@ -7,13 +7,23 @@ export function ProjectDashboardKanbanColumnHeader({
   title,
   count,
   onCollapse,
+  headerBorderOpacity = 1,
 }: {
   title: string;
   count: number;
   onCollapse?: () => void;
+  /** Semantic-zoom fade for the header rule; 1 keeps today's border. */
+  headerBorderOpacity?: number;
 }) {
   return (
-    <div className="mb-2 flex items-center justify-between gap-1 border-b border-border/85 pb-2">
+    <div
+      className="mb-2 flex items-center justify-between gap-1 pb-2"
+      style={{
+        borderBottomWidth: headerBorderOpacity > 0.02 ? 1 : 0,
+        borderBottomStyle: "solid",
+        borderBottomColor: `color-mix(in oklab, var(--border) ${Math.round(headerBorderOpacity * 85)}%, transparent)`,
+      }}
+    >
       <h4 className="min-w-0 truncate text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
         {title}
       </h4>

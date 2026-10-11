@@ -36,6 +36,10 @@ const decodeSettingsPatch = Schema.decodeUnknownEffect(ServerSettingsPatch);
 const decodeServerSettings = Schema.decodeUnknownEffect(ServerSettings);
 const decodeServerSettingsJson = Schema.decodeUnknownEffect(Schema.fromJsonString(ServerSettings));
 
+const decodeSettingsFile = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)),
+);
+
 const layerServerSettings = () =>
   ServerSettingsModule.layer.pipe(
     Layer.provide(ServerSecretStore.layer),
@@ -97,6 +101,26 @@ const recordProviderUsage = (provider: string, instanceId: string | null = provi
   });
 
 it.layer(NodeServices.layer)("server settings", (it) => {
+  it.effect("auto-resumes limited threads by default and keeps a stored opt-out", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const fs = yield* FileSystem.FileSystem;
+      const service = yield* ServerSettingsModule.ServerSettingsService;
+
+      yield* fs.writeFileString(config.settingsPath, `{ "enableAgentBrowserAccess": false }`);
+      assert.isTrue((yield* service.getSettings).autoResumeLimitedThreads);
+
+      yield* service.updateSettings({ autoResumeLimitedThreads: false });
+      assert.isFalse((yield* service.getSettings).autoResumeLimitedThreads);
+      const persisted = yield* decodeSettingsFile(yield* fs.readFileString(config.settingsPath));
+      assert.isFalse(persisted.autoResumeLimitedThreads);
+
+      yield* service.updateSettings({ autoResumeLimitedThreads: true });
+      const reset = yield* decodeSettingsFile(yield* fs.readFileString(config.settingsPath));
+      assert.notProperty(reset, "autoResumeLimitedThreads");
+    }).pipe(Effect.provide(layerServerSettings())),
+  );
+
   it.effect("migrates saved token delivery to paragraph buffering without resetting settings", () =>
     Effect.gen(function* () {
       const config = yield* ServerConfig.ServerConfig;

@@ -219,7 +219,8 @@ export const make = Effect.gen(function* () {
           headSelector: input.headSelector,
           ...(source ? { source } : {}),
           ...(input.target ? { target: input.target } : {}),
-          title: input.title,
+          // GitLab marks a draft merge request by its title prefix.
+          title: input.draft === true ? `Draft: ${input.title}` : input.title,
           bodyFile: input.bodyFile,
         })
         .pipe(

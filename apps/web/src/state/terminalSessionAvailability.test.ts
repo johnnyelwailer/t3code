@@ -16,6 +16,9 @@ vi.mock("./terminal", () => ({ terminalEnvironment: { metadata: () => ({}) } }))
 vi.mock("./query", () => ({
   useEnvironmentQuery: (atom: unknown) =>
     atom === null ? { data: null, error: null } : { data: state.data, error: state.error },
+  // t3team: the sidebar's data-only subscription; a failed refresh reads as no data.
+  useEnvironmentQueryDataOrNullOnError: (atom: unknown) =>
+    atom === null || state.error !== null ? null : state.data,
 }));
 
 let root: Root;

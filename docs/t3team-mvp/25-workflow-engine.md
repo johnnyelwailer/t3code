@@ -928,12 +928,14 @@ The handler's second argument is a typed context the broker injects per call:
 type ToolHandlerCtx = {
   readonly threadId?:  string;        // present when called from a thread-bound workflow
   readonly runId?:     string;        // present when called inside a workflow run
-  readonly workspaceRoot: string;
+  readonly workspaceRoot: string;     // the launch thread's checkout (see `workspace`)
 
   log: { info(msg, fields?): void; warn(…); error(…); };
   fetch: typeof fetch;                // HTTP
 
-  workspace: {                         // file IO rooted at the run dir (sandboxed by path)
+  workspace: {                         // file IO rooted at the launch thread's checkout: its
+                                       // worktree when it has one, else the project root.
+                                       // Path-sandboxed; `.git`, `.t3team-runs`, `.t3` unavailable.
     readText(rel: string):  Promise<string>;
     writeText(rel: string, content: string): Promise<void>;
     exists(rel: string):    Promise<boolean>;
@@ -1039,18 +1041,26 @@ beyond what the orchestration's run provides:
 ```ts
 type ScriptHandlerCtx = {
   readonly runId:         string;
-  readonly workspaceRoot: string;
+  readonly workspaceRoot: string;     // the launch thread's checkout (worktree, else project root)
 
   log:   { info(msg, fields?): void; warn(…); error(…); };
   fetch: typeof fetch;
-  workspace: {
+  workspace: {                         // rooted at `workspaceRoot`; same sandbox as ToolHandlerCtx
     readText(rel: string):  Promise<string>;
     writeText(rel: string, content: string): Promise<void>;
     exists(rel: string):    Promise<boolean>;
   };
   callTool: <I, R>(ref: ToolRef<I, R>, args: I) => Promise<R>;   // typed cross-tool dispatch
+  store?: ScriptPackStore;              // the recipe's own pack store, iff the pack has store:v1
+  changeRequests?: ChangeRequestReader; // list/detail/diff of the run project's repositories,
+                                        // iff the recipe declares integration.read
 };
 ```
+
+`store` and `changeRequests` are host-built per run (`apps/server/src/t3team-scriptHost*.ts`).
+Neither takes a pack id or a provider URL: the store is bound to the recipe's pack, and a
+change request outside the project's linked repositories is refused with
+`ChangeRequestScopeError`.
 
 Scripts can call tools (`ctx.callTool`) so the line between "a tool that does
 project-specific work" and "a script that uses host tools" is the registration shape,

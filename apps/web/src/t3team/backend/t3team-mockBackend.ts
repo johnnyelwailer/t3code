@@ -83,6 +83,13 @@ export function createMockBackend(): BackendApi {
       return { ok: true };
     },
 
+    async launchRecipeHeadless(input) {
+      return {
+        runId: `mock-headless-${input.recipeId}-${Date.now()}`,
+        status: "queued",
+      };
+    },
+
     async resolveWorkflowInput() {
       return undefined;
     },
@@ -116,6 +123,7 @@ export function createMockBackend(): BackendApi {
           status: "cloned" as const,
         })),
       }),
+      readLinkedRepositoryStatus: async () => ({ linkedRepositories: [] }),
       setMainRepository: async () => {
         throw new Error("Main repositories are not available in the mock backend.");
       },

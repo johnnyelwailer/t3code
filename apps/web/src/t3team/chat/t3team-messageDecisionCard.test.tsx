@@ -387,6 +387,37 @@ describe("T3TeamWorkflowDecisionCard clicks", () => {
     });
   });
 
+  it("shows why an answer failed and lets the user try again", async () => {
+    const onChoose = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error("Not connected to this environment."))
+      .mockResolvedValueOnce(undefined);
+    const container = await renderNode(
+      <T3TeamWorkflowDecisionCard
+        decision={{
+          question: QUESTION,
+          affordance: { kind: "choice", options: ["ship-now", "hold"] },
+          correlationId: "run-1:1",
+        }}
+        active
+        onChoose={onChoose}
+      />,
+    );
+    const buttons = () => [...container.querySelectorAll("button")];
+
+    await clickButton(container, "hold");
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+      "Not connected to this environment.",
+    );
+    expect(buttons().map((button) => button.disabled)).toEqual([false, false]);
+
+    await clickButton(container, "hold");
+
+    expect(onChoose).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
   it("ignores clicks on an inactive (stale) card", async () => {
     const onChoose = vi.fn(async () => {});
     const container = await renderNode(

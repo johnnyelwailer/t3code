@@ -38,6 +38,7 @@ import type {
   SourceControlProviderKind,
 } from "@t3tools/contracts";
 import { SourceControlProviderKind as SourceControlProviderKindSchema } from "@t3tools/contracts";
+import type { FileAtRevisionRequest, ProviderFileAtRevision } from "./t3team-fileAtRevision.ts";
 
 /**
  * The one failure shape every provider reports, so the service can decide what a failure means
@@ -230,6 +231,12 @@ export interface ProviderChangeRequestStat {
 export interface ProviderChangeRequestDetail extends ProviderChangeRequest {
   /** The head commit, where the host's detail read reports it. */
   readonly headSha?: string | null;
+  /** The base commit, where the host's detail read reports it. */
+  readonly baseSha?: string | null;
+  /** True only when the host says the head belongs to another repository. */
+  readonly isCrossRepository?: boolean;
+  /** The author's standing on the repository, as the host words it. */
+  readonly authorAssociation?: string | null;
   readonly body: string;
   readonly changedFiles: number;
   readonly mergedAt: string | null;
@@ -524,6 +531,15 @@ export interface PullRequestProviderApi {
       readonly newPath: string;
     },
   ) => Effect.Effect<ProviderDiffFileContents, PullRequestProviderError>;
+
+  /**
+   * t3team: one file at one commit sha, for any path rather than only the ones the diff carries.
+   * Null is "nothing readable there" (absent at that commit, a directory, a symlink). Optional:
+   * a host that cannot read a file at a revision omits it, and the service refuses typed.
+   */
+  readonly readFileAtRevision?: (
+    input: FileAtRevisionRequest,
+  ) => Effect.Effect<ProviderFileAtRevision | null, PullRequestProviderError>;
 
   /**
    * Which files the reader has already cleared. Only called when `capabilities.viewedFiles` is

@@ -1,5 +1,6 @@
 import { type EnvironmentId } from "@t3tools/contracts";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "./ThreadHoverCard";
+import { WatchedPullRequestIndicator } from "~/components/pullRequest/t3team-WatchedPullRequestIndicator";
 import { CollapsibleSectionHeader } from "./ui/collapsible-section-header";
 import { setThreadChangeRequestSnapshot } from "./ThreadStatusIndicators";
 import { ThreadContextDragGhost } from "./chat/ThreadContextDragGhost";
@@ -1764,6 +1765,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     prBadgeShape?.kind === "stack" || pr || currentLinkedPr ? (
       <ThreadPullRequestBadgeControl
         render={<InlineButton />}
+        threadRef={threadRef}
         badge={prBadgeShape}
         pullRequests={thread.pullRequests}
         number={pr?.number ?? currentLinkedPr?.number}
@@ -2228,6 +2230,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               <InboxThreadAttribution threadId={thread.id} />
               {terminalStatusIcon}
               {prBadge}
+              {/* t3team: the universal watched indicator for the thread's own pull request. */}
+              {currentLinkedPr ? (
+                <WatchedPullRequestIndicator
+                  environmentId={thread.environmentId}
+                  host={currentLinkedPr.host}
+                  repository={currentLinkedPr.repository}
+                  number={currentLinkedPr.number}
+                />
+              ) : null}
               {diff ? (
                 <span className="shrink-0 font-mono">
                   <span className="text-diff-addition-foreground">+{diff.insertions}</span>{" "}
@@ -5334,8 +5345,8 @@ export default function Sidebar() {
               onClearSearch={clearThreadSearch}
             />
             {/* t3team: one-click project pills under the search row. While they are
-                on, the header project icon stays out — sites that do not fit a disc
-                are the +N pill. Lost in the 2026-09-18 upstream sync. */}
+                on, the header project icon stays out — the row's last disc (+N, or a
+                search glyph when everything fits) is the searchable picker. Lost in the 2026-09-18 upstream sync. */}
             {projectScopePillsEnabled && projectGroups.length > 0 ? (
               <T3TeamSidebarProjectScopePills
                 groups={projectGroups}

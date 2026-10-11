@@ -16,8 +16,10 @@ import type {
   AbortedResult,
   AnyScriptRef,
   JournalStore,
+  ScriptHostContext,
   SuspendedResult,
   T3TeamToolHandlerClient,
+  ToolWorkspace,
   WorkflowRef,
   WorkflowRunOptions,
   WorkflowRunResult,
@@ -40,10 +42,21 @@ export interface LaunchWorkflowRecipeInput {
   readonly args: unknown;
   /** The launching recipe's private scripts; bodies see them as `scripts.*` (Epic 25 §Scripts). */
   readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
-  /** Per-run bridge to the broker's work-item draft tools, built by the caller from the launch
-   * thread (t3team-workflowHostDraftTools.ts). Absent leaves those refs bound but uncallable. */
+  /** Per-run bridge to the broker's host tools (drafts, change-request publishing), built by the
+   * caller from the launch thread (t3team-workflowHostTools.ts). Absent leaves those refs bound
+   * but uncallable. */
   readonly hostToolClient?: T3TeamToolHandlerClient;
+  /** The run's `ctx.store` / `ctx.changeRequests` for its scripts (t3team-scriptHostContext.ts). */
+  readonly scriptHost?: ScriptHostContext;
   readonly runsRoot: string;
+  /** The launch thread's checkout (its worktree, else the project root) the run's scripts
+   * read/write through `ctx.workspace`, path-guarded to `workspaceRoot` (t3team-workspaceFileAccess.ts). Absent (headless, no project) leaves the SDK's
+   * "started without a workspace filesystem" error in place. */
+  readonly workspace?: ToolWorkspace;
+  /** That same checkout root (`ctx.workspaceRoot`); absent falls back to the run directory. */
+  readonly workspaceRoot?: string;
+  /** The launching recipe's directory; scopes `launchThread` keys to the recipe (absent: the run). */
+  readonly recipePath?: string | undefined;
   /** The chat the user launched from; `undefined` for a headless run (`thread` is undefined). */
   readonly launchThreadId: string | undefined;
   readonly projectId: ProjectId;

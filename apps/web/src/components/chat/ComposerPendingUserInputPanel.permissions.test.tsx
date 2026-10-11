@@ -12,6 +12,12 @@ vi.mock("../ui/collapsible", () => {
   };
 });
 
+// t3team: the fork renders question text as markdown, which needs a full window (theme storage
+// listeners); this test stubs a minimal one and only cares about the answer controls.
+vi.mock("./t3team-pendingQuestionMarkdown", () => ({
+  T3TeamPendingQuestionMarkdown: ({ text }: { text: string }) => <span>{text}</span>,
+}));
+
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 
 it("cancels an answer's pending auto-submit on revocation and resumes after a new grant", async () => {

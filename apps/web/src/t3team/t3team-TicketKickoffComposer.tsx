@@ -1,5 +1,6 @@
 import { forwardRef, useCallback, useImperativeHandle } from "react";
 import { cn } from "~/lib/utils";
+import { useBackendState } from "~/t3team/backend/t3team-index";
 import { KickoffComposerEditor } from "~/t3team/composer/t3team-KickoffComposerEditor";
 import type {
   T3TeamKickoffComposerHandle,
@@ -32,8 +33,9 @@ export const TicketKickoffComposer = forwardRef<
       prefillText,
       selectedRecipe,
       onClearSelectedRecipe,
-      providers,
-      isConnected,
+      providers: providersProp,
+      // Prop kept for API compatibility; live connection comes from useBackendState below.
+      isConnected: _ignoredIsConnectedProp,
       workspaceRoot,
       slashRecipes,
       onSelectSlashRecipe,
@@ -41,6 +43,11 @@ export const TicketKickoffComposer = forwardRef<
     },
     ref,
   ) => {
+    // Prefer the live WS/server-config projection over prop-drilled snapshots: parents often
+    // pass values from a mount-time backend.state that never re-renders when the WS connects.
+    const backendState = useBackendState();
+    const providers = backendState.providers.length > 0 ? backendState.providers : providersProp;
+    const isConnected = backendState.connectionStatus === "connected";
     const {
       interactionMode,
       launchConfig,
@@ -104,6 +111,7 @@ export const TicketKickoffComposer = forwardRef<
 
     const providerStatusMessage = getT3TeamKickoffProviderBlocker({
       isConnected,
+      connectionStatus: backendState.connectionStatus,
       hasConfiguredProviders,
       providerInstanceEntries,
       selectedProviderEntry,
@@ -147,7 +155,9 @@ export const TicketKickoffComposer = forwardRef<
                   ? selectedRecipe
                     ? getT3TeamSelectedRecipeComposerPlaceholder(selectedRecipe)
                     : "Ask anything, @tag files/folders, $use skills, or / for commands"
-                  : "Server is disconnected"
+                  : backendState.connectionStatus === "connecting"
+                    ? "Connecting to the server…"
+                    : "Server is disconnected"
               }
               disabled={!isConnected}
               onChangeText={(nextValue, nextCursor) => {

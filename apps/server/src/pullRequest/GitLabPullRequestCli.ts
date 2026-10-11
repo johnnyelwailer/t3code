@@ -45,6 +45,8 @@ import {
   type GitLabProjectUsers,
 } from "./gitLabMergeRequestJson.ts";
 import type { ProviderListCursor } from "./PullRequestProvider.ts";
+import type { FileAtRevisionRequest, ProviderFileAtRevision } from "./t3team-fileAtRevision.ts";
+import { readGitLabFileAtRevision } from "./t3team-GitLabFileAtRevision.ts";
 
 /**
  * Names the read that produced unusable output, so a failure reports the call it came from
@@ -293,6 +295,11 @@ export class GitLabPullRequestCli extends Context.Service<
      * head does not have is answered as the empty revision, since the batch it was asked in was
      * looked at; a batch GitLab did not answer for is left out instead.
      */
+    /** t3team: one file at one commit sha, whether or not the merge request touches it. */
+    readonly readFileAtRevision: (
+      input: FileAtRevisionRequest,
+    ) => Effect.Effect<ProviderFileAtRevision | null, GitLabPullRequestCliError>;
+
     readonly getFileRevisions: (input: {
       readonly cwd: string;
       readonly repository: string;
@@ -1166,6 +1173,22 @@ export const make = Effect.gen(function* () {
     listReactions: (input) => awardsPage({ ...input, cursor: null, page: 1, collected: null }),
 
     getFileRevisions: fileRevisions,
+
+    readFileAtRevision: (input) =>
+      readGitLabFileAtRevision(gitlab, input).pipe(
+        Effect.flatMap((file) =>
+          file === undefined
+            ? Effect.fail(
+                new GitLabMergeRequestReadError({
+                  command: "glab",
+                  cwd: input.cwd,
+                  operation: "readFileAtRevision",
+                  cause: new Error("GitLab did not answer with a readable file."),
+                }),
+              )
+            : Effect.succeed(file),
+        ),
+      ),
 
     setReaction: (input) =>
       Effect.gen(function* () {

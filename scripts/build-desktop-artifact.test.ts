@@ -522,18 +522,16 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         cpu: ["x64"],
       },
     });
-    // The server sidecar stage bundles the same-architecture WSL (Linux,
-    // glibc) backend, so its install must fetch Linux native optional deps
-    // (e.g. ffi-rs) too — and must be hoisted so the tree survives asar
-    // packing and runtime extraction without symlinks.
+    // The server sidecar stage is hoisted so the tree survives asar packing
+    // and runtime extraction without symlinks. Its WSL backend ships in the
+    // separate Linux CLI archive, so it stages no Linux natives.
     assert.deepStrictEqual(
       createStageWorkspaceConfig({ platform: "win", arch: "x64", linuxServerBackend: true }),
       {
         packages: ["packages/*"],
         supportedArchitectures: {
-          os: ["win32", "linux"],
+          os: ["win32"],
           cpu: ["x64"],
-          libc: ["glibc"],
         },
         nodeLinker: "hoisted",
       },
@@ -543,9 +541,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       {
         packages: ["packages/*"],
         supportedArchitectures: {
-          os: ["win32", "linux"],
+          os: ["win32"],
           cpu: ["arm64"],
-          libc: ["glibc"],
         },
         nodeLinker: "hoisted",
       },
@@ -775,7 +772,6 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.notProperty(mac.mac as Record<string, unknown>, "sign");
       for (const config of [linux, win]) {
         assert.deepStrictEqual(config.electronLanguages, DESKTOP_ELECTRON_LANGUAGES);
-        assert.deepStrictEqual(config.files, DESKTOP_FILE_EXCLUSIONS);
         // Without a per-build stamp the artifact name keeps its historical
         // shape (the placeholders are electron-builder's, not template
         // literals).
@@ -2290,6 +2286,41 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ),
   );
 
+  it.effect("rasterizes a distribution DMG background instead of the vendor SVG", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const stageResourcesDir = yield* fs.makeTempDirectoryScoped({
+          prefix: "t3code-dmg-background-override-",
+        });
+        const overridePath = path.join(stageResourcesDir, "distro-background.svg");
+        yield* fs.writeFileString(overridePath, '<svg xmlns="http://www.w3.org/2000/svg"/>');
+        const dmgDir = path.join(stageResourcesDir, "dmg");
+        yield* fs.makeDirectory(dmgDir, { recursive: true });
+        yield* fs.writeFileString(
+          path.join(dmgDir, "dmg-background-latest.svg"),
+          '<svg xmlns="http://www.w3.org/2000/svg"/>',
+        );
+        const previous = process.env.T3CODE_DESKTOP_DMG_BACKGROUND;
+        process.env.T3CODE_DESKTOP_DMG_BACKGROUND = overridePath;
+        const commands: Array<{ readonly command: string; readonly args: ReadonlyArray<string> }> =
+          [];
+        yield* stageDesktopDmgBackground(stageResourcesDir, "latest", false).pipe(
+          Effect.provide(iconResizeSpawnerLayer(commands, [0, 0])),
+          Effect.ensuring(
+            Effect.sync(() => {
+              if (previous !== undefined) process.env.T3CODE_DESKTOP_DMG_BACKGROUND = previous;
+              else delete process.env.T3CODE_DESKTOP_DMG_BACKGROUND;
+            }),
+          ),
+        );
+        assert.equal(commands[0]?.args.at(-3), overridePath);
+        assert.notEqual(commands[0]?.args.at(-3), path.join(dmgDir, "dmg-background-latest.svg"));
+      }),
+    ),
+  );
+
   it.effect("fails clearly when the selected DMG background source is missing", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -2833,7 +2864,10 @@ it("detects pnpm cmd-shims that wrap esbuild with node", async () => {
 });
 
 it("resolves esbuild via the package bin, skipping a node-wrapped .bin shim", async () => {
-  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-esbuild-resolve-"));
+  // Resolution returns real paths; macOS's tmpdir is a /var -> /private/var symlink.
+  const root = NodeFS.realpathSync(
+    NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-esbuild-resolve-")),
+  );
   try {
     const webPkg = NodePath.join(root, "apps", "web");
     const esbuildPkg = NodePath.join(root, "node_modules", "esbuild");

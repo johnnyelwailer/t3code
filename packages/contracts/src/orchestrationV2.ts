@@ -361,6 +361,18 @@ export const OrchestrationV2LimitRecoveryUpdate = Schema.Struct({
 );
 export type OrchestrationV2LimitRecoveryUpdate = typeof OrchestrationV2LimitRecoveryUpdate.Type;
 
+/**
+ * t3team: a workflow `user.input` ask waiting on a thread. The ask lives in the
+ * workflow run store; this mirror on the thread record lets the shell report it
+ * as pending user input (notifications, sidebar) like any other question.
+ */
+export const OrchestrationV2PendingWorkflowAsk = Schema.Struct({
+  runId: TrimmedNonEmptyString,
+  correlationId: TrimmedNonEmptyString,
+  createdAt: IsoDateTime,
+});
+export type OrchestrationV2PendingWorkflowAsk = typeof OrchestrationV2PendingWorkflowAsk.Type;
+
 export const OrchestrationV2AppThread = Schema.Struct({
   ...OrchestrationV2CreationFields,
   id: ThreadId,
@@ -405,6 +417,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   snoozedUntil: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   snoozedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecovery)),
+  /** t3team: optional so threads written before the mirror still decode. */
+  pendingWorkflowAsk: Schema.optional(Schema.NullOr(OrchestrationV2PendingWorkflowAsk)),
   pinnedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   // Fractional-index slot in the user-arranged pinned order. Optional so

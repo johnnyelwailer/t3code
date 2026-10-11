@@ -35,6 +35,7 @@ describe("parseRunsResponse", () => {
             updated_at: "2026-09-12T21:35:59Z",
             html_url: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/248523362",
             name: "hive/nx-nexi [main] [c9f4a2]",
+            actor: { login: "pj" },
           },
         ],
       }),
@@ -48,6 +49,7 @@ describe("parseRunsResponse", () => {
         updatedAt: "2026-09-12T21:35:59Z",
         htmlUrl: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/248523362",
         name: "hive/nx-nexi [main] [c9f4a2]",
+        actor: "pj",
       },
     ]);
   });

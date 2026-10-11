@@ -3,7 +3,7 @@ import type { AuthSessionState } from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import React, { startTransition, useEffect, useRef, useState, useCallback } from "react";
 
-import { APP_DISPLAY_NAME } from "../../branding";
+import { useT3TeamAppDisplayName } from "../../t3team/t3team-appBrandName";
 import { connectPairing } from "../../connection/onboarding";
 import {
   peekPairingTokenFromUrl,
@@ -17,10 +17,11 @@ import { StandalonePage, StandalonePageHeader } from "../ui/standalone-page";
 import { useAtomCommand } from "../../state/use-atom-command";
 
 export function PairingPendingSurface() {
+  const appName = useT3TeamAppDisplayName();
   return (
     <StandalonePage tone="pairing">
       <StandalonePageHeader
-        eyebrow={APP_DISPLAY_NAME}
+        eyebrow={appName}
         title="Pairing with this environment"
         description="Validating the pairing link and preparing your session."
       />
@@ -42,6 +43,7 @@ export function PairingRouteSurface({
   const [errorMessage, setErrorMessage] = useState(initialErrorMessage ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const autoSubmitAttemptedRef = useRef(false);
+  const appName = useT3TeamAppDisplayName();
 
   const submitCredential = useCallback(
     async (nextCredential: string) => {
@@ -89,7 +91,7 @@ export function PairingRouteSurface({
   return (
     <StandalonePage tone="pairing">
       <StandalonePageHeader
-        eyebrow={APP_DISPLAY_NAME}
+        eyebrow={appName}
         title="Pair with this environment"
         description={describeAuthGate(auth.bootstrapMethods)}
       />
@@ -157,6 +159,7 @@ export function HostedPairingRouteSurface() {
   const [canRetry, setCanRetry] = useState(false);
   const submitAttemptedRef = useRef(false);
   const tokenSubmittedRef = useRef(false);
+  const appName = useT3TeamAppDisplayName();
 
   const submitHostedPairingRequest = useCallback(async () => {
     const request = hostedPairingRequestRef.current;
@@ -213,7 +216,7 @@ export function HostedPairingRouteSurface() {
   return (
     <StandalonePage tone="pairing">
       <StandalonePageHeader
-        eyebrow={APP_DISPLAY_NAME}
+        eyebrow={appName}
         title={
           status === "paired"
             ? "Backend paired"

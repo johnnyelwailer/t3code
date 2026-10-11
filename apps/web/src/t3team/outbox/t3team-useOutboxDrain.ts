@@ -18,7 +18,7 @@ import { threadEnvironment } from "~/state/threads";
 import { useEnvironment } from "~/state/environments";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useThreadProjection } from "~/state/entities";
-import type { BackendApi } from "~/t3team/backend/t3team-types";
+import type { T3TeamOutboxBackend } from "~/t3team/outbox/t3team-useWorkflowOutboxActions";
 import { launchStagedComposerActionOnThread } from "~/t3team/chat/t3team-threadStagedActionLaunch";
 import { dispatchT3TeamOutboxEntry } from "~/t3team/outbox/t3team-outboxDispatch";
 import type { T3TeamOutboxStagedActionPayload } from "~/t3team/outbox/t3team-outboxModel";
@@ -45,7 +45,7 @@ type HeadThreadMessages = ReadonlyArray<{ readonly id: string; readonly role: st
 
 export function useT3TeamOutboxDrain(input: {
   readonly environmentId: EnvironmentId;
-  readonly backend: BackendApi | null | undefined;
+  readonly backend: T3TeamOutboxBackend | null | undefined;
 }): void {
   const environment = useEnvironment(input.environmentId);
   const phase = environment?.connection.phase ?? "available";
@@ -61,7 +61,7 @@ export function useT3TeamOutboxDrain(input: {
   const headThread = useThreadProjection(headThreadRef);
 
   const depsRef = useRef<{
-    backend: BackendApi | null | undefined;
+    backend: T3TeamOutboxBackend | null | undefined;
     startTurn: typeof startTurn;
     headMessages: HeadThreadMessages;
   }>({ backend: input.backend, startTurn, headMessages: null });
@@ -102,12 +102,15 @@ export function useT3TeamOutboxDrain(input: {
           ? backend.submitRecipeCardAction(request)
           : Promise.reject(new Error("No backend.")),
       launchStagedAction: (payload: T3TeamOutboxStagedActionPayload) => {
-        if (!backend) return Promise.reject(new Error("No backend."));
+        const launchRecipeWorkflow = backend?.launchRecipeWorkflow;
+        if (!backend || !launchRecipeWorkflow) return Promise.reject(new Error("No backend."));
         if (payload.modelSelection === null) {
           return Promise.reject(new Error("No model selection was recorded for this action."));
         }
         return launchStagedComposerActionOnThread({
-          backend,
+          backend: {
+            launchRecipeWorkflow: (request) => launchRecipeWorkflow.call(backend, request),
+          },
           threadId: entry.threadId,
           action: payload.action,
           composerText: payload.composerText,

@@ -129,6 +129,8 @@ import {
   type GitHubViewerAccess,
 } from "./gitHubPullRequestJson.ts";
 import type { ProviderChangeRequestSummary, ProviderListCursor } from "./PullRequestProvider.ts";
+import type { FileAtRevisionRequest, ProviderFileAtRevision } from "./t3team-fileAtRevision.ts";
+import { readGitHubFileAtRevision } from "./t3team-GitHubFileAtRevision.ts";
 
 /**
  * Names the read that produced unusable output, so a failure reports the call it came from
@@ -605,6 +607,11 @@ export class GitHubPullRequestApi extends Context.Service<
       { readonly oldContents: string; readonly newContents: string },
       GitHubPullRequestApiError
     >;
+
+    /** t3team: one file at one commit sha, whether or not the pull request touches it. */
+    readonly readFileAtRevision: (
+      input: FileAtRevisionRequest,
+    ) => Effect.Effect<ProviderFileAtRevision | null, GitHubPullRequestApiError>;
 
     /**
      * Which files of the pull request the signed-in account has cleared, and which of those have
@@ -2254,6 +2261,20 @@ export const make = Effect.gen(function* () {
     },
 
     getPullRequestDiffFileContents,
+    readFileAtRevision: (input) =>
+      readGitHubFileAtRevision(api, input).pipe(
+        Effect.flatMap((file) =>
+          file === undefined
+            ? Effect.fail(
+                new GitHubPullRequestReadError({
+                  cwd: input.cwd,
+                  operation: "readFileAtRevision",
+                  cause: new Error("GitHub did not answer with a readable file."),
+                }),
+              )
+            : Effect.succeed(file),
+        ),
+      ),
 
     getReviewThreadComments: (input) => {
       const { owner, name } = parseRepositorySelector(input.repository);

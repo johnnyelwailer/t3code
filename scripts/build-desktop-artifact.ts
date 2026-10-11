@@ -28,6 +28,7 @@ import serverPackageJson from "../apps/server/package.json" with { type: "json" 
 
 import { applyWebBrandAssets } from "./apply-web-brand-assets.ts";
 import { applyDistributionWebIcons } from "./lib/t3team-distributionWebIcons.ts";
+import { resolveDmgBackgroundOverride } from "./lib/t3team-dmgBackground.ts";
 import {
   BRAND_ASSET_PATHS,
   resolveWebAssetBrandForChannel,
@@ -1722,12 +1723,10 @@ export function createStageWorkspaceConfig(input: {
   readonly allowBuilds?: Record<string, boolean>;
   readonly patchedDependencies?: Record<string, string>;
   readonly overrides?: Record<string, string>;
-  // The Windows server sidecar stage runs both the Windows primary and the
-  // WSL Linux backend from one dependency tree, so it needs win32 + linux
-  // natives (e.g. @yuuang/ffi-rs-linux-x64-gnu) — and a hoisted (physical,
-  // symlink-free) node_modules: the tree gets packed into server.asar and
-  // later extracted for WSL, and neither step can rely on pnpm's
-  // symlink/junction layout surviving the trip.
+  // The Windows server sidecar stage needs a hoisted (physical, symlink-free)
+  // node_modules: the tree gets packed into server.asar and later extracted,
+  // and neither step can rely on pnpm's symlink/junction layout surviving the
+  // trip. The WSL backend runs from the separate Linux CLI archive instead.
   readonly linuxServerBackend?: boolean;
   readonly linkWorkspacePackages?: boolean;
 }): StageWorkspaceConfig {
@@ -2768,7 +2767,19 @@ export const stageDesktopDmgBackground = Effect.fn("stageDesktopDmgBackground")(
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const sourcePath = path.join(stageResourcesDir, "dmg", `dmg-background-${channel}.svg`);
+  const vendorSourcePath = path.join(stageResourcesDir, "dmg", `dmg-background-${channel}.svg`);
+  const overridePath = resolveDmgBackgroundOverride({
+    env: process.env,
+    channel,
+    readFile: (filePath) => {
+      try {
+        return NodeFS.readFileSync(filePath, "utf8");
+      } catch {
+        return undefined;
+      }
+    },
+  });
+  const sourcePath = overridePath ?? vendorSourcePath;
   if (!(yield* fs.exists(sourcePath))) {
     return yield* new DesktopDmgBackgroundSourceMissingError({ channel, sourcePath });
   }

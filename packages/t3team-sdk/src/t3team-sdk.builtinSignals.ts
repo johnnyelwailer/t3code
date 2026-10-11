@@ -23,6 +23,12 @@ import {
   type Signal,
   type SignalSourceRef,
 } from "./t3team-sdk.signal.ts";
+import {
+  ScmViewerChangeRequests,
+  ScmViewerChangeRequestsParams,
+  ScmViewerChangeRequestUpdated,
+  ViewerChangeRequestPayload,
+} from "./t3team-sdk.builtinSignalsViewer.ts";
 
 // ── ChangeRequest payloads (Tier A) ─────────────────────────────────────────
 
@@ -181,6 +187,7 @@ export const BUILTIN_SIGNAL_SOURCES = [
   ScmChangeRequestWatch,
   ScmChangeRequestChecks,
   ScmChangeRequestReview,
+  ScmViewerChangeRequests,
   WorkItemUpdates,
 ] as const;
 
@@ -191,6 +198,7 @@ export const BUILTIN_SIGNALS: ReadonlyArray<Signal<unknown>> = [
   ScmChangeRequestDraftReady,
   ScmChangeRequestChecksConcluded,
   ScmChangeRequestReviewActivity,
+  ScmViewerChangeRequestUpdated,
   WorkItemUpdated,
 ];
 
@@ -204,17 +212,21 @@ export const BUILTIN_SIGNAL_GLOBALS: Readonly<Record<string, unknown>> = {
   ScmChangeRequestWatch,
   ScmChangeRequestChecks,
   ScmChangeRequestReview,
+  ScmViewerChangeRequests,
   WorkItemUpdates,
   ScmChangeRequestMerged,
   ScmChangeRequestClosed,
   ScmChangeRequestDraftReady,
   ScmChangeRequestChecksConcluded,
   ScmChangeRequestReviewActivity,
+  ScmViewerChangeRequestUpdated,
   WorkItemUpdated,
   ChangeRequestPayload,
   ChangeRequestChecksPayload,
   ChangeRequestReviewPayload,
   WorkItemPayload,
   ScmChangeRequestParams,
+  ScmViewerChangeRequestsParams,
+  ViewerChangeRequestPayload,
   WorkItemParams,
 };

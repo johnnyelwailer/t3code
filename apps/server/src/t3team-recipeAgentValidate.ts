@@ -3,7 +3,9 @@
  * Static only — the workflow BODY is never executed. `prepareWorkflow`/`extractMeta` run just the
  * file's head (imports blanked, only `Schema` injected) in a `node:vm` context to read the `meta`
  * literal, and `deriveWorkflowShape` is the same static AST scan the UI's play-as-shape preview
- * uses ({@link ./t3team-workflowShapePreview.ts}). The one dynamic import is a recipe DIRECTORY's
+ * uses ({@link ./t3team-workflowShapePreview.ts}). A recipe config (`*.config.ts`) is imported
+ * only after it passes its data-only check (t3team-recipeAgentValidateConfig.ts), and so are the
+ * recipe modules it names. The other dynamic import is a recipe DIRECTORY's
  * `recipe.ts` (to resolve its `defaultAction` workflow) — the same trusted-project-code path UI
  * discovery already takes. Paths are constrained to the project workspace root or an active pack's
  * recipe directory ({@link ./t3team-recipeAgentPaths.ts}) — a pack recipe's `recipePath` is what
@@ -27,6 +29,10 @@ import {
 } from "./t3team-projectRecipeDiscoveryShared.ts";
 import { resolveAgentRecipePath } from "./t3team-recipeAgentPaths.ts";
 import { validateWorkflowSourceStatic } from "./t3team-recipeAgentValidateStatic.ts";
+import {
+  isRecipeConfigPath,
+  validateRecipeConfigForAgent,
+} from "./t3team-recipeAgentValidateConfig.ts";
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -125,6 +131,13 @@ export const validateProjectRecipeWorkflowForAgent = Effect.fn(
   const stat = yield* fileSystem.stat(requestedPath).pipe(Effect.catch(() => Effect.succeed(null)));
   if (!stat) {
     return failedResult([issue(requestedPath, "discover", "Path does not exist.")]);
+  }
+  if (stat.type === "File" && isRecipeConfigPath(requestedPath)) {
+    return yield* validateRecipeConfigForAgent({ workspaceRoot, configPath: requestedPath }).pipe(
+      Effect.catch((error) =>
+        Effect.succeed(failedResult([issue(requestedPath, "load", errorMessage(error))])),
+      ),
+    );
   }
   const resolved =
     stat.type === "Directory"

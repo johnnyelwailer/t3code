@@ -16,33 +16,38 @@ import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
  */
 export function useCloudSessionCreate(input: {
   readonly environmentId: EnvironmentId | null;
+  readonly canManageRelay: boolean;
   readonly relayDiscovered: ReturnType<typeof useRelayEnvironmentDiscovery>["environments"];
   readonly serverSessions: ReadonlyArray<CloudSession>;
   readonly setRelayIdsBefore: (ids: ReadonlySet<string>) => void;
   readonly setLocalSession: (session: LocalCloudSession) => void;
   readonly refreshCloudSessionList: () => void;
 }) {
-  const { environmentId, relayDiscovered, serverSessions } = input;
+  const { environmentId, canManageRelay, relayDiscovered, serverSessions } = input;
   const { setRelayIdsBefore, setLocalSession, refreshCloudSessionList } = input;
   const createSession = useAtomCommand(cloudSessionEnvironment.create, { reportFailure: false });
-  const [createPending, setCreatePending] = useState(false);
-  const latestRef = useRef<(projectId?: ProjectId) => void>(() => {});
+  const [pendingKind, setPendingKind] = useState<null | "session" | "setup">(null);
+  const createPending = pendingKind !== null;
+  const latestRef = useRef<
+    (projectId?: ProjectId, options?: { readonly machineSetup?: boolean }) => void
+  >(() => {});
 
   /** `projectId` (a project on the primary environment) runs the session in its machine. */
   const onCreate = useCallback(
-    (projectId?: ProjectId) => {
-      if (environmentId === null || createPending) return;
+    (projectId?: ProjectId, options?: { readonly machineSetup?: boolean }) => {
+      if (environmentId === null || !canManageRelay || createPending) return;
       setRelayIdsBefore(
         new Set(
           [...relayDiscovered.values()].map((entry) => String(entry.environment.environmentId)),
         ),
       );
-      setCreatePending(true);
+      setPendingKind(options?.machineSetup ? "setup" : "session");
       void createSession({
         environmentId,
         input: {
           durationSeconds: CLOUD_SESSION_LIFETIME_SECONDS,
           ...(projectId ? { projectId } : {}),
+          ...(options?.machineSetup ? { machineSetup: true } : {}),
         },
       })
         .then((result) => {
@@ -53,12 +58,13 @@ export function useCloudSessionCreate(input: {
             });
             refreshCloudSessionList();
           } else {
-            reportCloudSessionCreateFailure(result, () => latestRef.current(projectId));
+            reportCloudSessionCreateFailure(result, () => latestRef.current(projectId, options));
           }
         })
-        .finally(() => setCreatePending(false));
+        .finally(() => setPendingKind(null));
     },
     [
+      canManageRelay,
       createPending,
       createSession,
       environmentId,
@@ -73,5 +79,5 @@ export function useCloudSessionCreate(input: {
     latestRef.current = onCreate;
   }, [onCreate]);
 
-  return { onCreate, createPending };
+  return { onCreate, createPending, createPendingSetup: pendingKind === "setup" };
 }

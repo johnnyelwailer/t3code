@@ -122,6 +122,10 @@
       "types": "./src/handlesDispatch.ts",
       "import": "./src/handlesDispatch.ts"
     },
+    "./handlesAny": {
+      "types": "./src/handlesAny.ts",
+      "import": "./src/handlesAny.ts"
+    },
     "./replayDrift": {
       "types": "./src/replayDrift.ts",
       "import": "./src/replayDrift.ts"

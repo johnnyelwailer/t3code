@@ -32,6 +32,7 @@ import {
   HIDDEN_T3TEAM_DIR,
   MAIN_REPOSITORY_GITIGNORE_ENTRIES,
   MANIFEST_FILE_NAME,
+  isLinkedRepositoryReady,
   REFERENCES_DIR_NAME,
 } from "./t3team-project-repository-utils.ts";
 import { migrateProjectStateDir } from "./t3team-projectMainRepositoryState.ts";
@@ -77,7 +78,7 @@ export const switchProjectMainRepository = Effect.fn("switchProjectMainRepositor
       const linked =
         findLinkedRepository(source.linkedRepositories, input.url) ??
         findLinkedRepository(home.linkedRepositories, input.url);
-      if (!linked || linked.status === "failed" || !linked.localPath) {
+      if (!linked || !isLinkedRepositoryReady(linked) || !linked.localPath) {
         return yield* fail(`Linked repository '${input.url}' has no ready local checkout.`);
       }
       const isClone = yield* fileSystem

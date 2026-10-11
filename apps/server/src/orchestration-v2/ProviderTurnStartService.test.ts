@@ -14,6 +14,7 @@ import {
   ThreadId,
   ProjectId,
   type OrchestrationV2ThreadProjection,
+  type ServerProvider,
   OrchestrationV2DomainEvent,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
@@ -27,6 +28,7 @@ import * as Schema from "effect/Schema";
 import * as GitWorkflow from "../git/GitWorkflowService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ContextHandoffService from "./ContextHandoffService.ts";
 import * as EventSink from "./EventSink.ts";
 import * as IdAllocator from "./IdAllocator.ts";
@@ -175,6 +177,10 @@ function makeLocalCommandHarness(input: {
   readonly delegatedCompletion?: OrchestrationV2ThreadProjection["messages"][number]["delegatedCompletion"];
   /** Loads the thread and starts the run, then fails every later state read. */
   readonly failReadsAfterRunning?: boolean;
+  /** The run's selected model id (default "gpt-5.4"). */
+  readonly model?: string;
+  /** Published provider snapshots, exposed to the turn-start via the registry. */
+  readonly providers?: ReadonlyArray<ServerProvider>;
 }) {
   const now = DateTime.makeUnsafe("2026-09-04T12:00:00Z");
   const threadId = ThreadId.make("thread-native-account-command");
@@ -193,7 +199,7 @@ function makeLocalCommandHarness(input: {
     threadId,
     ordinal: 2,
     providerInstanceId: newInstanceId,
-    modelSelection: { instanceId: newInstanceId, model: "gpt-5.4" },
+    modelSelection: { instanceId: newInstanceId, model: input.model ?? "gpt-5.4" },
     providerThreadId,
     userMessageId: messageId,
     rootNodeId,
@@ -541,6 +547,11 @@ function makeLocalCommandHarness(input: {
       ),
     ),
   );
+  const providerRegistryValue = {
+    getProviders: Effect.succeed(input.providers ?? []),
+    refresh: () => Effect.succeed(input.providers ?? []),
+    refreshInstance: () => Effect.succeed(input.providers ?? []),
+  } as never;
   return {
     open,
     writeIfRunCurrent,
@@ -553,14 +564,20 @@ function makeLocalCommandHarness(input: {
     projection: () => projection,
     start: Effect.gen(function* () {
       yield* (yield* ProviderTurnStart.ProviderTurnStartServiceV2).start({ threadId, runId });
-    }).pipe(Effect.provide(layer)),
+    }).pipe(
+      Effect.provide(layer),
+      Effect.provideService(ProviderRegistry.ProviderRegistry, providerRegistryValue),
+    ),
     startWithRetry: Effect.gen(function* () {
       yield* (yield* ProviderTurnStart.ProviderTurnStartServiceV2).start({
         threadId,
         runId,
         willRetry: true,
       });
-    }).pipe(Effect.provide(layer)),
+    }).pipe(
+      Effect.provide(layer),
+      Effect.provideService(ProviderRegistry.ProviderRegistry, providerRegistryValue),
+    ),
   };
 }
 
@@ -895,3 +912,66 @@ effectIt.effect(
       );
     }),
 );
+
+// t3team: conductor turns carry a compact, read-only usage snapshot.
+const usageProvider = {
+  instanceId: ProviderInstanceId.make("claudeAgent"),
+  driver: ProviderDriverKind.make("claudeAgent"),
+  enabled: true,
+  installed: true,
+  version: "test",
+  status: "ready",
+  auth: { status: "authenticated" },
+  checkedAt: "2026-09-04T00:00:00.000Z",
+  models: [],
+  slashCommands: [],
+  skills: [],
+  usageLimits: {
+    checkedAt: "2026-09-04T10:00:00.000Z",
+    windows: [
+      {
+        id: "five_hour",
+        kind: "session" as const,
+        label: "Session",
+        usedPercent: 42,
+        resetsAt: "2026-09-04T18:00:00.000Z",
+      },
+      { id: "seven_day", kind: "weekly" as const, label: "Weekly", usedPercent: 90 },
+    ],
+  },
+} as unknown as ServerProvider;
+
+effectIt.effect(
+  "prepends the conductor usage snapshot to a conductor turn's provider message",
+  () => {
+    const harness = makeLocalCommandHarness({
+      text: "Continue",
+      model: "conductor",
+      failReadsAfterRunning: true,
+      providers: [usageProvider],
+    });
+    return Effect.gen(function* () {
+      yield* harness.start;
+      expect(harness.startRootRun).toHaveBeenCalledTimes(1);
+      const input = harness.startRootRun.mock.calls[0]![0];
+      expect(input.message.text).toContain(
+        "claudeAgent: session 42% (resets 18:00Z) · weekly 90% · severity: warning",
+      );
+      expect(input.message.text).toContain("Continue");
+    });
+  },
+);
+
+effectIt.effect("does not prepend a usage block for a non-conductor model", () => {
+  const harness = makeLocalCommandHarness({
+    text: "Continue",
+    failReadsAfterRunning: true,
+    providers: [usageProvider],
+  });
+  return Effect.gen(function* () {
+    yield* harness.start;
+    expect(harness.startRootRun).toHaveBeenCalledTimes(1);
+    const input = harness.startRootRun.mock.calls[0]![0];
+    expect(input.message.text).toBe("Continue");
+  });
+});

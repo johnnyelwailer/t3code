@@ -119,6 +119,27 @@ describe("ComposerPendingUserInputPanel", () => {
     expect(markup).toContain("<em>panel</em>");
   });
 
+  it("keeps single newlines in the question and option descriptions as line breaks", () => {
+    const markup = renderPanel({
+      ...prompt,
+      questions: [
+        {
+          id: "question-lines",
+          header: "Ship order",
+          question: "Two options are ready.\nA ships this week.\nB needs review.\n\nWhich first?",
+          options: [{ label: "Ship A", description: "Smallest change\nNo migration" }],
+          multiSelect: false,
+        },
+      ],
+    });
+
+    expect(markup).toContain(
+      "Two options are ready.<br/>\nA ships this week.<br/>\nB needs review.",
+    );
+    expect(markup).toContain("<p>Which first?</p>");
+    expect(markup).toContain("Smallest change<br/>\nNo migration");
+  });
+
   it("renders a clamped context strip with an expand affordance above the question", () => {
     const markup = renderToStaticMarkup(
       <ComposerPendingUserInputPanel

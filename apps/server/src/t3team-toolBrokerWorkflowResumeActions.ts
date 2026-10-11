@@ -38,10 +38,11 @@ export interface WorkflowResumeToolDeps<E = string> {
   readonly rearmScheduler: () => Promise<void>;
   /** The thread operations a re-driven run performs (`T3TeamWorkflowHost`). */
   readonly host: WorkflowHostPort;
-  readonly loadThreadProject: (
-    threadId: ThreadId,
-  ) => Effect.Effect<
-    { readonly project: { readonly workspaceRoot: string | null | undefined } },
+  readonly loadThreadProject: (threadId: ThreadId) => Effect.Effect<
+    {
+      readonly project: { readonly workspaceRoot: string | null | undefined };
+      readonly thread?: { readonly worktreePath?: string | null | undefined };
+    },
     E
   >;
   /** Re-issues a failed run's retained `thread.turn` step (GHE #403). Absent when the broker's

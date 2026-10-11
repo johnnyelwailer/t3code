@@ -125,8 +125,18 @@ function withoutPlugin(plugins: PluginOption[], name: string): PluginOption[] {
     );
 }
 
+// Pack stories: the pack-ui kit's own fixture pack, plus the packs of T3CODE_DISTRIBUTION, which
+// the launcher (t3team-storybook.mjs) resolves; this file loads as CommonJS and cannot.
+const packStoryDirs = new Set([
+  `${srcDir}/t3team/packs/t3team-kit-fixture-pack`,
+  ...(JSON.parse(process.env.T3TEAM_STORYBOOK_PACK_DIRS ?? "[]") as string[]),
+]);
+
 const config: StorybookConfig = {
-  stories: [`${srcDir}/t3team/stories/**/*.stories.tsx`],
+  stories: [
+    `${srcDir}/t3team/stories/**/*.stories.tsx`,
+    ...[...packStoryDirs].map((dir) => `${dir}/**/*.stories.tsx`),
+  ],
   staticDirs: packDir ? [{ from: packDir, to: "/pack" }] : [],
   framework: {
     name: "@storybook/react-vite",
@@ -156,9 +166,15 @@ const config: StorybookConfig = {
         tailwindcss(),
       ],
       resolve: {
-        alias: {
-          "~": srcDir,
-        },
+        alias: [
+          // The kanban zoom stories mount the real flat board: the server-advertised zoom flag
+          // is advertised for the Storybook build (stories have no live server to read it from).
+          {
+            find: /^~\/t3team\/t3team-useKanbanSemanticZoomFlag$/,
+            replacement: `${srcDir}/t3team/t3team-useKanbanSemanticZoomFlag.storyMock.ts`,
+          },
+          { find: "~", replacement: srcDir },
+        ],
       },
       server: {
         // The launcher passes `--host 127.0.0.1`; accept both loopback names so

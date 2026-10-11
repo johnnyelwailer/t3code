@@ -84,6 +84,8 @@ function CloudSessionLiveDetail({
     setLiveSeconds((current) => Math.max(current, elapsedSeconds));
   }, [elapsedSeconds]);
   const staticSuffix = formatDuration(elapsedSeconds);
+  // A detail that is only the elapsed time ticks as a whole; a longer one carries it as a suffix.
+  if (detail === staticSuffix) return <>{formatDuration(liveSeconds)}</>;
   const marker = ` · ${staticSuffix}`;
   if (!detail.endsWith(marker)) return <>{detail}</>;
   return (

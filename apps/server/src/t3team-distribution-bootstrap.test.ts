@@ -96,6 +96,7 @@ vi.mock("@t3code/distribution", () => ({
     colors: { light: {}, dark: {} },
   },
   distributionBranding: undefined,
+  distributionPersistence: [],
 }));
 
 describe("compiled-in distribution bootstrap", () => {

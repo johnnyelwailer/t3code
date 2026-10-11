@@ -12,5 +12,5 @@ export function registerCompiledPackPersistence(
     if (packs.has(packId)) throw new Error(`Duplicate persistence pack ${packId}`);
     packs.set(packId, mergePackCollectionsDefinitions(modules));
   }
-  registerPackCollections(packs);
+  registerPackCollections(packs, "compiled");
 }

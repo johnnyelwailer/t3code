@@ -1,5 +1,6 @@
 import { getRegistry } from "./t3team-sdk.internal.ts";
 import type { PromptRef } from "./t3team-sdk.prompt.ts";
+import { assertRecipeTriggers } from "./t3team-sdk.recipeTriggers.ts";
 import type * as T from "./t3team-sdk.types.ts";
 
 /** Action names are wire identifiers (`launch.actionName`), so keep them boring and stable. */
@@ -63,6 +64,11 @@ export function defineRecipe<RInputs, ROutputs>(opts: {
   readonly defaultAction: T.WorkflowRef<RInputs, ROutputs> | PromptRef;
   /** Named sibling actions of the same recipe; `defaultAction` stays the plain-launch entry. */
   readonly actions?: Readonly<Record<string, T.AnyActionRef>>;
+  /**
+   * Host-side event triggers (S5b): the host reconciles the enabled ones into signal
+   * registrations and launches this recipe's actions headless — one event, one run, no thread.
+   */
+  readonly triggers?: ReadonlyArray<T.RecipeTriggerSpec>;
   readonly defaults?: Partial<RInputs>;
 }): T.RecipeRef<RInputs, ROutputs> {
   if (opts.scope !== undefined && opts.scope !== "project") {
@@ -90,6 +96,7 @@ export function defineRecipe<RInputs, ROutputs>(opts: {
     }
   }
   assertActions(opts.id, opts.actions ?? {});
+  assertRecipeTriggers(opts.id, opts.triggers ?? []);
 
   const ref = Object.freeze({
     kind: "recipe" as const,
@@ -111,6 +118,9 @@ export function defineRecipe<RInputs, ROutputs>(opts: {
     ...(opts.scripts === undefined ? {} : { scripts: Object.freeze({ ...opts.scripts }) }),
     defaultAction: opts.defaultAction,
     ...(opts.actions === undefined ? {} : { actions: Object.freeze({ ...opts.actions }) }),
+    ...(opts.triggers === undefined
+      ? {}
+      : { triggers: Object.freeze(opts.triggers.map((trigger) => Object.freeze({ ...trigger }))) }),
     ...(opts.defaults === undefined ? {} : { defaults: opts.defaults }),
   }) as T.RecipeRef<RInputs, ROutputs>;
 
