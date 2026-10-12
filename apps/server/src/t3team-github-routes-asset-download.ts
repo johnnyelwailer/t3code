@@ -1,14 +1,13 @@
 /* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import * as NodeBuffer from "node:buffer";
 
-import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import { HttpClient, HttpClientResponse } from "effect/http";
 
 import * as GitHubApi from "./sourceControl/GitHubApi.ts";
 import { T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
+import { fetchAssetResponse } from "./t3team-github-routes-asset-fetch.ts";
 import type {
   GitHubAssetDownloadRequest,
   GitHubDownloadedAsset,
@@ -17,7 +16,6 @@ import { readTrimmedString } from "./t3team-github-routes-shared.ts";
 import { toT3TeamError } from "./t3team-project-repository-utils.ts";
 
 const MAX_GITHUB_ASSET_BYTES = 25_000_000;
-const GITHUB_ASSET_TIMEOUT_MS = 20_000;
 
 function isGitHubHostedAsset(assetHost: string, host: string): boolean {
   return (
@@ -81,32 +79,10 @@ export function downloadGitHubAsset(
   }
 
   return Effect.gen(function* () {
-    const httpClient = yield* HttpClient.HttpClient;
     const token = isGitHubHostedAsset(parsedUrl.host, host)
       ? yield* readGitHubToken(host, parsedUrl.host)
       : undefined;
-    const response = yield* httpClient
-      .get(parsedUrl.toString(), {
-        headers: {
-          Accept: "*/*",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      })
-      .pipe(
-        Effect.timeoutOption(Duration.millis(GITHUB_ASSET_TIMEOUT_MS)),
-        Effect.mapError((cause) => toT3TeamError(cause, "Failed to download GitHub asset.")),
-        Effect.flatMap((responseOption) =>
-          Option.match(responseOption, {
-            onNone: () =>
-              Effect.fail(
-                new T3TeamAtlassianError({
-                  message: `GitHub asset download timed out after ${String(GITHUB_ASSET_TIMEOUT_MS)}ms.`,
-                }),
-              ),
-            onSome: (settledResponse) => Effect.succeed(settledResponse),
-          }),
-        ),
-      );
+    const response = yield* fetchAssetResponse(parsedUrl, token);
     const okResponse = yield* HttpClientResponse.matchStatus({
       "2xx": (success) => Effect.succeed(success),
       orElse: (failed) =>

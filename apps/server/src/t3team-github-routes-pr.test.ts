@@ -31,7 +31,9 @@ describe("enrichPullRequestState", () => {
         }),
       );
 
-      const [item] = yield* enrichPullRequestState("nexplore.ghe.com", [notification], "me").pipe(
+      const {
+        items: [item],
+      } = yield* enrichPullRequestState("nexplore.ghe.com", [notification], "me").pipe(
         Effect.provideService(GitHubApi.GitHubApi, api),
       );
 
@@ -52,18 +54,63 @@ describe("enrichPullRequestState", () => {
     }),
   );
 
-  it.effect("keeps the row, uncached, when the read is held back by the rate limit", () =>
-    Effect.gen(function* () {
-      const { api, calls } = makeFakeGitHubApi((call) => rateLimited(call.host));
+  it.effect(
+    "reports the pause, with no guessed state, when the rate limit holds the read back",
+    () =>
+      Effect.gen(function* () {
+        const { api, calls } = makeFakeGitHubApi((call) =>
+          rateLimited(call.host, 1_790_000_000_000),
+        );
 
-      const [item] = yield* enrichPullRequestState("nexplore.ghe.com", [notification]).pipe(
-        Effect.provideService(GitHubApi.GitHubApi, api),
+        const { items, pausedMessage } = yield* enrichPullRequestState("nexplore.ghe.com", [
+          notification,
+        ]).pipe(Effect.provideService(GitHubApi.GitHubApi, api));
+
+        expect(items[0]?.subjectState).toBeUndefined();
+        expect(items[0]?.subjectUrl).toBe("https://nexplore.ghe.com/acme/project/pull/7");
+        expect(pausedMessage).toContain("nexplore.ghe.com are paused until 2026-09-21 14:13 UTC");
+        expect(calls).toHaveLength(1);
+        expect(pullRequestStateCache.size).toBe(0);
+      }),
+  );
+
+  it.effect("keeps the row open, as gh did, when the read fails for another reason", () =>
+    Effect.gen(function* () {
+      const { api } = makeFakeGitHubApi((call) =>
+        Effect.fail(
+          new GitHubApi.GitHubApiNotFoundError({ host: call.host, operation: call.operation }),
+        ),
       );
 
-      expect(item?.subjectState).toBe("open");
-      expect(item?.subjectUrl).toBe("https://nexplore.ghe.com/acme/project/pull/7");
-      expect(calls).toHaveLength(1);
-      expect(pullRequestStateCache.size).toBe(0);
+      const { items, pausedMessage } = yield* enrichPullRequestState("nexplore.ghe.com", [
+        notification,
+      ]).pipe(Effect.provideService(GitHubApi.GitHubApi, api));
+
+      expect(items[0]?.subjectState).toBe("open");
+      expect(pausedMessage).toBeUndefined();
+    }),
+  );
+
+  it.effect("reads each subject on the host its API URL names, not the inbox host", () =>
+    Effect.gen(function* () {
+      const { api, calls } = makeFakeGitHubApi(() => restOk({ state: "open" }));
+      const subject = (id: string, subjectUrl: string) => ({ ...notification, id, subjectUrl });
+
+      yield* enrichPullRequestState("nexplore.ghe.com", [
+        subject("a", "https://api.github.com/repos/acme/project/pulls/1"),
+        subject("b", "https://git.acme.internal/api/v3/repos/acme/project/pulls/2"),
+        subject("c", "https://api.tenant.ghe.com/repos/acme/project/pulls/3"),
+        subject("d", "/repos/acme/project/pulls/4"),
+        // Not any shape of GitHub API URL: no read, and so no credential used for it.
+        subject("e", "https://evil.example.com/repos/acme/project/pulls/5"),
+      ]).pipe(Effect.provideService(GitHubApi.GitHubApi, api));
+
+      expect(calls.map((call) => [call.host, call.path]).toSorted()).toEqual([
+        ["git.acme.internal", "/repos/acme/project/pulls/2"],
+        ["github.com", "/repos/acme/project/pulls/1"],
+        ["nexplore.ghe.com", "/repos/acme/project/pulls/4"],
+        ["tenant.ghe.com", "/repos/acme/project/pulls/3"],
+      ]);
     }),
   );
 });

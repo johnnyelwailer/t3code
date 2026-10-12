@@ -10,6 +10,11 @@ export type GitHubInboxDiscoverRequest = {
   readonly linkedRepositoryUrls?: ReadonlyArray<string>;
   /** Repository setup only needs matches; skip inbox and pull-request hydration for a fast path. */
   readonly discoveryMode?: "inbox" | "repositories";
+  /**
+   * `"user"` for an explicit refresh or open: the read may spend the quota reserve. Anything
+   * else (the command palette's activity fan-out) is a background read that honours a pause.
+   */
+  readonly trigger?: "user" | "background";
 };
 
 export type GitHubRepositoryCandidate = {
@@ -100,14 +105,17 @@ export type RawGitHubPullRequest = {
   readonly changed_files?: number;
 };
 
+/** A read cut short by the rate limit: its result stands for the pause, so it is never cached. */
 export type GitHubRepositoriesAttempt = {
   readonly items: ReadonlyArray<GitHubRepositoryCandidate>;
   readonly warning?: string;
+  readonly paused?: true;
 };
 
 export type GitHubInboxAttempt = {
   readonly items: ReadonlyArray<GitHubInboxItem>;
   readonly warning?: string;
+  readonly paused?: true;
 };
 
 type CacheEntry<T> = { readonly value: T; readonly expiresAt: number };
@@ -174,6 +182,16 @@ export function writeCached<T>(
     if (typeof oldestKey === "string") cache.delete(oldestKey);
   }
   cache.set(key, { value, expiresAt: currentEpochMilliseconds() + ttlMs });
+}
+
+/** `writeCached`, except for an attempt the rate limit cut short. */
+export function writeCachedUnlessPaused<T extends { readonly paused?: true }>(
+  cache: Map<string, CacheEntry<T>>,
+  key: string,
+  value: T,
+  ttlMs: number,
+): void {
+  if (value.paused !== true) writeCached(cache, key, value, ttlMs);
 }
 
 export function readTrimmedString(value: unknown): string | undefined {

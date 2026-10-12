@@ -63,6 +63,7 @@ describe("loadGitHubInboxResponse repository discovery", () => {
         projectKey: "NEXI",
         projectTitle: "Nexi Distribution",
         discoveryMode: "repositories",
+        trigger: "user",
       }).pipe(Effect.provideService(GitHubApi.GitHubApi, api));
 
       expect(result.suggestedRepositoryUrls).toEqual([
@@ -73,7 +74,7 @@ describe("loadGitHubInboxResponse repository discovery", () => {
         "t3team.github.account",
         "t3team.github.repositories",
       ]);
-      // Setup discovery is a user waiting on the answer, so it may spend the reserve.
+      // An explicit refresh is a user waiting on the answer, so it may spend the reserve.
       expect(calls.every((call) => call.allowReserve)).toBe(true);
     }),
   );
@@ -141,7 +142,9 @@ describe("loadGitHubInboxResponse repository discovery", () => {
               html_url: `https://github.com/pj/repo-${String(page)}`,
             },
           ],
-          page < 3 ? { link: '<https://api.github.com/user/repos?page=2>; rel="next"' } : {},
+          page < 3
+            ? { link: `<https://api.github.com/user/repos?page=${String(page + 1)}>; rel="next"` }
+            : {},
         );
       });
 
@@ -158,6 +161,68 @@ describe("loadGitHubInboxResponse repository discovery", () => {
       expect(calls.filter((call) => call.operation === "t3team.github.repositories")).toHaveLength(
         3,
       );
+    }),
+  );
+
+  it.effect("lets an explicit inbox refresh spend the reserve, whatever the mode", () =>
+    Effect.gen(function* () {
+      const { api, calls } = makeFakeGitHubApi((call) =>
+        call.operation === "t3team.github.account" ? restOk({ login: "pj" }) : restOk([]),
+      );
+
+      yield* loadGitHubInboxResponse({ host: "github.com", trigger: "user" }).pipe(
+        Effect.provideService(GitHubApi.GitHubApi, api),
+      );
+
+      expect(calls.length).toBeGreaterThan(1);
+      expect(calls.every((call) => call.allowReserve)).toBe(true);
+    }),
+  );
+
+  it.effect("keeps repository-mode discovery in the background unless a user asked", () =>
+    Effect.gen(function* () {
+      const { api, calls } = makeFakeGitHubApi((call) =>
+        call.operation === "t3team.github.account" ? restOk({ login: "pj" }) : restOk([]),
+      );
+
+      yield* loadGitHubInboxResponse({ host: "github.com", discoveryMode: "repositories" }).pipe(
+        Effect.provideService(GitHubApi.GitHubApi, api),
+      );
+
+      expect(calls.some((call) => call.allowReserve)).toBe(false);
+    }),
+  );
+
+  it.effect("does not remember what the rate limit cut short, so the reset serves real data", () =>
+    Effect.gen(function* () {
+      let paused = true;
+      const { api, calls } = makeFakeGitHubApi((call) => {
+        if (call.operation === "t3team.github.account") return restOk({ login: "pj" });
+        if (paused) return rateLimited(call.host, 1_790_000_000_000);
+        return call.operation === "t3team.github.repositories"
+          ? restOk([{ id: 1, full_name: "pj/app", html_url: "https://github.com/pj/app" }])
+          : restOk([]);
+      });
+      const read = loadGitHubInboxResponse({
+        host: "github.com",
+        linkedRepositoryUrls: ["https://github.com/acme/project"],
+      }).pipe(Effect.provideService(GitHubApi.GitHubApi, api));
+
+      const during = yield* read;
+      expect(during.repositories).toEqual([]);
+      expect(during.inboxWarning).toContain("paused until");
+
+      // Nothing from the paused round is cached: not the response, the repositories or the inbox.
+      expect(responseCache.size).toBe(0);
+      expect(repositoriesCache.size).toBe(0);
+      expect(inboxCache.size).toBe(0);
+
+      paused = false;
+      const reads = calls.length;
+      const after = yield* read;
+      expect(calls.length).toBeGreaterThan(reads);
+      expect(after.repositories.map((repository) => repository.nameWithOwner)).toEqual(["pj/app"]);
+      expect(after.inboxWarning).toBeUndefined();
     }),
   );
 

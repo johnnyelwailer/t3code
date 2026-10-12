@@ -30,6 +30,7 @@ import {
   RESPONSE_CACHE_TTL_MS,
   UNAUTHENTICATED_ACCOUNT_CACHE_TTL_MS,
   writeCached,
+  writeCachedUnlessPaused,
 } from "./t3team-github-routes-shared.ts";
 import type {
   GitHubInboxDiscoverRequest,
@@ -37,9 +38,9 @@ import type {
 } from "./t3team-github-routes-shared.ts";
 
 export function loadGitHubInboxResponse(input: GitHubInboxDiscoverRequest) {
-  const repositoriesOnly = input.discoveryMode === "repositories";
   return Effect.gen(function* () {
     const host = readTrimmedString(input.host) ?? "github.com";
+    const repositoriesOnly = input.discoveryMode === "repositories";
 
     const responseCacheKey = makeResponseCacheKey({
       host,
@@ -77,7 +78,10 @@ export function loadGitHubInboxResponse(input: GitHubInboxDiscoverRequest) {
           accountRead.pausedMessage ??
           `Authenticate GitHub CLI for ${host} via gh auth login --hostname ${host}.`,
       } satisfies GitHubInboxDiscoverResponse;
-      writeCached(responseCache, responseCacheKey, response, RESPONSE_CACHE_TTL_MS);
+      // A pause says nothing about who is signed in: serving it after the reset would be wrong.
+      if (accountRead.pausedMessage === undefined) {
+        writeCached(responseCache, responseCacheKey, response, RESPONSE_CACHE_TTL_MS);
+      }
       return response;
     }
 
@@ -96,7 +100,7 @@ export function loadGitHubInboxResponse(input: GitHubInboxDiscoverRequest) {
       ).pipe(
         Effect.tap((value) =>
           Effect.sync(() => {
-            writeCached(
+            writeCachedUnlessPaused(
               useAuthenticatedRepositoryList ? repositoriesCache : repositorySearchCache,
               useAuthenticatedRepositoryList ? host : responseCacheKey,
               value,
@@ -121,13 +125,13 @@ export function loadGitHubInboxResponse(input: GitHubInboxDiscoverRequest) {
         (yield* loadRepositoriesAttempt(host).pipe(
           Effect.tap((value) =>
             Effect.sync(() => {
-              writeCached(
+              writeCachedUnlessPaused(
                 repositorySearchCache,
                 responseCacheKey,
                 value,
                 REPOSITORIES_CACHE_TTL_MS,
               );
-              writeCached(repositoriesCache, host, value, REPOSITORIES_CACHE_TTL_MS);
+              writeCachedUnlessPaused(repositoriesCache, host, value, REPOSITORIES_CACHE_TTL_MS);
             }),
           ),
         ));
@@ -158,7 +162,7 @@ export function loadGitHubInboxResponse(input: GitHubInboxDiscoverRequest) {
         (yield* loadRepositoriesAttempt(host).pipe(
           Effect.tap((value) =>
             Effect.sync(() => {
-              writeCached(repositoriesCache, host, value, REPOSITORIES_CACHE_TTL_MS);
+              writeCachedUnlessPaused(repositoriesCache, host, value, REPOSITORIES_CACHE_TTL_MS);
             }),
           ),
         ));
@@ -172,7 +176,7 @@ export function loadGitHubInboxResponse(input: GitHubInboxDiscoverRequest) {
         (yield* loadInboxAttempt(host, account).pipe(
           Effect.tap((value) =>
             Effect.sync(() => {
-              writeCached(inboxCache, host, value, INBOX_CACHE_TTL_MS);
+              writeCachedUnlessPaused(inboxCache, host, value, INBOX_CACHE_TTL_MS);
             }),
           ),
         )));
@@ -217,9 +221,14 @@ export function loadGitHubInboxResponse(input: GitHubInboxDiscoverRequest) {
       ...(warningParts.length > 0 ? { inboxWarning: warningParts.join(" ") } : {}),
     } satisfies GitHubInboxDiscoverResponse;
 
-    writeCached(responseCache, responseCacheKey, response, RESPONSE_CACHE_TTL_MS);
+    // Whatever the rate limit cut short is not remembered: after the reset it would still be
+    // served as the answer, empty or stale.
+    const paused = [repositoriesAttempt, inboxAttempt, linkedPullRequestsAttempt].some(
+      (attempt) => "paused" in attempt && attempt.paused === true,
+    );
+    if (!paused) writeCached(responseCache, responseCacheKey, response, RESPONSE_CACHE_TTL_MS);
     return response;
-    // Setup discovery is a user waiting on this answer and may spend the reserve; the rest is a
-    // background refresh of activity that must honour a pause and leave the reserve alone.
-  }).pipe(Effect.provideService(GitHubApi.AllowGitHubReserve, repositoriesOnly));
+    // An explicit refresh or open is a user waiting on this answer and may spend the reserve; the
+    // palette's automatic fan-out (no `trigger`) must honour a pause and leave the reserve alone.
+  }).pipe(Effect.provideService(GitHubApi.AllowGitHubReserve, input.trigger === "user"));
 }

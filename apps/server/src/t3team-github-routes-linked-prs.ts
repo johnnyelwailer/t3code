@@ -149,7 +149,11 @@ export function loadLinkedPullRequestsAttempt(input: {
           : failedRepositories.length > 0
             ? `Unable to load pull requests for ${failedRepositories.join(", ")} (check host, permissions, or API availability).`
             : undefined;
-      return { items, ...(warning ? { warning } : {}) } satisfies GitHubInboxAttempt;
+      return {
+        items,
+        ...(warning ? { warning } : {}),
+        ...(pausedMessage !== undefined ? { paused: true as const } : {}),
+      } satisfies GitHubInboxAttempt;
     }),
   );
 }

@@ -1,7 +1,12 @@
 import * as Effect from "effect/Effect";
 import { resolveGitHubWorkItemKey } from "@t3tools/shared/t3team-githubActivity";
 import type * as GitHubApi from "./sourceControl/GitHubApi.ts";
-import { rateLimitMessageOf, readRestBody, readRestPages } from "./t3team-githubRestRead.ts";
+import {
+  isGitHubRateLimit,
+  rateLimitMessageOf,
+  readRestBody,
+  readRestPages,
+} from "./t3team-githubRestRead.ts";
 import { enrichPullRequestState } from "./t3team-github-routes-pr.ts";
 import type {
   GitHubInboxAttempt,
@@ -13,6 +18,9 @@ import type {
 } from "./t3team-github-routes-shared.ts";
 import { parseJsonArray, readTrimmedString } from "./t3team-github-routes-shared.ts";
 import { collectProjectSearchTerms } from "./t3team-github-routes-suggestions.ts";
+
+/** Marks an attempt the rate limit cut short, so the caller does not cache it. */
+const pausedFlag = (error: unknown) => (isGitHubRateLimit(error) ? { paused: true as const } : {});
 
 function mapRawRepositories(
   host: string,
@@ -54,6 +62,7 @@ export function loadRepositoriesAttempt(
         warning:
           rateLimitMessageOf(error) ??
           "Unable to list repositories for this host (check host, permissions, or API availability).",
+        ...pausedFlag(error),
       }),
       onSuccess: (items) => ({ items }),
     }),
@@ -90,6 +99,7 @@ export function loadRepositorySearchAttempt(
         warning:
           rateLimitMessageOf(error) ??
           "Unable to search repositories for this host (check API permissions).",
+        ...pausedFlag(error),
       }),
       onSuccess: (value) => value,
     }),
@@ -144,13 +154,15 @@ export function loadInboxAttempt(
     ),
     Effect.flatMap((items) => enrichPullRequestState(host, items, account)),
     Effect.match({
-      onFailure: (error) => ({
-        items: [] as ReadonlyArray<GitHubInboxItem>,
+      onFailure: (error): GitHubInboxAttempt => ({
+        items: [],
         warning:
           rateLimitMessageOf(error) ??
           "Unable to load GitHub inbox (notifications scope may be missing).",
+        ...pausedFlag(error),
       }),
-      onSuccess: (items) => ({ items }),
+      onSuccess: ({ items, pausedMessage }): GitHubInboxAttempt =>
+        pausedMessage === undefined ? { items } : { items, warning: pausedMessage, paused: true },
     }),
   );
 }

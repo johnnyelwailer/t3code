@@ -113,4 +113,76 @@ describe("downloadGitHubAsset", () => {
       expect(credentialHosts).toEqual([]);
     }),
   );
+
+  it.effect("follows a redirect itself and sends the token only to the asset's own origin", () =>
+    Effect.gen(function* () {
+      const seen: Array<{ url: string; authorization: string | undefined }> = [];
+      const client = HttpClient.make((request) => {
+        seen.push({ url: request.url, authorization: request.headers["authorization"] });
+        return Effect.succeed(
+          request.url.startsWith("https://github.com/")
+            ? HttpClientResponse.fromWeb(
+                request,
+                new Response(null, {
+                  status: 302,
+                  headers: { location: "https://objects.example.com/signed/1.png?sig=abc" },
+                }),
+              )
+            : HttpClientResponse.fromWeb(
+                request,
+                new Response(png, { status: 200, headers: { "content-type": "image/png" } }),
+              ),
+        );
+      });
+      const { api } = makeFakeGitHubApi(
+        () => restOk({}),
+        () => Effect.succeed({ token: Redacted.make("gh-token"), fingerprint: "github.com:abc" }),
+      );
+
+      const result = yield* downloadGitHubAsset({
+        host: "github.com",
+        url: "https://github.com/user-attachments/assets/1",
+      }).pipe(
+        Effect.provideService(HttpClient.HttpClient, client),
+        Effect.provideService(GitHubApi.GitHubApi, api),
+      );
+
+      expect(seen).toEqual([
+        { url: "https://github.com/user-attachments/assets/1", authorization: "Bearer gh-token" },
+        { url: "https://objects.example.com/signed/1.png?sig=abc", authorization: undefined },
+      ]);
+      expect(result.sizeBytes).toBe(4);
+    }),
+  );
+
+  it.effect("keeps the token on a same-origin redirect and refuses a redirect to http", () =>
+    Effect.gen(function* () {
+      const seen: Array<string | undefined> = [];
+      const client = HttpClient.make((request) => {
+        seen.push(request.headers["authorization"]);
+        const location =
+          request.url === "https://github.com/a"
+            ? "https://github.com/b"
+            : "http://insecure.example/c";
+        return Effect.succeed(
+          HttpClientResponse.fromWeb(
+            request,
+            new Response(null, { status: 302, headers: { location } }),
+          ),
+        );
+      });
+      const { api } = makeFakeGitHubApi(() => restOk({}));
+
+      const error = yield* Effect.flip(
+        downloadGitHubAsset({ host: "github.com", url: "https://github.com/a" }).pipe(
+          Effect.provideService(HttpClient.HttpClient, client),
+          Effect.provideService(GitHubApi.GitHubApi, api),
+        ),
+      );
+
+      // /a then the same-origin /b carry the token; the http hop is never requested.
+      expect(seen).toEqual(["Bearer test-token", "Bearer test-token"]);
+      expect(error.message).toContain("failed with 302");
+    }),
+  );
 });
