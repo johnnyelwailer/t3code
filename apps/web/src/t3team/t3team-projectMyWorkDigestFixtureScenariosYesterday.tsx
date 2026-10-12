@@ -21,8 +21,15 @@ const ticket = (id: string, key: string, title: string, status: string): Project
     ref: { displayId: key, title },
   });
 
-// The product owner's own previous working day: one library bump merged in three repos, a review
+// The product owner's own last working day: one library bump merged in three repos, a review
 // finished, a ticket handed to test, a time-logging move, and a Jira edit that says nothing.
+// The found day's start, local: the local day the fixture activity (18–24 h before the fixture
+// clock) falls on.
+const yesterdayFrom = (() => {
+  const date = new Date(DIGEST_FIXTURE_NOW_MS - 24 * HOUR);
+  date.setHours(0, 0, 0, 0);
+  return date.toISOString();
+})();
 const yesterdayTickets: readonly ProjectTicket[] = [
   ticket("y-bump", "IES-25144", "Bump ies-base-libs to 4.2 in all frontends", "Done"),
   ticket("y-koord", "IES-23704", "FE Koordination: Einsatzübersicht Filter", "Done"),
@@ -52,6 +59,7 @@ const yesterdayGraph: DigestGraph = {
   ...digestFixtureGraph,
   tickets: [...digestFixtureGraph.tickets, ...yesterdayTickets],
   yesterday: {
+    from: yesterdayFrom,
     merged: [
       merged("ies-alarm", 399, "IES-25144 Bump ies-base-libs to 4.2", 22, "IES-25144"),
       merged("ies-psd", 241, "IES-25144 Bump ies-base-libs to 4.2", 21.5, "IES-25144"),
