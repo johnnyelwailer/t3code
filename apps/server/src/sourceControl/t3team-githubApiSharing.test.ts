@@ -55,4 +55,20 @@ describe("one GitHubApi per process", () => {
       assert.notStrictEqual(first, second);
     });
   });
+
+  it.effect("does not answer a read from one made under a smaller byte cap", () => {
+    const { layer, sent } = makeGitHubApiHarness(() => jsonResponse({ login: "pj" }));
+    return Effect.gen(function* () {
+      const api = yield* GitHubApi.GitHubApi;
+      const read = {
+        host: "github.com",
+        operation: "viewer",
+        path: "user",
+        coalesce: { ttl: "30 seconds" },
+      } as const;
+      yield* api.rest({ ...read, maxResponseBytes: 10 });
+      yield* api.rest({ ...read, maxResponseBytes: 1_000_000 });
+      assert.strictEqual(sent("/user"), 2);
+    }).pipe(Effect.provide(layer));
+  });
 });

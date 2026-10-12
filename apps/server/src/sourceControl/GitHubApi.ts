@@ -347,6 +347,18 @@ function classify(input: {
   return Answer.Failed({ messages: input.graphql ? undefined : restErrorMessages(body) });
 }
 
+/** What makes two reads the same read: a smaller byte cap can truncate what a bigger one would not. */
+function readKey(host: string, scope: string, input: GitHubRestInput): string {
+  return [
+    host,
+    scope,
+    input.accept ?? "",
+    input.path,
+    input.coalesce?.revision ?? "",
+    input.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES,
+  ].join(" ");
+}
+
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
   const httpClient = yield* HttpClient.HttpClient;
@@ -405,8 +417,6 @@ export const make = Effect.gen(function* () {
     });
     const { token, fingerprint } = yield* credential(host);
     const scope = yield* SourceControlRateLimit.CredentialScope;
-    // REST spends `core`, GraphQL and search each their own quota, each with its own reserve. A
-    // refusal still pauses the whole host, the key PullRequestService records its backoff under.
     const resource = input.resource;
     const key = { provider: "github" as const, host };
     const run = Effect.gen(function* () {
@@ -559,9 +569,7 @@ export const make = Effect.gen(function* () {
       const host = normalizeHost(input.host);
       const { fingerprint } = yield* credential(host);
       const scope = (yield* SourceControlRateLimit.CredentialScope) || fingerprint;
-      const key = [host, scope, input.accept ?? "", input.path, input.coalesce.revision ?? ""].join(
-        "\0",
-      );
+      const key = readKey(host, scope, input);
       return yield* reads.share(key, input.coalesce.ttl, sendRequest);
     });
 

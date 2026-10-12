@@ -3334,6 +3334,8 @@ export const layer = Layer.unwrap(
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const pullRequests = yield* PullRequestService.PullRequestService;
     const gitHubApi = yield* GitHubApi.GitHubApi;
+    // The server's one GitHubApi (semaphore, quota, pause, read coalescer) goes to every
+    // connection; rebuilding `layerWithDependencies` per connection gave each client its own budget.
     const gitHubTransport = Layer.succeed(GitHubApi.GitHubApi, gitHubApi);
     const sql = yield* SqlClient.SqlClient;
     return HttpRouter.add(
@@ -3401,9 +3403,6 @@ export const layer = Layer.unwrap(
               // One server-lifetime service means clients share the same PR caches, and a WS
               // mutation invalidates the HTTP diff cache that every client reads from.
               Layer.provide(Layer.succeed(PullRequestService.PullRequestService, pullRequests)),
-              // GitHub transport: the server's one instance (semaphore, quota, pause, read
-              // coalescer) is handed to every connection. Rebuilding `layerWithDependencies` here
-              // would give each client its own budget against the same host.
               // Cloud sessions drive `gh` directly, exactly as pull-request
               // reading does, so they inherit the user's existing login and
               // carry no credential of their own.

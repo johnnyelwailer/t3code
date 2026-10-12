@@ -57,15 +57,14 @@ export function makeGitHubReadCoalescer<A, E>(
     kept.delete(key);
   };
 
-  const remember = (key: string, value: A, expiresAtMs: number, nowMs: number) => {
+  const remember = (key: string, value: A, expiresAtMs: number) => {
     forget(key);
     const weight = weigh(value);
     kept.set(key, { expiresAtMs, value, weight });
     keptWeight += weight;
-    for (const [candidate, entry] of kept) {
-      const withinBounds = kept.size <= MAX_ENTRIES && keptWeight <= MAX_WEIGHT;
-      if (withinBounds || candidate === key) return;
-      if (entry.expiresAtMs <= nowMs || !withinBounds) forget(candidate);
+    for (const candidate of kept.keys()) {
+      if (candidate === key || (kept.size <= MAX_ENTRIES && keptWeight <= MAX_WEIGHT)) return;
+      forget(candidate);
     }
   };
 
@@ -82,7 +81,7 @@ export function makeGitHubReadCoalescer<A, E>(
         inFlight.delete(key);
         if (Exit.isSuccess(exit)) {
           const nowMs = yield* Clock.currentTimeMillis;
-          remember(key, exit.value, nowMs + ttlMs, nowMs);
+          remember(key, exit.value, nowMs + ttlMs);
         }
         yield* Deferred.succeed(flight, Exit.hasInterrupts(exit) ? undefined : exit);
         return yield* exit;
