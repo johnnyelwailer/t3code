@@ -13,7 +13,7 @@
 import * as Effect from "effect/Effect";
 
 import { makeWorkflowAuthorApprovalGate } from "../t3team-workflowAuthorApproval.ts";
-import type { ProviderAdapterV2Event, ProviderAdapterV2SessionRuntime } from "./ProviderAdapter.ts";
+import type { ProviderAdapterV2Event, ProviderAdapterV2SessionRuntime } from "@t3tools/provider-core/server/ProviderAdapter";
 
 export const makeWorkflowAuthorRunGate = (input: {
   readonly runThreadId: string;

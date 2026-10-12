@@ -35,7 +35,7 @@ import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
 import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
 import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
-import { expandHomePath } from "./pathExpansion.ts";
+import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import { resolveLaunchWorkflowPath } from "./t3team-projectRecipeActionLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { launchPreparedWorkflow } from "./t3team-workflowEphemeralLaunch.ts";

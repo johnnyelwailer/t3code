@@ -32,6 +32,7 @@ import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { T3TeamSidebarWorkNavItems } from "~/t3team/components/t3team-SidebarWorkNav";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
+import { observeResize } from "~/lib/observeResize";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
@@ -57,7 +58,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
     // The titlebar row, not a padded SidebarHeader: it aligns to the window controls.
     <div
       className={cn(
-        "relative flex h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center gap-2 px-3 md:pl-0",
+        "relative flex h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center gap-2 pr-3",
         isElectron && "drag-region",
       )}
     >
@@ -79,6 +80,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         variant={backdropVariant ? "media-navigation" : "ghost"}
         // t3team: the trigger stays visible on desktop, docked right after the brand.
         className="relative top-auto z-10 ms-auto mr-[var(--sidebar-content-inset)] translate-y-0"
+        aria-label="Toggle main sidebar"
       />
     </div>
   );
@@ -93,11 +95,9 @@ export function SidebarBrandWidthProbe({
 }) {
   const observeWidth = useCallback(
     (probe: HTMLDivElement) => {
-      const observer = new ResizeObserver(([entry]) => {
+      return observeResize(probe, ([entry]) => {
         if (entry) onWidthChange(entry.borderBoxSize[0]?.inlineSize ?? probe.offsetWidth);
       });
-      observer.observe(probe);
-      return () => observer.disconnect();
     },
     [onWidthChange],
   );
@@ -140,7 +140,7 @@ function SidebarBrand({
     <Link
       aria-label="Go to threads"
       className={cn(
-        "sidebar-brand relative z-10 hidden h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2 md:flex",
+        "sidebar-brand relative z-10 hidden h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2 focus-visible:ring-inset md:flex",
         // Titlebar inset only where native window buttons exist — on the web the brand docks
         // left, flush with the sidebar items below it, instead of reserving phantom control
         // space (see the same rule in `t3team-ProjectSidebarHeader.tsx`). Electron always has
@@ -168,11 +168,12 @@ function SidebarBrandMark({
 }) {
   return (
     // Center the visible capitals, without the font's ascender/descender space.
+    // Padding keeps ascenders and round-letter overshoot inside the truncation clip.
     <span className="inline-flex min-w-0 items-baseline gap-1 text-sm font-medium tracking-tight">
       <T3Wordmark aria-label="T3" className="h-[1cap] w-auto shrink-0" />
       <span
         className={cn(
-          "truncate [text-box:trim-both_cap_alphabetic]",
+          "truncate [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:py-1",
           onBackdrop ? mutedLabelClass : "text-muted-foreground",
         )}
       >

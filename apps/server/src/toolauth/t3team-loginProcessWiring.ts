@@ -11,7 +11,7 @@
 import * as Effect from "effect/Effect";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
-import * as PtyAdapter from "../terminal/PtyAdapter.ts";
+import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 import { assemblePtyRead, foldPtyRead, stripAnsi } from "./t3team-advance.ts";
 import type { ActiveSession } from "./t3team-ToolAuthService.ts";
 import type { AuthState, ToolAuthAdapter } from "./t3team-types.ts";

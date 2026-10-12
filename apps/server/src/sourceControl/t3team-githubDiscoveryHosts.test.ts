@@ -3,7 +3,7 @@ import * as Option from "effect/Option";
 import { ChildProcessSpawner } from "effect/process";
 
 import * as VcsProcess from "../vcs/VcsProcess.ts";
-import * as GitHubSourceControlProvider from "./GitHubSourceControlProvider.ts";
+import * as GitHubSourceControlProvider from "@t3tools/source-control-github/server/GitHubSourceControlProvider";
 
 const processResult = (
   stdout: string,

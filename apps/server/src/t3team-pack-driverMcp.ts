@@ -1,7 +1,7 @@
 import type { PackMcpAccess } from "@t3team/pack-api";
 import type { ThreadId } from "@t3tools/contracts";
 
-import { readMcpProviderSession } from "./mcp/McpProviderSession.ts";
+import { readMcpProviderSession } from "@t3tools/provider-core/server/mcpSession";
 
 export const readPackMcpSession = (threadId: ThreadId) => {
   const session = readMcpProviderSession(threadId);

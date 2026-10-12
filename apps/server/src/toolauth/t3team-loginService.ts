@@ -17,7 +17,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
-import * as PtyAdapter from "../terminal/PtyAdapter.ts";
+import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 import { getAdapter } from "./t3team-adapters.ts";
 import { wireLoginProcess } from "./t3team-loginProcessWiring.ts";
 import type { ActiveSession } from "./t3team-ToolAuthService.ts";

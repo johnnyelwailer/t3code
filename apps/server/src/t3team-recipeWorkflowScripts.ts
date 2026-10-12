@@ -21,7 +21,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import type { AnyScriptRef } from "@t3team/sdk";
 
-import { expandHomePath } from "./pathExpansion.ts";
+import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import { resolveRecipeActions, resolveRecipeWorkflowPath } from "./t3team-projectRecipeActions.ts";
 import { importRecipeModuleRef } from "./t3team-projectRecipeDiscoveryModule.ts";
 

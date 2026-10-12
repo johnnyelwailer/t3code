@@ -22,7 +22,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import type { EventSinkV2Shape } from "../orchestration-v2/EventSink.ts";
-import type { IdAllocatorV2Shape } from "../orchestration-v2/IdAllocator.ts";
+import type { IdAllocatorV2Shape } from "@t3tools/provider-core/server/IdAllocator";
 import { delegatedCompletionWakeDetail } from "../orchestration-v2/Orchestrator.ts";
 import {
   type DelegatedCompletionWakeRendererShape,

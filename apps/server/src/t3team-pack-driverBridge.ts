@@ -23,14 +23,14 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-import { ProviderContinuationRequests } from "./orchestration-v2/ProviderContinuationRequests.ts";
+import { ProviderContinuationRequests } from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import { ServerSettingsService } from "./serverSettings.ts";
 import { ProviderDriverError } from "./provider/Errors.ts";
 import {
   defaultProviderContinuationIdentity,
   type ProviderDriver,
   type ProviderInstance,
-} from "./provider/ProviderDriver.ts";
+} from "@t3tools/provider-core/server/driver";
 import { makePackOrchestrationAdapter } from "./t3team-pack-driverAdapter.ts";
 import { makeOpenCodeHarnessCapability } from "./t3team-pack-driverHarness.ts";
 import { makePackProviderSnapshot } from "./t3team-pack-driverSnapshotShape.ts";

@@ -26,7 +26,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
-import { expandHomePath } from "./pathExpansion.ts";
+import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import { resolveRecipeActions } from "./t3team-projectRecipeActions.ts";
 import { importRecipeModuleRef } from "./t3team-projectRecipeDiscoveryModule.ts";
 

@@ -3,7 +3,7 @@ import type {
   ResourcePressureEvent,
   ResourceTelemetrySnapshot,
 } from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { assert, describe, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
@@ -70,7 +70,7 @@ const stubs = Layer.mergeAll(
     listRecent: ({ limit }) => Effect.succeed(events.slice(0, limit)),
     readAccumulation: Effect.succeed({ worktreeThreadCount: 45, archivedWorktreeThreadCount: 30 }),
   }),
-  Layer.succeed(HostProcessPlatform, "linux"),
+  Layer.succeed(HostProcess.Platform, "linux"),
   Layer.succeed(
     ChildProcessSpawner.ChildProcessSpawner,
     {} as unknown as ChildProcessSpawner.ChildProcessSpawner["Service"],

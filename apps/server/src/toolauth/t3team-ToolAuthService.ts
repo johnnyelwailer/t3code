@@ -26,7 +26,7 @@ import * as Path from "effect/Path";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
 import * as ProcessRunner from "../processRunner.ts";
-import * as PtyAdapter from "../terminal/PtyAdapter.ts";
+import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 import { getAdapter, PRODUCTION_TOOLS } from "./t3team-adapters.ts";
 import { makeToolAuthInstallFlow } from "./t3team-installService.ts";
 import { makeToolAuthLoginFlow } from "./t3team-loginService.ts";

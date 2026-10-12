@@ -18,8 +18,8 @@ import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 
-import type { ProviderAdapterV2Event } from "./ProviderAdapter.ts";
-import { makeProviderFailure } from "./ProviderFailure.ts";
+import type { ProviderAdapterV2Event } from "@t3tools/provider-core/server/ProviderAdapter";
+import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 
 type TerminalEvent = Extract<ProviderAdapterV2Event, { readonly type: "turn.terminal" }>;
 export type SettleCode = "turn_inactivity" | "interrupt_no_terminal";

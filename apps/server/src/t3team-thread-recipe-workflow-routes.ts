@@ -10,7 +10,7 @@ import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import { HttpRouter } from "effect/http";
 
-import { expandHomePath } from "./pathExpansion.ts";
+import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import {
   errorResponse,
   okJson,
