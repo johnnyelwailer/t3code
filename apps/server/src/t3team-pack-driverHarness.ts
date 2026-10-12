@@ -34,8 +34,8 @@ import {
   defaultProviderContinuationIdentity,
   type ProviderDriver,
   type ProviderInstance,
-} from "./provider/ProviderDriver.ts";
-import { OpenCodeDriver, type OpenCodeDriverEnv } from "./provider/Drivers/OpenCodeDriver.ts";
+} from "@t3tools/provider-core/server/driver";
+import { OpenCodeDriver, type OpenCodeDriverEnv } from "@t3tools/provider-opencode/server";
 import { openCodeUpstreamConfigContent } from "./t3team-pack-aiProvider.ts";
 import { providerInstanceToPack } from "./t3team-pack-driverHarnessWrap.ts";
 import { restampAdapter } from "./t3team-pack-driverRestamp.ts";

@@ -23,8 +23,8 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
-import { clearMcpProviderSession, setMcpProviderSession } from "./mcp/McpProviderSession.ts";
-import * as ProviderContinuationRequests from "./orchestration-v2/ProviderContinuationRequests.ts";
+import { clearMcpProviderSession, setMcpProviderSession } from "@t3tools/provider-core/server/mcpSession";
+import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import { layerTest as serverSettingsLayerTest } from "./serverSettings.ts";
 import {
   CAPABILITIES_JSON,

@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import { it } from "@effect/vitest";
 import { describe, expect } from "vite-plus/test";
 
-import type { GitLabCli } from "../sourceControl/GitLabCli.ts";
+import type { GitLabCli } from "./GitLabCli.ts";
 import { readGitLabFileAtRevision } from "./t3team-GitLabFileAtRevision.ts";
 
 const SHA = "a".repeat(40);

@@ -13,7 +13,7 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
-import * as PtyAdapter from "../terminal/PtyAdapter.ts";
+import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 import { getAdapter } from "./t3team-adapters.ts";
 import { stripAnsi } from "./t3team-advance.ts";
 import { buildNpmInstallArgv } from "./t3team-installCommand.ts";

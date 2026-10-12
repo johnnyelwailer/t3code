@@ -25,7 +25,7 @@ import {
   ProviderAdapterTurnStartError,
   type ProviderAdapterV2SessionRuntime,
   type ProviderAdapterV2TurnInput,
-} from "./orchestration-v2/ProviderAdapter.ts";
+} from "@t3tools/provider-core/server/ProviderAdapter";
 import { packCall, packRoundTrip } from "./t3team-pack-driverCall.ts";
 import { asPack, PackCodec } from "./t3team-pack-driverCodec.ts";
 import { packEventsToStream } from "./t3team-pack-driverEvents.ts";

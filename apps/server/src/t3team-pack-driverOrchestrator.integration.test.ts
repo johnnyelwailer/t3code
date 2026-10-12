@@ -20,9 +20,9 @@ import * as Stream from "effect/Stream";
 import * as EffectWorker from "./orchestration-v2/EffectWorker.ts";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as ProviderAdapterRegistry from "./orchestration-v2/ProviderAdapterRegistry.ts";
-import * as ProviderContinuationRequests from "./orchestration-v2/ProviderContinuationRequests.ts";
+import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import { layerWithRegistry } from "./orchestration-v2/testkit/ProviderReplayHarness.ts";
-import { checkpointWorkspace } from "./orchestration-v2/testkit/ReplayFixtureWorkspace.ts";
+import { checkpointWorkspace } from "@t3tools/provider-testing/replayWorkspace";
 import { makeScriptedPack, PACK_DRIVER } from "./t3team-pack-driver.fixtures.ts";
 import { makePackOrchestrationAdapter } from "./t3team-pack-driverAdapter.ts";
 

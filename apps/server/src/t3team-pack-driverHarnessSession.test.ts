@@ -20,7 +20,7 @@ import * as Stream from "effect/Stream";
 import type {
   ProviderAdapterV2SessionRuntime,
   ProviderAdapterV2Shape,
-} from "./orchestration-v2/ProviderAdapter.ts";
+} from "@t3tools/provider-core/server/ProviderAdapter";
 import {
   CAPABILITIES_JSON,
   NOW,

@@ -34,9 +34,9 @@ import {
   ProviderAdapterOpenSessionError,
   ProviderAdapterProtocolError,
   type ProviderAdapterV2Shape,
-} from "./orchestration-v2/ProviderAdapter.ts";
-import type { ProviderContinuationRequest } from "./orchestration-v2/ProviderContinuationRequests.ts";
-import { turnScopedSelectionTransition } from "./orchestration-v2/ProviderSelectionTransition.ts";
+} from "@t3tools/provider-core/server/ProviderAdapter";
+import type { ProviderContinuationRequest } from "@t3tools/provider-core/server/ProviderContinuationRequests";
+import { turnScopedSelectionTransition } from "@t3tools/provider-core/server/selectionTransition";
 import { packCall, packRoundTrip } from "./t3team-pack-driverCall.ts";
 import { asPack, PackCodec } from "./t3team-pack-driverCodec.ts";
 import { readPackMcpSession } from "./t3team-pack-driverMcp.ts";

@@ -19,7 +19,7 @@ import * as Stream from "effect/Stream";
 import type {
   ProviderAdapterV2SessionRuntime,
   ProviderAdapterV2Shape,
-} from "./orchestration-v2/ProviderAdapter.ts";
+} from "@t3tools/provider-core/server/ProviderAdapter";
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   if (value === null || typeof value !== "object") return false;

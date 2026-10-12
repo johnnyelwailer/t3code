@@ -39,7 +39,7 @@ import {
   ProviderAdapterV2Event,
   ProviderAdapterV2RuntimePolicy,
   ProviderAdapterV2TurnMessage,
-} from "./orchestration-v2/ProviderAdapter.ts";
+} from "@t3tools/provider-core/server/ProviderAdapter";
 
 const Thread = OrchestrationV2ProviderThread;
 const Turns = Schema.Array(OrchestrationV2ProviderTurn);

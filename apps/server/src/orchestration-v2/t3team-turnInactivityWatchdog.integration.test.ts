@@ -30,13 +30,13 @@ import { makePackOrchestrationAdapter } from "../t3team-pack-driverAdapter.ts";
 import * as EffectWorker from "./EffectWorker.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
-import * as ProviderContinuationRequests from "./ProviderContinuationRequests.ts";
+import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import {
   MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS,
   TurnInactivityPolicy,
 } from "./t3team-turnInactivityPolicy.ts";
 import { layerWithRegistry } from "./testkit/ProviderReplayHarness.ts";
-import { checkpointWorkspace } from "./testkit/ReplayFixtureWorkspace.ts";
+import { checkpointWorkspace } from "@t3tools/provider-testing/replayWorkspace";
 
 const instanceId = ProviderInstanceId.make(PACK_DRIVER);
 const modelSelection = { instanceId, model: "example/model" };

@@ -14,10 +14,10 @@ import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 
 import type * as ServerConfig from "../../config.ts";
-import { OpenCodeRuntimeError, type OpenCodeRuntimeShape } from "../../provider/opencodeRuntime.ts";
-import * as IdAllocator from "../IdAllocator.ts";
-import { ProviderAdapterV2RuntimePolicy } from "../ProviderAdapter.ts";
-import { makeOpenCodeAdapterV2 } from "./OpenCodeAdapterV2.ts";
+import { OpenCodeRuntimeError, type OpenCodeRuntimeShape } from "@t3tools/provider-opencode/server/OpenCodeRuntime";
+import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+import { ProviderAdapterV2RuntimePolicy } from "@t3tools/provider-core/server/ProviderAdapter";
+import { makeOpenCodeAdapterV2 } from "@t3tools/provider-opencode/server/adapter";
 
 type ConnectInput = Parameters<OpenCodeRuntimeShape["connectToOpenCodeServer"]>[0];
 

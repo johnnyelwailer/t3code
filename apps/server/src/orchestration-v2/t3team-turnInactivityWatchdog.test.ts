@@ -21,7 +21,7 @@ import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 import * as TestClock from "effect/testing/TestClock";
 
-import type { ProviderAdapterV2Event } from "./ProviderAdapter.ts";
+import type { ProviderAdapterV2Event } from "@t3tools/provider-core/server/ProviderAdapter";
 import {
   budgetAfterEvent,
   budgetFromSeconds,

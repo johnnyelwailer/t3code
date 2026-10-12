@@ -23,6 +23,10 @@
       "types": "./src/server/mergeMessage.ts",
       "import": "./src/server/mergeMessage.ts"
     },
+    "./server/t3team-fileAtRevision": {
+      "types": "./src/server/t3team-fileAtRevision.ts",
+      "import": "./src/server/t3team-fileAtRevision.ts"
+    },
     "./server/pullRequestChecks": {
       "types": "./src/server/pullRequestChecks.ts",
       "import": "./src/server/pullRequestChecks.ts"
