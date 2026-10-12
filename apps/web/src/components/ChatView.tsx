@@ -338,6 +338,8 @@ import {
 import { useNowMinute } from "../hooks/useNowMinute";
 import { usePanelAnimationSettings, usePanelPresence } from "../panelAnimations";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
+import { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionComposerGate";
+import type { CloudSessionQueuedSend } from "~/cloud/t3team-cloudSessionTargetStore";
 import { useRemoveClonedProject } from "../hooks/useRemoveClonedProject";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { resolveAppModelSelectionForInstance } from "../modelSelection";
@@ -4570,6 +4572,12 @@ export default function ChatView(props: ChatViewProps) {
     };
   }, [draftId, activeProjectKey]);
 
+  const cloudSessionScopeKey = draftId ?? routeThreadKey;
+  const cloudAvailableEnvironmentIds = useMemo(
+    () => new Set(logicalProjectEnvironments.map((env) => env.environmentId)),
+    [logicalProjectEnvironments],
+  );
+  const cloudFlushSendRef = useRef<(queued: CloudSessionQueuedSend) => void>(() => {});
   const onEnvironmentChange = useCallback(
     (nextEnvironmentId: EnvironmentId) => {
       if (envLocked || !draftId || sendInFlightRef.current) return;
@@ -4648,6 +4656,21 @@ export default function ChatView(props: ChatViewProps) {
     ],
   );
 
+  const cloudSessionComposerGate = useCloudSessionComposerGate({
+    scopeKey: cloudSessionScopeKey,
+    availableEnvironmentIds: cloudAvailableEnvironmentIds,
+    onRemapEnvironment: onEnvironmentChange,
+    onFlushSend: (queued) => cloudFlushSendRef.current(queued),
+    onRestoreDraft: (queued) => {
+      setOptimisticUserMessages((existing) =>
+        existing.filter((message) => message.id !== queued.messageId),
+      );
+      promptRef.current = queued.messageText;
+      setComposerDraftPrompt(composerDraftTarget, queued.messageText);
+      composerRef.current?.focusAtEnd();
+    },
+  });
+
   const activeTerminalGroup =
     terminalUiState.terminalGroups.find(
       (group) => group.id === terminalUiState.activeTerminalGroupId,
@@ -4698,8 +4721,14 @@ export default function ChatView(props: ChatViewProps) {
     composerRef.current?.focusAtEnd();
   }, [composerRef]);
   const canInterruptRunningThread =
-    canOperateThread && deriveCanInterruptRunningThread(activeThread !== undefined, activeRuntime);
+    (canOperateThread &&
+      deriveCanInterruptRunningThread(activeThread !== undefined, activeRuntime)) ||
+    cloudSessionComposerGate.hasQueuedBind;
   const onInterrupt = useCallback(async () => {
+    if (cloudSessionComposerGate.hasQueuedBind) {
+      cloudSessionComposerGate.cancelQueuedSend();
+      return;
+    }
     if (
       !activeThread ||
       !readEnvironmentScope(activeThread.environmentId, AuthOrchestrationOperateScope)
@@ -4716,7 +4745,7 @@ export default function ChatView(props: ChatViewProps) {
         error instanceof Error ? error.message : "Failed to interrupt the current turn.",
       );
     }
-  }, [activeThread, environmentId, interruptThreadTurn, setThreadError]);
+  }, [activeThread, cloudSessionComposerGate, environmentId, interruptThreadTurn, setThreadError]);
   // t3team: "Stop incl. sub-runs" over V2 lineage (capability-gated fork RPC).
   const t3teamStopCascade = useT3TeamStopCascade({
     environmentId,
@@ -7906,8 +7935,11 @@ export default function ChatView(props: ChatViewProps) {
     // The user asked for this one, so it leads the notice tier instead of trailing it.
     const usageLimitsItems = usageLimitsBanner === null ? [] : [usageLimitsBanner];
     const projectCloneItems = projectCloneBannerItem === null ? [] : [projectCloneBannerItem];
+    const cloudBindItems =
+      cloudSessionComposerGate.bannerItem === null ? [] : [cloudSessionComposerGate.bannerItem];
     if (!localCheckoutBranchMismatch || !showBranchMismatchBanner || !activeBranchMismatchKey) {
       return [
+        ...cloudBindItems,
         ...feedbackBannerItems,
         ...limitRecoveryItems,
         ...usageLimitsItems,
@@ -7917,6 +7949,7 @@ export default function ChatView(props: ChatViewProps) {
       ];
     }
     return [
+      ...cloudBindItems,
       ...feedbackBannerItems,
       ...limitRecoveryItems,
       ...usageLimitsItems,
@@ -7972,6 +8005,7 @@ export default function ChatView(props: ChatViewProps) {
     handleRestoreThreadBranch,
     isRestoringThreadBranch,
     backgroundWorkBannerItem,
+    cloudSessionComposerGate.bannerItem,
     goalBannerItem,
     localCheckoutBranchMismatch,
     projectCloneBannerItem,
@@ -8857,6 +8891,38 @@ export default function ChatView(props: ChatViewProps) {
           : "No eligible machine has available resources. Choose a machine in the composer to override.",
       });
       return;
+    }
+    // Optimistic cloud target: queue locally until Ready+connected+project, then flush.
+    if (
+      !directAnnotation &&
+      !composerHasNonPromptContent &&
+      promptRef.current.trim().length > 0 &&
+      !cloudSessionComposerGate.hasQueuedBind
+    ) {
+      const queued = cloudSessionComposerGate.tryQueueSend(
+        newMessageId(),
+        promptRef.current.trim(),
+      );
+      if (queued) {
+        const createdAt = queued.createdAt;
+        promptRef.current = "";
+        setComposerDraftPrompt(composerDraftTarget, "");
+        composerRef.current?.resetCursorState();
+        setOptimisticUserMessages((existing) => [
+          ...existing,
+          {
+            id: queued.messageId as ReturnType<typeof newMessageId>,
+            role: "user",
+            text: queued.messageText,
+            runId: null,
+            createdAt,
+            updatedAt: createdAt,
+            streaming: false,
+            inputIntent: "queued_turn" as const,
+          },
+        ]);
+        return;
+      }
     }
     if (activeEnvironmentUnavailable) {
       // t3team offline outbox: instead of erroring, hand the would-be run start to the
@@ -10294,6 +10360,14 @@ export default function ChatView(props: ChatViewProps) {
       );
       resetLocalDispatch();
     }
+  };
+  cloudFlushSendRef.current = (queued) => {
+    setOptimisticUserMessages((existing) =>
+      existing.filter((message) => message.id !== queued.messageId),
+    );
+    promptRef.current = queued.messageText;
+    setComposerDraftPrompt(composerDraftTarget, queued.messageText);
+    void onSend();
   };
 
   const onRespondToApproval = useCallback(
@@ -12030,7 +12104,9 @@ export default function ChatView(props: ChatViewProps) {
                                 {...(canCheckoutPullRequestIntoThread
                                   ? { onCheckoutPullRequestRequest: openPullRequestDialog }
                                   : {})}
-                                {...(hasMultipleEnvironments ? { onEnvironmentChange } : {})}
+                                {...(hasMultipleEnvironments || draftId
+                                  ? { onEnvironmentChange }
+                                  : {})}
                                 autoEnvironmentLabel={autoEnvironmentLabel}
                                 onAutoEnvironment={
                                   draftId &&

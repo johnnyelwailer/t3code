@@ -69,11 +69,13 @@ export const WithCloudAction: Story = {
   args: { onCreateCloudSession: () => {} },
 };
 
-/** One session mid-build, shown read-only above the action. */
+/** One session mid-build — selectable (optimistic); connect waits for send. */
 export const CloudSessionStarting: Story = {
   args: {
     onCreateCloudSession: () => {},
+    onSelectCloudSession: () => {},
     pendingCloudSessions: [cloudSession({ sessionId: "s-live" })],
+    selectedCloudSession: { sessionId: "s-live", label: "Cloud session · starting" },
   },
 };
 

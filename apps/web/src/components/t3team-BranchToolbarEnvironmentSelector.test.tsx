@@ -240,189 +240,43 @@ describe("BranchToolbarEnvironmentSelector", () => {
     ]);
   });
 
-  it("clicking a ready machine connects it, then selects it for the thread", () => {
+  it("clicking a ready machine selects it immediately without a connect gate", () => {
     const ready = {
       sessionId: "1",
       phase: "ready",
       environmentId: "env-cloud",
       machineLabel: "ubuntu-slim",
     } as unknown as CloudSession;
-    const onCloudSessionAction = vi.fn();
+    const onSelectCloudSession = vi.fn();
     const onEnvironmentChange = vi.fn();
-    const props = {
+    mountSelector({
       onEnvironmentChange,
       onCreateCloudSession: () => {},
-      onCloudSessionAction,
+      onSelectCloudSession,
       pendingCloudSessions: [ready],
-    };
-    mountSelector(props);
+    });
     const readyRow = Array.from(liveContainer?.querySelectorAll("button") ?? []).find((button) =>
       button.textContent?.startsWith("Cloud session"),
     );
+    expect(readyRow?.disabled).not.toBe(true);
     act(() => {
       readyRow?.click();
     });
-    expect(onCloudSessionAction).toHaveBeenCalledWith(ready);
-    expect(liveContainer?.textContent).toContain("Connecting…");
+    expect(onSelectCloudSession).toHaveBeenCalledWith(ready);
     expect(onEnvironmentChange).not.toHaveBeenCalled();
-
-    // The connect registers the machine's environment: it is selected for the thread.
-    const cloudEnv = {
-      environmentId: EnvironmentId.make("env-cloud"),
-      projectId: ProjectId.make("project-x"),
-      label: "Cloud session",
-      isPrimary: false,
-      machine: "server" as const,
-    };
-    act(() => {
-      liveRoot?.render(
-        <BranchToolbarEnvironmentSelector
-          envLocked={false}
-          environmentId={PRIMARY.environmentId}
-          availableEnvironments={[PRIMARY, cloudEnv]}
-          {...props}
-        />,
-      );
-    });
-    expect(onEnvironmentChange).toHaveBeenCalledWith("env-cloud");
-  });
-
-  it("waits for a connected machine's project, then says why it cannot run here", () => {
-    vi.useFakeTimers();
-    const ready = {
-      sessionId: "1",
-      phase: "ready",
-      environmentId: "env-cloud",
-      machineLabel: "ubuntu-slim",
-      remainingSeconds: null,
-    } as unknown as CloudSession;
-    const props = {
-      onEnvironmentChange: vi.fn(),
-      onCreateCloudSession: () => {},
-      onCloudSessionAction: () => {},
-      pendingCloudSessions: [ready],
-    };
-    mountSelector(props);
-    act(() => {
-      Array.from(liveContainer?.querySelectorAll("button") ?? [])
-        .find((button) => button.textContent?.startsWith("Cloud session"))
-        ?.click();
-    });
-    expect(liveContainer?.textContent).toContain("Connecting…");
-    act(() => {
-      liveRoot?.render(
-        <BranchToolbarEnvironmentSelector
-          envLocked={false}
-          environmentId={PRIMARY.environmentId}
-          availableEnvironments={[PRIMARY]}
-          connectedEnvironmentIds={new Set(["env-cloud"])}
-          {...props}
-        />,
-      );
-    });
-    // A fresh machine registers its project seconds after connecting: still connecting.
-    expect(liveContainer?.textContent).toContain("Connecting…");
-    act(() => {
-      vi.advanceTimersByTime(60_000);
-    });
     expect(liveContainer?.textContent).not.toContain("Connecting…");
-    expect(liveContainer?.textContent).toContain("Doesn't have this project");
-    expect(props.onEnvironmentChange).not.toHaveBeenCalled();
-    vi.useRealTimers();
   });
 
-  describe("a connect that does not finish", () => {
-    const ready = {
-      sessionId: "1",
-      phase: "ready",
-      environmentId: "env-cloud",
-      machineLabel: "ubuntu-slim",
-      remainingSeconds: null,
-    } as unknown as CloudSession;
-    const baseProps = {
-      onEnvironmentChange: vi.fn(),
+  it("shows the optimistic cloud selection in the trigger before the VM is connected", () => {
+    renderSelector({
+      onEnvironmentChange: () => {},
       onCreateCloudSession: () => {},
-      onCloudSessionAction: () => {},
-      pendingCloudSessions: [ready],
-    };
-    const clickRow = () =>
-      act(() => {
-        Array.from(liveContainer?.querySelectorAll("button") ?? [])
-          .find((button) => button.textContent?.startsWith("Cloud session"))
-          ?.click();
-      });
-    const rerender = (extra: object) =>
-      act(() => {
-        liveRoot?.render(
-          <BranchToolbarEnvironmentSelector
-            envLocked={false}
-            environmentId={PRIMARY.environmentId}
-            availableEnvironments={[PRIMARY]}
-            {...baseProps}
-            {...extra}
-          />,
-        );
-      });
-
-    afterEach(() => vi.useRealTimers());
-
-    it("counts the seconds spent connecting, and admits when it is slow", () => {
-      vi.useFakeTimers();
-      mountSelector(baseProps);
-      clickRow();
-      expect(liveContainer?.textContent).toContain("Connecting… 0s");
-      act(() => {
-        vi.advanceTimersByTime(12_000);
-      });
-      expect(liveContainer?.textContent).toContain("Connecting… 12s");
-      expect(liveContainer?.textContent).not.toContain("taking longer");
-      act(() => {
-        vi.advanceTimersByTime(10_000);
-      });
-      expect(liveContainer?.textContent).toContain("Connecting… 22s · taking longer than usual");
+      selectedCloudSession: { sessionId: "1", label: "nexi-machine-qa · 7:01 PM" },
     });
-
-    it("leaves Connecting… with the real reason, and retries on the next click", () => {
-      const onCloudSessionAction = vi.fn();
-      const props = { ...baseProps, onCloudSessionAction };
-      mountSelector(props);
-      clickRow();
-      expect(liveContainer?.textContent).toContain("Connecting…");
-      rerender({
-        onCloudSessionAction,
-        cloudSessionConnectFailure: {
-          sessionId: "1",
-          message: "The authenticated token is missing required scope: relay:write",
-        },
-      });
-      expect(liveContainer?.textContent).not.toContain("Connecting…");
-      expect(liveContainer?.textContent).toContain(
-        "Couldn't connect: The authenticated token is missing required scope: relay:write",
-      );
-      clickRow();
-      expect(onCloudSessionAction).toHaveBeenCalledTimes(2);
-      expect(liveContainer?.textContent).toContain("Connecting…");
-      expect(liveContainer?.textContent).not.toContain("Couldn't connect");
-    });
-
-    it("ignores a failure that belongs to another session", () => {
-      mountSelector(baseProps);
-      clickRow();
-      rerender({ cloudSessionConnectFailure: { sessionId: "other", message: "nope" } });
-      expect(liveContainer?.textContent).toContain("Connecting…");
-    });
-
-    it("lets the user stop waiting", () => {
-      mountSelector(baseProps);
-      clickRow();
-      act(() => {
-        Array.from(liveContainer?.querySelectorAll("button") ?? [])
-          .find((button) => button.textContent === "Cancel")
-          ?.click();
-      });
-      expect(liveContainer?.textContent).not.toContain("Connecting…");
-      expect(liveContainer?.textContent).not.toContain("Couldn't connect");
-    });
+    expect(testState.selectProps?.value).toBe("__cloud-session:1");
+    expect(
+      testState.selectProps?.items?.some((item) => item.label === "nexi-machine-qa · 7:01 PM"),
+    ).toBe(true);
   });
 
   it("shows a create in flight at once, and a second click cannot start a second machine", () => {
@@ -514,7 +368,7 @@ describe("BranchToolbarEnvironmentSelector", () => {
     ]);
   });
 
-  it("keeps the menu open after clicking 'New cloud session' (it is not a select item)", () => {
+  it("closes the menu after clicking 'New cloud session' (optimistic select)", () => {
     const onCreateCloudSession = vi.fn();
     const onCloudMenuOpenChange = vi.fn();
     mountSelector({ onCreateCloudSession, onCloudMenuOpenChange });
@@ -529,9 +383,9 @@ describe("BranchToolbarEnvironmentSelector", () => {
       createButton?.click();
     });
     expect(onCreateCloudSession).toHaveBeenCalledTimes(1);
-    // A button click does not drive the Select's value or close the popup, so
-    // the just-created session keeps appearing in the open, still-polling list.
-    expect(testState.selectProps?.open).toBe(true);
+    // Optimistic select closes the menu; list polling continues while provisioning.
+    expect(testState.selectProps?.open).toBe(false);
+    expect(onCloudMenuOpenChange).toHaveBeenCalledWith(false);
   });
 
   it("still closes the menu when a normal environment row is selected", () => {
