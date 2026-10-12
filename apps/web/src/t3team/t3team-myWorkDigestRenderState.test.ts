@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  resolveDigestEmptyLanes,
   resolveMyWorkDigestRenderState,
   type MyWorkDigestRenderInput,
 } from "~/t3team/t3team-myWorkDigestRenderState";
@@ -65,5 +66,25 @@ describe("My Work digest render state", () => {
       "retrying",
     );
     expect(resolve({ ...storedSignedOut, status: "ready", freshness: "fresh" })).toBe("sign-in");
+  });
+});
+
+describe("empty digest lanes", () => {
+  it("claims nothing needs you only when the round and the Jira half are both trusted", () => {
+    expect(resolveDigestEmptyLanes({ emptyStateAllowed: true, jiraNoticeShown: false })).toBe(
+      "nothing",
+    );
+  });
+
+  it("leaves the message to the Jira notice when the data may be stale or signed out", () => {
+    expect(resolveDigestEmptyLanes({ emptyStateAllowed: true, jiraNoticeShown: true })).toBe(
+      "unverified",
+    );
+  });
+
+  it("keeps loading before a fresh round, notice or not", () => {
+    expect(resolveDigestEmptyLanes({ emptyStateAllowed: false, jiraNoticeShown: true })).toBe(
+      "loading",
+    );
   });
 });

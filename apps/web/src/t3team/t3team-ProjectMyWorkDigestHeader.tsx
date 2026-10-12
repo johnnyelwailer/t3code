@@ -62,6 +62,9 @@ export function ProjectMyWorkDigestHeader({
             changeRequestNote={graph.changeRequestNote}
             nowMs={nowMs}
             refreshing={refreshing}
+            needsAttention={
+              graph.jiraAuth === "needs-reconnect" || graph.jiraSyncError !== undefined
+            }
           />
           <PrWatchDigestStatus projectId={watchProjectId} />
         </div>
@@ -98,6 +101,9 @@ export function ProjectMyWorkDigestHeader({
             changeRequestNote={graph.changeRequestNote}
             nowMs={nowMs}
             refreshing={refreshing}
+            needsAttention={
+              graph.jiraAuth === "needs-reconnect" || graph.jiraSyncError !== undefined
+            }
           />
           <PrWatchDigestStatus projectId={watchProjectId} />
         </div>

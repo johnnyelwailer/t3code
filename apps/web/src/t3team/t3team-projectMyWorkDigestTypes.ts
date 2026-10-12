@@ -153,6 +153,10 @@ export type DigestGraph = {
   readonly viewer: { readonly name: string; readonly role: string; readonly lastVisitAt: string };
   /** When the oldest project's Jira tickets last matched Jira (ISO). */
   readonly jiraSyncedAt?: string;
+  /** `needs-reconnect` when a project's Jira session is dead; absent from older servers. */
+  readonly jiraAuth?: "ok" | "needs-reconnect";
+  /** Why a project's last Jira sync failed, in plain words. */
+  readonly jiraSyncError?: string;
   /** Why change requests may be incomplete or old this round (e.g. the host is rate-limiting). */
   readonly changeRequestNote?: string;
   readonly sprint?: DigestSprint;

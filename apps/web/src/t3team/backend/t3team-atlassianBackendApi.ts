@@ -6,6 +6,7 @@ import type {
 import type { ResourcePage, ResourceSnapshot } from "@t3tools/project-context";
 
 import { createAtlassianIssueContentOpsApi } from "./t3team-atlassianBackendApiIssueContentOps";
+import { createAtlassianAccountOpsApi } from "./t3team-atlassianBackendApiAccountOps";
 import { createAtlassianIssueOpsApi } from "./t3team-atlassianBackendApiIssueOps";
 import type {
   AtlassianBackendApi,
@@ -40,14 +41,6 @@ export function createAtlassianBackendApi(httpBaseUrl: string): AtlassianBackend
       return post<{ token: string | null }, { configured: boolean }>("/api/t3team/tempo/token", {
         token,
       });
-    },
-
-    async listAccounts(): Promise<ReadonlyArray<IntegrationAccount>> {
-      const response = await post<object, { accounts: ReadonlyArray<IntegrationAccount> }>(
-        "/api/t3team/atlassian/accounts",
-        {},
-      );
-      return response.accounts;
     },
 
     async connectBasic(
@@ -158,6 +151,7 @@ export function createAtlassianBackendApi(httpBaseUrl: string): AtlassianBackend
       return response.snapshot;
     },
 
+    ...createAtlassianAccountOpsApi(post),
     ...createAtlassianIssueOpsApi(post),
     ...createAtlassianIssueContentOpsApi(post),
   };

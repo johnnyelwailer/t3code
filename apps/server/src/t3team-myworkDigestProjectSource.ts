@@ -36,6 +36,7 @@ import type {
 } from "./t3team-myworkDigestTypes.ts";
 import { readDigestDependencies } from "./t3team-myworkDigestDependencies.ts";
 import { withProfileNames } from "./t3team-myworkDigestPeopleNames.ts";
+import { readDigestJiraHealth } from "./t3team-myworkDigestJiraHealth.ts";
 import { readDigestViewerTickets } from "./t3team-myworkDigestViewer.ts";
 
 /** The mirror identity a project's Jira reads key on. */
@@ -111,6 +112,7 @@ export function loadDigestProjectSource(
           })
         : undefined;
     const jiraSyncedAtMs = yield* readDigestJiraSyncedAtMs(project);
+    const jiraHealth = yield* readDigestJiraHealth(project);
     const dependencies = yield* readDigestDependencies({ identity, assigned: viewer.assigned });
 
     // Burndown history: the sprint's backfilled changelog rows; when the
@@ -192,6 +194,7 @@ export function loadDigestProjectSource(
       ...(prRead?.note !== undefined ? { changeRequestNote: prRead.note } : {}),
       ...(prRead?.stale === true ? { changeRequestsStale: true } : {}),
       ...(jiraSyncedAtMs !== undefined ? { jiraSyncedAt: millisToIso(jiraSyncedAtMs) } : {}),
+      ...jiraHealth,
       ...(dependencies.length > 0 ? { dependencies } : {}),
       ...(yesterdayRead?.yesterday !== undefined ? { yesterday: yesterdayRead.yesterday } : {}),
     };

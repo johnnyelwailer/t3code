@@ -75,6 +75,13 @@ export function createMockAtlassianBackendApi(input: {
     }),
     setTempoToken: async () => ({ configured: false }),
     listAccounts: async () => input.mockIntegrationProvider.listAccounts(),
+    listAccountStatuses: async () =>
+      (await input.mockIntegrationProvider.listAccounts()).map((account) => ({
+        ...account,
+        status: "connected" as const,
+        needsReconnect: false,
+      })),
+    disconnectAccount: async () => {},
     connectBasic: async () => input.mockIntegrationProvider.listAccounts(),
     connectOAuth: async () => input.mockIntegrationProvider.listAccounts(),
     exchangeOAuthCode: async () => ({

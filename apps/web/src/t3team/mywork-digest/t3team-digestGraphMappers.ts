@@ -34,6 +34,7 @@ import { digestYesterday } from "./t3team-digestGraphYesterday";
 import {
   buildTicketIndex,
   digestSprintGoals,
+  digestJiraHealth,
   oldestJiraSync,
   resolveIndexedTicketId,
   type DigestTicketRefLike,
@@ -191,6 +192,7 @@ export function payloadToDigestGraph(input: {
     scope: input.payload.scope,
     projects,
     ...(jiraSyncedAt !== undefined ? { jiraSyncedAt } : {}),
+    ...digestJiraHealth(input.payload.projects),
     ...(changeRequestNote !== undefined ? { changeRequestNote } : {}),
     viewer: input.viewer,
     ...(sprint !== undefined ? { sprint } : {}),

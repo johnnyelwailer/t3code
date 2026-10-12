@@ -3,6 +3,7 @@
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useToolAuthActions, useToolAuthStates } from "../../state/t3team-toolauth";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
+import { JiraConnectionSettings } from "./t3team-JiraConnectionSettings";
 import { ToolAuthCard } from "./t3team-ToolAuthCard";
 import { TOOL_AUTH_TOOLS, type ToolAuthToolMeta } from "./t3team-toolAuthTools";
 
@@ -30,6 +31,7 @@ export function ConnectedToolsSettings() {
           <ConnectedToolCard key={meta.tool} meta={meta} />
         ))}
       </SettingsSection>
+      <JiraConnectionSettings />
     </SettingsPageContainer>
   );
 }

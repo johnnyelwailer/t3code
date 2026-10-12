@@ -1,3 +1,6 @@
+import { DigestJiraNoticeCard } from "~/t3team/t3team-DigestJiraNoticeCard";
+import { resolveDigestJiraNotice } from "~/t3team/t3team-digestJiraNotice";
+import { resolveDigestEmptyLanes } from "~/t3team/t3team-myWorkDigestRenderState";
 import { digestLaneLayout } from "~/t3team/t3team-projectMyWorkDigestLaneLayout";
 import {
   digestRowTicketIds,
@@ -24,6 +27,7 @@ export function ProjectMyWorkDigestView({
   onResetArrangement,
   refreshing = false,
   emptyStateAllowed = true,
+  onReload,
 }: {
   plan: ResolvedDigestPlan;
   graph: DigestGraph;
@@ -41,6 +45,8 @@ export function ProjectMyWorkDigestView({
    * free. Default true — fixtures and stories hand over a settled graph.
    */
   emptyStateAllowed?: boolean;
+  /** Re-reads the digest: what the Jira notice's retry and post-sign-in reload call. */
+  onReload?: (() => void) | undefined;
 }) {
   const graph = useDigestPrThreadClaims(serverGraph, nowMs);
   const ticketsById = new Map(graph.tickets.map((ticket) => [ticket.id, ticket]));
@@ -54,6 +60,14 @@ export function ProjectMyWorkDigestView({
       {...(updatedAtMs !== undefined ? { updatedAtMs } : {})}
     />
   );
+  const jiraNotice = resolveDigestJiraNotice(graph, nowMs);
+  const noticeCard = jiraNotice ? (
+    <DigestJiraNoticeCard notice={jiraNotice} onReload={onReload} />
+  ) : null;
+  const emptyLanes = resolveDigestEmptyLanes({
+    emptyStateAllowed,
+    jiraNoticeShown: jiraNotice !== null,
+  });
   const arranged = graph.arrangement ? (
     <DigestArrangementBar
       arrangement={graph.arrangement}
@@ -65,17 +79,18 @@ export function ProjectMyWorkDigestView({
     return (
       <div className="@container/digest space-y-8">
         {header}
+        {noticeCard}
         {arranged}
-        {emptyStateAllowed ? (
+        {emptyLanes === "nothing" ? (
           <T3SurfacePanel
             tone="dashed"
             className="px-6 py-10 text-center text-sm text-muted-foreground"
           >
             Nothing needs you
           </T3SurfacePanel>
-        ) : (
+        ) : emptyLanes === "loading" ? (
           <MyWorkLoadingLanesPlaceholder />
-        )}
+        ) : null}
       </div>
     );
   }
@@ -100,18 +115,19 @@ export function ProjectMyWorkDigestView({
   return (
     <div className="@container/digest space-y-8">
       {header}
+      {noticeCard}
       {arranged}
       {lanesEmpty ? (
-        emptyStateAllowed ? (
+        emptyLanes === "nothing" ? (
           <T3SurfacePanel
             tone="dashed"
             className="px-6 py-6 text-center text-sm text-muted-foreground"
           >
             Nothing needs you right now
           </T3SurfacePanel>
-        ) : (
+        ) : emptyLanes === "loading" ? (
           <MyWorkLoadingLanesPlaceholder />
-        )
+        ) : null
       ) : (
         <div className={lanes.gridClassName}>
           {lanes.showSide ? (

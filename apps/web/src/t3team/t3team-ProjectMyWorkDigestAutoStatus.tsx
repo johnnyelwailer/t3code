@@ -17,6 +17,7 @@ export function DigestAutoStatus({
   changeRequestNote,
   nowMs,
   refreshing = false,
+  needsAttention = false,
 }: {
   updatedAtMs: number | undefined;
   jiraSyncedAt: string | undefined;
@@ -24,6 +25,8 @@ export function DigestAutoStatus({
   nowMs: number;
   /** A round is in flight over content that is already on screen (often a cold-start cache paint). */
   refreshing?: boolean;
+  /** The Jira half cannot be trusted (signed out, failing sync): the dot is amber whatever the age. */
+  needsAttention?: boolean;
 }) {
   // PRs that may be old or missing (the host rate-limited the read): said here, beside the sync.
   const prNotice = changeRequestNote ? (
@@ -55,7 +58,9 @@ export function DigestAutoStatus({
       </span>
     ) : null;
   }
-  const stale = jiraSyncedAt !== undefined && nowMs - Date.parse(jiraSyncedAt) > JIRA_SYNC_STALE_MS;
+  const stale =
+    needsAttention ||
+    (jiraSyncedAt !== undefined && nowMs - Date.parse(jiraSyncedAt) > JIRA_SYNC_STALE_MS);
   return (
     <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
       <span className="inline-flex items-center gap-1.5">

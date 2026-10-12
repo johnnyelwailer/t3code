@@ -10,6 +10,9 @@ import {
 import {
   accountNeedsReconnect,
   clearAllNeedsReconnect,
+  hasUnsavedReconnectFlags,
+  markReconnectFlagsSaved,
+  reapplyUnsavedReconnectFlags,
   setAccountNeedsReconnect,
 } from "./t3team-atlassian-auth-staleToken.ts";
 
@@ -40,19 +43,28 @@ function persistedAuthsPayload(): PersistedAtlassianAuths {
   };
 }
 
-/** Replace memory with the persisted secret. Callers hold the lock. */
-export const reloadAuthsFromDisk = Effect.gen(function* () {
-  const parsed = yield* loadPersistedAtlassianAuthsPayload;
-  if (!parsed) return;
-  atlassianAuths.clear();
-  clearAllNeedsReconnect();
-  for (const entry of parsed.auths) {
-    atlassianAuths.set(entry.accountId, entry.auth);
-    setAccountNeedsReconnect(entry.accountId, entry.needsReconnect === true);
-  }
-});
-
-/** Write memory to the persisted secret. Callers hold the lock. */
+/**
+ * Write memory to the persisted secret. Callers hold the lock. Whatever flags were waiting for a
+ * write are in the file once this succeeds.
+ */
 export const persistAuthsToDisk = Effect.suspend(() =>
   savePersistedAtlassianAuthsPayload(persistedAuthsPayload()),
-);
+).pipe(Effect.tap(() => Effect.sync(markReconnectFlagsSaved)));
+
+/**
+ * Replace memory with the persisted secret, keeping the flags a refused call raised since the last
+ * write and writing them out. Callers hold the lock.
+ */
+export const reloadAuthsFromDisk = Effect.gen(function* () {
+  const parsed = yield* loadPersistedAtlassianAuthsPayload;
+  if (parsed) {
+    atlassianAuths.clear();
+    clearAllNeedsReconnect();
+    for (const entry of parsed.auths) {
+      atlassianAuths.set(entry.accountId, entry.auth);
+      setAccountNeedsReconnect(entry.accountId, entry.needsReconnect === true);
+    }
+  }
+  reapplyUnsavedReconnectFlags((accountId) => atlassianAuths.has(accountId));
+  if (hasUnsavedReconnectFlags()) yield* persistAuthsToDisk.pipe(Effect.ignore);
+});

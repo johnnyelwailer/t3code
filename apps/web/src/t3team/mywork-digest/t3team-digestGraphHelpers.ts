@@ -47,6 +47,25 @@ export function oldestJiraSync(
     .toSorted()[0];
 }
 
+/** Any project with a dead session makes the whole digest's Jira half untrustworthy. */
+export function digestJiraHealth(
+  projects: ReadonlyArray<{
+    readonly jiraAuth?: "ok" | "needs-reconnect";
+    readonly jiraSyncError?: string;
+  }>,
+): { readonly jiraAuth?: "ok" | "needs-reconnect"; readonly jiraSyncError?: string } {
+  const jiraSyncError = projects.find((data) => data.jiraSyncError !== undefined)?.jiraSyncError;
+  const jiraAuth = projects.some((data) => data.jiraAuth === "needs-reconnect")
+    ? "needs-reconnect"
+    : projects.some((data) => data.jiraAuth === "ok")
+      ? "ok"
+      : undefined;
+  return {
+    ...(jiraAuth !== undefined ? { jiraAuth } : {}),
+    ...(jiraSyncError !== undefined ? { jiraSyncError } : {}),
+  };
+}
+
 export type DigestTicketRefLike = { readonly issueId?: string; readonly issueKey?: string };
 
 /** A server ticket ref → the app ticket id, by Jira id first, then key; "" when unknown. */

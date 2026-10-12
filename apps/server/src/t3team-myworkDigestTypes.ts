@@ -17,6 +17,7 @@ import type {
   T3TeamDigestPerson,
 } from "./t3team-myworkDigestTypesPrs.ts";
 import type { T3TeamDigestDependency } from "./t3team-myworkDigestDependencies.ts";
+import type { T3TeamDigestJiraAuth } from "./t3team-myworkDigestJiraHealth.ts";
 import type { T3TeamDigestYesterday } from "./t3team-myworkDigestTypesYesterday.ts";
 
 export type {
@@ -132,6 +133,10 @@ export type T3TeamDigestProjectData = {
   readonly changeRequestsStale?: boolean;
   /** When the project's Jira tickets last matched Jira (ISO); absent before any sync. */
   readonly jiraSyncedAt?: string;
+  /** Whether the Jira session behind this project's tickets still works; absent from older hosts. */
+  readonly jiraAuth?: T3TeamDigestJiraAuth;
+  /** Plain-language reason the last Jira sync failed; absent when it did not. */
+  readonly jiraSyncError?: string;
   /** Who the viewer's tickets hang together with (Jira links, same story). */
   readonly dependencies?: ReadonlyArray<T3TeamDigestDependency>;
   /** What the viewer merged and moved on their last working day; absent when the horizon had none. */
@@ -222,6 +227,8 @@ export type T3TeamDigestProjectSource = {
   readonly changeRequestNote?: string;
   readonly changeRequestsStale?: boolean;
   readonly jiraSyncedAt?: string;
+  readonly jiraAuth?: T3TeamDigestJiraAuth;
+  readonly jiraSyncError?: string;
   /** Who the viewer's tickets hang together with (Jira links, same story). */
   readonly dependencies?: ReadonlyArray<T3TeamDigestDependency>;
   readonly yesterday?: T3TeamDigestYesterday;
