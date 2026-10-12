@@ -78,7 +78,8 @@ export function parseRunsResponse(body: string): readonly WorkflowRunSummary[] |
 /**
  * Whether every job in a `GET /actions/runs/{id}/jobs` answer belongs to `attempt`. That endpoint
  * answers for the run's LATEST attempt, so a re-run that began after the run was listed shows up
- * here as jobs of a later attempt. Unreadable, or a job that does not say, is not a match.
+ * here as jobs of a later attempt. Unreadable, no jobs yet (a re-run that has not queued any), or
+ * a job that does not say, is not a match.
  */
 export function jobsMatchAttempt(body: string, attempt: number): boolean {
   let parsed: unknown;
@@ -89,7 +90,7 @@ export function jobsMatchAttempt(body: string, attempt: number): boolean {
   }
   const jobs =
     typeof parsed === "object" && parsed !== null ? (parsed as { jobs?: unknown }).jobs : null;
-  if (!Array.isArray(jobs)) return false;
+  if (!Array.isArray(jobs) || jobs.length === 0) return false;
   return jobs.every(
     (job) =>
       typeof job === "object" &&
