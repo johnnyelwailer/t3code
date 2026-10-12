@@ -13,6 +13,7 @@ import {
   OpenCodeIcon,
   PiAgentIcon,
 } from "../Icons";
+import { NexploreAI } from "../t3team-NexploreAIIcon";
 
 import { cn } from "~/lib/utils";
 import {
@@ -29,6 +30,7 @@ const PROVIDER_ICON_BY_PROVIDER: Partial<Record<ProviderDriverKind, Icon>> = {
   [ProviderDriverKind.make("grok")]: GrokIcon,
   [ProviderDriverKind.make("antigravity")]: AntigravityIcon,
   [ProviderDriverKind.make("pi")]: PiAgentIcon,
+  [ProviderDriverKind.make("nexplore")]: NexploreAI,
 };
 
 const PROVIDER_TEXT_COLOR_BY_PROVIDER: Partial<Record<ProviderDriverKind, string>> = {
