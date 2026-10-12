@@ -38,6 +38,7 @@ export function toCloudSessionFailure(error: GitHubApi.GitHubApiError): CloudSes
       return new CloudSessionFailedError({
         reason: "rejected",
         message: "The provider is rate limiting cloud session requests. Try again shortly.",
+        ...(typeof error.retryAt === "number" ? { retryAt: error.retryAt } : {}),
       });
     case "GitHubApiRequestError":
       return new CloudSessionFailedError({

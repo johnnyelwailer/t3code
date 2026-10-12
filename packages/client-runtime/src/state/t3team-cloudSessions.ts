@@ -20,8 +20,8 @@ import {
 /**
  * A provisioning session changes phase every few seconds for its first ~2.5
  * minutes (measured on hive/nx-nexi run 248523362), so the list has to move at
- * roughly that granularity to feel live. It is three `gh` calls per poll at
- * most, against a host the user is already talking to.
+ * roughly that granularity to feel live. List polls go through `GitHubApi` as
+ * background reads (no quota reserve, honour the rate-limit pause).
  *
  * The interval is driven by the UI surface that is actually looking at the
  * list (the "Run on" menu while it is open), not by this atom: the list itself
