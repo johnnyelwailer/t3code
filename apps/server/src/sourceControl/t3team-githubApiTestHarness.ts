@@ -19,7 +19,7 @@ export const jsonResponse = (body: unknown, init?: ResponseInit) =>
  * actually leave the process, with the real quota, pause and read coalescer in between.
  */
 export function makeGitHubApiHarness(
-  respond: (request: HttpClientRequest.HttpClientRequest) => Response,
+  respond: (request: HttpClientRequest.HttpClientRequest) => Response | Promise<Response>,
 ) {
   const requests: Array<HttpClientRequest.HttpClientRequest> = [];
   const credentials = Layer.succeed(
@@ -39,7 +39,9 @@ export function makeGitHubApiHarness(
     HttpClient.HttpClient,
     HttpClient.make((request) => {
       requests.push(request);
-      return Effect.succeed(HttpClientResponse.fromWeb(request, respond(request)));
+      return Effect.promise(async () => respond(request)).pipe(
+        Effect.map((response) => HttpClientResponse.fromWeb(request, response)),
+      );
     }),
   );
   const layer = GitHubApi.layer.pipe(

@@ -332,6 +332,12 @@ const DIFF_MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 const DIFF_TIMEOUT = Duration.seconds(60);
 /** Pierre expansion is for source files, not blobs large enough to stall a review surface. */
 const DIFF_FILE_MAX_OUTPUT_BYTES = 1024 * 1024;
+/** A pull request's refs move only on a push; every file of its diff shares one read. */
+const DIFF_REFS_COALESCE = { ttl: Duration.seconds(15) };
+/** A file at a commit sha never changes, so a re-opened diff reads it from memory. */
+const DIFF_FILE_COALESCE = { ttl: Duration.minutes(10) };
+/** One diff opening 100 files must not take every request slot the other reads share. */
+const DIFF_FILE_CONCURRENCY = 3;
 
 /** What `gh pr list --state` asked a repository's own list for, without search. */
 const LIST_STATES: Record<PullRequestListState, ReadonlyArray<"OPEN" | "CLOSED" | "MERGED">> = {
@@ -1400,87 +1406,94 @@ export const make = Effect.gen(function* () {
       );
   };
 
+  const diffFileGate = Semaphore.makeUnsafe(DIFF_FILE_CONCURRENCY);
   const getPullRequestDiffFileContents: GitHubPullRequestApi["Service"]["getPullRequestDiffFileContents"] =
     (input) =>
-      Effect.gen(function* () {
-        if (input.commit !== undefined && !isCommitSha(input.commit)) {
-          return yield* new GitHubDiffCommitError({ cwd: input.cwd });
-        }
-        const { owner, name } = parseRepositorySelector(input.repository);
-        const refsResponse = yield* api.rest({
-          host: input.host,
-          operation: "getPullRequestDiffFileContents",
-          path:
-            input.commit === undefined
-              ? `repos/${owner}/${name}/pulls/${input.number}`
-              : `repos/${owner}/${name}/commits/${input.commit}`,
-          timeout: DIFF_TIMEOUT,
-        });
-        const refs = decodeRevisionRefs(refsResponse.body);
-        // A root commit has no parent, which is an absent old revision. Every file in it is new,
-        // so that is a usable answer whenever the caller does not need the old side.
-        const baseRef = Option.isSome(refs)
-          ? input.commit === undefined
-            ? refs.value.base?.sha
-            : (refs.value.parents?.[0]?.sha ?? "")
-          : undefined;
-        const headRef = Option.isSome(refs)
-          ? input.commit === undefined
-            ? refs.value.head?.sha
-            : refs.value.sha
-          : undefined;
-        const rootCommitNewFile =
-          input.commit !== undefined && input.changeType === "new" && baseRef === "";
-        if (
-          headRef === undefined ||
-          (!rootCommitNewFile && (baseRef === undefined || !isCommitSha(baseRef))) ||
-          !isCommitSha(headRef)
-        ) {
-          return yield* new GitHubDiffRevisionsUnavailableError({
-            cwd: input.cwd,
-            number: input.number,
-            ...(input.commit === undefined ? {} : { commit: input.commit }),
+      diffFileGate.withPermit(
+        Effect.gen(function* () {
+          if (input.commit !== undefined && !isCommitSha(input.commit)) {
+            return yield* new GitHubDiffCommitError({ cwd: input.cwd });
+          }
+          const { owner, name } = parseRepositorySelector(input.repository);
+          const refsResponse = yield* api.rest({
+            host: input.host,
+            operation: "getPullRequestDiffFileContents",
+            path:
+              input.commit === undefined
+                ? `repos/${owner}/${name}/pulls/${input.number}`
+                : `repos/${owner}/${name}/commits/${input.commit}`,
+            timeout: DIFF_TIMEOUT,
+            coalesce: DIFF_REFS_COALESCE,
           });
-        }
+          const refs = decodeRevisionRefs(refsResponse.body);
+          // A root commit has no parent, which is an absent old revision. Every file in it is new,
+          // so that is a usable answer whenever the caller does not need the old side.
+          const baseRef = Option.isSome(refs)
+            ? input.commit === undefined
+              ? refs.value.base?.sha
+              : (refs.value.parents?.[0]?.sha ?? "")
+            : undefined;
+          const headRef = Option.isSome(refs)
+            ? input.commit === undefined
+              ? refs.value.head?.sha
+              : refs.value.sha
+            : undefined;
+          const rootCommitNewFile =
+            input.commit !== undefined && input.changeType === "new" && baseRef === "";
+          if (
+            headRef === undefined ||
+            (!rootCommitNewFile && (baseRef === undefined || !isCommitSha(baseRef))) ||
+            !isCommitSha(headRef)
+          ) {
+            return yield* new GitHubDiffRevisionsUnavailableError({
+              cwd: input.cwd,
+              number: input.number,
+              ...(input.commit === undefined ? {} : { commit: input.commit }),
+            });
+          }
 
-        const readFile = (revision: string, filePath: string) =>
-          api
-            .rest({
-              host: input.host,
-              operation: "getPullRequestDiffFileContents",
-              accept: "application/vnd.github.raw+json",
-              path: `repos/${owner}/${name}/contents/${filePath
-                .split("/")
-                .map(encodeURIComponent)
-                .join("/")}?ref=${encodeURIComponent(revision)}`,
-              maxResponseBytes: DIFF_FILE_MAX_OUTPUT_BYTES,
-              timeout: DIFF_TIMEOUT,
-            })
-            .pipe(
-              Effect.flatMap((response) =>
-                response.truncated || response.body.includes("\0") || response.invalidUtf8
-                  ? Effect.fail(
-                      new GitHubDiffFileContentsUnavailableError({
-                        cwd: input.cwd,
-                        path: filePath,
-                        reason: response.truncated ? "oversized" : "binary",
-                      }),
-                    )
-                  : Effect.succeed(response.body),
-              ),
-            );
+          const readFile = (revision: string, filePath: string) =>
+            api
+              .rest({
+                host: input.host,
+                operation: "getPullRequestDiffFileContents",
+                accept: "application/vnd.github.raw+json",
+                path: `repos/${owner}/${name}/contents/${filePath
+                  .split("/")
+                  .map(encodeURIComponent)
+                  .join("/")}?ref=${encodeURIComponent(revision)}`,
+                maxResponseBytes: DIFF_FILE_MAX_OUTPUT_BYTES,
+                timeout: DIFF_TIMEOUT,
+                coalesce: DIFF_FILE_COALESCE,
+              })
+              .pipe(
+                Effect.flatMap((response) =>
+                  response.truncated || response.body.includes("\0") || response.invalidUtf8
+                    ? Effect.fail(
+                        new GitHubDiffFileContentsUnavailableError({
+                          cwd: input.cwd,
+                          path: filePath,
+                          reason: response.truncated ? "oversized" : "binary",
+                        }),
+                      )
+                    : Effect.succeed(response.body),
+                ),
+              );
 
-        const [oldContents, newContents] = yield* Effect.all(
-          [
-            input.changeType === "new"
-              ? Effect.succeed("")
-              : readFile(baseRef ?? "", input.oldPath),
-            input.changeType === "deleted" ? Effect.succeed("") : readFile(headRef, input.newPath),
-          ],
-          { concurrency: 2 },
-        );
-        return { oldContents, newContents };
-      });
+          const [oldContents, newContents] = yield* Effect.all(
+            [
+              input.changeType === "new"
+                ? Effect.succeed("")
+                : readFile(baseRef ?? "", input.oldPath),
+              input.changeType === "deleted"
+                ? Effect.succeed("")
+                : readFile(headRef, input.newPath),
+            ],
+            { concurrency: 2 },
+          );
+          return { oldContents, newContents };
+        }),
+      );
 
   /**
    * Every check context of the head commit, a page at a time, for a rollup the detail read cut at

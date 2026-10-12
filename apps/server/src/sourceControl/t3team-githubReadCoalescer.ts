@@ -6,6 +6,8 @@ import * as Exit from "effect/Exit";
 
 /** Past this many kept answers the oldest go, so a long-lived server never grows without bound. */
 const MAX_ENTRIES = 512;
+/** A kept answer's weight (its body length), summed, may not pass this: file bodies are large. */
+const MAX_WEIGHT = 16 * 1024 * 1024;
 
 /**
  * Shares one GitHub read between every caller that asks for the same key within a short window:
@@ -41,16 +43,30 @@ export function isCoalescible<
   );
 }
 
-export function makeGitHubReadCoalescer<A, E>(): GitHubReadCoalescer<A, E> {
-  const kept = new Map<string, { readonly expiresAtMs: number; readonly value: A }>();
+export function makeGitHubReadCoalescer<A, E>(
+  weigh: (value: A) => number = () => 0,
+): GitHubReadCoalescer<A, E> {
+  const kept = new Map<
+    string,
+    { readonly expiresAtMs: number; readonly value: A; readonly weight: number }
+  >();
   const inFlight = new Map<string, Deferred.Deferred<A, E>>();
+  let keptWeight = 0;
+
+  const forget = (key: string) => {
+    keptWeight -= kept.get(key)?.weight ?? 0;
+    kept.delete(key);
+  };
 
   const remember = (key: string, value: A, expiresAtMs: number, nowMs: number) => {
-    kept.delete(key);
-    kept.set(key, { expiresAtMs, value });
+    forget(key);
+    const weight = weigh(value);
+    kept.set(key, { expiresAtMs, value, weight });
+    keptWeight += weight;
     for (const [candidate, entry] of kept) {
-      if (kept.size <= MAX_ENTRIES) return;
-      if (entry.expiresAtMs <= nowMs || candidate !== key) kept.delete(candidate);
+      const withinBounds = kept.size <= MAX_ENTRIES && keptWeight <= MAX_WEIGHT;
+      if (withinBounds || candidate === key) return;
+      if (entry.expiresAtMs <= nowMs || !withinBounds) forget(candidate);
     }
   };
 

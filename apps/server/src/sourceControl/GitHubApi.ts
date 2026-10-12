@@ -354,7 +354,9 @@ export const make = Effect.gen(function* () {
   const quota = yield* GitHubQuota.GitHubQuota;
   const limits = yield* SourceControlRateLimit.SourceControlRateLimit;
   const gate = yield* Semaphore.make(CONCURRENCY);
-  const reads = makeGitHubReadCoalescer<GitHubRestResponse, GitHubApiError>();
+  const reads = makeGitHubReadCoalescer<GitHubRestResponse, GitHubApiError>(
+    (response) => response.body.length,
+  );
 
   const credential: GitHubApi["Service"]["credential"] = Effect.fn("GitHubApi.credential")(
     function* (host) {
