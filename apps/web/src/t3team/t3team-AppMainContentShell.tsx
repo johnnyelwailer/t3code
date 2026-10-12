@@ -4,6 +4,7 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 import { SidebarTrigger } from "~/t3team/components/ui/t3team-sidebar";
 import { useT3TeamActiveChatStore } from "~/t3team/t3team-activeChatStore";
 import { ProjectDashboardKickoffAside } from "~/t3team/t3team-ProjectDashboardKickoffAside";
+import { T3TeamDashboardRecipeActionProvider } from "~/t3team/t3team-dashboardRecipeActions";
 import type { ProjectDashboardKickoffAsideProps } from "~/t3team/t3team-ProjectDashboardKickoffAsideTypes";
 import { ResizableRightSidebarLayout } from "~/t3team/t3team-ResizableRightSidebarLayout";
 import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
@@ -124,47 +125,50 @@ export function ProjectBrowserEmptyWithChat({
     );
   }
 
+  // The kickoff host runs dashboard recipe actions, so the home is a recipe-action scope too.
   return (
-    <ResizableRightSidebarLayout
-      storageKey="t3team_home_right_sidebar"
-      defaultAsideWidth={28 * 16}
-      minAsideWidth={24 * 16}
-      mobileMainLabel="Home"
-      mobileAsideLabel="Agent"
-      main={
-        <ProjectBrowserEmpty
-          onCreate={onCreate}
-          setupSurfaceReason={setupSurfaceReason}
-          shouldInsetDesktopHeader={shouldInsetDesktopHeader}
-        />
-      }
-      aside={
-        project ? (
-          <ProjectDashboardKickoffAside
-            project={project}
-            dashboardMode="backlog"
-            activeThread={null}
-            providers={providers}
-            isConnected={isConnected}
-            onOpenThread={onOpenThread}
-            onThreadKickoffConsumed={() => {}}
-            onKickoffThread={onKickoffThread}
+    <T3TeamDashboardRecipeActionProvider>
+      <ResizableRightSidebarLayout
+        storageKey="t3team_home_right_sidebar"
+        defaultAsideWidth={28 * 16}
+        minAsideWidth={24 * 16}
+        mobileMainLabel="Home"
+        mobileAsideLabel="Agent"
+        main={
+          <ProjectBrowserEmpty
+            onCreate={onCreate}
+            setupSurfaceReason={setupSurfaceReason}
+            shouldInsetDesktopHeader={shouldInsetDesktopHeader}
           />
-        ) : (
-          <aside className="flex min-h-0 h-full flex-1 flex-col items-center justify-center gap-3 border-l border-border/70 bg-background px-6 text-center text-sm text-muted-foreground">
-            {onStartScratch ? (
-              <>
-                Chat without a project: threads live in the No project folder.
-                <Button variant="outline" size="sm" onClick={onStartScratch}>
-                  Start a chat without a project
-                </Button>
-              </>
-            ) : (
-              "Your kickoff chat will appear here once the first project is ready."
-            )}
-          </aside>
-        )
-      }
-    />
+        }
+        aside={
+          project ? (
+            <ProjectDashboardKickoffAside
+              project={project}
+              dashboardMode="backlog"
+              activeThread={null}
+              providers={providers}
+              isConnected={isConnected}
+              onOpenThread={onOpenThread}
+              onThreadKickoffConsumed={() => {}}
+              onKickoffThread={onKickoffThread}
+            />
+          ) : (
+            <aside className="flex min-h-0 h-full flex-1 flex-col items-center justify-center gap-3 border-l border-border/70 bg-background px-6 text-center text-sm text-muted-foreground">
+              {onStartScratch ? (
+                <>
+                  Chat without a project: threads live in the No project folder.
+                  <Button variant="outline" size="sm" onClick={onStartScratch}>
+                    Start a chat without a project
+                  </Button>
+                </>
+              ) : (
+                "Your kickoff chat will appear here once the first project is ready."
+              )}
+            </aside>
+          )
+        }
+      />
+    </T3TeamDashboardRecipeActionProvider>
   );
 }
