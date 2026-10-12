@@ -42,8 +42,12 @@ export const rateLimited = (host: string, retryAt?: number) =>
     }),
   );
 
-export function makeFakeGitHubApi(handler: Handler) {
+export function makeFakeGitHubApi(
+  handler: Handler,
+  credential?: GitHubApi.GitHubApi["Service"]["credential"],
+) {
   const calls: Array<RecordedRestCall> = [];
+  const credentialHosts: Array<string> = [];
   const api = GitHubApi.GitHubApi.of({
     rest: (input) =>
       Effect.gen(function* () {
@@ -57,8 +61,13 @@ export function makeFakeGitHubApi(handler: Handler) {
         return yield* handler(call);
       }),
     graphql: () => Effect.die("graphql is not used by the t3team-github-* reads"),
-    credential: () =>
-      Effect.succeed({ token: Redacted.make("test-token"), fingerprint: "test-fingerprint" }),
+    credential: (host) => {
+      credentialHosts.push(host);
+      return (
+        credential?.(host) ??
+        Effect.succeed({ token: Redacted.make("test-token"), fingerprint: "test-fingerprint" })
+      );
+    },
   });
-  return { api, calls };
+  return { api, calls, credentialHosts };
 }

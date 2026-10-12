@@ -1,6 +1,5 @@
 import * as Effect from "effect/Effect";
 import { HttpRouter } from "effect/http";
-import { VcsProcess } from "./vcs/VcsProcess.ts";
 import { errorResponse, okJson, readJsonBody } from "./t3team-atlassian-http.ts";
 import type { GitHubAssetDownloadRequest } from "./t3team-github-routes-asset-types.ts";
 import { downloadGitHubAsset } from "./t3team-github-routes-asset-download.ts";
@@ -27,9 +26,8 @@ export const t3teamGitHubAssetRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3team/github/asset",
   Effect.gen(function* () {
-    const vcs = yield* VcsProcess;
     const input = yield* readJsonBody<GitHubAssetDownloadRequest>();
-    const asset = yield* downloadGitHubAsset(vcs, input);
+    const asset = yield* downloadGitHubAsset(input);
     return okJson({ asset });
   }).pipe(Effect.catch(errorResponse)),
 );
