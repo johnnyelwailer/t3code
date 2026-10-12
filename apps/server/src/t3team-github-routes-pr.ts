@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
-import type { VcsProcessShape } from "./t3team-vcsProcessShape.ts";
+import type * as GitHubApi from "./sourceControl/GitHubApi.ts";
+import { readRestBody } from "./t3team-githubRestRead.ts";
 import type { GitHubInboxItem, RawGitHubPullRequest } from "./t3team-github-routes-shared.ts";
 import {
   INBOX_CACHE_TTL_MS,
@@ -39,7 +40,6 @@ function toGitHubWebUrl(
 }
 
 function fetchPullRequestState(
-  vcs: VcsProcessShape,
   host: string,
   repository: string,
   subjectApiUrl: string,
@@ -60,7 +60,7 @@ function fetchPullRequestState(
     | "changedFiles"
   >,
   never,
-  never
+  GitHubApi.GitHubApi
 > {
   const cacheKey = `${host}:${subjectApiUrl}`;
   const cached = readCached(pullRequestStateCache, cacheKey);
@@ -75,83 +75,73 @@ function fetchPullRequestState(
     });
   }
 
-  return vcs
-    .run({
-      operation: "t3team.github.pr-state",
-      command: "gh",
-      args: ["api", "--hostname", host, apiPath],
-      cwd: process.cwd(),
-    })
-    .pipe(
-      Effect.map((output) => {
-        const parsed = JSON.parse(output.stdout) as RawGitHubPullRequest;
-        const state = readTrimmedString(parsed.state)?.toLowerCase();
-        const subjectState = parsed.merged_at
-          ? "merged"
-          : parsed.draft
-            ? "draft"
-            : state === "closed"
-              ? "closed"
-              : "open";
-        const subjectUrl =
-          readTrimmedString(parsed.html_url) ?? toGitHubWebUrl(host, repository, subjectApiUrl);
-        const subjectBranch = readTrimmedString(parsed.head?.ref);
-        const authorLogin = readTrimmedString(parsed.user?.login);
-        const authorAvatarUrl = readTrimmedString(parsed.user?.avatar_url);
-        const requestedReviewerLogins = (parsed.requested_reviewers ?? [])
-          .map((reviewer) => readTrimmedString(reviewer.login)?.toLowerCase())
-          .filter((value): value is string => typeof value === "string");
-        const reviewRequested =
-          typeof account === "string" && requestedReviewerLogins.includes(account.toLowerCase());
-        const value = {
-          subjectState,
-          ...(subjectUrl ? { subjectUrl } : {}),
-          ...(subjectBranch ? { subjectBranch } : {}),
-          ...(authorLogin ? { authorLogin } : {}),
-          ...(authorAvatarUrl ? { authorAvatarUrl } : {}),
-          ...(reviewRequested ? { reviewRequested } : {}),
-          ...(typeof parsed.comments === "number" ? { commentCount: parsed.comments } : {}),
-          ...(typeof parsed.review_comments === "number"
-            ? { reviewCommentCount: parsed.review_comments }
-            : {}),
-          ...(typeof parsed.additions === "number" ? { additions: parsed.additions } : {}),
-          ...(typeof parsed.deletions === "number" ? { deletions: parsed.deletions } : {}),
-          ...(typeof parsed.changed_files === "number"
-            ? { changedFiles: parsed.changed_files }
-            : {}),
-        } as Pick<
-          GitHubInboxItem,
-          | "subjectState"
-          | "subjectUrl"
-          | "subjectBranch"
-          | "authorLogin"
-          | "authorAvatarUrl"
-          | "reviewRequested"
-          | "commentCount"
-          | "reviewCommentCount"
-          | "additions"
-          | "deletions"
-          | "changedFiles"
-        >;
-        writeCached(pullRequestStateCache, cacheKey, value, INBOX_CACHE_TTL_MS);
-        return value;
-      }),
-      Effect.catch(() => {
-        const fallbackUrl = toGitHubWebUrl(host, repository, subjectApiUrl);
-        return Effect.succeed({
-          subjectState: "open" as const,
-          ...(fallbackUrl ? { subjectUrl: fallbackUrl } : {}),
-        });
-      }),
-    );
+  return readRestBody({ host, operation: "t3team.github.pr-state", path: apiPath }).pipe(
+    Effect.map((body) => {
+      const parsed = JSON.parse(body) as RawGitHubPullRequest;
+      const state = readTrimmedString(parsed.state)?.toLowerCase();
+      const subjectState = parsed.merged_at
+        ? "merged"
+        : parsed.draft
+          ? "draft"
+          : state === "closed"
+            ? "closed"
+            : "open";
+      const subjectUrl =
+        readTrimmedString(parsed.html_url) ?? toGitHubWebUrl(host, repository, subjectApiUrl);
+      const subjectBranch = readTrimmedString(parsed.head?.ref);
+      const authorLogin = readTrimmedString(parsed.user?.login);
+      const authorAvatarUrl = readTrimmedString(parsed.user?.avatar_url);
+      const requestedReviewerLogins = (parsed.requested_reviewers ?? [])
+        .map((reviewer) => readTrimmedString(reviewer.login)?.toLowerCase())
+        .filter((value): value is string => typeof value === "string");
+      const reviewRequested =
+        typeof account === "string" && requestedReviewerLogins.includes(account.toLowerCase());
+      const value = {
+        subjectState,
+        ...(subjectUrl ? { subjectUrl } : {}),
+        ...(subjectBranch ? { subjectBranch } : {}),
+        ...(authorLogin ? { authorLogin } : {}),
+        ...(authorAvatarUrl ? { authorAvatarUrl } : {}),
+        ...(reviewRequested ? { reviewRequested } : {}),
+        ...(typeof parsed.comments === "number" ? { commentCount: parsed.comments } : {}),
+        ...(typeof parsed.review_comments === "number"
+          ? { reviewCommentCount: parsed.review_comments }
+          : {}),
+        ...(typeof parsed.additions === "number" ? { additions: parsed.additions } : {}),
+        ...(typeof parsed.deletions === "number" ? { deletions: parsed.deletions } : {}),
+        ...(typeof parsed.changed_files === "number" ? { changedFiles: parsed.changed_files } : {}),
+      } as Pick<
+        GitHubInboxItem,
+        | "subjectState"
+        | "subjectUrl"
+        | "subjectBranch"
+        | "authorLogin"
+        | "authorAvatarUrl"
+        | "reviewRequested"
+        | "commentCount"
+        | "reviewCommentCount"
+        | "additions"
+        | "deletions"
+        | "changedFiles"
+      >;
+      writeCached(pullRequestStateCache, cacheKey, value, INBOX_CACHE_TTL_MS);
+      return value;
+    }),
+    Effect.catch(() => {
+      const fallbackUrl = toGitHubWebUrl(host, repository, subjectApiUrl);
+      return Effect.succeed({
+        subjectState: "open" as const,
+        ...(fallbackUrl ? { subjectUrl: fallbackUrl } : {}),
+      });
+    }),
+  );
 }
 
 export function enrichPullRequestState(
-  vcs: VcsProcessShape,
   host: string,
   items: ReadonlyArray<GitHubInboxItem>,
   account?: string,
-): Effect.Effect<ReadonlyArray<GitHubInboxItem>, never, never> {
+): Effect.Effect<ReadonlyArray<GitHubInboxItem>, never, GitHubApi.GitHubApi> {
   return Effect.forEach(
     items,
     (item) => {
@@ -164,7 +154,7 @@ export function enrichPullRequestState(
         );
       }
 
-      return fetchPullRequestState(vcs, host, item.repository, item.subjectUrl, account).pipe(
+      return fetchPullRequestState(host, item.repository, item.subjectUrl, account).pipe(
         Effect.map((stateData) => {
           const nextItem = Object.assign({}, item);
           if (stateData.subjectUrl) {

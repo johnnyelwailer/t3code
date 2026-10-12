@@ -102,15 +102,26 @@ export function viewerLoginFor(
   return Effect.gen(function* () {
     const known = viewerLogins.get(host);
     if (known !== undefined) return known;
+    const login = yield* fetchViewerLogin(host).pipe(Effect.orElseSucceed(() => null));
+    if (login !== null) viewerLogins.set(host, login);
+    return login;
+  });
+}
+
+/**
+ * One `GET /user` for the login behind the host's credential, unremembered. The error is kept so
+ * a caller that must tell "rate limited" from "signed out" can; `null` is an answer it could not
+ * read.
+ */
+export function fetchViewerLogin(
+  host: string,
+  operation = "t3team.digest.viewer",
+): Effect.Effect<string | null, GitHubApi.GitHubApiError, GitHubApi.GitHubApi> {
+  return Effect.gen(function* () {
     const api = yield* GitHubApi.GitHubApi;
-    const result = yield* api
-      .rest({ host, operation: "t3team.digest.viewer", path: "user" })
-      .pipe(Effect.option);
-    if (Option.isNone(result)) return null;
-    const decoded = decodeViewer(result.value.body);
-    if (Option.isNone(decoded) || decoded.value.login.trim() === "") return null;
-    viewerLogins.set(host, decoded.value.login);
-    return decoded.value.login;
+    const result = yield* api.rest({ host, operation, path: "user" });
+    const decoded = decodeViewer(result.body);
+    return Option.isNone(decoded) || decoded.value.login.trim() === "" ? null : decoded.value.login;
   });
 }
 

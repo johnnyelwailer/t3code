@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 
-import type { VcsProcessShape } from "./t3team-vcsProcessShape.ts";
+import * as GitHubApi from "./sourceControl/GitHubApi.ts";
 import { loadAccount } from "./t3team-github-routes-account.ts";
 import {
   loadInboxAttempt,
@@ -36,10 +36,10 @@ import type {
   GitHubInboxDiscoverResponse,
 } from "./t3team-github-routes-shared.ts";
 
-export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInboxDiscoverRequest) {
+export function loadGitHubInboxResponse(input: GitHubInboxDiscoverRequest) {
+  const repositoriesOnly = input.discoveryMode === "repositories";
   return Effect.gen(function* () {
     const host = readTrimmedString(input.host) ?? "github.com";
-    const repositoriesOnly = input.discoveryMode === "repositories";
 
     const responseCacheKey = makeResponseCacheKey({
       host,
@@ -54,26 +54,28 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
       return cachedResponse;
     }
 
-    const account =
-      readCached(accountCache, host) ??
-      (yield* loadAccount(vcs, host).pipe(
-        Effect.tap((value) =>
-          Effect.sync(() => {
-            writeCached(
-              accountCache,
-              host,
-              value,
-              value ? ACCOUNT_CACHE_TTL_MS : UNAUTHENTICATED_ACCOUNT_CACHE_TTL_MS,
-            );
-          }),
-        ),
-      ));
+    const cachedAccount = readCached(accountCache, host);
+    const accountRead =
+      cachedAccount !== undefined ? { account: cachedAccount } : yield* loadAccount(host);
+    const account = accountRead.account;
+    // A read held back by the rate limit says nothing about who is signed in: it is not cached,
+    // and its answer is the pause rather than a prompt to sign in again.
+    if (cachedAccount === undefined && accountRead.pausedMessage === undefined) {
+      writeCached(
+        accountCache,
+        host,
+        account,
+        account ? ACCOUNT_CACHE_TTL_MS : UNAUTHENTICATED_ACCOUNT_CACHE_TTL_MS,
+      );
+    }
 
     if (!account) {
       const response = {
         host,
         ...EMPTY_RESPONSE,
-        inboxWarning: `Authenticate GitHub CLI for ${host} via gh auth login --hostname ${host}.`,
+        inboxWarning:
+          accountRead.pausedMessage ??
+          `Authenticate GitHub CLI for ${host} via gh auth login --hostname ${host}.`,
       } satisfies GitHubInboxDiscoverResponse;
       writeCached(responseCache, responseCacheKey, response, RESPONSE_CACHE_TTL_MS);
       return response;
@@ -86,8 +88,8 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
         : readCached(repositorySearchCache, responseCacheKey)) ??
       (yield* (
         useAuthenticatedRepositoryList
-          ? loadRepositoriesAttempt(vcs, host)
-          : loadRepositorySearchAttempt(vcs, host, {
+          ? loadRepositoriesAttempt(host)
+          : loadRepositorySearchAttempt(host, {
               ...(input.projectKey ? { projectKey: input.projectKey } : {}),
               ...(input.projectTitle ? { projectTitle: input.projectTitle } : {}),
             })
@@ -116,7 +118,7 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
     ) {
       repositoriesAttempt =
         readCached(repositoriesCache, host) ??
-        (yield* loadRepositoriesAttempt(vcs, host).pipe(
+        (yield* loadRepositoriesAttempt(host).pipe(
           Effect.tap((value) =>
             Effect.sync(() => {
               writeCached(
@@ -153,7 +155,7 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
     if (repositoriesOnly && suggestedRepositoryUrls.length === 0) {
       const completeRepositoriesAttempt =
         readCached(repositoriesCache, host) ??
-        (yield* loadRepositoriesAttempt(vcs, host).pipe(
+        (yield* loadRepositoriesAttempt(host).pipe(
           Effect.tap((value) =>
             Effect.sync(() => {
               writeCached(repositoriesCache, host, value, REPOSITORIES_CACHE_TTL_MS);
@@ -167,7 +169,7 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
     const inboxAttempt = repositoriesOnly
       ? { items: [] as ReadonlyArray<GitHubInboxDiscoverResponse["inboxItems"][number]> }
       : (readCached(inboxCache, host) ??
-        (yield* loadInboxAttempt(vcs, host, account).pipe(
+        (yield* loadInboxAttempt(host, account).pipe(
           Effect.tap((value) =>
             Effect.sync(() => {
               writeCached(inboxCache, host, value, INBOX_CACHE_TTL_MS);
@@ -178,7 +180,6 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
     const linkedPullRequestsAttempt = repositoriesOnly
       ? { items: [] as ReadonlyArray<GitHubInboxDiscoverResponse["inboxItems"][number]> }
       : yield* loadLinkedPullRequestsAttempt({
-          vcs,
           account,
           ...(input.linkedRepositoryUrls
             ? { linkedRepositoryUrls: input.linkedRepositoryUrls }
@@ -196,11 +197,16 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
       ...(input.linkedRepositoryUrls ? { linkedRepositoryUrls: input.linkedRepositoryUrls } : {}),
     });
 
+    // One rate-limit pause holds back every read, so it would otherwise be said once per source.
     const warningParts = [
-      repositoriesAttempt.warning,
-      inboxAttempt.warning,
-      linkedPullRequestsAttempt.warning,
-    ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
+      ...new Set(
+        [
+          repositoriesAttempt.warning,
+          inboxAttempt.warning,
+          linkedPullRequestsAttempt.warning,
+        ].filter((part): part is string => typeof part === "string" && part.trim().length > 0),
+      ),
+    ];
 
     const response = {
       host,
@@ -213,5 +219,7 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
 
     writeCached(responseCache, responseCacheKey, response, RESPONSE_CACHE_TTL_MS);
     return response;
-  });
+    // Setup discovery is a user waiting on this answer and may spend the reserve; the rest is a
+    // background refresh of activity that must honour a pause and leave the reserve alone.
+  }).pipe(Effect.provideService(GitHubApi.AllowGitHubReserve, repositoriesOnly));
 }
