@@ -5,8 +5,10 @@
  * host, remembered for the server's lifetime (names barely change). The lookups run beside the
  * poll, never inside it: a round shows the names known so far, the next one the rest. At most a
  * dozen are in flight across all projects, and a person two projects share is asked once. A
- * lookup that failed (no such user, a rate limit, a host that will not answer) is not asked again
- * for an hour: retrying it every round only spends the quota the failure was already short of.
+ * lookup that failed is not asked again straight away: retrying it every round only spends the
+ * quota the failure was already short of. "No such user" is settled for an hour; a transient
+ * failure (rate limit, network, 5xx) for a few minutes, so the name still turns up once the host
+ * recovers.
  */
 
 import * as Clock from "effect/Clock";
@@ -20,7 +22,8 @@ import type { T3TeamDigestPerson } from "./t3team-myworkDigestTypesPrs.ts";
 const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 const MAX_IN_FLIGHT = 12;
 const MAX_REMEMBERED = 500;
-export const FAILED_LOOKUP_TTL_MS = 60 * 60_000;
+export const NOT_FOUND_LOOKUP_TTL_MS = 60 * 60_000;
+export const TRANSIENT_LOOKUP_TTL_MS = 5 * 60_000;
 const known = new Map<string, string | null>();
 /** When a failed lookup may be asked again, by `host:login`. */
 const failedUntil = new Map<string, number>();
@@ -39,19 +42,23 @@ function lookup(api: GitHubApi.GitHubApi["Service"], host: string, login: string
       return name ? name : null;
     }),
     // An answer is remembered for good (a name, or "this profile has none"); a failed read is
-    // remembered only until `FAILED_LOOKUP_TTL_MS` has passed, and never as "nameless".
+    // remembered only until its TTL has passed (see the header), and never as "nameless".
     Effect.tap((name) =>
       Effect.sync(() => {
         if (known.size >= MAX_REMEMBERED) known.delete(known.keys().next().value!);
         known.set(`${host}:${login}`, name);
       }),
     ),
-    Effect.tapError(() =>
+    Effect.tapError((error) =>
       Effect.flatMap(Clock.currentTimeMillis, (now) =>
         Effect.sync(() => {
           if (failedUntil.size >= MAX_REMEMBERED)
             failedUntil.delete(failedUntil.keys().next().value!);
-          failedUntil.set(`${host}:${login}`, now + FAILED_LOOKUP_TTL_MS);
+          const ttl =
+            error._tag === "GitHubApiNotFoundError"
+              ? NOT_FOUND_LOOKUP_TTL_MS
+              : TRANSIENT_LOOKUP_TTL_MS;
+          failedUntil.set(`${host}:${login}`, now + ttl);
         }),
       ),
     ),

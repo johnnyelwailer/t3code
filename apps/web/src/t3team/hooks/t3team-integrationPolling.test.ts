@@ -220,6 +220,26 @@ describe("t3team integration polling", () => {
       }
     });
 
+    it("reads straight away on return even after backoff has grown", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(3_000_000);
+      const doc = stubWindow();
+      // Never refreshes its freshness, so every attempt backs off until it caps at a minute.
+      const poll = vi.fn();
+      const poller = start(poll, () => undefined);
+      try {
+        await vi.advanceTimersByTimeAsync(USER_IDLE_AFTER_MS + 60_000);
+        const readsWhenIdle = poll.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(10 * 60_000);
+        expect(poll).toHaveBeenCalledTimes(readsWhenIdle);
+        doc.dispatchEvent(new Event("pointerdown"));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(poll).toHaveBeenCalledTimes(readsWhenIdle + 1);
+      } finally {
+        poller.dispose();
+      }
+    });
+
     it("still reads once for a view mounted while the reader is idle", async () => {
       vi.useFakeTimers();
       vi.setSystemTime(2_000_000);

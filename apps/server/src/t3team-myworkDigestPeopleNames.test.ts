@@ -6,8 +6,9 @@ import * as TestClock from "effect/testing/TestClock";
 import * as GitHubApi from "./sourceControl/GitHubApi.ts";
 import {
   awaitDigestPeopleNamesForTests,
-  FAILED_LOOKUP_TTL_MS,
+  NOT_FOUND_LOOKUP_TTL_MS,
   resetDigestPeopleNamesForTests,
+  TRANSIENT_LOOKUP_TTL_MS,
   withProfileNames,
 } from "./t3team-myworkDigestPeopleNames.ts";
 
@@ -72,41 +73,68 @@ it.effect("names login-only people from the host profile, once per person", () =
   }),
 );
 
-it.effect("does not ask again for a failed lookup within the TTL, then does", () =>
+/**
+ * One person whose lookup fails with `failure` until the host recovers; `state.calls` counts the
+ * lookups and `round` runs one digest round to completion.
+ */
+function failingLookup(failure: () => unknown) {
+  const state = { calls: 0, fail: true };
+  const api = Layer.mock(GitHubApi.GitHubApi)({
+    rest: () => {
+      state.calls += 1;
+      return state.fail ? Effect.fail(failure() as never) : restResponse('{"name":"Ada Lovelace"}');
+    },
+  });
+  const entries = [{ host: "h", author: person("ada") }];
+  const round = Effect.gen(function* () {
+    const result = yield* withProfileNames(entries).pipe(Effect.provide(api));
+    yield* awaitDigestPeopleNamesForTests;
+    return result;
+  });
+  return { state, round };
+}
+
+it.effect("asks again after a transient failure only once the short TTL has passed", () =>
   Effect.gen(function* () {
     resetDigestPeopleNamesForTests();
-    let calls = 0;
-    let fail = true;
-    const api = Layer.mock(GitHubApi.GitHubApi)({
-      rest: () => {
-        calls += 1;
-        return fail
-          ? Effect.fail(
-              new GitHubApi.GitHubApiRateLimitError({ host: "h", operation: "test" }) as never,
-            )
-          : restResponse('{"name":"Ada Lovelace"}');
-      },
-    });
-    const entries = [{ host: "h", author: person("ada") }];
-    const round = Effect.gen(function* () {
-      const result = yield* withProfileNames(entries).pipe(Effect.provide(api));
-      yield* awaitDigestPeopleNamesForTests;
-      return result;
-    });
+    const { state, round } = failingLookup(
+      () => new GitHubApi.GitHubApiRateLimitError({ host: "h", operation: "test" }),
+    );
     const first = yield* round;
     assert.strictEqual(first[0]?.author?.name, "ada");
-    assert.strictEqual(calls, 1);
+    assert.strictEqual(state.calls, 1);
     // The host recovers, but the failure is remembered: later rounds inside the TTL stay quiet
     // and the person is not mistaken for nameless.
-    fail = false;
+    state.fail = false;
     yield* round;
-    yield* TestClock.adjust(FAILED_LOOKUP_TTL_MS - 1);
+    yield* TestClock.adjust(TRANSIENT_LOOKUP_TTL_MS - 1);
     yield* round;
-    assert.strictEqual(calls, 1);
+    assert.strictEqual(state.calls, 1);
     yield* TestClock.adjust(1);
     yield* round;
     const named = yield* round;
     assert.strictEqual(named[0]?.author?.name, "Ada Lovelace");
-    assert.strictEqual(calls, 2);
+    assert.strictEqual(state.calls, 2);
+  }),
+);
+
+it.effect("keeps a not-found lookup quiet for the long TTL", () =>
+  Effect.gen(function* () {
+    resetDigestPeopleNamesForTests();
+    const { state, round } = failingLookup(
+      () => new GitHubApi.GitHubApiNotFoundError({ host: "h", operation: "test" }),
+    );
+    yield* round;
+    assert.strictEqual(state.calls, 1);
+    state.fail = false;
+    // Well past the transient TTL, still not asked: the profile was not there.
+    yield* TestClock.adjust(NOT_FOUND_LOOKUP_TTL_MS - 1);
+    yield* round;
+    assert.strictEqual(state.calls, 1);
+    yield* TestClock.adjust(1);
+    yield* round;
+    const named = yield* round;
+    assert.strictEqual(named[0]?.author?.name, "Ada Lovelace");
+    assert.strictEqual(state.calls, 2);
   }),
 );

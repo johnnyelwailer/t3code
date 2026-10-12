@@ -148,7 +148,9 @@ export function startBrowserPolling(input: {
   };
 
   // The first interaction after going idle re-arms with one read if the data went stale.
-  const stopWatchingActivity = doc ? watchUserActivity(() => schedule(retryDelayMs)) : undefined;
+  // The reader is back, so backoff from earlier failed or no-op polls does not apply: freshness
+  // alone decides whether a read is due. (Visibility and online changes keep the backoff.)
+  const stopWatchingActivity = doc ? watchUserActivity(() => schedule(0)) : undefined;
   if (doc) {
     doc.addEventListener("visibilitychange", handleVisibilityChange);
   }
