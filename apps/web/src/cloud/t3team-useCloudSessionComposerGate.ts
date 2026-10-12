@@ -3,14 +3,19 @@
  * VM is Ready+connected with the project, show a status banner, and restore the
  * draft on cancel/failure.
  */
-import type { CloudSession, EnvironmentId, MessageId } from "@t3tools/contracts";
+import type { CloudSession, EnvironmentId, MessageId, ScopedProjectRef } from "@t3tools/contracts";
 import { CloudIcon } from "lucide-react";
 import { createElement, useCallback, useMemo, useRef } from "react";
 
 import type { ComposerBannerStackItem } from "~/components/chat/ComposerBannerStack";
 import { Button } from "~/components/ui/button";
+import { useEnvironments } from "~/state/environments";
 import { useCloudSessionController } from "./t3team-useCloudSessionController";
 import { useCloudSessionBindFlush } from "./t3team-useCloudSessionBindFlush";
+import {
+  useCloudSessionProjectFollow,
+  useCloudSessionProjectKey,
+} from "./t3team-useCloudSessionProjectFollow";
 import { queueCloudSessionSendIfNeeded } from "./t3team-cloudSessionQueueSend";
 import {
   cloudSessionBindBannerTitle,
@@ -21,6 +26,8 @@ import type { CloudSessionQueuedSend } from "./t3team-cloudSessionTargetStore";
 
 export function useCloudSessionComposerGate(input: {
   readonly scopeKey: string | null;
+  /** The composer's project: a cloud session set up for another one stops being the target. */
+  readonly projectRef: ScopedProjectRef | null;
   readonly availableEnvironmentIds: ReadonlySet<string>;
   readonly onRemapEnvironment: (environmentId: EnvironmentId) => void;
   readonly onFlushSend: (queued: CloudSessionQueuedSend) => void;
@@ -43,6 +50,11 @@ export function useCloudSessionComposerGate(input: {
   );
 
   const pendingFlushRef = useRef<CloudSessionQueuedSend | null>(null);
+  useCloudSessionProjectFollow({
+    scopeKey: input.scopeKey,
+    projectKey: useCloudSessionProjectKey(input.projectRef),
+    onRestoreDraft: input.onRestoreDraft,
+  });
 
   const { target, cancelQueuedSend } = useCloudSessionBindFlush({
     scopeKey: input.scopeKey,
@@ -81,11 +93,21 @@ export function useCloudSessionComposerGate(input: {
       ? null
       : (cloud.sessions.find((item) => item.sessionId === target.sessionId) ?? null);
 
+  const { environments } = useEnvironments();
+  const machineRegistered =
+    session?.environmentId !== undefined &&
+    environments.some(
+      (environment) =>
+        environment.environmentId === session.environmentId &&
+        environment.connection.phase === "connected",
+    );
+
   const bannerItem = useMemo<ComposerBannerStackItem | null>(() => {
     if (target === null || !target.bindRequested) return null;
     const phase = resolveCloudSessionBindPhase({
       sessionPhase: session?.phase ?? null,
       connecting: cloud.pendingKind === "connect",
+      machineRegistered,
       projectReady:
         session?.environmentId !== undefined &&
         input.availableEnvironmentIds.has(session.environmentId),
@@ -105,7 +127,14 @@ export function useCloudSessionComposerGate(input: {
         "Cancel",
       ),
     };
-  }, [cancelQueuedSend, cloud.pendingKind, input.availableEnvironmentIds, session, target]);
+  }, [
+    cancelQueuedSend,
+    cloud.pendingKind,
+    input.availableEnvironmentIds,
+    machineRegistered,
+    session,
+    target,
+  ]);
 
   return {
     tryQueueSend,

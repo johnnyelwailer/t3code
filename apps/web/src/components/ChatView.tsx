@@ -4658,6 +4658,7 @@ export default function ChatView(props: ChatViewProps) {
 
   const cloudSessionComposerGate = useCloudSessionComposerGate({
     scopeKey: cloudSessionScopeKey,
+    projectRef: activeProjectRef,
     availableEnvironmentIds: cloudAvailableEnvironmentIds,
     onRemapEnvironment: onEnvironmentChange,
     onFlushSend: (queued) => cloudFlushSendRef.current(queued),
