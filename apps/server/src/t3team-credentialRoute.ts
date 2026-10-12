@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
+import { ServerConfig } from "./config.ts";
 
 /**
  * A `/api/t3team` route that hands out or changes credentials (an account sign-in, a cloud session's
@@ -20,6 +21,26 @@ class LocalApiRouteAuthError extends Schema.TaggedError<LocalApiRouteAuthError>(
 ) {}
 
 /**
+ * Whether a cookie-authenticated POST came from this server's own page. Its `Origin` must name this
+ * server, or the dev web server (`devUrl`): in web dev the page is served by Vite, whose `/api`
+ * proxy rewrites `Host` to the backend's, so the browser's origin never matches `Host` there.
+ */
+export function isOwnOrigin(input: {
+  readonly origin: string;
+  readonly host: string | undefined;
+  readonly devUrl: URL | undefined;
+}): boolean {
+  let originUrl: URL;
+  try {
+    originUrl = new URL(input.origin);
+  } catch {
+    return false;
+  }
+  if (originUrl.host === input.host) return true;
+  return input.devUrl !== undefined && originUrl.origin === input.devUrl.origin;
+}
+
+/**
  * CSRF guard for the cookie path. Cookies here are SameSite=Lax, and every other localhost port
  * counts as same-site — so a page served by another local process could fire a credentialed POST.
  * A browser always sends `Origin` on POST; refuse one that is not this server. A bearer request is
@@ -31,11 +52,8 @@ const requireSameOrigin = Effect.gen(function* () {
   if (request.headers.authorization !== undefined) return;
   const origin = request.headers.origin;
   if (origin === undefined) return;
-  let originHost: string | null = null;
-  try {
-    originHost = new URL(origin).host;
-  } catch {}
-  if (originHost === null || originHost !== request.headers.host) {
+  const { devUrl } = yield* ServerConfig;
+  if (!isOwnOrigin({ origin, host: request.headers.host, devUrl })) {
     return yield* new LocalApiRouteAuthError({ reason: "cross-origin request" });
   }
 });
