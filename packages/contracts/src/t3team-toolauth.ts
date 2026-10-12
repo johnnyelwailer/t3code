@@ -33,6 +33,16 @@ export const ToolAuthPhase = Schema.Literals([
 ]);
 export type ToolAuthPhase = typeof ToolAuthPhase.Type;
 
+/**
+ * A host a CLI signs in to (`nexplore.ghe.com`, `github.com`, optionally with a port). Starts with
+ * a letter or digit so it can never be read as a command-line flag when it becomes an argument.
+ */
+export const ToolAuthHostname = Schema.String.check(
+  Schema.isMaxLength(253),
+  Schema.isPattern(/^[A-Za-z0-9][A-Za-z0-9.-]*(:\d{1,5})?$/),
+);
+export type ToolAuthHostname = typeof ToolAuthHostname.Type;
+
 /** What the UI needs to render for one tool's card, and nothing more. */
 export const ToolAuthState = Schema.Struct({
   tool: ToolAuthToolId,
@@ -55,6 +65,11 @@ export const ToolAuthState = Schema.Struct({
   account: Schema.optional(Schema.String),
   /** Organisation/workspace label, when the CLI reports one — independent of `account`. */
   organization: Schema.optional(Schema.String),
+  /**
+   * The host this state is about, for a CLI that signs in per host (`gh`). A card that needs a
+   * specific host compares it before trusting `connected`.
+   */
+  hostname: Schema.optional(Schema.String),
   /** Epoch milliseconds. Only present when the tool's credential store reports it. */
   expiresAt: Schema.optional(Schema.Number),
   /**
@@ -77,6 +92,8 @@ export type ToolAuthListResult = typeof ToolAuthListResult.Type;
 
 export const ToolAuthStartInput = Schema.Struct({
   tool: ToolAuthToolId,
+  /** Signs in to this host instead of the tool's default one. Only per-host tools accept it. */
+  hostname: Schema.optional(ToolAuthHostname),
 });
 export type ToolAuthStartInput = typeof ToolAuthStartInput.Type;
 

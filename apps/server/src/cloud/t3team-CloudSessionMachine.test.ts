@@ -219,6 +219,8 @@ describe("CloudSessionMachines.resolve", () => {
       const error = yield* Effect.flip(resolveIn(checkout(DEVCONTAINER), ""));
       expect(error.reason).toBe("repository_sign_in_required");
       expect(error.message).toContain("gh auth login --hostname nexplore.ghe.com");
+      // The client signs in to exactly the repository's host, whatever its default login host is.
+      expect(error.host).toBe("nexplore.ghe.com");
     }),
   );
 });

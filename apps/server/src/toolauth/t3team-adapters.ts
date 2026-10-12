@@ -27,7 +27,7 @@
  *
  * @module toolauth/adapters
  */
-import type { ToolAuthAdapter, ToolAuthPhase } from "./t3team-types.ts";
+import type { AuthState, ToolAuthAdapter, ToolAuthPhase } from "./t3team-types.ts";
 import { GH } from "./t3team-ghAdapter.ts";
 
 export const CLAUDE: ToolAuthAdapter = {
@@ -180,6 +180,23 @@ const ADAPTERS: Record<string, ToolAuthAdapter> = {
 
 /** The tools surfaced in the production API/UI — `fake` is test/dev only. */
 export const PRODUCTION_TOOLS: ReadonlyArray<string> = [CLAUDE.tool, CODEX.tool, GH.tool];
+
+/**
+ * `adapter` signing in to `hostname`, for a per-host CLI (`gh`). `undefined` when the CLI has no
+ * notion of a host, so a request for one is refused instead of silently signing in elsewhere.
+ */
+export function adapterForHost(
+  adapter: ToolAuthAdapter,
+  hostname: string | undefined,
+): ToolAuthAdapter | undefined {
+  if (hostname === undefined || hostname === adapter.hostname) return adapter;
+  return adapter.forHost?.(hostname);
+}
+
+/** A per-host CLI's status is about that host; `state` says which. Other tools' pass through. */
+export function withAdapterHostname(adapter: ToolAuthAdapter, state: AuthState): AuthState {
+  return adapter.hostname === undefined ? state : { ...state, hostname: adapter.hostname };
+}
 
 export function getAdapter(tool: string): ToolAuthAdapter {
   const adapter = ADAPTERS[tool];

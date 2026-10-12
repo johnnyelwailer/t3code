@@ -3072,7 +3072,9 @@ const layerWsRpc = (
         [WS_METHODS.toolAuthList]: (_input) =>
           toolAuth.list.pipe(Effect.map((tools) => ({ tools: tools.map(toToolAuthWireState) }))),
         [WS_METHODS.toolAuthStart]: (input) =>
-          toolAuth.start(input.tool).pipe(Effect.map(toToolAuthWireState)),
+          toolAuth
+            .start(input.tool, { hostname: input.hostname })
+            .pipe(Effect.map(toToolAuthWireState)),
         // One-click "install this CLI", chained into the real sign-in flow
         // server-side (see `ToolAuthService.install`). The immediate
         // response is just the `installing` snapshot; every later beat
