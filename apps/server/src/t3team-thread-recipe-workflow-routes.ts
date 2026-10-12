@@ -11,6 +11,7 @@ import * as Effect from "effect/Effect";
 import { HttpRouter } from "effect/http";
 
 import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   errorResponse,
   okJson,
@@ -53,8 +54,9 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
     }
     // Single expansion point (pathExpansion.ts): a workspace-root recipePath may carry a literal
     // `~`; expand it ONCE so every downstream use below — plus the persisted run row — agrees.
+    const home = yield* HostProcess.HomeDirectory;
     const recipePath = input.launch.recipePath
-      ? toPhysicalProjectStatePath(expandHomePath(input.launch.recipePath))
+      ? toPhysicalProjectStatePath(expandHomePath(input.launch.recipePath, home))
       : undefined;
     // One recipe, several actions (Epic 16): a named action is resolved from the recipe's own
     // module, so it can only select a workflow the recipe declares. No name ⇒ defaultAction.

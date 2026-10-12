@@ -46,6 +46,8 @@ const recordingInstance = (id: string, calls: Call[]): ProviderInstance => {
         record("title", input.modelSelection).pipe(Effect.as({ title: "t" })),
       generateActivityLabel: (input) =>
         record("label", input.modelSelection).pipe(Effect.as({ label: "l" })),
+      generateReviewGuide: () =>
+        Effect.die("generateReviewGuide stub not configured for this test"),
       generateStructured: (input) =>
         record("structured", input.modelSelection).pipe(Effect.as({ status: "ok" }) as never),
     }),

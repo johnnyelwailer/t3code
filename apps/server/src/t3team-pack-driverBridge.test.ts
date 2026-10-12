@@ -23,7 +23,8 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
-import { clearMcpProviderSession, setMcpProviderSession } from "@t3tools/provider-core/server/mcpSession";
+import type { McpProviderSessionConfig } from "@t3tools/provider-core/server/mcpSession";
+import { McpProviderSessions } from "@t3tools/provider-core/server/McpProviderSessions";
 import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import { layerTest as serverSettingsLayerTest } from "./serverSettings.ts";
 import {
@@ -48,12 +49,28 @@ const runtimePolicy = {
   cwd: "/work",
 } as const;
 
+const mcpConfigs = new Map<ThreadId, McpProviderSessionConfig>();
+const mcpSessions = McpProviderSessions.of({
+  set: (config) =>
+    Effect.sync(() => {
+      mcpConfigs.set(config.threadId, config);
+    }),
+  read: (id) => Effect.sync(() => mcpConfigs.get(id)),
+  clear: (id) =>
+    Effect.sync(() => {
+      mcpConfigs.delete(id);
+    }),
+});
+
 const createInScope = (definition: PackProviderDriverDefinition) =>
   Effect.gen(function* () {
     const scope = yield* Scope.make();
     const instance = yield* bridgePackProviderDriver(definition)
       .create({ instanceId, displayName: "Example", environment: [], enabled: true, config: {} })
-      .pipe(Effect.provideService(Scope.Scope, scope));
+      .pipe(
+        Effect.provideService(Scope.Scope, scope),
+        Effect.provideService(McpProviderSessions, mcpSessions),
+      );
     return { scope, instance };
   });
 
@@ -74,7 +91,7 @@ describe("bridgePackProviderDriver (orchestration V2)", () => {
   it.effect("maps the pack adapter and an open session one-to-one", () =>
     Effect.gen(function* () {
       const pack = makeScriptedPack();
-      setMcpProviderSession({
+      yield* mcpSessions.set({
         environmentId: EnvironmentId.make("environment-1"),
         threadId,
         providerSessionId,
@@ -84,7 +101,7 @@ describe("bridgePackProviderDriver (orchestration V2)", () => {
         authorizationHeader: "Bearer provider-token",
       });
       const { instance, runtime, sessionScope, scope } = yield* openSession(pack.definition);
-      clearMcpProviderSession(threadId);
+      yield* mcpSessions.clear(threadId);
 
       expect(instance.orchestrationAdapter.driver).toBe(PACK_DRIVER);
       const capabilities = yield* instance.orchestrationAdapter.getCapabilities();
@@ -137,7 +154,7 @@ describe("bridgePackProviderDriver (orchestration V2)", () => {
       });
       const { runtime } = yield* openSession(pack.definition);
       const secondThreadId = ThreadId.make("thread-2");
-      setMcpProviderSession({
+      yield* mcpSessions.set({
         environmentId: EnvironmentId.make("environment-1"),
         threadId: secondThreadId,
         providerSessionId,
@@ -155,7 +172,7 @@ describe("bridgePackProviderDriver (orchestration V2)", () => {
         providerTurnId: ProviderTurnId.make("provider-turn-1"),
         message: turn.message,
       });
-      clearMcpProviderSession(secondThreadId);
+      yield* mcpSessions.clear(secondThreadId);
       yield* runtime.startTurn(
         yield* decodeTurnInput(turnInputJson("thread-3", providerSessionId)),
       );
@@ -375,7 +392,7 @@ describe("bridgePackProviderDriver (orchestration V2)", () => {
           enabled: true,
           config: {},
         })
-        .pipe(Effect.scoped, Effect.flip);
+        .pipe(Effect.provideService(McpProviderSessions, mcpSessions), Effect.scoped, Effect.flip);
       expect(error._tag).toBe("ProviderDriverError");
       expect(error.detail).toContain("nope");
     }),

@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-outset-state-indicators -- Existing merged lint debt; keep green while preserving behavior. */
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";

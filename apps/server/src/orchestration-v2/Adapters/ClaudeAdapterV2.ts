@@ -6534,7 +6534,6 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             type: "turn_item.updated",
             driver: CLAUDE_PROVIDER,
             turnItem: makeProviderRetryTurnItem({
-              idAllocator,
               driver: CLAUDE_PROVIDER,
               threadId: context.input.threadId,
               runId: context.input.runId,

@@ -19,7 +19,7 @@ import * as Stream from "effect/Stream";
 
 import type {
   ProviderAdapterV2SessionRuntime,
-  ProviderAdapterV2Shape,
+  ProviderAdapterV2,
 } from "@t3tools/provider-core/server/ProviderAdapter";
 import {
   CAPABILITIES_JSON,
@@ -53,7 +53,7 @@ const decodeThread = Schema.decodeUnknownEffect(PackCodec.providerThread);
 const makeInnerAdapter = (probes: {
   readonly busy: () => boolean;
   readonly seen: OrchestrationV2ProviderThread[];
-}): ProviderAdapterV2Shape => ({
+}): ProviderAdapterV2["Service"] => ({
   instanceId,
   driver: INNER,
   getCapabilities: () => decodeCapabilities(CAPABILITIES_JSON).pipe(Effect.orDie),
@@ -108,6 +108,7 @@ describe("createOpenCodeHarness session bridge", () => {
         driver: OUTER,
         instanceId,
         offerContinuation: () => Effect.void,
+        mcpSessions: { read: () => Effect.succeed(undefined) },
       });
       const sessionScope = yield* Scope.make();
       const runtime = yield* outer

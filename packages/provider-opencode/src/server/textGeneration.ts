@@ -332,21 +332,22 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
   // The OpenCode session API carries no reasoning-effort or thinking-budget
   // parameter (the aux model selection is option-stripped by the caller), so
   // the light-inference requirement for this op holds by construction.
-  const generateActivityLabel: ProviderTextGeneration["generateActivityLabel"] =
-    Effect.fn("OpenCodeTextGeneration.generateActivityLabel")(function* (input) {
-      const { prompt, outputSchema } = buildActivityLabelPrompt({ context: input.context });
-      const generated = yield* runOpenCodeJson({
-        operation: "generateActivityLabel",
-        cwd: input.cwd,
-        prompt,
-        outputSchema,
-        modelSelection: input.modelSelection,
-      });
-
-      return {
-        label: sanitizeActivityLabel(generated.label),
-      } satisfies ActivityLabelGenerationResult;
+  const generateActivityLabel: ProviderTextGeneration["generateActivityLabel"] = Effect.fn(
+    "OpenCodeTextGeneration.generateActivityLabel",
+  )(function* (input) {
+    const { prompt, outputSchema } = buildActivityLabelPrompt({ context: input.context });
+    const generated = yield* runOpenCodeJson({
+      operation: "generateActivityLabel",
+      cwd: input.cwd,
+      prompt,
+      outputSchema,
+      modelSelection: input.modelSelection,
     });
+
+    return {
+      label: sanitizeActivityLabel(generated.label),
+    } satisfies ActivityLabelGenerationResult;
+  });
 
   const generateStructured: ProviderTextGeneration["generateStructured"] = (input) =>
     runOpenCodeJson({

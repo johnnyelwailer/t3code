@@ -30,6 +30,7 @@ import { makePackOrchestrationAdapter } from "../t3team-pack-driverAdapter.ts";
 import * as EffectWorker from "./EffectWorker.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
+import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import {
   MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS,
@@ -70,12 +71,14 @@ const runScenario = (name: string, scenario: Scenario) =>
       const registry = ProviderAdapterRegistry.layerFromAdaptersEffect(
         Effect.gen(function* () {
           const requests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
+          const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
           return [
             makePackOrchestrationAdapter({
               adapter: pack.instance.orchestration,
               driver: ProviderDriverKind.make(PACK_DRIVER),
               instanceId,
               offerContinuation: requests.offer,
+              mcpSessions,
             }),
           ];
         }),

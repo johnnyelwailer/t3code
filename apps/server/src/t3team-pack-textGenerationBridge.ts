@@ -18,19 +18,22 @@ import type { TextGeneration } from "./textGeneration/TextGeneration.ts";
 const errorDetail = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
+const unsupportedOperation = (driver: ProviderDriverKind, operation: string) =>
+  Effect.fail(
+    new TextGenerationError({
+      operation,
+      detail: `Provider driver '${driver}' does not support text generation.`,
+    }),
+  );
+
 const unsupportedTextGeneration = (driver: ProviderDriverKind): TextGeneration["Service"] => {
-  const fail = (operation: string) =>
-    Effect.fail(
-      new TextGenerationError({
-        operation,
-        detail: `Provider driver '${driver}' does not support text generation.`,
-      }),
-    );
+  const fail = (operation: string) => unsupportedOperation(driver, operation);
   return {
     generateCommitMessage: () => fail("generateCommitMessage"),
     generatePrContent: () => fail("generatePrContent"),
     generateBranchName: () => fail("generateBranchName"),
     generateThreadTitle: () => fail("generateThreadTitle"),
+    generateReviewGuide: () => fail("generateReviewGuide"),
   };
 };
 
@@ -61,6 +64,7 @@ export const bridgePackTextGeneration = (
       attempt("generateBranchName", () => service.generateBranchName(input)),
     generateThreadTitle: (input) =>
       attempt("generateThreadTitle", () => service.generateThreadTitle(input)),
+    generateReviewGuide: () => unsupportedOperation(driver, "generateReviewGuide"),
     ...(service.generateActivityLabel
       ? {
           generateActivityLabel: (input) =>

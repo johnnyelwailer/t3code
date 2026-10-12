@@ -27,7 +27,11 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
-import { ProviderAdapterV2RuntimePolicy, type ProviderAdapterV2Event } from "@t3tools/provider-core/server/ProviderAdapter";
+import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
+import {
+  ProviderAdapterV2RuntimePolicy,
+  type ProviderAdapterV2Event,
+} from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ClaudeAdapterV2 from "./ClaudeAdapterV2.ts";
 import {
   applyClaudeTaskToolResult,
@@ -143,7 +147,7 @@ const makeHarness = Effect.gen(function* () {
     ClaudeAdapterV2.ClaudeAgentSdkQueryRunnerError
   >();
   const offered: Array<SDKUserMessage> = [];
-  const adapter = ClaudeAdapterV2.makeClaudeAdapterV2({
+  const adapter = yield* ClaudeAdapterV2.makeClaudeAdapterV2({
     instanceId: ClaudeAdapterV2.CLAUDE_DEFAULT_INSTANCE_ID,
     settings: SETTINGS,
     environment: {},
@@ -161,6 +165,7 @@ const makeHarness = Effect.gen(function* () {
           offer: (message: SDKUserMessage) => Effect.sync(() => void offered.push(message)),
           setModel: () => Effect.void,
           setPermissionMode: () => Effect.void,
+          stopTask: () => Effect.void,
           interrupt: Effect.void,
           close: Effect.void,
         }),
@@ -284,19 +289,23 @@ describe("ClaudeAdapterV2 t3team Claude Tasks", () => {
         const latest = todoPlans().at(-1);
         assert.deepEqual(latest?.kind === "todo_list" ? latest.steps : undefined, [
           { id: "task-1", text: "Inspect", status: "running" },
-          { id: "task-2", text: "Ship (blocked by #1)", status: "pending" },
+          { id: "task-2", text: "Ship", status: "pending" },
         ]);
-        // Each change supersedes the previous list, as successive TodoWrite calls do.
-        assert.isTrue(todoPlans().some((plan) => plan.status === "superseded"));
+        // One list per turn, updated in place by each task call.
+        assert.equal(new Set(todoPlans().map((plan) => plan.id)).size, 1);
         assert.isTrue(
           harness.events.some(
             (event) =>
               event.type === "turn_item.updated" &&
               event.turnItem.type === "todo_list" &&
-              event.turnItem.nativeItemRef?.nativeId === "tool-task-update-1",
+              event.turnItem.nativeItemRef?.nativeId?.startsWith("claude-tasks:") === true,
           ),
         );
-      }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+        ),
+      ),
     ),
   );
 });

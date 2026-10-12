@@ -18,7 +18,7 @@ import * as Stream from "effect/Stream";
 
 import type {
   ProviderAdapterV2SessionRuntime,
-  ProviderAdapterV2Shape,
+  ProviderAdapterV2,
 } from "@t3tools/provider-core/server/ProviderAdapter";
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
@@ -94,9 +94,9 @@ const restampRuntime = (
 
 /** The inner adapter re-identified as `outer`; its own `driver` is the inner identity. */
 export const restampAdapter = (
-  adapter: ProviderAdapterV2Shape,
+  adapter: ProviderAdapterV2["Service"],
   outer: ProviderDriverKind,
-): ProviderAdapterV2Shape => {
+): ProviderAdapterV2["Service"] => {
   const inner = adapter.driver;
   if (inner === outer) return adapter;
   return {

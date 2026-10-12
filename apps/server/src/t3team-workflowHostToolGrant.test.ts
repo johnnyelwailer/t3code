@@ -24,7 +24,12 @@ import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import { afterAll } from "vite-plus/test";
-import { ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  ProjectId,
+  ProviderInstanceId,
+  SourceControlProviderKind,
+  ThreadId,
+} from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -131,7 +136,7 @@ const published = {
   url: "https://example.test/pr/7",
   number: 7,
   repository: "acme/setup",
-  provider: "github" as const,
+  provider: SourceControlProviderKind.make("github"),
   branch: "machine/setup",
   commit: "abc1234",
   projectId,

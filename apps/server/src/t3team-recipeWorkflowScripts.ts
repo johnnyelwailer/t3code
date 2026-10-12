@@ -22,6 +22,7 @@ import * as Path from "effect/Path";
 import type { AnyScriptRef } from "@t3team/sdk";
 
 import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import { resolveRecipeActions, resolveRecipeWorkflowPath } from "./t3team-projectRecipeActions.ts";
 import { importRecipeModuleRef } from "./t3team-projectRecipeDiscoveryModule.ts";
 
@@ -43,12 +44,13 @@ export const NO_RECIPE_SCRIPTS: Readonly<Record<string, AnyScriptRef>> = Object.
  */
 export const resolveRecipeWorkflowScripts = Effect.fn("resolveRecipeWorkflowScripts")(
   function* (input: { readonly recipePath: string | undefined; readonly workflowPath: string }) {
-    const recipePath = expandHomePath(input.recipePath?.trim() ?? "");
+    const home = yield* HostProcess.HomeDirectory;
+    const recipePath = expandHomePath(input.recipePath?.trim() ?? "", home);
     if (recipePath.length === 0) return NO_RECIPE_SCRIPTS;
     // Workspace roots (and thus recipe/workflow launch paths derived from them) may legitimately
     // carry a literal `~` — expand it here, once, so this fs.exists/import and the ownership
     // compare below all operate on the real absolute path (see pathExpansion.ts).
-    const workflowPath = expandHomePath(input.workflowPath);
+    const workflowPath = expandHomePath(input.workflowPath, home);
 
     const fileSystem = yield* FileSystem.FileSystem;
     const pathService = yield* Path.Path;
