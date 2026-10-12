@@ -1,11 +1,10 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
-import * as TestClock from "effect/testing/TestClock";
 
 import * as GitHubApi from "../sourceControl/GitHubApi.ts";
 import { makeSessionGh } from "./t3team-CloudSessionGh.ts";
-import { jobStepsRequest, type CloudSessionRepoRef } from "./t3team-githubActionsSessionClient.ts";
+import { type CloudSessionRepoRef } from "./t3team-githubActionsSessionClient.ts";
 
 const REPO: CloudSessionRepoRef = {
   host: "nexplore.ghe.com",
@@ -60,47 +59,6 @@ describe("makeSessionGh", () => {
         { operation: "cloudSession.listRuns", allowReserve: false },
         { operation: "cloudSession.cancelRun", allowReserve: true },
       ]);
-    }),
-  );
-
-  it.effect("caches job-step reads briefly so list polls share one GHE call", () =>
-    Effect.gen(function* () {
-      let stepsCalls = 0;
-      const rest: GitHubApi.GitHubApi["Service"]["rest"] = (input) =>
-        Effect.sync(() => {
-          if (input.operation === "cloudSession.jobSteps") stepsCalls += 1;
-          return okRest(JSON.stringify({ jobs: [] }));
-        });
-      const gh = makeSessionGh(mockApi(rest), REPO);
-      const request = jobStepsRequest(REPO, 42);
-
-      yield* gh.runBackground(request);
-      yield* gh.runBackground(request);
-      assert.strictEqual(stepsCalls, 1);
-
-      yield* TestClock.adjust("6 seconds");
-      yield* gh.runBackground(request);
-      assert.strictEqual(stepsCalls, 2);
-    }),
-  );
-
-  it.effect("caches the viewer login across list polls", () =>
-    Effect.gen(function* () {
-      let viewerCalls = 0;
-      const rest: GitHubApi.GitHubApi["Service"]["rest"] = (input) =>
-        Effect.sync(() => {
-          if (input.path === "user") viewerCalls += 1;
-          return okRest(JSON.stringify({ login: "pj" }));
-        });
-      const gh = makeSessionGh(mockApi(rest), REPO);
-
-      assert.strictEqual(yield* gh.resolveLogin({ allowReserve: false }), "pj");
-      assert.strictEqual(yield* gh.resolveLogin({ allowReserve: false }), "pj");
-      assert.strictEqual(viewerCalls, 1);
-
-      yield* TestClock.adjust("61 seconds");
-      assert.strictEqual(yield* gh.resolveLogin({ allowReserve: false }), "pj");
-      assert.strictEqual(viewerCalls, 2);
     }),
   );
 });

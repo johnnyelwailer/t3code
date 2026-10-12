@@ -59,6 +59,8 @@ export type GitHubActionsRequest =
       /** Relative to the host's API root, e.g. `repos/acme/fleet/actions/runs`. */
       readonly path: string;
       readonly body?: unknown;
+      /** A background read may be shared process-wide for this long (see `GitHubRestInput`). */
+      readonly coalesce?: { readonly ttlMs: number; readonly revision?: string };
     }
   | {
       readonly kind: "graphql";
@@ -95,6 +97,13 @@ export function dispatchSessionRequest(
  * List session-workflow runs. `actor=` is included, but this GHE ignores it
  * (`created_by` too); `sessionRunsForLogin` is what actually scopes the list.
  */
+/** Concurrent surfaces and WebSocket clients of one server share a runs listing this long. */
+const RUNS_COALESCE_MS = 4_000;
+/** The signed-in identity does not move on the poll cadence. */
+const LOGIN_COALESCE_MS = 60_000;
+/** A run's job steps are re-read only after the run changed, or this long. */
+const JOB_STEPS_COALESCE_MS = 15_000;
+
 export function listRunsRequest(
   ref: CloudSessionRepoRef,
   limit: number,
@@ -108,6 +117,7 @@ export function listRunsRequest(
     kind: "rest",
     operation: "cloudSession.listRuns",
     path: repoApiPath(ref, `actions/workflows/${ref.workflowFileName}/runs?${query}`),
+    coalesce: { ttlMs: RUNS_COALESCE_MS },
   };
 }
 
@@ -117,14 +127,24 @@ export function listRunsRequest(
  * sessions" sound.
  */
 export function currentLoginRequest(_ref: CloudSessionRepoRef): GitHubActionsRequest {
-  return { kind: "rest", operation: "cloudSession.viewer", path: "user" };
+  return {
+    kind: "rest",
+    operation: "cloudSession.viewer",
+    path: "user",
+    coalesce: { ttlMs: LOGIN_COALESCE_MS },
+  };
 }
 
-export function jobStepsRequest(ref: CloudSessionRepoRef, runId: number): GitHubActionsRequest {
+export function jobStepsRequest(
+  ref: CloudSessionRepoRef,
+  runId: number,
+  revision?: string,
+): GitHubActionsRequest {
   return {
     kind: "rest",
     operation: "cloudSession.jobSteps",
     path: repoApiPath(ref, `actions/runs/${runId}/jobs`),
+    coalesce: { ttlMs: JOB_STEPS_COALESCE_MS, ...(revision === undefined ? {} : { revision }) },
   };
 }
 

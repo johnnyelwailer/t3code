@@ -14,6 +14,7 @@ import { collectUint8StreamText } from "../stream/collectUint8StreamText.ts";
 import * as GitHubCredentials from "./GitHubCredentials.ts";
 import * as GitHubQuota from "./githubQuota.ts";
 import * as SourceControlRateLimit from "./SourceControlRateLimit.ts";
+import { isCoalescible, makeGitHubReadCoalescer } from "./t3team-githubReadCoalescer.ts";
 
 const DEFAULT_TIMEOUT = Duration.seconds(30);
 const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
@@ -137,6 +138,12 @@ export interface GitHubRestInput {
   readonly timeout?: Duration.Input;
   /** Overrides `AllowGitHubReserve` for this one request. */
   readonly allowReserve?: boolean;
+  /**
+   * A plain GET may be answered from a read another caller made within `ttl`, or ride the one
+   * already in flight. `revision` names the version of the resource the caller already knows, so
+   * a changed resource is never answered from an older read.
+   */
+  readonly coalesce?: { readonly ttl: Duration.Input; readonly revision?: string };
 }
 
 export interface GitHubGraphQlInput {
@@ -347,6 +354,7 @@ export const make = Effect.gen(function* () {
   const quota = yield* GitHubQuota.GitHubQuota;
   const limits = yield* SourceControlRateLimit.SourceControlRateLimit;
   const gate = yield* Semaphore.make(CONCURRENCY);
+  const reads = makeGitHubReadCoalescer<GitHubRestResponse, GitHubApiError>();
 
   const credential: GitHubApi["Service"]["credential"] = Effect.fn("GitHubApi.credential")(
     function* (host) {
@@ -523,7 +531,7 @@ export const make = Effect.gen(function* () {
       input.body === undefined
         ? withEtag
         : withEtag.pipe(HttpClientRequest.bodyJsonUnsafe(input.body));
-    return AllowGitHubReserve.pipe(
+    const sendRequest = AllowGitHubReserve.pipe(
       Effect.flatMap((interactive) =>
         send({
           host: input.host,
@@ -536,7 +544,22 @@ export const make = Effect.gen(function* () {
         }),
       ),
     );
+    return isCoalescible(input) ? coalescedRead(input, sendRequest) : sendRequest;
   };
+
+  const coalescedRead = (
+    input: GitHubRestInput & { readonly coalesce: NonNullable<GitHubRestInput["coalesce"]> },
+    sendRequest: Effect.Effect<GitHubRestResponse, GitHubApiError>,
+  ) =>
+    Effect.gen(function* () {
+      const host = normalizeHost(input.host);
+      const { fingerprint } = yield* credential(host);
+      const scope = (yield* SourceControlRateLimit.CredentialScope) || fingerprint;
+      const key = [host, scope, input.accept ?? "", input.path, input.coalesce.revision ?? ""].join(
+        "\0",
+      );
+      return yield* reads.share(key, input.coalesce.ttl, sendRequest);
+    });
 
   const graphql: GitHubApi["Service"]["graphql"] = Effect.fn("GitHubApi.graphql")(
     function* (input) {

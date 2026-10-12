@@ -3333,6 +3333,8 @@ export const layer = Layer.unwrap(
     const serverBrowser = yield* ServerBrowser.ServerBrowser;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const pullRequests = yield* PullRequestService.PullRequestService;
+    const gitHubApi = yield* GitHubApi.GitHubApi;
+    const gitHubTransport = Layer.succeed(GitHubApi.GitHubApi, gitHubApi);
     const sql = yield* SqlClient.SqlClient;
     return HttpRouter.add(
       "GET",
@@ -3399,12 +3401,15 @@ export const layer = Layer.unwrap(
               // One server-lifetime service means clients share the same PR caches, and a WS
               // mutation invalidates the HTTP diff cache that every client reads from.
               Layer.provide(Layer.succeed(PullRequestService.PullRequestService, pullRequests)),
+              // GitHub transport: the server's one instance (semaphore, quota, pause, read
+              // coalescer) is handed to every connection. Rebuilding `layerWithDependencies` here
+              // would give each client its own budget against the same host.
               // Cloud sessions drive `gh` directly, exactly as pull-request
               // reading does, so they inherit the user's existing login and
               // carry no credential of their own.
               Layer.provide(
                 CloudSessionServiceLayer.pipe(
-                  Layer.provide(GitHubApi.layerWithDependencies),
+                  Layer.provide(gitHubTransport),
                   // The create path hands the creator's live T3 Connect
                   // credential to the VM, so it needs the CLI token manager.
                   Layer.provide(CloudCliTokenManager.layer),
@@ -3416,9 +3421,7 @@ export const layer = Layer.unwrap(
                   // background top-up from opening two sign-ins at once.
                   // A session for a project runs in its machine; the resolver reads the
                   // project's checkouts (discovery, provided below) and the user's gh login.
-                  Layer.provide(
-                    CloudSessionMachinesLayer.pipe(Layer.provide(GitHubApi.layerWithDependencies)),
-                  ),
+                  Layer.provide(CloudSessionMachinesLayer.pipe(Layer.provide(gitHubTransport))),
                 ),
               ),
               Layer.provide(ProjectMachineDiscoveryLayer),
@@ -3430,7 +3433,7 @@ export const layer = Layer.unwrap(
                         Layer.mergeAll(
                           AzureDevOpsCli.layer,
                           BitbucketApi.layer,
-                          GitHubApi.layerWithDependencies,
+                          gitHubTransport,
                           GitLabCli.layer,
                           ForgejoCli.layer,
                         ),
