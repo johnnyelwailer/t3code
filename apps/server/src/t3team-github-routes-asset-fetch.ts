@@ -31,7 +31,9 @@ export function fetchAssetResponse(
     let target = start;
     for (let hop = 0; ; hop += 1) {
       const authorization =
-        token !== undefined && target.origin === start.origin ? `Bearer ${token}` : undefined;
+        token !== undefined && target.protocol === "https:" && target.origin === start.origin
+          ? `Bearer ${token}`
+          : undefined;
       const response = yield* httpClient
         .get(target.toString(), {
           headers: { Accept: "*/*", ...(authorization ? { Authorization: authorization } : {}) },

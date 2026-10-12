@@ -185,4 +185,24 @@ describe("downloadGitHubAsset", () => {
       expect(error.message).toContain("failed with 302");
     }),
   );
+
+  it.effect("never sends the token to a plain-http asset URL", () =>
+    Effect.gen(function* () {
+      const seen: Array<string | undefined> = [];
+      const client = HttpClient.make((request) => {
+        seen.push(request.headers["authorization"]);
+        return Effect.succeed(
+          HttpClientResponse.fromWeb(request, new Response("data", { status: 200 })),
+        );
+      });
+      const { api } = makeFakeGitHubApi(() => restOk({}));
+
+      yield* downloadGitHubAsset({ host: "github.com", url: "http://github.com/a" }).pipe(
+        Effect.provideService(HttpClient.HttpClient, client),
+        Effect.provideService(GitHubApi.GitHubApi, api),
+      );
+
+      expect(seen).toEqual([undefined]);
+    }),
+  );
 });
