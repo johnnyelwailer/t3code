@@ -42,6 +42,7 @@ function mount(environmentId: string, sessions: CloudSession[]) {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  vi.spyOn(Math, "random").mockReturnValue(0);
   mocks.refresh.mockClear();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 });
@@ -50,6 +51,7 @@ afterEach(() => {
   act(() => root?.unmount());
   root = null;
   vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
