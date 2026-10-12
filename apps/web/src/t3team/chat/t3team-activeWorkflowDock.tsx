@@ -87,7 +87,7 @@ export function deriveT3TeamActiveWorkflowDockItems(
     byRunId.set(runId, {
       runId,
       messageId: message.id,
-      name: shape.name || "Orchestration",
+      name: shape.description || shape.name || "Orchestration",
       summaries,
     });
   }
