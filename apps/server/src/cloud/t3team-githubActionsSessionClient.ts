@@ -59,6 +59,11 @@ export type GitHubActionsRequest =
       /** Relative to the host's API root, e.g. `repos/acme/fleet/actions/runs`. */
       readonly path: string;
       readonly body?: unknown;
+      /**
+       * Only for a GET the session may cache: `settled` marks data about a run that has
+       * finished, which can never change again, so it is kept far longer than a live read.
+       */
+      readonly lifetime?: "live" | "settled";
     }
   | {
       readonly kind: "graphql";
@@ -120,11 +125,17 @@ export function currentLoginRequest(_ref: CloudSessionRepoRef): GitHubActionsReq
   return { kind: "rest", operation: "cloudSession.viewer", path: "user" };
 }
 
-export function jobStepsRequest(ref: CloudSessionRepoRef, runId: number): GitHubActionsRequest {
+/** `settled` is a run that has completed: its steps are final, so the read is cached long. */
+export function jobStepsRequest(
+  ref: CloudSessionRepoRef,
+  runId: number,
+  settled = false,
+): GitHubActionsRequest {
   return {
     kind: "rest",
     operation: "cloudSession.jobSteps",
     path: repoApiPath(ref, `actions/runs/${runId}/jobs`),
+    lifetime: settled ? "settled" : "live",
   };
 }
 

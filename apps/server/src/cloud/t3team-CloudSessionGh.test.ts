@@ -44,7 +44,7 @@ describe("makeSessionGh", () => {
           }
           return okRest(JSON.stringify({ workflow_runs: [] }));
         });
-      const gh = makeSessionGh(mockApi(rest), REPO);
+      const gh = yield* makeSessionGh(mockApi(rest), REPO);
 
       yield* gh.resolveLogin({ allowReserve: false });
       yield* gh.listRunsFor("pj", { allowReserve: false });
@@ -71,7 +71,7 @@ describe("makeSessionGh", () => {
           if (input.operation === "cloudSession.jobSteps") stepsCalls += 1;
           return okRest(JSON.stringify({ jobs: [] }));
         });
-      const gh = makeSessionGh(mockApi(rest), REPO);
+      const gh = yield* makeSessionGh(mockApi(rest), REPO);
       const request = jobStepsRequest(REPO, 42);
 
       yield* gh.runBackground(request);
@@ -92,7 +92,7 @@ describe("makeSessionGh", () => {
           if (input.path === "user") viewerCalls += 1;
           return okRest(JSON.stringify({ login: "pj" }));
         });
-      const gh = makeSessionGh(mockApi(rest), REPO);
+      const gh = yield* makeSessionGh(mockApi(rest), REPO);
 
       assert.strictEqual(yield* gh.resolveLogin({ allowReserve: false }), "pj");
       assert.strictEqual(yield* gh.resolveLogin({ allowReserve: false }), "pj");

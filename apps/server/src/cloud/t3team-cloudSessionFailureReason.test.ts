@@ -139,6 +139,21 @@ describe("projectCloudSession failure reason", () => {
     }),
   );
 
+  it.effect("asks for a settled run's steps as settled data, and a moving run's as live", () =>
+    Effect.gen(function* () {
+      const gh = fakeGh(JOBS_WITH_FAILED_STEP);
+      const moving = { ...failedRun, id: 78, status: "in_progress", conclusion: null };
+
+      yield* projectCloudSession(failedRun, 0, "machine", repoRef, gh.run);
+      yield* projectCloudSession(moving, 0, "machine", repoRef, gh.run);
+
+      assert.deepStrictEqual(
+        gh.calls.map((call) => (call.kind === "rest" ? call.lifetime : undefined)),
+        ["settled", "live"],
+      );
+    }),
+  );
+
   it.effect("retries an unreadable read a bounded number of times, then pins the reason", () =>
     Effect.gen(function* () {
       const gh = fakeGh("not json");

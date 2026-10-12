@@ -93,7 +93,7 @@ export const projectCloudSession = (
     // `null` means "we could not read the steps", which is NOT the same as
     // "there are no steps yet". Passing `[]` here would report `requested`
     // for a running session and march its phase backwards on one flaky poll.
-    const readSteps = run(jobStepsRequest(repoRef, sessionRun.id)).pipe(
+    const readSteps = run(jobStepsRequest(repoRef, sessionRun.id, isRunSettled(sessionRun))).pipe(
       Effect.map((result) => (result.truncated ? null : parseJobStepsResponse(result.body))),
       // Progress detail is a nicety: a run whose steps cannot be read is
       // still a real session, so degrade to the run-level phase rather

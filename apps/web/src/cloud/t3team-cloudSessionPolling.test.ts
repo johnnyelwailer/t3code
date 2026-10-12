@@ -1,3 +1,4 @@
+import { CLOUD_SESSION_REFRESH_INTERVAL_MS } from "@t3tools/client-runtime/state/cloud-sessions";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
@@ -87,6 +88,14 @@ describe("startCloudSessionListPolling", () => {
 });
 
 describe("cloudSessionPollIntervalMs", () => {
+  it("polls a provisioning session no faster than every 10s by default (2 GHE calls per list)", () => {
+    // The shipped default, not an argument: this is what a Run-on menu actually uses.
+    expect(CLOUD_SESSION_REFRESH_INTERVAL_MS).toBeGreaterThanOrEqual(10_000);
+    expect(
+      cloudSessionPollIntervalMs([{ phase: "preparing" }], CLOUD_SESSION_REFRESH_INTERVAL_MS),
+    ).toBe(CLOUD_SESSION_REFRESH_INTERVAL_MS);
+  });
+
   it("polls at the busy cadence only while a session is provisioning", () => {
     expect(cloudSessionPollIntervalMs([{ phase: "preparing" }, { phase: "ready" }], 5000)).toBe(
       5000,

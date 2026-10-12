@@ -24,6 +24,7 @@ import {
 import { parseLogin, parseRunsResponse } from "./t3team-githubActionsSessionParse.ts";
 import { sessionRunsForLogin } from "./t3team-cloudSessionRunOwnership.ts";
 import { toCloudSessionFailure } from "./t3team-CloudSessionErrors.ts";
+import { isCacheableRead, makeSessionReadCache } from "./t3team-CloudSessionReadCache.ts";
 
 /** Recent runs worth considering; also the window `cancel` checks membership against. */
 const RUN_HISTORY_LIMIT = 100;
@@ -34,12 +35,6 @@ const RUN_HISTORY_LIMIT = 100;
  * quota for nothing.
  */
 const LOGIN_CACHE_TTL_MS = 60_000;
-
-/**
- * Job-step detail for an in-progress run is polled on the client list cadence.
- * Serving a few-second cache collapses N surfaces / ticks into one GHE call.
- */
-const JOB_STEPS_CACHE_TTL_MS = 5_000;
 
 export type SessionGhRunOptions = {
   /**
@@ -56,59 +51,55 @@ export type SessionGhRunOptions = {
  * pieces that make per-user isolation work: the list is always scoped to the
  * login that `resolveLogin` returns.
  */
-export function makeSessionGh(api: GitHubApi.GitHubApi["Service"], repoRef: CloudSessionRepoRef) {
+export const makeSessionGh = Effect.fn("cloud.session_gh.make")(function* (
+  api: GitHubApi.GitHubApi["Service"],
+  repoRef: CloudSessionRepoRef,
+) {
   let cachedLogin: { readonly login: string; readonly expiresAt: number } | null = null;
-  const jobStepsCache = new Map<
-    string,
-    { readonly expiresAt: number; readonly response: GitHubActionsResponse }
-  >();
 
-  /** Run one request, mapping its errors to user-visible session failures. */
+  /** One request, errors mapped to user-visible session failures; no caching. */
+  const execute = (
+    request: GitHubActionsRequest,
+    allowReserve: boolean,
+  ): Effect.Effect<GitHubActionsResponse, CloudSessionFailedError> =>
+    (request.kind === "graphql"
+      ? api
+          .graphql({
+            host: repoRef.host,
+            operation: request.operation,
+            query: request.query,
+            ...(request.variables === undefined ? {} : { variables: request.variables }),
+            allowReserve,
+          })
+          .pipe(Effect.map((body) => ({ body, truncated: false })))
+      : api
+          .rest({
+            host: repoRef.host,
+            operation: request.operation,
+            path: request.path,
+            ...(request.method === undefined ? {} : { method: request.method }),
+            ...(request.body === undefined ? {} : { body: request.body }),
+            allowReserve,
+          })
+          .pipe(Effect.map((response) => ({ body: response.body, truncated: response.truncated })))
+    ).pipe(Effect.mapError(toCloudSessionFailure));
+
+  /**
+   * Reads that declare a `lifetime` (a run's job steps) are cached and
+   * single-flighted: briefly while the run is live, for good once it settled.
+   * Always at background priority — progress detail is a nicety, never a reason
+   * to spend the quota reserve.
+   */
+  const cachedRead = yield* makeSessionReadCache((request) => execute(request, false));
+
+  /** Run one request, honouring the cache for the reads that opt in. */
   const run = (
     request: GitHubActionsRequest,
     options?: SessionGhRunOptions,
-  ): Effect.Effect<GitHubActionsResponse, CloudSessionFailedError> => {
-    const allowReserve = options?.allowReserve === true;
-    const execute = (
-      request.kind === "graphql"
-        ? api
-            .graphql({
-              host: repoRef.host,
-              operation: request.operation,
-              query: request.query,
-              ...(request.variables === undefined ? {} : { variables: request.variables }),
-              allowReserve,
-            })
-            .pipe(Effect.map((body) => ({ body, truncated: false })))
-        : api
-            .rest({
-              host: repoRef.host,
-              operation: request.operation,
-              path: request.path,
-              ...(request.method === undefined ? {} : { method: request.method }),
-              ...(request.body === undefined ? {} : { body: request.body }),
-              allowReserve,
-            })
-            .pipe(
-              Effect.map((response) => ({ body: response.body, truncated: response.truncated })),
-            )
-    ).pipe(Effect.mapError(toCloudSessionFailure));
-
-    if (request.kind !== "rest" || request.operation !== "cloudSession.jobSteps") {
-      return execute;
-    }
-
-    return Effect.gen(function* () {
-      const now = yield* Clock.currentTimeMillis;
-      const hit = jobStepsCache.get(request.path);
-      if (hit !== undefined && hit.expiresAt > now) {
-        return hit.response;
-      }
-      const response = yield* execute;
-      jobStepsCache.set(request.path, { expiresAt: now + JOB_STEPS_CACHE_TTL_MS, response });
-      return response;
-    });
-  };
+  ): Effect.Effect<GitHubActionsResponse, CloudSessionFailedError> =>
+    isCacheableRead(request)
+      ? cachedRead(request)
+      : execute(request, options?.allowReserve === true);
 
   /** Background reads: honour the rate-limit pause and leave the quota reserve. */
   const runBackground = (
@@ -172,4 +163,4 @@ export function makeSessionGh(api: GitHubApi.GitHubApi["Service"], repoRef: Clou
     });
 
   return { run, runBackground, runInteractive, listRunsFor, resolveLogin } as const;
-}
+});
