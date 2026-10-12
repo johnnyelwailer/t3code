@@ -154,6 +154,29 @@ describe("projectCloudSession failure reason", () => {
     }),
   );
 
+  it.effect("names the second failure of a re-run, not the first attempt's pinned reason", () =>
+    Effect.gen(function* () {
+      const stepsFailingAt = (name: string) =>
+        JSON.stringify({
+          jobs: [{ steps: [{ name, status: "completed", conclusion: "failure" }] }],
+        });
+      let attempt = 0;
+      const run = () =>
+        Effect.sync(() => answer(stepsFailingAt(`step of attempt ${(attempt += 1)}`)));
+      const cache = makeFailureReasonCache();
+
+      const first = yield* projectCloudSession(failedRun, 0, "machine", repoRef, run, cache);
+      const rerun = { ...failedRun, runAttempt: 2 };
+      const second = yield* projectCloudSession(rerun, 0, "machine", repoRef, run, cache);
+      const secondAgain = yield* projectCloudSession(rerun, 0, "machine", repoRef, run, cache);
+
+      assert.equal(first.failureReason, "Failed at “step of attempt 1”.");
+      assert.equal(second.failureReason, "Failed at “step of attempt 2”.");
+      assert.equal(secondAgain.failureReason, second.failureReason);
+      assert.equal(attempt, 2);
+    }),
+  );
+
   it.effect("retries an unreadable read a bounded number of times, then pins the reason", () =>
     Effect.gen(function* () {
       const gh = fakeGh("not json");

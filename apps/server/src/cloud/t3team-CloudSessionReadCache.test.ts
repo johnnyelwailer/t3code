@@ -1,5 +1,6 @@
 import { CloudSessionFailedError } from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -14,6 +15,9 @@ const REPO: CloudSessionRepoRef = {
   repo: "nx-nexi",
   workflowFileName: "session.yml",
 };
+
+/** Who is asking; a reference, so reading it needs nothing in the effect context. */
+const Identity = Context.Reference<string>("test/Identity", { defaultValue: () => "nobody" });
 
 const rest = (request: ReturnType<typeof jobStepsRequest>) => {
   if (request.kind !== "rest") throw new Error("expected a REST request");
@@ -30,7 +34,7 @@ describe("makeSingleFlight", () => {
         yield* Deferred.await(gate);
         return executions;
       });
-      const shared = yield* makeSingleFlight(slow);
+      const shared = yield* makeSingleFlight(slow, Effect.succeed("pj"));
 
       const callers = yield* Effect.forEach(Array.from({ length: 5 }), () =>
         Effect.forkChild(shared),
@@ -53,6 +57,7 @@ describe("makeSingleFlight", () => {
       const gate = yield* Deferred.make<void>();
       const shared = yield* makeSingleFlight(
         Deferred.await(gate).pipe(Effect.tap(() => Effect.sync(() => (completions += 1)))),
+        Effect.succeed("pj"),
       );
 
       const leaver = yield* Effect.forkChild(shared);
@@ -63,6 +68,47 @@ describe("makeSingleFlight", () => {
       yield* Fiber.join(stayer);
 
       assert.strictEqual(completions, 1);
+    }),
+  );
+});
+
+describe("makeSingleFlight identity", () => {
+  it.effect("never shares a flight between two credentials, only within one", () =>
+    Effect.gen(function* () {
+      const runs: string[] = [];
+      const gate = yield* Deferred.make<void>();
+      const shared = yield* makeSingleFlight(
+        Effect.gen(function* () {
+          const who = yield* Identity;
+          runs.push(who);
+          yield* Deferred.await(gate);
+          return `list-of-${who}`;
+        }),
+        Identity,
+      );
+
+      const as = (who: string) =>
+        Effect.forkChild(shared.pipe(Effect.provideService(Identity, who)));
+      const callers = [yield* as("ann"), yield* as("bob"), yield* as("ann"), yield* as("bob")];
+      yield* Effect.yieldNow;
+      yield* Deferred.succeed(gate, undefined);
+      const results = yield* Effect.forEach(callers, Fiber.join);
+
+      assert.deepStrictEqual(results, ["list-of-ann", "list-of-bob", "list-of-ann", "list-of-bob"]);
+      assert.deepStrictEqual([...runs].sort(), ["ann", "bob"]);
+    }),
+  );
+
+  it.effect("shares nothing when the identity cannot be resolved", () =>
+    Effect.gen(function* () {
+      let runs = 0;
+      const shared = yield* makeSingleFlight(
+        Effect.sync(() => (runs += 1)),
+        Effect.fail("no credential"),
+      );
+      yield* shared;
+      yield* shared;
+      assert.strictEqual(runs, 2);
     }),
   );
 });
@@ -96,6 +142,26 @@ describe("makeSessionReadCache", () => {
       yield* TestClock.adjust("7 days");
       yield* read(settled);
       assert.strictEqual(calls.length, 3, "a settled run is never re-read");
+    }),
+  );
+
+  it.effect("reads a re-run's steps afresh: the run id is reused, the attempt is not", () =>
+    Effect.gen(function* () {
+      const bodies: string[] = [];
+      const read = yield* makeSessionReadCache(() =>
+        Effect.sync(() => {
+          bodies.push("read");
+          return { body: `attempt-${bodies.length}`, truncated: false };
+        }),
+      );
+
+      const first = yield* read(rest(jobStepsRequest(REPO, 9, true, 1)));
+      const again = yield* read(rest(jobStepsRequest(REPO, 9, true, 1)));
+      const rerun = yield* read(rest(jobStepsRequest(REPO, 9, true, 2)));
+
+      assert.strictEqual(again.body, first.body);
+      assert.notStrictEqual(rerun.body, first.body);
+      assert.strictEqual(bodies.length, 2);
     }),
   );
 

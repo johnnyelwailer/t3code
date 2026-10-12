@@ -32,17 +32,41 @@ const SETTLED_READ_TTL = Duration.infinity;
 /** Comfortably more than the displayed list (and its failed runs) a server instance serves. */
 const READ_CACHE_CAPACITY = 256;
 
-/** Runs `effect` once for however many callers ask while it is in flight. */
-export const makeSingleFlight = <A, E>(effect: Effect.Effect<A, E>) =>
-  Cache.makeWith((_key: void) => effect, {
-    capacity: 1,
+/** Bounds the distinct identities in flight at once; a flight is removed the moment it ends. */
+const SINGLE_FLIGHT_CAPACITY = 64;
+
+/**
+ * Runs `effect` once for however many callers *of the same identity* ask while it is in flight.
+ * `identityOf` names whose answer this is (the credential the request will carry): callers under
+ * different credentials never share a flight, since their answers are different users' data.
+ * The flight runs under the first caller's context, which is right because it shares that
+ * caller's identity. When the identity cannot be resolved nothing is shared — each caller runs
+ * (and fails, or not) on its own.
+ */
+export const makeSingleFlight = <A, E, E2>(
+  effect: Effect.Effect<A, E>,
+  identityOf: Effect.Effect<string, E2>,
+) =>
+  Cache.makeWith((_identity: string) => effect, {
+    capacity: SINGLE_FLIGHT_CAPACITY,
     timeToLive: () => Duration.zero,
-  }).pipe(Effect.map((cache) => Cache.get(cache, undefined)));
+  }).pipe(
+    Effect.map((cache) =>
+      identityOf.pipe(
+        Effect.matchEffect({
+          onFailure: () => effect,
+          onSuccess: (identity) => Cache.get(cache, identity),
+        }),
+      ),
+    ),
+  );
 
 class ReadKey extends Data.Class<{
   readonly operation: string;
   readonly path: string;
   readonly lifetime: "live" | "settled";
+  /** Which attempt of the run: a re-run keeps the run id, so it must not read the first one's. */
+  readonly attempt: number;
 }> {}
 
 /** What a GET's answer is worth keeping, given how it ended. */
@@ -83,6 +107,7 @@ export const makeSessionReadCache = (
             operation: request.operation,
             path: request.path,
             lifetime: request.lifetime ?? "live",
+            attempt: request.attempt ?? 1,
           }),
         ),
     ),

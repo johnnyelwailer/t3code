@@ -24,17 +24,11 @@ import {
 import { parseLogin, parseRunsResponse } from "./t3team-githubActionsSessionParse.ts";
 import { sessionRunsForLogin } from "./t3team-cloudSessionRunOwnership.ts";
 import { toCloudSessionFailure } from "./t3team-CloudSessionErrors.ts";
+import { makeLoginMemo } from "./t3team-CloudSessionLoginMemo.ts";
 import { isCacheableRead, makeSessionReadCache } from "./t3team-CloudSessionReadCache.ts";
 
 /** Recent runs worth considering; also the window `cancel` checks membership against. */
 const RUN_HISTORY_LIMIT = 100;
-
-/**
- * How long a resolved login stays good. The fleet credential's identity does
- * not change on the poll cadence, so re-hitting `GET /user` every list burns
- * quota for nothing.
- */
-const LOGIN_CACHE_TTL_MS = 60_000;
 
 export type SessionGhRunOptions = {
   /**
@@ -55,7 +49,20 @@ export const makeSessionGh = Effect.fn("cloud.session_gh.make")(function* (
   api: GitHubApi.GitHubApi["Service"],
   repoRef: CloudSessionRepoRef,
 ) {
-  let cachedLogin: { readonly login: string; readonly expiresAt: number } | null = null;
+  // Re-hitting `GET /user` every list burns quota for nothing; memoised per credential identity.
+  const logins = makeLoginMemo();
+
+  /**
+   * Whose credential a request to the fleet host carries right now (a pinned one when the
+   * caller pinned it) — the key that keeps one user's login or list from answering another.
+   * Reads the held credential's fingerprint; no GHE request.
+   */
+  const identity: Effect.Effect<string, CloudSessionFailedError> = api
+    .credential(repoRef.host)
+    .pipe(
+      Effect.map((credential) => credential.fingerprint),
+      Effect.mapError(toCloudSessionFailure),
+    );
 
   /** One request, errors mapped to user-visible session failures; no caching. */
   const execute = (
@@ -147,9 +154,10 @@ export const makeSessionGh = Effect.fn("cloud.session_gh.make")(function* (
   const resolveLogin = (options?: SessionGhRunOptions) =>
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
-      if (cachedLogin !== null && cachedLogin.expiresAt > now) {
-        return cachedLogin.login;
-      }
+      // No resolvable identity means no memo: ask the host, which reports the real failure.
+      const who = yield* Effect.orElseSucceed(identity, () => null);
+      const memoised = who === null ? undefined : logins.get(who, now);
+      if (memoised !== undefined) return memoised;
       const result = yield* run(currentLoginRequest(repoRef), options);
       const login = parseLogin(result.body);
       if (login === null) {
@@ -158,9 +166,9 @@ export const makeSessionGh = Effect.fn("cloud.session_gh.make")(function* (
           message: "Could not determine your GitHub identity, so your sessions cannot be listed.",
         });
       }
-      cachedLogin = { login, expiresAt: now + LOGIN_CACHE_TTL_MS };
+      if (who !== null) logins.set(who, login, now);
       return login;
     });
 
-  return { run, runBackground, runInteractive, listRunsFor, resolveLogin } as const;
+  return { run, runBackground, runInteractive, listRunsFor, resolveLogin, identity } as const;
 });

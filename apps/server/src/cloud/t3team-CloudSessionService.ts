@@ -145,9 +145,10 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
     ),
   );
 
-  // Every tab, menu and poll asking at once shares one GHE fan-out; nothing is kept after it
-  // ends, so the next list still reads fresh (create/cancel never go through this).
-  const list = yield* makeSingleFlight(listOnce);
+  // Every tab, menu and poll asking at once under the SAME credential shares one GHE fan-out
+  // (a different credential is a different user's list, so never shares); nothing is kept after
+  // it ends, so the next list still reads fresh (create/cancel never go through this).
+  const list = yield* makeSingleFlight(listOnce, gh.identity);
 
   const create: CloudSessionService["Service"]["create"] = (input) =>
     Effect.gen(function* () {

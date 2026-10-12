@@ -33,7 +33,12 @@ export interface WorkflowRunSummary {
   readonly name: string;
   /** Who started the run. This GHE ignores `actor=` on the list query, so filter on this. */
   readonly actor: string;
+  /** Which attempt of the run this is; a re-run keeps `id` and bumps this. Absent reads as 1. */
+  readonly runAttempt?: number;
 }
+
+export const runAttemptOf = (run: Pick<WorkflowRunSummary, "runAttempt">): number =>
+  run.runAttempt ?? 1;
 
 /** Wrap a correlation tag the way `run-name` renders it. */
 export function sessionTagMarker(tag: string): string {
@@ -64,6 +69,8 @@ export type GitHubActionsRequest =
        * finished, which can never change again, so it is kept far longer than a live read.
        */
       readonly lifetime?: "live" | "settled";
+      /** The run attempt a cached read belongs to; part of its cache identity. */
+      readonly attempt?: number;
     }
   | {
       readonly kind: "graphql";
@@ -130,12 +137,14 @@ export function jobStepsRequest(
   ref: CloudSessionRepoRef,
   runId: number,
   settled = false,
+  attempt = 1,
 ): GitHubActionsRequest {
   return {
     kind: "rest",
     operation: "cloudSession.jobSteps",
     path: repoApiPath(ref, `actions/runs/${runId}/jobs`),
     lifetime: settled ? "settled" : "live",
+    attempt,
   };
 }
 

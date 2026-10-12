@@ -31,6 +31,7 @@ function toRun(raw: Record<string, unknown>): WorkflowRunSummary {
     htmlUrl: asString(raw["html_url"]),
     name: asString(raw["name"]) || asString(raw["display_title"]),
     actor: actorLogin(raw["actor"]),
+    ...(typeof raw["run_attempt"] === "number" ? { runAttempt: raw["run_attempt"] } : {}),
   };
 }
 

@@ -1,4 +1,8 @@
-import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
+import {
+  runAttemptOf,
+  type WorkflowJobStep,
+  type WorkflowRunSummary,
+} from "./t3team-githubActionsSessionClient.ts";
 
 /**
  * The user-visible reason a cloud session failed, read from the provisioning
@@ -72,11 +76,18 @@ const FAILURE_REASON_CACHE_LIMIT = 200;
  */
 const UNREADABLE_READ_LIMIT = 3;
 
-/** Per-run failure reasons and unreadable-read counts, keyed by run id. One per service instance. */
+/**
+ * Per-run failure reasons and unreadable-read counts, keyed by run id AND attempt (a re-run keeps
+ * its id, and its second failure is not the first one's). One per service instance.
+ */
 export interface FailureReasonCache {
-  readonly reasons: Map<number, string>;
-  readonly unreadableReads: Map<number, number>;
+  readonly reasons: Map<string, string>;
+  readonly unreadableReads: Map<string, number>;
 }
+
+type AttemptedRun = Pick<WorkflowRunSummary, "id" | "runAttempt">;
+
+const attemptKey = (run: AttemptedRun): string => `${run.id}#${runAttemptOf(run)}`;
 
 export const makeFailureReasonCache = (): FailureReasonCache => ({
   reasons: new Map(),
@@ -89,17 +100,17 @@ export const makeFailureReasonCache = (): FailureReasonCache => ({
  */
 export function cachedFailureReason(
   cache: FailureReasonCache | undefined,
-  runId: number,
+  run: AttemptedRun,
 ): string | undefined {
-  return cache?.reasons.get(runId);
+  return cache?.reasons.get(attemptKey(run));
 }
 
-const boundedSet = <V>(map: Map<number, V>, runId: number, value: V): void => {
-  if (!map.has(runId) && map.size >= FAILURE_REASON_CACHE_LIMIT) {
+const boundedSet = <V>(map: Map<string, V>, key: string, value: V): void => {
+  if (!map.has(key) && map.size >= FAILURE_REASON_CACHE_LIMIT) {
     const oldest = map.keys().next();
     if (oldest.done !== true) map.delete(oldest.value);
   }
-  map.set(runId, value);
+  map.set(key, value);
 };
 
 /**
@@ -109,16 +120,17 @@ const boundedSet = <V>(map: Map<number, V>, runId: number, value: V): void => {
  */
 export function recordFailureRead(
   cache: FailureReasonCache | undefined,
-  runId: number,
+  run: AttemptedRun,
   reason: string,
   readable: boolean,
 ): void {
   if (cache === undefined) return;
-  const misses = readable ? 0 : (cache.unreadableReads.get(runId) ?? 0) + 1;
+  const key = attemptKey(run);
+  const misses = readable ? 0 : (cache.unreadableReads.get(key) ?? 0) + 1;
   if (readable || misses >= UNREADABLE_READ_LIMIT) {
-    cache.unreadableReads.delete(runId);
-    boundedSet(cache.reasons, runId, reason);
+    cache.unreadableReads.delete(key);
+    boundedSet(cache.reasons, key, reason);
     return;
   }
-  boundedSet(cache.unreadableReads, runId, misses);
+  boundedSet(cache.unreadableReads, key, misses);
 }
