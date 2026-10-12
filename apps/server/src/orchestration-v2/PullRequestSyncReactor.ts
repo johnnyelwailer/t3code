@@ -33,6 +33,12 @@ import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 import { forkParked } from "../serverActivation.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
+import {
+  avatarIdentity,
+  avatarRefreshDue,
+  isUnresolvableRead,
+  unresolvableBackoffMs,
+} from "./t3team-pullRequestSyncPolicy.ts";
 import { isTerminalRunStatus } from "./ThreadManagementService.ts";
 
 const SLOW_SYNC_INTERVAL_MS = 15 * 60 * 1_000;
@@ -79,7 +85,8 @@ function snapshotFieldsEqual(left: SnapshotFields, right: SnapshotFields): boole
     (left.closedAt ?? null) === (right.closedAt ?? null) &&
     (left.mergedAt ?? null) === (right.mergedAt ?? null) &&
     (left.author?.login ?? null) === (right.author?.login ?? null) &&
-    (left.author?.avatarUrl ?? null) === (right.author?.avatarUrl ?? null) &&
+    // Not the URL itself: GHE signs avatar URLs with a token that is new on every read.
+    avatarIdentity(left.author?.avatarUrl) === avatarIdentity(right.author?.avatarUrl) &&
     left.additions === right.additions &&
     left.deletions === right.deletions &&
     left.changedFiles === right.changedFiles &&
@@ -158,6 +165,14 @@ export const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
 
   const lastSyncedAt = new Map<string, number>();
+  const lastAttemptedAt = new Map<string, number>();
+  // Links the host cannot resolve (no such pull request for this credential, no project reads
+  // that host), by pull request. They stay unsynced, which is how the UI already shows an
+  // unresolved link, and are asked again only after a pause that doubles with every failure.
+  const unresolvable = new Map<
+    string,
+    { readonly failures: number; readonly retryAt: number; readonly attemptedAt: number }
+  >();
   const requested = new Map<string, number>();
   let requestGeneration = 0;
   // Requested keys wait in `requested` for one queued sweep, so a burst of links (an agent
@@ -171,11 +186,20 @@ export const make = Effect.gen(function* () {
 
   const isDue = (key: string, entries: ReadonlyArray<LinkEntry>, nowMs: number): boolean => {
     if (requested.has(key) || retryStacks.has(key)) return true;
-    if (entries.some((entry) => entry.link.snapshot === null)) return true;
+    const backoff = unresolvable.get(key);
+    if (backoff !== undefined && nowMs < backoff.retryAt) return false;
     // Settled threads stop watching their pull requests. Unsettling one makes its links due on
     // the next sweep, since the cadence clock below kept running while it was settled.
     const active = entries.filter((entry) => isUnsettled(entry.thread));
-    if (active.every((entry) => entry.link.snapshot?.state === "merged")) return false;
+    if (active.some((entry) => entry.link.snapshot === null)) return true;
+    if (active.every((entry) => entry.link.snapshot?.state === "merged")) {
+      // What is left unread belongs to settled threads: one try, then the slow cadence.
+      const attempted = lastAttemptedAt.get(key);
+      return (
+        entries.some((entry) => entry.link.snapshot === null) &&
+        (attempted === undefined || nowMs - attempted >= SLOW_SYNC_INTERVAL_MS)
+      );
+    }
     if (active.some((entry) => entry.link.snapshot?.state === "open")) return true;
     // Closed requests can reopen on the host.
     const last = lastSyncedAt.get(key);
@@ -205,6 +229,10 @@ export const make = Effect.gen(function* () {
     }
 
     for (const key of lastSyncedAt.keys()) if (!groups.has(key)) lastSyncedAt.delete(key);
+    for (const key of lastAttemptedAt.keys()) if (!groups.has(key)) lastAttemptedAt.delete(key);
+    for (const key of unresolvable.keys()) if (!groups.has(key)) unresolvable.delete(key);
+    // A pause that has ended refuses nothing, so it is only clutter.
+    for (const [pauseKey, until] of pausedUntil) if (until <= nowMs) pausedUntil.delete(pauseKey);
     for (const key of retryStacks) if (!groups.has(key)) retryStacks.delete(key);
     for (const key of requested.keys()) if (!groups.has(key)) requested.delete(key);
 
@@ -223,7 +251,9 @@ export const make = Effect.gen(function* () {
       const changed =
         link.snapshot === null ||
         !snapshotFieldsEqual(link.snapshot, fields) ||
-        !stacksEqual(link.stack, nextStack);
+        !stacksEqual(link.stack, nextStack) ||
+        // Only the avatar's signature moved: no stack read, but the stored URL is kept fresh.
+        avatarRefreshDue(link.snapshot, fields.author?.avatarUrl, nowMs);
       // Persist discovered siblings before a terminal snapshot can trigger settlement. A settled
       // thread that shares this pull request with an active one takes the fresh snapshot, but
       // gains no links.
@@ -330,6 +360,7 @@ export const make = Effect.gen(function* () {
       }
       // The host answered, so the cadence clock ticks even if a dispatch below is rejected.
       lastSyncedAt.set(key, nowMs);
+      unresolvable.delete(key);
       // A refresh requested while the host read was in flight belongs to the next sweep.
       if (requested.get(key) === generation) requested.delete(key);
       yield* Effect.forEach(
@@ -351,9 +382,21 @@ export const make = Effect.gen(function* () {
     // Failed host reads by reason: how many, and the first key that failed that way.
     const skips = new Map<string, { count: number; readonly key: string }>();
     const readGroup = (key: string, entries: ReadonlyArray<LinkEntry>, pauseKey: string) =>
-      syncGroup(key, entries).pipe(
+      Effect.sync(() => lastAttemptedAt.set(key, nowMs)).pipe(
+        Effect.andThen(syncGroup(key, entries)),
         Effect.catchCause((cause) => {
           if (Cause.hasInterruptsOnly(cause)) return Effect.failCause(cause);
+          if (isUnresolvableRead(cause)) {
+            const failures = (unresolvable.get(key)?.failures ?? 0) + 1;
+            unresolvable.set(key, {
+              failures,
+              retryAt: nowMs + unresolvableBackoffMs(failures),
+              attemptedAt: nowMs,
+            });
+            // The host's answer to the request is in; asking again at the next sweep would
+            // only repeat it.
+            requested.delete(key);
+          }
           const retryAt = rateLimitRetryAt(cause);
           if (retryAt !== undefined) {
             pausedUntil.set(pauseKey, Math.max(retryAt, pausedUntil.get(pauseKey) ?? 0));
@@ -435,10 +478,14 @@ export const make = Effect.gen(function* () {
       Stream.runForEach(events, (event) => {
         switch (event.type) {
           case "thread.pull-request-synced":
+            // Each sync event names every link its thread still has unread. One the host has
+            // already said it cannot resolve waits out its pause, unless it was linked since.
             return Effect.forEach(
-              visibleThreadPullRequests(event.payload.pullRequests ?? []).filter(
-                (link) => link.snapshot === null,
-              ),
+              visibleThreadPullRequests(event.payload.pullRequests ?? []).filter((link) => {
+                if (link.snapshot !== null) return false;
+                const held = unresolvable.get(threadPullRequestKeyOf(link));
+                return held === undefined || Date.parse(link.linkedAt) > held.attemptedAt;
+              }),
               requestSync,
               { discard: true },
             );
@@ -474,6 +521,8 @@ export const make = Effect.gen(function* () {
 
   const requestSync: PullRequestSyncReactor["Service"]["requestSync"] = (key) =>
     Effect.suspend(() => {
+      // A request is someone asking for a fresh read, so it ends any pause on the link.
+      unresolvable.delete(threadPullRequestKeyOf(key));
       requested.set(threadPullRequestKeyOf(key), ++requestGeneration);
       if (requestedSweepQueued) return Effect.void;
       requestedSweepQueued = true;

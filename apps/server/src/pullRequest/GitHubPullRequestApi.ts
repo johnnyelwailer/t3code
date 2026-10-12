@@ -1301,6 +1301,7 @@ export const make = Effect.gen(function* () {
     readonly host: string;
     readonly operation: string;
     readonly allowReserve?: boolean | undefined;
+    readonly allowPartialNotFound?: boolean | undefined;
     readonly variables?: Readonly<Record<string, unknown>>;
     readonly query: string;
     readonly decode: (raw: string) => Result.Result<A, unknown>;
@@ -1312,6 +1313,7 @@ export const make = Effect.gen(function* () {
         query: input.query,
         ...(input.variables === undefined ? {} : { variables: input.variables }),
         ...(input.allowReserve === true ? { allowReserve: true } : {}),
+        ...(input.allowPartialNotFound === true ? { allowPartialNotFound: true } : {}),
       })
       .pipe(Effect.flatMap((raw) => decodeWith(input.cwd, input.operation, input.decode, raw)));
 
@@ -1780,12 +1782,15 @@ export const make = Effect.gen(function* () {
               host: first.request.host,
               operation: "getPullRequestSummary",
               ...document,
+              // One repository gone or out of reach answers NOT_FOUND for its alias only; the
+              // other aliases keep their data, and the missing one is read on its own below.
+              allowPartialNotFound: true,
               decode: decodePullRequestSummariesJson,
             });
       return batched.pipe(
-        // A GraphQL error anywhere fails the whole document — one repository gone or out of
-        // reach — so a batch that could not be read leaves every entry to its own read. A paused
-        // budget is the exception: reading one at a time would only spend what is being saved.
+        // Any other GraphQL error fails the whole document, so a batch that could not be read
+        // leaves every entry to its own read. A paused budget is the exception: reading one at
+        // a time would only spend what is being saved.
         Effect.catchCauseIf(
           (cause) =>
             !Cause.hasInterruptsOnly(cause) &&

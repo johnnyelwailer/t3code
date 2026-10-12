@@ -222,6 +222,51 @@ describe("GitHubApi", () => {
     },
   );
 
+  it.effect("returns the data beside NOT_FOUND errors only when the caller allows it", () => {
+    const answer = {
+      data: { s0: { pullRequest: { number: 7 } }, s1: { pullRequest: null } },
+      errors: [{ type: "NOT_FOUND", message: "Could not resolve", path: ["s1", "pullRequest"] }],
+    };
+    const { layer } = harness(() => json(answer));
+    const query = "query { viewer { id } }";
+    return Effect.gen(function* () {
+      const api = yield* GitHubApi.GitHubApi;
+      const whole = yield* Effect.flip(api.graphql({ host: "github.com", operation: "x", query }));
+      expect(whole._tag).toBe("GitHubApiNotFoundError");
+      const partial = yield* api.graphql({
+        host: "github.com",
+        operation: "x",
+        query,
+        allowPartialNotFound: true,
+      });
+      expect(JSON.parse(partial)).toEqual(answer);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("fails a partial answer whose errors are not all NOT_FOUND, even when allowed", () => {
+    const { layer } = harness(() =>
+      json({
+        data: { s0: null },
+        errors: [
+          { type: "NOT_FOUND", message: "Could not resolve" },
+          { message: "Something went wrong" },
+        ],
+      }),
+    );
+    return Effect.gen(function* () {
+      const api = yield* GitHubApi.GitHubApi;
+      const error = yield* Effect.flip(
+        api.graphql({
+          host: "github.com",
+          operation: "x",
+          query: "query { viewer { id } }",
+          allowPartialNotFound: true,
+        }),
+      );
+      expect(error._tag).toBe("GitHubApiResponseError");
+    }).pipe(Effect.provide(layer));
+  });
+
   it.effect("pauses the host after a GraphQL RATE_LIMITED answer until the reset", () => {
     const reset = Math.floor(NOW / 1000) + 600;
     const { layer, requests } = harness(() =>
