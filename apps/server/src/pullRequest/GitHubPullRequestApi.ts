@@ -1153,7 +1153,7 @@ export const make = Effect.gen(function* () {
                 return { ...credential, ...cached.value };
               // Pin this read so an auth switch cannot poison its cache entry.
               const response = yield* api
-                .rest({ host, operation: "getRoutingIdentity", path: "user", allowReserve: true })
+                .rest({ host, operation: "getRoutingIdentity", path: "user" })
                 .pipe(
                   Effect.provideService(GitHubApi.PinnedGitHubCredential, credential),
                   Effect.provideService(SourceControlRateLimit.CredentialScope, key),
