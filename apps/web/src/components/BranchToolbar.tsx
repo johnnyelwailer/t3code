@@ -2,7 +2,11 @@ import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { readLocalApi } from "../localApi";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { ComposerContextLabel } from "./ComposerContextLabel";
-import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import {
+  scopedThreadKey,
+  scopeProjectRef,
+  scopeThreadRef,
+} from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import {
   ChevronDownIcon,
@@ -25,7 +29,10 @@ import {
 } from "react";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
-import { useT3TeamRunOnCloudSessionProps } from "./cloud/t3team-useRunOnCloudSessionProps";
+import {
+  clearCloudSessionTargetIfLocal,
+  useT3TeamRunOnCloudSessionProps,
+} from "./cloud/t3team-useRunOnCloudSessionProps";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject, useThreadShell, useThreadShellsForProjectRefs } from "../state/entities";
 import {
@@ -709,7 +716,20 @@ export const BranchToolbar = memo(function BranchToolbar({
   const labelsOverflow = useLabelsOverflow(stripElement);
 
   // t3team: the "Run on" menu's cloud entries (shared with the thread details panel).
-  const cloudSessions = useT3TeamRunOnCloudSessionProps(activeProjectRef);
+  // scopeKey owns the optimistic cloud preference across thread navigation.
+  const cloudSessionScopeKey = draftId ?? scopedThreadKey(threadRef);
+  const cloudSessions = useT3TeamRunOnCloudSessionProps(activeProjectRef, cloudSessionScopeKey);
+  const handleEnvironmentChange = useCallback(
+    (nextEnvironmentId: EnvironmentId) => {
+      clearCloudSessionTargetIfLocal(
+        cloudSessionScopeKey,
+        nextEnvironmentId,
+        cloudSessions.selectorProps.cloudEnvironmentIds,
+      );
+      onEnvironmentChange?.(nextEnvironmentId);
+    },
+    [cloudSessionScopeKey, cloudSessions.selectorProps.cloudEnvironmentIds, onEnvironmentChange],
+  );
 
   // The same machine can reach the catalog under two environment ids (its T3
   // Connect identity and a relay id minted when a cloud session's relay link
@@ -744,7 +764,7 @@ export const BranchToolbar = memo(function BranchToolbar({
                 envLocked={envLocked}
                 environmentId={environmentId}
                 availableEnvironments={availableEnvironments}
-                {...(showEnvironmentPicker && onEnvironmentChange ? { onEnvironmentChange } : {})}
+                {...(onEnvironmentChange ? { onEnvironmentChange: handleEnvironmentChange } : {})}
                 {...cloudSessions.selectorProps}
               />
             ) : null}
@@ -816,7 +836,7 @@ export const BranchToolbar = memo(function BranchToolbar({
               envLocked={envLocked}
               environmentId={environmentId}
               availableEnvironments={availableEnvironments}
-              {...(showEnvironmentPicker && onEnvironmentChange ? { onEnvironmentChange } : {})}
+              {...(onEnvironmentChange ? { onEnvironmentChange: handleEnvironmentChange } : {})}
               {...cloudSessions.selectorProps}
             />
           ) : null}
@@ -856,7 +876,7 @@ export const BranchToolbar = memo(function BranchToolbar({
                 envLocked={envLocked}
                 environmentId={environmentId}
                 availableEnvironments={availableEnvironments}
-                {...(showEnvironmentPicker && onEnvironmentChange ? { onEnvironmentChange } : {})}
+                {...(onEnvironmentChange ? { onEnvironmentChange: handleEnvironmentChange } : {})}
                 {...cloudSessions.selectorProps}
               />
               {showGitControls ? (

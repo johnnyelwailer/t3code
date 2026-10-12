@@ -4,7 +4,7 @@ import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { ScaleIcon, SettingsIcon } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useMemo, useState } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
 import { cn } from "../lib/utils";
@@ -17,6 +17,10 @@ import { useComposerMenuProps } from "./chat/composerEventScope";
 import { RunOnCloudRow } from "./cloud/t3team-RunOnCloudRow";
 import { runOnRows } from "./cloud/t3team-runOnCloudRows";
 import { NewCloudSessionItem } from "./cloud/t3team-NewCloudSessionItem";
+import {
+  cloudSessionSelectValue,
+  parseCloudSessionSelectValue,
+} from "~/cloud/t3team-cloudSessionTargetLogic";
 import {
   Select,
   SelectGroup,
@@ -86,13 +90,12 @@ export interface BranchToolbarEnvironmentSelectorProps {
    */
   onSetupCloudSessions?: () => void;
   /**
-   * Connects a READY cloud session's machine (the "Ready · Connect" row). Absent
-   * hides the connect affordance on those rows. Present when a provider is
-   * configured; the same controller drives the Settings panel's Connect.
+   * t3team: optimistic cloud preference for this composer — session id + label shown
+   * in the trigger immediately, before the VM is Ready/connected.
    */
-  onCloudSessionAction?: (cloudSession: CloudSession) => void;
-  /** t3team: why the last connect attempt ended without connecting; the row shows it. */
-  cloudSessionConnectFailure?: { readonly sessionId: string; readonly message: string } | null;
+  selectedCloudSession?: { readonly sessionId: string; readonly label: string } | null;
+  /** t3team: one-click select of a ready/provisioning session (connect waits for send). */
+  onSelectCloudSession?: (session: CloudSession) => void;
   /** t3team: hides a surfaced failure from the menu once the user has seen it. */
   onDismissCloudSession?: (cloudSession: CloudSession) => void;
   /**
@@ -102,9 +105,6 @@ export interface BranchToolbarEnvironmentSelectorProps {
    */
   onCloudMenuOpenChange?: (open: boolean) => void;
 }
-
-/** t3team: how long a clicked cloud machine gets to connect and register this thread's project. */
-const CONNECT_AND_SYNC_DEADLINE_MS = 60_000;
 
 export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvironmentSelector({
   autoEnvironmentLabel,
@@ -123,18 +123,14 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   cloudSessionSetupPending = false,
   cloudSessionProject,
   onSetupCloudSessions,
-  onCloudSessionAction,
-  cloudSessionConnectFailure,
+  selectedCloudSession = null,
+  onSelectCloudSession,
   onDismissCloudSession,
   onCloudMenuOpenChange,
 }: BranchToolbarEnvironmentSelectorProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
-  // The cloud entry makes the selector interactive even with a single
-  // environment, so the static-label branch is the locked state or a state
-  // with neither an environment picker nor any cloud affordance.
   const hasCloudAffordance =
     onCreateCloudSession !== undefined || onSetupCloudSessions !== undefined;
-  // t3team: one list — the machines, then one row per cloud session (connected or not).
   const { machines: runOnEnvironments, cloud: cloudRows } = useMemo(
     () =>
       runOnRows(availableEnvironments, pendingCloudSessions ?? [], environmentId, {
@@ -153,81 +149,30 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
     () => cloudRows.flatMap((row) => (row.environment === null ? [] : [row.environment])),
     [cloudRows],
   );
-  const activeEnvironment = useMemo(
-    () =>
+  const activeEnvironment = useMemo(() => {
+    if (selectedCloudSession !== null) {
+      return {
+        environmentId: cloudSessionSelectValue(selectedCloudSession.sessionId) as EnvironmentId,
+        label: selectedCloudSession.label,
+        machine: "cloud" as const,
+        isPrimary: false,
+        projectId: null,
+      };
+    }
+    return (
       [...runOnEnvironments, ...connectedCloudEnvironments].find(
         (env) => env.environmentId === environmentId,
-      ) ?? null,
-    [connectedCloudEnvironments, runOnEnvironments, environmentId],
-  );
+      ) ?? null
+    );
+  }, [connectedCloudEnvironments, environmentId, runOnEnvironments, selectedCloudSession]);
 
-  // The menu's open state is controlled on purpose: the "New cloud session"
-  // row is a plain button inside the popup (not a Select item), so clicking it
-  // never triggers Base UI's select-and-close — the menu stays open and keeps
-  // polling, and the just-created session appears in the open list.
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Keyed by the ids, not the list: the list is rebuilt on every connection-state change.
-  const projectEnvironmentKey = availableEnvironments
-    .map((env) => env.environmentId)
-    .join("\u0000");
-  const projectEnvironmentIds = useMemo(
-    () => new Set<string>(projectEnvironmentKey.split("\u0000")),
-    [projectEnvironmentKey],
-  );
-  // Clicking a ready machine connects it, then runs the thread there: once its environment
-  // registers for this project, it is selected and the menu closes. Until then the row says it
-  // is connecting; a machine that connects without this project stops there, shown unavailable.
-  const [selectWhenConnected, setSelectWhenConnected] = useState<string | null>(null);
-  // When that wait began, so the row can show how long it has been going.
-  const [connectStartedAt, setConnectStartedAt] = useState<number | null>(null);
-  // Why the wait ended without connecting, on the row it belongs to, until the next attempt.
-  const [connectFailure, setConnectFailure] = useState<{
-    readonly sessionId: string;
-    readonly message: string;
-  } | null>(null);
-  // The machine the user just tried that turned out not to have this project: it stays listed,
-  // saying why. Other projects' machines are not listed at all — nothing here can run on them.
-  const [refusedEnvironmentId, setRefusedEnvironmentId] = useState<string | null>(null);
-  const cancelConnect = useCallback(() => {
-    setSelectWhenConnected(null);
-    setConnectStartedAt(null);
-  }, []);
-  // The connect itself failed (the toast says so too): stop waiting and say why on the row.
-  const handledConnectFailure = useRef(cloudSessionConnectFailure);
-  useEffect(() => {
-    if (selectWhenConnected === null || !cloudSessionConnectFailure) return;
-    // A failure acts once: a retry must not be cut short by the one it is retrying from.
-    if (handledConnectFailure.current === cloudSessionConnectFailure) return;
-    const waitingRow = cloudRows.find((row) => row.session.environmentId === selectWhenConnected);
-    if (waitingRow?.session.sessionId !== cloudSessionConnectFailure.sessionId) return;
-    handledConnectFailure.current = cloudSessionConnectFailure;
-    setConnectFailure(cloudSessionConnectFailure);
-    cancelConnect();
-  }, [cancelConnect, cloudRows, cloudSessionConnectFailure, selectWhenConnected]);
-  useEffect(() => {
-    if (selectWhenConnected === null || !projectEnvironmentIds.has(selectWhenConnected)) return;
-    setSelectWhenConnected(null);
-    onEnvironmentChange?.(selectWhenConnected as EnvironmentId);
-    setMenuOpen(false);
-    onCloudMenuOpenChange?.(false);
-  }, [onCloudMenuOpenChange, onEnvironmentChange, projectEnvironmentIds, selectWhenConnected]);
-  // One deadline per click, read against the latest state: a fresh machine registers its project
-  // seconds after it connects, so the attempt gets the whole window. Connected by then but still
-  // without this project: refused, saying why. Never connected: the row is clickable again.
-  const connectedRef = useRef(connectedEnvironmentIds);
-  useEffect(() => {
-    connectedRef.current = connectedEnvironmentIds;
-  }, [connectedEnvironmentIds]);
-  useEffect(() => {
-    if (selectWhenConnected === null) return;
-    const environment = selectWhenConnected;
-    const timer = setTimeout(() => {
-      if (connectedRef.current?.has(environment)) setRefusedEnvironmentId(environment);
-      setSelectWhenConnected((current) => (current === environment ? null : current));
-    }, CONNECT_AND_SYNC_DEADLINE_MS);
-    return () => clearTimeout(timer);
-  }, [selectWhenConnected]);
+  const selectValue = autoEnvironmentLabel
+    ? "auto"
+    : selectedCloudSession !== null
+      ? cloudSessionSelectValue(selectedCloudSession.sessionId)
+      : environmentId;
 
   const environmentItems = useMemo(
     () => [
@@ -240,9 +185,14 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             label: env.label,
           }))
         : []),
-      // "New cloud session" is deliberately NOT a keyboard-navigable item: it
-      // dispatches a real VM, so it is offered as a mouse-only row below and
-      // kept out of the arrow-key focus order.
+      ...(selectedCloudSession !== null
+        ? [
+            {
+              value: cloudSessionSelectValue(selectedCloudSession.sessionId),
+              label: selectedCloudSession.label,
+            },
+          ]
+        : []),
       ...(onSetupCloudSessions
         ? [{ value: SETUP_CLOUD_SESSIONS_SELECT_VALUE, label: "Set up cloud sessions" }]
         : []),
@@ -254,10 +204,12 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       onAutoEnvironment,
       onEnvironmentChange,
       onSetupCloudSessions,
+      selectedCloudSession,
     ],
   );
 
   const handleValueChange = (value: string | null) => {
+    if (value === null) return;
     if (value === SETUP_CLOUD_SESSIONS_SELECT_VALUE) {
       onSetupCloudSessions?.();
       return;
@@ -266,6 +218,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       onAutoEnvironment?.();
       return;
     }
+    if (parseCloudSessionSelectValue(value) !== null) return;
     onEnvironmentChange?.(value as EnvironmentId);
   };
 
@@ -274,11 +227,18 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
     onCloudMenuOpenChange?.(open);
   };
 
-  // The static label carries the xs control's height (h-7 sm:h-6) as well as
-  // its padding: the composer context strip has no min-height of its own, and
-  // the glass seam joining it to the composer assumes a fixed strip height, so
-  // a shorter label would drag the seam out of line whenever this label is the
-  // only thing in the strip.
+  const selectCloudSession = (session: CloudSession) => {
+    onSelectCloudSession?.(session);
+    setMenuOpen(false);
+    onCloudMenuOpenChange?.(false);
+  };
+
+  const createCloudSession = () => {
+    onCreateCloudSession?.();
+    setMenuOpen(false);
+    onCloudMenuOpenChange?.(false);
+  };
+
   if (envLocked || (onEnvironmentChange === undefined && !hasCloudAffordance)) {
     const lockedRow = (
       <span
@@ -309,7 +269,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
     <Select
       modal={false}
       open={menuOpen}
-      value={autoEnvironmentLabel ? "auto" : environmentId}
+      value={selectValue}
       onOpenChange={handleOpenChange}
       onValueChange={handleValueChange}
       items={environmentItems}
@@ -352,7 +312,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             />
           )}
           <ComposerContextLabel displayMode={displayMode}>
-            {onEnvironmentChange !== undefined ? (
+            {onEnvironmentChange !== undefined || selectedCloudSession !== null ? (
               <SelectValue />
             ) : (
               (activeEnvironment?.label ?? "Run on")
@@ -390,9 +350,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                   </span>
                 </SelectItem>
               ))
-            : // A single machine with a cloud entry behind it: the machine row is
-              // informational (it is already the selection), not a choice.
-              runOnEnvironments.map((env) => (
+            : runOnEnvironments.map((env) => (
                 <div
                   key={env.environmentId}
                   className="flex items-center gap-1.5 px-2 py-1.5 text-xs"
@@ -403,46 +361,30 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
               ))}
           {onCreateCloudSession && (
             <>
-              {cloudRows
-                .filter(
-                  (row) =>
-                    !row.unavailable ||
-                    row.session.environmentId === refusedEnvironmentId ||
-                    row.session.environmentId === selectWhenConnected,
-                )
-                .map((row) => (
-                  <RunOnCloudRow
-                    key={row.session.sessionId}
-                    row={row}
-                    selectable={onEnvironmentChange !== undefined}
-                    connecting={
-                      selectWhenConnected !== null &&
-                      selectWhenConnected === row.session.environmentId
-                    }
-                    connectingSince={connectStartedAt}
-                    connectError={
-                      connectFailure?.sessionId === row.session.sessionId
-                        ? connectFailure.message
-                        : null
-                    }
-                    onCancelConnect={cancelConnect}
-                    onConnect={(session) => {
-                      setConnectFailure(null);
-                      onCloudSessionAction?.(session);
-                      if (session.environmentId !== undefined) {
-                        setConnectStartedAt(Date.now());
-                        setSelectWhenConnected(session.environmentId);
-                      }
-                    }}
-                    onDismiss={onDismissCloudSession}
-                  />
-                ))}
+              {cloudRows.map((row) => (
+                <RunOnCloudRow
+                  key={row.session.sessionId}
+                  row={row}
+                  selectable={onEnvironmentChange !== undefined}
+                  selected={selectedCloudSession?.sessionId === row.session.sessionId}
+                  onSelect={selectCloudSession}
+                  onDismiss={onDismissCloudSession}
+                />
+              ))}
               <NewCloudSessionItem
                 project={cloudSessionProject}
                 pending={cloudSessionCreatePending}
                 setupPending={cloudSessionSetupPending}
-                onCreate={() => onCreateCloudSession?.()}
-                onSetup={onSetupProjectMachine}
+                onCreate={createCloudSession}
+                onSetup={
+                  onSetupProjectMachine
+                    ? () => {
+                        onSetupProjectMachine();
+                        setMenuOpen(false);
+                        onCloudMenuOpenChange?.(false);
+                      }
+                    : undefined
+                }
               />
             </>
           )}

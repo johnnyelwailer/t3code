@@ -1,13 +1,23 @@
 import type { CloudSession, ScopedProjectRef } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { useNavigate } from "@tanstack/react-router";
-import { type ComponentProps, useCallback, useMemo } from "react";
+import { type ComponentProps, useCallback, useEffect, useMemo } from "react";
 
 import { useCloudSessionController } from "~/cloud/t3team-useCloudSessionController";
+import { cloudSessionDisplayName } from "~/components/cloud/t3team-cloudSessionDisplayName";
 import { useServerConfig } from "~/t3team/t3team-serverState";
 import type { BranchToolbarEnvironmentSelector } from "~/components/BranchToolbarEnvironmentSelector";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useEnvironments } from "~/state/environments";
+import { getCloudSessionLocal } from "~/cloud/t3team-cloudSessionLocalStore";
+import {
+  clearCloudSessionTarget,
+  resolveCloudSessionCreating,
+  selectCloudSessionCreating,
+  selectCloudSessionTarget,
+  useCloudSessionTarget,
+} from "~/cloud/t3team-cloudSessionTargetStore";
+import { CLOUD_SESSION_CREATING_ID } from "~/cloud/t3team-cloudSessionTargetLogic";
 import { runOnCloudSessions } from "./t3team-cloudSessionSplit";
 
 const DISMISSED_FAILURES_KEY = "t3code:cloud-session-dismissed-failures";
@@ -22,8 +32,8 @@ type CloudSelectorProps = Pick<
   | "onSetupProjectMachine"
   | "cloudSessionCreatePending"
   | "cloudSessionSetupPending"
-  | "onCloudSessionAction"
-  | "cloudSessionConnectFailure"
+  | "selectedCloudSession"
+  | "onSelectCloudSession"
   | "onDismissCloudSession"
   | "onCloudMenuOpenChange"
   | "onSetupCloudSessions"
@@ -33,16 +43,13 @@ type CloudSelectorProps = Pick<
 >;
 
 /**
- * The "Run on" menu's cloud entries, shared by every surface that renders the environment
- * selector (the composer strip's `BranchToolbar`, the thread details panel): provisioning and
- * the most recent failed session, "New cloud session" when a provider is configured, otherwise
- * "Set up cloud sessions". `available` is false without a primary environment, and then no cloud
- * affordance is passed at all. Values are memoised — the composer strip re-renders per keystroke.
- *
- * A session runs in the project's machine only when the project lives where sessions are created
- * (the primary environment); a thread on a remote environment starts a plain one.
+ * The "Run on" menu's cloud entries. `scopeKey` (draft id or thread key) owns the
+ * optimistic cloud preference so create/pick flips the trigger immediately.
  */
-export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | null): {
+export function useT3TeamRunOnCloudSessionProps(
+  projectRef: ScopedProjectRef | null,
+  scopeKey: string | null = null,
+): {
   readonly available: boolean;
   readonly selectorProps: CloudSelectorProps;
 } {
@@ -51,9 +58,8 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
   const { available, configured, sessions, onCreate, createPending, createPendingSetup } =
     cloudSessions;
   const { primaryEnvironmentId } = cloudSessions;
-  const { onSessionAction, onCloudMenuOpenChange, connectFailure } = cloudSessions;
-  // A failure surfaced in the menu stays dismissed once the user closed it (kept per browser; the
-  // list only ever surfaces the newest session, so the stored ids never grow past a handful).
+  const { onCloudMenuOpenChange, connectFailure: _connectFailure } = cloudSessions;
+  const target = useCloudSessionTarget(scopeKey);
   const [dismissed, setDismissed] = useLocalStorage(
     DISMISSED_FAILURES_KEY,
     [] as ReadonlyArray<string>,
@@ -80,18 +86,38 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
         : undefined,
     [primaryEnvironmentId, projectEnvironmentId, projectId],
   );
-  const onCreateCloudSession = useCallback(
-    () => onCreate(cloudSessionProject?.projectId),
-    [cloudSessionProject, onCreate],
-  );
+
+  // Create answered: replace the creating sentinel with the real session id/label.
+  useEffect(() => {
+    if (scopeKey === null || target?.sessionId !== CLOUD_SESSION_CREATING_ID) return;
+    const session = getCloudSessionLocal()?.session ?? null;
+    if (session === null) return;
+    resolveCloudSessionCreating(scopeKey, session.sessionId, cloudSessionDisplayName(session));
+  }, [scopeKey, sessions, target?.sessionId]);
+
+  const onCreateCloudSession = useCallback(() => {
+    if (scopeKey !== null) selectCloudSessionCreating(scopeKey);
+    onCreate(cloudSessionProject?.projectId);
+  }, [cloudSessionProject, onCreate, scopeKey]);
+
   const machineSetupEnabled = useServerConfig()?.machineSetup === true;
-  const onSetupProjectMachine = useCallback(
-    () => onCreate(cloudSessionProject?.projectId, { machineSetup: true }),
-    [cloudSessionProject, onCreate],
+  const onSetupProjectMachine = useCallback(() => {
+    if (scopeKey !== null) selectCloudSessionCreating(scopeKey);
+    onCreate(cloudSessionProject?.projectId, { machineSetup: true });
+  }, [cloudSessionProject, onCreate, scopeKey]);
+
+  const onSelectCloudSession = useCallback(
+    (session: CloudSession) => {
+      if (scopeKey === null) return;
+      selectCloudSessionTarget({
+        scopeKey,
+        sessionId: session.sessionId,
+        label: cloudSessionDisplayName(session),
+      });
+    },
+    [scopeKey],
   );
-  // Unconfigured: the entry leaves for the Connections settings, where provisioning lives.
-  // Every environment connected here, whatever its project: a cloud machine connected for another
-  // project is listed as unavailable for this thread rather than as one to connect.
+
   const { environments } = useEnvironments();
   const connectedKey = environments
     .filter((environment) => environment.connection.phase === "connected")
@@ -112,6 +138,17 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
   const onSetupCloudSessions = useCallback(() => {
     void navigate({ to: "/settings/connections" });
   }, [navigate]);
+
+  // Prefer live session label when the list has caught up.
+  const selectedCloudSession = useMemo(() => {
+    if (target === null) return null;
+    const live = sessions.find((session) => session.sessionId === target.sessionId);
+    return {
+      sessionId: target.sessionId,
+      label: live ? cloudSessionDisplayName(live) : target.label,
+    };
+  }, [sessions, target]);
+
   const selectorProps = useMemo<CloudSelectorProps>(
     () =>
       !available
@@ -126,8 +163,8 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
               cloudSessionCreatePending: createPending,
               cloudSessionSetupPending: createPendingSetup,
               ...(cloudSessionProject ? { cloudSessionProject } : {}),
-              onCloudSessionAction: onSessionAction,
-              cloudSessionConnectFailure: connectFailure,
+              selectedCloudSession,
+              onSelectCloudSession,
               onDismissCloudSession,
               onCloudMenuOpenChange,
             }
@@ -137,7 +174,6 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
       cloudSessionProject,
       configured,
       connectedEnvironmentIds,
-      connectFailure,
       cloudEnvironmentIds,
       createPending,
       createPendingSetup,
@@ -146,10 +182,22 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
       onCreateCloudSession,
       onSetupProjectMachine,
       onDismissCloudSession,
-      onSessionAction,
+      onSelectCloudSession,
       onSetupCloudSessions,
       pendingCloudSessions,
+      selectedCloudSession,
     ],
   );
   return { available, selectorProps };
+}
+
+/** Clear the optimistic cloud preference when the user picks a non-cloud machine. */
+export function clearCloudSessionTargetIfLocal(
+  scopeKey: string | null,
+  environmentId: string,
+  cloudEnvironmentIds: ReadonlySet<string> | undefined,
+): void {
+  if (scopeKey === null) return;
+  if (cloudEnvironmentIds?.has(environmentId) === true) return;
+  clearCloudSessionTarget(scopeKey);
 }

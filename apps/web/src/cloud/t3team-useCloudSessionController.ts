@@ -1,5 +1,5 @@
 import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 
 import { environmentCatalog } from "~/connection/catalog";
 import {
@@ -14,14 +14,24 @@ import { type RelayEnvironmentCandidate } from "~/components/cloud/t3team-cloudS
 import {
   isTerminalCloudSessionPhase,
   mergeLocalCloudSession,
-  type LocalCloudSession,
 } from "~/components/cloud/t3team-cloudSessionSplit";
+import { isCloudSessionProvisionPending } from "~/components/cloud/t3team-cloudSessionProvisionPresentation";
 import { showCloudSessionFailureToast } from "./t3team-cloudSessionToast";
 import { useCloudSessionListRefresh } from "./t3team-useCloudSessionListRefresh";
 import { useCloudSessionConnect } from "./t3team-useCloudSessionConnect";
 import { liveCloudSessionForEnvironment } from "./t3team-cloudSessionEnvironmentMatch";
 import { useCloudSessionCreate } from "./t3team-useCloudSessionCreate";
 import { useCanManageRelay } from "./t3team-useCanManageRelay";
+import {
+  getCloudSessionLocal,
+  setCloudSessionLocal,
+  subscribeCloudSessionLocal,
+} from "./t3team-cloudSessionLocalStore";
+import {
+  cloudSessionTargetsNeedListRefresh,
+  getCloudSessionTargets,
+  subscribeCloudSessionTargets,
+} from "./t3team-cloudSessionTargetStore";
 
 /**
  * Drives the cloud session surfaces (settings panel + "Run on" menu): create,
@@ -43,7 +53,16 @@ export function useCloudSessionController() {
     readonly sessionId: string;
     readonly kind: "cancel" | "stop";
   } | null>(null);
-  const [localSession, setLocalSession] = useState<LocalCloudSession | null>(null);
+  const localSession = useSyncExternalStore(
+    subscribeCloudSessionLocal,
+    getCloudSessionLocal,
+    getCloudSessionLocal,
+  );
+  const targetsNeedRefresh = useSyncExternalStore(
+    subscribeCloudSessionTargets,
+    () => cloudSessionTargetsNeedListRefresh(getCloudSessionTargets()),
+    () => false,
+  );
   const [relayIdsBefore, setRelayIdsBefore] = useState<ReadonlySet<string> | null>(null);
   const [cloudMenuOpen, setCloudMenuOpen] = useState(false);
   const [panelVisible, setPanelVisible] = useState(false);
@@ -51,6 +70,9 @@ export function useCloudSessionController() {
   const sessions = useMemo(
     () => mergeLocalCloudSession(serverSessions, localSession),
     [serverSessions, localSession],
+  );
+  const provisioningVisible = sessions.some((session) =>
+    isCloudSessionProvisionPending(session.phase),
   );
   const relayCandidates: RelayEnvironmentCandidate[] = useMemo(
     () =>
@@ -65,9 +87,12 @@ export function useCloudSessionController() {
   const registerRelayEnvironment = useAtomCommand(environmentCatalog.register, {
     reportFailure: false,
   });
+  // Keep listing while the menu/panel is open, while anything is still
+  // provisioning (so a create survives thread navigation), or while a draft
+  // has an optimistic create/bind in flight.
   const { refreshCloudSessionList, refreshRelayEnvironments } = useCloudSessionListRefresh(
     environmentId,
-    cloudMenuOpen || panelVisible,
+    cloudMenuOpen || panelVisible || provisioningVisible || targetsNeedRefresh,
     sessions,
   );
 
@@ -85,7 +110,7 @@ export function useCloudSessionController() {
     relayDiscovered,
     serverSessions,
     setRelayIdsBefore,
-    setLocalSession,
+    setLocalSession: setCloudSessionLocal,
     refreshCloudSessionList,
   });
 
