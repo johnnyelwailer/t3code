@@ -110,6 +110,20 @@ describe("makeSessionGh", () => {
     }),
   );
 
+  it.effect("an unreadable viewer names the host whose identity is missing", () =>
+    Effect.gen(function* () {
+      const gh = yield* makeSessionGh(
+        mockApi(() => Effect.succeed(okRest(JSON.stringify({})))),
+        REPO,
+      );
+
+      const error = yield* Effect.flip(gh.resolveLogin({ allowReserve: false }));
+
+      assert.strictEqual(error.reason, "unauthorized");
+      assert.include(error.message, "nexplore.ghe.com");
+    }),
+  );
+
   it.effect(
     "never pins a failure reason from a later attempt's steps (re-run raced the read)",
     () =>
