@@ -4,7 +4,7 @@ import { HttpRouter } from "effect/http";
 import { errorResponse, okJson, readJsonBody } from "./t3team-atlassian-http.ts";
 import { toT3TeamError } from "./t3team-project-repository-utils.ts";
 import type { GitHubInboxDiscoverRequest } from "./t3team-github-routes-shared.ts";
-import { VcsProcess } from "./vcs/VcsProcess.ts";
+import { guardedGitHubProcess } from "./t3team-ghCliRateLimitGuard.ts";
 import { loadGitHubInboxResponse } from "./t3team-github-inbox-loader.ts";
 
 /**
@@ -16,7 +16,7 @@ export const t3teamGitHubInboxRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3team/github/inbox",
   Effect.gen(function* () {
-    const vcs = yield* VcsProcess;
+    const vcs = yield* guardedGitHubProcess;
     const input = yield* readJsonBody<GitHubInboxDiscoverRequest>();
     const response = yield* loadGitHubInboxResponse(vcs, input);
     return okJson(response);
