@@ -5,7 +5,9 @@
  * instance publishes on `ServerProvider.usageLimits`, plus the accounts the
  * configured CLIProxyAPI hubs report — and returns them per INSTANCE with a
  * severity per window. It samples nothing itself: the probe cadence and the
- * live rate-limit merges belong to the provider snapshots.
+ * live rate-limit merges belong to the provider snapshots. Hub windows that
+ * mirror a live instance window are dropped (the live snapshot wins), and
+ * `notice` carries the same answer as framed agent-facing text.
  *
  * @module t3team-toolBrokerProviderUsage
  */
@@ -19,10 +21,13 @@ import {
   type ServerProviderUsageLimits,
   type UsageLimitSourceSnapshot,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 
+import { dedupeHubSources } from "./provider/t3team-providerCapacityDedupe.ts";
+import { buildProviderCapacityNotice } from "./provider/t3team-providerCapacityNotice.ts";
 import { type T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
 
@@ -53,11 +58,12 @@ const unavailableReason = (limits: ServerProviderUsageLimits | undefined): strin
   return limits.windows.length === 0 ? "no usage windows reported" : undefined;
 };
 
-/** Pure projection of the published snapshots into the tool answer. */
+/** Projection of the published snapshots into the tool answer. */
 const buildProviderUsageResult = (input: {
   readonly providers: ReadonlyArray<ServerProvider>;
   readonly sources: ReadonlyArray<UsageLimitSourceSnapshot>;
   readonly providerInstanceId?: string;
+  readonly now: DateTime.DateTime;
 }): ProviderUsageQueryResult => {
   const selected = input.providers.filter(
     (provider) =>
@@ -65,7 +71,8 @@ const buildProviderUsageResult = (input: {
       (input.providerInstanceId === undefined || provider.instanceId === input.providerInstanceId),
   );
   // Hub accounts are not runnable instances; they only answer the unfiltered question.
-  const sources = input.providerInstanceId === undefined ? input.sources : [];
+  const sources =
+    input.providerInstanceId === undefined ? dedupeHubSources(input.providers, input.sources) : [];
   return {
     contractVersion: PROVIDER_USAGE_CONTRACT_VERSION,
     instances: selected.map((provider) => {
@@ -95,6 +102,7 @@ const buildProviderUsageResult = (input: {
     hubErrors: sources.flatMap((source) =>
       source.error === undefined ? [] : [{ sourceId: source.id, error: source.error }],
     ),
+    notice: buildProviderCapacityNotice({ providers: selected, sources, now: input.now }),
   };
 };
 
@@ -130,6 +138,7 @@ export const makeReadProviderUsage =
         providerUsage: buildProviderUsageResult({
           providers,
           sources,
+          now: yield* DateTime.now,
           ...(instanceId !== undefined ? { providerInstanceId: instanceId } : {}),
         }),
       });

@@ -954,10 +954,14 @@ effectIt.effect(
       yield* harness.start;
       expect(harness.startRootRun).toHaveBeenCalledTimes(1);
       const input = harness.startRootRun.mock.calls[0]![0];
-      expect(input.message.text).toContain(
-        "claudeAgent: session 42% (resets 18:00Z) · weekly 90% · severity: warning",
+      expect(input.message.text).toMatch(
+        /^<system-reminder type="provider-capacity" source="server">\n/,
       );
-      expect(input.message.text).toContain("Continue");
+      expect(input.message.text).toContain(
+        "claudeAgent: Session 42% (resets 2026-09-04 18:00 UTC) · severity: normal\n" +
+          "claudeAgent: Weekly 90% · severity: warning\n",
+      );
+      expect(input.message.text).toMatch(/<\/system-reminder>\n\nContinue$/);
     });
   },
 );
