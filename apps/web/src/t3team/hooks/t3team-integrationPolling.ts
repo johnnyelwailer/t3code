@@ -65,6 +65,8 @@ export function startBrowserPolling(input: {
   let disposed = false;
   let inFlight = false;
   let retryDelayMs = 0;
+  // The reader came back while a poll was in flight, where `schedule` does nothing.
+  let resumeRequested = false;
   // A freshly mounted view always gets its first read; only later reads wait on the reader.
   let hasPolled = false;
   const isIdle = () => hasPolled && doc !== undefined && isUserIdle();
@@ -128,7 +130,9 @@ export function startBrowserPolling(input: {
           })
           .finally(() => {
             inFlight = false;
-            schedule(retryDelayMs);
+            const resuming = resumeRequested;
+            resumeRequested = false;
+            schedule(resuming ? 0 : retryDelayMs);
           });
       },
       Math.max(delayMs, minimumDelayMs),
@@ -150,7 +154,12 @@ export function startBrowserPolling(input: {
   // The first interaction after going idle re-arms with one read if the data went stale.
   // The reader is back, so backoff from earlier failed or no-op polls does not apply: freshness
   // alone decides whether a read is due. (Visibility and online changes keep the backoff.)
-  const stopWatchingActivity = doc ? watchUserActivity(() => schedule(0)) : undefined;
+  const stopWatchingActivity = doc
+    ? watchUserActivity(() => {
+        if (inFlight) resumeRequested = true;
+        else schedule(0);
+      })
+    : undefined;
   if (doc) {
     doc.addEventListener("visibilitychange", handleVisibilityChange);
   }

@@ -240,6 +240,52 @@ describe("t3team integration polling", () => {
       }
     });
 
+    it("honours a return that lands while a poll is in flight", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(4_000_000);
+      const doc = stubWindow();
+      const first = start(
+        () => undefined,
+        () => undefined,
+      );
+      await vi.advanceTimersByTimeAsync(USER_IDLE_AFTER_MS + 1);
+      let finish: () => void = () => {};
+      const poll = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
+      const poller = start(poll, () => undefined);
+      try {
+        await vi.advanceTimersByTimeAsync(0);
+        expect(poll).toHaveBeenCalledTimes(1);
+        // The reader returns mid-read: `schedule` is a no-op while in flight, so this must be kept.
+        doc.dispatchEvent(new Event("pointerdown"));
+        finish();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(poll).toHaveBeenCalledTimes(2);
+      } finally {
+        poller.dispose();
+        first.dispose();
+      }
+    });
+
+    it("keeps backoff for a visibility return while the reader is not idle", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(5_000_000);
+      const doc = stubWindow();
+      const poll = vi.fn();
+      const poller = start(poll, () => undefined);
+      try {
+        // Reads at 0, 5, 15, 35 and 75 s; the delay has grown to its 60 s cap.
+        await vi.advanceTimersByTimeAsync(100_000);
+        expect(poll).toHaveBeenCalledTimes(5);
+        doc.dispatchEvent(new Event("visibilitychange"));
+        await vi.advanceTimersByTimeAsync(59_999);
+        expect(poll).toHaveBeenCalledTimes(5);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(poll).toHaveBeenCalledTimes(6);
+      } finally {
+        poller.dispose();
+      }
+    });
+
     it("still reads once for a view mounted while the reader is idle", async () => {
       vi.useFakeTimers();
       vi.setSystemTime(2_000_000);
