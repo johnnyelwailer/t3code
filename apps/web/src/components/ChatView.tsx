@@ -4667,7 +4667,7 @@ export default function ChatView(props: ChatViewProps) {
       );
       promptRef.current = queued.messageText;
       setComposerDraftPrompt(composerDraftTarget, queued.messageText);
-      composerRef.current?.focus();
+      composerRef.current?.focusAtEnd();
     },
   });
 

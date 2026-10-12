@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { CLOUD_SESSION_CREATING_ID } from "./t3team-cloudSessionTargetLogic";
 import {

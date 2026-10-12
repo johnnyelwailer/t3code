@@ -5,10 +5,7 @@
  */
 import { useSyncExternalStore } from "react";
 
-import {
-  CLOUD_SESSION_CREATING_ID,
-  cloudSessionSelectValue,
-} from "./t3team-cloudSessionTargetLogic";
+import { CLOUD_SESSION_CREATING_ID } from "./t3team-cloudSessionTargetLogic";
 
 export interface CloudSessionQueuedSend {
   readonly messageId: string;
@@ -147,10 +144,6 @@ export function failCloudSessionBind(
   });
   commit(next);
   return queued;
-}
-
-export function cloudSessionTargetSelectValue(target: CloudSessionTarget | null): string | null {
-  return target === null ? null : cloudSessionSelectValue(target.sessionId);
 }
 
 export function useCloudSessionTarget(scopeKey: string | null): CloudSessionTarget | null {
