@@ -5,6 +5,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { useThreadShells } from "~/state/entities";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { environmentCatalog } from "~/connection/catalog";
+import { isHostedStaticApp } from "~/hostedPairing";
+import { allEnvironmentShellsBootstrappedAtom } from "~/state/shell";
 import {
   buildUpstreamBridgeNavigation,
   knownEnvironmentIdsOf,
@@ -30,7 +32,15 @@ export function useUpstreamRouteBridge(pathname: string, enabled: boolean): void
   const threadShells = useThreadShells();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const catalog = useAtomValue(environmentCatalog.catalogValueAtom);
-  const knownEnvironmentIds = useMemo(() => knownEnvironmentIdsOf(catalog), [catalog]);
+  const shellsBootstrapped = useAtomValue(allEnvironmentShellsBootstrappedAtom);
+  // Settled once every registered environment has bootstrapped and the platform has registered
+  // the primary (a hosted static app has none).
+  const discoverySettled =
+    shellsBootstrapped && (primaryEnvironmentId !== null || isHostedStaticApp());
+  const knownEnvironmentIds = useMemo(
+    () => knownEnvironmentIdsOf(catalog, discoverySettled),
+    [catalog, discoverySettled],
+  );
 
   const resolveProjectIdForThread = useCallback(
     ({ environmentId, threadId }: { environmentId: string; threadId: string }) =>

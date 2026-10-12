@@ -25,8 +25,7 @@ import { useThreadSelectionStore } from "../threadSelectionStore";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { primaryServerKeybindingsAtom } from "~/state/server";
 import { readThreadShells } from "../state/entities";
-import { knownEnvironmentIdsOf, translateUpstreamPath } from "../t3team/t3team-upstreamRouteBridge";
-import { environmentCatalog } from "../connection/catalog";
+import { translateUpstreamPath } from "../t3team/t3team-upstreamRouteBridge";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { primaryEnvironmentIdAtom } from "../state/primaryEnvironment";
 import { useT3TeamAppBaseName } from "~/t3team/t3team-appBrandName";
@@ -231,9 +230,9 @@ export const Route = createFileRoute("/_chat")({
         readThreadShells().find((shell) => shell.id === threadId)?.projectId ??
         null,
       primaryEnvironmentId: appAtomRegistry.get(primaryEnvironmentIdAtom),
-      knownEnvironmentIds: knownEnvironmentIdsOf(
-        appAtomRegistry.get(environmentCatalog.catalogValueAtom),
-      ),
+      // Environment discovery is never settled this early; the reactive bridge decides whether a
+      // non-primary environment is really absent.
+      knownEnvironmentIds: null,
     });
     if (translation.kind === "target") {
       throw redirect(translation.target);

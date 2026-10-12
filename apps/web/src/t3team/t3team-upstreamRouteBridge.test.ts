@@ -4,6 +4,7 @@ import {
   buildUpstreamBridgeNavigation,
   isT3TeamShellPath,
   isTeamShellEnvironment,
+  knownEnvironmentIdsOf,
   translateUpstreamPath,
 } from "./t3team-upstreamRouteBridge.ts";
 
@@ -149,6 +150,14 @@ describe("translateUpstreamPath", () => {
     expect(translateUpstreamPath("/local/thread-7", deps(null, null, null))).toEqual({
       kind: "ignore",
     });
+  });
+
+  it("knows the catalog's environments only once discovery has settled", () => {
+    const catalog = { isReady: true, entries: new Map([["cloud", {}]]) };
+    // Ready but still discovering: platform environments (the primary) arrive after this.
+    expect(knownEnvironmentIdsOf(catalog, false)).toBeNull();
+    expect(knownEnvironmentIdsOf({ ...catalog, isReady: false }, true)).toBeNull();
+    expect(knownEnvironmentIdsOf(catalog, true)).toEqual(new Set(["cloud"]));
   });
 
   it("falls back for a thread on an environment this client does not have", () => {

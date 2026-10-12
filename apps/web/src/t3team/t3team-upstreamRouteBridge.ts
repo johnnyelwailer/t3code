@@ -127,12 +127,16 @@ export interface UpstreamRouteBridgeDeps {
  * is unknown: upstream's environment-scoped view renders any thread, and the bridge moves a primary
  * one into the Team shell once the id resolves — a Team route, once entered, is never moved back.
  */
-/** `knownEnvironmentIds` from the connection catalog: `null` until it has loaded. */
-export function knownEnvironmentIdsOf(catalog: {
-  readonly isReady: boolean;
-  readonly entries: ReadonlyMap<string, unknown>;
-}): ReadonlySet<string> | null {
-  return catalog.isReady ? new Set(catalog.entries.keys()) : null;
+/**
+ * `knownEnvironmentIds` from the connection catalog: `null` until discovery has settled. The
+ * catalog's first ready emission is not enough — platform environments (the primary among them)
+ * are registered after it — so the caller also says whether every environment has bootstrapped.
+ */
+export function knownEnvironmentIdsOf(
+  catalog: { readonly isReady: boolean; readonly entries: ReadonlyMap<string, unknown> },
+  settled: boolean,
+): ReadonlySet<string> | null {
+  return catalog.isReady && settled ? new Set(catalog.entries.keys()) : null;
 }
 
 export function isTeamShellEnvironment(
