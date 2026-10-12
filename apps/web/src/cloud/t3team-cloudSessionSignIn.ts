@@ -13,8 +13,10 @@ type CloudSessionSignInRequest = {
    * not say, which signs in to the deployment's default host.
    */
   readonly host?: string | undefined;
-  /** Runs the action that failed again, after the sign-in completed. */
+  /** Runs every action that failed for this host again, after the sign-in completed. */
   readonly retry: () => void;
+  /** The actions `retry` runs; a second one for the same host joins it. */
+  readonly retries: Array<() => void>;
 };
 
 type CloudSessionSignInStore = {
@@ -25,21 +27,36 @@ export const useCloudSessionSignInStore = create<CloudSessionSignInStore>(() => 
   request: null,
 }));
 
-/** Start the gh sign-in for `host`; `retry` runs once it succeeds. */
-export function requestCloudSessionSignIn(retry: () => void, host?: string) {
-  useCloudSessionSignInStore.setState({ request: { retry, host } });
+/**
+ * Start the gh sign-in for `host`; `retry` runs once it succeeds. While a sign-in for the same
+ * host is open, another action for it joins that one (same request object, so the running
+ * sign-in is not restarted) and both run after it. One for a different host is refused (`false`):
+ * replacing the open request would drop the first action, so the caller reports it instead.
+ */
+export function requestCloudSessionSignIn(retry: () => void, host?: string): boolean {
+  const open = useCloudSessionSignInStore.getState().request;
+  if (open !== null) {
+    if (open.host !== host) return false;
+    open.retries.push(retry);
+    return true;
+  }
+  const retries = [retry];
+  useCloudSessionSignInStore.setState({
+    request: { host, retries, retry: () => retries.forEach((run) => run()) },
+  });
+  return true;
 }
 
 /**
  * Whether a gh state is about the host the request needs. gh's status belongs to one host: a
- * `connected` for another host says nothing about this one. A state or request that names no host
- * is the default host on both sides.
+ * `connected` for another host, or one that names no host, says nothing about this one. A request
+ * that names no host is for the default host, which any state speaks for.
  */
 export function toolAuthStateIsForHost(
   state: Pick<ToolAuthState, "hostname"> | undefined,
   host: string | undefined,
 ): boolean {
-  return host === undefined || state?.hostname === undefined || state.hostname === host;
+  return host === undefined || state?.hostname === host;
 }
 
 export function clearCloudSessionSignIn() {

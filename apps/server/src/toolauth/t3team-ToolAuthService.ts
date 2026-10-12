@@ -121,8 +121,8 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
   const sessionsRef = yield* SynchronizedRef.make(new Map<string, ActiveSession>());
   const listeners = new Set<(event: ToolAuthServiceStreamEvent) => Effect.Effect<void>>();
 
-  const runProbe = (adapter: ToolAuthAdapter) =>
-    probeStatus(adapter, { homeDir, env }).pipe(
+  const runProbe = (adapter: ToolAuthAdapter, requireProbeAnswer = false) =>
+    probeStatus(adapter, { homeDir, env, requireProbeAnswer }).pipe(
       Effect.provideService(ProcessRunner.ProcessRunner, processRunner),
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),
@@ -172,7 +172,7 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
     notifyUpdate,
     applySessionUpdate,
     stateForTool,
-    probe: runProbe,
+    probe: (adapter) => runProbe(adapter, true),
     homeDir,
     env,
     singleFlight,

@@ -135,6 +135,21 @@ export function stubProbeRunner(
   });
 }
 
+/** A `ProcessRunner` whose command never answers in time — a status probe that hangs. */
+export function stubTimedOutProbeRunner(): ProcessRunner.ProcessRunner["Service"] {
+  return ProcessRunner.ProcessRunner.of({
+    run: () =>
+      Effect.succeed({
+        stdout: "",
+        stderr: "",
+        code: 0,
+        timedOut: true,
+        stdoutTruncated: false,
+        stderrTruncated: false,
+      } as ProcessRunner.ProcessRunOutput),
+  });
+}
+
 export function makeService(
   homeDir: string,
   overrides: Partial<ToolAuthService.ToolAuthServiceOptions> = {},

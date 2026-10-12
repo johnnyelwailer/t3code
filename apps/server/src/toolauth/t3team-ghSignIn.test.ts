@@ -1,4 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
+
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
@@ -9,6 +12,7 @@ import {
   makeTempHome,
   removeTempHome,
   stubProbeRunner,
+  stubTimedOutProbeRunner,
   waitFor,
 } from "./t3team-toolauthTestHarness.ts";
 
@@ -184,6 +188,29 @@ describe("gh sign-in", () => {
       }),
     );
   });
+
+  it.live(
+    "a clean exit is not connected when the probe hangs and hosts.yml names another host",
+    () =>
+      Effect.gen(function* () {
+        const homeDir = makeTempHome();
+        try {
+          const hosts = NodePath.join(homeDir, GH.status.credentialPath);
+          NodeFS.mkdirSync(NodePath.dirname(hosts), { recursive: true });
+          NodeFS.writeFileSync(hosts, "other.example.com:\n  user: octocat\n");
+          const { service, ptyAdapter } = yield* makeService(
+            homeDir,
+            { tools: ["gh"] },
+            stubTimedOutProbeRunner(),
+          );
+          yield* service.start("gh");
+          ptyAdapter.processes[0]!.emitExit({ exitCode: 0, signal: null });
+          yield* waitFor(phaseIs(service, "failed"));
+        } finally {
+          removeTempHome(homeDir);
+        }
+      }),
+  );
 
   it.live("a status read names the host it is about", () =>
     Effect.gen(function* () {

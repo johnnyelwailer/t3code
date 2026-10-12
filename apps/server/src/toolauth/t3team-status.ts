@@ -38,6 +38,13 @@ export interface ToolAuthStatusOptions {
    * production. Passed verbatim to the probe command.
    */
   readonly env: NodeJS.ProcessEnv;
+  /**
+   * For an adapter that declares a `probe`: a probe that did not answer (timeout, spawn failure,
+   * empty output) is `idle`, never the credential-file hint. The hint says "some credential
+   * exists", not "this host is signed in" (a per-host CLI's file can hold another host only), so
+   * it must not decide a login's outcome. Adapters with no probe still use the hint.
+   */
+  readonly requireProbeAnswer?: boolean;
 }
 
 /**
@@ -115,7 +122,8 @@ export const probeStatus = Effect.fn("toolauth.probeStatus")(function* (
   // The probe didn't resolve a phase (none declared, it failed to run, or its
   // output didn't parse) — fall back to the credential-file hint.
   if (phase === undefined) {
-    phase = Option.isSome(credentialFileText) ? "connected" : "idle";
+    const hintAllowed = !(options.requireProbeAnswer === true && adapter.status.probe?.length);
+    phase = hintAllowed && Option.isSome(credentialFileText) ? "connected" : "idle";
   }
 
   // "No OAuth credential" is not the same as "not usable". A gateway base URL,

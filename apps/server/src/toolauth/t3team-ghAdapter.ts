@@ -101,7 +101,10 @@ export function ghAdapter(hostname: string): ToolAuthAdapter {
       // "✓ Logged in to nexplore.ghe.com account <login> (<storage>)".
       // Logged in to OTHER hosts (github.com) must not count: match the
       // configured host specifically.
-      probe: ["gh", "auth", "status"],
+      // `--hostname` limits gh to that host: it ignores other hosts' sessions and exits 1 when
+      // that one is not signed in (gh 2.101 `gh auth status --help`: "or only the one given via
+      // `--hostname`"). The parse below still reads the host's line from the output.
+      probe: ["gh", "auth", "status", "--hostname", hostname],
       parseProbe: (out: string): ToolAuthPhase =>
         new RegExp(`logged in to ${host}`, "i").test(out) ? "connected" : "idle",
       // Both wordings exist across gh versions ("as <login>" in older ones,

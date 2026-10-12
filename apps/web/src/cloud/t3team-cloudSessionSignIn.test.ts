@@ -9,6 +9,7 @@ import { toastManager } from "~/components/ui/toast";
 import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
 import {
   clearCloudSessionSignIn,
+  requestCloudSessionSignIn,
   toolAuthStateIsForHost,
   useCloudSessionSignInStore,
 } from "./t3team-cloudSessionSignIn";
@@ -72,6 +73,37 @@ describe("reportCloudSessionCreateFailure", () => {
     expect(retry).toHaveBeenCalledOnce();
   });
 
+  it("runs every action that waited on the same host's sign-in, without restarting it", () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    expect(requestCloudSessionSignIn(first, "github.com")).toBe(true);
+    const open = useCloudSessionSignInStore.getState().request;
+    expect(requestCloudSessionSignIn(second, "github.com")).toBe(true);
+    expect(useCloudSessionSignInStore.getState().request).toBe(open);
+    open?.retry();
+    expect(first).toHaveBeenCalledOnce();
+    expect(second).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the open sign-in and toasts a failure that needs another host", () => {
+    const toast = vi.spyOn(toastManager, "add");
+    const first = vi.fn();
+    requestCloudSessionSignIn(first, "github.com");
+    reportCloudSessionCreateFailure(
+      failure({
+        _tag: "CloudSessionFailedError",
+        reason: "unauthorized",
+        message: "No usable credential.",
+        host: "nexplore.ghe.com",
+      }),
+      () => {},
+    );
+    expect(toast).toHaveBeenCalledOnce();
+    expect(useCloudSessionSignInStore.getState().request?.host).toBe("github.com");
+    useCloudSessionSignInStore.getState().request?.retry();
+    expect(first).toHaveBeenCalledOnce();
+  });
+
   it("still toasts every other failure", () => {
     const toast = vi.spyOn(toastManager, "add");
     reportCloudSessionCreateFailure(
@@ -89,9 +121,13 @@ describe("toolAuthStateIsForHost", () => {
     expect(toolAuthStateIsForHost({ hostname: "github.com" }, "github.com")).toBe(true);
   });
 
-  it("treats a state or a request that names no host as the default host", () => {
+  it("needs an exact match once a host is requested: a state naming no host is not it", () => {
+    expect(toolAuthStateIsForHost({}, "github.com")).toBe(false);
+    expect(toolAuthStateIsForHost(undefined, "github.com")).toBe(false);
+  });
+
+  it("lets any state speak for a request that names no host (the default host)", () => {
     expect(toolAuthStateIsForHost({ hostname: "nexplore.ghe.com" }, undefined)).toBe(true);
-    expect(toolAuthStateIsForHost({}, "github.com")).toBe(true);
-    expect(toolAuthStateIsForHost(undefined, "github.com")).toBe(true);
+    expect(toolAuthStateIsForHost(undefined, undefined)).toBe(true);
   });
 });
