@@ -3,19 +3,18 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { assembleMyWorkDigestProjectData } from "./t3team-myworkDigestAggregation.ts";
 import type { BacklogResourceRef } from "./t3team-atlassian-backlog-cacheShared.ts";
+import { DIGEST_TRANSITION_RETENTION_MS } from "./t3team-digestStatusTransitions.ts";
 import { assembleDigestYesterday } from "./t3team-myworkDigestYesterday.ts";
-import {
-  DIGEST_DATA_RETENTION_MS,
-  digestDataWindow,
-  lastActivityDayWindow,
-} from "./t3team-myworkDigestYesterdayWindow.ts";
+import { digestDataWindow, lastActivityDayWindow } from "./t3team-myworkDigestYesterdayWindow.ts";
 
 const iso = (ms: number) => DateTime.formatIso(DateTime.makeUnsafe(ms));
 
 /** The window `lastActivityDayWindow` finds for a lone activity instant, as ISO strings. */
 const dayOf = (nowMs: number, zone: string, ms: number) => {
   const window = lastActivityDayWindow(nowMs, zone, [ms]);
-  return window !== undefined ? { from: iso(window.fromMs), until: iso(window.untilMs) } : undefined;
+  return window !== undefined
+    ? { from: iso(window.fromMs), until: iso(window.untilMs) }
+    : undefined;
 };
 
 describe("digestDataWindow", () => {
@@ -23,7 +22,7 @@ describe("digestDataWindow", () => {
     // Tue 2026-10-06 09:00 in Zurich (UTC+2, still summer time): today starts Monday 22:00Z.
     const window = digestDataWindow(Date.parse("2026-10-06T07:00:00Z"), "Europe/Zurich");
     expect(window.untilMs).toBe(Date.parse("2026-10-05T22:00:00.000Z"));
-    expect(window.fromMs).toBe(window.untilMs - DIGEST_DATA_RETENTION_MS);
+    expect(window.fromMs).toBe(window.untilMs - DIGEST_TRANSITION_RETENTION_MS);
   });
 });
 
@@ -79,17 +78,15 @@ describe("lastActivityDayWindow", () => {
   });
 
   it("gives up at the horizon", () => {
-    const old = NOW - 2 * DIGEST_DATA_RETENTION_MS;
+    const old = NOW - 2 * DIGEST_TRANSITION_RETENTION_MS;
     expect(lastActivityDayWindow(NOW, "Europe/Zurich", [old])).toBeUndefined();
   });
 
   it("follows the clock change: the long Sunday runs 25 hours", () => {
     // Zurich leaves summer time on Sun 2026-10-25; a Sunday activity seen on Monday 2026-10-26.
-    const window = lastActivityDayWindow(
-      Date.parse("2026-10-26T08:00:00Z"),
-      "Europe/Zurich",
-      [Date.parse("2026-10-25T12:00:00Z")],
-    );
+    const window = lastActivityDayWindow(Date.parse("2026-10-26T08:00:00Z"), "Europe/Zurich", [
+      Date.parse("2026-10-25T12:00:00Z"),
+    ]);
     expect(window).toEqual({
       fromMs: Date.parse("2026-10-24T22:00:00.000Z"), // Sunday still starts at +2
       untilMs: Date.parse("2026-10-25T23:00:00.000Z"), // Monday already starts at +1

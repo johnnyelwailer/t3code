@@ -9,18 +9,17 @@
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 
+import { DIGEST_TRANSITION_RETENTION_MS } from "./t3team-digestStatusTransitions.ts";
+
 export type DigestYesterdayWindow = {
   readonly fromMs: number;
   readonly untilMs: number;
 };
 
 /**
- * How far back the digest's reads reach. Day-aligned (the start of today, not "now"), so the
- * merged-PR read that keys on the window's start stays cache-warm across a whole calendar day.
+ * `timeZone` is an IANA name from the client; an unknown or absent one falls back to this
+ * process's own zone (the desktop app's server runs on the viewer's machine).
  */
-export const DIGEST_DATA_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
-
-/** `timeZone` is an IANA name from the client; an unknown or absent one falls back to this process's own zone. */
 function zoneFor(timeZone?: string) {
   return Option.getOrElse(
     timeZone !== undefined ? DateTime.zoneMakeNamed(timeZone) : Option.none(),
@@ -35,21 +34,22 @@ function startOfDay(nowMs: number, zone: ReturnType<typeof zoneFor>) {
 const dayStartMs = (day: ReturnType<typeof startOfDay>) => DateTime.toEpochMillis(day);
 
 /**
- * The shared data horizon: the start of today in the viewer's zone back over the retention, up to
- * the start of today. Today's activity never counts — the recap is about the day the viewer left
- * behind.
+ * The shared data horizon: the start of today in the viewer's zone back over the digest's 30-day
+ * retention (day-aligned, so the merged-PR read that keys on the window's start stays cache-warm
+ * across a whole calendar day), up to the start of today. Today's activity never counts — the
+ * recap is about the day the viewer left behind.
  */
 export function digestDataWindow(nowMs: number, timeZone?: string): DigestYesterdayWindow {
   const todayMs = dayStartMs(startOfDay(nowMs, zoneFor(timeZone)));
-  return { fromMs: todayMs - DIGEST_DATA_RETENTION_MS, untilMs: todayMs };
+  return { fromMs: todayMs - DIGEST_TRANSITION_RETENTION_MS, untilMs: todayMs };
 }
 
 /**
  * The most recent day strictly before today holding any of `activityMs`, walking back day by day
- * from the day before today to the horizon (`DIGEST_DATA_RETENTION_MS` back from the start of
- * today). Returns that day's own window — start of day to start of the next — or `undefined` when
- * no day in the horizon has activity. `activityMs` is what the caller already read for the whole
- * horizon, so the walk-back adds no reads of its own.
+ * from the day before today to the horizon (the retention back from the start of today). Returns
+ * that day's own window — start of day to start of the next — or `undefined` when no day in the
+ * horizon has activity. `activityMs` is what the caller already read for the whole horizon, so
+ * the walk-back adds no reads of its own.
  */
 export function lastActivityDayWindow(
   nowMs: number,
@@ -59,7 +59,7 @@ export function lastActivityDayWindow(
   const zone = zoneFor(timeZone);
   const todayMs = dayStartMs(startOfDay(nowMs, zone));
   let day = DateTime.subtract(startOfDay(nowMs, zone), { days: 1 });
-  const floorMs = dayStartMs(startOfDay(todayMs - DIGEST_DATA_RETENTION_MS, zone));
+  const floorMs = dayStartMs(startOfDay(todayMs - DIGEST_TRANSITION_RETENTION_MS, zone));
   for (;;) {
     const fromMs = dayStartMs(day);
     const untilMs = dayStartMs(DateTime.add(day, { days: 1 }));

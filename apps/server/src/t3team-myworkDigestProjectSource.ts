@@ -8,15 +8,20 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import type { T3TeamBacklogCacheIdentity } from "./t3team-atlassian-backlog-cacheShared.ts";
-import { loadDigestViewerMergedPrEntries } from "./t3team-myworkDigestPrCache.ts";
+import type { DigestTransitionRead } from "./t3team-digestStatusTransitions.ts";
 import { resolveDigestTicketRef } from "./t3team-myworkDigestAggregation.ts";
 import { loadDigestBurndownContext } from "./t3team-myworkDigestBurndownBackfill.ts";
 import { kickDigestMirrorSync, readDigestJiraSyncedAtMs } from "./t3team-myworkDigestFreshness.ts";
 import { toDigestPrEntries } from "./t3team-myworkDigestPr.ts";
-import { loadDigestPrEntries, loadDigestViewerPrEntries } from "./t3team-myworkDigestPrCache.ts";
+import {
+  loadDigestPrEntries,
+  loadDigestViewerMergedPrEntries,
+  loadDigestViewerPrEntries,
+} from "./t3team-myworkDigestPrCache.ts";
 import { readDigestYesterday } from "./t3team-myworkDigestYesterdayRead.ts";
 import type { DigestYesterdayWindow } from "./t3team-myworkDigestYesterdayWindow.ts";
 import { viewerPrsForProject } from "./t3team-myworkDigestViewerPrs.ts";
+import { enrichDigestReviewEntries } from "./t3team-myworkDigestReviewEnrich.ts";
 import {
   readDigestEstimateUnit,
   type DigestThreadRow,
@@ -33,18 +38,10 @@ import { readDigestDependencies } from "./t3team-myworkDigestDependencies.ts";
 import { withProfileNames } from "./t3team-myworkDigestPeopleNames.ts";
 import { readDigestViewerTickets } from "./t3team-myworkDigestViewer.ts";
 
-import { readDigestViewerTickets } from "./t3team-myworkDigestViewer.ts";
-
-type DigestTransitionRow = {
-  readonly issueId: string;
-  readonly issueKey: string | null;
-  readonly from: string;
-  readonly to: string;
-  readonly atMs: number;
-};
-
 /** The mirror identity a project's Jira reads key on. */
-export function digestIdentityFor(project: T3TeamMyWorkDigestProjectInput): T3TeamBacklogCacheIdentity {
+export function digestIdentityFor(
+  project: T3TeamMyWorkDigestProjectInput,
+): T3TeamBacklogCacheIdentity {
   return {
     provider: project.account.provider,
     accountId: project.account.id,
@@ -62,7 +59,7 @@ type DigestSharedReads = {
   /** The found last-working-day window; `undefined` when the horizon had no activity. */
   readonly yesterdayWindow: DigestYesterdayWindow | undefined;
   /** This project's status transitions, read by the loader over the same horizon. */
-  readonly transitionRows: DigestTransitionRow[];
+  readonly transitionRows: ReadonlyArray<DigestTransitionRead>;
   readonly threads: ReadonlyArray<DigestThreadRow>;
   readonly agentByThread: ReadonlyMap<string, string>;
   readonly rawTicketByThread: ReadonlyMap<string, string>;

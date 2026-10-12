@@ -22,7 +22,8 @@ const startOfLocalDay = (ms: number): number => {
  */
 export function digestYesterdayHeading(fromIso: string, nowMs: number): string {
   const foundDay = startOfLocalDay(Date.parse(fromIso));
-  if (foundDay === startOfLocalDay(nowMs) - LOCAL_DAY_MS) return "Yesterday";
+  const dayBefore = startOfLocalDay(startOfLocalDay(nowMs) - LOCAL_DAY_MS);
+  if (foundDay === dayBefore) return "Yesterday";
   return `Since ${new Date(foundDay).toLocaleDateString(undefined, { weekday: "long" })}`;
 }
 

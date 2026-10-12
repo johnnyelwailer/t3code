@@ -6,6 +6,8 @@
  * data horizon, so this only matches and filters.
  */
 
+import type * as Effect from "effect/Effect";
+
 import type { BacklogResourceRef } from "./t3team-atlassian-backlog-cacheShared.ts";
 import { loadDigestViewerMergedPrEntries } from "./t3team-myworkDigestPrCache.ts";
 import type { T3TeamDigestTransition } from "./t3team-myworkDigestTypes.ts";

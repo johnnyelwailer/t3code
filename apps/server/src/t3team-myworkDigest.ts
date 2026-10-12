@@ -15,14 +15,8 @@ import * as Effect from "effect/Effect";
 import { readDigestStatusTransitionsSince } from "./t3team-digestStatusTransitions.ts";
 import { assembleMyWorkDigestPayload } from "./t3team-myworkDigestAggregation.ts";
 import { loadDigestViewerMergedPrEntries } from "./t3team-myworkDigestPrCache.ts";
-import {
-  digestIdentityFor,
-  loadDigestProjectSource,
-} from "./t3team-myworkDigestProjectSource.ts";
-import {
-  digestDataWindow,
-  lastActivityDayWindow,
-} from "./t3team-myworkDigestYesterdayWindow.ts";
+import { digestIdentityFor, loadDigestProjectSource } from "./t3team-myworkDigestProjectSource.ts";
+import { digestDataWindow, lastActivityDayWindow } from "./t3team-myworkDigestYesterdayWindow.ts";
 import {
   readDigestDecisionQuestions,
   readDigestHandoffTickets,
@@ -104,7 +98,7 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
             requestedViewerName,
             mergedPrs,
             yesterdayWindow,
-            transitionRows: transitionRows[index],
+            transitionRows: transitionRows[index] ?? [],
             threads,
             agentByThread,
             rawTicketByThread,
