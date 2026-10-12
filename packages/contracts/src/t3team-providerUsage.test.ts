@@ -95,6 +95,7 @@ describe("ProviderUsageQueryResult", () => {
       ],
       hubAccounts: [],
       hubErrors: [],
+      notice: "<system-reminder>…</system-reminder>",
     };
     expect(encodeResult(decodeResult(payload))).toEqual(payload);
   });
