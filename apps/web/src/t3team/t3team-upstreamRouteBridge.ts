@@ -114,6 +114,12 @@ export interface UpstreamRouteBridgeDeps {
    * WSL) stays on upstream's environment-scoped thread route.
    */
   readonly primaryEnvironmentId: string | null;
+  /**
+   * Environments this client has (the connection catalog), or `null` while the catalog has not
+   * loaded. A thread on one of them, or on any environment before the catalog is known, waits on
+   * upstream's route; a thread on an environment the client does not have falls back.
+   */
+  readonly knownEnvironmentIds: ReadonlySet<string> | null;
 }
 
 /**
@@ -121,6 +127,14 @@ export interface UpstreamRouteBridgeDeps {
  * is unknown: upstream's environment-scoped view renders any thread, and the bridge moves a primary
  * one into the Team shell once the id resolves — a Team route, once entered, is never moved back.
  */
+/** `knownEnvironmentIds` from the connection catalog: `null` until it has loaded. */
+export function knownEnvironmentIdsOf(catalog: {
+  readonly isReady: boolean;
+  readonly entries: ReadonlyMap<string, unknown>;
+}): ReadonlySet<string> | null {
+  return catalog.isReady ? new Set(catalog.entries.keys()) : null;
+}
+
 export function isTeamShellEnvironment(
   environmentId: string,
   primaryEnvironmentId: string | null,
@@ -163,11 +177,16 @@ export function translateUpstreamPath(
     }
   }
 
-  // A thread that is not known to be the primary's stays on upstream's route even before its
-  // shell has synced: that route waits for its environment, while "unhandled" would send a reload
-  // of a cloud-session thread to the dashboard. On a cold load the primary itself is not known yet
-  // (null in `beforeLoad`); the reactive bridge re-translates once it is.
-  if (threadPath && !isTeamShellEnvironment(threadPath.environmentId, deps.primaryEnvironmentId)) {
+  // A thread on another machine stays on upstream's route even before its shell has synced: that
+  // route waits for its environment, while "unhandled" would send a reload of a cloud-session
+  // thread to the dashboard. On a cold load neither the primary nor the catalog is known yet (in
+  // `beforeLoad`); the reactive bridge re-translates once they are, and an environment the client
+  // does not have then falls back like any unknown path.
+  if (
+    threadPath &&
+    !isTeamShellEnvironment(threadPath.environmentId, deps.primaryEnvironmentId) &&
+    (deps.knownEnvironmentIds === null || deps.knownEnvironmentIds.has(threadPath.environmentId))
+  ) {
     return { kind: "ignore" };
   }
 

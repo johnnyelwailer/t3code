@@ -7,9 +7,14 @@ import {
   translateUpstreamPath,
 } from "./t3team-upstreamRouteBridge.ts";
 
-const deps = (projectId: string | null, primaryEnvironmentId: string | null = "local") => ({
+const deps = (
+  projectId: string | null,
+  primaryEnvironmentId: string | null = "local",
+  knownEnvironmentIds: ReadonlySet<string> | null = new Set(["local", "cloud"]),
+) => ({
   resolveProjectIdForThread: () => projectId,
   primaryEnvironmentId,
+  knownEnvironmentIds,
 });
 
 describe("isT3TeamShellPath", () => {
@@ -137,9 +142,23 @@ describe("translateUpstreamPath", () => {
   it("keeps a reloaded thread on another machine before its shell has synced", () => {
     // A cold load of a cloud-session thread: the primary is known, the remote shells are not yet.
     expect(translateUpstreamPath("/cloud/thread-7", deps(null))).toEqual({ kind: "ignore" });
-    // On a cold load the primary is not known yet either: wait for the reactive bridge.
-    expect(translateUpstreamPath("/cloud/thread-7", deps(null, null))).toEqual({ kind: "ignore" });
-    expect(translateUpstreamPath("/local/thread-7", deps(null, null))).toEqual({ kind: "ignore" });
+    // On a cold load neither the primary nor the catalog is known yet: wait for the reactive bridge.
+    expect(translateUpstreamPath("/cloud/thread-7", deps(null, null, null))).toEqual({
+      kind: "ignore",
+    });
+    expect(translateUpstreamPath("/local/thread-7", deps(null, null, null))).toEqual({
+      kind: "ignore",
+    });
+  });
+
+  it("falls back for a thread on an environment this client does not have", () => {
+    // A garbage path or a removed environment: upstream's route would wait for it forever.
+    expect(translateUpstreamPath("/removed/thread-7", deps(null))).toEqual({ kind: "unhandled" });
+    expect(translateUpstreamPath("/foo/bar", deps(null))).toEqual({ kind: "unhandled" });
+    // Hosted static (no primary) with a loaded catalog: the same.
+    expect(translateUpstreamPath("/removed/thread-7", deps(null, null))).toEqual({
+      kind: "unhandled",
+    });
   });
 
   it("reports unhandled for paths that are not upstream thread routes", () => {

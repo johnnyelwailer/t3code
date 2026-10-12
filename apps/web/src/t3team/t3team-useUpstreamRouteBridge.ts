@@ -1,10 +1,13 @@
-import { useCallback, useEffect } from "react";
+import { useAtomValue } from "@effect/atom-react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
 import { useThreadShells } from "~/state/entities";
 import { usePrimaryEnvironmentId } from "~/state/environments";
+import { environmentCatalog } from "~/connection/catalog";
 import {
   buildUpstreamBridgeNavigation,
+  knownEnvironmentIdsOf,
   translateUpstreamPath,
 } from "~/t3team/t3team-upstreamRouteBridge";
 
@@ -26,6 +29,8 @@ export function useUpstreamRouteBridge(pathname: string, enabled: boolean): void
   const navigate = useNavigate();
   const threadShells = useThreadShells();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const catalog = useAtomValue(environmentCatalog.catalogValueAtom);
+  const knownEnvironmentIds = useMemo(() => knownEnvironmentIdsOf(catalog), [catalog]);
 
   const resolveProjectIdForThread = useCallback(
     ({ environmentId, threadId }: { environmentId: string; threadId: string }) =>
@@ -46,10 +51,18 @@ export function useUpstreamRouteBridge(pathname: string, enabled: boolean): void
     const translation = translateUpstreamPath(pathname, {
       resolveProjectIdForThread,
       primaryEnvironmentId,
+      knownEnvironmentIds,
     });
     if (translation.kind === "ignore") {
       return;
     }
     void navigate(buildUpstreamBridgeNavigation(translation));
-  }, [enabled, navigate, pathname, primaryEnvironmentId, resolveProjectIdForThread]);
+  }, [
+    enabled,
+    knownEnvironmentIds,
+    navigate,
+    pathname,
+    primaryEnvironmentId,
+    resolveProjectIdForThread,
+  ]);
 }
