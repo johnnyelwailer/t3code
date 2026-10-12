@@ -50,7 +50,7 @@ export function ProjectMyWorkSimpleViews({
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {filteredWorkItems.map((ticket) => (
-        <T3SurfacePanel key={ticket.id} tone="muted" className="px-2.5 py-2">
+        <T3SurfacePanel key={ticket.id} tone="muted" className="px-3 py-3">
           <DraggableTicketWorkItemCard
             capabilities={getTicketAgentContext(ticket)}
             dragLabel={`${ticket.ref.displayId} ${ticket.ref.title}`}
