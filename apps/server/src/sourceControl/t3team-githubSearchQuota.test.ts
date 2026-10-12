@@ -25,6 +25,7 @@ describe("restResourceOf", () => {
     assert.strictEqual(restResourceOf("/search/issues"), "search");
     assert.strictEqual(restResourceOf("repos/acme/search/pulls/1"), "core");
     assert.strictEqual(restResourceOf("user"), "core");
+    assert.strictEqual(restResourceOf("graphql"), "graphql");
   });
 });
 

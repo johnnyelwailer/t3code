@@ -15,8 +15,9 @@ const RESERVE_RATIO = 0.1;
  */
 export type GitHubQuotaResource = string;
 
-/** Which quota a REST path spends: search has its own, small one; everything else is `core`. */
+/** Which quota a path spends: search and GraphQL have their own; everything else is `core`. */
 export function restResourceOf(path: string): GitHubQuotaResource {
+  if (/^\/*graphql(\?|$)/u.test(path)) return "graphql";
   return /^\/*search\//u.test(path) ? "search" : "core";
 }
 

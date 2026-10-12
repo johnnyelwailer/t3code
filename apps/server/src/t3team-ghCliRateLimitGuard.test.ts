@@ -83,6 +83,10 @@ describe("ghApiTarget", () => {
       }),
       { host: "github.com", path: "user" },
     );
+    assert.deepStrictEqual(
+      ghApiTarget({ command: "gh", args: ["api", "--hostname=Ghe.Example.com", "graphql"] }),
+      { host: "ghe.example.com", path: "graphql" },
+    );
     assert.strictEqual(ghApiTarget({ command: "gh", args: ["auth", "token"] }), null);
     assert.strictEqual(ghApiTarget({ command: "git", args: ["api"] }), null);
   });
@@ -149,6 +153,31 @@ describe("guardGhApiProcess", () => {
       const refused = yield* Effect.flip(vcs.run(search));
       assert.strictEqual(refused._tag, "SourceControlRateLimitPausedError");
       yield* vcs.run(inbox);
+      assert.strictEqual(calls.length, 1);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("passes a call through when there is no credential to scope the pause by", () => {
+    const calls: Array<ReadonlyArray<string>> = [];
+    const vcs: VcsProcessShape = {
+      run: (input) => {
+        calls.push(input.args);
+        return Effect.succeed(output);
+      },
+    };
+    return Effect.gen(function* () {
+      const guarded = guardGhApiProcess(vcs, {
+        api: {
+          ...api,
+          credential: (host) =>
+            Effect.fail(
+              new GitHubApi.GitHubApiAuthenticationError({ host, operation: "credential" }),
+            ),
+        },
+        limits: yield* SourceControlRateLimit.SourceControlRateLimit,
+        quota: yield* GitHubQuota.GitHubQuota,
+      });
+      yield* guarded.run(inbox);
       assert.strictEqual(calls.length, 1);
     }).pipe(Effect.provide(layer));
   });

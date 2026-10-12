@@ -1,5 +1,6 @@
 import type { VcsError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import * as GitHubApi from "./sourceControl/GitHubApi.ts";
 import * as GitHubQuota from "./sourceControl/githubQuota.ts";
@@ -35,8 +36,9 @@ export function ghApiTarget(input: Pick<VcsProcessInput, "command" | "args">) {
   let host = DEFAULT_HOST;
   let path = "";
   for (let index = 1; index < input.args.length; index++) {
-    const arg = input.args[index]!;
-    if (arg === "--hostname") host = input.args[index + 1] ?? DEFAULT_HOST;
+    const arg = input.args.at(index) ?? "";
+    if (arg === "--hostname") host = input.args.at(index + 1) ?? DEFAULT_HOST;
+    if (arg.startsWith("--hostname=")) host = arg.slice("--hostname=".length) || DEFAULT_HOST;
     if (FLAGS_WITH_VALUE.has(arg)) index++;
     else if (!arg.startsWith("-") && path === "") path = arg;
   }
@@ -51,7 +53,7 @@ const isRateLimited = (error: VcsError) =>
  * while the host is paused or its quota is at the reserve, and a rate-limited answer starts (or
  * extends) the pause for everyone. The CLI prints no quota headers here, so only the pause and
  * the balance `GitHubApi` already observed are consulted; a refusal falls back to the
- * pause's own cooldown. Everything that is not `gh api` passes straight through.
+ * pause's own cooldown. With no credential to scope the pause by, the call passes through. Everything that is not `gh api` passes straight through.
  */
 export function guardGhApiProcess(
   vcs: VcsProcessShape,
@@ -61,29 +63,40 @@ export function guardGhApiProcess(
     readonly quota: GitHubQuota.GitHubQuota["Service"];
   },
 ): VcsProcessShape {
+  const guarded = (
+    input: VcsProcessInput,
+    target: { readonly host: string; readonly path: string },
+    key: { readonly provider: "github"; readonly host: string },
+  ) =>
+    Effect.gen(function* () {
+      yield* deps.quota.admit(target.host, GitHubQuota.restResourceOf(target.path));
+      const lease = yield* deps.limits.check(key);
+      return yield* vcs.run(input).pipe(
+        Effect.tap(() => deps.limits.recordSuccess({ ...key, lease })),
+        Effect.tapError((error) =>
+          error._tag === "SourceControlRateLimitPausedError" || !isRateLimited(error)
+            ? Effect.void
+            : deps.limits.recordRateLimit({ ...key, lease }),
+        ),
+      );
+    });
+
   return {
     run: (input) => {
       const target = ghApiTarget(input);
       if (target === null) return vcs.run(input);
       const key = { provider: "github" as const, host: target.host };
-      return Effect.gen(function* () {
-        const fingerprint = yield* deps.api.credential(target.host).pipe(
-          Effect.map((credential) => credential.fingerprint),
-          Effect.orElseSucceed(() => ""),
-        );
-        return yield* Effect.gen(function* () {
-          yield* deps.quota.admit(target.host, GitHubQuota.restResourceOf(target.path));
-          const lease = yield* deps.limits.check(key);
-          return yield* vcs.run(input).pipe(
-            Effect.tap(() => deps.limits.recordSuccess({ ...key, lease })),
-            Effect.tapError((error) =>
-              error._tag === "SourceControlRateLimitPausedError" || !isRateLimited(error)
-                ? Effect.void
-                : deps.limits.recordRateLimit({ ...key, lease }),
-            ),
-          );
-        }).pipe(Effect.provideService(SourceControlRateLimit.CredentialScope, fingerprint));
-      });
+      return deps.api.credential(target.host).pipe(
+        Effect.map((credential) => credential.fingerprint),
+        Effect.option,
+        Effect.flatMap((fingerprint) =>
+          Option.isNone(fingerprint)
+            ? vcs.run(input)
+            : guarded(input, target, key).pipe(
+                Effect.provideService(SourceControlRateLimit.CredentialScope, fingerprint.value),
+              ),
+        ),
+      );
     },
   };
 }
