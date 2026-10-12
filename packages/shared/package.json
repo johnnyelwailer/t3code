@@ -51,6 +51,10 @@
       "types": "./src/composerPullRequestMatches.ts",
       "import": "./src/composerPullRequestMatches.ts"
     },
+    "./composerReferenceRank": {
+      "types": "./src/composerReferenceRank.ts",
+      "import": "./src/composerReferenceRank.ts"
+    },
     "./themePalettes": {
       "types": "./src/themePalettes.ts",
       "import": "./src/themePalettes.ts"

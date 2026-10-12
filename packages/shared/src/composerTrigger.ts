@@ -3,7 +3,8 @@ export type ComposerTriggerKind =
   | "pull-request"
   | "slash-command"
   | "slash-model"
-  | "skill";
+  | "skill"
+  | "work-item";
 export type ComposerSlashCommand = "model" | "plan" | "default";
 
 export interface ComposerTrigger {
@@ -105,6 +106,16 @@ export function detectComposerTrigger(
     return {
       kind: "pull-request",
       query: pullRequestMatch[1] ?? "",
+      rangeStart: tokenStart,
+      rangeEnd: cursor,
+    };
+  // A Jira issue key in flight: project prefix, dash, and any digits typed so far. Uppercase-only
+  // so free text like `self-hosted` never opens a reference menu. Parity with the web trigger.
+  const workItemKeyMatch = /^[A-Z][A-Z0-9]{0,9}-\d*$/.exec(token);
+  if (workItemKeyMatch)
+    return {
+      kind: "work-item",
+      query: token,
       rangeStart: tokenStart,
       rangeEnd: cursor,
     };

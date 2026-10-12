@@ -15,6 +15,25 @@ describe("detectComposerTrigger", () => {
       });
     },
   );
+
+  it.each(["NX-", "NX-12", "ABC123-", "PROJ-9"])(
+    "detects %s as the work-item trigger with its source range",
+    (key) => {
+      const text = `Ref ${key}`;
+      expect(detectComposerTrigger(text, text.length)).toEqual({
+        kind: "work-item",
+        query: key,
+        rangeStart: 4,
+        rangeEnd: text.length,
+      });
+    },
+  );
+
+  it("leaves lowercase tokens and dash-less prefixes without a work-item trigger", () => {
+    for (const text of ["self-hosted", "Fix NX", "nx-12"]) {
+      expect(detectComposerTrigger(text, text.length)).not.toEqual({ kind: "work-item" });
+    }
+  });
 });
 
 describe("serializeComposerFileLink", () => {
