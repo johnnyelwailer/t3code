@@ -9,3 +9,9 @@ export const noJitter = Layer.succeed(Random.Random, {
   nextIntUnsafe: () => 0,
   nextDoubleUnsafe: () => 0.5,
 });
+
+/** Pins `Schedule.jittered` to its earliest point (0.8x), so a test can see the jitter shorten a wait. */
+export const earliestJitter = Layer.succeed(Random.Random, {
+  nextIntUnsafe: () => 0,
+  nextDoubleUnsafe: () => 0,
+});
