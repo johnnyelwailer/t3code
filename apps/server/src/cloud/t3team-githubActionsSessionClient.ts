@@ -33,6 +33,8 @@ export interface WorkflowRunSummary {
   readonly name: string;
   /** Who started the run. This GHE ignores `actor=` on the list query, so filter on this. */
   readonly actor: string;
+  /** Which attempt of the run this is; a re-run keeps `id` and bumps this. Absent reads as 1. */
+  readonly runAttempt?: number;
 }
 
 /** Wrap a correlation tag the way `run-name` renders it. */
@@ -59,6 +61,13 @@ export type GitHubActionsRequest =
       /** Relative to the host's API root, e.g. `repos/acme/fleet/actions/runs`. */
       readonly path: string;
       readonly body?: unknown;
+      /**
+       * Only for a GET the session may cache: `settled` marks data about a run that has
+       * finished, which can never change again, so it is kept far longer than a live read.
+       */
+      readonly lifetime?: "live" | "settled";
+      /** The run attempt a cached read belongs to; part of its cache identity. */
+      readonly attempt?: number;
     }
   | {
       readonly kind: "graphql";
@@ -120,11 +129,22 @@ export function currentLoginRequest(_ref: CloudSessionRepoRef): GitHubActionsReq
   return { kind: "rest", operation: "cloudSession.viewer", path: "user" };
 }
 
-export function jobStepsRequest(ref: CloudSessionRepoRef, runId: number): GitHubActionsRequest {
+/**
+ * `settled` is a run that has completed: its steps are final, so the read is cached long — but
+ * only when `attempt` is known, since without it a re-run (same run id) cannot be told apart.
+ */
+export function jobStepsRequest(
+  ref: CloudSessionRepoRef,
+  runId: number,
+  settled = false,
+  attempt?: number,
+): GitHubActionsRequest {
   return {
     kind: "rest",
     operation: "cloudSession.jobSteps",
     path: repoApiPath(ref, `actions/runs/${runId}/jobs`),
+    lifetime: settled && attempt !== undefined ? "settled" : "live",
+    ...(attempt === undefined ? {} : { attempt }),
   };
 }
 

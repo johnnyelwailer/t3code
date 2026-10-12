@@ -9,6 +9,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 
@@ -27,6 +28,16 @@ const noMachines = Layer.mock(CloudSessionMachines)({
   resolveSetup: () => Effect.die("these sessions have no project"),
   poolKeyOf: () => Effect.succeed(null),
 });
+
+/** The credential identity `GitHubApi` reports: the pinned one when set, else the ambient one. */
+const ambientCredential: GitHubApi.GitHubApi["Service"]["credential"] = () =>
+  Effect.gen(function* () {
+    const pinned = yield* GitHubApi.PinnedGitHubCredential;
+    return {
+      token: Redacted.make("token"),
+      fingerprint: pinned?.credentialFingerprint ?? "ambient",
+    };
+  });
 
 const ghOut = (body: string): GitHubApi.GitHubRestResponse => ({
   status: 200,
@@ -174,7 +185,11 @@ describe("CloudSessionService.create credential handoff", () => {
     Effect.gen(function* () {
       const { calls, rest, graphql } = makeGithubMock();
 
-      const ghMock = Layer.mock(GitHubApi.GitHubApi)({ rest, graphql });
+      const ghMock = Layer.mock(GitHubApi.GitHubApi)({
+        rest,
+        graphql,
+        credential: ambientCredential,
+      });
       const cloudCliMock = Layer.mock(CliTokenManager.CloudCliTokenManager)({
         getExisting: Effect.succeed(
           Option.some({
@@ -233,7 +248,11 @@ describe("CloudSessionService.create credential handoff", () => {
     Effect.gen(function* () {
       const { calls, rest, graphql } = makeGithubMock();
 
-      const ghMock = Layer.mock(GitHubApi.GitHubApi)({ rest, graphql });
+      const ghMock = Layer.mock(GitHubApi.GitHubApi)({
+        rest,
+        graphql,
+        credential: ambientCredential,
+      });
       // No usable credential, ever: the mint starts, times out (here: fails
       // immediately), and the handoff still fails with connect_sign_in_required.
       const cloudCliMock = Layer.mock(CliTokenManager.CloudCliTokenManager)({
@@ -292,7 +311,11 @@ describe("CloudSessionService.create credential handoff", () => {
       // never opens a browser — telling the user to "confirm it there" sends
       // them looking for a tab that does not exist.
       const { rest, graphql } = makeGithubMock();
-      const ghMock = Layer.mock(GitHubApi.GitHubApi)({ rest, graphql });
+      const ghMock = Layer.mock(GitHubApi.GitHubApi)({
+        rest,
+        graphql,
+        credential: ambientCredential,
+      });
       const cloudCliMock = Layer.mock(CliTokenManager.CloudCliTokenManager)({
         getExisting: Effect.succeed(Option.none()),
       });
@@ -331,7 +354,11 @@ describe("CloudSessionService.create credential handoff", () => {
     Effect.gen(function* () {
       const { calls, rest, graphql } = makeGithubMock();
 
-      const ghMock = Layer.mock(GitHubApi.GitHubApi)({ rest, graphql });
+      const ghMock = Layer.mock(GitHubApi.GitHubApi)({
+        rest,
+        graphql,
+        credential: ambientCredential,
+      });
       // First read (the gate's check): no credential. After the mint "succeeds",
       // the handoff's read finds the freshly minted one.
       let reads = 0;
@@ -397,7 +424,7 @@ const providersFor = (
   rest: GitHubApi.GitHubApi["Service"]["rest"],
   graphql: GitHubApi.GitHubApi["Service"]["graphql"],
 ) => {
-  const ghMock = Layer.mock(GitHubApi.GitHubApi)({ rest, graphql });
+  const ghMock = Layer.mock(GitHubApi.GitHubApi)({ rest, graphql, credential: ambientCredential });
   const cloudCliMock = Layer.mock(CliTokenManager.CloudCliTokenManager)({
     getExisting: Effect.succeed(Option.none()),
   });
@@ -504,7 +531,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
   ) =>
     Layer.mergeAll(
       machines,
-      Layer.mock(GitHubApi.GitHubApi)({ rest, graphql }),
+      Layer.mock(GitHubApi.GitHubApi)({ rest, graphql, credential: ambientCredential }),
       Layer.mock(CliTokenManager.CloudCliTokenManager)({
         getExisting: Effect.succeed(Option.none()),
       }),
@@ -742,7 +769,7 @@ describe("CloudSessionService.cancel", () => {
       });
       const providers = Layer.mergeAll(
         noMachines,
-        Layer.mock(GitHubApi.GitHubApi)({ rest, graphql }),
+        Layer.mock(GitHubApi.GitHubApi)({ rest, graphql, credential: ambientCredential }),
         Layer.mock(CliTokenManager.CloudCliTokenManager)({
           getExisting: Effect.succeed(Option.none()),
         }),

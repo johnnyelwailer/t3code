@@ -93,7 +93,9 @@ export const projectCloudSession = (
     // `null` means "we could not read the steps", which is NOT the same as
     // "there are no steps yet". Passing `[]` here would report `requested`
     // for a running session and march its phase backwards on one flaky poll.
-    const readSteps = run(jobStepsRequest(repoRef, sessionRun.id)).pipe(
+    const readSteps = run(
+      jobStepsRequest(repoRef, sessionRun.id, isRunSettled(sessionRun), sessionRun.runAttempt),
+    ).pipe(
       Effect.map((result) => (result.truncated ? null : parseJobStepsResponse(result.body))),
       // Progress detail is a nicety: a run whose steps cannot be read is
       // still a real session, so degrade to the run-level phase rather
@@ -152,11 +154,11 @@ const settledFailureReason = (
   readSteps: Effect.Effect<readonly WorkflowJobStep[] | null>,
   cache: FailureReasonCache | undefined,
 ): Effect.Effect<string> => {
-  const cached = cachedFailureReason(cache, sessionRun.id);
+  const cached = cachedFailureReason(cache, sessionRun);
   if (cached !== undefined) return Effect.succeed(cached);
   return Effect.map(readSteps, (steps) => {
     const reason = cloudSessionFailureReason(sessionRun, steps);
-    recordFailureRead(cache, sessionRun.id, reason, steps !== null);
+    recordFailureRead(cache, sessionRun, reason, steps !== null);
     return reason;
   });
 };

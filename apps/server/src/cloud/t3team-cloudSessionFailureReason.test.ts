@@ -29,6 +29,7 @@ const failedRun: WorkflowRunSummary = {
   htmlUrl: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/77",
   name: "nexi-session [s1]",
   actor: "pj",
+  runAttempt: 1,
 };
 
 const answer = (body: string) => ({ body, truncated: false });
@@ -136,6 +137,58 @@ describe("projectCloudSession failure reason", () => {
       assert.equal(second.failureReason, first.failureReason);
       // Settled runs are final: one jobs read for the lifetime of the cache.
       assert.equal(gh.calls.length, 1);
+    }),
+  );
+
+  it.effect("asks for a settled run's steps as settled data, and a moving run's as live", () =>
+    Effect.gen(function* () {
+      const gh = fakeGh(JOBS_WITH_FAILED_STEP);
+      const moving = { ...failedRun, id: 78, status: "in_progress", conclusion: null };
+
+      yield* projectCloudSession(failedRun, 0, "machine", repoRef, gh.run);
+      yield* projectCloudSession(moving, 0, "machine", repoRef, gh.run);
+
+      assert.deepStrictEqual(
+        gh.calls.map((call) => (call.kind === "rest" ? call.lifetime : undefined)),
+        ["settled", "live"],
+      );
+    }),
+  );
+
+  it.effect("names the second failure of a re-run, not the first attempt's pinned reason", () =>
+    Effect.gen(function* () {
+      const stepsFailingAt = (name: string) =>
+        JSON.stringify({
+          jobs: [{ steps: [{ name, status: "completed", conclusion: "failure" }] }],
+        });
+      let attempt = 0;
+      const run = () =>
+        Effect.sync(() => answer(stepsFailingAt(`step of attempt ${(attempt += 1)}`)));
+      const cache = makeFailureReasonCache();
+
+      const first = yield* projectCloudSession(failedRun, 0, "machine", repoRef, run, cache);
+      const rerun = { ...failedRun, runAttempt: 2 };
+      const second = yield* projectCloudSession(rerun, 0, "machine", repoRef, run, cache);
+      const secondAgain = yield* projectCloudSession(rerun, 0, "machine", repoRef, run, cache);
+
+      assert.equal(first.failureReason, "Failed at “step of attempt 1”.");
+      assert.equal(second.failureReason, "Failed at “step of attempt 2”.");
+      assert.equal(secondAgain.failureReason, second.failureReason);
+      assert.equal(attempt, 2);
+    }),
+  );
+
+  it.effect("pins no reason for a run that does not name its attempt", () =>
+    Effect.gen(function* () {
+      const gh = fakeGh(JOBS_WITH_FAILED_STEP);
+      const cache = makeFailureReasonCache();
+      const { runAttempt: _attempt, ...unnamed } = failedRun;
+
+      yield* projectCloudSession(unnamed, 0, "machine", repoRef, gh.run, cache);
+      yield* projectCloudSession(unnamed, 0, "machine", repoRef, gh.run, cache);
+
+      // A re-run could not be told apart from this run, so each list reads again.
+      assert.equal(gh.calls.length, 2);
     }),
   );
 

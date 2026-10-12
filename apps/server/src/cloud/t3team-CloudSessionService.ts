@@ -15,6 +15,7 @@ import * as CliTokenManager from "./CliTokenManager.ts";
 import { cancelRunRequest } from "./t3team-githubActionsSessionClient.ts";
 import { isSessionCredentialIssueEnabled } from "./t3team-CloudSessionCredential.ts";
 import { makeSessionGh } from "./t3team-CloudSessionGh.ts";
+import { makeSingleFlight } from "./t3team-CloudSessionReadCache.ts";
 import { resolveFleetConfig, workflowHistoryUrl } from "./t3team-CloudSessionFleet.ts";
 import { makeFailureReasonCache } from "./t3team-cloudSessionFailureReason.ts";
 import { ConnectCredentialMinter } from "./t3team-ConnectCredentialMinter.ts";
@@ -86,12 +87,12 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
   // `t3team-CloudSessionGh`; here we only orchestrate list/create/cancel on top.
   // List/poll reads use `runBackground` (honour pause, leave quota reserve);
   // create/cancel use `runInteractive` so a user click can still spend reserve.
-  const gh = makeSessionGh(api, repoRef);
+  const gh = yield* makeSessionGh(api, repoRef);
   const payloadCleanup = yield* makePayloadIssueCleanup(repoRef, gh.runBackground);
   const failureReasons = makeFailureReasonCache();
   const claims = yield* makeClaimLedger();
 
-  const list: CloudSessionService["Service"]["list"] = Effect.gen(function* () {
+  const listOnce: CloudSessionService["Service"]["list"] = Effect.gen(function* () {
     // Hard isolation: resolve who the caller is BEFORE fetching, and scope the
     // list to that login. If the identity cannot be resolved this fails closed
     // (an error), never returning an unscoped list that would leak other users.
@@ -143,6 +144,11 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       () => Effect.succeed({ sessions: [], configured: false } satisfies CloudSessionListResult),
     ),
   );
+
+  // Every tab, menu and poll asking at once under the SAME credential shares one GHE fan-out
+  // (a different credential is a different user's list, so never shares); nothing is kept after
+  // it ends, so the next list still reads fresh (create/cancel never go through this).
+  const list = yield* makeSingleFlight(listOnce, gh.identity);
 
   const create: CloudSessionService["Service"]["create"] = (input) =>
     Effect.gen(function* () {

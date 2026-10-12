@@ -31,6 +31,7 @@ function toRun(raw: Record<string, unknown>): WorkflowRunSummary {
     htmlUrl: asString(raw["html_url"]),
     name: asString(raw["name"]) || asString(raw["display_title"]),
     actor: actorLogin(raw["actor"]),
+    ...(typeof raw["run_attempt"] === "number" ? { runAttempt: raw["run_attempt"] } : {}),
   };
 }
 
@@ -72,6 +73,30 @@ export function parseRunsResponse(body: string): readonly WorkflowRunSummary[] |
   return runs
     .filter((run): run is Record<string, unknown> => typeof run === "object" && run !== null)
     .map(toRun);
+}
+
+/**
+ * Whether every job in a `GET /actions/runs/{id}/jobs` answer belongs to `attempt`. That endpoint
+ * answers for the run's LATEST attempt, so a re-run that began after the run was listed shows up
+ * here as jobs of a later attempt. Unreadable, no jobs yet (a re-run that has not queued any), or
+ * a job that does not say, is not a match.
+ */
+export function jobsMatchAttempt(body: string, attempt: number): boolean {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return false;
+  }
+  const jobs =
+    typeof parsed === "object" && parsed !== null ? (parsed as { jobs?: unknown }).jobs : null;
+  if (!Array.isArray(jobs) || jobs.length === 0) return false;
+  return jobs.every(
+    (job) =>
+      typeof job === "object" &&
+      job !== null &&
+      (job as { run_attempt?: unknown }).run_attempt === attempt,
+  );
 }
 
 /**
