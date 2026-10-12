@@ -49,13 +49,15 @@ export function AccountSignInDialog({
           </DialogDescription>
         </DialogHeader>
         {auth._tag === "SigningIn" && auth.userCode !== null ? (
-          <DialogPanel className="space-y-2">
-            <p className="text-muted-foreground text-sm">
-              No window? Enter this code on the sign-in page:
-            </p>
-            <p className="rounded-lg border border-border bg-muted/40 py-3 text-center font-mono text-2xl font-semibold tracking-widest">
-              {auth.userCode}
-            </p>
+          <DialogPanel>
+            <div className="grid gap-2">
+              <p className="text-muted-foreground text-sm">
+                No window? Enter this code on the sign-in page:
+              </p>
+              <p className="rounded-lg border border-border bg-muted/40 py-3 text-center font-mono text-2xl font-semibold tracking-widest">
+                {auth.userCode}
+              </p>
+            </div>
           </DialogPanel>
         ) : null}
         <DialogFooter>
