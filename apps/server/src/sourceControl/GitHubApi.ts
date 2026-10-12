@@ -186,6 +186,11 @@ export function gitHubApiUrls(host: string): { readonly rest: string; readonly g
   return { rest: `https://${normalized}/api/v3`, graphql: `https://${normalized}/api/graphql` };
 }
 
+/** Whether a REST path (API root included, so `/api/v3` on Enterprise Server) is a search. */
+function isSearchPath(pathname: string): boolean {
+  return /^(?:\/api\/v3)?\/search\//.test(pathname);
+}
+
 /** GraphQL documents longer than this are cut in traces; the hash still identifies them. */
 const TRACED_QUERY_MAX_CHARS = 4_000;
 
@@ -393,10 +398,15 @@ export const make = Effect.gen(function* () {
     });
     const { token, fingerprint } = yield* credential(host);
     const scope = yield* SourceControlRateLimit.CredentialScope;
-    // REST spends `core` and GraphQL its own quota, each with its own reserve. Every REST path
-    // this reads today is `core`; a `search/` read would need its own resource here. A refusal
-    // still pauses the whole host, the key PullRequestService records its own backoff under.
-    const resource = input.graphql === true ? "graphql" : "core";
+    // REST spends `core`, search its own (much smaller) quota, and GraphQL another, each with its
+    // own reserve. A refusal still pauses the whole host, the key PullRequestService records its
+    // own backoff under.
+    const resource =
+      input.graphql === true
+        ? "graphql"
+        : isSearchPath(new URL(input.request.url).pathname)
+          ? "search"
+          : "core";
     const key = { provider: "github" as const, host };
     const run = Effect.gen(function* () {
       const lease = yield* quota

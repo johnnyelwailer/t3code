@@ -54,6 +54,8 @@ export interface GitHubBackendApi {
     readonly projectTitle?: string;
     readonly linkedRepositoryUrls?: ReadonlyArray<string>;
     readonly discoveryMode?: "inbox" | "repositories";
+    /** `"user"` only for an explicit refresh or open; omitted means an automatic background read. */
+    readonly trigger?: "user" | "background";
   }) => Promise<GitHubInboxDiscoverResponse>;
   readonly getPullRequestContext: (
     input: GitHubPullRequestContextRequest,

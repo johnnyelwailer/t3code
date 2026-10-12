@@ -31,6 +31,7 @@ export function createGitHubBackendApi(httpBaseUrl: string): GitHubBackendApi {
       readonly projectTitle?: string;
       readonly linkedRepositoryUrls?: ReadonlyArray<string>;
       readonly discoveryMode?: "inbox" | "repositories";
+      readonly trigger?: "user" | "background";
     }) {
       return postJson<typeof input, GitHubInboxDiscoverResponse>(
         httpBaseUrl,

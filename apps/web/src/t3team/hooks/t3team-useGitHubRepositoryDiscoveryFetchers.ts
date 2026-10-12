@@ -47,6 +47,7 @@ export function useGitHubRepositoryDiscoveryFetchers({
       try {
         const response = await backend.github.discoverInbox({
           host,
+          trigger: "user",
           ...(projectKey ? { projectKey } : {}),
           ...(projectTitle ? { projectTitle } : {}),
           linkedRepositoryUrls,
@@ -109,6 +110,7 @@ export function useGitHubRepositoryDiscoveryFetchers({
             try {
               const response = await backend.github.discoverInbox({
                 host: entry.host,
+                trigger: "user",
                 discoveryMode: "repositories",
                 ...(projectKey ? { projectKey } : {}),
                 ...(projectTitle ? { projectTitle } : {}),

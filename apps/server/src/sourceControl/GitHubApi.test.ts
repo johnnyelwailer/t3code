@@ -284,6 +284,44 @@ describe("GitHubApi", () => {
     }).pipe(Effect.provide(layer));
   });
 
+  it.effect(
+    "accounts a search read against the search quota, not core, on every host shape",
+    () => {
+      const reset = Math.floor(NOW / 1000) + 600;
+      const quota = (resource: string, limit: number, remaining: number) => ({
+        "x-ratelimit-resource": resource,
+        "x-ratelimit-limit": String(limit),
+        "x-ratelimit-remaining": String(remaining),
+        "x-ratelimit-reset": String(reset),
+      });
+      // core is nearly empty; search has 2 of 30 left, under its own last tenth.
+      const { layer, requests } = harness((request) =>
+        /\/search\//.test(request.url)
+          ? json({ items: [] }, { headers: quota("search", 30, 2) })
+          : json({ ok: true }, { headers: quota("core", 5000, 10) }),
+      );
+      return Effect.gen(function* () {
+        yield* TestClock.setTime(NOW);
+        const api = yield* GitHubApi.GitHubApi;
+        const search = { host: "github.com", operation: "s", path: "search/repositories?q=x" };
+        const core = { host: "github.com", operation: "c", path: "repos/acme/web/pulls" };
+        yield* api.rest(core);
+        // Core is now under its reserve, yet a search is still admitted: it is not core's to spend.
+        yield* api.rest(search);
+        yield* api.rest({ host: "git.acme.internal", operation: "s", path: "search/issues?q=x" });
+        const refusedSearch = yield* Effect.flip(api.rest(search));
+        expect(refusedSearch).toMatchObject({ _tag: "SourceControlRateLimitPausedError" });
+        const refusedCore = yield* Effect.flip(api.rest(core));
+        expect(refusedCore).toMatchObject({ _tag: "SourceControlRateLimitPausedError" });
+        expect(requests.map((request) => new URL(request.url).pathname)).toEqual([
+          "/repos/acme/web/pulls",
+          "/search/repositories",
+          "/api/v3/search/issues",
+        ]);
+      }).pipe(Effect.provide(layer));
+    },
+  );
+
   it.effect("carries GitHub's own reason for a refused REST request", () => {
     const { layer } = harness(() =>
       json(
