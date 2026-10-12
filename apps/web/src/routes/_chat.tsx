@@ -230,6 +230,9 @@ export const Route = createFileRoute("/_chat")({
         readThreadShells().find((shell) => shell.id === threadId)?.projectId ??
         null,
       primaryEnvironmentId: appAtomRegistry.get(primaryEnvironmentIdAtom),
+      // Environment discovery is never settled this early; the reactive bridge decides whether a
+      // non-primary environment is really absent.
+      knownEnvironmentIds: null,
     });
     if (translation.kind === "target") {
       throw redirect(translation.target);
