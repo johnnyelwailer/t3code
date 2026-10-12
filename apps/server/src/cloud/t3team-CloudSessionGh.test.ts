@@ -1,5 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as GitHubApi from "../sourceControl/GitHubApi.ts";
@@ -13,6 +14,21 @@ const REPO: CloudSessionRepoRef = {
   workflowFileName: "session.yml",
 };
 
+const okRest = (body: string): GitHubApi.GitHubRestResponse => ({
+  status: 200,
+  headers: {},
+  body,
+  truncated: false,
+  invalidUtf8: false,
+});
+
+/** `makeSessionGh` only calls `rest`/`graphql`; credential is unused in these tests. */
+const mockApi = (rest: GitHubApi.GitHubApi["Service"]["rest"]): GitHubApi.GitHubApi["Service"] => ({
+  rest,
+  graphql: () => Effect.succeed("{}"),
+  credential: () => Effect.succeed({ token: Redacted.make("unused"), fingerprint: "fp" }),
+});
+
 describe("makeSessionGh", () => {
   it.effect("list reads leave the quota reserve; interactive runs may spend it", () =>
     Effect.gen(function* () {
@@ -24,24 +40,11 @@ describe("makeSessionGh", () => {
             allowReserve: input.allowReserve === true,
           });
           if (input.path === "user") {
-            return {
-              status: 200,
-              headers: {},
-              body: JSON.stringify({ login: "pj" }),
-              truncated: false,
-              invalidUtf8: false,
-            };
+            return okRest(JSON.stringify({ login: "pj" }));
           }
-          return {
-            status: 200,
-            headers: {},
-            body: JSON.stringify({ workflow_runs: [] }),
-            truncated: false,
-            invalidUtf8: false,
-          };
+          return okRest(JSON.stringify({ workflow_runs: [] }));
         });
-      const api = { rest, graphql: () => Effect.succeed("{}") } as GitHubApi.GitHubApi["Service"];
-      const gh = makeSessionGh(api, REPO);
+      const gh = makeSessionGh(mockApi(rest), REPO);
 
       yield* gh.resolveLogin({ allowReserve: false });
       yield* gh.listRunsFor("pj", { allowReserve: false });
@@ -66,16 +69,9 @@ describe("makeSessionGh", () => {
       const rest: GitHubApi.GitHubApi["Service"]["rest"] = (input) =>
         Effect.sync(() => {
           if (input.operation === "cloudSession.jobSteps") stepsCalls += 1;
-          return {
-            status: 200,
-            headers: {},
-            body: JSON.stringify({ jobs: [] }),
-            truncated: false,
-            invalidUtf8: false,
-          };
+          return okRest(JSON.stringify({ jobs: [] }));
         });
-      const api = { rest, graphql: () => Effect.succeed("{}") } as GitHubApi.GitHubApi["Service"];
-      const gh = makeSessionGh(api, REPO);
+      const gh = makeSessionGh(mockApi(rest), REPO);
       const request = jobStepsRequest(REPO, 42);
 
       yield* gh.runBackground(request);
@@ -94,16 +90,9 @@ describe("makeSessionGh", () => {
       const rest: GitHubApi.GitHubApi["Service"]["rest"] = (input) =>
         Effect.sync(() => {
           if (input.path === "user") viewerCalls += 1;
-          return {
-            status: 200,
-            headers: {},
-            body: JSON.stringify({ login: "pj" }),
-            truncated: false,
-            invalidUtf8: false,
-          };
+          return okRest(JSON.stringify({ login: "pj" }));
         });
-      const api = { rest, graphql: () => Effect.succeed("{}") } as GitHubApi.GitHubApi["Service"];
-      const gh = makeSessionGh(api, REPO);
+      const gh = makeSessionGh(mockApi(rest), REPO);
 
       assert.strictEqual(yield* gh.resolveLogin({ allowReserve: false }), "pj");
       assert.strictEqual(yield* gh.resolveLogin({ allowReserve: false }), "pj");
