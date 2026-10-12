@@ -2,6 +2,7 @@ import { ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
+import * as TestClock from "effect/testing/TestClock";
 
 import { enrichPr } from "./t3team-myworkDigestPrEnrich.ts";
 
@@ -17,21 +18,23 @@ const comment = (author: ReturnType<typeof actor>) => ({
   createdAt: "2026-10-01T00:00:00Z",
 });
 
-function service() {
+function service(onDetail: () => void = () => {}) {
   return {
     detail: () =>
-      Effect.succeed({
-        author: actor("alice", { avatarUrl: "https://avatars/alice" }),
-        viewer: "pj",
-        reviewers: [
-          actor("pj"),
-          actor("bob"),
-          actor("copilot-pull-request-reviewer", { isBot: true }),
-        ],
-        additions: 10,
-        deletions: 2,
-        body: "",
-      }),
+      Effect.sync(onDetail).pipe(
+        Effect.as({
+          author: actor("alice", { avatarUrl: "https://avatars/alice" }),
+          viewer: "pj",
+          reviewers: [
+            actor("pj"),
+            actor("bob"),
+            actor("copilot-pull-request-reviewer", { isBot: true }),
+          ],
+          additions: 10,
+          deletions: 2,
+          body: "",
+        }),
+      ),
     activity: () =>
       Effect.succeed({
         reviewers: [actor("bob", { avatarUrl: "https://avatars/bob" })],
@@ -76,6 +79,7 @@ describe("enrichPr", () => {
     Effect.gen(function* () {
       const ref = { projectId: ProjectId.make("p"), repository: "org/rate-limited", number: 7 };
       const good = yield* enrichPr(service(), ref);
+      yield* TestClock.adjust("2 minutes");
       // The host's rate limit paused: both reads fail.
       const paused = {
         detail: () => Effect.fail(new RateLimitPaused()),
@@ -91,6 +95,23 @@ describe("enrichPr", () => {
         activity: () => Effect.fail(new SignedOut({ reason: "cli-unauthenticated" })),
       } as never;
       expect(yield* enrichPr(signedOut, ref)).toBeUndefined();
+    }),
+  );
+
+  it.effect("reads one PR once however many projects list it", () =>
+    Effect.gen(function* () {
+      let reads = 0;
+      const counting = service(() => {
+        reads += 1;
+      });
+      const shared = { host: "nexplore.ghe.com", repository: "hive/Shared", number: 3 };
+      const first = yield* enrichPr(counting, { ...shared, projectId: ProjectId.make("p1") });
+      const second = yield* enrichPr(counting, { ...shared, projectId: ProjectId.make("p2") });
+      expect(reads).toBe(1);
+      expect(second).toEqual(first);
+      yield* TestClock.adjust("2 minutes");
+      yield* enrichPr(counting, { ...shared, projectId: ProjectId.make("p1") });
+      expect(reads).toBe(2);
     }),
   );
 });

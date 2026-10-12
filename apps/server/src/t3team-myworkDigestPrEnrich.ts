@@ -5,9 +5,11 @@
 
 import type { PullRequestActor, PullRequestListEntry } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 
 import type { PullRequestService } from "./pullRequest/PullRequestService.ts";
+import { makeGitHubReadCoalescer } from "./sourceControl/t3team-githubReadCoalescer.ts";
 import { isRateLimitedFailure } from "./t3team-myworkDigestRateLimited.ts";
 import type { T3TeamDigestPerson } from "./t3team-myworkDigestTypesPrs.ts";
 
@@ -88,7 +90,7 @@ function mapUnhandledThreads(activity: {
     });
 }
 
-// The last enrichment each PR read successfully, keyed by app project + host/repo#number. The shared
+// The last enrichment each PR read successfully, keyed by host/repo#number. The shared
 // reads expire after a minute and fail outright while the host's rate limit is paused; serving the
 // last good enrichment then keeps names, faces and sizes on the digest instead of dropping every row
 // back to bare logins until the quota resets. Only a rate limit falls back (see
@@ -105,21 +107,22 @@ function rememberEnrichment(key: string, enrichment: PrEnrichment) {
   }
 }
 
-/**
- * One PR's detail + activity through the shared cached reads; when unreadable, the last enrichment
- * read for it this session, else undefined.
- */
-export function enrichPr(
-  service: PullRequestService["Service"],
-  ref: {
-    readonly projectId: PullRequestListEntry["projectId"];
-    readonly host?: string;
-    readonly repository: string;
-    readonly number: number;
-  },
-) {
-  const key = `${ref.projectId}:${ref.host ?? ""}/${ref.repository}#${ref.number}`;
-  return Effect.all([service.detail(ref), service.activity(ref)], { concurrency: 2 }).pipe(
+/** The PR's identity on its host. Never the app project: two projects on one PR are one read. */
+export const enrichmentKey = (ref: {
+  readonly host?: string;
+  readonly repository: string;
+  readonly number: number;
+}) => `${(ref.host ?? "").toLowerCase()}/${ref.repository.toLowerCase()}#${ref.number}`;
+
+type EnrichmentRef = {
+  readonly projectId: PullRequestListEntry["projectId"];
+  readonly host?: string;
+  readonly repository: string;
+  readonly number: number;
+};
+
+const readEnrichment = (service: PullRequestService["Service"], ref: EnrichmentRef) =>
+  Effect.all([service.detail(ref), service.activity(ref)], { concurrency: 2 }).pipe(
     Effect.map(([detail, activity]): PrEnrichment => {
       const withAvatar = avatarsByLogin([
         detail.author,
@@ -140,13 +143,35 @@ export function enrichPr(
         body: typeof detail.body === "string" ? detail.body : "",
       };
     }),
-    Effect.tap((enrichment) => Effect.sync(() => rememberEnrichment(key, enrichment))),
-    Effect.catch((error) =>
-      Effect.succeed<PrEnrichment | undefined>(
-        isRateLimitedFailure(error) ? lastGoodEnrichment.get(key) : undefined,
-      ),
-    ),
   );
+
+/** A read answers every project that asks for the same PR within this window. */
+const ENRICHMENT_SHARE = Duration.minutes(1);
+const sharedEnrichments = makeGitHubReadCoalescer<
+  PrEnrichment,
+  Effect.Error<ReturnType<typeof readEnrichment>>
+>();
+
+/**
+ * One PR's detail + activity through the shared cached reads, read once however many projects
+ * list it; when unreadable, the last enrichment read for it this session, else undefined.
+ */
+export function enrichPr(service: PullRequestService["Service"], ref: EnrichmentRef) {
+  const key = enrichmentKey(ref);
+  return sharedEnrichments
+    .share(
+      key,
+      ENRICHMENT_SHARE,
+      Effect.suspend(() => readEnrichment(service, ref)),
+    )
+    .pipe(
+      Effect.tap((enrichment) => Effect.sync(() => rememberEnrichment(key, enrichment))),
+      Effect.catch((error) =>
+        Effect.succeed<PrEnrichment | undefined>(
+          isRateLimitedFailure(error) ? lastGoodEnrichment.get(key) : undefined,
+        ),
+      ),
+    );
 }
 
 /** An enrichment as PR-entry fields: faces, comments, who already engaged, size. */

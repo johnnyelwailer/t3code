@@ -29,8 +29,12 @@ import type { DigestYesterdayWindow } from "./t3team-myworkDigestYesterdayWindow
 
 /** How long a cold first read may hold the digest before it ships without change requests. */
 const DIGEST_PR_FIRST_READ_WAIT = Duration.millis(1_200);
-/** A cached read younger than this serves without a background refresh. */
-const DIGEST_PR_FRESH_MS = 30_000;
+/**
+ * A cached read younger than this serves without a background refresh. The web polls the digest
+ * every 90 s, so anything under that made every poll a full refetch; this lets a poll serve the
+ * last read and refresh on every second one.
+ */
+const DIGEST_PR_FRESH_MS = 120_000;
 /** App projects whose last read is kept; the least recently read is dropped past this. */
 const MAX_CACHED_READS = 64;
 

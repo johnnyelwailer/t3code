@@ -30,6 +30,9 @@ import type {
   T3TeamMyWorkDigestPayload,
 } from "./t3team-myworkDigestTypes.ts";
 
+/** Bounded so ten projects never fire their GitHub reads in one burst. */
+const PROJECT_READ_CONCURRENCY = 4;
+
 /** Load the whole digest for one set of scoped project entries. */
 export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
   return Effect.gen(function* () {
@@ -52,7 +55,7 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
             sinceMs: dataWindow.fromMs,
           }),
         // Projects are independent reads; one slow one must not serialize the rest.
-        { concurrency: "unbounded" },
+        { concurrency: PROJECT_READ_CONCURRENCY },
       ),
     ]);
     const yesterdayWindow = lastActivityDayWindow(nowMs, input.timeZone, [
@@ -111,7 +114,7 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
           ),
         ),
       // Projects are independent reads; one slow host must not serialize the rest.
-      { concurrency: "unbounded" },
+      { concurrency: PROJECT_READ_CONCURRENCY },
     );
     const { loaded, someSessionExpired } = yield* settleDigestProjectLoads(results);
     const sources = loaded.map((entry) => entry.source);
