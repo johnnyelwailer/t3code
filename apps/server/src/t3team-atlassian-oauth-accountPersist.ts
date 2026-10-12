@@ -8,11 +8,7 @@ import { MockIntegrationProvider } from "@t3tools/integrations-core/mock";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 
-import {
-  loadPersistedAuths,
-  replaceAtlassianAuths,
-  savePersistedAuths,
-} from "./t3team-atlassian-auth-store.ts";
+import { commitAtlassianAuths, loadPersistedAuths } from "./t3team-atlassian-auth-store.ts";
 import { T3TeamAtlassianError, tryAtlassianPromise } from "./t3team-atlassian-http.ts";
 
 const mockProvider = new MockIntegrationProvider();
@@ -64,7 +60,7 @@ export function persistAtlassianOAuthAccounts(grant: AtlassianOAuthGrant) {
       () => provider.listAccounts(),
       "Failed to connect to Atlassian.",
     );
-    replaceAtlassianAuths(
+    yield* commitAtlassianAuths(
       accounts.flatMap((account) => {
         const auth = auths.find(
           (candidate) => candidate.kind === "oauth" && candidate.cloudId === account.id,
@@ -72,7 +68,6 @@ export function persistAtlassianOAuthAccounts(grant: AtlassianOAuthGrant) {
         return auth ? [{ accountId: account.id, auth }] : [];
       }),
     );
-    yield* savePersistedAuths;
     return accounts;
   });
 }

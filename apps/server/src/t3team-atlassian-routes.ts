@@ -6,11 +6,10 @@ import { HttpRouter } from "effect/http";
 import {
   type BasicConnectInput,
   type OAuthConnectInput,
+  commitAtlassianAuths,
   loadPersistedAuths,
   providerForAccount,
   providerForPersistedAuths,
-  replaceAtlassianAuths,
-  savePersistedAuths,
 } from "./t3team-atlassian-auth-store.ts";
 import {
   errorResponse,
@@ -58,8 +57,9 @@ export const t3teamAtlassianConnectBasicRouteLayer = HttpRouter.add(
       () => provider.listAccounts(),
       "Failed to connect to Atlassian.",
     );
-    replaceAtlassianAuths(accounts.map((account) => ({ accountId: account.id, auth: input.auth })));
-    yield* savePersistedAuths;
+    yield* commitAtlassianAuths(
+      accounts.map((account) => ({ accountId: account.id, auth: input.auth })),
+    );
     return okJson({ accounts });
   }).pipe(Effect.catch(errorResponse)),
 );
