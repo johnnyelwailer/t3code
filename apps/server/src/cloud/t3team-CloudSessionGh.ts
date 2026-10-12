@@ -163,7 +163,7 @@ export const makeSessionGh = Effect.fn("cloud.session_gh.make")(function* (
       if (login === null) {
         return yield* new CloudSessionFailedError({
           reason: "unauthorized",
-          message: "Could not determine your GitHub identity, so your sessions cannot be listed.",
+          message: `Could not determine your GitHub identity on ${repoRef.host}, so your sessions cannot be listed.`,
         });
       }
       if (who !== null) logins.set(who, login, now);
