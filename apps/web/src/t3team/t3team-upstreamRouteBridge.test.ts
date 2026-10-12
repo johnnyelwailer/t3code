@@ -134,6 +134,14 @@ describe("translateUpstreamPath", () => {
     expect(translateUpstreamPath("/local/thread-7", deps(null))).toEqual({ kind: "unhandled" });
   });
 
+  it("keeps a reloaded thread on another machine before its shell has synced", () => {
+    // A cold load of a cloud-session thread: the primary is known, the remote shells are not yet.
+    expect(translateUpstreamPath("/cloud/thread-7", deps(null))).toEqual({ kind: "ignore" });
+    // On a cold load the primary is not known yet either: wait for the reactive bridge.
+    expect(translateUpstreamPath("/cloud/thread-7", deps(null, null))).toEqual({ kind: "ignore" });
+    expect(translateUpstreamPath("/local/thread-7", deps(null, null))).toEqual({ kind: "ignore" });
+  });
+
   it("reports unhandled for paths that are not upstream thread routes", () => {
     for (const pathname of ["/threads", "/a/b/c", "/local/thread/extra"]) {
       expect(translateUpstreamPath(pathname, deps("p1"))).toEqual({ kind: "unhandled" });

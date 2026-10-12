@@ -163,6 +163,14 @@ export function translateUpstreamPath(
     }
   }
 
+  // A thread that is not known to be the primary's stays on upstream's route even before its
+  // shell has synced: that route waits for its environment, while "unhandled" would send a reload
+  // of a cloud-session thread to the dashboard. On a cold load the primary itself is not known yet
+  // (null in `beforeLoad`); the reactive bridge re-translates once it is.
+  if (threadPath && !isTeamShellEnvironment(threadPath.environmentId, deps.primaryEnvironmentId)) {
+    return { kind: "ignore" };
+  }
+
   if (!threadPath || !projectId) {
     return { kind: "unhandled" };
   }
