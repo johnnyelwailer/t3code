@@ -10,16 +10,23 @@ import { HttpRouter, HttpServerResponse } from "effect/http";
 import { describe, expect, it } from "vite-plus/test";
 
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
+import { ServerConfig } from "./config.ts";
 import { t3teamRouteAuthLayer } from "./t3team-routeAuth.ts";
 
 const SESSIONS: Record<string, ReadonlyArray<string>> = {
   "Bearer reader": [AuthOrchestrationReadScope],
   "Bearer operator": [AuthOrchestrationReadScope, AuthOrchestrationOperateScope],
+  // A browser cookie session: the mock reads the `cookie` header when there is no `authorization`.
+  "t3_session=operator": [AuthOrchestrationReadScope, AuthOrchestrationOperateScope],
 };
+
+const DEV_URL = new URL("http://localhost:6275/");
+// The guard reads only `devUrl`.
+const serverConfig = Layer.succeed(ServerConfig, { devUrl: DEV_URL } as ServerConfig["Service"]);
 
 const environmentAuth = Layer.mock(EnvironmentAuth.EnvironmentAuth)({
   authenticateHttpRequest: (request) => {
-    const scopes = SESSIONS[request.headers.authorization ?? ""];
+    const scopes = SESSIONS[request.headers.authorization ?? request.headers.cookie ?? ""];
     return scopes === undefined
       ? Effect.fail(new EnvironmentAuth.ServerAuthMissingCredentialError())
       : Effect.succeed({
@@ -34,15 +41,29 @@ const environmentAuth = Layer.mock(EnvironmentAuth.EnvironmentAuth)({
 const routes = Layer.mergeAll(
   HttpRouter.add("GET", "/api/t3team/thread/read", HttpServerResponse.text("read")),
   HttpRouter.add("POST", "/api/t3team/thread/write", HttpServerResponse.text("wrote")),
-).pipe(Layer.provide(t3teamRouteAuthLayer), Layer.provide(environmentAuth));
+  // The routes that store a credential, at their real paths (t3team-tempo-routes.ts,
+  // t3team-atlassian-routes.ts); the registry test below proves they sit in the guarded group.
+  HttpRouter.add("POST", "/api/t3team/tempo/token", HttpServerResponse.text("stored")),
+  HttpRouter.add("POST", "/api/t3team/atlassian/connect/basic", HttpServerResponse.text("stored")),
+  HttpRouter.add("DELETE", "/api/t3team/thread/write", HttpServerResponse.text("deleted")),
+).pipe(
+  Layer.provide(t3teamRouteAuthLayer),
+  Layer.provide(environmentAuth),
+  Layer.provide(serverConfig),
+);
 
-const call = async (method: "GET" | "POST", path: string, authorization?: string) => {
+const call = async (
+  method: "GET" | "POST" | "DELETE",
+  path: string,
+  authorization?: string,
+  extra: Record<string, string> = {},
+) => {
   const { handler, dispose } = HttpRouter.toWebHandler(routes, { disableLogger: true });
   try {
     const response = await handler(
       new Request(`http://localhost${path}`, {
         method,
-        headers: authorization === undefined ? {} : { authorization },
+        headers: authorization === undefined ? extra : { authorization, ...extra },
       }),
     );
     return { status: response.status, body: await response.text() };
@@ -69,6 +90,64 @@ describe("t3team route auth", () => {
       status: 200,
       body: "wrote",
     });
+  });
+});
+
+const COOKIE = { cookie: "t3_session=operator" };
+
+describe("t3team route CSRF guard", () => {
+  it.each(["/api/t3team/tempo/token", "/api/t3team/atlassian/connect/basic"])(
+    "refuses a cross-origin cookie POST to %s before the route runs",
+    async (path) => {
+      const response = await call("POST", path, undefined, {
+        ...COOKIE,
+        origin: "http://localhost:8080",
+        host: "localhost:3773",
+      });
+      expect(response.status).toBe(403);
+      expect(response.body).not.toBe("stored");
+    },
+  );
+
+  it("refuses a cross-origin cookie DELETE too", async () => {
+    const response = await call("DELETE", "/api/t3team/thread/write", undefined, {
+      ...COOKIE,
+      origin: "http://localhost:8080",
+      host: "localhost:3773",
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("lets this server's own page and the dev web server's proxy through", async () => {
+    const own = await call("POST", "/api/t3team/tempo/token", undefined, {
+      ...COOKIE,
+      origin: "http://localhost:3773",
+      host: "localhost:3773",
+    });
+    expect(own).toEqual({ status: 200, body: "stored" });
+    const proxied = await call("POST", "/api/t3team/tempo/token", undefined, {
+      ...COOKIE,
+      origin: "http://localhost:6275",
+      host: "localhost:14315",
+    });
+    expect(proxied).toEqual({ status: 200, body: "stored" });
+  });
+
+  it("exempts a bearer request, whatever its origin (the desktop renderer is t3code://app)", async () => {
+    const response = await call("POST", "/api/t3team/tempo/token", "Bearer operator", {
+      origin: "t3code://app",
+      host: "localhost:3773",
+    });
+    expect(response).toEqual({ status: 200, body: "stored" });
+  });
+
+  it("does not guard reads", async () => {
+    const response = await call("GET", "/api/t3team/thread/read", undefined, {
+      ...COOKIE,
+      origin: "http://localhost:8080",
+      host: "localhost:3773",
+    });
+    expect(response).toEqual({ status: 200, body: "read" });
   });
 });
 

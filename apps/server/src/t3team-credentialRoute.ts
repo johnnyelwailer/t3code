@@ -43,17 +43,22 @@ export function isOwnOrigin(input: {
 /**
  * CSRF guard for the cookie path. Cookies here are SameSite=Lax, and every other localhost port
  * counts as same-site — so a page served by another local process could fire a credentialed POST.
- * A browser always sends `Origin` on POST; refuse one that is not this server. A bearer request is
- * exempt: no other origin can attach this client's token (the desktop renderer, origin
- * `t3code://app`, authenticates that way).
+ * A browser always sends `Origin` on POST; a request whose `Origin` is not this server is cross-origin.
+ * A bearer request is exempt: no other origin can attach this client's token (the desktop renderer,
+ * origin `t3code://app`, authenticates that way). Shared by `credentialRoute` and the
+ * `t3teamRouteAuthLayer` group, so there is one comparison.
  */
-const requireSameOrigin = Effect.gen(function* () {
+export const isCrossOriginCookieRequest = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
-  if (request.headers.authorization !== undefined) return;
+  if (request.headers.authorization !== undefined) return false;
   const origin = request.headers.origin;
-  if (origin === undefined) return;
+  if (origin === undefined) return false;
   const { devUrl } = yield* ServerConfig;
-  if (!isOwnOrigin({ origin, host: request.headers.host, devUrl })) {
+  return !isOwnOrigin({ origin, host: request.headers.host, devUrl });
+});
+
+const requireSameOrigin = Effect.gen(function* () {
+  if (yield* isCrossOriginCookieRequest) {
     return yield* new LocalApiRouteAuthError({ reason: "cross-origin request" });
   }
 });
