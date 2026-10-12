@@ -90,7 +90,7 @@ export function useGitHubAuthProbe(params: {
         setGithubHost(auth.host ?? "github.com");
         setGithubAccount(auth.account);
         setAuthenticatedHosts(auth.accounts);
-        if (auth.status === "authenticated") {
+        if (auth.status === "authenticated" || auth.accounts.length > 0) {
           await onAuthenticatedRef.current({
             host: auth.host ?? "github.com",
             account: auth.account,

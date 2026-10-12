@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 
+import { WorkspacePageHeader } from "~/components/WorkspacePageHeader";
+import { isElectron } from "~/env";
 import { useBackendState } from "~/t3team/backend/t3team-index";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 
@@ -113,8 +115,11 @@ export function AllProjectsMyWorkPane({
       // Only an item this screen can render reveals the aside (its project may still be loading).
       mobileAsideRequest={panelRevealRequest}
       main={
-        <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
-          <AllProjectsMyWorkView onOpenTicket={onOpenTicket} />
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {isElectron ? <WorkspacePageHeader electron /> : null}
+          <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+            <AllProjectsMyWorkView onOpenTicket={onOpenTicket} />
+          </div>
         </div>
       }
       aside={aside}
