@@ -3,7 +3,7 @@ import type { IntegrationAccountRef } from "@t3tools/integrations-core";
 import * as Effect from "effect/Effect";
 
 import { providerForAccount } from "./t3team-atlassian-auth-store.ts";
-import { tryAtlassianPromise } from "./t3team-atlassian-http.ts";
+import { type T3TeamAtlassianError, tryAtlassianPromise } from "./t3team-atlassian-http.ts";
 
 /**
  * `account.id` is the Jira site/cloud id (used to pick the OAuth client), NOT
@@ -27,15 +27,10 @@ export function invalidateT3TeamAtlassianViewerAccountIdCache() {
   viewerAccountIdByAccountId.clear();
 }
 
-/**
- * Resolve (and cache) the Jira accountId of the viewer authenticated by
- * `account`. Returns `undefined` for non-Atlassian providers (e.g. the mock
- * provider used when no auth is connected yet). Resolution failures
- * (network/auth hiccups) are logged as warnings and mapped to `undefined` so
- * callers can fall back to the live `listResources` path instead of failing
- * the whole request.
- */
-export function resolveT3TeamAtlassianViewerAccountId(account: IntegrationAccountRef) {
+function resolveViewerAccountId<E, R>(
+  account: IntegrationAccountRef,
+  onLookupFailure: (error: T3TeamAtlassianError) => Effect.Effect<undefined, E, R>,
+) {
   return Effect.gen(function* () {
     const cached = viewerAccountIdByAccountId.get(account.id);
     if (cached) return cached;
@@ -48,17 +43,35 @@ export function resolveT3TeamAtlassianViewerAccountId(account: IntegrationAccoun
     const viewerAccountId = yield* tryAtlassianPromise(
       () => provider.resolveViewerAccountId({ account }),
       "Failed to resolve the current Atlassian user.",
-    ).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(
-          "t3team: failed to resolve Atlassian viewer accountId; falling back to live My Work path",
-          { accountId: account.id, provider: account.provider, error },
-        ).pipe(Effect.as(undefined)),
-      ),
-    );
+    ).pipe(Effect.catch(onLookupFailure));
     if (viewerAccountId) {
       viewerAccountIdByAccountId.set(account.id, viewerAccountId);
     }
     return viewerAccountId;
   });
+}
+
+/**
+ * Resolve (and cache) the Jira accountId of the viewer authenticated by
+ * `account`. Returns `undefined` for non-Atlassian providers (e.g. the mock
+ * provider used when no auth is connected yet). A failed `/myself` lookup is
+ * logged and mapped to `undefined` so callers can fall back to the live
+ * `listResources` path instead of failing the whole request.
+ */
+export function resolveT3TeamAtlassianViewerAccountId(account: IntegrationAccountRef) {
+  return resolveViewerAccountId(account, (error) =>
+    Effect.logWarning(
+      "t3team: failed to resolve Atlassian viewer accountId; falling back to live My Work path",
+      { accountId: account.id, provider: account.provider, error },
+    ).pipe(Effect.as(undefined)),
+  );
+}
+
+/**
+ * As `resolveT3TeamAtlassianViewerAccountId`, but `undefined` means only "no Atlassian credentials
+ * for this account". A failed lookup stays an error, so a caller can tell "not signed in" from
+ * "could not ask right now".
+ */
+export function resolveT3TeamAtlassianViewerAccountIdStrict(account: IntegrationAccountRef) {
+  return resolveViewerAccountId(account, (error) => Effect.fail(error));
 }

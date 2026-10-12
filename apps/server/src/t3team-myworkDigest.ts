@@ -15,6 +15,7 @@ import * as Effect from "effect/Effect";
 import { readDigestStatusTransitionsSince } from "./t3team-digestStatusTransitions.ts";
 import { assembleMyWorkDigestPayload } from "./t3team-myworkDigestAggregation.ts";
 import { loadDigestViewerMergedPrEntries } from "./t3team-myworkDigestPrCache.ts";
+import { settleDigestProjectLoads } from "./t3team-myworkDigestProjectOutcomes.ts";
 import { digestIdentityFor, loadDigestProjectSource } from "./t3team-myworkDigestProjectSource.ts";
 import { digestDataWindow, lastActivityDayWindow } from "./t3team-myworkDigestYesterdayWindow.ts";
 import {
@@ -88,32 +89,35 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
       })),
     );
 
-    const loaded = yield* Effect.forEach(
+    const results = yield* Effect.forEach(
       projects,
       (project, index) =>
-        loadDigestProjectSource(
-          {
-            nowMs,
-            nowIso,
-            requestedViewerName,
-            mergedPrs,
-            yesterdayWindow,
-            transitionRows: transitionRows[index] ?? [],
-            threads,
-            agentByThread,
-            rawTicketByThread,
-            pendingRuns,
-            questions,
-          },
-          project,
+        Effect.result(
+          loadDigestProjectSource(
+            {
+              nowMs,
+              nowIso,
+              requestedViewerName,
+              mergedPrs,
+              yesterdayWindow,
+              transitionRows: transitionRows[index] ?? [],
+              threads,
+              agentByThread,
+              rawTicketByThread,
+              pendingRuns,
+              questions,
+            },
+            project,
+          ),
         ),
       // Projects are independent reads; one slow host must not serialize the rest.
       { concurrency: "unbounded" },
     );
+    const { loaded, someSessionExpired } = yield* settleDigestProjectLoads(results);
     const sources = loaded.map((entry) => entry.source);
-    // Set when any project could not resolve the viewer (no Jira session): the
-    // client shows "sign in" instead of a misleading empty digest.
-    const viewerUnresolved = loaded.some((entry) => entry.viewerUnresolved);
+    // Set when any project could not resolve the viewer (no Jira credentials or a
+    // dead session): the client shows "sign in" instead of a misleading empty digest.
+    const viewerUnresolved = someSessionExpired || loaded.some((entry) => entry.viewerUnresolved);
     const changeRequestsPending = loaded.some((entry) => entry.changeRequestsPending);
 
     // The mirror-resolved name (the exact string `ticket.assignee` carries, so the client's

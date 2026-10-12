@@ -41,8 +41,10 @@ export function resolveMyWorkDigestRenderState(
   if (input.sessionExpired) return "session-expired";
   if (input.status === "error") return "error";
   if (input.hasGraph) {
-    // The server had no Jira identity, so an empty graph says nothing about the user's work.
-    return input.viewerUnresolved && input.ticketCount === 0 ? "sign-in" : "content";
+    if (!input.viewerUnresolved || input.ticketCount > 0) return "content";
+    // The server had no Jira identity, so an empty graph says nothing about the user's work. A
+    // stored graph only says that was true LAST time: asking to sign in needs a fresh round.
+    if (input.freshness === "fresh") return "sign-in";
   }
   // No graph to paint. A failing fetch says so; everything else is still on its way.
   if (input.status === "retrying") return "retrying";

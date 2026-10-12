@@ -3,8 +3,8 @@
  * and which mirror rows are theirs.
  *
  * "My Work" = the viewer's assigned issues plus their parents, off the same
- * assignee-indexed mirror read the legacy My Work view uses. Without a resolved
- * viewer (no or stale Jira session) there is nothing personal to show, and the
+ * assignee-indexed mirror read the legacy My Work view uses. Without Jira
+ * credentials for the account there is nothing personal to show, and the
  * caller tells the client so instead of painting an empty digest.
  */
 
@@ -15,7 +15,7 @@ import type {
   BacklogResourceRef,
   T3TeamBacklogCacheIdentity,
 } from "./t3team-atlassian-backlog-cacheShared.ts";
-import { resolveT3TeamAtlassianViewerAccountId } from "./t3team-atlassian-viewer-identity.ts";
+import { resolveT3TeamAtlassianViewerAccountIdStrict } from "./t3team-atlassian-viewer-identity.ts";
 import type { T3TeamMyWorkDigestProjectInput } from "./t3team-myworkDigestTypes.ts";
 
 export type DigestViewerTickets = {
@@ -38,9 +38,11 @@ export function readDigestViewerTickets(input: {
   readonly requestedViewerName: string | undefined;
 }) {
   return Effect.gen(function* () {
-    const viewerAccountId = yield* resolveT3TeamAtlassianViewerAccountId(
+    // Only "no Atlassian credentials" is unresolved. A dead session keeps its typed error so the
+    // client shows the sign-in panel, and an outage fails the round so the client retries.
+    const viewerAccountId = yield* resolveT3TeamAtlassianViewerAccountIdStrict(
       input.project.account,
-    ).pipe(Effect.catch(() => Effect.succeed(undefined)));
+    );
     const resolved = viewerAccountId !== undefined && viewerAccountId !== "";
     const projection = resolved
       ? yield* readMyWorkIssueRows({ ...input.identity, viewerAccountId })

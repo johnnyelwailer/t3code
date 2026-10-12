@@ -47,11 +47,23 @@ describe("My Work digest render state", () => {
     );
     expect(resolve({ status: "error", hasGraph: true, ticketCount: 5 })).toBe("error");
     // No Jira identity: an empty graph says nothing about the user's work.
-    expect(resolve({ viewerUnresolved: true, hasGraph: true, ticketCount: 0 })).toBe("sign-in");
+    expect(
+      resolve({ viewerUnresolved: true, hasGraph: true, ticketCount: 0, freshness: "fresh" }),
+    ).toBe("sign-in");
     expect(resolve({ viewerUnresolved: true, status: "ready", freshness: "fresh" })).toBe(
       "sign-in",
     );
     // …but tickets DID come back, so the viewer flag is stale information: render them.
     expect(resolve({ viewerUnresolved: true, hasGraph: true, ticketCount: 2 })).toBe("content");
+  });
+
+  it("never asks to sign in from a stored graph before a fresh round confirms it", () => {
+    // The stored graph remembers a signed-out round; the user may have signed in since.
+    const storedSignedOut = { viewerUnresolved: true, hasGraph: true, ticketCount: 0 };
+    expect(resolve({ ...storedSignedOut, status: "ready", freshness: "cached" })).toBe("loading");
+    expect(resolve({ ...storedSignedOut, status: "retrying", freshness: "cached" })).toBe(
+      "retrying",
+    );
+    expect(resolve({ ...storedSignedOut, status: "ready", freshness: "fresh" })).toBe("sign-in");
   });
 });
