@@ -622,6 +622,13 @@ import {
 } from "./chat/composerPromptHistory";
 
 const EMPTY_PROVIDERS: ServerProvider[] = [];
+// Safe default for the PR menu's multi-repo fan-out: no linked repositories are plumbed into the
+// core chat yet, so the menu stays scoped to the main repository. The composer's fan-out mechanism
+// (one list target per linked project) is in place and only needs these ids supplied.
+const EMPTY_LINKED_PULL_REQUEST_TARGETS: ReadonlyArray<{
+  readonly projectId: ProjectId;
+  readonly repository: string;
+}> = [];
 // t3team: an image-only send says "images" rather than the generic attachment wording.
 const IMAGE_ONLY_BOOTSTRAP_PROMPT =
   "[User attached one or more images without additional text. Respond using the conversation context and the attached image(s).]";
@@ -8945,6 +8952,7 @@ export default function ChatView(props: ChatViewProps) {
       previewAnnotations: sendContextPreviewAnnotations,
       reviewComments: composerReviewComments,
       threadContexts: composerThreadContexts,
+      workItems: composerWorkItems,
       selectedProvider: ctxSelectedProvider,
       selectedModel: ctxSelectedModel,
       selectedProviderModels: ctxSelectedProviderModels,
@@ -9092,6 +9100,7 @@ export default function ChatView(props: ChatViewProps) {
                         reviewComments: composerReviewComments,
                         previewAnnotations: composerPreviewAnnotations,
                         threadContexts: composerThreadContexts,
+                        workItems: composerWorkItems,
                         attachments: newEditAttachments.map((attachment, index) => ({
                           attachment,
                           attachmentId:
@@ -9239,6 +9248,7 @@ export default function ChatView(props: ChatViewProps) {
           reviewComments: composerReviewComments,
           previewAnnotations: composerPreviewAnnotations,
           threadContexts: composerThreadContexts,
+          workItems: composerWorkItems,
         }),
         interactionMode: followUp.interactionMode,
       });
@@ -9339,6 +9349,7 @@ export default function ChatView(props: ChatViewProps) {
     const composerPreviewAnnotationsSnapshot = [...composerPreviewAnnotations];
     const composerReviewCommentsSnapshot: ReviewCommentContext[] = [...composerReviewComments];
     const composerThreadContextsSnapshot = [...composerThreadContexts];
+    const composerWorkItemsSnapshot = [...composerWorkItems];
     // Expired terminal excerpts are not sent; their chips leave the text with them.
     const messageTextForSend = composerTerminalContexts
       .filter((context) => !composerTerminalContextsSnapshot.includes(context))
@@ -9361,6 +9372,7 @@ export default function ChatView(props: ChatViewProps) {
           reviewComments: composerReviewCommentsSnapshot,
           previewAnnotations: composerPreviewAnnotationsSnapshot,
           threadContexts: composerThreadContextsSnapshot,
+          workItems: composerWorkItemsSnapshot,
           attachments: composerAttachmentsSnapshot.map((attachment, index) => ({
             attachment,
             attachmentId: attachmentIds[index] ?? attachment.id,
@@ -11928,6 +11940,18 @@ export default function ChatView(props: ChatViewProps) {
                               }
                               pullRequestRepository={
                                 supportsPullRequests ? activeProjectRepository : null
+                              }
+                              linkedPullRequestTargets={EMPTY_LINKED_PULL_REQUEST_TARGETS}
+                              jiraWorkItemSource={
+                                activeProject?.source?.provider === "atlassian" &&
+                                activeProject.source
+                                  ? {
+                                      provider: activeProject.source.provider,
+                                      accountId: activeProject.source.accountId,
+                                      externalProjectId: activeProject.source.externalProjectId,
+                                      externalProjectKey: activeProject.source.externalProjectKey,
+                                    }
+                                  : null
                               }
                               restingControlsHost={restingComposerControlsHost}
                               restingControlsHaveLeadingContext={

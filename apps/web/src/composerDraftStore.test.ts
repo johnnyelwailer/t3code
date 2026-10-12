@@ -363,6 +363,57 @@ describe("composerDraftStore addImages", () => {
   });
 });
 
+describe("composerDraftStore work items", () => {
+  beforeEach(resetComposerDraftStore);
+  afterEach(resetComposerDraftStore);
+
+  const workItem = (key: string, title: string) => ({
+    key,
+    jiraProjectKey: "NXAI",
+    title,
+    status: "To Do",
+    url: `https://jira.example.com/browse/${key}`,
+    capturedAt: "2026-01-01T00:00:00.000Z",
+  });
+
+  it("adds work items, dedupes by key, and removes them on request", () => {
+    const threadId = ThreadId.make("work-item-draft");
+    const threadRef = scopeThreadRef(TEST_ENVIRONMENT_ID, threadId);
+    const store = useComposerDraftStore.getState();
+
+    store.addWorkItems(threadRef, [workItem("NXAI-1", "First"), workItem("NXAI-2", "Second")]);
+    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.workItems?.map((item) => item.key)).toEqual([
+      "NXAI-1",
+      "NXAI-2",
+    ]);
+
+    // Re-attaching the same key must not create a second chip.
+    store.addWorkItems(threadRef, [workItem("NXAI-1", "First (re-added)")]);
+    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.workItems?.map((item) => item.key)).toEqual([
+      "NXAI-1",
+      "NXAI-2",
+    ]);
+
+    store.removeWorkItem(threadRef, "NXAI-1");
+    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.workItems?.map((item) => item.key)).toEqual([
+      "NXAI-2",
+    ]);
+
+    store.removeWorkItem(threadRef, "NXAI-2");
+    // Once the last chip is gone the draft is user-content-free, so it may be pruned entirely.
+    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.workItems ?? []).toEqual([]);
+  });
+
+  it("counts a work-item chip as user content so it is not dropped as an empty draft", () => {
+    const threadId = ThreadId.make("work-item-content");
+    const threadRef = scopeThreadRef(TEST_ENVIRONMENT_ID, threadId);
+    const store = useComposerDraftStore.getState();
+    expect(composerDraftHasUserContent(store.getComposerDraft(threadRef))).toBe(false);
+    store.addWorkItems(threadRef, [workItem("NXAI-9", "Only a chip")]);
+    expect(composerDraftHasUserContent(store.getComposerDraft(threadRef))).toBe(true);
+  });
+});
+
 describe("composerDraftStore clearComposerContent", () => {
   const threadId = ThreadId.make("thread-clear");
   const threadRef = scopeThreadRef(TEST_ENVIRONMENT_ID, threadId);

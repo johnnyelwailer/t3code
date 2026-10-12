@@ -6,6 +6,7 @@ import { useRightPanelStore } from "~/rightPanelStore";
 import { AttachmentFilePreview } from "../files/AttachmentFilePreview";
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
 import { filterComposerPullRequestMatches } from "@t3tools/shared/composerPullRequestMatches";
+import { rankComposerReferences } from "@t3tools/shared/composerReferenceRank";
 import { importPastedComposerText, readPastedComposerContext } from "../composerInlineTokenPaste";
 import { elementContextToPreviewAnnotation } from "../../lib/elementContext";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
@@ -250,6 +251,8 @@ import {
   terminalContextRecord,
   threadContextRecord,
   threadContextReference,
+  workItemContextReference,
+  type WorkItemContextDraft,
 } from "~/lib/composerContextRecords";
 import { matchComposerThreadItems } from "@t3tools/client-runtime/composerThreadItems";
 import { THREAD_CONTEXT_DROP_EVENT, threadContextDropTargetProps } from "./threadContextDrag";
@@ -295,6 +298,8 @@ import {
 } from "./ComposerControl";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
 import { buildPullRequestReferenceContext } from "../pullRequest/pullRequestDetail.logic";
+import { recordComposerReferenceRecency } from "~/t3team/t3team-composerReferenceRecency";
+import { useComposerWorkItemSearch } from "~/t3team/t3team-useComposerWorkItemSearch";
 import {
   matchesPullRequestQuery,
   rankPullRequestMatches,
@@ -428,6 +433,7 @@ function SnapShotAttachmentFrame({
 
 const COMPOSER_PULL_REQUEST_LIST_LIMIT = 99;
 const COMPOSER_PULL_REQUEST_RESULT_LIMIT = 12;
+const COMPOSER_WORK_ITEM_RESULT_LIMIT = 12;
 const EMPTY_PULL_REQUEST_LIST_TARGETS: ReadonlyArray<EnvironmentQueryTarget<PullRequestListInput>> =
   [];
 
@@ -1512,6 +1518,7 @@ export interface ChatComposerHandle {
     previewAnnotations: PreviewAnnotationPayload[];
     reviewComments: ReviewCommentContext[];
     threadContexts: ThreadContextRecord[];
+    workItems: WorkItemContextDraft[];
     selectedPromptEffort: string | null;
     selectedModelOptionsForDispatch: unknown;
     selectedModelSelection: ModelSelection;
@@ -1643,6 +1650,26 @@ export interface ChatComposerProps {
   gitCwd: string | null;
   pullRequestProjectId: ProjectId | null;
   pullRequestRepository: string | null;
+  /**
+   * Linked (non-main) repositories of a multi-repo project, so the `#` PR menu lists PRs from
+   * them too. Empty when the project is single-repo or its linked repositories are unknown —
+   * the menu then stays scoped to the main repository, which is the safe default.
+   */
+  linkedPullRequestTargets: ReadonlyArray<{
+    readonly projectId: ProjectId;
+    readonly repository: string;
+  }>;
+  /**
+   * The thread's bound Jira project, present when the work-source is Atlassian. Drives the
+   * work-item composer menu: its `#`/key trigger opens a search scoped to this project. `null`
+   * when the project has no Jira binding, in which case the work-item menu stays closed.
+   */
+  jiraWorkItemSource: {
+    readonly provider: string;
+    readonly accountId: string;
+    readonly externalProjectId: string;
+    readonly externalProjectKey?: string | undefined;
+  } | null;
   restingControlsHost: HTMLDivElement | null;
   restingControlsHaveLeadingContext: boolean;
   onRestingControlsVisibilityChange: (visible: boolean) => void;
@@ -1793,6 +1820,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     gitCwd,
     pullRequestProjectId,
     pullRequestRepository,
+    linkedPullRequestTargets,
+    jiraWorkItemSource,
     restingControlsHost,
     restingControlsHaveLeadingContext,
     onRestingControlsVisibilityChange,
@@ -1897,6 +1926,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerPreviewAnnotations = composerDraft.previewAnnotations;
   const composerReviewComments = composerDraft.reviewComments;
   const composerThreadContexts = composerDraft.threadContexts;
+  const composerWorkItems = composerDraft.workItems;
   const pendingSnapShotAnimations = useSyncExternalStore(
     subscribeToPendingSnapShotAnimations,
     getPendingSnapShotAnimations,
@@ -2662,33 +2692,84 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerReviewComments.length === 0;
 
   const pullRequestListTargets = useMemo(
-    () =>
-      composerTriggerKind !== "pull-request" ||
-      pullRequestProjectId === null ||
-      (pullRequestTextQuery !== null && settledPullRequestTextQuery === null)
-        ? EMPTY_PULL_REQUEST_LIST_TARGETS
-        : [
-            {
-              environmentId,
-              input: {
-                state: "all" as const,
-                projectId: pullRequestProjectId,
-                limit: COMPOSER_PULL_REQUEST_LIST_LIMIT,
-                ...(settledPullRequestTextQuery === null
-                  ? {}
-                  : { query: settledPullRequestTextQuery }),
-              },
-            },
-          ],
+    () => {
+      if (
+        composerTriggerKind !== "pull-request" ||
+        pullRequestProjectId === null ||
+        (pullRequestTextQuery !== null && settledPullRequestTextQuery === null)
+      ) {
+        return EMPTY_PULL_REQUEST_LIST_TARGETS;
+      }
+      const queryInput =
+        settledPullRequestTextQuery === null ? {} : { query: settledPullRequestTextQuery };
+      const mainTarget = {
+        environmentId,
+        input: {
+          state: "all" as const,
+          projectId: pullRequestProjectId,
+          limit: COMPOSER_PULL_REQUEST_LIST_LIMIT,
+          ...queryInput,
+        },
+      };
+      // Multi-repo projects: fan out one list target per linked repository so the menu ranks
+      // PRs from every repo together, not just the main checkout.
+      const linkedTargets = linkedPullRequestTargets.map((target) => ({
+        environmentId,
+        input: {
+          state: "all" as const,
+          projectId: target.projectId,
+          limit: COMPOSER_PULL_REQUEST_LIST_LIMIT,
+          ...queryInput,
+        },
+      }));
+      return [mainTarget, ...linkedTargets];
+    },
     [
       composerTriggerKind,
       environmentId,
       pullRequestProjectId,
       pullRequestTextQuery,
       settledPullRequestTextQuery,
+      linkedPullRequestTargets,
     ],
   );
+  const pullRequestAllowedProjectIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (pullRequestProjectId !== null) ids.add(pullRequestProjectId);
+    for (const target of linkedPullRequestTargets) {
+      ids.add(target.projectId);
+    }
+    return ids;
+  }, [pullRequestProjectId, linkedPullRequestTargets]);
   const pullRequestLookup = usePullRequestList(pullRequestListTargets);
+
+  // Work-item menu: the bound Jira project's issues matching the typed key fragment. The search
+  // already joins this thread's recency per key, so the shared ranker gets all its signals here.
+  const workItemQuery =
+    composerTrigger?.kind === "work-item" ? composerTrigger.query : "";
+  const workItemSearchQuery = workItemQuery.length > 0 ? workItemQuery : null;
+  const debouncedWorkItemQuery = useDebouncedValue(workItemSearchQuery, 180);
+  const settledWorkItemQuery =
+    workItemSearchQuery === debouncedWorkItemQuery ? workItemSearchQuery : null;
+  const workItemSearchEnabled =
+    composerTriggerKind === "work-item" &&
+    jiraWorkItemSource !== null &&
+    activeThreadId !== null;
+  const workItemQuerySettled = settledWorkItemQuery !== null || workItemSearchQuery === null;
+  const workItemHttpBaseUrl = readPreparedConnection(environmentId)?.httpBaseUrl ?? null;
+  const workItemSearch = useComposerWorkItemSearch({
+    httpBaseUrl: workItemHttpBaseUrl,
+    enabled: workItemSearchEnabled && workItemQuerySettled,
+    query: settledWorkItemQuery ?? "",
+    account:
+      jiraWorkItemSource !== null
+        ? { id: jiraWorkItemSource.accountId, provider: jiraWorkItemSource.provider }
+        : null,
+    externalProjectId: jiraWorkItemSource?.externalProjectId ?? null,
+    jiraProjectKey: jiraWorkItemSource?.externalProjectKey,
+    threadId: activeThreadId,
+    limit: COMPOSER_WORK_ITEM_RESULT_LIMIT * 3,
+  });
   const pullRequestTriggerNumber = useMemo(() => {
     if (composerTrigger?.kind !== "pull-request" || composerTrigger.query.length === 0) {
       return null;
@@ -2822,6 +2903,39 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           (skill.scope ? `${skill.scope} skill` : "Run provider skill"),
       }));
     }
+    if (composerTrigger.kind === "work-item") {
+      if (jiraWorkItemSource === null || activeThreadId === null) {
+        return [];
+      }
+      const results = workItemSearch.data?.items ?? [];
+      const entries = results.map((item) => {
+        const updatedAt = Date.parse(item.capturedAt);
+        return {
+          refId: item.key,
+          query: composerTrigger.query,
+          matchKey: item.key,
+          recency: item.recency,
+          updatedAt: Number.isFinite(updatedAt) ? updatedAt : null,
+          item,
+        };
+      });
+      return rankComposerReferences(entries)
+        .slice(0, COMPOSER_WORK_ITEM_RESULT_LIMIT)
+        .map(({ item }) => ({
+          id: `work-item:${item.key}`,
+          type: "work-item" as const,
+          workItem: {
+            key: item.key,
+            jiraProjectKey: item.jiraProjectKey,
+            title: item.title,
+            status: item.status,
+            url: item.url,
+            capturedAt: item.capturedAt,
+          },
+          label: item.key,
+          description: item.title,
+        }));
+    }
     if (
       composerTrigger.kind === "pull-request" &&
       pullRequestProjectId !== null &&
@@ -2841,10 +2955,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           })
         : rankPullRequestMatches(
             (pullRequestLookup.data?.entries ?? []).filter((entry) => {
-              if (
-                entry.projectId !== pullRequestProjectId ||
-                entry.repository.trim().toLowerCase() !== pullRequestRepository.trim().toLowerCase()
-              ) {
+              if (!pullRequestAllowedProjectIds.has(entry.projectId)) {
                 return false;
               }
               const provider = pullRequestLookup.data?.providers.find(
@@ -2882,6 +2993,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     environmentThreadShells,
     exactPullRequestLookup.data,
     planModeUiEnabled,
+    pullRequestAllowedProjectIds,
     pullRequestLookup.data,
     pullRequestProjectId,
     pullRequestRepository,
@@ -2892,6 +3004,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     selectedProviderStatus,
     settings.showSkillsInSlashMenu,
     workspaceEntries.entries,
+    workItemSearch.data,
+    jiraWorkItemSource,
   ]);
 
   const composerMenuOpen = Boolean(composerTrigger);
@@ -2980,10 +3094,22 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       (pullRequestLookup.isPending ||
         pullRequestTextQuery !== debouncedPullRequestTextQuery ||
         pullRequestTriggerNumber !== debouncedPullRequestNumber ||
-        exactPullRequestLookup.isPending));
+        exactPullRequestLookup.isPending)) ||
+    (composerTriggerKind === "work-item" && workItemSearchEnabled && workItemSearch.isPending);
   const composerMenuEmptyState = useMemo(() => {
     if (composerTriggerKind === "skill") {
       return "No skills found. Try / to browse provider commands.";
+    }
+    if (composerTriggerKind === "work-item") {
+      if (jiraWorkItemSource === null) {
+        return "This project has no Jira binding to search work items in.";
+      }
+      if (workItemSearch.error !== null) {
+        return "Work items could not be read for this project.";
+      }
+      return composerTrigger?.query
+        ? `No work item matches ${composerTrigger.query}.`
+        : "No work items found in this project.";
     }
     if (composerTriggerKind === "pull-request") {
       if (pullRequestProjectId === null || pullRequestRepository === null) {
@@ -3005,6 +3131,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   }, [
     composerTrigger,
     composerTriggerKind,
+    jiraWorkItemSource,
+    workItemSearch.error,
     pullRequestLookup.data?.errors,
     pullRequestLookup.error,
     pullRequestProjectId,
@@ -3180,6 +3308,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   );
   const addComposerDraftThreadContexts = useComposerDraftStore((store) => store.addThreadContexts);
   const setComposerDraftThreadContexts = useComposerDraftStore((store) => store.setThreadContexts);
+  const addComposerDraftWorkItems = useComposerDraftStore((store) => store.addWorkItems);
+  const removeComposerDraftWorkItem = useComposerDraftStore((store) => store.removeWorkItem);
   const buildContextClipboardFragment = useCallback(
     (contextIds: ReadonlyArray<string>): string | null => {
       const wanted = new Set(contextIds);
@@ -4181,6 +4311,42 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           addComposerDraftReviewComment(composerDraftTarget, comment, {
             appendReference: false,
           });
+          recordComposerReferenceRecency(
+            activeThreadId ?? "",
+            "pull-request",
+            item.id,
+          );
+          setComposerHighlightedItemId(null);
+        }
+        return;
+      }
+      if (item.type === "work-item") {
+        if (
+          trigger.kind !== "work-item" ||
+          !composerMenuItemsRef.current.some((candidate) => candidate.id === item.id)
+        ) {
+          return;
+        }
+        const draft: WorkItemContextDraft = item.workItem;
+        const replacement = `${formatInlineContextReference(workItemContextReference(draft))} `;
+        const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
+          snapshot.value,
+          trigger.rangeEnd,
+          replacement,
+        );
+        const applied = applyPromptReplacement(
+          trigger.rangeStart,
+          replacementRangeEnd,
+          replacement,
+          { expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd) },
+        );
+        if (applied) {
+          addComposerDraftWorkItems(composerDraftTarget, [draft], { appendReference: false });
+          recordComposerReferenceRecency(
+            activeThreadId ?? "",
+            "work-item",
+            draft.key,
+          );
           setComposerHighlightedItemId(null);
         }
         return;
@@ -4212,10 +4378,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       }
     },
     [
+      activeThreadId,
       addComposerDraftReviewComment,
       addComposerDraftThreadContexts,
+      addComposerDraftWorkItems,
       applyPromptReplacement,
       composerDraftTarget,
+      environmentId,
       handleInteractionModeChange,
       planModeUiEnabled,
       onUsageLimitsCommand,
@@ -6617,6 +6786,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         previewAnnotations: composerPreviewAnnotations,
         reviewComments: composerReviewComments,
         threadContexts: composerThreadContexts,
+        workItems: composerWorkItems,
         selectedPromptEffort,
         selectedModelOptionsForDispatch,
         selectedModelSelection,
@@ -6666,6 +6836,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       composerTerminalContextsRef,
       composerPreviewAnnotations,
       composerReviewComments,
+      composerWorkItems,
       focusComposer,
       environmentId,
       primaryEnvironmentId,

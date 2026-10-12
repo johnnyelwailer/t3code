@@ -17,12 +17,14 @@ import {
   MessagesSquareIcon,
   PackageIcon,
   SettingsIcon,
+  TicketIcon,
   UserRoundIcon,
   type LucideIcon,
 } from "lucide-react";
 import { memo, useLayoutEffect, useRef } from "react";
 
 import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../composer-logic";
+import type { WorkItemContextDraft } from "~/lib/composerContextRecords";
 import { cn } from "~/lib/utils";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 import { Badge } from "../ui/badge";
@@ -82,6 +84,13 @@ export type ComposerCommandItem =
       id: string;
       type: "pull-request";
       pullRequest: PullRequestContextMetadata;
+      label: string;
+      description: string;
+    }
+  | {
+      id: string;
+      type: "work-item";
+      workItem: WorkItemContextDraft;
       label: string;
       description: string;
     }
@@ -223,6 +232,9 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
           className={cn("size-4 shrink-0", pullRequestPresentation.toneClassName)}
         />
       ) : null}
+      {props.item.type === "work-item" ? (
+        <TicketIcon aria-hidden="true" className="size-4 shrink-0 text-secondary-label" />
+      ) : null}
       <span className="flex min-w-0 flex-1 items-center gap-2">
         <span className="min-w-0 max-w-[45%] shrink-0 truncate font-sans text-xs font-medium">
           {isSlashSkill ? (
@@ -258,6 +270,7 @@ const LISTBOX_LABEL_BY_TRIGGER: Record<ComposerTriggerKind, string> = {
   "pull-request": "Pull requests",
   "slash-command": "Commands",
   skill: "Skills",
+  "work-item": "Issues",
 };
 
 const SKILL_SOURCE_ICON_BY_KIND: Record<ProviderSkillSourceKind, LucideIcon> = {

@@ -11,7 +11,12 @@ import {
 
 import { resolveShortcutCommand, type ShortcutEventLike } from "./keybindings";
 
-export type ComposerTriggerKind = "path" | "pull-request" | "slash-command" | "skill";
+export type ComposerTriggerKind =
+  | "path"
+  | "pull-request"
+  | "slash-command"
+  | "skill"
+  | "work-item";
 export type ComposerSlashCommand = "model" | "plan" | "default";
 export type ComposerSubmissionIntent = "foreground" | "background" | "alternate";
 
@@ -266,6 +271,18 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
     return {
       kind: "pull-request",
       query: pullRequestMatch[1] ?? "",
+      rangeStart: tokenStart,
+      rangeEnd: cursor,
+    };
+  }
+  // A Jira issue key in flight: a project prefix, the dash, and any digits typed so far
+  // (`NX-` opens the issue menu; `NX-12` narrows it). Uppercase-only so free text like
+  // `self-hosted` never opens a reference menu.
+  const workItemKeyMatch = /^[A-Z][A-Z0-9]{0,9}-\d*$/.exec(token);
+  if (workItemKeyMatch) {
+    return {
+      kind: "work-item",
+      query: token,
       rangeStart: tokenStart,
       rangeEnd: cursor,
     };

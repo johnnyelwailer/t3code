@@ -372,6 +372,25 @@ describe("detectComposerTrigger", () => {
     });
   });
 
+  it.each(["NX-", "NX-12", "ABC123-"])(
+    "detects a Jira work-item key in flight as the work-item trigger (%s)",
+    (key) => {
+      const text = `Ref ${key}`;
+      expect(detectComposerTrigger(text, text.length)).toEqual({
+        kind: "work-item",
+        query: key,
+        rangeStart: "Ref ".length,
+        rangeEnd: text.length,
+      });
+    },
+  );
+
+  it("does not open the work-item menu for lowercase or dash-less tokens", () => {
+    for (const text of ["self-hosted", "Fix NX", "nx-12"]) {
+      expect(detectComposerTrigger(text, text.length)).not.toEqual({ kind: "work-item" });
+    }
+  });
+
   it("does not keep pull request completion active for headings or embedded hashes", () => {
     expect(detectComposerTrigger("# Heading", "# Heading".length)).toBeNull();
     expect(detectComposerTrigger("issue#123", "issue#123".length)).toBeNull();
