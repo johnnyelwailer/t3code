@@ -50,7 +50,6 @@ export function makeGitHubReadCoalescer<A, E>(
     string,
     { readonly expiresAtMs: number; readonly value: A; readonly weight: number }
   >();
-  const inFlight = new Map<string, Deferred.Deferred<A, E>>();
   let keptWeight = 0;
 
   const forget = (key: string) => {
@@ -70,32 +69,39 @@ export function makeGitHubReadCoalescer<A, E>(
     }
   };
 
-  const lead = <R>(key: string, ttlMs: number, load: Effect.Effect<A, E, R>) =>
-    Effect.gen(function* () {
-      const flight = Deferred.makeUnsafe<A, E>();
-      inFlight.set(key, flight);
-      const exit = yield* Effect.exit(load).pipe(
-        Effect.onInterrupt(() =>
-          Effect.sync(() => inFlight.delete(key)).pipe(Effect.andThen(Deferred.interrupt(flight))),
-        ),
-      );
-      inFlight.delete(key);
-      if (Exit.isSuccess(exit)) {
-        const nowMs = yield* Clock.currentTimeMillis;
-        remember(key, exit.value, nowMs + ttlMs, nowMs);
-      }
-      yield* Deferred.done(flight, exit);
-      return yield* exit;
-    });
+  /** An undefined flight result means its leader was interrupted: the waiter takes over. */
+  type Flight = Deferred.Deferred<Exit.Exit<A, E> | undefined>;
+  const inFlight = new Map<string, Flight>();
 
-  const share: GitHubReadCoalescer<A, E>["share"] = (key, ttl, load) =>
+  const lead = <R>(key: string, ttlMs: number, load: Effect.Effect<A, E, R>) =>
+    Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const flight: Flight = Deferred.makeUnsafe();
+        inFlight.set(key, flight);
+        const exit = yield* Effect.exit(restore(load));
+        inFlight.delete(key);
+        if (Exit.isSuccess(exit)) {
+          const nowMs = yield* Clock.currentTimeMillis;
+          remember(key, exit.value, nowMs + ttlMs, nowMs);
+        }
+        yield* Deferred.succeed(flight, Exit.hasInterrupts(exit) ? undefined : exit);
+        return yield* exit;
+      }),
+    );
+
+  const share: GitHubReadCoalescer<A, E>["share"] = <R>(
+    key: string,
+    ttl: Duration.Input,
+    load: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E, R> =>
     Effect.gen(function* () {
       const nowMs = yield* Clock.currentTimeMillis;
       const hit = kept.get(key);
       if (hit !== undefined && hit.expiresAtMs > nowMs) return hit.value;
       const flight = inFlight.get(key);
-      if (flight !== undefined) return yield* Deferred.await(flight);
-      return yield* lead(key, Duration.toMillis(ttl), load);
+      if (flight === undefined) return yield* lead(key, Duration.toMillis(ttl), load);
+      const settled = yield* Deferred.await(flight);
+      return settled === undefined ? yield* share(key, ttl, load) : yield* settled;
     });
 
   return { share };
