@@ -26,6 +26,7 @@ import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import { noJitter } from "./t3team-testNoJitter.ts";
 import * as Logger from "effect/Logger";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
@@ -281,7 +282,7 @@ type Harness = Effect.Success<ReturnType<typeof makeHarness>>;
 
 const startAndSweep = Effect.fn("startPullRequestSyncHarness")(function* (fixture: Harness) {
   const reactor = yield* PullRequestSyncReactor.PullRequestSyncReactor;
-  yield* reactor.start();
+  yield* reactor.start().pipe(Effect.provide(noJitter));
   yield* Deferred.succeed(fixture.activation, undefined);
   yield* Queue.take(fixture.snapshotReads);
   yield* reactor.drain;

@@ -646,7 +646,7 @@ export const make = Effect.gen(function* () {
       Effect.gen(function* () {
         yield* worker.enqueue(undefined);
         yield* worker.drain;
-      }).pipe(Effect.repeat(Schedule.spaced("1 minute")), Effect.asVoid),
+      }).pipe(Effect.repeat(Schedule.spaced("1 minute").pipe(Schedule.jittered)), Effect.asVoid),
     );
     yield* forkParked(
       Stream.runForEach(settingsChanges, (settings) => {

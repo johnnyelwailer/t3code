@@ -14,6 +14,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import { noJitter } from "./t3team-testNoJitter.ts";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
@@ -217,7 +218,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
 
         yield* Effect.gen(function* () {
           const service = yield* ThreadPullRequestService.make;
-          yield* service.start();
+          yield* service.start().pipe(Effect.provide(noJitter));
           yield* Deferred.succeed(activation, undefined);
           // Startup backfill reads every active thread.
           expect(yield* Queue.take(reads)).toEqual({ location: "active", unsettledOnly: false });
@@ -306,7 +307,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
 
         yield* Effect.gen(function* () {
           const service = yield* ThreadPullRequestService.make;
-          yield* service.start();
+          yield* service.start().pipe(Effect.provide(noJitter));
           yield* Deferred.succeed(activation, undefined);
           // Backfill finds the settled branch thread and must read it again.
           expect(yield* Queue.take(reads)).toEqual({ location: "active", unsettledOnly: false });
