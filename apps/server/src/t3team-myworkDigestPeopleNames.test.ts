@@ -1,10 +1,12 @@
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as TestClock from "effect/testing/TestClock";
 
 import * as GitHubApi from "./sourceControl/GitHubApi.ts";
 import {
   awaitDigestPeopleNamesForTests,
+  FAILED_LOOKUP_TTL_MS,
   resetDigestPeopleNamesForTests,
   withProfileNames,
 } from "./t3team-myworkDigestPeopleNames.ts";
@@ -70,7 +72,7 @@ it.effect("names login-only people from the host profile, once per person", () =
   }),
 );
 
-it.effect("asks again after a failed lookup instead of remembering it as nameless", () =>
+it.effect("does not ask again for a failed lookup within the TTL, then does", () =>
   Effect.gen(function* () {
     resetDigestPeopleNamesForTests();
     let calls = 0;
@@ -86,14 +88,25 @@ it.effect("asks again after a failed lookup instead of remembering it as nameles
       },
     });
     const entries = [{ host: "h", author: person("ada") }];
-    const first = yield* withProfileNames(entries).pipe(Effect.provide(api));
-    yield* awaitDigestPeopleNamesForTests;
+    const round = Effect.gen(function* () {
+      const result = yield* withProfileNames(entries).pipe(Effect.provide(api));
+      yield* awaitDigestPeopleNamesForTests;
+      return result;
+    });
+    const first = yield* round;
     assert.strictEqual(first[0]?.author?.name, "ada");
+    assert.strictEqual(calls, 1);
+    // The host recovers, but the failure is remembered: later rounds inside the TTL stay quiet
+    // and the person is not mistaken for nameless.
     fail = false;
-    yield* withProfileNames(entries).pipe(Effect.provide(api));
-    yield* awaitDigestPeopleNamesForTests;
-    const second = yield* withProfileNames(entries).pipe(Effect.provide(api));
-    assert.strictEqual(second[0]?.author?.name, "Ada Lovelace");
+    yield* round;
+    yield* TestClock.adjust(FAILED_LOOKUP_TTL_MS - 1);
+    yield* round;
+    assert.strictEqual(calls, 1);
+    yield* TestClock.adjust(1);
+    yield* round;
+    const named = yield* round;
+    assert.strictEqual(named[0]?.author?.name, "Ada Lovelace");
     assert.strictEqual(calls, 2);
   }),
 );

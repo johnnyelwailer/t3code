@@ -4,9 +4,12 @@
  * Jira identity; the host's profile has the real name. One `GET /users/<login>` per person per
  * host, remembered for the server's lifetime (names barely change). The lookups run beside the
  * poll, never inside it: a round shows the names known so far, the next one the rest. At most a
- * dozen are in flight across all projects, and a person two projects share is asked once.
+ * dozen are in flight across all projects, and a person two projects share is asked once. A
+ * lookup that failed (no such user, a rate limit, a host that will not answer) is not asked again
+ * for an hour: retrying it every round only spends the quota the failure was already short of.
  */
 
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Schema from "effect/Schema";
@@ -17,7 +20,10 @@ import type { T3TeamDigestPerson } from "./t3team-myworkDigestTypesPrs.ts";
 const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 const MAX_IN_FLIGHT = 12;
 const MAX_REMEMBERED = 500;
+export const FAILED_LOOKUP_TTL_MS = 60 * 60_000;
 const known = new Map<string, string | null>();
+/** When a failed lookup may be asked again, by `host:login`. */
+const failedUntil = new Map<string, number>();
 const inFlight = new Set<string>();
 const running: Array<Fiber.Fiber<unknown>> = [];
 
@@ -32,13 +38,22 @@ function lookup(api: GitHubApi.GitHubApi["Service"], host: string, login: string
       const name = profile._tag === "Some" ? profile.value.name?.trim() : undefined;
       return name ? name : null;
     }),
-    // Only an answer is remembered (a name, or "this profile has none"); a failed read is
-    // asked again next round.
+    // An answer is remembered for good (a name, or "this profile has none"); a failed read is
+    // remembered only until `FAILED_LOOKUP_TTL_MS` has passed, and never as "nameless".
     Effect.tap((name) =>
       Effect.sync(() => {
         if (known.size >= MAX_REMEMBERED) known.delete(known.keys().next().value!);
         known.set(`${host}:${login}`, name);
       }),
+    ),
+    Effect.tapError(() =>
+      Effect.flatMap(Clock.currentTimeMillis, (now) =>
+        Effect.sync(() => {
+          if (failedUntil.size >= MAX_REMEMBERED)
+            failedUntil.delete(failedUntil.keys().next().value!);
+          failedUntil.set(`${host}:${login}`, now + FAILED_LOOKUP_TTL_MS);
+        }),
+      ),
     ),
     Effect.orElseSucceed(() => null),
   );
@@ -61,12 +76,20 @@ export function withProfileNames<E extends Entry>(
       ...(entry.reviewers ?? []),
       ...(entry.engaged ?? []),
     ];
+    const now = yield* Clock.currentTimeMillis;
     const missing = new Map<string, { host: string; login: string }>();
     for (const entry of entries)
       for (const person of people(entry))
         if (person.name === person.login && LOGIN.test(person.login)) {
           const key = `${entry.host}:${person.login}`;
-          if (!known.has(key) && !inFlight.has(key) && inFlight.size + missing.size < MAX_IN_FLIGHT)
+          const retryAt = failedUntil.get(key);
+          if (retryAt !== undefined && retryAt <= now) failedUntil.delete(key);
+          if (
+            !known.has(key) &&
+            !failedUntil.has(key) &&
+            !inFlight.has(key) &&
+            inFlight.size + missing.size < MAX_IN_FLIGHT
+          )
             missing.set(key, { host: entry.host, login: person.login });
         }
     if (missing.size > 0) {
@@ -100,6 +123,7 @@ export function withProfileNames<E extends Entry>(
 
 export function resetDigestPeopleNamesForTests(): void {
   known.clear();
+  failedUntil.clear();
   inFlight.clear();
   running.length = 0;
 }
