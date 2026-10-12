@@ -7,45 +7,21 @@
  * the hand-off has nothing to jump between.
  *
  * It is a LOADING state, not decoration — it exists only while a first result is outstanding, so
- * it may breathe where permanent chrome must not. Everything animated is `motion-safe:` or carries
+ * it may breathe where permanent chrome must not. The mark is a pack-neutral vector animation
+ * (t3team-MyWorkLoadingMark.tsx), not the brand logo. Everything animated is `motion-safe:` or carries
  * a reduced-motion opt-out in t3team-index-myWorkLoading.css; under `prefers-reduced-motion` it is
  * a static, still-pleasant layout.
  */
-import { T3TeamPackBrandImage } from "~/t3team/t3team-PackBrandImage";
-import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import { MyWorkLoadingHeader, MyWorkLoadingLanes } from "~/t3team/t3team-MyWorkLoadingSkeletons";
-
-const LOADABLE_ASSET = /^(data:|blob:|https?:|\/)/i;
-
-function isLoadableBrandAsset(src: string | undefined): boolean {
-  return src !== undefined && LOADABLE_ASSET.test(src);
-}
-
-/**
- * The pack's mark when a pack supplies one, a neutral duo-orb otherwise. Drawn in the theme's own
- * `--primary`, so it belongs to whatever palette is painted rather than to one brand's hexes.
- */
-function MyWorkLoadingMark() {
-  const brand = useT3TeamPackAppearance()?.brand;
-  // The server inlines pack assets as data URLs; a pack-relative path it could not inline would
-  // render as a broken image on the very first thing the user sees, so that falls back too.
-  if (isLoadableBrandAsset(brand?.mark) || isLoadableBrandAsset(brand?.markDark)) {
-    return <T3TeamPackBrandImage brand={brand} kind="mark" className="size-7" />;
-  }
-  return (
-    <svg viewBox="0 0 28 28" className="size-7 text-primary" aria-hidden focusable="false">
-      <circle cx="11" cy="14" r="7" fill="currentColor" opacity="0.85" />
-      <circle cx="19" cy="14" r="7" fill="currentColor" opacity="0.35" />
-    </svg>
-  );
-}
+import { greetingForHour, MyWorkLoadingMark } from "~/t3team/t3team-MyWorkLoadingMark";
 
 export function MyWorkLoadingAnimation({
-  /** The one line of copy under the mark; the gate and the digest say the same thing. */
+  /** The line under the greeting; the gate and the digest say the same thing. */
   message = "Gathering your work…",
 }: {
   message?: string;
 }) {
+  const greeting = greetingForHour(new Date().getHours());
   return (
     <div
       role="status"
@@ -64,9 +40,12 @@ export function MyWorkLoadingAnimation({
           aria-hidden
         />
         <div className="relative space-y-4">
-          <div className="t3team-mywork-loading-mark flex items-center gap-2.5">
+          <div className="t3team-mywork-loading-mark flex items-center gap-4">
             <MyWorkLoadingMark />
-            <p className="text-sm text-muted-foreground">{message}</p>
+            <div>
+              <p className="text-xl font-semibold tracking-tight">{greeting}</p>
+              <p className="text-sm text-muted-foreground">{message}</p>
+            </div>
           </div>
           <MyWorkLoadingHeader />
         </div>

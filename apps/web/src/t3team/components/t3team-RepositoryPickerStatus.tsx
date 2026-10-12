@@ -17,7 +17,7 @@ export function RepositoryPickerStatus({
   return (
     <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-        {discovery.authStatus === "authenticated" ? (
+        {discovery.signedIn ? (
           discovery.authenticatedHosts.map((entry) => (
             <span key={entry.host} className="inline-flex items-center gap-1.5">
               <span className="size-1.5 rounded-full bg-success" />

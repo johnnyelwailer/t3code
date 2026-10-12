@@ -84,7 +84,7 @@ export function RepositoryPicker({
     repoCountByHost.set(entry.host, (repoCountByHost.get(entry.host) ?? 0) + 1);
   }
 
-  const signedIn = discovery.authStatus === "authenticated";
+  const signedIn = discovery.signedIn;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
