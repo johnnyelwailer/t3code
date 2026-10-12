@@ -18,8 +18,9 @@ const comment = (author: ReturnType<typeof actor>) => ({
   createdAt: "2026-10-01T00:00:00Z",
 });
 
-function service(onDetail: () => void = () => {}) {
+function service(onDetail: () => void = () => {}, accountId = "1") {
   return {
+    routingIdentity: () => Effect.succeed({ accountId }),
     detail: () =>
       Effect.sync(onDetail).pipe(
         Effect.as({
@@ -82,6 +83,7 @@ describe("enrichPr", () => {
       yield* TestClock.adjust("2 minutes");
       // The host's rate limit paused: both reads fail.
       const paused = {
+        routingIdentity: () => Effect.succeed({ accountId: "1" }),
         detail: () => Effect.fail(new RateLimitPaused()),
         activity: () => Effect.fail(new RateLimitPaused()),
       } as never;
@@ -91,6 +93,7 @@ describe("enrichPr", () => {
       expect(yield* enrichPr(paused, { ...ref, number: 8 })).toBeUndefined();
       // Signed out (or a revoked token, a lost repo) is not a rate limit: no stale data.
       const signedOut = {
+        routingIdentity: () => Effect.succeed({ accountId: "1" }),
         detail: () => Effect.fail(new SignedOut({ reason: "cli-unauthenticated" })),
         activity: () => Effect.fail(new SignedOut({ reason: "cli-unauthenticated" })),
       } as never;
@@ -109,8 +112,26 @@ describe("enrichPr", () => {
       const second = yield* enrichPr(counting, { ...shared, projectId: ProjectId.make("p2") });
       expect(reads).toBe(1);
       expect(second).toEqual(first);
-      yield* TestClock.adjust("2 minutes");
+      yield* TestClock.adjust("20 seconds");
       yield* enrichPr(counting, { ...shared, projectId: ProjectId.make("p1") });
+      expect(reads).toBe(2);
+    }),
+  );
+
+  it.effect("does not share a read between two accounts on one host", () =>
+    Effect.gen(function* () {
+      let reads = 0;
+      const ref = {
+        host: "nexplore.ghe.com",
+        repository: "hive/TwoAccounts",
+        number: 9,
+        projectId: ProjectId.make("p1"),
+      };
+      const count = () => {
+        reads += 1;
+      };
+      yield* enrichPr(service(count, "100"), ref);
+      yield* enrichPr(service(count, "200"), { ...ref, projectId: ProjectId.make("p2") });
       expect(reads).toBe(2);
     }),
   );

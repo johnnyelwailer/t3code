@@ -7,12 +7,11 @@
  * the digest used to wait on the host every single round, and the Jira half,
  * ready in ~200 ms, painted ~10 s late.
  *
- * Here the digest never waits on a warm read: the last result serves at once
- * and a stale one refreshes in the background (single-flight per app
- * project). Only the very first read waits, and only briefly; past that the
- * digest ships without change requests. Either way, while a background read
- * is in flight the digest says `pending`, so the client re-polls until it
- * lands instead of picking it up a whole poll interval later.
+ * Here a fresh read serves at once. A stale one refreshes single-flight per app project and the
+ * digest waits at most `DIGEST_PR_FIRST_READ_WAIT` for it, then ships the last result; the very
+ * first read waits the same and ships without change requests. Either way, while a background
+ * read is in flight the digest says `pending`, so the client re-polls until it lands instead of
+ * picking it up a whole poll interval later.
  */
 
 import * as Clock from "effect/Clock";
@@ -27,14 +26,15 @@ import { loadViewerMergedPrEntries } from "./t3team-myworkDigestMergedPrs.ts";
 import { loadViewerPrEntries } from "./t3team-myworkViewerPrLoader.ts";
 import type { DigestYesterdayWindow } from "./t3team-myworkDigestYesterdayWindow.ts";
 
-/** How long a cold first read may hold the digest before it ships without change requests. */
+/** How long a cold or stale read may hold the digest before it ships what it has. */
 const DIGEST_PR_FIRST_READ_WAIT = Duration.millis(1_200);
 /**
- * A cached read younger than this serves without a background refresh. The web polls the digest
- * every 90 s, so anything under that made every poll a full refetch; this lets a poll serve the
- * last read and refresh on every second one.
+ * A cached read younger than this serves without a refresh. Just above the web's 90 s poll, so a
+ * poll serves the last read (at most 90 s old) instead of always refetching; the next poll finds
+ * it stale and waits briefly for the refresh, so the common worst case a user sees is about 90 s
+ * and a host too slow to answer in `DIGEST_PR_FIRST_READ_WAIT` shows 180 s-old data for one poll.
  */
-const DIGEST_PR_FRESH_MS = 120_000;
+const DIGEST_PR_FRESH_MS = 100_000;
 /** App projects whose last read is kept; the least recently read is dropped past this. */
 const MAX_CACHED_READS = 64;
 
@@ -86,8 +86,15 @@ export function readCached<A, R>(
     const nowMs = yield* Clock.currentTimeMillis;
     const cached = cachedReads.get(key);
     if (cached !== undefined) {
-      if (nowMs - cached.atMs >= freshMs) yield* startRefresh(key, load);
-      return { read: cached.read as A, pending: refreshes.has(key) };
+      if (nowMs - cached.atMs < freshMs)
+        return { read: cached.read as A, pending: refreshes.has(key) };
+      const refresh = yield* startRefresh(key, load);
+      const refreshed = yield* Fiber.join(refresh).pipe(
+        Effect.timeoutOption(DIGEST_PR_FIRST_READ_WAIT),
+      );
+      return Option.isSome(refreshed)
+        ? { read: refreshed.value, pending: false }
+        : { read: cached.read as A, pending: true };
     }
     const fiber = yield* startRefresh(key, load);
     const landed = yield* Fiber.join(fiber).pipe(Effect.timeoutOption(DIGEST_PR_FIRST_READ_WAIT));
