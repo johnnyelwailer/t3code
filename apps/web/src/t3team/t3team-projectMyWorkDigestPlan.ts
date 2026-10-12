@@ -200,9 +200,7 @@ export function resolveDigestPlan(
     sections: [
       ...sections,
       ...trailing,
-      ...(
-        hasYesterdayWidget ? [] : digestYesterdaySection(graph, "footer", nowMs)
-      ),
+      ...(hasYesterdayWidget ? [] : digestYesterdaySection(graph, "footer", nowMs)),
     ],
     droppedTicketIds,
     newSinceTicketIds: [...unseen],
