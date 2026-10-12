@@ -105,6 +105,28 @@ describe("cloudSessionPollIntervalMs", () => {
     );
   });
 
+  it("waits out a provider rate-limit pause instead of re-polling into it", () => {
+    const nowMs = 1_000_000;
+    expect(
+      cloudSessionPollIntervalMs([{ phase: "preparing" }], 5000, {
+        rateLimitedUntilMs: nowMs + 45_000,
+        nowMs,
+      }),
+    ).toBe(45_000);
+    expect(
+      cloudSessionPollIntervalMs([{ phase: "preparing" }], 5000, {
+        rateLimitedUntilMs: nowMs + 1_000,
+        nowMs,
+      }),
+    ).toBe(CLOUD_SESSION_MIN_REFRESH_GAP_MS);
+    expect(
+      cloudSessionPollIntervalMs([{ phase: "preparing" }], 5000, {
+        rateLimitedUntilMs: nowMs - 1,
+        nowMs,
+      }),
+    ).toBe(5000);
+  });
+
   it("backs an idle list off to one refresh per idle interval", () => {
     vi.useFakeTimers();
     try {
