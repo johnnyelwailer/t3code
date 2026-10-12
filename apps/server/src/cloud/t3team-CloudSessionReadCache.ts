@@ -1,4 +1,4 @@
-import type { CloudSessionFailedError } from "@t3tools/contracts";
+import { CloudSessionFailedError } from "@t3tools/contracts";
 import * as Cache from "effect/Cache";
 import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
@@ -9,6 +9,7 @@ import type {
   GitHubActionsRequest,
   GitHubActionsResponse,
 } from "./t3team-githubActionsSessionClient.ts";
+import { jobsMatchAttempt } from "./t3team-githubActionsSessionParse.ts";
 
 /**
  * How the cloud session list spends fewer GHE calls on data it already read.
@@ -72,9 +73,27 @@ class ReadKey extends Data.Class<{
 /** What a GET's answer is worth keeping, given how it ended. */
 const timeToLive = (exit: Exit.Exit<GitHubActionsResponse, unknown>, key: ReadKey) => {
   if (Exit.isFailure(exit)) return Duration.zero;
-  // A cut-off answer is not the final word even for a settled run.
-  return key.lifetime === "settled" && !exit.value.truncated ? SETTLED_READ_TTL : LIVE_READ_TTL;
+  return key.lifetime === "settled" ? SETTLED_READ_TTL : LIVE_READ_TTL;
 };
+
+/**
+ * A settled read is only kept (and only believed) when its answer is demonstrably the key's
+ * attempt: the jobs endpoint answers for the latest attempt, so a re-run that started after the
+ * listing would otherwise be cached as the finished attempt's steps for good. Anything else
+ * fails — read as "steps unreadable" by the caller, and retried — rather than cached.
+ */
+const readSettled = (
+  key: ReadKey,
+  answer: GitHubActionsResponse,
+): Effect.Effect<GitHubActionsResponse, CloudSessionFailedError> =>
+  key.lifetime !== "settled" || (!answer.truncated && jobsMatchAttempt(answer.body, key.attempt))
+    ? Effect.succeed(answer)
+    : Effect.fail(
+        new CloudSessionFailedError({
+          reason: "unreachable",
+          message: "The provider returned steps for a different run attempt.",
+        }),
+      );
 
 /** The request kinds this cache serves: a REST GET that declared a `lifetime`. */
 export const isCacheableRead = (
@@ -96,7 +115,10 @@ export const makeSessionReadCache = (
   ) => Effect.Effect<GitHubActionsResponse, CloudSessionFailedError>,
 ) =>
   Cache.makeWith(
-    (key: ReadKey) => execute({ kind: "rest", operation: key.operation, path: key.path }),
+    (key: ReadKey) =>
+      execute({ kind: "rest", operation: key.operation, path: key.path }).pipe(
+        Effect.flatMap((answer) => readSettled(key, answer)),
+      ),
     { capacity: READ_CACHE_CAPACITY, timeToLive },
   ).pipe(
     Effect.map(

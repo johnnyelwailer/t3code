@@ -17,7 +17,6 @@ import {
 } from "./t3team-cloudSessionFailureReason.ts";
 import {
   jobStepsRequest,
-  runAttemptOf,
   type CloudSessionRepoRef,
   type GitHubActionsRequest,
   type GitHubActionsResponse,
@@ -95,7 +94,7 @@ export const projectCloudSession = (
     // "there are no steps yet". Passing `[]` here would report `requested`
     // for a running session and march its phase backwards on one flaky poll.
     const readSteps = run(
-      jobStepsRequest(repoRef, sessionRun.id, isRunSettled(sessionRun), runAttemptOf(sessionRun)),
+      jobStepsRequest(repoRef, sessionRun.id, isRunSettled(sessionRun), sessionRun.runAttempt),
     ).pipe(
       Effect.map((result) => (result.truncated ? null : parseJobStepsResponse(result.body))),
       // Progress detail is a nicety: a run whose steps cannot be read is

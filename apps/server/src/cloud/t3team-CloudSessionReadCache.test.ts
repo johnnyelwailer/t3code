@@ -113,92 +113,130 @@ describe("makeSingleFlight identity", () => {
   );
 });
 
-describe("makeSessionReadCache", () => {
-  const okResponse = { body: "{}", truncated: false };
+/** What the jobs endpoint answers while `attempt` is the run's latest. */
+const jobsOfAttempt = (attempt: number) => ({
+  body: JSON.stringify({ jobs: [{ run_attempt: attempt, steps: [] }] }),
+  truncated: false,
+});
 
+/** A host whose runs are all on `latest.attempt` and that counts every read it serves. */
+const makeHost = () => {
+  const latest = { attempt: 1 };
+  const calls: string[] = [];
+  const execute = (request: { readonly kind: string; readonly path?: string }) =>
+    Effect.sync(() => {
+      calls.push(request.path ?? "graphql");
+      return jobsOfAttempt(latest.attempt);
+    });
+  return { latest, calls, execute };
+};
+
+describe("makeSessionReadCache", () => {
   it.effect("keeps a live run's steps briefly, and a settled run's steps for good", () =>
     Effect.gen(function* () {
-      const calls: string[] = [];
-      const read = yield* makeSessionReadCache((request) =>
-        Effect.sync(() => {
-          calls.push(request.kind === "rest" ? request.path : "graphql");
-          return okResponse;
-        }),
-      );
+      const host = makeHost();
+      const read = yield* makeSessionReadCache(host.execute);
       const live = rest(jobStepsRequest(REPO, 1));
-      const settled = rest(jobStepsRequest(REPO, 2, true));
+      const settled = rest(jobStepsRequest(REPO, 2, true, 1));
 
       yield* read(live);
       yield* read(live);
       yield* read(settled);
       yield* read(settled);
-      assert.strictEqual(calls.length, 2);
+      assert.strictEqual(host.calls.length, 2);
 
       yield* TestClock.adjust("6 seconds");
       yield* read(live);
       yield* read(settled);
-      assert.strictEqual(calls.length, 3, "only the live run is re-read");
+      assert.strictEqual(host.calls.length, 3, "only the live run is re-read");
 
       yield* TestClock.adjust("7 days");
       yield* read(settled);
-      assert.strictEqual(calls.length, 3, "a settled run is never re-read");
+      assert.strictEqual(host.calls.length, 3, "a settled run is never re-read");
     }),
   );
 
   it.effect("reads a re-run's steps afresh: the run id is reused, the attempt is not", () =>
     Effect.gen(function* () {
-      const bodies: string[] = [];
-      const read = yield* makeSessionReadCache(() =>
-        Effect.sync(() => {
-          bodies.push("read");
-          return { body: `attempt-${bodies.length}`, truncated: false };
-        }),
-      );
+      const host = makeHost();
+      const read = yield* makeSessionReadCache(host.execute);
 
-      const first = yield* read(rest(jobStepsRequest(REPO, 9, true, 1)));
-      const again = yield* read(rest(jobStepsRequest(REPO, 9, true, 1)));
+      yield* read(rest(jobStepsRequest(REPO, 9, true, 1)));
+      yield* read(rest(jobStepsRequest(REPO, 9, true, 1)));
+      host.latest.attempt = 2;
       const rerun = yield* read(rest(jobStepsRequest(REPO, 9, true, 2)));
 
-      assert.strictEqual(again.body, first.body);
-      assert.notStrictEqual(rerun.body, first.body);
-      assert.strictEqual(bodies.length, 2);
+      assert.strictEqual(rerun.body, jobsOfAttempt(2).body);
+      assert.strictEqual(host.calls.length, 2);
+    }),
+  );
+
+  it.effect(
+    "does not keep a settled read whose jobs are a later attempt (re-run raced the read)",
+    () =>
+      Effect.gen(function* () {
+        const host = makeHost();
+        const read = yield* makeSessionReadCache(host.execute);
+        const attempt1 = rest(jobStepsRequest(REPO, 5, true, 1));
+
+        // The run was listed as settled on attempt 1, but a re-run began before the jobs answer.
+        host.latest.attempt = 2;
+        const raced = yield* Effect.exit(read(attempt1));
+        assert.isTrue(raced._tag === "Failure", "attempt 2's steps are never read as attempt 1's");
+
+        // Nothing was cached: once the host answers for attempt 1 again, it is read and then kept.
+        host.latest.attempt = 1;
+        yield* read(attempt1);
+        yield* read(attempt1);
+        assert.strictEqual(host.calls.length, 2);
+      }),
+  );
+
+  it.effect("gives a run that does not name its attempt the live lifetime only", () =>
+    Effect.gen(function* () {
+      const host = makeHost();
+      const read = yield* makeSessionReadCache(host.execute);
+      const unnamed = rest(jobStepsRequest(REPO, 6, true));
+
+      assert.strictEqual(unnamed.lifetime, "live");
+      yield* read(unnamed);
+      yield* read(unnamed);
+      assert.strictEqual(host.calls.length, 1);
+
+      yield* TestClock.adjust("6 seconds");
+      yield* read(unnamed);
+      assert.strictEqual(host.calls.length, 2, "re-read once the live lifetime is up");
     }),
   );
 
   it.effect("does not serve a run's live steps as its settled steps", () =>
     Effect.gen(function* () {
-      let calls = 0;
-      const read = yield* makeSessionReadCache(() =>
-        Effect.sync(() => {
-          calls += 1;
-          return okResponse;
-        }),
-      );
+      const host = makeHost();
+      const read = yield* makeSessionReadCache(host.execute);
 
       yield* read(rest(jobStepsRequest(REPO, 7)));
-      yield* read(rest(jobStepsRequest(REPO, 7, true)));
-      assert.strictEqual(calls, 2);
+      yield* read(rest(jobStepsRequest(REPO, 7, true, 1)));
+      assert.strictEqual(host.calls.length, 2);
     }),
   );
 
-  it.effect("never keeps a failure or a truncated settled answer for long", () =>
+  it.effect("never keeps a failure or a truncated settled answer", () =>
     Effect.gen(function* () {
       let calls = 0;
       const read = yield* makeSessionReadCache(() => {
         calls += 1;
         return calls === 1
           ? Effect.fail(new CloudSessionFailedError({ reason: "unreachable", message: "down" }))
-          : Effect.succeed({ body: "{", truncated: true });
+          : calls === 2
+            ? Effect.succeed({ body: "{", truncated: true })
+            : Effect.succeed(jobsOfAttempt(1));
       });
-      const settled = rest(jobStepsRequest(REPO, 3, true));
+      const settled = rest(jobStepsRequest(REPO, 3, true, 1));
 
       assert.isTrue((yield* Effect.exit(read(settled)))._tag === "Failure");
+      assert.isTrue((yield* Effect.exit(read(settled)))._tag === "Failure");
       yield* read(settled);
-      assert.strictEqual(calls, 2, "a failure is retried at once");
-
-      yield* TestClock.adjust("6 seconds");
-      yield* read(settled);
-      assert.strictEqual(calls, 3, "a truncated answer only gets the live lifetime");
+      assert.strictEqual(calls, 3, "each unreadable answer is retried at once");
     }),
   );
 });

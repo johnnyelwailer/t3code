@@ -1,8 +1,4 @@
-import {
-  runAttemptOf,
-  type WorkflowJobStep,
-  type WorkflowRunSummary,
-} from "./t3team-githubActionsSessionClient.ts";
+import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
 
 /**
  * The user-visible reason a cloud session failed, read from the provisioning
@@ -87,7 +83,9 @@ export interface FailureReasonCache {
 
 type AttemptedRun = Pick<WorkflowRunSummary, "id" | "runAttempt">;
 
-const attemptKey = (run: AttemptedRun): string => `${run.id}#${runAttemptOf(run)}`;
+/** `null` when the run does not say its attempt: a re-run could not be told apart, so not cached. */
+const attemptKey = (run: AttemptedRun): string | null =>
+  run.runAttempt === undefined ? null : `${run.id}#${run.runAttempt}`;
 
 export const makeFailureReasonCache = (): FailureReasonCache => ({
   reasons: new Map(),
@@ -102,7 +100,8 @@ export function cachedFailureReason(
   cache: FailureReasonCache | undefined,
   run: AttemptedRun,
 ): string | undefined {
-  return cache?.reasons.get(attemptKey(run));
+  const key = attemptKey(run);
+  return key === null ? undefined : cache?.reasons.get(key);
 }
 
 const boundedSet = <V>(map: Map<string, V>, key: string, value: V): void => {
@@ -124,8 +123,8 @@ export function recordFailureRead(
   reason: string,
   readable: boolean,
 ): void {
-  if (cache === undefined) return;
   const key = attemptKey(run);
+  if (cache === undefined || key === null) return;
   const misses = readable ? 0 : (cache.unreadableReads.get(key) ?? 0) + 1;
   if (readable || misses >= UNREADABLE_READ_LIMIT) {
     cache.unreadableReads.delete(key);

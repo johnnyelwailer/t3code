@@ -29,6 +29,7 @@ const failedRun: WorkflowRunSummary = {
   htmlUrl: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/77",
   name: "nexi-session [s1]",
   actor: "pj",
+  runAttempt: 1,
 };
 
 const answer = (body: string) => ({ body, truncated: false });
@@ -174,6 +175,20 @@ describe("projectCloudSession failure reason", () => {
       assert.equal(second.failureReason, "Failed at “step of attempt 2”.");
       assert.equal(secondAgain.failureReason, second.failureReason);
       assert.equal(attempt, 2);
+    }),
+  );
+
+  it.effect("pins no reason for a run that does not name its attempt", () =>
+    Effect.gen(function* () {
+      const gh = fakeGh(JOBS_WITH_FAILED_STEP);
+      const cache = makeFailureReasonCache();
+      const { runAttempt: _attempt, ...unnamed } = failedRun;
+
+      yield* projectCloudSession(unnamed, 0, "machine", repoRef, gh.run, cache);
+      yield* projectCloudSession(unnamed, 0, "machine", repoRef, gh.run, cache);
+
+      // A re-run could not be told apart from this run, so each list reads again.
+      assert.equal(gh.calls.length, 2);
     }),
   );
 

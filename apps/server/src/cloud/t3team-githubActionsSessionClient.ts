@@ -37,9 +37,6 @@ export interface WorkflowRunSummary {
   readonly runAttempt?: number;
 }
 
-export const runAttemptOf = (run: Pick<WorkflowRunSummary, "runAttempt">): number =>
-  run.runAttempt ?? 1;
-
 /** Wrap a correlation tag the way `run-name` renders it. */
 export function sessionTagMarker(tag: string): string {
   return `[${tag}]`;
@@ -132,19 +129,22 @@ export function currentLoginRequest(_ref: CloudSessionRepoRef): GitHubActionsReq
   return { kind: "rest", operation: "cloudSession.viewer", path: "user" };
 }
 
-/** `settled` is a run that has completed: its steps are final, so the read is cached long. */
+/**
+ * `settled` is a run that has completed: its steps are final, so the read is cached long — but
+ * only when `attempt` is known, since without it a re-run (same run id) cannot be told apart.
+ */
 export function jobStepsRequest(
   ref: CloudSessionRepoRef,
   runId: number,
   settled = false,
-  attempt = 1,
+  attempt?: number,
 ): GitHubActionsRequest {
   return {
     kind: "rest",
     operation: "cloudSession.jobSteps",
     path: repoApiPath(ref, `actions/runs/${runId}/jobs`),
-    lifetime: settled ? "settled" : "live",
-    attempt,
+    lifetime: settled && attempt !== undefined ? "settled" : "live",
+    ...(attempt === undefined ? {} : { attempt }),
   };
 }
 
