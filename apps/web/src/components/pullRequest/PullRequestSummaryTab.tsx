@@ -22,6 +22,7 @@ import { cn } from "~/lib/utils";
 import { useOpenLink } from "~/browser/useOpenLink";
 import { formatRelativeTimeLabel } from "~/timestampFormat";
 import { ChangeRequestSummarySlot } from "~/t3team/packs/t3team-changeRequestSlots";
+import { ReferenceThreadsPanel } from "../references/ReferenceThreadsPanel";
 
 import { Button } from "../ui/button";
 import { PullRequestEditButton } from "./PullRequestEditButton";
@@ -860,6 +861,13 @@ export function PullRequestSummaryTab({
             </div>
           )}
         </div>
+      </Section>
+
+      <Section key={`threads:${detail.url}`} title="Threads">
+        <ReferenceThreadsPanel
+          environmentId={environmentId}
+          input={{ kind: "pull-request", ref: reference }}
+        />
       </Section>
 
       <Section key={`checks:${detail.url}`} title="Checks" defaultOpen={false}>

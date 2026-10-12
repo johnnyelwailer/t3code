@@ -1,5 +1,8 @@
 import { ArrowUpRightIcon } from "lucide-react";
 import type { ProjectSource } from "@t3tools/project-context";
+import type { ProjectId } from "@t3tools/contracts";
+import { ReferenceThreadsPanel } from "~/components/references/ReferenceThreadsPanel";
+import { usePrimaryEnvironmentId } from "~/state/environments";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { ThreadChatView } from "~/t3team/chat/t3team-ThreadChatView";
 import { embeddedKickoffInitialUserMessage } from "~/t3team/t3team-embeddedKickoffInitialUserMessage";
@@ -28,6 +31,7 @@ export function EmbeddedThreadAside({
   onOpenFullThread,
 }: EmbeddedThreadAsideProps) {
   const initialUserMessage = embeddedKickoffInitialUserMessage(thread);
+  const environmentId = usePrimaryEnvironmentId();
   return (
     <aside className="relative flex h-full min-h-0 flex-col overflow-hidden border-l border-border/70 bg-background [view-transition-name:t3team-right-sidebar-panel]">
       <div className="flex min-h-0 flex-1 flex-col">
@@ -42,6 +46,16 @@ export function EmbeddedThreadAside({
               <ArrowUpRightIcon className="size-3.5" />
               Open full thread
             </Button>
+          </div>
+        ) : null}
+        {ticketId && environmentId !== null ? (
+          <div className="shrink-0 border-b border-border/60">
+            <ReferenceThreadsPanel
+              environmentId={environmentId}
+              input={{ kind: "work-item", projectId: projectId as ProjectId, ticketId }}
+              defaultExpanded={false}
+              compact
+            />
           </div>
         ) : null}
         <ThreadChatView

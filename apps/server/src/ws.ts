@@ -252,6 +252,10 @@ import * as UsageService from "./usage/UsageService.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import { listLinkedPullRequestThreads } from "./pullRequest/linkedThreads.ts";
+import {
+  listReferencePullRequestThreads,
+  listReferenceWorkItemThreads,
+} from "./references/linkedThreads.ts";
 import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
@@ -2656,6 +2660,23 @@ const layerWsRpc = (
                   ),
             ),
           ),
+        [WS_METHODS.referencesLinkedThreads]: (input) =>
+          input.kind === "pull-request"
+            ? resolvePullRequestSyncKey(input.ref).pipe(
+                Effect.flatMap((key) =>
+                  key === null
+                    ? Effect.succeed({ threads: [] })
+                    : listReferencePullRequestThreads(key).pipe(
+                        Effect.provideService(SqlClient.SqlClient, sql),
+                      ),
+                ),
+              )
+            : listReferenceWorkItemThreads({ projectId: input.projectId, ticketId: input.ticketId }).pipe(
+                Effect.provideService(
+                  ThreadManagementService.ThreadManagementService,
+                  threadManagement,
+                ),
+              ),
         [WS_METHODS.pullRequestsDetail]: (input) =>
           withPullRequestViewer(input, pullRequests.detail(input)),
         [WS_METHODS.pullRequestsPreview]: (input) =>

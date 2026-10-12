@@ -193,6 +193,11 @@ import {
   PullRequestUpdateInput,
 } from "./pullRequest.ts";
 import {
+  ReferenceLinkedThreadsInput,
+  ReferenceLinkedThreadsResult,
+  ReferenceOperationError,
+} from "./references.ts";
+import {
   CloudSessionCancelInputSchema,
   CloudSessionCreateInputSchema,
   CloudSessionFailedError,
@@ -575,6 +580,7 @@ export const WS_METHODS = {
   pullRequestsRoutingIdentity: "pullRequests.routingIdentity",
   pullRequestsStack: "pullRequests.stack",
   pullRequestsLinkedThreads: "pullRequests.linkedThreads",
+  referencesLinkedThreads: "references.linkedThreads",
   pullRequestsDetail: "pullRequests.detail",
   pullRequestsPreview: "pullRequests.preview",
   pullRequestsChecks: "pullRequests.checks",
@@ -1094,6 +1100,14 @@ const WsPullRequestsLinkedThreadsRpc = Rpc.make(WS_METHODS.pullRequestsLinkedThr
   payload: PullRequestRef,
   success: PullRequestLinkedThreadsResult,
   error: PullRequestRpcError,
+});
+
+const ReferenceRpcError = Schema.Union([ReferenceOperationError, EnvironmentAuthorizationError]);
+
+const WsReferencesLinkedThreadsRpc = Rpc.make(WS_METHODS.referencesLinkedThreads, {
+  payload: ReferenceLinkedThreadsInput,
+  success: ReferenceLinkedThreadsResult,
+  error: ReferenceRpcError,
 });
 
 const WsPullRequestsDetailRpc = Rpc.make(WS_METHODS.pullRequestsDetail, {
@@ -2087,6 +2101,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsPullRequestsRoutingIdentityRpc,
   WsPullRequestsStackRpc,
   WsPullRequestsLinkedThreadsRpc,
+  WsReferencesLinkedThreadsRpc,
   WsPullRequestsDetailRpc,
   WsPullRequestsPreviewRpc,
   WsPullRequestsChecksRpc,

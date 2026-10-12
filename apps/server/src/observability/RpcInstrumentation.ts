@@ -113,6 +113,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.pullRequestsRoutingIdentity]: "pull-requests",
   [WS_METHODS.pullRequestsStack]: "pull-requests",
   [WS_METHODS.pullRequestsLinkedThreads]: "pull-requests",
+  [WS_METHODS.referencesLinkedThreads]: "references",
   [WS_METHODS.pullRequestsDetail]: "pull-requests",
   [WS_METHODS.pullRequestsPreview]: "pull-requests",
   [WS_METHODS.pullRequestsChecks]: "pull-requests",

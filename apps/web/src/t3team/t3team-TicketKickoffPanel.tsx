@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ProjectId } from "@t3tools/contracts";
+import { ReferenceThreadsPanel } from "~/components/references/ReferenceThreadsPanel";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { ScrollArea } from "~/t3team/components/ui/t3team-scroll-area";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
@@ -132,6 +134,16 @@ export function TicketKickoffPanel({
             return undefined;
           }}
         />
+        {ticketId && environmentId !== null ? (
+          <div className="border-t border-border/60">
+            <ReferenceThreadsPanel
+              environmentId={environmentId}
+              input={{ kind: "work-item", projectId: projectId as ProjectId, ticketId }}
+              defaultExpanded
+              onOpenThread={(threadId) => onOpenThread(threadId)}
+            />
+          </div>
+        ) : null}
       </ScrollArea>
 
       <TicketKickoffPanelFooter
