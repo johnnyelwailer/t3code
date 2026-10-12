@@ -387,6 +387,8 @@ export const make = Effect.gen(function* () {
     readonly timeout?: Duration.Input | undefined;
     readonly allowReserve: boolean;
     readonly acceptNotModified: boolean;
+    /** The GitHub quota this request spends. */
+    readonly resource: GitHubQuota.GitHubQuotaResource;
     /** Reads the body for GraphQL `errors`, which GitHub sends with HTTP 200. */
     readonly graphql?: boolean;
   }) {
@@ -401,10 +403,9 @@ export const make = Effect.gen(function* () {
     });
     const { token, fingerprint } = yield* credential(host);
     const scope = yield* SourceControlRateLimit.CredentialScope;
-    // REST spends `core` and GraphQL its own quota, each with its own reserve. Every REST path
-    // this reads today is `core`; a `search/` read would need its own resource here. A refusal
-    // still pauses the whole host, the key PullRequestService records its own backoff under.
-    const resource = input.graphql === true ? "graphql" : "core";
+    // REST spends `core`, GraphQL and search each their own quota, each with its own reserve. A
+    // refusal still pauses the whole host, the key PullRequestService records its backoff under.
+    const resource = input.resource;
     const key = { provider: "github" as const, host };
     const run = Effect.gen(function* () {
       const lease = yield* quota
@@ -541,6 +542,7 @@ export const make = Effect.gen(function* () {
           timeout: input.timeout,
           allowReserve: input.allowReserve ?? interactive,
           acceptNotModified: input.ifNoneMatch !== undefined,
+          resource: GitHubQuota.restResourceOf(input.path),
         }),
       ),
     );
@@ -590,6 +592,7 @@ export const make = Effect.gen(function* () {
           maxResponseBytes: input.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES,
           allowReserve,
           acceptNotModified: false,
+          resource: "graphql",
           graphql: true,
         });
         // A body cut at the byte cap hides any `errors` past the cut and cannot be decoded.

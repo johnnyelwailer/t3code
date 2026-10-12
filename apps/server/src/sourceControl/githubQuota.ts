@@ -13,7 +13,12 @@ const RESERVE_RATIO = 0.1;
  * GitHub's quotas: `core` for REST, `graphql` for GraphQL, and a few smaller ones (`search`, …).
  * Each is spent and reset on its own, so each is tracked on its own.
  */
-type GitHubQuotaResource = string;
+export type GitHubQuotaResource = string;
+
+/** Which quota a REST path spends: search has its own, small one; everything else is `core`. */
+export function restResourceOf(path: string): GitHubQuotaResource {
+  return /^\/*search\//u.test(path) ? "search" : "core";
+}
 
 interface QuotaSnapshot {
   readonly limit: number;
