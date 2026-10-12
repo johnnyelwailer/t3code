@@ -1,6 +1,6 @@
 /**
  * The digest's "yesterday" wire types, split from `t3team-myworkDigestTypes.ts`: what the viewer
- * merged and which of their tickets moved in the previous working day.
+ * merged and which of their tickets moved on their last working day.
  */
 
 import type { T3TeamDigestTicketRef } from "./t3team-myworkDigestTypes.ts";
@@ -25,9 +25,9 @@ export type T3TeamDigestYesterdayMoved = {
   readonly at: string;
 };
 
-/** One project's slice of the previous working day, for the viewer. */
+/** One project's slice of the viewer's last working day. */
 export type T3TeamDigestYesterday = {
-  /** The window, ISO instants: the previous working day's start up to the start of today. */
+  /** The window, ISO instants: the found day's start up to the start of the next day. */
   readonly from: string;
   readonly until: string;
   readonly merged: ReadonlyArray<T3TeamDigestYesterdayMerged>;

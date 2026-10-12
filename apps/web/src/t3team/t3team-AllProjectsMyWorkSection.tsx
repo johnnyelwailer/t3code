@@ -3,8 +3,6 @@
  *
  * Built on `useProjectMyWork` — the FETCH-only hook — deliberately, not on `ProjectDashboardMyWorkView`.
  * That view is a singleton by construction and breaks when instantiated once per project:
- *  - it requires `T3TeamDashboardRecipeActionProvider`, mounted only by `AppDashboardPane`, so N
- *    copies outside that pane throw on render;
  *  - its `useProjectMyWorkState` persists UI state into the ROUTE SEARCH, which is global to the
  *    URL — N instances race on mount and then all converge on whichever wrote last, overwriting
  *    every project's saved My Work view;

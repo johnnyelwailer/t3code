@@ -32,9 +32,9 @@ export const BUNDLED_DASHBOARD_WIDGETS: ReadonlyArray<DashboardWidgetDefinition>
   defineDashboardWidget({
     id: "my-work.yesterday",
     version: "1.0.0",
-    title: "Yesterday",
+    title: "Last working day",
     shortDescription:
-      "What the viewer did in the previous working day: the pull requests they merged and the " +
+      "What the viewer did on their last working day: the pull requests they merged and the " +
       "tickets of theirs that moved, each a link. Reads the digest itself, so it lists nothing.",
     surfaces: ["project.dashboard.myWork"],
     component: "digest-yesterday",

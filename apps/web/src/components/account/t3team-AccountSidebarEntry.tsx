@@ -1,7 +1,10 @@
 import type { AccountStatus } from "@t3tools/contracts";
 import { ChevronDownIcon, LogInIcon, LogOutIcon, UserRoundIcon } from "lucide-react";
+import { useState } from "react";
 
 import { useAccounts } from "~/account/t3team-useAccounts";
+
+import { AccountSignInDialog } from "./t3team-AccountSignInDialog";
 
 import {
   Menu,
@@ -53,6 +56,7 @@ function AccountEntry({
   readonly onOpenVerification: () => void;
 }) {
   const state = account.auth;
+  const [reopenToken, setReopenToken] = useState(0);
   if (state._tag === "SignedIn") {
     return (
       <Menu>
@@ -81,21 +85,18 @@ function AccountEntry({
     );
   }
   if (state._tag === "SigningIn") {
-    return state.userCode === null ? (
-      <SidebarMenuButton disabled>
-        <LogInIcon />
-        <span className="truncate">Finish signing in in your browser…</span>
-      </SidebarMenuButton>
-    ) : (
-      <SidebarMenuButton
-        onClick={onOpenVerification}
-        title="Copy the code and open the sign-in page"
-      >
-        <LogInIcon />
-        <span className="truncate">
-          Signing in… or enter <span className="font-mono font-semibold">{state.userCode}</span>
-        </span>
-      </SidebarMenuButton>
+    return (
+      <>
+        <SidebarMenuButton onClick={() => setReopenToken((token) => token + 1)}>
+          <LogInIcon />
+          <span className="truncate">Signing in to {account.label}…</span>
+        </SidebarMenuButton>
+        <AccountSignInDialog
+          account={account}
+          reopenToken={reopenToken}
+          onOpenVerification={onOpenVerification}
+        />
+      </>
     );
   }
   return (

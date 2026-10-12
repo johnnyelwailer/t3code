@@ -28,7 +28,7 @@ export type MyWorkDigestPollInput = {
   readonly projects: ReadonlyArray<MyWorkDigestProjectInput>;
   /** The Jira display name the mirror assigns to the viewer (drives the burndown). */
   readonly viewer?: { readonly name?: string };
-  /** The viewer's IANA time zone: the server's "yesterday" is their previous working day. */
+  /** The viewer's IANA time zone: the server's "yesterday" is their last working day. */
   readonly timeZone?: string;
   /** The fingerprint from the previous round; lets the server answer `unchanged`. */
   readonly knownFingerprint?: string;
@@ -124,7 +124,7 @@ export type MyWorkDigestPayload = {
     readonly changeRequestNote?: string;
     readonly changeRequestsStale?: boolean;
     readonly jiraSyncedAt?: string;
-    /** The previous working day: PRs the viewer merged, tickets of theirs that moved. */
+    /** The viewer's last working day: PRs the viewer merged, tickets of theirs that moved. */
     readonly yesterday?: {
       readonly from: string;
       readonly until: string;
