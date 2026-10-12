@@ -141,6 +141,17 @@ describe("t3team route CSRF guard", () => {
     expect(response).toEqual({ status: 200, body: "stored" });
   });
 
+  it("refuses a victim's cookie sent next to a junk bearer from another origin", async () => {
+    // The cookie wins in selectRequestCredential, so the bearer header must not buy an exemption.
+    const response = await call("POST", "/api/t3team/tempo/token", "Bearer junk", {
+      ...COOKIE,
+      origin: "http://localhost:8080",
+      host: "localhost:3773",
+    });
+    expect(response.status).toBe(403);
+    expect(response.body).not.toBe("stored");
+  });
+
   it("does not guard reads", async () => {
     const response = await call("GET", "/api/t3team/thread/read", undefined, {
       ...COOKIE,

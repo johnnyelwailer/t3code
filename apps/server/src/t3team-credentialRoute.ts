@@ -37,7 +37,20 @@ export function isOwnOrigin(input: {
     return false;
   }
   if (originUrl.host === input.host) return true;
-  return input.devUrl !== undefined && originUrl.origin === input.devUrl.origin;
+  return input.devUrl !== undefined && isSameDevOrigin(originUrl, input.devUrl);
+}
+
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/** Dev only: a tab opened at 127.0.0.1 is the same dev server as `devUrl` at localhost. */
+function isSameDevOrigin(origin: URL, devUrl: URL): boolean {
+  if (origin.origin === devUrl.origin) return true;
+  return (
+    origin.protocol === devUrl.protocol &&
+    origin.port === devUrl.port &&
+    LOOPBACK_HOSTS.has(origin.hostname) &&
+    LOOPBACK_HOSTS.has(devUrl.hostname)
+  );
 }
 
 /**
@@ -45,12 +58,17 @@ export function isOwnOrigin(input: {
  * counts as same-site — so a page served by another local process could fire a credentialed POST.
  * A browser always sends `Origin` on POST; a request whose `Origin` is not this server is cross-origin.
  * A bearer request is exempt: no other origin can attach this client's token (the desktop renderer,
- * origin `t3code://app`, authenticates that way). Shared by `credentialRoute` and the
+ * origin `t3code://app`, authenticates that way, with `credentials: "omit"`). Only when it carries
+ * no cookie: `selectRequestCredential` prefers a session cookie over the `Authorization` header, so
+ * a foreign page could send the victim's cookie next to a junk bearer. Cookie names vary (per port,
+ * legacy, dev), so any `Cookie` header counts. Shared by `credentialRoute` and the
  * `t3teamRouteAuthLayer` group, so there is one comparison.
  */
 export const isCrossOriginCookieRequest = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
-  if (request.headers.authorization !== undefined) return false;
+  if (request.headers.authorization !== undefined && request.headers.cookie === undefined) {
+    return false;
+  }
   const origin = request.headers.origin;
   if (origin === undefined) return false;
   const { devUrl } = yield* ServerConfig;

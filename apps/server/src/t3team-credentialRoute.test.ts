@@ -19,6 +19,24 @@ describe("isOwnOrigin", () => {
     ).toBe(true);
   });
 
+  it("treats loopback aliases of the dev server as the same origin", () => {
+    const devUrl = new URL("http://localhost:6275/");
+    for (const origin of ["http://127.0.0.1:6275", "http://[::1]:6275"]) {
+      expect(isOwnOrigin({ origin, host: "localhost:14315", devUrl })).toBe(true);
+    }
+    // Another port or scheme, a non-loopback host, or no devUrl is still refused.
+    for (const origin of [
+      "http://127.0.0.1:8080",
+      "https://127.0.0.1:6275",
+      "http://evil.test:6275",
+    ]) {
+      expect(isOwnOrigin({ origin, host: "localhost:14315", devUrl })).toBe(false);
+    }
+    expect(
+      isOwnOrigin({ origin: "http://127.0.0.1:3773", host: "localhost:3773", devUrl: undefined }),
+    ).toBe(false);
+  });
+
   it("refuses another local page", () => {
     expect(
       isOwnOrigin({
