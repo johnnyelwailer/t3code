@@ -99,7 +99,7 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
         // The server's burndown join needs the Jira display name the mirror
         // assigns to; the cached name is the same one the chip wears.
         viewer: { name: requestedViewer },
-        // "Yesterday" is the viewer's previous working day, in the viewer's zone.
+        // "Yesterday" is the viewer's last working day, in the viewer's zone.
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         ...(fingerprintRef.current !== undefined
           ? { knownFingerprint: fingerprintRef.current }

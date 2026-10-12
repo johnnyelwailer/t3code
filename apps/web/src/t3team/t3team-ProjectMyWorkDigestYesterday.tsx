@@ -116,7 +116,7 @@ function LoosePrLine({
 }
 
 /**
- * The `my-work.yesterday` widget: what the viewer finished on their previous working day, one
+ * The `my-work.yesterday` widget: what the viewer finished on their last working day, one
  * line per work item with its outcome and merged PRs, under a one-line summary. Before noon it
  * opens expanded; later it starts folded to the summary. Reads the graph itself
  * (`content: "none"`), so the section lists nothing.

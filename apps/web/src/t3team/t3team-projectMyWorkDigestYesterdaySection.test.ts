@@ -11,7 +11,11 @@ import {
 // Local wall-clock times: the default placement follows the viewer's own morning.
 const MORNING = new Date(2026, 9, 6, 9, 0).getTime();
 const NOW = new Date(2026, 9, 6, 15, 0).getTime();
+// The found day, its local start: literally yesterday, and a Thursday three days back.
+const YESTERDAY_FROM = new Date(2026, 9, 5).toISOString();
+const THURSDAY_FROM = new Date(2026, 9, 1).toISOString();
 const withYesterday: DigestGraph["yesterday"] = {
+  from: YESTERDAY_FROM,
   merged: [
     {
       id: "github.com:a/b#1",
@@ -40,12 +44,12 @@ function graph(yesterday?: DigestGraph["yesterday"]): DigestGraph {
   };
 }
 
-const yesterdaySection = (placement: "side" | "footer") => ({
+const yesterdaySection = (placement: "side" | "footer", heading = "Yesterday") => ({
   id: "yesterday",
   kind: "graph" as const,
   widget: "my-work.yesterday",
   placement,
-  heading: "Yesterday",
+  heading,
   items: [],
 });
 const agentPlan = (sections: DigestPlan["sections"]): DigestPlan => ({
@@ -103,13 +107,18 @@ describe("the yesterday section of the plan", () => {
   });
 
   it("is absent when Jira merely updated tickets", () => {
-    const updatedOnly = { merged: [], moved: [{ ticketId: "t", at: "2026-10-05T10:00:00Z" }] };
+    const updatedOnly = {
+      from: YESTERDAY_FROM,
+      merged: [],
+      moved: [{ ticketId: "t", at: "2026-10-05T10:00:00Z" }],
+    };
     expect(buildHeuristicDigestPlan(graph(updatedOnly), MORNING).sections).toEqual([]);
   });
 
   it("is absent when a filter hid every ticket that moved and nothing was merged", () => {
     // The status filter narrows `tickets`, not `yesterday`: the moves are there, their tickets are not.
     const movedHidden = {
+      from: YESTERDAY_FROM,
       merged: [],
       moved: [
         { ticketId: "t-hidden", from: "Code Review", to: "Done", at: "2026-10-05T10:00:00Z" },
@@ -124,5 +133,26 @@ describe("the yesterday section of the plan", () => {
     expect(buildDigestPlan(graph(withYesterday), NOW).sections.map((s) => s.id)).toEqual([
       "yesterday",
     ]);
+  });
+});
+
+describe("the yesterday section's heading", () => {
+  it("says Yesterday when the found day is literally the day before today", () => {
+    const plan = buildHeuristicDigestPlan(graph(withYesterday), NOW);
+    expect(plan.sections[0]?.heading).toBe("Yesterday");
+  });
+
+  it("says Since <day> when the walk-back reached further back", () => {
+    const graphSinceThursday = graph({ ...withYesterday, from: THURSDAY_FROM });
+    const plan = buildHeuristicDigestPlan(graphSinceThursday, NOW);
+    expect(plan.sections[0]?.heading).toBe(
+      `Since ${new Date(THURSDAY_FROM).toLocaleDateString(undefined, { weekday: "long" })}`,
+    );
+  });
+
+  it("keeps an arrangement's own heading", () => {
+    const arranged = agentPlan([yesterdaySection("footer", "Last week")]);
+    const kept = resolveDigestPlan(arranged, graph(withYesterday), NOW);
+    expect(kept.sections[0]?.heading).toBe("Last week");
   });
 });

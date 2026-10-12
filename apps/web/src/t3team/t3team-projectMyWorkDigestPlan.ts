@@ -136,7 +136,7 @@ export function buildHeuristicDigestPlan(
           : { ticketId: ticket.id };
       }),
   })).filter((section) => section.items.length > 0);
-  const yesterday = digestYesterdaySection(graph, digestYesterdayPlacement(nowMs));
+  const yesterday = digestYesterdaySection(graph, digestYesterdayPlacement(nowMs), nowMs);
   const leads = yesterday.some((section) => section.placement === "side");
   return {
     producer: "heuristic",
@@ -200,7 +200,9 @@ export function resolveDigestPlan(
     sections: [
       ...sections,
       ...trailing,
-      ...(hasYesterdayWidget ? [] : digestYesterdaySection(graph, "footer")),
+      ...(
+        hasYesterdayWidget ? [] : digestYesterdaySection(graph, "footer", nowMs)
+      ),
     ],
     droppedTicketIds,
     newSinceTicketIds: [...unseen],

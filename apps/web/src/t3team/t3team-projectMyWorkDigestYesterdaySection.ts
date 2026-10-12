@@ -5,8 +5,26 @@ import type {
 } from "./t3team-projectMyWorkDigestTypes";
 import { digestYesterdayRecap, isDigestMorning } from "./t3team-projectMyWorkDigestYesterdayRecap";
 
-/** The `graph` widget that lists what the viewer merged and moved in the previous working day. */
+/** The `graph` widget that lists what the viewer merged and moved on their last working day. */
 export const DIGEST_YESTERDAY_WIDGET_ID = "my-work.yesterday";
+
+const LOCAL_DAY_MS = 24 * 60 * 60 * 1000;
+
+const startOfLocalDay = (ms: number): number => {
+  const date = new Date(ms);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+};
+
+/**
+ * The section's heading: "Yesterday" when the found day is literally the day before today, else
+ * "Since <day name>" — the last working day, however far back the walk-back reached.
+ */
+export function digestYesterdayHeading(fromIso: string, nowMs: number): string {
+  const foundDay = startOfLocalDay(Date.parse(fromIso));
+  if (foundDay === startOfLocalDay(nowMs) - LOCAL_DAY_MS) return "Yesterday";
+  return `Since ${new Date(foundDay).toLocaleDateString(undefined, { weekday: "long" })}`;
+}
 
 /**
  * Whether the widget would list anything: the same recap it renders, over the tickets the graph
@@ -35,15 +53,18 @@ export function digestYesterdayPlacement(nowMs: number): DigestPlacement {
 export function digestYesterdaySection(
   graph: DigestGraph,
   placement: DigestPlacement,
+  nowMs: number,
 ): DigestSection[] {
   if (!hasDigestYesterday(graph)) return [];
+  const yesterday = graph.yesterday;
+  if (yesterday === undefined) return [];
   return [
     {
       id: "yesterday",
       kind: "graph",
       widget: DIGEST_YESTERDAY_WIDGET_ID,
       placement,
-      heading: "Yesterday",
+      heading: digestYesterdayHeading(yesterday.from, nowMs),
       hint: "what you finished on your last working day",
       items: [],
     },

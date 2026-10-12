@@ -55,7 +55,7 @@ export type T3TeamMyWorkDigestInput = {
   readonly projects: ReadonlyArray<T3TeamMyWorkDigestProjectInput>;
   /** The viewer's Jira display name; drives the personal burndown when present. */
   readonly viewer?: { readonly name?: string };
-  /** The viewer's IANA time zone: "yesterday" is their previous working day. Absent = the server's. */
+  /** The viewer's IANA time zone: "yesterday" is their last working day, in it. Absent = the server's. */
   readonly timeZone?: string;
 };
 
@@ -134,7 +134,7 @@ export type T3TeamDigestProjectData = {
   readonly jiraSyncedAt?: string;
   /** Who the viewer's tickets hang together with (Jira links, same story). */
   readonly dependencies?: ReadonlyArray<T3TeamDigestDependency>;
-  /** What the viewer merged and moved in the previous working day; absent when neither. */
+  /** What the viewer merged and moved on their last working day; absent when the horizon had none. */
   readonly yesterday?: T3TeamDigestYesterday;
 };
 
