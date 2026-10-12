@@ -13,51 +13,47 @@ export type MirrorSyncIdentity = { provider: string; accountId: string; external
 export const maxPagesPerBurst = 10;
 export const burstPause = "3 seconds";
 
-/** Hard cap on pages per incremental walk — prevents runaway loops. */
+/**
+ * Hard cap on pages per walk — prevents runaway loops. A capped catch-up walk
+ * resumes from its persisted watermark on the next walk; a capped reconcile is
+ * incomplete and does not prune.
+ */
 export const maxPagesPerWalk = 200;
 
-/** Incremental wake interval (normal polling). */
+/** Wake interval between walks once caught up (normal polling). */
 export const normalSleepMs = 90_000; // 90 seconds
 
 /** Full-reconcile interval: once per ~24 h. */
 export const reconcileIntervalMs = 24 * 60 * 60 * 1_000;
 
 /**
- * Minimum relative lookback for incremental walks: fetch issues updated in the
- * last N minutes (`updated >= -Nm`). Comfortably larger than the ~90 s poll
- * interval so brief hiccups don't drop updates. Over-fetch is harmless (upserts
- * dedupe) and typically stays within one page.
+ * Floor for a catch-up walk's relative lookback (`updated >= -Nm`), so a
+ * watermark that sits just behind "now" still re-reads the last few minutes.
+ * Over-fetch is harmless: upserts only overwrite strictly newer rows.
  */
-const minIncrementalLookbackMinutes = 15;
+const minCatchUpLookbackMinutes = 15;
 
 /**
- * Slack added on top of the elapsed-time-based lookback so clock skew between
- * this machine and Jira (and JQL's minute granularity) can't drop updates.
+ * Overlap behind the watermark so clock skew between this machine and Jira
+ * (and JQL's minute granularity) can't drop updates at the boundary.
  */
-const incrementalLookbackSlackMinutes = 5;
+const watermarkOverlapMinutes = 5;
 
 /**
- * Cap on the widened lookback. Anything older than this is the 24 h
- * reconcile's job anyway, and an uncapped `updated >= -Nm` after a very long
- * suspend would degenerate into a full-project walk on the incremental path.
+ * Lookback reaching back to the watermark (minus the overlap), however long ago
+ * that was. JQL's absolute datetimes are read in the Jira user's profile
+ * timezone, so the walk sends the bound as relative minutes instead.
+ * `undefined` (no watermark yet) means walk the whole project from the oldest change.
  */
-const maxIncrementalLookbackMinutes = 24 * 60;
-
-/**
- * Lookback for an incremental walk, widened by the time since the last
- * successful walk so a gap (laptop suspend, repeated walk failures) doesn't
- * drop updates until the 24 h reconcile. `lastSuccessfulWalkMs` of 0 (no
- * successful walk yet) yields the max lookback via the cap.
- */
-export function computeIncrementalLookbackMinutes(input: {
+export function computeWatermarkLookbackMinutes(input: {
   readonly nowMs: number;
-  readonly lastSuccessfulWalkMs: number;
-}): number {
-  const elapsedMinutes = Math.ceil(Math.max(0, input.nowMs - input.lastSuccessfulWalkMs) / 60_000);
-  return Math.min(
-    Math.max(minIncrementalLookbackMinutes, elapsedMinutes + incrementalLookbackSlackMinutes),
-    maxIncrementalLookbackMinutes,
-  );
+  readonly watermarkMs: number | undefined;
+}): number | undefined {
+  if (input.watermarkMs === undefined) {
+    return undefined;
+  }
+  const elapsedMinutes = Math.ceil(Math.max(0, input.nowMs - input.watermarkMs) / 60_000);
+  return Math.max(minCatchUpLookbackMinutes, elapsedMinutes + watermarkOverlapMinutes);
 }
 
 /** Mirror page size. */

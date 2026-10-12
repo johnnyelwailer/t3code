@@ -10,14 +10,10 @@
 
 import { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/sql/SqlClient";
 
 import { providerForAccount } from "./t3team-atlassian-auth-store.ts";
-import {
-  kickT3TeamAtlassianMirrorSync,
-  mirrorSyncMapKey,
-} from "./t3team-atlassian-backlog-mirrorSyncService.ts";
-import { lastT3TeamMirrorWalkMs } from "./t3team-atlassian-mirrorSyncIdleTracking.ts";
+import { kickT3TeamAtlassianMirrorSync } from "./t3team-atlassian-backlog-mirrorSyncService.ts";
+import { readT3TeamMirrorSyncStatus } from "./t3team-atlassian-mirrorSyncState.ts";
 import type { T3TeamMyWorkDigestProjectInput } from "./t3team-myworkDigestTypes.ts";
 
 /** Keep this project's mirror loop alive; a provider that cannot resolve is not the digest's failure. */
@@ -33,23 +29,19 @@ export function kickDigestMirrorSync(project: T3TeamMyWorkDigestProjectInput) {
 }
 
 /**
- * When this project's Jira half last matched Jira: this process's last mirror
- * walk, else — before the first walk of a fresh start — the newest backlog
- * view sync on disk. `undefined` when neither ever happened. The digest shows this instead
- * of its own fetch time, which reads "just now" over a mirror days old.
+ * When this project's Jira half last matched Jira: the last mirror catch-up
+ * walk that reached the end of Jira's change list (persisted, so it survives
+ * restarts). `undefined` until one has — a capped or failed walk, or a backlog
+ * view sync covering only that view's issues, never counts. The digest shows
+ * this instead of its own fetch time, which reads "just now" over a stale mirror.
  */
 export function readDigestJiraSyncedAtMs(project: T3TeamMyWorkDigestProjectInput) {
-  return Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    const rows = yield* sql<{ readonly at: number | null }>`
-      SELECT MAX(updated_at) AS "at"
-      FROM t3team_atlassian_backlog_views
-      WHERE provider = ${project.account.provider}
-        AND account_id = ${project.account.id}
-        AND external_project_id = ${project.externalProjectId}
-    `;
-    const walked = lastT3TeamMirrorWalkMs(mirrorSyncMapKey(project));
-    // A view sync only refreshes that view's issues, so it stands in only until the first walk.
-    return walked ?? rows[0]?.at ?? undefined;
-  }).pipe(Effect.orElseSucceed(() => undefined));
+  return readT3TeamMirrorSyncStatus({
+    provider: project.account.provider,
+    accountId: project.account.id,
+    externalProjectId: project.externalProjectId,
+  }).pipe(
+    Effect.map((status) => status.lastSuccessAtMs),
+    Effect.orElseSucceed(() => undefined),
+  );
 }
