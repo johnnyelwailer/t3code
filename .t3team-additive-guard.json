@@ -133,6 +133,7 @@
     "apps/server/src/orchestration-v2/ThreadTitleRegenerationService.test.ts",
     "apps/server/src/orchestration-v2/legacy/LegacyV1Cutover.integration.test.ts",
     "apps/server/src/orchestration-v2/legacy/LegacyV1ThreadImporter.ts",
+    "apps/server/src/orchestration-v2/runtimeLayer.test.ts",
     "apps/server/src/orchestration-v2/testkit/ProviderSwitch.integration.test.ts",
     "apps/server/src/os-jank.test.ts",
     "apps/server/src/os-jank.ts",

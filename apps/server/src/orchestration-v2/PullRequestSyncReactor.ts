@@ -231,6 +231,8 @@ export const make = Effect.gen(function* () {
     for (const key of lastSyncedAt.keys()) if (!groups.has(key)) lastSyncedAt.delete(key);
     for (const key of lastAttemptedAt.keys()) if (!groups.has(key)) lastAttemptedAt.delete(key);
     for (const key of unresolvable.keys()) if (!groups.has(key)) unresolvable.delete(key);
+    // A pause that has ended refuses nothing, so it is only clutter.
+    for (const [pauseKey, until] of pausedUntil) if (until <= nowMs) pausedUntil.delete(pauseKey);
     for (const key of retryStacks) if (!groups.has(key)) retryStacks.delete(key);
     for (const key of requested.keys()) if (!groups.has(key)) requested.delete(key);
 

@@ -9,7 +9,12 @@ import * as Schema from "effect/Schema";
 const isOperationError = Schema.is(PullRequestOperationError);
 const isUnavailableError = Schema.is(PullRequestUnavailableError);
 
-/** First pause after a link the host cannot resolve; each further failure doubles it. */
+/**
+ * Not-found can be temporary: the credential may lack access for now, or the pull request was
+ * only just created. So the first pause is short, the second is the base, and each further
+ * failure doubles it.
+ */
+const UNRESOLVABLE_FIRST_BACKOFF_MS = 2 * 60 * 1_000;
 const UNRESOLVABLE_BACKOFF_BASE_MS = 15 * 60 * 1_000;
 const UNRESOLVABLE_BACKOFF_MAX_MS = 24 * 60 * 60 * 1_000;
 /**
@@ -20,14 +25,15 @@ const UNRESOLVABLE_BACKOFF_MAX_MS = 24 * 60 * 60 * 1_000;
 const AVATAR_REFRESH_MS = 60 * 60 * 1_000;
 
 /**
- * The avatar without its query and fragment. GHE signs avatar URLs with a token that differs on
- * every read, so the whole URL says nothing about whether the picture changed.
+ * The avatar without its volatile signature. GHE appends a `token` that differs on every read, so
+ * the whole URL says nothing about whether the picture changed. Other parameters stay: github.com
+ * versions an avatar with `?v=N`, and GHE adds a `u=` content hash.
  */
 export function avatarIdentity(url: string | null | undefined): string | null {
   if (url === null || url === undefined) return null;
   try {
     const parsed = new URL(url);
-    parsed.search = "";
+    parsed.searchParams.delete("token");
     parsed.hash = "";
     return parsed.href;
   } catch {
@@ -62,8 +68,6 @@ export function isUnresolvableRead(cause: Cause.Cause<unknown>): boolean {
 
 /** How long to leave a link alone after its `failures`-th unresolvable read in a row. */
 export function unresolvableBackoffMs(failures: number): number {
-  return Math.min(
-    UNRESOLVABLE_BACKOFF_BASE_MS * 2 ** Math.max(0, failures - 1),
-    UNRESOLVABLE_BACKOFF_MAX_MS,
-  );
+  if (failures <= 1) return UNRESOLVABLE_FIRST_BACKOFF_MS;
+  return Math.min(UNRESOLVABLE_BACKOFF_BASE_MS * 2 ** (failures - 2), UNRESOLVABLE_BACKOFF_MAX_MS);
 }
