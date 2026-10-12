@@ -12,10 +12,12 @@ import {
 import { describe, expect, it } from "@effect/vitest";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import type { Tool } from "effect/ai";
 
 import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
@@ -429,7 +431,7 @@ describe("pull request toolkit handlers", () => {
     }),
   );
 
-  describe("verifying a new link's target", () => {
+  describe("verifying a link whose host was inferred", () => {
     const notFound = () =>
       Effect.fail(
         new PullRequestOperationError({
@@ -439,60 +441,59 @@ describe("pull request toolkit handlers", () => {
         }),
       );
 
-    it.effect("rejects a target the host does not have, with guidance, and links nothing", () =>
+    it.effect("rejects a not-found target on the project's host and links nothing", () =>
       Effect.gen(function* () {
         const harness = yield* makeHarness({ summary: notFound });
         const error = yield* harness
           .call("link_pull_request", { repository: "owner/fork", number: 299 })
           .pipe(Effect.flip);
-        expect(error).toMatchObject({
-          _tag: "PullRequestTargetUnreadableError",
-          reason: "not-found",
-        });
+        expect(error).toMatchObject({ _tag: "PullRequestNotOnProjectHostError" });
         expect(error.message).toBe(
-          "No pull request #299 in owner/fork on github.com. Pass the full URL, or the host where it lives.",
+          "No pull request #299 in owner/fork on github.com, the host of this thread's project, so it was not linked. If it lives on another host, pass its full URL.",
         );
         expect(yield* Ref.get(harness.reads)).toEqual(["github.com/owner/fork#299"]);
         expect(yield* Ref.get(harness.commands)).toEqual([]);
       }),
     );
 
-    it.effect("rejects a watch of a target the host does not have", () =>
+    it.effect("rejects a watch of a not-found target on the project's host", () =>
       Effect.gen(function* () {
         const harness = yield* makeHarness({ summary: notFound });
         const error = yield* harness
           .call("watch_pull_request", { repository: "owner/fork", number: 299 })
           .pipe(Effect.flip);
-        expect(error).toMatchObject({ _tag: "PullRequestTargetUnreadableError" });
+        expect(error).toMatchObject({ _tag: "PullRequestNotOnProjectHostError" });
         expect(yield* Ref.get(harness.commands)).toEqual([]);
       }),
     );
 
-    it.effect("rejects a host no project can read", () =>
+    it.effect("trusts an explicit url or host: no read, and it links", () =>
       Effect.gen(function* () {
-        const harness = yield* makeHarness({
-          summary: () =>
-            Effect.fail(new PullRequestUnavailableError({ reason: "provider-unsupported" })),
+        const harness = yield* makeHarness({ summary: notFound });
+        yield* harness.call("link_pull_request", {
+          url: "https://github.com/owner/fork/pull/299",
         });
-        const error = yield* harness
-          .call("link_pull_request", {
-            host: "nexpore.ghe.com",
-            repository: "pj/nexi-distribution",
-            number: 529,
-          })
-          .pipe(Effect.flip);
-        expect(error).toMatchObject({
-          _tag: "PullRequestTargetUnreadableError",
-          reason: "host-unsupported",
+        yield* harness.call("link_pull_request", {
           host: "nexpore.ghe.com",
+          repository: "pj/nexi-distribution",
+          number: 529,
         });
-        expect(yield* Ref.get(harness.commands)).toEqual([]);
+        yield* harness.call("watch_pull_request", {
+          url: "https://github.com/owner/fork/pull/300",
+        });
+        expect(yield* Ref.get(harness.reads)).toEqual([]);
+        expect(yield* Ref.get(harness.commands)).toMatchObject([
+          { type: "thread.pull-request.link", number: 299 },
+          { type: "thread.pull-request.link", number: 529, host: "nexpore.ghe.com" },
+          { type: "thread.pull-request.watch", number: 300 },
+        ]);
       }),
     );
 
-    it.effect("links anyway when the read fails for a reason time or the user can fix", () =>
+    it.effect("links anyway when the host cannot be routed, or the read fails transiently", () =>
       Effect.gen(function* () {
         for (const failure of [
+          new PullRequestUnavailableError({ reason: "provider-unsupported" }),
           new PullRequestOperationError({ operation: "summary", detail: "rate limited" }),
           new PullRequestUnavailableError({ reason: "cli-unauthenticated" }),
         ]) {
@@ -505,6 +506,20 @@ describe("pull request toolkit handlers", () => {
             { type: "thread.pull-request.watch", number: 300, watching: true },
           ]);
         }
+      }),
+    );
+
+    it.effect("links anyway when the host does not answer in time", () =>
+      Effect.gen(function* () {
+        const harness = yield* makeHarness({ summary: () => Effect.never });
+        const fiber = yield* harness
+          .call("link_pull_request", { repository: "owner/fork", number: 299 })
+          .pipe(Effect.forkChild);
+        yield* TestClock.adjust("10 seconds");
+        yield* Fiber.join(fiber);
+        expect(yield* Ref.get(harness.commands)).toMatchObject([
+          { type: "thread.pull-request.link", number: 299 },
+        ]);
       }),
     );
 

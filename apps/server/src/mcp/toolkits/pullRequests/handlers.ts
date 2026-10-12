@@ -38,7 +38,7 @@ import {
   PullRequestTargetIncompleteError,
   PullRequestHostRequiredError,
   PullRequestUnlinkFailedError,
-  PullRequestTargetUnreadableError,
+  PullRequestNotOnProjectHostError,
   PullRequestListFailedError,
   PullRequestNotOpenError,
   type PullRequestTargetInput,
@@ -49,6 +49,9 @@ import {
   PullRequestsToolkit,
   type ThreadPullRequestEntry,
 } from "./tools.ts";
+
+/** How long a new link waits for the host before it links unverified. */
+const VERIFY_READ_TIMEOUT = "10 seconds";
 
 interface ResolvedTarget {
   readonly host: string;
@@ -224,18 +227,21 @@ const make = Effect.gen(function* () {
         : Effect.fail(new Failure({ cause }));
 
   /**
-   * One read of a pull request about to be linked. An agent that passes repository and number
-   * lands on the project's host, which is wrong whenever the pull request lives elsewhere, and
-   * a link that can never be read sits in the thread unresolved. Only an answer that will not
-   * change (not found, or a host no project can read) rejects; a rate limit, a signed-out CLI
-   * or a network failure links anyway, since linking must work offline and under quota. The
-   * read goes through the service's persistent read cache under the key the sync reactor uses,
-   * so the first sweep after the link reuses it.
+   * One bounded read for a new link whose host was inferred (no url, no host). An agent that
+   * names only repository and number lands on the project's host, which is wrong whenever the
+   * pull request lives elsewhere, and such a link can never be read. A url or an explicit host
+   * is the agent's override and is trusted. Only a not-found answer rejects: a missing
+   * credential grant or an unroutable host says nothing about the pull request, and a rate
+   * limit, a signed-out CLI, a network failure or a timeout must not block linking. The read
+   * goes through the service's persistent read cache under the key the sync reactor uses, so
+   * the first sweep after the link reuses it.
    */
-  const verifyNewTarget = Effect.fn("PullRequestsToolkit.verifyNewTarget")(function* (
+  const verifyInferredHost = Effect.fn("PullRequestsToolkit.verifyInferredHost")(function* (
     thread: OrchestrationV2ThreadShell,
+    input: PullRequestTargetInput,
     target: ResolvedTarget,
   ) {
+    if (input.url !== undefined || input.host !== undefined) return;
     yield* pullRequests
       .summary({
         projectId: thread.projectId,
@@ -245,18 +251,18 @@ const make = Effect.gen(function* () {
       })
       .pipe(
         Effect.asVoid,
+        Effect.timeoutOption(VERIFY_READ_TIMEOUT),
+        Effect.asVoid,
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.failCause(cause as Cause.Cause<never>)
-            : isUnresolvableRead(cause)
+            : isUnresolvableRead(cause) &&
+                !Schema.is(PullRequestUnavailableError)(Cause.squash(cause))
               ? Effect.fail(
-                  new PullRequestTargetUnreadableError({
+                  new PullRequestNotOnProjectHostError({
                     host: target.host,
                     repository: target.repository,
                     number: target.number,
-                    reason: Schema.is(PullRequestUnavailableError)(Cause.squash(cause))
-                      ? "host-unsupported"
-                      : "not-found",
                   }),
                 )
               : Effect.void,
@@ -288,7 +294,7 @@ const make = Effect.gen(function* () {
     if (watching && before?.snapshot?.state === "merged") {
       return yield* new PullRequestNotOpenError({ state: "merged" });
     }
-    if (watching && before === undefined) yield* verifyNewTarget(thread, target);
+    if (watching && before === undefined) yield* verifyInferredHost(thread, input, target);
     yield* engine
       .dispatch({
         type: "thread.pull-request.watch",
@@ -328,7 +334,7 @@ const make = Effect.gen(function* () {
         );
         if (existing && existing.source !== "stack-dismissed")
           return { ...target, alreadyLinked: true };
-        yield* verifyNewTarget(thread, target);
+        yield* verifyInferredHost(thread, input, target);
         const alreadyLinked = yield* engine
           .dispatch({
             type: "thread.pull-request.link",
