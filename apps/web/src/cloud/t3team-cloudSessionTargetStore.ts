@@ -22,6 +22,11 @@ export interface CloudSessionTarget {
    */
   readonly sessionId: string;
   readonly label: string;
+  /**
+   * The composer's logical project when the session was picked or created (it is provisioned
+   * for that project). Null when the composer had none; then the target follows no project.
+   */
+  readonly projectKey: string | null;
   /** True after the user sends; connect/flush run only then. */
   readonly bindRequested: boolean;
   readonly queuedSend: CloudSessionQueuedSend | null;
@@ -60,6 +65,7 @@ export function selectCloudSessionTarget(input: {
   readonly scopeKey: string;
   readonly sessionId: string;
   readonly label: string;
+  readonly projectKey?: string | null;
 }): void {
   const next = new Map(byScope);
   const previous = next.get(input.scopeKey);
@@ -67,6 +73,7 @@ export function selectCloudSessionTarget(input: {
     scopeKey: input.scopeKey,
     sessionId: input.sessionId,
     label: input.label,
+    projectKey: input.projectKey ?? null,
     bindRequested: previous?.bindRequested === true && previous.sessionId === input.sessionId,
     queuedSend: previous?.sessionId === input.sessionId ? (previous.queuedSend ?? null) : null,
     failureMessage: null,
@@ -75,11 +82,16 @@ export function selectCloudSessionTarget(input: {
 }
 
 /** Immediate preference while create is in flight (no session id yet). */
-export function selectCloudSessionCreating(scopeKey: string, label = "New cloud session"): void {
+export function selectCloudSessionCreating(
+  scopeKey: string,
+  label = "New cloud session",
+  projectKey: string | null = null,
+): void {
   selectCloudSessionTarget({
     scopeKey,
     sessionId: CLOUD_SESSION_CREATING_ID,
     label,
+    projectKey,
   });
 }
 
@@ -91,7 +103,7 @@ export function resolveCloudSessionCreating(
 ): void {
   const current = byScope.get(scopeKey);
   if (current === undefined || current.sessionId !== CLOUD_SESSION_CREATING_ID) return;
-  selectCloudSessionTarget({ scopeKey, sessionId, label });
+  selectCloudSessionTarget({ scopeKey, sessionId, label, projectKey: current.projectKey });
 }
 
 export function clearCloudSessionTarget(scopeKey: string): void {
