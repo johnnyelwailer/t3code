@@ -15,12 +15,14 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "../../../project/ProjectService.ts";
+import * as PullRequestService from "../../../pullRequest/PullRequestService.ts";
 
 const dependencies = [
   McpInvocationContext.McpInvocationContext,
   ThreadManagementService.ThreadManagementService,
   Orchestrator.OrchestratorV2,
   ProjectService.ProjectService,
+  PullRequestService.PullRequestService,
 ];
 
 const REGISTER_EVERY_PR =
@@ -57,7 +59,7 @@ export const PullRequestTargetInput = Schema.Struct({
   host: Schema.optional(
     TrimmedNonEmptyString.annotate({
       description:
-        "Host the repository lives on, for example github.com. Defaults to the host of this thread's project.",
+        "Host the repository lives on, for example github.com. Defaults to the host of this thread's project, so pass it, or better the url, for a pull request outside that project's repository.",
     }),
   ),
 });
@@ -87,6 +89,27 @@ export class PullRequestHostRequiredError extends Schema.TaggedError<PullRequest
 ) {
   override get message(): string {
     return "This thread's project has no recognised remote. Pass host or url.";
+  }
+}
+
+/**
+ * A new link whose pull request the host reported absent, or whose host no project can read.
+ * Either way the agent guessed the host or repository, so the message says how to fix the call.
+ */
+export class PullRequestTargetUnreadableError extends Schema.TaggedError<PullRequestTargetUnreadableError>()(
+  "PullRequestTargetUnreadableError",
+  {
+    host: Schema.String,
+    repository: Schema.String,
+    number: Schema.Int,
+    reason: Schema.Literals(["not-found", "host-unsupported"]),
+  },
+) {
+  override get message(): string {
+    const where = `${this.repository} on ${this.host}`;
+    return this.reason === "not-found"
+      ? `No pull request #${this.number} in ${where}. Pass the full URL, or the host where it lives.`
+      : `Pull requests cannot be read on ${this.host}, so #${this.number} in ${this.repository} was not linked. Pass the full URL, or the host where it lives.`;
   }
 }
 
@@ -168,6 +191,7 @@ export const PullRequestToolError = Schema.Union([
   PullRequestUrlInvalidError,
   PullRequestTargetIncompleteError,
   PullRequestHostRequiredError,
+  PullRequestTargetUnreadableError,
   PullRequestThreadRequiredError,
   PullRequestThreadNotFoundError,
   PullRequestLinkFailedError,
@@ -248,7 +272,7 @@ export const ListThreadPullRequestsResult = Schema.Struct({
 export type ListThreadPullRequestsResult = typeof ListThreadPullRequestsResult.Type;
 
 const LinkPullRequestTool = Tool.make("link_pull_request", {
-  description: `${REGISTER_EVERY_PR} Links a pull request to this thread so T3 Code tracks it, shows its status beside the thread, and settles the thread when it merges. Pass the URL, or repository plus number. Linking an already-linked pull request succeeds with alreadyLinked=true.`,
+  description: `${REGISTER_EVERY_PR} Links a pull request to this thread so T3 Code tracks it, shows its status beside the thread, and settles the thread when it merges. Pass the URL, or repository plus number. Prefer the URL for a pull request outside this project's repository: repository plus number is looked up on the project's host, and a pull request that is not there is rejected. Linking an already-linked pull request succeeds with alreadyLinked=true.`,
   parameters: PullRequestTargetInput,
   success: LinkPullRequestResult,
   failure: PullRequestToolError,

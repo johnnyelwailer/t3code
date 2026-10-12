@@ -4,6 +4,7 @@ import {
 } from "@t3tools/shared/threadPullRequests";
 import {
   CommandId,
+  PullRequestUnavailableError,
   pullRequestHostOf,
   type OrchestrationProjectShell,
   type OrchestrationV2ThreadShell,
@@ -22,9 +23,12 @@ import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
+import { isUnresolvableRead } from "../../../orchestration-v2/t3team-pullRequestSyncPolicy.ts";
 import * as ProjectService from "../../../project/ProjectService.ts";
+import * as PullRequestService from "../../../pullRequest/PullRequestService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import {
@@ -34,6 +38,7 @@ import {
   PullRequestTargetIncompleteError,
   PullRequestHostRequiredError,
   PullRequestUnlinkFailedError,
+  PullRequestTargetUnreadableError,
   PullRequestListFailedError,
   PullRequestNotOpenError,
   type PullRequestTargetInput,
@@ -157,6 +162,7 @@ const make = Effect.gen(function* () {
   const engine = yield* Orchestrator.OrchestratorV2;
 
   const projects = yield* ProjectService.ProjectService;
+  const pullRequests = yield* PullRequestService.PullRequestService;
   const crypto = yield* Crypto.Crypto;
 
   const commandId = (tag: string, threadId: ThreadId) =>
@@ -218,6 +224,47 @@ const make = Effect.gen(function* () {
         : Effect.fail(new Failure({ cause }));
 
   /**
+   * One read of a pull request about to be linked. An agent that passes repository and number
+   * lands on the project's host, which is wrong whenever the pull request lives elsewhere, and
+   * a link that can never be read sits in the thread unresolved. Only an answer that will not
+   * change (not found, or a host no project can read) rejects; a rate limit, a signed-out CLI
+   * or a network failure links anyway, since linking must work offline and under quota. The
+   * read goes through the service's persistent read cache under the key the sync reactor uses,
+   * so the first sweep after the link reuses it.
+   */
+  const verifyNewTarget = Effect.fn("PullRequestsToolkit.verifyNewTarget")(function* (
+    thread: OrchestrationV2ThreadShell,
+    target: ResolvedTarget,
+  ) {
+    yield* pullRequests
+      .summary({
+        projectId: thread.projectId,
+        host: target.host,
+        repository: target.repository,
+        number: target.number,
+      })
+      .pipe(
+        Effect.asVoid,
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.failCause(cause as Cause.Cause<never>)
+            : isUnresolvableRead(cause)
+              ? Effect.fail(
+                  new PullRequestTargetUnreadableError({
+                    host: target.host,
+                    repository: target.repository,
+                    number: target.number,
+                    reason: Schema.is(PullRequestUnavailableError)(Cause.squash(cause))
+                      ? "host-unsupported"
+                      : "not-found",
+                  }),
+                )
+              : Effect.void,
+        ),
+      );
+  });
+
+  /**
    * Starts or stops a watch. One command links an unlinked pull request and watches it, and the
    * result reports the state the thread holds afterwards.
    */
@@ -241,6 +288,7 @@ const make = Effect.gen(function* () {
     if (watching && before?.snapshot?.state === "merged") {
       return yield* new PullRequestNotOpenError({ state: "merged" });
     }
+    if (watching && before === undefined) yield* verifyNewTarget(thread, target);
     yield* engine
       .dispatch({
         type: "thread.pull-request.watch",
@@ -280,6 +328,7 @@ const make = Effect.gen(function* () {
         );
         if (existing && existing.source !== "stack-dismissed")
           return { ...target, alreadyLinked: true };
+        yield* verifyNewTarget(thread, target);
         const alreadyLinked = yield* engine
           .dispatch({
             type: "thread.pull-request.link",

@@ -2,6 +2,8 @@ import {
   EnvironmentId,
   ProjectId,
   ProviderInstanceId,
+  PullRequestOperationError,
+  PullRequestUnavailableError,
   ThreadId,
   type OrchestrationV2ServerCommand as OrchestrationCommand,
   type OrchestrationProjectShell,
@@ -22,6 +24,7 @@ import {
   v2PullRequestThread,
 } from "../../../orchestration-v2/testkit/pullRequestFixtures.ts";
 import * as ProjectService from "../../../project/ProjectService.ts";
+import * as PullRequestService from "../../../pullRequest/PullRequestService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import * as McpToolAccessTestkit from "../../McpToolAccess.testkit.ts";
@@ -135,6 +138,10 @@ interface HarnessOptions {
   readonly project?: OrchestrationProjectShell | null;
   /** A rejection the orchestrator reports as the dispatch error's cause. */
   readonly reject?: (command: OrchestrationCommand) => string | null;
+  /** What the host read of a new link's target answers; defaults to readable. */
+  readonly summary?: (
+    ref: Parameters<PullRequestService.PullRequestService["Service"]["summary"]>[0],
+  ) => Effect.Effect<void, PullRequestOperationError | PullRequestUnavailableError>;
 }
 
 const makeHarness = Effect.fn("makePullRequestsToolkitHarness")(function* (
@@ -143,6 +150,7 @@ const makeHarness = Effect.fn("makePullRequestsToolkitHarness")(function* (
   const commands = yield* Ref.make<ReadonlyArray<OrchestrationCommand>>([]);
   const thread = options.thread === undefined ? makeThread([]) : options.thread;
   const project = options.project === undefined ? makeProject() : options.project;
+  const reads = yield* Ref.make<ReadonlyArray<string>>([]);
   const dispatch: Orchestrator.OrchestratorV2Shape["dispatch"] = (command) =>
     Effect.gen(function* () {
       const rejection = options.reject?.(command) ?? null;
@@ -163,6 +171,13 @@ const makeHarness = Effect.fn("makePullRequestsToolkitHarness")(function* (
       getThreadShell: (id) =>
         Effect.succeed(id === THREAD_ID && thread ? v2PullRequestThread(thread) : null),
       dispatch,
+    }),
+    Layer.mock(PullRequestService.PullRequestService)({
+      summary: (ref) =>
+        Ref.update(reads, (seen) => [...seen, `${ref.host}/${ref.repository}#${ref.number}`]).pipe(
+          Effect.andThen(options.summary?.(ref) ?? Effect.void),
+          Effect.as({} as never),
+        ),
     }),
     Layer.succeed(Crypto.Crypto, testCrypto),
     McpToolAccessTestkit.liveThreadsLayer,
@@ -189,7 +204,7 @@ const makeHarness = Effect.fn("makePullRequestsToolkitHarness")(function* (
       Effect.provideService(McpInvocationContext.McpInvocationContext, invocation(capabilities)),
       Effect.provide(layerDependencies),
     );
-  return { commands, call };
+  return { commands, reads, call };
 });
 
 describe("pull request toolkit handlers", () => {
@@ -413,6 +428,114 @@ describe("pull request toolkit handlers", () => {
       expect(yield* Ref.get(harness.commands)).toEqual([]);
     }),
   );
+
+  describe("verifying a new link's target", () => {
+    const notFound = () =>
+      Effect.fail(
+        new PullRequestOperationError({
+          operation: "summary",
+          detail: "not found",
+          reason: "not-found",
+        }),
+      );
+
+    it.effect("rejects a target the host does not have, with guidance, and links nothing", () =>
+      Effect.gen(function* () {
+        const harness = yield* makeHarness({ summary: notFound });
+        const error = yield* harness
+          .call("link_pull_request", { repository: "owner/fork", number: 299 })
+          .pipe(Effect.flip);
+        expect(error).toMatchObject({
+          _tag: "PullRequestTargetUnreadableError",
+          reason: "not-found",
+        });
+        expect(error.message).toBe(
+          "No pull request #299 in owner/fork on github.com. Pass the full URL, or the host where it lives.",
+        );
+        expect(yield* Ref.get(harness.reads)).toEqual(["github.com/owner/fork#299"]);
+        expect(yield* Ref.get(harness.commands)).toEqual([]);
+      }),
+    );
+
+    it.effect("rejects a watch of a target the host does not have", () =>
+      Effect.gen(function* () {
+        const harness = yield* makeHarness({ summary: notFound });
+        const error = yield* harness
+          .call("watch_pull_request", { repository: "owner/fork", number: 299 })
+          .pipe(Effect.flip);
+        expect(error).toMatchObject({ _tag: "PullRequestTargetUnreadableError" });
+        expect(yield* Ref.get(harness.commands)).toEqual([]);
+      }),
+    );
+
+    it.effect("rejects a host no project can read", () =>
+      Effect.gen(function* () {
+        const harness = yield* makeHarness({
+          summary: () =>
+            Effect.fail(new PullRequestUnavailableError({ reason: "provider-unsupported" })),
+        });
+        const error = yield* harness
+          .call("link_pull_request", {
+            host: "nexpore.ghe.com",
+            repository: "pj/nexi-distribution",
+            number: 529,
+          })
+          .pipe(Effect.flip);
+        expect(error).toMatchObject({
+          _tag: "PullRequestTargetUnreadableError",
+          reason: "host-unsupported",
+          host: "nexpore.ghe.com",
+        });
+        expect(yield* Ref.get(harness.commands)).toEqual([]);
+      }),
+    );
+
+    it.effect("links anyway when the read fails for a reason time or the user can fix", () =>
+      Effect.gen(function* () {
+        for (const failure of [
+          new PullRequestOperationError({ operation: "summary", detail: "rate limited" }),
+          new PullRequestUnavailableError({ reason: "cli-unauthenticated" }),
+        ]) {
+          const harness = yield* makeHarness({ summary: () => Effect.fail(failure) });
+          yield* harness.call("link_pull_request", { repository: "owner/fork", number: 299 });
+          yield* harness.call("watch_pull_request", { repository: "owner/fork", number: 300 });
+          expect(yield* Ref.get(harness.reads)).toHaveLength(2);
+          expect(yield* Ref.get(harness.commands)).toMatchObject([
+            { type: "thread.pull-request.link", number: 299 },
+            { type: "thread.pull-request.watch", number: 300, watching: true },
+          ]);
+        }
+      }),
+    );
+
+    it.effect("links a readable target", () =>
+      Effect.gen(function* () {
+        const harness = yield* makeHarness();
+        yield* harness.call("link_pull_request", { repository: "owner/fork", number: 299 });
+        expect(yield* Ref.get(harness.reads)).toEqual(["github.com/owner/fork#299"]);
+        expect(yield* Ref.get(harness.commands)).toMatchObject([
+          { type: "thread.pull-request.link", number: 299 },
+        ]);
+      }),
+    );
+
+    it.effect("reads nothing for a target that is already linked, or on unwatch", () =>
+      Effect.gen(function* () {
+        const harness = yield* makeHarness({
+          summary: notFound,
+          thread: makeThread([makeLink(5, { headBranch: "linked" })]),
+        });
+        const result = yield* harness.call("link_pull_request", {
+          repository: "t3tools/t3code",
+          number: 5,
+        });
+        expect(result).toMatchObject({ alreadyLinked: true });
+        yield* harness.call("watch_pull_request", { repository: "t3tools/t3code", number: 5 });
+        yield* harness.call("unwatch_pull_request", { repository: "owner/gone", number: 9 });
+        expect(yield* Ref.get(harness.reads)).toEqual([]);
+      }),
+    );
+  });
 
   it.effect("treats a duplicate link as alreadyLinked rather than an error", () =>
     Effect.gen(function* () {
