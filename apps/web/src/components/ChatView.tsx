@@ -11363,6 +11363,7 @@ export default function ChatView(props: ChatViewProps) {
     orchestration: {
       dockItems: t3teamChat.dockItems,
       onLocate: t3teamChat.onLocateWorkflowCard,
+      ...(t3teamChat.onControlWorkflow ? { onControl: t3teamChat.onControlWorkflow } : {}),
     },
   };
   const panelToggleControlProps = {

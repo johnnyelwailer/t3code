@@ -1,5 +1,10 @@
 // @vitest-environment jsdom
-import type { EnvironmentId, T3TeamThreadFacts, ThreadId } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  OrchestrationWorkflowRunStatus,
+  T3TeamThreadFacts,
+  ThreadId,
+} from "@t3tools/contracts";
 import { act, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -21,7 +26,10 @@ const { ThreadOrchestrationPanel } =
 const ENV = "env-1" as unknown as EnvironmentId;
 const THREAD = "thread-1" as unknown as ThreadId;
 
-function facts(status: string, extra?: Partial<T3TeamThreadFacts>): T3TeamThreadFacts {
+function facts(
+  status: string,
+  runExtra?: Partial<OrchestrationWorkflowRunStatus>,
+): T3TeamThreadFacts {
   return {
     threadId: THREAD,
     workflowRunStatus: {
@@ -30,9 +38,9 @@ function facts(status: string, extra?: Partial<T3TeamThreadFacts>): T3TeamThread
       pendingKind: null,
       wakeAt: null,
       updatedAt: "2026-07-17T10:00:00.000Z",
+      ...runExtra,
     },
     updatedAt: "2026-07-17T10:00:00.000Z",
-    ...extra,
   } as unknown as T3TeamThreadFacts;
 }
 
@@ -98,6 +106,99 @@ describe("ThreadOrchestrationPanel", () => {
     expect(container.textContent).toContain("Starts when capacity is free");
   });
 
+  it("prefers the loaded shape title, then the durable title, then the generic fallback", async () => {
+    factsRef.current = facts("sleeping", { title: "Durable release goal" });
+    const dockItem: T3TeamActiveWorkflowDockItem = {
+      runId: "run-1",
+      messageId: "message-1" as T3TeamActiveWorkflowDockItem["messageId"],
+      name: "Shape description",
+      summaries: [],
+    };
+    const withDock = await render(
+      <ThreadOrchestrationPanel environmentId={ENV} threadId={THREAD} dockItems={[dockItem]} />,
+    );
+    expect(withDock.textContent).toContain("Shape description");
+    expect(withDock.textContent).not.toContain("Durable release goal");
+
+    factsRef.current = facts("sleeping", { title: "Durable release goal" });
+    const durable = await render(
+      <ThreadOrchestrationPanel environmentId={ENV} threadId={THREAD} dockItems={[]} />,
+    );
+    expect(durable.textContent).toContain("Durable release goal");
+
+    factsRef.current = facts("sleeping");
+    const fallback = await render(
+      <ThreadOrchestrationPanel environmentId={ENV} threadId={THREAD} dockItems={[]} />,
+    );
+    expect(fallback.textContent).toContain("Orchestration");
+  });
+
+  it("shows pause and stop for a scheduled run and sends controls through the shared callback", async () => {
+    factsRef.current = facts("sleeping");
+    const onControl = vi.fn(async () => ({ status: "paused" as const }));
+    const container = await render(
+      <ThreadOrchestrationPanel
+        environmentId={ENV}
+        threadId={THREAD}
+        dockItems={[]}
+        onControl={onControl}
+      />,
+    );
+    const pause = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Pause orchestration"]',
+    );
+    expect(pause).not.toBeNull();
+    expect(
+      container.querySelector('button[aria-label="More orchestration actions"]'),
+    ).not.toBeNull();
+    await act(async () => {
+      pause?.click();
+    });
+    expect(onControl).toHaveBeenCalledWith({ workflowRunId: "run-1", action: "pause" });
+  });
+
+  it("hides controls for terminal runs", async () => {
+    factsRef.current = facts("completed");
+    const container = await render(
+      <ThreadOrchestrationPanel
+        environmentId={ENV}
+        threadId={THREAD}
+        dockItems={[]}
+        onControl={vi.fn()}
+      />,
+    );
+    expect(container.querySelector('button[aria-label="Pause orchestration"]')).toBeNull();
+    expect(container.querySelector('button[aria-label="More orchestration actions"]')).toBeNull();
+  });
+
+  it("locates the durable launch message when no dock item is loaded", async () => {
+    factsRef.current = facts("sleeping", {
+      messageId: "t3team-wf-shape:run-1" as OrchestrationWorkflowRunStatus["messageId"],
+    });
+    const onLocate = vi.fn();
+    const container = await render(
+      <ThreadOrchestrationPanel
+        environmentId={ENV}
+        threadId={THREAD}
+        dockItems={[]}
+        onLocate={onLocate}
+      />,
+    );
+    const toggle = container.querySelector<HTMLButtonElement>(
+      "[data-orchestration-status] > button",
+    )!;
+    await act(async () => {
+      toggle.click();
+    });
+    const locate = container.querySelector<HTMLButtonElement>(
+      "[data-orchestration-detail] button",
+    )!;
+    await act(async () => {
+      locate.click();
+    });
+    expect(onLocate).toHaveBeenCalledWith({ messageId: "t3team-wf-shape:run-1" });
+  });
+
   it("hides step detail until expanded, then reveals it on click", async () => {
     factsRef.current = facts("suspended");
     const dockItem: T3TeamActiveWorkflowDockItem = {
@@ -118,7 +219,9 @@ describe("ThreadOrchestrationPanel", () => {
     expect(container.textContent).toContain("Release train");
     expect(container.querySelector("[data-orchestration-detail]")).toBeNull();
 
-    const toggle = container.querySelector<HTMLButtonElement>("[data-orchestration-status]")!;
+    const toggle = container.querySelector<HTMLButtonElement>(
+      "[data-orchestration-status] > button",
+    )!;
     await act(async () => {
       toggle.click();
     });
@@ -131,6 +234,6 @@ describe("ThreadOrchestrationPanel", () => {
     await act(async () => {
       locate.click();
     });
-    expect(onLocate).toHaveBeenCalledWith(dockItem);
+    expect(onLocate).toHaveBeenCalledWith({ messageId: dockItem.messageId });
   });
 });

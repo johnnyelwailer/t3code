@@ -57,7 +57,9 @@ export function useT3TeamChatTimelineProps(input: {
   /** The thread's active orchestration runs, for the thread-details orchestration section. */
   readonly dockItems: ReadonlyArray<T3TeamActiveWorkflowDockItem>;
   /** Scroll the timeline to a run's launch card — the same action the composer dock triggers. */
-  readonly onLocateWorkflowCard: (item: T3TeamActiveWorkflowDockItem) => void;
+  readonly onLocateWorkflowCard: (target: { readonly messageId: ChatMessage["id"] }) => void;
+  /** The existing workflow control path, shared by timeline cards and thread details. */
+  readonly onControlWorkflow: ChatViewT3TeamExtensionProps["onControlWorkflow"];
 } {
   const facts = useT3TeamThreadFacts(input.environmentId, input.threadId);
   const {
@@ -86,9 +88,9 @@ export function useT3TeamChatTimelineProps(input: {
   const [navigationRequest, setNavigationRequest] = useState<NonNullable<
     T3TeamTimelineRowProps["workflowCardNavigationRequest"]
   > | null>(null);
-  const openWorkflowCard = useCallback((item: T3TeamActiveWorkflowDockItem) => {
+  const openWorkflowCard = useCallback((target: { readonly messageId: ChatMessage["id"] }) => {
     setNavigationRequest((previous) => ({
-      messageId: item.messageId,
+      messageId: target.messageId,
       requestId: (previous?.requestId ?? 0) + 1,
     }));
   }, []);
@@ -146,5 +148,6 @@ export function useT3TeamChatTimelineProps(input: {
     facts,
     dockItems,
     onLocateWorkflowCard: openWorkflowCard,
+    onControlWorkflow,
   };
 }
