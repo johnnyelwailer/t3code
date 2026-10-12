@@ -119,7 +119,7 @@ export function ManageProjectRepositoriesDialog({
       <Card
         role="dialog"
         aria-label="Linked repositories"
-        className="flex h-full w-full max-w-2xl flex-col overflow-hidden sm:h-[min(40rem,calc(100dvh-2rem))]"
+        className="flex h-full w-full max-w-4xl flex-col overflow-hidden sm:h-[calc(100dvh-4rem)]"
       >
         <header className="flex items-start justify-between gap-3 px-5 pt-5 pb-4">
           <div className="min-w-0">

@@ -59,5 +59,11 @@ export class CloudSessionFailedError extends Schema.TaggedError<CloudSessionFail
     reason: CloudSessionFailureReasonSchema,
     /** Safe to show a user. Never contains the provider credential. */
     message: Schema.String,
+    /**
+     * When the provider paused this host (rate limit / quota reserve), the
+     * earliest wall-clock ms a retry can succeed. Clients back off until then
+     * instead of re-polling into the same pause.
+     */
+    retryAt: Schema.optionalKey(Schema.Number),
   },
 ) {}

@@ -39,6 +39,7 @@ export function useGitHubRepositoryDiscovery({
   >(authCache?.authStatus ?? "checking");
   const [authDetail, setAuthDetail] = useState<string | undefined>(authCache?.authDetail);
   const [loadingAuth, setLoadingAuth] = useState(false);
+  const [probeNonce, setProbeNonce] = useState(0);
   const [loadingDiscovery, setLoadingDiscovery] = useState(false);
   const [suggestedUrls, setSuggestedUrls] = useState<ReadonlyArray<string>>(
     discoveryCache?.suggestedUrls ?? [],
@@ -81,7 +82,7 @@ export function useGitHubRepositoryDiscovery({
 
   useGitHubAuthProbe({
     enabled,
-    refreshKey: discoveryCacheKey,
+    refreshKey: `${discoveryCacheKey}:${probeNonce}`,
     onAuthenticated: discoverSuggestionsAcrossHosts,
     setAuthStatus,
     setAuthDetail,
@@ -117,6 +118,8 @@ export function useGitHubRepositoryDiscovery({
       });
       return;
     }
+    // Not signed in as far as the last probe knew: ask `gh` again, the sign-in may have happened since.
+    setProbeNonce((nonce) => nonce + 1);
     void discoverSuggestions(githubHost, githubAccount);
   }, [
     authStatus,
@@ -127,8 +130,13 @@ export function useGitHubRepositoryDiscovery({
     githubHost,
   ]);
 
+  // `gh auth status` reports "unauthenticated" when ANY host holds a refused token, even while
+  // another (the Enterprise one) is signed in; a signed-in login is what the picker can use.
+  const signedIn = authStatus === "authenticated" || authenticatedHosts.length > 0;
+
   return {
     backendAvailable: Boolean(backend),
+    signedIn,
     githubHost,
     githubAccount,
     authStatus,

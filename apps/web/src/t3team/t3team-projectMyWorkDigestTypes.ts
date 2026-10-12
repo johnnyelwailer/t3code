@@ -171,13 +171,13 @@ export type DigestGraph = {
   readonly dependencies?: readonly DigestDependency[];
   readonly transitions: readonly DigestTransition[];
   readonly blockers: readonly DigestBlocker[];
-  /** The previous working day (merged PRs, moved tickets); absent when there is nothing. */
+  /** The viewer's last working day (merged PRs, moved tickets); absent when there is nothing. */
   readonly yesterday?: DigestYesterday;
   /** The arrangement an agent stored for this scope (the arrange-my-work recipe); absent = default. */
   readonly arrangement?: DigestPlan;
 };
 
-/** A PR the viewer merged in the previous working day; `ticketId` when it names a held ticket. */
+/** A PR the viewer merged on their last working day; `ticketId` when it names a held ticket. */
 export type DigestYesterdayMerged = {
   readonly id: string;
   /** The app project whose digest carried it — the PR detail panel reads through that project. */
@@ -192,7 +192,7 @@ export type DigestYesterdayMerged = {
 };
 
 /**
- * One of the viewer's tickets that moved in the previous working day. `from`/`to` are the statuses
+ * One of the viewer's tickets that moved on their last working day. `from`/`to` are the statuses
  * when the mirror saw the move; a ticket Jira merely updated carries neither.
  */
 export type DigestYesterdayMoved = {
@@ -203,6 +203,8 @@ export type DigestYesterdayMoved = {
 };
 
 export type DigestYesterday = {
+  /** The found day's start, an ISO instant in the viewer's zone — the section's heading derives from it. */
+  readonly from: string;
   readonly merged: readonly DigestYesterdayMerged[];
   readonly moved: readonly DigestYesterdayMoved[];
 };

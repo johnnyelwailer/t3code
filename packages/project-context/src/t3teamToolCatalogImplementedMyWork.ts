@@ -34,7 +34,7 @@ const MY_WORK_ARRANGE_DESCRIPTION =
   "(side = compact list, main = grouped by story, footer = collapsed count); my-work.reviews " +
   "lists review-owed pull requests, placements side|main; my-work.yesterday reads the digest " +
   "itself, placements side|footer: the pull requests the viewer merged and the tickets of theirs " +
-  "that moved in the previous working day (kind 'graph'). An unknown widget or a placement a " +
+  "that moved on their last working day (kind 'graph'). An unknown widget or a placement a " +
   "widget does not allow is rejected with the reason — fix and call again. Section ids must be " +
   "unique, at most 12 sections. The latest arrangement per project (or for all projects) " +
   "replaces the previous one. Pass { reset: true } instead of a plan to return to the default " +

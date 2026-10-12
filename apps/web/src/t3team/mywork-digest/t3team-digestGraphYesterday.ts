@@ -18,7 +18,7 @@ type Resolve = (position: number, ref: DigestTicketRefLike) => string;
 
 const newestFirst = (left: string, right: string) => Date.parse(right) - Date.parse(left);
 
-/** `undefined` when no project had anything for the previous working day. */
+/** `undefined` when no project had anything for the viewer's last working day. */
 export function digestYesterday(
   projects: MyWorkDigestPayload["projects"],
   resolveTicketId: Resolve,
@@ -26,7 +26,10 @@ export function digestYesterday(
 ): DigestYesterday | undefined {
   const merged = new Map<string, DigestYesterdayMerged>();
   const moved = new Map<string, DigestYesterdayMoved>();
+  // One found day across projects: its start is the same on every project's slice.
+  let from: string | undefined;
   projects.forEach((data, position) => {
+    if (data.yesterday !== undefined && from === undefined) from = data.yesterday.from;
     for (const pr of data.yesterday?.merged ?? []) {
       const ticketId =
         pr.workItemKey !== undefined ? resolveTicketId(position, { issueKey: pr.workItemKey }) : "";
@@ -58,6 +61,7 @@ export function digestYesterday(
   });
   if (merged.size === 0 && moved.size === 0) return undefined;
   return {
+    from: from ?? "",
     merged: [...merged.values()].toSorted((a, b) => newestFirst(a.mergedAt, b.mergedAt)),
     moved: [...moved.values()].toSorted((a, b) => newestFirst(a.at, b.at)),
   };
