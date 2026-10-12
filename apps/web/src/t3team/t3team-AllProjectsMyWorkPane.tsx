@@ -7,6 +7,7 @@ import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 
 import { AllProjectsKickoffAside } from "~/t3team/t3team-AllProjectsKickoffAside";
 import { AllProjectsMyWorkView } from "~/t3team/t3team-AllProjectsMyWorkView";
+import { T3TeamDashboardRecipeActionProvider } from "~/t3team/t3team-dashboardRecipeActions";
 import { DigestPrAside } from "~/t3team/t3team-DigestPrAside";
 import { MyWorkRightPanel } from "~/t3team/t3team-MyWorkRightPanel";
 import { closeDigestPullRequest, useDigestPrAsideStore } from "~/t3team/t3team-digestPrAsideStore";
@@ -26,6 +27,8 @@ import {
  * a digest row opens shows beside the digest. When nothing is in detail the aside is the generic
  * kickoff host (recipes / sidecar) — same rule as a single-project dashboard.
  * Collapsed until something is opened (or the user expands it).
+ * The kickoff host runs dashboard recipe actions, so this pane is a recipe-action scope just like
+ * a project dashboard: once the Scratch project exists the aside mounts that host.
  */
 export function AllProjectsMyWorkPane({
   onOpenTicket,
@@ -103,26 +106,28 @@ export function AllProjectsMyWorkPane({
   );
 
   return (
-    <ResizableRightSidebarLayout
-      storageKey="t3team_all_my_work_right_sidebar"
-      collapsedStorageKey="t3team:right-sidebar:all-my-work:v1"
-      defaultCollapsed
-      minAsideWidth={22 * 16}
-      defaultAsideWidth={24 * 16}
-      minMainWidth={36 * 16}
-      mobileMainLabel="My work"
-      mobileAsideLabel={pullRequest ? "Pull request" : ticket ? ticket.ticketId : "Agent"}
-      // Only an item this screen can render reveals the aside (its project may still be loading).
-      mobileAsideRequest={panelRevealRequest}
-      main={
-        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          {isElectron ? <WorkspacePageHeader electron /> : null}
-          <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-            <AllProjectsMyWorkView onOpenTicket={onOpenTicket} />
+    <T3TeamDashboardRecipeActionProvider>
+      <ResizableRightSidebarLayout
+        storageKey="t3team_all_my_work_right_sidebar"
+        collapsedStorageKey="t3team:right-sidebar:all-my-work:v1"
+        defaultCollapsed
+        minAsideWidth={22 * 16}
+        defaultAsideWidth={24 * 16}
+        minMainWidth={36 * 16}
+        mobileMainLabel="My work"
+        mobileAsideLabel={pullRequest ? "Pull request" : ticket ? ticket.ticketId : "Agent"}
+        // Only an item this screen can render reveals the aside (its project may still be loading).
+        mobileAsideRequest={panelRevealRequest}
+        main={
+          <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            {isElectron ? <WorkspacePageHeader electron /> : null}
+            <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+              <AllProjectsMyWorkView onOpenTicket={onOpenTicket} />
+            </div>
           </div>
-        </div>
-      }
-      aside={aside}
-    />
+        }
+        aside={aside}
+      />
+    </T3TeamDashboardRecipeActionProvider>
   );
 }
