@@ -162,6 +162,8 @@ import Migration0106 from "./Migrations/t3team-080_WorkflowRunWatchAny.ts";
 // main shipped 105 (PackDocuments) and 106 (WorkflowRunWatchAny) first, so these take 107/108.
 import Migration0107 from "./Migrations/059_McpAppModelContext.ts";
 import Migration0108 from "./Migrations/060_ThreadSnapshotWindowIndexes.ts";
+// New from the 2026-10-11 upstream sync (upstream 061). Appended above the fork's maximum id (108).
+import Migration0109 from "./Migrations/061_PullRequestReviewGuides.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -284,6 +286,8 @@ export const migrationEntries = [
   // Upstream 059/060 live at 107/108 in this fork's ledger; see the import comment.
   [107, "McpAppModelContext", Migration0107],
   [108, "ThreadSnapshotWindowIndexes", Migration0108],
+  // Upstream 061 lives at 109 in this fork's ledger; see the import comment.
+  [109, "PullRequestReviewGuides", Migration0109],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

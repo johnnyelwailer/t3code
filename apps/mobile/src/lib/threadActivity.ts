@@ -400,8 +400,12 @@ function resolvePendingUserInputAnswer(
 ): string | ReadonlyArray<string> | null {
   if (draft?.attachmentsBlocked) return null;
   const customAnswer =
-    question.allowCustomAnswer === false ? null : normalizeDraftAnswer(draft?.customAnswer);
-  if (customAnswer) {
+    question.allowCustomAnswer === false
+      ? null
+      : question.initialAnswer !== undefined
+        ? (draft?.customAnswer ?? null)
+        : normalizeDraftAnswer(draft?.customAnswer);
+  if (customAnswer !== null && customAnswer.length > 0) {
     return customAnswer;
   }
 
@@ -409,12 +413,12 @@ function resolvePendingUserInputAnswer(
   if (question.multiSelect) {
     return selectedOptionValues.length > 0
       ? selectedOptionValues
-      : question.allowCustomAnswer !== false && (draft?.attachmentCount ?? 0) > 0
-        ? ""
-        : null;
+      : (customAnswer ??
+          (question.allowCustomAnswer !== false && (draft?.attachmentCount ?? 0) > 0 ? "" : null));
   }
   return (
     selectedOptionValues[0] ??
+    customAnswer ??
     (question.allowCustomAnswer !== false && (draft?.attachmentCount ?? 0) > 0 ? "" : null)
   );
 }
@@ -518,6 +522,7 @@ function itemIcon(item: OrchestrationV2TurnItem): ThreadFeedActivity["icon"] {
       case "monitor":
         return "eye";
       case "background_task":
+      case "system":
         return "zap";
       default:
         source satisfies never;
@@ -811,7 +816,11 @@ function toFeedActivity(
       ? collectToolFilePaths(item)
       : null;
   const getFullDetail = memoizeValue(() =>
-    readPaths ? readPaths.join("\n") || null : formatItemFullDetail(row, item),
+    readPaths
+      ? readPaths.join("\n") || null
+      : item.type === "notification"
+        ? item.detail?.trim() || null
+        : formatItemFullDetail(row, item),
   );
   const getCopyText = memoizeValue(() =>
     [summary, detail, getFullDetail()]
@@ -1634,7 +1643,7 @@ export function setPendingUserInputCustomAnswer(
   }
 
   const selectedOptionValues =
-    customAnswer.trim().length > 0
+    question.initialAnswer !== undefined || customAnswer.trim().length > 0
       ? undefined
       : normalizeSelectedOptionValues(question, draft?.selectedOptionValues);
   return {

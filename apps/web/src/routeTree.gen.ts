@@ -41,6 +41,7 @@ import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
 import { Route as ChatPullRequestsRouteImport } from './routes/_chat.pull-requests'
 import { Route as T3teamProjectsProjectIdRouteImport } from './routes/t3team.projects.$projectId'
 import { Route as T3teamDraftsDraftIdRouteImport } from './routes/t3team.drafts.$draftId'
+import { Route as ChatNewRouteImport } from './routes/_chat.new'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
 import { Route as T3teamProjectsProjectIdTicketsTicketIdRouteImport } from './routes/t3team.projects.$projectId.tickets.$ticketId'
@@ -206,6 +207,11 @@ const T3teamDraftsDraftIdRoute = T3teamDraftsDraftIdRouteImport.update({
   path: '/drafts/$draftId',
   getParentRoute: () => T3teamRoute,
 } as any)
+const ChatNewRoute = ChatNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => ChatRoute,
+} as any)
 const ChatDraftDraftIdRoute = ChatDraftDraftIdRouteImport.update({
   id: '/draft/$draftId',
   path: '/draft/$draftId',
@@ -239,6 +245,7 @@ export interface FileRoutesByFullPath {
   '/t3team': typeof T3teamRouteWithChildren
   '/usage': typeof UsageRoute
   '/welcome': typeof WelcomeRoute
+  '/new': typeof ChatNewRoute
   '/pull-requests': typeof ChatPullRequestsRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
@@ -275,6 +282,7 @@ export interface FileRoutesByTo {
   '/t3team': typeof T3teamRouteWithChildren
   '/usage': typeof UsageRoute
   '/welcome': typeof WelcomeRoute
+  '/new': typeof ChatNewRoute
   '/pull-requests': typeof ChatPullRequestsRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
@@ -314,6 +322,7 @@ export interface FileRoutesById {
   '/t3team': typeof T3teamRouteWithChildren
   '/usage': typeof UsageRoute
   '/welcome': typeof WelcomeRoute
+  '/_chat/new': typeof ChatNewRoute
   '/_chat/pull-requests': typeof ChatPullRequestsRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
@@ -354,6 +363,7 @@ export interface FileRouteTypes {
     | '/t3team'
     | '/usage'
     | '/welcome'
+    | '/new'
     | '/pull-requests'
     | '/oauth/callback'
     | '/projects/$projectKey'
@@ -390,6 +400,7 @@ export interface FileRouteTypes {
     | '/t3team'
     | '/usage'
     | '/welcome'
+    | '/new'
     | '/pull-requests'
     | '/oauth/callback'
     | '/projects/$projectKey'
@@ -428,6 +439,7 @@ export interface FileRouteTypes {
     | '/t3team'
     | '/usage'
     | '/welcome'
+    | '/_chat/new'
     | '/_chat/pull-requests'
     | '/oauth/callback'
     | '/projects/$projectKey'
@@ -698,6 +710,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof T3teamDraftsDraftIdRouteImport
       parentRoute: typeof T3teamRoute
     }
+    '/_chat/new': {
+      id: '/_chat/new'
+      path: '/new'
+      fullPath: '/new'
+      preLoaderRoute: typeof ChatNewRouteImport
+      parentRoute: typeof ChatRoute
+    }
     '/_chat/draft/$draftId': {
       id: '/_chat/draft/$draftId'
       path: '/draft/$draftId'
@@ -730,6 +749,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface ChatRouteChildren {
+  ChatNewRoute: typeof ChatNewRoute
   ChatPullRequestsRoute: typeof ChatPullRequestsRoute
   ChatIndexRoute: typeof ChatIndexRoute
   ChatEnvironmentIdThreadIdRoute: typeof ChatEnvironmentIdThreadIdRoute
@@ -737,6 +757,7 @@ interface ChatRouteChildren {
 }
 
 const ChatRouteChildren: ChatRouteChildren = {
+  ChatNewRoute: ChatNewRoute,
   ChatPullRequestsRoute: ChatPullRequestsRoute,
   ChatIndexRoute: ChatIndexRoute,
   ChatEnvironmentIdThreadIdRoute: ChatEnvironmentIdThreadIdRoute,

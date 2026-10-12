@@ -17,18 +17,22 @@ import { resolveSpawnCommand } from "@t3tools/shared/shell";
 
 import { resolveAttachmentPath } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
-import { expandHomePath } from "../pathExpansion.ts";
+import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import { codexExecLaunchArgs, resolveCodexLaunchArgs } from "../provider/codexLaunchArgs.ts";
-import type * as TextGeneration from "./TextGeneration.ts";
-import * as TextGenerationOperations from "./TextGenerationOperations.ts";
-import { buildActivityLabelPrompt } from "./TextGenerationPrompts.ts";
+import type {
+  ActivityLabelGenerationResult,
+  ProviderTextGeneration,
+} from "@t3tools/provider-core/server/textGeneration";
+import * as TextGenerationOperations from "@t3tools/provider-core/server/textGenerationOperations";
+import { buildActivityLabelPrompt } from "@t3tools/provider-core/server/textGenerationPrompts";
 import {
   normalizeCliError,
   sanitizeActivityLabel,
   toJsonSchemaObject,
-} from "./TextGenerationUtils.ts";
+} from "@t3tools/provider-core/server/textGenerationUtils";
 import { codexModelFamily, getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { getCodexServiceTierOptionValue } from "../codexModelOptions.ts";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 
 const CODEX_TIMEOUT_MS = 180_000;
 const encodeJsonString = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
@@ -152,6 +156,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     outputSchema: outputSchemaJson,
     modelSelection,
     attachments,
+    investigate,
     reasoningEffortOverride,
   }: TextGenerationOperations.Request<S> & {
     /**
@@ -222,7 +227,12 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
         env: {
           ...effectiveEnvironment,
           ...(effectiveConfig.homePath
-            ? { CODEX_HOME: expandHomePath(effectiveConfig.homePath) }
+            ? {
+                CODEX_HOME: expandHomePath(
+                  effectiveConfig.homePath,
+                  yield* HostProcess.HomeDirectory,
+                ),
+              }
             : {}),
         },
         cwd,
@@ -274,7 +284,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     return yield* Effect.gen(function* () {
       yield* runCodexCommand().pipe(
         Effect.scoped,
-        Effect.timeoutOption(CODEX_TIMEOUT_MS),
+        // The read-only sandbox already holds an investigation to reading; it only needs longer.
+        Effect.timeoutOption(investigate?.timeoutMs ?? CODEX_TIMEOUT_MS),
         Effect.flatMap(
           Option.match({
             onNone: () =>
@@ -312,7 +323,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     }).pipe(Effect.ensuring(cleanup));
   });
 
-  const generateActivityLabel: TextGeneration.TextGeneration["Service"]["generateActivityLabel"] =
+  const generateActivityLabel: ProviderTextGeneration["generateActivityLabel"] =
     Effect.fn("CodexTextGeneration.generateActivityLabel")(function* (input) {
       const { prompt, outputSchema } = buildActivityLabelPrompt({ context: input.context });
 
@@ -329,10 +340,10 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
 
       return {
         label: sanitizeActivityLabel(generated.label),
-      } satisfies TextGeneration.ActivityLabelGenerationResult;
+      } satisfies ActivityLabelGenerationResult;
     });
 
-  const generateStructured: TextGeneration.TextGeneration["Service"]["generateStructured"] = (
+  const generateStructured: ProviderTextGeneration["generateStructured"] = (
     input,
   ) =>
     runCodexJson({
@@ -347,5 +358,5 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     ...TextGenerationOperations.fromRunner("CodexTextGeneration", runCodexJson),
     generateActivityLabel,
     generateStructured,
-  } satisfies TextGeneration.TextGeneration["Service"];
+  } satisfies ProviderTextGeneration;
 });
