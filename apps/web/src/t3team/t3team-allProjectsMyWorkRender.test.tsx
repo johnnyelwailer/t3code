@@ -52,7 +52,7 @@ vi.mock("~/t3team/hooks/t3team-useProjectMyWork", () => ({
         displayId: "NEX-1",
         title: "Ship the thing",
         status: "In Progress",
-        ref: { id: "ticket-1", title: "Ship the thing" },
+        ref: { id: "ticket-1", displayId: "NEX-1", title: "Ship the thing" },
       },
       {
         id: "ticket-2",
@@ -60,7 +60,7 @@ vi.mock("~/t3team/hooks/t3team-useProjectMyWork", () => ({
         title: "Subtask of the thing",
         status: "To Do",
         parentId: "ticket-1",
-        ref: { id: "ticket-2", title: "Subtask of the thing" },
+        ref: { id: "ticket-2", displayId: "NEX-2", title: "Subtask of the thing" },
       },
     ],
     loading: false,
