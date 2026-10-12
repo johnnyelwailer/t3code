@@ -1334,7 +1334,9 @@ it.effect("rejects a worktree launch before create when baseRef does not resolve
         }),
       )
       .pipe(Effect.flip);
-    assert.equal(failed._tag, "ThreadLaunchError");
+    if (failed._tag !== "ThreadLaunchError") {
+      assert.fail(`expected ThreadLaunchError, got ${failed._tag}`);
+    }
     assert.equal(failed.operation, "provision-worktree");
     assert.isUndefined(failed.threadId);
     assert.include(String(failed.cause), "baseRef 'main'");

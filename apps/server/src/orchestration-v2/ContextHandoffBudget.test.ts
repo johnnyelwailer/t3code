@@ -675,7 +675,7 @@ describe("handoff delivery", () => {
   it.effect("when the budget would hard-fail, middle-truncates and keeps search/read recall", () =>
     Effect.gen(function* () {
       let calls = 0;
-      let captured: ProviderAdapterV2HistoricalContext | undefined;
+      let captured: ProviderAdapter.ProviderAdapterV2HistoricalContext | undefined;
       const result = yield* deliverContextHandoffs({
         handoffs: [handoff],
         providerThread,

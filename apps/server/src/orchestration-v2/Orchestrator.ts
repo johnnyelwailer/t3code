@@ -5073,6 +5073,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         // Same-provider follow-ups only. A switch still has to queue on the
         // selected provider, and that capability check stays below.
         const queueRedirect =
+          activeRun !== undefined &&
           activeRun.providerInstanceId === modelSelection.instanceId &&
           !isNativeMaintenanceCommand(command) &&
           !isGoalCommand(command)

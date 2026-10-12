@@ -29,6 +29,13 @@ import {
   workflowAuthorMcpScope,
 } from "./t3team-workflowAuthorMcpScope.ts";
 import { WORKFLOW_AUTHOR_TOOL_IDS } from "./t3team-workflowAuthorTurn.ts";
+import { T3TeamAskUserWriter } from "./mcp/toolkits/t3team/t3team-askUserWriter.ts";
+
+/** Services the T3Team toolkit's tools declare; registration captures them, these calls never reach them. */
+const t3TeamRegistrationServices = Layer.mergeAll(
+  Layer.mock(ThreadManagementService)({}),
+  Layer.mock(T3TeamAskUserWriter)({}),
+);
 
 const AUTHOR = ThreadId.make("run-mcp:author");
 const scopeFor = (threadId: ThreadId): McpInvocationContext.McpInvocationScope => ({
@@ -143,6 +150,7 @@ it.effect(
       },
     };
     const TestLayer = T3TeamToolkitRegistrationLive.pipe(
+      Layer.provide(t3TeamRegistrationServices),
       Layer.provideMerge(McpServer.McpServer.layer),
       Layer.provideMerge(
         Layer.succeed(

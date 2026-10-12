@@ -4,7 +4,7 @@
  * itself is covered by `t3team-changeRequestPublisher.test.ts`.
  */
 import { assert, it } from "@effect/vitest";
-import { ProjectId } from "@t3tools/contracts";
+import { ProjectId, SourceControlProviderKind } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import { T3TEAM_MCP_SERVER_NAME } from "./t3team-toolBroker.ts";
@@ -27,7 +27,7 @@ const published = {
   url: "https://github.com/acme/widgets/pull/7",
   number: 7,
   repository: "acme/widgets",
-  provider: "github" as const,
+  provider: SourceControlProviderKind.make("github"),
   branch: "machine/setup",
   commit: "abc123",
   projectId: ProjectId.make("project-1"),

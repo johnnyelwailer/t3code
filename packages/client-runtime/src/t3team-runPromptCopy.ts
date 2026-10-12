@@ -47,7 +47,9 @@ export function resolveRunInitiatingPrompt(message: RunInitiatingPromptMessage):
   const stored = ext?.displayText !== undefined ? ext.displayText : presentation.text;
   if (stored.trim().length === 0) return null;
 
-  if (message.scheduledTaskId !== undefined || presentation.isAutomation) return stored;
+  if (message.scheduledTaskId !== undefined || presentation.attribution === "automation") {
+    return stored;
+  }
   // Delegated briefs and inter-agent messages name the sending thread.
   if (message.createdBy === "agent" && message.senderThreadId !== undefined) return stored;
   // A person typed this. A server-created user row is a resume, not that prompt.

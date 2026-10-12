@@ -14,7 +14,9 @@ const CURRENT_MODULE_FILE = NodeURL.fileURLToPath(import.meta.url);
 // file and the true caller. Skip it too — otherwise a relative workflow path resolves
 // against the SDK rather than the file (or workflow body) that called `defineWorkflow`.
 const DISPATCH_MODULE_FILE = CURRENT_MODULE_FILE.replace(/\.internal\.ts$/, ".ts");
-const SDK_FRAME_FILES = new Set([CURRENT_MODULE_FILE, DISPATCH_MODULE_FILE]);
+// Vitest 5 reports Windows frames with `/` separators, while `fileURLToPath` yields `\`.
+const sdkFrameKey = (filePath: string) => filePath.replaceAll("\\", "/");
+const SDK_FRAME_FILES = new Set([CURRENT_MODULE_FILE, DISPATCH_MODULE_FILE].map(sdkFrameKey));
 const nodeRequire = NodeModule.createRequire(import.meta.url);
 
 type NodeFsModule = {
@@ -86,7 +88,7 @@ function findCallerFilePath(): string | undefined {
       }
 
       const normalizedFileName = normalizeFilePath(fileName);
-      if (!SDK_FRAME_FILES.has(normalizedFileName)) {
+      if (!SDK_FRAME_FILES.has(sdkFrameKey(normalizedFileName))) {
         return normalizedFileName;
       }
     }

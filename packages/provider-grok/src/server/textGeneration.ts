@@ -138,21 +138,23 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
   // The Grok ACP path carries no reasoning-effort or thinking-budget parameter
   // (the aux model selection is option-stripped by the caller), so the
   // light-inference requirement for this op holds by construction.
-  const generateActivityLabel: ProviderTextGeneration["generateActivityLabel"] =
-    Effect.fn("GrokTextGeneration.generateActivityLabel")(function* (input) {
-      const { prompt, outputSchema } = buildActivityLabelPrompt({ context: input.context });
-      const generated = yield* runGrokJson({
-        operation: "generateActivityLabel",
-        cwd: input.cwd,
-        prompt,
-        outputSchema,
-        modelSelection: input.modelSelection,
-      });
+  const generateActivityLabel: ProviderTextGeneration["generateActivityLabel"] = Effect.fn(
+    "GrokTextGeneration.generateActivityLabel",
+  )(function* (input) {
+    const { prompt, outputSchema } = buildActivityLabelPrompt({ context: input.context });
 
-      return {
-        label: sanitizeActivityLabel(generated.label),
-      } satisfies ActivityLabelGenerationResult;
+    const generated = yield* runGrokJson({
+      operation: "generateActivityLabel",
+      cwd: input.cwd,
+      prompt,
+      outputSchema,
+      modelSelection: input.modelSelection,
     });
+
+    return {
+      label: sanitizeActivityLabel(generated.label),
+    } satisfies ActivityLabelGenerationResult;
+  });
 
   const generateStructured: ProviderTextGeneration["generateStructured"] = (input) =>
     runGrokJson({

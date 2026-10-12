@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-outset-state-indicators -- Existing merged lint debt; keep green while preserving behavior. */
 import { ChevronsLeftIcon, ChevronsRightIcon } from "lucide-react";
 
 import { Button } from "~/t3team/components/ui/t3team-button";

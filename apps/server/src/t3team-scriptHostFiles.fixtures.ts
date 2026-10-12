@@ -12,7 +12,7 @@ import { assert } from "@effect/vitest";
 import {
   type OrchestrationProjectShell,
   type ProjectId,
-  type SourceControlProviderKind,
+  SourceControlProviderKind,
 } from "@t3tools/contracts";
 import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts/settings";
 import { CHANGE_REQUEST_FILE_MAX_BYTES, CHANGE_REQUEST_FILE_MAX_LINES } from "@t3team/sdk";
@@ -176,13 +176,16 @@ afterAll(() => NodeFS.rmSync(workspace, { recursive: true, force: true }));
 
 const scriptHost = Effect.gen(function* () {
   const providers = [
-    fakeHost("github", { repositories: github }),
+    fakeHost(SourceControlProviderKind.make("github"), { repositories: github }),
     // One GitLab-shaped host; `group/noshas` is the repository whose detail reports no commits.
-    fakeHost("gitlab", {
+    fakeHost(SourceControlProviderKind.make("gitlab"), {
       repositories: { ...gitlab, "group/noshas": {} },
       withoutShas: "group/noshas",
     }),
-    fakeHost("bitbucket", { repositories: {}, canReadFiles: false }),
+    fakeHost(SourceControlProviderKind.make("bitbucket"), {
+      repositories: {},
+      canReadFiles: false,
+    }),
   ];
   const context = yield* Layer.build(
     Layer.mergeAll(

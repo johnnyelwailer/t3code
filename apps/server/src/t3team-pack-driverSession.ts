@@ -29,7 +29,7 @@ import {
 import { packCall, packRoundTrip } from "./t3team-pack-driverCall.ts";
 import { asPack, PackCodec } from "./t3team-pack-driverCodec.ts";
 import { packEventsToStream } from "./t3team-pack-driverEvents.ts";
-import { withPackMcp } from "./t3team-pack-driverMcp.ts";
+import { type PackMcpSessions, withPackMcp } from "./t3team-pack-driverMcp.ts";
 import { makePackSessionProbes } from "./t3team-pack-driverSessionProbes.ts";
 import { makePackThreadOps } from "./t3team-pack-driverSessionThreads.ts";
 
@@ -40,12 +40,13 @@ export const makePackSessionRuntime = (input: {
   readonly runtime: PackSessionRuntime;
   readonly driver: ProviderDriverKind;
   readonly instanceId: ProviderInstanceId;
+  readonly mcpSessions: PackMcpSessions;
   readonly providerSessionId: ProviderSessionId;
   readonly providerSession: OrchestrationV2ProviderSession;
   /** Completes when the session scope closes; ends the event stream. */
   readonly closed: Effect.Effect<void>;
 }): ProviderAdapterV2SessionRuntime => {
-  const { runtime, driver, providerSessionId } = input;
+  const { runtime, driver, providerSessionId, mcpSessions } = input;
   const turnError = (value: ProviderAdapterV2TurnInput) => (cause: unknown) =>
     new ProviderAdapterTurnStartError({
       driver,
@@ -57,13 +58,12 @@ export const makePackSessionRuntime = (input: {
   const runTurn =
     (method: (encoded: PackTurnInput) => Promise<void>) => (value: ProviderAdapterV2TurnInput) => {
       const bridge = packCall(turnError(value));
-      return bridge
-        .encode(PackCodec.turnInput, value)
-        .pipe(
-          Effect.flatMap((encoded) =>
-            bridge.call(() => method(withPackMcp(asPack<TurnJson>(encoded), value.threadId))),
-          ),
-        );
+      return bridge.encode(PackCodec.turnInput, value).pipe(
+        Effect.flatMap((encoded) =>
+          withPackMcp(mcpSessions, asPack<TurnJson>(encoded), value.threadId),
+        ),
+        Effect.flatMap((turn) => bridge.call(() => method(turn))),
+      );
     };
   const compact = runtime.compactThread;
   const steer = runtime.steerTurn;
@@ -103,15 +103,12 @@ export const makePackSessionRuntime = (input: {
             cause,
           }),
       );
-      return bridge
-        .encode(PackCodec.steerInput, value)
-        .pipe(
-          Effect.flatMap((encoded) =>
-            bridge.call(() =>
-              steer.call(runtime, withPackMcp(asPack<SteerJson>(encoded), value.threadId)),
-            ),
-          ),
-        );
+      return bridge.encode(PackCodec.steerInput, value).pipe(
+        Effect.flatMap((encoded) =>
+          withPackMcp(mcpSessions, asPack<SteerJson>(encoded), value.threadId),
+        ),
+        Effect.flatMap((steering) => bridge.call(() => steer.call(runtime, steering))),
+      );
     },
     interruptTurn: (value) => {
       const bridge = packCall(
