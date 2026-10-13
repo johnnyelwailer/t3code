@@ -760,6 +760,13 @@ export const ServerConfig = Schema.Struct({
    */
   myWorkRightPanel: Schema.optionalKey(Schema.Boolean),
   /**
+   * Whether a run that failed on a transient gateway error auto-resumes on a durable backoff, with
+   * the live composer retry banner and its toggle. Runtime feature flag (env
+   * `NEXI_FF_TRANSIENT_AUTO_RESUME`, default on); absent on older servers, which clients treat as
+   * off (no banner, no toggle).
+   */
+  transientAutoResume: Schema.optionalKey(Schema.Boolean),
+  /**
    * Whether this server names the project state dir `.nexi` instead of `.t3team`. Runtime
    * feature flag (env `NEXI_FF_NEXI_STATE_DIR`, default on); absent on older servers.
    */

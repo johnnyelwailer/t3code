@@ -33,6 +33,12 @@ export const FEATURE_FLAG_DEFINITIONS = {
     description:
       "My Work aside uses RightPanelTabs (PR/thread/browser tabs) with Agent kickoff when empty. Off: legacy DigestPrAside swap.",
   },
+  TRANSIENT_AUTO_RESUME: {
+    defaultEnabled: true,
+    requiresRestart: false,
+    description:
+      "A run that failed on a transient gateway error (timeout, queue full) keeps retrying on a durable backoff, with a live composer banner and an auto-resume toggle. Off: the run stays failed after the retry budget, as before.",
+  },
 } as const;
 
 export type FeatureFlagKey = keyof typeof FEATURE_FLAG_DEFINITIONS;

@@ -94,6 +94,11 @@ describe("feature flag layering", () => {
         requiresRestart: false,
         defaultEnabled: true,
       }),
+      expect.objectContaining({
+        key: "TRANSIENT_AUTO_RESUME",
+        requiresRestart: false,
+        defaultEnabled: true,
+      }),
     ]);
   });
 });
