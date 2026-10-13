@@ -21,6 +21,8 @@ import { useLinkedRepositorySyncStatus } from "~/t3team/hooks/t3team-useLinkedRe
 import { LinkedRepositorySyncStatusLine } from "~/t3team/components/t3team-LinkedRepositorySyncStatusLine";
 import { useGitHubRepositoryDiscovery } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
 import { LinkedRepositorySyncModal } from "~/t3team/components/t3team-LinkedRepositorySyncModal";
+import { LinkedRepositoryBranchControl } from "~/t3team/components/t3team-LinkedRepositoryBranchControl";
+import { useLinkedRepositoryBranches } from "~/t3team/hooks/t3team-useLinkedRepositoryBranches";
 import { useLinkedRepositorySyncView } from "~/t3team/hooks/t3team-useLinkedRepositorySyncView";
 import { useServerConfig } from "~/t3team/t3team-serverState";
 
@@ -62,7 +64,13 @@ export function ManageProjectRepositoriesDialog({
     linkedRepositoryUrls,
   });
 
+  const branches = useLinkedRepositoryBranches({
+    urls: linkedRepositoryUrls,
+    recorded: syncStatus.byUrl,
+  });
+
   const dirty =
+    branches.changed ||
     mainRepositoryUrl !== initialMainUrl ||
     linkedRepositoryUrls.length !== currentUrls.length ||
     linkedRepositoryUrls.some((url) => !currentUrls.includes(url));
@@ -104,6 +112,7 @@ export function ManageProjectRepositoriesDialog({
         backend,
         project,
         linkedRepositoryUrls,
+        linkedRepositoryBranches: branches.branches,
         // Show clone progress while the save waits on the chosen main repository's clone.
         onSaved: () => syncStatus.refresh(),
         onPhase: syncView.setPhase,
@@ -160,6 +169,14 @@ export function ManageProjectRepositoriesDialog({
               onLinkMany={linkRepositories}
               renderLinkedStatus={(url) => (
                 <LinkedRepositorySyncStatusLine entry={syncStatus.byUrl.get(url)} />
+              )}
+              renderLinkedControls={(url) => (
+                <LinkedRepositoryBranchControl
+                  workspaceRoot={project.workspace?.rootPath}
+                  entry={syncStatus.byUrl.get(url)}
+                  value={branches.branchFor(url)}
+                  onChange={(branch) => branches.setBranch(url, branch)}
+                />
               )}
             />
 

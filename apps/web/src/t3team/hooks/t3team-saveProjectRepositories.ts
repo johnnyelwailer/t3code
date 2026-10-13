@@ -21,6 +21,8 @@ export async function saveProjectRepositories(input: {
   readonly backend: BackendApi | null;
   readonly project: ProjectShellProject;
   readonly linkedRepositoryUrls: ReadonlyArray<string>;
+  /** The branch each linked repository's checkout should be on, by URL; absent: left as is. */
+  readonly linkedRepositoryBranches?: Readonly<Record<string, string>>;
   /** The user's main-repository choice; `undefined` = unchanged (auto-detection may apply). */
   readonly mainRepositoryUrl?: string | null;
   /** Called once the list is saved and syncs are queued, before any wait for a clone. */
@@ -39,6 +41,9 @@ export async function saveProjectRepositories(input: {
   const bootstrap = await backend.projectWorkspace.bootstrapWorkspace({
     workspaceRoot: project.workspace.rootPath,
     linkedRepositoryUrls,
+    ...(input.linkedRepositoryBranches
+      ? { linkedRepositoryBranches: input.linkedRepositoryBranches }
+      : {}),
     refreshLinkedRepositories: true,
   });
   project = applyWorkspaceBootstrapToProject(project, bootstrap);
@@ -78,6 +83,9 @@ export async function saveProjectRepositories(input: {
   const rooted = await backend.projectWorkspace.bootstrapWorkspace({
     workspaceRoot: result.workspaceRoot,
     linkedRepositoryUrls,
+    ...(input.linkedRepositoryBranches
+      ? { linkedRepositoryBranches: input.linkedRepositoryBranches }
+      : {}),
   });
   phase("saved");
   return applyWorkspaceBootstrapToProject(project, rooted);

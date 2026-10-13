@@ -32,6 +32,7 @@ import {
 } from "./t3team-project-repository-utils.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import { bootstrapWorkspaceReferences } from "./t3team-project-repository-routesReferences.ts";
+import { t3teamLinkedRepositoryBranchesRouteLayer } from "./t3team-project-repository-routesBranches.ts";
 import { t3teamLinkedRepositoryStatusRouteLayer } from "./t3team-project-repository-routesStatus.ts";
 
 const bootstrapRouteLayer = HttpRouter.add(
@@ -147,6 +148,9 @@ const bootstrapRouteLayer = HttpRouter.add(
       workspaceRepositoryInitialized,
       detectedMainRepository: mainRepository,
       linkedRepositoryUrls: input.linkedRepositoryUrls,
+      ...(input.linkedRepositoryBranches
+        ? { linkedRepositoryBranches: input.linkedRepositoryBranches }
+        : {}),
       ...(input.refreshLinkedRepositories ? { refreshLinkedRepositories: true } : {}),
     });
     return okJson(response);
@@ -161,4 +165,5 @@ const bootstrapRouteLayer = HttpRouter.add(
 export const t3teamProjectWorkspaceBootstrapRouteLayer = Layer.mergeAll(
   bootstrapRouteLayer,
   t3teamLinkedRepositoryStatusRouteLayer,
+  t3teamLinkedRepositoryBranchesRouteLayer,
 );

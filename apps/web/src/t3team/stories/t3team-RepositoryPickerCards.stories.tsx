@@ -1,6 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react";
 
 import type { GitHubRepositoryCandidate } from "~/t3team/backend/t3team-githubBackendTypes";
+import { BackendProvider } from "~/t3team/backend/t3team-BackendContext";
+import { createMockBackend } from "~/t3team/backend/t3team-mockBackend";
+import { LinkedRepositoryBranchControl } from "~/t3team/components/t3team-LinkedRepositoryBranchControl";
 import { RepositoryPicker } from "~/t3team/components/t3team-RepositoryPicker";
 import { LinkedRepositorySyncStatusLine } from "~/t3team/components/t3team-LinkedRepositorySyncStatusLine";
 import type { LinkedRepositorySyncResult } from "~/t3team/backend/t3team-types";
@@ -44,6 +47,19 @@ const CATALOG: ReadonlyArray<GitHubRepositoryCandidate> = [
 
 const LINKED = CATALOG.slice(0, 6).map((entry) => entry.url);
 
+const mockBackend = createMockBackend();
+const backendWithBranches = {
+  ...mockBackend,
+  projectWorkspace: {
+    ...mockBackend.projectWorkspace,
+    listLinkedRepositoryBranches: async () => ({
+      branches: ["develop", "feature/pj", "main"],
+      current: "feature/pj",
+      defaultBranch: "main",
+    }),
+  },
+};
+
 const syncByUrl = new Map<string, LinkedRepositorySyncResult>(
   LINKED.map((url, index): [string, LinkedRepositorySyncResult] => [
     url,
@@ -84,9 +100,11 @@ const meta = {
   parameters: { layout: "fullscreen" },
   decorators: [
     (Story: () => React.ReactElement) => (
-      <div className="flex h-[40rem] w-full max-w-6xl flex-col bg-card">
-        <Story />
-      </div>
+      <BackendProvider backend={backendWithBranches}>
+        <div className="flex h-[40rem] w-full max-w-6xl flex-col bg-card">
+          <Story />
+        </div>
+      </BackendProvider>
     ),
   ],
   args: {
@@ -96,6 +114,14 @@ const meta = {
     onLinkMany: () => {},
     renderLinkedStatus: (url: string) => (
       <LinkedRepositorySyncStatusLine entry={syncByUrl.get(url)} />
+    ),
+    renderLinkedControls: (url: string) => (
+      <LinkedRepositoryBranchControl
+        workspaceRoot="/workspace"
+        entry={syncByUrl.get(url)}
+        value={url === LINKED[4] ? "feature/pj" : undefined}
+        onChange={() => {}}
+      />
     ),
   },
 } satisfies Meta<typeof RepositoryPicker>;

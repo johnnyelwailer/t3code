@@ -35,10 +35,13 @@ export type LinkedRepositorySyncRequest = {
   readonly referencesRoot: string;
   readonly url: string;
   readonly localPath: string;
+  /** The branch the checkout should be on once synced; absent leaves it as it is. */
+  readonly branch?: string;
 };
 
 type Job = {
   readonly url: string;
+  readonly branch?: string;
   phase: LinkedRepositorySyncPhase;
   /** Every requester to record the outcome for: reference manifest → the URL it lists the
    * checkout under (a joined request may spell the same repository differently). */
@@ -74,7 +77,12 @@ const make = Effect.gen(function* () {
   const jobs = new Map<string, Job>();
 
   const sync = (job: Job, localPath: string) =>
-    syncLinkedCheckout({ url: job.url, localPath, onPhase: (phase) => (job.phase = phase) });
+    syncLinkedCheckout({
+      url: job.url,
+      localPath,
+      ...(job.branch ? { branch: job.branch } : {}),
+      onPhase: (phase) => (job.phase = phase),
+    });
 
   const record = (job: Job, localPath: string, outcome: Effect.Success<ReturnType<typeof sync>>) =>
     Effect.gen(function* () {
@@ -82,7 +90,13 @@ const make = Effect.gen(function* () {
       for (const [referencesRoot, urls] of job.requesters) {
         for (const url of urls) {
           const entry: LinkedRepositoryBootstrapResult = isSameRepository(url, job.url)
-            ? { url, localPath, ...outcome, syncedAt }
+            ? {
+                url,
+                localPath,
+                ...outcome,
+                ...(job.branch ? { branch: job.branch } : {}),
+                syncedAt,
+              }
             : {
                 url,
                 localPath,
@@ -128,6 +142,7 @@ const make = Effect.gen(function* () {
         }
         const job: Job = {
           url: input.url,
+          ...(input.branch ? { branch: input.branch } : {}),
           phase: "queued",
           requesters: new Map([[input.referencesRoot, new Set([input.url])]]),
           settled: Deferred.makeUnsafe<void>(),

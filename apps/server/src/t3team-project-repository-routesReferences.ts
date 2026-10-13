@@ -38,6 +38,8 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
     readonly workspaceRepositoryInitialized: boolean;
     readonly detectedMainRepository: MainRepositoryBootstrapResult | undefined;
     readonly linkedRepositoryUrls: ReadonlyArray<string> | undefined;
+    /** The branch each linked checkout should be on, by URL; undefined keeps what is recorded. */
+    readonly linkedRepositoryBranches?: Readonly<Record<string, string>>;
     /** An explicit save: refetch every linked repository, ignoring the refetch throttle. */
     readonly refreshLinkedRepositories?: boolean;
   }) {
@@ -83,6 +85,7 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
           urls: linkedRepositoryUrls,
           preserved: preserved.linkedRepositories,
           refresh: input.refreshLinkedRepositories === true,
+          ...(input.linkedRepositoryBranches ? { branches: input.linkedRepositoryBranches } : {}),
           phaseOf: sync.phase,
           nowMs,
         });
@@ -109,6 +112,7 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
             referencesRoot,
             url: item.entry.url,
             localPath: item.entry.localPath,
+            ...(item.entry.branch ? { branch: item.entry.branch } : {}),
           });
         }
 

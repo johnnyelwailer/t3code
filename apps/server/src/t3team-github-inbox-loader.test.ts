@@ -281,9 +281,11 @@ describe("loadGitHubInboxResponse repository discovery", () => {
 
   itLoader("shows a stale stored list at once and refreshes it in the background", () =>
     Effect.gen(function* () {
+      // The background refresh is held back by the rate limit, so it writes nothing into the test's
+      // state directory while the test tears it down.
       const { api } = makeFakeGitHubApi((call) => {
         if (call.operation === "t3team.github.account") return restOk({ login: "pj" });
-        return restOk([]);
+        return rateLimited(call.host, 1_790_000_000_000);
       });
       yield* writeStoredRepositoryList(
         "repos:github.com:pj",
