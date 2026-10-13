@@ -584,10 +584,16 @@ describe("BranchToolbarEnvironmentSelector — Move to (started thread, panel)",
 
   // The started thread's composer reads this target on send; a Move-mode create must not set it.
   const THREAD_SCOPE = "env-primary:thread-started";
+  const COMPOSER_PROJECT_KEY = "github.com/acme/app";
   const mountCreate = (props: Partial<BranchToolbarEnvironmentSelectorProps>) => {
     const create = vi.fn();
     mountMove({
-      onCreateCloudSession: (options) => beginCloudSessionCreate(THREAD_SCOPE, options, create),
+      onCreateCloudSession: (options) =>
+        beginCloudSessionCreate(
+          { scopeKey: THREAD_SCOPE, projectKey: COMPOSER_PROJECT_KEY },
+          options,
+          create,
+        ),
       ...props,
     });
     act(() => {
@@ -606,6 +612,13 @@ describe("BranchToolbarEnvironmentSelector — Move to (started thread, panel)",
     const create = mountCreate({ envLocked: false });
     expect(create).toHaveBeenCalledTimes(1);
     expect(getCloudSessionTarget(THREAD_SCOPE)?.sessionId).toBeDefined();
+    clearCloudSessionTarget(THREAD_SCOPE);
+  });
+
+  // The project follow drops a target set up for another project, so the create must record it.
+  it("tags a draft's creating target with the composer's project", () => {
+    mountCreate({ envLocked: false });
+    expect(getCloudSessionTarget(THREAD_SCOPE)?.projectKey).toBe(COMPOSER_PROJECT_KEY);
     clearCloudSessionTarget(THREAD_SCOPE);
   });
 });
