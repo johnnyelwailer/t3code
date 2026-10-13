@@ -20,7 +20,7 @@ type ActiveMirrorSync = { readonly token: symbol };
  */
 const activeMirrorSyncs = new Map<string, ActiveMirrorSync>();
 
-export function mirrorSyncMapKey(input: {
+function mirrorSyncMapKey(input: {
   readonly account: IntegrationAccountRef;
   readonly externalProjectId: string;
 }): string {
@@ -96,8 +96,5 @@ export {
   nextMirrorSleepMs,
 } from "./t3team-atlassian-backlog-mirrorSyncShared.ts";
 export type { T3TeamAtlassianMirrorSyncRequest } from "./t3team-atlassian-backlog-mirrorSyncShared.ts";
-export {
-  runMirrorCatchUpWalk,
-  runMirrorReconcile,
-} from "./t3team-atlassian-backlog-mirrorSyncWalks.ts";
+export { runMirrorReconcile } from "./t3team-atlassian-backlog-mirrorSyncWalks.ts";
 export { upsertMirrorIssues } from "./t3team-atlassian-backlog-mirrorSyncDb.ts";

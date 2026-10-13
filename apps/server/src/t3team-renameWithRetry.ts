@@ -12,10 +12,10 @@ import * as FileSystem from "effect/FileSystem";
 const TRANSIENT_CODES: ReadonlySet<string> = new Set(["EPERM", "EBUSY", "EACCES"]);
 const RETRY_DELAY_MS = 2_000;
 /** About three minutes: a multi-gigabyte tree can take that long to be released. */
-export const RENAME_MAX_ATTEMPTS = 90;
+const RENAME_MAX_ATTEMPTS = 90;
 
 /** The errno code behind a platform error (`error.reason.cause.code`), when there is one. */
-export const platformErrorCode = (error: unknown): string | undefined => {
+const platformErrorCode = (error: unknown): string | undefined => {
   if (typeof error !== "object" || error === null || !("reason" in error)) return undefined;
   const { reason } = error;
   if (typeof reason !== "object" || reason === null || !("cause" in reason)) return undefined;
@@ -24,7 +24,7 @@ export const platformErrorCode = (error: unknown): string | undefined => {
   return typeof cause.code === "string" ? cause.code : undefined;
 };
 
-export const isTransientRenameError = (error: unknown): boolean => {
+const isTransientRenameError = (error: unknown): boolean => {
   const code = platformErrorCode(error);
   return code !== undefined && TRANSIENT_CODES.has(code);
 };
