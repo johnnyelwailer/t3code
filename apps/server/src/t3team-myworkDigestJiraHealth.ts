@@ -34,12 +34,15 @@ export function readDigestJiraHealth(
       account: project.account,
       externalProjectId: project.externalProjectId,
     });
-    return {
+    const health: T3TeamDigestJiraHealth = {
       jiraAuth: accountNeedsReconnect(project.account.id) ? "needs-reconnect" : "ok",
       ...(sync.lastSyncAt !== undefined
         ? { jiraSyncedAt: DateTime.formatIso(DateTime.makeUnsafe(sync.lastSyncAt)) }
-        : { ...(mirrorSyncing ? { jiraSyncPending: true } : {}) }),
+        : mirrorSyncing
+          ? { jiraSyncPending: true }
+          : {}),
       ...(sync.lastError !== undefined ? { jiraSyncError: sync.lastError } : {}),
-    } satisfies T3TeamDigestJiraHealth;
+    };
+    return health;
   });
 }

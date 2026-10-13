@@ -232,34 +232,39 @@ it.effect(
     }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
 );
 
-it.effect("the digest's synced-at moves only when a catch-up walk completes, pending until then", () =>
-  Effect.gen(function* () {
-    yield* startAtJiraNow;
-    const project = { account, externalProjectId: "IES" };
+it.effect(
+  "the digest's synced-at moves only when a catch-up walk completes, pending until then",
+  () =>
+    Effect.gen(function* () {
+      yield* startAtJiraNow;
+      const project = { account, externalProjectId: "IES" };
 
-    yield* settle(
-      runMirrorCatchUpWalk(
-        request,
-        fakeJira(allIssues, { failCall: 3 }).source,
-        identity,
-        notSuperseded,
-      ),
-    );
-    const beforeFirstCatchUp = yield* readDigestJiraHealth(project, true);
-    assert.isUndefined(beforeFirstCatchUp.jiraSyncedAt);
-    assert.isTrue(beforeFirstCatchUp.jiraSyncPending, "the first sync reads as in progress");
-    assert.isUndefined((yield* readDigestJiraHealth(project, false)).jiraSyncPending);
+      yield* settle(
+        runMirrorCatchUpWalk(
+          request,
+          fakeJira(allIssues, { failCall: 3 }).source,
+          identity,
+          notSuperseded,
+        ),
+      );
+      const beforeFirstCatchUp = yield* readDigestJiraHealth(project, true);
+      assert.isUndefined(beforeFirstCatchUp.jiraSyncedAt);
+      assert.isTrue(beforeFirstCatchUp.jiraSyncPending, "the first sync reads as in progress");
+      assert.isUndefined((yield* readDigestJiraHealth(project, false)).jiraSyncPending);
 
-    const jira = fakeJira(allIssues);
-    yield* settleValue(runMirrorCatchUpWalk(request, jira.source, identity, notSuperseded));
-    assert.isUndefined((yield* readDigestJiraHealth(project, true)).jiraSyncedAt, "a capped walk is not synced");
+      const jira = fakeJira(allIssues);
+      yield* settleValue(runMirrorCatchUpWalk(request, jira.source, identity, notSuperseded));
+      assert.isUndefined(
+        (yield* readDigestJiraHealth(project, true)).jiraSyncedAt,
+        "a capped walk is not synced",
+      );
 
-    const catchUpStartMs = yield* Clock.currentTimeMillis;
-    yield* settleValue(runMirrorCatchUpWalk(request, jira.source, identity, notSuperseded));
-    const caughtUp = yield* readDigestJiraHealth(project, true);
-    assert.strictEqual(caughtUp.jiraSyncedAt, isoAt(catchUpStartMs));
-    assert.isUndefined(caughtUp.jiraSyncPending);
-  }).pipe(Effect.provide(layerMemory)),
+      const catchUpStartMs = yield* Clock.currentTimeMillis;
+      yield* settleValue(runMirrorCatchUpWalk(request, jira.source, identity, notSuperseded));
+      const caughtUp = yield* readDigestJiraHealth(project, true);
+      assert.strictEqual(caughtUp.jiraSyncedAt, isoAt(catchUpStartMs));
+      assert.isUndefined(caughtUp.jiraSyncPending);
+    }).pipe(Effect.provide(layerMemory)),
 );
 
 it.effect("the loop records a rate-limited walk, backs off, and resumes to catch up", () =>

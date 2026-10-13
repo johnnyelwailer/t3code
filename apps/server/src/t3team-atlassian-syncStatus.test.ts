@@ -39,7 +39,9 @@ describe("describeMirrorSyncFailure", () => {
   it.each([
     [
       "a 429 deep in the cause chain",
-      wrapped(new AtlassianApiError({ status: 429, message: "<html>slow down</html>", path: "/s" })),
+      wrapped(
+        new AtlassianApiError({ status: 429, message: "<html>slow down</html>", path: "/s" }),
+      ),
       MIRROR_SYNC_RATE_LIMITED_TEXT,
     ],
     [
@@ -62,7 +64,11 @@ describe("describeMirrorSyncFailure", () => {
       wrapped(new AtlassianApiError({ status: 503, message: "Service Unavailable", path: "/s" })),
       MIRROR_SYNC_JIRA_DOWN_TEXT,
     ],
-    ["the typed session-expired error", reconnectRequiredError(), ATLASSIAN_SESSION_EXPIRED_MESSAGE],
+    [
+      "the typed session-expired error",
+      reconnectRequiredError(),
+      ATLASSIAN_SESSION_EXPIRED_MESSAGE,
+    ],
     [
       "a dead refresh token",
       wrapped(new AtlassianOAuthSessionExpiredError({ message: "refresh_token is invalid" })),
@@ -82,7 +88,11 @@ describe("toJiraSyncStatus", () => {
   it("reports a failure newer than the last success", () => {
     expect(
       toJiraSyncStatus(
-        state({ lastSuccessAtMs: 100, lastError: MIRROR_SYNC_RATE_LIMITED_TEXT, lastErrorAtMs: 200 }),
+        state({
+          lastSuccessAtMs: 100,
+          lastError: MIRROR_SYNC_RATE_LIMITED_TEXT,
+          lastErrorAtMs: 200,
+        }),
       ),
     ).toEqual({ lastSyncAt: 100, lastError: MIRROR_SYNC_RATE_LIMITED_TEXT });
   });
@@ -106,7 +116,11 @@ describe("combineAccountSyncStatus", () => {
   it("takes the newest success and the newest unresolved failure across projects", () => {
     expect(
       combineAccountSyncStatus([
-        state({ lastSuccessAtMs: 100, lastError: MIRROR_SYNC_UNREACHABLE_TEXT, lastErrorAtMs: 150 }),
+        state({
+          lastSuccessAtMs: 100,
+          lastError: MIRROR_SYNC_UNREACHABLE_TEXT,
+          lastErrorAtMs: 150,
+        }),
         state({ lastSuccessAtMs: 400, lastError: MIRROR_SYNC_FAILED_TEXT, lastErrorAtMs: 300 }),
         state({ lastError: MIRROR_SYNC_RATE_LIMITED_TEXT, lastErrorAtMs: 250 }),
       ]),

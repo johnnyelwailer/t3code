@@ -88,10 +88,7 @@ export function DigestAutoStatus({
   return (
     <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
       <span className="inline-flex items-center gap-1.5">
-        <span
-          className={`size-1.5 rounded-full ${dot}`}
-          aria-hidden
-        />
+        <span className={`size-1.5 rounded-full ${dot}`} aria-hidden />
         {label}
       </span>
       {prNotice}

@@ -22,7 +22,8 @@ export const MIRROR_SYNC_RATE_LIMITED_TEXT =
 export const MIRROR_SYNC_UNREACHABLE_TEXT = "Couldn't reach Jira; retrying automatically.";
 export const MIRROR_SYNC_ACCESS_DENIED_TEXT =
   "Jira refused access to this project. Check your Jira permissions.";
-export const MIRROR_SYNC_JIRA_DOWN_TEXT = "Jira is having trouble right now; retrying automatically.";
+export const MIRROR_SYNC_JIRA_DOWN_TEXT =
+  "Jira is having trouble right now; retrying automatically.";
 export const MIRROR_SYNC_FAILED_TEXT = "Jira sync failed; retrying automatically.";
 
 const maxCauseDepth = 6;

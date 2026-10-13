@@ -72,7 +72,7 @@ export const SyncError: Story = {
       {
         ...connected,
         lastSyncAt: hoursAgo(5),
-        lastSyncError: "Jira did not answer the last three syncs.",
+        lastSyncError: "Couldn't reach Jira; retrying automatically.",
       },
     ],
   },

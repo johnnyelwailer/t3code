@@ -62,7 +62,12 @@ it.effect("a session revoked mid-loop is recorded and surfaces as needs-reconnec
     ]);
     let stopped = false;
     const loop = yield* Effect.forkChild(
-      runMirrorLoop(project, "dead-session-loop", () => stopped, () => Effect.succeed(revokedJira)),
+      runMirrorLoop(
+        project,
+        "dead-session-loop",
+        () => stopped,
+        () => Effect.succeed(revokedJira),
+      ),
     );
 
     const status = yield* untilFailureRecorded;
@@ -78,6 +83,9 @@ it.effect("a session revoked mid-loop is recorded and surfaces as needs-reconnec
     setAccountNeedsReconnect(cloudId, false);
     const afterSignIn = yield* readDigestJiraHealth(project, true);
     assert.strictEqual(afterSignIn.jiraAuth, "ok");
-    assert.isUndefined(afterSignIn.jiraSyncError, "a signed-in account shows no stale session error");
+    assert.isUndefined(
+      afterSignIn.jiraSyncError,
+      "a signed-in account shows no stale session error",
+    );
   }).pipe(Effect.provide(layerMemory)),
 );

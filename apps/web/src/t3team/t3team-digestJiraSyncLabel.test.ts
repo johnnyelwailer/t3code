@@ -8,7 +8,12 @@ const nowMs = Date.parse("2026-10-13T12:00:00.000Z");
 describe("digestJiraSyncLabel", () => {
   it("says a first sync is in progress instead of a blank or the fetch time", () => {
     expect(
-      digestJiraSyncLabel({ jiraSyncedAt: undefined, jiraSyncPending: true, updatedAtMs: nowMs, nowMs }),
+      digestJiraSyncLabel({
+        jiraSyncedAt: undefined,
+        jiraSyncPending: true,
+        updatedAtMs: nowMs,
+        nowMs,
+      }),
     ).toBe("Jira sync in progress");
   });
 
@@ -36,10 +41,20 @@ describe("digestJiraSyncLabel", () => {
 
   it("falls back to the fetch time only for a host that reports no sync at all", () => {
     expect(
-      digestJiraSyncLabel({ jiraSyncedAt: undefined, jiraSyncPending: false, updatedAtMs: nowMs, nowMs }),
+      digestJiraSyncLabel({
+        jiraSyncedAt: undefined,
+        jiraSyncPending: false,
+        updatedAtMs: nowMs,
+        nowMs,
+      }),
     ).toMatch(/^auto · updated /);
     expect(
-      digestJiraSyncLabel({ jiraSyncedAt: undefined, jiraSyncPending: false, updatedAtMs: undefined, nowMs }),
+      digestJiraSyncLabel({
+        jiraSyncedAt: undefined,
+        jiraSyncPending: false,
+        updatedAtMs: undefined,
+        nowMs,
+      }),
     ).toBeNull();
   });
 });

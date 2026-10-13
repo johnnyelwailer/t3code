@@ -50,5 +50,5 @@ export const jiraSyncInProgressEmptyScenario = withJiraState(emptyGraphScenario,
 export const jiraSyncFailedScenario = withJiraState(heuristic, {
   jiraAuth: "ok",
   jiraSyncedAt: ago(30),
-  jiraSyncError: "Jira did not answer the last three syncs.",
+  jiraSyncError: "Couldn't reach Jira; retrying automatically.",
 });
