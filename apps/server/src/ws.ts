@@ -39,6 +39,7 @@ import {
   ClientWebDeployment,
   type DiscoveredLocalServerList,
   type EditorId,
+  type EventId,
   type FileManagerRevealKind,
   type OrchestrationClientOrigin,
   type OrchestrationV2Command,
@@ -142,6 +143,10 @@ import {
   type ShellApplicationEvent,
 } from "./orchestration-v2/ShellStream.ts";
 import { shownShell } from "./orchestration-v2/t3team-hiddenShellThreads.ts";
+import {
+  snapshotEventIdFields,
+  threadCursorIdentityMatches,
+} from "./orchestration-v2/t3team-threadCursorIdentity.ts";
 import { ORCHESTRATION_V2_PROJECTION_SCHEMA_VERSION } from "./orchestration-v2/ProjectionStore.ts";
 import { bufferLiveStream } from "./orchestration-v2/LiveStreamBudget.ts";
 import { coalesceThreadLiveStream } from "./orchestration-v2/ThreadLiveEventCoalescer.ts";
@@ -806,6 +811,7 @@ export const subscribeOrchestrationV2Thread = Effect.fn("ws.orchestrationV2.subs
   function* (input: {
     readonly threadId: ThreadId;
     readonly afterSequence?: number;
+    readonly afterEventId?: EventId;
     readonly requestCompletionMarker?: boolean;
     readonly acceptBoundedSnapshot?: boolean;
   }) {
@@ -900,11 +906,17 @@ export const subscribeOrchestrationV2Thread = Effect.fn("ws.orchestrationV2.subs
         ),
       );
       const { snapshotSequence } = snapshot;
+      const eventIdFields = yield* snapshotEventIdFields(
+        applicationEvents,
+        input.threadId,
+        snapshotSequence,
+      );
       const snapshotItem = useBoundedSnapshot
-        ? buildBoundedThreadStreamSnapshot(snapshot)
+        ? { ...buildBoundedThreadStreamSnapshot(snapshot), ...eventIdFields }
         : {
             kind: "snapshot" as const,
             snapshotSequence,
+            ...eventIdFields,
             projection: projectThreadProjectionForWire(snapshot.projection),
           };
       return Stream.concat(
@@ -934,6 +946,13 @@ export const subscribeOrchestrationV2Thread = Effect.fn("ws.orchestrationV2.subs
       if (input.afterSequence > highWater) {
         return yield* snapshotThenLive();
       }
+      // A cursor inside the sequence range can still belong to another
+      // timeline (state restore, overlapping servers): replace, don't replay.
+      const cursorMatches = yield* threadCursorIdentityMatches(applicationEvents, input.threadId, {
+        afterSequence: input.afterSequence,
+        ...(input.afterEventId === undefined ? {} : { afterEventId: input.afterEventId }),
+      });
+      if (!cursorMatches) return yield* snapshotThenLive();
       const stats = yield* applicationEvents
         .getAgentReplayStats({
           threadId: input.threadId,

@@ -3262,6 +3262,15 @@ export const OrchestrationV2SubscribeThreadInput = Schema.Struct({
    * sequence on the client).
    */
   afterSequence: Schema.optionalKey(NonNegativeInt),
+  /**
+   * Event id of the thread event at `afterSequence`. Sequences restart their
+   * meaning when a state restore or an overlapping server reissues them for
+   * different events, so a bare cursor cannot prove it belongs to this
+   * timeline. When present and the stored event at that sequence has another
+   * id (or none), the server sends a snapshot instead of replaying. Optional:
+   * older clients send none, older servers ignore it.
+   */
+  afterEventId: Schema.optionalKey(EventId),
   /** Requests a marker between initial catch-up and live delivery. */
   requestCompletionMarker: Schema.optionalKey(Schema.Boolean),
   /** Allows snapshot fallbacks to contain a bounded, pageable history window. */
@@ -3271,6 +3280,11 @@ export type OrchestrationV2SubscribeThreadInput = typeof OrchestrationV2Subscrib
 
 export const OrchestrationV2ThreadDetailSnapshot = Schema.Struct({
   snapshotSequence: NonNegativeInt,
+  /**
+   * Event id of the thread event at `snapshotSequence`; resumed as
+   * `afterEventId`. Omitted by older servers and for an empty thread.
+   */
+  snapshotEventId: Schema.optionalKey(EventId),
   projection: OrchestrationV2ThreadProjection,
   /**
    * Progressive history metadata. Omitted on full-projection caches and older
@@ -3294,6 +3308,8 @@ export type OrchestrationV2ThreadDetailSnapshot = typeof OrchestrationV2ThreadDe
  */
 export const OrchestrationV2ThreadBoundedSnapshot = Schema.Struct({
   snapshotSequence: NonNegativeInt,
+  /** Event id at `snapshotSequence`; see {@link OrchestrationV2ThreadDetailSnapshot}. */
+  snapshotEventId: Schema.optionalKey(EventId),
   projection: OrchestrationV2ThreadProjection,
   historyCursor: Schema.NullOr(TrimmedNonEmptyString),
   hasMoreHistory: Schema.Boolean,
@@ -3376,6 +3392,8 @@ export const OrchestrationV2ThreadStreamItem = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("snapshot"),
     snapshotSequence: NonNegativeInt,
+    /** Event id at `snapshotSequence`; see {@link OrchestrationV2ThreadDetailSnapshot}. */
+    snapshotEventId: Schema.optionalKey(EventId),
     projection: OrchestrationV2ThreadProjection,
     /**
      * Progressive history metadata is present on bounded socket fallbacks and
