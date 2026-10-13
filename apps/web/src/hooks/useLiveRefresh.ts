@@ -15,6 +15,13 @@
  */
 import { useEffect, useId, useRef } from "react";
 
+import {
+  isUserIdle,
+  lastUserInteractionAt,
+  USER_IDLE_AFTER_MS,
+  watchUserActivity,
+} from "./t3team-userActivity";
+
 /** Long enough that alt-tabbing through windows does not become a request per tab stop. */
 export const LIVE_REFRESH_MIN_INTERVAL_MS = 10_000;
 
@@ -28,7 +35,7 @@ export const LIVE_REFRESH_INTERVAL_MS = 5 * 60_000;
  * until morning spends a night of somebody's rate limit on an answer nobody read. Their next
  * click, key or scroll starts the interval up again.
  */
-export const LIVE_REFRESH_IDLE_AFTER_MS = 6 * 60_000;
+export const LIVE_REFRESH_IDLE_AFTER_MS = USER_IDLE_AFTER_MS;
 
 /**
  * Whether a view should read again now. Separate from the hook because the rule is the whole of
@@ -84,39 +91,6 @@ export function shouldRefreshOnInterval(input: {
  */
 const lastRefreshedAtByView = new Map<string, number>();
 
-/**
- * When the reader last did anything. Shared rather than per view: a person is present in the
- * window, not in one component of it. Only tracked while a live view is mounted.
- */
-let lastInteractedAt = 0;
-const interactionWatchers = new Set<() => void>();
-const INTERACTION_EVENTS = ["pointerdown", "pointermove", "keydown", "wheel"] as const;
-const noteInteraction = () => {
-  const now = Date.now();
-  const wasIdle = now - lastInteractedAt >= LIVE_REFRESH_IDLE_AFTER_MS;
-  lastInteractedAt = now;
-  if (wasIdle) for (const resume of interactionWatchers) resume();
-};
-
-function watchInteraction(resume: () => void): () => void {
-  if (interactionWatchers.size === 0) {
-    // Arriving is itself the reader doing something, and it is what makes the first interval tick
-    // after a mount count.
-    lastInteractedAt = Date.now();
-    for (const event of INTERACTION_EVENTS) {
-      document.addEventListener(event, noteInteraction, { passive: true });
-    }
-  }
-  interactionWatchers.add(resume);
-  return () => {
-    interactionWatchers.delete(resume);
-    if (interactionWatchers.size > 0) return;
-    for (const event of INTERACTION_EVENTS) {
-      document.removeEventListener(event, noteInteraction);
-    }
-  };
-}
-
 export function useLiveRefresh(
   refresh: (() => void) | null,
   options: {
@@ -146,7 +120,7 @@ export function useLiveRefresh(
     const visible = () => document.visibilityState === "visible";
     const onArrival = () => {
       const now = Date.now();
-      if (now - lastInteractedAt >= LIVE_REFRESH_IDLE_AFTER_MS) return;
+      if (isUserIdle(now)) return;
       const lastRefreshedAt = lastRefreshedAtByView.get(viewId);
       if (lastRefreshedAt === undefined) {
         // Nothing read yet, so nothing to refresh: the mount's own read is what fills this in.
@@ -158,7 +132,14 @@ export function useLiveRefresh(
     const onInterval = () => {
       const now = Date.now();
       const lastRefreshedAt = lastRefreshedAtByView.get(viewId) ?? now;
-      if (shouldRefreshOnInterval({ visible: visible(), now, lastRefreshedAt, lastInteractedAt })) {
+      if (
+        shouldRefreshOnInterval({
+          visible: visible(),
+          now,
+          lastRefreshedAt,
+          lastInteractedAt: lastUserInteractionAt(),
+        })
+      ) {
         read(now);
       }
     };
@@ -176,7 +157,7 @@ export function useLiveRefresh(
       syncTimer();
     };
 
-    const stopWatchingInteraction = watchInteraction(() => {
+    const stopWatchingInteraction = watchUserActivity(() => {
       onArrival();
       syncTimer();
     });
