@@ -479,7 +479,8 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
       if (item.sequence <= sequence) continue;
       // An event type from a newer server still moves the resume cursor past it.
       sequence = item.sequence;
-      eventId = item.kind === "event" ? item.event.id : undefined;
+      // Always the id of the event AT `sequence`, or cleared when the wire omitted it.
+      eventId = item.kind === "event" ? item.event.id : item.eventId;
       if (item.kind === "event") {
         fresh.push(item);
         continue;

@@ -1,10 +1,9 @@
 import type { EventId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import * as Stream from "effect/Stream";
 
 import type { OrchestrationEventStore } from "../persistence/OrchestrationEventStore.ts";
 
-type EventReader = Pick<OrchestrationEventStore["Service"], "readAgentEvents">;
+type EventReader = Pick<OrchestrationEventStore["Service"], "readAgentEventId">;
 
 /**
  * Event id of the thread's stored event at `sequence`, or undefined when none
@@ -18,18 +17,10 @@ export const threadEventIdAtSequence = (
 ): Effect.Effect<EventId | undefined> =>
   sequence < 1
     ? Effect.succeed(undefined)
-    : events
-        .readAgentEvents({
-          threadId,
-          afterSequence: sequence - 1,
-          throughSequence: sequence,
-          limit: 1,
-        })
-        .pipe(
-          Stream.runHead,
-          Effect.map((head) => (head._tag === "Some" ? head.value.event.id : undefined)),
-          Effect.catch(() => Effect.succeed(undefined)),
-        );
+    : // Id-only query: the cursor event can carry a payload far above the replay decode budget.
+      events
+        .readAgentEventId({ threadId, sequence })
+        .pipe(Effect.catch(() => Effect.succeed(undefined)));
 
 /**
  * Whether a resuming client's cursor belongs to this server's timeline.

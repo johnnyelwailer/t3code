@@ -3357,6 +3357,8 @@ const OrchestrationV2UnknownThreadStreamEvent = Schema.Struct({
   kind: Schema.Literal("event"),
   sequence: NonNegativeInt,
   event: Schema.Struct({
+    // Kept so the resume cursor can still name the event it advanced to.
+    id: Schema.optional(EventId),
     type: Schema.String,
     payload: Schema.optional(Schema.Unknown),
   }).check(
@@ -3373,12 +3375,14 @@ const OrchestrationV2UnknownThreadStreamEvent = Schema.Struct({
       kind: Schema.Literal("unknown-event"),
       sequence: NonNegativeInt,
       eventType: Schema.String,
+      eventId: Schema.optionalKey(EventId),
     }),
     {
       decode: SchemaGetter.transform((item) => ({
         kind: "unknown-event" as const,
         sequence: item.sequence,
         eventType: item.event.type,
+        ...(item.event.id === undefined ? {} : { eventId: item.event.id }),
       })),
       encode: SchemaGetter.forbidden(() => "Servers never send unknown thread events."),
     },

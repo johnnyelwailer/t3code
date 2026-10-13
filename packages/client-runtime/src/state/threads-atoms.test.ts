@@ -846,6 +846,49 @@ describe("thread resume cursor identity", () => {
   );
 
   it.effect(
+    "keeps the cursor id on the unknown event it advanced to, and clears it when absent",
+    () =>
+      Effect.gen(function* () {
+        const h = yield* makeHarness({
+          snapshot: { ...SNAPSHOT, snapshotEventId: EventId.make("cached-event-7") },
+        });
+        const unmount = h.registry.mount(h.stateAtom);
+        const first = yield* Queue.take(h.subscriptions);
+        yield* Queue.offer(first.events, {
+          kind: "unknown-event",
+          sequence: 8,
+          eventType: "run.from-a-future-server",
+          eventId: EventId.make("future-event-8"),
+        });
+        yield* Queue.offer(first.events, { kind: "synchronized" });
+        yield* observeState(h.registry, h.stateAtom, (state) => state.status === "live");
+        unmount();
+        yield* Deferred.await(first.closed);
+        const remount = h.registry.mount(h.stateAtom);
+        const second = yield* Queue.take(h.subscriptions);
+        // Never the stale id of sequence 7 next to sequence 8.
+        expect(second.afterSequence).toBe(8);
+        expect(second.afterEventId).toBe("future-event-8");
+        // A wire event without an id leaves the cursor unnamed instead of stale.
+        yield* Queue.offer(second.events, {
+          kind: "unknown-event",
+          sequence: 9,
+          eventType: "run.from-a-future-server",
+        });
+        yield* Queue.offer(second.events, { kind: "synchronized" });
+        yield* observeState(h.registry, h.stateAtom, (state) => state.status === "live");
+        remount();
+        yield* Deferred.await(second.closed);
+        const again = h.registry.mount(h.stateAtom);
+        const third = yield* Queue.take(h.subscriptions);
+        expect(third.afterSequence).toBe(9);
+        expect(third.afterEventId).toBeUndefined();
+        again();
+        yield* Deferred.await(third.closed);
+      }),
+  );
+
+  it.effect(
     "replaces cached phantom turns on a snapshot and keeps applying events below the old cursor",
     () =>
       Effect.gen(function* () {
