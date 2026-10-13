@@ -1,6 +1,6 @@
 import { ChevronDownIcon, ChevronRightIcon, LocateFixedIcon, RouteIcon } from "lucide-react";
 import { useState } from "react";
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, OrchestrationWorkflowRunStatus, ThreadId } from "@t3tools/contracts";
 
 import { cn } from "~/lib/utils";
 import type { ChatMessage } from "~/types";
@@ -34,12 +34,16 @@ import { resolveWorkflowRunStatusPill } from "~/t3team/components/t3team-project
 export function ThreadOrchestrationPanel({
   environmentId,
   threadId,
-  dockItems,
-  onLocate,
-  onControl,
+  ...viewProps
 }: {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
+} & ThreadOrchestrationPanelActions) {
+  const run = useT3TeamThreadFacts(environmentId, threadId)?.workflowRunStatus ?? null;
+  return run === null ? null : <ThreadOrchestrationPanelView run={run} {...viewProps} />;
+}
+
+type ThreadOrchestrationPanelActions = {
   readonly dockItems: ReadonlyArray<T3TeamActiveWorkflowDockItem>;
   readonly onLocate?: ((target: { readonly messageId: ChatMessage["id"] }) => void) | undefined;
   readonly onControl?:
@@ -48,20 +52,25 @@ export function ThreadOrchestrationPanel({
         readonly action: WorkflowRunControlAction;
       }) => Promise<unknown>)
     | undefined;
-}) {
-  const facts = useT3TeamThreadFacts(environmentId, threadId);
+};
+
+/** The section for one known run; the data-free seam the Storybook story renders. */
+export function ThreadOrchestrationPanelView({
+  run,
+  dockItems,
+  onLocate,
+  onControl,
+}: { readonly run: OrchestrationWorkflowRunStatus } & ThreadOrchestrationPanelActions) {
   const [expanded, setExpanded] = useState(false);
   const [controlPending, setControlPending] = useState<WorkflowRunControlAction | null>(null);
   const [controlError, setControlError] = useState<string | null>(null);
-  const run = facts?.workflowRunStatus ?? null;
-  const pill = run ? resolveWorkflowRunStatusPill(run) : null;
-  // Hide when there is no run to report, or a status with no pill of its own (e.g. `watching`):
-  // the section must never appear on an idle thread.
-  if (run === null || pill === null) return null;
+  const pill = resolveWorkflowRunStatusPill(run);
+  // A status with no pill of its own (e.g. `watching`) must never show a section.
+  if (pill === null) return null;
 
   const dockItem = run.runId ? dockItems.find((item) => item.runId === run.runId) : undefined;
-  const name = dockItem?.name ?? run.title ?? "Orchestration";
-  const wake = formatWorkflowStepDue(run.wakeAt ?? undefined);
+  const name = dockItem?.name ?? run.title ?? null;
+  const wake = run.status === "sleeping" ? null : formatWorkflowStepDue(run.wakeAt ?? undefined);
   const stepSummaries = dockItem?.summaries ?? [];
   const messageId = dockItem?.messageId ?? run.messageId;
   const canLocate = messageId !== undefined && onLocate !== undefined;
@@ -99,15 +108,23 @@ export function ThreadOrchestrationPanel({
       >
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center text-left"
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
           aria-expanded={hasDetail ? expanded : undefined}
           disabled={!hasDetail}
           onClick={() => hasDetail && setExpanded((value) => !value)}
         >
           <RouteIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} />
           <div className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium text-foreground/80">{name}</span>
-            <p className={cn("flex items-center gap-1.5 truncate text-2xs", pill.colorClass)}>
+            {name !== null ? (
+              <span className="block truncate text-sm font-medium text-foreground/80">{name}</span>
+            ) : null}
+            <p
+              className={cn(
+                "flex items-center gap-1.5 truncate",
+                name !== null ? "text-2xs" : "text-sm",
+                pill.colorClass,
+              )}
+            >
               <span className={cn("size-1.5 shrink-0 rounded-full", pill.dotClass)} aria-hidden />
               <span className="shrink-0 font-medium">{pill.label}</span>
               {pill.detail ? (
@@ -128,7 +145,7 @@ export function ThreadOrchestrationPanel({
           canResume={false}
           canStop={canStop}
           pending={controlPending}
-          className="ml-1 flex shrink-0 items-center gap-0.5"
+          className="ml-2 flex shrink-0 items-center gap-1"
           {...(onControl && run.runId
             ? { onControl: (action: WorkflowRunControlAction) => void control(action) }
             : {})}
@@ -137,7 +154,7 @@ export function ThreadOrchestrationPanel({
       <T3TeamWorkflowRunControlStatus pending={controlPending} error={controlError} />
 
       {hasDetail && expanded ? (
-        <div data-orchestration-detail className="mt-1 flex flex-col gap-1.5 px-2.5 pb-1">
+        <div data-orchestration-detail className="mt-1 flex flex-col gap-1.5 pr-2.5 pb-1 pl-9">
           {stepSummaries.length > 0 ? (
             <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
               {stepSummaries.map((summary, index) => (
