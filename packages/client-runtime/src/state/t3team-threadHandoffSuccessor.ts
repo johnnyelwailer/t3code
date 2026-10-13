@@ -47,16 +47,16 @@ export function continuationEnvelope(input: {
 }
 
 /**
- * Where the successor's first run is, read from its thread shell: `live` once a run is
- * underway (or already done), `failed` when it ended without running, `pending` before.
+ * Where the successor's first run is, read from its thread shell: `live` once the provider
+ * turn is underway (or already done), `failed` when it ended without running, `pending` before.
+ * `preparing` (worktree fetch/checkout/setup still ahead, any of which can fail the run) and
+ * `starting` (provider turn not yet accepted) stay pending: the source is settled on `live`.
  */
 export function successorRunState(
   shell: Pick<OrchestrationV2ThreadShell, "status" | "latestRunId"> | undefined,
 ): "pending" | "live" | "failed" {
   if (shell === undefined || shell.latestRunId === null) return "pending";
   switch (shell.status) {
-    case "preparing":
-    case "starting":
     case "running":
     case "waiting":
     case "completed":

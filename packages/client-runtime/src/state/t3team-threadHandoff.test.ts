@@ -167,7 +167,10 @@ describe("successor helpers", () => {
       ({ status, latestRunId }) as Parameters<typeof successorRunState>[0];
     expect(successorRunState(undefined)).toBe("pending");
     expect(successorRunState(shell("idle", null))).toBe("pending");
-    expect(successorRunState(shell("starting", "run-1"))).toBe("live");
+    expect(successorRunState(shell("preparing", "run-1"))).toBe("pending");
+    expect(successorRunState(shell("starting", "run-1"))).toBe("pending");
+    expect(successorRunState(shell("running", "run-1"))).toBe("live");
+    expect(successorRunState(shell("waiting", "run-1"))).toBe("live");
     expect(successorRunState(shell("completed", "run-1"))).toBe("live");
     expect(successorRunState(shell("failed", "run-1"))).toBe("failed");
   });
