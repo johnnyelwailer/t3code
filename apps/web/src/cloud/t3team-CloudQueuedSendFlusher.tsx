@@ -4,27 +4,26 @@
  * is ready even after the user navigated away or restarted the app. Renders nothing; the
  * cloud-session controller only mounts while something is queued.
  */
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useLocation } from "@tanstack/react-router";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 
-import { finalizePromotedDraftThreadByRef, useComposerDraftStore } from "~/composerDraftStore";
+import { useComposerDraftStore } from "~/composerDraftStore";
 import { useClientSettings } from "~/hooks/useSettings";
+import { useScratchProject } from "~/hooks/useScratchProject";
 import { selectProjectGroupingSettings } from "~/logicalProject";
 import { useProjects, useThreadShells } from "~/state/entities";
 import { useEnvironments } from "~/state/environments";
 import { threadEnvironment } from "~/state/threads";
 import { useOrchestrationCommand } from "~/state/use-orchestration-command";
-import { completeCloudQueuedSend, dispatchCloudQueuedSend } from "./t3team-cloudQueuedSendDispatch";
+import {
+  applyCloudQueuedSendAction,
+  connectRequestedFor,
+  pruneCloudQueuedSendRequests,
+  type CloudQueuedSendRequests,
+} from "./t3team-cloudQueuedSendActions";
 import { resolveCloudQueuedSendFacts } from "./t3team-cloudQueuedSendFacts";
 import { decideCloudQueuedSendFlush } from "./t3team-cloudQueuedSendFlush";
-import {
-  failDraftCloudQueuedSend,
-  stampDraftCloudQueuedSendStep,
-  updateDraftCloudQueuedSend,
-  useCloudQueuedSends,
-} from "./t3team-cloudQueuedSendStore";
+import { stampDraftCloudQueuedSendStep, useCloudQueuedSends } from "./t3team-cloudQueuedSendStore";
 import {
   getCloudSessionTargets,
   subscribeCloudSessionTargets,
@@ -51,18 +50,12 @@ function ActiveCloudQueuedSendFlusher() {
   const pathname = useLocation({ select: (location) => location.pathname });
   const draftThreadsByKey = useComposerDraftStore((state) => state.draftThreadsByThreadKey);
   const startTurn = useOrchestrationCommand(threadEnvironment.startTurn, { reportFailure: false });
-  // messageId -> session a connect was requested for since the last (re)try. A connect failure
-  // only parks the message when this flusher asked for that connect.
-  const connectRequestedRef = useRef(new Map<string, string>());
+  const { openScratchProject } = useScratchProject();
+  const requestsRef = useRef<CloudQueuedSendRequests>(new Map());
 
   useEffect(() => {
     const groupingSettings = selectProjectGroupingSettings(settings);
-    // Off the draft's own page the promoted draft is retired at once; on it, the thread route
-    // takes over and retires it when the thread has started.
-    const retireIfAway = (draftId: string, environmentId: EnvironmentId, threadId: ThreadId) => {
-      if (pathname.includes(draftId)) return;
-      finalizePromotedDraftThreadByRef(scopeThreadRef(environmentId, threadId));
-    };
+    const requests = requestsRef.current;
     for (const [draftId, queued] of Object.entries(queuedByDraft)) {
       const draft = draftThreadsByKey[draftId];
       if (draft === undefined || draft.promotedTo) continue;
@@ -80,65 +73,37 @@ function ActiveCloudQueuedSendFlusher() {
         queued,
         projectReady: facts.project !== null,
       });
-      const target = targets.get(draftId) ?? null;
-      const requestedFor = connectRequestedRef.current.get(queued.messageId);
       const action = decideCloudQueuedSendFlush({
         queued,
-        target,
+        target: targets.get(draftId) ?? null,
         session: facts.session,
-        connectFailure: requestedFor === queued.sessionId ? cloud.connectFailure : null,
+        connectFailure:
+          connectRequestedFor(requests, queued.messageId) === queued.sessionId
+            ? cloud.connectFailure
+            : null,
         machineConnected: facts.machineConnected,
         projectId: facts.project?.id ?? null,
+        scratch: facts.scratch,
         threadExists: facts.threadExists,
       });
-      switch (action.kind) {
-        case "wait":
-          break;
-        case "resolve-session":
-          updateDraftCloudQueuedSend(draftId, queued.messageId, (current) => ({
-            ...current,
-            sessionId: action.sessionId,
-            sessionLabel: action.label,
-          }));
-          break;
-        case "connect":
-          if (requestedFor !== action.session.sessionId) {
-            connectRequestedRef.current.set(queued.messageId, action.session.sessionId);
-            cloud.onSessionAction(action.session);
-          }
-          break;
-        case "fail":
-          connectRequestedRef.current.delete(queued.messageId);
-          failDraftCloudQueuedSend(draftId, queued.messageId, action.message, action.retryable);
-          break;
-        case "delivered":
-          completeCloudQueuedSend(draftId, action.environmentId, draft.threadId);
-          retireIfAway(draftId, action.environmentId, draft.threadId);
-          break;
-        case "dispatch":
-          void dispatchCloudQueuedSend({
-            draftId,
-            messageId: queued.messageId,
-            environmentId: action.environmentId,
-            projectId: action.projectId,
-            projectCwd: facts.project?.workspaceRoot ?? null,
-            startTurn,
-          }).then((outcome) => {
-            if (outcome === "sent") retireIfAway(draftId, action.environmentId, draft.threadId);
-          });
-          break;
-      }
+      applyCloudQueuedSendAction(action, {
+        draftId,
+        queued,
+        threadId: draft.threadId,
+        projectCwd: facts.project?.workspaceRoot ?? null,
+        requests,
+        draftPageOpen: pathname.includes(draftId),
+        connect: cloud.onSessionAction,
+        openScratchProject: (environmentId) =>
+          openScratchProject(environmentId, "Could not open the cloud machine's folder"),
+        startTurn,
+      });
     }
-    // Retried or cleared messages start over with a fresh connect.
-    for (const messageId of connectRequestedRef.current.keys()) {
-      const stillQueued = Object.values(queuedByDraft).some(
-        (queued) => queued.messageId === messageId && queued.failureMessage === undefined,
-      );
-      if (!stillQueued) connectRequestedRef.current.delete(messageId);
-    }
+    pruneCloudQueuedSendRequests(requests, Object.values(queuedByDraft));
   }, [
     cloud,
     draftThreadsByKey,
+    openScratchProject,
     environments,
     pathname,
     projects,

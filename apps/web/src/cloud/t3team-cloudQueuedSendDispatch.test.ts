@@ -11,7 +11,11 @@ import {
   type StartCloudQueuedTurn,
 } from "./t3team-cloudQueuedSendDispatch";
 import { decodeCloudQueuedSend } from "./t3team-cloudQueuedSendModel";
-import { getDraftCloudQueuedSend, writeDraftCloudQueuedSend } from "./t3team-cloudQueuedSendStore";
+import {
+  cancelDraftCloudQueuedSend,
+  getDraftCloudQueuedSend,
+  writeDraftCloudQueuedSend,
+} from "./t3team-cloudQueuedSendStore";
 
 const localEnv = EnvironmentId.make("env-local");
 const cloudEnv = EnvironmentId.make("env-cloud");
@@ -91,6 +95,34 @@ describe("dispatchCloudQueuedSend", () => {
       projectId: cloudProjectId,
       promotedTo: { environmentId: cloudEnv, threadId },
     });
+  });
+
+  it("refuses Cancel while the send is in flight, so the text is never restored and sent too", async () => {
+    let release: () => void = () => {};
+    const startTurn = vi.fn<StartCloudQueuedTurn>(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve(AsyncResult.success(undefined));
+        }),
+    );
+    const sending = dispatch(startTurn);
+    expect(cancelDraftCloudQueuedSend(draftId)).toBeNull();
+    expect(useComposerDraftStore.getState().draftsByThreadKey[draftId]?.prompt).toBe("");
+    expect(getDraftCloudQueuedSend(draftId)?.messageId).toBe(queued.messageId);
+    release();
+    expect(await sending).toBe("sent");
+    expect(getDraftCloudQueuedSend(draftId)).toBeNull();
+    expect(useComposerDraftStore.getState().draftsByThreadKey[draftId]?.prompt ?? "").toBe("");
+  });
+
+  it("lets Cancel win before a send starts: nothing is dispatched", async () => {
+    const startTurn = vi.fn<StartCloudQueuedTurn>(async () => AsyncResult.success(undefined));
+    expect(cancelDraftCloudQueuedSend(draftId)?.messageId).toBe(queued.messageId);
+    expect(await dispatch(startTurn)).toBe("skipped");
+    expect(startTurn).not.toHaveBeenCalled();
+    expect(useComposerDraftStore.getState().draftsByThreadKey[draftId]?.prompt).toBe(
+      "run the migration",
+    );
   });
 
   it("parks a failed send as retryable and does not resend it on its own", async () => {

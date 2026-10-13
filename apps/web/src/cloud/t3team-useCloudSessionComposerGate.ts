@@ -15,9 +15,9 @@ import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {
   cancelDraftCloudQueuedSend,
   retryDraftCloudQueuedSend,
-  useCloudQueuedSendDispatching,
   useDraftCloudQueuedSend,
 } from "./t3team-cloudQueuedSendStore";
+import { useCloudQueuedSendDispatching } from "./t3team-cloudQueuedSendDispatching";
 import { useCloudSessionController } from "./t3team-useCloudSessionController";
 import {
   useCloudSessionProjectFollow,
@@ -116,7 +116,14 @@ export function useCloudSessionComposerGate(input: {
         Fragment,
         null,
         canRetry ? action("Retry", retryQueuedSend) : null,
-        action("Cancel", cancelQueuedSend),
+        // In flight the turn is already starting: it is delivered, not cancellable.
+        stepFacts.flushing
+          ? createElement(
+              Button,
+              { key: "sending", size: "xs", variant: "ghost", disabled: true },
+              "Sending…",
+            )
+          : action("Cancel", cancelQueuedSend),
       ),
     };
   }, [canRetry, cancelQueuedSend, retryQueuedSend, stepFacts]);

@@ -137,10 +137,18 @@ export function CloudQueuedSendCard({ facts, onCancel, onRetry }: CloudQueuedSen
             Retry
           </Button>
         ) : null}
-        <Button type="button" size="xs" variant="ghost-muted" onClick={onCancel}>
-          <XIcon aria-hidden />
-          Cancel
-        </Button>
+        {facts.flushing ? (
+          // The turn is already starting: it is delivered, not cancellable.
+          <Button type="button" size="xs" variant="ghost-muted" disabled>
+            <Spinner className="size-3 shrink-0" />
+            Sending…
+          </Button>
+        ) : (
+          <Button type="button" size="xs" variant="ghost-muted" onClick={onCancel}>
+            <XIcon aria-hidden />
+            Cancel
+          </Button>
+        )}
       </div>
     </section>
   );

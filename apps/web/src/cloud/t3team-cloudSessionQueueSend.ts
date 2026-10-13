@@ -11,7 +11,10 @@ import { writeDraftCloudQueuedSend } from "./t3team-cloudQueuedSendStore";
 import { getCloudSessionTarget } from "./t3team-cloudSessionTargetStore";
 
 /** The turn as the composer prepared it; the session fields come from the draft's target. */
-export type CloudQueuedTurn = Omit<CloudQueuedSend, "sessionId" | "sessionLabel" | "createdAt">;
+export type CloudQueuedTurn = Omit<
+  CloudQueuedSend,
+  "sessionId" | "sessionLabel" | "projectKey" | "createdAt"
+>;
 
 export function queueCloudSessionSendIfNeeded(input: {
   readonly draftId: string | null;
@@ -31,6 +34,7 @@ export function queueCloudSessionSendIfNeeded(input: {
     ...input.turn,
     sessionId: target.sessionId,
     sessionLabel: target.label,
+    projectKey: target.projectKey,
     createdAt,
     stepStartedAt: { queued: createdAt },
   };

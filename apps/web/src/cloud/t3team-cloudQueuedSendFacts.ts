@@ -1,7 +1,13 @@
 /**
  * The live facts about one queued cloud send, read the same way by the app-level flusher (to act)
  * and by the composer banner and thread card (to show where it is). Pure.
+ *
+ * The send binds to the same project on the session's machine as ChatView's machine list does:
+ * the session's own project first (`resolveCloudSessionOwnProject`), else the one that groups
+ * with the draft's project (`logicalProjectPerEnvironment`). A "No project" draft binds to the
+ * machine's own scratch project, which the flusher opens there when it is not listed yet.
  */
+import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
@@ -14,51 +20,112 @@ import {
   type selectProjectGroupingSettings,
 } from "~/logicalProject";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
+import {
+  logicalProjectPerEnvironment,
+  projectCwdOf,
+  resolveCloudSessionOwnProject,
+} from "./t3team-cloudSessionOwnProject";
 
 export interface CloudQueuedSendFacts {
   readonly session: CloudSession | null;
   readonly environmentId: EnvironmentId | null;
   /** The session's machine is a connected environment on this client. */
   readonly machineConnected: boolean;
-  /** The draft's project on that machine, once it has synced there. */
+  /** The draft's project on that machine, once it is there. */
   readonly project: EnvironmentProject | null;
+  /** The draft is a "No project" thread: its project on the machine is that machine's scratch. */
+  readonly scratch: boolean;
   /** The draft's thread is already known on that machine. */
   readonly threadExists: boolean;
 }
 
+interface FactsEnvironment {
+  readonly environmentId: EnvironmentId;
+  readonly connection: { readonly phase: string };
+  readonly serverConfig?:
+    | {
+        readonly scratchWorkspaceRoot?: string | null;
+        readonly cwd?: string;
+        readonly projectFromCwd?: boolean;
+      }
+    | null
+    | undefined;
+}
+
 export function resolveCloudQueuedSendFacts(input: {
   readonly queued: CloudQueuedSend;
-  readonly draft: Pick<DraftSessionState, "logicalProjectKey" | "threadId">;
+  readonly draft: Pick<
+    DraftSessionState,
+    "environmentId" | "projectId" | "logicalProjectKey" | "threadId"
+  >;
   readonly sessions: readonly CloudSession[];
-  readonly environments: ReadonlyArray<{
-    readonly environmentId: EnvironmentId;
-    readonly connection: { readonly phase: string };
-  }>;
+  readonly environments: ReadonlyArray<FactsEnvironment>;
   readonly projects: ReadonlyArray<EnvironmentProject>;
   readonly threadShells: ReadonlyArray<Pick<EnvironmentThreadShell, "environmentId" | "id">>;
   readonly groupingSettings: ReturnType<typeof selectProjectGroupingSettings>;
 }): CloudQueuedSendFacts {
+  const { draft, projects, environments } = input;
   const session = input.sessions.find((item) => item.sessionId === input.queued.sessionId) ?? null;
   const environmentId = (session?.environmentId ?? null) as EnvironmentId | null;
+  const environmentOf = (id: EnvironmentId) =>
+    environments.find((environment) => environment.environmentId === id);
+  const composerProject =
+    projects.find((p) => p.environmentId === draft.environmentId && p.id === draft.projectId) ??
+    null;
+  const scratch =
+    composerProject !== null &&
+    isScratchProject(
+      composerProject,
+      environmentOf(composerProject.environmentId)?.serverConfig?.scratchWorkspaceRoot,
+    );
   if (environmentId === null) {
-    return { session, environmentId, machineConnected: false, project: null, threadExists: false };
+    return {
+      session,
+      environmentId,
+      machineConnected: false,
+      project: null,
+      scratch,
+      threadExists: false,
+    };
   }
+  const machine = environmentOf(environmentId);
+  const projectKey =
+    composerProject === null
+      ? draft.logicalProjectKey
+      : deriveLogicalProjectKeyFromSettings(composerProject, input.groupingSettings);
+  const projectOnMachine = (): EnvironmentProject | null => {
+    if (scratch) {
+      const root = machine?.serverConfig?.scratchWorkspaceRoot;
+      return (
+        projects.find((p) => p.environmentId === environmentId && isScratchProject(p, root)) ?? null
+      );
+    }
+    const own = resolveCloudSessionOwnProject({
+      target: { sessionId: input.queued.sessionId, projectKey: input.queued.projectKey ?? null },
+      project: composerProject,
+      projectKey,
+      sessions: input.sessions,
+      serverCwdOf: (id) => projectCwdOf(environmentOf(id)?.serverConfig),
+      projects,
+    });
+    const entry = logicalProjectPerEnvironment(
+      projects,
+      (p) => deriveLogicalProjectKeyFromSettings(p, input.groupingSettings) === projectKey,
+      own,
+    ).find((candidate) => candidate.environmentId === environmentId);
+    return entry === undefined
+      ? null
+      : (projects.find((p) => p.environmentId === environmentId && p.id === entry.projectId) ??
+          null);
+  };
   return {
     session,
     environmentId,
-    machineConnected: input.environments.some(
-      (environment) =>
-        environment.environmentId === environmentId && environment.connection.phase === "connected",
-    ),
-    project:
-      input.projects.find(
-        (candidate) =>
-          candidate.environmentId === environmentId &&
-          deriveLogicalProjectKeyFromSettings(candidate, input.groupingSettings) ===
-            input.draft.logicalProjectKey,
-      ) ?? null,
+    machineConnected: machine?.connection.phase === "connected",
+    project: projectOnMachine(),
+    scratch,
     threadExists: input.threadShells.some(
-      (shell) => shell.environmentId === environmentId && shell.id === input.draft.threadId,
+      (shell) => shell.environmentId === environmentId && shell.id === draft.threadId,
     ),
   };
 }
