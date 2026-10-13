@@ -19,6 +19,7 @@ import {
   useCloudSessionTarget,
 } from "~/cloud/t3team-cloudSessionTargetStore";
 import { CLOUD_SESSION_CREATING_ID } from "~/cloud/t3team-cloudSessionTargetLogic";
+import { useCloudSessionProjectKey } from "~/cloud/t3team-useCloudSessionProjectFollow";
 import { runOnCloudSessions } from "./t3team-cloudSessionSplit";
 
 const DISMISSED_FAILURES_KEY = "t3code:cloud-session-dismissed-failures";
@@ -69,6 +70,7 @@ export function useT3TeamRunOnCloudSessionProps(
     [onSessionAction],
   );
   const target = useCloudSessionTarget(scopeKey);
+  const projectKey = useCloudSessionProjectKey(projectRef);
   const [dismissed, setDismissed] = useLocalStorage(
     DISMISSED_FAILURES_KEY,
     [] as ReadonlyArray<string>,
@@ -106,17 +108,19 @@ export function useT3TeamRunOnCloudSessionProps(
 
   const onCreateCloudSession = useCallback(
     (options?: CloudSessionCreateOptions) =>
-      beginCloudSessionCreate(scopeKey, options, () => onCreate(cloudSessionProject?.projectId)),
-    [cloudSessionProject, onCreate, scopeKey],
+      beginCloudSessionCreate({ scopeKey, projectKey }, options, () =>
+        onCreate(cloudSessionProject?.projectId),
+      ),
+    [cloudSessionProject, onCreate, projectKey, scopeKey],
   );
 
   const machineSetupEnabled = useServerConfig()?.machineSetup === true;
   const onSetupProjectMachine = useCallback(
     (options?: CloudSessionCreateOptions) =>
-      beginCloudSessionCreate(scopeKey, options, () =>
+      beginCloudSessionCreate({ scopeKey, projectKey }, options, () =>
         onCreate(cloudSessionProject?.projectId, { machineSetup: true }),
       ),
-    [cloudSessionProject, onCreate, scopeKey],
+    [cloudSessionProject, onCreate, projectKey, scopeKey],
   );
 
   const onSelectCloudSession = useCallback(
@@ -126,9 +130,10 @@ export function useT3TeamRunOnCloudSessionProps(
         scopeKey,
         sessionId: session.sessionId,
         label: cloudSessionDisplayName(session),
+        projectKey,
       });
     },
-    [scopeKey],
+    [projectKey, scopeKey],
   );
 
   const { environments } = useEnvironments();

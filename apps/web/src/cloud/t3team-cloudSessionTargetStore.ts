@@ -88,13 +88,18 @@ export interface CloudSessionCreateOptions {
   readonly selectAsTarget: boolean;
 }
 
-/** Starts a create; a Run-on pick also selects the creating session for `scopeKey` at once. */
+/**
+ * Starts a create; a Run-on pick also selects the creating session for `scopeKey` at once,
+ * tagged with the composer's `projectKey` so the target follows the composer's project.
+ */
 export function beginCloudSessionCreate(
-  scopeKey: string | null,
+  scope: { readonly scopeKey: string | null; readonly projectKey: string | null },
   options: CloudSessionCreateOptions | undefined,
   create: () => void,
 ): void {
-  if (scopeKey !== null && options?.selectAsTarget !== false) selectCloudSessionCreating(scopeKey);
+  if (scope.scopeKey !== null && options?.selectAsTarget !== false) {
+    selectCloudSessionCreating(scope.scopeKey, undefined, scope.projectKey);
+  }
   create();
 }
 
