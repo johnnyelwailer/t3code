@@ -125,6 +125,7 @@ describe("useProjectBacklog workspace sync", () => {
         setMainRepository: vi.fn(async () => {
           throw new Error("not used");
         }),
+        readMainRepositoryMigrationStatus: vi.fn(async () => ({ migration: null })),
         discoverRecipes: vi.fn(async () => ({
           workspaceRoot: "/tmp/project-1-backlog-sync-test",
           hasProjectLocalRecipes: false,

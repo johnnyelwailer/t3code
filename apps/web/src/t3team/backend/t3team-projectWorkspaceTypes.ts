@@ -9,6 +9,7 @@ import type {
   ProjectMainRepository,
   ProjectMainRepositoryCandidate,
   ProjectMainRepositorySelection,
+  ProjectStateMigration,
 } from "@t3tools/contracts";
 
 import type { LinkedRepositorySyncResult } from "~/t3team/backend/t3team-types";
@@ -37,6 +38,8 @@ export type ProjectMainRepositorySwitchResult = {
   readonly workspaceRoot: string;
   readonly mainRepository?: ProjectMainRepository;
   readonly migratedPaths: ReadonlyArray<string>;
+  /** A state dir too large to copy inline, handed to a migration thread; poll its status. */
+  readonly stateMigration?: ProjectStateMigration;
 };
 
 export type ProjectWorkspaceContextFile = {

@@ -1,3 +1,4 @@
+import type { ProjectStateMigration } from "@t3tools/contracts";
 import type {
   DiscoverProjectRecipesRequest,
   DiscoverProjectRecipesResponse,
@@ -81,6 +82,13 @@ export function createProjectWorkspaceBackendApi(httpBaseUrl: string): ProjectWo
       return postJson<typeof input, ProjectMainRepositorySwitchResult>(
         httpBaseUrl,
         "/api/t3team/project/main-repository",
+        input,
+      );
+    },
+    readMainRepositoryMigrationStatus(input) {
+      return postJson<typeof input, { migration: ProjectStateMigration | null }>(
+        httpBaseUrl,
+        "/api/t3team/project/main-repository/migration",
         input,
       );
     },

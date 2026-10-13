@@ -37,3 +37,40 @@ export const ProjectMainRepositoryCandidate = Schema.Struct({
   checkoutPath: TrimmedNonEmptyString,
 });
 export type ProjectMainRepositoryCandidate = typeof ProjectMainRepositoryCandidate.Type;
+
+/** `pending`: recorded, its thread is being launched. `running`: the migration recipe runs on
+ * that thread. `completed` / `failed`: written by the recipe's outcome script, or by the server
+ * when the launch or the run itself ended without one. */
+export const ProjectStateMigrationStatus = Schema.Literals([
+  "pending",
+  "running",
+  "completed",
+  "failed",
+]);
+export type ProjectStateMigrationStatus = typeof ProjectStateMigrationStatus.Type;
+
+/**
+ * A state-dir migration a main-repository switch handed to an agent thread, persisted in the
+ * receiving checkout's machine-local references dir (never committed, never migrated itself).
+ */
+export const ProjectStateMigration = Schema.Struct({
+  migrationId: TrimmedNonEmptyString,
+  status: ProjectStateMigrationStatus,
+  /** The workspace whose state dir is copied, and the checkout receiving it. */
+  fromRoot: TrimmedNonEmptyString,
+  toRoot: TrimmedNonEmptyString,
+  stateDir: TrimmedNonEmptyString,
+  /** State-dir-relative entries never copied; everything else is copied, target wins. */
+  excludes: Schema.Array(Schema.String),
+  /** Lower bound from the bounded scan that decided the handoff. */
+  missingFilesAtLeast: Schema.optional(Schema.Number),
+  threadId: Schema.optional(TrimmedNonEmptyString),
+  runId: Schema.optional(TrimmedNonEmptyString),
+  startedAt: Schema.String,
+  updatedAt: Schema.String,
+  summary: Schema.optional(Schema.String),
+  error: Schema.optional(Schema.String),
+  conflicts: Schema.optional(Schema.Number),
+  pullRequestUrl: Schema.optional(Schema.String),
+});
+export type ProjectStateMigration = typeof ProjectStateMigration.Type;
