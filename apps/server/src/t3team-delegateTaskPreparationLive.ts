@@ -5,6 +5,7 @@
  * to `McpHttpServer.layer` in server.ts. Side effects after the child exists (`afterCreate`)
  * never fail the delegation: each one degrades to a note in the tool result.
  */
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { OrchestratorMcpFailure, type ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -126,7 +127,13 @@ const make = Effect.gen(function* () {
                     repository: repo,
                   }).pipe(
                     Effect.provideService(T3TeamLinkedRepositorySync, linkedRepositorySync),
-                    Effect.mapError((message) => failure("invalid_request", String(message))),
+                    Effect.provide(NodeServices.layer),
+                    Effect.mapError((message) =>
+                      failure(
+                        "invalid_request",
+                        typeof message === "string" ? message : String(message),
+                      ),
+                    ),
                   );
                 }
                 return yield* resolveDelegatedWorkspace({
@@ -138,7 +145,14 @@ const make = Effect.gen(function* () {
                   branchSeed: input.title ?? "child",
                   worktreeKey: delegatedWorktreeKey(parentThread.id, input.requestKey),
                 });
-              }).pipe(Effect.mapError((message) => failure("invalid_request", message)));
+              }).pipe(
+                Effect.mapError((message) =>
+                  failure(
+                    "invalid_request",
+                    typeof message === "string" ? message : message.message,
+                  ),
+                ),
+              );
         if (workspace !== undefined) notes.push(describeDelegatedWorkspace(workspace));
         const environment = resolveEnvironmentBinding(
           extensions.environment,
