@@ -36,7 +36,10 @@ import type { ProjectThread, ViewState } from "~/t3team/t3team-types";
 // Keep the real store + handlers + barrier; mock only the heavy external
 // dependencies so the test stays focused on the real wiring under test.
 vi.mock("~/localApi", () => ({ readLocalApi: () => null }));
-vi.mock("~/state/environments", () => ({ usePrimaryEnvironmentId: () => null }));
+vi.mock("~/state/environments", () => ({
+  usePrimaryEnvironmentId: () => null,
+  usePrimaryEnvironment: () => null,
+}));
 vi.mock("~/state/entities", () => ({
   useProjects: () => emptyArray,
   useThreadShells: () => emptyArray,

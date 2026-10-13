@@ -217,6 +217,8 @@ function RootRouteView() {
     return (
       <>
         <DocumentTitleSync />
+        <T3TeamPackAppearanceSync />
+        <T3TeamPackAppearanceDefaultsSync />
         {hostedPromptLinkLanding}
       </>
     );

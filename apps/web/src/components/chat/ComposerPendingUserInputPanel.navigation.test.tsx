@@ -73,6 +73,9 @@ beforeEach(() => {
   vi.stubGlobal("window", {
     setTimeout: globalThis.setTimeout,
     clearTimeout: globalThis.clearTimeout,
+    // t3team: the fork's question markdown renders through useTheme, which subscribes to these.
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
   });
   vi.stubGlobal("document", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
 });
