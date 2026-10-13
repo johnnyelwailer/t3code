@@ -5,7 +5,7 @@
  */
 import * as Effect from "effect/Effect";
 
-import type { GitLabCli } from "../sourceControl/GitLabCli.ts";
+import type { GitLabCli } from "./GitLabCli.ts";
 import {
   fileFromHostJson,
   isRepositorySelector,
