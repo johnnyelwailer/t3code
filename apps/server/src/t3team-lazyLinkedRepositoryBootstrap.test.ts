@@ -14,7 +14,10 @@ import {
   T3TeamLinkedRepositorySync,
   T3TeamLinkedRepositorySyncLive,
 } from "./t3team-linkedRepositorySync.ts";
-import { LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV } from "./t3team-lazyLinkedRepositoryFlag.ts";
+import {
+  LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV,
+} from "./t3team-lazyLinkedRepositoryFlag.ts";
+import { MAIN_REPOSITORY_FLAG_ENV } from "./t3team-mainRepositoryFlag.ts";
 import { bootstrapWorkspaceReferences } from "./t3team-project-repository-routesReferences.ts";
 import { ensureLinkedRepositoryCheckout } from "./t3team-linkedRepositoryOnDemand.ts";
 import { VcsProcess } from "./vcs/VcsProcess.ts";
@@ -63,8 +66,10 @@ describe("lazy linked repository bootstrap", () => {
     const layer = T3TeamLinkedRepositorySyncLive.pipe(
       Layer.provideMerge(Layer.mergeAll(vcs, sourceControl, NodeServices.layer)),
     );
-    const previous = process.env[LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV];
+    const previousLazy = process.env[LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV];
+    const previousMain = process.env[MAIN_REPOSITORY_FLAG_ENV];
     process.env[LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV] = "1";
+    process.env[MAIN_REPOSITORY_FLAG_ENV] = "0";
     return Effect.gen(function* () {
       const response = yield* bootstrapWorkspaceReferences({
         workspaceRoot,
@@ -86,8 +91,10 @@ describe("lazy linked repository bootstrap", () => {
       Effect.provide(layer),
       Effect.ensuring(
         Effect.sync(() => {
-          if (previous === undefined) delete process.env[LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV];
-          else process.env[LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV] = previous;
+          if (previousLazy === undefined) delete process.env[LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV];
+          else process.env[LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV] = previousLazy;
+          if (previousMain === undefined) delete process.env[MAIN_REPOSITORY_FLAG_ENV];
+          else process.env[MAIN_REPOSITORY_FLAG_ENV] = previousMain;
           NodeFS.rmSync(root, { recursive: true, force: true });
         }),
       ),

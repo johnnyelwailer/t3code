@@ -83,7 +83,11 @@ export const ensureLinkedRepositoryCheckout = Effect.fn("ensureLinkedRepositoryC
 const readEntry = (input: {
   readonly workspaceRoot: string;
   readonly repository: string;
-}): Effect.Effect<LinkedRepositoryBootstrapResult | undefined> =>
+}): Effect.Effect<
+  LinkedRepositoryBootstrapResult | undefined,
+  never,
+  FileSystem.FileSystem | Path.Path
+> =>
   Effect.gen(function* () {
     const path = yield* Path.Path;
     const referencesRoot = path.join(input.workspaceRoot, HIDDEN_T3TEAM_DIR, REFERENCES_DIR_NAME);

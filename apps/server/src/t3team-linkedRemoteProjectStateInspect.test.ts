@@ -1,7 +1,4 @@
-import * as NodeFS from "node:fs";
-import * as NodeOS from "node:os";
-import * as NodePath from "node:path";
-
+// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -12,7 +9,7 @@ import { inspectRemoteProjectStateOnDefaultBranch } from "./t3team-linkedRemoteP
 import { VcsProcess } from "./vcs/VcsProcess.ts";
 
 describe("inspectRemoteProjectStateOnDefaultBranch", () => {
-  it.effect("reports committed .nexi entries from ls-tree (committed-only)", () => {
+  it.effect("reports committed .nexi entries from ls-tree (committed-only)", () =>
     const calls: Array<ReadonlyArray<string>> = [];
     const vcs = Layer.succeed(VcsProcess, {
       run: (input) =>
@@ -55,7 +52,7 @@ describe("inspectRemoteProjectStateOnDefaultBranch", () => {
           repository: null,
         }),
     } as never);
-    return Effect.gen(function* () {
+    Effect.gen(function* () {
       const result = yield* inspectRemoteProjectStateOnDefaultBranch(
         "https://example.test/acme/repo.git",
       );
@@ -64,7 +61,7 @@ describe("inspectRemoteProjectStateOnDefaultBranch", () => {
       expect(result.committedOnly).toBe(true);
       expect(result.source).toBe("remote");
       expect(calls.some((args) => args.includes("ls-tree"))).toBe(true);
-    }).pipe(Effect.provide(Layer.mergeAll(vcs, sourceControl, NodeServices.layer)));
-  });
+    }).pipe(Effect.provide(Layer.mergeAll(vcs, sourceControl, NodeServices.layer))),
+  );
 
 });

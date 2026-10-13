@@ -16,8 +16,6 @@ import {
 } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
-import * as Path from "effect/Path";
-
 import { SourceControlRepositoryService } from "./sourceControl/SourceControlRepositoryService.ts";
 import {
   INSPECT_TIMEOUT_MS,
@@ -37,10 +35,11 @@ export type RemoteProjectStateInspectResult = {
 
 const REMOTE_FETCH_TIMEOUT_MS = INSPECT_TIMEOUT_MS;
 
-const stateDirCandidates = (): ReadonlyArray<string> => {
-  const names = new Set<string>([PROJECT_STATE_DIR, T3TEAM_PROJECT_STATE_DIR, NEXI_PROJECT_STATE_DIR]);
-  return [...names];
-};
+const STATE_DIR_CANDIDATES: ReadonlyArray<string> = [
+  PROJECT_STATE_DIR,
+  T3TEAM_PROJECT_STATE_DIR,
+  NEXI_PROJECT_STATE_DIR,
+];
 
 const countTreeEntries = (stdout: string): number =>
   stdout
@@ -53,7 +52,6 @@ export const inspectRemoteProjectStateOnDefaultBranch = Effect.fn(
   "inspectRemoteProjectStateOnDefaultBranch",
 )(function* (url: string) {
   const fileSystem = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
   const sourceControl = yield* SourceControlRepositoryService;
   const scratchRoot = yield* fileSystem
     .makeTempDirectory({ prefix: "t3-linked-remote-inspect-" })
@@ -61,7 +59,7 @@ export const inspectRemoteProjectStateOnDefaultBranch = Effect.fn(
   const prepared = yield* sourceControl
     .prepareClone({ remoteUrl: url, destinationPath: scratchRoot })
     .pipe(
-      Effect.catchAll(() =>
+      Effect.catch(() =>
         Effect.succeed({
           cloneUrl: url,
           remoteUrl: url,
@@ -97,7 +95,7 @@ export const inspectRemoteProjectStateOnDefaultBranch = Effect.fn(
   );
   const ref =
     sym.exitCode === 0 && sym.stdout.trim().length > 0 ? sym.stdout.trim() : "FETCH_HEAD";
-  for (const stateDirName of stateDirCandidates()) {
+  for (const stateDirName of STATE_DIR_CANDIDATES) {
     const tree = yield* git(
       "ls-tree",
       scratchRoot,
