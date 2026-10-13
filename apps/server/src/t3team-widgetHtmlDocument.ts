@@ -28,7 +28,7 @@ const WIDGET_RESET_CSS = [
 ].join("");
 
 /** Calls to these globals need the web srcdoc bridge, which HTML renders do not provide. */
-const BRIDGE_GLOBAL_USE = /\bsendPrompt\s*\(|\bhost\s*\.\s*callTool\b/;
+const BRIDGE_GLOBAL_USE = /\bsendPrompt\b|\bcallTool\b/;
 
 /** Whether a widget needs the sendPrompt/callTool bridge (and so the srcdoc path). */
 export function t3teamWidgetNeedsBridge(input: {
