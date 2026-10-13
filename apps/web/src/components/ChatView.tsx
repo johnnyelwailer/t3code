@@ -455,6 +455,7 @@ import { useT3TeamTimelineArtifacts } from "~/t3team/chat/t3team-useTimelineArti
 import { useResourcePressureBannerItem } from "./chat/t3team-ResourcePressureThreadBanner";
 import { useProviderRetryBannerItem } from "./chat/t3team-ProviderRetryBanner";
 import { useT3TeamThreadHandoff } from "../t3team/chat/t3team-useThreadHandoff";
+import { useThreadHandoffBannerItem } from "./chat/t3team-ThreadHandoffBanner";
 import { useT3TeamChatTimelineProps } from "~/t3team/chat/t3team-useChatTimelineProps";
 import { useT3TeamStopCascade } from "~/t3team/chat/t3team-useStopCascade";
 import { useT3TeamActiveAgents } from "~/t3team/chat/t3team-useActiveAgents";
@@ -3195,6 +3196,11 @@ export default function ChatView(props: ChatViewProps) {
     environmentId,
     threadId: activeThreadId,
   });
+  // t3team: "Moved to …" / "Moved here from …" (thread handoff link fact).
+  const threadHandoffBanner = useThreadHandoffBannerItem({
+    environmentId,
+    threadId: activeThreadId,
+  });
   const systemComposerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
     const items: ComposerBannerStackItem[] = [];
     const updateRunning = serverUpdateState.status === "running";
@@ -3330,11 +3336,13 @@ export default function ChatView(props: ChatViewProps) {
     }
     if (autoBalanceUpdateBanner) items.push(autoBalanceUpdateBanner);
     if (resourcePressureBanner) items.push(resourcePressureBanner);
+    if (threadHandoffBanner) items.push(threadHandoffBanner);
     return items;
   }, [
     automaticEnvironment,
     autoBalanceUpdateBanner,
     resourcePressureBanner,
+    threadHandoffBanner,
     activeEnvironmentUnavailableState,
     handleReconnectActiveEnvironment,
     canDisconnectActiveEnvironment,

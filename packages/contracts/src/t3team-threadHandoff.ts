@@ -104,3 +104,15 @@ export class T3TeamThreadHandoffError extends Schema.TaggedError<T3TeamThreadHan
   "T3TeamThreadHandoffError",
   { message: Schema.String },
 ) {}
+
+const decodeThreadHandoffLink = Schema.decodeUnknownOption(T3TeamThreadHandoffLink);
+
+/** The handoff link recorded on a thread's facts, if any (and well-formed). */
+export function readThreadHandoffLink(
+  facts: { readonly extensions?: { readonly [key: string]: unknown } | undefined } | undefined,
+): T3TeamThreadHandoffLink | null {
+  const value = facts?.extensions?.[T3TEAM_THREAD_HANDOFF_FACT_KEY];
+  if (value === undefined) return null;
+  const decoded = decodeThreadHandoffLink(value);
+  return decoded._tag === "Some" ? decoded.value : null;
+}
