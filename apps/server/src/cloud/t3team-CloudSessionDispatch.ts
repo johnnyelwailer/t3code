@@ -12,6 +12,10 @@ import {
 } from "./t3team-githubActionsSessionClient.ts";
 import { pendingCloudSession, projectCloudSession } from "./t3team-CloudSessionProjection.ts";
 import type { CloudSessionMachine, CloudSessionSetup } from "./t3team-CloudSessionMachine.ts";
+import {
+  type CloudSessionPlainProject,
+  plainProjectDispatchInputs,
+} from "./t3team-cloudSessionPlainProject.ts";
 
 /**
  * Which published session-server build the session installs (`server_ref`): the one tagged for this
@@ -53,6 +57,8 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
     readonly machine?: CloudSessionMachine | null;
     /** Set when the session checks the project out on the host so an agent can write a machine. */
     readonly setup?: CloudSessionSetup | null;
+    /** Set for a plain session: the project its server runs in (never with machine or setup). */
+    readonly plain?: CloudSessionPlainProject | null;
   }) {
     const marker = sessionTagMarker(input.sessionTag);
 
@@ -83,6 +89,7 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
               machine_setup: "true",
             }
           : {}),
+        ...plainProjectDispatchInputs(input.plain),
       }),
     );
 

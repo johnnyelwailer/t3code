@@ -1,52 +1,42 @@
 /**
- * Queue the first composer send against an optimistic cloud target. Returns the
- * queued payload when the send should wait for Ready+connect; null when the
+ * Queue a draft's first composer send against an optimistic cloud target. Returns the queued
+ * record (persisted on the draft) when the send should wait for the session; null when the
  * caller should send on the current environment as usual.
  */
 import type { CloudSession } from "@t3tools/contracts";
 
 import { isTerminalCloudSessionPhase } from "~/components/cloud/t3team-cloudSessionSplit";
-import {
-  getCloudSessionTarget,
-  requestCloudSessionBind,
-  type CloudSessionQueuedSend,
-} from "./t3team-cloudSessionTargetStore";
-import { CLOUD_SESSION_CREATING_ID } from "./t3team-cloudSessionTargetLogic";
+import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
+import { writeDraftCloudQueuedSend } from "./t3team-cloudQueuedSendStore";
+import { getCloudSessionTarget } from "./t3team-cloudSessionTargetStore";
+
+/** The turn as the composer prepared it; the session fields come from the draft's target. */
+export type CloudQueuedTurn = Omit<
+  CloudQueuedSend,
+  "sessionId" | "sessionLabel" | "projectKey" | "createdAt"
+>;
 
 export function queueCloudSessionSendIfNeeded(input: {
-  readonly scopeKey: string | null;
-  readonly messageId: string;
-  readonly messageText: string;
+  readonly draftId: string | null;
+  readonly turn: CloudQueuedTurn;
   readonly sessions: readonly CloudSession[];
-  readonly availableEnvironmentIds: ReadonlySet<string>;
-}): CloudSessionQueuedSend | null {
-  if (input.scopeKey === null) return null;
-  const target = getCloudSessionTarget(input.scopeKey);
+  readonly now?: () => Date;
+}): CloudQueuedSend | null {
+  if (input.draftId === null) return null;
+  const target = getCloudSessionTarget(input.draftId);
   if (target === null) return null;
-  if (target.sessionId === CLOUD_SESSION_CREATING_ID) {
-    const queued = {
-      messageId: input.messageId,
-      messageText: input.messageText,
-      createdAt: new Date().toISOString(),
-    };
-    return requestCloudSessionBind(input.scopeKey, queued) ? queued : null;
-  }
   const session = input.sessions.find((item) => item.sessionId === target.sessionId);
-  if (session === undefined) {
-    const queued = {
-      messageId: input.messageId,
-      messageText: input.messageText,
-      createdAt: new Date().toISOString(),
-    };
-    return requestCloudSessionBind(input.scopeKey, queued) ? queued : null;
-  }
-  if (isTerminalCloudSessionPhase(session.phase)) return null;
-  // Ready+synced still queues briefly: bind-flush remaps then sends on the cloud
-  // env in the next tick (same path as a still-provisioning session).
-  const queued = {
-    messageId: input.messageId,
-    messageText: input.messageText,
-    createdAt: new Date().toISOString(),
+  if (session !== undefined && isTerminalCloudSessionPhase(session.phase)) return null;
+  // A ready, synced session still queues: the app-level flusher sends it within a tick, on the
+  // same path as one that is still provisioning.
+  const createdAt = (input.now?.() ?? new Date()).toISOString();
+  const queued: CloudQueuedSend = {
+    ...input.turn,
+    sessionId: target.sessionId,
+    sessionLabel: target.label,
+    projectKey: target.projectKey,
+    createdAt,
+    stepStartedAt: { queued: createdAt },
   };
-  return requestCloudSessionBind(input.scopeKey, queued) ? queued : null;
+  return writeDraftCloudQueuedSend(input.draftId, queued) ? queued : null;
 }

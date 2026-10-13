@@ -185,6 +185,10 @@ import { cn } from "~/lib/utils";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
 import {
+  CloudQueuedDraftStatus,
+  cloudQueuedDraftStatusLabel,
+} from "../cloud/t3team-CloudQueuedDraftStatus";
+import {
   buildDraftActionMenuItems,
   buildThreadActionMenuItems,
   threadActionRequiresOperate,
@@ -857,7 +861,7 @@ function SidebarSectionHeader(props: {
 // While the draft is open the row renders a frozen snapshot (see
 // SidebarDraftBlock); memoized so per-keystroke block re-renders skip it
 // entirely.
-const SidebarDraftRow = memo(function SidebarDraftRow(props: {
+export const SidebarDraftRow = memo(function SidebarDraftRow(props: {
   draftId: DraftId;
   composer: ComposerThreadDraftState;
   project: ProjectFaviconProject | null;
@@ -868,8 +872,13 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
   onContextMenu: (draftId: DraftId, position: { x: number; y: number }) => void;
 }) {
   const { composer, draftId, onContextMenu, onDiscard, onNavigate } = props;
+  // t3team: a draft whose first message waits for its cloud session previews that message.
+  const queued = composer.cloudQueuedSend ?? null;
   const promptPreview =
-    replaceComposerContextReferences(composer.prompt, (occurrence) => occurrence.label)
+    replaceComposerContextReferences(
+      composer.prompt.trim().length > 0 || queued === null ? composer.prompt : queued.messageText,
+      (occurrence) => occurrence.label,
+    )
       .trim()
       .split("\n", 1)[0] ?? "";
   // images mirrors persistedAttachments once rehydration finishes; before
@@ -886,7 +895,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
       : `${attachmentCount} attachment${attachmentCount === 1 ? "" : "s"}`;
   const accessibility = resolveSidebarRowAccessibility({
     title: preview,
-    statusLabel: "Unsent draft",
+    statusLabel: queued ? cloudQueuedDraftStatusLabel(queued) : "Unsent draft",
     projectDisplayName: props.projectDisplayName,
     isActive: props.isActive,
   });
@@ -949,6 +958,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
             <span className="min-w-0 flex-1 truncate text-xs font-medium text-secondary-label">
               {props.projectDisplayName}
             </span>
+            {queued ? <CloudQueuedDraftStatus queued={queued} /> : null}
             <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-end">
               <Tooltip>
                 <TooltipTrigger
@@ -1039,7 +1049,12 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
         // Open draft: render the frozen entry snapshot, or nothing for a
         // draft that has never been left. Gated on the LIVE session above so
         // send/discard still removes the row immediately.
-        if (frozenActive.routeDraftId === draftKey && frozenActive.row !== null) {
+        // t3team: a sent first message waiting for its cloud session is a thread to be, so
+        // the open draft shows live with its Queued status.
+        const liveComposer = draftsByThreadKey[draftKey];
+        if (liveComposer?.cloudQueuedSend) {
+          rows.push({ draftId: DraftId.make(draftKey), session, composer: liveComposer });
+        } else if (frozenActive.routeDraftId === draftKey && frozenActive.row !== null) {
           rows.push(frozenActive.row);
         }
         continue;

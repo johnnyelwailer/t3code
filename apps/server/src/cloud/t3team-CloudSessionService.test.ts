@@ -21,12 +21,14 @@ import * as NexiBrokerService from "./t3team-NexiBrokerService.ts";
 import { ConnectCredentialMintError } from "./t3team-ConnectCredentialMintError.ts";
 import * as CloudSessionService from "./t3team-CloudSessionService.ts";
 import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
+import type { CloudSessionPlainProject } from "./t3team-cloudSessionPlainProject.ts";
 
 /** Sessions here are plain ones: no project, so the machine resolver is never consulted. */
 const noMachines = Layer.mock(CloudSessionMachines)({
   resolve: () => Effect.die("these sessions have no project"),
   resolveSetup: () => Effect.die("these sessions have no project"),
   poolKeyOf: () => Effect.succeed(null),
+  resolvePlain: () => Effect.die("these sessions have no project"),
 });
 
 /** The credential identity `GitHubApi` reports: the pinned one when set, else the ambient one. */
@@ -682,6 +684,80 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       assert.notInclude(dispatch, "machine_devcontainer");
       assert.notInclude(dispatch, "ghp_setup");
     }).pipe(Effect.scoped),
+  );
+
+  const plainMachines = (plain: CloudSessionPlainProject) =>
+    Layer.mock(CloudSessionMachines)({
+      resolve: () => Effect.succeed(null),
+      resolveSetup: () => Effect.die("not a setup"),
+      poolKeyOf: () => Effect.succeed(null),
+      resolvePlain: () => Effect.succeed(plain),
+    });
+
+  it.effect("a plain session for a project checks that project out, as the user", () =>
+    Effect.gen(function* () {
+      const { calls, rest, graphql } = makeGithubMock();
+      const parked: Array<Readonly<Record<string, string>> | undefined> = [];
+      const machines = plainMachines({
+        kind: "checkout",
+        checkout: {
+          repository: {
+            url: "https://nexplore.ghe.com/hive/common-agentdirectives.git",
+            host: "nexplore.ghe.com",
+            owner: "hive",
+            name: "common-agentdirectives",
+          },
+          commit: "d".repeat(40),
+          token: "ghp_plain",
+          author: { name: "Pj", email: "pj@example.test" },
+        },
+      });
+      const broker = brokerMock((_login, secrets) =>
+        Effect.sync(() => (parked.push(secrets), "g")),
+      );
+      yield* runPastDiscoveryPoll(
+        create(providersWith(rest, graphql, broker, machines), ProjectId.make("p1")),
+      );
+      const dispatch = calls.find((call) => joinedOf(call).includes("/dispatches"))?.stdin ?? "";
+      assert.include(
+        dispatch,
+        '"project_repository":"https://nexplore.ghe.com/hive/common-agentdirectives.git"',
+      );
+      assert.include(dispatch, `"project_commit":"${"d".repeat(40)}"`);
+      assert.include(dispatch, '"workspace":"m-pj.hive.common-agentdirectives_"');
+      // Plain: no machine, no setup, and the token rides only with the grant.
+      assert.notInclude(dispatch, "machine_");
+      assert.notInclude(dispatch, "ghp_plain");
+      assert.deepEqual(parked, [
+        { GIT_TOKEN: "ghp_plain", GIT_AUTHOR_NAME: "Pj", GIT_AUTHOR_EMAIL: "pj@example.test" },
+      ]);
+    }),
+  );
+
+  it.effect("a plain session for a project with no remote starts in a folder named after it", () =>
+    Effect.gen(function* () {
+      const { calls, rest, graphql } = makeGithubMock();
+      const parked: Array<Readonly<Record<string, string>> | undefined> = [];
+      const broker = brokerMock((_login, secrets) =>
+        Effect.sync(() => (parked.push(secrets), "g")),
+      );
+      yield* runPastDiscoveryPoll(
+        create(
+          providersWith(
+            rest,
+            graphql,
+            broker,
+            plainMachines({ kind: "workspace", folder: "IES NG-781a8188" }),
+          ),
+          ProjectId.make("p1"),
+        ),
+      );
+      const dispatch = calls.find((call) => joinedOf(call).includes("/dispatches"))?.stdin ?? "";
+      assert.include(dispatch, '"project_name":"IES NG-781a8188"');
+      assert.include(dispatch, '"workspace":"u-pj_"');
+      assert.notInclude(dispatch, "project_repository");
+      assert.deepEqual(parked, [undefined]);
+    }),
   );
 
   it.effect("a warm standby of the project is claimed instead of dispatching a session", () =>

@@ -1871,6 +1871,7 @@ const layerWsRpc = (
             kanbanSemanticZoom: isKanbanSemanticZoomEnabled(),
             threadFind: true,
             threadFindProgressive: true,
+            projectFromCwd: config.autoBootstrapProjectFromCwd,
             ...Option.match(scratchWorkspaceRoot, {
               onNone: () => ({}),
               onSome: (root) => ({ scratchWorkspaceRoot: root }),
