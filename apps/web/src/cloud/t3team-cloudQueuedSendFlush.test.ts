@@ -56,6 +56,17 @@ describe("decideCloudQueuedSendFlush", () => {
     ).toEqual({ kind: "dispatch", environmentId: "env-cloud", projectId: "p" });
   });
 
+  it("connects a T3 Connect session with no published environment id through relay discovery", () => {
+    const noId = (transport: "t3_connect" | "nexi_broker") =>
+      decideCloudQueuedSendFlush({
+        ...base,
+        session: session("ready", { environmentId: undefined, transport }),
+      }).kind;
+    expect(noId("t3_connect")).toBe("connect");
+    // A broker session's id arrives once its VM reports in; connecting earlier fails.
+    expect(noId("nexi_broker")).toBe("wait");
+  });
+
   it("treats an existing thread as already delivered instead of sending again", () => {
     expect(
       decideCloudQueuedSendFlush({

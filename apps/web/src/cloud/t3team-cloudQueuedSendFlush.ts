@@ -74,8 +74,11 @@ export function decideCloudQueuedSendFlush(input: {
   }
   if (session.phase !== "ready") return { kind: "wait" };
   // Broker sessions mint the environment id only once the VM reports in; connecting before
-  // that fails with "still starting".
-  if (environmentId === undefined) return { kind: "wait" };
+  // that fails with "still starting". A T3 Connect session whose workflow published no id is
+  // matched through relay discovery on connect, as the ChatView bind flush did.
+  if (environmentId === undefined) {
+    return session.transport === "nexi_broker" ? { kind: "wait" } : { kind: "connect", session };
+  }
   if (!input.machineConnected) return { kind: "connect", session };
   if (input.projectId === null) {
     return input.scratch ? { kind: "open-scratch", environmentId } : { kind: "wait" };

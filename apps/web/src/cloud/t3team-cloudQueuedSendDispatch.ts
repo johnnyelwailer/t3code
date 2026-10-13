@@ -1,9 +1,8 @@
 /**
- * Delivers one queued cloud send: retargets the draft at the cloud machine, launches its thread
- * with the prepared first message, and promotes the draft. Exactly once:
- *  - here and in other windows: the dispatching set and the outbox's cross-tab claim (Cancel too);
- *  - the server: a command id derived from the message id, so a replay after a crash, a reload
- *    or a retry returns the first launch's receipt instead of launching again.
+ * Delivers one queued cloud send (retarget the draft, launch its thread, promote it), exactly
+ * once: the in-window dispatching set; the renewed cross-window claim (Cancel takes it too) with
+ * the persisted record re-read under it; and a command id derived from the message id, so a
+ * server replay after a crash, reload or retry returns the first launch's receipt.
  */
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { StartThreadTurnInput } from "@t3tools/client-runtime/operations";
@@ -17,10 +16,10 @@ import {
   useComposerDraftStore,
   type DraftSessionState,
 } from "~/composerDraftStore";
-import { acquireOutboxDispatch, releaseOutboxDispatch } from "~/t3team/outbox/t3team-outboxStorage";
+import { holdCloudQueuedSendClaim } from "./t3team-cloudQueuedSendClaim";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
+import { isPersistedCloudQueuedSendPending } from "./t3team-cloudQueuedSendPersisted";
 import {
-  cloudQueuedSendClaimKey,
   failDraftCloudQueuedSend,
   getDraftCloudQueuedSend,
   writeDraftCloudQueuedSend,
@@ -109,13 +108,14 @@ export async function dispatchCloudQueuedSend(input: {
   readonly projectCwd: string | null;
   readonly startTurn: StartCloudQueuedTurn;
 }): Promise<"sent" | "failed" | "skipped"> {
-  const claimKey = cloudQueuedSendClaimKey(input.messageId);
-  if (isCloudQueuedSendDispatching(input.messageId) || !acquireOutboxDispatch(claimKey)) {
-    return "skipped";
-  }
+  if (isCloudQueuedSendDispatching(input.messageId)) return "skipped";
+  const claim = holdCloudQueuedSendClaim(input.messageId);
+  if (claim === null) return "skipped";
   setCloudQueuedSendDispatching(input.messageId, true);
   try {
-    // Re-read under the claim: another window may have sent or cancelled it meanwhile.
+    // Under the claim, the persisted record decides: another window may have sent or
+    // cancelled it while this window's copy still shows it queued.
+    if (!isPersistedCloudQueuedSendPending(input.draftId, input.messageId)) return "skipped";
     const queued = getDraftCloudQueuedSend(input.draftId);
     const store = useComposerDraftStore.getState();
     const draftId = DraftId.make(input.draftId);
@@ -151,6 +151,6 @@ export async function dispatchCloudQueuedSend(input: {
     return "sent";
   } finally {
     setCloudQueuedSendDispatching(input.messageId, false);
-    releaseOutboxDispatch(claimKey);
+    claim.release();
   }
 }
