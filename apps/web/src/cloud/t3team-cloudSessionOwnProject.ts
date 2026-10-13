@@ -57,6 +57,17 @@ function isSameProject(composer: ComposerProject, own: ProjectFacts) {
   return ownRepository === null || ownRepository === composerRepository;
 }
 
+/**
+ * The working directory a server registers as its project, or null when it registers none there
+ * (an older server, or one started without `--auto-bootstrap-project-from-cwd`): only then is a
+ * project at that path expected, and worth holding the session's environment for.
+ */
+export function projectCwdOf(
+  serverConfig: { readonly cwd?: string; readonly projectFromCwd?: boolean } | null | undefined,
+): string | null {
+  return serverConfig?.projectFromCwd === true && serverConfig.cwd ? serverConfig.cwd : null;
+}
+
 export function resolveCloudSessionOwnProject(input: {
   /** The composer's Run-on target (null when it targets no cloud session). */
   readonly target: { readonly sessionId: string; readonly projectKey: string | null } | null;
@@ -64,7 +75,7 @@ export function resolveCloudSessionOwnProject(input: {
   readonly project: ComposerProject | null;
   readonly projectKey: string | null;
   readonly sessions: ReadonlyArray<Pick<CloudSession, "sessionId" | "environmentId">>;
-  /** The server working directory an environment reported in its config; null when unknown. */
+  /** The working directory an environment registers as its project (`projectCwdOf`); null when none. */
   readonly serverCwdOf: (environmentId: EnvironmentId) => string | null;
   readonly projects: ReadonlyArray<
     ProjectFacts & { readonly environmentId: EnvironmentId; readonly id: ProjectId }

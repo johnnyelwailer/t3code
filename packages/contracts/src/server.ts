@@ -775,6 +775,11 @@ export const ServerConfig = Schema.Struct({
   threadFind: Schema.optionalKey(Schema.Boolean),
   threadFindProgressive: Schema.optionalKey(Schema.Boolean),
   /**
+   * Whether this server registers its working directory (`cwd`) as a project on startup.
+   * Absent on servers that predate the field.
+   */
+  projectFromCwd: Schema.optionalKey(Schema.Boolean),
+  /**
    * Folder behind this environment's Scratch project, for threads that need
    * no repository. Present only on servers that answer projects.ensureScratch
    * and whose data dir is outside a Git checkout.

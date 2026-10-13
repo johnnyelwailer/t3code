@@ -6,6 +6,7 @@ import { useEnvironments } from "~/state/environments";
 import { useCloudSessions } from "~/state/t3team-cloudSessions";
 import {
   type CloudSessionOwnProject,
+  projectCwdOf,
   resolveCloudSessionOwnProject,
 } from "./t3team-cloudSessionOwnProject";
 import { useCloudSessionTarget } from "./t3team-cloudSessionTargetStore";
@@ -28,7 +29,7 @@ export function useCloudSessionOwnProject(
   return useMemo(() => {
     const cwdById = new Map<EnvironmentId, string>();
     for (const environment of environments) {
-      const cwd = environment.serverConfig?.cwd;
+      const cwd = projectCwdOf(environment.serverConfig);
       if (cwd) cwdById.set(environment.environmentId, cwd);
     }
     return resolveCloudSessionOwnProject({

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   logicalProjectPerEnvironment,
+  projectCwdOf,
   resolveCloudSessionOwnProject,
 } from "./t3team-cloudSessionOwnProject";
 
@@ -136,5 +137,16 @@ describe("logicalProjectPerEnvironment", () => {
       { environmentId: LOCAL, projectId: ProjectId.make("local") },
       { environmentId: VM, projectId: ProjectId.make("restored") },
     ]);
+  });
+});
+
+describe("projectCwdOf", () => {
+  it("is the cwd only on a server that registers it as its project", () => {
+    expect(projectCwdOf({ cwd: "/vm/project", projectFromCwd: true })).toBe("/vm/project");
+    // Older servers do not say, and a server without the flag never lists a project there:
+    // holding the environment for one would hold it forever.
+    expect(projectCwdOf({ cwd: "/vm/project" })).toBeNull();
+    expect(projectCwdOf({ cwd: "/vm/project", projectFromCwd: false })).toBeNull();
+    expect(projectCwdOf(null)).toBeNull();
   });
 });
