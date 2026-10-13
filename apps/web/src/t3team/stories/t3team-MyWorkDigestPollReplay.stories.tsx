@@ -8,6 +8,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { DigestPollReplay } from "./t3team-DigestPollReplay";
 import {
   DIGEST_REPLAY_EMPTY_FIRST_STEPS,
+  DIGEST_REPLAY_REFILL_STEPS,
   DIGEST_REPLAY_STEPS,
 } from "./t3team-digestPollReplayScenario";
 
@@ -30,4 +31,8 @@ export const CachedPaintThenPolls: Story = {
 
 export const EmptyFirstSyncThenPopulated: Story = {
   render: () => <DigestPollReplay steps={DIGEST_REPLAY_EMPTY_FIRST_STEPS} />,
+};
+
+export const MirrorRefillKeepsContent: Story = {
+  render: () => <DigestPollReplay steps={DIGEST_REPLAY_REFILL_STEPS} />,
 };

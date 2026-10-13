@@ -171,3 +171,10 @@ export const DIGEST_REPLAY_EMPTY_FIRST_STEPS: ReadonlyArray<DigestReplayStep> = 
   step("tickets arrive", 500, { syncedMinutesAgo: 0 }),
   step("pull requests settle", 380, { syncedMinutesAgo: 0, changeRequestsPending: false }),
 ];
+
+/** A re-sync that empties the mirror for a moment: the digest must keep what it showed. */
+export const DIGEST_REPLAY_REFILL_STEPS: ReadonlyArray<DigestReplayStep> = [
+  step("first round lands", 600, {}),
+  step("Jira re-syncs, mirror momentarily empty", 450, { noTickets: true, jiraSyncPending: true }),
+  step("mirror refilled", 400, { syncedMinutesAgo: 0, changeRequestsPending: false }),
+];
