@@ -740,12 +740,6 @@ export const ServerConfig = Schema.Struct({
    */
   mainRepository: Schema.optionalKey(Schema.Boolean),
   /**
-   * Whether linked reference repositories stay lazy at bootstrap (main-only eager sync).
-   * Runtime feature flag (env `NEXI_FF_LAZY_LINKED_REPOSITORY_CHECKOUT`, default on); absent on
-   * older servers, which clients treat as off (legacy eager background sync at bootstrap).
-   */
-  lazyLinkedRepositoryCheckout: Schema.optionalKey(Schema.Boolean),
-  /**
    * Whether a cloud session for a project with no machine definition sets one up.
    * Runtime feature flag (env `NEXI_FF_MACHINE_SETUP`, default off); absent on older servers.
    */

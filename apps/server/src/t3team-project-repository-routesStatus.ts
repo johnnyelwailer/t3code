@@ -59,7 +59,7 @@ export const readLinkedRepositoryStatus = Effect.fn("readLinkedRepositoryStatus"
   };
 });
 
-export const ensureLinkedRepositoryCheckoutRoute = Effect.fn("ensureLinkedRepositoryCheckoutRoute")(
+const ensureLinkedRepositoryCheckoutRoute = Effect.fn("ensureLinkedRepositoryCheckoutRoute")(
   function* (workspaceRoot: string, repository: string) {
     const entry = yield* ensureLinkedRepositoryCheckout({ workspaceRoot, repository });
     const sync = yield* T3TeamLinkedRepositorySync;

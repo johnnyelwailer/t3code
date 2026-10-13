@@ -15,10 +15,6 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 import type { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
-import * as Option from "effect/Option";
-import { isLazyLinkedRepositoryCheckoutEnabled } from "./t3team-lazyLinkedRepositoryFlag.ts";
-import { ensureLinkedRepositoryCheckout } from "./t3team-linkedRepositoryOnDemand.ts";
-import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 import {
   HIDDEN_T3TEAM_DIR,
   isLinkedRepositoryReady,
@@ -101,20 +97,6 @@ export const resolvePullRequestCheckoutRoot = (input: {
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const reference = input.reference.trim();
-    const sync = yield* Effect.serviceOption(T3TeamLinkedRepositorySync);
-    if (
-      Option.isSome(sync) &&
-      isLazyLinkedRepositoryCheckoutEnabled() &&
-      WEB_URL.test(reference)
-    ) {
-      yield* ensureLinkedRepositoryCheckout({
-        workspaceRoot: input.cwd,
-        repository: reference,
-      }).pipe(
-        Effect.provideService(T3TeamLinkedRepositorySync, sync.value),
-        Effect.catch(() => Effect.void),
-      );
-    }
     if (!WEB_URL.test(reference)) return input.cwd;
 
     const ownRemoteUrl = yield* input.sourceControlProviders.resolveHandle({ cwd: input.cwd }).pipe(

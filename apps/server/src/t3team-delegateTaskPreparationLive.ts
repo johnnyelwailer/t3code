@@ -42,6 +42,9 @@ import { startChildSetupScript } from "./t3team-toolBrokerStartChildContext.ts";
 import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts";
 import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { ensureLinkedRepositoryCheckout } from "./t3team-linkedRepositoryOnDemand.ts";
+import { isLazyLinkedRepositoryCheckoutEnabled } from "./t3team-lazyLinkedRepositoryFlag.ts";
+import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 
 const failure = (code: OrchestratorMcpFailure["code"], message: string) =>
   new OrchestratorMcpFailure({ code, message });
@@ -62,6 +65,7 @@ const make = Effect.gen(function* () {
   const workflows = Option.getOrUndefined(
     yield* Effect.serviceOption(T3TeamWorkflowEngineRegistry),
   );
+  const linkedRepositorySync = yield* T3TeamLinkedRepositorySync;
   const recordChild = makeDelegatedChildRecorder({
     metadata: yield* T3TeamChildThreadMetadata,
     facts: yield* T3TeamThreadFactsStore,
@@ -110,14 +114,30 @@ const make = Effect.gen(function* () {
         const workspace =
           isolated === undefined || project === undefined
             ? undefined
-            : yield* resolveDelegatedWorkspace({
-                services,
-                projectWorkspaceRoot: project.workspaceRoot,
-                projectMainRepository: project.mainRepository,
-                repository: isolated.repository,
-                baseRef: isolated.baseRef,
-                branchSeed: input.title ?? "child",
-                worktreeKey: delegatedWorktreeKey(parentThread.id, input.requestKey),
+            : yield* Effect.gen(function* () {
+                const repo = isolated.repository?.trim();
+                if (
+                  repo !== undefined &&
+                  repo.length > 0 &&
+                  isLazyLinkedRepositoryCheckoutEnabled()
+                ) {
+                  yield* ensureLinkedRepositoryCheckout({
+                    workspaceRoot: project.workspaceRoot,
+                    repository: repo,
+                  }).pipe(
+                    Effect.provideService(T3TeamLinkedRepositorySync, linkedRepositorySync),
+                    Effect.mapError((message) => failure("invalid_request", String(message))),
+                  );
+                }
+                return yield* resolveDelegatedWorkspace({
+                  services,
+                  projectWorkspaceRoot: project.workspaceRoot,
+                  projectMainRepository: project.mainRepository,
+                  repository: isolated.repository,
+                  baseRef: isolated.baseRef,
+                  branchSeed: input.title ?? "child",
+                  worktreeKey: delegatedWorktreeKey(parentThread.id, input.requestKey),
+                });
               }).pipe(Effect.mapError((message) => failure("invalid_request", message)));
         if (workspace !== undefined) notes.push(describeDelegatedWorkspace(workspace));
         const environment = resolveEnvironmentBinding(

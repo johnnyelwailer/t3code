@@ -7,7 +7,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { afterAll, describe, expect } from "vite-plus/test";
+import { describe, expect } from "vite-plus/test";
 
 import type { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import {
@@ -19,7 +19,6 @@ import {
   repositoryContainsPullRequest,
   resolvePullRequestCheckoutRoot,
 } from "./t3team-pullRequestCheckoutRoot.ts";
-import { LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV } from "./t3team-lazyLinkedRepositoryFlag.ts";
 
 const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
@@ -85,13 +84,6 @@ describe("repositoryContainsPullRequest", () => {
 
 describe("resolvePullRequestCheckoutRoot", () => {
   const prUrl = "https://github.com/acme/api/pull/4";
-  const previousLazy = process.env[LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV];
-  process.env[LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV] = "0";
-  afterAll(() => {
-    if (previousLazy === undefined) delete process.env[LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV];
-    else process.env[LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV] = previousLazy;
-  });
-
   it.effect("runs in the linked repository's local clone when the project root has no remote", () =>
     Effect.gen(function* () {
       const clone = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "pr-checkout-clone-"));
