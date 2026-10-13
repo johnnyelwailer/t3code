@@ -35,6 +35,12 @@ export const syncLinkedCheckout = (job: {
         error: "Reference path already exists but is not a git repository.",
       } as const;
     }
+    if (state === "unreadable") {
+      return {
+        status: "failed",
+        error: "Git could not read the existing checkout, so it was left untouched.",
+      } as const;
+    }
     if (state === "missing") {
       job.onPhase("cloning");
       yield* cloneLinkedCheckoutAtomically({ url: job.url, directory: localPath });

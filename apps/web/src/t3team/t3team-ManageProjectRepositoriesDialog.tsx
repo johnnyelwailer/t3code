@@ -20,6 +20,8 @@ import { saveProjectRepositories } from "~/t3team/hooks/t3team-saveProjectReposi
 import { useLinkedRepositorySyncStatus } from "~/t3team/hooks/t3team-useLinkedRepositorySyncStatus";
 import { LinkedRepositorySyncStatusLine } from "~/t3team/components/t3team-LinkedRepositorySyncStatusLine";
 import { useGitHubRepositoryDiscovery } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
+import { LinkedRepositorySyncModal } from "~/t3team/components/t3team-LinkedRepositorySyncModal";
+import { useLinkedRepositorySyncView } from "~/t3team/hooks/t3team-useLinkedRepositorySyncView";
 import { useServerConfig } from "~/t3team/t3team-serverState";
 
 export function ManageProjectRepositoriesDialog({
@@ -85,9 +87,18 @@ export function ManageProjectRepositoriesDialog({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose, saving]);
 
+  const mainChange =
+    mainRepositoryEnabled && mainRepositoryUrl !== initialMainUrl ? mainRepositoryUrl : undefined;
+  const syncView = useLinkedRepositorySyncView({
+    urls: linkedRepositoryUrls,
+    byUrl: syncStatus.byUrl,
+    mainRepositoryUrl: mainChange,
+  });
+
   const saveLinkedRepositories = async () => {
     setSaveError(null);
     setSaving(true);
+    syncView.begin();
     try {
       const nextProject = await saveProjectRepositories({
         backend,
@@ -95,15 +106,15 @@ export function ManageProjectRepositoriesDialog({
         linkedRepositoryUrls,
         // Show clone progress while the save waits on the chosen main repository's clone.
         onSaved: () => syncStatus.refresh(),
-        ...(mainRepositoryEnabled && mainRepositoryUrl !== initialMainUrl
-          ? { mainRepositoryUrl }
-          : {}),
+        onPhase: syncView.setPhase,
+        ...(mainChange !== undefined ? { mainRepositoryUrl: mainChange } : {}),
       });
       onProjectUpdated(nextProject);
       setSaved({ urls: linkedRepositoryUrls, main: mainRepositoryUrl });
       syncStatus.refresh();
     } catch (error) {
       setSaveError(error);
+      syncView.hide();
     } finally {
       setSaving(false);
     }
@@ -119,8 +130,14 @@ export function ManageProjectRepositoriesDialog({
       <Card
         role="dialog"
         aria-label="Linked repositories"
-        className="flex h-full w-full max-w-4xl flex-col overflow-hidden sm:h-[calc(100dvh-4rem)]"
+        className="relative flex h-full w-full max-w-4xl flex-col overflow-hidden sm:h-[calc(100dvh-4rem)]"
       >
+        {syncView.visible ? (
+          <LinkedRepositorySyncModal
+            steps={syncView.steps}
+            onContinueInBackground={syncView.hide}
+          />
+        ) : null}
         <header className="flex items-start justify-between gap-3 px-5 pt-5 pb-4">
           <div className="min-w-0">
             <h2 className="text-base font-semibold">Linked repositories</h2>

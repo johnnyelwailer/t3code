@@ -106,6 +106,12 @@ const makeHarness = Effect.fn("TestEnvironmentThreads.makeHarness")(function* (o
     readonly latestLocalTurnOrdinal?: number | null;
   };
   readonly httpSnapshot?: ThreadSnapshotLoadResult;
+  /**
+   * Fixture snapshots stand in for a current server, which names the event at
+   * its cursor. "omit" models a cache written before ids existed or an older
+   * server: such a cursor is not resumable.
+   */
+  readonly eventIds?: "omit";
   readonly completionMarker?: boolean;
   readonly resumeCache?: NonNullable<Parameters<typeof makeEnvironmentThreadState>[1]>;
   readonly loadCached?: ReturnType<Persistence.EnvironmentCacheStore["Service"]["loadThread"]>;
@@ -157,13 +163,27 @@ const makeHarness = Effect.fn("TestEnvironmentThreads.makeHarness")(function* (o
   const prepared = yield* SubscriptionRef.make<Option.Option<PreparedConnection>>(
     Option.some(PREPARED),
   );
+  const withFixtureEventId = (loaded: ThreadSnapshotLoadResult): ThreadSnapshotLoadResult =>
+    loaded._tag !== "present" ||
+    options?.eventIds === "omit" ||
+    loaded.snapshot.snapshotEventId !== undefined
+      ? loaded
+      : {
+          ...loaded,
+          snapshot: {
+            ...loaded.snapshot,
+            snapshotEventId: EventId.make(`http-event-${loaded.snapshot.snapshotSequence}`),
+          },
+        };
   const snapshotLoader = ThreadSnapshotLoader.ThreadSnapshotLoader.of({
     load: (_prepared, threadId) =>
       Ref.update(loaderCalls, (count) => count + 1).pipe(
         Effect.as(
           threadId === THREAD_ID
-            ? (options?.httpSnapshot ??
-                ({ _tag: "unavailable" } satisfies ThreadSnapshotLoadResult))
+            ? withFixtureEventId(
+                options?.httpSnapshot ??
+                  ({ _tag: "unavailable" } satisfies ThreadSnapshotLoadResult),
+              )
             : ({ _tag: "unavailable" } satisfies ThreadSnapshotLoadResult),
         ),
       ),
@@ -186,6 +206,9 @@ const makeHarness = Effect.fn("TestEnvironmentThreads.makeHarness")(function* (o
         threadId === THREAD_ID && options?.cached !== undefined
           ? Option.some({
               snapshotSequence: CACHED_SNAPSHOT_SEQUENCE,
+              ...(options.eventIds === "omit"
+                ? {}
+                : { snapshotEventId: EventId.make("cached-event-7") }),
               projection: options.cached,
               ...(options.cachedHistory === undefined
                 ? {}
@@ -279,6 +302,7 @@ const snapshot = (
 ): Extract<OrchestrationV2ThreadStreamItem, { readonly kind: "snapshot" }> => ({
   kind: "snapshot",
   snapshotSequence,
+  snapshotEventId: EventId.make(`snapshot-event-${snapshotSequence}`),
   projection,
 });
 
@@ -398,6 +422,7 @@ describe("EnvironmentThreads", () => {
       expect(yield* Ref.get(saved)).toEqual([
         {
           snapshotSequence: 7,
+          snapshotEventId: "http-event-7",
           projection: BASE_PROJECTION,
           historyCursor: null,
           hasMoreHistory: false,
@@ -531,6 +556,7 @@ describe("EnvironmentThreads", () => {
         {
           projection: BASE_PROJECTION,
           snapshotSequence: CACHED_SNAPSHOT_SEQUENCE,
+          snapshotEventId: "http-event-7",
           historyCursor: null,
           hasMoreHistory: false,
           latestLocalTurnOrdinal: null,
@@ -594,6 +620,7 @@ describe("EnvironmentThreads", () => {
         response,
         Option.some({
           snapshotSequence: 3,
+          snapshotEventId: EventId.make("old-disk-event-3"),
           projection: {
             ...BASE_PROJECTION,
             thread: { ...BASE_PROJECTION.thread, title: "Old disk data" },
@@ -1798,6 +1825,7 @@ describe("EnvironmentThreads", () => {
         kind: "unknown-event",
         sequence,
         eventType: "run.from-a-future-server",
+        eventId: EventId.make(`future-event-${sequence}`),
       });
       const occurredAt = DateTime.makeUnsafe("2026-06-20T01:00:00.000Z");
       yield* Queue.offerAll(harness.inputs, [
@@ -1850,6 +1878,46 @@ describe("EnvironmentThreads", () => {
       }
       expect(yield* Ref.get(harness.subscriptionCount)).toBe(2);
       expect(yield* Ref.get(harness.lastSubscribeAfterSequence)).toBe(CACHED_SNAPSHOT_SEQUENCE + 4);
+    }),
+  );
+
+  it.effect("does not resume past an unknown event that arrived without an id", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({ cached: BASE_PROJECTION, completionMarker: true });
+      yield* Queue.offerAll(harness.inputs, [
+        { kind: "unknown-event", sequence: 8, eventType: "run.from-a-future-server" },
+        synchronized(),
+      ]);
+      yield* awaitThreadState(harness.observed, (value) => value.status === "live");
+      yield* harness.replaceSession;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        if ((yield* Ref.get(harness.subscriptionCount)) >= 2) break;
+        yield* Effect.yieldNow;
+      }
+      expect(yield* Ref.get(harness.subscriptionCount)).toBe(2);
+      // The cursor moved to a sequence nothing can name, so it is not resumable:
+      // the server is asked for a snapshot rather than a delta.
+      expect(yield* Ref.get(harness.lastSubscribeAfterSequence)).toBeUndefined();
+    }),
+  );
+
+  it.effect("does not resume a cached cursor that has no event id", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({
+        cached: BASE_PROJECTION,
+        eventIds: "omit",
+        completionMarker: true,
+      });
+      yield* Queue.offer(harness.inputs, snapshot(BASE_PROJECTION, 9));
+      yield* Queue.offer(harness.inputs, synchronized());
+      // The cached projection paints right away; only the resume cursor is withheld.
+      yield* awaitThreadState(harness.observed, (value) => Option.isSome(value.data));
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        if ((yield* Ref.get(harness.subscriptionCount)) >= 1) break;
+        yield* Effect.yieldNow;
+      }
+      expect(yield* Ref.get(harness.subscriptionCount)).toBe(1);
+      expect(yield* Ref.get(harness.lastSubscribeAfterSequence)).toBeUndefined();
     }),
   );
 

@@ -1,6 +1,7 @@
 import {
   ORCHESTRATION_V2_WS_METHODS,
   type EnvironmentId as EnvironmentIdType,
+  type EventId,
   type OrchestrationV2ThreadDetailSnapshot,
   type OrchestrationV2ThreadProjection,
   type OrchestrationV2ThreadStreamItem,
@@ -92,19 +93,23 @@ function snapshotToPersist(
   projection: OrchestrationV2ThreadProjection,
   history: ThreadHistoryMeta,
   acceptsBoundedSnapshots: boolean,
+  snapshotEventId?: EventId,
 ): OrchestrationV2ThreadDetailSnapshot {
+  // The cursor's event id lets the next resume prove the cursor is still ours.
+  const eventId = snapshotEventId === undefined ? {} : { snapshotEventId };
   // A complete bounded snapshot still proves paging support. Retain that evidence
   // so a thread that grows while closed can resume with a bounded fallback.
   if (acceptsBoundedSnapshots || history.hasMoreHistory || history.historyCursor !== null) {
     return {
       snapshotSequence,
+      ...eventId,
       projection,
       historyCursor: history.historyCursor,
       hasMoreHistory: history.hasMoreHistory,
       latestLocalTurnOrdinal: history.latestLocalTurnOrdinal,
     };
   }
-  return { snapshotSequence, projection };
+  return { snapshotSequence, ...eventId, projection };
 }
 
 function shouldPersistThread(
@@ -124,6 +129,8 @@ function shouldPersistThread(
 interface ThreadResumeSnapshot {
   readonly state: EnvironmentThreadState;
   readonly sequence: number;
+  /** Event id at `sequence`; undefined when the cursor's event id is unknown. */
+  readonly eventId?: EventId;
   readonly persisted: boolean;
   readonly acceptsBoundedSnapshots?: boolean;
 }
@@ -225,9 +232,19 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
     retained?.sequence ??
     Option.match(cached, { onNone: () => 0, onSome: (snapshot) => snapshot.snapshotSequence });
   const lastSequence = yield* SubscriptionRef.make(initialSequence);
+  // Sent as `afterEventId` so the server can tell a cursor from this timeline
+  // from one a restored or overlapping server reissued for different events.
+  const initialEventId = retained
+    ? retained.eventId
+    : Option.match(cached, {
+        onNone: () => undefined,
+        onSome: (snapshot) => snapshot.snapshotEventId,
+      });
+  const lastEventId = yield* Ref.make<EventId | undefined>(initialEventId);
   let committed: ThreadResumeSnapshot = {
     state: initialState,
     sequence: initialSequence,
+    ...(initialEventId === undefined ? {} : { eventId: initialEventId }),
     persisted: retained?.persisted ?? Option.isSome(cached),
     acceptsBoundedSnapshots: canLoadHistory,
   };
@@ -245,9 +262,11 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
   const remember = Effect.gen(function* () {
     const current = yield* SubscriptionRef.get(state);
     const sequence = yield* SubscriptionRef.get(lastSequence);
+    const eventId = yield* Ref.get(lastEventId);
     committed = {
       state: current,
       sequence,
+      ...(eventId === undefined ? {} : { eventId }),
       acceptsBoundedSnapshots: yield* Ref.get(acceptsBoundedSocketSnapshots),
       persisted:
         committed.persisted &&
@@ -303,7 +322,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
 
   yield* Effect.addFinalizer(() =>
     Effect.suspend(() => {
-      const { state: current, sequence: snapshotSequence } = committed;
+      const { state: current, sequence: snapshotSequence, eventId } = committed;
       return Option.match(current.data, {
         onNone: () => Effect.void,
         onSome: (projection) =>
@@ -314,6 +333,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
                   projection,
                   current.history,
                   committed.acceptsBoundedSnapshots === true,
+                  eventId,
                 ),
               )
             : Effect.void,
@@ -408,6 +428,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
           thread,
           next.history,
           yield* Ref.get(acceptsBoundedSocketSnapshots),
+          yield* Ref.get(lastEventId),
         ),
       );
     }
@@ -452,11 +473,14 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
   ) {
     const appliedSequence = yield* SubscriptionRef.get(lastSequence);
     let sequence = appliedSequence;
+    let eventId: EventId | undefined;
     const fresh: EventItem[] = [];
     for (const item of items) {
       if (item.sequence <= sequence) continue;
       // An event type from a newer server still moves the resume cursor past it.
       sequence = item.sequence;
+      // Always the id of the event AT `sequence`, or cleared when the wire omitted it.
+      eventId = item.kind === "event" ? item.event.id : item.eventId;
       if (item.kind === "event") {
         fresh.push(item);
         continue;
@@ -473,6 +497,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
     }
     if (sequence === appliedSequence) return;
     yield* SubscriptionRef.set(lastSequence, sequence);
+    yield* Ref.set(lastEventId, eventId);
     if (fresh.length === 0) return;
 
     const waiting = yield* Ref.get(awaitingCompletion);
@@ -569,6 +594,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
           result.projection,
           result.history,
           yield* Ref.get(acceptsBoundedSocketSnapshots),
+          yield* Ref.get(lastEventId),
         ),
       );
     }
@@ -588,7 +614,10 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
     }
 
     if (item.kind === "snapshot") {
+      // A snapshot replaces the cursor outright (it may be lower than the old
+      // one when the server's timeline was reset), never merges with it.
       yield* SubscriptionRef.set(lastSequence, item.snapshotSequence);
+      yield* Ref.set(lastEventId, item.snapshotEventId);
       const hasProgressiveHistory =
         item.historyCursor !== undefined ||
         item.hasMoreHistory !== undefined ||
@@ -887,6 +916,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
               yield* applyLock.withPermits(1)(
                 Effect.gen(function* () {
                   yield* SubscriptionRef.set(lastSequence, httpResult.snapshot.snapshotSequence);
+                  yield* Ref.set(lastEventId, httpResult.snapshot.snapshotEventId);
                   const history: ThreadHistoryMeta =
                     httpResult.history !== undefined
                       ? {
@@ -919,7 +949,15 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
         }
 
         const sequence = yield* SubscriptionRef.get(lastSequence);
-        const canResume = Option.isSome(current.data);
+        const eventId = yield* Ref.get(lastEventId);
+        // A cursor the server cannot verify is not a resume cursor: without an
+        // event id (cache written before ids existed, or an older server that
+        // sends none) a restored or overlapping server could be replaying
+        // different events after that sequence. Subscribe without one so the
+        // server sends a snapshot; the cached projection still paints meanwhile.
+        // Cost: one snapshot per such cached thread, and every reconnect to an
+        // older server (which never sends ids) is a snapshot.
+        const canResume = Option.isSome(current.data) && eventId !== undefined;
         const acceptBoundedSnapshot = yield* Ref.get(acceptsBoundedSocketSnapshots);
         if (!supportsCompletionMarker && canResume) {
           yield* SubscriptionRef.update(state, (value) => ({
@@ -931,7 +969,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
 
         return {
           threadId,
-          ...(canResume ? { afterSequence: sequence } : {}),
+          ...(canResume ? { afterSequence: sequence, afterEventId: eventId } : {}),
           ...(supportsCompletionMarker ? { requestCompletionMarker: true as const } : {}),
           ...(acceptBoundedSnapshot ? { acceptBoundedSnapshot: true as const } : {}),
         };
