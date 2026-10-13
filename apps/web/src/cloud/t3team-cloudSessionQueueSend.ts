@@ -29,12 +29,14 @@ export function queueCloudSessionSendIfNeeded(input: {
   if (session !== undefined && isTerminalCloudSessionPhase(session.phase)) return null;
   // A ready, synced session still queues: the app-level flusher sends it within a tick, on the
   // same path as one that is still provisioning.
+  const createdAt = (input.now?.() ?? new Date()).toISOString();
   const queued: CloudQueuedSend = {
     ...input.turn,
     sessionId: target.sessionId,
     sessionLabel: target.label,
     projectKey: target.projectKey,
-    createdAt: (input.now?.() ?? new Date()).toISOString(),
+    createdAt,
+    stepStartedAt: { queued: createdAt },
   };
   return writeDraftCloudQueuedSend(input.draftId, queued) ? queued : null;
 }

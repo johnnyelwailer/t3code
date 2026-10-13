@@ -3,13 +3,17 @@
  * single source of truth: the composer banner, the sidebar row, the thread card and the app-level
  * flusher all read it here, so none of them depends on the draft's composer being mounted.
  */
-import { useSyncExternalStore } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { DraftId, flushComposerDraftStorage, useComposerDraftStore } from "~/composerDraftStore";
 import { holdCloudQueuedSendClaim } from "./t3team-cloudQueuedSendClaim";
+import { isCloudQueuedSendDispatching } from "./t3team-cloudQueuedSendDispatching";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import { confirmPersistedCloudQueuedSend } from "./t3team-cloudQueuedSendPersisted";
+import {
+  resolveCloudQueuedSendStepId,
+  type CloudQueuedSendStepFacts,
+} from "./t3team-cloudQueuedSendSteps";
 
 type DraftsByKey = ReturnType<typeof useComposerDraftStore.getState>["draftsByThreadKey"];
 
@@ -80,6 +84,25 @@ export function updateDraftCloudQueuedSend(
   writeDraftCloudQueuedSend(draftId, update(current));
 }
 
+/** Records when the send's current bind step was first seen; later sightings keep that time. */
+export function stampDraftCloudQueuedSendStep(
+  draftId: string,
+  facts: Omit<CloudQueuedSendStepFacts, "flushing">,
+  at: Date = new Date(),
+): void {
+  const { queued } = facts;
+  if (queued.failureMessage !== undefined) return;
+  const stepId = resolveCloudQueuedSendStepId({
+    ...facts,
+    flushing: isCloudQueuedSendDispatching(queued.messageId),
+  });
+  if (queued.stepStartedAt?.[stepId] !== undefined) return;
+  updateDraftCloudQueuedSend(draftId, queued.messageId, (current) => ({
+    ...current,
+    stepStartedAt: { ...current.stepStartedAt, [stepId]: at.toISOString() },
+  }));
+}
+
 export function failDraftCloudQueuedSend(
   draftId: string,
   messageId: string,
@@ -130,35 +153,4 @@ function restoreQueuedMessage(draftId: string, current: CloudQueuedSend): void {
     typed.length > 0 ? `${current.messageText}\n\n${typed}` : current.messageText,
   );
   writeDraftCloudQueuedSend(draftId, null);
-}
-
-// Messages a flusher in this window is dispatching right now ("Sending…").
-const dispatching = new Set<string>();
-const listeners = new Set<() => void>();
-let dispatchingSnapshot: ReadonlySet<string> = new Set();
-
-export function setCloudQueuedSendDispatching(messageId: string, active: boolean): void {
-  if (active === dispatching.has(messageId)) return;
-  if (active) dispatching.add(messageId);
-  else dispatching.delete(messageId);
-  dispatchingSnapshot = new Set(dispatching);
-  for (const listener of listeners) listener();
-}
-
-export function isCloudQueuedSendDispatching(messageId: string): boolean {
-  return dispatching.has(messageId);
-}
-
-function subscribeDispatching(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-export function useCloudQueuedSendDispatching(messageId: string | null): boolean {
-  const snapshot = useSyncExternalStore(
-    subscribeDispatching,
-    () => dispatchingSnapshot,
-    () => dispatchingSnapshot,
-  );
-  return messageId !== null && snapshot.has(messageId);
 }

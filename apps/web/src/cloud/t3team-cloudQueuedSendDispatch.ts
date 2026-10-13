@@ -22,10 +22,12 @@ import { confirmPersistedCloudQueuedSend } from "./t3team-cloudQueuedSendPersist
 import {
   failDraftCloudQueuedSend,
   getDraftCloudQueuedSend,
-  isCloudQueuedSendDispatching,
-  setCloudQueuedSendDispatching,
   writeDraftCloudQueuedSend,
 } from "./t3team-cloudQueuedSendStore";
+import {
+  isCloudQueuedSendDispatching,
+  setCloudQueuedSendDispatching,
+} from "./t3team-cloudQueuedSendDispatching";
 
 export type StartCloudQueuedTurn = (value: {
   readonly environmentId: EnvironmentId;
@@ -88,13 +90,12 @@ function buildCloudQueuedTurnInput(input: {
   };
 }
 
-/** The send went through (now or earlier): clear the record and hand the draft to its thread. */
+/** Delivered (now or earlier): promote, then clear the record, whose write-through carries both. */
 export function completeCloudQueuedSend(
   draftId: string,
   environmentId: EnvironmentId,
   threadId: DraftSessionState["threadId"],
 ): void {
-  // Promote first: clearing the record writes through, so other windows read both at once.
   markPromotedDraftThreadByRef(scopeThreadRef(environmentId, threadId));
   writeDraftCloudQueuedSend(draftId, null);
 }
