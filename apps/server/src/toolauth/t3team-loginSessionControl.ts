@@ -9,7 +9,7 @@ import { ToolAuthNoActiveSessionError, ToolAuthNotAwaitingCodeError } from "@t3t
 import * as Effect from "effect/Effect";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
-import type * as PtyAdapter from "../terminal/PtyAdapter.ts";
+import type * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 import type { ActiveSession } from "./t3team-ToolAuthService.ts";
 import type { AuthState } from "./t3team-types.ts";
 

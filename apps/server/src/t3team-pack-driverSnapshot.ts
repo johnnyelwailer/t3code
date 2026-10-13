@@ -16,7 +16,7 @@ import {
 } from "@t3tools/contracts";
 import type { PackProviderInstance, PackProviderSnapshot } from "@t3team/pack-api";
 
-import { buildServerProvider } from "./provider/providerSnapshot.ts";
+import { buildServerProvider } from "@t3tools/provider-core/server/snapshotProbe";
 
 const toModels = (snapshot: PackProviderSnapshot): ReadonlyArray<ServerProviderModel> =>
   snapshot.models.map((model) => ({

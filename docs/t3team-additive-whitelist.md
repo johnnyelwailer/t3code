@@ -22,7 +22,10 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20261008` → the 2026-10-08 upstream sync merge commit
+- Current: `t3team/fork-baseline-20261012` → the 2026-10-12 upstream sync merge commit
+  `7006978420` (434 upstream commits absorbed, `04ad17425a..48595c787c`). Grandfathered: upstream's
+  tree plus the conflict resolutions in that merge. Post-merge fixes on the sync branch stay measured.
+- Before that: `t3team/fork-baseline-20261008` → the 2026-10-08 upstream sync merge commit
   `7deceab97b` (114 upstream commits absorbed, `9ae9f2ba1f..04ad17425a`, in three merges: upstream
   `365aa87982`, upstream `04ad17425a`, then fork main `0b3b3d67b3`). Grandfathered: upstream's tree
   plus the conflict resolutions in those merges. Post-merge fixes on the sync branch stay measured.
@@ -85,10 +88,26 @@ git push origin t3team/fork-baseline-YYYYMMDD
 | 2026-10-03 | `t3team/fork-baseline-20260927`          | `t3team/fork-baseline-20261003` (`88992deee`)           | The 2026-10-03 upstream sync (orchestration V2 rewrite, 123 commits). Tag points at the merge commit so the post-merge V2 port stays measured.                                                                          |
 | 2026-10-06 | `t3team/fork-baseline-20261003`          | `t3team/fork-baseline-20261006` (`ba03dadc53`)          | The 2026-10-06 upstream sync (9ae9f2ba1f, 247 commits per johnnyelwailer/t3code#385). Tag points at the merge commit so the Effect/layout port + cutover fix stay measured.                                             |
 | 2026-10-08 | `t3team/fork-baseline-20261006`          | `t3team/fork-baseline-20261008` (`7deceab97b`)          | The 2026-10-08 upstream sync (04ad17425a, 114 commits since 9ae9f2ba1f, incl. the unpushed 10-07 batch). Tag points at the final merge commit (fork main 0b3b3d67b3 merged in) so post-merge fixes stay measured.       |
+| 2026-10-12 | `t3team/fork-baseline-20261008`          | `t3team/fork-baseline-20261012` (`7006978420`)          | The 2026-10-12 upstream sync (48595c787c, 434 commits since 04ad17425a). Tag points at the merge commit so the post-merge type/lint fixes stay measured.                                                                |
 
 Until the new tag is pushed, the guard fails loudly on CI (missing tag), never silently.
 
 ## Allowed Modified Upstream Files
+
+### Upstream sync 2026-10-12
+
+- `apps/server/src/mcp/toolkits/worktree/registration.test.ts`
+  - Upstream toolkit registration now resolves every registered toolkit's services; the stub layer mocks the fork toolkit's T3TeamToolBroker and T3TeamAskUserWriter.
+- `apps/server/src/orchestration-v2/DeadSessionSendRecovery.test.ts`
+  - Fork-authored test (already an allowed unprefixed new file); retyped from the removed ProviderAdapterV2Shape to ProviderAdapterV2["Service"].
+- `packages/provider-cursor/src/server/textGeneration.ts`
+  - Upstream moved CursorTextGeneration.ts (whitelisted) here; carries the fork's activity-label and structured generation operations.
+- `packages/provider-grok/src/server/textGeneration.ts`
+  - Upstream moved GrokTextGeneration.ts (whitelisted) here; carries the fork's activity-label and structured generation operations.
+- `packages/provider-opencode/src/server/textGeneration.ts`
+  - Upstream moved OpenCodeTextGeneration.ts (whitelisted) here; carries the fork's activity-label and structured generation operations.
+- `packages/provider-opencode/src/server/v2/textGeneration.ts`
+  - Upstream moved OpenCode2TextGeneration.ts here; carries the fork's activity-label and structured generation operations.
 
 ### Rebaseline 2026-09-08 (guard machinery)
 

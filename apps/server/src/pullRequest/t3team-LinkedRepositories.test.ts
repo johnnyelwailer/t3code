@@ -1,4 +1,5 @@
 import { assert, it } from "@effect/vitest";
+import { SourceControlProviderKind } from "@t3tools/contracts";
 
 import { parseLinkedRepositoryUrls } from "./t3team-LinkedRepositories.ts";
 
@@ -8,8 +9,8 @@ it("parses https and ssh remotes into host, repository, and provider", () => {
     "git@gitlab.com:group/web.git",
   ]);
   assert.deepStrictEqual(parsed, [
-    { host: "github.com", repository: "acme/web", kind: "github" },
-    { host: "gitlab.com", repository: "group/web", kind: "gitlab" },
+    { host: "github.com", repository: "acme/web", kind: SourceControlProviderKind.make("github") },
+    { host: "gitlab.com", repository: "group/web", kind: SourceControlProviderKind.make("gitlab") },
   ]);
 });
 
@@ -18,7 +19,7 @@ it("resolves an Azure DevOps remote to the repository name, not the path", () =>
   assert.deepStrictEqual(entry, {
     host: "dev.azure.com",
     repository: "web",
-    kind: "azure-devops",
+    kind: SourceControlProviderKind.make("azure-devops"),
   });
 });
 
@@ -28,7 +29,9 @@ it("deduplicates the same repository recorded once per form", () => {
     "https://github.com/acme/web.git",
     "git@github.com:acme/web",
   ]);
-  assert.deepStrictEqual(parsed, [{ host: "github.com", repository: "acme/web", kind: "github" }]);
+  assert.deepStrictEqual(parsed, [
+    { host: "github.com", repository: "acme/web", kind: SourceControlProviderKind.make("github") },
+  ]);
 });
 
 it("keeps one repository per host, and drops a URL that reads as nothing", () => {
@@ -39,8 +42,8 @@ it("keeps one repository per host, and drops a URL that reads as nothing", () =>
     "   ",
   ]);
   assert.deepStrictEqual(parsed, [
-    { host: "github.com", repository: "acme/web", kind: "github" },
-    { host: "gitlab.com", repository: "acme/web", kind: "gitlab" },
+    { host: "github.com", repository: "acme/web", kind: SourceControlProviderKind.make("github") },
+    { host: "gitlab.com", repository: "acme/web", kind: SourceControlProviderKind.make("gitlab") },
   ]);
 });
 
@@ -49,6 +52,6 @@ it("reports an unrecognised host as the unknown provider", () => {
   assert.deepStrictEqual(entry, {
     host: "gerrit.example.test",
     repository: "acme/web",
-    kind: "unknown",
+    kind: SourceControlProviderKind.make("unknown"),
   });
 });

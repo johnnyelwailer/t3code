@@ -37,7 +37,7 @@ import {
   legacyForkTurnItemId,
   legacyMessageContext,
 } from "./t3team-legacyMessageMapping.ts";
-import { randomUuidV4 } from "../RandomUuid.ts";
+import { randomUuidV4 } from "@t3tools/provider-core/server/randomUuid";
 
 const IMPORT_EVENT_PREFIX = "migration:v1";
 const TRANSCRIPT_EVENT_BATCH_SIZE = 100;

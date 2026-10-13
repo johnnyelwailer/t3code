@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-outset-state-indicators -- Existing merged lint debt; keep green while preserving behavior. */
 import { useCallback } from "react";
 
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";

@@ -24,7 +24,10 @@ import {
 import * as Effect from "effect/Effect";
 
 import type { PullRequestError, PullRequestService } from "./pullRequest/PullRequestService.ts";
-import { isRevisionSha, isSafeRepositoryPath } from "./pullRequest/t3team-fileAtRevision.ts";
+import {
+  isRevisionSha,
+  isSafeRepositoryPath,
+} from "@t3tools/source-control-core/server/t3team-fileAtRevision";
 import { decodeText, sliceLines, validateRange } from "./t3team-scriptHostFileText.ts";
 
 type PullRequests = PullRequestService["Service"];

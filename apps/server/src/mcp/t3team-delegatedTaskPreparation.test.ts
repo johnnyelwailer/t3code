@@ -15,13 +15,14 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 
-import type { ProviderAdapterV2Shape } from "../orchestration-v2/ProviderAdapter.ts";
+import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import type { McpInvocationScope } from "./McpInvocationContext.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
 import {
@@ -133,7 +134,9 @@ const makeDependencies = (
   let delegated = options.alreadyDelegated === true;
   return Layer.mergeAll(
     NodeServices.layer,
+    ServerSettings.layerTest(),
     Layer.mock(ThreadManagementService.ThreadManagementService)({
+      hasReceipt: () => Effect.sync(() => delegated),
       getThreadRecords: (threadId) =>
         Effect.succeed(
           threadId === parentThreadId ? parentProjection(delegated ? [task] : []) : childProjection,
@@ -158,7 +161,8 @@ const makeDependencies = (
       ProviderAdapterRegistry.ProviderAdapterRegistryV2,
       ProviderAdapterRegistry.ProviderAdapterRegistryV2.of({
         list: () => Effect.succeed([instanceId]),
-        get: () => Effect.succeed({ instanceId } as unknown as ProviderAdapterV2Shape),
+        get: () =>
+          Effect.succeed({ instanceId } as unknown as ProviderAdapter.ProviderAdapterV2["Service"]),
       }),
     ),
     Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),

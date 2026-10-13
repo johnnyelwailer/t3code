@@ -7,7 +7,7 @@
  * that is actually on screen, not the one it replaced.
  */
 
-export type PullRequestDetailTab = "summary" | "timeline" | "code";
+export type PullRequestDetailTab = "summary" | "guide" | "timeline" | "code";
 
 export interface PullRequestDetailViewState {
   readonly tab: PullRequestDetailTab;
@@ -15,7 +15,7 @@ export interface PullRequestDetailViewState {
   readonly file: string | null;
 }
 
-const DETAIL_TABS = ["summary", "timeline", "code"] as const;
+const DETAIL_TABS = ["summary", "guide", "timeline", "code"] as const;
 /**
  * Long enough for any realistic path, short enough that a link stays a link: the value is
  * user-reachable through the address bar, so a hostile one must not be able to bloat it.

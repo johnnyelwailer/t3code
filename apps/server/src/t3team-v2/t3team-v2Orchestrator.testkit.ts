@@ -12,7 +12,7 @@ import { layerMemory as SqlitePersistenceMemory } from "../persistence/Sqlite.ts
 import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
-import type { ProviderAdapterV2Shape } from "../orchestration-v2/ProviderAdapter.ts";
+import type { ProviderAdapterV2 } from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import { layerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
 import * as ThreadLineage from "./t3team-threadLineage.ts";
@@ -29,7 +29,7 @@ const adapter = {
   getCapabilities: () => Effect.succeed(CodexProviderCapabilitiesV2),
   planSelectionTransition: () => Effect.succeed({ type: "apply_on_next_turn" as const }),
   openSession: () => Effect.die("No provider process in t3team-v2 tests"),
-} as ProviderAdapterV2Shape;
+} as ProviderAdapterV2["Service"];
 
 /**
  * An orchestrator over an in-memory database plus the fork writers, all in one

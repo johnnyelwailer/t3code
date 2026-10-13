@@ -26,7 +26,8 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
-import { expandHomePath } from "./pathExpansion.ts";
+import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import { resolveRecipeActions } from "./t3team-projectRecipeActions.ts";
 import { importRecipeModuleRef } from "./t3team-projectRecipeDiscoveryModule.ts";
 
@@ -46,14 +47,15 @@ const errorMessage = (error: unknown) => (error instanceof Error ? error.message
  */
 export const resolveRecipeHostToolScope = Effect.fn("resolveRecipeHostToolScope")(
   function* (input: { readonly recipePath: string | undefined; readonly workflowPath: string }) {
-    const recipePath = expandHomePath(input.recipePath?.trim() ?? "");
+    const home = yield* HostProcess.HomeDirectory;
+    const recipePath = expandHomePath(input.recipePath?.trim() ?? "", home);
     if (recipePath.length === 0) {
       return denied("the launch carries no recipePath, so no recipe declaration can be read");
     }
     // Workspace roots (and thus recipe/workflow launch paths derived from them) may legitimately
     // carry a literal `~` — expand it here, once, so this fs.exists/import and the ownership
     // compare below all operate on the real absolute path (see pathExpansion.ts).
-    const workflowPath = expandHomePath(input.workflowPath);
+    const workflowPath = expandHomePath(input.workflowPath, home);
 
     const fileSystem = yield* FileSystem.FileSystem;
     const pathService = yield* Path.Path;

@@ -28,7 +28,7 @@ import type {
   ResourcePressureReport,
   ResourcePressureSnapshot,
 } from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
@@ -77,7 +77,7 @@ const makeEnabled = (sampleIntervalMs: number) =>
     const hostResources = yield* HostResources.HostResources;
     const telemetry = yield* ResourceTelemetry.ResourceTelemetry;
     const events = yield* ResourcePressureEventRepository;
-    const platform = yield* HostProcessPlatform;
+    const platform = yield* HostProcess.Platform;
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 
     const latest = yield* Ref.make<ResourcePressureSnapshot | null>(null);

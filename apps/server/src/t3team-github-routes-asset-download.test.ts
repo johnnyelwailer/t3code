@@ -4,8 +4,8 @@ import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import { HttpClient, HttpClientResponse } from "effect/http";
 
-import * as GitHubApi from "./sourceControl/GitHubApi.ts";
-import * as GitHubCredentials from "./sourceControl/GitHubCredentials.ts";
+import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubCredentials from "@t3tools/source-control-github/server/GitHubCredentials";
 import { downloadGitHubAsset } from "./t3team-github-routes-asset-download.ts";
 import { makeFakeGitHubApi, restOk } from "./t3team-githubRestApi.fixtures.ts";
 

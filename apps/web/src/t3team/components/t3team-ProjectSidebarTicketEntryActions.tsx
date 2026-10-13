@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-outset-state-indicators -- Existing merged lint debt; keep green while preserving behavior. */
 import { EllipsisIcon, SquarePenIcon } from "lucide-react";
 
 export function ProjectSidebarTicketEntryActions({

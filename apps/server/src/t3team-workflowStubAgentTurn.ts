@@ -17,7 +17,8 @@ import { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import * as ProviderAdapterRegistry from "./orchestration-v2/ProviderAdapterRegistry.ts";
-import * as ProviderContinuationRequests from "./orchestration-v2/ProviderContinuationRequests.ts";
+import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
+import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import {
   completedTurnEvents,
   makeScriptedPack,
@@ -135,12 +136,14 @@ export function makeWorkflowStubProvider(
   const registryLayer = ProviderAdapterRegistry.layerFromAdaptersEffect(
     Effect.gen(function* () {
       const requests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
+      const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
       return [
         makePackOrchestrationAdapter({
           adapter: pack.instance.orchestration,
           driver: ProviderDriverKind.make(PACK_DRIVER),
           instanceId: WORKFLOW_STUB_MODEL_SELECTION.instanceId,
           offerContinuation: requests.offer,
+          mcpSessions,
         }),
       ];
     }),

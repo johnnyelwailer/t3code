@@ -5,6 +5,7 @@ import * as RemoteEnvironmentAuthorization from "../authorization/service.ts";
 import type { PreparedConnection } from "../connection/model.ts";
 import { environmentEndpointUrl } from "../environment/endpoint.ts";
 import * as ManagedRelay from "../relay/managedRelay.ts";
+import type { makeEnvironmentHttpApiUrlBuilder } from "../rpc/http.ts";
 import { executeAuthenticatedEnvironmentHttpRequest } from "./environmentHttpAuth.ts";
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -15,6 +16,15 @@ const definedHeaders = (headers: object): Record<string, string> =>
       (entry): entry is [string, string] => typeof entry[1] === "string",
     ),
   );
+
+/**
+ * The contract URL builder only knows typed routes; any of them carries the environment origin the
+ * request is sent to, which is all an untyped route needs.
+ */
+const untypedRouteUrl = (
+  urls: ReturnType<typeof makeEnvironmentHttpApiUrlBuilder>["auth"],
+  path: string,
+): string => environmentEndpointUrl(urls.session(), path);
 
 /** A route's status and decoded JSON body, whatever the status: the caller owns the error shape. */
 export interface EnvironmentJsonPostResponse {
@@ -51,8 +61,8 @@ export const postEnvironmentJson = Effect.fn("clientRuntime.state.postEnvironmen
       remoteAuthorization,
       group: "auth",
       method: "POST",
-      url: (httpBaseUrl) => {
-        requestUrl = environmentEndpointUrl(httpBaseUrl, input.path);
+      url: (urls) => {
+        requestUrl = untypedRouteUrl(urls, input.path);
         return requestUrl;
       },
       timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,

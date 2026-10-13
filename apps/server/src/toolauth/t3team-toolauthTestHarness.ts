@@ -21,7 +21,7 @@ import * as Option from "effect/Option";
 import * as Schedule from "effect/Schedule";
 
 import * as ProcessRunner from "../processRunner.ts";
-import * as PtyAdapter from "../terminal/PtyAdapter.ts";
+import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 import * as ToolAuthService from "./t3team-ToolAuthService.ts";
 
 // Drives the exact same pty path production code uses, but with a stubbed
