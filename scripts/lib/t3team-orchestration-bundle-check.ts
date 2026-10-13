@@ -16,7 +16,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { ChildProcess } from "effect/process";
 
-import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import serverPackageJson from "../../apps/server/package.json" with { type: "json" };
 
@@ -72,8 +72,8 @@ export const checkOrchestrationBundle = Effect.fn("checkOrchestrationBundle")(fu
     return yield* new OrchestrationBundleDistMissingError({ distDir });
   }
 
-  const hostPlatform = yield* HostProcessPlatform;
-  const hostArchitecture = yield* HostProcessArchitecture;
+  const hostPlatform = yield* HostProcess.Platform;
+  const hostArchitecture = yield* HostProcess.Architecture;
   const platform = hostPlatformToBuildPlatform(hostPlatform);
   const arch = hostArchToBuildArch(hostArchitecture);
 
