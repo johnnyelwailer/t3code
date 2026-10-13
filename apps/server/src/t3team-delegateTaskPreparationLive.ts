@@ -46,6 +46,7 @@ import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts
 import { ensureLinkedRepositoryCheckout } from "./t3team-linkedRepositoryOnDemand.ts";
 import { isLazyLinkedRepositoryCheckoutEnabled } from "./t3team-lazyLinkedRepositoryFlag.ts";
 import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
+import { VcsProcess } from "./vcs/VcsProcess.ts";
 
 const failure = (code: OrchestratorMcpFailure["code"], message: string) =>
   new OrchestratorMcpFailure({ code, message });
@@ -127,7 +128,7 @@ const make = Effect.gen(function* () {
                     repository: repo,
                   }).pipe(
                     Effect.provideService(T3TeamLinkedRepositorySync, linkedRepositorySync),
-                    Effect.provide(NodeServices.layer),
+                    Effect.provide(Layer.mergeAll(NodeServices.layer, VcsProcess.layer)),
                     Effect.mapError((message) =>
                       failure(
                         "invalid_request",
