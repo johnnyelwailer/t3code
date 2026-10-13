@@ -474,3 +474,106 @@ function findCreateButton(): HTMLButtonElement | null {
     buttons.find((button) => button.textContent?.includes("New cloud session") === true) ?? null
   );
 }
+
+describe("BranchToolbarEnvironmentSelector — Move to (started thread, panel)", () => {
+  const CLOUD_ENV = {
+    environmentId: EnvironmentId.make("env-cloud"),
+    projectId: ProjectId.make("project-x"),
+    label: "Cloud session",
+    isPrimary: false,
+    machine: "server" as const,
+  };
+  const session = (phase: string, environmentId?: string) =>
+    ({
+      sessionId: `s-${phase}`,
+      phase,
+      ...(environmentId ? { environmentId } : {}),
+      machineLabel: "ubuntu-slim",
+    }) as unknown as CloudSession;
+  const mountMove = (props: Partial<BranchToolbarEnvironmentSelectorProps> = {}) => {
+    const handlers = {
+      onEnvironmentChange: vi.fn(),
+      onHandoffToEnvironment: vi.fn(),
+      onConnectCloudSession: vi.fn(),
+      onSelectCloudSession: vi.fn(),
+    };
+    mountSelector({
+      envLocked: true,
+      displayMode: "panel",
+      availableEnvironments: [PRIMARY, CLOUD_ENV],
+      onCreateCloudSession: () => {},
+      pendingCloudSessions: [session("ready", "env-cloud"), session("preparing")],
+      ...handlers,
+      ...props,
+    });
+    return handlers;
+  };
+
+  it("stays the locked label for a started thread without a handoff handler", () => {
+    const markup = renderSelector({
+      envLocked: true,
+      displayMode: "panel",
+      availableEnvironments: [PRIMARY, CLOUD_ENV],
+      onEnvironmentChange: () => {},
+      onCreateCloudSession: () => {},
+    });
+    expect(testState.selectProps).toBeUndefined();
+    expect(markup).not.toContain("Move to");
+  });
+
+  it("stays locked in the composer strip even with a handoff handler", () => {
+    renderSelector({
+      envLocked: true,
+      displayMode: "toolbar",
+      onHandoffToEnvironment: () => {},
+      onCreateCloudSession: () => {},
+    });
+    expect(testState.selectProps).toBeUndefined();
+  });
+
+  it("opens an interactive 'Move to' menu with machines, cloud sessions and create", () => {
+    mountMove();
+    expect(liveContainer?.textContent).toContain("Move to");
+    expect(liveContainer?.textContent).not.toContain("Run on");
+    const items = Array.from(liveContainer?.querySelectorAll("[data-select-item]") ?? []).map(
+      (item) => item.getAttribute("data-select-item"),
+    );
+    expect(items).toEqual(["env-primary", "env-cloud"]);
+    expect(findCreateButton()).not.toBeNull();
+    expect(testState.selectProps?.value).toBe("env-primary");
+  });
+
+  it("routes a pick to onHandoffToEnvironment, never onEnvironmentChange", () => {
+    const handlers = mountMove();
+    act(() => {
+      testState.selectProps?.onValueChange?.("env-cloud", makeValueChangeDetails());
+    });
+    expect(handlers.onHandoffToEnvironment).toHaveBeenCalledWith(CLOUD_ENV.environmentId);
+    expect(handlers.onEnvironmentChange).not.toHaveBeenCalled();
+  });
+
+  it("ignores re-picking the machine the thread already runs on", () => {
+    const handlers = mountMove();
+    act(() => {
+      testState.selectProps?.onValueChange?.("env-primary", makeValueChangeDetails());
+    });
+    expect(handlers.onHandoffToEnvironment).not.toHaveBeenCalled();
+    expect(handlers.onEnvironmentChange).not.toHaveBeenCalled();
+  });
+
+  it("connects a ready, unconnected session instead of setting a draft cloud target", () => {
+    const handlers = mountMove({
+      availableEnvironments: [PRIMARY],
+      pendingCloudSessions: [session("ready", "env-elsewhere")],
+    });
+    const row = Array.from(liveContainer?.querySelectorAll("button") ?? []).find((button) =>
+      button.textContent?.startsWith("Cloud session"),
+    );
+    act(() => {
+      row?.click();
+    });
+    expect(handlers.onConnectCloudSession).toHaveBeenCalledTimes(1);
+    expect(handlers.onSelectCloudSession).not.toHaveBeenCalled();
+    expect(handlers.onHandoffToEnvironment).not.toHaveBeenCalled();
+  });
+});
