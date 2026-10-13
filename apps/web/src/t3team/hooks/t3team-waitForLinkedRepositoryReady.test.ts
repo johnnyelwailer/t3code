@@ -51,4 +51,17 @@ describe("waitForLinkedRepositoryReady", () => {
       }),
     ).rejects.toThrow("Repository not found");
   });
+
+  it("rejects instead of polling forever when nothing is syncing a repository that is not cloned", async () => {
+    const { backend, read } = backendReturning({ status: "not-cloned" });
+    await expect(
+      waitForLinkedRepositoryReady({
+        backend,
+        workspaceRoot: "/tmp/project",
+        url: URL,
+        sleep: async () => {},
+      }),
+    ).rejects.toThrow("not cloned and no sync is running");
+    expect(read).toHaveBeenCalledTimes(1);
+  });
 });

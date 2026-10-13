@@ -38,6 +38,10 @@ const decodeLinkedRepositoryManifest = Schema.decodeEffect(
   Schema.fromJsonString(LinkedRepositoryManifestJson),
 );
 
+/** Linked repositories sync on demand: how a user or an agent gets one cloned. */
+const SYNC_HINT =
+  'Sync it with "Sync now" in the project\'s linked repositories (agents: t3_linked_repository_sync)';
+
 /** Whether a repository (any clone-URL spelling) contains the pull request at `pullRequestUrl`.
  * A pull request URL is the repository's URL plus a provider-specific tail, so containment is a
  * path-segment prefix, which holds for every provider without parsing any of their URL shapes. */
@@ -119,13 +123,13 @@ export const resolvePullRequestCheckoutRoot = (input: {
     const localPath = linked.localPath.trim();
     if (!isLinkedRepositoryReady(linked) || localPath === "") {
       return yield* fail(
-        `${linked.url} is linked to this project but has no local clone yet (${linked.error ?? (linked.status === "pending" ? "it is still being cloned" : "its clone failed")}). Refresh the project's linked repositories, then try again.`,
+        `${linked.url} is linked to this project but has no local clone yet (${linked.error ?? (linked.status === "failed" ? "its clone failed" : "it is not cloned on this machine")}). ${SYNC_HINT}, then try again.`,
       );
     }
     const exists = yield* fileSystem.exists(localPath).pipe(Effect.orElseSucceed(() => false));
     if (!exists) {
       return yield* fail(
-        `The local clone of ${linked.url} is missing at '${localPath}'. Refresh the project's linked repositories to clone it again.`,
+        `The local clone of ${linked.url} is missing at '${localPath}'. ${SYNC_HINT} to clone it again.`,
       );
     }
     return localPath;

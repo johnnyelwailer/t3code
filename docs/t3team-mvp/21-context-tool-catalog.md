@@ -197,6 +197,7 @@ Useful tools:
 t3team.project.attach_context_bundle
 t3team.project.refresh_context_bundle
 t3team.project.list_linked_repositories
+t3team.project.sync_linked_repository
 t3team.project.open_dashboard_mode
 t3team.project.open_linked_repository_manager
 t3team.project.refresh_integrations
@@ -207,6 +208,10 @@ Notes:
 
 - `open_dashboard_mode` is a view-state tool. It switches between backlog and my-work.
 - `open_linked_repository_manager` opens existing UI, not a hidden mutation.
+- `t3team.project.sync_linked_repository` is implemented (MCP `t3_linked_repository_sync`).
+  Linked repositories sync on demand: the bootstrap only records them, and
+  `context/linked-repositories.json` lists each with its checkout state. The agent clones or
+  fetches the one it needs; delegating into an uncloned linked repository clones it too.
 - `create_context_bound_thread` creates a thread under the current project or view.
 - `t3team.project.refresh_context_bundle` is implemented. It rebuilds the lightweight
   project context bundle (`work-items/index.json` plus summary JSON) from the current backlog

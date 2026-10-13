@@ -1,7 +1,8 @@
 /**
  * Saving a project's linked repositories (and, behind `NEXI_FF_MAIN_REPOSITORY`, its main
- * repository): refresh the workspace references, then either apply the user's main-repository
- * choice or let auto-detection run on the freshly linked clones.
+ * repository): record the workspace references, then either apply the user's main-repository
+ * choice or let auto-detection run on the linked clones already on disk. Linked repositories sync
+ * on demand, so a save clones only the repository chosen as the main one.
  */
 import type { ProjectShellProject } from "@t3tools/project-context";
 
@@ -36,15 +37,17 @@ export async function saveProjectRepositories(input: {
   let project = replaceLinkedRepositoryUrlsInProject(input.project, linkedRepositoryUrls);
   if (!backend || !project.workspace?.rootPath) return project;
 
-  // Returns at once: clones and fetches run in the background on the server; the dialog shows
-  // their progress through `readLinkedRepositoryStatus`.
+  // Returns at once: the main repository's clone runs in the background on the server; the
+  // dialog shows its progress through `readLinkedRepositoryStatus`.
   const bootstrap = await backend.projectWorkspace.bootstrapWorkspace({
     workspaceRoot: project.workspace.rootPath,
     linkedRepositoryUrls,
     ...(input.linkedRepositoryBranches
       ? { linkedRepositoryBranches: input.linkedRepositoryBranches }
       : {}),
-    refreshLinkedRepositories: true,
+    ...(typeof input.mainRepositoryUrl === "string"
+      ? { syncLinkedRepositoryUrls: [input.mainRepositoryUrl] }
+      : {}),
   });
   project = applyWorkspaceBootstrapToProject(project, bootstrap);
   if (linkedRepositoryUrls.length === 0) {

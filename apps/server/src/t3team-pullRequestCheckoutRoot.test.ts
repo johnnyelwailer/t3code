@@ -144,7 +144,14 @@ describe("resolvePullRequestCheckoutRoot", () => {
         { url: "https://github.com/acme/api.git", localPath: "", status: "pending" },
       ]);
       const pendingError = yield* resolve({ cwd: pending, reference: prUrl }).pipe(Effect.flip);
-      expect(pendingError.message).toContain("still being cloned");
+      expect(pendingError.message).toContain("not cloned on this machine");
+      expect(pendingError.message).toContain("t3_linked_repository_sync");
+
+      const notCloned = workspaceWith([
+        { url: "https://github.com/acme/api.git", localPath: "/r/01-api", status: "not-cloned" },
+      ]);
+      const notClonedError = yield* resolve({ cwd: notCloned, reference: prUrl }).pipe(Effect.flip);
+      expect(notClonedError.message).toContain("not cloned on this machine");
 
       const gone = workspaceWith([
         { url: "https://github.com/acme/api.git", localPath: "/no/such/clone", status: "cloned" },

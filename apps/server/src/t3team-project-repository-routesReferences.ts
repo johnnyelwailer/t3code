@@ -1,7 +1,7 @@
 /**
  * The reference-repository step of the project workspace bootstrap (split out of
- * `t3team-project-repository-routes.ts`): queues background syncs of linked clones (it never
- * waits on git), reports main-repository
+ * `t3team-project-repository-routes.ts`): records the linked repositories (they sync on demand;
+ * the syncs asked for are queued in the background, never awaited), reports main-repository
  * candidates, and rewrites the reference manifest without dropping earlier entries.
  *
  * @module t3team-project-repository-routesReferences
@@ -40,8 +40,8 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
     readonly linkedRepositoryUrls: ReadonlyArray<string> | undefined;
     /** The branch each linked checkout should be on, by URL; undefined keeps what is recorded. */
     readonly linkedRepositoryBranches?: Readonly<Record<string, string>>;
-    /** An explicit save: refetch every linked repository, ignoring the refetch throttle. */
-    readonly refreshLinkedRepositories?: boolean;
+    /** Linked repositories to clone/fetch now; every other one is only recorded. */
+    readonly syncLinkedRepositoryUrls?: ReadonlyArray<string>;
   }) {
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -52,7 +52,6 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
       .pipe(Effect.mapError(toAtlassianError("Failed to create repository references directory.")));
 
     const sync = yield* T3TeamLinkedRepositorySync;
-    const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
     // Under the manifest lock: a background sync settling meanwhile records its outcome after this
     // write, never under it.
     return yield* sync.withManifestLock(
@@ -79,15 +78,14 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
               repositoryLookupCandidates(url).includes(candidate),
             ),
         );
-        // No git here: clones and fetches are queued and run in the background.
+        // No git here: the clones and fetches asked for are queued and run in the background.
         const planned = yield* planLinkedRepositoriesForBootstrap({
           referencesRoot,
           urls: linkedRepositoryUrls,
           preserved: preserved.linkedRepositories,
-          refresh: input.refreshLinkedRepositories === true,
+          syncUrls: input.syncLinkedRepositoryUrls ?? [],
           ...(input.linkedRepositoryBranches ? { branches: input.linkedRepositoryBranches } : {}),
           phaseOf: sync.phase,
-          nowMs,
         });
         const manifestLinkedRepositories = mergeLinkedRepositoryEntries(
           preserved.linkedRepositories,

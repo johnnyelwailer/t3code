@@ -27,7 +27,9 @@ export function describeLinkedRepositorySyncStatus(
   if (entry.status === "failed") {
     return { label: "Sync failed", tone: "error", ...(entry.error ? { detail: entry.error } : {}) };
   }
-  if (entry.status === "pending") return { label: "Not cloned yet", tone: "muted" };
+  if (entry.status === "not-cloned" || entry.status === "pending") {
+    return { label: "Not cloned · syncs when needed", tone: "muted" };
+  }
   if (entry.error) {
     return { label: "Ready · last update failed", tone: "error", detail: entry.error };
   }

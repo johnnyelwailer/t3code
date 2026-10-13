@@ -5,8 +5,9 @@ const POLL_MS = 2_000;
 /**
  * Resolves once the linked repository `url` has a usable checkout, polling the cheap status
  * endpoint (each poll is a file read on the server, so no single request nears a timeout).
- * Rejects when its background sync fails. Used before switching the main repository to a
- * repository whose first clone is still running.
+ * Rejects when its background sync fails, or when no sync is running for a repository that is
+ * not cloned (linked repositories sync on demand: the caller must have asked for this one). Used
+ * before switching the main repository to a repository whose first clone is still running.
  */
 export async function waitForLinkedRepositoryReady(input: {
   readonly backend: BackendApi;
@@ -27,6 +28,7 @@ export async function waitForLinkedRepositoryReady(input: {
       if (entry.status === "failed") {
         throw new Error(entry.error ?? `Linked repository '${input.url}' could not be cloned.`);
       }
+      throw new Error(`Linked repository '${input.url}' is not cloned and no sync is running.`);
     }
     await sleep(POLL_MS);
   }

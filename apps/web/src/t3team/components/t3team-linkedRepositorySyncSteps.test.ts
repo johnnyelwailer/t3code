@@ -33,6 +33,16 @@ describe("buildSyncSteps", () => {
     expect(describeSyncProgress(steps)).toBe("Step 3 of 5");
   });
 
+  it("counts a repository that is only linked, not cloned, as done once saved", () => {
+    const steps = buildSyncSteps({
+      phase: "saved",
+      urls: [A],
+      byUrl: new Map([[A, entry(A, { status: "not-cloned" })]]),
+    });
+    expect(steps[1]).toMatchObject({ state: "done", detail: "Linked — cloned when needed" });
+    expect(describeSyncProgress(steps)).toBeNull();
+  });
+
   it("reports a failed clone with its reason and leaves later steps pending", () => {
     const steps = buildSyncSteps({
       phase: "saved",

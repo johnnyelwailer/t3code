@@ -23,6 +23,7 @@ import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts"
 import { ProviderRegistry } from "./provider/ProviderRegistry.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import { T3TeamChildThreadMetadata } from "./t3team-childThreadMetadata.ts";
+import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
 import {
   applyDelegationEffort,
@@ -52,6 +53,8 @@ const make = Effect.gen(function* () {
     path: yield* Path.Path,
     gitWorkflow: yield* GitWorkflowService,
     sourceControlProviders: yield* SourceControlProviderRegistry,
+    // A child delegated into a linked repository not cloned yet clones it on demand.
+    linkedRepositorySync: yield* T3TeamLinkedRepositorySync,
   };
   const setupScripts = yield* ProjectSetupScriptRunner;
   const providers = yield* ProviderRegistry;
