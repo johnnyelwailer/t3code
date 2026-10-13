@@ -80,8 +80,11 @@ export const syncLinkedRepositoryOnDemand = Effect.fn("syncLinkedRepositoryOnDem
         view: describeLinkedRepositoryForAgent(entry, sync.phase(entry.localPath)),
       } satisfies LinkedRepositoryOnDemandResult;
     }
+    // A job records its outcome before it leaves the registry and before `awaitSettled` resolves,
+    // so a job that settled before this call is already in the manifest. The re-read takes the
+    // manifest lock so it never interleaves with a bootstrap rewriting the file.
     yield* sync.awaitSettled(entry.localPath);
-    const settled = (yield* readEntry).entry ?? entry;
+    const settled = (yield* sync.withManifestLock(readEntry)).entry ?? entry;
     return {
       entry: settled,
       view: describeLinkedRepositoryForAgent(settled, sync.phase(settled.localPath)),

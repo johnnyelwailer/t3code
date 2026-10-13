@@ -6,6 +6,7 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -80,6 +81,59 @@ describe("linked repositories on demand", () => {
         const response = yield* bootstrap(harness.workspaceRoot, [url]);
         expect(response.linkedRepositories[0]?.status).toBe("not-cloned");
         expect(harness.counts.clone).toBe(0);
+      }),
+    );
+  });
+
+  it.live("adopts a legacy pending entry whose clone is on disk with one fetch, once", () => {
+    const harness = makeHarness();
+    const url = makeOrigin(harness.root, "landed");
+    const manifestPath = NodePath.join(
+      harness.workspaceRoot,
+      HIDDEN_T3TEAM_DIR,
+      REFERENCES_DIR_NAME,
+      MANIFEST_FILE_NAME,
+    );
+    return run(
+      harness,
+      Effect.gen(function* () {
+        const first = yield* bootstrap(harness.workspaceRoot, [url], true);
+        const localPath = first.linkedRepositories[0]!.localPath;
+        yield* Effect.flatMap(T3TeamLinkedRepositorySync, (sync) => sync.awaitSettled(localPath));
+        // As an older version left it: the clone landed, the entry still says `pending`.
+        NodeFS.writeFileSync(
+          manifestPath,
+          JSON.stringify({ linkedRepositories: [{ url, localPath, status: "pending" }] }),
+        );
+        const fetchesBefore = harness.counts.fetch;
+        const adopting = yield* bootstrap(harness.workspaceRoot, [url]);
+        expect(adopting.linkedRepositories[0]?.syncState).toBeDefined();
+        yield* Effect.flatMap(T3TeamLinkedRepositorySync, (sync) => sync.awaitSettled(localPath));
+        const [entry] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot))
+          .linkedRepositories;
+        expect(entry?.status).toBe("updated");
+        yield* bootstrap(harness.workspaceRoot, [url]);
+        expect(harness.counts).toMatchObject({ clone: 1, fetch: fetchesBefore + 1 });
+      }),
+    );
+  });
+
+  it.live("keeps a recorded clone at its path when the list reorders, without syncing it", () => {
+    const harness = makeHarness();
+    const [kept, added] = ["kept", "added"].map((name) => makeOrigin(harness.root, name));
+    return run(
+      harness,
+      Effect.gen(function* () {
+        const first = yield* bootstrap(harness.workspaceRoot, [kept!], true);
+        const keptPath = first.linkedRepositories[0]!.localPath;
+        yield* Effect.flatMap(T3TeamLinkedRepositorySync, (sync) => sync.awaitSettled(keptPath));
+        const reordered = yield* bootstrap(harness.workspaceRoot, [added!, kept!]);
+        expect(reordered.linkedRepositories[1]).toMatchObject({
+          localPath: keptPath,
+          status: "cloned",
+        });
+        expect(reordered.linkedRepositories[1]?.syncState).toBeUndefined();
+        expect(harness.counts).toMatchObject({ clone: 1, fetch: 0 });
       }),
     );
   });
@@ -212,6 +266,7 @@ describe("linked repositories on demand", () => {
       Effect.provide(
         GitVcsDriver.layer.pipe(
           Layer.provideMerge(ServerConfig.layerTest(harness.root, { prefix: "t3-linked-od-" })),
+          Layer.provideMerge(NodeServices.layer),
         ),
       ),
       Effect.scoped,

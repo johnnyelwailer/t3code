@@ -7,6 +7,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 
+import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 import {
   addBranch,
   bootstrap,
@@ -418,9 +419,14 @@ describe("T3TeamLinkedRepositorySync", () => {
         NodePath.join(referencesRoot, MANIFEST_FILE_NAME),
         JSON.stringify({ linkedRepositories: [{ url, localPath, status: "pending" }] }),
       );
-      const first = yield* readLinkedRepositoryStatus(harness.workspaceRoot);
-      expect(first.linkedRepositories[0]?.syncState).toBeUndefined();
-      expect(first.linkedRepositories[0]?.status).toBe("pending");
+      // The old status route re-queued a `pending` entry with no job (a "lost" first clone).
+      for (let poll = 0; poll < 2; poll += 1) {
+        const status = yield* readLinkedRepositoryStatus(harness.workspaceRoot);
+        expect(status.linkedRepositories[0]?.syncState).toBeUndefined();
+        expect(status.linkedRepositories[0]?.status).toBe("pending");
+      }
+      expect((yield* T3TeamLinkedRepositorySync).phase(localPath)).toBeUndefined();
+      yield* settleAll([localPath]);
       expect(harness.counts.clone).toBe(0);
       expect(NodeFS.existsSync(localPath)).toBe(false);
     }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));

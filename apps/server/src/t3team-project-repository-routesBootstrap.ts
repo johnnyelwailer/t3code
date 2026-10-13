@@ -47,8 +47,9 @@ export type PlannedLinkedRepository = {
 
 /** Decides each linked repository's checkout path and whether to sync it now — without running
  * git. Linked repositories sync on demand: a bootstrap only records them, and syncs the ones named
- * in `syncUrls` (an explicit user choice) or whose chosen branch changed. A checkout already on
- * disk is kept, never refetched here. */
+ * in `syncUrls` (an explicit user choice) or whose chosen branch changed. A usable checkout already
+ * on disk is kept, never refetched here; one on disk that is not recorded as usable yet is adopted
+ * with a single fetch. */
 export const planLinkedRepositoriesForBootstrap = Effect.fn("planLinkedRepositoriesForBootstrap")(
   function* (input: {
     readonly referencesRoot: string;
@@ -109,13 +110,19 @@ export const planLinkedRepositoriesForBootstrap = Effect.fn("planLinkedRepositor
       };
       // Choosing another branch is an explicit request to put the checkout on it.
       const branchChanged = input.branches !== undefined && previous?.branch !== branch;
+      // A checkout on disk not recorded as usable (a legacy `pending` entry whose clone landed, or
+      // a clone found after its entry was lost) is adopted once: one fetch, which also checks its
+      // origin. Afterwards it is `updated` (or `failed`) and never synced here again.
+      const unadoptedCheckout =
+        (previousIsClone || onDiskPath !== undefined) &&
+        (entry.status === "pending" || entry.status === "not-cloned");
       const requested = input.syncUrls.some((candidate) => isSameRepository(candidate, url));
       planned.push({
         entry,
         ...(phase ? { phase } : {}),
         // A running sync is still requested: that registers this manifest for its outcome
         // (the sync service deduplicates the work).
-        request: phase !== undefined || requested || branchChanged,
+        request: phase !== undefined || requested || branchChanged || unadoptedCheckout,
       });
     }
     return planned;

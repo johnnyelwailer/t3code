@@ -1,3 +1,5 @@
+import { isSameRepository } from "@t3tools/project-context/t3teamRepositoryIdentity";
+
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 
 const POLL_MS = 2_000;
@@ -20,7 +22,10 @@ export async function waitForLinkedRepositoryReady(input: {
     const { linkedRepositories } = await input.backend.projectWorkspace.readLinkedRepositoryStatus({
       workspaceRoot: input.workspaceRoot,
     });
-    const entry = linkedRepositories.find((candidate) => candidate.url === input.url);
+    // The same repository may be recorded under another spelling (https / ssh / owner/repo).
+    const entry = linkedRepositories.find((candidate) =>
+      isSameRepository(candidate.url, input.url),
+    );
     // Not a reference clone (e.g. the workspace's own repository): nothing to wait for.
     if (!entry) return;
     if (entry.syncState === undefined) {
