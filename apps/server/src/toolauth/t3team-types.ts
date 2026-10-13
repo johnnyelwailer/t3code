@@ -23,6 +23,8 @@
  */
 import type { ToolAuthPhase } from "@t3tools/contracts";
 
+import type * as PtyAdapter from "@t3tools/shared/PtyAdapter";
+
 export type { ToolAuthPhase };
 
 /**
@@ -51,6 +53,8 @@ export interface AuthState {
   account?: string | undefined;
   /** Organisation/workspace label, when the CLI reports one — independent of `account`. */
   organization?: string | undefined;
+  /** The host this state is about, for a CLI that signs in per host (`gh`). */
+  hostname?: string | undefined;
   /** Epoch milliseconds. Only set when the credential store reports one. */
   expiresAt?: number | undefined;
   /**
@@ -121,19 +125,24 @@ export interface ToolAuthAdapter {
   /** One line explaining what signing in here grants. */
   readonly description: string;
 
+  /** The host this adapter signs in to, for a CLI that signs in per host (`gh`). */
+  readonly hostname?: string | undefined;
+  /**
+   * The same adapter pointed at another host — present only for a per-host CLI. A sign-in that
+   * must land on the host a request needs (not the deployment's default) is started through it.
+   */
+  readonly forHost?: ((hostname: string) => ToolAuthAdapter) | undefined;
+
   /** Argv for the interactive login. */
   readonly command: string[];
 
   /**
    * Extra variables merged over the service env when spawning the login pty.
    *
-   * gh uses it for `GH_BROWSER=/usr/bin/true`: the auto-answered Enter that
-   * starts the CLI's device-code polling would otherwise also make gh open
-   * the HOST's browser — on a desktop host that window pops up before the
-   * user has even read the code off the card, and on a headless VM it is
-   * useless anyway. Pointing the documented `GH_BROWSER` launcher at a no-op
-   * keeps the Enter (and thus the polling) but suppresses the window. The
-   * device URL is on the card; the user opens it on their own schedule.
+   * gh uses it for `GH_BROWSER=/usr/bin/true`, so an Enter it is ever sent (older gh) cannot make
+   * it open the HOST's browser before the user has read the code off the card — and for
+   * `GH_PROMPT_DISABLED`/`NO_COLOR`, which stop it asking questions a silent pty never answers.
+   * The device URL is on the card; the user opens it on their own schedule.
    */
   readonly spawnEnv?: Readonly<Record<string, string>> | undefined;
 
@@ -165,12 +174,11 @@ export interface ToolAuthAdapter {
     /**
      * A line that, once printed, is answered with a bare Enter on the pty.
      *
-     * gh's device flow prints the one-time code and then blocks on
-     * "Press Enter to open … in your browser" — the Enter is what starts the
-     * CLI's own device-code polling. A headless sandbox has no hand on that
-     * keyboard, so the pty layer (`t3team-loginService.ts`) answers it once,
-     * automatically, the first time a line matches. Data, not code: a new
-     * tool with the same need stays a table entry.
+     * For a CLI that blocks on a keypress after printing its device code, so a headless sandbox
+     * has no hand on that keyboard: the pty layer (`t3team-loginProcessWiring.ts`) answers it
+     * once, automatically, the first time a line matches. Data, not code: a tool with the same
+     * need stays a table entry. gh before its prompt-free output (see `spawnEnv`) is the example:
+     * there the Enter is what starts its polling; current gh polls on its own and never asks.
      */
     autoEnter?: RegExp;
     success: RegExp;
@@ -182,4 +190,16 @@ export interface ToolAuthAdapter {
 
   /** Paths that must persist on the user's volume for the session to survive. */
   readonly persistPaths: string[];
+}
+
+/** Shared session shape the login and install flows both read and write via `sessionsRef`. */
+export interface ActiveSession {
+  readonly adapter: ToolAuthAdapter;
+  /**
+   * Absent for a session that never spawned a process — the binary-missing
+   * failed state the login flow registers in place of a spawn. Terminal
+   * states need no live pty; `cancel`/`submitCode` guard on this.
+   */
+  readonly process?: PtyAdapter.PtyProcess | undefined;
+  readonly state: AuthState;
 }

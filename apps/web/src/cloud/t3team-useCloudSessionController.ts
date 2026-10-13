@@ -48,6 +48,7 @@ export function useCloudSessionController() {
     configured,
     historyUrl,
     loadError,
+    rateLimitedUntilMs,
   } = useCloudSessions();
   const [actionPending, setActionPending] = useState<{
     readonly sessionId: string;
@@ -94,6 +95,7 @@ export function useCloudSessionController() {
     environmentId,
     cloudMenuOpen || panelVisible || provisioningVisible || targetsNeedRefresh,
     sessions,
+    rateLimitedUntilMs,
   );
 
   const { connectPendingSessionId, connectFailure, requestConnect } = useCloudSessionConnect({

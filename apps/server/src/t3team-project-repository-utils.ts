@@ -13,6 +13,8 @@ import { ensureNexiProjectStateDir } from "./t3team-projectMainRepositoryState.t
 export type BootstrapWorkspaceRequest = {
   readonly workspaceRoot: string;
   readonly linkedRepositoryUrls?: ReadonlyArray<string>;
+  /** The branch each linked repository's checkout should be on, by URL. Absent: left as is. */
+  readonly linkedRepositoryBranches?: Readonly<Record<string, string>>;
   readonly setupProfileId?: string;
   /** An explicit save: refetch every linked repository instead of honoring the refetch throttle. */
   readonly refreshLinkedRepositories?: boolean;
@@ -31,6 +33,8 @@ export type LinkedRepositoryBootstrapResult = {
   /** When the last background clone/fetch settled (success or failure); throttles refetches. */
   readonly syncedAt?: string;
   readonly syncState?: LinkedRepositorySyncPhase;
+  /** The branch the project chose for this checkout; absent means it is left as cloned. */
+  readonly branch?: string;
 };
 
 export type LinkedRepositorySyncPhase = "queued" | "cloning" | "updating";

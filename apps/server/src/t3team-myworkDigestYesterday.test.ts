@@ -3,52 +3,101 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { assembleMyWorkDigestProjectData } from "./t3team-myworkDigestAggregation.ts";
 import type { BacklogResourceRef } from "./t3team-atlassian-backlog-cacheShared.ts";
+import { DIGEST_TRANSITION_RETENTION_MS } from "./t3team-digestStatusTransitions.ts";
 import { assembleDigestYesterday } from "./t3team-myworkDigestYesterday.ts";
-import { digestYesterdayWindow } from "./t3team-myworkDigestYesterdayWindow.ts";
+import { digestDataWindow, lastActivityDayWindow } from "./t3team-myworkDigestYesterdayWindow.ts";
 
 const iso = (ms: number) => DateTime.formatIso(DateTime.makeUnsafe(ms));
-const windowIn = (nowIso: string, zone: string) => {
-  const window = digestYesterdayWindow(Date.parse(nowIso), zone);
-  return { from: iso(window.fromMs), until: iso(window.untilMs) };
+
+/** The window `lastActivityDayWindow` finds for a lone activity instant, as ISO strings. */
+const dayOf = (nowMs: number, zone: string, ms: number) => {
+  const window = lastActivityDayWindow(nowMs, zone, [ms]);
+  return window !== undefined
+    ? { from: iso(window.fromMs), until: iso(window.untilMs) }
+    : undefined;
 };
 
-describe("digestYesterdayWindow", () => {
-  it("is the day before on a Tuesday, in the viewer's zone", () => {
-    // Tue 2026-10-06 09:00 in Zurich (UTC+2): yesterday is Mon 10-05 00:00 .. Tue 10-06 00:00.
-    expect(windowIn("2026-10-06T07:00:00Z", "Europe/Zurich")).toEqual({
-      from: "2026-10-04T22:00:00.000Z",
-      until: "2026-10-05T22:00:00.000Z",
-    });
+describe("digestDataWindow", () => {
+  it("runs from the start of today back over the retention", () => {
+    // Tue 2026-10-06 09:00 in Zurich (UTC+2, still summer time): today starts Monday 22:00Z.
+    const window = digestDataWindow(Date.parse("2026-10-06T07:00:00Z"), "Europe/Zurich");
+    expect(window.untilMs).toBe(Date.parse("2026-10-05T22:00:00.000Z"));
+    expect(window.fromMs).toBe(window.untilMs - DIGEST_TRANSITION_RETENTION_MS);
   });
+});
 
-  it("reads 'today' in the viewer's zone, not UTC", () => {
-    // 23:30Z on Tue is already Wed 01:30 in Zurich: yesterday is Tuesday.
-    expect(windowIn("2026-10-06T23:30:00Z", "Europe/Zurich").from).toBe("2026-10-05T22:00:00.000Z");
-  });
+describe("lastActivityDayWindow", () => {
+  // Zurich dates, 2026: 10-04 Sun, 10-05 Mon, 10-06 Tue, 10-08 Thu, 10-09 Fri, 10-11 Sun, 10-12 Mon.
+  const NOW = Date.parse("2026-10-12T08:00:00Z"); // a Monday morning
+  const atOn = (dateIso: string, hourUtc: number) =>
+    Date.parse(`${dateIso}T${String(hourUtc).padStart(2, "0")}:00:00Z`);
 
-  it("is Friday on a Monday, running on to the start of Monday", () => {
-    expect(windowIn("2026-10-12T08:00:00Z", "Europe/Zurich")).toEqual({
-      from: "2026-10-08T22:00:00.000Z",
+  it("is the day before when the day before has activity", () => {
+    expect(dayOf(NOW, "Europe/Zurich", atOn("2026-10-11", 12))).toEqual({
+      from: "2026-10-10T22:00:00.000Z", // Sunday 00:00 in Zurich
       until: "2026-10-11T22:00:00.000Z",
     });
   });
 
-  it("is Friday on a Sunday, and on a Saturday", () => {
-    expect(windowIn("2026-10-11T12:00:00Z", "Europe/Zurich").from).toBe("2026-10-08T22:00:00.000Z");
-    expect(windowIn("2026-10-10T12:00:00Z", "Europe/Zurich").from).toBe("2026-10-08T22:00:00.000Z");
+  it("walks back over empty days to the last active one", () => {
+    // Monday, with an empty Sunday and Friday, and a Thursday activity: Thursday wins.
+    expect(dayOf(NOW, "Europe/Zurich", atOn("2026-10-08", 10))).toEqual({
+      from: "2026-10-07T22:00:00.000Z",
+      until: "2026-10-08T22:00:00.000Z",
+    });
   });
 
-  it("follows the clock change: Friday starts at +2, Monday at +1", () => {
-    // Zurich left summer time on Sun 2026-10-25.
-    expect(windowIn("2026-10-26T08:00:00Z", "Europe/Zurich")).toEqual({
-      from: "2026-10-22T22:00:00.000Z",
-      until: "2026-10-25T23:00:00.000Z",
+  it("prefers the newest active day", () => {
+    const window = lastActivityDayWindow(NOW, "Europe/Zurich", [
+      atOn("2026-10-08", 10),
+      atOn("2026-10-09", 16),
+    ]);
+    expect(window?.fromMs).toBe(Date.parse("2026-10-08T22:00:00.000Z")); // Friday
+  });
+
+  it("finds a day three weeks back", () => {
+    const window = lastActivityDayWindow(NOW, "Europe/Zurich", [atOn("2026-09-20", 9)]); // Sunday
+    expect(window?.fromMs).toBe(Date.parse("2026-09-19T22:00:00.000Z"));
+  });
+
+  it("is absent when nothing happened", () => {
+    expect(lastActivityDayWindow(NOW, "Europe/Zurich", [])).toBeUndefined();
+  });
+
+  it("never counts today", () => {
+    expect(lastActivityDayWindow(NOW, "Europe/Zurich", [atOn("2026-10-12", 7)])).toBeUndefined();
+  });
+
+  it("reads the day in the viewer's zone, not UTC", () => {
+    // 23:30Z on Monday is already Tuesday 01:30 in Zurich: a Monday activity is the day before.
+    const now = Date.parse("2026-10-06T23:30:00Z");
+    const window = lastActivityDayWindow(now, "Europe/Zurich", [
+      Date.parse("2026-10-05T10:00:00Z"),
+    ]);
+    expect(window?.fromMs).toBe(Date.parse("2026-10-04T22:00:00.000Z")); // Monday 00:00, in Zurich
+  });
+
+  it("gives up at the horizon", () => {
+    const old = NOW - 2 * DIGEST_TRANSITION_RETENTION_MS;
+    expect(lastActivityDayWindow(NOW, "Europe/Zurich", [old])).toBeUndefined();
+  });
+
+  it("follows the clock change: the long Sunday runs 25 hours", () => {
+    // Zurich leaves summer time on Sun 2026-10-25; a Sunday activity seen on Monday 2026-10-26.
+    const window = lastActivityDayWindow(Date.parse("2026-10-26T08:00:00Z"), "Europe/Zurich", [
+      Date.parse("2026-10-25T12:00:00Z"),
+    ]);
+    expect(window).toEqual({
+      fromMs: Date.parse("2026-10-24T22:00:00.000Z"), // Sunday still starts at +2
+      untilMs: Date.parse("2026-10-25T23:00:00.000Z"), // Monday already starts at +1
     });
   });
 
   it("falls back to the server's own zone for a missing or unknown one", () => {
-    const now = Date.parse("2026-10-06T07:00:00Z");
-    expect(digestYesterdayWindow(now, "Not/AZone")).toEqual(digestYesterdayWindow(now));
+    const activity = Date.parse("2026-10-09T12:00:00Z");
+    expect(lastActivityDayWindow(NOW, "Not/AZone", [activity])).toEqual(
+      lastActivityDayWindow(NOW, undefined, [activity]),
+    );
   });
 });
 

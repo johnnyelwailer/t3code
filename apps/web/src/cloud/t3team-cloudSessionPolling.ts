@@ -28,11 +28,22 @@ export const CLOUD_SESSION_IDLE_REFRESH_INTERVAL_MS = 30_000;
 /**
  * The poll interval for a session list: the busy cadence (never below the
  * shared floor) while any session is still provisioning, the idle one otherwise.
+ * When the provider has paused this host (`rateLimitedUntilMs`), wait until
+ * that wall-clock time instead of re-polling into the same pause.
  */
 export function cloudSessionPollIntervalMs(
   sessions: readonly Pick<CloudSession, "phase">[],
   busyIntervalMs: number,
+  options?: {
+    readonly rateLimitedUntilMs?: number | null;
+    readonly nowMs?: number;
+  },
 ): number {
+  const until = options?.rateLimitedUntilMs;
+  const now = options?.nowMs ?? Date.now();
+  if (typeof until === "number" && until > now) {
+    return Math.max(until - now, CLOUD_SESSION_MIN_REFRESH_GAP_MS);
+  }
   const busy = sessions.some((session) => isCloudSessionProvisionPending(session.phase));
   return busy
     ? Math.max(busyIntervalMs, CLOUD_SESSION_MIN_REFRESH_GAP_MS)

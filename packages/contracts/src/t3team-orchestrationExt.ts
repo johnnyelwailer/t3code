@@ -8,7 +8,13 @@
  */
 import * as Schema from "effect/Schema";
 
-import { EnvironmentId, IsoDateTime, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import {
+  EnvironmentId,
+  IsoDateTime,
+  MessageId,
+  ThreadId,
+  TrimmedNonEmptyString,
+} from "./baseSchemas.ts";
 
 export const ProjectWorkSourceProvider = Schema.Literals([
   "atlassian",
@@ -53,6 +59,10 @@ export type OrchestrationThreadActivityState = typeof OrchestrationThreadActivit
 /** Durable workflow-engine state joined from `workflow_runs` for the launch thread. */
 export const OrchestrationWorkflowRunStatus = Schema.Struct({
   runId: Schema.optional(Schema.String),
+  /** Best available durable label when the launch card is not loaded in the timeline. */
+  title: Schema.optional(TrimmedNonEmptyString),
+  /** Stable launch-card target; lets non-timeline surfaces navigate without a loaded dock item. */
+  messageId: Schema.optional(MessageId),
   status: Schema.Literals([
     // The run exists and its hidden author is writing the source (no source yet).
     "authoring",

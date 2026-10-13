@@ -40,6 +40,8 @@ export function cloudSessionBindBannerTitle(phase: CloudSessionBindPhase): strin
 export function resolveCloudSessionBindPhase(input: {
   readonly sessionPhase: string | null;
   readonly connecting: boolean;
+  /** The session's machine is a connected environment on this client (its project may still be absent). */
+  readonly machineRegistered: boolean;
   readonly projectReady: boolean;
   readonly flushing: boolean;
   readonly failed: boolean;
@@ -47,7 +49,8 @@ export function resolveCloudSessionBindPhase(input: {
   if (input.failed) return "failed";
   if (input.flushing) return "flushing";
   if (input.sessionPhase === null || input.sessionPhase !== "ready") return "provisioning";
-  if (input.connecting) return "connecting";
+  // Not registered yet is still connecting; only a registered machine can be waiting on its project.
+  if (input.connecting || !input.machineRegistered) return "connecting";
   if (!input.projectReady) return "syncing";
   return "connecting";
 }

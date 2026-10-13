@@ -1,4 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
+
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
@@ -13,6 +16,13 @@ import {
   removeTempHome,
   waitFor,
 } from "./t3team-toolauthTestHarness.ts";
+
+/** The credential `fake`'s status check looks for — what a login that really signed in leaves. */
+function writeFakeCredential(homeDir: string): void {
+  const file = NodePath.join(homeDir, FAKE.status.credentialPath);
+  NodeFS.mkdirSync(NodePath.dirname(file), { recursive: true });
+  NodeFS.writeFileSync(file, "{}");
+}
 
 describe("ToolAuthService", () => {
   it.effect(
@@ -140,15 +150,33 @@ describe("ToolAuthService", () => {
     }),
   );
 
-  it.effect("treats a clean exit before any terminal phase as connected", () =>
+  it.live("a clean exit before any terminal phase is connected once the credential is there", () =>
     Effect.gen(function* () {
       const homeDir = makeTempHome();
       try {
         const { service, ptyAdapter } = yield* makeService(homeDir);
         yield* service.start("fake");
         const process = ptyAdapter.processes[0]!;
+        writeFakeCredential(homeDir);
         process.emitExit({ exitCode: 0, signal: null });
         yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "connected")));
+      } finally {
+        removeTempHome(homeDir);
+      }
+    }),
+  );
+
+  it.live("a clean exit with no success line and no credential is failed, not connected", () =>
+    Effect.gen(function* () {
+      const homeDir = makeTempHome();
+      try {
+        const { service, ptyAdapter } = yield* makeService(homeDir);
+        yield* service.start("fake");
+        ptyAdapter.processes[0]!.emitExit({ exitCode: 0, signal: null });
+        yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "failed")));
+        expect((yield* firstFakeState(service))?.message).toBe(
+          "Example tool finished without signing in.",
+        );
       } finally {
         removeTempHome(homeDir);
       }
@@ -195,12 +223,13 @@ describe("ToolAuthService", () => {
     }),
   );
 
-  it.effect("start() after a connected session (Reconnect) spawns a fresh process", () =>
+  it.live("start() after a connected session (Reconnect) spawns a fresh process", () =>
     Effect.gen(function* () {
       const homeDir = makeTempHome();
       try {
         const { service, ptyAdapter } = yield* makeService(homeDir);
         yield* service.start("fake");
+        writeFakeCredential(homeDir);
         ptyAdapter.processes[0]!.emitExit({ exitCode: 0, signal: null });
         yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "connected")));
 

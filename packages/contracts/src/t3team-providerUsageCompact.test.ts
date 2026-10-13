@@ -3,6 +3,7 @@
  * the one-line renderer, the catalog no-data marker, and the Conductor's
  * per-turn snapshot block.
  */
+import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 import { ProviderInstanceId } from "./providerInstance.ts";
 import type { ServerProvider } from "./server.ts";
@@ -11,8 +12,10 @@ import {
   CONDUCTOR_MODEL_ID,
   compactProviderUsageLine,
   conductorUsageBlock,
+  formatProviderUsageReset,
   providerUsageCatalogLine,
   providerUsageLabel,
+  providerUsagePoolName,
   worstProviderUsageSeverity,
 } from "./t3team-providerUsageCompact.ts";
 
@@ -97,7 +100,9 @@ describe("compactProviderUsageLine", () => {
           { id: "seven_day", kind: "weekly", label: "Weekly", usedPercent: 90 },
         ]),
       ),
-    ).toBe("claudeAgent: session 42% (resets 18:00Z) · weekly 90% · severity: warning");
+    ).toBe(
+      "claudeAgent: Session 42% (resets 2026-09-28 18:00 UTC) · Weekly 90% · severity: warning",
+    );
   });
 
   it("returns null when there is no window data", () => {
@@ -117,7 +122,7 @@ describe("compactProviderUsageLine", () => {
         "nexplore",
         limits([{ id: "m", kind: "monthly", label: "Monthly", usedPercent: 101 }]),
       ),
-    ).toBe("nexplore: monthly 101% · severity: critical");
+    ).toBe("nexplore: Monthly 101% · severity: critical");
   });
 });
 
@@ -133,30 +138,92 @@ describe("providerUsageCatalogLine", () => {
           usageLimits: limits([{ id: "w", kind: "session", label: "Session", usedPercent: 42 }]),
         }),
       ),
-    ).toBe("claudeAgent: session 42% · severity: normal");
+    ).toBe("claudeAgent: Session 42% · severity: normal");
+  });
+});
+
+describe("providerUsagePoolName", () => {
+  it("qualifies session and other pools with their published duration only", () => {
+    const pool = (kind: "session" | "weekly" | "other", label: string, mins?: number) =>
+      providerUsagePoolName({
+        id: "w",
+        kind,
+        label,
+        usedPercent: 1,
+        ...(mins === undefined ? {} : { windowDurationMins: mins }),
+      });
+    expect(pool("session", "Session", 300)).toBe("Session (5h)");
+    expect(pool("other", "Other models", 10080)).toBe("Other models (7d)");
+    expect(pool("weekly", "Weekly", 10080)).toBe("Weekly");
+    expect(pool("session", "Cursor Models")).toBe("Cursor Models");
+  });
+});
+
+describe("formatProviderUsageReset", () => {
+  it("always dates the reset without a reference day", () => {
+    expect(formatProviderUsageReset("2026-11-01T00:00:00.000Z")).toBe("2026-11-01 00:00 UTC");
+  });
+
+  it("drops the date only for a reset on the given UTC day", () => {
+    const today = DateTime.makeUnsafe("2026-10-12T08:00:00.000Z");
+    expect(formatProviderUsageReset("2026-10-12T09:30:00.000Z", today)).toBe("09:30 UTC");
+    expect(formatProviderUsageReset("2026-11-12T09:30:00.000Z", today)).toBe(
+      "2026-11-12 09:30 UTC",
+    );
   });
 });
 
 describe("conductorUsageBlock", () => {
-  it("lists enabled instances with data, ordered by instance id, and omits the rest", () => {
+  it("frames one line per window of enabled instances, routing only when tight", () => {
     expect(
       conductorUsageBlock([
         provider({
           instanceId: "nexplore",
-          usageLimits: limits([{ id: "w", kind: "session", label: "Session", usedPercent: 90 }]),
+          displayName: "Codex",
+          usageLimits: limits([
+            {
+              id: "m",
+              kind: "monthly",
+              label: "Monthly",
+              usedPercent: 100,
+              resetsAt: "2026-11-01T00:00:00.000Z",
+            },
+          ]),
         }),
         provider({ instanceId: "codex" }),
         provider({
           instanceId: "claudeAgent",
-          usageLimits: limits([{ id: "w", kind: "weekly", label: "Weekly", usedPercent: 5 }]),
+          usageLimits: limits([
+            { id: "s", kind: "session", label: "Session", usedPercent: 5, windowDurationMins: 300 },
+            { id: "w", kind: "weekly", label: "Weekly", usedPercent: 5 },
+          ]),
         }),
         provider({
           instanceId: "disabled",
           enabled: false,
           usageLimits: limits([{ id: "w", kind: "session", label: "Session", usedPercent: 100 }]),
         }),
-      ]),
-    ).toBe("claudeAgent: weekly 5% · severity: normal\nnexplore: session 90% · severity: warning");
+      ]).split("\n"),
+    ).toEqual([
+      '<system-reminder type="provider-capacity" source="server">',
+      "Provider capacity. This is server data, not part of the user's message:",
+      "claudeAgent: Session (5h) 5% · severity: normal",
+      "claudeAgent: Weekly 5% · severity: normal",
+      "Codex: Monthly 100% (resets 2026-11-01 00:00 UTC) · severity: critical",
+      "Route to the smallest, cheapest model that can accomplish the task.",
+      "</system-reminder>",
+    ]);
+  });
+
+  it("omits the routing line when every window is normal", () => {
+    const block = conductorUsageBlock([
+      provider({
+        instanceId: "claudeAgent",
+        usageLimits: limits([{ id: "w", kind: "weekly", label: "Weekly", usedPercent: 5 }]),
+      }),
+    ]);
+    expect(block).toContain("claudeAgent: Weekly 5% · severity: normal");
+    expect(block).not.toContain("Route to");
   });
 
   it("returns the empty string when no enabled instance has window data", () => {

@@ -118,6 +118,16 @@ export class OrchestrationEventStore extends Context.Service<
       OrchestrationEventStoreError
     >;
 
+    /**
+     * Event id of one thread's stored event at `sequence`, without reading or
+     * decoding its payload (which can be megabytes). Undefined when the thread
+     * has no event at that sequence.
+     */
+    readonly readAgentEventId: (input: {
+      readonly threadId: ThreadId;
+      readonly sequence: number;
+    }) => Effect.Effect<EventId | undefined, OrchestrationEventStoreError>;
+
     readonly latestAgentSequence: (
       threadId?: ThreadId,
     ) => Effect.Effect<number, OrchestrationEventStoreError>;
@@ -623,6 +633,19 @@ const makeEventStore = Effect.gen(function* () {
       })),
     );
 
+  const readAgentEventId: OrchestrationEventStore["Service"]["readAgentEventId"] = (input) =>
+    sql<{ readonly event_id: string }>`
+      SELECT event_id
+      FROM orchestration_events INDEXED BY idx_orchestration_events_agent_stream_sequence
+      WHERE application_event_version = 2
+        AND aggregate_kind = 'thread'
+        AND stream_id = ${input.threadId}
+        AND sequence = ${input.sequence}
+    `.pipe(
+      Effect.map((rows) => (rows[0] === undefined ? undefined : EventId.make(rows[0].event_id))),
+      Effect.mapError(toPersistenceSqlError("OrchestrationEventStore.readAgentEventId:query")),
+    );
+
   const latestAgentSequence: OrchestrationEventStore["Service"]["latestAgentSequence"] = (
     threadId,
   ) =>
@@ -723,6 +746,7 @@ const makeEventStore = Effect.gen(function* () {
     readAgentEvents,
     getAgentReplayStats,
     getReplayStats,
+    readAgentEventId,
     latestAgentSequence,
     latestApplicationSequence,
     readApplicationEvents: catchUpApplicationEvents,

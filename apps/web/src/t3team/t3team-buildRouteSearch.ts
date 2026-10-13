@@ -3,7 +3,7 @@ import type { T3TeamRouteSearch } from "~/t3team/t3team-routeState";
 /**
  * The search params that travel with an in-app navigation: everything the current location has,
  * minus what belongs only to the location being left (an embedded thread, the setup welcome flag,
- * the add-project dialog's chosen project).
+ * the add-project dialog's chosen project, the linked-repositories dialog).
  */
 export function buildRouteSearch(
   search: T3TeamRouteSearch,
@@ -15,6 +15,7 @@ export function buildRouteSearch(
   const {
     chatThreadId: _ignoredChatThreadId,
     setup: _ignoredSetup,
+    manageRepositories: _ignoredManageRepositories,
     project: _ignoredCreateProject,
     ...rest
   } = search;

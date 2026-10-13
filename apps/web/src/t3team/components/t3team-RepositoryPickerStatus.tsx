@@ -1,5 +1,7 @@
 import { RefreshCw } from "lucide-react";
 
+import { formatRelativeTimeLabel } from "~/timestampFormat";
+
 import { Button } from "~/t3team/components/ui/t3team-button";
 import type { GitHubDiscoveryState } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
 
@@ -17,7 +19,7 @@ export function RepositoryPickerStatus({
   return (
     <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-        {discovery.authStatus === "authenticated" ? (
+        {discovery.signedIn ? (
           discovery.authenticatedHosts.map((entry) => (
             <span key={entry.host} className="inline-flex items-center gap-1.5">
               <span className="size-1.5 rounded-full bg-success" />
@@ -32,6 +34,13 @@ export function RepositoryPickerStatus({
           <span>{loading ? "Checking your GitHub sign-in…" : "Not signed in to GitHub"}</span>
         )}
       </div>
+      <span className="ml-auto shrink-0 text-2xs text-muted-foreground/80">
+        {discovery.repositoriesRefreshing
+          ? "Updating…"
+          : discovery.repositoriesFetchedAt
+            ? `Updated ${formatRelativeTimeLabel(discovery.repositoriesFetchedAt)}`
+            : null}
+      </span>
       <Button
         variant="ghost"
         size="icon-xs"

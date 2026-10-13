@@ -12,9 +12,12 @@ import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
-import { digestYesterdayWindow } from "./t3team-myworkDigestYesterdayWindow.ts";
+import { readDigestStatusTransitionsSince } from "./t3team-digestStatusTransitions.ts";
 import { assembleMyWorkDigestPayload } from "./t3team-myworkDigestAggregation.ts";
-import { loadDigestProjectSource } from "./t3team-myworkDigestProjectSource.ts";
+import { loadDigestViewerMergedPrEntries } from "./t3team-myworkDigestPrCache.ts";
+import { settleDigestProjectLoads } from "./t3team-myworkDigestProjectOutcomes.ts";
+import { digestIdentityFor, loadDigestProjectSource } from "./t3team-myworkDigestProjectSource.ts";
+import { digestDataWindow, lastActivityDayWindow } from "./t3team-myworkDigestYesterdayWindow.ts";
 import {
   readDigestDecisionQuestions,
   readDigestHandoffTickets,
@@ -34,7 +37,28 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
     const nowMs = yield* Clock.currentTimeMillis;
     const nowIso = DateTime.formatIso(DateTime.makeUnsafe(nowMs));
     const requestedViewerName = input.viewer?.name?.trim() || undefined;
-    const yesterdayWindow = digestYesterdayWindow(nowMs, input.timeZone);
+    // One shared data horizon: the merged-PR read keys on its start (cache-warm all day), and the
+    // recap walks back through it, day by day, to the viewer's last working day. Today never counts.
+    const dataWindow = digestDataWindow(nowMs, input.timeZone);
+    // The merged-PR read and the per-project transition reads are independent host/DB work: run
+    // them together, before any project source loads.
+    const [mergedPrs, transitionRows] = yield* Effect.all([
+      loadDigestViewerMergedPrEntries(dataWindow),
+      Effect.forEach(
+        projects,
+        (project) =>
+          readDigestStatusTransitionsSince({
+            ...digestIdentityFor(project),
+            sinceMs: dataWindow.fromMs,
+          }),
+        // Projects are independent reads; one slow one must not serialize the rest.
+        { concurrency: "unbounded" },
+      ),
+    ]);
+    const yesterdayWindow = lastActivityDayWindow(nowMs, input.timeZone, [
+      ...mergedPrs.read.map((entry) => Date.parse(entry.updatedAt)),
+      ...transitionRows.flat().map((row) => row.atMs),
+    ]);
     const appProjectIds = [
       ...new Set(
         projects
@@ -65,30 +89,35 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
       })),
     );
 
-    const loaded = yield* Effect.forEach(
+    const results = yield* Effect.forEach(
       projects,
-      (project) =>
-        loadDigestProjectSource(
-          {
-            nowMs,
-            nowIso,
-            requestedViewerName,
-            yesterdayWindow,
-            threads,
-            agentByThread,
-            rawTicketByThread,
-            pendingRuns,
-            questions,
-          },
-          project,
+      (project, index) =>
+        Effect.result(
+          loadDigestProjectSource(
+            {
+              nowMs,
+              nowIso,
+              requestedViewerName,
+              mergedPrs,
+              yesterdayWindow,
+              transitionRows: transitionRows[index] ?? [],
+              threads,
+              agentByThread,
+              rawTicketByThread,
+              pendingRuns,
+              questions,
+            },
+            project,
+          ),
         ),
       // Projects are independent reads; one slow host must not serialize the rest.
       { concurrency: "unbounded" },
     );
+    const { loaded, someSessionExpired } = yield* settleDigestProjectLoads(results);
     const sources = loaded.map((entry) => entry.source);
-    // Set when any project could not resolve the viewer (no Jira session): the
-    // client shows "sign in" instead of a misleading empty digest.
-    const viewerUnresolved = loaded.some((entry) => entry.viewerUnresolved);
+    // Set when any project could not resolve the viewer (no Jira credentials or a
+    // dead session): the client shows "sign in" instead of a misleading empty digest.
+    const viewerUnresolved = someSessionExpired || loaded.some((entry) => entry.viewerUnresolved);
     const changeRequestsPending = loaded.some((entry) => entry.changeRequestsPending);
 
     // The mirror-resolved name (the exact string `ticket.assignee` carries, so the client's

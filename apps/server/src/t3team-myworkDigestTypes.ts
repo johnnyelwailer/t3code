@@ -17,6 +17,7 @@ import type {
   T3TeamDigestPerson,
 } from "./t3team-myworkDigestTypesPrs.ts";
 import type { T3TeamDigestDependency } from "./t3team-myworkDigestDependencies.ts";
+import type { T3TeamDigestJiraAuth } from "./t3team-myworkDigestJiraHealth.ts";
 import type { T3TeamDigestYesterday } from "./t3team-myworkDigestTypesYesterday.ts";
 
 export type {
@@ -55,7 +56,7 @@ export type T3TeamMyWorkDigestInput = {
   readonly projects: ReadonlyArray<T3TeamMyWorkDigestProjectInput>;
   /** The viewer's Jira display name; drives the personal burndown when present. */
   readonly viewer?: { readonly name?: string };
-  /** The viewer's IANA time zone: "yesterday" is their previous working day. Absent = the server's. */
+  /** The viewer's IANA time zone: "yesterday" is their last working day, in it. Absent = the server's. */
   readonly timeZone?: string;
 };
 
@@ -132,9 +133,15 @@ export type T3TeamDigestProjectData = {
   readonly changeRequestsStale?: boolean;
   /** When the project's Jira tickets last matched Jira (ISO); absent before any sync. */
   readonly jiraSyncedAt?: string;
+  /** The first mirror sync is still running, so `jiraSyncedAt` is absent and the tickets partial. */
+  readonly jiraSyncPending?: boolean;
+  /** Whether the Jira session behind this project's tickets still works; absent from older hosts. */
+  readonly jiraAuth?: T3TeamDigestJiraAuth;
+  /** Plain-language reason the last Jira sync failed; absent when it did not. */
+  readonly jiraSyncError?: string;
   /** Who the viewer's tickets hang together with (Jira links, same story). */
   readonly dependencies?: ReadonlyArray<T3TeamDigestDependency>;
-  /** What the viewer merged and moved in the previous working day; absent when neither. */
+  /** What the viewer merged and moved on their last working day; absent when the horizon had none. */
   readonly yesterday?: T3TeamDigestYesterday;
 };
 
@@ -222,6 +229,9 @@ export type T3TeamDigestProjectSource = {
   readonly changeRequestNote?: string;
   readonly changeRequestsStale?: boolean;
   readonly jiraSyncedAt?: string;
+  readonly jiraSyncPending?: boolean;
+  readonly jiraAuth?: T3TeamDigestJiraAuth;
+  readonly jiraSyncError?: string;
   /** Who the viewer's tickets hang together with (Jira links, same story). */
   readonly dependencies?: ReadonlyArray<T3TeamDigestDependency>;
   readonly yesterday?: T3TeamDigestYesterday;

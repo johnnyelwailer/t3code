@@ -8,6 +8,7 @@ import * as Semaphore from "effect/Semaphore";
 import { PositiveInt, type PullRequestChecks } from "@t3tools/contracts";
 
 import * as GitHubApi from "./GitHubApi.ts";
+import { nextPagePath } from "./t3team-githubLinkPaging.ts";
 import type { GitHubPullRequestDetail } from "./gitHubPullRequestJson.ts";
 import type { GitHubPullRequestApiError } from "./GitHubPullRequestApi.ts";
 import type { ProviderRepositoryRef } from "@t3tools/source-control-core/server/PullRequestProvider";
@@ -47,7 +48,8 @@ export const KnownWorkflowRuns = Context.Reference<{
   defaultValue: () => null,
 });
 
-type Validator = { etag: string | undefined; next: boolean; body: string };
+/** `next` is the API path of the following page, from the `Link` header; null on the last. */
+type Validator = { etag: string | undefined; next: string | null; body: string };
 
 /** A host that answers these with one of them has no conditional REST for it at all. */
 const UNSUPPORTED_STATUSES = new Set([404, 405, 501]);
@@ -89,7 +91,7 @@ export const makeChecksRevalidator = Effect.gen(function* () {
               operation: "revalidateChecks",
               status,
             });
-          /** Whether the endpoint has a next page, or null where the host cannot say. */
+          /** What the endpoint answered, or null where the host cannot say. */
           const get = (endpoint: string, head = false) =>
             Effect.gen(function* () {
               const previous = entry.validators.get(endpoint);
@@ -118,7 +120,7 @@ export const makeChecksRevalidator = Effect.gen(function* () {
                 entry.value = null;
                 return null;
               }
-              if (response.status === 304 && previous) return previous.next;
+              if (response.status === 304 && previous) return previous;
               if (response.status !== 200 || response.truncated) {
                 return yield* fail(response.status);
               }
@@ -132,11 +134,15 @@ export const makeChecksRevalidator = Effect.gen(function* () {
               }
               const validator = {
                 etag: response.headers["etag"]?.trim(),
-                next: /rel="next"/.test(response.headers["link"] ?? ""),
+                next: yield* nextPagePath({
+                  host: input.host,
+                  operation: "revalidateChecks",
+                  link: response.headers["link"],
+                }),
                 body: response.body,
               };
               entry.validators.set(endpoint, validator);
-              return validator.next;
+              return validator;
             });
           const root = `repos/${input.repository}`;
           if ((yield* get(`${root}/pulls/${input.number}`, true)) === null) return yield* read;
@@ -153,13 +159,14 @@ export const makeChecksRevalidator = Effect.gen(function* () {
           ];
           const runPages: Array<string> = [];
           for (const endpoint of endpoints) {
-            for (let page = 1; ; page++) {
+            let paged: string | null =
+              `${endpoint}${endpoint.includes("?") ? "&" : "?"}per_page=100`;
+            for (let page = 1; paged !== null; page++) {
               if (page > 100) return yield* fail(200);
-              const paged = `${endpoint}${endpoint.includes("?") ? "&" : "?"}per_page=100&page=${page}`;
-              const next = yield* get(paged);
-              if (next === null) return yield* read;
+              const answered: Validator | null = yield* get(paged);
+              if (answered === null) return yield* read;
               if (endpoint === runsEndpoint) runPages.push(paged);
-              if (!next) break;
+              paged = answered.next;
             }
           }
           const now = yield* Clock.currentTimeMillis;

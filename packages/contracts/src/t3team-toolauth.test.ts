@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 import {
   ToolAuthInstallInput,
   ToolAuthPhase,
+  ToolAuthStartInput,
   ToolAuthState,
   ToolAuthToolId,
 } from "./t3team-toolauth.ts";
@@ -11,6 +12,7 @@ import {
 const decodeToolAuthToolId = Schema.decodeUnknownSync(ToolAuthToolId);
 const decodeToolAuthInstallInput = Schema.decodeUnknownSync(ToolAuthInstallInput);
 const decodeToolAuthState = Schema.decodeUnknownSync(ToolAuthState);
+const decodeToolAuthStartInput = Schema.decodeUnknownSync(ToolAuthStartInput);
 const decodeToolAuthPhase = Schema.decodeUnknownSync(ToolAuthPhase);
 
 describe("ToolAuthInstallInput — the client can only send a closed tool id", () => {
@@ -78,5 +80,24 @@ describe("ToolAuthState.installLog", () => {
       message: "npm ERR! 403 Forbidden",
     });
     expect(decoded.message).toBe("npm ERR! 403 Forbidden");
+  });
+});
+
+describe("ToolAuthStartInput.hostname — the host becomes a CLI argument", () => {
+  it("accepts a host name, with or without a port, and none at all", () => {
+    expect(decodeToolAuthStartInput({ tool: "gh" })).toEqual({ tool: "gh" });
+    expect(decodeToolAuthStartInput({ tool: "gh", hostname: "github.com" })).toEqual({
+      tool: "gh",
+      hostname: "github.com",
+    });
+    expect(
+      decodeToolAuthStartInput({ tool: "gh", hostname: "ghe.example.com:8443" }).hostname,
+    ).toBe("ghe.example.com:8443");
+  });
+
+  it("rejects anything that could be read as a flag or carry more than a host", () => {
+    for (const hostname of ["--web", "-h", "a b", "host;rm", "https://github.com", ""]) {
+      expect(() => decodeToolAuthStartInput({ tool: "gh", hostname })).toThrow();
+    }
   });
 });

@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useNavigate } from "@tanstack/react-router";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
+import { WorkspacePageHeader } from "~/components/WorkspacePageHeader";
 import { isElectron } from "~/env";
 import { useNowMinute } from "~/hooks/useNowMinute";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
@@ -120,8 +121,11 @@ function StartupMyWorkProbe({ onFallback }: { readonly onFallback: () => void })
   // The gap the animation fills: whichever way this lands, the next paint is My Work's first load
   // or the draft landing, and neither should be preceded by a blank window.
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden p-4 sm:p-6">
-      <MyWorkLoadingAnimation />
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+      {isElectron ? <WorkspacePageHeader electron /> : null}
+      <div className="min-h-0 flex-1 p-4 sm:p-6">
+        <MyWorkLoadingAnimation />
+      </div>
     </div>
   );
 }

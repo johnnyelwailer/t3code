@@ -1165,4 +1165,255 @@ describe("PullRequestSyncReactor", () => {
       }),
     ),
   );
+
+  it.effect("backs off a link the host cannot resolve instead of re-reading it every sweep", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([makeThread("one", { pullRequests: [makeLink(7), makeLink(8)] })]),
+          summary: (input) =>
+            input.number === 7
+              ? Effect.fail(
+                  new PullRequestOperationError({
+                    operation: "summary",
+                    detail: "not found",
+                    reason: "not-found",
+                  }),
+                )
+              : Effect.succeed(makeSummary(input)),
+        });
+        const reads = (number: number) =>
+          Ref.get(fixture.summaryCalls).pipe(
+            Effect.map((calls) => calls.filter((call) => call.number === number).length),
+          );
+
+        yield* Effect.gen(function* () {
+          const reactor = yield* startAndSweep(fixture);
+          assert.strictEqual(yield* reads(7), 1);
+          const commands = yield* Ref.get(fixture.syncCommands);
+          assert.deepStrictEqual(
+            commands.map((command) => command.number),
+            [8],
+          );
+          yield* Ref.update(fixture.snapshots, (snapshot) => applySync(snapshot, commands));
+
+          // The sync event names the link that is still unread; it must not ask for it again.
+          const thread = (yield* Ref.get(fixture.snapshots)).threads[0]!;
+          yield* Queue.offer(fixture.domainEvents, {
+            type: "thread.pull-request-synced",
+            payload: thread,
+          } as unknown as OrchestrationV2DomainEvent);
+
+          // Not-found can be temporary, so the first pause is short: two minutes.
+          yield* sweepAgain(fixture, reactor);
+          assert.strictEqual(yield* reads(7), 1);
+          yield* sweepAgain(fixture, reactor);
+          assert.strictEqual(yield* reads(7), 2);
+          // The next pause is fifteen minutes (minute 17), then thirty (minute 47).
+          for (let minute = 3; minute <= 16; minute += 1) yield* sweepAgain(fixture, reactor);
+          assert.strictEqual(yield* reads(7), 2);
+          yield* sweepAgain(fixture, reactor);
+          assert.strictEqual(yield* reads(7), 3);
+          for (let minute = 18; minute <= 46; minute += 1) yield* sweepAgain(fixture, reactor);
+          assert.strictEqual(yield* reads(7), 3);
+          yield* sweepAgain(fixture, reactor);
+          assert.strictEqual(yield* reads(7), 4);
+          // The healthy link beside it keeps its minute cadence.
+          assert.strictEqual(yield* reads(8), 48);
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect("reads a backed-off link again when someone asks for it", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([makeThread("one", { pullRequests: [makeLink(7)] })]),
+          summary: () =>
+            Effect.fail(
+              new PullRequestOperationError({
+                operation: "summary",
+                detail: "not found",
+                reason: "not-found",
+              }),
+            ),
+        });
+
+        yield* Effect.gen(function* () {
+          const reactor = yield* startAndSweep(fixture);
+          yield* sweepAgain(fixture, reactor);
+          assert.strictEqual((yield* Ref.get(fixture.summaryCalls)).length, 1);
+
+          yield* reactor.requestSync({
+            host: "github.com",
+            repository: "owner/repository",
+            number: 7,
+          });
+          yield* Queue.take(fixture.snapshotReads);
+          yield* reactor.drain;
+          assert.strictEqual((yield* Ref.get(fixture.summaryCalls)).length, 2);
+          // The answer was still not-found, so the request is spent rather than retried.
+          yield* sweepAgain(fixture, reactor);
+          assert.strictEqual((yield* Ref.get(fixture.summaryCalls)).length, 2);
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect("does not read an unsynced link on a settled thread every minute", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([
+            makeThread("settled", {
+              settledOverride: "settled",
+              settledAt: "2026-08-21T00:00:00.000Z",
+              pullRequests: [makeLink(5)],
+            }),
+          ]),
+          // Not a verdict on the link, so the failure is not backed off as unresolvable.
+          summary: () =>
+            Effect.fail(new PullRequestOperationError({ operation: "summary", detail: "down" })),
+        });
+
+        yield* Effect.gen(function* () {
+          const reactor = yield* startAndSweep(fixture);
+          assert.strictEqual((yield* Ref.get(fixture.summaryCalls)).length, 1);
+          for (let minute = 1; minute < 15; minute += 1) yield* sweepAgain(fixture, reactor);
+          assert.strictEqual((yield* Ref.get(fixture.summaryCalls)).length, 1);
+          yield* sweepAgain(fixture, reactor);
+          assert.strictEqual((yield* Ref.get(fixture.summaryCalls)).length, 2);
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect("ignores a signed avatar URL's token when deciding whether a link changed", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const author = (token: string) => ({
+          login: "pj",
+          name: null,
+          avatarUrl: `https://nexplore.ghe.com/avatars/u/1283972?token=${token}`,
+        });
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([
+            makeThread("fresh", {
+              pullRequests: [
+                makeLink(7, { author: author("OLD"), syncedAt: "2026-08-28T11:30:00.000Z" }),
+              ],
+            }),
+            makeThread("stale", {
+              pullRequests: [
+                makeLink(8, { author: author("OLD"), syncedAt: "2026-08-28T09:00:00.000Z" }),
+              ],
+            }),
+            makeThread("renamed", {
+              pullRequests: [
+                makeLink(9, { author: author("OLD"), syncedAt: "2026-08-28T11:30:00.000Z" }),
+              ],
+            }),
+          ]),
+          summary: (input) =>
+            Effect.succeed(
+              makeSummary(input, {
+                author: input.number === 9 ? { ...author("NEW"), login: "other" } : author("NEW"),
+              }),
+            ),
+        });
+
+        yield* Effect.gen(function* () {
+          yield* startAndSweep(fixture);
+          const commands = yield* Ref.get(fixture.syncCommands);
+          // Seven differs from its snapshot only by token: no dispatch and no stack read. Eight
+          // is the same, but its stored URL is old enough to replace, still without a stack read.
+          // Nine is a real change and reads the stack.
+          assert.deepStrictEqual(commands.map((command) => command.number).toSorted(), [8, 9]);
+          assert.deepStrictEqual(
+            (yield* Ref.get(fixture.stackCalls)).map((call) => call.number),
+            [9],
+          );
+          assert.strictEqual(
+            commands.find((command) => command.number === 8)?.snapshot.author?.avatarUrl,
+            author("NEW").avatarUrl,
+          );
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect("reads a backed-off link again when it is linked again", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([makeThread("one", { pullRequests: [makeLink(7)] })]),
+          summary: () =>
+            Effect.fail(
+              new PullRequestOperationError({
+                operation: "summary",
+                detail: "not found",
+                reason: "not-found",
+              }),
+            ),
+        });
+
+        yield* Effect.gen(function* () {
+          yield* startAndSweep(fixture);
+          assert.strictEqual((yield* Ref.get(fixture.summaryCalls)).length, 1);
+          const syncedEvent = (linkedAt: string) =>
+            ({
+              type: "thread.pull-request-synced",
+              payload: makeThread("one", { pullRequests: [makeLink(7, null, { linkedAt })] }),
+            }) as unknown as OrchestrationV2DomainEvent;
+
+          // A sync event that names the link as it was linked before the failed read is no ask.
+          yield* Queue.offer(fixture.domainEvents, syncedEvent("2026-08-10T00:00:00.000Z"));
+          // Linking it again moves `linkedAt` past the failed read, which reads it at once.
+          yield* Queue.offer(fixture.domainEvents, syncedEvent("2026-08-28T12:00:30.000Z"));
+          yield* Queue.take(fixture.snapshotReads);
+          yield* (yield* PullRequestSyncReactor.PullRequestSyncReactor).drain;
+          assert.strictEqual((yield* Ref.get(fixture.summaryCalls)).length, 2);
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect("counts a changed avatar version as a change", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const author = (version: number) => ({
+          login: "pj",
+          name: null,
+          avatarUrl: `https://avatars.githubusercontent.com/u/854944?v=${version}`,
+        });
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([
+            makeThread("one", {
+              pullRequests: [
+                makeLink(7, { author: author(3), syncedAt: "2026-08-28T11:59:00.000Z" }),
+              ],
+            }),
+          ]),
+          summary: (input) => Effect.succeed(makeSummary(input, { author: author(4) })),
+        });
+
+        yield* Effect.gen(function* () {
+          yield* startAndSweep(fixture);
+          const commands = yield* Ref.get(fixture.syncCommands);
+          assert.deepStrictEqual(
+            commands.map((command) => command.snapshot.author?.avatarUrl),
+            [author(4).avatarUrl],
+          );
+          assert.strictEqual((yield* Ref.get(fixture.stackCalls)).length, 1);
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
 });

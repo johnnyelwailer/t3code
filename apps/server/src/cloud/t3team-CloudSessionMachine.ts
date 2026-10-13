@@ -200,6 +200,7 @@ const make = Effect.gen(function* () {
       return yield* new CloudSessionFailedError({
         reason: "repository_sign_in_required",
         message: `Sign in to ${repository.host} with gh (gh auth login --hostname ${repository.host}) so the session can clone ${repository.owner}/${repository.name}.`,
+        host: repository.host,
       });
     }
     const profile = yield* api
@@ -211,6 +212,7 @@ const make = Effect.gen(function* () {
             new CloudSessionFailedError({
               reason: "repository_sign_in_required",
               message: `Could not read your ${repository.host} profile; sign in again (gh auth login --hostname ${repository.host}).`,
+              host: repository.host,
             }),
         ),
       );

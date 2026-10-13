@@ -4,8 +4,10 @@ import { readIntegrationCache } from "./t3team-integrationCache";
 import { useGitHubAuthProbe } from "./t3team-useGitHubAuthProbe";
 import { useGitHubRepositoryDiscoveryFetchers } from "./t3team-useGitHubRepositoryDiscoveryFetchers";
 import type { GitHubRepositoryCandidate } from "~/t3team/backend/t3team-githubBackendTypes";
+import { useRepositoryListFollowUp } from "./t3team-useRepositoryListFollowUp";
 import type {
   GitHubAuthAccount,
+  RepositoriesMeta,
   GitHubAuthCache,
   GitHubDiscoveryCache,
 } from "./t3team-githubRepositoryDiscoveryUtils";
@@ -39,6 +41,8 @@ export function useGitHubRepositoryDiscovery({
   >(authCache?.authStatus ?? "checking");
   const [authDetail, setAuthDetail] = useState<string | undefined>(authCache?.authDetail);
   const [loadingAuth, setLoadingAuth] = useState(false);
+  const [repositoriesMeta, setRepositoriesMeta] = useState<RepositoriesMeta>({ refreshing: false });
+  const [probeNonce, setProbeNonce] = useState(0);
   const [loadingDiscovery, setLoadingDiscovery] = useState(false);
   const [suggestedUrls, setSuggestedUrls] = useState<ReadonlyArray<string>>(
     discoveryCache?.suggestedUrls ?? [],
@@ -77,11 +81,12 @@ export function useGitHubRepositoryDiscovery({
       setGithubAccount,
       setSuggestedUrls,
       setCatalog,
+      setRepositoriesMeta,
     });
 
   useGitHubAuthProbe({
     enabled,
-    refreshKey: discoveryCacheKey,
+    refreshKey: `${discoveryCacheKey}:${probeNonce}`,
     onAuthenticated: discoverSuggestionsAcrossHosts,
     setAuthStatus,
     setAuthDetail,
@@ -106,29 +111,48 @@ export function useGitHubRepositoryDiscovery({
     [authenticatedHosts, discoverSuggestions],
   );
 
+  /** `force`: ask GitHub now. Otherwise the server answers from the list it keeps. */
+  const reload = useCallback(
+    async (force: boolean) => {
+      if (authStatus === "authenticated" && authenticatedHosts.length > 0) {
+        const active = authenticatedHosts.find((entry) => entry.active) ?? authenticatedHosts[0];
+        if (!active) return;
+        await discoverSuggestionsAcrossHosts({
+          host: active.host,
+          account: active.account,
+          accounts: authenticatedHosts,
+          ...(force ? { refresh: true } : {}),
+        });
+        return;
+      }
+      // Not signed in as far as the last probe knew: ask `gh` again, the sign-in may have happened since.
+      if (force) setProbeNonce((nonce) => nonce + 1);
+      await discoverSuggestions(githubHost, githubAccount, force);
+    },
+    [
+      authStatus,
+      authenticatedHosts,
+      discoverSuggestions,
+      discoverSuggestionsAcrossHosts,
+      githubAccount,
+      githubHost,
+    ],
+  );
   const refresh = useCallback(() => {
-    if (authStatus === "authenticated" && authenticatedHosts.length > 0) {
-      const active = authenticatedHosts.find((entry) => entry.active) ?? authenticatedHosts[0];
-      if (!active) return;
-      void discoverSuggestionsAcrossHosts({
-        host: active.host,
-        account: active.account,
-        accounts: authenticatedHosts,
-      });
-      return;
-    }
-    void discoverSuggestions(githubHost, githubAccount);
-  }, [
-    authStatus,
-    authenticatedHosts,
-    discoverSuggestions,
-    discoverSuggestionsAcrossHosts,
-    githubAccount,
-    githubHost,
-  ]);
+    void reload(true);
+  }, [reload]);
+  const reread = useCallback(() => reload(false), [reload]);
+  useRepositoryListFollowUp({ refreshing: repositoriesMeta.refreshing, reread });
+
+  // `gh auth status` reports "unauthenticated" when ANY host holds a refused token, even while
+  // another (the Enterprise one) is signed in; a signed-in login is what the picker can use.
+  const signedIn = authStatus === "authenticated" || authenticatedHosts.length > 0;
 
   return {
     backendAvailable: Boolean(backend),
+    signedIn,
+    repositoriesFetchedAt: repositoriesMeta.fetchedAt,
+    repositoriesRefreshing: repositoriesMeta.refreshing,
     githubHost,
     githubAccount,
     authStatus,

@@ -139,6 +139,12 @@ export interface GitHubGraphQlInput {
   readonly variables?: Readonly<Record<string, unknown>>;
   readonly allowReserve?: boolean;
   readonly maxResponseBytes?: number;
+  /**
+   * An answer whose only errors are `NOT_FOUND` is returned with its `data` instead of failing.
+   * For aliased documents, where one repository gone or out of reach must not hide the others';
+   * the caller reads each alias for null.
+   */
+  readonly allowPartialNotFound?: boolean;
 }
 
 export class GitHubApi extends Context.Service<
@@ -177,6 +183,11 @@ export function gitHubApiUrls(host: string): { readonly rest: string; readonly g
     };
   }
   return { rest: `https://${normalized}/api/v3`, graphql: `https://${normalized}/api/graphql` };
+}
+
+/** Whether a REST path (API root included, so `/api/v3` on Enterprise Server) is a search. */
+function isSearchPath(pathname: string): boolean {
+  return /^(?:\/api\/v3)?\/search\//.test(pathname);
 }
 
 /** GraphQL documents longer than this are cut in traces; the hash still identifies them. */
@@ -296,6 +307,7 @@ function classify(input: {
   readonly body: string;
   readonly graphql: boolean;
   readonly acceptNotModified: boolean;
+  readonly allowPartialNotFound?: boolean;
 }): Answer {
   const { status, headers, body } = input;
   const errors = input.graphql
@@ -320,6 +332,15 @@ function classify(input: {
     return Answer.RateLimited();
   }
   if (status === 401) return Answer.Unauthorized();
+  if (
+    input.allowPartialNotFound === true &&
+    status >= 200 &&
+    status < 300 &&
+    errors !== undefined &&
+    errors.every((error) => error.type === "NOT_FOUND")
+  ) {
+    return Answer.Ok();
+  }
   if (
     status === 404 ||
     (errors !== undefined && errors.every((error) => error.type === "NOT_FOUND"))
@@ -374,6 +395,7 @@ export const make = Effect.gen(function* () {
     readonly acceptNotModified: boolean;
     /** Reads the body for GraphQL `errors`, which GitHub sends with HTTP 200. */
     readonly graphql?: boolean;
+    readonly allowPartialNotFound?: boolean;
   }) {
     const host = normalizeHost(input.host);
     // Only the path: a query string can carry a SHA or a branch, and never needs to be in a trace.
@@ -386,10 +408,15 @@ export const make = Effect.gen(function* () {
     });
     const { token, fingerprint } = yield* credential(host);
     const scope = yield* SourceControlRateLimit.CredentialScope;
-    // REST spends `core` and GraphQL its own quota, each with its own reserve. Every REST path
-    // this reads today is `core`; a `search/` read would need its own resource here. A refusal
-    // still pauses the whole host, the key PullRequestService records its own backoff under.
-    const resource = input.graphql === true ? "graphql" : "core";
+    // REST spends `core`, search its own (much smaller) quota, and GraphQL another, each with its
+    // own reserve. A refusal still pauses the whole host, the key PullRequestService records its
+    // own backoff under.
+    const resource =
+      input.graphql === true
+        ? "graphql"
+        : isSearchPath(new URL(input.request.url).pathname)
+          ? "search"
+          : "core";
     const key = { provider: SourceControlProviderKind.make("github"), host };
     const run = Effect.gen(function* () {
       const lease = yield* quota
@@ -455,6 +482,7 @@ export const make = Effect.gen(function* () {
           body: collected.text,
           graphql: input.graphql === true,
           acceptNotModified: input.acceptNotModified,
+          allowPartialNotFound: input.allowPartialNotFound === true,
         }),
         {
           Ok: () =>
@@ -558,6 +586,7 @@ export const make = Effect.gen(function* () {
         allowReserve,
         acceptNotModified: false,
         graphql: true,
+        allowPartialNotFound: input.allowPartialNotFound === true,
       });
       // A body cut at the byte cap hides any `errors` past the cut and cannot be decoded.
       if (response.truncated) {

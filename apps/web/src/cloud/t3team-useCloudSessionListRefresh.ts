@@ -22,6 +22,7 @@ export function useCloudSessionListRefresh(
   environmentId: EnvironmentId | null,
   active: boolean,
   sessions: readonly CloudSession[],
+  rateLimitedUntilMs: number | null = null,
 ) {
   const refreshRelayEnvironments = useAtomCommand(relayEnvironmentDiscovery.refresh, {
     reportFailure: false,
@@ -37,8 +38,11 @@ export function useCloudSessionListRefresh(
     void refreshRelayEnvironments();
   }, [refreshCloudSessionList, refreshRelayEnvironments]);
   // Busy cadence only while something is provisioning; a change of cadence
-  // restarts the poll, so a fresh create is picked up at once.
-  const intervalMs = cloudSessionPollIntervalMs(sessions, CLOUD_SESSION_REFRESH_INTERVAL_MS);
+  // restarts the poll, so a fresh create is picked up at once. A rate-limit
+  // pause stretches the interval until the provider's retryAt.
+  const intervalMs = cloudSessionPollIntervalMs(sessions, CLOUD_SESSION_REFRESH_INTERVAL_MS, {
+    rateLimitedUntilMs,
+  });
   useCloudSessionListPolling(pollTick, active, intervalMs);
   return { refreshCloudSessionList, refreshRelayEnvironments } as const;
 }

@@ -6,7 +6,6 @@ import { ChildProcessSpawner } from "effect/process";
 import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
 import * as VcsProcess from "./vcs/VcsProcess.ts";
 import { resetDigestViewerLoginsForTests } from "./t3team-githubViewerSearch.ts";
-import { resetDigestPrCacheForTests } from "./t3team-myworkDigestPrCache.ts";
 import { loadViewerMergedPrEntries } from "./t3team-myworkDigestMergedPrs.ts";
 import { readDigestYesterday } from "./t3team-myworkDigestYesterdayRead.ts";
 
@@ -145,24 +144,9 @@ it.effect("skips a host that fails this round", () =>
 
 it.effect("attaches merged PRs to the project whose Jira key the title names", () =>
   Effect.gen(function* () {
-    resetDigestPrCacheForTests();
     resetDigestViewerLoginsForTests();
     const calls: Array<{ host: string; path: string }> = [];
-    const result = yield* readDigestYesterday({
-      window,
-      assigned: [],
-      tickets: [
-        {
-          id: "10",
-          displayId: "IES-1",
-          title: "t",
-          url: "u",
-          provider: "atlassian",
-          kind: "issue",
-        },
-      ] as never,
-      transitions: [],
-    }).pipe(
+    const merged = yield* loadViewerMergedPrEntries(window).pipe(
       Effect.provide(
         makeGitHub(
           {
@@ -176,6 +160,22 @@ it.effect("attaches merged PRs to the project whose Jira key the title names", (
         ),
       ),
     );
+    const result = readDigestYesterday({
+      window,
+      mergedRead: { read: merged, pending: false },
+      assigned: [],
+      tickets: [
+        {
+          id: "10",
+          displayId: "IES-1",
+          title: "t",
+          url: "u",
+          provider: "atlassian",
+          kind: "issue",
+        },
+      ] as never,
+      transitions: [],
+    });
     assert.deepStrictEqual(
       result.yesterday?.merged.map((pr) => [pr.number, pr.workItemKey]),
       [[9, "IES-1"]],

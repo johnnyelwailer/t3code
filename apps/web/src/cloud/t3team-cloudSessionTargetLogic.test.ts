@@ -20,6 +20,7 @@ describe("cloudSessionTargetLogic", () => {
       resolveCloudSessionBindPhase({
         sessionPhase: "preparing",
         connecting: false,
+        machineRegistered: false,
         projectReady: false,
         flushing: false,
         failed: false,
@@ -29,10 +30,27 @@ describe("cloudSessionTargetLogic", () => {
       resolveCloudSessionBindPhase({
         sessionPhase: "ready",
         connecting: true,
+        machineRegistered: false,
         projectReady: false,
         flushing: false,
         failed: false,
       }),
+    ).toBe("connecting");
+  });
+
+  it("keeps connecting until the machine is registered, then syncs the project (408)", () => {
+    const ready = {
+      sessionPhase: "ready",
+      connecting: false,
+      projectReady: false,
+      flushing: false,
+      failed: false,
+    } as const;
+    // Ready but its environment has not reported in yet: that is connecting, not a project gap.
+    expect(resolveCloudSessionBindPhase({ ...ready, machineRegistered: false })).toBe("connecting");
+    expect(resolveCloudSessionBindPhase({ ...ready, machineRegistered: true })).toBe("syncing");
+    expect(
+      resolveCloudSessionBindPhase({ ...ready, machineRegistered: true, projectReady: true }),
     ).toBe("connecting");
   });
 });

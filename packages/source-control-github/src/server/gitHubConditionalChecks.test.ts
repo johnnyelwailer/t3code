@@ -36,14 +36,16 @@ it.effect(
                 const head = path.endsWith("/pulls/1");
                 const modified =
                   ifNoneMatch === undefined || (path.includes(changed) && changed !== "");
-                const next = path.includes("check-runs") && path.endsWith("page=1");
+                const next = path.includes("check-runs") && !path.includes("&page=");
                 const runs = path.includes("/actions/runs");
                 return {
                   status: modified ? 200 : 304,
                   headers: modified
                     ? {
                         etag: `"${sha}-${changed}"`,
-                        ...(next ? { link: '<https://api.github.com/next>; rel="next"' } : {}),
+                        ...(next
+                          ? { link: `<https://api.github.com/${path}&page=2>; rel="next"` }
+                          : {}),
                       }
                     : {},
                   body: !modified

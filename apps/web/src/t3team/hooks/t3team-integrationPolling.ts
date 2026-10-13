@@ -2,6 +2,8 @@ export const GITHUB_ACTIVITY_POLL_INTERVAL_MS = 60_000;
 export const GITHUB_ACTIVITY_CACHE_MAX_AGE_MS = 60_000;
 export const ATLASSIAN_RESOURCES_POLL_INTERVAL_MS = 90_000;
 export const ATLASSIAN_RESOURCES_CACHE_MAX_AGE_MS = 90_000;
+import { isUserIdle, watchUserActivity } from "~/hooks/t3team-userActivity";
+
 const POLL_RETRY_BASE_MS = 5_000;
 const POLL_RETRY_MAX_MS = 60_000;
 
@@ -13,6 +15,8 @@ type PollingDelayInput = {
   readonly nowMs: number;
   readonly isVisible: boolean;
   readonly isOnline: boolean;
+  /** The reader has stopped touching the window; a poll would be for nobody. Defaults to false. */
+  readonly isIdle?: boolean;
 };
 
 type BrowserPollController = {
@@ -32,7 +36,7 @@ export function isPollingOnline(nav?: Pick<Navigator, "onLine">): boolean {
 }
 
 export function computeNextPollDelayMs(input: PollingDelayInput): number | null {
-  if (!input.enabled || !input.isVisible || !input.isOnline) {
+  if (!input.enabled || !input.isVisible || !input.isOnline || input.isIdle) {
     return null;
   }
 
@@ -61,6 +65,11 @@ export function startBrowserPolling(input: {
   let disposed = false;
   let inFlight = false;
   let retryDelayMs = 0;
+  // The reader came back while a poll was in flight, where `schedule` does nothing.
+  let resumeRequested = false;
+  // A freshly mounted view always gets its first read; only later reads wait on the reader.
+  let hasPolled = false;
+  const isIdle = () => hasPolled && doc !== undefined && isUserIdle();
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
   const clearScheduledPoll = () => {
@@ -90,6 +99,7 @@ export function startBrowserPolling(input: {
       nowMs: Date.now(),
       isVisible: isPollingVisible(doc),
       isOnline: isPollingOnline(nav),
+      isIdle: isIdle(),
     });
 
     if (delayMs === null) {
@@ -99,6 +109,11 @@ export function startBrowserPolling(input: {
     timeoutId = setTimeout(
       () => {
         timeoutId = null;
+        // Went idle while this was waiting: stand down until the reader's next interaction.
+        if (isIdle()) {
+          return;
+        }
+        hasPolled = true;
         inFlight = true;
         const previousUpdatedAt = input.getUpdatedAt();
         void Promise.resolve(input.poll())
@@ -115,7 +130,9 @@ export function startBrowserPolling(input: {
           })
           .finally(() => {
             inFlight = false;
-            schedule(retryDelayMs);
+            const resuming = resumeRequested;
+            resumeRequested = false;
+            schedule(resuming ? 0 : retryDelayMs);
           });
       },
       Math.max(delayMs, minimumDelayMs),
@@ -134,6 +151,15 @@ export function startBrowserPolling(input: {
     schedule(retryDelayMs);
   };
 
+  // The first interaction after going idle re-arms with one read if the data went stale.
+  // The reader is back, so backoff from earlier failed or no-op polls does not apply: freshness
+  // alone decides whether a read is due. (Visibility and online changes keep the backoff.)
+  const stopWatchingActivity = doc
+    ? watchUserActivity(() => {
+        if (inFlight) resumeRequested = true;
+        else schedule(0);
+      })
+    : undefined;
   if (doc) {
     doc.addEventListener("visibilitychange", handleVisibilityChange);
   }
@@ -147,6 +173,7 @@ export function startBrowserPolling(input: {
     dispose() {
       disposed = true;
       clearScheduledPoll();
+      stopWatchingActivity?.();
       if (doc) {
         doc.removeEventListener("visibilitychange", handleVisibilityChange);
       }
