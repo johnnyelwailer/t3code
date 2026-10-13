@@ -5,6 +5,7 @@ import type {
   ProviderInteractionMode,
   RuntimeMode,
   ServerProvider,
+  ServerSettings,
 } from "@t3tools/contracts";
 
 import { getProviderInteractionModeToggle } from "~/t3team/t3team-providerModels";
@@ -20,10 +21,10 @@ import { runtimeModeConfig } from "~/t3team/t3team-ticketKickoffRuntimeConfig";
 import type { T3TeamThreadToolId } from "~/t3team/t3team-types";
 import { getConfiguredDefaultModelSelection } from "~/t3team-configuredDefaultModelSelection";
 
-type ProviderSettingsSnapshot = {
-  readonly providerInstances: Record<string, { readonly enabled?: boolean } | undefined>;
-  readonly providers: Record<string, { readonly enabled?: boolean } | undefined>;
-};
+type ProviderSettingsSnapshot = Pick<
+  ServerSettings,
+  "providerInstances" | "projectSettingsOverrides"
+>;
 
 export type T3TeamKickoffLaunchConfig = {
   readonly selection: ModelSelection;
@@ -69,12 +70,12 @@ export function getT3TeamKickoffProviderBlocker(input: {
   return null;
 }
 
-export function hasConfiguredProviderSettings(settings: ProviderSettingsSnapshot): boolean {
+/** Legacy per-driver `providers` settings no longer exist; instances are the only source. */
+export function hasConfiguredProviderSettings(
+  settings: Pick<ProviderSettingsSnapshot, "providerInstances">,
+): boolean {
   for (const instance of Object.values(settings.providerInstances)) {
     if (instance && (instance.enabled ?? true)) return true;
-  }
-  for (const provider of Object.values(settings.providers)) {
-    if (provider?.enabled) return true;
   }
   return false;
 }
@@ -82,7 +83,7 @@ export function hasConfiguredProviderSettings(settings: ProviderSettingsSnapshot
 export function useT3TeamKickoffComposerState(providers: ReadonlyArray<ServerProvider>) {
   const providerSettings = usePrimarySettings((settings) => ({
     providerInstances: settings.providerInstances,
-    providers: settings.providers,
+    projectSettingsOverrides: settings.projectSettingsOverrides,
   }));
   const hasConfiguredProviders = useMemo(
     () => hasConfiguredProviderSettings(providerSettings),
@@ -96,7 +97,12 @@ export function useT3TeamKickoffComposerState(providers: ReadonlyArray<ServerPro
   const providerInstanceEntries = useMemo<ReadonlyArray<ProviderInstanceEntry>>(
     () =>
       sortProviderInstanceEntries(
-        applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), providerSettings),
+        applyProviderInstanceSettings(
+          deriveProviderInstanceEntries(providers),
+          providerSettings,
+          // The kickoff composer is not scoped to a project yet: machine-wide enablement.
+          null,
+        ),
       ),
     [providerSettings, providers],
   );

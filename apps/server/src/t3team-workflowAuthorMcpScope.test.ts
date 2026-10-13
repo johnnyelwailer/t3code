@@ -21,6 +21,7 @@ import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
 import { readCaller } from "./mcp/threadAccess.ts";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { T3TEAM_DEPRECATED_MCP_TOOL_ALIASES } from "./mcp/toolkits/t3team/t3team-mcpToolAliases.ts";
+import { T3TeamToolkitRegistrationDepsTest } from "./mcp/toolkits/t3team/t3team-toolkitRegistration.fixtures.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP } from "./mcp/toolkits/t3team/tools.ts";
 import { T3TeamToolBroker, type T3TeamToolBinding } from "./t3team-toolBroker.ts";
 import { WORKFLOW_AUTHOR_MCP_TOOL_NAMES } from "./t3team-workflowAuthorApproval.ts";
@@ -144,6 +145,7 @@ it.effect(
     };
     const TestLayer = T3TeamToolkitRegistrationLive.pipe(
       Layer.provideMerge(McpServer.McpServer.layer),
+      Layer.provideMerge(T3TeamToolkitRegistrationDepsTest),
       Layer.provideMerge(
         Layer.succeed(
           T3TeamToolBroker,

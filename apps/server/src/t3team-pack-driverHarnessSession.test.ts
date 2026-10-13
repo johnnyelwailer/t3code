@@ -27,6 +27,7 @@ import {
   PACK_DRIVER,
   providerThreadJson,
 } from "./t3team-pack-driver.fixtures.ts";
+import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import { makePackOrchestrationAdapter } from "./t3team-pack-driverAdapter.ts";
 import { PackCodec } from "./t3team-pack-driverCodec.ts";
 import { adapterToPack } from "./t3team-pack-driverHarnessSession.ts";
@@ -107,6 +108,7 @@ describe("createOpenCodeHarness session bridge", () => {
         adapter: adapterToPack(inner, Context.empty()),
         driver: OUTER,
         instanceId,
+        mcpSessions: yield* McpProviderSessions.McpProviderSessions,
         offerContinuation: () => Effect.void,
       });
       const sessionScope = yield* Scope.make();
@@ -127,6 +129,6 @@ describe("createOpenCodeHarness session bridge", () => {
       busy = false;
       expect(yield* runtime.hasPendingBackgroundWork!).toBe(false);
       expect(yield* runtime.hasPendingBackgroundWorkForThread!(providerThread)).toBe(false);
-    }),
+    }).pipe(Effect.provide(McpProviderSessions.layer)),
   );
 });

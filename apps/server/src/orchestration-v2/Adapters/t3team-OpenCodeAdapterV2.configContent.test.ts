@@ -3,48 +3,53 @@
  * OpenCode server a V2 session connects to, so a spawned server runs with the pack's providers.
  */
 import { assert, it } from "@effect/vitest";
-import {
-  OpenCodeSettings,
-  ProviderInstanceId,
-  ProviderSessionId,
-  ThreadId,
-} from "@t3tools/contracts";
+import { ProviderInstanceId, ProviderSessionId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
-import type * as ServerConfig from "../../config.ts";
-import { OpenCodeRuntimeError, type OpenCodeRuntimeShape } from "@t3tools/provider-opencode/server/OpenCodeRuntime";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import { ProviderAdapterV2RuntimePolicy } from "@t3tools/provider-core/server/ProviderAdapter";
+import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import { makeOpenCodeAdapterV2 } from "@t3tools/provider-opencode/server/adapter";
+import * as OpenCodeRuntime from "@t3tools/provider-opencode/server/OpenCodeRuntime";
+import { OpenCodeSettings } from "@t3tools/provider-opencode/settings";
 
-type ConnectInput = Parameters<OpenCodeRuntimeShape["connectToOpenCodeServer"]>[0];
+type ConnectInput = Parameters<
+  OpenCodeRuntime.OpenCodeRuntime["Service"]["connectToOpenCodeServer"]
+>[0];
 
 const decodeSettings = Schema.decodeSync(OpenCodeSettings);
 
 const openWith = (configContent: string) => {
   const settings = decodeSettings({ configContent });
   return Effect.gen(function* () {
-    const idAllocator = yield* IdAllocator.IdAllocatorV2;
     const instanceId = ProviderInstanceId.make("opencode-config");
     const connects: Array<ConnectInput> = [];
-    const adapter = makeOpenCodeAdapterV2({
+    const adapter = yield* makeOpenCodeAdapterV2({
       instanceId,
       settings,
       environment: {},
-      runtime: {
+    }).pipe(
+      Effect.provideService(OpenCodeRuntime.OpenCodeRuntime, {
         connectToOpenCodeServer: (input: ConnectInput) => {
           connects.push(input);
           // Stop right after the connect request: only its input is under test.
           return Effect.fail(
-            new OpenCodeRuntimeError({ operation: "connect", detail: "test stops here" }),
+            new OpenCodeRuntime.OpenCodeRuntimeError({
+              operation: "connect",
+              detail: "test stops here",
+            }),
           );
         },
-      } as unknown as OpenCodeRuntimeShape,
-      idAllocator,
-      serverConfig: { cwd: "/workspace" } as ServerConfig.ServerConfig["Service"],
-    });
+      } as unknown as OpenCodeRuntime.OpenCodeRuntime["Service"]),
+      Effect.provideService(ProviderHost.ProviderHost, {
+        paths: { cwd: "/workspace" },
+        resolveAttachmentPath: () => null,
+      } as unknown as ProviderHost.ProviderHost["Service"]),
+    );
     const exit = yield* Effect.exit(
       adapter.openSession({
         threadId: ThreadId.make("thread-opencode-config"),
@@ -59,7 +64,10 @@ const openWith = (configContent: string) => {
     );
     assert.isTrue(Exit.isFailure(exit));
     return connects;
-  }).pipe(Effect.provide(IdAllocator.layer), Effect.scoped);
+  }).pipe(
+    Effect.provide(Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer)),
+    Effect.scoped,
+  );
 };
 
 it.effect("forwards the configured OpenCode config content when a session connects", () =>

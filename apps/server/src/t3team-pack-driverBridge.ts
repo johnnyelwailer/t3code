@@ -2,11 +2,12 @@
  * Pack provider-driver bridge.
  *
  * Adapts a pack `PackProviderDriverDefinition` (Promise / AsyncIterable) into
- * the host's Effect-based `ProviderDriver`. The bridged driver is typed
- * `R = never` so it slots into the hydration layer's driver array without
- * widening the required environment; at runtime the registry provides the
- * full built-in driver context to every `create`, which is what lets the
- * `createOpenCodeHarness` capability reach the real OpenCode services.
+ * the host's Effect-based `ProviderDriver`. The bridged driver asks only for
+ * `McpProviderSessions` (each thread's MCP credential) and is erased to
+ * `AnyProviderDriver` in the hydration layer's driver array; at runtime the
+ * registry provides the full built-in driver context to every `create`, which
+ * is what lets the `createOpenCodeHarness` capability reach the real OpenCode
+ * services.
  *
  * Config is opaque (`Schema.Unknown`) — packs validate their own config.
  * `create` maps pack rejections to `ProviderDriverError`, registers the pack
@@ -23,6 +24,7 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
+import { McpProviderSessions } from "@t3tools/provider-core/server/McpProviderSessions";
 import { ProviderContinuationRequests } from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import { ServerSettingsService } from "./serverSettings.ts";
 import { ProviderDriverError } from "./provider/Errors.ts";
@@ -89,7 +91,7 @@ const DISPOSE_TIMEOUT = Duration.seconds(5);
 
 export const bridgePackProviderDriver = (
   definition: PackProviderDriverDefinition,
-): ProviderDriver<unknown, never> => {
+): ProviderDriver<unknown, McpProviderSessions> => {
   const driverKind = ProviderDriverKind.make(definition.driver);
   return {
     driverKind,
@@ -136,7 +138,7 @@ export const bridgePackProviderDriver = (
             }),
           catch: (cause) =>
             new ProviderDriverError({
-              driver: definition.driver,
+              driver: driverKind,
               instanceId,
               detail: errorDetail(cause),
               cause,
@@ -160,6 +162,7 @@ export const bridgePackProviderDriver = (
           ),
         );
         const continuationRequests = yield* ProviderContinuationRequests;
+        const mcpSessions = yield* McpProviderSessions;
         const continuationIdentity = defaultProviderContinuationIdentity({
           driverKind,
           instanceId,
@@ -168,6 +171,7 @@ export const bridgePackProviderDriver = (
           adapter: packInstance.orchestration,
           driver: driverKind,
           instanceId,
+          mcpSessions,
           offerContinuation: continuationRequests.offer,
         });
         const snapshot = yield* makePackProviderSnapshot({

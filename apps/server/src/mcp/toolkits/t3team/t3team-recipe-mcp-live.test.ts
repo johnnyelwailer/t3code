@@ -17,6 +17,7 @@ import * as NetAddress from "effect/net/NetAddress";
 import { McpSchema, McpServer } from "effect/ai";
 
 import * as ServerEnvironment from "../../../environment/ServerEnvironment.ts";
+import { T3TeamToolkitRegistrationDepsTest } from "./t3team-toolkitRegistration.fixtures.ts";
 import {
   T3TeamToolBroker,
   type T3TeamToolBinding,
@@ -109,6 +110,7 @@ const broker = T3TeamToolBroker.of({
 const TestLayer = T3TeamToolkitRegistrationLive.pipe(
   Layer.provideMerge(McpServer.McpServer.layer),
   Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
+  Layer.provideMerge(T3TeamToolkitRegistrationDepsTest),
 );
 
 it.effect(

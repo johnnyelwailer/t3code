@@ -22,7 +22,7 @@ import * as NodeURL from "node:url";
 
 import { assert, describe, it } from "@effect/vitest";
 import { afterAll } from "vite-plus/test";
-import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId, SourceControlProviderKind } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 
@@ -49,7 +49,7 @@ const published = {
   url: "https://example.test/pr/7",
   number: 7,
   repository: "acme/setup",
-  provider: "github" as const,
+  provider: SourceControlProviderKind.make("github"),
   branch: "machine/setup",
   commit: "abc1234",
   projectId: ProjectId.make("project-1"),

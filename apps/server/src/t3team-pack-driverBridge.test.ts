@@ -1,4 +1,4 @@
-import { describe, expect, it } from "@effect/vitest";
+import { it as baseIt, expect, it } from "@effect/vitest";
 import {
   EnvironmentId,
   ProviderInstanceId,
@@ -23,7 +23,7 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
-import { clearMcpProviderSession, setMcpProviderSession } from "@t3tools/provider-core/server/mcpSession";
+import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import { layerTest as serverSettingsLayerTest } from "./serverSettings.ts";
 import {
@@ -70,11 +70,12 @@ const openSession = (definition: PackProviderDriverDefinition) =>
 const withSession = (session: Partial<PackSessionRuntime>) =>
   makeScriptedPack({ session }).definition;
 
-describe("bridgePackProviderDriver (orchestration V2)", () => {
+it.layer(McpProviderSessions.layer)("bridgePackProviderDriver (orchestration V2)", (it) => {
   it.effect("maps the pack adapter and an open session one-to-one", () =>
     Effect.gen(function* () {
       const pack = makeScriptedPack();
-      setMcpProviderSession({
+      const sessions = yield* McpProviderSessions.McpProviderSessions;
+      yield* sessions.set({
         environmentId: EnvironmentId.make("environment-1"),
         threadId,
         providerSessionId,
@@ -84,7 +85,7 @@ describe("bridgePackProviderDriver (orchestration V2)", () => {
         authorizationHeader: "Bearer provider-token",
       });
       const { instance, runtime, sessionScope, scope } = yield* openSession(pack.definition);
-      clearMcpProviderSession(threadId);
+      yield* sessions.clear(threadId);
 
       expect(instance.orchestrationAdapter.driver).toBe(PACK_DRIVER);
       const capabilities = yield* instance.orchestrationAdapter.getCapabilities();
@@ -136,8 +137,9 @@ describe("bridgePackProviderDriver (orchestration V2)", () => {
         },
       });
       const { runtime } = yield* openSession(pack.definition);
+      const sessions = yield* McpProviderSessions.McpProviderSessions;
       const secondThreadId = ThreadId.make("thread-2");
-      setMcpProviderSession({
+      yield* sessions.set({
         environmentId: EnvironmentId.make("environment-1"),
         threadId: secondThreadId,
         providerSessionId,
@@ -155,7 +157,7 @@ describe("bridgePackProviderDriver (orchestration V2)", () => {
         providerTurnId: ProviderTurnId.make("provider-turn-1"),
         message: turn.message,
       });
-      clearMcpProviderSession(secondThreadId);
+      yield* sessions.clear(secondThreadId);
       yield* runtime.startTurn(
         yield* decodeTurnInput(turnInputJson("thread-3", providerSessionId)),
       );
@@ -210,7 +212,7 @@ describe("bridgePackProviderDriver (orchestration V2)", () => {
   );
 
   // Live clock: the late close runs on a detached fiber outside the test clock.
-  it.live("closes a pack session that resolves after its open was interrupted", () =>
+  baseIt.live("closes a pack session that resolves after its open was interrupted", () =>
     Effect.gen(function* () {
       const pack = makeScriptedPack();
       let started!: () => void;
@@ -255,7 +257,7 @@ describe("bridgePackProviderDriver (orchestration V2)", () => {
       );
       expect(Option.isSome(outcome)).toBe(true);
       expect(pack.log.filter((entry) => entry === "close")).toEqual(["close"]);
-    }),
+    }).pipe(Effect.provide(McpProviderSessions.layer)),
   );
 
   it.effect("reports missing optional methods as the adapter's own errors", () =>

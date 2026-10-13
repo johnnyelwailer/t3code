@@ -135,9 +135,13 @@ const executeEnvironmentRequest = Effect.fnUntraced(function* <
   /**
    * The URL to sign, from the group's contract URL builder. It encodes path
    * params exactly like the request client, so the DPoP proof matches the
-   * URL actually sent.
+   * URL actually sent. The raw `httpBaseUrl` is passed too, for routes outside
+   * the typed API (the `/api/t3team/*` routes) that build their own URL.
    */
-  readonly url: (urls: ReturnType<typeof makeEnvironmentHttpApiUrlBuilder>[Group]) => string;
+  readonly url: (
+    urls: ReturnType<typeof makeEnvironmentHttpApiUrlBuilder>[Group],
+    httpBaseUrl: string,
+  ) => string;
   readonly timeoutMs: number;
   readonly group: Group;
   readonly request: (input: {
@@ -153,7 +157,7 @@ const executeEnvironmentRequest = Effect.fnUntraced(function* <
 > {
   let httpBaseUrl = input.prepared.httpBaseUrl;
   const requestUrlFor = (baseUrl: string) =>
-    input.url(makeEnvironmentHttpApiUrlBuilder(baseUrl)[input.group]);
+    input.url(makeEnvironmentHttpApiUrlBuilder(baseUrl)[input.group], baseUrl);
   return yield* Effect.gen(function* () {
     let rejectedAccessToken: string | undefined;
     for (;;) {

@@ -44,6 +44,7 @@ const recordingInstance = (id: string, calls: Call[]): ProviderInstance => {
         record("branch", input.modelSelection).pipe(Effect.as({ branch: "b" })),
       generateThreadTitle: (input) =>
         record("title", input.modelSelection).pipe(Effect.as({ title: "t" })),
+      generateReviewGuide: () => Effect.die("unused"),
       generateActivityLabel: (input) =>
         record("label", input.modelSelection).pipe(Effect.as({ label: "l" })),
       generateStructured: (input) =>

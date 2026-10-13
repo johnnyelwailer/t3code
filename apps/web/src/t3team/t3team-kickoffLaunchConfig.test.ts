@@ -1,3 +1,4 @@
+import { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import type { ProviderInstanceEntry } from "~/providerInstances";
 import {
@@ -87,24 +88,19 @@ describe("t3team kickoff launch config", () => {
     ).toContain("Loading provider status");
   });
 
-  it("detects configured providers from explicit and legacy settings", () => {
+  it("detects configured providers from provider instances", () => {
+    const personal = ProviderInstanceId.make("codex_personal");
+    const codex = ProviderDriverKind.make("codex");
     expect(
       hasConfiguredProviderSettings({
-        providerInstances: {},
-        providers: { codex: { enabled: true } },
+        providerInstances: { [personal]: { driver: codex, enabled: true } },
       }),
     ).toBe(true);
     expect(
       hasConfiguredProviderSettings({
-        providerInstances: { codex_personal: { enabled: true } },
-        providers: { codex: { enabled: false } },
-      }),
-    ).toBe(true);
-    expect(
-      hasConfiguredProviderSettings({
-        providerInstances: {},
-        providers: { codex: { enabled: false } },
+        providerInstances: { [personal]: { driver: codex, enabled: false } },
       }),
     ).toBe(false);
+    expect(hasConfiguredProviderSettings({ providerInstances: {} })).toBe(false);
   });
 });

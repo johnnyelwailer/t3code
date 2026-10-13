@@ -11,6 +11,7 @@ import { T3_MCP_PROTOCOL, T3TeamToolkitRegistrationLive } from "../../McpHttpSer
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { T3TEAM_DEPRECATED_MCP_TOOL_ALIASES } from "./t3team-mcpToolAliases.ts";
 import { resolveToolNameAlias, withToolNameAliases } from "./t3team-mcpToolAliasProtocol.ts";
+import { T3TeamToolkitRegistrationDepsTest } from "./t3team-toolkitRegistration.fixtures.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP } from "./tools.ts";
 
 const aliases = Object.entries(T3TEAM_DEPRECATED_MCP_TOOL_ALIASES);
@@ -155,6 +156,7 @@ it.effect(
         const serverLayer = T3TeamToolkitRegistrationLive.pipe(
           Layer.provideMerge(transport),
           Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
+          Layer.provideMerge(T3TeamToolkitRegistrationDepsTest),
         );
         yield* HttpRouter.serve(serverLayer, { disableListenLog: true, disableLogger: true }).pipe(
           Layer.build,

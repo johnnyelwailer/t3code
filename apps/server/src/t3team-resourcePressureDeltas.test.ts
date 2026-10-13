@@ -8,6 +8,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
+import * as Stream from "effect/Stream";
 
 import type { ResourcePressureEventRepositoryShape } from "./persistence/t3team-ResourcePressureEvents.ts";
 import { bucketByClass, descendsFrom, indexByPid } from "./t3team-resourcePressureClasses.ts";
@@ -18,6 +19,7 @@ import {
 } from "./t3team-resourcePressureModel.ts";
 import { processEntry, telemetry } from "./t3team-resourcePressureTestFixtures.ts";
 import { makeSampleOnce } from "./t3team-resourcePressureSample.ts";
+import type { StorageCleanup } from "./storageCleanup.ts";
 import { sweepStorageNow } from "./t3team-resourcePressureSweep.ts";
 
 const GIB = 1024 ** 3;
@@ -100,8 +102,10 @@ describe("sweep now (spec delta 5)", () => {
   it.effect("runs the existing storage sweep only when enabled and available", () =>
     Effect.gen(function* () {
       let sweeps = 0;
-      const cleanup = Option.some({
-        start: () => Effect.void,
+      const cleanup = Option.some<StorageCleanup["Service"]>({
+        runNow: Effect.die("unused"),
+        latestReport: Effect.succeed(null),
+        reports: Stream.empty,
         drain: Effect.void,
         sweepNow: Effect.sync(() => void (sweeps += 1)),
       });

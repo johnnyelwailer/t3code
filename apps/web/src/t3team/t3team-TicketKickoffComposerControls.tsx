@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { usePrimaryEnvironmentId } from "~/state/environments";
 import { Separator } from "~/components/ui/separator";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import type {
@@ -60,6 +61,7 @@ export function TicketKickoffComposerControls({
   setRuntimeMode: (mode: RuntimeMode) => void;
 }) {
   const RuntimeModeIcon = runtimeOption.icon;
+  const environmentId = usePrimaryEnvironmentId();
 
   return (
     <>
@@ -73,6 +75,7 @@ export function TicketKickoffComposerControls({
       >
         <div className="-m-1 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <ProviderModelPicker
+            environmentId={environmentId}
             activeInstanceId={selectedInstanceId}
             model={selectedModel}
             lockedProvider={null}

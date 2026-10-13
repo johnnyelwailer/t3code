@@ -35,6 +35,7 @@ import {
   ProviderAdapterProtocolError,
   type ProviderAdapterV2,
 } from "@t3tools/provider-core/server/ProviderAdapter";
+import type { McpProviderSessions } from "@t3tools/provider-core/server/McpProviderSessions";
 import type { ProviderContinuationRequest } from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import { turnScopedSelectionTransition } from "@t3tools/provider-core/server/selectionTransition";
 import { packCall, packRoundTrip } from "./t3team-pack-driverCall.ts";
@@ -67,6 +68,8 @@ export const makePackOrchestrationAdapter = (input: {
   readonly adapter: PackOrchestrationAdapter;
   readonly driver: ProviderDriverKind;
   readonly instanceId: ProviderInstanceId;
+  /** Where each thread's MCP credential is read from when a session or turn starts. */
+  readonly mcpSessions: McpProviderSessions["Service"];
   /** Host continuation queue (`ProviderContinuationRequests.offer`). */
   readonly offerContinuation: (request: ProviderContinuationRequest) => Effect.Effect<void>;
 }): ProviderAdapterV2["Service"] => {
@@ -108,6 +111,7 @@ export const makePackOrchestrationAdapter = (input: {
             }),
         );
         const encoded = yield* bridge.encode(PackCodec.openSessionInput, value);
+        const mcpAccess = yield* readPackMcpSession(input.mcpSessions, value.threadId);
         const closePack = (runtime: PackSessionRuntime) =>
           bridge
             .call(() => runtime.close())
@@ -129,7 +133,7 @@ export const makePackOrchestrationAdapter = (input: {
             bridge.call(() => {
               opening = adapter.openSession({
                 ...asPack<Omit<PackOpenSessionInput, "mcp" | "host">>(encoded),
-                ...readPackMcpSession(value.threadId),
+                ...mcpAccess,
                 host: {
                   requestContinuation: (request) => {
                     // The host queue is unbounded and needs no services: a plain fork is enough.
@@ -166,6 +170,7 @@ export const makePackOrchestrationAdapter = (input: {
           runtime,
           driver,
           instanceId,
+          mcpSessions: input.mcpSessions,
           providerSessionId: value.providerSessionId,
           providerSession,
           closed: Deferred.await(closed),

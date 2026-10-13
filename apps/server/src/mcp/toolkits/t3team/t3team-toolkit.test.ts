@@ -15,6 +15,7 @@ import {
   mcpDescriptionOf,
   T3TeamToolkit,
 } from "./tools.ts";
+import { T3TeamToolkitRegistrationDepsTest } from "./t3team-toolkitRegistration.fixtures.ts";
 import { TOOL_SPECS } from "../../../t3team-toolBrokerHelpers.ts";
 
 it("maps or explicitly policy-excludes every canonical implemented tool", () => {
@@ -77,6 +78,7 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
   const TestLayer = T3TeamToolkitRegistrationLive.pipe(
     Layer.provideMerge(McpServer.McpServer.layer),
     Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
+    Layer.provideMerge(T3TeamToolkitRegistrationDepsTest),
   );
 
   return Effect.gen(function* () {
@@ -151,6 +153,7 @@ it.effect("routes t3_recipe_list through the bound broker callTool dispatch", ()
   const TestLayer = T3TeamToolkitRegistrationLive.pipe(
     Layer.provideMerge(McpServer.McpServer.layer),
     Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
+    Layer.provideMerge(T3TeamToolkitRegistrationDepsTest),
   );
 
   return Effect.gen(function* () {
@@ -200,6 +203,7 @@ it.effect("routes t3_recipe_validate through the bound broker callTool dispatch"
   const TestLayer = T3TeamToolkitRegistrationLive.pipe(
     Layer.provideMerge(McpServer.McpServer.layer),
     Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
+    Layer.provideMerge(T3TeamToolkitRegistrationDepsTest),
   );
 
   return Effect.gen(function* () {
@@ -239,6 +243,7 @@ it.effect(
     const TestLayer = T3TeamToolkitRegistrationLive.pipe(
       Layer.provideMerge(McpServer.McpServer.layer),
       Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
+      Layer.provideMerge(T3TeamToolkitRegistrationDepsTest),
     );
 
     return Effect.gen(function* () {
@@ -303,6 +308,7 @@ const skillMetadataCall = Effect.fn("T3TeamToolkitTest.skillMetadataCall")(funct
 
 const emptySkillMetadataLayer = T3TeamToolkitRegistrationLive.pipe(
   Layer.provideMerge(McpServer.McpServer.layer),
+  Layer.provideMerge(T3TeamToolkitRegistrationDepsTest),
   Layer.provideMerge(
     Layer.succeed(
       T3TeamToolBroker,

@@ -20,6 +20,7 @@ import * as Stream from "effect/Stream";
 import * as EffectWorker from "./orchestration-v2/EffectWorker.ts";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as ProviderAdapterRegistry from "./orchestration-v2/ProviderAdapterRegistry.ts";
+import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import { layerWithRegistry } from "./orchestration-v2/testkit/ProviderReplayHarness.ts";
 import { checkpointWorkspace } from "@t3tools/provider-testing/replayWorkspace";
@@ -38,11 +39,13 @@ it.effect("delivers continuation wakes and agent messages to a pack provider as 
       const registry = ProviderAdapterRegistry.layerFromAdaptersEffect(
         Effect.gen(function* () {
           const requests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
+          const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
           return [
             makePackOrchestrationAdapter({
               adapter: pack.instance.orchestration,
               driver,
               instanceId,
+              mcpSessions,
               offerContinuation: requests.offer,
             }),
           ];

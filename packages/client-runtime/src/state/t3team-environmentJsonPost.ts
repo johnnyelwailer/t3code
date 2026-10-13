@@ -51,7 +51,7 @@ export const postEnvironmentJson = Effect.fn("clientRuntime.state.postEnvironmen
       remoteAuthorization,
       group: "auth",
       method: "POST",
-      url: (httpBaseUrl) => {
+      url: (_urls, httpBaseUrl) => {
         requestUrl = environmentEndpointUrl(httpBaseUrl, input.path);
         return requestUrl;
       },

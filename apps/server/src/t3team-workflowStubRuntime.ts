@@ -18,9 +18,11 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
 import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
+import * as CommandReceiptStore from "./orchestration-v2/CommandReceiptStore.ts";
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import { layerWithRegistry } from "./orchestration-v2/testkit/ProviderReplayHarness.ts";
 import * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
+import * as ServerSettings from "./serverSettings.ts";
 import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
 import { T3TeamWorkflowEngineReactorLayer } from "./t3team-workflowEngineReactor.ts";
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
@@ -41,7 +43,15 @@ export function makeWorkflowStubRuntime(options: {
   const orchestration = layerWithRegistry({ name: options.name }, provider.registryLayer, {
     databaseLayer: database,
   });
-  const threads = ThreadManagementService.layer.pipe(Layer.provide(orchestration));
+  const threads = ThreadManagementService.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        orchestration,
+        CommandReceiptStore.layer.pipe(Layer.provide(database)),
+        ServerSettings.layerTest(),
+      ),
+    ),
+  );
   const foundation = T3TeamV2FoundationLive.pipe(Layer.provide(database));
   const persistence = Layer.mergeAll(
     WorkflowRunRepositoryLive,

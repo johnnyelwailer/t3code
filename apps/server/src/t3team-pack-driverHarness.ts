@@ -31,7 +31,6 @@ import * as Stream from "effect/Stream";
 
 import {
   defaultProviderContinuationIdentity,
-  type ProviderDriver,
   type ProviderInstance,
 } from "@t3tools/provider-core/server/driver";
 import { OpenCodeDriver, type OpenCodeDriverEnv } from "@t3tools/provider-opencode/server";
@@ -104,7 +103,7 @@ export const makeOpenCodeHarnessCapability = (input: {
 export function makeOpenCodeHarnessDriver(input: {
   readonly driverKind: ProviderDriverKind;
   readonly displayName: string;
-}): ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv> {
+}): typeof OpenCodeDriver {
   const stampSnapshot = (snapshot: ServerProvider): ServerProvider =>
     adaptOpenCodeHarnessSnapshot(snapshot, input.driverKind);
 
