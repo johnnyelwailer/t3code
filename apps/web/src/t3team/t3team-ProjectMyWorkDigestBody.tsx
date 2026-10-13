@@ -16,6 +16,15 @@ import {
 } from "~/t3team/t3team-ProjectMyWorkDigestHeader";
 import type { DigestGraph, ResolvedDigestPlan } from "~/t3team/t3team-projectMyWorkDigestPlan";
 
+/**
+ * A lone footer section spans the row; the 2/3-column split only applies once there is more than
+ * one, so a single "Parked" card never gets squeezed into a third of the width.
+ */
+function footerGridColumns(count: number): string {
+  if (count >= 3) return "@3xl/digest:grid-cols-2 @6xl/digest:grid-cols-3";
+  return count === 2 ? "@3xl/digest:grid-cols-2" : "";
+}
+
 /** The digest as it is on screen right now; `ProjectMyWorkDigestView` decides what that is. */
 export function ProjectMyWorkDigestBody({
   plan,
@@ -89,18 +98,8 @@ export function ProjectMyWorkDigestBody({
   const side = plan.sections.filter((s) => s.placement === "side");
   const main = plan.sections.filter((s) => s.placement === "main");
   const footer = plan.sections.filter((s) => s.placement === "footer");
-  // Only parked / stalled items: say so in one line instead of leaving the two-lane grid as a
-  // blank band between the header and the footer. Width is the parent's job: the digest lens
-  // drops the centered max-width cap so a widescreen uses the whole pane.
-  const lanesEmpty = side.length === 0 && main.length === 0;
-  // A lone footer section spans the row; the 2/3-column split only applies once there is more than
-  // one, so a single "Parked" card never gets squeezed into a third of the width.
-  const footerColumns =
-    footer.length >= 3
-      ? "@3xl/digest:grid-cols-2 @6xl/digest:grid-cols-3"
-      : footer.length === 2
-        ? "@3xl/digest:grid-cols-2"
-        : "";
+  const onlyParkedWork = side.length === 0 && main.length === 0;
+  const footerColumns = footerGridColumns(footer.length);
   const lanes = digestLaneLayout({ side: side.length, main: main.length });
   const shownTicketIds = digestShownTicketIds([...side, ...main], graph);
   const rowTicketIds = digestRowTicketIds([...side, ...main], graph);
@@ -109,7 +108,7 @@ export function ProjectMyWorkDigestBody({
       {header}
       {noticeCard}
       {arranged}
-      {lanesEmpty ? (
+      {onlyParkedWork ? (
         emptyLanes === "nothing" ? (
           <T3SurfacePanel
             tone="dashed"

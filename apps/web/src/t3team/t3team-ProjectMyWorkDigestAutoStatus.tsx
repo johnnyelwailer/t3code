@@ -32,6 +32,31 @@ export function digestJiraSyncLabel(input: {
   return `auto · updated ${formatDigestAgo(input.nowMs, new Date(input.updatedAtMs).toISOString())} ago`;
 }
 
+/**
+ * Quiet on purpose: the content below is usable, this only explains why it may be a moment old.
+ * Its slot is always laid out and only fades, so it appearing never moves the strip.
+ */
+function RefreshHint({ refreshing }: { refreshing: boolean }) {
+  const shown = useDelayedStatus(
+    "digest-refresh",
+    refreshing ? "refreshing" : null,
+    REFRESH_HINT_TIMING,
+  );
+  return (
+    <>
+      <span
+        aria-hidden
+        className={`text-muted-foreground/80 transition-opacity duration-200 motion-reduce:transition-none ${shown === null ? "opacity-0" : "opacity-100"}`}
+      >
+        Refreshing…
+      </span>
+      <span className="sr-only" aria-live="polite">
+        {shown === null ? "" : "Refreshing…"}
+      </span>
+    </>
+  );
+}
+
 export function DigestAutoStatus({
   updatedAtMs,
   jiraSyncedAt,
@@ -68,32 +93,12 @@ export function DigestAutoStatus({
       </TooltipPopup>
     </Tooltip>
   ) : null;
-  // Quiet on purpose: the content below is usable, this only explains why it may be a moment old.
-  // Its slot is always laid out and only fades, so it appearing never moves the strip.
-  const hintShown = useDelayedStatus(
-    "digest-refresh",
-    refreshing ? "refreshing" : null,
-    REFRESH_HINT_TIMING,
-  );
-  const refreshNotice = (
-    <>
-      <span
-        aria-hidden
-        className={`text-muted-foreground/80 transition-opacity duration-200 motion-reduce:transition-none ${hintShown === null ? "opacity-0" : "opacity-100"}`}
-      >
-        Refreshing…
-      </span>
-      <span className="sr-only" aria-live="polite">
-        {hintShown === null ? "" : "Refreshing…"}
-      </span>
-    </>
-  );
   const label = digestJiraSyncLabel({ jiraSyncedAt, jiraSyncPending, updatedAtMs, nowMs });
   if (label === null) {
     return (
       <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
         {prNotice}
-        {refreshNotice}
+        <RefreshHint refreshing={refreshing} />
       </span>
     );
   }
@@ -110,7 +115,7 @@ export function DigestAutoStatus({
         {label}
       </span>
       {prNotice}
-      {refreshNotice}
+      <RefreshHint refreshing={refreshing} />
     </span>
   );
 }
