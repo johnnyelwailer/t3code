@@ -10,7 +10,7 @@ type EventReader = Pick<OrchestrationEventStore["Service"], "readAgentEventId">;
  * exists. A read failure also reads as unknown: callers then fall back to the
  * snapshot path, which is always safe, instead of failing the subscription.
  */
-export const threadEventIdAtSequence = (
+const threadEventIdAtSequence = (
   events: EventReader,
   threadId: ThreadId,
   sequence: number,
