@@ -17,6 +17,12 @@ vi.mock("../ui/collapsible", () => {
   };
 });
 
+// t3team: the fork renders question context through ChatMarkdown, which needs a real DOM theme;
+// this test only drives navigation.
+vi.mock("./t3team-pendingQuestionMarkdown", () => ({
+  T3TeamPendingQuestionMarkdown: () => null,
+}));
+
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 
 const prompt = {
@@ -73,9 +79,6 @@ beforeEach(() => {
   vi.stubGlobal("window", {
     setTimeout: globalThis.setTimeout,
     clearTimeout: globalThis.clearTimeout,
-    // t3team: the fork's question markdown renders through useTheme, which subscribes to these.
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
   });
   vi.stubGlobal("document", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
 });
