@@ -1,3 +1,4 @@
+import { buildRouteSearch } from "~/t3team/t3team-buildRouteSearch";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -70,5 +71,14 @@ describe("t3team route state", () => {
       to: "/t3team/drafts/$draftId",
       params: { draftId: "draft-9" },
     });
+  });
+
+  it("keeps the project whose linked-repositories dialog is open, and drops it when leaving", () => {
+    const search = parseT3TeamRouteSearch({ manageRepositories: "project-1" });
+    expect(search.manageRepositories).toBe("project-1");
+    expect(buildRouteSearch(search)).not.toHaveProperty("manageRepositories");
+    expect(parseT3TeamRouteSearch({ manageRepositories: "" })).not.toHaveProperty(
+      "manageRepositories",
+    );
   });
 });

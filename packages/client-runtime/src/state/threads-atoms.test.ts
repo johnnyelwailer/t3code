@@ -51,7 +51,11 @@ const THREAD: OrchestrationV2ThreadProjection = {
   ...v2Projection,
   thread: { ...v2Projection.thread, title: "Cached thread" },
 };
-const SNAPSHOT: OrchestrationV2ThreadDetailSnapshot = { snapshotSequence: 7, projection: THREAD };
+const SNAPSHOT: OrchestrationV2ThreadDetailSnapshot = {
+  snapshotSequence: 7,
+  snapshotEventId: EventId.make("cached-event-7"),
+  projection: THREAD,
+};
 
 const makeHarness = Effect.fn("TestThreadAtoms.makeHarness")(function* (options?: {
   readonly snapshot?: OrchestrationV2ThreadDetailSnapshot;
@@ -61,6 +65,7 @@ const makeHarness = Effect.fn("TestThreadAtoms.makeHarness")(function* (options?
 }) {
   const subscriptions = yield* Queue.unbounded<{
     readonly afterSequence: number | undefined;
+    readonly afterEventId: string | undefined;
     readonly events: Queue.Queue<OrchestrationV2ThreadStreamItem>;
     readonly closed: Deferred.Deferred<void>;
   }>();
@@ -75,7 +80,10 @@ const makeHarness = Effect.fn("TestThreadAtoms.makeHarness")(function* (options?
   let opened = 0;
   let active = 0;
   const client = {
-    [ORCHESTRATION_V2_WS_METHODS.subscribeThread]: (input: { readonly afterSequence?: number }) =>
+    [ORCHESTRATION_V2_WS_METHODS.subscribeThread]: (input: {
+      readonly afterSequence?: number;
+      readonly afterEventId?: string;
+    }) =>
       Stream.unwrap(
         Effect.gen(function* () {
           const events = yield* Queue.unbounded<OrchestrationV2ThreadStreamItem>();
@@ -90,7 +98,12 @@ const makeHarness = Effect.fn("TestThreadAtoms.makeHarness")(function* (options?
                 active -= 1;
               }).pipe(Effect.andThen(Deferred.succeed(closed, undefined))),
           );
-          yield* Queue.offer(subscriptions, { afterSequence: input.afterSequence, events, closed });
+          yield* Queue.offer(subscriptions, {
+            afterSequence: input.afterSequence,
+            afterEventId: input.afterEventId,
+            events,
+            closed,
+          });
           return Stream.fromQueue(events);
         }),
       ),
@@ -336,6 +349,7 @@ describe("createEnvironmentThreadStateAtoms", () => {
       yield* Queue.offer(first.events, {
         kind: "snapshot",
         snapshotSequence: 8,
+        snapshotEventId: EventId.make("snapshot-event-8"),
         projection: latest,
       });
       yield* Queue.offer(first.events, { kind: "synchronized" });
@@ -773,3 +787,166 @@ it.effect("keeps snapshot boundaries and completion markers ordered inside a rep
     yield* Deferred.await(next.closed);
   }),
 );
+
+describe("thread resume cursor identity", () => {
+  const messagePayload = (sequence: number, text: string) => ({
+    id: MessageId.make(`identity-message-${sequence}`),
+    threadId: THREAD_ID,
+    runId: null,
+    nodeId: null,
+    role: "assistant" as const,
+    text,
+    streaming: false,
+    attachments: [],
+    createdBy: "agent" as const,
+    creationSource: "provider" as const,
+    createdAt: THREAD.thread.createdAt,
+    updatedAt: THREAD.thread.createdAt,
+  });
+  const messageEvent = (sequence: number, text: string): OrchestrationV2ThreadStreamItem => ({
+    kind: "event",
+    sequence,
+    event: {
+      id: EventId.make(`identity-event-${sequence}`),
+      type: "message.updated",
+      threadId: THREAD_ID,
+      occurredAt: THREAD.thread.createdAt,
+      payload: messagePayload(sequence, text),
+    },
+  });
+
+  it.effect("resumes with the event id of the cached snapshot and of each applied event", () =>
+    Effect.gen(function* () {
+      const h = yield* makeHarness({
+        snapshot: { ...SNAPSHOT, snapshotEventId: EventId.make("cached-event-7") },
+      });
+      const unmount = h.registry.mount(h.stateAtom);
+      const first = yield* Queue.take(h.subscriptions);
+      expect(first.afterSequence).toBe(7);
+      expect(first.afterEventId).toBe("cached-event-7");
+      yield* Queue.offer(first.events, messageEvent(8, "applied"));
+      yield* Queue.offer(first.events, { kind: "synchronized" });
+      yield* observeState(h.registry, h.stateAtom, (state) => state.status === "live");
+      unmount();
+      yield* Deferred.await(first.closed);
+      const remount = h.registry.mount(h.stateAtom);
+      const next = yield* Queue.take(h.subscriptions);
+      expect(next.afterSequence).toBe(8);
+      expect(next.afterEventId).toBe("identity-event-8");
+      remount();
+      yield* Deferred.await(next.closed);
+    }),
+  );
+
+  it.effect("does not resume a cached cursor that has no event id", () =>
+    Effect.gen(function* () {
+      // A cache written before ids existed, or a snapshot from an older server.
+      const h = yield* makeHarness({ snapshot: { snapshotSequence: 7, projection: THREAD } });
+      const unmount = h.registry.mount(h.stateAtom);
+      const first = yield* Queue.take(h.subscriptions);
+      // The cached projection still paints; the server is asked for a snapshot.
+      expect(currentThread(h.registry, h.stateAtom)).toBe(THREAD);
+      expect(first.afterSequence).toBeUndefined();
+      expect(first.afterEventId).toBeUndefined();
+      unmount();
+      yield* Deferred.await(first.closed);
+    }),
+  );
+
+  it.effect(
+    "keeps the cursor id on the unknown event it advanced to, and clears it when absent",
+    () =>
+      Effect.gen(function* () {
+        const h = yield* makeHarness({
+          snapshot: { ...SNAPSHOT, snapshotEventId: EventId.make("cached-event-7") },
+        });
+        const unmount = h.registry.mount(h.stateAtom);
+        const first = yield* Queue.take(h.subscriptions);
+        yield* Queue.offer(first.events, {
+          kind: "unknown-event",
+          sequence: 8,
+          eventType: "run.from-a-future-server",
+          eventId: EventId.make("future-event-8"),
+        });
+        yield* Queue.offer(first.events, { kind: "synchronized" });
+        yield* observeState(h.registry, h.stateAtom, (state) => state.status === "live");
+        unmount();
+        yield* Deferred.await(first.closed);
+        const remount = h.registry.mount(h.stateAtom);
+        const second = yield* Queue.take(h.subscriptions);
+        // Never the stale id of sequence 7 next to sequence 8.
+        expect(second.afterSequence).toBe(8);
+        expect(second.afterEventId).toBe("future-event-8");
+        // A wire event without an id leaves the cursor unnamed instead of stale.
+        yield* Queue.offer(second.events, {
+          kind: "unknown-event",
+          sequence: 9,
+          eventType: "run.from-a-future-server",
+        });
+        yield* Queue.offer(second.events, { kind: "synchronized" });
+        yield* observeState(h.registry, h.stateAtom, (state) => state.status === "live");
+        remount();
+        yield* Deferred.await(second.closed);
+        const again = h.registry.mount(h.stateAtom);
+        const third = yield* Queue.take(h.subscriptions);
+        // Unnamed cursor: not resumable, so no sequence either.
+        expect(third.afterSequence).toBeUndefined();
+        expect(third.afterEventId).toBeUndefined();
+        again();
+        yield* Deferred.await(third.closed);
+      }),
+  );
+
+  it.effect(
+    "replaces cached phantom turns on a snapshot and keeps applying events below the old cursor",
+    () =>
+      Effect.gen(function* () {
+        const h = yield* makeHarness({
+          snapshot: {
+            snapshotSequence: 50,
+            snapshotEventId: EventId.make("old-timeline-50"),
+            projection: { ...THREAD, messages: [messagePayload(40, "phantom turn")] },
+          },
+        });
+        const unmount = h.registry.mount(h.stateAtom);
+        const first = yield* Queue.take(h.subscriptions);
+        expect(first.afterSequence).toBe(50);
+        expect(first.afterEventId).toBe("old-timeline-50");
+        expect(currentThread(h.registry, h.stateAtom).messages).toHaveLength(1);
+
+        // The server found sequence 50 holds a different event: it replaces the
+        // cache with a snapshot whose cursor is far below the stale one.
+        yield* Queue.offer(first.events, {
+          kind: "snapshot",
+          snapshotSequence: 12,
+          snapshotEventId: EventId.make("new-timeline-12"),
+          projection: { ...THREAD, thread: { ...THREAD.thread, title: "New timeline" } },
+        });
+        yield* Queue.offer(first.events, { kind: "synchronized" });
+        const replaced = yield* observeState(
+          h.registry,
+          h.stateAtom,
+          (state) => state.status === "live",
+        );
+        const thread = Option.getOrThrow(replaced.data);
+        expect(thread.thread.title).toBe("New timeline");
+        expect(thread.messages).toEqual([]);
+
+        // Sequence 13 is under the old cursor (50) but after the new one.
+        yield* Queue.offer(first.events, messageEvent(13, "after the reset"));
+        yield* observeState(
+          h.registry,
+          h.stateAtom,
+          (state) => Option.getOrNull(state.data)?.messages[0]?.text === "after the reset",
+        );
+        unmount();
+        yield* Deferred.await(first.closed);
+        const remount = h.registry.mount(h.stateAtom);
+        const next = yield* Queue.take(h.subscriptions);
+        expect(next.afterSequence).toBe(13);
+        expect(next.afterEventId).toBe("identity-event-13");
+        remount();
+        yield* Deferred.await(next.closed);
+      }),
+  );
+});

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  resolveDigestEmptyLanes,
   resolveMyWorkDigestRenderState,
   type MyWorkDigestRenderInput,
 } from "~/t3team/t3team-myWorkDigestRenderState";
@@ -47,11 +48,53 @@ describe("My Work digest render state", () => {
     );
     expect(resolve({ status: "error", hasGraph: true, ticketCount: 5 })).toBe("error");
     // No Jira identity: an empty graph says nothing about the user's work.
-    expect(resolve({ viewerUnresolved: true, hasGraph: true, ticketCount: 0 })).toBe("sign-in");
+    expect(
+      resolve({ viewerUnresolved: true, hasGraph: true, ticketCount: 0, freshness: "fresh" }),
+    ).toBe("sign-in");
     expect(resolve({ viewerUnresolved: true, status: "ready", freshness: "fresh" })).toBe(
       "sign-in",
     );
     // …but tickets DID come back, so the viewer flag is stale information: render them.
     expect(resolve({ viewerUnresolved: true, hasGraph: true, ticketCount: 2 })).toBe("content");
+  });
+
+  it("never asks to sign in from a stored graph before a fresh round confirms it", () => {
+    // The stored graph remembers a signed-out round; the user may have signed in since.
+    const storedSignedOut = { viewerUnresolved: true, hasGraph: true, ticketCount: 0 };
+    expect(resolve({ ...storedSignedOut, status: "ready", freshness: "cached" })).toBe("loading");
+    expect(resolve({ ...storedSignedOut, status: "retrying", freshness: "cached" })).toBe(
+      "retrying",
+    );
+    expect(resolve({ ...storedSignedOut, status: "ready", freshness: "fresh" })).toBe("sign-in");
+  });
+});
+
+describe("empty digest lanes", () => {
+  it("claims nothing needs you only when the round and the Jira half are both trusted", () => {
+    expect(resolveDigestEmptyLanes({ emptyStateAllowed: true, jiraNoticeShown: false })).toBe(
+      "nothing",
+    );
+  });
+
+  it("leaves the message to the Jira notice when the data may be stale or signed out", () => {
+    expect(resolveDigestEmptyLanes({ emptyStateAllowed: true, jiraNoticeShown: true })).toBe(
+      "unverified",
+    );
+  });
+
+  it("keeps loading while the first Jira sync is still filling the mirror", () => {
+    expect(
+      resolveDigestEmptyLanes({
+        emptyStateAllowed: true,
+        jiraNoticeShown: false,
+        jiraSyncPending: true,
+      }),
+    ).toBe("loading");
+  });
+
+  it("keeps loading before a fresh round, notice or not", () => {
+    expect(resolveDigestEmptyLanes({ emptyStateAllowed: false, jiraNoticeShown: true })).toBe(
+      "loading",
+    );
   });
 });

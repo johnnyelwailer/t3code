@@ -6,11 +6,9 @@ import { HttpRouter } from "effect/http";
 import {
   type BasicConnectInput,
   type OAuthConnectInput,
+  commitAtlassianAuths,
   loadPersistedAuths,
   providerForAccount,
-  providerForPersistedAuths,
-  replaceAtlassianAuths,
-  savePersistedAuths,
 } from "./t3team-atlassian-auth-store.ts";
 import {
   errorResponse,
@@ -19,6 +17,10 @@ import {
   tryAtlassianPromise,
 } from "./t3team-atlassian-http.ts";
 import { persistAtlassianOAuthAccounts } from "./t3team-atlassian-oauth-accountPersist.ts";
+export {
+  t3teamAtlassianAccountsRouteLayer,
+  t3teamAtlassianDisconnectRouteLayer,
+} from "./t3team-atlassian-accounts-routes.ts";
 export { t3teamAtlassianAssetContentRouteLayer } from "./t3team-atlassian-asset-content-route.ts";
 export { t3teamAtlassianBacklogRouteLayer } from "./t3team-atlassian-backlog-routes.ts";
 export { t3teamAtlassianMyWorkRouteLayer } from "./t3team-atlassian-myWork-routes.ts";
@@ -58,23 +60,8 @@ export const t3teamAtlassianConnectBasicRouteLayer = HttpRouter.add(
       () => provider.listAccounts(),
       "Failed to connect to Atlassian.",
     );
-    replaceAtlassianAuths(accounts.map((account) => ({ accountId: account.id, auth: input.auth })));
-    yield* savePersistedAuths;
-    return okJson({ accounts });
-  }).pipe(Effect.catch(errorResponse)),
-);
-
-export const t3teamAtlassianAccountsRouteLayer = HttpRouter.add(
-  "POST",
-  "/api/t3team/atlassian/accounts",
-  Effect.gen(function* () {
-    const provider = yield* providerForPersistedAuths();
-    if (!provider) {
-      return okJson({ accounts: [] });
-    }
-    const accounts = yield* tryAtlassianPromise(
-      () => provider.listAccounts(),
-      "Failed to load persisted Atlassian accounts.",
+    yield* commitAtlassianAuths(
+      accounts.map((account) => ({ accountId: account.id, auth: input.auth })),
     );
     return okJson({ accounts });
   }).pipe(Effect.catch(errorResponse)),

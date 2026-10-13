@@ -29,15 +29,19 @@ export function toCloudSessionFailure(error: GitHubApi.GitHubApiError): CloudSes
     case "GitHubHostDisabledError":
     case "GitHubCliFailedError":
     case "GitHubApiAuthenticationError":
+      // The host is the one the failing request addressed, so the client signs in to exactly it
+      // (it can differ from the deployment's default gh login host).
       return new CloudSessionFailedError({
         reason: "unauthorized",
         message: "This server has no usable GitHub credential for the cloud session host.",
+        host: error.host,
       });
     case "GitHubApiRateLimitError":
     case "SourceControlRateLimitPausedError":
       return new CloudSessionFailedError({
         reason: "rejected",
         message: "The provider is rate limiting cloud session requests. Try again shortly.",
+        ...(typeof error.retryAt === "number" ? { retryAt: error.retryAt } : {}),
       });
     case "GitHubApiRequestError":
       return new CloudSessionFailedError({

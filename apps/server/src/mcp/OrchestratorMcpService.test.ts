@@ -2362,7 +2362,7 @@ describe("provider usage echo", () => {
         const result = yield* service.capabilities(scope);
         assert.deepEqual(result.providerUsage, [
           "nexplore: no usage data",
-          "claudeAgent: session 42% (resets 18:00Z) · weekly 90% · severity: warning",
+          "claudeAgent: Session 42% (resets 2026-09-28 18:00 UTC) · Weekly 90% · severity: warning",
         ]);
       }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layer))));
     }),
@@ -2421,7 +2421,7 @@ describe("provider usage echo", () => {
         assert.equal(result.status, "running");
         assert.equal(
           result.providerUsage,
-          "claudeAgent: session 42% (resets 18:00Z) · weekly 90% · severity: warning",
+          "claudeAgent: Session 42% (resets 2026-09-28 18:00 UTC) · Weekly 90% · severity: warning",
         );
       }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layer))));
     }),
@@ -2451,7 +2451,10 @@ describe("provider usage echo", () => {
             .pipe(Effect.flip);
         }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layer))));
         assert.equal(failure.code, "provider_unavailable");
-        assert.match(failure.message, /current windows: codex: session 42% \(resets 18:00Z\)/);
+        assert.match(
+          failure.message,
+          /current windows: codex: Session 42% \(resets 2026-09-28 18:00 UTC\)/,
+        );
       }),
   );
 });

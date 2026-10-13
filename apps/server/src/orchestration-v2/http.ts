@@ -30,6 +30,7 @@ import * as ThreadManagementService from "./ThreadManagementService.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import { buildActiveShellSnapshot, loadShellSnapshotParts } from "./ShellStream.ts";
 import { boundedSnapshotResponseFields } from "./ThreadStream.ts";
+import { snapshotEventIdFields } from "./t3team-threadCursorIdentity.ts";
 import { projectThreadProjectionForWire } from "./WireProjection.ts";
 
 function isThreadNotFound(error: unknown): boolean {
@@ -173,6 +174,11 @@ export const layer = HttpApiBuilder.group(
           ).pipe(traceLocalHandlerWork);
           return {
             snapshotSequence: snapshot.snapshotSequence,
+            ...(yield* snapshotEventIdFields(
+              applicationEvents,
+              args.params.threadId,
+              snapshot.snapshotSequence,
+            )),
             projection: snapshot.projection,
           };
         }),
@@ -195,6 +201,11 @@ export const layer = HttpApiBuilder.group(
               bounded,
               compactTurnItems: args.query.compactTurnItems === "1",
             }),
+            ...(yield* snapshotEventIdFields(
+              applicationEvents,
+              args.params.threadId,
+              snapshot.snapshotSequence,
+            )),
           };
         }),
       )

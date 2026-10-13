@@ -8,12 +8,16 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import type { T3TeamBacklogCacheIdentity } from "./t3team-atlassian-backlog-cacheShared.ts";
-import { readDigestStatusTransitionsSince } from "./t3team-digestStatusTransitions.ts";
+import type { DigestTransitionRead } from "./t3team-digestStatusTransitions.ts";
 import { resolveDigestTicketRef } from "./t3team-myworkDigestAggregation.ts";
 import { loadDigestBurndownContext } from "./t3team-myworkDigestBurndownBackfill.ts";
-import { kickDigestMirrorSync, readDigestJiraSyncedAtMs } from "./t3team-myworkDigestFreshness.ts";
+import { kickDigestMirrorSync } from "./t3team-myworkDigestFreshness.ts";
 import { toDigestPrEntries } from "./t3team-myworkDigestPr.ts";
-import { loadDigestPrEntries, loadDigestViewerPrEntries } from "./t3team-myworkDigestPrCache.ts";
+import {
+  loadDigestPrEntries,
+  loadDigestViewerMergedPrEntries,
+  loadDigestViewerPrEntries,
+} from "./t3team-myworkDigestPrCache.ts";
 import { readDigestYesterday } from "./t3team-myworkDigestYesterdayRead.ts";
 import type { DigestYesterdayWindow } from "./t3team-myworkDigestYesterdayWindow.ts";
 import { viewerPrsForProject } from "./t3team-myworkDigestViewerPrs.ts";
@@ -32,16 +36,31 @@ import type {
 } from "./t3team-myworkDigestTypes.ts";
 import { readDigestDependencies } from "./t3team-myworkDigestDependencies.ts";
 import { withProfileNames } from "./t3team-myworkDigestPeopleNames.ts";
+import { readDigestJiraHealth } from "./t3team-myworkDigestJiraHealth.ts";
 import { readDigestViewerTickets } from "./t3team-myworkDigestViewer.ts";
 
-const DIGEST_TRANSITION_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
+/** The mirror identity a project's Jira reads key on. */
+export function digestIdentityFor(
+  project: T3TeamMyWorkDigestProjectInput,
+): T3TeamBacklogCacheIdentity {
+  return {
+    provider: project.account.provider,
+    accountId: project.account.id,
+    externalProjectId: project.externalProjectId,
+  };
+}
 
 /** The app-scoped reads every project joins against. */
 type DigestSharedReads = {
   readonly nowMs: number;
   readonly nowIso: string;
   readonly requestedViewerName: string | undefined;
-  readonly yesterdayWindow: DigestYesterdayWindow;
+  /** The viewer's merged PRs across the data horizon; the recap filters to its own day. */
+  readonly mergedPrs: Effect.Success<ReturnType<typeof loadDigestViewerMergedPrEntries>>;
+  /** The found last-working-day window; `undefined` when the horizon had no activity. */
+  readonly yesterdayWindow: DigestYesterdayWindow | undefined;
+  /** This project's status transitions, read by the loader over the same horizon. */
+  readonly transitionRows: ReadonlyArray<DigestTransitionRead>;
   readonly threads: ReadonlyArray<DigestThreadRow>;
   readonly agentByThread: ReadonlyMap<string, string>;
   readonly rawTicketByThread: ReadonlyMap<string, string>;
@@ -60,12 +79,8 @@ export function loadDigestProjectSource(
 ) {
   return Effect.gen(function* () {
     const appProjectId = project.appProjectId?.trim() || undefined;
-    const identity: T3TeamBacklogCacheIdentity = {
-      provider: project.account.provider,
-      accountId: project.account.id,
-      externalProjectId: project.externalProjectId,
-    };
-    yield* kickDigestMirrorSync(project);
+    const identity = digestIdentityFor(project);
+    const mirrorSyncing = yield* kickDigestMirrorSync(project);
     const viewer = yield* readDigestViewerTickets({
       project,
       identity,
@@ -75,11 +90,7 @@ export function loadDigestProjectSource(
     const boardSprints = yield* readDigestSprints(identity);
     const { tickets, sprints } = alignDigestSprints(viewer.tickets, boardSprints, ctx.nowMs);
     const estimateUnit = yield* readDigestEstimateUnit(identity);
-    const transitionRows = yield* readDigestStatusTransitionsSince({
-      ...identity,
-      sinceMs: ctx.nowMs - DIGEST_TRANSITION_LOOKBACK_MS,
-    });
-    const transitions = transitionRows.map((row) => ({
+    const transitions = ctx.transitionRows.map((row) => ({
       ticketRef: {
         issueId: row.issueId,
         ...(row.issueKey !== null ? { issueKey: row.issueKey } : {}),
@@ -90,13 +101,17 @@ export function loadDigestProjectSource(
     }));
     const { read: prRead, pending: projectPrsPending } = yield* loadDigestPrEntries(appProjectId);
     const viewerPrs = yield* loadDigestViewerPrEntries();
-    const yesterdayRead = yield* readDigestYesterday({
-      window: ctx.yesterdayWindow,
-      assigned: viewer.assigned,
-      tickets,
-      transitions,
-    });
-    const jiraSyncedAtMs = yield* readDigestJiraSyncedAtMs(project);
+    const yesterdayRead =
+      ctx.yesterdayWindow !== undefined
+        ? readDigestYesterday({
+            window: ctx.yesterdayWindow,
+            mergedRead: ctx.mergedPrs,
+            assigned: viewer.assigned,
+            tickets,
+            transitions,
+          })
+        : undefined;
+    const jiraHealth = yield* readDigestJiraHealth(project, mirrorSyncing);
     const dependencies = yield* readDigestDependencies({ identity, assigned: viewer.assigned });
 
     // Burndown history: the sprint's backfilled changelog rows; when the
@@ -154,7 +169,10 @@ export function loadDigestProjectSource(
       appProjectId,
     );
     const pending =
-      projectPrsPending || viewerPrs.pending || reviewRead.pending || yesterdayRead.pending;
+      projectPrsPending ||
+      viewerPrs.pending ||
+      reviewRead.pending ||
+      (yesterdayRead !== undefined ? yesterdayRead.pending : false);
 
     const source: T3TeamDigestProjectSource = {
       input: project,
@@ -174,9 +192,9 @@ export function loadDigestProjectSource(
       nowIso: ctx.nowIso,
       ...(prRead?.note !== undefined ? { changeRequestNote: prRead.note } : {}),
       ...(prRead?.stale === true ? { changeRequestsStale: true } : {}),
-      ...(jiraSyncedAtMs !== undefined ? { jiraSyncedAt: millisToIso(jiraSyncedAtMs) } : {}),
+      ...jiraHealth,
       ...(dependencies.length > 0 ? { dependencies } : {}),
-      ...(yesterdayRead.yesterday !== undefined ? { yesterday: yesterdayRead.yesterday } : {}),
+      ...(yesterdayRead?.yesterday !== undefined ? { yesterday: yesterdayRead.yesterday } : {}),
     };
     return { source, viewerUnresolved: viewer.unresolved, changeRequestsPending: pending };
   });

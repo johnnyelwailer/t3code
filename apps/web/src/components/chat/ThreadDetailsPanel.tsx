@@ -23,6 +23,8 @@ import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
 import { ThreadOrchestrationPanel } from "../../t3team/components/t3team-ThreadOrchestrationPanel";
 import type { T3TeamActiveWorkflowDockItem } from "../../t3team/chat/t3team-activeWorkflowDock";
+import type { ChatViewT3TeamExtensionProps } from "../../t3team/t3team-chatViewExtensions";
+import type { ChatMessage } from "../../types";
 
 const GitActionsControl = memo(BaseGitActionsControl);
 
@@ -68,7 +70,8 @@ export interface ThreadDetailsPanelProps extends Pick<
    * orchestration section. Omitted on surfaces without a chat timeline (e.g. the draft panel). */
   orchestration?: {
     readonly dockItems: ReadonlyArray<T3TeamActiveWorkflowDockItem>;
-    readonly onLocate: (item: T3TeamActiveWorkflowDockItem) => void;
+    readonly onLocate: (target: { readonly messageId: ChatMessage["id"] }) => void;
+    readonly onControl?: ChatViewT3TeamExtensionProps["onControlWorkflow"];
   };
 }
 
@@ -186,6 +189,9 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
               threadId={props.threadId}
               dockItems={props.orchestration?.dockItems ?? []}
               {...(props.orchestration?.onLocate ? { onLocate: props.orchestration.onLocate } : {})}
+              {...(props.orchestration?.onControl
+                ? { onControl: props.orchestration.onControl }
+                : {})}
             />
           ) : null}
 

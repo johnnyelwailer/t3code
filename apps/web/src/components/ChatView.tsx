@@ -4691,6 +4691,7 @@ export default function ChatView(props: ChatViewProps) {
 
   const cloudSessionComposerGate = useCloudSessionComposerGate({
     scopeKey: cloudSessionScopeKey,
+    projectRef: activeProjectRef,
     availableEnvironmentIds: cloudAvailableEnvironmentIds,
     onRemapEnvironment: onEnvironmentChange,
     onFlushSend: (queued) => cloudFlushSendRef.current(queued),
@@ -11644,6 +11645,7 @@ export default function ChatView(props: ChatViewProps) {
     orchestration: {
       dockItems: t3teamChat.dockItems,
       onLocate: t3teamChat.onLocateWorkflowCard,
+      ...(t3teamChat.onControlWorkflow ? { onControl: t3teamChat.onControlWorkflow } : {}),
     },
   };
   const panelToggleControlProps = {

@@ -47,6 +47,34 @@ export function oldestJiraSync(
     .toSorted()[0];
 }
 
+/**
+ * Any project with a dead session makes the whole digest's Jira half untrustworthy; any project
+ * still on its first sync makes it partial.
+ */
+export function digestJiraHealth(
+  projects: ReadonlyArray<{
+    readonly jiraAuth?: "ok" | "needs-reconnect";
+    readonly jiraSyncError?: string;
+    readonly jiraSyncPending?: boolean;
+  }>,
+): {
+  readonly jiraAuth?: "ok" | "needs-reconnect";
+  readonly jiraSyncError?: string;
+  readonly jiraSyncPending?: boolean;
+} {
+  const jiraSyncError = projects.find((data) => data.jiraSyncError !== undefined)?.jiraSyncError;
+  const jiraAuth = projects.some((data) => data.jiraAuth === "needs-reconnect")
+    ? "needs-reconnect"
+    : projects.some((data) => data.jiraAuth === "ok")
+      ? "ok"
+      : undefined;
+  return {
+    ...(jiraAuth !== undefined ? { jiraAuth } : {}),
+    ...(jiraSyncError !== undefined ? { jiraSyncError } : {}),
+    ...(projects.some((data) => data.jiraSyncPending === true) ? { jiraSyncPending: true } : {}),
+  };
+}
+
 export type DigestTicketRefLike = { readonly issueId?: string; readonly issueKey?: string };
 
 /** A server ticket ref → the app ticket id, by Jira id first, then key; "" when unknown. */

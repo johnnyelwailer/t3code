@@ -565,7 +565,7 @@ export const OrchestratorMcpCapabilitiesResult = Schema.Struct({
   /**
    * Compact per-instance usage view: one short line per instance built from
    * the published `usageLimits` snapshots, e.g.
-   * `claudeAgent: session 42% (resets 18:00Z) · weekly 71% · severity: warning`,
+   * `claudeAgent: Session 42% (resets 2026-09-28 18:00 UTC) · Weekly 71% · severity: warning`,
    * or an explicit `no usage data` marker. Omitted when the host has no
    * provider registry snapshot.
    */

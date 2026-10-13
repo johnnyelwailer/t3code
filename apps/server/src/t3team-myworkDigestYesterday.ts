@@ -63,7 +63,7 @@ function movedTicket(
 
 export function assembleDigestYesterday(input: {
   readonly window: DigestYesterdayWindow;
-  /** This project's share of the viewer's merged PRs (matched to its Jira keys by the caller). */
+  /** This project's merged PRs, read over the whole horizon; the filter narrows to the found day. */
   readonly mergedEntries: T3TeamDigestProjectSource["prEntries"];
   /** The viewer's own tickets, without the parents the digest adds for context. */
   readonly assigned: ReadonlyArray<BacklogResourceRef>;
@@ -71,7 +71,7 @@ export function assembleDigestYesterday(input: {
   readonly transitions: ReadonlyArray<T3TeamDigestTransition>;
 }): T3TeamDigestYesterday | undefined {
   const merged = input.mergedEntries
-    .filter((entry) => entry.state === "merged")
+    .filter((entry) => entry.state === "merged" && inWindow(entry.updatedAt, input.window))
     .map((entry) => {
       const workItemKey = matchDigestWorkItemKey(entry.title, entry.headBranch, input.ticketKeys);
       return {

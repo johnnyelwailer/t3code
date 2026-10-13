@@ -6,7 +6,6 @@ import { threadHasStarted } from "~/components/ChatView.logic";
 import { DraftId, markPromotedDraftThreadByRef, useComposerDraftStore } from "~/composerDraftStore";
 import { buildThreadRouteParams } from "~/threadRoutes";
 import { useThreadRefs, useThreadShell } from "~/state/entities";
-import { Button } from "~/t3team/components/ui/t3team-button";
 import { waitForDraftHeroTransition } from "~/components/chat/draftHeroTransition";
 
 /**
@@ -62,23 +61,17 @@ export function AppDraftPane({ draftId: rawDraftId }: { draftId: string }) {
     };
   }, [canonicalThreadRef, navigate]);
 
-  // A draft that is neither in the store nor promoted no longer exists — say so
-  // instead of bouncing the user to a surface that looks like something else
-  // went wrong.
+  // Match upstream `ThreadRouteView`: a draft that is gone leaves the shell
+  // silently rather than trapping the user on an interstitial outside it.
+  useEffect(() => {
+    if (draftSession || canonicalThreadRef) {
+      return;
+    }
+    void navigate({ to: "/t3team", replace: true });
+  }, [canonicalThreadRef, draftSession, navigate]);
+
   if (!draftSession) {
-    if (canonicalThreadRef) return null;
-    return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-        <h2 className="text-base font-medium">This draft is no longer available</h2>
-        <p className="max-w-md text-sm leading-6 text-muted-foreground">
-          Drafts live in this browser until you send the first message. This one was discarded, sent
-          from another tab, or cleared with the browser&rsquo;s site data.
-        </p>
-        <Button variant="outline" onClick={() => void navigate({ to: "/t3team", replace: true })}>
-          Back to My work
-        </Button>
-      </div>
-    );
+    return null;
   }
 
   return (

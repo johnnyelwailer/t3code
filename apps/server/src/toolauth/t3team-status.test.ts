@@ -397,6 +397,38 @@ it.layer(NodeServices.layer)("toolauth status probe", (it) => {
       }),
     );
 
+    it.effect("does not read the hosts.yml hint as a sign-in when the probe must answer", () =>
+      Effect.gen(function* () {
+        const homeDir = makeTempHome();
+        try {
+          writeCredentialFile(homeDir, GH.status.credentialPath, {
+            "other.example.com": { oauth_token: "x" },
+          });
+          const state = yield* probeStatus(GH, { homeDir, env: {}, requireProbeAnswer: true }).pipe(
+            Effect.provideService(
+              ProcessRunner.ProcessRunner,
+              stubProcessRunner(() => Effect.fail(ghProbeSpawnFailure)),
+            ),
+          );
+          expect(state.phase).toBe("idle");
+        } finally {
+          removeTempHome(homeDir);
+        }
+      }),
+    );
+
+    it.effect("asks gh about the one host the adapter is for", () =>
+      Effect.sync(() => {
+        expect(ghAdapter("github.com").status.probe).toEqual([
+          "gh",
+          "auth",
+          "status",
+          "--hostname",
+          "github.com",
+        ]);
+      }),
+    );
+
     it.effect("reports idle when the probe fails and no hosts.yml exists", () =>
       Effect.gen(function* () {
         const homeDir = makeTempHome();

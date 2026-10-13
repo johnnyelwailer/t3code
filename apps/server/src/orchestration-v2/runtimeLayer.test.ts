@@ -2121,6 +2121,74 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
     }),
   );
 
+  it.effect("linking an unread pull request again renews its link time", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const threadId = ThreadId.make("runtime-relink-pull-request");
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("relink-create"),
+        threadId,
+        projectId: ProjectId.make("relink-project"),
+        title: "Relink",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+      });
+      const link = (id: string, source: "manual" | "stack" = "manual") =>
+        orchestrator.dispatch({
+          type: "thread.pull-request.link",
+          commandId: CommandId.make(id),
+          threadId,
+          host: "github.com",
+          repository: "pingdotgg/t3code",
+          number: 7,
+          url: "https://github.com/pingdotgg/t3code/pull/7",
+          source,
+        });
+      const linkedAt = () =>
+        orchestrator
+          .getThreadShell(threadId)
+          .pipe(Effect.map((thread) => thread?.pullRequests?.map((entry) => entry.linkedAt)));
+      yield* link("relink-1");
+      const first = yield* linkedAt();
+      yield* TestClock.adjust("1 minute");
+      // The sync reactor's own stack discovery is no ask.
+      yield* link("relink-stack", "stack");
+      assert.deepEqual(yield* linkedAt(), first);
+      yield* link("relink-2");
+      const renewed = yield* linkedAt();
+      assert.strictEqual(renewed?.length, 1);
+      assert.isTrue(Date.parse(renewed![0]!) > Date.parse(first![0]!));
+      // Once read, a link keeps its time.
+      yield* orchestrator.dispatch({
+        type: "thread.pull-request-link.sync",
+        commandId: CommandId.make("relink-sync"),
+        threadId,
+        host: "github.com",
+        repository: "pingdotgg/t3code",
+        number: 7,
+        snapshot: {
+          state: "open",
+          title: "Seven",
+          headBranch: "feature",
+          baseBranch: "main",
+          isDraft: false,
+          updatedAt: "2026-08-27T00:00:00.000Z",
+          syncedAt: "2026-08-27T00:00:00.000Z",
+        },
+        stack: null,
+      });
+      yield* TestClock.adjust("1 minute");
+      yield* link("relink-3");
+      assert.deepEqual(yield* linkedAt(), renewed);
+    }),
+  );
+
   it.effect("retains multiple pull requests and dismissed stack members through rebuilds", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;

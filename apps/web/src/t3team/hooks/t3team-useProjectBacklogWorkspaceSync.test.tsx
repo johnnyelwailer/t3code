@@ -122,6 +122,7 @@ describe("useProjectBacklog workspace sync", () => {
           linkedRepositories: [],
         })),
         readLinkedRepositoryStatus: vi.fn(async () => ({ linkedRepositories: [] })),
+        listLinkedRepositoryBranches: vi.fn(async () => ({ branches: [] })),
         setMainRepository: vi.fn(async () => {
           throw new Error("not used");
         }),

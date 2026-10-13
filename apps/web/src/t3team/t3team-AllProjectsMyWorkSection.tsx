@@ -3,8 +3,6 @@
  *
  * Built on `useProjectMyWork` — the FETCH-only hook — deliberately, not on `ProjectDashboardMyWorkView`.
  * That view is a singleton by construction and breaks when instantiated once per project:
- *  - it requires `T3TeamDashboardRecipeActionProvider`, mounted only by `AppDashboardPane`, so N
- *    copies outside that pane throw on render;
  *  - its `useProjectMyWorkState` persists UI state into the ROUTE SEARCH, which is global to the
  *    URL — N instances race on mount and then all converge on whichever wrote last, overwriting
  *    every project's saved My Work view;
@@ -24,19 +22,16 @@ import { InlineButton } from "~/components/ui/button";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { useProjectMyWork } from "~/t3team/hooks/t3team-useProjectMyWork";
-import { useProjectKanbanBoardColumns } from "~/t3team/hooks/t3team-useProjectKanbanBoardColumns";
-import { readProjectSetupProfileIdFromProject } from "~/t3team/hooks/t3team-createProjectBootstrap";
 import { humanizeT3TeamBackendError } from "~/t3team/t3team-humanizeBackendError";
 import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
 import { AppProjectIcon } from "~/t3team/t3team-AppStatusBits";
 import { TicketWorkItemRow } from "~/t3team/t3team-ProjectDashboardItemViews";
 import { ProjectMyWorkHierarchyView } from "~/t3team/t3team-ProjectMyWorkHierarchyView";
-import { ProjectDashboardKanban } from "~/t3team/t3team-ProjectDashboardKanban";
+import { AllProjectsMyWorkBoard } from "~/t3team/t3team-AllProjectsMyWorkBoard";
 import {
   buildProjectTicketHierarchy,
   type ProjectTicketHierarchy,
 } from "~/t3team/t3team-ticketHierarchy";
-import { buildProjectTicketKanbanColumns } from "~/t3team/t3team-projectTicketStatus";
 import { scopeProjectSearch } from "~/t3team/t3team-scopeRouteSync.logic";
 import type { ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 import type { ProjectTicket } from "~/t3team/t3team-types";
@@ -44,44 +39,6 @@ import type { ProjectTicket } from "~/t3team/t3team-types";
 /** The roll-up is read-only: no agent context menu, no ticket moves. */
 const NOOP_TICKET_CONTEXT_MENU = () => undefined;
 const NO_AGENT_CONTEXT = () => null;
-
-/** Read-only per-project board: the roll-up never moves tickets. */
-function AllProjectsMyWorkBoard({
-  project,
-  tickets,
-  lastCheckedAt,
-  onOpenTicket,
-}: {
-  project: ProjectShellProject;
-  tickets: readonly ProjectTicket[];
-  lastCheckedAt?: number;
-  onOpenTicket: (projectId: string, ticketId: string) => void;
-}) {
-  const { boardColumns, availableStatuses } = useProjectKanbanBoardColumns(project);
-  const profileId = useMemo(() => readProjectSetupProfileIdFromProject(project), [project]);
-  const kanbanColumns = useMemo(
-    () =>
-      buildProjectTicketKanbanColumns(tickets, {
-        profileId,
-        availableStatuses,
-        boardColumns,
-      }),
-    [availableStatuses, boardColumns, profileId, tickets],
-  );
-  const parentChildGroups = useMemo(() => buildProjectTicketHierarchy(tickets), [tickets]);
-  return (
-    <ProjectDashboardKanban
-      kanbanColumns={kanbanColumns}
-      allTickets={tickets}
-      isHierarchyMode={false}
-      parentChildGroups={parentChildGroups}
-      {...(lastCheckedAt !== undefined ? { jiraLastCheckedAt: lastCheckedAt } : {})}
-      projectId={project.id}
-      onOpenTicket={onOpenTicket}
-      onTicketContextMenu={NOOP_TICKET_CONTEXT_MENU}
-    />
-  );
-}
 
 /** Depth-indented parent/child tree for one project, reusing the per-project hierarchy view. */
 function AllProjectsMyWorkTree({
@@ -125,7 +82,7 @@ export function AllProjectsMyWorkSection({
   lens: ProjectMyWorkLens;
   onOpenTicket: (projectId: string, ticketId: string) => void;
 }) {
-  const { tickets, loading, error, sessionExpired, reload, lastCheckedAt } =
+  const { tickets, viewerAccountId, loading, error, sessionExpired, reload, lastCheckedAt } =
     useProjectMyWork(project);
   const assigned = useMemo(() => tickets ?? [], [tickets]);
   const navigate = useNavigate();
@@ -175,6 +132,7 @@ export function AllProjectsMyWorkSection({
         <AllProjectsMyWorkBoard
           project={project}
           tickets={assigned}
+          {...(viewerAccountId ? { viewerAccountId } : {})}
           {...(lastCheckedAt !== undefined ? { lastCheckedAt } : {})}
           onOpenTicket={onOpenTicket}
         />

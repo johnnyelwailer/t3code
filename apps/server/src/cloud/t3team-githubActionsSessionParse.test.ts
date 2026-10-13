@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { sessionTagMarker } from "./t3team-githubActionsSessionClient.ts";
 import {
+  jobsMatchAttempt,
   parseJobStepsResponse,
   parseLogin,
   parseRunsResponse,
@@ -151,4 +152,23 @@ describe("parseJobStepsResponse", () => {
       expect(parseJobStepsResponse(body)).toBeNull();
     },
   );
+});
+
+describe("jobsMatchAttempt", () => {
+  const body = (jobs: unknown) => JSON.stringify({ jobs });
+
+  it("matches only when every job belongs to the attempt", () => {
+    expect(jobsMatchAttempt(body([{ run_attempt: 1 }, { run_attempt: 1 }]), 1)).toBe(true);
+    expect(jobsMatchAttempt(body([{ run_attempt: 1 }, { run_attempt: 2 }]), 1)).toBe(false);
+    expect(jobsMatchAttempt(body([{ name: "no attempt" }]), 1)).toBe(false);
+  });
+
+  it("does not match a re-run that has no jobs yet", () => {
+    expect(jobsMatchAttempt(body([]), 1)).toBe(false);
+  });
+
+  it("does not match an unreadable answer", () => {
+    expect(jobsMatchAttempt("not json", 1)).toBe(false);
+    expect(jobsMatchAttempt(JSON.stringify({}), 1)).toBe(false);
+  });
 });

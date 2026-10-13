@@ -8,25 +8,24 @@ import {
 } from "@t3tools/integrations-atlassian";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
-import * as Semaphore from "effect/Semaphore";
-import {
-  JIRA_SESSION_EXPIRED_CODE,
-  T3TeamAtlassianError,
-  tryAtlassianPromise,
-} from "./t3team-atlassian-http.ts";
-import {
-  loadPersistedAtlassianAuthsPayload,
-  type PersistedAtlassianAuths,
-  savePersistedAtlassianAuthsPayload,
-} from "./t3team-atlassian-auth-persistence.ts";
+import { T3TeamAtlassianError, tryAtlassianPromise } from "./t3team-atlassian-http.ts";
 import { invalidateT3TeamAtlassianAuthDependents } from "./t3team-atlassian-auth-changeHooks.ts";
 import { findAuthForAccountId } from "./t3team-atlassian-auth-lookup.ts";
 import {
+  atlassianAuths,
+  persistAuthsToDisk,
+  reloadAuthsFromDisk,
+  withAuthStoreLock,
+} from "./t3team-atlassian-auth-state.ts";
+import {
+  oauthAuthExpiresSoon,
+  recoverFromDeadRefreshToken,
+} from "./t3team-atlassian-auth-deadToken.ts";
+import {
   accountNeedsReconnect,
-  clearAllNeedsReconnect,
-  failRefreshOrMarkNeedsReconnect,
+  markNeedsReconnect,
   reconnectRequiredError,
-  setAccountNeedsReconnect,
+  resetAllNeedsReconnect,
 } from "./t3team-atlassian-auth-staleToken.ts";
 import {
   readAtlassianOAuthClientId,
@@ -51,70 +50,23 @@ export type OAuthConnectInput = {
   };
 };
 
-const atlassianAuths = new Map<string, JiraApiAuth>();
-const OAUTH_REFRESH_SKEW_MS = 60_000;
+export const loadPersistedAuths = withAuthStoreLock(reloadAuthsFromDisk);
 
-// Concurrent writers race the atomic tmp-write-then-rename in persistence,
-// which fails on Windows when two renames target the secret file at once.
-const persistedAuthsSaveSemaphore = Semaphore.makeUnsafe(1);
-
-// Atlassian rotates refresh tokens: two concurrent refreshes for one account
-// would each redeem the same token, and the loser invalidates the winner.
-const oauthRefreshSemaphore = Semaphore.makeUnsafe(1);
-
-function persistedAuthsPayload(): PersistedAtlassianAuths {
-  return {
-    version: 1,
-    auths: [...atlassianAuths].map(([accountId, auth]) => ({
-      accountId,
-      auth,
-      ...(accountNeedsReconnect(accountId) ? { needsReconnect: true } : {}),
-    })),
-  };
-}
-
-export const loadPersistedAuths = Effect.gen(function* () {
-  const parsed = yield* loadPersistedAtlassianAuthsPayload;
-  if (!parsed) return;
-  atlassianAuths.clear();
-  clearAllNeedsReconnect();
-  for (const entry of parsed.auths) {
-    atlassianAuths.set(entry.accountId, entry.auth);
-    setAccountNeedsReconnect(entry.accountId, entry.needsReconnect === true);
-  }
-});
-
-export const savePersistedAuths = persistedAuthsSaveSemaphore.withPermits(1)(
-  Effect.suspend(() => savePersistedAtlassianAuthsPayload(persistedAuthsPayload())),
-);
-
-function missingRefreshTokenError() {
-  return new T3TeamAtlassianError({
-    message:
-      "Atlassian OAuth token expired and no refresh token is stored. Reconnect Atlassian to grant offline access.",
-  });
-}
-
-function jiraSessionExpiredError() {
-  return new T3TeamAtlassianError({
-    code: JIRA_SESSION_EXPIRED_CODE,
-    message: "Your Jira session expired. Sign in again.",
-  });
-}
+export const savePersistedAuths = withAuthStoreLock(persistAuthsToDisk);
 
 /**
- * The refresh grant was rejected because the stored refresh token is dead (401/403 with
- * `unauthorized_client`/`invalid_grant`). Keep the user from looping on the same token: drop the
- * account's credentials from memory AND the persisted secret, invalidate every account-keyed cache
- * and background loop, and fail with the clean typed error — never the upstream error body.
+ * Replace the persisted accounts (basic/OAuth connect) in one critical section, so a concurrent
+ * reload can not swap the old secret back in between the new accounts and their file write.
  */
-function clearExpiredOAuthAuth(accountId: string) {
-  return Effect.gen(function* () {
-    atlassianAuths.delete(accountId);
-    invalidateT3TeamAtlassianAuthDependents();
-    yield* savePersistedAuths;
-    return yield* Effect.fail(jiraSessionExpiredError());
-  });
+export function commitAtlassianAuths(
+  entries: ReadonlyArray<{ readonly accountId: string; readonly auth: JiraApiAuth }>,
+) {
+  return withAuthStoreLock(
+    Effect.suspend(() => {
+      replaceAtlassianAuths(entries);
+      return persistAuthsToDisk;
+    }),
+  );
 }
 
 function atlassianOAuthClientConfig(): { clientId: string; clientSecret?: string } {
@@ -126,12 +78,10 @@ function atlassianOAuthClientConfig(): { clientId: string; clientSecret?: string
   };
 }
 
-function refreshOAuthAuthIfNeeded(accountId: string, initialAuth: JiraApiAuth) {
-  const refresh = Effect.gen(function* () {
-    // Re-read under the permit: a concurrent caller may have refreshed this
-    // account while we waited, and its rotated token is the only valid one.
-    const auth = atlassianAuths.get(accountId) ?? initialAuth;
-    // A rotated-away refresh token never comes back; fail actionably instead of re-hitting Atlassian.
+/** Callers hold the store lock, so no reload or second refresh can interleave with this one. */
+function refreshOAuthAuthIfNeeded(accountId: string, auth: JiraApiAuth) {
+  return Effect.gen(function* () {
+    // A dead refresh token never comes back; fail with the sign-in error instead of re-hitting Atlassian.
     if (accountNeedsReconnect(accountId)) {
       return yield* reconnectRequiredError();
     }
@@ -140,12 +90,13 @@ function refreshOAuthAuthIfNeeded(accountId: string, initialAuth: JiraApiAuth) {
     }
 
     const now = yield* Clock.currentTimeMillis;
-    if (auth.expiresAt - now > OAUTH_REFRESH_SKEW_MS) {
+    if (!oauthAuthExpiresSoon(auth, now)) {
       return auth;
     }
 
-    if (!auth.refreshToken) {
-      return yield* missingRefreshTokenError();
+    const refreshToken = auth.refreshToken;
+    if (!refreshToken) {
+      return yield* markNeedsReconnect(accountId, persistAuthsToDisk);
     }
 
     const config = atlassianOAuthClientConfig();
@@ -153,75 +104,76 @@ function refreshOAuthAuthIfNeeded(accountId: string, initialAuth: JiraApiAuth) {
       return auth;
     }
 
-    const token = yield* tryAtlassianPromise(
-      () => refreshAccessToken(config, auth.refreshToken!),
+    const refreshed = yield* tryAtlassianPromise(
+      () => refreshAccessToken(config, refreshToken),
       "Failed to refresh Atlassian OAuth token.",
     ).pipe(
-      Effect.catch((error) =>
-        error instanceof T3TeamAtlassianError &&
-        error.cause instanceof AtlassianOAuthSessionExpiredError
-          ? clearExpiredOAuthAuth(accountId)
-          : failRefreshOrMarkNeedsReconnect(accountId, error, savePersistedAuths),
+      Effect.map((token): JiraApiAuth => ({
+        kind: "oauth",
+        cloudId: auth.cloudId,
+        ...(auth.siteUrl ? { siteUrl: auth.siteUrl } : {}),
+        accessToken: token.accessToken,
+        refreshToken: token.refreshToken,
+        expiresAt: now + token.expiresIn * 1000,
+      })),
+      // Only a dead refresh token is terminal; any other failure keeps its original error.
+      Effect.catchIf(
+        (error) =>
+          error instanceof T3TeamAtlassianError &&
+          error.cause instanceof AtlassianOAuthSessionExpiredError,
+        () => recoverFromDeadRefreshToken(accountId, refreshToken),
       ),
     );
-    const nextAuth: JiraApiAuth = {
-      kind: "oauth",
-      cloudId: auth.cloudId,
-      ...(auth.siteUrl ? { siteUrl: auth.siteUrl } : {}),
-      accessToken: token.accessToken,
-      refreshToken: token.refreshToken,
-      expiresAt: now + token.expiresIn * 1000,
-    };
-    atlassianAuths.set(accountId, nextAuth);
-    yield* savePersistedAuths;
-    return nextAuth;
+    if (refreshed === atlassianAuths.get(accountId)) {
+      return refreshed;
+    }
+    atlassianAuths.set(accountId, refreshed);
+    yield* persistAuthsToDisk;
+    return refreshed;
   });
-  return oauthRefreshSemaphore.withPermits(1)(refresh);
 }
 
 export function providerForAccount(accountId: string) {
-  return Effect.gen(function* () {
-    yield* loadPersistedAuths;
-    const resolved = findAuthForAccountId(atlassianAuths, accountId);
-    return resolved
-      ? new AtlassianIntegrationProvider(
-          yield* refreshOAuthAuthIfNeeded(resolved.accountId, resolved.auth),
-        )
-      : yield* t3teamFixtureOrMockProvider(accountId);
-  });
+  return withAuthStoreLock(
+    Effect.gen(function* () {
+      yield* reloadAuthsFromDisk;
+      const resolved = findAuthForAccountId(atlassianAuths, accountId);
+      return resolved
+        ? new AtlassianIntegrationProvider(
+            yield* refreshOAuthAuthIfNeeded(resolved.accountId, resolved.auth),
+          )
+        : yield* t3teamFixtureOrMockProvider(accountId);
+    }),
+  );
 }
 
 export function providerForPersistedAuths() {
-  return Effect.gen(function* () {
-    yield* loadPersistedAuths;
-    const refreshResults = yield* Effect.all(
-      [...atlassianAuths].map(([accountId, auth]) =>
-        refreshOAuthAuthIfNeeded(accountId, auth).pipe(
-          Effect.map((refreshedAuth) => ({ _tag: "success" as const, auth: refreshedAuth })),
-          Effect.catch((error) => Effect.succeed({ _tag: "failure" as const, accountId, error })),
+  return withAuthStoreLock(
+    Effect.gen(function* () {
+      yield* reloadAuthsFromDisk;
+      const refreshResults = yield* Effect.all(
+        [...atlassianAuths].map(([accountId, auth]) =>
+          refreshOAuthAuthIfNeeded(accountId, auth).pipe(
+            Effect.map((refreshedAuth) => ({ _tag: "success" as const, auth: refreshedAuth })),
+            Effect.catch((error) => Effect.succeed({ _tag: "failure" as const, accountId, error })),
+          ),
         ),
-      ),
-    );
-    const auths: JiraApiAuth[] = [];
-    for (const result of refreshResults) {
-      if (result._tag === "success") {
-        auths.push(result.auth);
+      );
+      const auths: JiraApiAuth[] = [];
+      for (const result of refreshResults) {
+        if (result._tag === "success") {
+          auths.push(result.auth);
+        }
       }
-    }
-    if (auths.length === 0) {
-      const failure = refreshResults.find((result) => result._tag === "failure");
-      if (failure) {
-        return yield* failure.error;
+      if (auths.length === 0) {
+        const failure = refreshResults.find((result) => result._tag === "failure");
+        if (failure) {
+          return yield* failure.error;
+        }
       }
-    }
-    return auths.length > 0 ? AtlassianIntegrationProvider.fromMultipleAuths(auths) : null;
-  });
-}
-
-function setAtlassianAuth(accountId: string, auth: JiraApiAuth): void {
-  atlassianAuths.set(accountId, auth);
-  setAccountNeedsReconnect(accountId, false);
-  invalidateT3TeamAtlassianAuthDependents();
+      return auths.length > 0 ? AtlassianIntegrationProvider.fromMultipleAuths(auths) : null;
+    }),
+  );
 }
 
 /**
@@ -234,7 +186,7 @@ export function replaceAtlassianAuths(
   entries: ReadonlyArray<{ readonly accountId: string; readonly auth: JiraApiAuth }>,
 ): void {
   atlassianAuths.clear();
-  clearAllNeedsReconnect();
+  resetAllNeedsReconnect();
   for (const entry of entries) {
     atlassianAuths.set(entry.accountId, entry.auth);
   }

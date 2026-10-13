@@ -47,7 +47,7 @@ globalThis.ResizeObserver ??= class ResizeObserver {
   disconnect() {}
 };
 
-function shapeMessage(runId: string, name: string): ChatMessage {
+function shapeMessage(runId: string, name: string, description?: string): ChatMessage {
   return {
     id: MessageId.make(`message-${runId}`),
     role: "system",
@@ -62,7 +62,13 @@ function shapeMessage(runId: string, name: string): ChatMessage {
         {
           kind: "view",
           miniappId: PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE,
-          props: { name, phases: [], steps: [], workflowRunId: runId },
+          props: {
+            name,
+            ...(description ? { description } : {}),
+            phases: [],
+            steps: [],
+            workflowRunId: runId,
+          },
         },
       ],
     },
@@ -119,6 +125,15 @@ afterEach(async () => {
 });
 
 describe("active workflow dock", () => {
+  it("uses the shape description before its name", () => {
+    const message = shapeMessage("run-described", "Release workflow", "Ship version 2");
+    const items = deriveT3TeamActiveWorkflowDockItems(
+      [{ kind: "message", message }],
+      new Map([["run-described", progress("run-described")]]),
+    );
+    expect(items[0]?.name).toBe("Ship version 2");
+  });
+
   it("keeps active and paused runs, but undocks terminal history", () => {
     const messages = [
       shapeMessage("run-active", "Active review"),

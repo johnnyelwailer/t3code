@@ -29,7 +29,28 @@ export type GitHubDiscoveryResult = {
   readonly suggestedRepositoryUrls: ReadonlyArray<string>;
   readonly repositories?: ReadonlyArray<GitHubRepositoryCandidate>;
   readonly inboxWarning?: string;
+  readonly repositoriesFetchedAt?: string;
+  readonly repositoriesRefreshing?: true;
 };
+
+export type RepositoriesMeta = {
+  /** The oldest fetch across the hosts shown, so "updated" never overstates. */
+  readonly fetchedAt?: string;
+  readonly refreshing: boolean;
+};
+
+export function mergeRepositoriesMeta(
+  results: ReadonlyArray<GitHubDiscoveryResult>,
+): RepositoriesMeta {
+  const fetched = results
+    .map((result) => result.repositoriesFetchedAt)
+    .filter((value): value is string => value !== undefined)
+    .toSorted();
+  return {
+    ...(fetched[0] ? { fetchedAt: fetched[0] } : {}),
+    refreshing: results.some((result) => result.repositoriesRefreshing === true),
+  };
+}
 
 export function mergeGitHubDiscoveryResults(
   results: ReadonlyArray<GitHubDiscoveryResult>,

@@ -30,12 +30,22 @@ export type ProjectAgentSetup = {
   readonly profileId?: string;
 };
 
+const SCHEMELESS_REMOTE = /^[a-z0-9-]+(\.[a-z0-9-]+)+\/[^\s/]+\/[^\s/]+$/i;
+
+/**
+ * A pasted `host/owner/repo` has no scheme, so git reads it as a local path and fails with
+ * "repository does not exist". Remote URLs and local paths pass through untouched.
+ */
+export function withRemoteScheme(url: string): string {
+  return SCHEMELESS_REMOTE.test(url) ? `https://${url}` : url;
+}
+
 export function normalizeRepositoryUrls(
   urls: ReadonlyArray<string> | undefined,
 ): ReadonlyArray<string> {
   const deduped = new Set<string>();
   for (const value of urls ?? []) {
-    const trimmed = value.trim();
+    const trimmed = withRemoteScheme(value.trim());
     if (trimmed.length > 0) deduped.add(trimmed);
   }
   return [...deduped.values()];

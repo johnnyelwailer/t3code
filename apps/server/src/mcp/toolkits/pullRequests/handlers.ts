@@ -4,6 +4,7 @@ import {
 } from "@t3tools/shared/threadPullRequests";
 import {
   CommandId,
+  PullRequestUnavailableError,
   pullRequestHostOf,
   type OrchestrationProjectShell,
   type OrchestrationV2ThreadShell,
@@ -23,11 +24,14 @@ import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
+import { isUnresolvableRead } from "../../../orchestration-v2/t3team-pullRequestSyncPolicy.ts";
 import * as ProjectService from "../../../project/ProjectService.ts";
 import * as PullRequestReviewGuideService from "../../../pullRequest/PullRequestReviewGuideService.ts";
 import { pullRequestSyncKey } from "../../../pullRequest/pullRequestSyncKey.ts";
+import * as PullRequestService from "../../../pullRequest/PullRequestService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import {
@@ -37,6 +41,7 @@ import {
   PullRequestTargetIncompleteError,
   PullRequestHostRequiredError,
   PullRequestUnlinkFailedError,
+  PullRequestNotOnProjectHostError,
   PullRequestListFailedError,
   PullRequestNotOpenError,
   type PullRequestTargetInput,
@@ -49,6 +54,9 @@ import {
   PullRequestsToolkit,
   type ThreadPullRequestEntry,
 } from "./tools.ts";
+
+/** How long a new link waits for the host before it links unverified. */
+const VERIFY_READ_TIMEOUT = "10 seconds";
 
 interface ResolvedTarget {
   readonly host: string;
@@ -202,6 +210,7 @@ const make = Effect.gen(function* () {
   const reviewGuides = yield* PullRequestReviewGuideService.PullRequestReviewGuideService;
 
   const projects = yield* ProjectService.ProjectService;
+  const pullRequests = yield* PullRequestService.PullRequestService;
   const crypto = yield* Crypto.Crypto;
 
   const commandId = (tag: string, threadId: ThreadId) =>
@@ -263,6 +272,50 @@ const make = Effect.gen(function* () {
         : Effect.fail(new Failure({ cause }));
 
   /**
+   * One bounded read for a new link whose host was inferred (no url, no host). An agent that
+   * names only repository and number lands on the project's host, which is wrong whenever the
+   * pull request lives elsewhere, and such a link can never be read. A url or an explicit host
+   * is the agent's override and is trusted. Only a not-found answer rejects: a missing
+   * credential grant or an unroutable host says nothing about the pull request, and a rate
+   * limit, a signed-out CLI, a network failure or a timeout must not block linking. The read
+   * goes through the service's persistent read cache under the key the sync reactor uses, so
+   * the first sweep after the link reuses it.
+   */
+  const verifyInferredHost = Effect.fn("PullRequestsToolkit.verifyInferredHost")(function* (
+    thread: OrchestrationV2ThreadShell,
+    input: PullRequestTargetInput,
+    target: ResolvedTarget,
+  ) {
+    if (input.url !== undefined || input.host !== undefined) return;
+    yield* pullRequests
+      .summary({
+        projectId: thread.projectId,
+        host: target.host,
+        repository: target.repository,
+        number: target.number,
+      })
+      .pipe(
+        Effect.asVoid,
+        Effect.timeoutOption(VERIFY_READ_TIMEOUT),
+        Effect.asVoid,
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.failCause(cause as Cause.Cause<never>)
+            : isUnresolvableRead(cause) &&
+                !Schema.is(PullRequestUnavailableError)(Cause.squash(cause))
+              ? Effect.fail(
+                  new PullRequestNotOnProjectHostError({
+                    host: target.host,
+                    repository: target.repository,
+                    number: target.number,
+                  }),
+                )
+              : Effect.void,
+        ),
+      );
+  });
+
+  /**
    * Starts or stops a watch. One command links an unlinked pull request and watches it, and the
    * result reports the state the thread holds afterwards.
    */
@@ -286,6 +339,7 @@ const make = Effect.gen(function* () {
     if (watching && before?.snapshot?.state === "merged") {
       return yield* new PullRequestNotOpenError({ state: "merged" });
     }
+    if (watching && before === undefined) yield* verifyInferredHost(thread, input, target);
     yield* engine
       .dispatch({
         type: "thread.pull-request.watch",
@@ -375,6 +429,7 @@ const make = Effect.gen(function* () {
         );
         if (existing && existing.source !== "stack-dismissed")
           return { ...target, alreadyLinked: true };
+        yield* verifyInferredHost(thread, input, target);
         const alreadyLinked = yield* engine
           .dispatch({
             type: "thread.pull-request.link",

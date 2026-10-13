@@ -10,64 +10,83 @@ export type RepositoryPickerEntry = {
   readonly isPrivate?: boolean;
 };
 
-/** One repository: the whole row toggles the link, so there is no separate Add/Remove target. */
+/**
+ * One repository as a selectable card: the whole card toggles the link, so there is no separate
+ * Add/Remove target. Cards wrap in a grid so many repositories (and their sync state) fit at once.
+ */
 export function RepositoryPickerRow({
   entry,
   linked,
   showHost,
   onToggle,
   status,
+  controls,
 }: {
   entry: RepositoryPickerEntry;
   linked: boolean;
   showHost: boolean;
   onToggle: (url: string) => void;
-  /** Rendered under the row, aligned with the repository name. */
+  /** Rendered at the foot of the card, e.g. its clone/sync state. */
   status?: ReactNode;
+  /** Interactive controls on their own full-width row under the status, e.g. a branch picker. */
+  controls?: ReactNode;
 }) {
   const slash = entry.name.indexOf("/");
   const owner = slash < 0 ? "" : entry.name.slice(0, slash + 1);
   const repo = slash < 0 ? entry.name : entry.name.slice(slash + 1);
   return (
-    <li>
+    <li
+      className={cn(
+        "flex min-w-0 flex-col rounded-lg border transition-colors",
+        linked
+          ? "border-primary/60 bg-primary/5"
+          : "border-border bg-background/40 hover:border-foreground/30 hover:bg-accent/40",
+      )}
+    >
       <button
         type="button"
         role="checkbox"
         aria-checked={linked}
         onClick={() => onToggle(entry.url)}
-        className="group flex w-full items-center gap-3 rounded-lg px-2.5 py-1.5 text-left text-foreground transition-colors hover:bg-accent/50 focus-visible:outline-2 focus-visible:outline-ring"
+        className="group flex flex-1 flex-col gap-1.5 rounded-lg p-3 text-left text-foreground focus-visible:outline-2 focus-visible:outline-ring"
       >
-        <span
-          className={cn(
-            "flex size-[18px] shrink-0 items-center justify-center rounded-sm border transition-colors",
-            linked
-              ? "border-primary bg-primary text-primary-foreground"
-              : "border-input bg-background/40 text-transparent group-hover:border-foreground/40",
-          )}
-        >
-          <Check className="size-3" strokeWidth={3} />
-        </span>
-        <span className="flex min-w-0 flex-1 items-baseline gap-2">
-          <span className="shrink-0 text-sm">
+        <span className="flex items-start gap-2.5">
+          <span
+            className={cn(
+              "mt-0.5 flex size-[18px] shrink-0 items-center justify-center rounded-sm border transition-colors",
+              linked
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-input bg-background/40 text-transparent group-hover:border-foreground/40",
+            )}
+          >
+            <Check className="size-3" strokeWidth={3} />
+          </span>
+          <span className="min-w-0 flex-1 text-sm leading-snug break-words">
             <span className="text-muted-foreground">{owner}</span>
             <span className="font-medium">{repo}</span>
           </span>
           {entry.isPrivate ? (
-            <Lock className="size-3 shrink-0 self-center text-muted-foreground/70" />
-          ) : null}
-          {entry.description ? (
-            <span className="min-w-0 truncate text-xs text-muted-foreground">
-              {entry.description}
-            </span>
+            <Lock
+              className="mt-0.5 size-3 shrink-0 text-muted-foreground/70"
+              aria-label="Private"
+            />
           ) : null}
         </span>
-        {showHost ? (
-          <span className="shrink-0 text-2xs text-muted-foreground/80 max-sm:hidden">
-            {entry.host}
+        {entry.description ? (
+          <span className="line-clamp-2 pl-7 text-xs text-muted-foreground">
+            {entry.description}
           </span>
         ) : null}
       </button>
-      {status ? <div className="pr-2.5 pb-1 pl-10">{status}</div> : null}
+      {showHost || status ? (
+        <div className="flex items-end justify-between gap-2 px-3 pl-10">
+          <div className="min-w-0 flex-1">{status}</div>
+          {showHost ? (
+            <span className="shrink-0 text-2xs text-muted-foreground/80">{entry.host}</span>
+          ) : null}
+        </div>
+      ) : null}
+      {controls ? <div className="px-3 pt-1 pb-3 pl-10">{controls}</div> : <div className="pb-3" />}
     </li>
   );
 }

@@ -213,6 +213,8 @@ describe("orchestration V2 contracts", () => {
       kind: "unknown-event",
       sequence: 2,
       eventType: "run.from-a-future-server",
+      // The resume cursor needs the id of the event it advanced to.
+      eventId: "event-2",
     });
     // A known type with a broken payload is a real defect, not a newer event.
     expect(() =>
@@ -322,6 +324,7 @@ describe("orchestration V2 contracts", () => {
       kind: "unknown-event",
       sequence: 2,
       eventType: "turn-item.updated",
+      eventId: "event-2",
     });
     expect(knownEvent).toMatchObject({
       kind: "event",

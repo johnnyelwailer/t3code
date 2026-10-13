@@ -18,12 +18,14 @@ import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "../../../project/ProjectService.ts";
 import * as PullRequestReviewGuideService from "../../../pullRequest/PullRequestReviewGuideService.ts";
+import * as PullRequestService from "../../../pullRequest/PullRequestService.ts";
 
 const dependencies = [
   McpInvocationContext.McpInvocationContext,
   ThreadManagementService.ThreadManagementService,
   Orchestrator.OrchestratorV2,
   ProjectService.ProjectService,
+  PullRequestService.PullRequestService,
 ];
 
 const guideDependencies = [
@@ -65,7 +67,7 @@ export const PullRequestTargetInput = Schema.Struct({
   host: Schema.optional(
     TrimmedNonEmptyString.annotate({
       description:
-        "Host the repository lives on, for example github.com. Defaults to the host of this thread's project.",
+        "Host the repository lives on, for example github.com. Defaults to the host of this thread's project, where the pull request is then checked to exist; pass host, or better the url, for a pull request outside that project's repository.",
     }),
   ),
 });
@@ -95,6 +97,24 @@ export class PullRequestHostRequiredError extends Schema.TaggedError<PullRequest
 ) {
   override get message(): string {
     return "This thread's project has no recognised remote. Pass host or url.";
+  }
+}
+
+/**
+ * A repository and number with no host landed on the project's host, and the host says the pull
+ * request is not there. The agent most likely guessed the host, so the message says how to
+ * override it.
+ */
+export class PullRequestNotOnProjectHostError extends Schema.TaggedError<PullRequestNotOnProjectHostError>()(
+  "PullRequestNotOnProjectHostError",
+  {
+    host: Schema.String,
+    repository: Schema.String,
+    number: Schema.Int,
+  },
+) {
+  override get message(): string {
+    return `No pull request #${this.number} in ${this.repository} on ${this.host}, the host of this thread's project, so it was not linked. If it lives on another host, pass its full URL.`;
   }
 }
 
@@ -194,6 +214,7 @@ export const PullRequestToolError = Schema.Union([
   PullRequestUrlInvalidError,
   PullRequestTargetIncompleteError,
   PullRequestHostRequiredError,
+  PullRequestNotOnProjectHostError,
   PullRequestThreadRequiredError,
   PullRequestThreadNotFoundError,
   PullRequestLinkFailedError,
@@ -276,7 +297,7 @@ export const ListThreadPullRequestsResult = Schema.Struct({
 export type ListThreadPullRequestsResult = typeof ListThreadPullRequestsResult.Type;
 
 const LinkPullRequestTool = Tool.make("link_pull_request", {
-  description: `${REGISTER_EVERY_PR} Links a pull request to this thread so T3 Code tracks it, shows its status beside the thread, and settles the thread when it merges. Pass the URL, or repository plus number. Linking an already-linked pull request succeeds with alreadyLinked=true.`,
+  description: `${REGISTER_EVERY_PR} Links a pull request to this thread so T3 Code tracks it, shows its status beside the thread, and settles the thread when it merges. Pass the URL, or repository plus number. Prefer the URL for a pull request outside this project's repository: repository plus number without a host is looked up on the project's host, and a pull request that is not there is rejected. A URL, or an explicit host, is trusted as given. Linking an already-linked pull request succeeds with alreadyLinked=true.`,
   parameters: PullRequestTargetInput,
   success: LinkPullRequestResult,
   failure: PullRequestToolError,

@@ -33,7 +33,30 @@ layer("readWorkflowRunFacts — authoring runs", (it) => {
       const facts = yield* readWorkflowRunFacts(sql, "thread-authoring");
       assert.strictEqual(facts.workflowRunStatus?.status, "authoring");
       assert.strictEqual(facts.workflowRunStatus?.runId, "run-authoring");
+      assert.strictEqual(facts.workflowRunStatus?.title, "workflow");
+      assert.strictEqual(facts.workflowRunStatus?.messageId, "t3team-wf-shape:run-authoring");
       assert.isNull(facts.sleepingUntil);
+    }),
+  );
+
+  it.effect("prefers an agent-authored intent goal over workflow identity", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`
+        INSERT INTO workflow_runs (
+          run_id, workflow_path, args_json, args_hash, launch_thread_id, project_id,
+          model_json, runtime_mode, interaction_mode, status, origin, intent_json,
+          pending_thread_id, pending_correlation_id, pending_kind, wake_at, created_at, updated_at
+        ) VALUES (
+          'run-goal', '/tmp/authored/generated.workflow.ts', '{}', 'args-hash',
+          'thread-goal', 'project-goal', '{}', 'full-access', 'default',
+          'sleeping', 'ephemeral', '{"goal":"Publish the October release"}',
+          NULL, NULL, NULL, '2026-10-13T08:00:00.000Z',
+          '2026-10-12T00:00:04.000Z', '2026-10-12T00:00:05.000Z'
+        )
+      `;
+      const facts = yield* readWorkflowRunFacts(sql, "thread-goal");
+      assert.strictEqual(facts.workflowRunStatus?.title, "Publish the October release");
     }),
   );
 });

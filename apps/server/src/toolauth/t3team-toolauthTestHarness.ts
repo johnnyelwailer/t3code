@@ -112,9 +112,48 @@ const testLayer = Layer.mergeAll(
   ProcessRunner.layer.pipe(Layer.provide(NodeServices.layer)),
 );
 
+/**
+ * A `ProcessRunner` that answers every command with `stdout` (exit 0) — a status probe
+ * (`gh auth status`) without ever running the real CLI against the machine's own login.
+ */
+export function stubProbeRunner(
+  stdout: string,
+  calls?: Array<{ readonly command: string; readonly args: ReadonlyArray<string> }>,
+): ProcessRunner.ProcessRunner["Service"] {
+  return ProcessRunner.ProcessRunner.of({
+    run: (input) => {
+      calls?.push({ command: input.command, args: input.args });
+      return Effect.succeed({
+        stdout,
+        stderr: "",
+        code: 0,
+        timedOut: false,
+        stdoutTruncated: false,
+        stderrTruncated: false,
+      } as ProcessRunner.ProcessRunOutput);
+    },
+  });
+}
+
+/** A `ProcessRunner` whose command never answers in time — a status probe that hangs. */
+export function stubTimedOutProbeRunner(): ProcessRunner.ProcessRunner["Service"] {
+  return ProcessRunner.ProcessRunner.of({
+    run: () =>
+      Effect.succeed({
+        stdout: "",
+        stderr: "",
+        code: 0,
+        timedOut: true,
+        stdoutTruncated: false,
+        stderrTruncated: false,
+      } as ProcessRunner.ProcessRunOutput),
+  });
+}
+
 export function makeService(
   homeDir: string,
   overrides: Partial<ToolAuthService.ToolAuthServiceOptions> = {},
+  processRunner?: ProcessRunner.ProcessRunner["Service"],
 ) {
   const ptyAdapter = new FakePtyAdapterService();
   return ToolAuthService.makeWithOptions({
@@ -129,6 +168,11 @@ export function makeService(
     checkBinaryAvailable: () => Effect.succeed(true),
     ...overrides,
   }).pipe(
+    // Innermost, so it wins over the real runner `testLayer` provides.
+    (effect) =>
+      processRunner === undefined
+        ? effect
+        : Effect.provideService(effect, ProcessRunner.ProcessRunner, processRunner),
     Effect.provide(testLayer),
     Effect.map((service) => ({ service, ptyAdapter })),
   );

@@ -33,6 +33,7 @@ const pr = (repo: string, number: number, at: string, key?: string): DigestYeste
 // The product owner's real Yesterday: three bump PRs for one ticket across repos, three moves, a
 // bare Jira update, and one PR that names no ticket.
 const yesterday: DigestYesterday = {
+  from: "2026-10-04T22:00:00.000Z",
   merged: [
     pr("ies-alarm", 399, "09:00", "IES-25144"),
     pr("ies-psd", 241, "09:10", "IES-25144"),
@@ -93,7 +94,8 @@ describe("the yesterday recap", () => {
   });
 
   it("tells a ticket ready for review from one past it, in test", () => {
-    const moves = (to: string) => ({
+    const moves = (to: string): DigestYesterday => ({
+      from: "2026-10-04T22:00:00.000Z",
       merged: [],
       moved: [{ ticketId: "t-alarm", from: "In Progress", to, at: "2026-10-05T10:00:00Z" }],
     });

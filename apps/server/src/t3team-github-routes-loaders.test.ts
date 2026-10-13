@@ -1,20 +1,10 @@
-import { describe, expect, vi } from "vite-plus/test";
+import { describe, expect } from "vite-plus/test";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import { ChildProcessSpawner } from "effect/process";
 
-import type { VcsProcessOutput, VcsProcessShape } from "./t3team-vcsProcessShape.ts";
+import * as GitHubApi from "./sourceControl/GitHubApi.ts";
 import { loadInboxAttempt } from "./t3team-github-routes-loaders.ts";
-
-function processOutput(stdout: string): VcsProcessOutput {
-  return {
-    exitCode: ChildProcessSpawner.ExitCode(0),
-    stdout,
-    stderr: "",
-    stdoutTruncated: false,
-    stderrTruncated: false,
-  };
-}
+import { makeFakeGitHubApi, rateLimited, restOk } from "./t3team-githubRestApi.fixtures.ts";
 
 /**
  * The notifications inbox is the SECOND producer of `GitHubInboxItem`, and it has to stamp
@@ -31,52 +21,46 @@ describe("loadInboxAttempt", () => {
     "stamps workItemKey from the notification subject title, falls back to the repository name, and leaves it undefined when neither carries a key",
     () =>
       Effect.gen(function* () {
-        const run = vi.fn<VcsProcessShape["run"]>(() =>
-          Effect.succeed(
-            processOutput(
-              JSON.stringify([
-                {
-                  id: "n1",
-                  reason: "review_requested",
-                  repository: { full_name: "acme/project" },
-                  subject: {
-                    type: "PullRequest",
-                    title: "ABC-123 something",
-                    url: "https://api/1",
-                  },
-                  updated_at: "2026-08-09T00:00:00Z",
-                },
-                {
-                  id: "n2",
-                  reason: "mention",
-                  repository: { full_name: "acme/DEF-42-spike" },
-                  subject: {
-                    type: "PullRequest",
-                    title: "Refactor internals",
-                    url: "https://api/2",
-                  },
-                  updated_at: "2026-08-09T00:00:00Z",
-                },
-                {
-                  id: "n3",
-                  reason: "mention",
-                  repository: { full_name: "acme/project" },
-                  subject: {
-                    type: "PullRequest",
-                    title: "Refactor internals",
-                    url: "https://api/3",
-                  },
-                  updated_at: "2026-08-09T00:00:00Z",
-                },
-              ]),
-            ),
-          ),
+        const { api, calls } = makeFakeGitHubApi(() =>
+          restOk([
+            {
+              id: "n1",
+              reason: "review_requested",
+              repository: { full_name: "acme/project" },
+              subject: {
+                type: "PullRequest",
+                title: "ABC-123 something",
+                url: "https://api/1",
+              },
+              updated_at: "2026-08-09T00:00:00Z",
+            },
+            {
+              id: "n2",
+              reason: "mention",
+              repository: { full_name: "acme/DEF-42-spike" },
+              subject: {
+                type: "PullRequest",
+                title: "Refactor internals",
+                url: "https://api/2",
+              },
+              updated_at: "2026-08-09T00:00:00Z",
+            },
+            {
+              id: "n3",
+              reason: "mention",
+              repository: { full_name: "acme/project" },
+              subject: {
+                type: "PullRequest",
+                title: "Refactor internals",
+                url: "https://api/3",
+              },
+              updated_at: "2026-08-09T00:00:00Z",
+            },
+          ]),
         );
 
-        const result = yield* loadInboxAttempt(
-          { run } as unknown as VcsProcessShape,
-          "github.com",
-          "alex-dev",
+        const result = yield* loadInboxAttempt("github.com", "alex-dev").pipe(
+          Effect.provideService(GitHubApi.GitHubApi, api),
         );
 
         const byId = new Map(result.items.map((item) => [item.id, item]));
@@ -84,6 +68,25 @@ describe("loadInboxAttempt", () => {
         // No key in the title, so the chain falls through to the repository name.
         expect(byId.get("n2")?.workItemKey).toBe("DEF-42");
         expect(byId.get("n3")?.workItemKey).toBe(undefined);
+        // The notifications read goes through GitHubApi, then each pull request's state does.
+        expect(calls[0]).toMatchObject({
+          host: "github.com",
+          operation: "t3team.github.inbox",
+          path: "notifications?per_page=25",
+        });
       }),
+  );
+
+  it.effect("says the host is paused when the notifications read hits the rate limit", () =>
+    Effect.gen(function* () {
+      const { api } = makeFakeGitHubApi((call) => rateLimited(call.host, 1_790_000_000_000));
+
+      const result = yield* loadInboxAttempt("nexplore.ghe.com", "alex-dev").pipe(
+        Effect.provideService(GitHubApi.GitHubApi, api),
+      );
+
+      expect(result.items).toEqual([]);
+      expect(result.warning).toContain("nexplore.ghe.com are paused until 2026-09-21 14:13 UTC");
+    }),
   );
 });

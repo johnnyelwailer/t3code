@@ -259,6 +259,51 @@ describe("GitHubApi", () => {
     },
   );
 
+  it.effect("returns the data beside NOT_FOUND errors only when the caller allows it", () => {
+    const answer = {
+      data: { s0: { pullRequest: { number: 7 } }, s1: { pullRequest: null } },
+      errors: [{ type: "NOT_FOUND", message: "Could not resolve", path: ["s1", "pullRequest"] }],
+    };
+    const { layer } = harness(() => json(answer));
+    const query = "query { viewer { id } }";
+    return Effect.gen(function* () {
+      const api = yield* GitHubApi.GitHubApi;
+      const whole = yield* Effect.flip(api.graphql({ host: "github.com", operation: "x", query }));
+      expect(whole._tag).toBe("GitHubApiNotFoundError");
+      const partial = yield* api.graphql({
+        host: "github.com",
+        operation: "x",
+        query,
+        allowPartialNotFound: true,
+      });
+      expect(JSON.parse(partial)).toEqual(answer);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("fails a partial answer whose errors are not all NOT_FOUND, even when allowed", () => {
+    const { layer } = harness(() =>
+      json({
+        data: { s0: null },
+        errors: [
+          { type: "NOT_FOUND", message: "Could not resolve" },
+          { message: "Something went wrong" },
+        ],
+      }),
+    );
+    return Effect.gen(function* () {
+      const api = yield* GitHubApi.GitHubApi;
+      const error = yield* Effect.flip(
+        api.graphql({
+          host: "github.com",
+          operation: "x",
+          query: "query { viewer { id } }",
+          allowPartialNotFound: true,
+        }),
+      );
+      expect(error._tag).toBe("GitHubApiResponseError");
+    }).pipe(Effect.provide(layer));
+  });
+
   it.effect("pauses the host after a GraphQL RATE_LIMITED answer until the reset", () => {
     const reset = Math.floor(NOW / 1000) + 600;
     const { layer, requests } = harness(() =>
@@ -320,6 +365,44 @@ describe("GitHubApi", () => {
       expect(requests).toHaveLength(4);
     }).pipe(Effect.provide(layer));
   });
+
+  it.effect(
+    "accounts a search read against the search quota, not core, on every host shape",
+    () => {
+      const reset = Math.floor(NOW / 1000) + 600;
+      const quota = (resource: string, limit: number, remaining: number) => ({
+        "x-ratelimit-resource": resource,
+        "x-ratelimit-limit": String(limit),
+        "x-ratelimit-remaining": String(remaining),
+        "x-ratelimit-reset": String(reset),
+      });
+      // core is nearly empty; search has 2 of 30 left, under its own last tenth.
+      const { layer, requests } = harness((request) =>
+        /\/search\//.test(request.url)
+          ? json({ items: [] }, { headers: quota("search", 30, 2) })
+          : json({ ok: true }, { headers: quota("core", 5000, 10) }),
+      );
+      return Effect.gen(function* () {
+        yield* TestClock.setTime(NOW);
+        const api = yield* GitHubApi.GitHubApi;
+        const search = { host: "github.com", operation: "s", path: "search/repositories?q=x" };
+        const core = { host: "github.com", operation: "c", path: "repos/acme/web/pulls" };
+        yield* api.rest(core);
+        // Core is now under its reserve, yet a search is still admitted: it is not core's to spend.
+        yield* api.rest(search);
+        yield* api.rest({ host: "git.acme.internal", operation: "s", path: "search/issues?q=x" });
+        const refusedSearch = yield* Effect.flip(api.rest(search));
+        expect(refusedSearch).toMatchObject({ _tag: "SourceControlRateLimitPausedError" });
+        const refusedCore = yield* Effect.flip(api.rest(core));
+        expect(refusedCore).toMatchObject({ _tag: "SourceControlRateLimitPausedError" });
+        expect(requests.map((request) => new URL(request.url).pathname)).toEqual([
+          "/repos/acme/web/pulls",
+          "/search/repositories",
+          "/api/v3/search/issues",
+        ]);
+      }).pipe(Effect.provide(layer));
+    },
+  );
 
   it.effect("carries GitHub's own reason for a refused REST request", () => {
     const { layer } = harness(() =>

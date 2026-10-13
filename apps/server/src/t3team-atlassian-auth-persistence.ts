@@ -6,7 +6,7 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
 import { ServerConfig } from "./config.ts";
-import { toAtlassianError } from "./t3team-atlassian-http.ts";
+import { toAtlassianError } from "./t3team-atlassian-errors.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 
 export type PersistedAtlassianAuths = {

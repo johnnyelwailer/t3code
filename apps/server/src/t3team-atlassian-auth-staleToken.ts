@@ -1,6 +1,5 @@
-import { AtlassianOAuthError } from "@t3tools/integrations-atlassian";
 import * as Effect from "effect/Effect";
-import { T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
+import { JIRA_SESSION_EXPIRED_CODE, T3TeamAtlassianError } from "./t3team-atlassian-errors.ts";
 
 /**
  * Atlassian refresh tokens are single-use and rotate on every refresh. When two installations share
@@ -9,42 +8,18 @@ import { T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
  * `403 {"error":"unauthorized_client","error_description":"refresh_token is invalid"}`.
  *
  * Retrying cannot help, so the account is flagged "needs reconnect" — in memory and persisted — and
- * every call for it fails with one actionable message instead of the raw 403 until the user
- * reconnects. Only the Atlassian error path reaches the UI (`errorResponse` → `payload.error` →
- * `setError(e.message)`), so the message IS the surface.
+ * every call for it fails with the typed session-expired error until the user signs in again. The
+ * account itself is never deleted: deleting it made a rotation conflict look like the user had
+ * never signed in, on every restart.
  */
-export const ATLASSIAN_RECONNECT_REQUIRED_MESSAGE =
-  "This Jira connection was refreshed by another installation and can no longer be renewed here. Reconnect Atlassian to continue.";
+export const ATLASSIAN_SESSION_EXPIRED_MESSAGE = "Your Jira session expired. Sign in again.";
 
-const REFRESH_TOKEN_INVALID_STATUS = 403;
-const REFRESH_TOKEN_INVALID_CODES: ReadonlySet<string> = new Set([
-  "unauthorized_client",
-  "invalid_grant",
-]);
-
-/**
- * The exact signature of a rotated-away refresh token: HTTP 403 with an RFC 6749 body whose `error`
- * is `unauthorized_client` or `invalid_grant` and whose description names the refresh token. Other
- * refresh failures (network, 5xx, revoked app) keep their original error.
- */
-function isRefreshTokenInvalidError(error: unknown): boolean {
-  const oauthError =
-    error instanceof AtlassianOAuthError
-      ? error
-      : error instanceof T3TeamAtlassianError && error.cause instanceof AtlassianOAuthError
-        ? error.cause
-        : null;
-  if (!oauthError) return false;
-  return (
-    oauthError.status === REFRESH_TOKEN_INVALID_STATUS &&
-    oauthError.oauthError !== undefined &&
-    REFRESH_TOKEN_INVALID_CODES.has(oauthError.oauthError) &&
-    (oauthError.oauthErrorDescription ?? "").includes("refresh_token")
-  );
-}
-
+/** The typed error the clients turn into their "sign in to Jira again" panel. */
 export function reconnectRequiredError() {
-  return new T3TeamAtlassianError({ message: ATLASSIAN_RECONNECT_REQUIRED_MESSAGE });
+  return new T3TeamAtlassianError({
+    code: JIRA_SESSION_EXPIRED_CODE,
+    message: ATLASSIAN_SESSION_EXPIRED_MESSAGE,
+  });
 }
 
 const needsReconnectAccountIds = new Set<string>();
@@ -58,22 +33,52 @@ export function setAccountNeedsReconnect(accountId: string, needsReconnect: bool
   else needsReconnectAccountIds.delete(accountId);
 }
 
+/**
+ * Flags raised by a refused Jira call, which has no store lock or file system at hand. They live in
+ * memory at once and are written out by the next credential reload, so a reload can neither drop
+ * them nor keep the file stale.
+ */
+const unsavedReconnectAccountIds = new Set<string>();
+
+export function flagNeedsReconnectUnsaved(accountId: string): void {
+  needsReconnectAccountIds.add(accountId);
+  unsavedReconnectAccountIds.add(accountId);
+}
+
+export function hasUnsavedReconnectFlags(): boolean {
+  return unsavedReconnectAccountIds.size > 0;
+}
+
+export function reapplyUnsavedReconnectFlags(isStored: (accountId: string) => boolean): void {
+  for (const accountId of unsavedReconnectAccountIds) {
+    if (isStored(accountId)) needsReconnectAccountIds.add(accountId);
+    else unsavedReconnectAccountIds.delete(accountId);
+  }
+}
+
+export function markReconnectFlagsSaved(): void {
+  unsavedReconnectAccountIds.clear();
+}
+
+/** Forget every flag, written or not: the accounts are being replaced wholesale. */
+export function resetAllNeedsReconnect(): void {
+  needsReconnectAccountIds.clear();
+  unsavedReconnectAccountIds.clear();
+}
+
 export function clearAllNeedsReconnect(): void {
   needsReconnectAccountIds.clear();
 }
 
 /**
- * Turn a failed refresh into either the actionable reconnect error (flagging the account first, and
- * persisting the flag through `persist`) or the original failure, untouched. Persisting is
- * best-effort: the in-memory flag already protects this process, and a persistence hiccup must not
- * hide the actionable message behind a file-system error.
+ * Flag the account and fail with the typed reconnect error, persisting the flag through `persist`.
+ * Persisting is best-effort: the in-memory flag already protects this process, and a persistence
+ * hiccup must not hide the sign-in prompt behind a file-system error.
  */
-export function failRefreshOrMarkNeedsReconnect<E, R>(
+export function markNeedsReconnect<E, R>(
   accountId: string,
-  error: E,
   persist: Effect.Effect<void, E, R>,
-): Effect.Effect<never, E | T3TeamAtlassianError, R> {
-  if (!isRefreshTokenInvalidError(error)) return Effect.fail(error);
+): Effect.Effect<never, T3TeamAtlassianError, R> {
   setAccountNeedsReconnect(accountId, true);
   return persist.pipe(
     Effect.ignore,

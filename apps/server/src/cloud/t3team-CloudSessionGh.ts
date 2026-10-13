@@ -11,6 +11,7 @@
  * GitHub read on the server.
  */
 import { CloudSessionFailedError } from "@t3tools/contracts";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import type * as GitHubApi from "../sourceControl/GitHubApi.ts";
 import {
@@ -23,12 +24,20 @@ import {
 import { parseLogin, parseRunsResponse } from "./t3team-githubActionsSessionParse.ts";
 import { sessionRunsForLogin } from "./t3team-cloudSessionRunOwnership.ts";
 import { toCloudSessionFailure } from "./t3team-CloudSessionErrors.ts";
+import { makeLoginMemo } from "./t3team-CloudSessionLoginMemo.ts";
+import { isCacheableRead, makeSessionReadCache } from "./t3team-CloudSessionReadCache.ts";
 
 /** Recent runs worth considering; also the window `cancel` checks membership against. */
 const RUN_HISTORY_LIMIT = 100;
 
-/** A session request is a network call on the user's behalf; it may spend the GraphQL reserve. */
-const ALLOW_RESERVE = true;
+export type SessionGhRunOptions = {
+  /**
+   * When true, the call may spend the GitHubQuota reserve and bypass a
+   * SourceControlRateLimit pause — for a user-initiated create/cancel only.
+   * Background list/poll reads leave the reserve alone and honour the pause.
+   */
+  readonly allowReserve?: boolean;
+};
 
 /**
  * Bundle the three GitHub operations a cloud session needs, bound to one API
@@ -36,10 +45,29 @@ const ALLOW_RESERVE = true;
  * pieces that make per-user isolation work: the list is always scoped to the
  * login that `resolveLogin` returns.
  */
-export function makeSessionGh(api: GitHubApi.GitHubApi["Service"], repoRef: CloudSessionRepoRef) {
-  /** Run one request, mapping its errors to user-visible session failures. */
-  const run = (
+export const makeSessionGh = Effect.fn("cloud.session_gh.make")(function* (
+  api: GitHubApi.GitHubApi["Service"],
+  repoRef: CloudSessionRepoRef,
+) {
+  // Re-hitting `GET /user` every list burns quota for nothing; memoised per credential identity.
+  const logins = makeLoginMemo();
+
+  /**
+   * Whose credential a request to the fleet host carries right now (a pinned one when the
+   * caller pinned it) — the key that keeps one user's login or list from answering another.
+   * Reads the held credential's fingerprint; no GHE request.
+   */
+  const identity: Effect.Effect<string, CloudSessionFailedError> = api
+    .credential(repoRef.host)
+    .pipe(
+      Effect.map((credential) => credential.fingerprint),
+      Effect.mapError(toCloudSessionFailure),
+    );
+
+  /** One request, errors mapped to user-visible session failures; no caching. */
+  const execute = (
     request: GitHubActionsRequest,
+    allowReserve: boolean,
   ): Effect.Effect<GitHubActionsResponse, CloudSessionFailedError> =>
     (request.kind === "graphql"
       ? api
@@ -48,7 +76,7 @@ export function makeSessionGh(api: GitHubApi.GitHubApi["Service"], repoRef: Clou
             operation: request.operation,
             query: request.query,
             ...(request.variables === undefined ? {} : { variables: request.variables }),
-            allowReserve: ALLOW_RESERVE,
+            allowReserve,
           })
           .pipe(Effect.map((body) => ({ body, truncated: false })))
       : api
@@ -58,10 +86,39 @@ export function makeSessionGh(api: GitHubApi.GitHubApi["Service"], repoRef: Clou
             path: request.path,
             ...(request.method === undefined ? {} : { method: request.method }),
             ...(request.body === undefined ? {} : { body: request.body }),
-            allowReserve: ALLOW_RESERVE,
+            allowReserve,
           })
           .pipe(Effect.map((response) => ({ body: response.body, truncated: response.truncated })))
     ).pipe(Effect.mapError(toCloudSessionFailure));
+
+  /**
+   * Reads that declare a `lifetime` (a run's job steps) are cached and
+   * single-flighted: briefly while the run is live, for good once it settled.
+   * Always at background priority — progress detail is a nicety, never a reason
+   * to spend the quota reserve.
+   */
+  const cachedRead = yield* makeSessionReadCache((request) => execute(request, false));
+
+  /** Run one request, honouring the cache for the reads that opt in. */
+  const run = (
+    request: GitHubActionsRequest,
+    options?: SessionGhRunOptions,
+  ): Effect.Effect<GitHubActionsResponse, CloudSessionFailedError> =>
+    isCacheableRead(request)
+      ? cachedRead(request)
+      : execute(request, options?.allowReserve === true);
+
+  /** Background reads: honour the rate-limit pause and leave the quota reserve. */
+  const runBackground = (
+    request: GitHubActionsRequest,
+  ): Effect.Effect<GitHubActionsResponse, CloudSessionFailedError> =>
+    run(request, { allowReserve: false });
+
+  /** User-initiated mutate path: may spend the reserve / enter a pause window. */
+  const runInteractive = (
+    request: GitHubActionsRequest,
+  ): Effect.Effect<GitHubActionsResponse, CloudSessionFailedError> =>
+    run(request, { allowReserve: true });
 
   /**
    * Runs of the session workflow, scoped to one login — the endpoint is scoped
@@ -72,8 +129,8 @@ export function makeSessionGh(api: GitHubApi.GitHubApi["Service"], repoRef: Clou
    * "we could not tell" as "nothing is running" would both hide live sessions
    * and let a pre-existing run be mistaken for a freshly dispatched one.
    */
-  const listRunsFor = (login: string) =>
-    run(listRunsRequest(repoRef, RUN_HISTORY_LIMIT, login)).pipe(
+  const listRunsFor = (login: string, options?: SessionGhRunOptions) =>
+    run(listRunsRequest(repoRef, RUN_HISTORY_LIMIT, login), options).pipe(
       Effect.flatMap((result) => {
         const parsed = parseRunsResponse(result.body);
         if (parsed === null || result.truncated) {
@@ -94,17 +151,24 @@ export function makeSessionGh(api: GitHubApi.GitHubApi["Service"], repoRef: Clou
    * the whole per-user isolation. If it cannot be resolved we fail closed:
    * returning a list we could not scope would leak other users' sessions.
    */
-  const resolveLogin = Effect.gen(function* () {
-    const result = yield* run(currentLoginRequest(repoRef));
-    const login = parseLogin(result.body);
-    if (login === null) {
-      return yield* new CloudSessionFailedError({
-        reason: "unauthorized",
-        message: "Could not determine your GitHub identity, so your sessions cannot be listed.",
-      });
-    }
-    return login;
-  });
+  const resolveLogin = (options?: SessionGhRunOptions) =>
+    Effect.gen(function* () {
+      const now = yield* Clock.currentTimeMillis;
+      // No resolvable identity means no memo: ask the host, which reports the real failure.
+      const who = yield* Effect.orElseSucceed(identity, () => null);
+      const memoised = who === null ? undefined : logins.get(who, now);
+      if (memoised !== undefined) return memoised;
+      const result = yield* run(currentLoginRequest(repoRef), options);
+      const login = parseLogin(result.body);
+      if (login === null) {
+        return yield* new CloudSessionFailedError({
+          reason: "unauthorized",
+          message: `Could not determine your GitHub identity on ${repoRef.host}, so your sessions cannot be listed.`,
+        });
+      }
+      if (who !== null) logins.set(who, login, now);
+      return login;
+    });
 
-  return { run, listRunsFor, resolveLogin } as const;
-}
+  return { run, runBackground, runInteractive, listRunsFor, resolveLogin, identity } as const;
+});

@@ -216,6 +216,8 @@ export class JiraApiClient {
       throw new AtlassianAuthError({
         message: `Authentication failed (${response.status}). Check your credentials or re-authenticate.`,
         path,
+        status: response.status,
+        baseUrl: this.baseUrl,
         ...(/scope does not match/i.test(body) ? { missingScope: true } : {}),
       });
     }

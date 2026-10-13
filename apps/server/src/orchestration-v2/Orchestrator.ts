@@ -3060,40 +3060,49 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               existing?.source === "stack-dismissed" &&
               command.source !== "stack" &&
               command.source !== "stack-dismissed";
-            if (existing && !undismisses) return thread;
-            const link = existing
-              ? { ...existing, source: command.source, url: command.url }
-              : {
-                  ...key,
-                  url: command.url,
-                  source: command.source,
-                  linkedAt: DateTime.formatIso(now),
-                  snapshot: null,
-                  stack: null,
-                };
-            const branch = thread.branchPullRequest;
-            const branchKey = branch ? legacyThreadPullRequestKey(branch) : null;
-            pullRequests = [
-              ...(command.source === "manual" &&
-              branch &&
-              branchKey &&
-              visibleThreadPullRequests(links).length === 0 &&
-              !threadPullRequestKeysEqual(branchKey, key) &&
-              !links.some((entry) => threadPullRequestKeysEqual(entry, branchKey))
-                ? [
-                    {
-                      ...branchKey,
-                      url: branch.url,
-                      source: "manual" as const,
-                      linkedAt: DateTime.formatIso(now),
-                      snapshot: null,
-                      stack: null,
-                    },
-                  ]
-                : []),
-              ...links.filter((entry) => !threadPullRequestKeysEqual(entry, key)),
-              link,
-            ];
+            if (existing && !undismisses) {
+              // Linking a pull request that is still unread asks for it again: the sync reactor
+              // may have set it aside as unresolvable, and a newer `linkedAt` is how it knows
+              // the link was asked for since.
+              if (existing.snapshot !== null || command.source === "stack") return thread;
+              pullRequests = links.map((link) =>
+                link === existing ? { ...link, linkedAt: DateTime.formatIso(now) } : link,
+              );
+            } else {
+              const link = existing
+                ? { ...existing, source: command.source, url: command.url }
+                : {
+                    ...key,
+                    url: command.url,
+                    source: command.source,
+                    linkedAt: DateTime.formatIso(now),
+                    snapshot: null,
+                    stack: null,
+                  };
+              const branch = thread.branchPullRequest;
+              const branchKey = branch ? legacyThreadPullRequestKey(branch) : null;
+              pullRequests = [
+                ...(command.source === "manual" &&
+                branch &&
+                branchKey &&
+                visibleThreadPullRequests(links).length === 0 &&
+                !threadPullRequestKeysEqual(branchKey, key) &&
+                !links.some((entry) => threadPullRequestKeysEqual(entry, branchKey))
+                  ? [
+                      {
+                        ...branchKey,
+                        url: branch.url,
+                        source: "manual" as const,
+                        linkedAt: DateTime.formatIso(now),
+                        snapshot: null,
+                        stack: null,
+                      },
+                    ]
+                  : []),
+                ...links.filter((entry) => !threadPullRequestKeysEqual(entry, key)),
+                link,
+              ];
+            }
           } else if (command.type === "thread.pull-request.unlink") {
             if (!existing) return thread;
             const belongsToStack =

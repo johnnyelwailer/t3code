@@ -98,12 +98,23 @@ export type LinkedRepositorySyncResult = {
   readonly error?: string;
   readonly syncedAt?: string;
   readonly syncState?: "queued" | "cloning" | "updating";
+  /** The branch the project chose for this checkout; absent means as cloned. */
+  readonly branch?: string;
+};
+
+/** The branches a linked repository's checkout knows (from its last fetch). */
+export type LinkedRepositoryBranches = {
+  readonly branches: ReadonlyArray<string>;
+  readonly current?: string;
+  readonly defaultBranch?: string;
 };
 
 export interface ProjectWorkspaceBackendApi {
   readonly bootstrapWorkspace: (input: {
     readonly workspaceRoot: string;
     readonly linkedRepositoryUrls?: ReadonlyArray<string>;
+    /** The branch each linked repository's checkout should be on, by URL. */
+    readonly linkedRepositoryBranches?: Readonly<Record<string, string>>;
     readonly setupProfileId?: string;
     /** An explicit save: refetch every linked repository instead of honoring the throttle. */
     readonly refreshLinkedRepositories?: boolean;
@@ -113,6 +124,11 @@ export interface ProjectWorkspaceBackendApi {
   readonly readLinkedRepositoryStatus: (input: {
     readonly workspaceRoot: string;
   }) => Promise<{ readonly linkedRepositories: ReadonlyArray<LinkedRepositorySyncResult> }>;
+  /** The branches a linked checkout knows. Local to the server: no network, no credential. */
+  readonly listLinkedRepositoryBranches: (input: {
+    readonly workspaceRoot: string;
+    readonly url: string;
+  }) => Promise<LinkedRepositoryBranches>;
   /** Sets the project's main repository (`url: null` = the project's own workspace). */
   readonly setMainRepository: (input: {
     readonly projectId: string;

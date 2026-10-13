@@ -39,6 +39,7 @@ import {
   ClientWebDeployment,
   type DiscoveredLocalServerList,
   type EditorId,
+  type EventId,
   type FileManagerRevealKind,
   type OrchestrationClientOrigin,
   type OrchestrationV2Command,
@@ -144,6 +145,10 @@ import {
   type ShellApplicationEvent,
 } from "./orchestration-v2/ShellStream.ts";
 import { shownShell } from "./orchestration-v2/t3team-hiddenShellThreads.ts";
+import {
+  snapshotEventIdFields,
+  threadCursorIdentityMatches,
+} from "./orchestration-v2/t3team-threadCursorIdentity.ts";
 import { ORCHESTRATION_V2_PROJECTION_SCHEMA_VERSION } from "./orchestration-v2/ProjectionStore.ts";
 import { bufferLiveStream } from "./orchestration-v2/LiveStreamBudget.ts";
 import { coalesceThreadLiveStream } from "./orchestration-v2/ThreadLiveEventCoalescer.ts";
@@ -807,6 +812,7 @@ export const subscribeOrchestrationV2Thread = Effect.fn("ws.orchestrationV2.subs
   function* (input: {
     readonly threadId: ThreadId;
     readonly afterSequence?: number;
+    readonly afterEventId?: EventId;
     readonly requestCompletionMarker?: boolean;
     readonly acceptBoundedSnapshot?: boolean;
     readonly acceptCompactTurnItems?: boolean;
@@ -902,14 +908,23 @@ export const subscribeOrchestrationV2Thread = Effect.fn("ws.orchestrationV2.subs
         ),
       );
       const { snapshotSequence } = snapshot;
+      const eventIdFields = yield* snapshotEventIdFields(
+        applicationEvents,
+        input.threadId,
+        snapshotSequence,
+      );
       const snapshotItem = useBoundedSnapshot
-        ? buildBoundedThreadStreamSnapshot({
-            ...snapshot,
-            compactTurnItems: input.acceptCompactTurnItems === true,
-          })
+        ? {
+            ...buildBoundedThreadStreamSnapshot({
+              ...snapshot,
+              compactTurnItems: input.acceptCompactTurnItems === true,
+            }),
+            ...eventIdFields,
+          }
         : {
             kind: "snapshot" as const,
             snapshotSequence,
+            ...eventIdFields,
             projection: projectThreadProjectionForWire(snapshot.projection),
           };
       return Stream.concat(
@@ -939,6 +954,13 @@ export const subscribeOrchestrationV2Thread = Effect.fn("ws.orchestrationV2.subs
       if (input.afterSequence > highWater) {
         return yield* snapshotThenLive();
       }
+      // A cursor inside the sequence range can still belong to another
+      // timeline (state restore, overlapping servers): replace, don't replay.
+      const cursorMatches = yield* threadCursorIdentityMatches(applicationEvents, input.threadId, {
+        afterSequence: input.afterSequence,
+        ...(input.afterEventId === undefined ? {} : { afterEventId: input.afterEventId }),
+      });
+      if (!cursorMatches) return yield* snapshotThenLive();
       const stats = yield* applicationEvents
         .getAgentReplayStats({
           threadId: input.threadId,
@@ -3107,7 +3129,9 @@ const layerWsRpc = (
         [WS_METHODS.toolAuthList]: (_input) =>
           toolAuth.list.pipe(Effect.map((tools) => ({ tools: tools.map(toToolAuthWireState) }))),
         [WS_METHODS.toolAuthStart]: (input) =>
-          toolAuth.start(input.tool).pipe(Effect.map(toToolAuthWireState)),
+          toolAuth
+            .start(input.tool, { hostname: input.hostname })
+            .pipe(Effect.map(toToolAuthWireState)),
         // One-click "install this CLI", chained into the real sign-in flow
         // server-side (see `ToolAuthService.install`). The immediate
         // response is just the `installing` snapshot; every later beat

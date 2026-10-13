@@ -1,22 +1,21 @@
 /* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import * as NodeBuffer from "node:buffer";
 
-import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
 import { HttpClient, HttpClientResponse } from "effect/http";
 
+import * as GitHubApi from "./sourceControl/GitHubApi.ts";
 import { T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
+import { fetchAssetResponse } from "./t3team-github-routes-asset-fetch.ts";
 import type {
   GitHubAssetDownloadRequest,
   GitHubDownloadedAsset,
 } from "./t3team-github-routes-asset-types.ts";
 import { readTrimmedString } from "./t3team-github-routes-shared.ts";
 import { toT3TeamError } from "./t3team-project-repository-utils.ts";
-import type { VcsProcessShape } from "./t3team-vcsProcessShape.ts";
 
 const MAX_GITHUB_ASSET_BYTES = 25_000_000;
-const GITHUB_ASSET_TIMEOUT_MS = 20_000;
 
 function isGitHubHostedAsset(assetHost: string, host: string): boolean {
   return (
@@ -32,33 +31,36 @@ function invalidAssetRequest(message: string): Effect.Effect<never, T3TeamAtlass
   return Effect.fail(new T3TeamAtlassianError({ message }));
 }
 
+/**
+ * The credential the asset's own host takes. GitHub.com and its media hosts are served by the
+ * github.com account, so an Enterprise host's token is never sent to them; an asset on the
+ * request's own host takes that host's. Through `GitHubApi`, so a pinned credential, Settings, the
+ * environment and `gh` resolve exactly as for every other GitHub read; none signed in is no token,
+ * and a public asset still loads.
+ *
+ * This is a download of a web asset, not an API request: it does not spend the REST quota, so it
+ * has no `GitHubApi.rest` call to go through.
+ */
 function readGitHubToken(
-  vcs: VcsProcessShape,
   host: string,
-): Effect.Effect<string | undefined, never, never> {
-  return vcs
-    .run({
-      operation: "t3team.github.asset.auth-token",
-      command: "gh",
-      args: ["auth", "token", "--hostname", host],
-      cwd: process.cwd(),
-      allowNonZeroExit: true,
-      timeoutMs: 5_000,
-      maxOutputBytes: 16_000,
-      appendTruncationMarker: true,
-    })
-    .pipe(
-      Effect.map((result) =>
-        result.exitCode === 0 ? readTrimmedString(result.stdout) : undefined,
-      ),
-      Effect.orElseSucceed(() => undefined),
+  assetHost: string,
+): Effect.Effect<string | undefined, never, GitHubApi.GitHubApi> {
+  return Effect.gen(function* () {
+    const api = yield* GitHubApi.GitHubApi;
+    const credential = yield* api.credential(
+      assetHost.toLowerCase() === host.toLowerCase() ? host : "github.com",
     );
+    return readTrimmedString(Redacted.value(credential.token));
+  }).pipe(Effect.orElseSucceed(() => undefined));
 }
 
 export function downloadGitHubAsset(
-  vcs: VcsProcessShape,
   input: GitHubAssetDownloadRequest,
-): Effect.Effect<GitHubDownloadedAsset, T3TeamAtlassianError, HttpClient.HttpClient> {
+): Effect.Effect<
+  GitHubDownloadedAsset,
+  T3TeamAtlassianError,
+  HttpClient.HttpClient | GitHubApi.GitHubApi
+> {
   const host = readTrimmedString(input.host) ?? "github.com";
   const url = readTrimmedString(input.url);
   if (!url) {
@@ -77,32 +79,10 @@ export function downloadGitHubAsset(
   }
 
   return Effect.gen(function* () {
-    const httpClient = yield* HttpClient.HttpClient;
     const token = isGitHubHostedAsset(parsedUrl.host, host)
-      ? yield* readGitHubToken(vcs, host)
+      ? yield* readGitHubToken(host, parsedUrl.host)
       : undefined;
-    const response = yield* httpClient
-      .get(parsedUrl.toString(), {
-        headers: {
-          Accept: "*/*",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      })
-      .pipe(
-        Effect.timeoutOption(Duration.millis(GITHUB_ASSET_TIMEOUT_MS)),
-        Effect.mapError((cause) => toT3TeamError(cause, "Failed to download GitHub asset.")),
-        Effect.flatMap((responseOption) =>
-          Option.match(responseOption, {
-            onNone: () =>
-              Effect.fail(
-                new T3TeamAtlassianError({
-                  message: `GitHub asset download timed out after ${String(GITHUB_ASSET_TIMEOUT_MS)}ms.`,
-                }),
-              ),
-            onSome: (settledResponse) => Effect.succeed(settledResponse),
-          }),
-        ),
-      );
+    const response = yield* fetchAssetResponse(parsedUrl, token);
     const okResponse = yield* HttpClientResponse.matchStatus({
       "2xx": (success) => Effect.succeed(success),
       orElse: (failed) =>

@@ -57,17 +57,21 @@ export function cloudSessionCreateFailureToast(result: { readonly cause: Cause.C
 }
 
 /**
- * A create that failed only because gh is not signed in to the session host does not end in a
- * toast: the app runs the gh sign-in and then `retry` (the same create). Anything else is a toast.
+ * A create that failed only because gh is not signed in to a host it needs (the session host, or
+ * the project's repository host) does not end in a toast: the app signs in to THAT host — the one
+ * the failure names — and then `retry` (the same create). Anything else is a toast, as is a
+ * sign-in for another host while one is already open.
  */
 export function reportCloudSessionCreateFailure(
   result: { readonly cause: Cause.Cause<unknown> },
   retry: () => void,
 ) {
   const failure = squashAtomCommandFailure(result);
-  if (isCloudSessionFailed(failure) && failure.reason === "unauthorized") {
-    requestCloudSessionSignIn(retry);
-    return;
+  if (
+    isCloudSessionFailed(failure) &&
+    (failure.reason === "unauthorized" || failure.reason === "repository_sign_in_required")
+  ) {
+    if (requestCloudSessionSignIn(retry, failure.host)) return;
   }
   toastManager.add({ type: "error", ...cloudSessionCreateFailureToast(result) });
 }

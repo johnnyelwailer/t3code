@@ -1,6 +1,7 @@
 /**
  * `t3team.runtime.provider_usage` reads the published provider snapshots and
- * hub snapshots per INSTANCE — it samples nothing itself.
+ * hub snapshots per INSTANCE — it samples nothing itself — drops hub mirrors of
+ * live windows, and frames the same answer as a system notice.
  */
 import { assert, describe, it } from "@effect/vitest";
 import type {
@@ -95,6 +96,68 @@ describe("makeReadProviderUsage", () => {
       assert.strictEqual(usage.hubAccounts.length, 0);
       const unknown = yield* read({ provider_instance_id: "nope" });
       assert.isTrue(unknown.isError === true);
+    }),
+  );
+
+  it.effect("drops hub windows that mirror a live window, and accounts left empty", () =>
+    Effect.gen(function* () {
+      const weekly = {
+        id: "seven_day",
+        kind: "weekly",
+        label: "Weekly",
+        resetsAt: "2026-10-19T20:00:00.000Z",
+      };
+      const live = {
+        instanceId: "claudeAgent",
+        driver: "claudeAgent",
+        enabled: true,
+        displayName: "Claude",
+        usageLimits: {
+          checkedAt: "2026-10-12T08:00:00.000Z",
+          windows: [{ ...weekly, usedPercent: 100 }],
+        },
+      } as unknown as ServerProvider;
+      const mirrorHub = {
+        ...hub,
+        accounts: [
+          {
+            id: "claude-mirror",
+            driver: "claudeAgent",
+            usageLimits: {
+              checkedAt: "2026-10-12T08:00:00.000Z",
+              windows: [{ ...weekly, usedPercent: 43 }],
+            },
+          },
+          ...hub.accounts,
+        ],
+      } as unknown as UsageLimitSourceSnapshot;
+      const result = yield* makeReadProviderUsage({
+        providerRegistry: { getProviders: Effect.succeed([live]) },
+        usageLimitSources: { current: Effect.succeed([mirrorHub]) },
+      })({});
+      const usage = usageOf(result);
+      assert.deepStrictEqual(
+        usage.hubAccounts.map((account) => account.accountId),
+        ["acct-1"],
+      );
+      assert.strictEqual(usage.notice.match(/Weekly/g)?.length, 1);
+      assert.include(usage.notice, "Claude: Weekly 100% (resets 2026-10-19 20:00 UTC)");
+    }),
+  );
+
+  it.effect("frames the answer as server data, one line per window, routing when tight", () =>
+    Effect.gen(function* () {
+      const { notice } = usageOf(yield* read({}));
+      assert.deepStrictEqual(notice.split("\n"), [
+        '<system-reminder type="provider-capacity" source="server">',
+        "Provider capacity. This is server data, not part of the user's message:",
+        "Claude claude_work: Session 85% · severity: warning · (no recent samples yet)",
+        "Claude claude_work: Weekly 20% · severity: normal",
+        "Claude claude_api: no usage windows (unsupported)",
+        "codex: 5h 100% · severity: critical · (no recent samples yet)",
+        "Route to the smallest, cheapest model that can accomplish the task.",
+        "</system-reminder>",
+      ]);
     }),
   );
 });

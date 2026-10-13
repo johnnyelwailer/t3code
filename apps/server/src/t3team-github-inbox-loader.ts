@@ -1,7 +1,11 @@
 import * as Effect from "effect/Effect";
 
-import type { VcsProcessShape } from "./t3team-vcsProcessShape.ts";
+import * as GitHubApi from "./sourceControl/GitHubApi.ts";
 import { loadAccount } from "./t3team-github-routes-account.ts";
+import {
+  loadFullRepositoryList,
+  loadRepositoryListing,
+} from "./t3team-github-repositoryListing.ts";
 import {
   loadInboxAttempt,
   loadRepositoriesAttempt,
@@ -25,18 +29,18 @@ import {
   readTrimmedString,
   repositorySearchCache,
   repositoriesCache,
-  REPOSITORIES_CACHE_TTL_MS,
   responseCache,
   RESPONSE_CACHE_TTL_MS,
   UNAUTHENTICATED_ACCOUNT_CACHE_TTL_MS,
   writeCached,
+  writeCachedUnlessPaused,
 } from "./t3team-github-routes-shared.ts";
 import type {
   GitHubInboxDiscoverRequest,
   GitHubInboxDiscoverResponse,
 } from "./t3team-github-routes-shared.ts";
 
-export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInboxDiscoverRequest) {
+export function loadGitHubInboxResponse(input: GitHubInboxDiscoverRequest) {
   return Effect.gen(function* () {
     const host = readTrimmedString(input.host) ?? "github.com";
     const repositoriesOnly = input.discoveryMode === "repositories";
@@ -54,55 +58,47 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
       return cachedResponse;
     }
 
-    const account =
-      readCached(accountCache, host) ??
-      (yield* loadAccount(vcs, host).pipe(
-        Effect.tap((value) =>
-          Effect.sync(() => {
-            writeCached(
-              accountCache,
-              host,
-              value,
-              value ? ACCOUNT_CACHE_TTL_MS : UNAUTHENTICATED_ACCOUNT_CACHE_TTL_MS,
-            );
-          }),
-        ),
-      ));
+    const cachedAccount = readCached(accountCache, host);
+    const accountRead =
+      cachedAccount !== undefined ? { account: cachedAccount } : yield* loadAccount(host);
+    const account = accountRead.account;
+    // A read held back by the rate limit says nothing about who is signed in: it is not cached,
+    // and its answer is the pause rather than a prompt to sign in again.
+    if (cachedAccount === undefined && accountRead.pausedMessage === undefined) {
+      writeCached(
+        accountCache,
+        host,
+        account,
+        account ? ACCOUNT_CACHE_TTL_MS : UNAUTHENTICATED_ACCOUNT_CACHE_TTL_MS,
+      );
+    }
 
     if (!account) {
       const response = {
         host,
         ...EMPTY_RESPONSE,
-        inboxWarning: `Authenticate GitHub CLI for ${host} via gh auth login --hostname ${host}.`,
+        inboxWarning:
+          accountRead.pausedMessage ??
+          `Authenticate GitHub CLI for ${host} via gh auth login --hostname ${host}.`,
       } satisfies GitHubInboxDiscoverResponse;
-      writeCached(responseCache, responseCacheKey, response, RESPONSE_CACHE_TTL_MS);
+      // A pause says nothing about who is signed in: serving it after the reset would be wrong.
+      if (accountRead.pausedMessage === undefined) {
+        writeCached(responseCache, responseCacheKey, response, RESPONSE_CACHE_TTL_MS);
+      }
       return response;
     }
 
     const useAuthenticatedRepositoryList = !repositoriesOnly || host.toLowerCase() === "github.com";
-    let repositoriesAttempt =
-      (useAuthenticatedRepositoryList
-        ? readCached(repositoriesCache, host)
-        : readCached(repositorySearchCache, responseCacheKey)) ??
-      (yield* (
-        useAuthenticatedRepositoryList
-          ? loadRepositoriesAttempt(vcs, host)
-          : loadRepositorySearchAttempt(vcs, host, {
-              ...(input.projectKey ? { projectKey: input.projectKey } : {}),
-              ...(input.projectTitle ? { projectTitle: input.projectTitle } : {}),
-            })
-      ).pipe(
-        Effect.tap((value) =>
-          Effect.sync(() => {
-            writeCached(
-              useAuthenticatedRepositoryList ? repositoriesCache : repositorySearchCache,
-              useAuthenticatedRepositoryList ? host : responseCacheKey,
-              value,
-              REPOSITORIES_CACHE_TTL_MS,
-            );
-          }),
-        ),
-      ));
+    const listing = yield* loadRepositoryListing({
+      host,
+      account,
+      authenticatedList: useAuthenticatedRepositoryList,
+      searchCacheKey: responseCacheKey,
+      ...(input.projectKey ? { projectKey: input.projectKey } : {}),
+      ...(input.projectTitle ? { projectTitle: input.projectTitle } : {}),
+      refresh: input.refresh === true,
+    });
+    let repositoriesAttempt = listing.attempt;
 
     // GHE search is the fast path, but it can omit private/organization-visible repos on some
     // installations. Fall back to the authenticated repository list only when the fast search has
@@ -114,21 +110,7 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
       !useAuthenticatedRepositoryList &&
       repositoriesAttempt.items.length === 0
     ) {
-      repositoriesAttempt =
-        readCached(repositoriesCache, host) ??
-        (yield* loadRepositoriesAttempt(vcs, host).pipe(
-          Effect.tap((value) =>
-            Effect.sync(() => {
-              writeCached(
-                repositorySearchCache,
-                responseCacheKey,
-                value,
-                REPOSITORIES_CACHE_TTL_MS,
-              );
-              writeCached(repositoriesCache, host, value, REPOSITORIES_CACHE_TTL_MS);
-            }),
-          ),
-        ));
+      repositoriesAttempt = yield* loadFullRepositoryList(host, account);
     }
 
     const collectSuggestions = (repositories: typeof repositoriesAttempt.items) =>
@@ -151,15 +133,7 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
     // organization-visible repository. If the fast result produces no actual match, retry once
     // against the authenticated repository list before reporting an empty discovery result.
     if (repositoriesOnly && suggestedRepositoryUrls.length === 0) {
-      const completeRepositoriesAttempt =
-        readCached(repositoriesCache, host) ??
-        (yield* loadRepositoriesAttempt(vcs, host).pipe(
-          Effect.tap((value) =>
-            Effect.sync(() => {
-              writeCached(repositoriesCache, host, value, REPOSITORIES_CACHE_TTL_MS);
-            }),
-          ),
-        ));
+      const completeRepositoriesAttempt = yield* loadFullRepositoryList(host, account);
       repositoriesAttempt = completeRepositoriesAttempt;
       suggestedRepositoryUrls = collectSuggestions(repositoriesAttempt.items);
     }
@@ -167,10 +141,10 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
     const inboxAttempt = repositoriesOnly
       ? { items: [] as ReadonlyArray<GitHubInboxDiscoverResponse["inboxItems"][number]> }
       : (readCached(inboxCache, host) ??
-        (yield* loadInboxAttempt(vcs, host, account).pipe(
+        (yield* loadInboxAttempt(host, account).pipe(
           Effect.tap((value) =>
             Effect.sync(() => {
-              writeCached(inboxCache, host, value, INBOX_CACHE_TTL_MS);
+              writeCachedUnlessPaused(inboxCache, host, value, INBOX_CACHE_TTL_MS);
             }),
           ),
         )));
@@ -178,7 +152,6 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
     const linkedPullRequestsAttempt = repositoriesOnly
       ? { items: [] as ReadonlyArray<GitHubInboxDiscoverResponse["inboxItems"][number]> }
       : yield* loadLinkedPullRequestsAttempt({
-          vcs,
           account,
           ...(input.linkedRepositoryUrls
             ? { linkedRepositoryUrls: input.linkedRepositoryUrls }
@@ -196,11 +169,17 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
       ...(input.linkedRepositoryUrls ? { linkedRepositoryUrls: input.linkedRepositoryUrls } : {}),
     });
 
+    // One rate-limit pause holds back every read, so it would otherwise be said once per source.
     const warningParts = [
-      repositoriesAttempt.warning,
-      inboxAttempt.warning,
-      linkedPullRequestsAttempt.warning,
-    ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
+      ...new Set(
+        [
+          repositoriesAttempt.warning,
+          listing.attempt.warning,
+          inboxAttempt.warning,
+          linkedPullRequestsAttempt.warning,
+        ].filter((part): part is string => typeof part === "string" && part.trim().length > 0),
+      ),
+    ];
 
     const response = {
       host,
@@ -208,10 +187,19 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
       repositories: repositoriesAttempt.items,
       inboxItems,
       suggestedRepositoryUrls,
+      ...(listing.fetchedAt ? { repositoriesFetchedAt: listing.fetchedAt } : {}),
+      ...(listing.refreshing ? { repositoriesRefreshing: true as const } : {}),
       ...(warningParts.length > 0 ? { inboxWarning: warningParts.join(" ") } : {}),
     } satisfies GitHubInboxDiscoverResponse;
 
-    writeCached(responseCache, responseCacheKey, response, RESPONSE_CACHE_TTL_MS);
+    // Whatever the rate limit cut short is not remembered: after the reset it would still be
+    // served as the answer, empty or stale.
+    const paused = [repositoriesAttempt, inboxAttempt, linkedPullRequestsAttempt].some(
+      (attempt) => "paused" in attempt && attempt.paused === true,
+    );
+    if (!paused) writeCached(responseCache, responseCacheKey, response, RESPONSE_CACHE_TTL_MS);
     return response;
-  });
+    // An explicit refresh or open is a user waiting on this answer and may spend the reserve; the
+    // palette's automatic fan-out (no `trigger`) must honour a pause and leave the reserve alone.
+  }).pipe(Effect.provideService(GitHubApi.AllowGitHubReserve, input.trigger === "user"));
 }

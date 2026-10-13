@@ -15,6 +15,7 @@ import * as CliTokenManager from "./CliTokenManager.ts";
 import { cancelRunRequest } from "./t3team-githubActionsSessionClient.ts";
 import { isSessionCredentialIssueEnabled } from "./t3team-CloudSessionCredential.ts";
 import { makeSessionGh } from "./t3team-CloudSessionGh.ts";
+import { makeSingleFlight } from "./t3team-CloudSessionReadCache.ts";
 import { resolveFleetConfig, workflowHistoryUrl } from "./t3team-CloudSessionFleet.ts";
 import { makeFailureReasonCache } from "./t3team-cloudSessionFailureReason.ts";
 import { ConnectCredentialMinter } from "./t3team-ConnectCredentialMinter.ts";
@@ -84,24 +85,31 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
 
   // The GitHub-request half (run / listRunsFor / resolveLogin) lives in
   // `t3team-CloudSessionGh`; here we only orchestrate list/create/cancel on top.
-  const gh = makeSessionGh(api, repoRef);
-  const payloadCleanup = yield* makePayloadIssueCleanup(repoRef, gh.run);
+  // List/poll reads use `runBackground` (honour pause, leave quota reserve);
+  // create/cancel use `runInteractive` so a user click can still spend reserve.
+  const gh = yield* makeSessionGh(api, repoRef);
+  const payloadCleanup = yield* makePayloadIssueCleanup(repoRef, gh.runBackground);
   const failureReasons = makeFailureReasonCache();
   const claims = yield* makeClaimLedger();
 
-  const list: CloudSessionService["Service"]["list"] = Effect.gen(function* () {
+  const listOnce: CloudSessionService["Service"]["list"] = Effect.gen(function* () {
     // Hard isolation: resolve who the caller is BEFORE fetching, and scope the
     // list to that login. If the identity cannot be resolved this fails closed
     // (an error), never returning an unscoped list that would leak other users.
-    const login = yield* gh.resolveLogin;
-    const runs = yield* gh.listRunsFor(login);
+    const login = yield* gh.resolveLogin({ allowReserve: false });
+    const runs = yield* gh.listRunsFor(login, { allowReserve: false });
     const nowMs = yield* Clock.currentTimeMillis;
     const projected = yield* Effect.forEach(
       runs.slice(0, SESSION_DISPLAY_LIMIT),
       (run) =>
-        projectCloudSession(run, nowMs, machineLabel, repoRef, gh.run, failureReasons).pipe(
-          Effect.map((session) => ({ run, session })),
-        ),
+        projectCloudSession(
+          run,
+          nowMs,
+          machineLabel,
+          repoRef,
+          gh.runBackground,
+          failureReasons,
+        ).pipe(Effect.map((session) => ({ run, session }))),
       { concurrency: 4 },
     );
     // Delete the credential payloads of sessions that have spent them.
@@ -137,12 +145,17 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
     ),
   );
 
+  // Every tab, menu and poll asking at once under the SAME credential shares one GHE fan-out
+  // (a different credential is a different user's list, so never shares); nothing is kept after
+  // it ends, so the next list still reads fresh (create/cancel never go through this).
+  const list = yield* makeSingleFlight(listOnce, gh.identity);
+
   const create: CloudSessionService["Service"]["create"] = (input) =>
     Effect.gen(function* () {
       // Resolve the creator's login up front, before any side effect: every run
       // we read afterwards is scoped to it, and if it cannot be resolved we
       // fail before writing the credential payload or dispatching.
-      const login = yield* gh.resolveLogin;
+      const login = yield* gh.resolveLogin({ allowReserve: true });
 
       // A tag unique to THIS dispatch. `workflow_dispatch` answers 204 with no
       // body, so it never reveals the run it created; the workflow echoes this
@@ -259,7 +272,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
           : yield* dispatchCredentialHandoff({
               repoRef,
               sessionTag,
-              run: gh.run,
+              run: gh.runInteractive,
               enabled: handoffEnabled,
               readCredential: cloudCli.getExisting,
               mint: minter.mint,
@@ -272,8 +285,8 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
         sessionTag,
         durationSeconds: input.durationSeconds,
         machineLabel,
-        run: gh.run,
-        listRuns: gh.listRunsFor(login),
+        run: gh.runInteractive,
+        listRuns: gh.listRunsFor(login, { allowReserve: true }),
         discoveryAttempts: DISPATCH_DISCOVERY_ATTEMPTS,
         brokerGrant,
         machine,
@@ -299,8 +312,8 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       // `session.yml` AND to the caller's login, so requiring membership here
       // stops a caller both from cancelling something that is not a cloud
       // session at all and from cancelling another user's session.
-      const login = yield* gh.resolveLogin;
-      const sessionRuns = yield* gh.listRunsFor(login);
+      const login = yield* gh.resolveLogin({ allowReserve: true });
+      const sessionRuns = yield* gh.listRunsFor(login, { allowReserve: true });
       const sessionRun = sessionRuns.find((item) => item.id === runId);
       // A claimed standby runs under the pool controller: this server's own claim proves it is
       // this user's session.
@@ -313,7 +326,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
               (session) => session.runId === input.sessionId,
             )));
       if (claimedHere) {
-        return yield* gh.run(cancelRunRequest(repoRef, runId)).pipe(Effect.asVoid);
+        return yield* gh.runInteractive(cancelRunRequest(repoRef, runId)).pipe(Effect.asVoid);
       }
       if (sessionRun === undefined) {
         return yield* new CloudSessionFailedError({
@@ -325,12 +338,12 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       // GitHub refuses to cancel a completed run, which used to surface as a provider refusal.
       if (sessionRun.status === "completed") return;
 
-      yield* gh.run(cancelRunRequest(repoRef, runId)).pipe(
+      yield* gh.runInteractive(cancelRunRequest(repoRef, runId)).pipe(
         Effect.asVoid,
         // It can end between the listing and the cancel; only a run still going is a failure.
         Effect.catch((error) =>
           gh
-            .listRunsFor(login)
+            .listRunsFor(login, { allowReserve: true })
             .pipe(
               Effect.flatMap((runs) =>
                 runs.find((item) => item.id === runId)?.status === "completed"

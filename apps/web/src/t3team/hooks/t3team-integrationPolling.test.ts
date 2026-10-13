@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { USER_IDLE_AFTER_MS } from "~/hooks/t3team-userActivity";
 import {
   ATLASSIAN_RESOURCES_CACHE_MAX_AGE_MS,
   ATLASSIAN_RESOURCES_POLL_INTERVAL_MS,
@@ -147,5 +148,168 @@ describe("t3team integration polling", () => {
     } finally {
       poller.dispose();
     }
+  });
+
+  it("does not poll an idle reader", () => {
+    expect(
+      computeNextPollDelayMs({
+        enabled: true,
+        intervalMs: 60_000,
+        maxAgeMs: 60_000,
+        nowMs: 10_000,
+        isVisible: true,
+        isOnline: true,
+        isIdle: true,
+      }),
+    ).toBeNull();
+  });
+
+  describe("with a reader at the window", () => {
+    const stubWindow = () => {
+      const doc = Object.assign(new EventTarget(), { visibilityState: "visible" });
+      vi.stubGlobal("document", doc);
+      vi.stubGlobal("window", new EventTarget());
+      return doc;
+    };
+    const start = (poll: () => void, getUpdatedAt: () => number | undefined) =>
+      startBrowserPolling({
+        enabled: true,
+        intervalMs: ATLASSIAN_RESOURCES_POLL_INTERVAL_MS,
+        maxAgeMs: ATLASSIAN_RESOURCES_CACHE_MAX_AGE_MS,
+        getUpdatedAt,
+        poll,
+      });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("stops scheduling refreshes once the reader has been idle, and resumes with one read", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(1_000_000);
+      const doc = stubWindow();
+      let updatedAt: number | undefined;
+      const poll = vi.fn(() => {
+        updatedAt = Date.now();
+      });
+      const poller = start(poll, () => updatedAt);
+      try {
+        await vi.advanceTimersByTimeAsync(0);
+        expect(poll).toHaveBeenCalledTimes(1);
+        // Reads keep coming while the reader is here (the first arrival counts as presence)...
+        await vi.advanceTimersByTimeAsync(ATLASSIAN_RESOURCES_POLL_INTERVAL_MS);
+        expect(poll).toHaveBeenCalledTimes(2);
+        // ...and stop after the idle window, however long the window stays open.
+        await vi.advanceTimersByTimeAsync(USER_IDLE_AFTER_MS);
+        const readsWhenIdle = poll.mock.calls.length;
+        expect(readsWhenIdle).toBeLessThanOrEqual(2 + USER_IDLE_AFTER_MS / 90_000);
+        await vi.advanceTimersByTimeAsync(60 * 60_000);
+        expect(poll).toHaveBeenCalledTimes(readsWhenIdle);
+        // Showing the window again is not interaction: it stays paused until input.
+        doc.dispatchEvent(new Event("visibilitychange"));
+        await vi.advanceTimersByTimeAsync(10 * 60_000);
+        expect(poll).toHaveBeenCalledTimes(readsWhenIdle);
+        // The next interaction reads once, because the data went stale, and the cadence restarts.
+        doc.dispatchEvent(new Event("pointermove"));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(poll).toHaveBeenCalledTimes(readsWhenIdle + 1);
+        await vi.advanceTimersByTimeAsync(ATLASSIAN_RESOURCES_POLL_INTERVAL_MS);
+        expect(poll).toHaveBeenCalledTimes(readsWhenIdle + 2);
+      } finally {
+        poller.dispose();
+      }
+    });
+
+    it("reads straight away on return even after backoff has grown", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(3_000_000);
+      const doc = stubWindow();
+      // Never refreshes its freshness, so every attempt backs off until it caps at a minute.
+      const poll = vi.fn();
+      const poller = start(poll, () => undefined);
+      try {
+        await vi.advanceTimersByTimeAsync(USER_IDLE_AFTER_MS + 60_000);
+        const readsWhenIdle = poll.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(10 * 60_000);
+        expect(poll).toHaveBeenCalledTimes(readsWhenIdle);
+        doc.dispatchEvent(new Event("pointerdown"));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(poll).toHaveBeenCalledTimes(readsWhenIdle + 1);
+      } finally {
+        poller.dispose();
+      }
+    });
+
+    it("honours a return that lands while a poll is in flight", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(4_000_000);
+      const doc = stubWindow();
+      const first = start(
+        () => undefined,
+        () => undefined,
+      );
+      await vi.advanceTimersByTimeAsync(USER_IDLE_AFTER_MS + 1);
+      let finish: () => void = () => {};
+      const poll = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
+      const poller = start(poll, () => undefined);
+      try {
+        await vi.advanceTimersByTimeAsync(0);
+        expect(poll).toHaveBeenCalledTimes(1);
+        // The reader returns mid-read: `schedule` is a no-op while in flight, so this must be kept.
+        doc.dispatchEvent(new Event("pointerdown"));
+        finish();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(poll).toHaveBeenCalledTimes(2);
+      } finally {
+        poller.dispose();
+        first.dispose();
+      }
+    });
+
+    it("keeps backoff for a visibility return while the reader is not idle", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(5_000_000);
+      const doc = stubWindow();
+      const poll = vi.fn();
+      const poller = start(poll, () => undefined);
+      try {
+        // Reads at 0, 5, 15, 35 and 75 s; the delay has grown to its 60 s cap.
+        await vi.advanceTimersByTimeAsync(100_000);
+        expect(poll).toHaveBeenCalledTimes(5);
+        doc.dispatchEvent(new Event("visibilitychange"));
+        await vi.advanceTimersByTimeAsync(59_999);
+        expect(poll).toHaveBeenCalledTimes(5);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(poll).toHaveBeenCalledTimes(6);
+      } finally {
+        poller.dispose();
+      }
+    });
+
+    it("still reads once for a view mounted while the reader is idle", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(2_000_000);
+      stubWindow();
+      let updatedAt: number | undefined;
+      const poll = vi.fn(() => {
+        updatedAt = Date.now();
+      });
+      const first = start(
+        () => undefined,
+        () => undefined,
+      );
+      await vi.advanceTimersByTimeAsync(USER_IDLE_AFTER_MS + 1);
+      // `first` keeps the activity clock running, and nobody touched the window.
+      const poller = start(poll, () => updatedAt);
+      try {
+        await vi.advanceTimersByTimeAsync(0);
+        expect(poll).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(60 * 60_000);
+        expect(poll).toHaveBeenCalledTimes(1);
+      } finally {
+        poller.dispose();
+        first.dispose();
+      }
+    });
   });
 });

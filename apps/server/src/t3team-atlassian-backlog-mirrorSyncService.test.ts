@@ -6,7 +6,8 @@
  * covers the single-flight guard (synchronous, no DB access needed) plus the
  * reconcile prune paths via the exported runMirrorReconcile walk: a completed
  * empty walk prunes, a provider-unavailable failure never does. The
- * relative-JQL incremental filter is covered in the provider unit tests.
+ * relative-JQL filter is covered in the provider unit tests; the watermark
+ * catch-up in t3team-atlassian-mirrorSyncCatchUp.test.ts.
  */
 
 import { assert, describe, it } from "@effect/vitest";
@@ -23,7 +24,7 @@ import { serializeBacklogCacheJson } from "./t3team-atlassian-backlog-cacheQueri
 import { parseJson } from "./t3team-atlassian-backlog-cacheShared.ts";
 import { ensureBacklogCacheTables } from "./t3team-atlassian-backlog-cacheTables.ts";
 import {
-  computeIncrementalLookbackMinutes,
+  computeWatermarkLookbackMinutes,
   nextMirrorSleepMs,
   hasActiveT3TeamAtlassianMirrorSync,
   isT3TeamMirrorSyncIdle,
@@ -256,46 +257,34 @@ mirrorSyncCacheLayer("t3team Atlassian mirror sync service", (it) => {
   );
 });
 
-it("lookback widening: normal 90 s cadence stays at the 15 m floor", () => {
+it("watermark lookback: a watermark just behind now stays at the 15 m floor", () => {
   const nowMs = 10 * 60_000;
-  assert.strictEqual(
-    computeIncrementalLookbackMinutes({ nowMs, lastSuccessfulWalkMs: nowMs - 90_000 }),
-    15,
-  );
+  assert.strictEqual(computeWatermarkLookbackMinutes({ nowMs, watermarkMs: nowMs - 90_000 }), 15);
 });
 
-it("lookback widening: gap since last successful walk widens the window with slack", () => {
-  // 47 m 10 s gap (e.g. laptop suspend) → ceil to 48 m + 5 m slack = 53 m.
+it("watermark lookback: reaches back to the watermark plus a 5 m overlap", () => {
   const nowMs = 100 * 60_000;
   assert.strictEqual(
-    computeIncrementalLookbackMinutes({
-      nowMs,
-      lastSuccessfulWalkMs: nowMs - (47 * 60_000 + 10_000),
-    }),
+    computeWatermarkLookbackMinutes({ nowMs, watermarkMs: nowMs - (47 * 60_000 + 10_000) }),
     53,
   );
 });
 
-it("lookback widening: elapsed just past the floor threshold leaves the floor", () => {
-  // 11 m gap → 11 + 5 = 16 m, one past the 15 m floor.
-  const nowMs = 60 * 60_000;
+it("watermark lookback: is not capped, so a 25-day-old watermark is reached", () => {
+  const nowMs = 30 * 24 * 60 * 60_000;
   assert.strictEqual(
-    computeIncrementalLookbackMinutes({ nowMs, lastSuccessfulWalkMs: nowMs - 11 * 60_000 }),
-    16,
+    computeWatermarkLookbackMinutes({ nowMs, watermarkMs: nowMs - 25 * 24 * 60 * 60_000 }),
+    25 * 24 * 60 + 5,
   );
 });
 
-it("lookback widening: caps at 24 h for very long gaps and the never-succeeded case", () => {
-  const nowMs = 3 * 24 * 60 * 60_000;
-  assert.strictEqual(
-    computeIncrementalLookbackMinutes({ nowMs, lastSuccessfulWalkMs: 0 }),
-    24 * 60,
-  );
+it("watermark lookback: no watermark walks the whole project", () => {
+  assert.isUndefined(computeWatermarkLookbackMinutes({ nowMs: 1_000, watermarkMs: undefined }));
 });
 
-it("lookback widening: clock going backwards never shrinks below the floor", () => {
+it("watermark lookback: a watermark ahead of this clock never shrinks below the floor", () => {
   assert.strictEqual(
-    computeIncrementalLookbackMinutes({ nowMs: 1_000, lastSuccessfulWalkMs: 5 * 60_000 }),
+    computeWatermarkLookbackMinutes({ nowMs: 1_000, watermarkMs: 5 * 60_000 }),
     15,
   );
 });
