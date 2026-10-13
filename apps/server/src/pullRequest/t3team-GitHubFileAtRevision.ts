@@ -13,7 +13,7 @@ import {
   isSafeRepositoryPath,
   type FileAtRevisionRequest,
   type ProviderFileAtRevision,
-} from "./t3team-fileAtRevision.ts";
+} from "@t3tools/source-control-core/server/t3team-fileAtRevision";
 
 /**
  * Base64 plus the JSON envelope. GitHub inlines files up to 1 MB (about 1.4 MB encoded), and does

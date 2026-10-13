@@ -13,7 +13,7 @@ import {
   isSafeRepositoryPath,
   type FileAtRevisionRequest,
   type ProviderFileAtRevision,
-} from "./t3team-fileAtRevision.ts";
+} from "@t3tools/source-control-core/server/t3team-fileAtRevision";
 
 const TIMEOUT_MS = 60_000;
 /**

@@ -32,7 +32,7 @@ import type { PullRequestProviderApi } from "./pullRequest/PullRequestProvider.t
 import * as PullRequestProviderRegistry from "./pullRequest/PullRequestProviderRegistry.ts";
 import * as PullRequestReadCache from "./pullRequest/PullRequestReadCache.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
-import type { ProviderFileAtRevision } from "./pullRequest/t3team-fileAtRevision.ts";
+import type { ProviderFileAtRevision } from "@t3tools/source-control-core/server/t3team-fileAtRevision";
 import * as ServerSettingsService from "./serverSettings.ts";
 import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
 import * as SourceControlRateLimit from "./sourceControl/SourceControlRateLimit.ts";
