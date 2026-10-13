@@ -22,7 +22,7 @@ import * as NodePath from "node:path";
 import * as NodeWorkerThreads from "node:worker_threads";
 
 const HEARTBEAT_MS = 500;
-export const DEFAULT_STALL_MS = 4_000;
+const DEFAULT_STALL_MS = 4_000;
 const DEFAULT_PROFILE_INTERVAL_US = 10_000;
 const DEFAULT_MAX_FILES = 10;
 /** The rolling profile is discarded and restarted this often when nothing stalled. */
