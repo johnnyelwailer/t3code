@@ -65,7 +65,8 @@ function adoptPersistedDraft(draftId: string, persisted: PersistedDraft): void {
         ...state.draftsByThreadKey,
         [draftId]: {
           ...draft,
-          prompt: persisted.prompt ?? draft.prompt,
+          // Text typed in this window since the queue cleared its prompt is the user's: keep it.
+          prompt: draft.prompt.length > 0 ? draft.prompt : (persisted.prompt ?? draft.prompt),
           cloudQueuedSend: persisted.queued,
         },
       },
