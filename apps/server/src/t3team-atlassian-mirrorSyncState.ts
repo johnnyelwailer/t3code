@@ -59,6 +59,15 @@ const insertMissingStateRow = (identity: MirrorSyncIdentity) =>
     return sql;
   });
 
+function toStatus(row: MirrorSyncStateRow | undefined): T3TeamMirrorSyncStatus {
+  return {
+    watermarkMs: row?.watermarkMs ?? undefined,
+    lastSuccessAtMs: row?.lastSuccessAtMs ?? undefined,
+    lastError: row?.lastError ?? undefined,
+    lastErrorAtMs: row?.lastErrorAtMs ?? undefined,
+  };
+}
+
 /** The mirror sync state for one project; every field is `undefined` before the first walk. */
 export function readT3TeamMirrorSyncStatus(identity: MirrorSyncIdentity) {
   return Effect.gen(function* () {
@@ -75,14 +84,26 @@ export function readT3TeamMirrorSyncStatus(identity: MirrorSyncIdentity) {
         AND account_id = ${identity.accountId}
         AND external_project_id = ${identity.externalProjectId}
     `;
-    const row = rows[0];
-    return {
-      watermarkMs: row?.watermarkMs ?? undefined,
-      lastSuccessAtMs: row?.lastSuccessAtMs ?? undefined,
-      lastError: row?.lastError ?? undefined,
-      lastErrorAtMs: row?.lastErrorAtMs ?? undefined,
-    } satisfies T3TeamMirrorSyncStatus;
+    return toStatus(rows[0]);
   }).pipe(Effect.mapError(toPersistenceSqlError("t3team.atlassianMirrorSync.readState")));
+}
+
+/** The mirror sync state of every project the account has synced. */
+export function readT3TeamMirrorSyncStatusesForAccount(accountId: string) {
+  return Effect.gen(function* () {
+    yield* ensureMirrorSyncStateTable;
+    const sql = yield* SqlClient.SqlClient;
+    const rows = yield* sql<MirrorSyncStateRow>`
+      SELECT
+        watermark_ms AS "watermarkMs",
+        last_success_at AS "lastSuccessAtMs",
+        last_error AS "lastError",
+        last_error_at AS "lastErrorAtMs"
+      FROM t3team_atlassian_mirror_sync_state
+      WHERE account_id = ${accountId}
+    `;
+    return rows.map(toStatus);
+  }).pipe(Effect.mapError(toPersistenceSqlError("t3team.atlassianMirrorSync.readAccountState")));
 }
 
 /** Move the watermark forward to `watermarkMs`; never moves it back. */

@@ -29,16 +29,10 @@ import {
   lastT3TeamMirrorSyncKickMs,
 } from "./t3team-atlassian-mirrorSyncIdleTracking.ts";
 import type { MirrorPageSource } from "./t3team-atlassian-mirrorSyncPageWalk.ts";
+import { describeMirrorSyncFailure } from "./t3team-atlassian-mirrorSyncFailureText.ts";
 import { recordT3TeamMirrorSyncFailure } from "./t3team-atlassian-mirrorSyncState.ts";
 
-function describeFailure(error: unknown): string {
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return typeof error.message === "string" ? error.message : String(error.message);
-  }
-  return String(error);
-}
-
-/** Persist and log a failed step; hands the error back so the loop can back off on it. */
+/** Log a failed step in full, persist the sentence a user may read; hands the error back so the loop can back off on it. */
 function recordStepFailure(identity: MirrorSyncIdentity, step: string, error: unknown) {
   return Effect.gen(function* () {
     yield* Effect.logWarning(`t3team atlassian mirror ${step} failed`, error).pipe(
@@ -46,7 +40,7 @@ function recordStepFailure(identity: MirrorSyncIdentity, step: string, error: un
     );
     const atMs = yield* Clock.currentTimeMillis;
     yield* recordT3TeamMirrorSyncFailure(identity, {
-      message: `${step}: ${describeFailure(error)}`,
+      message: describeMirrorSyncFailure(error),
       atMs,
     }).pipe(
       Effect.catchCause((cause) =>

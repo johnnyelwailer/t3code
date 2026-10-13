@@ -16,6 +16,9 @@ export class T3TeamAtlassianError extends Data.TaggedError("T3TeamAtlassianError
  */
 export const JIRA_SESSION_EXPIRED_CODE = "jira_session_expired";
 
+/** Jira did not answer within the request timeout. */
+export const JIRA_TIMEOUT_CODE = "jira_timeout";
+
 export function toAtlassianError(message: string) {
   return (cause: unknown) =>
     new T3TeamAtlassianError({

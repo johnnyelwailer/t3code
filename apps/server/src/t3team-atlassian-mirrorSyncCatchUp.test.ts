@@ -26,13 +26,14 @@ import {
   runMirrorCatchUpWalk,
   runMirrorReconcile,
 } from "./t3team-atlassian-backlog-mirrorSyncWalks.ts";
+import { MIRROR_SYNC_RATE_LIMITED_TEXT } from "./t3team-atlassian-mirrorSyncFailureText.ts";
 import { runMirrorLoop } from "./t3team-atlassian-mirrorSyncLoop.ts";
 import type { MirrorPageSource } from "./t3team-atlassian-mirrorSyncPageWalk.ts";
 import {
   advanceT3TeamMirrorWatermark,
   readT3TeamMirrorSyncStatus,
 } from "./t3team-atlassian-mirrorSyncState.ts";
-import { readDigestJiraSyncedAtMs } from "./t3team-myworkDigestFreshness.ts";
+import { readDigestJiraHealth } from "./t3team-myworkDigestJiraHealth.ts";
 
 const minuteMs = 60_000;
 const dayMs = 24 * 60 * minuteMs;
@@ -244,15 +245,15 @@ it.effect("the digest's synced-at moves only when a catch-up walk completes", ()
         notSuperseded,
       ),
     );
-    assert.isUndefined(yield* readDigestJiraSyncedAtMs(project));
+    assert.isUndefined((yield* readDigestJiraHealth(project)).jiraSyncedAt);
 
     const jira = fakeJira(allIssues);
     yield* settleValue(runMirrorCatchUpWalk(request, jira.source, identity, notSuperseded));
-    assert.isUndefined(yield* readDigestJiraSyncedAtMs(project), "a capped walk is not synced");
+    assert.isUndefined((yield* readDigestJiraHealth(project)).jiraSyncedAt, "a capped walk is not synced");
 
     const catchUpStartMs = yield* Clock.currentTimeMillis;
     yield* settleValue(runMirrorCatchUpWalk(request, jira.source, identity, notSuperseded));
-    assert.strictEqual(yield* readDigestJiraSyncedAtMs(project), catchUpStartMs);
+    assert.strictEqual((yield* readDigestJiraHealth(project)).jiraSyncedAt, isoAt(catchUpStartMs));
   }).pipe(Effect.provide(layerMemory)),
 );
 
@@ -278,7 +279,7 @@ it.effect("the loop records a rate-limited walk, backs off, and resumes to catch
       yield* TestClock.withLive(Effect.sleep("0 millis"));
       status = yield* readT3TeamMirrorSyncStatus(identity);
       if (status.lastError !== undefined) {
-        assert.include(status.lastError, "Too Many Requests");
+        assert.strictEqual(status.lastError, MIRROR_SYNC_RATE_LIMITED_TEXT);
         failureAtMs = status.lastErrorAtMs;
       }
     }

@@ -4,6 +4,7 @@ import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import { classifyRejectedSession } from "./t3team-atlassian-auth-rejection.ts";
 import {
   JIRA_SESSION_EXPIRED_CODE,
+  JIRA_TIMEOUT_CODE,
   T3TeamAtlassianError,
   toAtlassianError,
 } from "./t3team-atlassian-errors.ts";
@@ -16,6 +17,7 @@ const ATLASSIAN_REQUEST_TIMEOUT = Duration.millis(ATLASSIAN_REQUEST_TIMEOUT_MS);
 
 function atlassianTimeoutError(message: string) {
   return new T3TeamAtlassianError({
+    code: JIRA_TIMEOUT_CODE,
     message:
       `${message} Atlassian request timed out after ${ATLASSIAN_REQUEST_TIMEOUT_MS}ms. ` +
       "Check Jira auth and network connectivity.",

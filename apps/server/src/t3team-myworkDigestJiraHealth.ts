@@ -1,8 +1,13 @@
 /**
- * Whether a project's Jira half can be trusted this round: the session behind it, and the last
- * sync's failure. Optional on the wire, so hosts that predate it (Nexi Portal, the MCP digest tool)
- * keep reading the payload unchanged.
+ * Whether a project's Jira half can be trusted this round: the session behind it, when the mirror
+ * last matched Jira, and the last sync's failure. Optional on the wire, so hosts that predate it
+ * (Nexi Portal, the MCP digest tool) keep reading the payload unchanged.
+ *
+ * `jiraSyncedAt` is the last mirror catch-up that reached the end of Jira's change list, never the
+ * digest's own fetch time, which reads "just now" over a stale mirror. It is absent until the
+ * first catch-up completes; a capped or failed walk never counts.
  */
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import { accountNeedsReconnect } from "./t3team-atlassian-auth-staleToken.ts";
@@ -13,6 +18,7 @@ export type T3TeamDigestJiraAuth = "ok" | "needs-reconnect";
 
 export type T3TeamDigestJiraHealth = {
   readonly jiraAuth: T3TeamDigestJiraAuth;
+  readonly jiraSyncedAt?: string;
   readonly jiraSyncError?: string;
 };
 
@@ -24,6 +30,9 @@ export function readDigestJiraHealth(project: T3TeamMyWorkDigestProjectInput) {
     });
     return {
       jiraAuth: accountNeedsReconnect(project.account.id) ? "needs-reconnect" : "ok",
+      ...(sync.lastSyncAt !== undefined
+        ? { jiraSyncedAt: DateTime.formatIso(DateTime.makeUnsafe(sync.lastSyncAt)) }
+        : {}),
       ...(sync.lastError !== undefined ? { jiraSyncError: sync.lastError } : {}),
     } satisfies T3TeamDigestJiraHealth;
   });

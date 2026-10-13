@@ -1,5 +1,7 @@
 import type { IntegrationAccountRef } from "@t3tools/integrations-core";
 
+import { isRateLimitedFailure } from "./t3team-atlassian-mirrorSyncFailureText.ts";
+
 export type T3TeamAtlassianMirrorSyncRequest = {
   readonly account: IntegrationAccountRef;
   readonly externalProjectId: string;
@@ -68,17 +70,6 @@ export const mirrorPageSize = 100;
 const rateLimitedSleepMs = 5 * 60_000;
 const maxSleepMs = 15 * 60_000;
 
-function causeChainHasStatus429(error: unknown, depth = 0): boolean {
-  if (depth > 5 || error === null || typeof error !== "object") {
-    return false;
-  }
-  const record = error as { status?: unknown; cause?: unknown };
-  if (record.status === 429) {
-    return true;
-  }
-  return causeChainHasStatus429(record.cause, depth + 1);
-}
-
 /**
  * Next loop sleep given the walk outcome: success resets to the 90 s cadence;
  * a 429 anywhere in the error's cause chain jumps to the rate-limit pause;
@@ -89,7 +80,7 @@ export function nextMirrorSleepMs(previousSleepMs: number, outcome: "ok" | unkno
   if (outcome === "ok") {
     return normalSleepMs;
   }
-  if (causeChainHasStatus429(outcome)) {
+  if (isRateLimitedFailure(outcome)) {
     return Math.min(Math.max(rateLimitedSleepMs, previousSleepMs), maxSleepMs);
   }
   return Math.min(Math.max(previousSleepMs * 2, normalSleepMs * 2), maxSleepMs);

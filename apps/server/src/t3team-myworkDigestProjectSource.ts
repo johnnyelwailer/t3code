@@ -11,7 +11,7 @@ import type { T3TeamBacklogCacheIdentity } from "./t3team-atlassian-backlog-cach
 import type { DigestTransitionRead } from "./t3team-digestStatusTransitions.ts";
 import { resolveDigestTicketRef } from "./t3team-myworkDigestAggregation.ts";
 import { loadDigestBurndownContext } from "./t3team-myworkDigestBurndownBackfill.ts";
-import { kickDigestMirrorSync, readDigestJiraSyncedAtMs } from "./t3team-myworkDigestFreshness.ts";
+import { kickDigestMirrorSync } from "./t3team-myworkDigestFreshness.ts";
 import { toDigestPrEntries } from "./t3team-myworkDigestPr.ts";
 import {
   loadDigestPrEntries,
@@ -111,7 +111,6 @@ export function loadDigestProjectSource(
             transitions,
           })
         : undefined;
-    const jiraSyncedAtMs = yield* readDigestJiraSyncedAtMs(project);
     const jiraHealth = yield* readDigestJiraHealth(project);
     const dependencies = yield* readDigestDependencies({ identity, assigned: viewer.assigned });
 
@@ -193,7 +192,6 @@ export function loadDigestProjectSource(
       nowIso: ctx.nowIso,
       ...(prRead?.note !== undefined ? { changeRequestNote: prRead.note } : {}),
       ...(prRead?.stale === true ? { changeRequestsStale: true } : {}),
-      ...(jiraSyncedAtMs !== undefined ? { jiraSyncedAt: millisToIso(jiraSyncedAtMs) } : {}),
       ...jiraHealth,
       ...(dependencies.length > 0 ? { dependencies } : {}),
       ...(yesterdayRead?.yesterday !== undefined ? { yesterday: yesterdayRead.yesterday } : {}),
