@@ -33,6 +33,12 @@ export const FEATURE_FLAG_DEFINITIONS = {
     description:
       "My Work aside uses RightPanelTabs (PR/thread/browser tabs) with Agent kickoff when empty. Off: legacy DigestPrAside swap.",
   },
+  LAZY_LINKED_REPOSITORY_CHECKOUT: {
+    defaultEnabled: true,
+    requiresRestart: false,
+    description:
+      "Bootstrap only materializes the main repository; linked reference clones sync on demand or opportunistically in the background.",
+  },
 } as const;
 
 export type FeatureFlagKey = keyof typeof FEATURE_FLAG_DEFINITIONS;

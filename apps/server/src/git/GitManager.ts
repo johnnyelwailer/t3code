@@ -86,6 +86,8 @@ import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as SourceControlProvider from "@t3tools/source-control-core/server/SourceControlProvider";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import type { ChangeRequest } from "@t3tools/contracts";
+import { ensureLinkedRepositoryCheckout } from "../t3team-linkedRepositoryOnDemand.ts";
+import { isLazyLinkedRepositoryCheckoutEnabled } from "../t3team-lazyLinkedRepositoryFlag.ts";
 import { resolvePullRequestCheckoutRoot } from "../t3team-pullRequestCheckoutRoot.ts";
 
 export interface GitActionProgressReporter {
@@ -764,7 +766,15 @@ export const make = Effect.gen(function* () {
     operation: string,
     input: { readonly cwd: string; readonly reference: string },
   ) =>
-    resolvePullRequestCheckoutRoot({ operation, sourceControlProviders, ...input }).pipe(
+    Effect.gen(function* () {
+      if (isLazyLinkedRepositoryCheckoutEnabled() && /^https?:\/\//i.test(input.reference.trim())) {
+        yield* ensureLinkedRepositoryCheckout({
+          workspaceRoot: input.cwd,
+          repository: input.reference,
+        }).pipe(Effect.catchAll(() => Effect.void));
+      }
+      return yield* resolvePullRequestCheckoutRoot({ operation, sourceControlProviders, ...input });
+    }).pipe(
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),
     );

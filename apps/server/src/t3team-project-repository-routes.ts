@@ -33,7 +33,10 @@ import {
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import { bootstrapWorkspaceReferences } from "./t3team-project-repository-routesReferences.ts";
 import { t3teamLinkedRepositoryBranchesRouteLayer } from "./t3team-project-repository-routesBranches.ts";
-import { t3teamLinkedRepositoryStatusRouteLayer } from "./t3team-project-repository-routesStatus.ts";
+import {
+  t3teamLinkedRepositoryEnsureRouteLayer,
+  t3teamLinkedRepositoryStatusRouteLayer,
+} from "./t3team-project-repository-routesStatus.ts";
 
 const bootstrapRouteLayer = HttpRouter.add(
   "POST",
@@ -165,5 +168,6 @@ const bootstrapRouteLayer = HttpRouter.add(
 export const t3teamProjectWorkspaceBootstrapRouteLayer = Layer.mergeAll(
   bootstrapRouteLayer,
   t3teamLinkedRepositoryStatusRouteLayer,
+  t3teamLinkedRepositoryEnsureRouteLayer,
   t3teamLinkedRepositoryBranchesRouteLayer,
 );

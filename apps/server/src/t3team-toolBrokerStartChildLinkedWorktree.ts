@@ -6,28 +6,16 @@
  * @module t3team-toolBrokerStartChildLinkedWorktree
  */
 import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
 
 import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
-  isLinkedRepositoryReady,
   REFERENCES_DIR_NAME,
 } from "./t3team-project-repository-utils.ts";
-import {
-  buildScopedChildWorktreePath,
-  findLinkedRepository,
-  readLinkedRepositories,
-} from "./t3team-toolBrokerStartChildLinkedRepository.ts";
+import { buildScopedChildWorktreePath } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 import { createOrReuseChildWorktree } from "./t3team-toolBrokerStartChildLocalWorktree.ts";
 import type { T3TeamStartChildLinkedRepositoryServices } from "./t3team-toolBrokerStartChildContext.ts";
-
-const LinkedRepositoryManifestJson = Schema.Struct({
-  linkedRepositories: Schema.optional(Schema.Array(Schema.Unknown)),
-});
-const decodeLinkedRepositoryManifest = Schema.decodeEffect(
-  Schema.fromJsonString(LinkedRepositoryManifestJson),
-);
+import { ensureLinkedRepositoryCheckout } from "./t3team-linkedRepositoryOnDemand.ts";
 
 export const resolveLinkedRepositoryWorktree = (input: {
   readonly services: T3TeamStartChildLinkedRepositoryServices;
@@ -53,46 +41,19 @@ export const resolveLinkedRepositoryWorktree = (input: {
       );
     }
 
-    const manifestText = yield* input.services.fileSystem
-      .readFileString(manifestPath)
-      .pipe(Effect.mapError((error) => (error instanceof Error ? error.message : String(error))));
-
-    const manifest = yield* decodeLinkedRepositoryManifest(manifestText).pipe(
-      Effect.mapError(
-        (error) =>
-          `Failed to parse linked repository metadata: ${error instanceof Error ? error.message : String(error)}`,
+    const linkedRepository = yield* ensureLinkedRepositoryCheckout({
+      workspaceRoot: input.projectWorkspaceRoot,
+      repository: input.repoFullName,
+    }).pipe(
+      Effect.mapError((message) =>
+        typeof message === "string"
+          ? message
+          : message instanceof Error
+            ? message.message
+            : String(message),
       ),
     );
-    const linkedRepository = findLinkedRepository(
-      readLinkedRepositories(manifest.linkedRepositories),
-      input.repoFullName,
-    );
-    if (!linkedRepository) {
-      return yield* Effect.fail(
-        `No linked repository matched '${input.repoFullName}' in this project workspace.`,
-      );
-    }
-    if (!isLinkedRepositoryReady(linkedRepository)) {
-      return yield* Effect.fail(
-        `Linked repository '${input.repoFullName}' is not ready: ${linkedRepository.error ?? (linkedRepository.status === "pending" ? "it is still being cloned" : "bootstrap failed")}.`,
-      );
-    }
-
     const repositoryPath = linkedRepository.localPath.trim();
-    if (repositoryPath.length === 0) {
-      return yield* Effect.fail(
-        `Linked repository '${input.repoFullName}' does not have a usable local path.`,
-      );
-    }
-
-    const repositoryExists = yield* input.services.fileSystem
-      .exists(repositoryPath)
-      .pipe(Effect.orElseSucceed(() => false));
-    if (!repositoryExists) {
-      return yield* Effect.fail(
-        `Linked repository '${input.repoFullName}' is missing locally at '${repositoryPath}'.`,
-      );
-    }
 
     const baseRef =
       input.repoRef ??

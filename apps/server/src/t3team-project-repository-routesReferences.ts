@@ -12,6 +12,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
 import { toAtlassianError } from "./t3team-atlassian-http.ts";
+import { isLazyLinkedRepositoryCheckoutEnabled } from "./t3team-lazyLinkedRepositoryFlag.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import { writeReferenceManifest } from "./t3team-project-repository-services.ts";
 import {
@@ -29,7 +30,10 @@ import {
   type BootstrapWorkspaceResponse,
   type MainRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
-import { detectMainRepositoryCandidates } from "./t3team-projectMainRepositoryState.ts";
+import {
+  detectMainRepositoryCandidates,
+  detectMainRepositoryCandidatesWithRemote,
+} from "./t3team-projectMainRepositoryState.ts";
 import { repositoryLookupCandidates } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 
 export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferences")(
@@ -95,7 +99,9 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
         );
         const mainRepositoryCandidates =
           !mainRepository && isMainRepositoryEnabled()
-            ? yield* detectMainRepositoryCandidates(manifestLinkedRepositories)
+            ? isLazyLinkedRepositoryCheckoutEnabled()
+              ? yield* detectMainRepositoryCandidatesWithRemote(manifestLinkedRepositories)
+              : yield* detectMainRepositoryCandidates(manifestLinkedRepositories)
             : [];
 
         yield* writeReferenceManifest(referencesRoot, {
@@ -106,14 +112,18 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
           ...(mainRepository ? { mainRepository } : {}),
           updatedAt: DateTime.formatIso(yield* DateTime.now),
         });
-        for (const item of planned) {
-          if (!item.request) continue;
-          yield* sync.request({
-            referencesRoot,
-            url: item.entry.url,
-            localPath: item.entry.localPath,
-            ...(item.entry.branch ? { branch: item.entry.branch } : {}),
-          });
+        const queueBootstrapSyncs =
+          input.refreshLinkedRepositories === true || !isLazyLinkedRepositoryCheckoutEnabled();
+        if (queueBootstrapSyncs) {
+          for (const item of planned) {
+            if (!item.request) continue;
+            yield* sync.request({
+              referencesRoot,
+              url: item.entry.url,
+              localPath: item.entry.localPath,
+              ...(item.entry.branch ? { branch: item.entry.branch } : {}),
+            });
+          }
         }
 
         const response: BootstrapWorkspaceResponse = {
