@@ -27,6 +27,11 @@ export function invalidateT3TeamAtlassianViewerAccountIdCache() {
   viewerAccountIdByAccountId.clear();
 }
 
+/** The viewer remembered for this account, if one was resolved in this process. */
+export function cachedT3TeamAtlassianViewerAccountId(accountId: string): string | undefined {
+  return viewerAccountIdByAccountId.get(accountId);
+}
+
 function resolveViewerAccountId<E, R>(
   account: IntegrationAccountRef,
   onLookupFailure: (error: T3TeamAtlassianError) => Effect.Effect<undefined, E, R>,

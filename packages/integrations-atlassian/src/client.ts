@@ -17,6 +17,10 @@ export class AtlassianAuthError extends Data.TaggedError("AtlassianAuthError")<{
   /** The token is valid but was granted without the scope this endpoint needs
    * (Jira answers `401 "scope does not match"`); only a re-consent fixes it. */
   readonly missingScope?: boolean;
+  /** The HTTP status Jira answered with (401 or 403). */
+  readonly status?: number;
+  /** The Jira base URL of the credential that was refused, so a caller can tell which account. */
+  readonly baseUrl?: string;
 }> {}
 
 /**

@@ -191,6 +191,9 @@ export function assembleMyWorkDigestProjectData(
       : {}),
     ...(source.changeRequestsStale === true ? { changeRequestsStale: true } : {}),
     ...(source.jiraSyncedAt !== undefined ? { jiraSyncedAt: source.jiraSyncedAt } : {}),
+    ...(source.jiraSyncPending === true ? { jiraSyncPending: true } : {}),
+    ...(source.jiraAuth !== undefined ? { jiraAuth: source.jiraAuth } : {}),
+    ...(source.jiraSyncError !== undefined ? { jiraSyncError: source.jiraSyncError } : {}),
     ...(source.dependencies?.length ? { dependencies: source.dependencies } : {}),
     ...(source.yesterday !== undefined ? { yesterday: source.yesterday } : {}),
   };

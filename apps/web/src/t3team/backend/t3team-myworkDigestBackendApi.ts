@@ -124,6 +124,9 @@ export type MyWorkDigestPayload = {
     readonly changeRequestNote?: string;
     readonly changeRequestsStale?: boolean;
     readonly jiraSyncedAt?: string;
+    readonly jiraSyncPending?: boolean;
+    readonly jiraAuth?: "ok" | "needs-reconnect";
+    readonly jiraSyncError?: string;
     /** The viewer's last working day: PRs the viewer merged, tickets of theirs that moved. */
     readonly yesterday?: {
       readonly from: string;

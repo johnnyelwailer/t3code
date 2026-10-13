@@ -145,6 +145,8 @@ function createBackend(input: {
     })),
     setTempoToken: vi.fn(async () => ({ configured: false })),
     listAccounts: vi.fn(async () => []),
+    listAccountStatuses: vi.fn(async () => []),
+    disconnectAccount: vi.fn(async () => {}),
     connectBasic: vi.fn(async () => []),
     connectOAuth: vi.fn(async () => []),
     exchangeOAuthCode: vi.fn(async () => ({

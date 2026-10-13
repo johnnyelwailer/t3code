@@ -11,7 +11,7 @@ import type { T3TeamBacklogCacheIdentity } from "./t3team-atlassian-backlog-cach
 import type { DigestTransitionRead } from "./t3team-digestStatusTransitions.ts";
 import { resolveDigestTicketRef } from "./t3team-myworkDigestAggregation.ts";
 import { loadDigestBurndownContext } from "./t3team-myworkDigestBurndownBackfill.ts";
-import { kickDigestMirrorSync, readDigestJiraSyncedAtMs } from "./t3team-myworkDigestFreshness.ts";
+import { kickDigestMirrorSync } from "./t3team-myworkDigestFreshness.ts";
 import { toDigestPrEntries } from "./t3team-myworkDigestPr.ts";
 import {
   loadDigestPrEntries,
@@ -36,6 +36,7 @@ import type {
 } from "./t3team-myworkDigestTypes.ts";
 import { readDigestDependencies } from "./t3team-myworkDigestDependencies.ts";
 import { withProfileNames } from "./t3team-myworkDigestPeopleNames.ts";
+import { readDigestJiraHealth } from "./t3team-myworkDigestJiraHealth.ts";
 import { readDigestViewerTickets } from "./t3team-myworkDigestViewer.ts";
 
 /** The mirror identity a project's Jira reads key on. */
@@ -79,7 +80,7 @@ export function loadDigestProjectSource(
   return Effect.gen(function* () {
     const appProjectId = project.appProjectId?.trim() || undefined;
     const identity = digestIdentityFor(project);
-    yield* kickDigestMirrorSync(project);
+    const mirrorSyncing = yield* kickDigestMirrorSync(project);
     const viewer = yield* readDigestViewerTickets({
       project,
       identity,
@@ -110,7 +111,7 @@ export function loadDigestProjectSource(
             transitions,
           })
         : undefined;
-    const jiraSyncedAtMs = yield* readDigestJiraSyncedAtMs(project);
+    const jiraHealth = yield* readDigestJiraHealth(project, mirrorSyncing);
     const dependencies = yield* readDigestDependencies({ identity, assigned: viewer.assigned });
 
     // Burndown history: the sprint's backfilled changelog rows; when the
@@ -191,7 +192,7 @@ export function loadDigestProjectSource(
       nowIso: ctx.nowIso,
       ...(prRead?.note !== undefined ? { changeRequestNote: prRead.note } : {}),
       ...(prRead?.stale === true ? { changeRequestsStale: true } : {}),
-      ...(jiraSyncedAtMs !== undefined ? { jiraSyncedAt: millisToIso(jiraSyncedAtMs) } : {}),
+      ...jiraHealth,
       ...(dependencies.length > 0 ? { dependencies } : {}),
       ...(yesterdayRead?.yesterday !== undefined ? { yesterday: yesterdayRead.yesterday } : {}),
     };

@@ -23,8 +23,9 @@ import {
 } from "./t3team-atlassian-auth-deadToken.ts";
 import {
   accountNeedsReconnect,
-  clearAllNeedsReconnect,
+  markNeedsReconnect,
   reconnectRequiredError,
+  resetAllNeedsReconnect,
 } from "./t3team-atlassian-auth-staleToken.ts";
 import {
   readAtlassianOAuthClientId,
@@ -68,13 +69,6 @@ export function commitAtlassianAuths(
   );
 }
 
-function missingRefreshTokenError() {
-  return new T3TeamAtlassianError({
-    message:
-      "Atlassian OAuth token expired and no refresh token is stored. Reconnect Atlassian to grant offline access.",
-  });
-}
-
 function atlassianOAuthClientConfig(): { clientId: string; clientSecret?: string } {
   const clientId = readAtlassianOAuthClientId();
   const clientSecret = readAtlassianOAuthClientSecret() || undefined;
@@ -102,7 +96,7 @@ function refreshOAuthAuthIfNeeded(accountId: string, auth: JiraApiAuth) {
 
     const refreshToken = auth.refreshToken;
     if (!refreshToken) {
-      return yield* missingRefreshTokenError();
+      return yield* markNeedsReconnect(accountId, persistAuthsToDisk);
     }
 
     const config = atlassianOAuthClientConfig();
@@ -192,7 +186,7 @@ export function replaceAtlassianAuths(
   entries: ReadonlyArray<{ readonly accountId: string; readonly auth: JiraApiAuth }>,
 ): void {
   atlassianAuths.clear();
-  clearAllNeedsReconnect();
+  resetAllNeedsReconnect();
   for (const entry of entries) {
     atlassianAuths.set(entry.accountId, entry.auth);
   }
