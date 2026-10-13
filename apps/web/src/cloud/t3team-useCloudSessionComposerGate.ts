@@ -27,10 +27,16 @@ import {
   queueCloudSessionSendIfNeeded,
   type CloudQueuedTurn,
 } from "./t3team-cloudSessionQueueSend";
+import { useComposerDraftStore } from "~/composerDraftStore";
+import { useClientSettings } from "~/hooks/useSettings";
+import { selectProjectGroupingSettings } from "~/logicalProject";
+import { useProjects } from "~/state/entities";
+import type { CloudQueuedSendCardInput } from "./t3team-CloudQueuedSendCard";
+import { resolveCloudQueuedSendFacts } from "./t3team-cloudQueuedSendFacts";
 import {
-  cloudSessionBindBannerTitle,
-  resolveCloudSessionBindPhase,
-} from "./t3team-cloudSessionTargetLogic";
+  presentCloudQueuedSendProgress,
+  type CloudQueuedSendStepFacts,
+} from "./t3team-cloudQueuedSendSteps";
 
 export function useCloudSessionComposerGate(input: {
   /** The composer's draft session; only a draft's first message can wait for a cloud session. */
@@ -39,12 +45,13 @@ export function useCloudSessionComposerGate(input: {
   readonly scopeKey: string | null;
   /** The composer's project: a cloud session set up for another one stops being the target. */
   readonly projectRef: ScopedProjectRef | null;
-  readonly availableEnvironmentIds: ReadonlySet<string>;
 }): {
   readonly tryQueueSend: (turn: CloudQueuedTurn) => CloudQueuedSend | null;
   readonly cancelQueuedSend: () => void;
   readonly bannerItem: ComposerBannerStackItem | null;
   readonly hasQueuedBind: boolean;
+  /** The thread card's input while the draft's first message waits; null otherwise. */
+  readonly card: CloudQueuedSendCardInput | null;
 } {
   const cloud = useCloudSessionController();
   const { draftId } = input;
@@ -68,61 +75,64 @@ export function useCloudSessionComposerGate(input: {
     if (draftId !== null) retryDraftCloudQueuedSend(draftId);
   }, [draftId]);
 
-  const session =
-    queued === null
-      ? null
-      : (cloud.sessions.find((item) => item.sessionId === queued.sessionId) ?? null);
-
+  const draft = useComposerDraftStore((state) =>
+    draftId === null ? undefined : state.draftThreadsByThreadKey[draftId],
+  );
   const { environments } = useEnvironments();
-  const machineRegistered =
-    session?.environmentId !== undefined &&
-    environments.some(
-      (environment) =>
-        environment.environmentId === session.environmentId &&
-        environment.connection.phase === "connected",
-    );
+  const projects = useProjects();
+  const settings = useClientSettings();
+  // The same facts the app-level flusher acts on; the card and the banner both render them.
+  const stepFacts = useMemo<CloudQueuedSendStepFacts | null>(() => {
+    if (queued === null || draft === undefined) return null;
+    const facts = resolveCloudQueuedSendFacts({
+      queued,
+      draft,
+      sessions: cloud.sessions,
+      environments,
+      projects,
+      threadShells: [],
+      groupingSettings: selectProjectGroupingSettings(settings),
+    });
+    return { ...facts, queued, projectReady: facts.project !== null, flushing };
+  }, [cloud.sessions, draft, environments, flushing, projects, queued, settings]);
+  const canRetry = queued?.failureMessage !== undefined && queued.retryable !== false;
 
   const bannerItem = useMemo<ComposerBannerStackItem | null>(() => {
-    if (queued === null) return null;
-    const phase = resolveCloudSessionBindPhase({
-      sessionPhase: session?.phase ?? null,
-      connecting: cloud.pendingKind === "connect",
-      machineRegistered,
-      projectReady:
-        session?.environmentId !== undefined &&
-        input.availableEnvironmentIds.has(session.environmentId),
-      flushing,
-      failed: queued.failureMessage !== undefined,
-    });
+    if (stepFacts === null) return null;
+    const view = presentCloudQueuedSendProgress(stepFacts, Date.now());
     const action = (label: string, onClick: () => void) =>
       createElement(Button, { key: label, size: "xs", variant: "ghost", onClick }, label);
     return {
-      id: `cloud-session-bind:${queued.messageId}`,
-      variant: phase === "failed" ? "error" : "info",
+      id: `cloud-session-bind:${stepFacts.queued.messageId}`,
+      variant: view.failed ? "error" : "info",
       priority: "activity",
       icon: createElement(CloudIcon, {
-        className: phase === "failed" ? "size-3" : "size-3 animate-pulse",
+        className: view.failed ? "size-3" : "size-3 animate-pulse",
         "aria-hidden": true,
       }),
-      title: cloudSessionBindBannerTitle(phase),
-      description: queued.failureMessage ?? queued.sessionLabel,
+      title: view.title,
+      description: stepFacts.queued.failureMessage ?? stepFacts.queued.sessionLabel,
       actions: createElement(
         Fragment,
         null,
-        phase === "failed" && queued.retryable !== false ? action("Retry", retryQueuedSend) : null,
+        canRetry ? action("Retry", retryQueuedSend) : null,
         action("Cancel", cancelQueuedSend),
       ),
     };
-  }, [
-    cancelQueuedSend,
-    cloud.pendingKind,
-    flushing,
-    input.availableEnvironmentIds,
-    machineRegistered,
-    queued,
-    retryQueuedSend,
-    session,
-  ]);
+  }, [canRetry, cancelQueuedSend, retryQueuedSend, stepFacts]);
 
-  return { tryQueueSend, cancelQueuedSend, bannerItem, hasQueuedBind: queued !== null };
+  return {
+    tryQueueSend,
+    cancelQueuedSend,
+    bannerItem,
+    hasQueuedBind: queued !== null,
+    card:
+      stepFacts === null
+        ? null
+        : {
+            facts: stepFacts,
+            onCancel: cancelQueuedSend,
+            onRetry: canRetry ? retryQueuedSend : null,
+          },
+  };
 }

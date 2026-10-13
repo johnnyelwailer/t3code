@@ -21,6 +21,7 @@ import { resolveCloudQueuedSendFacts } from "./t3team-cloudQueuedSendFacts";
 import { decideCloudQueuedSendFlush } from "./t3team-cloudQueuedSendFlush";
 import {
   failDraftCloudQueuedSend,
+  stampDraftCloudQueuedSendStep,
   updateDraftCloudQueuedSend,
   useCloudQueuedSends,
 } from "./t3team-cloudQueuedSendStore";
@@ -73,6 +74,11 @@ function ActiveCloudQueuedSendFlusher() {
         projects,
         threadShells,
         groupingSettings,
+      });
+      stampDraftCloudQueuedSendStep(draftId, {
+        ...facts,
+        queued,
+        projectReady: facts.project !== null,
       });
       const target = targets.get(draftId) ?? null;
       const requestedFor = connectRequestedRef.current.get(queued.messageId);

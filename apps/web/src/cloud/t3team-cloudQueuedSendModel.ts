@@ -34,6 +34,8 @@ export const CloudQueuedSendSchema = Schema.Struct({
   failureMessage: Schema.optionalKey(Schema.String),
   /** False when retrying cannot help (the session ended): only cancel is offered. */
   retryable: Schema.optionalKey(Schema.Boolean),
+  /** When each bind step was first seen (step id -> ISO time), for per-step elapsed. */
+  stepStartedAt: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
 });
 
 export interface CloudQueuedSend {
@@ -49,6 +51,7 @@ export interface CloudQueuedSend {
   readonly createdAt: string;
   readonly failureMessage?: string;
   readonly retryable?: boolean;
+  readonly stepStartedAt?: Readonly<Record<string, string>>;
 }
 
 const decodeUnknown = Schema.decodeUnknownOption(CloudQueuedSendSchema);

@@ -345,6 +345,7 @@ import { usePanelAnimationSettings, usePanelPresence } from "../panelAnimations"
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionComposerGate";
 import { useCloudQueuedSendOptimisticMessage } from "~/cloud/t3team-useCloudQueuedSendOptimisticMessage";
+import { CloudQueuedSendCard } from "~/cloud/t3team-CloudQueuedSendCard";
 import { useRemoveClonedProject } from "../hooks/useRemoveClonedProject";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { resolveAppModelSelectionForInstance } from "../modelSelection";
@@ -4609,10 +4610,6 @@ export default function ChatView(props: ChatViewProps) {
   }, [draftId, activeProjectKey]);
 
   const cloudSessionScopeKey = draftId ?? routeThreadKey;
-  const cloudAvailableEnvironmentIds = useMemo(
-    () => new Set(logicalProjectEnvironments.map((env) => env.environmentId)),
-    [logicalProjectEnvironments],
-  );
   const onEnvironmentChange = useCallback(
     (nextEnvironmentId: EnvironmentId) => {
       if (envLocked || !draftId || sendInFlightRef.current) return;
@@ -4697,7 +4694,6 @@ export default function ChatView(props: ChatViewProps) {
     draftId: draftId ?? null,
     scopeKey: cloudSessionScopeKey,
     projectRef: activeProjectRef,
-    availableEnvironmentIds: cloudAvailableEnvironmentIds,
   });
   useCloudQueuedSendOptimisticMessage({ draftId: draftId ?? null, setOptimisticUserMessages });
 
@@ -11937,7 +11933,13 @@ export default function ChatView(props: ChatViewProps) {
                 {...(draftId ? { onWorktreeSetupWorkLocally } : {})}
                 {...(onOpenWorktreeSetupTerminal ? { onOpenWorktreeSetupTerminal } : {})}
                 isPreparingWorktree={!paintOnlyDisplayedTimeline && isPreparingWorktree}
-                footer={paintOnlyDisplayedTimeline ? null : threadStatusLine}
+                footer={
+                  paintOnlyDisplayedTimeline ? null : cloudSessionComposerGate.card ? (
+                    <CloudQueuedSendCard {...cloudSessionComposerGate.card} />
+                  ) : (
+                    threadStatusLine
+                  )
+                }
                 listRef={legendListRef}
                 timelineEntries={displayedTimeline.entries}
                 providerStatuses={

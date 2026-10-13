@@ -8,6 +8,10 @@ import { useShallow } from "zustand/react/shallow";
 
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
+import {
+  resolveCloudQueuedSendStepId,
+  type CloudQueuedSendStepFacts,
+} from "./t3team-cloudQueuedSendSteps";
 
 type DraftsByKey = ReturnType<typeof useComposerDraftStore.getState>["draftsByThreadKey"];
 
@@ -72,6 +76,25 @@ export function updateDraftCloudQueuedSend(
   const current = getDraftCloudQueuedSend(draftId);
   if (current === null || current.messageId !== messageId) return;
   writeDraftCloudQueuedSend(draftId, update(current));
+}
+
+/** Records when the send's current bind step was first seen; later sightings keep that time. */
+export function stampDraftCloudQueuedSendStep(
+  draftId: string,
+  facts: Omit<CloudQueuedSendStepFacts, "flushing">,
+  at: Date = new Date(),
+): void {
+  const { queued } = facts;
+  if (queued.failureMessage !== undefined) return;
+  const stepId = resolveCloudQueuedSendStepId({
+    ...facts,
+    flushing: isCloudQueuedSendDispatching(queued.messageId),
+  });
+  if (queued.stepStartedAt?.[stepId] !== undefined) return;
+  updateDraftCloudQueuedSend(draftId, queued.messageId, (current) => ({
+    ...current,
+    stepStartedAt: { ...current.stepStartedAt, [stepId]: at.toISOString() },
+  }));
 }
 
 export function failDraftCloudQueuedSend(
