@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 
 import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import { loadAccount } from "./t3team-github-routes-account.ts";
 import {
   loadFullRepositoryList,
@@ -201,5 +202,5 @@ export function loadGitHubInboxResponse(input: GitHubInboxDiscoverRequest) {
     return response;
     // An explicit refresh or open is a user waiting on this answer and may spend the reserve; the
     // palette's automatic fan-out (no `trigger`) must honour a pause and leave the reserve alone.
-  }).pipe(Effect.provideService(GitHubApi.AllowGitHubReserve, input.trigger === "user"));
+  }).pipe(Effect.provideService(SourceControlRateLimit.Interactive, input.trigger === "user"));
 }

@@ -1,4 +1,4 @@
-import { distributionBranding } from "@t3code/distribution";
+import { distributionHomeDirName } from "../t3team-distribution-homeDir.ts";
 import * as NetService from "@t3tools/shared/Net";
 import {
   OtlpHeadersFromString,
@@ -320,12 +320,7 @@ export const resolveServerConfig = (
       normalizedFlags.baseDir,
       Option.fromUndefinedOr(env.t3Home),
     ).pipe(Option.filter((value) => value.trim().length > 0));
-    const distroDir = distributionBranding?.userDataDirName;
-    const defaultDirName = distroDir
-      ? distroDir.startsWith(".")
-        ? distroDir
-        : `.${distroDir}`
-      : undefined;
+    const defaultDirName = distributionHomeDirName;
     const baseDir = yield* resolveBaseDir(
       Option.getOrUndefined(
         resolveOptionPrecedence(explicitBaseDir, Option.fromUndefinedOr(bootstrap?.t3Home)),

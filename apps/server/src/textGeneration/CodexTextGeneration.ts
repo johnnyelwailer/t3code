@@ -423,29 +423,28 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     }).pipe(Effect.ensuring(cleanup));
   });
 
-  const generateActivityLabel: ProviderTextGeneration["generateActivityLabel"] =
-    Effect.fn("CodexTextGeneration.generateActivityLabel")(function* (input) {
-      const { prompt, outputSchema } = buildActivityLabelPrompt({ context: input.context });
+  const generateActivityLabel: ProviderTextGeneration["generateActivityLabel"] = Effect.fn(
+    "CodexTextGeneration.generateActivityLabel",
+  )(function* (input) {
+    const { prompt, outputSchema } = buildActivityLabelPrompt({ context: input.context });
 
-      const generated = yield* runCodexJson({
-        operation: "generateActivityLabel",
-        cwd: input.cwd,
-        prompt,
-        outputSchema,
-        modelSelection: input.modelSelection,
-        // No-thinking by construction: the label is a tiny single-shot task and
-        // must not spend a reasoning budget (GHE #40 light-inference).
-        reasoningEffortOverride: "none",
-      });
-
-      return {
-        label: sanitizeActivityLabel(generated.label),
-      } satisfies ActivityLabelGenerationResult;
+    const generated = yield* runCodexJson({
+      operation: "generateActivityLabel",
+      cwd: input.cwd,
+      prompt,
+      outputSchema,
+      modelSelection: input.modelSelection,
+      // No-thinking by construction: the label is a tiny single-shot task and
+      // must not spend a reasoning budget (GHE #40 light-inference).
+      reasoningEffortOverride: "none",
     });
 
-  const generateStructured: ProviderTextGeneration["generateStructured"] = (
-    input,
-  ) =>
+    return {
+      label: sanitizeActivityLabel(generated.label),
+    } satisfies ActivityLabelGenerationResult;
+  });
+
+  const generateStructured: ProviderTextGeneration["generateStructured"] = (input) =>
     runCodexJson({
       operation: "generateStructured",
       cwd: input.cwd,

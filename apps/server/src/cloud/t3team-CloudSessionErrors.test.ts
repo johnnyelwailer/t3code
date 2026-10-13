@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
 import * as GitHubCredentials from "@t3tools/source-control-github/server/GitHubCredentials";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
+import { SourceControlProviderKind } from "@t3tools/contracts";
 import { toCloudSessionFailure } from "./t3team-CloudSessionErrors.ts";
 
 describe("toCloudSessionFailure", () => {
@@ -43,7 +44,7 @@ describe("toCloudSessionFailure", () => {
     Effect.sync(() => {
       const failure = toCloudSessionFailure(
         new SourceControlRateLimit.SourceControlRateLimitPausedError({
-          provider: "github",
+          provider: SourceControlProviderKind.make("github"),
           host: "nexplore.ghe.com",
           retryAt: 1_700_000_000_100,
         }),

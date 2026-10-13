@@ -16,7 +16,9 @@ import { OpenCodeSettings } from "@t3tools/provider-opencode/settings";
 import * as OpenCodeRuntime from "@t3tools/provider-opencode/server/OpenCodeRuntime";
 import { makeOpenCodeAdapterV2 } from "@t3tools/provider-opencode/server/adapter";
 
-type ConnectInput = Parameters<OpenCodeRuntime.OpenCodeRuntime["Service"]["connectToOpenCodeServer"]>[0];
+type ConnectInput = Parameters<
+  OpenCodeRuntime.OpenCodeRuntime["Service"]["connectToOpenCodeServer"]
+>[0];
 
 const decodeSettings = Schema.decodeSync(OpenCodeSettings);
 
@@ -43,27 +45,21 @@ const openWith = (configContent: string) => {
     });
   }).pipe(
     // Stop right after the connect request: only its input is under test.
-    Effect.provideService(
-      OpenCodeRuntime.OpenCodeRuntime,
-      {
-        connectToOpenCodeServer: (input: ConnectInput) => {
-          connects.push(input);
-          return Effect.fail(
-            new OpenCodeRuntime.OpenCodeRuntimeError({
-              operation: "connect",
-              detail: "test stops here",
-            }),
-          );
-        },
-      } as unknown as OpenCodeRuntime.OpenCodeRuntime["Service"],
-    ),
-    Effect.provideService(
-      ProviderHost.ProviderHost,
-      {
-        paths: { cwd: "/workspace" },
-        resolveAttachmentPath: () => null,
-      } as unknown as ProviderHost.ProviderHost["Service"],
-    ),
+    Effect.provideService(OpenCodeRuntime.OpenCodeRuntime, {
+      connectToOpenCodeServer: (input: ConnectInput) => {
+        connects.push(input);
+        return Effect.fail(
+          new OpenCodeRuntime.OpenCodeRuntimeError({
+            operation: "connect",
+            detail: "test stops here",
+          }),
+        );
+      },
+    } as unknown as OpenCodeRuntime.OpenCodeRuntime["Service"]),
+    Effect.provideService(ProviderHost.ProviderHost, {
+      paths: { cwd: "/workspace" },
+      resolveAttachmentPath: () => null,
+    } as unknown as ProviderHost.ProviderHost["Service"]),
     Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),
     Effect.scoped,
   );

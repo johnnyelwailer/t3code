@@ -11631,14 +11631,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         // t3team: host-machinery threads stay off the navigation shell (t3team-hiddenShellThreads.ts).
         .pipe(Effect.map(visibleShellSnapshot), Effect.mapError(shellProjectionError)),
     readShellSnapshot: (options) =>
-      projectionStore
-        .readShellSnapshot(options)
-        .pipe(
-          Effect.mapError(shellProjectionError),
-          Effect.map((read) =>
-            read.pipe(Effect.map(visibleShellSnapshot), Effect.mapError(shellProjectionError)),
-          ),
+      projectionStore.readShellSnapshot(options).pipe(
+        Effect.mapError(shellProjectionError),
+        Effect.map((read) =>
+          read.pipe(Effect.map(visibleShellSnapshot), Effect.mapError(shellProjectionError)),
         ),
+      ),
     getThreadShell: (threadId) =>
       projectionStore
         .getThreadShell(threadId)

@@ -329,27 +329,26 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
     );
   });
 
-  const generateActivityLabel: ProviderTextGeneration["generateActivityLabel"] =
-    Effect.fn("ClaudeTextGeneration.generateActivityLabel")(function* (input) {
-      const { prompt, outputSchema } = buildActivityLabelPrompt({ context: input.context });
+  const generateActivityLabel: ProviderTextGeneration["generateActivityLabel"] = Effect.fn(
+    "ClaudeTextGeneration.generateActivityLabel",
+  )(function* (input) {
+    const { prompt, outputSchema } = buildActivityLabelPrompt({ context: input.context });
 
-      const generated = yield* runClaudeJson({
-        operation: "generateActivityLabel",
-        cwd: input.cwd,
-        prompt,
-        outputSchema,
-        modelSelection: input.modelSelection,
-        noThinking: true,
-      });
-
-      return {
-        label: sanitizeActivityLabel(generated.label),
-      } satisfies ActivityLabelGenerationResult;
+    const generated = yield* runClaudeJson({
+      operation: "generateActivityLabel",
+      cwd: input.cwd,
+      prompt,
+      outputSchema,
+      modelSelection: input.modelSelection,
+      noThinking: true,
     });
 
-  const generateStructured: ProviderTextGeneration["generateStructured"] = (
-    input,
-  ) =>
+    return {
+      label: sanitizeActivityLabel(generated.label),
+    } satisfies ActivityLabelGenerationResult;
+  });
+
+  const generateStructured: ProviderTextGeneration["generateStructured"] = (input) =>
     runClaudeJson({
       operation: "generateStructured",
       cwd: input.cwd,
