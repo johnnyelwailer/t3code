@@ -106,6 +106,17 @@ describe("queued cloud send across two windows", { timeout: 60_000 }, () => {
     expect(b.prompt()).toBe("follow-up");
   });
 
+  it("does not keep the queued text itself as typed text when it adopts a settled send", async () => {
+    const { a, b } = await twoWindowsWithQueuedSend();
+    // B read the draft before A cleared its prompt: its prompt is still the queued message.
+    b.drafts.useComposerDraftStore.getState().setPrompt(b.draftId, queued.messageText);
+    expect(a.cancel()?.messageId).toBe(queued.messageId);
+    a.drafts.useComposerDraftStore.getState().setPrompt(a.draftId, "edited after cancel");
+    a.drafts.flushComposerDraftStorage();
+    expect(b.cancel()).toBeNull();
+    expect(b.prompt()).toBe("edited after cancel");
+  });
+
   it("makes the other window's flush stop on a send cancelled elsewhere", async () => {
     const late = await twoWindowsWithQueuedSend();
     expect(late.a.cancel()?.messageId).toBe(queued.messageId);
