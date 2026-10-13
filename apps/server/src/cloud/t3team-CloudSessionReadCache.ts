@@ -25,7 +25,7 @@ import { jobsMatchAttempt } from "./t3team-githubActionsSessionParse.ts";
  */
 
 /** A live run's detail moves on the client poll cadence; a few seconds shares one call. */
-export const LIVE_READ_TTL = Duration.seconds(5);
+const LIVE_READ_TTL = Duration.seconds(5);
 
 /** Settled data is immutable; the capacity bound, not time, is what retires it. */
 const SETTLED_READ_TTL = Duration.infinity;
