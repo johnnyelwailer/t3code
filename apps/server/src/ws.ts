@@ -245,6 +245,8 @@ import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
 import { T3TeamActorMailbox } from "./t3team-actorMailboxService.ts";
 import { stopThreadCascade } from "./t3team-threadStopCascade.ts";
+import { prepareThreadHandoff, recordThreadHandoff } from "./t3team-threadHandoff.ts";
+import * as VcsProcess from "./vcs/VcsProcess.ts";
 import { makeSettleParkedWorkflowStop } from "./t3team-settleParkedWorkflowStopLive.ts";
 import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import * as PackDocumentStore from "./t3team-v2/t3team-packDocumentStore.ts";
@@ -1355,6 +1357,8 @@ const layerWsRpc = (
       );
       // t3team: the inter-agent mailbox the stop cascade holds (optional, as above).
       const actorMailbox = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamActorMailbox));
+      // t3team: thread handoff reads branch state with it (optional: unknown state, no refusal).
+      const vcsProcess = Option.getOrUndefined(yield* Effect.serviceOption(VcsProcess.VcsProcess));
       // t3team: a user's settle first stops the thread's parked workflow runs (outside the lock).
       const stopParkedWorkflowRunsBeforeSettle = yield* makeSettleParkedWorkflowStop;
       const crypto = yield* Crypto.Crypto;
@@ -2278,6 +2282,25 @@ const layerWsRpc = (
               ),
             ),
           ),
+        [WS_METHODS.t3teamThreadHandoffPrepare]: (input) =>
+          Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
+            Effect.andThen(
+              prepareThreadHandoff(input, {
+                vcs: vcsProcess,
+                scheduledTasks: scheduledTasks.list().pipe(
+                  Effect.map((result) => result.tasks),
+                  Effect.orElseSucceed(() => []),
+                ),
+              }).pipe(
+                Effect.provideService(
+                  ThreadManagementService.ThreadManagementService,
+                  threadManagement,
+                ),
+                Effect.provideService(ProjectStore.ProjectStoreV2, projectStore),
+              ),
+            ),
+          ),
+        [WS_METHODS.t3teamThreadHandoffRecord]: (input) => recordThreadHandoff(input, threadFacts),
         [WS_METHODS.scheduledTasksList]: (_input) =>
           scheduledTasks.list().pipe(Effect.map(withVisibleWebhookUrls)),
         [WS_METHODS.scheduledTasksSubscribe]: (_input) =>
