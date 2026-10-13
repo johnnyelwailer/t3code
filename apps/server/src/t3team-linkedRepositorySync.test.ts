@@ -137,6 +137,80 @@ describe("T3TeamLinkedRepositorySync", () => {
     }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
   });
 
+  it.live(
+    "adopts a finished clone an earlier attempt could not publish instead of cloning again",
+    () => {
+      const harness = makeHarness();
+      const url = makeOrigin(harness.root, "adopt");
+      return Effect.gen(function* () {
+        // First attempt: a clone that finishes, then is left behind as a temp directory (publishing failed).
+        const first = yield* bootstrap(harness.workspaceRoot, [url], true);
+        const localPath = first.linkedRepositories[0]!.localPath;
+        yield* settleAll([localPath]);
+        expect(harness.counts.clone).toBe(1);
+        const leftover = NodePath.join(
+          NodePath.dirname(localPath),
+          `.${NodePath.basename(localPath)}.clone-abcd1234`,
+        );
+        NodeFS.renameSync(localPath, leftover);
+
+        yield* bootstrap(harness.workspaceRoot, [url], true);
+        yield* settleAll([localPath]);
+
+        expect(harness.counts.clone).toBe(1);
+        expect(NodeFS.existsSync(NodePath.join(localPath, "a.txt"))).toBe(true);
+        expect(NodeFS.existsSync(leftover)).toBe(false);
+        const [entry] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot))
+          .linkedRepositories;
+        expect(entry?.status).toBe("cloned");
+      }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
+    },
+  );
+
+  it.live("discards a half-finished leftover clone and clones fresh", () => {
+    const harness = makeHarness();
+    const url = makeOrigin(harness.root, "partial");
+    return Effect.gen(function* () {
+      const first = yield* bootstrap(harness.workspaceRoot, [url], true);
+      const localPath = first.linkedRepositories[0]!.localPath;
+      yield* settleAll([localPath]);
+      const leftover = NodePath.join(
+        NodePath.dirname(localPath),
+        `.${NodePath.basename(localPath)}.clone-ffff0000`,
+      );
+      NodeFS.mkdirSync(NodePath.join(leftover, ".git"), { recursive: true });
+      NodeFS.rmSync(localPath, { recursive: true, force: true });
+
+      yield* bootstrap(harness.workspaceRoot, [url], true);
+      yield* settleAll([localPath]);
+
+      expect(harness.counts.clone).toBe(2);
+      expect(NodeFS.existsSync(NodePath.join(localPath, "a.txt"))).toBe(true);
+      expect(NodeFS.existsSync(leftover)).toBe(false);
+    }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
+  });
+
+  it.live(
+    "keeps a healthy clone on disk when its manifest entry is gone and the list reorders",
+    () => {
+      const harness = makeHarness();
+      const url = makeOrigin(harness.root, "keeper");
+      const other = makeOrigin(harness.root, "newcomer");
+      return Effect.gen(function* () {
+        const first = yield* bootstrap(harness.workspaceRoot, [url], true);
+        const keeperPath = first.linkedRepositories[0]!.localPath;
+        yield* settleAll([keeperPath]);
+        NodeFS.rmSync(NodePath.join(NodePath.dirname(keeperPath), MANIFEST_FILE_NAME));
+
+        const second = yield* bootstrap(harness.workspaceRoot, [other, url], true);
+        yield* settleAll(second.linkedRepositories.map((entry) => entry.localPath));
+
+        expect(second.linkedRepositories[1]?.localPath).toBe(keeperPath);
+        expect(harness.counts.clone).toBe(2);
+      }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
+    },
+  );
+
   it.live("a client disconnect does not interrupt a running clone", () => {
     const harness = makeHarness();
     const url = makeOrigin(harness.root, "solo");
@@ -254,7 +328,7 @@ describe("T3TeamLinkedRepositorySync", () => {
       NodeFS.mkdirSync(referencesRoot, { recursive: true });
       NodeFS.writeFileSync(
         NodePath.join(referencesRoot, MANIFEST_FILE_NAME),
-        `{"linkedRepositories":[{"url":"${url}","localPath":"${localPath}","status":"pending"}]}`,
+        JSON.stringify({ linkedRepositories: [{ url, localPath, status: "pending" }] }),
       );
       const first = yield* readLinkedRepositoryStatus(harness.workspaceRoot);
       expect(first.linkedRepositories[0]?.syncState).toBeDefined();

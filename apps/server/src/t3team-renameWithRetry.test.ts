@@ -1,5 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - the real-filesystem case drives an actual child process.
 import * as NodeChildProcess from "node:child_process";
+import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
@@ -67,7 +68,7 @@ it.effect("gives up after the attempt budget", () =>
 
 /** Windows refuses to rename a directory that is some process's working directory: the same
  * EBUSY/EPERM a scanner's open handle causes after a clone. POSIX renames it happily. */
-const itOnWindows = process.platform === "win32" ? it.live : it.skip;
+const itOnWindows = NodePath.sep === "\\" ? it.live : it.live.skip;
 
 itOnWindows(
   "a directory a process is working in is renamed once it lets go (real filesystem)",
@@ -92,7 +93,9 @@ itOnWindows(
       const single = yield* fs.rename(from, to).pipe(Effect.exit);
       assert.isTrue(Exit.isFailure(single), "the held directory must refuse a plain rename");
 
-      setTimeout(() => child.kill(), 1_500);
+      yield* Effect.forkChild(
+        Effect.sleep("1500 millis").pipe(Effect.andThen(Effect.sync(() => child.kill()))),
+      );
       yield* renameDirectoryWithRetry(from, to, { delayMs: 250 });
       assert.isTrue(yield* fs.exists(to));
       assert.isFalse(yield* fs.exists(from));

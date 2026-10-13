@@ -19,6 +19,7 @@ import {
   type LinkedRepositorySyncPhase,
   type MainRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
+import { findExistingLinkedCheckout } from "./t3team-linkedRepositoryExistingCheckout.ts";
 import { findLinkedRepository } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 import { mainRepositoryFromManifestJson } from "./t3team-toolBrokerStartChildContext.ts";
 
@@ -67,13 +68,25 @@ export const planLinkedRepositoriesForBootstrap = Effect.fn("planLinkedRepositor
         : false;
       // A recorded clone is reused (possibly under another workspace's state dir, after a
       // main-repository switch); a pending one keeps its path so its running sync is found.
-      const localPath =
+      const recordedPath =
         previous?.localPath && (previousIsClone || previous.status === "pending")
           ? previous.localPath
-          : path.join(
-              input.referencesRoot,
-              `${String(index + 1).padStart(2, "0")}-${deriveReferenceDirectoryName(url)}`,
-            );
+          : undefined;
+      const onDiskPath =
+        recordedPath === undefined
+          ? yield* findExistingLinkedCheckout({
+              referencesRoot: input.referencesRoot,
+              url,
+              taken: new Set(planned.map((item) => item.entry.localPath)),
+            })
+          : undefined;
+      const localPath =
+        recordedPath ??
+        onDiskPath ??
+        path.join(
+          input.referencesRoot,
+          `${String(index + 1).padStart(2, "0")}-${deriveReferenceDirectoryName(url)}`,
+        );
       const phase = input.phaseOf(localPath);
       const syncedAtMs = previous?.syncedAt ? Date.parse(previous.syncedAt) : Number.NaN;
       const recentlySettled =
