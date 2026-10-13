@@ -29,6 +29,8 @@ export const CloudQueuedSendSchema = Schema.Struct({
   /** The cloud session it waits for; the create sentinel until the create RPC answers. */
   sessionId: Schema.String,
   sessionLabel: Schema.String,
+  /** The composer project the session was picked for (the Run-on target's), for its own project. */
+  projectKey: Schema.optionalKey(Schema.NullOr(Schema.String)),
   createdAt: Schema.String,
   /** Set when the send cannot go through; the message stays until retried or cancelled. */
   failureMessage: Schema.optionalKey(Schema.String),
@@ -46,6 +48,7 @@ export interface CloudQueuedSend {
   readonly interactionMode: ProviderInteractionModeType;
   readonly sessionId: string;
   readonly sessionLabel: string;
+  readonly projectKey?: string | null;
   readonly createdAt: string;
   readonly failureMessage?: string;
   readonly retryable?: boolean;

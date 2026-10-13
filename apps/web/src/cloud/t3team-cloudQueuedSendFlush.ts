@@ -9,7 +9,7 @@ import { isCloudQueuedSendFailed, type CloudQueuedSend } from "./t3team-cloudQue
 import { CLOUD_SESSION_CREATING_ID } from "./t3team-cloudSessionTargetLogic";
 
 export const CLOUD_QUEUED_SEND_NOT_CREATED_MESSAGE =
-  "The cloud session was not created. Send the message again to pick a machine.";
+  "The cloud session was still being created when the app reloaded. Pick it under Run on, then retry.";
 const CLOUD_QUEUED_SEND_ENDED_MESSAGE = "Cloud session ended before it could connect.";
 
 export type CloudQueuedSendFlushAction =
@@ -18,6 +18,8 @@ export type CloudQueuedSendFlushAction =
   /** The create answered: stamp the real session id on the record. */
   | { readonly kind: "resolve-session"; readonly sessionId: string; readonly label: string }
   | { readonly kind: "connect"; readonly session: CloudSession }
+  /** A "No project" draft: open the machine's scratch project, then send there. */
+  | { readonly kind: "open-scratch"; readonly environmentId: EnvironmentId }
   | { readonly kind: "fail"; readonly message: string; readonly retryable: boolean }
   /** The draft's thread already exists on the machine: an earlier dispatch went through. */
   | { readonly kind: "delivered"; readonly environmentId: EnvironmentId }
@@ -37,14 +39,18 @@ export function decideCloudQueuedSendFlush(input: {
   readonly machineConnected: boolean;
   /** The draft's project on that machine, once it has synced there. */
   readonly projectId: ProjectId | null;
+  /** The draft is a "No project" thread, whose project on the machine is opened on demand. */
+  readonly scratch: boolean;
   /** The draft's thread is already known on that machine. */
   readonly threadExists: boolean;
 }): CloudQueuedSendFlushAction {
   const { queued, session } = input;
   if (isCloudQueuedSendFailed(queued)) return { kind: "wait" };
   if (queued.sessionId === CLOUD_SESSION_CREATING_ID) {
+    // A reload while the create was in flight loses the answer; once the user picks the
+    // session under Run on, a retry resolves it.
     if (input.target === null) {
-      return { kind: "fail", message: CLOUD_QUEUED_SEND_NOT_CREATED_MESSAGE, retryable: false };
+      return { kind: "fail", message: CLOUD_QUEUED_SEND_NOT_CREATED_MESSAGE, retryable: true };
     }
     return input.target.sessionId === CLOUD_SESSION_CREATING_ID
       ? { kind: "wait" }
@@ -71,6 +77,8 @@ export function decideCloudQueuedSendFlush(input: {
   // that fails with "still starting".
   if (environmentId === undefined) return { kind: "wait" };
   if (!input.machineConnected) return { kind: "connect", session };
-  if (input.projectId === null) return { kind: "wait" };
+  if (input.projectId === null) {
+    return input.scratch ? { kind: "open-scratch", environmentId } : { kind: "wait" };
+  }
   return { kind: "dispatch", environmentId, projectId: input.projectId };
 }

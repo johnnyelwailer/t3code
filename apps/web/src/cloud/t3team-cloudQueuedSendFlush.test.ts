@@ -32,6 +32,7 @@ const base = {
   connectFailure: null,
   machineConnected: false,
   projectId: null,
+  scratch: false,
   threadExists: false,
 };
 
@@ -83,7 +84,20 @@ describe("decideCloudQueuedSendFlush", () => {
     ).toEqual({ kind: "fail", message: "relay denied", retryable: true });
   });
 
-  it("follows the create sentinel to the real session, or fails when the create is gone", () => {
+  it("opens the machine's scratch project for a No-project draft instead of waiting forever", () => {
+    const connected = { ...base, session: session("ready"), machineConnected: true };
+    expect(decideCloudQueuedSendFlush({ ...connected, scratch: true })).toEqual({
+      kind: "open-scratch",
+      environmentId: "env-cloud",
+    });
+    expect(decideCloudQueuedSendFlush({ ...connected, scratch: false }).kind).toBe("wait");
+    expect(
+      decideCloudQueuedSendFlush({ ...connected, scratch: true, projectId: ProjectId.make("s") })
+        .kind,
+    ).toBe("dispatch");
+  });
+
+  it("follows the create sentinel to the real session; a reload mid-create is retryable", () => {
     const creating = { ...queued, sessionId: CLOUD_SESSION_CREATING_ID };
     expect(
       decideCloudQueuedSendFlush({
@@ -92,10 +106,11 @@ describe("decideCloudQueuedSendFlush", () => {
         target: { sessionId: "session-9", label: "machine" },
       }),
     ).toEqual({ kind: "resolve-session", sessionId: "session-9", label: "machine" });
+    // After a reload the in-memory target is gone: park it as retryable, not terminal.
     expect(decideCloudQueuedSendFlush({ ...base, queued: creating })).toEqual({
       kind: "fail",
       message: CLOUD_QUEUED_SEND_NOT_CREATED_MESSAGE,
-      retryable: false,
+      retryable: true,
     });
   });
 

@@ -1,8 +1,7 @@
 /**
  * Delivers one queued cloud send: retargets the draft at the cloud machine, launches its thread
  * with the prepared first message, and promotes the draft. Exactly once:
- *  - this window: the dispatching set skips a second call while one is in flight;
- *  - other windows: the outbox's cross-tab dispatch claim (`acquireOutboxDispatch`);
+ *  - here and in other windows: the dispatching set and the outbox's cross-tab claim (Cancel too);
  *  - the server: a command id derived from the message id, so a replay after a crash, a reload
  *    or a retry returns the first launch's receipt instead of launching again.
  */
@@ -21,6 +20,7 @@ import {
 import { acquireOutboxDispatch, releaseOutboxDispatch } from "~/t3team/outbox/t3team-outboxStorage";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {
+  cloudQueuedSendClaimKey,
   failDraftCloudQueuedSend,
   getDraftCloudQueuedSend,
   isCloudQueuedSendDispatching,
@@ -110,7 +110,7 @@ export async function dispatchCloudQueuedSend(input: {
   readonly projectCwd: string | null;
   readonly startTurn: StartCloudQueuedTurn;
 }): Promise<"sent" | "failed" | "skipped"> {
-  const claimKey = `cloud-queued-send:${input.messageId}`;
+  const claimKey = cloudQueuedSendClaimKey(input.messageId);
   if (isCloudQueuedSendDispatching(input.messageId) || !acquireOutboxDispatch(claimKey)) {
     return "skipped";
   }

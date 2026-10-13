@@ -7,6 +7,7 @@ import { useSyncExternalStore } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
+import { acquireOutboxDispatch, releaseOutboxDispatch } from "~/t3team/outbox/t3team-outboxStorage";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 
 type DraftsByKey = ReturnType<typeof useComposerDraftStore.getState>["draftsByThreadKey"];
@@ -94,10 +95,30 @@ export function retryDraftCloudQueuedSend(draftId: string): void {
   writeDraftCloudQueuedSend(draftId, rest);
 }
 
-/** Cancel: the message goes back into the composer, ahead of anything typed since. */
+/** The cross-window claim a dispatch and a cancel of one queued message both take. */
+export function cloudQueuedSendClaimKey(messageId: string): string {
+  return `cloud-queued-send:${messageId}`;
+}
+
+/**
+ * Cancel: the message goes back into the composer, ahead of anything typed since. Refused (null)
+ * while a send is in flight here or in another window: that turn is already starting, so the
+ * message is delivered and the draft becomes its thread rather than coming back as text.
+ */
 export function cancelDraftCloudQueuedSend(draftId: string): CloudQueuedSend | null {
   const current = getDraftCloudQueuedSend(draftId);
-  if (current === null) return null;
+  if (current === null || isCloudQueuedSendDispatching(current.messageId)) return null;
+  const claimKey = cloudQueuedSendClaimKey(current.messageId);
+  if (!acquireOutboxDispatch(claimKey)) return null;
+  try {
+    restoreQueuedMessage(draftId, current);
+  } finally {
+    releaseOutboxDispatch(claimKey);
+  }
+  return current;
+}
+
+function restoreQueuedMessage(draftId: string, current: CloudQueuedSend): void {
   const store = useComposerDraftStore.getState();
   const typed = store.draftsByThreadKey[draftId]?.prompt.trim() ?? "";
   // Prompt first: clearing the record on an otherwise empty draft would drop the draft.
@@ -106,7 +127,6 @@ export function cancelDraftCloudQueuedSend(draftId: string): CloudQueuedSend | n
     typed.length > 0 ? `${current.messageText}\n\n${typed}` : current.messageText,
   );
   writeDraftCloudQueuedSend(draftId, null);
-  return current;
 }
 
 // Messages a flusher in this window is dispatching right now ("Sending…").

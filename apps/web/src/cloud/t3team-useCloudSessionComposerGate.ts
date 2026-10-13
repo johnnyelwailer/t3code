@@ -110,7 +110,14 @@ export function useCloudSessionComposerGate(input: {
         Fragment,
         null,
         phase === "failed" && queued.retryable !== false ? action("Retry", retryQueuedSend) : null,
-        action("Cancel", cancelQueuedSend),
+        // In flight the turn is already starting: it is delivered, not cancellable.
+        flushing
+          ? createElement(
+              Button,
+              { key: "sending", size: "xs", variant: "ghost", disabled: true },
+              "Sending…",
+            )
+          : action("Cancel", cancelQueuedSend),
       ),
     };
   }, [
