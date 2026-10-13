@@ -1,5 +1,5 @@
 import type { ScopedProjectRef } from "@t3tools/contracts";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 
 import { toastManager } from "~/components/ui/toast";
 import { useClientSettings } from "~/hooks/useSettings";
@@ -9,7 +9,6 @@ import {
 } from "~/logicalProject";
 import { useProject } from "~/state/entities";
 import { followCloudSessionProject } from "./t3team-cloudSessionProjectFollow";
-import type { CloudSessionQueuedSend } from "./t3team-cloudSessionTargetStore";
 
 /**
  * The composer project's logical key, the same one the machine list groups by, so a project
@@ -29,21 +28,17 @@ export function useCloudSessionProjectKey(projectRef: ScopedProjectRef | null): 
 
 /**
  * Drops the cloud preference once the composer's project is no longer the one the session was
- * set up for (or hands a queued first message back as a draft), and says why.
+ * set up for (a queued first message goes back into the composer), and says why.
  */
 export function useCloudSessionProjectFollow(input: {
   readonly scopeKey: string | null;
   readonly projectKey: string | null;
-  readonly onRestoreDraft: (queued: CloudSessionQueuedSend) => void;
 }): void {
   const { scopeKey, projectKey } = input;
-  const onRestoreRef = useRef(input.onRestoreDraft);
-  onRestoreRef.current = input.onRestoreDraft;
   useEffect(() => {
     if (scopeKey === null) return;
     const result = followCloudSessionProject(scopeKey, projectKey);
     if (result.kind === "kept") return;
-    if (result.kind === "restored" && result.queued) onRestoreRef.current(result.queued);
     toastManager.add({
       type: "info",
       title: "Cloud session cleared",
