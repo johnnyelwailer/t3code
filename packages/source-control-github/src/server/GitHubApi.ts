@@ -190,11 +190,6 @@ function isSearchPath(pathname: string): boolean {
   return /^(?:\/api\/v3)?\/search\//.test(pathname);
 }
 
-/** Whether a REST path (API root included, so `/api/v3` on Enterprise Server) is a search. */
-function isSearchPath(pathname: string): boolean {
-  return /^(?:\/api\/v3)?\/search\//.test(pathname);
-}
-
 /** GraphQL documents longer than this are cut in traces; the hash still identifies them. */
 const TRACED_QUERY_MAX_CHARS = 4_000;
 
