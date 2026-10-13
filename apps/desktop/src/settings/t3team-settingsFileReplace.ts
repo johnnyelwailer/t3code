@@ -27,7 +27,7 @@ const errnoCode = (error: unknown): string | undefined => {
   return typeof cause.code === "string" ? cause.code : undefined;
 };
 
-export const isTransientReplaceError = (error: unknown): boolean => {
+const isTransientReplaceError = (error: unknown): boolean => {
   const code = errnoCode(error);
   return code !== undefined && TRANSIENT_CODES.has(code);
 };
