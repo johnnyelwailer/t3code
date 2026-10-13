@@ -2,7 +2,7 @@ import { describe, expect } from "vite-plus/test";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
-import * as GitHubApi from "./sourceControl/GitHubApi.ts";
+import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
 import { loadInboxAttempt } from "./t3team-github-routes-loaders.ts";
 import { makeFakeGitHubApi, rateLimited, restOk } from "./t3team-githubRestApi.fixtures.ts";
 

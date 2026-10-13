@@ -15,6 +15,10 @@
       "types": "./src/server/GitHubApi.ts",
       "import": "./src/server/GitHubApi.ts"
     },
+    "./server/t3team-githubLinkPaging": {
+      "types": "./src/server/t3team-githubLinkPaging.ts",
+      "import": "./src/server/t3team-githubLinkPaging.ts"
+    },
     "./server/gitHubAuthStatus": {
       "types": "./src/server/gitHubAuthStatus.ts",
       "import": "./src/server/gitHubAuthStatus.ts"

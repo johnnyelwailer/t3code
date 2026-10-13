@@ -23,7 +23,7 @@
  */
 import type { ToolAuthPhase } from "@t3tools/contracts";
 
-import type * as PtyAdapter from "../terminal/PtyAdapter.ts";
+import type * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 
 export type { ToolAuthPhase };
 

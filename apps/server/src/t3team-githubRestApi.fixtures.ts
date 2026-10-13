@@ -7,7 +7,7 @@
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 
-import * as GitHubApi from "./sourceControl/GitHubApi.ts";
+import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
 
 export interface RecordedRestCall {
   readonly host: string;

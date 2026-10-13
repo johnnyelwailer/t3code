@@ -28,14 +28,14 @@ import * as PullRequestFilesViewed from "./persistence/PullRequestFilesViewed.ts
 import * as SqlitePersistence from "./persistence/Sqlite.ts";
 import * as ProjectService from "./project/ProjectService.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
-import type { PullRequestProviderApi } from "./pullRequest/PullRequestProvider.ts";
+import type { PullRequestProviderApi } from "@t3tools/source-control-core/server/PullRequestProvider";
 import * as PullRequestProviderRegistry from "./pullRequest/PullRequestProviderRegistry.ts";
 import * as PullRequestReadCache from "./pullRequest/PullRequestReadCache.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import type { ProviderFileAtRevision } from "@t3tools/source-control-core/server/t3team-fileAtRevision";
 import * as ServerSettingsService from "./serverSettings.ts";
 import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
-import * as SourceControlRateLimit from "./sourceControl/SourceControlRateLimit.ts";
+import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 import * as ScriptHost from "./t3team-scriptHostContext.ts";
 import * as Store from "./t3team-v2/t3team-packDocumentStore.ts";

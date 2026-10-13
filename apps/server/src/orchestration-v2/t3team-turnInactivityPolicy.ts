@@ -20,7 +20,7 @@ import * as Layer from "effect/Layer";
 
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
-import type { ProviderAdapterV2Event } from "./ProviderAdapter.ts";
+import type { ProviderAdapterV2Event } from "@t3tools/provider-core/server/ProviderAdapter";
 
 export const DEFAULT_TURN_INACTIVITY_TIMEOUT_MS = 600_000;
 /** A Stop (or the watchdog's own interrupt) must produce a terminal within this window. */

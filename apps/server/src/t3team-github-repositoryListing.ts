@@ -10,7 +10,7 @@
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
-import * as GitHubApi from "./sourceControl/GitHubApi.ts";
+import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
 import {
   loadRepositoriesAttempt,
   loadRepositorySearchAttempt,

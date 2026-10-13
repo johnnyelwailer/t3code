@@ -17,7 +17,7 @@
  */
 import * as Layer from "effect/Layer";
 
-import * as IdAllocator from "../orchestration-v2/IdAllocator.ts";
+import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ThreadCommandExecutor from "../orchestration-v2/ThreadCommandExecutor.ts";
 import * as TurnItemPositionStore from "../orchestration-v2/TurnItemPositionStore.ts";

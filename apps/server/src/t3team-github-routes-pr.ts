@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import type * as GitHubApi from "./sourceControl/GitHubApi.ts";
+import type * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
 import {
   isGitHubRateLimit,
   rateLimitMessage,

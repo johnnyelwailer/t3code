@@ -15,7 +15,7 @@ import { isWorkflowAuthorThread } from "../t3team-workflowAuthorSession.ts";
 const isHiddenShellThread = (shell: Pick<OrchestrationV2ThreadShell, "id" | "lineage">): boolean =>
   isWorkflowAuthorThread(shell.id) && shell.lineage.parentThreadId === null;
 
-export const visibleShellThreads = <T extends Pick<OrchestrationV2ThreadShell, "id" | "lineage">>(
+const visibleShellThreads = <T extends Pick<OrchestrationV2ThreadShell, "id" | "lineage">>(
   threads: ReadonlyArray<T>,
 ): ReadonlyArray<T> => threads.filter((thread) => !isHiddenShellThread(thread));
 
