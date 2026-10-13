@@ -52,6 +52,8 @@ const capture = (
 function recordingSteps(input: {
   readonly capture?: T3TeamThreadHandoffCapture;
   readonly fail?: "capture" | "launch" | "verify" | "interrupt" | "record";
+  readonly stopFails?: boolean;
+  readonly noStop?: boolean;
 }) {
   const calls: string[] = [];
   const launched: Array<{ readonly text: string; readonly workspace: unknown }> = [];
@@ -79,6 +81,15 @@ function recordingSteps(input: {
       if (input.fail === "record") throw new Error("record broke");
     },
     reapSource: step("reap"),
+    ...(input.noStop
+      ? {}
+      : {
+          stopSuccessor: async () => {
+            calls.push("stopSuccessor");
+            if (input.stopFails) throw new Error("stop broke");
+            return true;
+          },
+        }),
   };
   return { steps, calls, launched };
 }
@@ -101,15 +112,36 @@ describe("runThreadHandoff — source settles only after the successor is live",
     ]);
   });
 
-  it.each(["launch", "verify"] as const)(
-    "leaves the source untouched when %s fails",
-    async (stage) => {
-      const { steps, calls } = recordingSteps({ fail: stage });
-      const outcome = await runThreadHandoff({ source, successor, turnMode: "interrupt", steps });
-      expect(outcome).toEqual({ type: "failed", stage, message: `${stage} broke` });
-      expect(calls.filter((call) => SOURCE_MUTATIONS.test(call))).toEqual([]);
-    },
-  );
+  it.each([
+    ["launch", { type: "failed", stage: "launch", message: "launch broke" }],
+    [
+      "verify",
+      { type: "failed", stage: "verify", message: "verify broke", successorStopped: true },
+    ],
+  ] as const)("leaves the source untouched when %s fails", async (stage, expected) => {
+    const { steps, calls } = recordingSteps({ fail: stage });
+    const outcome = await runThreadHandoff({ source, successor, turnMode: "interrupt", steps });
+    expect(outcome).toEqual(expected);
+    expect(calls.filter((call) => SOURCE_MUTATIONS.test(call))).toEqual([]);
+  });
+
+  it("stops the successor only when verification fails", async () => {
+    const moved = recordingSteps({});
+    await runThreadHandoff({ source, successor, turnMode: "interrupt", steps: moved.steps });
+    expect(moved.calls).not.toContain("stopSuccessor");
+    const failed = recordingSteps({ fail: "verify" });
+    await runThreadHandoff({ source, successor, turnMode: "interrupt", steps: failed.steps });
+    expect(failed.calls).toEqual(["capture(wait=false)", "launch", "verify", "stopSuccessor"]);
+  });
+
+  it.each([
+    ["the stop throws", { fail: "verify", stopFails: true }],
+    ["the host cannot stop it", { fail: "verify", noStop: true }],
+  ] as const)("reports a still-starting successor when %s", async (_label, input) => {
+    const { steps } = recordingSteps(input);
+    const outcome = await runThreadHandoff({ source, successor, turnMode: "interrupt", steps });
+    expect(outcome).toMatchObject({ type: "failed", stage: "verify", successorStopped: false });
+  });
 
   it("moves nothing when the capture refuses", async () => {
     const refusals = [{ reason: "unpushed_commits" as const, message: "3 commits are not pushed" }];

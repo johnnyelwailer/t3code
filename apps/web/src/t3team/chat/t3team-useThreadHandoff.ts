@@ -26,9 +26,9 @@ import { threadEnvironment } from "~/state/threads";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useOrchestrationCommand } from "~/state/use-orchestration-command";
 import { buildThreadRouteParams } from "~/threadRoutes";
+import { awaitSuccessorLive, stopSuccessor } from "./t3team-threadHandoffSuccessorLive";
 import {
   announceThreadHandoff,
-  awaitSuccessorLive,
   handoffConfirmMessage,
   successorLaunchInput,
   unwrap,
@@ -130,6 +130,18 @@ export function useT3TeamThreadHandoff(input: {
           );
         },
         awaitSuccessorLive: () => awaitSuccessorLive(targetEnvironmentId, successorThreadId),
+        stopSuccessor: () =>
+          stopSuccessor(
+            targetEnvironmentId,
+            successorThreadId,
+            async (runId) =>
+              void unwrap(
+                await interrupt({
+                  environmentId: targetEnvironmentId,
+                  input: { threadId: successorThreadId, runId },
+                }),
+              ),
+          ),
         interruptSource: async (runId) =>
           void unwrap(await interrupt({ environmentId, input: { threadId, runId } })),
         record: async (recordEnvironmentId, recordInput) =>

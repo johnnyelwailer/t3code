@@ -8,8 +8,9 @@
  *   2. launch the successor (target) with the continuation envelope as its first message
  *   3. verify the successor's first run is live (target)
  *   4. settle: interrupt the source's active run, record both link facts, reap the source
- * A failure in 1–3 leaves the source exactly as it was. A failure in 4 is a warning: the
- * successor already runs, so nothing is rolled back.
+ * A failure in 1–3 leaves the source exactly as it was. A failed verify also stops the
+ * successor when it can, since a late-starting one plus a retry would put two agents on the
+ * same work. A failure in 4 is a warning: the successor already runs, so nothing is rolled back.
  */
 import {
   type EnvironmentId,
@@ -77,6 +78,11 @@ export interface ThreadHandoffSteps {
   }) => Promise<void>;
   /** Resolves once the successor's first run is observed live; rejects on failure or timeout. */
   readonly awaitSuccessorLive: () => Promise<void>;
+  /**
+   * Best-effort stop of a successor that failed verification; resolves `true` once nothing of
+   * it can still start. Absent or `false` = it may still come up.
+   */
+  readonly stopSuccessor?: () => Promise<boolean>;
   readonly interruptSource: (runId: RunId) => Promise<void>;
   readonly record: (
     environmentId: EnvironmentId,
@@ -90,8 +96,15 @@ export type ThreadHandoffOutcome =
   | { readonly type: "refused"; readonly refusals: ReadonlyArray<T3TeamThreadHandoffRefusal> }
   | {
       readonly type: "failed";
-      readonly stage: "capture" | "launch" | "verify";
+      readonly stage: "capture" | "launch";
       readonly message: string;
+    }
+  | {
+      readonly type: "failed";
+      readonly stage: "verify";
+      readonly message: string;
+      /** False when the successor may still start: retrying then could launch it twice. */
+      readonly successorStopped: boolean;
     }
   | { readonly type: "moved"; readonly warnings: ReadonlyArray<string> };
 
@@ -125,7 +138,10 @@ export async function runThreadHandoff(input: {
   try {
     await steps.awaitSuccessorLive();
   } catch (error) {
-    return { type: "failed", stage: "verify", message: messageOf(error) };
+    const successorStopped = steps.stopSuccessor
+      ? await steps.stopSuccessor().catch(() => false)
+      : false;
+    return { type: "failed", stage: "verify", message: messageOf(error), successorStopped };
   }
 
   // The successor runs: from here on, nothing is rolled back.
