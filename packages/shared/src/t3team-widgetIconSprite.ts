@@ -6,7 +6,9 @@
  * external icon library — and the widget CSP blocks every external request anyway. That left
  * authors hand-writing path data, which is exactly how ✅/⚠️/⛔ creeps back in.
  *
- * The host therefore injects this sprite into every widget's srcdoc. Authors reference it:
+ * The host therefore injects this sprite into every widget: the server bakes it into the document
+ * `t3_show_widget` publishes through upstream HTML renders, and the web bridge srcdoc embeds it
+ * for widgets that call tools. Shared so both stay one drawing. Authors reference it:
  *
  *   <svg class="t3w-icon" aria-hidden="true"><use href="#t3w-icon-check" /></svg>
  *   <svg class="t3w-icon t3w-icon-lg"><use href="#t3w-icon-triangle-alert" /></svg>
@@ -58,7 +60,7 @@ const ICON_NODES: Readonly<Record<string, string>> = {
 };
 
 /** The allowlist widget authors may reference. Stable ids — renaming one breaks saved widgets. */
-export const T3TEAM_WIDGET_ICON_NAMES: ReadonlyArray<string> = Object.keys(ICON_NODES).toSorted();
+export const T3TEAM_WIDGET_ICON_NAMES: ReadonlyArray<string> = Object.keys(ICON_NODES).sort();
 
 /** `<use href="#…">` target for an icon name. */
 export function t3teamWidgetIconId(name: string): string {

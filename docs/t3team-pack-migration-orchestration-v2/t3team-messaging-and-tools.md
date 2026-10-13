@@ -66,6 +66,12 @@ Kept (`apps/server/src/mcp/toolkits/t3team/tools.ts`): `t3_provider_usage`,
 `t3_recipe_list`, `t3_recipe_validate`. `t3team_help` is gone (fork #350): its topics live in
 the tool descriptions and the orchestration author's generated reference.
 
+`t3_show_widget` keeps its name and arguments but now maps to upstream's HTML rendering: it
+publishes the widget through the `html_render` path (`HtmlRender.publish`) and returns the same
+`htmlRender` result, so clients render it from the tool call like any `html_render` page. Only
+widgets that use the `sendPrompt` / `window.host.callTool` bridge stay on the fork's srcdoc
+widget artifact (see `docs/t3team-mvp/24-tiered-message-composition.md`).
+
 ### 3.5.1 Tool-name unification: `t3team_*` → `t3_*`
 
 The agent-facing names drop the `t3team_` prefix; `t3team_children` becomes `t3_task_ops`. It

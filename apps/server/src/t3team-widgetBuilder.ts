@@ -2,7 +2,7 @@
  * Intent → builder/authoring seam for `t3team.widget.show` / `thread.showWidget`
  * (design intent PJ 2026-08-29, Epic 24 widget composition default).
  *
- * Flow: intent → builder subagent → widgetCode → format routing (html shim | widget tier).
+ * Flow: intent → builder subagent → widgetCode → HTML render publish (bridge widgets: srcdoc).
  * Raw `widget_code` bypasses this module entirely (required for deterministic workflow replay).
  *
  * The full builder loop (reuse-check → draft → typecheck → preview via HtmlRender → fix) is

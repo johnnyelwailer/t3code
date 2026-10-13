@@ -2,6 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
 import type { T3TeamMessageWidgetAttachment } from "@t3tools/contracts";
+import { htmlRenderFromToolItem } from "@t3tools/shared/toolOutput";
 
 import { dispatchT3TeamToolCall } from "./t3team-toolBrokerBindingDispatch.ts";
 import { buildBindingState } from "./t3team-toolBrokerBindingPermissions.ts";
@@ -12,10 +13,11 @@ import {
 } from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import { callT3TeamWidgetShowTool, t3teamWidgetArtifactId } from "./t3team-widgetShowTool.ts";
 import {
-  parseT3TeamWidgetShowInput,
+  buildT3TeamWidgetHtmlDocument,
   T3TEAM_WIDGET_HTML_CSP,
-  wrapWidgetHtmlFragmentForHtmlRender,
-} from "./t3team-widgetShowCore.ts";
+  t3teamWidgetNeedsBridge,
+} from "./t3team-widgetHtmlDocument.ts";
+import { parseT3TeamWidgetShowInput } from "./t3team-widgetShowCore.ts";
 
 const validArgs = {
   title: "q4_revenue_chart",
@@ -248,121 +250,115 @@ describe("t3team.widget.show broker dispatch gating", () => {
   );
 });
 
-describe("html format HtmlRender shim", () => {
-  it("wraps fragments with widget CSP for HtmlRender", () => {
-    const wrapped = wrapWidgetHtmlFragmentForHtmlRender("<div>hello</div>");
-    assert.include(wrapped, "<!DOCTYPE html>");
-    assert.include(wrapped, "<div>hello</div>");
-    assert.include(wrapped, "connect-src 'none'");
-    assert.include(wrapped, T3TEAM_WIDGET_HTML_CSP);
-    assert.notInclude(wrapped, "publicProxy");
+describe("upstream HTML render path", () => {
+  function makeHtmlRender(options: { readonly fail?: boolean } = {}) {
+    const published: Array<{ html: string; title: string; height: number }> = [];
+    const htmlRender = {
+      prepare: () => Effect.succeed(""),
+      publish: (input: {
+        readonly threadId: string;
+        readonly html: string;
+        readonly title: string;
+        readonly height: number;
+      }) =>
+        options.fail
+          ? Effect.fail({ _tag: "HtmlRenderStoreError", message: "disk full", cause: "boom" })
+          : Effect.sync(() => {
+              published.push({ html: input.html, title: input.title, height: input.height });
+              return {
+                attachmentId: `${input.threadId}-widget-html`,
+                title: input.title,
+                height: input.height,
+              };
+            }),
+      preview: () => Effect.die("show_widget never previews"),
+    };
+    return { published, htmlRender: htmlRender as never };
+  }
+
+  it("builds a self-contained page with the widget CSP and icon sprite", () => {
+    const page = buildT3TeamWidgetHtmlDocument("<div>hello</div>");
+    assert.include(page, T3TEAM_WIDGET_HTML_CSP);
+    assert.include(page, 'id="t3w-icon-check"');
+    assert.include(page, ".t3w-icon");
+    assert.isAbove(page.indexOf("<div>hello</div>"), page.indexOf("<body>"));
   });
 
-  it.effect("routes html format through HtmlRender.publish and keeps fragment on attachment", () =>
+  it("sends only bridge widgets to the srcdoc path", () => {
+    assert.isFalse(t3teamWidgetNeedsBridge({ widgetCode: "<div>x</div>", tools: [] }));
+    assert.isTrue(t3teamWidgetNeedsBridge({ widgetCode: "<div/>", tools: ["t3team.view.read"] }));
+    assert.isTrue(
+      t3teamWidgetNeedsBridge({
+        widgetCode: "<button onclick=\"sendPrompt('go')\">Go</button>",
+        tools: [],
+      }),
+    );
+    assert.isTrue(
+      t3teamWidgetNeedsBridge({
+        widgetCode: "<script>window.host.callTool('x')</script>",
+        tools: [],
+      }),
+    );
+  });
+
+  it.effect("publishes html and svg like html_render, with no fork artifact or registry slot", () =>
     Effect.gen(function* () {
-      const { artifacts, registry, deps } = makeDeps();
-      const published: Array<{ html: string; title: string; height: number }> = [];
-      const htmlRender = {
-        prepare: () => Effect.succeed(""),
-        publish: (input: {
-          readonly threadId: string;
-          readonly html: string;
-          readonly title: string;
-          readonly height: number;
-        }) =>
-          Effect.sync(() => {
-            published.push({ html: input.html, title: input.title, height: input.height });
-            return {
-              attachmentId: `${input.threadId}-shim.html`,
-              title: input.title,
-              height: input.height,
-              heights: [[728, input.height] as const],
-            };
-          }),
-        preview: () => Effect.die("preview should not be called from show_widget shim"),
-      };
-      const result = yield* callT3TeamWidgetShowTool({
-        toolArgs: {
-          title: "shim_chart",
-          widget_code: "<div id='c'>chart</div>",
-          format: "html",
-        },
-        deps: { ...deps, htmlRender: htmlRender as never },
-      });
-      assert.notStrictEqual(result.isError, true);
-      const structured = result.structuredContent as {
-        format: string;
-        htmlShimmed: boolean;
-        htmlRender?: { attachmentId: string };
-      };
-      assert.strictEqual(structured.format, "html");
-      assert.strictEqual(structured.htmlShimmed, true);
-      assert.strictEqual(structured.htmlRender?.attachmentId, "thread-1-shim.html");
-      assert.strictEqual(published.length, 1);
-      assert.include(published[0]!.html, "<div id='c'>chart</div>");
-      assert.include(published[0]!.html, "connect-src 'none'");
-      const attachment = artifacts[0]!.payload as T3TeamMessageWidgetAttachment;
-      assert.strictEqual(attachment.widget.html, "<div id='c'>chart</div>");
-      assert.strictEqual(attachment.widget.htmlRender?.attachmentId, "thread-1-shim.html");
-      const widgetId = (result.structuredContent as { widgetId: string }).widgetId;
-      const reg = yield* registry.get(widgetId);
-      assert.isDefined(reg);
+      for (const widget_code of ["<div id='c'>chart</div>", "<svg viewBox='0 0 1 1'></svg>"]) {
+        const { artifacts, registry, deps } = makeDeps();
+        const { published, htmlRender } = makeHtmlRender();
+        const result = yield* callT3TeamWidgetShowTool({
+          toolArgs: { title: "chart", widget_code },
+          deps: { ...deps, htmlRender },
+        });
+        assert.notStrictEqual(result.isError, true);
+        const structured = result.structuredContent as { widgetId: string; message: string };
+        assert.strictEqual(published.length, 1);
+        assert.include(published[0]!.html, widget_code);
+        assert.include(structured.message, "above your reply");
+        assert.strictEqual(artifacts.length, 0);
+        assert.isUndefined(yield* registry.get(structured.widgetId));
+        // Upstream's timeline (web + mobile) and thread-deletion cleanup read the result directly.
+        for (const toolName of ["mcp__t3-code__t3_show_widget", "t3-code.t3_show_widget"]) {
+          assert.deepStrictEqual(
+            htmlRenderFromToolItem({ toolName, output: result.structuredContent }),
+            { attachmentId: "thread-1-widget-html", title: "chart", height: 400 },
+          );
+        }
+      }
     }),
   );
 
-  it.effect("does not call HtmlRender.publish for svg format", () =>
+  it.effect("keeps bridge widgets on the artifact path without publishing", () =>
     Effect.gen(function* () {
-      const { artifacts, deps } = makeDeps();
-      let publishCalls = 0;
-      const htmlRender = {
-        prepare: () => Effect.succeed(""),
-        publish: () => {
-          publishCalls += 1;
-          return Effect.succeed({
-            attachmentId: "should-not",
-            title: "x",
-            height: 1,
-          });
-        },
-        preview: () => Effect.die("no"),
-      };
-      const result = yield* callT3TeamWidgetShowTool({
-        toolArgs: { title: "pie", widget_code: "<svg></svg>", format: "svg" },
-        deps: { ...deps, htmlRender: htmlRender as never },
-      });
-      assert.notStrictEqual(result.isError, true);
-      assert.strictEqual(publishCalls, 0);
-      const attachment = artifacts[0]!.payload as T3TeamMessageWidgetAttachment;
-      assert.strictEqual(attachment.widget.format, "svg");
-      assert.isUndefined(attachment.widget.htmlRender);
-      assert.strictEqual(
-        (result.structuredContent as { htmlShimmed?: boolean }).htmlShimmed,
-        false,
-      );
+      for (const toolArgs of [
+        validArgs,
+        { title: "ask", widget_code: "<button onclick=\"sendPrompt('yes')\">Yes</button>" },
+      ]) {
+        const { artifacts, deps } = makeDeps();
+        const { published, htmlRender } = makeHtmlRender();
+        const result = yield* callT3TeamWidgetShowTool({
+          toolArgs,
+          deps: { ...deps, htmlRender },
+        });
+        assert.notStrictEqual(result.isError, true);
+        assert.strictEqual(published.length, 0);
+        assert.strictEqual(artifacts.length, 1);
+        assert.isUndefined((result.structuredContent as { htmlRender?: unknown }).htmlRender);
+      }
     }),
   );
 
-  it.effect("degrades to srcdoc path when HtmlRender.publish fails", () =>
+  it.effect("degrades to the artifact path when HtmlRender.publish fails", () =>
     Effect.gen(function* () {
       const { artifacts, deps } = makeDeps();
-      const htmlRender = {
-        prepare: () => Effect.succeed(""),
-        publish: () =>
-          Effect.fail({ _tag: "HtmlRenderStoreError", message: "disk full", cause: "boom" }),
-        preview: () => Effect.die("no"),
-      };
       const result = yield* callT3TeamWidgetShowTool({
         toolArgs: { title: "x", widget_code: "<div>ok</div>", format: "html" },
-        deps: { ...deps, htmlRender: htmlRender as never },
+        deps: { ...deps, htmlRender: makeHtmlRender({ fail: true }).htmlRender },
       });
       assert.notStrictEqual(result.isError, true);
       const attachment = artifacts[0]!.payload as T3TeamMessageWidgetAttachment;
       assert.strictEqual(attachment.widget.html, "<div>ok</div>");
-      assert.isUndefined(attachment.widget.htmlRender);
-      assert.strictEqual(
-        (result.structuredContent as { htmlShimmed?: boolean }).htmlShimmed,
-        false,
-      );
+      assert.isUndefined((result.structuredContent as { htmlRender?: unknown }).htmlRender);
     }),
   );
 });

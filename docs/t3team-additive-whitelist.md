@@ -387,3 +387,12 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
   nothing until a view is registered, so the panel is unchanged without one.
 - `apps/web/src/components/pullRequest/PullRequestSummaryTab.test.tsx` — one case: a throwing
   registered Summary view leaves the real panel standing.
+
+## `t3_show_widget` maps to upstream HTML renders (2026-10-13)
+
+- `packages/shared/src/t3McpToolPresentation.ts` — one import and one spread of
+  `T3TEAM_MCP_TOOLS` (`t3team-mcpToolPresentation.ts`) into the T3 tool inventory, so fork tools
+  on the `t3-code` server get upstream's cards, summaries and ACP identity recovery.
+- `packages/shared/src/toolOutput.ts` — `htmlRenderFromToolItem` gates on the tool's
+  `html-render` summary action instead of the literal `html_render` name, so `t3_show_widget`
+  results render inline (and are cleaned up on thread deletion) through upstream's path.

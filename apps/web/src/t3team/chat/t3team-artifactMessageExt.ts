@@ -38,7 +38,11 @@ export function artifactMessageExt(artifact: T3TeamThreadArtifact): T3TeamMessag
       : artifact.kind === T3TEAM_WIDGET_ARTIFACT_KIND
         ? Option.match(decodeWidget(artifact.payload), {
             onNone: () => null,
-            onSome: (widget): T3TeamMessageExt => ({ attachments: [widget] }),
+            // A widget with an `htmlRender` ref was published through upstream HTML renders; the
+            // timeline already shows it from its `t3_show_widget` tool call, so the artifact
+            // (written only by older builds) would render it twice.
+            onSome: (widget): T3TeamMessageExt | null =>
+              widget.widget.htmlRender === undefined ? { attachments: [widget] } : null,
           })
         : null;
   extByArtifact.set(artifact, ext);

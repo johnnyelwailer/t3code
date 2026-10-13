@@ -1,5 +1,6 @@
 {
   "allowedModifiedFiles": [
+    "apps/web/src/components/chat/ComposerPendingUserInputPanel.navigation.test.tsx",
     "packages/provider-core/src/server/runtimeInstructions.ts",
     "packages/source-control-github/src/server/GitHubApi.test.ts",
     "packages/source-control-github/src/server/GitHubApi.ts",
@@ -585,7 +586,9 @@
     "packages/shared/src/shell.test.ts",
     "packages/shared/src/shell.ts",
     "packages/shared/src/sourceControl.ts",
+    "packages/shared/src/t3McpToolPresentation.ts",
     "packages/shared/src/t3team-threadRunStatus.ts",
+    "packages/shared/src/toolOutput.ts",
     "packages/shared/tsconfig.json",
     "packages/t3team-pack-api/src/index.ts",
     "packages/t3team-pack-api/src/provider-driver.test.ts",
