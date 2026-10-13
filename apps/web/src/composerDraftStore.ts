@@ -81,6 +81,12 @@ import { getDefaultServerModel } from "./providerModels";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
 import { UnifiedSettings } from "@t3tools/contracts/settings";
 import { ReviewCommentContextSchema, type ReviewCommentContext } from "./reviewCommentContext";
+import {
+  CloudQueuedSendSchema,
+  decodeCloudQueuedSend,
+  toPersistedCloudQueuedSend,
+  type CloudQueuedSend,
+} from "./cloud/t3team-cloudQueuedSendModel";
 const isRuntimeMode = Schema.is(RuntimeMode);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
 const isReviewCommentContext = Schema.is(ReviewCommentContextSchema);
@@ -278,6 +284,8 @@ const PersistedComposerThreadDraftState = Schema.Struct({
   modelSelectionExplicit: Schema.optionalKey(Schema.Boolean),
   runtimeMode: Schema.optionalKey(RuntimeMode),
   interactionMode: Schema.optionalKey(ProviderInteractionMode),
+  // t3team: a first message waiting for its cloud session (see t3team-cloudQueuedSendModel).
+  cloudQueuedSend: Schema.optionalKey(CloudQueuedSendSchema),
 });
 type PersistedComposerThreadDraftState = typeof PersistedComposerThreadDraftState.Type;
 
@@ -438,6 +446,8 @@ export interface ComposerThreadDraftState {
   modelSelectionExplicit?: boolean;
   runtimeMode: RuntimeMode | null;
   interactionMode: ProviderInteractionMode | null;
+  /** t3team: a sent first message still waiting for its cloud session. Persisted. */
+  cloudQueuedSend?: CloudQueuedSend | null;
 }
 
 /**
@@ -462,7 +472,9 @@ export function composerDraftHasUserContent(
     draft.terminalContexts.length > 0 ||
     draft.previewAnnotations.length > 0 ||
     draft.reviewComments.length > 0 ||
-    draft.threadContexts.length > 0
+    draft.threadContexts.length > 0 ||
+    // t3team: a queued cloud send is a sent message: the draft keeps its row and is never reused.
+    draft.cloudQueuedSend != null
   );
 }
 
@@ -1007,7 +1019,8 @@ function shouldRemoveDraft(draft: ComposerThreadDraftState): boolean {
     Object.keys(draft.modelSelectionByProvider).length === 0 &&
     draft.activeProvider === null &&
     draft.runtimeMode === null &&
-    draft.interactionMode === null
+    draft.interactionMode === null &&
+    draft.cloudQueuedSend == null
   );
 }
 
@@ -2019,6 +2032,7 @@ function normalizePersistedDraftsByThreadId(
     const runtimeMode = isRuntimeMode(draftCandidate.runtimeMode)
       ? draftCandidate.runtimeMode
       : null;
+    const cloudQueuedSend = decodeCloudQueuedSend(draftCandidate.cloudQueuedSend);
     const interactionMode =
       draftCandidate.interactionMode === "plan" || draftCandidate.interactionMode === "default"
         ? draftCandidate.interactionMode
@@ -2118,7 +2132,8 @@ function normalizePersistedDraftsByThreadId(
       threadContexts.length === 0 &&
       !hasModelData &&
       !runtimeMode &&
-      !interactionMode
+      !interactionMode &&
+      cloudQueuedSend === null
     ) {
       continue;
     }
@@ -2151,6 +2166,7 @@ function normalizePersistedDraftsByThreadId(
         : {}),
       ...(runtimeMode ? { runtimeMode } : {}),
       ...(interactionMode ? { interactionMode } : {}),
+      ...(cloudQueuedSend ? { cloudQueuedSend: toPersistedCloudQueuedSend(cloudQueuedSend) } : {}),
     };
   }
 
@@ -2165,7 +2181,8 @@ function persistedComposerDraftHasUserContent(draft: PersistedComposerThreadDraf
     (draft.terminalContexts?.length ?? 0) > 0 ||
     (draft.previewAnnotations?.length ?? 0) > 0 ||
     (draft.reviewComments?.length ?? 0) > 0 ||
-    (draft.threadContexts?.length ?? 0) > 0
+    (draft.threadContexts?.length ?? 0) > 0 ||
+    draft.cloudQueuedSend !== undefined
   );
 }
 
@@ -2254,7 +2271,8 @@ export function partializeComposerDraftStoreState(
       draft.threadContexts.length === 0 &&
       !hasModelData &&
       draft.runtimeMode === null &&
-      draft.interactionMode === null
+      draft.interactionMode === null &&
+      draft.cloudQueuedSend == null
     ) {
       continue;
     }
@@ -2321,6 +2339,9 @@ export function partializeComposerDraftStoreState(
         : {}),
       ...(draft.runtimeMode ? { runtimeMode: draft.runtimeMode } : {}),
       ...(draft.interactionMode ? { interactionMode: draft.interactionMode } : {}),
+      ...(draft.cloudQueuedSend
+        ? { cloudQueuedSend: toPersistedCloudQueuedSend(draft.cloudQueuedSend) }
+        : {}),
     };
     persistedDraftsByThreadKey[threadKey] = persistedDraft;
   }
@@ -2612,6 +2633,7 @@ function toHydratedThreadDraft(
     ...(persistedDraft.modelSelectionExplicit ? { modelSelectionExplicit: true } : {}),
     runtimeMode: persistedDraft.runtimeMode ?? null,
     interactionMode: persistedDraft.interactionMode ?? null,
+    ...(persistedDraft.cloudQueuedSend ? { cloudQueuedSend: persistedDraft.cloudQueuedSend } : {}),
   };
 }
 
