@@ -6,7 +6,6 @@ import {
   PullRequestUnavailableError,
   ThreadId,
   type OrchestrationV2ServerCommand as OrchestrationCommand,
-  PullRequestOperationError,
   type OrchestrationProjectShell,
   type PullRequestRef,
   type PullRequestReviewGuideResult,

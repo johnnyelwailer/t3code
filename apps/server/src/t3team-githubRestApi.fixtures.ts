@@ -8,6 +8,7 @@ import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 
 import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 
 export interface RecordedRestCall {
   readonly host: string;
@@ -55,7 +56,7 @@ export function makeFakeGitHubApi(
           host: input.host,
           operation: input.operation,
           path: input.path,
-          allowReserve: input.allowReserve ?? (yield* GitHubApi.AllowGitHubReserve),
+          allowReserve: input.allowReserve ?? (yield* SourceControlRateLimit.Interactive),
         } satisfies RecordedRestCall;
         calls.push(call);
         return yield* handler(call);

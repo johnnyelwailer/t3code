@@ -10,7 +10,7 @@
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
-import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import {
   loadRepositoriesAttempt,
   loadRepositorySearchAttempt,
@@ -98,7 +98,7 @@ export const loadRepositoryListing = Effect.fn("loadRepositoryListing")(function
         refreshesInFlight.add(storeKey);
         yield* Effect.forkDetach(
           fetchNow.pipe(
-            Effect.provideService(GitHubApi.AllowGitHubReserve, false),
+            Effect.provideService(SourceControlRateLimit.Interactive, false),
             Effect.ignore,
             Effect.ensuring(Effect.sync(() => refreshesInFlight.delete(storeKey))),
           ),
