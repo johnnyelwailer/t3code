@@ -124,6 +124,7 @@ import {
   PullRequestDetailTabBar,
   PullRequestDetailTitleRow,
 } from "./PullRequestDetailLayout";
+import type { PullRequestDetailTab } from "./t3team-prDetailViewState.logic";
 import { PullRequestDetailGhost, PullRequestTimelineGhost } from "./PullRequestGhosts";
 import { PullRequestCopyableCode } from "./PullRequestCopyableCode";
 import { PullRequestActivityUnavailableState } from "./PullRequestActivityUnavailableState";
@@ -194,7 +195,7 @@ import { guideRunKey, useGuideRunStore } from "./guide/guideRunStore";
 import { useReviewGuideWriter } from "./guide/useReviewGuideWriter";
 import { useInlineActionConfirm } from "./useInlineActionConfirm";
 
-type DetailTab = "summary" | "guide" | "timeline" | "code";
+type DetailTab = PullRequestDetailTab;
 
 /** Said as the thing that did not happen, rather than as the operation that returned an error. */
 const ACTION_FAILURE_LABELS: Record<PullRequestAction, string> = {
