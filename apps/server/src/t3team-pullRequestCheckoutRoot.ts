@@ -24,6 +24,11 @@ import {
 } from "./t3team-project-repository-utils.ts";
 import { ensureNexiProjectStateDir } from "./t3team-projectMainRepositoryState.ts";
 import { readNormalizedReferenceManifest } from "./t3team-referenceManifestNormalization.ts";
+import { isLazyLinkedRepositoryCheckoutEnabled } from "./t3team-lazyLinkedRepositoryFlag.ts";
+import {
+  runEnsureLinkedRepositoryCheckout,
+  type LinkedRepositoryOnDemandRuntime,
+} from "./t3team-linkedRepositoryOnDemand.ts";
 import {
   readLinkedRepositories,
   repositoryLookupCandidates,
@@ -93,6 +98,8 @@ export const resolvePullRequestCheckoutRoot = (input: {
   readonly cwd: string;
   readonly reference: string;
   readonly sourceControlProviders: SourceControlProviderRegistry["Service"];
+  readonly linkedRepositoryOnDemand?: LinkedRepositoryOnDemandRuntime;
+  readonly ensureWaitTimeoutMs?: number;
 }): Effect.Effect<string, GitManagerError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
@@ -116,8 +123,35 @@ export const resolvePullRequestCheckoutRoot = (input: {
         `This project's folder has no git remote, and none of its linked repositories contains ${reference}. Link the repository the pull request belongs to, then try again.`,
       );
     }
-    const localPath = linked.localPath.trim();
-    if (!isLinkedRepositoryReady(linked) || localPath === "") {
+    let localPath = linked.localPath.trim();
+    const onDemand = input.linkedRepositoryOnDemand;
+    if (
+      (onDemand !== undefined &&
+        isLazyLinkedRepositoryCheckoutEnabled() &&
+        (!isLinkedRepositoryReady(linked) || localPath === "")) ||
+      (onDemand !== undefined &&
+        isLazyLinkedRepositoryCheckoutEnabled() &&
+        localPath !== "" &&
+        !(yield* fileSystem.exists(localPath).pipe(Effect.orElseSucceed(() => false))))
+    ) {
+      const ensured = yield* runEnsureLinkedRepositoryCheckout(onDemand, {
+        workspaceRoot: input.cwd,
+        repository: linked.url,
+        ...(input.ensureWaitTimeoutMs === undefined
+          ? {}
+          : { waitTimeoutMs: input.ensureWaitTimeoutMs }),
+      }).pipe(
+        Effect.mapError(
+          (message) =>
+            new GitManagerError({
+              operation: input.operation,
+              cwd: input.cwd,
+              detail: `${linked.url} is linked to this project but has no local clone yet (${message}).`,
+            }),
+        ),
+      );
+      localPath = ensured.localPath.trim();
+    } else if (!isLinkedRepositoryReady(linked) || localPath === "") {
       return yield* fail(
         `${linked.url} is linked to this project but has no local clone yet (${linked.error ?? (linked.status === "pending" ? "it is still being cloned" : "its clone failed")}). Refresh the project's linked repositories, then try again.`,
       );

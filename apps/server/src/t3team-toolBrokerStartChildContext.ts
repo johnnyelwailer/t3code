@@ -20,6 +20,7 @@ import {
 } from "./t3team-referenceManifestNormalization.ts";
 
 import { ensureNexiProjectStateDir } from "./t3team-projectMainRepositoryState.ts";
+import type { LinkedRepositoryOnDemandRuntime } from "./t3team-linkedRepositoryOnDemand.ts";
 
 const MAIN_REPOSITORY_STATUSES: ReadonlyArray<MainRepositoryBootstrapResult["status"]> = [
   "adopted",
@@ -89,6 +90,8 @@ export type T3TeamStartChildLinkedRepositoryServices = {
   readonly path: Path.Path;
   readonly sourceControlProviders: SourceControlProviderRegistry["Service"];
   readonly gitWorkflow: GitWorkflowService["Service"];
+  /** When set, linked-repo worktree prep may queue and wait for lazy bootstrap clones. */
+  readonly linkedRepositoryOnDemand?: LinkedRepositoryOnDemandRuntime;
 };
 
 /** Whether the project workspace carries linked-repository metadata — the context switch that

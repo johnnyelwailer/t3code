@@ -485,6 +485,10 @@ const layerGitManager = GitManager.layer.pipe(
   Layer.provideMerge(GitVcsDriver.layer),
   Layer.provideMerge(layerSourceControlProviderRegistry),
   Layer.provideMerge(TextGeneration.layer.pipe(Layer.provide(layerSourceControlProviderRegistry))),
+  // Pull request checkout on linked repositories may queue lazy reference clones.
+  Layer.provideMerge(
+    T3TeamLinkedRepositorySyncLive.pipe(Layer.provideMerge(layerSourceControlRepositoryService)),
+  ),
 );
 
 const layerGit = Layer.empty.pipe(

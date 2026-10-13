@@ -87,6 +87,7 @@ import * as SourceControlProvider from "@t3tools/source-control-core/server/Sour
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import type { ChangeRequest } from "@t3tools/contracts";
 import { resolvePullRequestCheckoutRoot } from "../t3team-pullRequestCheckoutRoot.ts";
+import { T3TeamLinkedRepositorySync } from "../t3team-linkedRepositorySync.ts";
 
 export interface GitActionProgressReporter {
   readonly publish: (event: GitActionProgressEvent) => Effect.Effect<void, never>;
@@ -756,6 +757,8 @@ export const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  const linkedRepositorySync = yield* T3TeamLinkedRepositorySync;
+  const linkedRepositoryOnDemand = { sync: linkedRepositorySync, fileSystem, path };
 
   const sourceControlProvider = (cwd: string) => sourceControlProviders.resolve({ cwd });
   // A linked-repository project keeps its pull requests in clones its workspace root does not
@@ -764,7 +767,12 @@ export const make = Effect.gen(function* () {
     operation: string,
     input: { readonly cwd: string; readonly reference: string },
   ) =>
-    resolvePullRequestCheckoutRoot({ operation, sourceControlProviders, ...input }).pipe(
+    resolvePullRequestCheckoutRoot({
+      operation,
+      sourceControlProviders,
+      linkedRepositoryOnDemand,
+      ...input,
+    }).pipe(
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),
     );

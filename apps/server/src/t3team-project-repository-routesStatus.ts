@@ -85,7 +85,9 @@ export const t3teamLinkedRepositoryEnsureRouteLayer = HttpRouter.add(
     const workspaceRoot = yield* normalizeT3TeamWorkspaceRoot(workspaceRootInput);
     return okJson(yield* ensureLinkedRepositoryCheckoutRoute(workspaceRoot, url));
   }).pipe(
-    Effect.mapError((cause) => toT3TeamError(cause, "Failed to ensure linked repository checkout.")),
+    Effect.mapError((cause) =>
+      toT3TeamError(cause, "Failed to ensure linked repository checkout."),
+    ),
     Effect.catch(errorResponse),
   ),
 );

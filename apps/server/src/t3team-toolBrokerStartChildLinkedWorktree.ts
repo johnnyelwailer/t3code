@@ -14,6 +14,8 @@ import {
   isLinkedRepositoryReady,
   REFERENCES_DIR_NAME,
 } from "./t3team-project-repository-utils.ts";
+import { isLazyLinkedRepositoryCheckoutEnabled } from "./t3team-lazyLinkedRepositoryFlag.ts";
+import { runEnsureLinkedRepositoryCheckout } from "./t3team-linkedRepositoryOnDemand.ts";
 import {
   buildScopedChildWorktreePath,
   findLinkedRepository,
@@ -63,7 +65,7 @@ export const resolveLinkedRepositoryWorktree = (input: {
           `Failed to parse linked repository metadata: ${error instanceof Error ? error.message : String(error)}`,
       ),
     );
-    const linkedRepository = findLinkedRepository(
+    let linkedRepository = findLinkedRepository(
       readLinkedRepositories(manifest.linkedRepositories),
       input.repoFullName,
     );
@@ -72,7 +74,21 @@ export const resolveLinkedRepositoryWorktree = (input: {
         `No linked repository matched '${input.repoFullName}' in this project workspace.`,
       );
     }
-    if (!isLinkedRepositoryReady(linkedRepository)) {
+    const onDemand = input.services.linkedRepositoryOnDemand;
+    if (
+      onDemand !== undefined &&
+      isLazyLinkedRepositoryCheckoutEnabled() &&
+      !isLinkedRepositoryReady(linkedRepository)
+    ) {
+      linkedRepository = yield* runEnsureLinkedRepositoryCheckout(onDemand, {
+        workspaceRoot: input.projectWorkspaceRoot,
+        repository: input.repoFullName,
+      }).pipe(
+        Effect.mapError(
+          (message) => `Linked repository '${input.repoFullName}' is not ready: ${message}`,
+        ),
+      );
+    } else if (!isLinkedRepositoryReady(linkedRepository)) {
       return yield* Effect.fail(
         `Linked repository '${input.repoFullName}' is not ready: ${linkedRepository.error ?? (linkedRepository.status === "pending" ? "it is still being cloned" : "bootstrap failed")}.`,
       );

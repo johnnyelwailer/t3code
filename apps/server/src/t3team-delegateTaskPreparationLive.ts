@@ -22,6 +22,7 @@ import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
 import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
 import { ProviderRegistry } from "./provider/ProviderRegistry.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
+import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 import { T3TeamChildThreadMetadata } from "./t3team-childThreadMetadata.ts";
 import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
 import {
@@ -47,11 +48,15 @@ const failure = (code: OrchestratorMcpFailure["code"], message: string) =>
   new OrchestratorMcpFailure({ code, message });
 
 const make = Effect.gen(function* () {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const linkedRepositorySync = yield* T3TeamLinkedRepositorySync;
   const services = {
-    fileSystem: yield* FileSystem.FileSystem,
-    path: yield* Path.Path,
+    fileSystem,
+    path,
     gitWorkflow: yield* GitWorkflowService,
     sourceControlProviders: yield* SourceControlProviderRegistry,
+    linkedRepositoryOnDemand: { sync: linkedRepositorySync, fileSystem, path },
   };
   const setupScripts = yield* ProjectSetupScriptRunner;
   const providers = yield* ProviderRegistry;

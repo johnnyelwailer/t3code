@@ -63,5 +63,4 @@ describe("inspectRemoteProjectStateOnDefaultBranch", () => {
       expect(calls.some((args) => args.includes("ls-tree"))).toBe(true);
     }).pipe(Effect.provide(Layer.mergeAll(vcs, sourceControl, NodeServices.layer)));
   });
-
 });

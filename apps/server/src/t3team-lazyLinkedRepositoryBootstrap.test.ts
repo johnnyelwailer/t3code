@@ -14,9 +14,7 @@ import {
   T3TeamLinkedRepositorySync,
   T3TeamLinkedRepositorySyncLive,
 } from "./t3team-linkedRepositorySync.ts";
-import {
-  LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV,
-} from "./t3team-lazyLinkedRepositoryFlag.ts";
+import { LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV } from "./t3team-lazyLinkedRepositoryFlag.ts";
 import { MAIN_REPOSITORY_FLAG_ENV } from "./t3team-mainRepositoryFlag.ts";
 import { bootstrapWorkspaceReferences } from "./t3team-project-repository-routesReferences.ts";
 import { ensureLinkedRepositoryCheckout } from "./t3team-linkedRepositoryOnDemand.ts";
@@ -91,7 +89,8 @@ describe("lazy linked repository bootstrap", () => {
       Effect.provide(layer),
       Effect.ensuring(
         Effect.sync(() => {
-          if (previousLazy === undefined) delete process.env[LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV];
+          if (previousLazy === undefined)
+            delete process.env[LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV];
           else process.env[LAZY_LINKED_REPOSITORY_CHECKOUT_FLAG_ENV] = previousLazy;
           if (previousMain === undefined) delete process.env[MAIN_REPOSITORY_FLAG_ENV];
           else process.env[MAIN_REPOSITORY_FLAG_ENV] = previousMain;

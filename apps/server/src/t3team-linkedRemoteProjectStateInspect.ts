@@ -17,10 +17,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import { SourceControlRepositoryService } from "./sourceControl/SourceControlRepositoryService.ts";
-import {
-  INSPECT_TIMEOUT_MS,
-  linkedCheckoutGit as git,
-} from "./t3team-linkedCheckoutGit.ts";
+import { INSPECT_TIMEOUT_MS, linkedCheckoutGit as git } from "./t3team-linkedCheckoutGit.ts";
 
 export type RemoteProjectStateInspectResult = {
   /** Whether the default branch tree contains the active project state dir name. */
@@ -93,8 +90,7 @@ export const inspectRemoteProjectStateOnDefaultBranch = Effect.fn(
     ["symbolic-ref", "--short", "FETCH_HEAD"],
     INSPECT_TIMEOUT_MS,
   );
-  const ref =
-    sym.exitCode === 0 && sym.stdout.trim().length > 0 ? sym.stdout.trim() : "FETCH_HEAD";
+  const ref = sym.exitCode === 0 && sym.stdout.trim().length > 0 ? sym.stdout.trim() : "FETCH_HEAD";
   for (const stateDirName of STATE_DIR_CANDIDATES) {
     const tree = yield* git(
       "ls-tree",
