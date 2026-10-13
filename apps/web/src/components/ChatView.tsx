@@ -344,7 +344,7 @@ import { useNowMinute } from "../hooks/useNowMinute";
 import { usePanelAnimationSettings, usePanelPresence } from "../panelAnimations";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionComposerGate";
-import type { CloudSessionQueuedSend } from "~/cloud/t3team-cloudSessionTargetStore";
+import { useCloudQueuedSendOptimisticMessage } from "~/cloud/t3team-useCloudQueuedSendOptimisticMessage";
 import { useRemoveClonedProject } from "../hooks/useRemoveClonedProject";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { resolveAppModelSelectionForInstance } from "../modelSelection";
@@ -1897,7 +1897,9 @@ export default function ChatView(props: ChatViewProps) {
   // Anything beyond the prompt text: attachments, terminal or element contexts, annotations.
   const composerHasNonPromptContent = useComposerDraftStore((store) => {
     const draft = store.getComposerDraft(composerDraftTarget);
-    return draft ? composerDraftHasUserContent({ ...draft, prompt: "" }) : false;
+    return draft
+      ? composerDraftHasUserContent({ ...draft, prompt: "", cloudQueuedSend: null })
+      : false;
   });
   const setComposerDraftPrompt = useComposerDraftStore((store) => store.setPrompt);
   const addComposerDraftImages = useComposerDraftStore((store) => store.addImages);
@@ -4611,7 +4613,6 @@ export default function ChatView(props: ChatViewProps) {
     () => new Set(logicalProjectEnvironments.map((env) => env.environmentId)),
     [logicalProjectEnvironments],
   );
-  const cloudFlushSendRef = useRef<(queued: CloudSessionQueuedSend) => void>(() => {});
   const onEnvironmentChange = useCallback(
     (nextEnvironmentId: EnvironmentId) => {
       if (envLocked || !draftId || sendInFlightRef.current) return;
@@ -4690,21 +4691,15 @@ export default function ChatView(props: ChatViewProps) {
     ],
   );
 
+  // t3team: a draft's first message queued for a cloud session is persisted on the draft and
+  // delivered by the app-level CloudQueuedSendFlusher; here it shows as the bubble and banner.
   const cloudSessionComposerGate = useCloudSessionComposerGate({
+    draftId: draftId ?? null,
     scopeKey: cloudSessionScopeKey,
     projectRef: activeProjectRef,
     availableEnvironmentIds: cloudAvailableEnvironmentIds,
-    onRemapEnvironment: onEnvironmentChange,
-    onFlushSend: (queued) => cloudFlushSendRef.current(queued),
-    onRestoreDraft: (queued) => {
-      setOptimisticUserMessages((existing) =>
-        existing.filter((message) => message.id !== queued.messageId),
-      );
-      promptRef.current = queued.messageText;
-      setComposerDraftPrompt(composerDraftTarget, queued.messageText);
-      composerRef.current?.focusAtEnd();
-    },
   });
+  useCloudQueuedSendOptimisticMessage({ draftId: draftId ?? null, setOptimisticUserMessages });
 
   const activeTerminalGroup =
     terminalUiState.terminalGroups.find(
@@ -9060,28 +9055,34 @@ export default function ChatView(props: ChatViewProps) {
       promptRef.current.trim().length > 0 &&
       !cloudSessionComposerGate.hasQueuedBind
     ) {
-      const queued = cloudSessionComposerGate.tryQueueSend(
-        newMessageId(),
-        promptRef.current.trim(),
-      );
+      const queueCtx = composerRef.current?.getSendContext();
+      const queuedText = promptRef.current.trim();
+      const queued = queueCtx
+        ? cloudSessionComposerGate.tryQueueSend({
+            messageId: newMessageId(),
+            messageText: queuedText,
+            outgoingText: formatOutgoingPrompt({
+              provider: queueCtx.selectedProvider,
+              model: queueCtx.selectedModel,
+              models: queueCtx.selectedProviderModels,
+              effort: queueCtx.selectedPromptEffort,
+              text: queuedText,
+            }),
+            titleSeed: queuedText,
+            modelSelection: createModelSelection(
+              queueCtx.selectedModelSelection.instanceId,
+              queueCtx.selectedModel || activeProjectDefaultModelSelection?.model || DEFAULT_MODEL,
+              queueCtx.selectedModelSelection.options,
+            ),
+            runtimeMode,
+            interactionMode: queueCtx.interactionMode,
+          })
+        : null;
       if (queued) {
-        const createdAt = queued.createdAt;
+        // The record is on the draft now, so clearing the prompt keeps the draft alive.
         promptRef.current = "";
         setComposerDraftPrompt(composerDraftTarget, "");
         composerRef.current?.resetCursorState();
-        setOptimisticUserMessages((existing) => [
-          ...existing,
-          {
-            id: queued.messageId as ReturnType<typeof newMessageId>,
-            role: "user",
-            text: queued.messageText,
-            runId: null,
-            createdAt,
-            updatedAt: createdAt,
-            streaming: false,
-            inputIntent: "queued_turn" as const,
-          },
-        ]);
         return;
       }
     }
@@ -10532,14 +10533,6 @@ export default function ChatView(props: ChatViewProps) {
       );
       if (!sendQueuesBehindSetup) resetLocalDispatch();
     }
-  };
-  cloudFlushSendRef.current = (queued) => {
-    setOptimisticUserMessages((existing) =>
-      existing.filter((message) => message.id !== queued.messageId),
-    );
-    promptRef.current = queued.messageText;
-    setComposerDraftPrompt(composerDraftTarget, queued.messageText);
-    void onSend();
   };
 
   const onRespondToApproval = useCallback(

@@ -74,6 +74,7 @@ import { useUpstreamRouteBridge } from "../t3team/t3team-useUpstreamRouteBridge"
 import { T3TeamPackAppearanceDefaultsSync } from "../t3team/t3team-PackAppearanceDefaultsSync";
 import { T3TeamPackAppearanceSync } from "../t3team/t3team-PackAppearanceSync";
 import { CloudSessionSignInDialogHost } from "../cloud/t3team-CloudSessionSignInDialogHost";
+import { CloudQueuedSendFlusher } from "../cloud/t3team-CloudQueuedSendFlusher";
 import { t3teamPackProductName, useT3TeamAppDisplayName } from "../t3team/t3team-appBrandName";
 import { useT3TeamPackAppearance } from "../t3team/t3team-packAppearance";
 // Registers the composing heartbeat with the composer draft store's sink (side effect only).
@@ -325,6 +326,8 @@ function RootRouteView() {
           {primaryEnvironmentAuthenticated ? <DesktopAppActivationCoordinator /> : null}
           {primaryEnvironmentAuthenticated ? <DesktopWebLinkCoordinator /> : null}
           {isElectron ? <RunningThreadKeepAlive /> : null}
+          {/* t3team: delivers drafts' first messages queued for a cloud session, app-wide. */}
+          {primaryEnvironmentAuthenticated ? <CloudQueuedSendFlusher /> : null}
           <RelayClientInstallDialog />
           <CloudSessionSignInDialogHost />
           <ConnectOnboardingDialog />
