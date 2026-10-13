@@ -280,6 +280,48 @@ describe("readHandoffBranchState", () => {
     }),
   );
 
+  const healthyRefusals = (state: T3TeamThreadHandoffBranchState) =>
+    threadHandoffRefusals({
+      shell: { branch: "feature/x", pendingRuntimeRequest: null },
+      branchState: state,
+      liveSubagentChildren: 0,
+      boundScheduledTasks: 0,
+    });
+
+  it.effect("lets a pushed, clean branch move: zero refusals end to end", () =>
+    Effect.gen(function* () {
+      const { vcs } = fakeVcs(
+        gitAnswers({ "rev-parse": "abc123\n", "rev-list": "0\n", status: "" }),
+      );
+      const state = yield* readHandoffBranchState(vcs, "/repo", "feature/x");
+      assert.deepStrictEqual(state, {
+        upstream: "origin/feature/x",
+        unpushedCommits: 0,
+        uncommittedChanges: false,
+      });
+      assert.deepStrictEqual(healthyRefusals(state), []);
+    }),
+  );
+
+  it.effect("refuses once as unverified when only the origin probe cannot run", () =>
+    Effect.gen(function* () {
+      const { vcs, calls } = fakeVcs(gitAnswers({ "rev-parse": "", status: "" }), (args) =>
+        args[0] === "rev-parse" ? 128 : 0,
+      );
+      const state = yield* readHandoffBranchState(vcs, "/repo", "feature/x");
+      assert.deepStrictEqual(state, {
+        upstream: null,
+        unpushedCommits: null,
+        uncommittedChanges: false,
+      });
+      assert.isFalse(calls.some((args) => args[0] === "rev-list"));
+      assert.deepStrictEqual(
+        healthyRefusals(state).map((refusal) => refusal.reason),
+        ["unverified"],
+      );
+    }),
+  );
+
   it.effect("reports unknown, not clean, when git fails", () =>
     Effect.gen(function* () {
       const { vcs } = fakeVcs(() => null);
