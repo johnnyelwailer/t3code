@@ -1,10 +1,12 @@
 import { assert, describe, it } from "@effect/vitest";
 import {
+  EnvironmentId,
   MessageId,
   RunId,
   ThreadId,
   TurnItemId,
   type OrchestrationV2TurnItem,
+  T3TEAM_THREAD_HANDOFF_FACT_KEY,
   type T3TeamThreadHandoffBranchState,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -15,6 +17,7 @@ import {
   readHandoffBranchState,
   UNKNOWN_BRANCH_STATE,
 } from "./t3team-threadHandoffBranchState.ts";
+import { recordThreadHandoff } from "./t3team-threadHandoff.ts";
 import {
   renderThreadHandoffSummary,
   threadHandoffRefusals,
@@ -237,4 +240,52 @@ describe("readHandoffBranchState", () => {
     assert.strictEqual(parseCommitCount(" 7\n"), 7);
     assert.strictEqual(parseCommitCount("fatal: no upstream"), null);
   });
+});
+
+describe("recordThreadHandoff", () => {
+  it.effect("writes the link under the handoff fact key, nothing else", () =>
+    Effect.gen(function* () {
+      const patches: Array<unknown> = [];
+      const store = {
+        upsert: (_threadId: ThreadId, patch: unknown) =>
+          Effect.sync(() => {
+            patches.push(patch);
+            return {} as never;
+          }),
+      } as unknown as Parameters<typeof recordThreadHandoff>[1];
+      const { link } = yield* recordThreadHandoff(
+        {
+          threadId: THREAD,
+          direction: "moved_to",
+          peerEnvironmentId: EnvironmentId.make("env-cloud"),
+          peerThreadId: ThreadId.make("thread:successor"),
+          peerLabel: "nexi-cloud-1",
+        },
+        store,
+      );
+      assert.strictEqual(link.direction, "moved_to");
+      assert.deepStrictEqual(Object.keys(patches[0] as object), ["extensions"]);
+      assert.deepStrictEqual(Object.keys((patches[0] as { extensions: object }).extensions), [
+        T3TEAM_THREAD_HANDOFF_FACT_KEY,
+      ]);
+    }),
+  );
+
+  it.effect("fails visibly where the server has no thread facts", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        recordThreadHandoff(
+          {
+            threadId: THREAD,
+            direction: "moved_from",
+            peerEnvironmentId: EnvironmentId.make("env-local"),
+            peerThreadId: THREAD,
+            peerLabel: "This device",
+          },
+          undefined,
+        ),
+      );
+      assert.strictEqual(error._tag, "T3TeamThreadHandoffError");
+    }),
+  );
 });
