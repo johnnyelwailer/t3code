@@ -7,6 +7,7 @@
  */
 import * as Effect from "effect/Effect";
 
+import { alignLinkedCheckoutBranch } from "./t3team-linkedCheckoutBranch.ts";
 import { redactUrlCredentials } from "./sourceControl/SourceControlRepositoryService.ts";
 import {
   cloneLinkedCheckoutAtomically,
@@ -23,10 +24,18 @@ import { isSameRepository } from "./t3team-toolBrokerStartChildLinkedRepository.
 export const syncLinkedCheckout = (job: {
   readonly url: string;
   readonly localPath: string;
+  /** The branch the checkout should end up on; absent leaves it on whatever it is on. */
+  readonly branch?: string;
   /** Reports the phase the sync entered, for status reads while it runs. */
   readonly onPhase: (phase: LinkedRepositorySyncPhase) => void;
 }) => {
-  const { localPath } = job;
+  const { localPath, branch } = job;
+  /** The sync outcome once the checkout exists: on the chosen branch, or with why it is not. */
+  const settle = Effect.fn("settleLinkedCheckout")(function* (status: "cloned" | "updated") {
+    const error =
+      branch === undefined ? undefined : yield* alignLinkedCheckoutBranch(localPath, branch);
+    return error === undefined ? ({ status } as const) : ({ status, error } as const);
+  });
   return Effect.gen(function* () {
     const state = yield* inspectLinkedCheckout(localPath);
     if (state === "foreign") {
@@ -44,7 +53,7 @@ export const syncLinkedCheckout = (job: {
     if (state === "missing") {
       job.onPhase("cloning");
       yield* cloneLinkedCheckoutAtomically({ url: job.url, directory: localPath });
-      return { status: "cloned" } as const;
+      return yield* settle("cloned");
     }
     // Fail closed: only a checkout whose `origin` is this repository is ours to report on (a
     // path derived from another repository's URL can share the slug). A broken checkout that
@@ -61,12 +70,12 @@ export const syncLinkedCheckout = (job: {
     if (origin === undefined) {
       job.onPhase("cloning");
       yield* recloneLinkedCheckout({ url: job.url, directory: localPath });
-      return { status: "cloned" } as const;
+      return yield* settle("cloned");
     }
     job.onPhase("updating");
     if (state === "broken") yield* repairLinkedCheckout({ url: job.url, directory: localPath });
     yield* fetchLinkedCheckout(localPath);
-    return { status: "updated" } as const;
+    return yield* settle("updated");
   }).pipe(
     Effect.catch((cause) =>
       // A failed refresh of a still-usable checkout keeps it usable; only the error is new.

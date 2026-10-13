@@ -17,6 +17,7 @@ import {
   T3TeamLinkedRepositorySyncLive,
 } from "./t3team-linkedRepositorySync.ts";
 import { bootstrapWorkspaceReferences } from "./t3team-project-repository-routesReferences.ts";
+import { listLinkedRepositoryBranches } from "./t3team-project-repository-routesBranches.ts";
 import { readLinkedRepositoryStatus } from "./t3team-project-repository-routesStatus.ts";
 import {
   deriveReferenceDirectoryName,
@@ -24,6 +25,7 @@ import {
   MANIFEST_FILE_NAME,
   REFERENCES_DIR_NAME,
 } from "./t3team-project-repository-utils.ts";
+import { MAIN_REPOSITORY_GITIGNORE_ENTRIES } from "./t3team-project-repository-utils.ts";
 import { isSameRepository } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 import { VcsProcess } from "./vcs/VcsProcess.ts";
 
@@ -94,14 +96,34 @@ const makeHarness = () => {
   };
 };
 
-const bootstrap = (workspaceRoot: string, urls: ReadonlyArray<string>, refresh = false) =>
+const bootstrap = (
+  workspaceRoot: string,
+  urls: ReadonlyArray<string>,
+  refresh = false,
+  branches?: Readonly<Record<string, string>>,
+) =>
   bootstrapWorkspaceReferences({
     workspaceRoot,
     workspaceRepositoryInitialized: true,
     detectedMainRepository: undefined,
     linkedRepositoryUrls: urls,
+    ...(branches ? { linkedRepositoryBranches: branches } : {}),
     ...(refresh ? { refreshLinkedRepositories: true } : {}),
   });
+
+/** A branch on the origin with its own files, then back on main so clones start there. */
+const addBranch = (origin: string, name: string, files: Record<string, string>) => {
+  git(origin, "checkout", "-q", "-b", name);
+  for (const [file, contents] of Object.entries(files)) {
+    NodeFS.writeFileSync(NodePath.join(origin, file), contents);
+  }
+  git(origin, "add", ".");
+  git(origin, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", `on ${name}`);
+  git(origin, "checkout", "-q", "main");
+};
+
+const currentBranch = (directory: string) =>
+  git(directory, "rev-parse", "--abbrev-ref", "HEAD").stdout.trim();
 
 const settleAll = (paths: ReadonlyArray<string>) =>
   Effect.gen(function* () {
@@ -210,6 +232,176 @@ describe("T3TeamLinkedRepositorySync", () => {
       }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
     },
   );
+
+  it.live("clones onto the chosen branch and records it", () => {
+    const harness = makeHarness();
+    const url = makeOrigin(harness.root, "branched");
+    addBranch(url, "feature/pj", { "skill.txt": "from the branch\n" });
+    return Effect.gen(function* () {
+      const first = yield* bootstrap(harness.workspaceRoot, [url], true, { [url]: "feature/pj" });
+      const localPath = first.linkedRepositories[0]!.localPath;
+      yield* settleAll([localPath]);
+      expect(currentBranch(localPath)).toBe("feature/pj");
+      expect(NodeFS.existsSync(NodePath.join(localPath, "skill.txt"))).toBe(true);
+      const [entry] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot)).linkedRepositories;
+      expect(entry?.branch).toBe("feature/pj");
+      expect(entry?.error).toBeUndefined();
+    }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
+  });
+
+  it.live("moves an existing checkout to the chosen branch without cloning again", () => {
+    const harness = makeHarness();
+    const url = makeOrigin(harness.root, "switch");
+    addBranch(url, "feature/pj", { "skill.txt": "from the branch\n" });
+    return Effect.gen(function* () {
+      const first = yield* bootstrap(harness.workspaceRoot, [url], true);
+      const localPath = first.linkedRepositories[0]!.localPath;
+      yield* settleAll([localPath]);
+      expect(currentBranch(localPath)).toBe("main");
+
+      yield* bootstrap(harness.workspaceRoot, [url], false, { [url]: "feature/pj" });
+      yield* settleAll([localPath]);
+      expect(currentBranch(localPath)).toBe("feature/pj");
+      expect(harness.counts.clone).toBe(1);
+    }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
+  });
+
+  it.live("clears T3's own scaffold out of the way when it blocks the switch", () => {
+    const harness = makeHarness();
+    const url = makeOrigin(harness.root, "scaffold");
+    addBranch(url, "feature/pj", {
+      "AGENTS.md": "the branch's own\n",
+      ".gitignore": "node_modules/\n*.log\n",
+    });
+    return Effect.gen(function* () {
+      const first = yield* bootstrap(harness.workspaceRoot, [url], true);
+      const localPath = first.linkedRepositories[0]!.localPath;
+      yield* settleAll([localPath]);
+      NodeFS.writeFileSync(NodePath.join(localPath, "AGENTS.md"), "scaffolded by T3\n");
+      NodeFS.writeFileSync(
+        NodePath.join(localPath, ".gitignore"),
+        `${MAIN_REPOSITORY_GITIGNORE_ENTRIES[0]}\n`,
+      );
+
+      yield* bootstrap(harness.workspaceRoot, [url], false, { [url]: "feature/pj" });
+      yield* settleAll([localPath]);
+      const [outcome] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot))
+        .linkedRepositories;
+      expect(outcome?.error).toBeUndefined();
+      expect(currentBranch(localPath)).toBe("feature/pj");
+      expect(NodeFS.readFileSync(NodePath.join(localPath, "AGENTS.md"), "utf8")).toBe(
+        "the branch's own\n",
+      );
+      const [entry] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot)).linkedRepositories;
+      expect(entry?.error).toBeUndefined();
+    }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
+  });
+
+  it.live(
+    "leaves a checkout alone, and says why, when the user's own edits block the switch",
+    () => {
+      const harness = makeHarness();
+      const url = makeOrigin(harness.root, "edited");
+      addBranch(url, "feature/pj", { "a.txt": "changed on the branch\n" });
+      return Effect.gen(function* () {
+        const first = yield* bootstrap(harness.workspaceRoot, [url], true);
+        const localPath = first.linkedRepositories[0]!.localPath;
+        yield* settleAll([localPath]);
+        NodeFS.writeFileSync(NodePath.join(localPath, "a.txt"), "my own edit\n");
+
+        yield* bootstrap(harness.workspaceRoot, [url], false, { [url]: "feature/pj" });
+        yield* settleAll([localPath]);
+        expect(currentBranch(localPath)).toBe("main");
+        expect(NodeFS.readFileSync(NodePath.join(localPath, "a.txt"), "utf8")).toBe(
+          "my own edit\n",
+        );
+        const [entry] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot))
+          .linkedRepositories;
+        expect(entry?.error).toContain('Could not switch to "feature/pj"');
+        expect(entry?.status).toBe("updated");
+      }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
+    },
+  );
+
+  it.live("reverts the scaffold edit to a tracked .gitignore when it blocks the switch", () => {
+    const harness = makeHarness();
+    const url = makeOrigin(harness.root, "tracked-ignore");
+    NodeFS.writeFileSync(NodePath.join(url, ".gitignore"), "node_modules/\n");
+    git(url, "add", ".");
+    git(url, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "ignore");
+    addBranch(url, "feature/pj", { ".gitignore": "node_modules/\n*.log\n" });
+    return Effect.gen(function* () {
+      const first = yield* bootstrap(harness.workspaceRoot, [url], true);
+      const localPath = first.linkedRepositories[0]!.localPath;
+      yield* settleAll([localPath]);
+      NodeFS.appendFileSync(
+        NodePath.join(localPath, ".gitignore"),
+        `${MAIN_REPOSITORY_GITIGNORE_ENTRIES[0]}\n`,
+      );
+
+      yield* bootstrap(harness.workspaceRoot, [url], false, { [url]: "feature/pj" });
+      yield* settleAll([localPath]);
+      const [entry] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot)).linkedRepositories;
+      expect(entry?.error).toBeUndefined();
+      expect(currentBranch(localPath)).toBe("feature/pj");
+      expect(NodeFS.readFileSync(NodePath.join(localPath, ".gitignore"), "utf8")).toBe(
+        "node_modules/\n*.log\n",
+      );
+    }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
+  });
+
+  it.live("lists the branches a checkout knows, with the current and the default one", () => {
+    const harness = makeHarness();
+    const url = makeOrigin(harness.root, "listing");
+    addBranch(url, "feature/pj", { "skill.txt": "from the branch\n" });
+    return Effect.gen(function* () {
+      const first = yield* bootstrap(harness.workspaceRoot, [url], true, { [url]: "feature/pj" });
+      yield* settleAll([first.linkedRepositories[0]!.localPath]);
+      const listed = yield* listLinkedRepositoryBranches(harness.workspaceRoot, url);
+      expect(listed.branches).toEqual(["feature/pj", "main"]);
+      expect(listed.current).toBe("feature/pj");
+      expect(listed.defaultBranch).toBe("main");
+      const unknown = yield* listLinkedRepositoryBranches(
+        harness.workspaceRoot,
+        "https://example.com/x/y",
+      );
+      expect(unknown.branches).toEqual([]);
+    }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
+  });
+
+  it.live("reports a branch that is not on the remote and keeps the checkout usable", () => {
+    const harness = makeHarness();
+    const url = makeOrigin(harness.root, "missing-branch");
+    return Effect.gen(function* () {
+      const first = yield* bootstrap(harness.workspaceRoot, [url], true, { [url]: "nope" });
+      const localPath = first.linkedRepositories[0]!.localPath;
+      yield* settleAll([localPath]);
+      expect(currentBranch(localPath)).toBe("main");
+      const [entry] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot)).linkedRepositories;
+      expect(entry?.error).toContain('"nope" does not exist on the remote');
+      expect(entry?.status).toBe("cloned");
+    }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
+  });
+
+  it.live("fast-forwards the chosen branch on a later sync", () => {
+    const harness = makeHarness();
+    const url = makeOrigin(harness.root, "forward");
+    addBranch(url, "feature/pj", { "one.txt": "1\n" });
+    return Effect.gen(function* () {
+      const first = yield* bootstrap(harness.workspaceRoot, [url], true, { [url]: "feature/pj" });
+      const localPath = first.linkedRepositories[0]!.localPath;
+      yield* settleAll([localPath]);
+      addBranch(url, "feature/pj-next", {});
+      git(url, "checkout", "-q", "feature/pj");
+      NodeFS.writeFileSync(NodePath.join(url, "two.txt"), "2\n");
+      git(url, "add", ".");
+      git(url, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "more");
+
+      yield* bootstrap(harness.workspaceRoot, [url], true, { [url]: "feature/pj" });
+      yield* settleAll([localPath]);
+      expect(NodeFS.existsSync(NodePath.join(localPath, "two.txt"))).toBe(true);
+    }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
+  });
 
   it.live("a client disconnect does not interrupt a running clone", () => {
     const harness = makeHarness();

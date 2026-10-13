@@ -5,6 +5,7 @@ import type {
 import type {
   GitHubBackendApi,
   GitHubInboxDiscoverResponse,
+  LinkedRepositoryBranches,
   LinkedRepositorySyncResult,
   ProjectMainRepositorySwitchResult,
   ProjectWorkspaceContextFile,
@@ -75,6 +76,13 @@ export function createProjectWorkspaceBackendApi(httpBaseUrl: string): ProjectWo
       return postJson<typeof input, { linkedRepositories: LinkedRepositorySyncResult[] }>(
         httpBaseUrl,
         "/api/t3team/project/workspace/linked-repositories/status",
+        input,
+      );
+    },
+    listLinkedRepositoryBranches(input) {
+      return postJson<typeof input, LinkedRepositoryBranches>(
+        httpBaseUrl,
+        "/api/t3team/project/workspace/linked-repositories/branches",
         input,
       );
     },

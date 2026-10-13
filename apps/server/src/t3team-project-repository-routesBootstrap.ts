@@ -53,6 +53,8 @@ export const planLinkedRepositoriesForBootstrap = Effect.fn("planLinkedRepositor
     readonly urls: ReadonlyArray<string>;
     readonly preserved: ReadonlyArray<LinkedRepositoryBootstrapResult>;
     readonly refresh: boolean;
+    /** The branch each repository should be on, by URL; undefined keeps the recorded choice. */
+    readonly branches?: Readonly<Record<string, string>>;
     readonly phaseOf: (localPath: string) => LinkedRepositorySyncPhase | undefined;
     readonly nowMs: number;
   }) {
@@ -93,18 +95,25 @@ export const planLinkedRepositoriesForBootstrap = Effect.fn("planLinkedRepositor
         previous?.localPath === localPath &&
         input.nowMs - syncedAtMs < LINKED_REPOSITORY_REFETCH_INTERVAL_MS &&
         (previous.status === "failed" || (isLinkedRepositoryReady(previous) && previousIsClone));
-      const entry: LinkedRepositoryBootstrapResult =
+      const branch = input.branches ? input.branches[url] : previous?.branch;
+      const { branch: _previousBranch, ...entryWithoutBranch } =
         previous &&
         previous.localPath === localPath &&
         (previousIsClone || !isLinkedRepositoryReady(previous))
           ? stripSyncState({ ...previous, url })
-          : { url, localPath, status: "pending" };
+          : ({ url, localPath, status: "pending" } satisfies LinkedRepositoryBootstrapResult);
+      const entry: LinkedRepositoryBootstrapResult = {
+        ...entryWithoutBranch,
+        ...(branch ? { branch } : {}),
+      };
+      // Choosing another branch is a reason to sync now, whatever the refetch throttle says.
+      const branchChanged = input.branches !== undefined && previous?.branch !== branch;
       planned.push({
         entry,
         ...(phase ? { phase } : {}),
         // A running sync is still requested: that registers this manifest for its outcome
         // (the sync service deduplicates the work).
-        request: phase !== undefined || input.refresh || !recentlySettled,
+        request: phase !== undefined || input.refresh || !recentlySettled || branchChanged,
       });
     }
     return planned;

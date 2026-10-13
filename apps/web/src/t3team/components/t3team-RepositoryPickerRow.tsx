@@ -20,6 +20,7 @@ export function RepositoryPickerRow({
   showHost,
   onToggle,
   status,
+  controls,
 }: {
   entry: RepositoryPickerEntry;
   linked: boolean;
@@ -27,23 +28,27 @@ export function RepositoryPickerRow({
   onToggle: (url: string) => void;
   /** Rendered at the foot of the card, e.g. its clone/sync state. */
   status?: ReactNode;
+  /** Interactive controls on their own full-width row under the status, e.g. a branch picker. */
+  controls?: ReactNode;
 }) {
   const slash = entry.name.indexOf("/");
   const owner = slash < 0 ? "" : entry.name.slice(0, slash + 1);
   const repo = slash < 0 ? entry.name : entry.name.slice(slash + 1);
   return (
-    <li className="min-w-0">
+    <li
+      className={cn(
+        "flex min-w-0 flex-col rounded-lg border transition-colors",
+        linked
+          ? "border-primary/60 bg-primary/5"
+          : "border-border bg-background/40 hover:border-foreground/30 hover:bg-accent/40",
+      )}
+    >
       <button
         type="button"
         role="checkbox"
         aria-checked={linked}
         onClick={() => onToggle(entry.url)}
-        className={cn(
-          "group flex h-full w-full flex-col gap-1.5 rounded-lg border p-3 text-left text-foreground transition-colors focus-visible:outline-2 focus-visible:outline-ring",
-          linked
-            ? "border-primary/60 bg-primary/5"
-            : "border-border bg-background/40 hover:border-foreground/30 hover:bg-accent/40",
-        )}
+        className="group flex flex-1 flex-col gap-1.5 rounded-lg p-3 text-left text-foreground focus-visible:outline-2 focus-visible:outline-ring"
       >
         <span className="flex items-start gap-2.5">
           <span
@@ -72,15 +77,16 @@ export function RepositoryPickerRow({
             {entry.description}
           </span>
         ) : null}
-        {showHost || status ? (
-          <span className="mt-auto flex items-center justify-between gap-2 pl-7 pt-0.5">
-            <span className="min-w-0 flex-1">{status}</span>
-            {showHost ? (
-              <span className="shrink-0 text-2xs text-muted-foreground/80">{entry.host}</span>
-            ) : null}
-          </span>
-        ) : null}
       </button>
+      {showHost || status ? (
+        <div className="flex items-end justify-between gap-2 px-3 pl-10">
+          <div className="min-w-0 flex-1">{status}</div>
+          {showHost ? (
+            <span className="shrink-0 text-2xs text-muted-foreground/80">{entry.host}</span>
+          ) : null}
+        </div>
+      ) : null}
+      {controls ? <div className="px-3 pt-1 pb-3 pl-10">{controls}</div> : <div className="pb-3" />}
     </li>
   );
 }
