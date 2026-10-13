@@ -10,7 +10,11 @@
  *
  * @module t3team-CloudSessionMachine
  */
-import { CloudSessionFailedError, type ProjectId } from "@t3tools/contracts";
+import {
+  CloudSessionFailedError,
+  plainProjectFolderName,
+  type ProjectId,
+} from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -27,10 +31,7 @@ import {
   machineRepositoryFromRemote,
   standbyPoolKey,
 } from "./t3team-cloudSessionMachineNames.ts";
-import {
-  type CloudSessionPlainProject,
-  plainProjectFolderName,
-} from "./t3team-cloudSessionPlainProject.ts";
+import type { CloudSessionPlainProject } from "./t3team-cloudSessionPlainProject.ts";
 
 export interface CloudSessionMachine {
   readonly repository: MachineRepository;

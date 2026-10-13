@@ -1,15 +1,22 @@
-import { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, type RepositoryIdentity } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { resolveCloudSessionOwnProject } from "./t3team-cloudSessionOwnProject";
 
 const VM = EnvironmentId.make("env-vm");
 const LOCAL = EnvironmentId.make("env-local");
+const FOLDER = "/home/runner/.t3home/projects/IES NG";
 const CHECKOUT = "/home/runner/_work/_temp/project/repository";
+const repository = (canonicalKey: string) =>
+  ({
+    canonicalKey,
+    locator: { source: "git-remote", remoteName: "origin", remoteUrl: "x" },
+  }) as unknown as RepositoryIdentity;
 
+// The composer's project: a managed workspace with no remote, keyed by its local path.
+const composer = { title: "IES NG", workspaceRoot: "/Users/pj/.t3code/IES NG" };
 const projects = [
-  // The composer's copy: a managed workspace with no remote, keyed by its local path.
-  { environmentId: LOCAL, id: ProjectId.make("local"), workspaceRoot: "/Users/pj/.t3code/IES NG" },
+  { environmentId: LOCAL, id: ProjectId.make("local"), ...composer },
   // A project the session's snapshot restored: same machine, not what the server started in.
   {
     environmentId: VM,
@@ -17,46 +24,70 @@ const projects = [
     workspaceRoot: "/home/runner/.t3home/projects/old",
   },
   // The project the session's server registered from its working directory.
-  { environmentId: VM, id: ProjectId.make("own"), workspaceRoot: CHECKOUT },
+  { environmentId: VM, id: ProjectId.make("own"), workspaceRoot: FOLDER },
 ];
 
 const base = {
-  target: { sessionId: "run-1", projectKey: "physical:env-local:/Users/pj/.t3code/IES NG" },
-  projectKey: "physical:env-local:/Users/pj/.t3code/IES NG",
+  target: { sessionId: "run-1", projectKey: "env-local:/Users/pj/.t3code/IES NG" },
+  project: composer,
+  projectKey: "env-local:/Users/pj/.t3code/IES NG",
   sessions: [{ sessionId: "run-1", environmentId: "env-vm" }],
-  serverCwdOf: (environmentId: EnvironmentId) => (environmentId === VM ? `${CHECKOUT}/` : null),
+  serverCwdOf: (environmentId: EnvironmentId) => (environmentId === VM ? `${FOLDER}/` : null),
   projects,
 };
+const OWN = { environmentId: VM, projectId: ProjectId.make("own") };
+const withRemote = { ...composer, repositoryIdentity: repository("nexplore.ghe.com/hive/common") };
+
+/** The session's server started in a checkout whose project carries `identity`. */
+const inCheckout = (identity: RepositoryIdentity | null) => ({
+  serverCwdOf: () => CHECKOUT,
+  projects: [
+    {
+      environmentId: VM,
+      id: ProjectId.make("own"),
+      workspaceRoot: CHECKOUT,
+      repositoryIdentity: identity,
+    },
+  ],
+});
 
 describe("resolveCloudSessionOwnProject", () => {
   it("is the project the session's server started in, though its key differs from the composer's", () => {
-    expect(resolveCloudSessionOwnProject(base)).toEqual({
-      environmentId: VM,
-      projectId: ProjectId.make("own"),
-    });
+    expect(resolveCloudSessionOwnProject(base)).toEqual(OWN);
   });
 
-  it("is none for a session set up for another project, or for none", () => {
-    expect(resolveCloudSessionOwnProject({ ...base, projectKey: "repo:acme/other" })).toBeNull();
+  it("is the checkout of the composer's repository, also before it reports its identity", () => {
+    const same = inCheckout(repository("nexplore.ghe.com/hive/common"));
+    expect(resolveCloudSessionOwnProject({ ...base, project: withRemote, ...same })).toEqual(OWN);
     expect(
-      resolveCloudSessionOwnProject({ ...base, target: { sessionId: "run-1", projectKey: null } }),
-    ).toBeNull();
+      resolveCloudSessionOwnProject({ ...base, project: withRemote, ...inCheckout(null) }),
+    ).toEqual(OWN);
+  });
+
+  it("is none for a session started for another project, though it was picked for this one", () => {
+    const other = inCheckout(repository("nexplore.ghe.com/hive/other"));
+    expect(resolveCloudSessionOwnProject({ ...base, project: withRemote, ...other })).toBeNull();
+    // A checkout, for a project with no remote.
+    const checkout = inCheckout(repository("nexplore.ghe.com/hive/common"));
+    expect(resolveCloudSessionOwnProject({ ...base, ...checkout })).toBeNull();
+    // Another project's folder.
+    const renamed = { ...composer, title: "Scratchpad" };
+    expect(resolveCloudSessionOwnProject({ ...base, project: renamed })).toBeNull();
+  });
+
+  it("is none for a target set up for another project, or for none", () => {
+    expect(resolveCloudSessionOwnProject({ ...base, projectKey: "acme/other" })).toBeNull();
+    const unbound = { sessionId: "run-1", projectKey: null };
+    expect(resolveCloudSessionOwnProject({ ...base, target: unbound })).toBeNull();
     expect(resolveCloudSessionOwnProject({ ...base, target: null })).toBeNull();
   });
 
-  it("is none until the session is ready on an environment that reported its working directory", () => {
+  it("is none until the session's server is up and has registered its project", () => {
     expect(
       resolveCloudSessionOwnProject({ ...base, sessions: [{ sessionId: "run-1" }] }),
     ).toBeNull();
     expect(resolveCloudSessionOwnProject({ ...base, serverCwdOf: () => null })).toBeNull();
-  });
-
-  it("is none while the server has not registered its project yet", () => {
-    expect(
-      resolveCloudSessionOwnProject({
-        ...base,
-        projects: projects.filter((project) => project.id !== ProjectId.make("own")),
-      }),
-    ).toBeNull();
+    const unregistered = projects.filter((project) => project.id !== ProjectId.make("own"));
+    expect(resolveCloudSessionOwnProject({ ...base, projects: unregistered })).toBeNull();
   });
 });
