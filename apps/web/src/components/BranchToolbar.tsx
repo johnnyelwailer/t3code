@@ -108,6 +108,8 @@ interface BranchToolbarProps {
   onComposerFocusRequest?: () => void;
   availableEnvironments?: readonly EnvironmentOption[];
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
+  /** t3team: panel "Move to" for a started thread (see BranchToolbarEnvironmentSelector). */
+  onHandoffToEnvironment?: ((environmentId: EnvironmentId) => void) | undefined;
   composerControlsHostRef?: (element: HTMLDivElement | null) => void;
   contextStripVisible?: boolean;
 }
@@ -623,6 +625,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   onComposerFocusRequest,
   availableEnvironments,
   onEnvironmentChange,
+  onHandoffToEnvironment,
   composerControlsHostRef,
   contextStripVisible = true,
 }: BranchToolbarProps) {
@@ -766,6 +769,9 @@ export const BranchToolbar = memo(function BranchToolbar({
                 availableEnvironments={availableEnvironments}
                 {...(onEnvironmentChange ? { onEnvironmentChange: handleEnvironmentChange } : {})}
                 {...cloudSessions.selectorProps}
+                {...(onHandoffToEnvironment && serverThread !== null
+                  ? { onHandoffToEnvironment }
+                  : {})}
               />
             ) : null}
             <RunContextSelector

@@ -41,6 +41,7 @@ type CloudSelectorProps = Pick<
   | "cloudSessionProject"
   | "connectedEnvironmentIds"
   | "cloudEnvironmentIds"
+  | "onConnectCloudSession"
 >;
 
 /**
@@ -59,7 +60,14 @@ export function useT3TeamRunOnCloudSessionProps(
   const { available, configured, sessions, onCreate, createPending, createPendingSetup } =
     cloudSessions;
   const { primaryEnvironmentId } = cloudSessions;
-  const { onCloudMenuOpenChange, connectFailure: _connectFailure } = cloudSessions;
+  const { onCloudMenuOpenChange, onSessionAction, connectFailure: _connectFailure } = cloudSessions;
+  // "Move to" connects a ready session first; the connected machine then lists as a choice.
+  const onConnectCloudSession = useCallback(
+    (session: CloudSession) => {
+      if (session.phase === "ready") onSessionAction(session);
+    },
+    [onSessionAction],
+  );
   const target = useCloudSessionTarget(scopeKey);
   const projectKey = useCloudSessionProjectKey(projectRef);
   const [dismissed, setDismissed] = useLocalStorage(
@@ -170,6 +178,7 @@ export function useT3TeamRunOnCloudSessionProps(
               onSelectCloudSession,
               onDismissCloudSession,
               onCloudMenuOpenChange,
+              onConnectCloudSession,
             }
           : { onSetupCloudSessions },
     [
@@ -181,6 +190,7 @@ export function useT3TeamRunOnCloudSessionProps(
       createPending,
       createPendingSetup,
       onCloudMenuOpenChange,
+      onConnectCloudSession,
       machineSetupEnabled,
       onCreateCloudSession,
       onSetupProjectMachine,
