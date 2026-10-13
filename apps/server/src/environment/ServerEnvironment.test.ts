@@ -1,5 +1,9 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
+import { PROVIDER_SEND_TURN_MAX_FILE_BYTES } from "@t3tools/contracts";
+import { vi } from "vite-plus/test";
+import { setPackAppearanceOverlay } from "../t3team-pack-appearanceOverlay.ts";
+import { setPackSetupProfileOverlay } from "../t3team-pack-setupProfileOverlay.ts";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -71,6 +75,10 @@ const makeServerConfig = Effect.fn(function* (baseDir: string) {
     startupPresentation: "browser",
   } satisfies ServerConfig.ServerConfig["Service"];
 });
+
+vi.mock("./ServerEnvironmentMachine.ts", () => ({
+  detectServerEnvironmentMachineKind: () => Effect.succeed("laptop"),
+}));
 
 it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
   it.effect.each([
@@ -164,11 +172,58 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
       expect(second.capabilities.repositoryIdentity).toBe(true);
       expect(second.capabilities.connectionProbe).toBe(true);
       expect(second.capabilities.attachmentUploads).toBe(true);
-      expect(second.capabilities.fileAttachments).toEqual({ maxUploadBytes: 50 * 1024 * 1024 });
+      expect(second.capabilities.fileAttachments).toEqual({
+        maxUploadBytes: PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+      });
       expect(second.capabilities.pullRequests).toBe(true);
+      expect(second.capabilities.usagePriceOverrides).toBe(true);
       expect(second.capabilities.threadTitleRegeneration).toBe(true);
       expect(second.capabilities.threadPullRequestLinking).toBe(true);
       expect(second.capabilities.agentActivityPublishing).toBe(false);
+    }),
+  );
+
+  it.effect("retains pack metadata alongside detected machine kind", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-environment-pack-test-",
+      });
+      const appearance = { themeId: "team", name: "Team", colors: { light: {}, dark: {} } };
+      setPackAppearanceOverlay(appearance);
+      setPackSetupProfileOverlay([
+        {
+          id: "engineering",
+          title: "Engineering",
+          description: "Team setup",
+          badge: "Team",
+          bullets: ["Build"],
+          category: "engineering",
+          audience: "engineering",
+          communicationStyle: {
+            technicalDepth: "high",
+            brevity: "balanced",
+            guidanceStyle: "expert",
+          },
+          preferredArtifactKinds: [],
+          recipeWeights: {},
+          recommendedSkillPackIds: [],
+          hideImplementationComplexity: false,
+        },
+      ]);
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          setPackAppearanceOverlay(undefined);
+          setPackSetupProfileOverlay(undefined);
+        }),
+      );
+      const descriptor = yield* Effect.gen(function* () {
+        const service = yield* ServerEnvironment.ServerEnvironment;
+        return yield* service.getDescriptor;
+      }).pipe(Effect.provide(makeServerEnvironmentLayer(baseDir)));
+      expect(descriptor.platform.machine).toBe("laptop");
+      expect(descriptor.appearance).toEqual(appearance);
+      expect(descriptor.setupProfiles?.[0]?.id).toBe("engineering");
     }),
   );
 
@@ -244,11 +299,13 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
       expect(withFd.capabilities.serverSelfUpdate).toBe("desktop-managed");
       expect(withFd.capabilities.desktopAppUpdate).toBe(true);
       expect(withFd.capabilities.serverSelfUpdateProgress).toBe(true);
+      expect(withFd.capabilities.serverUpdateThreadContinuation).toBe(true);
 
       const withoutFd = yield* describeWith({ mode: "desktop" });
       expect(withoutFd.capabilities.serverSelfUpdate).toBe("desktop-managed");
       expect(withoutFd.capabilities.desktopAppUpdate).toBeUndefined();
       expect(withoutFd.capabilities.serverSelfUpdateProgress).toBeUndefined();
+      expect(withoutFd.capabilities.serverUpdateThreadContinuation).toBeUndefined();
 
       const web = yield* describeWith({ mode: "web", desktopTelemetryControlFd: 5 });
       expect(web.capabilities.desktopAppUpdate).toBeUndefined();
