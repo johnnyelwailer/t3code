@@ -43,7 +43,7 @@ import type { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore
 import type { VcsProcess } from "./vcs/VcsProcess.ts";
 
 /** "Move when the turn ends" waits at most this long; a turn still running then is not moved. */
-export const HANDOFF_TURN_END_WAIT_MS = 10 * 60_000;
+const HANDOFF_TURN_END_WAIT_MS = 10 * 60_000;
 
 const fail = (message: string) => new T3TeamThreadHandoffError({ message });
 
