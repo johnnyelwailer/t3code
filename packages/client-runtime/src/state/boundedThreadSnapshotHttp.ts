@@ -111,6 +111,9 @@ export const layer: Layer.Layer<
             _tag: "present",
             snapshot: {
               snapshotSequence: bounded.snapshotSequence,
+              ...(bounded.snapshotEventId === undefined
+                ? {}
+                : { snapshotEventId: bounded.snapshotEventId }),
               projection: bounded.projection,
               latestLocalTurnOrdinal: bounded.latestLocalTurnOrdinal,
             },
