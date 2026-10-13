@@ -130,79 +130,84 @@ export function ManageProjectRepositoriesDialog({
       <Card
         role="dialog"
         aria-label="Linked repositories"
-        className="relative flex h-full w-full max-w-4xl flex-col overflow-hidden sm:h-[calc(100dvh-4rem)]"
+        className="flex h-full w-full max-w-6xl flex-col overflow-hidden sm:h-[calc(100dvh-4rem)]"
       >
         {syncView.visible ? (
           <LinkedRepositorySyncModal
             steps={syncView.steps}
             onContinueInBackground={syncView.hide}
+            onDone={onClose}
+            onBack={syncView.hide}
           />
-        ) : null}
-        <header className="flex items-start justify-between gap-3 px-5 pt-5 pb-4">
-          <div className="min-w-0">
-            <h2 className="text-base font-semibold">Linked repositories</h2>
-            <p className="truncate text-xs text-muted-foreground">
-              Code, PRs and branches for {project.title ?? "this project"} come from these.
-            </p>
-          </div>
-          <Button size="icon-xs" variant="ghost" onClick={onClose} aria-label="Close dialog">
-            <X className="size-4" />
-          </Button>
-        </header>
+        ) : (
+          <>
+            <header className="flex items-start justify-between gap-3 px-5 pt-5 pb-4">
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold">Linked repositories</h2>
+                <p className="truncate text-xs text-muted-foreground">
+                  Code, PRs and branches for {project.title ?? "this project"} come from these.
+                </p>
+              </div>
+              <Button size="icon-xs" variant="ghost" onClick={onClose} aria-label="Close dialog">
+                <X className="size-4" />
+              </Button>
+            </header>
 
-        <RepositoryPicker
-          discovery={discovery}
-          linkedUrls={linkedRepositoryUrls}
-          onToggle={toggleRepository}
-          onLinkMany={linkRepositories}
-          renderLinkedStatus={(url) => (
-            <LinkedRepositorySyncStatusLine entry={syncStatus.byUrl.get(url)} />
-          )}
-        />
-
-        {mainRepositoryEnabled && linkedRepositoryUrls.length > 0 ? (
-          <div className="border-t border-border px-4 py-3">
-            <MainRepositoryPicker
-              repositoryUrls={linkedRepositoryUrls}
-              candidates={readMainRepositoryCandidatesFromProject(project)}
-              value={mainRepositoryUrl}
-              onChange={setMainRepositoryUrl}
-              disabled={saving}
+            <RepositoryPicker
+              discovery={discovery}
+              linkedUrls={linkedRepositoryUrls}
+              onToggle={toggleRepository}
+              onLinkMany={linkRepositories}
+              renderLinkedStatus={(url) => (
+                <LinkedRepositorySyncStatusLine entry={syncStatus.byUrl.get(url)} />
+              )}
             />
-          </div>
-        ) : null}
 
-        {saveError ? (
-          <div className="border-t border-border p-3">
-            <T3TeamErrorState
-              error={saveError}
-              action="updating linked repositories"
-              onRetry={() => void saveLinkedRepositories()}
-            />
-          </div>
-        ) : null}
+            {mainRepositoryEnabled && linkedRepositoryUrls.length > 0 ? (
+              <div className="border-t border-border px-4 py-3">
+                <MainRepositoryPicker
+                  repositoryUrls={linkedRepositoryUrls}
+                  candidates={readMainRepositoryCandidatesFromProject(project)}
+                  value={mainRepositoryUrl}
+                  onChange={setMainRepositoryUrl}
+                  disabled={saving}
+                />
+              </div>
+            ) : null}
 
-        <footer className="flex items-center justify-between gap-2 border-t border-border bg-card px-5 py-3.5">
-          <span className="text-xs text-muted-foreground">
-            {linkedRepositoryUrls.length} linked
-            {unchangedSinceSave
-              ? " · saved, repositories sync in the background"
-              : dirty
-                ? " · unsaved changes"
-                : ""}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={onClose} disabled={saving}>
-              {saved === null ? "Cancel" : "Close"}
-            </Button>
-            <Button
-              onClick={() => void saveLinkedRepositories()}
-              disabled={saving || !dirty || unchangedSinceSave}
-            >
-              {saving ? "Saving..." : unchangedSinceSave ? "Saved" : "Save"}
-            </Button>
-          </div>
-        </footer>
+            {saveError ? (
+              <div className="border-t border-border p-3">
+                <T3TeamErrorState
+                  error={saveError}
+                  action="updating linked repositories"
+                  onRetry={() => void saveLinkedRepositories()}
+                />
+              </div>
+            ) : null}
+
+            <footer className="flex items-center justify-between gap-2 border-t border-border bg-card px-5 py-3.5">
+              <span className="text-xs text-muted-foreground">
+                {linkedRepositoryUrls.length} linked
+                {unchangedSinceSave
+                  ? " · saved, repositories sync in the background"
+                  : dirty
+                    ? " · unsaved changes"
+                    : ""}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" onClick={onClose} disabled={saving}>
+                  {saved === null ? "Cancel" : "Close"}
+                </Button>
+                <Button
+                  onClick={() => void saveLinkedRepositories()}
+                  disabled={saving || !dirty || unchangedSinceSave}
+                >
+                  {saving ? "Saving..." : unchangedSinceSave ? "Saved" : "Save"}
+                </Button>
+              </div>
+            </footer>
+          </>
+        )}
       </Card>
     </div>
   );

@@ -43,7 +43,7 @@ const meta = {
   title: "T3Team/Linked Repositories/Sync progress",
   component: LinkedRepositorySyncModal,
   decorators: [frame],
-  args: { onContinueInBackground: () => {} },
+  args: { onContinueInBackground: () => {}, onDone: () => {}, onBack: () => {} },
 } satisfies Meta<typeof LinkedRepositorySyncModal>;
 
 export default meta;

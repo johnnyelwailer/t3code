@@ -131,12 +131,14 @@ export function RepositoryPicker({
         ) : null}
 
         {pastedUrl && !linked.has(pastedUrl) && !entries.has(pastedUrl) ? (
-          <Section title="Link this URL">{row(entryFromUrl(pastedUrl), true)}</Section>
+          <Section title="Link this URL" layout="grid">
+            {row(entryFromUrl(pastedUrl), true)}
+          </Section>
         ) : null}
 
         {!loading && needle ? (
           matches.length > 0 ? (
-            <Section title="Results" count={matches.length}>
+            <Section title="Results" count={matches.length} layout="grid">
               {matches.map((entry) => row(entry, true))}
             </Section>
           ) : pastedUrl ? null : (
@@ -151,7 +153,7 @@ export function RepositoryPicker({
         {!loading && !needle ? (
           <>
             {linkedEntries.length > 0 ? (
-              <Section title="Linked" count={linkedEntries.length}>
+              <Section title="Linked" count={linkedEntries.length} layout="grid">
                 {linkedEntries.map((entry) => row(entry, true))}
               </Section>
             ) : null}
@@ -159,6 +161,7 @@ export function RepositoryPicker({
               <Section
                 title="Suggested for this project"
                 count={suggestedEntries.length}
+                layout="grid"
                 action={
                   <button
                     type="button"
@@ -177,6 +180,7 @@ export function RepositoryPicker({
                 {[...otherByHost].map(([host, list]) => (
                   <Section
                     key={host}
+                    layout="grid"
                     title={
                       otherByHost.size > 1 ? `Your repositories · ${host}` : "Your repositories"
                     }
