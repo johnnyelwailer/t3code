@@ -36,6 +36,8 @@ async function openWindow() {
     draftId,
     prompt: () => drafts.useComposerDraftStore.getState().draftsByThreadKey[draftId]?.prompt ?? "",
     cancel: () => store.cancelDraftCloudQueuedSend(draftId),
+    queued: () => store.getDraftCloudQueuedSend(draftId),
+    session: () => drafts.useComposerDraftStore.getState().getDraftSession(draftId),
     send: (startTurn: StartCloudQueuedTurn) =>
       dispatch.dispatchCloudQueuedSend({
         draftId,
@@ -84,6 +86,39 @@ describe("queued cloud send across two windows", { timeout: 60_000 }, () => {
     expect(await b.send(startTurn)).toBe("skipped");
     expect(startTurn).not.toHaveBeenCalled();
     expect(a.prompt()).toBe("ship it");
+  });
+
+  it("makes the other window's Cancel drop its stale copy of a send cancelled elsewhere", async () => {
+    const { a, b } = await twoWindowsWithQueuedSend();
+    expect(a.cancel()?.messageId).toBe(queued.messageId);
+    // B's Cancel: refused, and B now shows what A did (no queue, A's restored text).
+    expect(b.cancel()).toBeNull();
+    expect(b.queued()).toBeNull();
+    expect(b.prompt()).toBe("ship it");
+  });
+
+  it("makes the other window's flush stop on a send cancelled elsewhere", async () => {
+    const late = await twoWindowsWithQueuedSend();
+    expect(late.a.cancel()?.messageId).toBe(queued.messageId);
+    // B's flush: skipped, and nothing is left for its flusher to retry.
+    const startTurn = vi.fn<StartCloudQueuedTurn>(async () => AsyncResult.success(undefined));
+    expect(await late.b.send(startTurn)).toBe("skipped");
+    expect(late.b.queued()).toBeNull();
+    expect(await late.b.send(startTurn)).toBe("skipped");
+    expect(startTurn).not.toHaveBeenCalled();
+  });
+
+  it("makes the other window's draft follow a send delivered elsewhere", async () => {
+    const { a, b } = await twoWindowsWithQueuedSend();
+    const startTurn = vi.fn<StartCloudQueuedTurn>(async () => AsyncResult.success(undefined));
+    expect(await a.send(startTurn)).toBe("sent");
+    expect(await b.send(startTurn)).toBe("skipped");
+    expect(startTurn).toHaveBeenCalledTimes(1);
+    expect(b.queued()).toBeNull();
+    expect(b.session()?.promotedTo).toMatchObject({
+      environmentId: "env-cloud",
+      threadId: "thread-x",
+    });
   });
 
   it("keeps a long send's claim, so the other window cannot cancel it past the claim TTL", async () => {

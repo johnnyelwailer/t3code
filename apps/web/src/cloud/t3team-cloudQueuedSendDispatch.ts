@@ -18,7 +18,7 @@ import {
 } from "~/composerDraftStore";
 import { holdCloudQueuedSendClaim } from "./t3team-cloudQueuedSendClaim";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
-import { isPersistedCloudQueuedSendPending } from "./t3team-cloudQueuedSendPersisted";
+import { confirmPersistedCloudQueuedSend } from "./t3team-cloudQueuedSendPersisted";
 import {
   failDraftCloudQueuedSend,
   getDraftCloudQueuedSend,
@@ -90,14 +90,14 @@ function buildCloudQueuedTurnInput(input: {
   };
 }
 
-/** The send went through (now or earlier): clear the record and hand the draft to its thread. */
+/** Delivered (now or earlier): promote, then clear the record, whose write-through carries both. */
 export function completeCloudQueuedSend(
   draftId: string,
   environmentId: EnvironmentId,
   threadId: DraftSessionState["threadId"],
 ): void {
-  writeDraftCloudQueuedSend(draftId, null);
   markPromotedDraftThreadByRef(scopeThreadRef(environmentId, threadId));
+  writeDraftCloudQueuedSend(draftId, null);
 }
 
 export async function dispatchCloudQueuedSend(input: {
@@ -113,9 +113,9 @@ export async function dispatchCloudQueuedSend(input: {
   if (claim === null) return "skipped";
   setCloudQueuedSendDispatching(input.messageId, true);
   try {
-    // Under the claim, the persisted record decides: another window may have sent or
-    // cancelled it while this window's copy still shows it queued.
-    if (!isPersistedCloudQueuedSendPending(input.draftId, input.messageId)) return "skipped";
+    // Under the claim the persisted record decides; a stale copy here adopts it and stops.
+    const persisted = confirmPersistedCloudQueuedSend(input.draftId, input.messageId);
+    if (persisted === null || persisted.failureMessage !== undefined) return "skipped";
     const queued = getDraftCloudQueuedSend(input.draftId);
     const store = useComposerDraftStore.getState();
     const draftId = DraftId.make(input.draftId);

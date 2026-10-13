@@ -9,7 +9,7 @@ import { DraftId, flushComposerDraftStorage, useComposerDraftStore } from "~/com
 import { holdCloudQueuedSendClaim } from "./t3team-cloudQueuedSendClaim";
 import { isCloudQueuedSendDispatching } from "./t3team-cloudQueuedSendDispatching";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
-import { readPersistedDraftCloudQueuedSend } from "./t3team-cloudQueuedSendPersisted";
+import { confirmPersistedCloudQueuedSend } from "./t3team-cloudQueuedSendPersisted";
 import {
   resolveCloudQueuedSendStepId,
   type CloudQueuedSendStepFacts,
@@ -134,8 +134,9 @@ export function cancelDraftCloudQueuedSend(draftId: string): CloudQueuedSend | n
   const claim = holdCloudQueuedSendClaim(current.messageId);
   if (claim === null) return null;
   try {
-    // Another window may have sent it meanwhile: never hand back text that went out.
-    if (readPersistedDraftCloudQueuedSend(draftId)?.messageId !== current.messageId) return null;
+    // Another window may have sent or cancelled it: never hand back text that went out, and
+    // let this window's copy follow what happened there.
+    if (confirmPersistedCloudQueuedSend(draftId, current.messageId) === null) return null;
     restoreQueuedMessage(draftId, current);
   } finally {
     claim.release();
