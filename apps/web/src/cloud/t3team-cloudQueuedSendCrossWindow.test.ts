@@ -97,6 +97,15 @@ describe("queued cloud send across two windows", { timeout: 60_000 }, () => {
     expect(b.prompt()).toBe("ship it");
   });
 
+  it("keeps text typed in the other window when it adopts a send cancelled elsewhere", async () => {
+    const { a, b } = await twoWindowsWithQueuedSend();
+    b.drafts.useComposerDraftStore.getState().setPrompt(b.draftId, "follow-up");
+    expect(a.cancel()?.messageId).toBe(queued.messageId);
+    expect(b.cancel()).toBeNull();
+    expect(b.queued()).toBeNull();
+    expect(b.prompt()).toBe("follow-up");
+  });
+
   it("makes the other window's flush stop on a send cancelled elsewhere", async () => {
     const late = await twoWindowsWithQueuedSend();
     expect(late.a.cancel()?.messageId).toBe(queued.messageId);
