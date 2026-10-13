@@ -132,11 +132,13 @@ const encodeStageWorkspaceConfig = Schema.encodeEffect(fromYaml(StageWorkspaceCo
 
 // Canonical reader for the repo's pnpm-workspace.yaml (fromYaml + Schema).
 // Exported so consumers (e.g. the orchestration bundle probe) parse the file
-// with the same decoder instead of re-rolling a bespoke parser.
-export const readWorkspaceConfig = Effect.fn("readWorkspaceConfig")(function* (repoRoot: string) {
+// with the same decoder instead of re-rolling a bespoke parser. A PR CI test
+// calls this too, so a bad entry fails the PR instead of the nightly desktop build.
+export const readWorkspaceConfig = Effect.fn("readWorkspaceConfig")(function* (repoRoot?: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const workspaceYaml = yield* fs.readFileString(path.join(repoRoot, "pnpm-workspace.yaml"));
+  const root = repoRoot ?? (yield* RepoRoot);
+  const workspaceYaml = yield* fs.readFileString(path.join(root, "pnpm-workspace.yaml"));
   return yield* decodeWorkspaceConfig(workspaceYaml);
 });
 
