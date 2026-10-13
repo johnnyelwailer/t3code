@@ -36,7 +36,18 @@ export const ensureLinkedRepositoryCheckout = Effect.fn("ensureLinkedRepositoryC
     readonly repository: string;
   }) {
     if (!isLazyLinkedRepositoryCheckoutEnabled()) {
-      return yield* readEntry(input);
+      const entry = yield* readEntry(input);
+      if (entry === undefined) {
+        return yield* Effect.fail(
+          `No linked repository matched '${input.repository}' in this project workspace.`,
+        );
+      }
+      if (!isLinkedRepositoryReady(entry)) {
+        return yield* Effect.fail(
+          `Linked repository '${input.repository}' is not ready: ${entry.error ?? (entry.status === "pending" ? "it is still being cloned" : "bootstrap failed")}.`,
+        );
+      }
+      return entry;
     }
     const entry = yield* readEntry(input);
     if (entry === undefined) {
