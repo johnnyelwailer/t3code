@@ -25,7 +25,9 @@ import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 
 export interface CloudSessionOwnProject {
   readonly environmentId: EnvironmentId;
-  readonly projectId: ProjectId;
+  /** Null while the session's server has not listed its own project yet: the environment is
+   * held for it rather than offered through another project that merely groups the same. */
+  readonly projectId: ProjectId | null;
 }
 
 interface ProjectFacts {
@@ -84,7 +86,8 @@ export function resolveCloudSessionOwnProject(input: {
       String(item.environmentId) === environmentId &&
       normalizeProjectPathForComparison(item.workspaceRoot) === root,
   );
-  if (own === undefined || !isSameProject(project, own)) return null;
+  if (own === undefined) return { environmentId: environmentId as EnvironmentId, projectId: null };
+  if (!isSameProject(project, own)) return null;
   return { environmentId: own.environmentId, projectId: own.id };
 }
 
@@ -92,6 +95,7 @@ export function resolveCloudSessionOwnProject(input: {
  * One project per environment for the composer's project: the first that groups with it, except
  * that the session's own project takes its environment even when another project there groups the
  * same (a restored checkout of the same repository at another path), so a queued send lands in it.
+ * While that project is not listed yet, its environment is offered for nothing at all.
  */
 export function logicalProjectPerEnvironment<
   P extends { readonly environmentId: EnvironmentId; readonly id: ProjectId },
@@ -104,8 +108,10 @@ export function logicalProjectPerEnvironment<
     [];
   const seen = new Set<EnvironmentId>();
   if (own !== null) {
-    picked.push(own);
     seen.add(own.environmentId);
+    if (own.projectId !== null) {
+      picked.push({ environmentId: own.environmentId, projectId: own.projectId });
+    }
   }
   for (const project of projects) {
     if (seen.has(project.environmentId) || !groupsWithComposer(project)) continue;

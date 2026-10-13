@@ -99,7 +99,11 @@ describe("resolveCloudSessionOwnProject", () => {
     ).toBeNull();
     expect(resolveCloudSessionOwnProject({ ...base, serverCwdOf: () => null })).toBeNull();
     const unregistered = projects.filter((project) => project.id !== ProjectId.make("own"));
-    expect(resolveCloudSessionOwnProject({ ...base, projects: unregistered })).toBeNull();
+    // Known server, own project not listed yet: the environment is held, not given away.
+    expect(resolveCloudSessionOwnProject({ ...base, projects: unregistered })).toEqual({
+      environmentId: OWN.environmentId,
+      projectId: null,
+    });
   });
 });
 
@@ -115,6 +119,14 @@ describe("logicalProjectPerEnvironment", () => {
   it("gives the session's environment its own project, though another groups the same first", () => {
     expect(logicalProjectPerEnvironment(vmProjects, sameRepository, OWN)).toEqual([
       OWN,
+      { environmentId: LOCAL, projectId: ProjectId.make("local") },
+    ]);
+  });
+
+  it("holds the session's environment while its own project is not listed yet", () => {
+    const pending = { environmentId: VM, projectId: null };
+    const restoredOnly = vmProjects.filter((project) => project.id !== ProjectId.make("own"));
+    expect(logicalProjectPerEnvironment(restoredOnly, sameRepository, pending)).toEqual([
       { environmentId: LOCAL, projectId: ProjectId.make("local") },
     ]);
   });
