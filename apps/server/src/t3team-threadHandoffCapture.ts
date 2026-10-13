@@ -18,7 +18,7 @@ import {
   historicalMessagesWithRunStatus,
   renderHistory,
   selectHistory,
-} from "./orchestration-v2/ContextHandoffBudget.ts";
+} from "@t3tools/provider-core/server/handoffBudget";
 
 /** The whole transcript as a budgeted `full_thread_summary`, exactly as a provider handoff renders it. */
 export function renderThreadHandoffSummary(input: {

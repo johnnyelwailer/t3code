@@ -30,7 +30,7 @@ import * as Option from "effect/Option";
 import {
   DEFAULT_HANDOFF_TOKEN_CAP,
   handoffTokenCapConfig,
-} from "./orchestration-v2/ContextHandoffBudget.ts";
+} from "@t3tools/provider-core/server/handoffBudget";
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { readHandoffBranchState, UNKNOWN_BRANCH_STATE } from "./t3team-threadHandoffBranchState.ts";
