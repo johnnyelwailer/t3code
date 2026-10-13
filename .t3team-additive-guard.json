@@ -368,6 +368,7 @@
     "apps/web/src/connection/platform.ts",
     "apps/web/src/hooks/useHandleNewThread.test.ts",
     "apps/web/src/hooks/useHandleNewThread.ts",
+    "apps/web/src/hooks/useLiveRefresh.ts",
     "apps/web/src/hooks/usePreviewPanelInlineSize.ts",
     "apps/web/src/hooks/useResizableWidth.test.tsx",
     "apps/web/src/hooks/useResizableWidth.ts",
