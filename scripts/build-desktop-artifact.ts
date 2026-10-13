@@ -130,12 +130,15 @@ const encodeJsonString = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknow
 const decodeWorkspaceConfig = Schema.decodeEffect(fromYaml(WorkspaceConfig));
 const encodeStageWorkspaceConfig = Schema.encodeEffect(fromYaml(StageWorkspaceConfig));
 
-// Canonical reader for the repo's pnpm-workspace.yaml (fromYaml + Schema).
-// Exported so consumers (e.g. the orchestration bundle probe) parse the file
-// with the same decoder instead of re-rolling a bespoke parser.
-export const readWorkspaceConfig = Effect.fn("readWorkspaceConfig")(function* (repoRoot: string) {
+// Canonical reader for the repo's pnpm-workspace.yaml (fromYaml + Schema). A PR CI test calls it,
+// so a bad entry fails the PR instead of the nightly desktop build. Exported so consumers (e.g. the
+// orchestration bundle probe) parse the file with the same decoder; they may pass their own root.
+export const readWorkspaceConfig = Effect.fn("readWorkspaceConfig")(function* (
+  repoRootOverride?: string,
+) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  const repoRoot = repoRootOverride ?? (yield* RepoRoot);
   const workspaceYaml = yield* fs.readFileString(path.join(repoRoot, "pnpm-workspace.yaml"));
   return yield* decodeWorkspaceConfig(workspaceYaml);
 });
