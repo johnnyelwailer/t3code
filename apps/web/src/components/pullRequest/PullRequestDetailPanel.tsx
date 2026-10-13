@@ -168,7 +168,10 @@ import {
   writePullRequestDetailSnapshot,
 } from "./pullRequestDetail.logic";
 import { canEditPullRequestChangeRequest } from "./pullRequestEditing.logic";
-import type { PullRequestDetailViewState } from "./t3team-prDetailViewState.logic";
+import type {
+  PullRequestDetailTab as DetailTab,
+  PullRequestDetailViewState,
+} from "./t3team-prDetailViewState.logic";
 import {
   resolvePickableEnvironments,
   type PickableEnvironment,
@@ -193,7 +196,6 @@ import { guideRunKey, useGuideRunStore } from "./guide/guideRunStore";
 import { useReviewGuideWriter } from "./guide/useReviewGuideWriter";
 import { useInlineActionConfirm } from "./useInlineActionConfirm";
 
-type DetailTab = "summary" | "guide" | "timeline" | "code";
 
 /** Said as the thing that did not happen, rather than as the operation that returned an error. */
 const ACTION_FAILURE_LABELS: Record<PullRequestAction, string> = {
@@ -524,19 +526,14 @@ export function PullRequestDetailPanel({
   const [initialFile] = useState(() => initialView?.file ?? null);
   const [activeFile, setActiveFile] = useState<string | null>(null);
   useEffect(() => {
-    // The URL carries no Guide tab; it is reported as the Summary it sits beside.
-    onViewChange?.({
-      tab: tab === "guide" ? "summary" : tab,
-      file: tab === "code" ? activeFile : null,
-    });
+    onViewChange?.({ tab, file: tab === "code" ? activeFile : null });
   }, [tab, activeFile, onViewChange]);
   // Sync the tab when the URL changes (e.g., Back/Forward). The panel's own tab
   // changes are already reflected in the URL, so this only fires for external
   // navigation that the URL drives.
   useEffect(() => {
     const urlTab = initialView?.tab;
-    // The Guide reports itself as "summary", so that echo is not a navigation away from it.
-    if (urlTab && urlTab !== tab && !(tab === "guide" && urlTab === "summary")) {
+    if (urlTab && urlTab !== tab) {
       setTab(urlTab);
       if (urlTab !== "code") setActiveFile(null);
     }

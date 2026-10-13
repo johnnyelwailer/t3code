@@ -2,7 +2,6 @@ import {
   ANTIGRAVITY_DEFAULT_MODEL,
   type EnvironmentId,
   type ProviderInstanceId,
-  type EnvironmentId,
   type ProviderDriverKind,
   type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
@@ -184,8 +183,6 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
    * for the locked-mode header.
    */
   instanceEntries: ReadonlyArray<ProviderInstanceEntry>;
-  /** t3team: the environment the entries come from; a tool connect acts there. Default: primary. */
-  environmentId?: EnvironmentId | undefined;
   keybindings?: ResolvedKeybindingsConfig;
   /**
    * Model options per instance. Keyed by `ProviderInstanceId` so the

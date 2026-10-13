@@ -35,7 +35,7 @@ import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
 import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
 import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
-import { expandHomePath } from "./pathExpansion.ts";
+import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import { resolveLaunchWorkflowPath } from "./t3team-projectRecipeActionLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { launchPreparedWorkflow } from "./t3team-workflowEphemeralLaunch.ts";
@@ -85,7 +85,7 @@ it.effect(
       // Mirrors t3team-thread-recipe-workflow-routes.ts's own expansion, exactly: the single
       // point every downstream consumer (reads, engine launch, persisted row) is fed from.
       const tildeRecipePath = toTildePath(recipeRoot);
-      const recipePath = tildeRecipePath && expandHomePath(tildeRecipePath);
+      const recipePath = tildeRecipePath && expandHomePath(tildeRecipePath, NodeOS.homedir());
       const workflowPath = yield* resolveLaunchWorkflowPath({
         recipePath,
         workflowPath: toTildePath(workflowPathReal),

@@ -2,7 +2,7 @@
  * Pack orchestration adapter bridge.
  *
  * Maps a pack's `PackOrchestrationAdapter` (`@t3team/pack-api`, Promise + JSON) onto the host
- * `ProviderAdapterV2Shape` one-to-one. `openSession` runs in the session scope the
+ * `ProviderAdapterV2["Service"]` one-to-one. `openSession` runs in the session scope the
  * `ProviderSessionManagerV2` owns: the scope's close calls the pack session's `close()` (bounded)
  * and ends its event stream; a session that resolves after the open was interrupted is closed
  * when it arrives. The session receives the thread's MCP access and a
@@ -33,7 +33,7 @@ import {
   ProviderAdapterCapabilitiesError,
   ProviderAdapterOpenSessionError,
   ProviderAdapterProtocolError,
-  type ProviderAdapterV2Shape,
+  type ProviderAdapterV2,
 } from "@t3tools/provider-core/server/ProviderAdapter";
 import type { ProviderContinuationRequest } from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import { turnScopedSelectionTransition } from "@t3tools/provider-core/server/selectionTransition";
@@ -69,7 +69,7 @@ export const makePackOrchestrationAdapter = (input: {
   readonly instanceId: ProviderInstanceId;
   /** Host continuation queue (`ProviderContinuationRequests.offer`). */
   readonly offerContinuation: (request: ProviderContinuationRequest) => Effect.Effect<void>;
-}): ProviderAdapterV2Shape => {
+}): ProviderAdapterV2["Service"] => {
   const { adapter, driver, instanceId } = input;
   const plan = adapter.planSelectionTransition;
   return {

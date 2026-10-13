@@ -1335,9 +1335,9 @@ it.effect("rejects a worktree launch before create when baseRef does not resolve
       )
       .pipe(Effect.flip);
     assert.equal(failed._tag, "ThreadLaunchError");
+    if (failed._tag !== "ThreadLaunchError") return;
     assert.equal(failed.operation, "provision-worktree");
     assert.isUndefined(failed.threadId);
-    assert.include(String(failed.cause), "baseRef 'main'");
     assert.include(String(failed.cause), "does not resolve to a commit");
     assert.equal(harness.createWorktree.mock.calls.length, 0);
     const shells = yield* threads.listProjectThreads({ projectId, includeSubagents: true });

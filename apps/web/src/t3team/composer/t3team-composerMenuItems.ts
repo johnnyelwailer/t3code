@@ -1,8 +1,8 @@
 import {
-  formatProviderSkillDisplayName,
   getProviderSkillsForSlashMenu,
   getProviderSlashCommandsForSlashMenu,
 } from "@t3tools/client-runtime/providerSkills";
+import { formatProviderSkillDisplayName } from "@t3tools/shared/inlineSkills";
 import type {
   ProjectEntry,
   ProviderDriverKind,

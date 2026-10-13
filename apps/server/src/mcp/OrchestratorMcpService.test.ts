@@ -2322,7 +2322,7 @@ describe("provider usage echo", () => {
         list: () => Effect.succeed(instanceIds),
         get: (instanceId) =>
           instanceIds.includes(instanceId)
-            ? Effect.succeed({ instanceId } as unknown as ProviderAdapterV2Shape)
+            ? Effect.succeed({ instanceId } as unknown as ProviderAdapter.ProviderAdapterV2["Service"])
             : Effect.fail(
                 new ProviderAdapterRegistry.ProviderAdapterRegistryLookupError({ instanceId }),
               ),
@@ -2337,6 +2337,7 @@ describe("provider usage echo", () => {
   ) =>
     Layer.mergeAll(
       NodeServices.layer,
+      ServerSettings.layerTest(),
       Layer.mock(ThreadManagementService.ThreadManagementService)(tms as never),
       Layer.mock(ProviderRegistry.ProviderRegistry)({
         getProviders: Effect.succeed(providers),

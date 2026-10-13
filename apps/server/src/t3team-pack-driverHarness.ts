@@ -17,7 +17,6 @@
  */
 import type { PackHostCapabilities } from "@t3team/pack-api";
 import {
-  OpenCodeSettings,
   ProviderInstanceId,
   type ProviderDriverKind,
   type ProviderInstanceEnvironment,
@@ -36,6 +35,7 @@ import {
   type ProviderInstance,
 } from "@t3tools/provider-core/server/driver";
 import { OpenCodeDriver, type OpenCodeDriverEnv } from "@t3tools/provider-opencode/server";
+import { OpenCodeSettings } from "@t3tools/provider-opencode/settings";
 import { openCodeUpstreamConfigContent } from "./t3team-pack-aiProvider.ts";
 import { providerInstanceToPack } from "./t3team-pack-driverHarnessWrap.ts";
 import { restampAdapter } from "./t3team-pack-driverRestamp.ts";

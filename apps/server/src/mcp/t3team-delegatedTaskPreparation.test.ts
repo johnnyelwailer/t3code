@@ -15,7 +15,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 
-import type { ProviderAdapterV2Shape } from "@t3tools/provider-core/server/ProviderAdapter";
+import type { ProviderAdapterV2 } from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
@@ -158,7 +158,7 @@ const makeDependencies = (
       ProviderAdapterRegistry.ProviderAdapterRegistryV2,
       ProviderAdapterRegistry.ProviderAdapterRegistryV2.of({
         list: () => Effect.succeed([instanceId]),
-        get: () => Effect.succeed({ instanceId } as unknown as ProviderAdapterV2Shape),
+        get: () => Effect.succeed({ instanceId } as unknown as ProviderAdapterV2["Service"]),
       }),
     ),
     Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),

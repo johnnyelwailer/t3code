@@ -152,7 +152,6 @@ import {
 import { AgentInstructionsSettingRow } from "./t3team-AgentInstructionsSetting";
 import { T3TeamBetaSettings } from "./t3team-BetaSettings";
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
-import { DRIVER_OPTIONS, getDriverOption } from "./providerDriverMeta";
 import { T3TeamProjectSetupSetting } from "./t3team-ProjectSetupSetting";
 import { T3TeamAboutLicensesDescription } from "../../t3team/t3team-AboutLicensesDescription";
 import {

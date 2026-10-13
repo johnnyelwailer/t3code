@@ -31,6 +31,7 @@ const unsupportedTextGeneration = (driver: ProviderDriverKind): TextGeneration["
     generatePrContent: () => fail("generatePrContent"),
     generateBranchName: () => fail("generateBranchName"),
     generateThreadTitle: () => fail("generateThreadTitle"),
+    generateReviewGuide: () => fail("generateReviewGuide"),
   };
 };
 
@@ -61,6 +62,15 @@ export const bridgePackTextGeneration = (
       attempt("generateBranchName", () => service.generateBranchName(input)),
     generateThreadTitle: (input) =>
       attempt("generateThreadTitle", () => service.generateThreadTitle(input)),
+    // The pack text-generation API has no review-guide operation; upstream's review guide needs
+    // a provider that implements it.
+    generateReviewGuide: () =>
+      Effect.fail(
+        new TextGenerationError({
+          operation: "generateReviewGuide",
+          detail: `Provider driver '${driver}' does not support review guides.`,
+        }),
+      ),
     ...(service.generateActivityLabel
       ? {
           generateActivityLabel: (input) =>

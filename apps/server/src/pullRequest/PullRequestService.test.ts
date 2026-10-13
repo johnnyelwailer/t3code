@@ -1159,7 +1159,7 @@ it.effect("asks each GitHub host for its own viewer, not the default host's", ()
         }),
       ],
       providers: [
-        fakeProvider("github", {
+        fakeProvider(SourceControlProviderKind.make("github"), {
           getViewer: (input) => {
             viewers.push(input.host ?? "");
             return Effect.succeed("bilal");
@@ -6164,7 +6164,7 @@ it.effect("lists a project's linked repositories alongside its own remote", () =
           }),
         ],
         providers: [
-          fakeProvider("github", {
+          fakeProvider(SourceControlProviderKind.make("github"), {
             listChangeRequests: (input) => {
               read.push({ host: input.host, repository: input.repository });
               return Effect.succeed({
@@ -6221,7 +6221,7 @@ it.effect("does not read a linked repository that is the project's own remote ag
           }),
         ],
         providers: [
-          fakeProvider("github", {
+          fakeProvider(SourceControlProviderKind.make("github"), {
             listChangeRequests: () => {
               reads += 1;
               return Effect.succeed({
@@ -6358,7 +6358,7 @@ it.effect("keeps a linked repository on another host out of a host-filtered list
           }),
         ],
         providers: [
-          fakeProvider("github", {
+          fakeProvider(SourceControlProviderKind.make("github"), {
             listChangeRequests: (input) => {
               read.push(`github:${input.repository}`);
               return Effect.succeed({
@@ -6368,7 +6368,7 @@ it.effect("keeps a linked repository on another host out of a host-filtered list
               });
             },
           }),
-          fakeProvider("gitlab", {
+          fakeProvider(SourceControlProviderKind.make("gitlab"), {
             listChangeRequests: (input) => {
               read.push(`gitlab:${input.repository}`);
               return Effect.succeed({
@@ -6411,7 +6411,7 @@ it.effect("reports a linked repository on an unsupported host as unimplemented",
           }),
         ],
         providers: [
-          fakeProvider("github", {
+          fakeProvider(SourceControlProviderKind.make("github"), {
             listChangeRequests: () => {
               reads += 1;
               return Effect.succeed({
@@ -6457,7 +6457,7 @@ it.effect(
             }),
           ],
           providers: [
-            fakeProvider("github", {
+            fakeProvider(SourceControlProviderKind.make("github"), {
               getChangeRequest: (input) => {
                 reads.push(input.repository);
                 return Effect.succeed(hostedChangeRequest("body"));

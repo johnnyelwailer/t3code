@@ -249,7 +249,6 @@ import {
 } from "./t3team-resourcePressureThreadCleanup.ts";
 import { makeThreadCleanupDeps } from "./t3team-resourcePressureThreadCleanupDeps.ts";
 import { projectSourceClaimMessage } from "./t3team-projectSourceBindings.ts";
-import { StorageCleanup } from "./storageCleanup.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as UsageService from "./usage/UsageService.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
@@ -1410,7 +1409,6 @@ const layerWsRpc = (
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
       const hostResources = yield* HostResources.HostResources;
       const resourcePressure = yield* ResourcePressureMonitor;
-      const storageCleanup = yield* Effect.serviceOption(StorageCleanup);
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const threadCleanupDeps = yield* makeThreadCleanupDeps({
@@ -2613,7 +2611,7 @@ const layerWsRpc = (
         [WS_METHODS.serverRefreshUsageRates]: (_input) => usage.refreshRates,
         [WS_METHODS.serverRetryResourceTelemetry]: (_input) => resourceTelemetry.retry,
         [WS_METHODS.serverGetResourcePressure]: (_input) => resourcePressure.report,
-        [WS_METHODS.serverSweepStorageNow]: (_input) => sweepStorageNow(storageCleanup),
+        [WS_METHODS.serverSweepStorageNow]: (_input) => sweepStorageNow(Option.some(storageCleanup)),
         [WS_METHODS.serverPreviewThreadResourceCleanup]: (input) =>
           previewThreadCleanup(threadCleanupDeps, input.threadId),
         [WS_METHODS.serverCleanupThreadResources]: (input) =>

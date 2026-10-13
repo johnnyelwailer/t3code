@@ -5072,7 +5072,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           (yield* queuedAdapter.getCapabilities().pipe(mapDispatchError(command)));
         // Same-provider follow-ups only. A switch still has to queue on the
         // selected provider, and that capability check stays below.
+        // A run that failed on a missing worktree has no live turn to redirect onto.
         const queueRedirect =
+          activeRun !== undefined &&
           activeRun.providerInstanceId === modelSelection.instanceId &&
           !isNativeMaintenanceCommand(command) &&
           !isGoalCommand(command)
