@@ -1,5 +1,12 @@
 {
   "allowedModifiedFiles": [
+    "packages/provider-core/src/server/runtimeInstructions.ts",
+    "packages/source-control-github/src/server/GitHubApi.test.ts",
+    "packages/source-control-github/src/server/GitHubApi.ts",
+    "packages/source-control-github/src/server/GitHubPullRequestApi.test.ts",
+    "packages/source-control-github/src/server/GitHubPullRequestApi.ts",
+    "packages/source-control-github/src/server/gitHubConditionalChecks.test.ts",
+    "packages/source-control-github/src/server/gitHubConditionalChecks.ts",
     "packages/source-control-github/package.json",
     "apps/server/src/orchestration-v2/DeadSessionSendRecovery.test.ts",
     "packages/provider-opencode/package.json",
