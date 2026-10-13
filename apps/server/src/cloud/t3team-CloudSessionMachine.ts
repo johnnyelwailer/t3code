@@ -290,7 +290,7 @@ const make = Effect.gen(function* () {
         ? null
         : yield* git(own.root, "machine.origin", ["remote", "get-url", "origin"]);
     if (own === undefined || origin === null || !origin.ok || origin.stdout.length === 0) {
-      return { kind: "workspace", folder: plainProjectFolderName(found.title) } as const;
+      return { kind: "workspace", folder: plainProjectFolderName(found.title, projectId) } as const;
     }
     const repository = machineRepositoryFromRemote(origin.stdout);
     if (repository === null) {

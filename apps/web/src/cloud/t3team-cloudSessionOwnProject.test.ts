@@ -1,11 +1,15 @@
 import { EnvironmentId, ProjectId, type RepositoryIdentity } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveCloudSessionOwnProject } from "./t3team-cloudSessionOwnProject";
+import {
+  logicalProjectPerEnvironment,
+  resolveCloudSessionOwnProject,
+} from "./t3team-cloudSessionOwnProject";
 
 const VM = EnvironmentId.make("env-vm");
 const LOCAL = EnvironmentId.make("env-local");
-const FOLDER = "/home/runner/.t3home/projects/IES NG";
+// `plainProjectFolderName("IES NG", "local")`: the title plus the project id's hash.
+const FOLDER = "/home/runner/.t3home/projects/IES NG-9c436708";
 const CHECKOUT = "/home/runner/_work/_temp/project/repository";
 const repository = (canonicalKey: string) =>
   ({
@@ -14,9 +18,13 @@ const repository = (canonicalKey: string) =>
   }) as unknown as RepositoryIdentity;
 
 // The composer's project: a managed workspace with no remote, keyed by its local path.
-const composer = { title: "IES NG", workspaceRoot: "/Users/pj/.t3code/IES NG" };
+const composer = {
+  id: ProjectId.make("local"),
+  title: "IES NG",
+  workspaceRoot: "/Users/pj/.t3code/IES NG",
+};
 const projects = [
-  { environmentId: LOCAL, id: ProjectId.make("local"), ...composer },
+  { environmentId: LOCAL, ...composer },
   // A project the session's snapshot restored: same machine, not what the server started in.
   {
     environmentId: VM,
@@ -73,6 +81,9 @@ describe("resolveCloudSessionOwnProject", () => {
     // Another project's folder.
     const renamed = { ...composer, title: "Scratchpad" };
     expect(resolveCloudSessionOwnProject({ ...base, project: renamed })).toBeNull();
+    // Another project with the same title: its folder carries its own id.
+    const namesake = { ...composer, id: ProjectId.make("other") };
+    expect(resolveCloudSessionOwnProject({ ...base, project: namesake })).toBeNull();
   });
 
   it("is none for a target set up for another project, or for none", () => {
@@ -89,5 +100,29 @@ describe("resolveCloudSessionOwnProject", () => {
     expect(resolveCloudSessionOwnProject({ ...base, serverCwdOf: () => null })).toBeNull();
     const unregistered = projects.filter((project) => project.id !== ProjectId.make("own"));
     expect(resolveCloudSessionOwnProject({ ...base, projects: unregistered })).toBeNull();
+  });
+});
+
+describe("logicalProjectPerEnvironment", () => {
+  const sameRepository = () => true;
+  // A restored checkout of the same repository at another path, listed before the session's own.
+  const vmProjects = [
+    { environmentId: LOCAL, id: ProjectId.make("local") },
+    { environmentId: VM, id: ProjectId.make("restored") },
+    { environmentId: VM, id: ProjectId.make("own") },
+  ];
+
+  it("gives the session's environment its own project, though another groups the same first", () => {
+    expect(logicalProjectPerEnvironment(vmProjects, sameRepository, OWN)).toEqual([
+      OWN,
+      { environmentId: LOCAL, projectId: ProjectId.make("local") },
+    ]);
+  });
+
+  it("keeps the first grouping project per environment when no session has its own", () => {
+    expect(logicalProjectPerEnvironment(vmProjects, sameRepository, null)).toEqual([
+      { environmentId: LOCAL, projectId: ProjectId.make("local") },
+      { environmentId: VM, projectId: ProjectId.make("restored") },
+    ]);
   });
 });

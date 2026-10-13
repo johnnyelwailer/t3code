@@ -345,6 +345,7 @@ import { usePanelAnimationSettings, usePanelPresence } from "../panelAnimations"
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionComposerGate";
 import { useCloudSessionOwnProject } from "~/cloud/t3team-useCloudSessionOwnProject";
+import { logicalProjectPerEnvironment } from "~/cloud/t3team-cloudSessionOwnProject";
 import type { CloudSessionQueuedSend } from "~/cloud/t3team-cloudSessionTargetStore";
 import { useRemoveClonedProject } from "../hooks/useRemoveClonedProject";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
@@ -2875,16 +2876,13 @@ export default function ChatView(props: ChatViewProps) {
         activeProject,
         projectGroupingSettings,
       );
-      const seen = new Set<string>();
-      for (const p of allProjects) {
-        if (seen.has(p.environmentId)) continue;
-        if (deriveLogicalProjectKeyFromSettings(p, projectGroupingSettings) !== logicalKey)
-          continue;
-        seen.add(p.environmentId);
-        pushEnvironment(p.environmentId, p.id);
-      }
-      if (cloudSessionOwnProject && !seen.has(cloudSessionOwnProject.environmentId)) {
-        pushEnvironment(cloudSessionOwnProject.environmentId, cloudSessionOwnProject.projectId);
+      // t3team: the composer's cloud session's own project wins its environment.
+      for (const entry of logicalProjectPerEnvironment(
+        allProjects,
+        (p) => deriveLogicalProjectKeyFromSettings(p, projectGroupingSettings) === logicalKey,
+        cloudSessionOwnProject,
+      )) {
+        pushEnvironment(entry.environmentId, entry.projectId);
       }
     }
     // Sort: primary first, then alphabetical

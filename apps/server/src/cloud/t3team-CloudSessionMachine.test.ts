@@ -303,9 +303,9 @@ describe("CloudSessionMachines.resolvePlain", () => {
     Effect.gen(function* () {
       const repository = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-plain-"));
       git(repository, "init", "-q", "-b", "main");
-      expect(yield* plainIn(repository)).toEqual({ kind: "workspace", folder: "IES NG" });
+      expect(yield* plainIn(repository)).toEqual({ kind: "workspace", folder: "IES NG-781a8188" });
       const folder = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-plain-"));
-      expect(yield* plainIn(folder)).toEqual({ kind: "workspace", folder: "IES NG" });
+      expect(yield* plainIn(folder)).toEqual({ kind: "workspace", folder: "IES NG-781a8188" });
     }),
   );
 

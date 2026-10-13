@@ -33,6 +33,8 @@ interface ProjectFacts {
   readonly repositoryIdentity?: RepositoryIdentity | null | undefined;
 }
 
+type ComposerProject = ProjectFacts & { readonly id: ProjectId; readonly title: string };
+
 const repositoryOf = (project: ProjectFacts) =>
   project.repositoryIdentity ? repositoryGroupingKeyOf(project.repositoryIdentity) : null;
 
@@ -40,13 +42,13 @@ const folderOf = (workspaceRoot: string) =>
   normalizeProjectPathForComparison(workspaceRoot).split(/[\\/]/).pop() ?? "";
 
 /** Whether the machine's project can be the one this composer project's session was started for. */
-function isSameProject(composer: ProjectFacts & { readonly title: string }, own: ProjectFacts) {
+function isSameProject(composer: ComposerProject, own: ProjectFacts) {
   const composerRepository = repositoryOf(composer);
   const ownRepository = repositoryOf(own);
   if (composerRepository === null) {
     return (
       ownRepository === null &&
-      folderOf(own.workspaceRoot) === plainProjectFolderName(composer.title)
+      folderOf(own.workspaceRoot) === plainProjectFolderName(composer.title, composer.id)
     );
   }
   // The checkout may not have its identity yet; a different repository is never this project.
@@ -57,7 +59,7 @@ export function resolveCloudSessionOwnProject(input: {
   /** The composer's Run-on target (null when it targets no cloud session). */
   readonly target: { readonly sessionId: string; readonly projectKey: string | null } | null;
   /** The composer's project and its logical key, as the target recorded it. */
-  readonly project: (ProjectFacts & { readonly title: string }) | null;
+  readonly project: ComposerProject | null;
   readonly projectKey: string | null;
   readonly sessions: ReadonlyArray<Pick<CloudSession, "sessionId" | "environmentId">>;
   /** The server working directory an environment reported in its config; null when unknown. */
@@ -84,4 +86,31 @@ export function resolveCloudSessionOwnProject(input: {
   );
   if (own === undefined || !isSameProject(project, own)) return null;
   return { environmentId: own.environmentId, projectId: own.id };
+}
+
+/**
+ * One project per environment for the composer's project: the first that groups with it, except
+ * that the session's own project takes its environment even when another project there groups the
+ * same (a restored checkout of the same repository at another path), so a queued send lands in it.
+ */
+export function logicalProjectPerEnvironment<
+  P extends { readonly environmentId: EnvironmentId; readonly id: ProjectId },
+>(
+  projects: ReadonlyArray<P>,
+  groupsWithComposer: (project: P) => boolean,
+  own: CloudSessionOwnProject | null,
+): Array<{ readonly environmentId: EnvironmentId; readonly projectId: ProjectId }> {
+  const picked: Array<{ readonly environmentId: EnvironmentId; readonly projectId: ProjectId }> =
+    [];
+  const seen = new Set<EnvironmentId>();
+  if (own !== null) {
+    picked.push(own);
+    seen.add(own.environmentId);
+  }
+  for (const project of projects) {
+    if (seen.has(project.environmentId) || !groupsWithComposer(project)) continue;
+    seen.add(project.environmentId);
+    picked.push({ environmentId: project.environmentId, projectId: project.id });
+  }
+  return picked;
 }

@@ -747,13 +747,13 @@ describe("CloudSessionService.create over the Nexi broker", () => {
             rest,
             graphql,
             broker,
-            plainMachines({ kind: "workspace", folder: "IES NG" }),
+            plainMachines({ kind: "workspace", folder: "IES NG-781a8188" }),
           ),
           ProjectId.make("p1"),
         ),
       );
       const dispatch = calls.find((call) => joinedOf(call).includes("/dispatches"))?.stdin ?? "";
-      assert.include(dispatch, '"project_name":"IES NG"');
+      assert.include(dispatch, '"project_name":"IES NG-781a8188"');
       assert.include(dispatch, '"workspace":"u-pj_"');
       assert.notInclude(dispatch, "project_repository");
       assert.deepEqual(parked, [undefined]);
