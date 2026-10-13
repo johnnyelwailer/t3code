@@ -3,6 +3,10 @@ import * as Effect from "effect/Effect";
 import * as GitHubApi from "./sourceControl/GitHubApi.ts";
 import { loadAccount } from "./t3team-github-routes-account.ts";
 import {
+  loadFullRepositoryList,
+  loadRepositoryListing,
+} from "./t3team-github-repositoryListing.ts";
+import {
   loadInboxAttempt,
   loadRepositoriesAttempt,
   loadRepositorySearchAttempt,
@@ -25,7 +29,6 @@ import {
   readTrimmedString,
   repositorySearchCache,
   repositoriesCache,
-  REPOSITORIES_CACHE_TTL_MS,
   responseCache,
   RESPONSE_CACHE_TTL_MS,
   UNAUTHENTICATED_ACCOUNT_CACHE_TTL_MS,
@@ -86,29 +89,16 @@ export function loadGitHubInboxResponse(input: GitHubInboxDiscoverRequest) {
     }
 
     const useAuthenticatedRepositoryList = !repositoriesOnly || host.toLowerCase() === "github.com";
-    let repositoriesAttempt =
-      (useAuthenticatedRepositoryList
-        ? readCached(repositoriesCache, host)
-        : readCached(repositorySearchCache, responseCacheKey)) ??
-      (yield* (
-        useAuthenticatedRepositoryList
-          ? loadRepositoriesAttempt(host)
-          : loadRepositorySearchAttempt(host, {
-              ...(input.projectKey ? { projectKey: input.projectKey } : {}),
-              ...(input.projectTitle ? { projectTitle: input.projectTitle } : {}),
-            })
-      ).pipe(
-        Effect.tap((value) =>
-          Effect.sync(() => {
-            writeCachedUnlessPaused(
-              useAuthenticatedRepositoryList ? repositoriesCache : repositorySearchCache,
-              useAuthenticatedRepositoryList ? host : responseCacheKey,
-              value,
-              REPOSITORIES_CACHE_TTL_MS,
-            );
-          }),
-        ),
-      ));
+    const listing = yield* loadRepositoryListing({
+      host,
+      account,
+      authenticatedList: useAuthenticatedRepositoryList,
+      searchCacheKey: responseCacheKey,
+      ...(input.projectKey ? { projectKey: input.projectKey } : {}),
+      ...(input.projectTitle ? { projectTitle: input.projectTitle } : {}),
+      refresh: input.refresh === true,
+    });
+    let repositoriesAttempt = listing.attempt;
 
     // GHE search is the fast path, but it can omit private/organization-visible repos on some
     // installations. Fall back to the authenticated repository list only when the fast search has
@@ -120,21 +110,7 @@ export function loadGitHubInboxResponse(input: GitHubInboxDiscoverRequest) {
       !useAuthenticatedRepositoryList &&
       repositoriesAttempt.items.length === 0
     ) {
-      repositoriesAttempt =
-        readCached(repositoriesCache, host) ??
-        (yield* loadRepositoriesAttempt(host).pipe(
-          Effect.tap((value) =>
-            Effect.sync(() => {
-              writeCachedUnlessPaused(
-                repositorySearchCache,
-                responseCacheKey,
-                value,
-                REPOSITORIES_CACHE_TTL_MS,
-              );
-              writeCachedUnlessPaused(repositoriesCache, host, value, REPOSITORIES_CACHE_TTL_MS);
-            }),
-          ),
-        ));
+      repositoriesAttempt = yield* loadFullRepositoryList(host, account);
     }
 
     const collectSuggestions = (repositories: typeof repositoriesAttempt.items) =>
@@ -157,15 +133,7 @@ export function loadGitHubInboxResponse(input: GitHubInboxDiscoverRequest) {
     // organization-visible repository. If the fast result produces no actual match, retry once
     // against the authenticated repository list before reporting an empty discovery result.
     if (repositoriesOnly && suggestedRepositoryUrls.length === 0) {
-      const completeRepositoriesAttempt =
-        readCached(repositoriesCache, host) ??
-        (yield* loadRepositoriesAttempt(host).pipe(
-          Effect.tap((value) =>
-            Effect.sync(() => {
-              writeCachedUnlessPaused(repositoriesCache, host, value, REPOSITORIES_CACHE_TTL_MS);
-            }),
-          ),
-        ));
+      const completeRepositoriesAttempt = yield* loadFullRepositoryList(host, account);
       repositoriesAttempt = completeRepositoriesAttempt;
       suggestedRepositoryUrls = collectSuggestions(repositoriesAttempt.items);
     }
@@ -206,6 +174,7 @@ export function loadGitHubInboxResponse(input: GitHubInboxDiscoverRequest) {
       ...new Set(
         [
           repositoriesAttempt.warning,
+          listing.attempt.warning,
           inboxAttempt.warning,
           linkedPullRequestsAttempt.warning,
         ].filter((part): part is string => typeof part === "string" && part.trim().length > 0),
@@ -218,6 +187,8 @@ export function loadGitHubInboxResponse(input: GitHubInboxDiscoverRequest) {
       repositories: repositoriesAttempt.items,
       inboxItems,
       suggestedRepositoryUrls,
+      ...(listing.fetchedAt ? { repositoriesFetchedAt: listing.fetchedAt } : {}),
+      ...(listing.refreshing ? { repositoriesRefreshing: true as const } : {}),
       ...(warningParts.length > 0 ? { inboxWarning: warningParts.join(" ") } : {}),
     } satisfies GitHubInboxDiscoverResponse;
 
