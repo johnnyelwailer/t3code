@@ -2338,7 +2338,10 @@ describe("provider usage echo", () => {
     Layer.mergeAll(
       NodeServices.layer,
       ServerSettings.layerTest(),
-      Layer.mock(ThreadManagementService.ThreadManagementService)(tms as never),
+      Layer.mock(ThreadManagementService.ThreadManagementService)({
+        hasReceipt: () => Effect.succeed(false),
+        ...tms,
+      } as never),
       Layer.mock(ProviderRegistry.ProviderRegistry)({
         getProviders: Effect.succeed(providers),
         refreshInstance: () => Effect.succeed(providers),

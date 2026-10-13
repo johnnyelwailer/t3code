@@ -153,7 +153,8 @@ effectIt.effect("hydrates PATH when the desktop handoff is absent", () =>
         );
 
         assert.equal(probe.mock.calls.length, 1);
-        assert.equal(env.PATH, "/opt/tools/bin:/usr/bin");
+        // t3team: per-user CLI directories that exist on this machine are appended after it.
+        assert.isTrue(env.PATH?.startsWith("/opt/tools/bin:/usr/bin"));
       }),
     (probe) => Effect.sync(() => probe.mockRestore()),
   ),
