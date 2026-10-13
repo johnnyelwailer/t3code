@@ -1,14 +1,13 @@
 /**
- * Web side of "Move to" another machine (thread handoff): the successor's launch input, waiting
- * for its first run on the target environment's thread shells, the confirm copy and the outcome
- * toast. The pipeline itself is `runThreadHandoff` in client-runtime.
+ * Web side of "Move to" another machine (thread handoff): the successor's launch input, the
+ * confirm copy and the outcome toast. The pipeline itself is `runThreadHandoff` in
+ * client-runtime; watching the successor lives in `t3team-threadHandoffSuccessorLive`.
  */
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import {
-  successorRunState,
-  type ThreadHandoffOutcome,
-  type ThreadHandoffWorkspace,
+import type {
+  ThreadHandoffOutcome,
+  ThreadHandoffWorkspace,
 } from "@t3tools/client-runtime/state/thread-handoff";
 import type {
   EnvironmentId,
@@ -19,43 +18,6 @@ import type {
 
 import { toastManager } from "~/components/ui/toast";
 import { newMessageId } from "~/lib/utils";
-import { appAtomRegistry } from "~/rpc/atomRegistry";
-import { environmentThreadShells } from "~/state/threads";
-
-/** A successor whose first run has not started by then counts as a failed launch. */
-export const SUCCESSOR_LIVE_TIMEOUT_MS = 120_000;
-
-/** Resolves once the successor thread's first run is live on its environment. */
-export function awaitSuccessorLive(
-  environmentId: EnvironmentId,
-  threadId: ThreadId,
-  timeoutMs = SUCCESSOR_LIVE_TIMEOUT_MS,
-): Promise<void> {
-  const indexAtom = environmentThreadShells.environmentThreadIndexAtom(environmentId);
-  return new Promise<void>((resolve, reject) => {
-    let settled = false;
-    let unsubscribe = () => {};
-    const finish = (error?: Error) => {
-      if (settled) return;
-      settled = true;
-      globalThis.clearTimeout(timeout);
-      unsubscribe();
-      if (error === undefined) resolve();
-      else reject(error);
-    };
-    const inspect = () => {
-      const state = successorRunState(appAtomRegistry.get(indexAtom).get(threadId));
-      if (state === "live") finish();
-      else if (state === "failed") finish(new Error("The new thread's first run did not start."));
-    };
-    const timeout = globalThis.setTimeout(
-      () => finish(new Error("The new thread did not start in time.")),
-      timeoutMs,
-    );
-    unsubscribe = appAtomRegistry.subscribe(indexAtom, inspect);
-    inspect();
-  });
-}
 
 /** Confirm copy for the move; `running` asks whether to stop the active turn now. */
 export function handoffConfirmMessage(input: {
@@ -91,6 +53,13 @@ export function announceThreadHandoff(
       type: "warning",
       title: "This thread can't move yet",
       description: outcome.refusals.map((refusal) => refusal.message).join("\n"),
+    });
+  } else if (outcome.type === "failed" && outcome.stage === "verify" && !outcome.successorStopped) {
+    toastManager.add({
+      type: "error",
+      title: `Could not confirm the move to ${targetLabel}`,
+      description: `${outcome.message} The new thread there may still be starting, so moving again now could start the work twice. Nothing changed here.`,
+      actionProps: { children: "Open", onClick: open },
     });
   } else if (outcome.type === "failed") {
     toastManager.add({
