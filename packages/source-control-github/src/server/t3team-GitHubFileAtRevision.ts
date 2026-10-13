@@ -4,7 +4,7 @@
  */
 import * as Effect from "effect/Effect";
 
-import type * as GitHubApi from "../sourceControl/GitHubApi.ts";
+import type * as GitHubApi from "./GitHubApi.ts";
 import {
   encodePathSegments,
   fileFromHostJson,
