@@ -79,6 +79,7 @@ import {
   REFERENCES_DIR_NAME,
 } from "../t3team-project-repository-utils.ts";
 import * as GitManager from "./GitManager.ts";
+import { T3TeamLinkedRepositorySync } from "../t3team-linkedRepositorySync.ts";
 
 const encodeCliJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 const decodeForgejoPullRequest = Schema.decodeEffect(ForgejoPullRequestSchema);
@@ -852,8 +853,20 @@ function makeManager(input?: {
     ),
   );
 
+  const layerLinkedRepositorySync = Layer.succeed(
+    T3TeamLinkedRepositorySync,
+    T3TeamLinkedRepositorySync.of({
+      request: () => Effect.void,
+      recover: () => Effect.void,
+      phase: () => undefined,
+      awaitSettled: () => Effect.void,
+      withManifestLock: (effect) => effect,
+    }),
+  );
+
   const layerManager = Layer.mergeAll(
     Layer.succeed(TextGeneration.TextGeneration, textGeneration),
+    layerLinkedRepositorySync,
     Layer.mock(ProviderRegistry.ProviderRegistry)({
       getProviders: Effect.succeed([]),
     }),

@@ -25,6 +25,7 @@ import {
   findLinkedRepository,
   repositoryLookupCandidates,
 } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
+import { VcsProcess } from "./vcs/VcsProcess.ts";
 
 const matchesRepository = (entryUrl: string, target: string): boolean =>
   repositoryLookupCandidates(entryUrl).some((candidate) =>
@@ -41,6 +42,7 @@ export type LinkedRepositoryOnDemandRuntime = {
   readonly sync: T3TeamLinkedRepositorySync["Service"];
   readonly fileSystem: FileSystem.FileSystem;
   readonly path: Path.Path;
+  readonly vcsProcess: VcsProcess["Service"];
 };
 
 /** Runs {@link ensureLinkedRepositoryCheckout} with explicit services (no Effect `R` leakage). */
@@ -56,6 +58,7 @@ export const runEnsureLinkedRepositoryCheckout = (
     Effect.provideService(T3TeamLinkedRepositorySync, runtime.sync),
     Effect.provideService(FileSystem.FileSystem, runtime.fileSystem),
     Effect.provideService(Path.Path, runtime.path),
+    Effect.provideService(VcsProcess, runtime.vcsProcess),
     Effect.mapError((error) => (error instanceof Error ? error.message : String(error))),
   );
 

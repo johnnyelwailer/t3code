@@ -142,6 +142,7 @@ describe("lazy linked repository ensure on hard-requirement paths", () => {
         const sync = yield* T3TeamLinkedRepositorySync;
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
+        const vcsProcess = yield* VcsProcess;
         const driver = yield* GitVcsDriver.GitVcsDriver;
         const gate = yield* harness.holdClones();
         const fiber = yield* Effect.forkScoped(
@@ -156,10 +157,11 @@ describe("lazy linked repository ensure on hard-requirement paths", () => {
               sourceControlProviders: {
                 resolve: () => Effect.succeed({ getDefaultBranch: () => Effect.succeed("main") }),
               } as unknown as SourceControlProviderRegistry["Service"],
-              linkedRepositoryOnDemand: { sync, fileSystem, path },
+              linkedRepositoryOnDemand: { sync, fileSystem, path, vcsProcess },
             },
             projectWorkspaceRoot: harness.workspaceRoot,
             repository: origin,
+            baseRef: undefined,
             branchSeed: "child",
             worktreeKey: delegatedWorktreeKey("thread-1", "req-1"),
           }),
@@ -207,6 +209,7 @@ describe("lazy linked repository ensure on hard-requirement paths", () => {
         const sync = yield* T3TeamLinkedRepositorySync;
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
+        const vcsProcess = yield* VcsProcess;
         const gate = yield* harness.holdClones();
         const fiber = yield* Effect.forkScoped(
           resolvePullRequestCheckoutRoot({
@@ -216,7 +219,7 @@ describe("lazy linked repository ensure on hard-requirement paths", () => {
             sourceControlProviders: {
               resolveHandle: () => Effect.succeed({ provider: undefined, context: null }),
             } as never,
-            linkedRepositoryOnDemand: { sync, fileSystem, path },
+            linkedRepositoryOnDemand: { sync, fileSystem, path, vcsProcess },
           }),
         );
         yield* Effect.sleep("80 millis");
