@@ -4,6 +4,8 @@ import { writeIntegrationCache } from "./t3team-integrationCache";
 import type { GitHubRepositoryCandidate } from "~/t3team/backend/t3team-githubBackendTypes";
 import {
   mergeGitHubDiscoveryResults,
+  mergeRepositoriesMeta,
+  type RepositoriesMeta,
   type GitHubAuthAccount,
   type GitHubDiscoveryResult,
   type GitHubDiscoveryCache,
@@ -25,6 +27,7 @@ export function useGitHubRepositoryDiscoveryFetchers({
   setGithubAccount,
   setSuggestedUrls,
   setCatalog,
+  setRepositoriesMeta,
 }: {
   backend: ReturnType<typeof useBackend>;
   discoveryCacheKey: string;
@@ -38,9 +41,11 @@ export function useGitHubRepositoryDiscoveryFetchers({
   setSuggestedUrls: (urls: ReadonlyArray<string>) => void;
   /** Every repository the signed-in accounts can see, across all hosts, for free-text search. */
   setCatalog: (repositories: ReadonlyArray<GitHubRepositoryCandidate>) => void;
+  /** When the server last fetched the list from GitHub, and whether it is refreshing it now. */
+  setRepositoriesMeta: (meta: RepositoriesMeta) => void;
 }) {
   const discoverSuggestions = useCallback(
-    async (host: string, account?: string) => {
+    async (host: string, account?: string, refresh = false) => {
       if (!backend || !host) return;
       setLoadingDiscovery(true);
       setDiscoveryWarning(undefined);
@@ -48,10 +53,12 @@ export function useGitHubRepositoryDiscoveryFetchers({
         const response = await backend.github.discoverInbox({
           host,
           trigger: "user",
+          ...(refresh ? { refresh: true } : {}),
           ...(projectKey ? { projectKey } : {}),
           ...(projectTitle ? { projectTitle } : {}),
           linkedRepositoryUrls,
         });
+        setRepositoriesMeta(mergeRepositoriesMeta([response]));
         const nextAccount = response.account ?? account;
         const nextCache: GitHubDiscoveryCache = {
           githubHost: response.host,
@@ -86,6 +93,7 @@ export function useGitHubRepositoryDiscoveryFetchers({
       setLoadingDiscovery,
       setSuggestedUrls,
       setCatalog,
+      setRepositoriesMeta,
     ],
   );
 
@@ -94,10 +102,13 @@ export function useGitHubRepositoryDiscoveryFetchers({
       host,
       account,
       accounts,
+      refresh = false,
     }: {
       readonly host: string;
       readonly account: string | undefined;
       readonly accounts: ReadonlyArray<GitHubAuthAccount>;
+      /** An explicit refresh: ask GitHub now rather than serve the server's stored list. */
+      readonly refresh?: boolean;
     }) => {
       const hosts = accounts.length > 0 ? accounts : [{ host, account, active: true }];
       if (!backend) return;
@@ -112,6 +123,7 @@ export function useGitHubRepositoryDiscoveryFetchers({
                 host: entry.host,
                 trigger: "user",
                 discoveryMode: "repositories",
+                ...(refresh ? { refresh: true } : {}),
                 ...(projectKey ? { projectKey } : {}),
                 ...(projectTitle ? { projectTitle } : {}),
                 linkedRepositoryUrls,
@@ -143,6 +155,7 @@ export function useGitHubRepositoryDiscoveryFetchers({
           return;
         }
 
+        setRepositoriesMeta(mergeRepositoriesMeta(responses));
         const merged = mergeGitHubDiscoveryResults(responses, host);
         const failureWarning =
           failures.length > 0
@@ -181,6 +194,7 @@ export function useGitHubRepositoryDiscoveryFetchers({
       setLoadingDiscovery,
       setSuggestedUrls,
       setCatalog,
+      setRepositoriesMeta,
     ],
   );
 

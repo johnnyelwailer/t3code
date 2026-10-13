@@ -56,6 +56,8 @@ const syncByUrl = new Map<string, LinkedRepositorySyncResult>(
 const discovery: GitHubDiscoveryState = {
   backendAvailable: true,
   signedIn: true,
+  repositoriesFetchedAt: new Date(Date.now() - 3 * 60 * 60_000).toISOString(),
+  repositoriesRefreshing: false,
   githubHost: "github.com",
   githubAccount: "johnnyelwailer",
   authStatus: "authenticated",
