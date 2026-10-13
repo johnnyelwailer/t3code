@@ -15,7 +15,7 @@ import { parseJsonArray } from "./t3team-github-routes-shared.ts";
  * A paginated read stops here even when GitHub still offers a next page: 30 pages of 100 is 3000
  * rows, far past what a picker shows, and a runaway list must never keep spending quota.
  */
-export const MAX_REST_PAGES = 30;
+const MAX_REST_PAGES = 30;
 
 /** The body of one REST `GET`. */
 export function readRestBody(input: {
