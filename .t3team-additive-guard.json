@@ -356,6 +356,7 @@
     "apps/web/src/components/settings/DiagnosticsSettings.tsx",
     "apps/web/src/components/settings/EnvironmentRow.tsx",
     "apps/web/src/components/settings/KeybindingsSettings.tsx",
+    "apps/web/src/components/settings/ProjectSettingsPanel.tsx",
     "apps/web/src/components/settings/ProviderSettingsPanel.tsx",
     "apps/web/src/components/settings/SettingsPanels.restore.test.tsx",
     "apps/web/src/components/settings/SettingsPanels.tsx",

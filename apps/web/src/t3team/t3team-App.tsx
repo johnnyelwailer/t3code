@@ -35,6 +35,8 @@ export function App({
   showCreate: showCreateProp,
   reopenInitialSetup,
   onCreateOpenChange,
+  manageRepositoriesProjectId: manageRepositoriesProjectIdProp,
+  onManageRepositoriesChange,
   onOpenHome,
   onOpenSettings,
   onOpenDashboard,
@@ -49,10 +51,14 @@ export function App({
   const { state: sidebarState, setState: setSidebarState } = useProjectSidebarState();
   const [showCreateInternal, setShowCreateInternal] = useState(false);
   const [showSearchPalette, setShowSearchPalette] = useState(false);
-  const [manageRepositoriesProjectId, setManageRepositoriesProjectId] = useState<string | null>(
-    null,
-  );
+  const [manageRepositoriesInternal, setManageRepositoriesInternal] = useState<string | null>(null);
 
+  const manageRepositoriesProjectId =
+    manageRepositoriesProjectIdProp === undefined
+      ? manageRepositoriesInternal
+      : manageRepositoriesProjectIdProp;
+  const setManageRepositoriesProjectId =
+    onManageRepositoriesChange ?? setManageRepositoriesInternal;
   const showCreate = showCreateProp ?? showCreateInternal;
   const setShowCreate = onCreateOpenChange ?? setShowCreateInternal;
   // The route view wins; while URL navigation lags the store, the merged view

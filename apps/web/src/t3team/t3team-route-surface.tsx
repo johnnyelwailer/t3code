@@ -122,6 +122,16 @@ export function T3TeamRouteSurface() {
           dashboardMode={search.projectView ?? "my-work"}
           showCreate={isCreateRoute}
           reopenInitialSetup={search.setup === "welcome"}
+          manageRepositoriesProjectId={search.manageRepositories ?? null}
+          onManageRepositoriesChange={(projectId) => {
+            void navigate({
+              to: ".",
+              search: (previous: Record<string, unknown>) => {
+                const { manageRepositories: _closed, ...rest } = previous;
+                return projectId ? { ...rest, manageRepositories: projectId } : rest;
+              },
+            });
+          }}
           onCreateOpenChange={(open) => {
             void navigate({
               to: open ? "/t3team/new" : "/t3team",
