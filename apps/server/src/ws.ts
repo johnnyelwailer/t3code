@@ -161,7 +161,6 @@ import {
 } from "./orchestration-v2/ThreadStream.ts";
 import { isMachineSetupEnabled } from "./cloud/t3team-machineSetupFlag.ts";
 import { isKanbanSemanticZoomEnabled } from "./t3team-kanbanZoomFlag.ts";
-import { isLazyLinkedRepositoryCheckoutEnabled } from "./t3team-lazyLinkedRepositoryFlag.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import { isMyWorkRightPanelEnabled } from "./t3team-myWorkRightPanelFlag.ts";
 import { isWorkProfileChooserEnabled } from "./t3team-workProfileChooserFlag.ts";
@@ -1881,7 +1880,6 @@ const layerWsRpc = (
             // Runtime feature flags (env NEXI_FF_MAIN_REPOSITORY / NEXI_FF_NEXI_STATE_DIR,
             // default on): project main repository, and the `.nexi` state dir name.
             mainRepository: isMainRepositoryEnabled(),
-            lazyLinkedRepositoryCheckout: isLazyLinkedRepositoryCheckoutEnabled(),
             machineSetup: isMachineSetupEnabled(),
             // Runtime feature flag (env NEXI_FF_WORK_PROFILE_CHOOSER, default off): the work
             // profile chooser. Off means clients use the developer profile everywhere.
