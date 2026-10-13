@@ -1,9 +1,11 @@
 import type { AccountDefinition } from "./account.ts";
+import type { ColdLocalCompactionRouteDefinition } from "./cold-local-compaction.ts";
 import type { CompletionWakeRendererDefinition } from "./completion-wake.ts";
 import type { PackProviderDriverDefinition } from "./provider-driver.ts";
 
 export * from "./provider-driver.ts";
 export * from "./provider-orchestration.ts";
+export * from "./cold-local-compaction.ts";
 export * from "./completion-wake.ts";
 export * from "./account.ts";
 export * from "./t3team-collections.ts";
@@ -178,6 +180,8 @@ export type PackActivationContext = {
   ) => void;
   readonly defineModelPolicy: (definition: ModelPolicyDefinition) => void;
   readonly defineCompletionWakeRenderer: (definition: CompletionWakeRendererDefinition) => void;
+  /** One route per driver; requires the `cold-local-compaction:v1` capability. */
+  readonly defineColdLocalCompactionRoute: (definition: ColdLocalCompactionRouteDefinition) => void;
   /** An account the app signs the user in to; see `AccountDefinition`. */
   readonly defineAccount: (definition: AccountDefinition) => void;
   readonly resolveAssetDataUrl: PackAssetResolver;
