@@ -3,6 +3,7 @@ import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
+import type { CloudSessionCreateOptions } from "~/cloud/t3team-cloudSessionTargetStore";
 import { ScaleIcon, SettingsIcon } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 
@@ -61,14 +62,15 @@ export interface BranchToolbarEnvironmentSelectorProps {
   cloudEnvironmentIds?: ReadonlySet<string>;
   /**
    * Present when the server has a cloud provider configured: the menu offers a
-   * one-click "New cloud session". Absent hides the action item entirely.
+   * one-click "New cloud session". Absent hides the action item entirely. In "Move to" mode it
+   * is called with `selectAsTarget: false`: the started thread's composer keeps its machine.
    */
-  onCreateCloudSession?: () => void;
+  onCreateCloudSession?: (options?: CloudSessionCreateOptions) => void;
   /**
    * New cloud session for a project with no machine: starts a session that sets one up on its own
    * thread. Absent when the flag is off, and then such a project starts a plain session.
    */
-  onSetupProjectMachine?: () => void;
+  onSetupProjectMachine?: (options?: CloudSessionCreateOptions) => void;
   /**
    * t3team: a create is on its way to the server (resolving the machine, dispatching), which takes
    * seconds before the session's own row exists; the create row shows it at once and stops a
@@ -256,7 +258,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   };
 
   const createCloudSession = () => {
-    onCreateCloudSession?.();
+    onCreateCloudSession?.({ selectAsTarget: !moveMode });
     setMenuOpen(false);
     onCloudMenuOpenChange?.(false);
   };
@@ -405,7 +407,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                 onSetup={
                   onSetupProjectMachine
                     ? () => {
-                        onSetupProjectMachine();
+                        onSetupProjectMachine({ selectAsTarget: !moveMode });
                         setMenuOpen(false);
                         onCloudMenuOpenChange?.(false);
                       }

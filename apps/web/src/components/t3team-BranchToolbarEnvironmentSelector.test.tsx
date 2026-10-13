@@ -87,6 +87,11 @@ import {
   BranchToolbarEnvironmentSelector,
   type BranchToolbarEnvironmentSelectorProps,
 } from "./BranchToolbarEnvironmentSelector";
+import {
+  beginCloudSessionCreate,
+  clearCloudSessionTarget,
+  getCloudSessionTarget,
+} from "~/cloud/t3team-cloudSessionTargetStore";
 
 const PRIMARY = {
   environmentId: EnvironmentId.make("env-primary"),
@@ -575,5 +580,32 @@ describe("BranchToolbarEnvironmentSelector — Move to (started thread, panel)",
     expect(handlers.onConnectCloudSession).toHaveBeenCalledTimes(1);
     expect(handlers.onSelectCloudSession).not.toHaveBeenCalled();
     expect(handlers.onHandoffToEnvironment).not.toHaveBeenCalled();
+  });
+
+  // The started thread's composer reads this target on send; a Move-mode create must not set it.
+  const THREAD_SCOPE = "env-primary:thread-started";
+  const mountCreate = (props: Partial<BranchToolbarEnvironmentSelectorProps>) => {
+    const create = vi.fn();
+    mountMove({
+      onCreateCloudSession: (options) => beginCloudSessionCreate(THREAD_SCOPE, options, create),
+      ...props,
+    });
+    act(() => {
+      findCreateButton()?.click();
+    });
+    return create;
+  };
+
+  it("creates a cloud session in Move mode without writing a Run-on target", () => {
+    const create = mountCreate({});
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(getCloudSessionTarget(THREAD_SCOPE)).toBeNull();
+  });
+
+  it("still selects the creating session as the target for a draft's Run on menu", () => {
+    const create = mountCreate({ envLocked: false, onHandoffToEnvironment: undefined });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(getCloudSessionTarget(THREAD_SCOPE)?.sessionId).toBeDefined();
+    clearCloudSessionTarget(THREAD_SCOPE);
   });
 });

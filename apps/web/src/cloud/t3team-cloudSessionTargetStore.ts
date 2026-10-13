@@ -82,6 +82,22 @@ export function selectCloudSessionCreating(
   });
 }
 
+/** What a "New cloud session" click asks for; a "Move to" create must not touch the target. */
+export interface CloudSessionCreateOptions {
+  /** False for a started thread: its composer would otherwise send to the new session. */
+  readonly selectAsTarget: boolean;
+}
+
+/** Starts a create; a Run-on pick also selects the creating session for `scopeKey` at once. */
+export function beginCloudSessionCreate(
+  scopeKey: string | null,
+  options: CloudSessionCreateOptions | undefined,
+  create: () => void,
+): void {
+  if (scopeKey !== null && options?.selectAsTarget !== false) selectCloudSessionCreating(scopeKey);
+  create();
+}
+
 /** Create RPC answered: replace the creating sentinel with the real session. */
 export function resolveCloudSessionCreating(
   scopeKey: string,
