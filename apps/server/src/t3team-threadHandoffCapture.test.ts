@@ -142,15 +142,26 @@ describe("threadHandoffRefusals", () => {
     assert.include(refusal?.message ?? "", "3 commits on feature/x are not pushed");
   });
 
-  it("refuses a branch with no upstream that has local commits", () => {
+  it("refuses a branch origin does not have, even with no commits ahead of anything", () => {
     const [refusal] = threadHandoffRefusals({
       shell: idle,
+      branchState: { upstream: null, unpushedCommits: 0, uncommittedChanges: false },
+      liveSubagentChildren: 0,
+      boundScheduledTasks: 0,
+    });
+    assert.strictEqual(refusal?.reason, "unpushed_commits");
+    assert.include(refusal?.message ?? "", "feature/x is not pushed to origin");
+  });
+
+  it("refuses commits no remote has on a checkout without a branch", () => {
+    const [refusal] = threadHandoffRefusals({
+      shell: { branch: null, pendingRuntimeRequest: null },
       branchState: { upstream: null, unpushedCommits: 1, uncommittedChanges: false },
       liveSubagentChildren: 0,
       boundScheduledTasks: 0,
     });
     assert.strictEqual(refusal?.reason, "unpushed_commits");
-    assert.include(refusal?.message ?? "", "1 local commit");
+    assert.include(refusal?.message ?? "", "1 commit no remote has");
   });
 
   it("refuses dirty trees, pending questions, live subagents and bound scheduled tasks", () => {
@@ -170,20 +181,30 @@ describe("threadHandoffRefusals", () => {
     );
   });
 
-  it("does not refuse when the branch state could not be read", () => {
-    assert.deepStrictEqual(refusalsFor({ branchState: UNKNOWN_BRANCH_STATE }), []);
+  it("refuses, not passes, every check it could not read", () => {
+    assert.deepStrictEqual(
+      refusalsFor({
+        branchState: UNKNOWN_BRANCH_STATE,
+        liveSubagentChildren: null,
+        boundScheduledTasks: null,
+      }),
+      ["unverified", "unverified", "unverified", "unverified"],
+    );
   });
 });
 
 type Vcs = VcsProcess["Service"];
-const fakeVcs = (respond: (args: ReadonlyArray<string>) => string | null) => {
+const fakeVcs = (
+  respond: (args: ReadonlyArray<string>) => string | null,
+  exitCode?: (args: ReadonlyArray<string>) => number,
+) => {
   const calls: Array<ReadonlyArray<string>> = [];
   const vcs = {
     run: (input: { readonly args: ReadonlyArray<string> }) => {
       calls.push(input.args);
       const stdout = respond(input.args);
       return Effect.succeed({
-        exitCode: stdout === null ? 128 : 0,
+        exitCode: exitCode?.(input.args) ?? (stdout === null ? 128 : 0),
         stdout: stdout ?? "",
         stderr: "",
         stdoutTruncated: false,
@@ -194,32 +215,62 @@ const fakeVcs = (respond: (args: ReadonlyArray<string>) => string | null) => {
   return { vcs, calls };
 };
 
+// Answers each git call by its subcommand; a missing answer is a failed call.
+const gitAnswers =
+  (answers: Record<string, string>) =>
+  (args: ReadonlyArray<string>): string | null =>
+    answers[args.find((arg) => !arg.startsWith("--")) ?? ""] ?? null;
+
 describe("readHandoffBranchState", () => {
-  it.effect("counts commits ahead of the upstream and sees a dirty tree", () =>
+  it.effect("counts commits ahead of origin/<branch>, not of the tracked upstream", () =>
     Effect.gen(function* () {
-      const { vcs, calls } = fakeVcs((args) =>
-        args[0] === "rev-parse"
-          ? "origin/feature/x\n"
-          : args[0] === "rev-list"
-            ? "2\n"
-            : " M a.ts\n",
+      const { vcs, calls } = fakeVcs(
+        gitAnswers({ "rev-parse": "abc123\n", "rev-list": "2\n", status: " M a.ts\n" }),
       );
-      const state = yield* readHandoffBranchState(vcs, "/repo");
+      const state = yield* readHandoffBranchState(vcs, "/repo", "feature/x");
       assert.deepStrictEqual(state, {
         upstream: "origin/feature/x",
         unpushedCommits: 2,
         uncommittedChanges: true,
       });
-      assert.deepStrictEqual(calls[1], ["rev-list", "--count", "@{upstream}..HEAD"]);
+      assert.deepStrictEqual(calls, [
+        ["--no-optional-locks", "status", "--porcelain"],
+        ["rev-parse", "--verify", "--quiet", "refs/remotes/origin/feature/x^{commit}"],
+        ["rev-list", "--count", "refs/remotes/origin/feature/x..HEAD"],
+      ]);
     }),
   );
 
-  it.effect("counts commits no remote has when the branch tracks nothing", () =>
+  it.effect("reports a branch origin lacks as not pushed, with its remote-less commits", () =>
     Effect.gen(function* () {
-      const { vcs, calls } = fakeVcs((args) =>
-        args[0] === "rev-parse" ? null : args[0] === "rev-list" ? "4" : "",
+      const { vcs, calls } = fakeVcs(
+        (args) => (args[0] === "rev-parse" ? null : args[0] === "rev-list" ? "0" : ""),
+        (args) => (args[0] === "rev-parse" ? 1 : 0),
       );
-      const state = yield* readHandoffBranchState(vcs, "/repo");
+      const state = yield* readHandoffBranchState(vcs, "/repo", "feature/new");
+      assert.deepStrictEqual(state, {
+        upstream: null,
+        unpushedCommits: 0,
+        uncommittedChanges: false,
+      });
+      assert.deepStrictEqual(calls[2], ["rev-list", "--count", "HEAD", "--not", "--remotes"]);
+      // Not pushed to origin at all: refused even with nothing "ahead".
+      assert.deepStrictEqual(
+        threadHandoffRefusals({
+          shell: { branch: "feature/new", pendingRuntimeRequest: null },
+          branchState: state,
+          liveSubagentChildren: 0,
+          boundScheduledTasks: 0,
+        }).map((refusal) => refusal.reason),
+        ["unpushed_commits"],
+      );
+    }),
+  );
+
+  it.effect("counts only remote-less commits for a checkout without a branch", () =>
+    Effect.gen(function* () {
+      const { vcs, calls } = fakeVcs((args) => (args[0] === "rev-list" ? "4" : ""));
+      const state = yield* readHandoffBranchState(vcs, "/repo", null);
       assert.deepStrictEqual(state, {
         upstream: null,
         unpushedCommits: 4,
@@ -232,7 +283,10 @@ describe("readHandoffBranchState", () => {
   it.effect("reports unknown, not clean, when git fails", () =>
     Effect.gen(function* () {
       const { vcs } = fakeVcs(() => null);
-      assert.deepStrictEqual(yield* readHandoffBranchState(vcs, "/gone"), UNKNOWN_BRANCH_STATE);
+      assert.deepStrictEqual(
+        yield* readHandoffBranchState(vcs, "/gone", "feature/x"),
+        UNKNOWN_BRANCH_STATE,
+      );
     }),
   );
 

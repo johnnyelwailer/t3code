@@ -1357,7 +1357,7 @@ const layerWsRpc = (
       );
       // t3team: the inter-agent mailbox the stop cascade holds (optional, as above).
       const actorMailbox = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamActorMailbox));
-      // t3team: thread handoff reads branch state with it (optional: unknown state, no refusal).
+      // t3team: thread handoff reads branch state with it (optional: unknown state refuses).
       const vcsProcess = Option.getOrUndefined(yield* Effect.serviceOption(VcsProcess.VcsProcess));
       // t3team: a user's settle first stops the thread's parked workflow runs (outside the lock).
       const stopParkedWorkflowRunsBeforeSettle = yield* makeSettleParkedWorkflowStop;
@@ -2287,10 +2287,7 @@ const layerWsRpc = (
             Effect.andThen(
               prepareThreadHandoff(input, {
                 vcs: vcsProcess,
-                scheduledTasks: scheduledTasks.list().pipe(
-                  Effect.map((result) => result.tasks),
-                  Effect.orElseSucceed(() => []),
-                ),
+                scheduledTasks: scheduledTasks.list().pipe(Effect.map((result) => result.tasks)),
               }).pipe(
                 Effect.provideService(
                   ThreadManagementService.ThreadManagementService,
