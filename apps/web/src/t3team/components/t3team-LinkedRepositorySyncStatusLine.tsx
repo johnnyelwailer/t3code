@@ -17,9 +17,9 @@ export function LinkedRepositorySyncStatusLine({
   if (!entry) return null;
   const view = describeLinkedRepositorySyncStatus(entry);
   return (
-    <div className={`truncate text-2xs ${TONE_CLASS[view.tone]}`}>
+    <span className={`block truncate text-2xs ${TONE_CLASS[view.tone]}`}>
       {view.label}
       {view.detail ? ` — ${view.detail}` : null}
-    </div>
+    </span>
   );
 }
