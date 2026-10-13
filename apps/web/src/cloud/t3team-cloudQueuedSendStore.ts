@@ -6,9 +6,10 @@
 import { useSyncExternalStore } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
-import { acquireOutboxDispatch, releaseOutboxDispatch } from "~/t3team/outbox/t3team-outboxStorage";
+import { DraftId, flushComposerDraftStorage, useComposerDraftStore } from "~/composerDraftStore";
+import { holdCloudQueuedSendClaim } from "./t3team-cloudQueuedSendClaim";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
+import { readPersistedDraftCloudQueuedSend } from "./t3team-cloudQueuedSendPersisted";
 
 type DraftsByKey = ReturnType<typeof useComposerDraftStore.getState>["draftsByThreadKey"];
 
@@ -47,7 +48,10 @@ export function getDraftCloudQueuedSend(draftId: string): CloudQueuedSend | null
   return useComposerDraftStore.getState().draftsByThreadKey[draftId]?.cloudQueuedSend ?? null;
 }
 
-/** Replaces (or clears, with null) the record. False when the draft has no composer state. */
+/**
+ * Replaces (or clears, with null) the record, and writes it through to storage at once so
+ * another window's claim-holder reads it. False when the draft has no composer state.
+ */
 export function writeDraftCloudQueuedSend(draftId: string, next: CloudQueuedSend | null): boolean {
   let written = false;
   useComposerDraftStore.setState((state) => {
@@ -61,6 +65,7 @@ export function writeDraftCloudQueuedSend(draftId: string, next: CloudQueuedSend
       },
     };
   });
+  if (written) flushComposerDraftStorage();
   return written;
 }
 
@@ -95,11 +100,6 @@ export function retryDraftCloudQueuedSend(draftId: string): void {
   writeDraftCloudQueuedSend(draftId, rest);
 }
 
-/** The cross-window claim a dispatch and a cancel of one queued message both take. */
-export function cloudQueuedSendClaimKey(messageId: string): string {
-  return `cloud-queued-send:${messageId}`;
-}
-
 /**
  * Cancel: the message goes back into the composer, ahead of anything typed since. Refused (null)
  * while a send is in flight here or in another window: that turn is already starting, so the
@@ -108,12 +108,14 @@ export function cloudQueuedSendClaimKey(messageId: string): string {
 export function cancelDraftCloudQueuedSend(draftId: string): CloudQueuedSend | null {
   const current = getDraftCloudQueuedSend(draftId);
   if (current === null || isCloudQueuedSendDispatching(current.messageId)) return null;
-  const claimKey = cloudQueuedSendClaimKey(current.messageId);
-  if (!acquireOutboxDispatch(claimKey)) return null;
+  const claim = holdCloudQueuedSendClaim(current.messageId);
+  if (claim === null) return null;
   try {
+    // Another window may have sent it meanwhile: never hand back text that went out.
+    if (readPersistedDraftCloudQueuedSend(draftId)?.messageId !== current.messageId) return null;
     restoreQueuedMessage(draftId, current);
   } finally {
-    releaseOutboxDispatch(claimKey);
+    claim.release();
   }
   return current;
 }

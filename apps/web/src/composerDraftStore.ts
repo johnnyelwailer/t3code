@@ -137,6 +137,11 @@ const composerPersistStorage: PersistStorage<ComposerPersistState> = {
   removeItem: (name) => composerDebouncedStorage.removeItem(name),
 };
 
+/** Writes pending composer draft state now (t3team: other windows read it under a claim). */
+export function flushComposerDraftStorage(): void {
+  composerDebouncedStorage.flush();
+}
+
 // Flush pending composer draft writes before page unload to prevent data loss.
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
   window.addEventListener("beforeunload", () => {
