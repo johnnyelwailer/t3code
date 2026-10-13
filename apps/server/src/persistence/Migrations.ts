@@ -366,23 +366,16 @@ export interface RunMigrationsOptions {
 export const runMigrations = Effect.fn("runMigrations")(function* ({
   toMigrationInclusive,
 }: RunMigrationsOptions = {}) {
-<<<<<<< HEAD
-  const previewMigrations =
-    toMigrationInclusive === undefined || toMigrationInclusive >= 55
-      ? yield* reconcileV2PreviewMigration()
-      : [];
-  const sprintLedgerMigrations =
-    toMigrationInclusive === undefined || toMigrationInclusive >= 84
-      ? yield* reconcileForkSprintLedger()
-      : [];
-=======
   const includesV2 =
     toMigrationInclusive === undefined || toMigrationInclusive >= FIRST_V2_MIGRATION_ID;
   const previewMigrations = includesV2 ? yield* reconcileV2PreviewMigration() : [];
   if (includesV2) {
     yield* assertV2MigrationsCanRun(toMigrationInclusive);
   }
->>>>>>> upstream/main
+  const sprintLedgerMigrations =
+    toMigrationInclusive === undefined || toMigrationInclusive >= 84
+      ? yield* reconcileForkSprintLedger()
+      : [];
   const executedMigrations = [
     ...previewMigrations,
     ...sprintLedgerMigrations,

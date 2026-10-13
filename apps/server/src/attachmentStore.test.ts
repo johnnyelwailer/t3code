@@ -7,11 +7,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   attachmentFileExtension,
-<<<<<<< HEAD
   attachmentRelativePath,
-=======
   chatAttachmentStableKey,
->>>>>>> upstream/main
   createAttachmentId,
   createDeterministicAttachmentId,
   createPendingAttachmentId,
