@@ -344,6 +344,7 @@ import { useNowMinute } from "../hooks/useNowMinute";
 import { usePanelAnimationSettings, usePanelPresence } from "../panelAnimations";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionComposerGate";
+import { useCloudSessionOwnProject } from "~/cloud/t3team-useCloudSessionOwnProject";
 import type { CloudSessionQueuedSend } from "~/cloud/t3team-cloudSessionTargetStore";
 import { useRemoveClonedProject } from "../hooks/useRemoveClonedProject";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
@@ -2827,6 +2828,11 @@ export default function ChatView(props: ChatViewProps) {
       activeProject,
       environmentById.get(activeProject.environmentId)?.serverConfig?.scratchWorkspaceRoot ?? null,
     );
+  // t3team: the composer's cloud session hosts this project even when its copy groups differently.
+  const cloudSessionOwnProject = useCloudSessionOwnProject(
+    draftId ?? routeThreadKey,
+    activeProjectRef,
+  );
   const logicalProjectEnvironments = useMemo(() => {
     if (!activeProject) return [];
     const envs: EnvironmentOption[] = [];
@@ -2877,6 +2883,9 @@ export default function ChatView(props: ChatViewProps) {
         seen.add(p.environmentId);
         pushEnvironment(p.environmentId, p.id);
       }
+      if (cloudSessionOwnProject && !seen.has(cloudSessionOwnProject.environmentId)) {
+        pushEnvironment(cloudSessionOwnProject.environmentId, cloudSessionOwnProject.projectId);
+      }
     }
     // Sort: primary first, then alphabetical
     envs.sort((a, b) => {
@@ -2888,6 +2897,7 @@ export default function ChatView(props: ChatViewProps) {
     activeProject,
     activeProjectIsScratch,
     allProjects,
+    cloudSessionOwnProject,
     draftId,
     environments,
     projectGroupingSettings,

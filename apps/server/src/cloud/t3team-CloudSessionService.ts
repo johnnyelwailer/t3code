@@ -187,9 +187,20 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
         wantsSetup && input.projectId !== undefined
           ? yield* machines.resolveSetup(input.projectId)
           : null;
+      // A plain session still runs in its project: the repository checked out on the host, or an
+      // empty workspace when the project has none. Its token, like a machine's, needs the broker.
+      const plain =
+        machine === null && setup === null && input.projectId !== undefined && broker.enabled
+          ? yield* machines.resolvePlain(input.projectId)
+          : null;
+      const plainCheckout = plain?.kind === "checkout" ? plain.checkout : null;
       // The caller's name for it, else its repository's (t3team-cloudSessionName.ts).
       const sessionTag = yield* makeSessionTag(
-        input.name ?? machine?.repository.name ?? setup?.repository.name ?? null,
+        input.name ??
+          machine?.repository.name ??
+          setup?.repository.name ??
+          plainCheckout?.repository.name ??
+          null,
       );
       if ((machine !== null || setup !== null) && !broker.enabled) {
         return yield* new CloudSessionFailedError({
@@ -202,7 +213,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       // A warm standby of the project, when the broker has one idle: seconds instead of minutes.
       const workspace = sessionWorkspaceName(
         login,
-        machine?.repository ?? setup?.repository ?? null,
+        machine?.repository ?? setup?.repository ?? plainCheckout?.repository ?? null,
       );
       if (machine !== null) {
         // The project is in use: the broker warms its next machine now, not at the next report.
@@ -241,7 +252,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
 
       // Broker mode: a grant only a run this login dispatched can redeem replaces the whole T3
       // Connect handoff. Fails with `broker_sign_in_required` before any dispatch when signed out.
-      const access = machine ?? setup;
+      const access = machine ?? setup ?? plainCheckout;
       const brokerGrant = broker.enabled
         ? yield* broker.requestGrant(
             login,
@@ -291,6 +302,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
         brokerGrant,
         machine,
         setup,
+        plain,
         workspace,
       });
     });
