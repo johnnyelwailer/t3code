@@ -50,7 +50,7 @@ export interface ProviderCapacityHubError {
   readonly error: string;
 }
 
-export const capacityWindow = (
+const capacityWindow = (
   window: ServerProviderUsageWindow,
   sampleKeyPrefix: string,
   now: DateTime.DateTime,
