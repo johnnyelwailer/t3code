@@ -18,6 +18,7 @@ import {
   SourceControlRepositoryService,
 } from "./sourceControl/SourceControlRepositoryService.ts";
 import { t3teamRandomHex } from "./t3team-random.ts";
+import { renameDirectoryWithRetry } from "./t3team-renameWithRetry.ts";
 import { VcsProcess } from "./vcs/VcsProcess.ts";
 
 /** Generous: a first clone of a large repository legitimately takes many minutes. */
@@ -128,9 +129,9 @@ export const cloneLinkedCheckoutAtomically = Effect.fn("cloneLinkedCheckoutAtomi
         message: "The reference path was created by something else while cloning.",
       });
     }
-    yield* fileSystem
-      .rename(tempDirectory, input.directory)
-      .pipe(Effect.tapError(() => discardTemp));
+    yield* renameDirectoryWithRetry(tempDirectory, input.directory).pipe(
+      Effect.tapError(() => discardTemp),
+    );
   },
 );
 
