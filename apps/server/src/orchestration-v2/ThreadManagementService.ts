@@ -27,7 +27,6 @@ import {
   type OrchestrationV2TurnItem,
   ProjectId,
   ProviderInstanceId,
-  resolveProjectProviderInstanceEnabled,
   RunId,
   type ScheduledTaskId,
   ThreadId,
@@ -44,6 +43,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as CommandReceiptStore from "./CommandReceiptStore.ts";
+import { resolveProjectProviderInstanceEnabledPackAware } from "./t3team-packAwareProviderEnablement.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
@@ -530,7 +530,7 @@ const make = Effect.gen(function* () {
             : serverSettings.getSettings.pipe(
                 Effect.orDie,
                 Effect.flatMap((current) =>
-                  resolveProjectProviderInstanceEnabled(current, input.projectId, input.instanceId)
+                  resolveProjectProviderInstanceEnabledPackAware(current, input.projectId, input.instanceId)
                     ? Effect.void
                     : new ThreadManagementProviderInstanceDisabledError({
                         projectId: input.projectId,
@@ -546,7 +546,7 @@ const make = Effect.gen(function* () {
       serverSettings.getSettings.pipe(
         Effect.orDie,
         Effect.map((current) =>
-          resolveProjectProviderInstanceEnabled(current, input.projectId, input.instanceId),
+          resolveProjectProviderInstanceEnabledPackAware(current, input.projectId, input.instanceId),
         ),
       );
 

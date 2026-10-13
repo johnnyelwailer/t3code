@@ -1,5 +1,7 @@
 {
   "allowedModifiedFiles": [
+    "apps/server/src/orchestration-v2/ThreadManagementService.ts",
+    "apps/server/src/persistence/Migrations.test.ts",
     "apps/web/src/components/chat/ComposerPendingUserInputPanel.navigation.test.tsx",
     "packages/provider-core/src/server/runtimeInstructions.ts",
     "packages/source-control-github/src/server/GitHubApi.test.ts",

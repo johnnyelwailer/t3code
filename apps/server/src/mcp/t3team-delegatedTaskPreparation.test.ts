@@ -135,6 +135,7 @@ const makeDependencies = (
   return Layer.mergeAll(
     NodeServices.layer,
     Layer.mock(ThreadManagementService.ThreadManagementService)({
+      hasReceipt: () => Effect.succeed(false),
       getThreadRecords: (threadId) =>
         Effect.succeed(
           threadId === parentThreadId ? parentProjection(delegated ? [task] : []) : childProjection,

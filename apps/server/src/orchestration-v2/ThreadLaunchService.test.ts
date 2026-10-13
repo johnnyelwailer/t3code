@@ -182,6 +182,7 @@ function makeHarness(options: HarnessOptions = {}) {
         options.hasCommit ?? ((input) => Effect.succeed(input.refName !== "refs/heads/t3")),
       remoteExists: options.remoteExists ?? (() => Effect.succeed(true)),
       remoteBranchExists: () => Effect.succeed(true),
+      hasRefNamed: () => Effect.succeed(false),
       removeWorktree,
       resolveRemoteTrackingCommit: () =>
         Effect.succeed({ commitSha: "remote-main-sha", remoteRefName: "origin/main" }),
@@ -1318,7 +1319,8 @@ it.effect("renames a temporary branch on an existing worktree to a generated nam
 
 it.effect("rejects a worktree launch before create when baseRef does not resolve", () => {
   const harness = makeHarness({
-    hasCommit: () => Effect.succeed(false),
+    // HEAD resolves (not an unborn repository), the requested base does not.
+    hasCommit: ({ refName }) => Effect.succeed(refName === "HEAD"),
     remoteExists: () => Effect.succeed(false),
   });
   return Effect.gen(function* () {
@@ -1374,7 +1376,7 @@ it.effect("allows a missing local baseRef when startFromOrigin can fetch it", ()
 it.effect("replays a reused-thread worktree launch after local baseRef disappears", () => {
   let baseResolves = true;
   const harness = makeHarness({
-    hasCommit: () => Effect.succeed(baseResolves),
+    hasCommit: ({ refName }) => Effect.succeed(refName === "HEAD" || baseResolves),
     remoteExists: () => Effect.succeed(false),
   });
   return Effect.gen(function* () {

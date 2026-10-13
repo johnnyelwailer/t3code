@@ -9,7 +9,14 @@
  * in-memory SQLite (every layer reference below memoizes to one instance per build).
  */
 import type { PackTurnInput } from "@t3team/pack-api";
-import { CommandId, EventId, ProjectId, ThreadId } from "@t3tools/contracts";
+import {
+  CommandId,
+  EventId,
+  ProjectId,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -23,6 +30,7 @@ import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import { layerWithRegistry } from "./orchestration-v2/testkit/ProviderReplayHarness.ts";
 import * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
 import * as ServerSettings from "./serverSettings.ts";
+import { PACK_DRIVER } from "./t3team-pack-driver.fixtures.ts";
 import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
 import { T3TeamWorkflowEngineReactorLayer } from "./t3team-workflowEngineReactor.ts";
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
@@ -48,7 +56,15 @@ export function makeWorkflowStubRuntime(options: {
       Layer.mergeAll(
         orchestration,
         CommandReceiptStore.layer.pipe(Layer.provide(database)),
-        ServerSettings.layerTest(),
+        // The stub provider's instance must be enabled: thread.create refuses disabled instances.
+        ServerSettings.layerTest({
+          providerInstances: {
+            [ProviderInstanceId.make(PACK_DRIVER)]: {
+              driver: ProviderDriverKind.make(PACK_DRIVER),
+              enabled: true,
+            },
+          },
+        }),
       ),
     ),
   );

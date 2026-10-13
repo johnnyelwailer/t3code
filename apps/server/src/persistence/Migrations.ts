@@ -303,8 +303,16 @@ const makeMigrationLoader = (throughId?: number) =>
 
 // V2's schema migrations start after the legacy schema migrations. Upstream registers them at
 // 55; this fork's ledger places OrchestrationV2 at 84 (fork ids 33-83 predate it and carry
-// site-local history), so the "would skip a required migration" check starts there.
+// site-local history).
 const FIRST_V2_MIGRATION_ID = 84;
+
+// The ledger ids that carry upstream-owned V2 migrations in this fork's ledger (upstream 055/056
+// at 84/85, 057/058 at 103/104, 059/060 at 107/108, 061 at 109). Only these are checked for being
+// skipped: fork migrations (and the repair migrations for fork DBs that have gaps, e.g. 99) must
+// keep starting on databases whose history has holes. Add each id a sync appends from upstream.
+export const UPSTREAM_V2_MIGRATION_IDS: ReadonlySet<number> = new Set([
+  84, 85, 103, 104, 107, 108, 109,
+]);
 
 /**
  * Fail before migrating when the migrator would skip one of V2's own
@@ -329,7 +337,7 @@ const assertV2MigrationsCanRun = Effect.fn("assertV2MigrationsCanRun")(function*
   const recordedNames = new Map(recorded.map((row) => [row.migration_id, row.name]));
   const skipped = migrationEntries.flatMap(([id, name]) => {
     if (
-      id < FIRST_V2_MIGRATION_ID ||
+      !UPSTREAM_V2_MIGRATION_IDS.has(id) ||
       id > latestRecordedId ||
       (throughId !== undefined && id > throughId)
     )
