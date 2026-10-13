@@ -4,7 +4,8 @@
  *  - `prepareThreadHandoff` (source environment, read-only): the continuation envelope's
  *    ingredients — `full_thread_summary`, thread facts, branch state — and the eligibility
  *    verdict. "Move when the turn ends" first waits for the active run (bounded) with the
- *    existing `waitForThread`.
+ *    existing `waitForThread`, and refuses if the turn is still running after it. A check that
+ *    cannot be read refuses (see `threadHandoffRefusals`).
  *  - `recordThreadHandoff` (either environment): writes the link fact both threads show.
  *
  * The client drives the order (capture → launch → verify → record); nothing here mutates a
@@ -14,6 +15,7 @@
 import {
   T3TEAM_THREAD_HANDOFF_FACT_KEY,
   type ScheduledTask,
+  type ScheduledTaskError,
   type T3TeamThreadHandoffCapture,
   T3TeamThreadHandoffError,
   type T3TeamThreadHandoffPrepareInput,
@@ -40,7 +42,7 @@ import { collectSubagentDescendants } from "./t3team-threadStopCascade.ts";
 import type { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import type { VcsProcess } from "./vcs/VcsProcess.ts";
 
-/** "Move when the turn ends" waits at most this long before capturing anyway. */
+/** "Move when the turn ends" waits at most this long; a turn still running then is not moved. */
 export const HANDOFF_TURN_END_WAIT_MS = 10 * 60_000;
 
 const fail = (message: string) => new T3TeamThreadHandoffError({ message });
@@ -52,8 +54,8 @@ export const prepareThreadHandoff = Effect.fn("t3team.threadHandoff.prepare")(fu
   input: T3TeamThreadHandoffPrepareInput,
   deps: {
     readonly vcs?: VcsProcess["Service"] | undefined;
-    /** Tasks whose thread binding cannot move; a failed read counts as none. */
-    readonly scheduledTasks?: Effect.Effect<ReadonlyArray<ScheduledTask>>;
+    /** Tasks whose thread binding cannot move; a failed read refuses the move. */
+    readonly scheduledTasks?: Effect.Effect<ReadonlyArray<ScheduledTask>, ScheduledTaskError>;
   } = {},
 ) {
   const threads = yield* ThreadManagementService;
@@ -72,7 +74,13 @@ export const prepareThreadHandoff = Effect.fn("t3team.threadHandoff.prepare")(fu
         timeoutMs: HANDOFF_TURN_END_WAIT_MS,
       })
       .pipe(Effect.catchCause(failWith("Could not wait for the turn to end.")));
-    shell = (yield* readShell) ?? shell;
+    const after = yield* readShell;
+    if (after === null) return yield* fail("The thread no longer exists.");
+    // Capturing now would let the client stop the very turn the user chose to wait for.
+    if (after.activeRunId !== null) {
+      return yield* fail("The turn is still running, so the thread was not moved.");
+    }
+    shell = after;
   }
 
   const records = yield* threads
@@ -96,20 +104,30 @@ export const prepareThreadHandoff = Effect.fn("t3team.threadHandoff.prepare")(fu
   const branchState =
     deps.vcs === undefined || cwd === null
       ? UNKNOWN_BRANCH_STATE
-      : yield* readHandoffBranchState(deps.vcs, cwd);
+      : yield* readHandoffBranchState(deps.vcs, cwd, shell.branch);
 
+  // A read that fails is `null`: the verdict refuses it instead of counting none.
   const snapshot = yield* threads.getShellSnapshot({ location: "active" }).pipe(
     Effect.map((value) => value.threads),
-    Effect.orElseSucceed(() => []),
+    Effect.orElseSucceed(() => null),
   );
-  const descendants = new Set<string>(collectSubagentDescendants(shell.id, snapshot));
-  const liveSubagentChildren = snapshot.filter(
-    (child) =>
-      descendants.has(child.id) &&
-      (child.activeRunId !== null || (child.pendingBackgroundTasks?.length ?? 0) > 0),
-  ).length;
-  const tasks = deps.scheduledTasks === undefined ? [] : yield* deps.scheduledTasks;
-  const boundScheduledTasks = tasks.filter((task) => task.threadId === shell.id).length;
+  const descendants = new Set<string>(
+    snapshot === null ? [] : collectSubagentDescendants(shell.id, snapshot),
+  );
+  const liveSubagentChildren =
+    snapshot === null
+      ? null
+      : snapshot.filter(
+          (child) =>
+            descendants.has(child.id) &&
+            (child.activeRunId !== null || (child.pendingBackgroundTasks?.length ?? 0) > 0),
+        ).length;
+  const tasks =
+    deps.scheduledTasks === undefined
+      ? []
+      : yield* deps.scheduledTasks.pipe(Effect.orElseSucceed(() => null));
+  const boundScheduledTasks =
+    tasks === null ? null : tasks.filter((task) => task.threadId === shell.id).length;
 
   return {
     threadId: shell.id,

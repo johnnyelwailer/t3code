@@ -37,6 +37,8 @@ export const T3TeamThreadHandoffRefusalReason = Schema.Literals([
   "pending_user_input",
   "live_subagent_children",
   "scheduled_task_bound",
+  /** A check could not be read; unknown state never moves. */
+  "unverified",
 ]);
 export type T3TeamThreadHandoffRefusalReason = typeof T3TeamThreadHandoffRefusalReason.Type;
 
@@ -49,9 +51,12 @@ export type T3TeamThreadHandoffRefusal = typeof T3TeamThreadHandoffRefusal.Type;
 
 /** Branch state of the thread's checkout; null fields mean "could not tell". */
 export const T3TeamThreadHandoffBranchState = Schema.Struct({
-  /** Upstream ref the branch tracks (`origin/feature/x`), null when it has none. */
+  /**
+   * The remote branch the successor starts from (`origin/feature/x`); null when origin does not
+   * have it, or the thread has no branch.
+   */
   upstream: Schema.NullOr(Schema.String),
-  /** Commits on HEAD not on the upstream (all local commits when there is no upstream). */
+  /** Commits on HEAD not on `upstream` (commits no remote has when `upstream` is null). */
   unpushedCommits: Schema.NullOr(NonNegativeInt),
   uncommittedChanges: Schema.NullOr(Schema.Boolean),
 });

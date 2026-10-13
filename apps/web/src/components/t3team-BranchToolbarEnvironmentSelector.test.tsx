@@ -603,7 +603,7 @@ describe("BranchToolbarEnvironmentSelector — Move to (started thread, panel)",
   });
 
   it("still selects the creating session as the target for a draft's Run on menu", () => {
-    const create = mountCreate({ envLocked: false, onHandoffToEnvironment: undefined });
+    const create = mountCreate({ envLocked: false });
     expect(create).toHaveBeenCalledTimes(1);
     expect(getCloudSessionTarget(THREAD_SCOPE)?.sessionId).toBeDefined();
     clearCloudSessionTarget(THREAD_SCOPE);

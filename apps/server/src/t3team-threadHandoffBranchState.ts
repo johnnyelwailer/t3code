@@ -1,9 +1,10 @@
 /**
  * Branch state for the thread handoff eligibility check: is there work on this checkout the
- * other machine cannot see? The other machine checks the branch out from the remote, so
- * unpushed commits and uncommitted changes would silently stay behind.
+ * other machine cannot see? The other machine starts from `origin/<branch>`, so commits that
+ * ref lacks and uncommitted changes would silently stay behind.
  *
- * Every probe degrades to `null` ("could not tell") instead of failing the capture.
+ * A probe that cannot answer reports `null` ("could not tell"); the eligibility check refuses
+ * on it rather than letting unknown state move.
  * @module t3team-threadHandoffBranchState
  */
 import type { T3TeamThreadHandoffBranchState } from "@t3tools/contracts";
@@ -27,35 +28,49 @@ export function parseCommitCount(stdout: string): number | null {
   return /^\d+$/.test(trimmed) ? Number(trimmed) : null;
 }
 
+/** Exit code and stdout, or null when git could not run at all. */
 const git = (vcs: Vcs, cwd: string, args: ReadonlyArray<string>) =>
   vcs.run({ operation: OPERATION, command: "git", args, cwd, allowNonZeroExit: true }).pipe(
-    Effect.map((output) => (output.exitCode === 0 ? output.stdout : null)),
+    Effect.map((output) => ({ exitCode: output.exitCode, stdout: output.stdout })),
     Effect.orElseSucceed(() => null),
   );
 
+const count = (vcs: Vcs, cwd: string, args: ReadonlyArray<string>) =>
+  git(vcs, cwd, ["rev-list", "--count", ...args]).pipe(
+    Effect.map((out) => (out?.exitCode === 0 ? parseCommitCount(out.stdout) : null)),
+  );
+
+/**
+ * `branch` is the thread's branch, the one the successor checks out from origin. `upstream` is
+ * `origin/<branch>` when origin has it, null when it does not (then `unpushedCommits` counts the
+ * commits no remote has). Without a branch only remote-less commits count.
+ */
 export const readHandoffBranchState = Effect.fn("t3team.threadHandoff.readBranchState")(function* (
   vcs: Vcs,
   cwd: string,
+  branch: string | null,
 ) {
-  const upstreamOut = yield* git(vcs, cwd, [
-    "rev-parse",
-    "--abbrev-ref",
-    "--symbolic-full-name",
-    "@{upstream}",
-  ]);
-  const upstream = upstreamOut?.trim() || null;
-  // No upstream: every commit no remote has is local-only work.
-  const countOut = yield* git(
-    vcs,
-    cwd,
-    upstream === null
-      ? ["rev-list", "--count", "HEAD", "--not", "--remotes"]
-      : ["rev-list", "--count", "@{upstream}..HEAD"],
-  );
-  const statusOut = yield* git(vcs, cwd, ["status", "--porcelain"]);
+  // Never take index.lock under the live agent's own git commands.
+  const status = yield* git(vcs, cwd, ["--no-optional-locks", "status", "--porcelain"]);
+  const uncommittedChanges = status?.exitCode === 0 ? status.stdout.trim().length > 0 : null;
+  const localOnly = ["HEAD", "--not", "--remotes"];
+  if (branch === null) {
+    return {
+      upstream: null,
+      unpushedCommits: yield* count(vcs, cwd, localOnly),
+      uncommittedChanges,
+    };
+  }
+  const remoteRef = `refs/remotes/origin/${branch}`;
+  // --quiet: exit 1 means "no such ref"; any other failure means git could not tell.
+  const probe = yield* git(vcs, cwd, ["rev-parse", "--verify", "--quiet", `${remoteRef}^{commit}`]);
+  if (probe?.exitCode === 0) {
+    const unpushedCommits = yield* count(vcs, cwd, [`${remoteRef}..HEAD`]);
+    return { upstream: `origin/${branch}`, unpushedCommits, uncommittedChanges };
+  }
   return {
-    upstream,
-    unpushedCommits: countOut === null ? null : parseCommitCount(countOut),
-    uncommittedChanges: statusOut === null ? null : statusOut.trim().length > 0,
+    upstream: null,
+    unpushedCommits: probe?.exitCode === 1 ? yield* count(vcs, cwd, localOnly) : null,
+    uncommittedChanges,
   } satisfies T3TeamThreadHandoffBranchState;
 });

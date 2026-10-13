@@ -46,29 +46,44 @@ export function renderThreadHandoffSummary(input: {
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
+const unverified = (what: string): T3TeamThreadHandoffRefusal => ({
+  reason: "unverified",
+  message: `Couldn't verify ${what}, so nothing moved. Try again.`,
+});
+
 /**
  * Why this thread may not move now. Empty means eligible. An active run is NOT a refusal: the
- * client interrupts it (or waits for the turn) as part of the move.
+ * client interrupts it (or waits for the turn) as part of the move. A check that could not be
+ * read (`null`) refuses: unknown state never moves.
  */
 export function threadHandoffRefusals(input: {
   readonly shell: Pick<OrchestrationV2ThreadShell, "branch" | "pendingRuntimeRequest">;
   readonly branchState: T3TeamThreadHandoffBranchState;
-  readonly liveSubagentChildren: number;
-  readonly boundScheduledTasks: number;
+  readonly liveSubagentChildren: number | null;
+  readonly boundScheduledTasks: number | null;
 }): ReadonlyArray<T3TeamThreadHandoffRefusal> {
   const refusals: T3TeamThreadHandoffRefusal[] = [];
   const { unpushedCommits, uncommittedChanges, upstream } = input.branchState;
-  if (unpushedCommits !== null && unpushedCommits > 0) {
-    const where = input.shell.branch ?? "this branch";
+  const { branch } = input.shell;
+  if (unpushedCommits === null) {
+    refusals.push(unverified(`that ${branch ?? "this checkout"} is pushed`));
+  } else if (branch !== null && upstream === null) {
+    refusals.push({
+      reason: "unpushed_commits",
+      message: `${branch} is not pushed to origin. Push it first (git push -u origin ${branch}): the other machine checks out origin/${branch}.`,
+    });
+  } else if (unpushedCommits > 0) {
     refusals.push({
       reason: "unpushed_commits",
       message:
         upstream === null
-          ? `${where} is not pushed (${plural(unpushedCommits, "local commit", "local commits")}). Push it first: the other machine checks out from the remote.`
-          : `${plural(unpushedCommits, "commit", "commits")} on ${where} ${unpushedCommits === 1 ? "is" : "are"} not pushed to ${upstream}. Push first: unpushed work stays on this machine.`,
+          ? `This checkout has ${plural(unpushedCommits, "commit", "commits")} no remote has. Push first: unpushed work stays on this machine.`
+          : `${plural(unpushedCommits, "commit", "commits")} on ${branch ?? "this branch"} ${unpushedCommits === 1 ? "is" : "are"} not pushed to ${upstream}. Push first: unpushed work stays on this machine.`,
     });
   }
-  if (uncommittedChanges === true) {
+  if (uncommittedChanges === null) {
+    refusals.push(unverified("that the checkout has no uncommitted changes"));
+  } else if (uncommittedChanges) {
     refusals.push({
       reason: "uncommitted_changes",
       message: "The checkout has uncommitted changes. Commit and push them first.",
@@ -80,13 +95,17 @@ export function threadHandoffRefusals(input: {
       message: "The thread is waiting for your answer. Answer or dismiss it first.",
     });
   }
-  if (input.liveSubagentChildren > 0) {
+  if (input.liveSubagentChildren === null) {
+    refusals.push(unverified("that no subagents are still working under this thread"));
+  } else if (input.liveSubagentChildren > 0) {
     refusals.push({
       reason: "live_subagent_children",
       message: `${plural(input.liveSubagentChildren, "subagent is", "subagents are")} still working under this thread.`,
     });
   }
-  if (input.boundScheduledTasks > 0) {
+  if (input.boundScheduledTasks === null) {
+    refusals.push(unverified("which scheduled tasks run in this thread"));
+  } else if (input.boundScheduledTasks > 0) {
     refusals.push({
       reason: "scheduled_task_bound",
       message: `${plural(input.boundScheduledTasks, "scheduled task runs", "scheduled tasks run")} in this thread and cannot move with it.`,
