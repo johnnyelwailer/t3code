@@ -12,6 +12,10 @@ import * as Schema from "effect/Schema";
 import * as Ref from "effect/Ref";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
+import {
+  removeStaleSettingsTempFiles,
+  replaceFileWithRetry,
+} from "./t3team-settingsFileReplace.ts";
 
 const ClientSettingsJson = fromLenientJson(ClientSettingsSchema);
 const decodeClientSettingsDocument = Schema.decodeEffect(
@@ -172,7 +176,7 @@ const writeClientSettings = Effect.fnUntraced(function* (input: {
         }),
     ),
   );
-  yield* input.fileSystem.rename(tempPath, targetPath).pipe(
+  yield* replaceFileWithRetry(input.fileSystem, tempPath, targetPath).pipe(
     Effect.mapError(
       (cause) =>
         new DesktopClientSettingsWriteError({
@@ -189,6 +193,14 @@ export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const crypto = yield* Crypto.Crypto;
+
+  // Earlier failed writes left their temp files behind; clear them without delaying start-up.
+  yield* removeStaleSettingsTempFiles(
+    fileSystem,
+    path,
+    path.dirname(environment.clientSettingsPath),
+    path.basename(environment.clientSettingsPath),
+  ).pipe(Effect.ignore, Effect.forkDetach);
 
   return DesktopClientSettings.of({
     get: readClientSettings(fileSystem, environment.clientSettingsPath).pipe(

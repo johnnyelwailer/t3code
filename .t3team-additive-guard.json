@@ -23,6 +23,7 @@
     "apps/desktop/src/backend/DesktopBackendConfiguration.test.ts",
     "apps/desktop/src/backend/DesktopBackendConfiguration.ts",
     "apps/desktop/src/preview/Manager.ts",
+    "apps/desktop/src/settings/DesktopClientSettings.ts",
     "apps/desktop/src/window/DesktopApplicationMenu.ts",
     "apps/desktop/src/window/DesktopWindow.test.ts",
     "apps/desktop/src/window/DesktopWindow.ts",
