@@ -459,6 +459,7 @@ import {
 import { useT3TeamTimelineArtifacts } from "~/t3team/chat/t3team-useTimelineArtifacts";
 import { useResourcePressureBannerItem } from "./chat/t3team-ResourcePressureThreadBanner";
 import { useProviderRetryBannerItem } from "./chat/t3team-ProviderRetryBanner";
+import { useT3TeamThreadHandoff } from "../t3team/chat/t3team-useThreadHandoff";
 import { useT3TeamChatTimelineProps } from "~/t3team/chat/t3team-useChatTimelineProps";
 import { useT3TeamStopCascade } from "~/t3team/chat/t3team-useStopCascade";
 import { useT3TeamActiveAgents } from "~/t3team/chat/t3team-useActiveAgents";
@@ -4797,6 +4798,13 @@ export default function ChatView(props: ChatViewProps) {
     environmentId,
     threadId: activeThread?.id ?? null,
     supported: serverConfig?.environment.capabilities.t3team?.stopCascade === true,
+  });
+  // t3team: panel "Move to" another machine for a started thread (capability-gated fork RPC).
+  const onHandoffToEnvironment = useT3TeamThreadHandoff({
+    environmentId,
+    threadId: activeThread?.id ?? null,
+    enabled: isServerThread && envLocked,
+    availableEnvironments: logicalProjectEnvironments,
   });
   useEffect(() => subscribeSnapShotComposerFocus(focusComposer), [focusComposer]);
   const scheduleComposerFocus = useCallback(() => {
@@ -11682,6 +11690,7 @@ export default function ChatView(props: ChatViewProps) {
         ? onAutoEnvironment
         : undefined,
     onEnvironmentChange,
+    onHandoffToEnvironment,
     onEnvModeChange,
     envMode,
     ...(canOverrideServerThreadEnvMode
