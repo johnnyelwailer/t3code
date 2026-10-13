@@ -67,6 +67,7 @@ export function ProjectMyWorkDigestView({
   const emptyLanes = resolveDigestEmptyLanes({
     emptyStateAllowed,
     jiraNoticeShown: jiraNotice !== null,
+    jiraSyncPending: graph.jiraSyncPending === true,
   });
   const arranged = graph.arrangement ? (
     <DigestArrangementBar

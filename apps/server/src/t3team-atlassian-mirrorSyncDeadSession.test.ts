@@ -71,12 +71,12 @@ it.effect("a session revoked mid-loop is recorded and surfaces as needs-reconnec
 
     assert.strictEqual(status.lastError, ATLASSIAN_SESSION_EXPIRED_MESSAGE);
     assert.isTrue(accountNeedsReconnect(cloudId));
-    const health = yield* readDigestJiraHealth(project);
+    const health = yield* readDigestJiraHealth(project, true);
     assert.strictEqual(health.jiraAuth, "needs-reconnect");
     assert.isUndefined(health.jiraSyncError);
 
     setAccountNeedsReconnect(cloudId, false);
-    const afterSignIn = yield* readDigestJiraHealth(project);
+    const afterSignIn = yield* readDigestJiraHealth(project, true);
     assert.strictEqual(afterSignIn.jiraAuth, "ok");
     assert.isUndefined(afterSignIn.jiraSyncError, "a signed-in account shows no stale session error");
   }).pipe(Effect.provide(layerMemory)),

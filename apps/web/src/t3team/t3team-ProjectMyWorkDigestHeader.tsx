@@ -59,6 +59,7 @@ export function ProjectMyWorkDigestHeader({
           <DigestAutoStatus
             updatedAtMs={updatedAtMs}
             jiraSyncedAt={graph.jiraSyncedAt}
+            jiraSyncPending={graph.jiraSyncPending === true}
             changeRequestNote={graph.changeRequestNote}
             nowMs={nowMs}
             refreshing={refreshing}
@@ -98,6 +99,7 @@ export function ProjectMyWorkDigestHeader({
           <DigestAutoStatus
             updatedAtMs={updatedAtMs}
             jiraSyncedAt={graph.jiraSyncedAt}
+            jiraSyncPending={graph.jiraSyncPending === true}
             changeRequestNote={graph.changeRequestNote}
             nowMs={nowMs}
             refreshing={refreshing}

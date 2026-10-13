@@ -62,12 +62,15 @@ export type DigestEmptyLanes =
 /**
  * What an empty digest says. "Nothing needs you" is a claim about the user's work, so it needs the
  * Jira half to be current as well as the round to be fresh; when it is not, the Jira notice above
- * is the whole message and the empty panel stays out of its way.
+ * is the whole message and the empty panel stays out of its way. A first Jira sync still running
+ * keeps the lanes loading: the header already says so, and the mirror is not done filling.
  */
 export function resolveDigestEmptyLanes(input: {
   readonly emptyStateAllowed: boolean;
   readonly jiraNoticeShown: boolean;
+  readonly jiraSyncPending?: boolean;
 }): DigestEmptyLanes {
   if (!input.emptyStateAllowed) return "loading";
-  return input.jiraNoticeShown ? "unverified" : "nothing";
+  if (input.jiraNoticeShown) return "unverified";
+  return input.jiraSyncPending === true ? "loading" : "nothing";
 }

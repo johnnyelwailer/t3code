@@ -15,14 +15,18 @@ import { providerForAccount } from "./t3team-atlassian-auth-store.ts";
 import { kickT3TeamAtlassianMirrorSync } from "./t3team-atlassian-backlog-mirrorSyncService.ts";
 import type { T3TeamMyWorkDigestProjectInput } from "./t3team-myworkDigestTypes.ts";
 
-/** Keep this project's mirror loop alive; a provider that cannot resolve is not the digest's failure. */
+/**
+ * Keep this project's mirror loop alive. True when the loop was kicked; a provider that cannot
+ * resolve (not Jira, or a dead session) is not the digest's failure and answers false.
+ */
 export function kickDigestMirrorSync(project: T3TeamMyWorkDigestProjectInput) {
   return Effect.gen(function* () {
     const provider = yield* providerForAccount(project.account.id);
-    if (!(provider instanceof AtlassianIntegrationProvider)) return;
+    if (!(provider instanceof AtlassianIntegrationProvider)) return false;
     yield* kickT3TeamAtlassianMirrorSync({
       account: project.account,
       externalProjectId: project.externalProjectId,
     });
-  }).pipe(Effect.ignore);
+    return true;
+  }).pipe(Effect.orElseSucceed(() => false));
 }

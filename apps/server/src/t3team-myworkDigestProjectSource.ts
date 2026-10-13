@@ -80,7 +80,7 @@ export function loadDigestProjectSource(
   return Effect.gen(function* () {
     const appProjectId = project.appProjectId?.trim() || undefined;
     const identity = digestIdentityFor(project);
-    yield* kickDigestMirrorSync(project);
+    const mirrorSyncing = yield* kickDigestMirrorSync(project);
     const viewer = yield* readDigestViewerTickets({
       project,
       identity,
@@ -111,7 +111,7 @@ export function loadDigestProjectSource(
             transitions,
           })
         : undefined;
-    const jiraHealth = yield* readDigestJiraHealth(project);
+    const jiraHealth = yield* readDigestJiraHealth(project, mirrorSyncing);
     const dependencies = yield* readDigestDependencies({ identity, assigned: viewer.assigned });
 
     // Burndown history: the sprint's backfilled changelog rows; when the

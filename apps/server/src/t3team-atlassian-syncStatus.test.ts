@@ -4,7 +4,7 @@ import {
   AtlassianNetworkError,
   AtlassianOAuthSessionExpiredError,
 } from "@t3tools/integrations-atlassian";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   ATLASSIAN_SESSION_EXPIRED_MESSAGE,

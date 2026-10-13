@@ -35,6 +35,18 @@ export const jiraSessionExpiredEmptyScenario = withJiraState(emptyGraphScenario,
   jiraSyncedAt: ago(WEEKS_AGO),
 });
 
+/** The first sync after connecting is still walking the project: no sync time to show yet. */
+export const jiraSyncInProgressScenario = withJiraState(heuristic, {
+  jiraAuth: "ok",
+  jiraSyncPending: true,
+});
+
+/** The same first sync, before any of the viewer's tickets have landed in the mirror. */
+export const jiraSyncInProgressEmptyScenario = withJiraState(emptyGraphScenario, {
+  jiraAuth: "ok",
+  jiraSyncPending: true,
+});
+
 export const jiraSyncFailedScenario = withJiraState(heuristic, {
   jiraAuth: "ok",
   jiraSyncedAt: ago(30),

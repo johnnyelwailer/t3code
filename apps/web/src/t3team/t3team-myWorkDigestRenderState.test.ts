@@ -82,6 +82,16 @@ describe("empty digest lanes", () => {
     );
   });
 
+  it("keeps loading while the first Jira sync is still filling the mirror", () => {
+    expect(
+      resolveDigestEmptyLanes({
+        emptyStateAllowed: true,
+        jiraNoticeShown: false,
+        jiraSyncPending: true,
+      }),
+    ).toBe("loading");
+  });
+
   it("keeps loading before a fresh round, notice or not", () => {
     expect(resolveDigestEmptyLanes({ emptyStateAllowed: false, jiraNoticeShown: true })).toBe(
       "loading",

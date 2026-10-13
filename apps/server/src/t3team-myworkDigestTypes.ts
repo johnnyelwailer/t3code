@@ -133,6 +133,8 @@ export type T3TeamDigestProjectData = {
   readonly changeRequestsStale?: boolean;
   /** When the project's Jira tickets last matched Jira (ISO); absent before any sync. */
   readonly jiraSyncedAt?: string;
+  /** The first mirror sync is still running, so `jiraSyncedAt` is absent and the tickets partial. */
+  readonly jiraSyncPending?: boolean;
   /** Whether the Jira session behind this project's tickets still works; absent from older hosts. */
   readonly jiraAuth?: T3TeamDigestJiraAuth;
   /** Plain-language reason the last Jira sync failed; absent when it did not. */
@@ -227,6 +229,7 @@ export type T3TeamDigestProjectSource = {
   readonly changeRequestNote?: string;
   readonly changeRequestsStale?: boolean;
   readonly jiraSyncedAt?: string;
+  readonly jiraSyncPending?: boolean;
   readonly jiraAuth?: T3TeamDigestJiraAuth;
   readonly jiraSyncError?: string;
   /** Who the viewer's tickets hang together with (Jira links, same story). */

@@ -19,6 +19,8 @@ import {
   jiraSessionExpiredEmptyScenario,
   jiraSessionExpiredScenario,
   jiraSyncFailedScenario,
+  jiraSyncInProgressEmptyScenario,
+  jiraSyncInProgressScenario,
   staleJiraSyncScenario,
 } from "~/t3team/t3team-projectMyWorkDigestFixtureScenariosJira";
 import { storyCardAttentionScenario } from "~/t3team/t3team-projectMyWorkDigestFixtureScenariosStoryCards";
@@ -175,4 +177,12 @@ export const JiraSessionExpiredEmpty: Story = createStory(
 export const JiraSyncFailed: Story = createStory(
   jiraSyncFailedScenario,
   "The last sync failed with a reason: the notice offers a retry.",
+);
+export const JiraSyncInProgress: Story = createStory(
+  jiraSyncInProgressScenario,
+  "The first Jira sync is still walking the project: the status strip says so instead of a time.",
+);
+export const JiraSyncInProgressEmpty: Story = createStory(
+  jiraSyncInProgressEmptyScenario,
+  "The first sync before any ticket has landed: the lanes keep loading, never 'Nothing needs you'.",
 );

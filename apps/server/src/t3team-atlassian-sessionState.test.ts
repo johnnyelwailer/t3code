@@ -188,10 +188,10 @@ it.effect("the digest marks a project whose session is dead", () =>
     replaceAtlassianAuths([signedIn("cloud-1"), signedIn("cloud-2")]);
     setAccountNeedsReconnect("cloud-2", true);
     const health = (accountId: string) =>
-      readDigestJiraHealth({
-        account: { id: accountId, provider: "atlassian" },
-        externalProjectId: "10000",
-      });
+      readDigestJiraHealth(
+        { account: { id: accountId, provider: "atlassian" }, externalProjectId: "10000" },
+        false,
+      );
 
     assert.equal((yield* health("cloud-1")).jiraAuth, "ok");
     assert.equal((yield* health("cloud-2")).jiraAuth, "needs-reconnect");
