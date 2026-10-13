@@ -465,6 +465,7 @@
     "packages/client-runtime/src/state/threadDetail.ts",
     "packages/client-runtime/src/state/threadRetention.ts",
     "packages/client-runtime/src/state/threads-atoms.test.ts",
+    "packages/client-runtime/src/state/threads-sync.test.ts",
     "packages/client-runtime/src/state/threads.ts",
     "packages/contracts/src/applicationEvent.ts",
     "packages/contracts/src/assets.test.ts",

@@ -950,7 +950,14 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
 
         const sequence = yield* SubscriptionRef.get(lastSequence);
         const eventId = yield* Ref.get(lastEventId);
-        const canResume = Option.isSome(current.data);
+        // A cursor the server cannot verify is not a resume cursor: without an
+        // event id (cache written before ids existed, or an older server that
+        // sends none) a restored or overlapping server could be replaying
+        // different events after that sequence. Subscribe without one so the
+        // server sends a snapshot; the cached projection still paints meanwhile.
+        // Cost: one snapshot per such cached thread, and every reconnect to an
+        // older server (which never sends ids) is a snapshot.
+        const canResume = Option.isSome(current.data) && eventId !== undefined;
         const acceptBoundedSnapshot = yield* Ref.get(acceptsBoundedSocketSnapshots);
         if (!supportsCompletionMarker && canResume) {
           yield* SubscriptionRef.update(state, (value) => ({
@@ -962,8 +969,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
 
         return {
           threadId,
-          ...(canResume ? { afterSequence: sequence } : {}),
-          ...(canResume && eventId !== undefined ? { afterEventId: eventId } : {}),
+          ...(canResume ? { afterSequence: sequence, afterEventId: eventId } : {}),
           ...(supportsCompletionMarker ? { requestCompletionMarker: true as const } : {}),
           ...(acceptBoundedSnapshot ? { acceptBoundedSnapshot: true as const } : {}),
         };

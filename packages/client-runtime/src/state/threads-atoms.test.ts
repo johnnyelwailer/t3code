@@ -51,7 +51,11 @@ const THREAD: OrchestrationV2ThreadProjection = {
   ...v2Projection,
   thread: { ...v2Projection.thread, title: "Cached thread" },
 };
-const SNAPSHOT: OrchestrationV2ThreadDetailSnapshot = { snapshotSequence: 7, projection: THREAD };
+const SNAPSHOT: OrchestrationV2ThreadDetailSnapshot = {
+  snapshotSequence: 7,
+  snapshotEventId: EventId.make("cached-event-7"),
+  projection: THREAD,
+};
 
 const makeHarness = Effect.fn("TestThreadAtoms.makeHarness")(function* (options?: {
   readonly snapshot?: OrchestrationV2ThreadDetailSnapshot;
@@ -345,6 +349,7 @@ describe("createEnvironmentThreadStateAtoms", () => {
       yield* Queue.offer(first.events, {
         kind: "snapshot",
         snapshotSequence: 8,
+        snapshotEventId: EventId.make("snapshot-event-8"),
         projection: latest,
       });
       yield* Queue.offer(first.events, { kind: "synchronized" });
@@ -833,12 +838,15 @@ describe("thread resume cursor identity", () => {
     }),
   );
 
-  it.effect("sends no event id when the cached cursor never had one", () =>
+  it.effect("does not resume a cached cursor that has no event id", () =>
     Effect.gen(function* () {
-      const h = yield* makeHarness();
+      // A cache written before ids existed, or a snapshot from an older server.
+      const h = yield* makeHarness({ snapshot: { snapshotSequence: 7, projection: THREAD } });
       const unmount = h.registry.mount(h.stateAtom);
       const first = yield* Queue.take(h.subscriptions);
-      expect(first.afterSequence).toBe(7);
+      // The cached projection still paints; the server is asked for a snapshot.
+      expect(currentThread(h.registry, h.stateAtom)).toBe(THREAD);
+      expect(first.afterSequence).toBeUndefined();
       expect(first.afterEventId).toBeUndefined();
       unmount();
       yield* Deferred.await(first.closed);
@@ -881,7 +889,8 @@ describe("thread resume cursor identity", () => {
         yield* Deferred.await(second.closed);
         const again = h.registry.mount(h.stateAtom);
         const third = yield* Queue.take(h.subscriptions);
-        expect(third.afterSequence).toBe(9);
+        // Unnamed cursor: not resumable, so no sequence either.
+        expect(third.afterSequence).toBeUndefined();
         expect(third.afterEventId).toBeUndefined();
         again();
         yield* Deferred.await(third.closed);
