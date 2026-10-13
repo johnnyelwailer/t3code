@@ -344,6 +344,8 @@ import { useNowMinute } from "../hooks/useNowMinute";
 import { usePanelAnimationSettings, usePanelPresence } from "../panelAnimations";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionComposerGate";
+import { useCloudSessionOwnProject } from "~/cloud/t3team-useCloudSessionOwnProject";
+import { logicalProjectPerEnvironment } from "~/cloud/t3team-cloudSessionOwnProject";
 import type { CloudSessionQueuedSend } from "~/cloud/t3team-cloudSessionTargetStore";
 import { useRemoveClonedProject } from "../hooks/useRemoveClonedProject";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
@@ -2827,6 +2829,11 @@ export default function ChatView(props: ChatViewProps) {
       activeProject,
       environmentById.get(activeProject.environmentId)?.serverConfig?.scratchWorkspaceRoot ?? null,
     );
+  // t3team: the composer's cloud session hosts this project even when its copy groups differently.
+  const cloudSessionOwnProject = useCloudSessionOwnProject(
+    draftId ?? routeThreadKey,
+    activeProjectRef,
+  );
   const logicalProjectEnvironments = useMemo(() => {
     if (!activeProject) return [];
     const envs: EnvironmentOption[] = [];
@@ -2869,13 +2876,13 @@ export default function ChatView(props: ChatViewProps) {
         activeProject,
         projectGroupingSettings,
       );
-      const seen = new Set<string>();
-      for (const p of allProjects) {
-        if (seen.has(p.environmentId)) continue;
-        if (deriveLogicalProjectKeyFromSettings(p, projectGroupingSettings) !== logicalKey)
-          continue;
-        seen.add(p.environmentId);
-        pushEnvironment(p.environmentId, p.id);
+      // t3team: the composer's cloud session's own project wins its environment.
+      for (const entry of logicalProjectPerEnvironment(
+        allProjects,
+        (p) => deriveLogicalProjectKeyFromSettings(p, projectGroupingSettings) === logicalKey,
+        cloudSessionOwnProject,
+      )) {
+        pushEnvironment(entry.environmentId, entry.projectId);
       }
     }
     // Sort: primary first, then alphabetical
@@ -2888,6 +2895,7 @@ export default function ChatView(props: ChatViewProps) {
     activeProject,
     activeProjectIsScratch,
     allProjects,
+    cloudSessionOwnProject,
     draftId,
     environments,
     projectGroupingSettings,

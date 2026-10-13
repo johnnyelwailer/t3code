@@ -153,3 +153,4 @@ export const CloudSessionCancelInputSchema = Schema.Struct({
 export type CloudSessionCancelInput = typeof CloudSessionCancelInputSchema.Type;
 
 export * from "./t3team-cloudSessionFailure.ts";
+export * from "./t3team-cloudSessionProjectFolder.ts";
