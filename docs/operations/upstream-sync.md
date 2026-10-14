@@ -81,8 +81,6 @@ The DMG is the macOS installer.
     - `T3CODE_CLERK_CLI_OAUTH_CLIENT_ID`
     - `T3CODE_RELAY_URL`
     - `T3CODE_NEXI_BROKER_URL`
-      The build fills a missing Atlassian client id/secret into the packaged `Resources/.env` from
-      these build keys and fails if a client id would ship without its secret.
 14. **Before any DMG is handed over.** The baked-in Atlassian client ID must match the last good
     build, and Jira sign-in gets a quick smoke test.
 
