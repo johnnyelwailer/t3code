@@ -29,8 +29,17 @@ import {
   lastT3TeamMirrorSyncKickMs,
 } from "./t3team-atlassian-mirrorSyncIdleTracking.ts";
 import type { MirrorPageSource } from "./t3team-atlassian-mirrorSyncPageWalk.ts";
+import {
+  type MirrorRecentWindowState,
+  newMirrorRecentWindowState,
+  runMirrorRecentWindowFirst,
+} from "./t3team-atlassian-mirrorSyncRecentWindow.ts";
+import { clearMirrorProgress } from "./t3team-atlassian-mirrorSyncProgress.ts";
 import { describeMirrorSyncFailure } from "./t3team-atlassian-mirrorSyncFailureText.ts";
-import { recordT3TeamMirrorSyncFailure } from "./t3team-atlassian-mirrorSyncState.ts";
+import {
+  readT3TeamMirrorSyncStatus,
+  recordT3TeamMirrorSyncFailure,
+} from "./t3team-atlassian-mirrorSyncState.ts";
 
 /** Log a failed step in full, persist the sentence a user may read; hands the error back so the loop can back off on it. */
 function recordStepFailure(identity: MirrorSyncIdentity, step: string, error: unknown) {
@@ -51,6 +60,13 @@ function recordStepFailure(identity: MirrorSyncIdentity, step: string, error: un
   });
 }
 
+/** A state read that fails must not end the loop, so it reads as "not pending" (the 30 min TTL). */
+const isFirstCatchUpPending = (identity: MirrorSyncIdentity) =>
+  readT3TeamMirrorSyncStatus(identity).pipe(
+    Effect.map((status) => status.lastSuccessAtMs === undefined),
+    Effect.orElseSucceed(() => false),
+  );
+
 type MirrorSyncPass = MirrorCatchUpOutcome | "not-jira" | { readonly failure: unknown };
 
 /**
@@ -69,7 +85,10 @@ export type ResolveMirrorPageSource<E, R> = (
   input: T3TeamAtlassianMirrorSyncRequest,
 ) => Effect.Effect<MirrorPageSource | undefined, E, R>;
 
-/** One catch-up walk, followed by the prune-only reconcile when `takeReconcileTurn` grants it. */
+/**
+ * The recent window first when the watermark is stale, then one catch-up walk,
+ * followed by the prune-only reconcile when `takeReconcileTurn` grants it.
+ */
 function runMirrorSyncPass<E, R>(
   input: T3TeamAtlassianMirrorSyncRequest,
   identity: MirrorSyncIdentity,
@@ -77,11 +96,20 @@ function runMirrorSyncPass<E, R>(
   options: {
     readonly resolveSource: ResolveMirrorPageSource<E, R>;
     readonly takeReconcileTurn: () => boolean;
+    readonly recentWindow: MirrorRecentWindowState;
   },
 ) {
   return Effect.gen(function* () {
     const source = yield* options.resolveSource(input);
     if (source === undefined) return "not-jira";
+    const recent = yield* runMirrorRecentWindowFirst(
+      input,
+      source,
+      identity,
+      isSuperseded,
+      options.recentWindow,
+    );
+    if (recent === "superseded") return "superseded";
     const outcome = yield* runMirrorCatchUpWalk(input, source, identity, isSuperseded);
     if (outcome === "caught-up" && options.takeReconcileTurn()) {
       yield* runMirrorReconcile(input, source, identity, isSuperseded).pipe(
@@ -119,11 +147,13 @@ export function runMirrorLoop<E, R>(
   return Effect.gen(function* () {
     let lastReconcileMs = Number.NEGATIVE_INFINITY;
     let sleepMs = normalSleepMs;
+    const recentWindow = newMirrorRecentWindowState();
 
     while (!isSuperseded()) {
       const nowMs = yield* Clock.currentTimeMillis;
       const lastKickedMs = lastT3TeamMirrorSyncKickMs(mapKey) ?? nowMs;
-      if (isT3TeamMirrorSyncIdle({ nowMs, lastKickedMs })) {
+      const firstCatchUpPending = yield* isFirstCatchUpPending(identity);
+      if (isT3TeamMirrorSyncIdle({ nowMs, lastKickedMs, firstCatchUpPending })) {
         yield* Effect.logDebug(
           "t3team atlassian mirror sync: no kick within idle TTL; terminating loop",
         ).pipe(Effect.annotateLogs(identity));
@@ -132,6 +162,7 @@ export function runMirrorLoop<E, R>(
 
       const pass = yield* runMirrorSyncPass(input, identity, isSuperseded, {
         resolveSource,
+        recentWindow,
         takeReconcileTurn: () => {
           if (nowMs - lastReconcileMs < reconcileIntervalMs) return false;
           lastReconcileMs = nowMs;
@@ -145,5 +176,5 @@ export function runMirrorLoop<E, R>(
       sleepMs = nextSleep(sleepMs, pass);
       yield* Effect.sleep(sleepMs);
     }
-  });
+  }).pipe(Effect.ensuring(Effect.sync(() => clearMirrorProgress(identity))));
 }

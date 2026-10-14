@@ -13,6 +13,13 @@ export type AtlassianAccountStatus = IntegrationAccount & {
   readonly lastSyncAt?: string;
   /** A plain-language sentence about why the last sync failed. */
   readonly lastSyncError?: string;
+  /** How far the first sync has got while it is still running; absent otherwise. */
+  readonly catchUp?: {
+    readonly pagesWalked: number;
+    readonly lastPageMs?: number;
+    /** ISO time of the Jira change mirrored up to; absent until the older history is being walked. */
+    readonly reachedAt?: string;
+  };
 };
 
 export interface AtlassianAccountBackendApi {
