@@ -31,7 +31,7 @@ export type MirrorRecentWindowOutcome = "continue" | "superseded";
 export const newMirrorRecentWindowState = (): MirrorRecentWindowState => ({ done: false });
 
 /** True when the watermark is missing or older than the recent window. */
-export function watermarkPredatesRecentWindow(input: {
+function watermarkPredatesRecentWindow(input: {
   readonly nowMs: number;
   readonly watermarkMs: number | undefined;
 }): boolean {
