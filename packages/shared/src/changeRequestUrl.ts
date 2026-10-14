@@ -1,5 +1,5 @@
 import type { RepositoryIdentity, ThreadLinkedPullRequest } from "@t3tools/contracts";
-import { canonicalRepositoryKey } from "./sourceControl.ts";
+import { canonicalRepositoryKey, isGitHubHost } from "./sourceControl.ts";
 
 /**
  * A change request named the way a thread link names one: the host below which the repository
@@ -54,7 +54,7 @@ export function parseChangeRequestUrl(targetUrl: string): ChangeRequestLink | nu
     return claim(host, match);
   }
   // GitHub, and any Enterprise install: /{owner}/{repo}/pull/{n}
-  if (isHostOf(host, "github.com", "github")) {
+  if (isGitHubHost(host)) {
     const match = /^\/([^/]+\/[^/]+)\/pull\/(\d+)(?:\/|$)/u.exec(url.pathname);
     if (match) return claim(host, match);
   }

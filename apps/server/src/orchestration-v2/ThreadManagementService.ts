@@ -27,7 +27,6 @@ import {
   type OrchestrationV2TurnItem,
   ProjectId,
   ProviderInstanceId,
-  resolveProjectProviderInstanceEnabled,
   RunId,
   type ScheduledTaskId,
   ThreadId,
@@ -45,6 +44,8 @@ import * as Stream from "effect/Stream";
 
 import * as CommandReceiptStore from "./CommandReceiptStore.ts";
 import * as Orchestrator from "./Orchestrator.ts";
+import { getPackProviderOverlay } from "../t3team-pack-providerOverlay.ts";
+import { resolveProjectProviderInstanceEnabledWithPack } from "../t3team-packProviderGate.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
 import { DispatchModeLimit, exceededDispatchModeLimit } from "./DispatchModeLimit.ts";
@@ -530,7 +531,12 @@ const make = Effect.gen(function* () {
             : serverSettings.getSettings.pipe(
                 Effect.orDie,
                 Effect.flatMap((current) =>
-                  resolveProjectProviderInstanceEnabled(current, input.projectId, input.instanceId)
+                  resolveProjectProviderInstanceEnabledWithPack(
+                    current,
+                    input.projectId,
+                    input.instanceId,
+                    getPackProviderOverlay(),
+                  )
                     ? Effect.void
                     : new ThreadManagementProviderInstanceDisabledError({
                         projectId: input.projectId,
@@ -546,7 +552,12 @@ const make = Effect.gen(function* () {
       serverSettings.getSettings.pipe(
         Effect.orDie,
         Effect.map((current) =>
-          resolveProjectProviderInstanceEnabled(current, input.projectId, input.instanceId),
+          resolveProjectProviderInstanceEnabledWithPack(
+            current,
+            input.projectId,
+            input.instanceId,
+            getPackProviderOverlay(),
+          ),
         ),
       );
 

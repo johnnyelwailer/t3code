@@ -8,6 +8,13 @@ import {
 } from "./changeRequestUrl.ts";
 
 describe("parseChangeRequestUrl", () => {
+  it("reads a pull request on a managed GitHub Enterprise Cloud host (*.ghe.com)", () => {
+    expect(parseChangeRequestUrl("https://nexplore.ghe.com/Hive/Nx-Nexi/pull/12")).toMatchObject({
+      host: "nexplore.ghe.com",
+      repository: "hive/nx-nexi",
+    });
+  });
+
   it("reads a GitHub pull request, lower-casing the repository", () => {
     expect(parseChangeRequestUrl("https://github.com/T3Tools/T3Code/pull/123")).toEqual({
       host: "github.com",
