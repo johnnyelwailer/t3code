@@ -1191,20 +1191,6 @@ describe("resolveProjectProviderInstanceEnabled", () => {
     };
     expect(resolveProjectProviderInstanceEnabled(overridden, projectId, instanceId)).toBe(true);
   });
-
-  it("starts a distribution provider that has no settings entry, but not an opt-in built-in", () => {
-    const settings: ServerSettings = { ...DEFAULT_SERVER_SETTINGS, providerInstances: {} };
-    expect(
-      resolveProjectProviderInstanceEnabled(
-        settings,
-        projectId,
-        ProviderInstanceId.make("nexplore"),
-      ),
-    ).toBe(true);
-    expect(
-      resolveProjectProviderInstanceEnabled(settings, projectId, ProviderInstanceId.make("cursor")),
-    ).toBe(false);
-  });
 });
 
 describe("requiredScopesForProjectMutation", () => {

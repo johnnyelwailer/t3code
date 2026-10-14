@@ -199,7 +199,7 @@ const GITHUB_HOST_LABELS: ReadonlySet<string> = new Set(["github", "ghe"]);
  * narrowing to only `*.github.com` + `.ghe.com` would silently reclassify those
  * as `unknown` and break every PR operation against them.
  */
-function isGitHubHost(host: string): boolean {
+export function isGitHubHost(host: string): boolean {
   if (host === "github.com" || host.endsWith(".github.com")) {
     return true;
   }
