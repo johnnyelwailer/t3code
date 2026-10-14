@@ -184,6 +184,8 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
   - Persist optional `t3teamExt` JSON alongside existing projection-thread message fields as the smallest storage seam for workflow message metadata.
 - `apps/server/src/persistence/Migrations.ts`
   - Register the additive t3team migration that adds `projection_thread_messages.t3team_ext_json`.
+- `apps/server/src/persistence/Migrations.test.ts`
+  - Upstream's V2 guard tests hard-code ids 54/55/56; this fork registers upstream 055 at 84 (`FIRST_V2_MIGRATION_ID`), so the same assertions are expressed relative to that constant. Unavoidable: with literal ids they assert the bug that refused pre-sync fork databases (2026-10-14).
 - `apps/server/src/persistence/Services/ProjectionThreadMessages.ts`
   - Extend the projection-thread message schema with optional `t3teamExt` so the persistence layer can carry the namespaced message extension.
 - `packages/contracts/src/settings.ts`
