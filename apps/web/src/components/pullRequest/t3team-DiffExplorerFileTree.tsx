@@ -1,14 +1,18 @@
 /**
  * The PR diff explorer's file tree: a real directory tree (nested, not a repeated path list)
- * where every file carries a "viewed" checkbox. Presentational — the parent owns selection,
- * the viewed set, and paging; this only draws the pane's chrome and delegates the rows to
- * `TreeLevel`.
+ * where every file carries a "viewed" checkbox, or the same files as a flat list of full paths.
+ * Presentational — the parent owns selection, the viewed set, paging and where the pane sits;
+ * this only draws the pane's chrome and delegates the rows.
  */
-import { CheckCheckIcon, ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react";
+import * as Schema from "effect/Schema";
 import { useMemo, useState, type ReactNode } from "react";
 
-import { Button } from "../ui/button";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { useLocalStorage } from "~/hooks/useLocalStorage";
+import { cn } from "~/lib/utils";
+
+import { DiffExplorerTreeHeader } from "./t3team-DiffExplorerTreeHeader";
+import { PathList, TreeLevel } from "./t3team-DiffExplorerTreeRows";
+import type { PrTreeDockSide } from "./t3team-prCodeTreeDock.logic";
 import {
   buildDiffExplorerTree,
   compactDiffExplorerTree,
@@ -16,7 +20,8 @@ import {
   diffExplorerDirectoryPaths,
   type DiffExplorerFile,
 } from "./t3team-prDiffExplorer.logic";
-import { TreeLevel } from "./t3team-DiffExplorerTreeRows";
+
+const FULL_PATHS_STORAGE_KEY = "t3code.pullRequestFileTreeFullPaths";
 
 export interface DiffExplorerFileTreeProps {
   readonly files: readonly DiffExplorerFile[];
@@ -26,13 +31,17 @@ export interface DiffExplorerFileTreeProps {
   readonly onToggleViewed: (key: string) => void;
   readonly onMarkAllViewed: () => void;
   readonly ariaLabel: string;
+  /** The side the pane is docked on, which decides which edge carries its divider. */
+  readonly side: PrTreeDockSide;
+  readonly onSwapSide: () => void;
   /** Rendered under the tree, for a host that still has files to fetch. */
   readonly footer?: ReactNode;
 }
 
 /**
  * The file-tree pane of the PR diff view. Directories start open; the header reports how much
- * of the change is marked viewed and offers "mark all" plus expand/collapse-all.
+ * of the change is marked viewed and offers "mark all", expand/collapse-all, a full-path list
+ * and the dock side.
  */
 export function DiffExplorerFileTree({
   files,
@@ -42,11 +51,18 @@ export function DiffExplorerFileTree({
   onToggleViewed,
   onMarkAllViewed,
   ariaLabel,
+  side,
+  onSwapSide,
   footer,
 }: DiffExplorerFileTreeProps) {
   const tree = useMemo(() => compactDiffExplorerTree(buildDiffExplorerTree(files)), [files]);
   const directoryPaths = useMemo(() => diffExplorerDirectoryPaths(tree), [tree]);
   const counts = useMemo(() => countViewedFiles(files, viewed), [files, viewed]);
+  const [showFullPaths, setShowFullPaths] = useLocalStorage(
+    FULL_PATHS_STORAGE_KEY,
+    false,
+    Schema.Boolean,
+  );
 
   // Track closed folders rather than open ones so a directory that arrives with a later slice
   // opens by default instead of defaulting to hidden.
@@ -73,76 +89,49 @@ export function DiffExplorerFileTree({
     // diffstats, counts and header buttons past the pane's right edge, where they were clipped.
     <aside
       data-pr-tree-pane
-      className="flex min-h-0 w-full min-w-0 flex-col border-l border-border/60 bg-background"
+      className={cn(
+        "flex min-h-0 w-full min-w-0 flex-col border-border/60 bg-background",
+        side === "left" ? "border-r" : "border-l",
+      )}
     >
-      <div
-        className="flex h-10 min-h-10 shrink-0 items-center gap-1 border-b border-border/60 px-2 text-xs text-muted-foreground"
-        data-surface-subheader
-      >
-        <span className="px-1 font-medium text-foreground">Files</span>
-        <span className="tabular-nums">{files.length}</span>
-        <span className="ml-auto min-w-0 truncate tabular-nums text-2xs">
-          {counts.viewed}/{counts.total} viewed
-        </span>
-        {directoryPaths.length > 0 ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  size="icon-xs"
-                  variant="ghost"
-                  aria-label={everythingOpen ? "Collapse all folders" : "Expand all folders"}
-                  onClick={() =>
-                    setClosedDirectories(
-                      everythingOpen ? new Set(directoryPaths) : new Set<string>(),
-                    )
-                  }
-                />
-              }
-            >
-              {everythingOpen ? (
-                <ChevronsDownUpIcon className="size-3.5" />
-              ) : (
-                <ChevronsUpDownIcon className="size-3.5" />
-              )}
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              {everythingOpen ? "Collapse all folders" : "Expand all folders"}
-            </TooltipPopup>
-          </Tooltip>
-        ) : null}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type="button"
-                size="icon-xs"
-                variant="ghost"
-                aria-label="Mark all files as viewed"
-                onClick={onMarkAllViewed}
-              />
-            }
-          >
-            <CheckCheckIcon className="size-3.5" />
-          </TooltipTrigger>
-          <TooltipPopup side="top">Mark all as viewed</TooltipPopup>
-        </Tooltip>
-      </div>
+      <DiffExplorerTreeHeader
+        fileCount={files.length}
+        viewedCount={counts.viewed}
+        hasDirectories={directoryPaths.length > 0}
+        everythingOpen={everythingOpen}
+        onToggleAllDirectories={() =>
+          setClosedDirectories(everythingOpen ? new Set(directoryPaths) : new Set<string>())
+        }
+        showFullPaths={showFullPaths}
+        onToggleFullPaths={() => setShowFullPaths(!showFullPaths)}
+        onMarkAllViewed={onMarkAllViewed}
+        side={side}
+        onSwapSide={onSwapSide}
+      />
       <div
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-1.5"
         aria-label={ariaLabel}
       >
-        <TreeLevel
-          nodes={tree}
-          depth={0}
-          selectedKey={selectedKey}
-          viewed={viewed}
-          openDirectories={openDirectories}
-          onSelectFile={onSelectFile}
-          onToggleViewed={onToggleViewed}
-          onToggleDirectory={toggleDirectory}
-        />
+        {showFullPaths ? (
+          <PathList
+            files={files}
+            selectedKey={selectedKey}
+            viewed={viewed}
+            onSelectFile={onSelectFile}
+            onToggleViewed={onToggleViewed}
+          />
+        ) : (
+          <TreeLevel
+            nodes={tree}
+            depth={0}
+            selectedKey={selectedKey}
+            viewed={viewed}
+            openDirectories={openDirectories}
+            onSelectFile={onSelectFile}
+            onToggleViewed={onToggleViewed}
+            onToggleDirectory={toggleDirectory}
+          />
+        )}
       </div>
       {footer}
     </aside>
