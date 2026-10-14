@@ -11,6 +11,7 @@ import type { IntegrationAccountRef } from "@t3tools/integrations-core";
 import * as Effect from "effect/Effect";
 
 import { ATLASSIAN_SESSION_EXPIRED_MESSAGE } from "./t3team-atlassian-auth-staleToken.ts";
+import { readCatchUpForAccount, type T3TeamJiraCatchUp } from "./t3team-atlassian-syncCatchUp.ts";
 import {
   readT3TeamMirrorSyncStatus,
   readT3TeamMirrorSyncStatusesForAccount,
@@ -21,6 +22,8 @@ export type T3TeamJiraSyncStatus = {
   /** Epoch ms of the last sync that matched Jira; absent before the first one. */
   readonly lastSyncAt?: number;
   readonly lastError?: string;
+  /** Present only while a project's first sync is still walking in this process. */
+  readonly catchUp?: T3TeamJiraCatchUp;
 };
 
 function unresolvedError(state: T3TeamMirrorSyncStatus): string | undefined {
@@ -65,6 +68,10 @@ export function readJiraSyncStatusForAccount(accountId: string) {
   return readT3TeamMirrorSyncStatusesForAccount(accountId).pipe(
     Effect.map(combineAccountSyncStatus),
     Effect.orElseSucceed((): T3TeamJiraSyncStatus => ({})),
+    Effect.map((status): T3TeamJiraSyncStatus => {
+      const catchUp = readCatchUpForAccount(accountId);
+      return catchUp === undefined ? status : { ...status, catchUp };
+    }),
   );
 }
 

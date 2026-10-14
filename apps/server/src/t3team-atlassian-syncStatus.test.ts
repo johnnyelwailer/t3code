@@ -19,6 +19,7 @@ import {
   MIRROR_SYNC_RATE_LIMITED_TEXT,
   MIRROR_SYNC_UNREACHABLE_TEXT,
 } from "./t3team-atlassian-mirrorSyncFailureText.ts";
+import { combineCatchUp } from "./t3team-atlassian-syncCatchUp.ts";
 import { combineAccountSyncStatus, toJiraSyncStatus } from "./t3team-atlassian-syncStatus.ts";
 
 const wrapped = (cause: unknown) =>
@@ -129,5 +130,33 @@ describe("combineAccountSyncStatus", () => {
 
   it("is empty for an account with no synced project", () => {
     expect(combineAccountSyncStatus([])).toEqual({});
+  });
+});
+
+describe("combineCatchUp", () => {
+  const progress = (fields: {
+    pagesWalked: number;
+    lastPageMs?: number;
+    reachedMs?: number;
+    lastPageAtMs: number;
+  }) => ({ accountId: "acct", lastPageMs: undefined, reachedMs: undefined, ...fields });
+
+  it("is absent when no project is catching up", () => {
+    expect(combineCatchUp([])).toBeUndefined();
+  });
+
+  it("sums the pages, reports the newest page's duration and the slowest project's reach", () => {
+    expect(
+      combineCatchUp([
+        progress({ pagesWalked: 40, lastPageMs: 900, reachedMs: 5_000, lastPageAtMs: 1 }),
+        progress({ pagesWalked: 10, lastPageMs: 300, reachedMs: 2_000, lastPageAtMs: 2 }),
+      ]),
+    ).toEqual({ pagesWalked: 50, lastPageMs: 300, reachedAt: 2_000 });
+  });
+
+  it("omits the reach until a catch-up page has been stored", () => {
+    expect(
+      combineCatchUp([progress({ pagesWalked: 3, lastPageMs: 120, lastPageAtMs: 1 })]),
+    ).toEqual({ pagesWalked: 3, lastPageMs: 120 });
   });
 });
