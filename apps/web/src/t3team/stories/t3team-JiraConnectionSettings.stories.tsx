@@ -19,6 +19,8 @@ const connected: AtlassianAccountStatus = {
   lastSyncAt: hoursAgo(0.2),
 };
 
+const { lastSyncAt: _synced, ...neverSynced } = connected;
+
 function SettingsStory({ accounts }: { readonly accounts: ReadonlyArray<AtlassianAccountStatus> }) {
   const mock = createMockBackend();
   const backend = {
@@ -64,6 +66,17 @@ export const NeedsSignIn: Story = {
 
 export const StaleSync: Story = {
   args: { accounts: [{ ...connected, lastSyncAt: hoursAgo(26 * 24) }] },
+};
+
+export const CatchingUp: Story = {
+  args: {
+    accounts: [
+      {
+        ...neverSynced,
+        catchUp: { pagesWalked: 42, lastPageMs: 850, reachedAt: hoursAgo(26 * 24) },
+      },
+    ],
+  },
 };
 
 export const SyncError: Story = {

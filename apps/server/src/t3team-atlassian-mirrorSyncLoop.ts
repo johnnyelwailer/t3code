@@ -34,6 +34,7 @@ import {
   newMirrorRecentWindowState,
   runMirrorRecentWindowFirst,
 } from "./t3team-atlassian-mirrorSyncRecentWindow.ts";
+import { clearMirrorProgress } from "./t3team-atlassian-mirrorSyncProgress.ts";
 import { describeMirrorSyncFailure } from "./t3team-atlassian-mirrorSyncFailureText.ts";
 import {
   readT3TeamMirrorSyncStatus,
@@ -175,5 +176,5 @@ export function runMirrorLoop<E, R>(
       sleepMs = nextSleep(sleepMs, pass);
       yield* Effect.sleep(sleepMs);
     }
-  });
+  }).pipe(Effect.ensuring(Effect.sync(() => clearMirrorProgress(identity))));
 }

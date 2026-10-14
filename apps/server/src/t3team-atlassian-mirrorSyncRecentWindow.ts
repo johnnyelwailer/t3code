@@ -57,7 +57,7 @@ export function runMirrorRecentWindowFirst(
   return Effect.gen(function* () {
     if (state.done) return "continue" satisfies MirrorRecentWindowOutcome;
     const nowMs = yield* Clock.currentTimeMillis;
-    const { watermarkMs } = yield* readT3TeamMirrorSyncStatus(identity);
+    const { watermarkMs, lastSuccessAtMs } = yield* readT3TeamMirrorSyncStatus(identity);
     if (!watermarkPredatesRecentWindow({ nowMs, watermarkMs })) {
       state.done = true;
       return "continue" satisfies MirrorRecentWindowOutcome;
@@ -69,6 +69,8 @@ export function runMirrorRecentWindowFirst(
       isSuperseded,
       updatedWithinMinutes: recentWindowMinutes,
       newestFirst: true,
+      walk: "recent-window",
+      trackProgress: lastSuccessAtMs === undefined,
       failureMessage: "Failed to fetch Atlassian mirror page (recent window).",
       onPageStored: () => Effect.void,
     });

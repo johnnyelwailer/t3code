@@ -19,7 +19,11 @@ export const request = { account, externalProjectId: "IES" };
 export const identity = { provider: "atlassian", accountId: account.id, externalProjectId: "IES" };
 export const notSuperseded = () => false;
 
-export type FakeIssue = { readonly id: string; readonly displayId: string; readonly updatedAt: string };
+export type FakeIssue = {
+  readonly id: string;
+  readonly displayId: string;
+  readonly updatedAt: string;
+};
 
 export const isoAt = (ms: number) => DateTime.formatIso(DateTime.makeUnsafe(ms));
 
