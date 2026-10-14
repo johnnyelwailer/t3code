@@ -356,7 +356,7 @@ function readKey(host: string, scope: string, input: GitHubRestInput): string {
     input.path,
     input.coalesce?.revision ?? "",
     input.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES,
-  ].join(" ");
+  ].join("\0");
 }
 
 /** @public Service construction is part of the canonical Effect module API. */
