@@ -36,9 +36,25 @@ const BrokerSession = Schema.Struct({
   runId: Schema.String,
   environmentId: Schema.optional(Schema.NullOr(Schema.String)),
   label: Schema.optional(Schema.NullOr(Schema.String)),
+  repository: Schema.optional(Schema.NullOr(Schema.String)),
+  /** When the session registered with the broker (ISO 8601). */
+  since: Schema.optional(Schema.NullOr(Schema.String)),
 });
 export type BrokerSession = typeof BrokerSession.Type;
 const SessionsResponse = Schema.Struct({ sessions: Schema.Array(BrokerSession) });
+/** A machine the user enrolled with the broker (a desktop or a headless box), not a cloud run. */
+const BrokerHost = Schema.Struct({
+  id: Schema.String,
+  label: Schema.String,
+  online: Schema.Boolean,
+  lastSeen: Schema.optional(Schema.NullOr(Schema.String)),
+  created: Schema.optional(Schema.NullOr(Schema.String)),
+});
+export type BrokerHost = typeof BrokerHost.Type;
+const HostsResponse = Schema.Struct({ hosts: Schema.Array(BrokerHost) });
+
+/** Hosts and runs share the broker's session keys; a host's is its id behind this prefix. */
+export const BROKER_HOST_KEY_PREFIX = "h-";
 const ClaimResponse = Schema.Struct({ sessionId: Schema.String });
 
 /** What a claimed standby becomes: the dispatch inputs of a cold project-machine session. */
@@ -75,12 +91,15 @@ export const makeNexiBrokerClient = Effect.fn("cloud.broker.client.make")(functi
     request: HttpClientRequest.HttpClientRequest,
     schema: Schema.Codec<A, I>,
     what: string,
+    /** The answer when the broker has the route switched off (404). */
+    whenAbsent?: { readonly value: A },
   ) =>
     Effect.gen(function* () {
       const token = yield* accessToken;
       const response = yield* http
         .execute(request.pipe(HttpClientRequest.bearerToken(token)))
         .pipe(Effect.mapError(() => failed(`The Nexi broker could not be reached (${what}).`)));
+      if (response.status === 404 && whenAbsent !== undefined) return whenAbsent.value;
       if (response.status >= 400) {
         const body = yield* response.json.pipe(Effect.orElseSucceed(() => ({})));
         const reason =
@@ -114,6 +133,13 @@ export const makeNexiBrokerClient = Effect.fn("cloud.broker.client.make")(functi
         GrantResponse,
         "the session grant",
       ).pipe(Effect.map((body) => body.grant)),
+    /** The user's enrolled machines; empty when the broker has hosts switched off (404). */
+    listHosts: call(
+      HttpClientRequest.get(`${config.url}/v1/hosts`),
+      HostsResponse,
+      "your machines",
+      { value: { hosts: [] } },
+    ).pipe(Effect.map((body) => body.hosts)),
     listSessions: call(
       HttpClientRequest.get(`${config.url}/v1/sessions`),
       SessionsResponse,

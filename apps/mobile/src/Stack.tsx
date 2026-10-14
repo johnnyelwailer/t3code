@@ -70,6 +70,7 @@ import { ThreadQueueSheet } from "./features/threads/ThreadQueueControl";
 import { ThreadRouteScreen } from "./features/threads/ThreadRouteScreen";
 import { McpAppFullscreenScreen } from "./features/threads/McpAppFullscreenScreen";
 import { ConnectionsRouteScreen } from "./features/connection/ConnectionsRouteScreen";
+import { MachinesRouteScreen } from "./features/broker/t3team-MachinesRouteScreen";
 import { ConnectionsNewRouteScreen } from "./features/connection/ConnectionsNewRouteScreen";
 import { AddProjectDestinationRoute } from "./features/projects/AddProjectDestinationRoute";
 import { AddProjectLocalRoute } from "./features/projects/AddProjectLocalRoute";
@@ -575,6 +576,7 @@ const WORKSPACE_OVERLAY_ROUTES = new Set([
   "ConnectOnboarding",
   "Connections",
   "ConnectionsNew",
+  "Machines",
   "GitBranches",
   "GitCommit",
   "GitConfirm",
@@ -979,6 +981,20 @@ const RootStackConfig = createWorkspaceStackNavigator({
           : {
               ...FORM_SHEET_PRESENTATION_OPTIONS,
               sheetAllowedDetents: [0.55, 0.7],
+              sheetGrabberVisible: true,
+            }),
+      },
+    }),
+    Machines: createNativeStackScreen({
+      screen: MachinesRouteScreen,
+      linking: "machines",
+      options: {
+        title: "Machines",
+        ...(Platform.OS === "android"
+          ? { presentation: "card" as const, headerShown: false }
+          : {
+              ...FORM_SHEET_PRESENTATION_OPTIONS,
+              sheetAllowedDetents: [0.7, 0.95],
               sheetGrabberVisible: true,
             }),
       },

@@ -34,6 +34,7 @@
     "apps/desktop/tsconfig.json",
     "apps/desktop/vite.config.ts",
     "apps/mobile/app.config.ts",
+    "apps/mobile/src/Stack.tsx",
     "apps/mobile/src/connection/platform.ts",
     "apps/mobile/src/features/settings/SettingsRouteScreen.tsx",
     "apps/mobile/src/features/threads/ThreadFeed.tsx",

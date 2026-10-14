@@ -6,6 +6,7 @@ import { deriveProjectGroupLabel } from "@t3tools/client-runtime/state/project-g
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AccountSection } from "../account/t3team-AccountSection";
+import { MachinesRow } from "../broker/t3team-MachinesRow";
 import { hasCloudPublicConfig } from "../cloud/publicConfig";
 import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
@@ -78,6 +79,7 @@ function ConfiguredSettingsRouteScreen() {
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
         <AccountSection />
+        <MachinesRow />
 
         <SettingsSection title="Connections">
           <SettingsRow
@@ -120,6 +122,7 @@ function LocalSettingsRouteScreen() {
         }}
       >
         <AccountSection />
+        <MachinesRow />
 
         <SettingsSection title="Connections">
           <SettingsRow
