@@ -26,6 +26,7 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 
 import { activateCompiledInDistribution } from "./t3team-distribution-bootstrap.ts";
 import { activatePackRecipeSources } from "./t3team-packRecipeSourcesFromEnv.ts";
+import { installProcessResilience } from "./t3team-processResilience.ts";
 
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as HostPowerMonitor from "./background/HostPowerMonitor.ts";
@@ -1151,6 +1152,9 @@ const layerMakeServer = Layer.unwrap(
 
     // Recipes of the pack on disk (T3TEAM_PACKS_DIR), for a host that compiles its distribution in.
     yield* activatePackRecipeSources;
+
+    // Survive @cursor/sdk writes after close; log event-loop stalls to the trace.
+    yield* installProcessResilience;
 
     const layerHttpListening = Layer.effectDiscard(
       Effect.gen(function* () {
