@@ -38,6 +38,9 @@ export class LinkedRepositoryNotLinkedError extends Schema.TaggedError<LinkedRep
   }
 }
 
+/** How long a caller waits for an on-demand sync by default: the clone's own timeout (30 min). */
+export const LINKED_REPOSITORY_SYNC_WAIT_CAP_MS = LINKED_REPOSITORY_CLONE_TIMEOUT_MS;
+
 /** Waiting for the sync gave up (it keeps running in the background). */
 export class LinkedRepositorySyncTimedOutError extends Schema.TaggedError<LinkedRepositorySyncTimedOutError>()(
   "LinkedRepositorySyncTimedOutError",
@@ -97,7 +100,7 @@ export const syncLinkedRepositoryOnDemand = Effect.fn("syncLinkedRepositoryOnDem
     // A job records its outcome before it leaves the registry and before `awaitSettled` resolves,
     // so a job that settled before this call is already in the manifest. The re-read takes the
     // manifest lock so it never interleaves with a bootstrap rewriting the file.
-    const waitMs = input.waitTimeoutMs ?? LINKED_REPOSITORY_CLONE_TIMEOUT_MS;
+    const waitMs = input.waitTimeoutMs ?? LINKED_REPOSITORY_SYNC_WAIT_CAP_MS;
     yield* sync.awaitSettled(entry.localPath).pipe(
       Effect.timeoutOrElse({
         duration: Duration.millis(waitMs),

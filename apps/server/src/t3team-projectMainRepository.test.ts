@@ -182,6 +182,29 @@ it.layer(TestLayer)("project main repository", (it) => {
     }),
   );
 
+  it.effect("keeps the main-repository inspection marker when the manifest is rewritten", () =>
+    Effect.gen(function* () {
+      const { home, alpha, linkedRepositories } = makeProject();
+      const mainRepositoryInspection = {
+        inspectedAt: "2026-10-14T08:00:00.000Z",
+        candidates: [{ url: "https://github.com/acme/alpha", checkoutPath: alpha }],
+      };
+      write(
+        state(home, "references", "reference-repositories.json"),
+        JSON.stringify({ linkedRepositories, mainRepositoryInspection }),
+      );
+      yield* switchProjectMainRepository({
+        project: { workspaceRoot: home },
+        url: "https://github.com/acme/alpha",
+        selection: "detected",
+      });
+      const manifest = JSON.parse(
+        NodeFS.readFileSync(state(alpha, "references", "reference-repositories.json"), "utf8"),
+      );
+      expect(manifest.mainRepositoryInspection).toEqual(mainRepositoryInspection);
+    }),
+  );
+
   it.effect("never lets detection override an explicit user choice", () =>
     Effect.gen(function* () {
       const { home } = makeProject();

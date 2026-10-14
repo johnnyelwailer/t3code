@@ -16,7 +16,9 @@ import {
 } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Schema from "effect/Schema";
 import {
+  CLONE_ENV,
   redactUrlCredentials,
   SourceControlRepositoryService,
 } from "./sourceControl/SourceControlRepositoryService.ts";
@@ -55,10 +57,20 @@ const notFound: RemoteProjectStateInspectResult = {
   source: "remote",
 };
 
+/** The remote could not be read (unreachable, refused credentials, timed out). */
+export class RemoteProjectStateInspectError extends Schema.TaggedError<RemoteProjectStateInspectError>()(
+  "RemoteProjectStateInspectError",
+  { step: Schema.String, detail: Schema.String },
+) {
+  override get message(): string {
+    return `git ${this.step} failed: ${redactUrlCredentials(this.detail)}`;
+  }
+}
+
 /** Shallow-fetch `url`'s default branch in a temp git dir and count `.nexi`/`.t3team` entries.
- * The temp dir is released on every exit — success, failure, timeout, interruption. The URL is
- * passed without userinfo: authentication is git's credential helper, as for every linked clone
- * (`GIT_TERMINAL_PROMPT=0`, so a missing credential fails instead of prompting). */
+ * Authenticates exactly as a linked clone does: the same prepared clone URL and the clone's env
+ * (`CLONE_ENV`, git's own credential helper). A remote that cannot be read FAILS — only a read
+ * that worked can say "no project state here". The temp dir is released on every exit. */
 export const inspectRemoteProjectStateOnDefaultBranch = Effect.fn(
   "inspectRemoteProjectStateOnDefaultBranch",
 )(function* (url: string) {
@@ -74,22 +86,31 @@ export const inspectRemoteProjectStateOnDefaultBranch = Effect.fn(
       const prepared = yield* sourceControl
         .prepareClone({ remoteUrl: url, destinationPath: scratchRoot })
         .pipe(Effect.orElseSucceed(() => ({ cloneUrl: url })));
-      const cloneUrl = redactUrlCredentials(prepared.cloneUrl || url);
+      const cloneUrl = prepared.cloneUrl || url;
       yield* git("init", scratchRoot, ["init", "-q"], INSPECT_TIMEOUT_MS);
       const added = yield* git(
         "remote",
         scratchRoot,
         ["remote", "add", "origin", cloneUrl],
         INSPECT_TIMEOUT_MS,
+        CLONE_ENV,
       );
-      if (added.exitCode !== 0) return notFound;
+      if (added.exitCode !== 0) {
+        return yield* new RemoteProjectStateInspectError({
+          step: "remote add",
+          detail: added.stderr,
+        });
+      }
       const fetched = yield* git(
         "fetch",
         scratchRoot,
         ["fetch", "--depth", "1", "origin", "HEAD"],
         REMOTE_FETCH_TIMEOUT_MS,
+        CLONE_ENV,
       );
-      if (fetched.exitCode !== 0) return notFound;
+      if (fetched.exitCode !== 0) {
+        return yield* new RemoteProjectStateInspectError({ step: "fetch", detail: fetched.stderr });
+      }
       const sym = yield* git(
         "symref",
         scratchRoot,

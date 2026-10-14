@@ -81,7 +81,9 @@ export interface SourceControlCloneOptions {
 // tells the user a clone stalled. The tracked path passes null and relies on
 // progress and Cancel instead.
 const CLONE_TIMEOUT_MS = 120_000;
-const CLONE_ENV = {
+/** The environment every clone runs git with (t3team: the linked-repository remote inspect uses
+ * the same, so it authenticates exactly as the clone does). */
+export const CLONE_ENV = {
   // `--progress` forces the transfer counters through the pipe; the delay env
   // makes the checkout counter start immediately. No tty means a credential
   // prompt would hang forever, so tell git to fail instead.

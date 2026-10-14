@@ -7,12 +7,17 @@ import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
 import { describe, expect, it } from "@effect/vitest";
+import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 
-import { syncLinkedRepositoryOnDemand } from "./t3team-linkedRepositoryOnDemand.ts";
+import {
+  LINKED_REPOSITORY_SYNC_WAIT_CAP_MS,
+  syncLinkedRepositoryOnDemand,
+} from "./t3team-linkedRepositoryOnDemand.ts";
 import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 import { bootstrap, makeHarness, makeOrigin } from "./t3team-linkedRepositorySync.fixtures.ts";
 import { readLinkedRepositoryStatus } from "./t3team-project-repository-routesStatus.ts";
@@ -57,13 +62,22 @@ describe("waiting on an on-demand linked repository sync", () => {
       Effect.gen(function* () {
         const gate = yield* harness.holdClones();
         yield* bootstrap(harness.workspaceRoot, [url]);
-        const error = yield* syncLinkedRepositoryOnDemand({
-          workspaceRoot: harness.workspaceRoot,
-          repository: url,
-          wait: true,
-          waitTimeoutMs: 50,
-        }).pipe(Effect.flip);
-        expect(error.message).toContain("timed out after");
+        // The production default is the clone timeout: 30 minutes.
+        expect(LINKED_REPOSITORY_SYNC_WAIT_CAP_MS).toBe(30 * 60_000);
+        const waiter = yield* Effect.forkChild(
+          syncLinkedRepositoryOnDemand({
+            workspaceRoot: harness.workspaceRoot,
+            repository: url,
+            wait: true,
+            waitTimeoutMs: 50,
+          }),
+        );
+        const exit = yield* Fiber.await(waiter);
+        // The cap ends the waiting fiber itself (it does not linger on the running job).
+        expect(waiter.pollUnsafe()).toBeDefined();
+        expect(Exit.isFailure(exit)).toBe(true);
+        const error = Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined;
+        expect(String((error as Error | undefined)?.message)).toContain("timed out after");
         const [entry] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot))
           .linkedRepositories;
         expect(entry?.syncState).toBe("cloning");

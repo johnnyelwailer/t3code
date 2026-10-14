@@ -25,8 +25,6 @@ import {
   isLinkedRepositoryReady,
   type LinkedRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
-import { inspectRemoteProjectStateOnDefaultBranch } from "./t3team-linkedRemoteProjectStateInspect.ts";
-import { LINKED_REPOSITORY_SYNC_CONCURRENCY } from "./t3team-linkedRepositorySyncConcurrency.ts";
 
 /** Linked clones (ready, real git checkouts) whose working tree already holds a state dir. */
 export const detectMainRepositoryCandidates = Effect.fn("detectMainRepositoryCandidates")(
@@ -49,41 +47,6 @@ export const detectMainRepositoryCandidates = Effect.fn("detectMainRepositoryCan
     return candidates;
   },
 );
-
-/** Like {@link detectMainRepositoryCandidates}, plus repositories whose **committed** remote
- * default branch already carries a project state dir (see `t3team-linkedRemoteProjectStateInspect`).
- * Pending clones with no local tree yet can still appear when the remote inspect succeeds. */
-export const detectMainRepositoryCandidatesWithRemote = Effect.fn(
-  "detectMainRepositoryCandidatesWithRemote",
-)(function* (linkedRepositories: ReadonlyArray<LinkedRepositoryBootstrapResult>) {
-  const local = yield* detectMainRepositoryCandidates(linkedRepositories);
-  const seen = new Set(local.map((candidate) => candidate.checkoutPath));
-  // Bounded like the sync service's clones: a project may link dozens of repositories.
-  const pending = linkedRepositories.filter((entry) => {
-    const checkoutPath = entry.localPath?.trim();
-    return checkoutPath && !seen.has(checkoutPath);
-  });
-  const inspected = yield* Effect.forEach(
-    pending,
-    (entry) =>
-      inspectRemoteProjectStateOnDefaultBranch(entry.url).pipe(
-        Effect.option,
-        Effect.map((remote) =>
-          remote._tag === "Some" && remote.value.hasProjectStateDir
-            ? [{ url: entry.url, checkoutPath: entry.localPath.trim() }]
-            : [],
-        ),
-      ),
-    { concurrency: LINKED_REPOSITORY_SYNC_CONCURRENCY },
-  );
-  const remoteCandidates: ProjectMainRepositoryCandidate[] = [];
-  for (const candidate of inspected.flat()) {
-    if (seen.has(candidate.checkoutPath)) continue;
-    seen.add(candidate.checkoutPath);
-    remoteCandidates.push(candidate);
-  }
-  return [...local, ...remoteCandidates];
-});
 
 /** Entries never copied by a migration: reference clones and child worktrees stay where they
  * are (the copied reference manifest keeps pointing at them by absolute path), and copying a

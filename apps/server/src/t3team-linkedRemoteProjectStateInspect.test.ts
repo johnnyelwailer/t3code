@@ -6,7 +6,10 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
-import { SourceControlRepositoryService } from "./sourceControl/SourceControlRepositoryService.ts";
+import {
+  CLONE_ENV,
+  SourceControlRepositoryService,
+} from "./sourceControl/SourceControlRepositoryService.ts";
 import { inspectRemoteProjectStateOnDefaultBranch } from "./t3team-linkedRemoteProjectStateInspect.ts";
 import { VcsProcess } from "./vcs/VcsProcess.ts";
 
@@ -68,10 +71,18 @@ describe("inspectRemoteProjectStateOnDefaultBranch", () => {
 
   /** A git stand-in: `failOn` exits 128, `hangOn` never returns; every call is recorded. */
   const scriptedGit = (options: { readonly failOn?: string; readonly hangOn?: string }) => {
-    const calls: Array<{ readonly cwd: string; readonly args: ReadonlyArray<string> }> = [];
+    const calls: Array<{
+      readonly cwd: string;
+      readonly args: ReadonlyArray<string>;
+      readonly env: unknown;
+    }> = [];
     const layer = Layer.succeed(VcsProcess, {
-      run: (input: { readonly cwd: string; readonly args: ReadonlyArray<string> }) => {
-        calls.push({ cwd: input.cwd, args: input.args });
+      run: (input: {
+        readonly cwd: string;
+        readonly args: ReadonlyArray<string>;
+        readonly env?: unknown;
+      }) => {
+        calls.push({ cwd: input.cwd, args: input.args, env: input.env });
         if (input.args[0] === options.hangOn) return Effect.never;
         return Effect.succeed({
           exitCode: (input.args[0] === options.failOn ? 128 : 0) as never,
@@ -92,8 +103,11 @@ describe("inspectRemoteProjectStateOnDefaultBranch", () => {
   const removesScratchWhenGitFails = (failOn: string) => {
     const git = scriptedGit({ failOn });
     return Effect.gen(function* () {
-      const result = yield* inspectRemoteProjectStateOnDefaultBranch("https://example.test/a.git");
-      expect(result.hasProjectStateDir).toBe(false);
+      // An unreadable remote fails (it is not "no project state"), and still cleans up.
+      const error = yield* inspectRemoteProjectStateOnDefaultBranch(
+        "https://example.test/a.git",
+      ).pipe(Effect.flip);
+      expect(error.message).toContain(`git ${failOn === "remote" ? "remote add" : "fetch"} failed`);
       expect(NodeFS.existsSync(scratchOf(git.calls))).toBe(false);
     }).pipe(Effect.provide(Layer.mergeAll(git.layer, passThroughClone, NodeServices.layer)));
   };
@@ -118,13 +132,19 @@ describe("inspectRemoteProjectStateOnDefaultBranch", () => {
     }).pipe(Effect.provide(Layer.mergeAll(git.layer, passThroughClone, NodeServices.layer)));
   });
 
-  it.effect("never passes a credential in the URL to git", () => {
+  it.effect("authenticates exactly as a linked clone: its prepared URL and its env", () => {
     const git = scriptedGit({});
     return Effect.gen(function* () {
-      yield* inspectRemoteProjectStateOnDefaultBranch("https://pj:s3cret-token@example.test/a.git");
-      const argv = git.calls.flatMap((call) => call.args).join(" ");
-      expect(argv).not.toContain("s3cret-token");
-      expect(argv).toContain("https://example.test/a.git");
+      // The URL is the clone's, unchanged: an embedded token and an ssh user both survive.
+      for (const url of ["https://pj:token@example.test/a.git", "ssh://git@example.test/a.git"]) {
+        git.calls.length = 0;
+        yield* inspectRemoteProjectStateOnDefaultBranch(url);
+        const remote = git.calls.find((call) => call.args[0] === "remote");
+        const fetch = git.calls.find((call) => call.args[0] === "fetch");
+        expect(remote?.args).toEqual(["remote", "add", "origin", url]);
+        expect(remote?.env).toEqual(CLONE_ENV);
+        expect(fetch?.env).toEqual(CLONE_ENV);
+      }
     }).pipe(Effect.provide(Layer.mergeAll(git.layer, passThroughClone, NodeServices.layer)));
   });
 });

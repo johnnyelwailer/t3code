@@ -115,6 +115,39 @@ describe("linked repositories on demand", () => {
     },
   );
 
+  it.live("retries an inspection that could not read a remote, never one that could", () => {
+    const harness = makeHarness();
+    // Not there yet: the first inspection cannot read it (as with a network or credential error).
+    const url = NodePath.join(harness.root, "origins", "late");
+    const create = bootstrapWorkspaceReferences({
+      workspaceRoot: harness.workspaceRoot,
+      workspaceRepositoryInitialized: true,
+      detectedMainRepository: undefined,
+      linkedRepositoryUrls: [url],
+      inspectLinkedRepositoriesForMainRepository: true,
+    });
+    return run(
+      harness,
+      Effect.gen(function* () {
+        const failed = yield* create;
+        expect(failed.mainRepositoryCandidates).toBeUndefined();
+        expect(harness.counts.fetch).toBe(1);
+
+        makeOrigin(harness.root, "late");
+        NodeFS.mkdirSync(NodePath.join(url, PROJECT_STATE_DIR), { recursive: true });
+        NodeFS.writeFileSync(NodePath.join(url, PROJECT_STATE_DIR, "AGENTS.md"), "team\n");
+        git(url, "add", ".");
+        git(url, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "state");
+        const retried = yield* create;
+        expect(harness.counts.fetch).toBe(2);
+        expect(retried.mainRepositoryCandidates?.map((candidate) => candidate.url)).toEqual([url]);
+
+        yield* create;
+        expect(harness.counts.fetch).toBe(2);
+      }),
+    );
+  });
+
   it.live("a legacy pending entry without a clone reads as not cloned after a bootstrap", () => {
     const harness = makeHarness();
     const url = makeOrigin(harness.root, "legacy");

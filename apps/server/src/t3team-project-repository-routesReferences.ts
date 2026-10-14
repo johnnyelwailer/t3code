@@ -9,6 +9,7 @@
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
 import { toAtlassianError } from "./t3team-atlassian-http.ts";
@@ -21,8 +22,10 @@ import {
 } from "./t3team-project-repository-routesBootstrap.ts";
 import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 import {
+  detectMainRepositoryCandidatesWithRemote,
   mergeMainRepositoryCandidates,
   recordMainRepositoryInspectionCandidates,
+  withMainRepositoryInspectionClaim,
 } from "./t3team-mainRepositoryInspection.ts";
 import {
   HIDDEN_T3TEAM_DIR,
@@ -33,10 +36,7 @@ import {
   type BootstrapWorkspaceResponse,
   type MainRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
-import {
-  detectMainRepositoryCandidates,
-  detectMainRepositoryCandidatesWithRemote,
-} from "./t3team-projectMainRepositoryState.ts";
+import { detectMainRepositoryCandidates } from "./t3team-projectMainRepositoryState.ts";
 import { repositoryLookupCandidates } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 
 export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferences")(
@@ -105,17 +105,14 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
         const localCandidates = detecting
           ? yield* detectMainRepositoryCandidates(manifestLinkedRepositories)
           : [];
-        // At most once per project: the marker is written before the inspection runs (below,
-        // outside this lock — it reads remotes), so a repeated or concurrent call skips it.
+        // Once per project: a completed inspection is recorded and never repeated; until then
+        // (none yet, or the last one could not read a remote) a creation bootstrap inspects.
         const recordedInspection = preserved.mainRepositoryInspection;
-        const inspectAt =
+        const shouldInspect =
           detecting &&
           input.inspectLinkedRepositoriesForMainRepository === true &&
-          recordedInspection === undefined
-            ? DateTime.formatIso(yield* DateTime.now)
-            : undefined;
-        const mainRepositoryInspection =
-          inspectAt !== undefined ? { inspectedAt: inspectAt, candidates: [] } : recordedInspection;
+          recordedInspection === undefined;
+        const mainRepositoryInspection = recordedInspection;
 
         yield* writeReferenceManifest(referencesRoot, {
           workspaceRoot,
@@ -153,24 +150,32 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
         return {
           response,
           manifestLinkedRepositories,
-          inspectAt,
+          shouldInspect,
           localCandidates,
           recordedCandidates,
         };
       }),
     );
-    const inspected =
-      locked.inspectAt === undefined
-        ? []
-        : yield* detectMainRepositoryCandidatesWithRemote(locked.manifestLinkedRepositories);
-    if (locked.inspectAt !== undefined) {
+    // Outside the manifest lock: it reads remotes. A concurrent creation holding the in-flight
+    // claim makes this one skip; the marker is written only when every remote was read.
+    const inspection = locked.shouldInspect
+      ? yield* withMainRepositoryInspectionClaim(
+          referencesRoot,
+          detectMainRepositoryCandidatesWithRemote(locked.manifestLinkedRepositories),
+        )
+      : Option.none();
+    if (Option.isSome(inspection) && inspection.value.complete) {
       yield* sync.withManifestLock(
-        recordMainRepositoryInspectionCandidates(referencesRoot, locked.inspectAt, inspected),
+        recordMainRepositoryInspectionCandidates(
+          referencesRoot,
+          DateTime.formatIso(yield* DateTime.now),
+          inspection.value.candidates,
+        ),
       );
     }
     const mainRepositoryCandidates = mergeMainRepositoryCandidates(
       locked.localCandidates,
-      locked.inspectAt === undefined ? locked.recordedCandidates : inspected,
+      Option.isSome(inspection) ? inspection.value.candidates : locked.recordedCandidates,
     );
     return {
       ...locked.response,
