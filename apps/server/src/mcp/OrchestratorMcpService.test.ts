@@ -2363,7 +2363,7 @@ describe("provider usage echo", () => {
           "nexplore: no usage data",
           "claudeAgent: Session 42% (resets 2026-09-28 18:00 UTC) · Weekly 90% · severity: warning",
         ]);
-      }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layer))));
+      }).pipe(Effect.provide(layerOrchestratorService.pipe(Layer.provide(layer))));
     }),
   );
 
@@ -2422,7 +2422,7 @@ describe("provider usage echo", () => {
           result.providerUsage,
           "claudeAgent: Session 42% (resets 2026-09-28 18:00 UTC) · Weekly 90% · severity: warning",
         );
-      }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layer))));
+      }).pipe(Effect.provide(layerOrchestratorService.pipe(Layer.provide(layer))));
     }),
   );
 
@@ -2448,7 +2448,7 @@ describe("provider usage echo", () => {
               clientRequestId: "delegate-usage-fail-1",
             })
             .pipe(Effect.flip);
-        }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layer))));
+        }).pipe(Effect.provide(layerOrchestratorService.pipe(Layer.provide(layer))));
         assert.equal(failure.code, "provider_unavailable");
         assert.match(
           failure.message,
