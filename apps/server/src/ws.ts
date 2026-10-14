@@ -272,6 +272,9 @@ import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.
 import * as OtlpEndpointCheck from "./observability/OtlpEndpointCheck.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubCredentials from "@t3tools/source-control-github/server/GitHubCredentials";
+import * as GitHubQuota from "@t3tools/source-control-github/server/GitHubQuota";
+import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import * as SourceControlBuiltInDrivers from "./sourceControl/builtInDrivers.ts";
 import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
@@ -3414,6 +3417,20 @@ export const layer = Layer.unwrap(
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const pullRequests = yield* PullRequestService.PullRequestService;
     const reviewGuides = yield* PullRequestReviewGuideService.PullRequestReviewGuideService;
+    // The server's one GitHub transport (semaphore, quota, pause, read coalescer) goes to every
+    // connection; rebuilding `layerWithDependencies` per connection gave each client its own budget.
+    const gitHubTransport = Layer.mergeAll(
+      Layer.succeed(GitHubApi.GitHubApi, yield* GitHubApi.GitHubApi),
+      Layer.succeed(
+        GitHubCredentials.GitHubCredentials,
+        yield* GitHubCredentials.GitHubCredentials,
+      ),
+      Layer.succeed(GitHubQuota.GitHubQuota, yield* GitHubQuota.GitHubQuota),
+      Layer.succeed(
+        SourceControlRateLimit.SourceControlRateLimit,
+        yield* SourceControlRateLimit.SourceControlRateLimit,
+      ),
+    );
     const sql = yield* SqlClient.SqlClient;
     return HttpRouter.add(
       "GET",
@@ -3485,7 +3502,7 @@ export const layer = Layer.unwrap(
               // carry no credential of their own.
               Layer.provide(
                 CloudSessionServiceLayer.pipe(
-                  Layer.provide(GitHubApi.layerWithDependencies),
+                  Layer.provide(gitHubTransport),
                   // The create path hands the creator's live T3 Connect
                   // credential to the VM, so it needs the CLI token manager.
                   Layer.provide(CloudCliTokenManager.layer),
@@ -3497,9 +3514,7 @@ export const layer = Layer.unwrap(
                   // background top-up from opening two sign-ins at once.
                   // A session for a project runs in its machine; the resolver reads the
                   // project's checkouts (discovery, provided below) and the user's gh login.
-                  Layer.provide(
-                    CloudSessionMachinesLayer.pipe(Layer.provide(GitHubApi.layerWithDependencies)),
-                  ),
+                  Layer.provide(CloudSessionMachinesLayer.pipe(Layer.provide(gitHubTransport))),
                 ),
               ),
               Layer.provide(ProjectMachineDiscoveryLayer),
@@ -3515,7 +3530,7 @@ export const layer = Layer.unwrap(
                 SourceControlDiscovery.layer.pipe(
                   Layer.provide(
                     SourceControlProviderRegistry.layer.pipe(
-                      Layer.provide(SourceControlBuiltInDrivers.layer),
+                      Layer.provide(SourceControlBuiltInDrivers.makeLayer(gitHubTransport)),
                       Layer.provideMerge(GitVcsDriver.layer),
                       Layer.provide(
                         VcsDriverRegistry.layer.pipe(Layer.provide(VcsProjectConfig.layer)),

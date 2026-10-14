@@ -653,6 +653,16 @@ layer("GitHubPullRequestApi.layer", (it) => {
     }),
   );
 
+  it.effect("reads the routing identity with the caller's own reserve, never its own", () =>
+    Effect.gen(function* () {
+      mockedExecute.mockReturnValueOnce(Effect.succeed(output('{"id":9,"login":"viewer"}')));
+      const cli = yield* GitHubPullRequestApi.GitHubPullRequestApi;
+      yield* cli.getRoutingIdentity({ cwd: "/w", host: "github.identity-reserve.test" });
+      expect(callAt(0)).toMatchObject({ kind: "rest", path: "user" });
+      expect(callAt(0)).not.toHaveProperty("allowReserve");
+    }),
+  );
+
   it.effect("coalesces concurrent identity verification for the same host and credential", () =>
     Effect.gen(function* () {
       mockedExecute.mockImplementation(() =>

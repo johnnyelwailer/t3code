@@ -400,7 +400,10 @@ export const make = Effect.gen(function* () {
         yield* Effect.gen(function* () {
           yield* worker.enqueue({ threadId: null, refresh: false });
           yield* worker.drain;
-        }).pipe(Effect.repeat(Schedule.spaced("1 minute")), Effect.delay("1 minute"));
+        }).pipe(
+          Effect.repeat(Schedule.spaced("1 minute").pipe(Schedule.jittered)),
+          Effect.delay("1 minute"),
+        );
       }).pipe(Effect.asVoid),
     );
   });

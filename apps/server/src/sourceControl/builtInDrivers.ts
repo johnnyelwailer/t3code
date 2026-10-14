@@ -47,14 +47,25 @@ export const BUILT_IN_SOURCE_CONTROL_DRIVERS: ReadonlyArray<
   SourceControlDriver<BuiltInSourceControlDriversEnv>
 > = drivers;
 
-/** The services the built-in drivers' packages own, plus the host port they all run against. */
-export const layer = Layer.mergeAll(
-  // `GitHubApi.layerWithDependencies` carries the quota reserve and rate-limit pause every GitHub
-  // reader shares, so the server builds it once, here.
-  GitHubPullRequestApi.layer.pipe(Layer.provideMerge(GitHubApi.layerWithDependencies)),
-  AzureDevOpsPullRequestCli.layer.pipe(Layer.provideMerge(AzureDevOpsCli.layer)),
-  BitbucketPullRequestApi.layer.pipe(Layer.provideMerge(BitbucketApi.layer)),
-  ForgejoCli.layer,
-  GitCafeApi.layer.pipe(Layer.provideMerge(GitCafeCredentials.layer)),
-  GitLabPullRequestCli.layer.pipe(Layer.provideMerge(GitLabCli.layer)),
-).pipe(Layer.provideMerge(ServerSourceControlHost.layer));
+/** The GitHub transport with the credential, quota and pause its readers share. */
+type GitHubTransportLayer = typeof GitHubApi.layerWithDependencies;
+
+/**
+ * The services the built-in drivers' packages own, plus the host port they all run against.
+ * `gitHubTransport` is the one GitHub transport every GitHub reader shares (its quota reserve,
+ * rate-limit pause and read coalescer); a caller that already holds the server's instance passes
+ * it so it is not built a second time.
+ */
+export const makeLayer = (
+  gitHubTransport: GitHubTransportLayer = GitHubApi.layerWithDependencies,
+) =>
+  Layer.mergeAll(
+    GitHubPullRequestApi.layer.pipe(Layer.provideMerge(gitHubTransport)),
+    AzureDevOpsPullRequestCli.layer.pipe(Layer.provideMerge(AzureDevOpsCli.layer)),
+    BitbucketPullRequestApi.layer.pipe(Layer.provideMerge(BitbucketApi.layer)),
+    ForgejoCli.layer,
+    GitCafeApi.layer.pipe(Layer.provideMerge(GitCafeCredentials.layer)),
+    GitLabPullRequestCli.layer.pipe(Layer.provideMerge(GitLabCli.layer)),
+  ).pipe(Layer.provideMerge(ServerSourceControlHost.layer));
+
+export const layer = makeLayer();

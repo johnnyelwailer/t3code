@@ -6,6 +6,7 @@ import {
   CLOUD_SESSION_MIN_REFRESH_GAP_MS,
   cloudSessionPollIntervalMs,
   createRefreshGate,
+  jitteredPollIntervalMs,
   startCloudSessionListPolling,
 } from "./t3team-cloudSessionPolling";
 
@@ -176,5 +177,29 @@ describe("createRefreshGate", () => {
 
   it("holds the shared list gate at five seconds or more", () => {
     expect(CLOUD_SESSION_MIN_REFRESH_GAP_MS).toBeGreaterThanOrEqual(5000);
+  });
+});
+
+describe("jitteredPollIntervalMs", () => {
+  it("only ever stretches the interval, by at most a fifth", () => {
+    expect(jitteredPollIntervalMs(5000, () => 0)).toBe(5000);
+    expect(jitteredPollIntervalMs(5000, () => 0.5)).toBe(5500);
+    expect(jitteredPollIntervalMs(5000, () => 0.999)).toBeLessThanOrEqual(6000);
+  });
+
+  it("delays a poll tick by the jitter", () => {
+    vi.useFakeTimers();
+    try {
+      const refresh = vi.fn();
+      const stop = startCloudSessionListPolling(refresh, 5000, undefined, () => 1);
+      expect(refresh).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(5999);
+      expect(refresh).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(1);
+      expect(refresh).toHaveBeenCalledTimes(2);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

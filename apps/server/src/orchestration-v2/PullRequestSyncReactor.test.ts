@@ -27,6 +27,7 @@ import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import { earliestJitter, noJitter } from "./t3team-testNoJitter.ts";
 import * as Logger from "effect/Logger";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
@@ -286,7 +287,7 @@ type Harness = Effect.Success<ReturnType<typeof makeHarness>>;
 
 const startAndSweep = Effect.fn("startPullRequestSyncHarness")(function* (fixture: Harness) {
   const reactor = yield* PullRequestSyncReactor.PullRequestSyncReactor;
-  yield* reactor.start();
+  yield* reactor.start().pipe(Effect.provide(noJitter));
   yield* Deferred.succeed(fixture.activation, undefined);
   yield* Queue.take(fixture.snapshotReads);
   yield* reactor.drain;
@@ -580,6 +581,27 @@ describe("PullRequestSyncReactor", () => {
           assert.strictEqual((yield* Ref.get(fixture.summaryCalls)).length, 2);
           assert.strictEqual((yield* Ref.get(fixture.stackCalls)).length, 1);
           assert.strictEqual((yield* Ref.get(fixture.syncCommands)).length, 1);
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect("sweeps sooner than the nominal minute when the jitter runs short", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([makeThread("one", { pullRequests: [makeLink(42)] })]),
+        });
+
+        yield* Effect.gen(function* () {
+          const reactor = yield* PullRequestSyncReactor.PullRequestSyncReactor;
+          yield* reactor.start().pipe(Effect.provide(earliestJitter));
+          yield* Deferred.succeed(fixture.activation, undefined);
+          yield* Queue.take(fixture.snapshotReads);
+          yield* reactor.drain;
+          yield* TestClock.adjust("49 seconds");
+          yield* Queue.take(fixture.snapshotReads);
         }).pipe(Effect.provide(fixture.layer));
       }),
     ),
