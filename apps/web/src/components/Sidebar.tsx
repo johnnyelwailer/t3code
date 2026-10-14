@@ -2896,8 +2896,9 @@ export default function Sidebar() {
     setScopedProjectForChrome(
       scopedProjectGroup?.id ?? null,
       scopedProjectGroup?.memberProjectRefs ?? null,
+      projectScopeKey,
     );
-  }, [scopedProjectGroup, setScopedProjectForChrome]);
+  }, [projectScopeKey, scopedProjectGroup, setScopedProjectForChrome]);
   const scopedProjectIds = useMemo(
     () => scopedProjectGroup?.memberProjectRefs.map((projectRef) => projectRef.projectId as string),
     [scopedProjectGroup],
