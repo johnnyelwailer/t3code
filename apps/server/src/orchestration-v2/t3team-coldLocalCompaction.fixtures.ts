@@ -23,7 +23,7 @@ import * as DateTime from "effect/DateTime";
 const at = DateTime.makeUnsafe("2026-10-13T08:00:00.000Z");
 
 export const threadId = ThreadId.make("thread:cold-compaction");
-export const claudeDriver = ProviderDriverKind.make("claudeAgent");
+const claudeDriver = ProviderDriverKind.make("claudeAgent");
 export const claudeInstanceId = ProviderInstanceId.make("claudeAgent");
 export const providerThreadId = ProviderThreadId.make("provider-thread:cold-compaction");
 export const rootNodeId = NodeId.make("node:cold-compaction");

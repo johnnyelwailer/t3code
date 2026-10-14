@@ -17,9 +17,7 @@ const routesByDriver = new Map<string, ColdLocalCompactionRouteDefinition>();
 
 const isNonNegativeNumber = (value: number): boolean => Number.isFinite(value) && value >= 0;
 
-export function assertValidColdLocalCompactionRoute(
-  route: ColdLocalCompactionRouteDefinition,
-): void {
+function assertValidColdLocalCompactionRoute(route: ColdLocalCompactionRouteDefinition): void {
   const named = [route.driver, route.localProviderInstance, route.localModel];
   if (named.some((value) => typeof value !== "string" || value.trim().length === 0)) {
     throw new Error(
