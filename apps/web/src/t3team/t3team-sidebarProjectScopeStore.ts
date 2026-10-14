@@ -42,7 +42,11 @@ export const useT3TeamSidebarProjectScope = create<T3TeamSidebarProjectScopeStat
       state.scopedProjectRefs === projectRefs &&
       state.scopedProjectKey === projectKey
         ? state
-        : { scopedProjectId: projectId, scopedProjectRefs: projectRefs, scopedProjectKey: projectKey },
+        : {
+            scopedProjectId: projectId,
+            scopedProjectRefs: projectRefs,
+            scopedProjectKey: projectKey,
+          },
     ),
   setLinkedRepositoryKeysByProjectId: (keysByProjectId) =>
     set((state) =>
