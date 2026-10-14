@@ -30,7 +30,7 @@ const matchesRepository = (entryUrl: string, target: string): boolean =>
   );
 
 /** User-visible cap on how long hard-requirement paths wait for a pending linked clone. */
-export const LINKED_REPOSITORY_ENSURE_WAIT_MS = LINKED_REPOSITORY_CLONE_TIMEOUT_MS;
+const LINKED_REPOSITORY_ENSURE_WAIT_MS = LINKED_REPOSITORY_CLONE_TIMEOUT_MS;
 
 export const linkedRepositoryEnsureTimedOutMessage = (repository: string, waitMs: number) =>
   `Linked repository '${repository}' checkout timed out after ${Math.round(waitMs / 1000)}s while waiting for the clone to finish. Try again or refresh linked repositories in project settings.`;
