@@ -3,8 +3,6 @@ import {
   BUILT_IN_THEME_IDS,
   BUILT_IN_THEMES,
   T3_CHAT_THEME,
-  T3_CODE_LIGHT_THEME_COLORS,
-  T3_CODE_DARK_THEME_COLORS,
   MOBILE_THEME_IDS,
   getThemeColorsForAppearance,
 } from "@t3tools/shared/themePalettes";
@@ -13,6 +11,7 @@ import {
   readGeneratedMobileThemeVariables,
 } from "./mobileTheme.test-support";
 import { getMobileThemeRuntimeVariables } from "./mobileThemeVariables";
+import { NEXI_DARK_THEME_COLORS, NEXI_LIGHT_THEME_COLORS } from "./nexiTheme";
 
 import {
   createMobileThemePairPatch,
@@ -85,8 +84,8 @@ describe("mobile themes", () => {
       const colors = theme
         ? getThemeColorsForAppearance(theme, appearance)!
         : appearance === "dark"
-          ? T3_CODE_DARK_THEME_COLORS
-          : T3_CODE_LIGHT_THEME_COLORS;
+          ? NEXI_DARK_THEME_COLORS
+          : NEXI_LIGHT_THEME_COLORS;
       const variables =
         themeId === DEFAULT_MOBILE_THEME_ID
           ? readDefaultMobileThemeVariables(appearance)
@@ -320,7 +319,7 @@ describe("mobile themes", () => {
     (appearance) => {
       const variables = getMobileThemeVariables("t3-code", appearance);
       const desktop =
-        appearance === "dark" ? T3_CODE_DARK_THEME_COLORS : T3_CODE_LIGHT_THEME_COLORS;
+        appearance === "dark" ? NEXI_DARK_THEME_COLORS : NEXI_LIGHT_THEME_COLORS;
       const bubbleContrast = contrastRatio(
         variables["--color-user-bubble"],
         variables["--color-screen"],
@@ -341,11 +340,11 @@ describe("mobile themes", () => {
     },
   );
 
-  it("uses the same preview roles and standard artwork as desktop", () => {
+  it("previews the Nexi default and the desktop roles of built-in themes", () => {
     expect(getMobileThemePreviewColors(DEFAULT_MOBILE_THEME_ID, "light")).toEqual({
-      canvas: "#fcfcfc",
-      accent: "#f4f4f5",
-      messageAction: "#4f46e5",
+      canvas: "#faf9fb",
+      accent: "#f05a0a",
+      messageAction: "#cc4c08",
     });
     const desktopOcean = BUILT_IN_THEMES.find((theme) => theme.id === "ocean")!;
     expect(getMobileThemePreviewColors("ocean", "light")).toEqual({

@@ -43,7 +43,7 @@ export function CompactBrandTitle(
       <NexiWordmark colorClassName="accent-icon" height={Math.round(15 * scale)} />
       <Text
         allowFontScaling={props.allowFontScaling}
-        className="font-t3-medium text-foreground-muted"
+        className="font-nexi-display text-foreground-muted"
         style={{ fontSize: 21 * scale, letterSpacing: -0.5 * scale }}
       >
         Work

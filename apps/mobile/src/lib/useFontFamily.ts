@@ -2,6 +2,7 @@ const FONT_FAMILIES = {
   regular: "DMSans-Regular",
   medium: "DMSans-Medium",
   bold: "DMSans-Bold",
+  display: "BuenosAires-Bold",
 } as const;
 
 /**

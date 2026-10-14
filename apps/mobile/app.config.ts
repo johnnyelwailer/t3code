@@ -116,6 +116,9 @@ const dmSansFonts = {
   bold: "@expo-google-fonts/dm-sans/700Bold/DMSans_700Bold.ttf",
 } as const;
 
+// Static Bold instance of the Nexplore pack display font (buenos-aires-vf.ttf).
+const displayFont = "./assets/fonts/BuenosAires-Bold.ttf";
+
 const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
   "expo-widgets",
   {
@@ -322,7 +325,7 @@ const config: ExpoConfig = {
       "expo-font",
       {
         ios: {
-          fonts: [dmSansFonts.regular, dmSansFonts.medium, dmSansFonts.bold],
+          fonts: [dmSansFonts.regular, dmSansFonts.medium, dmSansFonts.bold, displayFont],
         },
         android: {
           fonts: [
@@ -337,6 +340,10 @@ const config: ExpoConfig = {
             {
               fontFamily: "DMSans-Bold",
               fontDefinitions: [{ path: dmSansFonts.bold, weight: 700 }],
+            },
+            {
+              fontFamily: "BuenosAires-Bold",
+              fontDefinitions: [{ path: displayFont, weight: 700 }],
             },
           ],
         },
