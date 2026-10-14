@@ -120,7 +120,7 @@ export function ThreadOrchestrationPanelView({
             ) : null}
             <p
               className={cn(
-                "flex items-center gap-1.5 truncate",
+                "flex flex-wrap items-center gap-x-1.5",
                 name !== null ? "text-2xs" : "text-sm",
                 pill.colorClass,
               )}
@@ -128,7 +128,7 @@ export function ThreadOrchestrationPanelView({
               <span className={cn("size-1.5 shrink-0 rounded-full", pill.dotClass)} aria-hidden />
               <span className="shrink-0 font-medium">{pill.label}</span>
               {pill.detail ? (
-                <span className="min-w-0 truncate text-muted-foreground">· {pill.detail}</span>
+                <span className="min-w-0 text-muted-foreground">· {pill.detail}</span>
               ) : null}
             </p>
           </div>
