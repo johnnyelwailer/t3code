@@ -53,6 +53,8 @@ export function digestIdentityFor(
 /** The app-scoped reads every project joins against. */
 type DigestSharedReads = {
   readonly nowMs: number;
+  /** "background" for the All projects digest: its mirror kicks take turns. */
+  readonly mirrorLane?: "foreground" | "background";
   readonly nowIso: string;
   readonly requestedViewerName: string | undefined;
   /** The viewer's merged PRs across the data horizon; the recap filters to its own day. */
@@ -80,7 +82,7 @@ export function loadDigestProjectSource(
   return Effect.gen(function* () {
     const appProjectId = project.appProjectId?.trim() || undefined;
     const identity = digestIdentityFor(project);
-    const mirrorSyncing = yield* kickDigestMirrorSync(project);
+    const mirrorSyncing = yield* kickDigestMirrorSync(project, ctx.mirrorLane);
     const viewer = yield* readDigestViewerTickets({
       project,
       identity,

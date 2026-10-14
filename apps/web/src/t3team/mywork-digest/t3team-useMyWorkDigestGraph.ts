@@ -37,6 +37,12 @@ import {
 } from "./t3team-digestGraphCache";
 import { useMyWorkDigestGraphState } from "./t3team-useMyWorkDigestGraphState";
 import { toDigestProjectEntries } from "./t3team-digestProjectEntries";
+import {
+  mergeProgressiveParts,
+  orderProgressiveEntries,
+  runProgressiveAllRounds,
+  type ProgressiveDigestPart,
+} from "./t3team-digestProgressiveAll";
 
 export type {
   UseMyWorkDigestGraphInput,
@@ -70,6 +76,14 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
   // Bumped when the scope signature changes so an in-flight load from the
   // previous scope cannot clobber the new one (same guard as useProjectMyWork).
   const generationRef = useRef(0);
+  // Progressive All projects paint (t3team-digestProgressiveAll): set once an all-scope round has
+  // answered for this scope, after which per-project partials must never land over it.
+  const allRoundLandedRef = useRef(false);
+  // True while the graph on screen was assembled from per-project partials.
+  const partialShownRef = useRef(false);
+  const graphRef = useRef(state.graph);
+  // What the last changed round said was still pending server-side (change requests, a mirror sync).
+  const lastPayloadPendingRef = useRef(false);
 
   const load = async (
     scope: MyWorkDigestScope,
@@ -109,7 +123,14 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
 
       if (result.unchanged) {
         fingerprintRef.current = result.fingerprint;
-        pendingRetry.update(undefined, () => void loadRef.current(scope, entriesRef.current));
+        // An unchanged answer over a partial paint confirms nothing about the missing projects.
+        if (!partialShownRef.current) allRoundLandedRef.current = true;
+        // Same answer as the last changed round: its pending state still holds (and a retry
+        // armed by a failed round stops here, now that the server answers again).
+        pendingRetry.update(
+          lastPayloadPendingRef.current,
+          () => void loadRef.current(scope, entriesRef.current),
+        );
         // The server confirmed what we already hold: a cached paint is now a fresh answer.
         patch({ freshness: "fresh", refreshing: false, sessionExpired: false });
         return;
@@ -142,7 +163,15 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
       writeCachedDigestGraph(digestScopeSignature(scope, entries), nextGraph, unresolved);
       // Change requests still being read server-side: pick them up in a moment, not a poll later.
       const crPending = result.value.changeRequestsPending === true;
-      pendingRetry.update(crPending, () => void loadRef.current(scope, entriesRef.current));
+      // A mirror still filling (first sync / catch-up) is pending too: keep re-reading until done.
+      const syncPending = nextGraph.jiraSyncPending === true;
+      lastPayloadPendingRef.current = crPending || syncPending;
+      pendingRetry.update(
+        lastPayloadPendingRef.current,
+        () => void loadRef.current(scope, entriesRef.current),
+      );
+      allRoundLandedRef.current = true;
+      partialShownRef.current = false;
       lastCheckedAtRef.current = Date.now();
       patch({
         viewerUnresolved: unresolved,
@@ -160,18 +189,89 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
         patch({ sessionExpired: true, error: undefined, status: "error", refreshing: false });
         return;
       }
-      // A failed fetch (backend booting, timeout, network) is transient: the poller retries.
-      patch({ status: "retrying", error: undefined, refreshing: false });
+      // A failed fetch (backend booting, timeout, network) is transient: retry soon, backing off.
+      pendingRetry.update(true, () => void loadRef.current(scope, entriesRef.current));
+      // Projects already painted stay on screen; only a view with nothing to show says "retrying".
+      patch(
+        partialShownRef.current
+          ? { refreshing: false }
+          : { status: "retrying", error: undefined, refreshing: false },
+      );
     }
+  };
+
+  /** Paint each project as it lands until the all-scope round answers (see the module header). */
+  const startProgressive = (
+    scopeEntries: ReadonlyArray<MyWorkDigestProjectInput>,
+    generation: number,
+  ) => {
+    const pollFn = readMyWorkDigestPollFn(backend);
+    if (pollFn === undefined) return;
+    const isCancelled = () =>
+      generationRef.current !== generation ||
+      allRoundLandedRef.current ||
+      // A stored graph for this scope is already on screen and fuller than any partial.
+      (graphRef.current !== null && !partialShownRef.current);
+    if (isCancelled()) return;
+    const parts: ProgressiveDigestPart[] = [];
+    const nameOf = (entry: MyWorkDigestProjectInput) =>
+      projects.find((project) => project.id === entry.appProjectId)?.title.trim() ||
+      entry.name?.trim() ||
+      entry.externalProjectId;
+    const paint = (remaining: ReadonlyArray<MyWorkDigestProjectInput>) => {
+      const merged = mergeProgressiveParts(parts);
+      if (merged.entries.length === 0) return;
+      const graph = payloadToDigestGraph({
+        payload: merged.payload,
+        projects,
+        entries: merged.entries,
+        viewer: {
+          name: merged.payload.viewer?.name || input.viewer?.name?.trim() || "",
+          role: input.viewer?.role?.trim() || "",
+          lastVisitAt: merged.payload.viewer?.lastVisitAt ?? LAST_VISIT_EPOCH,
+        },
+      });
+      partialShownRef.current = true;
+      patch({
+        graph: {
+          ...graph,
+          ...(remaining.length > 0 ? { syncingProjects: remaining.map(nameOf) } : {}),
+        },
+        status: "ready",
+        error: undefined,
+        viewerUnresolved: merged.payload.viewer?.unresolved === true,
+        // Partial: never an answer about the scope, so no empty state can come of it.
+        freshness: "cached",
+      });
+    };
+    const firstAccount = scopeEntries[0]?.account.id;
+    void runProgressiveAllRounds({
+      entries: orderProgressiveEntries(scopeEntries, graphRef.current),
+      pollFn,
+      viewerName:
+        input.viewer?.name?.trim() || readCachedAtlassianCurrentUserDisplayName(firstAccount) || "",
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      isCancelled,
+      onPart: (part, remaining) => {
+        parts.push(part);
+        paint(remaining);
+      },
+      onSkip: (_entry, remaining) => {
+        if (parts.length > 0) paint(remaining);
+      },
+    });
   };
 
   // The poller reads the latest loader through a ref (fresh backend/viewer on
   // every tick) while its subscription restarts only when scope or entries change.
   const loadRef = useRef(load);
+  const startProgressiveRef = useRef(startProgressive);
   const entriesRef = useRef(entries);
   useEffect(() => {
     loadRef.current = load;
+    startProgressiveRef.current = startProgressive;
     entriesRef.current = entries;
+    graphRef.current = state.graph;
   });
 
   // Keyed on the scope SIGNATURE, not the `entries` array: the project store rebuilds its project
@@ -187,6 +287,11 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
     fingerprintRef.current = undefined;
     requestedViewerRef.current = undefined;
     lastCheckedAtRef.current = undefined;
+    allRoundLandedRef.current = false;
+    partialShownRef.current = false;
+    lastPayloadPendingRef.current = false;
+    const generation = generationRef.current;
+    if (scope === "all" && entries.length > 1) startProgressiveRef.current(entries, generation);
     const poller = startBrowserPolling({
       enabled: true,
       intervalMs: ATLASSIAN_RESOURCES_POLL_INTERVAL_MS,

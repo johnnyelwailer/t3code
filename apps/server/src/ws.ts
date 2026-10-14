@@ -807,7 +807,8 @@ const enrichProjectShells = Effect.fn("ws.orchestrationV2.enrichProjectShells")(
               repositoryIdentityResolved: enrichment.repositoryIdentityResolved,
             })),
           ),
-        { concurrency: 16 },
+        // Cache reads plus a queue offer each; bounded so a large project list is not a burst.
+        { concurrency: 4 },
       ).pipe(
         Effect.map((enriched) => ({
           projects: enriched.map((entry) => entry.project),
