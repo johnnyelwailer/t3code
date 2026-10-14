@@ -9,15 +9,16 @@
 
 import * as NodeOS from "node:os";
 
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import * as GitHubApi from "./sourceControl/GitHubApi.ts";
+import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
 import {
   findAuthenticatedGitHubAccounts,
   parseGitHubAuthStatus,
-} from "./sourceControl/gitHubAuthStatus.ts";
+} from "@t3tools/source-control-github/server/gitHubAuthStatus";
 import * as VcsProcess from "./vcs/VcsProcess.ts";
 
 /** GitHub's search page cap; a digest round reads one page and never pages past it. */
@@ -55,33 +56,56 @@ export function searchHitMergedAt(item: GitHubSearchItem): string | null {
   return item.pull_request?.merged_at ?? item.closed_at ?? null;
 }
 
+/** `gh auth status` checks every login against the API, so it is read at most this often. */
+const SIGNED_IN_HOSTS_TTL_MS = 120_000;
+/** Nobody signed in is asked again soon, so a fresh `gh auth login` is seen on the next round. */
+const NO_HOSTS_TTL_MS = 10_000;
+
+interface SignedInHosts {
+  readonly hosts: ReadonlyArray<string>;
+  readonly ok: boolean;
+}
+
+/** Per `VcsProcess` instance: one per server, and a fresh one for every test layer. */
+const signedInHostsMemory = new WeakMap<
+  object,
+  { readonly value: SignedInHosts; readonly expiresAt: number }
+>();
+
 /**
- * Every GitHub host `gh` holds an authenticated login for. Read from the CLI on each call: a
- * `gh auth login` or `gh auth logout` between rounds must apply on the next one. `ok` is false
- * when `gh` could not say, which is not the same as "no hosts".
+ * Every GitHub host `gh` holds an authenticated login for. `gh auth status` is the only way to
+ * list them, but it is not free: it validates each login against GitHub's API, outside
+ * `GitHubApi`'s quota and pause. So an answer is reused for a couple of minutes (a few seconds
+ * when it names no host), and one that `gh` could not give is never kept. `ok` is false when `gh`
+ * could not say, which is not the same as "no hosts".
  */
-export const readSignedInGitHubHosts: Effect.Effect<
-  { readonly hosts: ReadonlyArray<string>; readonly ok: boolean },
-  never,
-  VcsProcess.VcsProcess
-> = Effect.gen(function* () {
-  const process = yield* VcsProcess.VcsProcess;
-  const output = yield* process
-    .run({
-      operation: "t3team.digest.githubHosts",
-      command: "gh",
-      args: ["auth", "status", "--json", "hosts"],
-      cwd: NodeOS.homedir(),
-      timeoutMs: 15_000,
-    })
-    .pipe(Effect.option);
-  if (Option.isNone(output)) return { hosts: [], ok: false };
-  const status = parseGitHubAuthStatus(output.value.stdout);
-  return {
-    hosts: [...new Set(findAuthenticatedGitHubAccounts(status.accounts).map((a) => a.host))],
-    ok: status.parsed,
-  };
-});
+export const readSignedInGitHubHosts: Effect.Effect<SignedInHosts, never, VcsProcess.VcsProcess> =
+  Effect.gen(function* () {
+    const process = yield* VcsProcess.VcsProcess;
+    const now = yield* Clock.currentTimeMillis;
+    const remembered = signedInHostsMemory.get(process);
+    if (remembered !== undefined && remembered.expiresAt > now) return remembered.value;
+    const output = yield* process
+      .run({
+        operation: "t3team.digest.githubHosts",
+        command: "gh",
+        args: ["auth", "status", "--json", "hosts"],
+        cwd: NodeOS.homedir(),
+        timeoutMs: 15_000,
+      })
+      .pipe(Effect.option);
+    if (Option.isNone(output)) return { hosts: [], ok: false };
+    const status = parseGitHubAuthStatus(output.value.stdout);
+    const value = {
+      hosts: [...new Set(findAuthenticatedGitHubAccounts(status.accounts).map((a) => a.host))],
+      ok: status.parsed,
+    };
+    if (status.parsed) {
+      const ttl = value.hosts.length > 0 ? SIGNED_IN_HOSTS_TTL_MS : NO_HOSTS_TTL_MS;
+      signedInHostsMemory.set(process, { value, expiresAt: now + ttl });
+    }
+    return value;
+  });
 
 export const signedInGitHubHosts: Effect.Effect<
   ReadonlyArray<string>,
@@ -102,15 +126,26 @@ export function viewerLoginFor(
   return Effect.gen(function* () {
     const known = viewerLogins.get(host);
     if (known !== undefined) return known;
+    const login = yield* fetchViewerLogin(host).pipe(Effect.orElseSucceed(() => null));
+    if (login !== null) viewerLogins.set(host, login);
+    return login;
+  });
+}
+
+/**
+ * One `GET /user` for the login behind the host's credential, unremembered. The error is kept so
+ * a caller that must tell "rate limited" from "signed out" can; `null` is an answer it could not
+ * read.
+ */
+export function fetchViewerLogin(
+  host: string,
+  operation = "t3team.digest.viewer",
+): Effect.Effect<string | null, GitHubApi.GitHubApiError, GitHubApi.GitHubApi> {
+  return Effect.gen(function* () {
     const api = yield* GitHubApi.GitHubApi;
-    const result = yield* api
-      .rest({ host, operation: "t3team.digest.viewer", path: "user" })
-      .pipe(Effect.option);
-    if (Option.isNone(result)) return null;
-    const decoded = decodeViewer(result.value.body);
-    if (Option.isNone(decoded) || decoded.value.login.trim() === "") return null;
-    viewerLogins.set(host, decoded.value.login);
-    return decoded.value.login;
+    const result = yield* api.rest({ host, operation, path: "user" });
+    const decoded = decodeViewer(result.body);
+    return Option.isNone(decoded) || decoded.value.login.trim() === "" ? null : decoded.value.login;
   });
 }
 

@@ -111,5 +111,7 @@ export const ProviderUsageQueryResult = Schema.Struct({
   hubErrors: Schema.Array(
     Schema.Struct({ sourceId: UsageLimitSourceId, error: TrimmedNonEmptyString }),
   ),
+  /** The same answer as framed agent-facing text (`frameProviderCapacityNotice`). */
+  notice: TrimmedNonEmptyString,
 });
 export type ProviderUsageQueryResult = typeof ProviderUsageQueryResult.Type;

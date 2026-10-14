@@ -8,6 +8,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
+import * as Stream from "effect/Stream";
 
 import type { ResourcePressureEventRepositoryShape } from "./persistence/t3team-ResourcePressureEvents.ts";
 import { bucketByClass, descendsFrom, indexByPid } from "./t3team-resourcePressureClasses.ts";
@@ -101,7 +102,9 @@ describe("sweep now (spec delta 5)", () => {
     Effect.gen(function* () {
       let sweeps = 0;
       const cleanup = Option.some({
-        start: () => Effect.void,
+        runNow: Effect.die("not used"),
+        latestReport: Effect.succeed(null),
+        reports: Stream.empty,
         drain: Effect.void,
         sweepNow: Effect.sync(() => void (sweeps += 1)),
       });

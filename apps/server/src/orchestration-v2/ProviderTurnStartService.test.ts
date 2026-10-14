@@ -31,10 +31,10 @@ import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ContextHandoffService from "./ContextHandoffService.ts";
 import * as EventSink from "./EventSink.ts";
-import * as IdAllocator from "./IdAllocator.ts";
+import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
-import { ProviderAdapterEventStreamError } from "./ProviderAdapter.ts";
+import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as ProviderTurnStart from "./ProviderTurnStartService.ts";
 import * as RunExecutionService from "./RunExecutionService.ts";
@@ -389,7 +389,7 @@ function makeLocalCommandHarness(input: {
     }).pipe(
       Effect.andThen(
         Effect.fail(
-          new ProviderAdapterEventStreamError({
+          new ProviderAdapter.ProviderAdapterEventStreamError({
             driver: providerThread.driver,
             providerSessionId,
             cause: input.ensureThreadFailure,
@@ -402,7 +402,7 @@ function makeLocalCommandHarness(input: {
     driver: providerThread.driver,
     resumeThread: () =>
       Effect.fail(
-        new ProviderAdapterEventStreamError({
+        new ProviderAdapter.ProviderAdapterEventStreamError({
           driver: providerThread.driver,
           providerSessionId,
           cause: "native thread is gone",
@@ -954,10 +954,14 @@ effectIt.effect(
       yield* harness.start;
       expect(harness.startRootRun).toHaveBeenCalledTimes(1);
       const input = harness.startRootRun.mock.calls[0]![0];
-      expect(input.message.text).toContain(
-        "claudeAgent: session 42% (resets 18:00Z) · weekly 90% · severity: warning",
+      expect(input.message.text).toMatch(
+        /^<system-reminder type="provider-capacity" source="server">\n/,
       );
-      expect(input.message.text).toContain("Continue");
+      expect(input.message.text).toContain(
+        "claudeAgent: Session 42% (resets 2026-09-04 18:00 UTC) · severity: normal\n" +
+          "claudeAgent: Weekly 90% · severity: warning\n",
+      );
+      expect(input.message.text).toMatch(/<\/system-reminder>\n\nContinue$/);
     });
   },
 );

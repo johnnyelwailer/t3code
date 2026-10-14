@@ -15,7 +15,8 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
-import { expandHomePath } from "./pathExpansion.ts";
+import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   DEFAULT_RECIPE_ACTION_NAME,
   resolveRecipeActionPath,
@@ -38,6 +39,7 @@ export const resolveLaunchWorkflowPath = Effect.fn("resolveLaunchWorkflowPath")(
   readonly workflowPath: string;
   readonly actionName: string | undefined;
 }) {
+  const home = yield* HostProcess.HomeDirectory;
   const actionName = input.actionName?.trim() ?? "";
   if (actionName.length === 0 || actionName === DEFAULT_RECIPE_ACTION_NAME) {
     // The one path this resolver does NOT re-derive from the recipe module — it's the launch
@@ -46,10 +48,10 @@ export const resolveLaunchWorkflowPath = Effect.fn("resolveLaunchWorkflowPath")(
     // downstream consumer (source reads, the persisted run row, the engine launch) is fed from,
     // and it must return the SAME absolute-path shape the named-action branch below produces.
     // Clients address bundled recipes under the canonical state dir name.
-    return toPhysicalProjectStatePath(expandHomePath(input.workflowPath));
+    return toPhysicalProjectStatePath(expandHomePath(input.workflowPath, home));
   }
 
-  const recipePath = expandHomePath(input.recipePath?.trim() ?? "");
+  const recipePath = expandHomePath(input.recipePath?.trim() ?? "", home);
   if (recipePath.length === 0) {
     return yield* new T3TeamRecipeActionResolutionError({
       message: `launch.actionName '${actionName}' requires launch.recipePath: actions are resolved from the recipe's own module.`,

@@ -142,6 +142,7 @@ export async function hydrateStoredThreads(): Promise<ProjectThread[]> {
         t3teamStoredThreadsJson: mergedJson,
       });
     }
+    lastPersistedJson = mergedJson;
 
     if (legacyThreads.length > 0) {
       clearLegacyStoredThreads();
@@ -156,24 +157,73 @@ export async function hydrateStoredThreads(): Promise<ProjectThread[]> {
   }
 }
 
-export function persistStoredThreads(threads: ReadonlyArray<ProjectThread>): void {
+/**
+ * The threads blob is the whole thread list as JSON (hundreds of KB with a few hundred threads) and
+ * lives in the desktop client-settings file, so every write is a read-modify-write of that file.
+ * The thread list changes with every streamed event, so this is throttled and skipped when the
+ * encoded list did not change: written at once, then at most once per interval, never twice with
+ * the same content. Unthrottled it was ~2 writes a second at idle, each 350 KB.
+ */
+const PERSIST_MIN_INTERVAL_MS = 2_000;
+let lastPersistedJson: string | undefined;
+let lastPersistAtMs = 0;
+let trailingJson: string | undefined;
+let trailingTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function writeStoredThreadsJson(json: string): Promise<void> {
   const localApi = readLocalApi();
   if (!localApi) {
     return;
   }
-
-  const nextJson = encodeStoredThreads(threads);
-  void localApi.persistence
-    .getClientSettings()
-    .then((settings) => {
-      const currentSettings = settings ?? DEFAULT_CLIENT_SETTINGS;
-      return localApi.persistence.setClientSettings({
+  lastPersistAtMs = Date.now();
+  try {
+    const settings = await localApi.persistence.getClientSettings();
+    const currentSettings = settings ?? DEFAULT_CLIENT_SETTINGS;
+    if (currentSettings.t3teamStoredThreadsJson !== json) {
+      await localApi.persistence.setClientSettings({
         ...DEFAULT_CLIENT_SETTINGS,
         ...currentSettings,
-        t3teamStoredThreadsJson: nextJson,
+        t3teamStoredThreadsJson: json,
       });
-    })
-    .catch(() => {
-      // Ignore persistence failures and keep the current renderer state.
-    });
+    }
+    lastPersistedJson = json;
+  } catch {
+    // Ignore persistence failures and keep the current renderer state; the next change retries.
+  }
+}
+
+function flushTrailingStoredThreads(): void {
+  if (trailingTimer !== undefined) {
+    clearTimeout(trailingTimer);
+    trailingTimer = undefined;
+  }
+  const json = trailingJson;
+  trailingJson = undefined;
+  if (json !== undefined && json !== lastPersistedJson) {
+    void writeStoredThreadsJson(json);
+  }
+}
+
+export function persistStoredThreads(threads: ReadonlyArray<ProjectThread>): void {
+  if (!readLocalApi()) {
+    return;
+  }
+
+  const nextJson = encodeStoredThreads(threads);
+  if (nextJson === lastPersistedJson) {
+    trailingJson = undefined;
+    return;
+  }
+
+  const waitMs = lastPersistAtMs + PERSIST_MIN_INTERVAL_MS - Date.now();
+  if (waitMs <= 0 && trailingTimer === undefined) {
+    void writeStoredThreadsJson(nextJson);
+    return;
+  }
+  trailingJson = nextJson;
+  trailingTimer ??= setTimeout(flushTrailingStoredThreads, Math.max(waitMs, 0));
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener?.("pagehide", flushTrailingStoredThreads);
 }

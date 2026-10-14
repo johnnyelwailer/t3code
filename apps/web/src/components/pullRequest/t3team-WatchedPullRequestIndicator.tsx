@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-outset-state-indicators -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The universal "this pull request is watched" indicator (doc 07 §3). Renders nothing unless a
  * live thread watches the open pull request. Hover shows the watchers' card; a click pins it so

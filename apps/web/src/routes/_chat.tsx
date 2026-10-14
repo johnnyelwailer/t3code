@@ -5,6 +5,7 @@ import { useEffect } from "react";
 
 import { isCommandPaletteOpen } from "../commandPaletteBus";
 import { ThreadRouteView } from "../components/ThreadRouteView";
+import { ThreadLinkPrompt } from "../components/promptLinks/ThreadLinkPrompt";
 import { resolveThreadRouteTarget } from "../threadRoutes";
 import { isPreviewAvailableFor } from "../browser/previewRuntime";
 import { usePrimaryEnvironmentId } from "../state/environments";
@@ -194,6 +195,9 @@ function ChatRouteLayout() {
   return (
     <>
       <ChatRouteGlobalShortcuts />
+      {threadTarget?.kind === "server" ? (
+        <ThreadLinkPrompt threadRef={threadTarget.threadRef} />
+      ) : null}
       {threadTarget ? <ThreadRouteView target={threadTarget} /> : <Outlet />}
     </>
   );
@@ -230,6 +234,9 @@ export const Route = createFileRoute("/_chat")({
         readThreadShells().find((shell) => shell.id === threadId)?.projectId ??
         null,
       primaryEnvironmentId: appAtomRegistry.get(primaryEnvironmentIdAtom),
+      // Environment discovery is never settled this early; the reactive bridge decides whether a
+      // non-primary environment is really absent.
+      knownEnvironmentIds: null,
     });
     if (translation.kind === "target") {
       throw redirect(translation.target);

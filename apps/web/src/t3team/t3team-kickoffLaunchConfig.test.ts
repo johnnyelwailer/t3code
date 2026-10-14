@@ -87,24 +87,22 @@ describe("t3team kickoff launch config", () => {
     ).toContain("Loading provider status");
   });
 
-  it("detects configured providers from explicit and legacy settings", () => {
-    expect(
-      hasConfiguredProviderSettings({
-        providerInstances: {},
-        providers: { codex: { enabled: true } },
-      }),
-    ).toBe(true);
+  it("detects configured providers from provider instance settings", () => {
     expect(
       hasConfiguredProviderSettings({
         providerInstances: { codex_personal: { enabled: true } },
-        providers: { codex: { enabled: false } },
       }),
     ).toBe(true);
     expect(
       hasConfiguredProviderSettings({
-        providerInstances: {},
-        providers: { codex: { enabled: false } },
+        providerInstances: { codex_personal: {} },
+      }),
+    ).toBe(true);
+    expect(
+      hasConfiguredProviderSettings({
+        providerInstances: { codex_personal: { enabled: false } },
       }),
     ).toBe(false);
+    expect(hasConfiguredProviderSettings({ providerInstances: {} })).toBe(false);
   });
 });

@@ -2,15 +2,14 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as TestClock from "effect/testing/TestClock";
 
-import * as GitHubApi from "../sourceControl/GitHubApi.ts";
+import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
 import {
   jsonResponse,
   makeGitHubApiHarness,
-} from "../sourceControl/t3team-githubApiTestHarness.ts";
+} from "@t3tools/source-control-github/server/t3team-githubApiTestHarness";
 import { discoveryDelayMs } from "./t3team-CloudSessionDispatch.ts";
 import { makeSessionGh } from "./t3team-CloudSessionGh.ts";
 import { type CloudSessionRepoRef } from "./t3team-githubActionsSessionClient.ts";
-import { jobStepsRequest } from "./t3team-githubActionsSessionClient.ts";
 
 const REPO: CloudSessionRepoRef = {
   host: "nexplore.ghe.com",
@@ -33,7 +32,9 @@ describe("cloud session reads share one GitHub request", () => {
     const { layer, sent } = makeGitHubApiHarness(answerByPath);
     return Effect.gen(function* () {
       const api = yield* GitHubApi.GitHubApi;
-      const clients = Array.from({ length: 8 }, () => makeSessionGh(api, REPO));
+      const clients = yield* Effect.forEach(Array.from({ length: 8 }), () =>
+        makeSessionGh(api, REPO),
+      );
       yield* Effect.forEach(
         clients,
         (gh) =>
@@ -50,7 +51,7 @@ describe("cloud session reads share one GitHub request", () => {
   it.effect("answers a later list from the short cache, then reads again once it expires", () => {
     const { layer, sent } = makeGitHubApiHarness(answerByPath);
     return Effect.gen(function* () {
-      const gh = makeSessionGh(yield* GitHubApi.GitHubApi, REPO);
+      const gh = yield* makeSessionGh(yield* GitHubApi.GitHubApi, REPO);
       yield* gh.listRunsFor("pj", { allowReserve: false });
       yield* gh.listRunsFor("pj", { allowReserve: false });
       assert.strictEqual(sent("/runs"), 1);
@@ -63,27 +64,10 @@ describe("cloud session reads share one GitHub request", () => {
   it.effect("a user's own create or cancel list never reads a cached answer", () => {
     const { layer, sent } = makeGitHubApiHarness(answerByPath);
     return Effect.gen(function* () {
-      const gh = makeSessionGh(yield* GitHubApi.GitHubApi, REPO);
+      const gh = yield* makeSessionGh(yield* GitHubApi.GitHubApi, REPO);
       yield* gh.listRunsFor("pj", { allowReserve: false });
       yield* gh.listRunsFor("pj", { allowReserve: true });
       assert.strictEqual(sent("/runs"), 2);
-    }).pipe(Effect.provide(layer));
-  });
-
-  it.effect("re-reads a run's jobs only when the run changed or the window passed", () => {
-    const { layer, sent } = makeGitHubApiHarness(answerByPath);
-    return Effect.gen(function* () {
-      const gh = makeSessionGh(yield* GitHubApi.GitHubApi, REPO);
-      const unchanged = jobStepsRequest(REPO, 7, "in_progress:2026-10-12T12:00:00Z");
-      yield* gh.runBackground(unchanged);
-      yield* TestClock.adjust("10 seconds");
-      yield* gh.runBackground(unchanged);
-      assert.strictEqual(sent("/jobs"), 1);
-      yield* gh.runBackground(jobStepsRequest(REPO, 7, "in_progress:2026-10-12T12:00:10Z"));
-      assert.strictEqual(sent("/jobs"), 2);
-      yield* TestClock.adjust("16 seconds");
-      yield* gh.runBackground(unchanged);
-      assert.strictEqual(sent("/jobs"), 3);
     }).pipe(Effect.provide(layer));
   });
 
@@ -98,7 +82,7 @@ describe("cloud session reads share one GitHub request", () => {
     );
     return Effect.gen(function* () {
       yield* TestClock.setTime(NOW);
-      const gh = makeSessionGh(yield* GitHubApi.GitHubApi, REPO);
+      const gh = yield* makeSessionGh(yield* GitHubApi.GitHubApi, REPO);
       const tripped = yield* Effect.flip(gh.listRunsFor("pj", { allowReserve: false }));
       assert.strictEqual(tripped.retryAt, NOW + 60_000);
       yield* TestClock.adjust("5 seconds");

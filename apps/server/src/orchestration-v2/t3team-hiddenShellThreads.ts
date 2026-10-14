@@ -15,9 +15,23 @@ import { isWorkflowAuthorThread } from "../t3team-workflowAuthorSession.ts";
 const isHiddenShellThread = (shell: Pick<OrchestrationV2ThreadShell, "id" | "lineage">): boolean =>
   isWorkflowAuthorThread(shell.id) && shell.lineage.parentThreadId === null;
 
-export const visibleShellThreads = <T extends Pick<OrchestrationV2ThreadShell, "id" | "lineage">>(
+const visibleShellThreads = <T extends Pick<OrchestrationV2ThreadShell, "id" | "lineage">>(
   threads: ReadonlyArray<T>,
 ): ReadonlyArray<T> => threads.filter((thread) => !isHiddenShellThread(thread));
+
+/** A shell snapshot without host-machinery threads (both reads of the orchestrator use it). */
+export const visibleShellSnapshot = <
+  T extends {
+    readonly threads: ReadonlyArray<Pick<OrchestrationV2ThreadShell, "id" | "lineage">>;
+    readonly archivedThreads: ReadonlyArray<Pick<OrchestrationV2ThreadShell, "id" | "lineage">>;
+  },
+>(
+  snapshot: T,
+): T => ({
+  ...snapshot,
+  threads: visibleShellThreads(snapshot.threads),
+  archivedThreads: visibleShellThreads(snapshot.archivedThreads),
+});
 
 /** The shell the transport may show: a hidden thread reads as gone (deltas become removals). */
 export const shownShell = <T extends Pick<OrchestrationV2ThreadShell, "id" | "lineage">>(

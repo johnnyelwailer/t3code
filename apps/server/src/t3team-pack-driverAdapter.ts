@@ -2,7 +2,7 @@
  * Pack orchestration adapter bridge.
  *
  * Maps a pack's `PackOrchestrationAdapter` (`@t3team/pack-api`, Promise + JSON) onto the host
- * `ProviderAdapterV2Shape` one-to-one. `openSession` runs in the session scope the
+ * `ProviderAdapterV2` service one-to-one. `openSession` runs in the session scope the
  * `ProviderSessionManagerV2` owns: the scope's close calls the pack session's `close()` (bounded)
  * and ends its event stream; a session that resolves after the open was interrupted is closed
  * when it arrives. The session receives the thread's MCP access and a
@@ -33,13 +33,13 @@ import {
   ProviderAdapterCapabilitiesError,
   ProviderAdapterOpenSessionError,
   ProviderAdapterProtocolError,
-  type ProviderAdapterV2Shape,
-} from "./orchestration-v2/ProviderAdapter.ts";
-import type { ProviderContinuationRequest } from "./orchestration-v2/ProviderContinuationRequests.ts";
-import { turnScopedSelectionTransition } from "./orchestration-v2/ProviderSelectionTransition.ts";
+  type ProviderAdapterV2,
+} from "@t3tools/provider-core/server/ProviderAdapter";
+import type { ProviderContinuationRequest } from "@t3tools/provider-core/server/ProviderContinuationRequests";
+import { turnScopedSelectionTransition } from "@t3tools/provider-core/server/selectionTransition";
 import { packCall, packRoundTrip } from "./t3team-pack-driverCall.ts";
 import { asPack, PackCodec } from "./t3team-pack-driverCodec.ts";
-import { readPackMcpSession } from "./t3team-pack-driverMcp.ts";
+import { type PackMcpSessions, readPackMcpSession } from "./t3team-pack-driverMcp.ts";
 import { makePackSessionRuntime } from "./t3team-pack-driverSession.ts";
 
 /** Upper bound on a pack session `close()` so a hung teardown cannot stall session release. */
@@ -69,8 +69,10 @@ export const makePackOrchestrationAdapter = (input: {
   readonly instanceId: ProviderInstanceId;
   /** Host continuation queue (`ProviderContinuationRequests.offer`). */
   readonly offerContinuation: (request: ProviderContinuationRequest) => Effect.Effect<void>;
-}): ProviderAdapterV2Shape => {
-  const { adapter, driver, instanceId } = input;
+  /** Host MCP credential registry (`McpProviderSessions`), read per session and per turn. */
+  readonly mcpSessions: PackMcpSessions;
+}): ProviderAdapterV2["Service"] => {
+  const { adapter, driver, instanceId, mcpSessions } = input;
   const plan = adapter.planSelectionTransition;
   return {
     instanceId,
@@ -108,6 +110,7 @@ export const makePackOrchestrationAdapter = (input: {
             }),
         );
         const encoded = yield* bridge.encode(PackCodec.openSessionInput, value);
+        const mcp = yield* readPackMcpSession(mcpSessions, value.threadId);
         const closePack = (runtime: PackSessionRuntime) =>
           bridge
             .call(() => runtime.close())
@@ -129,7 +132,7 @@ export const makePackOrchestrationAdapter = (input: {
             bridge.call(() => {
               opening = adapter.openSession({
                 ...asPack<Omit<PackOpenSessionInput, "mcp" | "host">>(encoded),
-                ...readPackMcpSession(value.threadId),
+                ...mcp,
                 host: {
                   requestContinuation: (request) => {
                     // The host queue is unbounded and needs no services: a plain fork is enough.
@@ -166,6 +169,7 @@ export const makePackOrchestrationAdapter = (input: {
           runtime,
           driver,
           instanceId,
+          mcpSessions,
           providerSessionId: value.providerSessionId,
           providerSession,
           closed: Deferred.await(closed),

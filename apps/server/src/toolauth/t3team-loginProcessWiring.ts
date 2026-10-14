@@ -11,7 +11,7 @@
 import * as Effect from "effect/Effect";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
-import * as PtyAdapter from "../terminal/PtyAdapter.ts";
+import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 import { assemblePtyRead, foldPtyRead, stripAnsi } from "./t3team-advance.ts";
 import type { ActiveSession } from "./t3team-ToolAuthService.ts";
 import type { AuthState, ToolAuthAdapter } from "./t3team-types.ts";
@@ -26,6 +26,8 @@ export interface LoginProcessWiring {
     nextState: AuthState,
     previousState: AuthState,
   ) => Effect.Effect<void>;
+  /** The adapter's own status check — what a clean exit with no success line is verified by. */
+  readonly probe: (adapter: ToolAuthAdapter) => Effect.Effect<AuthState>;
 }
 
 export function wireLoginProcess({
@@ -34,6 +36,7 @@ export function wireLoginProcess({
   adapter,
   sessionsRef,
   applySessionUpdate,
+  probe,
 }: LoginProcessWiring): void {
   // Guards onData/onExit below against a stale process: if this is called
   // again for this tool (Retry/Reconnect, or the install→login chain), the
@@ -107,11 +110,30 @@ export function wireLoginProcess({
           yield* applySessionUpdate(tool, settled, session.state);
           return;
         }
-        const nextState: AuthState = {
-          ...settled,
-          phase: event.exitCode === 0 ? "connected" : "failed",
-          message: settled.message ?? `exited with code ${event.exitCode}`,
-        };
+        if (event.exitCode !== 0) {
+          yield* applySessionUpdate(
+            tool,
+            {
+              ...settled,
+              phase: "failed",
+              message: settled.message ?? `exited with code ${event.exitCode}`,
+            },
+            session.state,
+          );
+          return;
+        }
+        // Exit 0 without a success line proves nothing: a CLI can quit cleanly having signed
+        // nothing in (declined prompt, wrong host). Only the adapter's own status check says
+        // whether the credential is there.
+        const verified = yield* probe(adapter);
+        const nextState: AuthState =
+          verified.phase === "connected"
+            ? { ...settled, phase: "connected", account: verified.account ?? settled.account }
+            : {
+                ...settled,
+                phase: "failed",
+                message: `${adapter.label} finished without signing in${adapter.hostname === undefined ? "" : ` to ${adapter.hostname}`}.`,
+              };
         yield* applySessionUpdate(tool, nextState, session.state);
       }),
     );

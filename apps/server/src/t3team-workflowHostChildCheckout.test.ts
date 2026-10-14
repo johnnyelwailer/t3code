@@ -3,6 +3,7 @@ import { CommandId, ProjectId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
+import * as CommandReceiptStore from "./orchestration-v2/CommandReceiptStore.ts";
 import * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
 import * as ThreadArtifactsStore from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import * as ThreadFactsStore from "./t3team-v2/t3team-threadFactsStore.ts";
@@ -11,15 +12,17 @@ import {
   testModelSelection,
 } from "./t3team-v2/t3team-v2Orchestrator.testkit.ts";
 import * as WorkflowHost from "./t3team-workflowHost.ts";
+import * as ServerSettings from "./serverSettings.ts";
+
+const threadManagementLayer = ThreadManagementService.layer.pipe(
+  Layer.provide(ServerSettings.layerTest()),
+  Layer.provide(CommandReceiptStore.layer),
+);
 
 const base = makeT3TeamV2TestLayer("t3team-workflow-host-child-checkout");
 const TestLayer = WorkflowHost.layer.pipe(
   Layer.provideMerge(
-    Layer.mergeAll(
-      ThreadManagementService.layer,
-      ThreadArtifactsStore.layer,
-      ThreadFactsStore.layer,
-    ),
+    Layer.mergeAll(threadManagementLayer, ThreadArtifactsStore.layer, ThreadFactsStore.layer),
   ),
   Layer.provideMerge(base),
 );

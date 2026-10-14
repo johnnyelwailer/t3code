@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import { JIRA_SESSION_EXPIRED_CODE, T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
+import { JIRA_SESSION_EXPIRED_CODE, T3TeamAtlassianError } from "./t3team-atlassian-errors.ts";
 
 /**
  * Atlassian refresh tokens are single-use and rotate on every refresh. When two installations share
@@ -31,6 +31,39 @@ export function accountNeedsReconnect(accountId: string): boolean {
 export function setAccountNeedsReconnect(accountId: string, needsReconnect: boolean): void {
   if (needsReconnect) needsReconnectAccountIds.add(accountId);
   else needsReconnectAccountIds.delete(accountId);
+}
+
+/**
+ * Flags raised by a refused Jira call, which has no store lock or file system at hand. They live in
+ * memory at once and are written out by the next credential reload, so a reload can neither drop
+ * them nor keep the file stale.
+ */
+const unsavedReconnectAccountIds = new Set<string>();
+
+export function flagNeedsReconnectUnsaved(accountId: string): void {
+  needsReconnectAccountIds.add(accountId);
+  unsavedReconnectAccountIds.add(accountId);
+}
+
+export function hasUnsavedReconnectFlags(): boolean {
+  return unsavedReconnectAccountIds.size > 0;
+}
+
+export function reapplyUnsavedReconnectFlags(isStored: (accountId: string) => boolean): void {
+  for (const accountId of unsavedReconnectAccountIds) {
+    if (isStored(accountId)) needsReconnectAccountIds.add(accountId);
+    else unsavedReconnectAccountIds.delete(accountId);
+  }
+}
+
+export function markReconnectFlagsSaved(): void {
+  unsavedReconnectAccountIds.clear();
+}
+
+/** Forget every flag, written or not: the accounts are being replaced wholesale. */
+export function resetAllNeedsReconnect(): void {
+  needsReconnectAccountIds.clear();
+  unsavedReconnectAccountIds.clear();
 }
 
 export function clearAllNeedsReconnect(): void {

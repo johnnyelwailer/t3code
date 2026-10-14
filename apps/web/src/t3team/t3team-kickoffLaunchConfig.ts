@@ -22,7 +22,6 @@ import { getConfiguredDefaultModelSelection } from "~/t3team-configuredDefaultMo
 
 type ProviderSettingsSnapshot = {
   readonly providerInstances: Record<string, { readonly enabled?: boolean } | undefined>;
-  readonly providers: Record<string, { readonly enabled?: boolean } | undefined>;
 };
 
 export type T3TeamKickoffLaunchConfig = {
@@ -73,16 +72,13 @@ export function hasConfiguredProviderSettings(settings: ProviderSettingsSnapshot
   for (const instance of Object.values(settings.providerInstances)) {
     if (instance && (instance.enabled ?? true)) return true;
   }
-  for (const provider of Object.values(settings.providers)) {
-    if (provider?.enabled) return true;
-  }
   return false;
 }
 
 export function useT3TeamKickoffComposerState(providers: ReadonlyArray<ServerProvider>) {
   const providerSettings = usePrimarySettings((settings) => ({
     providerInstances: settings.providerInstances,
-    providers: settings.providers,
+    projectSettingsOverrides: settings.projectSettingsOverrides,
   }));
   const hasConfiguredProviders = useMemo(
     () => hasConfiguredProviderSettings(providerSettings),
@@ -96,7 +92,11 @@ export function useT3TeamKickoffComposerState(providers: ReadonlyArray<ServerPro
   const providerInstanceEntries = useMemo<ReadonlyArray<ProviderInstanceEntry>>(
     () =>
       sortProviderInstanceEntries(
-        applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), providerSettings),
+        applyProviderInstanceSettings(
+          deriveProviderInstanceEntries(providers),
+          providerSettings,
+          null,
+        ),
       ),
     [providerSettings, providers],
   );

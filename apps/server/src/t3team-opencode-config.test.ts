@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { resolveOpenCodeConfigContent } from "./provider/opencodeRuntime.ts";
+import { resolveOpenCodeConfigContent } from "@t3tools/provider-opencode/server/OpenCodeRuntime";
 
 describe("pack-provided OpenCode config", () => {
   it("preserves a declarative per-instance config", () => {

@@ -2,7 +2,7 @@ import type { ProviderInstanceConfigMap } from "@t3tools/contracts";
 import { ProviderDriverKind } from "@t3tools/contracts";
 import type { PackProviderDriverDefinition } from "@t3team/pack-api";
 
-import type { AnyProviderDriver } from "./provider/ProviderDriver.ts";
+import type { AnyProviderDriver } from "@t3tools/provider-core/server/driver";
 import { bridgePackProviderDriver } from "./t3team-pack-driverBridge.ts";
 import { makeOpenCodeHarnessDriver } from "./t3team-pack-driverHarness.ts";
 

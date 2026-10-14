@@ -9,20 +9,22 @@
  *
  * @module toolauth/loginService
  */
-import {
-  ToolAuthNoActiveSessionError,
-  ToolAuthNotAwaitingCodeError,
-  ToolAuthSpawnError,
-} from "@t3tools/contracts";
+import { ToolAuthSpawnError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
-import * as PtyAdapter from "../terminal/PtyAdapter.ts";
-import { getAdapter } from "./t3team-adapters.ts";
+import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
+import { adapterForHost, getAdapter } from "./t3team-adapters.ts";
 import { wireLoginProcess } from "./t3team-loginProcessWiring.ts";
+import { killSessionProcess, makeToolAuthSessionControl } from "./t3team-loginSessionControl.ts";
 import type { ActiveSession } from "./t3team-ToolAuthService.ts";
 import type { ToolSingleFlight } from "./t3team-singleFlight.ts";
 import type { AuthState, ToolAuthAdapter } from "./t3team-types.ts";
+
+/** `hostname`: sign in to this host instead of the adapter's default (per-host CLIs only). */
+export interface ToolAuthStartOptions {
+  readonly hostname?: string | undefined;
+}
 
 export interface ToolAuthLoginFlowDeps {
   readonly ptyAdapter: PtyAdapter.PtyAdapter["Service"];
@@ -36,6 +38,8 @@ export interface ToolAuthLoginFlowDeps {
   ) => Effect.Effect<void>;
   /** Re-probes a tool with no active session — used by `cancel()` to report a fresh status. */
   readonly stateForTool: (tool: string) => Effect.Effect<AuthState>;
+  /** The adapter's own status check, to verify a login that exited 0 without a success line. */
+  readonly probe: (adapter: ToolAuthAdapter) => Effect.Effect<AuthState>;
   readonly homeDir: string;
   readonly env: NodeJS.ProcessEnv;
   /** Shared with the install flow so start() and install() cannot race each other. */
@@ -61,6 +65,7 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
     notifyUpdate,
     applySessionUpdate,
     stateForTool,
+    probe,
     homeDir,
     env,
     singleFlight,
@@ -82,6 +87,7 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
       const missingState: AuthState = {
         tool,
         phase: "failed",
+        ...(adapter.hostname === undefined ? {} : { hostname: adapter.hostname }),
         message: `${shell} is not installed on this machine — install it on the host, then try again.`,
       };
       yield* SynchronizedRef.update(sessionsRef, (sessions) => {
@@ -93,7 +99,11 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
       return missingState;
     }
 
-    const initialState: AuthState = { tool, phase: "starting" };
+    const initialState: AuthState = {
+      tool,
+      phase: "starting",
+      ...(adapter.hostname === undefined ? {} : { hostname: adapter.hostname }),
+    };
 
     const process = yield* ptyAdapter
       .spawn({
@@ -118,13 +128,23 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
     // Data/exit wiring (read assembly, auto-Enter answer, exit settlement)
     // lives in `t3team-loginProcessWiring.ts`; it guards stale processes by
     // identity against the session map this spawn just wrote.
-    wireLoginProcess({ process, tool, adapter, sessionsRef, applySessionUpdate });
+    wireLoginProcess({ process, tool, adapter, sessionsRef, applySessionUpdate, probe });
 
     return initialState;
   });
 
-  const start = Effect.fn("toolauth.start")(function* (tool: string) {
-    const adapter = getAdapter(tool);
+  const start = Effect.fn("toolauth.start")(function* (
+    tool: string,
+    options?: ToolAuthStartOptions,
+  ) {
+    // A per-host CLI (gh) signs in to the host the caller needs, not only the deployment default.
+    const adapter = adapterForHost(getAdapter(tool), options?.hostname);
+    if (adapter === undefined) {
+      return yield* new ToolAuthSpawnError({
+        tool,
+        cause: new Error(`${tool} signs in to one host only`),
+      });
+    }
 
     // Same single-flight claim the install flow takes, and for the same reason:
     // `spawnLoginProcess` suspends at the pty spawn BEFORE it writes the session
@@ -160,51 +180,26 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
     // `install()`-driven install is running for the same tool joins it rather
     // than racing a second flow).
     if (existing && existing.state.phase !== "connected" && existing.state.phase !== "failed") {
-      return existing.state;
+      // A sign-in to ANOTHER host is not this one: joining it would hand back a flow that signs
+      // the wrong host in. It is abandoned for the host asked for now.
+      const otherHost =
+        existing.process !== undefined &&
+        existing.state.phase !== "installing" &&
+        existing.state.hostname !== undefined &&
+        adapter.hostname !== undefined &&
+        existing.state.hostname !== adapter.hostname;
+      if (!otherHost) return existing.state;
+      yield* killSessionProcess(existing.process);
     }
 
     return yield* spawnLoginProcess(tool, adapter);
   });
 
-  const submitCode = Effect.fn("toolauth.submitCode")(function* (tool: string, code: string) {
-    const session = (yield* SynchronizedRef.get(sessionsRef)).get(tool);
-    if (!session) return yield* new ToolAuthNoActiveSessionError({ tool });
-    if (session.state.phase !== "awaiting-code") {
-      return yield* new ToolAuthNotAwaitingCodeError({ tool, phase: session.state.phase });
-    }
-    // A session without a live process is one that never spawned (the
-    // binary-missing failed state above) — there is no CLI to answer.
-    const pty = session.process;
-    if (!pty) return yield* new ToolAuthNoActiveSessionError({ tool });
-    const nextState: AuthState = { ...session.state, phase: "verifying" };
-    yield* applySessionUpdate(tool, nextState, session.state);
-    yield* Effect.sync(() => pty.write(`${code.trim()}\n`));
-    return nextState;
-  });
-
-  const cancel = Effect.fn("toolauth.cancel")(function* (tool: string) {
-    const session = (yield* SynchronizedRef.get(sessionsRef)).get(tool);
-    if (session) {
-      // The binary-missing session has no process to kill — just drop the record.
-      const pty = session.process;
-      if (pty) {
-        yield* Effect.sync(() => {
-          try {
-            pty.kill();
-          } catch {
-            // best-effort — the process may already be gone
-          }
-        });
-      }
-      yield* SynchronizedRef.update(sessionsRef, (sessions) => {
-        const next = new Map(sessions);
-        next.delete(tool);
-        return next;
-      });
-    }
-    const state = yield* stateForTool(tool);
-    yield* notifyUpdate(state);
-    return state;
+  const { submitCode, cancel } = makeToolAuthSessionControl({
+    sessionsRef,
+    notifyUpdate,
+    applySessionUpdate,
+    stateForTool,
   });
 
   return { spawnLoginProcess, start, submitCode, cancel };

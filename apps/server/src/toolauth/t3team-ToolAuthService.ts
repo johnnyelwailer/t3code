@@ -26,13 +26,15 @@ import * as Path from "effect/Path";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
 import * as ProcessRunner from "../processRunner.ts";
-import * as PtyAdapter from "../terminal/PtyAdapter.ts";
-import { getAdapter, PRODUCTION_TOOLS } from "./t3team-adapters.ts";
+import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
+import { getAdapter, PRODUCTION_TOOLS, withAdapterHostname } from "./t3team-adapters.ts";
 import { makeToolAuthInstallFlow } from "./t3team-installService.ts";
-import { makeToolAuthLoginFlow } from "./t3team-loginService.ts";
+import { makeToolAuthLoginFlow, type ToolAuthStartOptions } from "./t3team-loginService.ts";
 import { makeToolSingleFlight } from "./t3team-singleFlight.ts";
 import { probeStatus } from "./t3team-status.ts";
-import type { AuthState, ToolAuthAdapter } from "./t3team-types.ts";
+import type { ActiveSession, AuthState, ToolAuthAdapter } from "./t3team-types.ts";
+
+export type { ActiveSession };
 
 /** Default cap on a single npm install — a hung installer must not pin the slot forever. */
 const DEFAULT_INSTALL_TIMEOUT: Duration.Input = Duration.minutes(5);
@@ -44,18 +46,6 @@ export type ToolAuthServiceStreamEvent =
   | { readonly type: "snapshot"; readonly tools: ReadonlyArray<AuthState> }
   | { readonly type: "update"; readonly state: AuthState };
 
-/** Shared session shape the login and install flows both read and write via `sessionsRef`. */
-export interface ActiveSession {
-  readonly adapter: ToolAuthAdapter;
-  /**
-   * Absent for a session that never spawned a process — the binary-missing
-   * failed state the login flow registers in place of a spawn. Terminal
-   * states need no live pty; `cancel`/`submitCode` guard on this.
-   */
-  readonly process?: PtyAdapter.PtyProcess | undefined;
-  readonly state: AuthState;
-}
-
 /** ToolAuthService - Service tag for the "Connected tools" sign-in flows. */
 export class ToolAuthService extends Context.Service<
   ToolAuthService,
@@ -63,7 +53,10 @@ export class ToolAuthService extends Context.Service<
     /** Current state of every known tool — active session state wins over a fresh probe. */
     readonly list: Effect.Effect<ReadonlyArray<AuthState>>;
     /** Starts (or returns the already-running) sign-in flow for `tool`. */
-    readonly start: (tool: string) => Effect.Effect<AuthState, ToolAuthSpawnError>;
+    readonly start: (
+      tool: string,
+      options?: ToolAuthStartOptions,
+    ) => Effect.Effect<AuthState, ToolAuthSpawnError>;
     /**
      * One-click "install this CLI", chained straight into `start()` on a
      * successful re-probe (`t3team-installService.ts`). Joins an
@@ -128,11 +121,12 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
   const sessionsRef = yield* SynchronizedRef.make(new Map<string, ActiveSession>());
   const listeners = new Set<(event: ToolAuthServiceStreamEvent) => Effect.Effect<void>>();
 
-  const runProbe = (adapter: ToolAuthAdapter) =>
-    probeStatus(adapter, { homeDir, env }).pipe(
+  const runProbe = (adapter: ToolAuthAdapter, requireProbeAnswer = false) =>
+    probeStatus(adapter, { homeDir, env, requireProbeAnswer }).pipe(
       Effect.provideService(ProcessRunner.ProcessRunner, processRunner),
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),
+      Effect.map((state) => withAdapterHostname(adapter, state)),
     );
 
   const notifyUpdate = (state: AuthState) =>
@@ -178,6 +172,7 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
     notifyUpdate,
     applySessionUpdate,
     stateForTool,
+    probe: (adapter) => runProbe(adapter, true),
     homeDir,
     env,
     singleFlight,

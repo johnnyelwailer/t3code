@@ -1,17 +1,12 @@
 /**
  * Optimistic Run-on target for a draft/thread: which cloud session is selected
- * before the VM is Ready/connected, and the first message queued until bind.
- * Module-level so navigating threads does not drop the preference or the queue.
+ * before the VM is Ready/connected. Module-level so navigating threads does not
+ * drop the preference. A first message sent meanwhile is persisted on the draft
+ * itself (`t3team-cloudQueuedSendStore`), not here.
  */
 import { useSyncExternalStore } from "react";
 
 import { CLOUD_SESSION_CREATING_ID } from "./t3team-cloudSessionTargetLogic";
-
-export interface CloudSessionQueuedSend {
-  readonly messageId: string;
-  readonly messageText: string;
-  readonly createdAt: string;
-}
 
 export interface CloudSessionTarget {
   /** Composer/draft/thread key this preference belongs to. */
@@ -22,10 +17,11 @@ export interface CloudSessionTarget {
    */
   readonly sessionId: string;
   readonly label: string;
-  /** True after the user sends; connect/flush run only then. */
-  readonly bindRequested: boolean;
-  readonly queuedSend: CloudSessionQueuedSend | null;
-  readonly failureMessage: string | null;
+  /**
+   * The composer's logical project when the session was picked or created (it is provisioned
+   * for that project). Null when the composer had none; then the target follows no project.
+   */
+  readonly projectKey: string | null;
 }
 
 const listeners = new Set<() => void>();
@@ -60,26 +56,29 @@ export function selectCloudSessionTarget(input: {
   readonly scopeKey: string;
   readonly sessionId: string;
   readonly label: string;
+  readonly projectKey?: string | null;
 }): void {
   const next = new Map(byScope);
-  const previous = next.get(input.scopeKey);
   next.set(input.scopeKey, {
     scopeKey: input.scopeKey,
     sessionId: input.sessionId,
     label: input.label,
-    bindRequested: previous?.bindRequested === true && previous.sessionId === input.sessionId,
-    queuedSend: previous?.sessionId === input.sessionId ? (previous.queuedSend ?? null) : null,
-    failureMessage: null,
+    projectKey: input.projectKey ?? null,
   });
   commit(next);
 }
 
 /** Immediate preference while create is in flight (no session id yet). */
-export function selectCloudSessionCreating(scopeKey: string, label = "New cloud session"): void {
+export function selectCloudSessionCreating(
+  scopeKey: string,
+  label = "New cloud session",
+  projectKey: string | null = null,
+): void {
   selectCloudSessionTarget({
     scopeKey,
     sessionId: CLOUD_SESSION_CREATING_ID,
     label,
+    projectKey,
   });
 }
 
@@ -91,7 +90,7 @@ export function resolveCloudSessionCreating(
 ): void {
   const current = byScope.get(scopeKey);
   if (current === undefined || current.sessionId !== CLOUD_SESSION_CREATING_ID) return;
-  selectCloudSessionTarget({ scopeKey, sessionId, label });
+  selectCloudSessionTarget({ scopeKey, sessionId, label, projectKey: current.projectKey });
 }
 
 export function clearCloudSessionTarget(scopeKey: string): void {
@@ -99,51 +98,6 @@ export function clearCloudSessionTarget(scopeKey: string): void {
   const next = new Map(byScope);
   next.delete(scopeKey);
   commit(next);
-}
-
-export function requestCloudSessionBind(
-  scopeKey: string,
-  queuedSend: CloudSessionQueuedSend,
-): boolean {
-  const current = byScope.get(scopeKey);
-  if (current === undefined) return false;
-  const next = new Map(byScope);
-  next.set(scopeKey, {
-    ...current,
-    bindRequested: true,
-    queuedSend,
-    failureMessage: null,
-  });
-  commit(next);
-  return true;
-}
-
-export function clearCloudSessionQueuedSend(scopeKey: string): CloudSessionQueuedSend | null {
-  const current = byScope.get(scopeKey);
-  if (current === undefined || current.queuedSend === null) return null;
-  const queued = current.queuedSend;
-  const next = new Map(byScope);
-  next.set(scopeKey, { ...current, bindRequested: false, queuedSend: null, failureMessage: null });
-  commit(next);
-  return queued;
-}
-
-export function failCloudSessionBind(
-  scopeKey: string,
-  message: string,
-): CloudSessionQueuedSend | null {
-  const current = byScope.get(scopeKey);
-  if (current === undefined) return null;
-  const queued = current.queuedSend;
-  const next = new Map(byScope);
-  next.set(scopeKey, {
-    ...current,
-    bindRequested: false,
-    queuedSend: null,
-    failureMessage: message,
-  });
-  commit(next);
-  return queued;
 }
 
 export function useCloudSessionTarget(scopeKey: string | null): CloudSessionTarget | null {
@@ -156,12 +110,12 @@ export function useCloudSessionTarget(scopeKey: string | null): CloudSessionTarg
   return targets.get(scopeKey) ?? null;
 }
 
-/** True when any target still needs list polling (creating or bind in flight). */
+/** True when any target still needs list polling (its create is in flight). */
 export function cloudSessionTargetsNeedListRefresh(
   targets: ReadonlyMap<string, CloudSessionTarget> = getCloudSessionTargets(),
 ): boolean {
   for (const target of targets.values()) {
-    if (target.sessionId === CLOUD_SESSION_CREATING_ID || target.bindRequested) return true;
+    if (target.sessionId === CLOUD_SESSION_CREATING_ID) return true;
   }
   return false;
 }

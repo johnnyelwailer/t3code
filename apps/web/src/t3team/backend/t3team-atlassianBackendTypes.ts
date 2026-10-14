@@ -13,6 +13,7 @@ import type {
   AtlassianOAuthExchangeInput,
   AtlassianOAuthExchangeResult,
 } from "./t3team-atlassianBackendAuthTypes";
+import type { AtlassianAccountBackendApi } from "./t3team-atlassianAccountStatus";
 import type { AtlassianChildIssueBackendApi } from "./t3team-atlassianBackendChildIssueTypes";
 import type { AtlassianIssueContentBackendApi } from "./t3team-atlassianBackendIssueContentTypes";
 
@@ -63,7 +64,10 @@ export type AtlassianIssueStatusLane = "todo" | "inProgress" | "review" | "done"
 export type { TempoCapacityResponse, TempoUserCapacity } from "./t3team-atlassianTempoTypes";
 
 export interface AtlassianBackendApi
-  extends AtlassianIssueContentBackendApi, AtlassianChildIssueBackendApi {
+  extends
+    AtlassianAccountBackendApi,
+    AtlassianIssueContentBackendApi,
+    AtlassianChildIssueBackendApi {
   readonly getTempoCapacity: (input: {
     readonly accountIds: ReadonlyArray<string>;
     readonly from: string;
@@ -72,7 +76,6 @@ export interface AtlassianBackendApi
     readonly atlassianAccountId?: string;
   }) => Promise<TempoCapacityResponse>;
   readonly setTempoToken: (token: string | null) => Promise<{ configured: boolean }>;
-  readonly listAccounts: () => Promise<ReadonlyArray<IntegrationAccount>>;
   readonly connectBasic: (
     input: AtlassianBasicConnectInput,
   ) => Promise<ReadonlyArray<IntegrationAccount>>;

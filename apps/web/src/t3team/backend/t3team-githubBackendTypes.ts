@@ -45,6 +45,10 @@ export type GitHubInboxDiscoverResponse = {
   readonly inboxItems: ReadonlyArray<GitHubInboxItem>;
   readonly suggestedRepositoryUrls: ReadonlyArray<string>;
   readonly inboxWarning?: string;
+  /** When `repositories` was last fetched from GitHub (the server keeps the list between opens). */
+  readonly repositoriesFetchedAt?: string;
+  /** The stored list was stale and the server is refreshing it in the background. */
+  readonly repositoriesRefreshing?: true;
 };
 
 export interface GitHubBackendApi {
@@ -54,6 +58,10 @@ export interface GitHubBackendApi {
     readonly projectTitle?: string;
     readonly linkedRepositoryUrls?: ReadonlyArray<string>;
     readonly discoveryMode?: "inbox" | "repositories";
+    /** `"user"` only for an explicit refresh or open; omitted means an automatic background read. */
+    readonly trigger?: "user" | "background";
+    /** Ask GitHub for the repository list now instead of the server's stored one. */
+    readonly refresh?: boolean;
   }) => Promise<GitHubInboxDiscoverResponse>;
   readonly getPullRequestContext: (
     input: GitHubPullRequestContextRequest,

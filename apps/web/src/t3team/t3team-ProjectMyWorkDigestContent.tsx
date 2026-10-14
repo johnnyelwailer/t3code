@@ -143,6 +143,7 @@ export function ProjectMyWorkDigestContent({
       onResetArrangement={resetArrangement}
       refreshing={refreshing}
       emptyStateAllowed={freshness === "fresh"}
+      onReload={reload}
       {...(updatedAt !== undefined ? { updatedAtMs: updatedAt } : {})}
     />
   );

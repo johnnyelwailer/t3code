@@ -12,6 +12,7 @@ import * as ServerConfig from "./config.ts";
 import { loadPersistedAtlassianAuthsPayload } from "./t3team-atlassian-auth-persistence.ts";
 import {
   ATLASSIAN_SESSION_EXPIRED_MESSAGE,
+  accountNeedsReconnect,
   setAccountNeedsReconnect,
 } from "./t3team-atlassian-auth-staleToken.ts";
 import {
@@ -185,10 +186,9 @@ it.effect("explains expired OAuth records that cannot be refreshed", () =>
 
     const error = yield* providerForPersistedAuths().pipe(Effect.flip);
 
-    assert.equal(
-      error.message,
-      "Atlassian OAuth token expired and no refresh token is stored. Reconnect Atlassian to grant offline access.",
-    );
+    assert.equal(error.code, "jira_session_expired");
+    assert.equal(error.message, ATLASSIAN_SESSION_EXPIRED_MESSAGE);
+    assert.isTrue(accountNeedsReconnect("old-cloud"));
   }).pipe(Effect.provide(testLayer("t3team-atlassian-auth-expired-"))),
 );
 

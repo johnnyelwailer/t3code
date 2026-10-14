@@ -4,6 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { activateCompiledInDistribution } from "./t3team-distribution-bootstrap.ts";
 import {
+  getPackColdLocalCompactionRoute,
+  setPackColdLocalCompactionRoutes,
+} from "./t3team-pack-coldLocalCompactionRoute.ts";
+import {
   getPackAppearanceOverlay,
   setPackAppearanceOverlay,
 } from "./t3team-pack-appearanceOverlay.ts";
@@ -86,6 +90,14 @@ vi.mock("@t3code/distribution", () => ({
       modelSelection: { instanceId: "nexplore", model: "light" },
     });
     context.defineWorkflowEphemeralConcurrencyPolicy?.({ maxActiveSteps: 8 });
+    context.defineColdLocalCompactionRoute?.({
+      driver: "claudeAgent",
+      ttlMs: 300_000,
+      minUsedTokens: 100_000,
+      localProviderInstance: "nexplore",
+      localModel: "medium",
+      enabled: true,
+    });
   },
   distributionAssets: { "assets/mark.svg": "data:image/svg+xml;base64,QU9B" },
   distributionTheme: {
@@ -109,6 +121,7 @@ describe("compiled-in distribution bootstrap", () => {
     setPackAppearanceOverlay(undefined);
     setPackSetupProfileOverlay(undefined);
     setWorkflowRepairPolicy({});
+    setPackColdLocalCompactionRoutes([]);
     setWorkflowAgentModelPolicy("inherit");
     setWorkflowEphemeralConcurrencyPolicy({
       maxActiveSteps: DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS,
@@ -146,6 +159,12 @@ describe("compiled-in distribution bootstrap", () => {
     });
     expect(getWorkflowAgentModelPolicy()).toEqual({ instanceId: "nexplore", model: "light" });
     expect(getWorkflowEphemeralConcurrencyPolicy()).toEqual({ maxActiveSteps: 8 });
+    expect(getPackColdLocalCompactionRoute("claudeAgent")).toMatchObject({
+      localProviderInstance: "nexplore",
+      localModel: "medium",
+      enabled: true,
+    });
+    expect(getPackColdLocalCompactionRoute("codex")).toBeUndefined();
 
     const appearance = getPackAppearanceOverlay();
     expect(appearance?.themeId).toBe("nexplore");

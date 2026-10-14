@@ -4,6 +4,7 @@ import type { PackProviderDriverDefinition, PackProviderInstance } from "@t3team
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
+import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import { bridgePackProviderDriver } from "./t3team-pack-driverBridge.ts";
 
 const instance: PackProviderInstance = {
@@ -49,7 +50,7 @@ describe("pack text generation bridge", () => {
           enabled: true,
           config: {},
         }),
-      );
+      ).pipe(Effect.provide(McpProviderSessions.layer));
       const result = yield* built.textGeneration.generateThreadTitle({
         cwd: "/tmp",
         message: "hello",

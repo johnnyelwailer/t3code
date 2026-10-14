@@ -12,6 +12,7 @@ import * as Layer from "effect/Layer";
 
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "./orchestration-v2/ProjectionStore.ts";
+import * as CommandReceiptStore from "./orchestration-v2/CommandReceiptStore.ts";
 import * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
 import * as ThreadArtifactsStore from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import * as ThreadFactsStore from "./t3team-v2/t3team-threadFactsStore.ts";
@@ -24,12 +25,18 @@ import {
 import { FAKE_LAUNCH_WORKTREE, makeThreadLaunchFake } from "./t3team-threadLaunchFake.fixtures.ts";
 import * as WorkflowHost from "./t3team-workflowHost.ts";
 import { launchedThreadIdentity } from "./t3team-workflowLaunchedThreadIds.ts";
+import * as ServerSettings from "./serverSettings.ts";
 
 const { layer: ThreadLaunchFake, launches, crash } = makeThreadLaunchFake();
 
+const threadManagementLayer = ThreadManagementService.layer.pipe(
+  Layer.provide(ServerSettings.layerTest()),
+  Layer.provide(CommandReceiptStore.layer),
+);
+
 const base = makeT3TeamV2TestLayer("t3team-workflow-host-launch");
 const services = Layer.mergeAll(
-  ThreadManagementService.layer,
+  threadManagementLayer,
   ThreadArtifactsStore.layer,
   ThreadFactsStore.layer,
 ).pipe(Layer.provideMerge(base));

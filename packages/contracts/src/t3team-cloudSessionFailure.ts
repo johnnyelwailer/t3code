@@ -65,5 +65,11 @@ export class CloudSessionFailedError extends Schema.TaggedError<CloudSessionFail
      * instead of re-polling into the same pause.
      */
     retryAt: Schema.optionalKey(Schema.Number),
+    /**
+     * The provider host the failing request needs a sign-in for (`unauthorized`,
+     * `repository_sign_in_required`). The client signs in to exactly this host, so the sign-in
+     * cannot land on a different one than the request that failed.
+     */
+    host: Schema.optionalKey(Schema.String),
   },
 ) {}

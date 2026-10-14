@@ -17,7 +17,6 @@
  */
 import type { PackHostCapabilities } from "@t3team/pack-api";
 import {
-  OpenCodeSettings,
   ProviderInstanceId,
   type ProviderDriverKind,
   type ProviderInstanceEnvironment,
@@ -34,8 +33,10 @@ import {
   defaultProviderContinuationIdentity,
   type ProviderDriver,
   type ProviderInstance,
-} from "./provider/ProviderDriver.ts";
-import { OpenCodeDriver, type OpenCodeDriverEnv } from "./provider/Drivers/OpenCodeDriver.ts";
+  type ProviderUsageReaderEnv,
+} from "@t3tools/provider-core/server/driver";
+import { OpenCodeDriver, type OpenCodeDriverEnv } from "@t3tools/provider-opencode/server";
+import { OpenCodeSettings } from "@t3tools/provider-opencode/settings";
 import { openCodeUpstreamConfigContent } from "./t3team-pack-aiProvider.ts";
 import { providerInstanceToPack } from "./t3team-pack-driverHarnessWrap.ts";
 import { restampAdapter } from "./t3team-pack-driverRestamp.ts";
@@ -104,7 +105,11 @@ export const makeOpenCodeHarnessCapability = (input: {
 export function makeOpenCodeHarnessDriver(input: {
   readonly driverKind: ProviderDriverKind;
   readonly displayName: string;
-}): ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv> {
+}): ProviderDriver<
+  OpenCodeSettings,
+  OpenCodeDriverEnv,
+  ProviderUsageReaderEnv<typeof OpenCodeDriver>
+> {
   const stampSnapshot = (snapshot: ServerProvider): ServerProvider =>
     adaptOpenCodeHarnessSnapshot(snapshot, input.driverKind);
 

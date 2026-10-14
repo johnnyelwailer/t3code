@@ -12,6 +12,14 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { T3TEAM_DEPRECATED_MCP_TOOL_ALIASES } from "./t3team-mcpToolAliases.ts";
 import { resolveToolNameAlias, withToolNameAliases } from "./t3team-mcpToolAliasProtocol.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP } from "./tools.ts";
+import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
+import { T3TeamAskUserWriter } from "./t3team-askUserWriter.ts";
+
+/** Services the T3Team toolkit's tools declare; registration captures them, these calls never reach them. */
+const t3TeamRegistrationServices = Layer.mergeAll(
+  Layer.mock(ThreadManagementService.ThreadManagementService)({}),
+  Layer.mock(T3TeamAskUserWriter)({}),
+);
 
 const aliases = Object.entries(T3TEAM_DEPRECATED_MCP_TOOL_ALIASES);
 
@@ -153,6 +161,7 @@ it.effect(
           protocols: [T3_MCP_PROTOCOL],
         }).pipe(Layer.provide(AuthLive));
         const serverLayer = T3TeamToolkitRegistrationLive.pipe(
+          Layer.provide(t3TeamRegistrationServices),
           Layer.provideMerge(transport),
           Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
         );

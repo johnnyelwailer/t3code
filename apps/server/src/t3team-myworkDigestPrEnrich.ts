@@ -9,7 +9,7 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 
 import type { PullRequestService } from "./pullRequest/PullRequestService.ts";
-import { makeGitHubReadCoalescer } from "./sourceControl/t3team-githubReadCoalescer.ts";
+import { makeGitHubReadCoalescer } from "@t3tools/source-control-github/server/t3team-githubReadCoalescer";
 import { isRateLimitedFailure } from "./t3team-myworkDigestRateLimited.ts";
 import type { T3TeamDigestPerson } from "./t3team-myworkDigestTypesPrs.ts";
 

@@ -55,11 +55,15 @@ function reportToolAuthFailure(
  * the settings page's `ConnectedToolsSettings` and the model picker's
  * `ModelPickerProviderConnectPanel` — so the connect flow behaves
  * identically wherever it's triggered from.
+ *
+ * `options.hostname` signs a per-host CLI (`gh`) in to that host instead of its default one.
  */
 export function useToolAuthActions(
   meta: ToolAuthToolMeta,
   targetEnvironmentId?: EnvironmentId | null,
+  options?: { readonly hostname?: string | undefined },
 ) {
+  const hostname = options?.hostname;
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const environmentId = targetEnvironmentId ?? primaryEnvironmentId;
   const start = useAtomCommand(toolAuthEnvironment.start, { reportFailure: false });
@@ -70,12 +74,15 @@ export function useToolAuthActions(
   const onConnect = useCallback(() => {
     if (!environmentId) return;
     void (async () => {
-      const result = await start({ environmentId, input: { tool: meta.tool } });
+      const result = await start({
+        environmentId,
+        input: { tool: meta.tool, ...(hostname === undefined ? {} : { hostname }) },
+      });
       if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
         reportToolAuthFailure(meta.label, "connect", result);
       }
     })();
-  }, [environmentId, meta.label, meta.tool, start]);
+  }, [environmentId, hostname, meta.label, meta.tool, start]);
 
   /**
    * One click for "install it and sign me in". The server installs, re-probes,

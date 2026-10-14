@@ -1,7 +1,15 @@
-import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
+import { classifyRejectedSession } from "./t3team-atlassian-auth-rejection.ts";
+import {
+  JIRA_SESSION_EXPIRED_CODE,
+  JIRA_TIMEOUT_CODE,
+  T3TeamAtlassianError,
+  toAtlassianError,
+} from "./t3team-atlassian-errors.ts";
+
+export { JIRA_SESSION_EXPIRED_CODE, T3TeamAtlassianError, toAtlassianError };
 
 export const ATLASSIAN_REQUEST_TIMEOUT_MS = 12_000;
 
@@ -9,34 +17,11 @@ const ATLASSIAN_REQUEST_TIMEOUT = Duration.millis(ATLASSIAN_REQUEST_TIMEOUT_MS);
 
 function atlassianTimeoutError(message: string) {
   return new T3TeamAtlassianError({
+    code: JIRA_TIMEOUT_CODE,
     message:
       `${message} Atlassian request timed out after ${ATLASSIAN_REQUEST_TIMEOUT_MS}ms. ` +
       "Check Jira auth and network connectivity.",
   });
-}
-
-export class T3TeamAtlassianError extends Data.TaggedError("T3TeamAtlassianError")<{
-  readonly message: string;
-  /**
-   * Machine-readable classification the client can branch on without parsing the message, e.g.
-   * `jira_session_expired`. Absent for ordinary failures.
-   */
-  readonly code?: string;
-  readonly cause?: unknown;
-}> {}
-
-/**
- * The server dropped the account's dead refresh token and the user must sign in again. The client
- * turns this into its "Your Jira session expired. Sign in again." state instead of a raw error.
- */
-export const JIRA_SESSION_EXPIRED_CODE = "jira_session_expired";
-
-export function toAtlassianError(message: string) {
-  return (cause: unknown) =>
-    new T3TeamAtlassianError({
-      message: cause instanceof Error ? cause.message : message,
-      cause,
-    });
 }
 
 export function readJsonBody<T>() {
@@ -53,7 +38,7 @@ export function tryAtlassianPromise<T>(thunk: () => Promise<T>, message: string)
     Effect.tryPromise({
       try: thunk,
       catch: toAtlassianError(message),
-    }),
+    }).pipe(Effect.catch(classifyRejectedSession)),
     Effect.sleep(ATLASSIAN_REQUEST_TIMEOUT).pipe(
       Effect.flatMap(() => Effect.fail(atlassianTimeoutError(message))),
     ),

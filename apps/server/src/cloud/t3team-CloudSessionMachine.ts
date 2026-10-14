@@ -10,7 +10,11 @@
  *
  * @module t3team-CloudSessionMachine
  */
-import { CloudSessionFailedError, type ProjectId } from "@t3tools/contracts";
+import {
+  CloudSessionFailedError,
+  plainProjectFolderName,
+  type ProjectId,
+} from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -18,7 +22,7 @@ import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 
 import { ProjectMachineDiscovery } from "../project/t3team-ProjectMachineDiscovery.ts";
-import * as GitHubApi from "../sourceControl/GitHubApi.ts";
+import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
 import { VcsProcess } from "../vcs/VcsProcess.ts";
 import {
   type MachineGitAuthor,
@@ -27,6 +31,7 @@ import {
   machineRepositoryFromRemote,
   standbyPoolKey,
 } from "./t3team-cloudSessionMachineNames.ts";
+import type { CloudSessionPlainProject } from "./t3team-cloudSessionPlainProject.ts";
 
 export interface CloudSessionMachine {
   readonly repository: MachineRepository;
@@ -84,6 +89,14 @@ export class CloudSessionMachines extends Context.Service<
      * https origin, else null. Needs no sign-in: it only reads the checkout.
      */
     readonly poolKeyOf: (projectId: ProjectId) => Effect.Effect<string | null>;
+    /**
+     * What a plain session (no machine) runs in: the project's own repository when it has an
+     * https-reachable `origin`, else an empty workspace named after the project. Fails when the
+     * origin cannot be cloned, nothing of the branch is pushed, or the user is not signed in.
+     */
+    readonly resolvePlain: (
+      projectId: ProjectId,
+    ) => Effect.Effect<CloudSessionPlainProject, CloudSessionFailedError>;
   }
 >()("t3/cloud/t3team-CloudSessionMachine/CloudSessionMachines") {}
 
@@ -200,6 +213,7 @@ const make = Effect.gen(function* () {
       return yield* new CloudSessionFailedError({
         reason: "repository_sign_in_required",
         message: `Sign in to ${repository.host} with gh (gh auth login --hostname ${repository.host}) so the session can clone ${repository.owner}/${repository.name}.`,
+        host: repository.host,
       });
     }
     const profile = yield* api
@@ -211,6 +225,7 @@ const make = Effect.gen(function* () {
             new CloudSessionFailedError({
               reason: "repository_sign_in_required",
               message: `Could not read your ${repository.host} profile; sign in again (gh auth login --hostname ${repository.host}).`,
+              host: repository.host,
             }),
         ),
       );
@@ -262,7 +277,46 @@ const make = Effect.gen(function* () {
       return repository === null ? null : standbyPoolKey(repository);
     }).pipe(Effect.orElseSucceed(() => null));
 
-  return CloudSessionMachines.of({ resolve, resolveSetup, poolKeyOf });
+  const resolvePlain = Effect.fn("cloud.session_machine.resolve_plain")(function* (
+    projectId: ProjectId,
+  ) {
+    const found = yield* discovery
+      .resolveDefault(projectId)
+      .pipe(Effect.mapError((error) => unavailable(error.message)));
+    // Only the project's own checkout (its main repository); a linked repository is not the project.
+    const own = found.checkouts.find((checkout) => checkout.repository === ".");
+    const origin =
+      own === undefined
+        ? null
+        : yield* git(own.root, "machine.origin", ["remote", "get-url", "origin"]);
+    if (own === undefined || origin === null || !origin.ok || origin.stdout.length === 0) {
+      return { kind: "workspace", folder: plainProjectFolderName(found.title, projectId) } as const;
+    }
+    const repository = machineRepositoryFromRemote(origin.stdout);
+    if (repository === null) {
+      return yield* unavailable(
+        "This project's origin remote is not one a cloud session can clone over https.",
+      );
+    }
+    // The user's pushed branch, else the default branch the clone would start on.
+    const commit =
+      (yield* pinnedCommit(own.root)) ??
+      (yield* git(own.root, "machine.defaultBranch", [
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        "refs/remotes/origin/HEAD^{commit}",
+      ]).pipe(Effect.map((out) => (out.ok && SHA.test(out.stdout) ? out.stdout : null))));
+    if (commit === null) {
+      return yield* unavailable(
+        "Push this project's branch so the cloud session can check it out.",
+      );
+    }
+    const creds = yield* credentials(repository);
+    return { kind: "checkout", checkout: { repository, commit, ...creds } } as const;
+  });
+
+  return CloudSessionMachines.of({ resolve, resolveSetup, poolKeyOf, resolvePlain });
 });
 
 export const layer = Layer.effect(CloudSessionMachines, make);
