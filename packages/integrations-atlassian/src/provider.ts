@@ -47,6 +47,7 @@ import {
   type JiraSprintField,
   findJiraSprintField,
 } from "./planning.ts";
+import { resolveMirrorWalkContext } from "./t3team-mirrorWalkContext.ts";
 
 export type AtlassianBacklogBoard = {
   readonly id: string;
@@ -1335,7 +1336,11 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       });
     }
 
-    const project = await this.findProjectById(input.externalProjectId, entry.client);
+    const { project, estimateField, sprintField } = await resolveMirrorWalkContext(
+      entry.client,
+      input.externalProjectId,
+      Date.now(),
+    );
     if (!project) {
       throw new AtlassianMirrorSourceUnavailableError({
         reason: "project-not-found",
@@ -1343,11 +1348,6 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
         message: `Atlassian project "${input.externalProjectId}" was not found on ${entry.siteUrl}.`,
       });
     }
-
-    const [estimateField, sprintField] = await Promise.all([
-      this.resolveEstimateField(entry.client),
-      this.resolveSprintField(entry.client),
-    ]);
 
     const projectKey = project.key.replace(/"/g, '\\"');
     const jqlParts = [`project = "${projectKey}"`];

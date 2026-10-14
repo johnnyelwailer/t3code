@@ -396,6 +396,40 @@ describe("AtlassianIntegrationProvider", () => {
     expect(seenJql[2]).toMatch(/updated >= -64800m ORDER BY updated DESC$/);
   });
 
+  it("resolves the project and fields once for a multi-page mirror walk", async () => {
+    const callsByEndpoint = { projects: 0, fields: 0, searches: 0 };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/rest/api/3/project/search")) {
+        callsByEndpoint.projects += 1;
+        return Response.json({ values: [{ id: "project-1", key: "PROJ" }], isLast: true });
+      }
+      if (url.endsWith("/rest/api/3/field")) {
+        callsByEndpoint.fields += 1;
+        return Response.json([]);
+      }
+      if (url.includes("/rest/api/3/search/jql")) {
+        callsByEndpoint.searches += 1;
+        return Response.json({ issues: [], isLast: true });
+      }
+      return Response.json([]);
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new AtlassianIntegrationProvider({
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+    const account = { id: "https://test.atlassian.net", provider: "atlassian" } as const;
+
+    for (let page = 0; page < 3; page++) {
+      await provider.listProjectMirrorPage({ account, externalProjectId: "project-1" });
+    }
+
+    expect(callsByEndpoint).toEqual({ projects: 1, fields: 1, searches: 3 });
+  });
+
   it("throws a typed error from the mirror page when no client is available", async () => {
     const provider = AtlassianIntegrationProvider.fromMultipleAuths([]);
     const account = { id: "https://test.atlassian.net", provider: "atlassian" } as const;
