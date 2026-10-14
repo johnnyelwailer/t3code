@@ -22,6 +22,10 @@ export class AtlassianOAuthSessionExpiredError extends Data.TaggedError(
 )<{
   readonly message: string;
   readonly cause?: unknown;
+  /** HTTP status and RFC 6749 error fields of the rejection, for secret-free diagnostics. */
+  readonly status?: number;
+  readonly oauthError?: string;
+  readonly oauthErrorDescription?: string;
 }> {}
 
 /**
@@ -222,6 +226,8 @@ export async function refreshAccessToken(
       throw new AtlassianOAuthSessionExpiredError({
         message: "The Atlassian refresh token is no longer valid. Sign in again.",
         cause: text,
+        status: response.status,
+        ...parseOAuthErrorBody(text),
       });
     }
     throw new AtlassianOAuthError({

@@ -144,6 +144,8 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
   - Allow Atlassian OAuth `window.open` popups inside Electron instead of delegating them to the system browser.
 - `apps/desktop/src/window/DesktopWindow.test.ts`
   - Cover in-app OAuth popup handling in the desktop shell.
+- `scripts/build-desktop-artifact.ts`
+  - Fill the Atlassian OAuth client id/secret into the packaged `Resources/.env` from the build environment (`scripts/lib/t3team-packaged-env.ts`) and fail a build that ships a client id without its secret, so Jira token refresh does not depend on how the app was launched.
 - `apps/web/vite.config.ts`
   - Add dev proxy/defaults and compile-time constants used by migrated t3team route.
 - `apps/web/src/routeTree.gen.ts`

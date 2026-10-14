@@ -1,6 +1,5 @@
 import {
   AtlassianIntegrationProvider,
-  AtlassianOAuthSessionExpiredError,
   type AtlassianAccessibleResource,
   type JiraApiAuth,
   type TokenExchangeResult,
@@ -28,9 +27,12 @@ import {
   resetAllNeedsReconnect,
 } from "./t3team-atlassian-auth-staleToken.ts";
 import {
+  ATLASSIAN_OAUTH_ENV_HINT,
   readAtlassianOAuthClientId,
   readAtlassianOAuthClientSecret,
 } from "./t3team-atlassian-oauthEnv.ts";
+import { JIRA_OAUTH_CONFIG_CODE } from "./t3team-atlassian-errors.ts";
+import { logRefreshAttempt, refreshFailureDetails } from "./t3team-atlassian-auth-refreshTrace.ts";
 import { t3teamFixtureOrMockProvider } from "./t3team-fixtureProjectRegistry.ts";
 
 export type BasicConnectInput = {
@@ -96,40 +98,94 @@ function refreshOAuthAuthIfNeeded(accountId: string, auth: JiraApiAuth) {
 
     const refreshToken = auth.refreshToken;
     if (!refreshToken) {
-      return yield* markNeedsReconnect(accountId, persistAuthsToDisk);
+      return yield* markNeedsReconnect(accountId, persistAuthsToDisk, "no-refresh-token");
     }
 
     const config = atlassianOAuthClientConfig();
+    const clientSecretPresent = config.clientSecret !== undefined;
     if (!config.clientId) {
+      yield* logRefreshAttempt({ accountId, outcome: "missing-client-id", clientSecretPresent });
       return auth;
     }
+    // Atlassian rejects a refresh without the client secret. Redeeming anyway only burned the
+    // single-use token and flagged the account, so a launch without the secret looked like a
+    // signed-out session on every later start. Report the setup problem instead, unflagged.
+    if (!clientSecretPresent) {
+      yield* logRefreshAttempt({
+        accountId,
+        outcome: "missing-client-secret",
+        clientSecretPresent,
+      });
+      return yield* oauthConfigError();
+    }
 
-    const refreshed = yield* tryAtlassianPromise(
+    const outcome = yield* tryAtlassianPromise(
       () => refreshAccessToken(config, refreshToken),
       "Failed to refresh Atlassian OAuth token.",
     ).pipe(
-      Effect.map((token): JiraApiAuth => ({
-        kind: "oauth",
-        cloudId: auth.cloudId,
-        ...(auth.siteUrl ? { siteUrl: auth.siteUrl } : {}),
-        accessToken: token.accessToken,
-        refreshToken: token.refreshToken,
-        expiresAt: now + token.expiresIn * 1000,
+      Effect.map((token): RefreshResult => ({
+        _tag: "refreshed",
+        auth: {
+          kind: "oauth",
+          cloudId: auth.cloudId,
+          ...(auth.siteUrl ? { siteUrl: auth.siteUrl } : {}),
+          accessToken: token.accessToken,
+          refreshToken: token.refreshToken,
+          expiresAt: now + token.expiresIn * 1000,
+        },
       })),
-      // Only a dead refresh token is terminal; any other failure keeps its original error.
-      Effect.catchIf(
-        (error) =>
-          error instanceof T3TeamAtlassianError &&
-          error.cause instanceof AtlassianOAuthSessionExpiredError,
-        () => recoverFromDeadRefreshToken(accountId, refreshToken),
+      Effect.catch((error) =>
+        Effect.gen(function* () {
+          const details = refreshFailureDetails(error);
+          if (details.refreshTokenInvalid) {
+            const recovered = yield* recoverFromDeadRefreshToken(accountId, refreshToken).pipe(
+              Effect.tapError(() =>
+                logRefreshAttempt({
+                  accountId,
+                  outcome: "refresh-token-invalid",
+                  clientSecretPresent,
+                  details,
+                }),
+              ),
+            );
+            yield* logRefreshAttempt({
+              accountId,
+              outcome: "adopted-newer-token",
+              clientSecretPresent,
+              details,
+            });
+            if (recovered._tag === "gone") return yield* reconnectRequiredError();
+            return { _tag: "unchanged", auth: recovered.auth } satisfies RefreshResult;
+          }
+          // A bare `unauthorized_client` (no "refresh_token is invalid") means the client id or
+          // secret was refused: a configuration problem, so the session stays unflagged.
+          yield* logRefreshAttempt({
+            accountId,
+            outcome: details.sessionExpiredResponse ? "client-rejected" : "failed",
+            clientSecretPresent,
+            details,
+          });
+          if (details.sessionExpiredResponse) return yield* oauthConfigError();
+          return yield* Effect.fail(error);
+        }),
       ),
     );
-    if (refreshed === atlassianAuths.get(accountId)) {
-      return refreshed;
-    }
-    atlassianAuths.set(accountId, refreshed);
+    if (outcome._tag === "unchanged") return outcome.auth;
+    yield* logRefreshAttempt({ accountId, outcome: "refreshed", clientSecretPresent });
+    atlassianAuths.set(accountId, outcome.auth);
     yield* persistAuthsToDisk;
-    return refreshed;
+    return outcome.auth;
+  });
+}
+
+type RefreshResult =
+  | { readonly _tag: "refreshed"; readonly auth: JiraApiAuth }
+  | { readonly _tag: "unchanged"; readonly auth: JiraApiAuth };
+
+function oauthConfigError() {
+  return new T3TeamAtlassianError({
+    code: JIRA_OAUTH_CONFIG_CODE,
+    message: `Jira sign-in can not be renewed: the Atlassian OAuth client is not configured correctly (${ATLASSIAN_OAUTH_ENV_HINT}).`,
   });
 }
 

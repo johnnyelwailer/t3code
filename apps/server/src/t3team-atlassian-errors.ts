@@ -26,3 +26,10 @@ export function toAtlassianError(message: string) {
       cause,
     });
 }
+
+/**
+ * The server is missing Atlassian OAuth client configuration (client id or secret), so a token
+ * refresh can not even be attempted. This is a setup problem, not a dead session: the stored
+ * account must not be flagged needs-reconnect for it.
+ */
+export const JIRA_OAUTH_CONFIG_CODE = "jira_oauth_config";
