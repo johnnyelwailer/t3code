@@ -26,6 +26,7 @@ import {
   type LinkedRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
 import { inspectRemoteProjectStateOnDefaultBranch } from "./t3team-linkedRemoteProjectStateInspect.ts";
+import { LINKED_REPOSITORY_SYNC_CONCURRENCY } from "./t3team-linkedRepositorySyncConcurrency.ts";
 
 /** Linked clones (ready, real git checkouts) whose working tree already holds a state dir. */
 export const detectMainRepositoryCandidates = Effect.fn("detectMainRepositoryCandidates")(
@@ -57,15 +58,29 @@ export const detectMainRepositoryCandidatesWithRemote = Effect.fn(
 )(function* (linkedRepositories: ReadonlyArray<LinkedRepositoryBootstrapResult>) {
   const local = yield* detectMainRepositoryCandidates(linkedRepositories);
   const seen = new Set(local.map((candidate) => candidate.checkoutPath));
-  const remoteCandidates: ProjectMainRepositoryCandidate[] = [];
-  for (const entry of linkedRepositories) {
+  // Bounded like the sync service's clones: a project may link dozens of repositories.
+  const pending = linkedRepositories.filter((entry) => {
     const checkoutPath = entry.localPath?.trim();
-    if (!checkoutPath || seen.has(checkoutPath)) continue;
-    const remote = yield* inspectRemoteProjectStateOnDefaultBranch(entry.url).pipe(Effect.option);
-    if (remote._tag === "Some" && remote.value.hasProjectStateDir) {
-      remoteCandidates.push({ url: entry.url, checkoutPath });
-      seen.add(checkoutPath);
-    }
+    return checkoutPath && !seen.has(checkoutPath);
+  });
+  const inspected = yield* Effect.forEach(
+    pending,
+    (entry) =>
+      inspectRemoteProjectStateOnDefaultBranch(entry.url).pipe(
+        Effect.option,
+        Effect.map((remote) =>
+          remote._tag === "Some" && remote.value.hasProjectStateDir
+            ? [{ url: entry.url, checkoutPath: entry.localPath.trim() }]
+            : [],
+        ),
+      ),
+    { concurrency: LINKED_REPOSITORY_SYNC_CONCURRENCY },
+  );
+  const remoteCandidates: ProjectMainRepositoryCandidate[] = [];
+  for (const candidate of inspected.flat()) {
+    if (seen.has(candidate.checkoutPath)) continue;
+    seen.add(candidate.checkoutPath);
+    remoteCandidates.push(candidate);
   }
   return [...local, ...remoteCandidates];
 });

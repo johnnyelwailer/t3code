@@ -30,8 +30,7 @@ import type {
   LinkedRepositorySyncPhase,
 } from "./t3team-project-repository-utils.ts";
 import { VcsProcess } from "./vcs/VcsProcess.ts";
-
-const LINKED_REPOSITORY_SYNC_CONCURRENCY = 3;
+import { LINKED_REPOSITORY_SYNC_CONCURRENCY } from "./t3team-linkedRepositorySyncConcurrency.ts";
 
 export type LinkedRepositorySyncRequest = {
   readonly referencesRoot: string;

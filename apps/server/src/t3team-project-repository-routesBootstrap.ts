@@ -27,6 +27,10 @@ import {
 import { mainRepositoryFromManifestJson } from "./t3team-toolBrokerStartChildContext.ts";
 
 import { readNormalizedReferenceManifest } from "./t3team-referenceManifestNormalization.ts";
+import {
+  mainRepositoryInspectionFromManifestJson,
+  type MainRepositoryInspection,
+} from "./t3team-mainRepositoryInspection.ts";
 
 /** Tolerant read of the `linkedRepositories` array from a persisted reference manifest. */
 const ReferenceManifestLinkedRepositoriesJson = Schema.Struct({
@@ -148,6 +152,7 @@ export function mergeLinkedRepositoryEntries(
 export type PreservedReferenceManifest = {
   readonly linkedRepositories: ReadonlyArray<LinkedRepositoryBootstrapResult>;
   readonly mainRepository?: MainRepositoryBootstrapResult;
+  readonly mainRepositoryInspection?: MainRepositoryInspection;
 };
 
 export const readPreservedReferenceManifest = Effect.fn("readPreservedReferenceManifest")(
@@ -167,9 +172,11 @@ export const readPreservedReferenceManifest = Effect.fn("readPreservedReferenceM
         typeof (entry as { url?: unknown }).url === "string",
     );
     const mainRepository = mainRepositoryFromManifestJson(preservedRaw);
+    const mainRepositoryInspection = mainRepositoryInspectionFromManifestJson(preservedRaw);
     return {
       linkedRepositories,
       ...(mainRepository ? { mainRepository } : {}),
+      ...(mainRepositoryInspection ? { mainRepositoryInspection } : {}),
     } satisfies PreservedReferenceManifest;
   },
 );

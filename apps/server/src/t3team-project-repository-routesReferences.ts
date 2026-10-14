@@ -21,6 +21,10 @@ import {
 } from "./t3team-project-repository-routesBootstrap.ts";
 import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 import {
+  mergeMainRepositoryCandidates,
+  recordMainRepositoryInspectionCandidates,
+} from "./t3team-mainRepositoryInspection.ts";
+import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
   normalizeRepositoryUrls,
@@ -60,7 +64,7 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
     const sync = yield* T3TeamLinkedRepositorySync;
     // Under the manifest lock: a background sync settling meanwhile records its outcome after this
     // write, never under it.
-    return yield* sync.withManifestLock(
+    const locked = yield* sync.withManifestLock(
       Effect.gen(function* () {
         // Earlier entries survive re-bootstraps; their clones are reused, including clones
         // recorded under the previous workspace before a main-repository switch.
@@ -97,12 +101,21 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
           preserved.linkedRepositories,
           planned.map((item) => item.entry),
         );
-        const mainRepositoryCandidates =
-          !mainRepository && isMainRepositoryEnabled()
-            ? input.inspectLinkedRepositoriesForMainRepository === true
-              ? yield* detectMainRepositoryCandidatesWithRemote(manifestLinkedRepositories)
-              : yield* detectMainRepositoryCandidates(manifestLinkedRepositories)
-            : [];
+        const detecting = !mainRepository && isMainRepositoryEnabled();
+        const localCandidates = detecting
+          ? yield* detectMainRepositoryCandidates(manifestLinkedRepositories)
+          : [];
+        // At most once per project: the marker is written before the inspection runs (below,
+        // outside this lock — it reads remotes), so a repeated or concurrent call skips it.
+        const recordedInspection = preserved.mainRepositoryInspection;
+        const inspectAt =
+          detecting &&
+          input.inspectLinkedRepositoriesForMainRepository === true &&
+          recordedInspection === undefined
+            ? DateTime.formatIso(yield* DateTime.now)
+            : undefined;
+        const mainRepositoryInspection =
+          inspectAt !== undefined ? { inspectedAt: inspectAt, candidates: [] } : recordedInspection;
 
         yield* writeReferenceManifest(referencesRoot, {
           workspaceRoot,
@@ -110,6 +123,7 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
           referencesRoot,
           linkedRepositories: manifestLinkedRepositories,
           ...(mainRepository ? { mainRepository } : {}),
+          ...(mainRepositoryInspection ? { mainRepositoryInspection } : {}),
           updatedAt: DateTime.formatIso(yield* DateTime.now),
         });
         for (const item of planned) {
@@ -130,10 +144,37 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
             withSyncState(item.entry, sync.phase(item.entry.localPath)),
           ),
           ...(mainRepository ? { mainRepository } : {}),
-          ...(mainRepositoryCandidates.length > 0 ? { mainRepositoryCandidates } : {}),
         };
-        return response;
+        // The creation bootstrap reports what an earlier inspection found; others stay local.
+        const recordedCandidates =
+          input.inspectLinkedRepositoriesForMainRepository === true
+            ? (recordedInspection?.candidates ?? [])
+            : [];
+        return {
+          response,
+          manifestLinkedRepositories,
+          inspectAt,
+          localCandidates,
+          recordedCandidates,
+        };
       }),
     );
+    const inspected =
+      locked.inspectAt === undefined
+        ? []
+        : yield* detectMainRepositoryCandidatesWithRemote(locked.manifestLinkedRepositories);
+    if (locked.inspectAt !== undefined) {
+      yield* sync.withManifestLock(
+        recordMainRepositoryInspectionCandidates(referencesRoot, locked.inspectAt, inspected),
+      );
+    }
+    const mainRepositoryCandidates = mergeMainRepositoryCandidates(
+      locked.localCandidates,
+      locked.inspectAt === undefined ? locked.recordedCandidates : inspected,
+    );
+    return {
+      ...locked.response,
+      ...(mainRepositoryCandidates.length > 0 ? { mainRepositoryCandidates } : {}),
+    } satisfies BootstrapWorkspaceResponse;
   },
 );

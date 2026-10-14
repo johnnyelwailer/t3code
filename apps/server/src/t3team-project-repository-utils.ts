@@ -9,6 +9,7 @@ import * as Path from "effect/Path";
 
 import { T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
 import { ensureNexiProjectStateDir } from "./t3team-projectMainRepositoryState.ts";
+import type { MainRepositoryInspection } from "./t3team-mainRepositoryInspection.ts";
 
 export type BootstrapWorkspaceRequest = {
   readonly workspaceRoot: string;
@@ -114,6 +115,8 @@ export type ReferenceManifestFile = {
   readonly workspaceRepositoryInitialized: boolean;
   readonly linkedRepositories: ReadonlyArray<LinkedRepositoryBootstrapResult>;
   readonly mainRepository?: MainRepositoryBootstrapResult;
+  /** The once-per-project remote main-repository inspection (`t3team-mainRepositoryInspection`). */
+  readonly mainRepositoryInspection?: MainRepositoryInspection;
   readonly updatedAt: string;
 };
 

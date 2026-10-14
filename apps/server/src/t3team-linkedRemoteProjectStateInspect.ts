@@ -16,7 +16,10 @@ import {
 } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
-import { SourceControlRepositoryService } from "./sourceControl/SourceControlRepositoryService.ts";
+import {
+  redactUrlCredentials,
+  SourceControlRepositoryService,
+} from "./sourceControl/SourceControlRepositoryService.ts";
 import { INSPECT_TIMEOUT_MS, linkedCheckoutGit as git } from "./t3team-linkedCheckoutGit.ts";
 
 export type RemoteProjectStateInspectResult = {
@@ -44,77 +47,75 @@ const countTreeEntries = (stdout: string): number =>
     .map((line) => line.trim())
     .filter((line) => line.length > 0).length;
 
-/** Shallow-fetch `url`'s default branch in a temp git dir and count `.nexi`/`.t3team` entries. */
+const notFound: RemoteProjectStateInspectResult = {
+  hasProjectStateDir: false,
+  entryCount: 0,
+  stateDirName: PROJECT_STATE_DIR,
+  committedOnly: true,
+  source: "remote",
+};
+
+/** Shallow-fetch `url`'s default branch in a temp git dir and count `.nexi`/`.t3team` entries.
+ * The temp dir is released on every exit — success, failure, timeout, interruption. The URL is
+ * passed without userinfo: authentication is git's credential helper, as for every linked clone
+ * (`GIT_TERMINAL_PROMPT=0`, so a missing credential fails instead of prompting). */
 export const inspectRemoteProjectStateOnDefaultBranch = Effect.fn(
   "inspectRemoteProjectStateOnDefaultBranch",
 )(function* (url: string) {
   const fileSystem = yield* FileSystem.FileSystem;
   const sourceControl = yield* SourceControlRepositoryService;
-  const scratchRoot = yield* fileSystem
-    .makeTempDirectory({ prefix: "t3-linked-remote-inspect-" })
-    .pipe(Effect.orDie);
-  const prepared = yield* sourceControl
-    .prepareClone({ remoteUrl: url, destinationPath: scratchRoot })
-    .pipe(
-      Effect.catch(() =>
-        Effect.succeed({
-          cloneUrl: url,
-          remoteUrl: url,
-          destinationPath: scratchRoot,
-          repository: null,
-        }),
-      ),
-    );
-  const cloneUrl = prepared.cloneUrl || url;
-  yield* git("init", scratchRoot, ["init", "-q"], INSPECT_TIMEOUT_MS);
-  yield* git("remote", scratchRoot, ["remote", "add", "origin", cloneUrl], INSPECT_TIMEOUT_MS);
-  const fetched = yield* git(
-    "fetch",
-    scratchRoot,
-    ["fetch", "--depth", "1", "origin", "HEAD"],
-    REMOTE_FETCH_TIMEOUT_MS,
+  return yield* Effect.scoped(
+    Effect.gen(function* () {
+      const scratchRoot = yield* Effect.acquireRelease(
+        fileSystem.makeTempDirectory({ prefix: "t3-linked-remote-inspect-" }).pipe(Effect.orDie),
+        (directory) =>
+          fileSystem.remove(directory, { recursive: true, force: true }).pipe(Effect.ignore),
+      );
+      const prepared = yield* sourceControl
+        .prepareClone({ remoteUrl: url, destinationPath: scratchRoot })
+        .pipe(Effect.orElseSucceed(() => ({ cloneUrl: url })));
+      const cloneUrl = redactUrlCredentials(prepared.cloneUrl || url);
+      yield* git("init", scratchRoot, ["init", "-q"], INSPECT_TIMEOUT_MS);
+      const added = yield* git(
+        "remote",
+        scratchRoot,
+        ["remote", "add", "origin", cloneUrl],
+        INSPECT_TIMEOUT_MS,
+      );
+      if (added.exitCode !== 0) return notFound;
+      const fetched = yield* git(
+        "fetch",
+        scratchRoot,
+        ["fetch", "--depth", "1", "origin", "HEAD"],
+        REMOTE_FETCH_TIMEOUT_MS,
+      );
+      if (fetched.exitCode !== 0) return notFound;
+      const sym = yield* git(
+        "symref",
+        scratchRoot,
+        ["symbolic-ref", "--short", "FETCH_HEAD"],
+        INSPECT_TIMEOUT_MS,
+      );
+      const ref =
+        sym.exitCode === 0 && sym.stdout.trim().length > 0 ? sym.stdout.trim() : "FETCH_HEAD";
+      for (const stateDirName of STATE_DIR_CANDIDATES) {
+        const tree = yield* git(
+          "ls-tree",
+          scratchRoot,
+          ["ls-tree", "-r", "--name-only", `${ref}:${stateDirName}`],
+          INSPECT_TIMEOUT_MS,
+        );
+        if (tree.exitCode === 0 && tree.stdout.trim().length > 0) {
+          return {
+            hasProjectStateDir: true,
+            entryCount: countTreeEntries(tree.stdout),
+            stateDirName,
+            committedOnly: true,
+            source: "remote",
+          } satisfies RemoteProjectStateInspectResult;
+        }
+      }
+      return notFound;
+    }),
   );
-  if (fetched.exitCode !== 0) {
-    yield* fileSystem.remove(scratchRoot, { recursive: true, force: true }).pipe(Effect.ignore);
-    return {
-      hasProjectStateDir: false,
-      entryCount: 0,
-      stateDirName: PROJECT_STATE_DIR,
-      committedOnly: true as const,
-      source: "remote" as const,
-    } satisfies RemoteProjectStateInspectResult;
-  }
-  const sym = yield* git(
-    "symref",
-    scratchRoot,
-    ["symbolic-ref", "--short", "FETCH_HEAD"],
-    INSPECT_TIMEOUT_MS,
-  );
-  const ref = sym.exitCode === 0 && sym.stdout.trim().length > 0 ? sym.stdout.trim() : "FETCH_HEAD";
-  for (const stateDirName of STATE_DIR_CANDIDATES) {
-    const tree = yield* git(
-      "ls-tree",
-      scratchRoot,
-      ["ls-tree", "-r", "--name-only", `${ref}:${stateDirName}`],
-      INSPECT_TIMEOUT_MS,
-    );
-    if (tree.exitCode === 0 && tree.stdout.trim().length > 0) {
-      yield* fileSystem.remove(scratchRoot, { recursive: true, force: true }).pipe(Effect.ignore);
-      return {
-        hasProjectStateDir: true,
-        entryCount: countTreeEntries(tree.stdout),
-        stateDirName,
-        committedOnly: true as const,
-        source: "remote" as const,
-      } satisfies RemoteProjectStateInspectResult;
-    }
-  }
-  yield* fileSystem.remove(scratchRoot, { recursive: true, force: true }).pipe(Effect.ignore);
-  return {
-    hasProjectStateDir: false,
-    entryCount: 0,
-    stateDirName: PROJECT_STATE_DIR,
-    committedOnly: true as const,
-    source: "remote" as const,
-  } satisfies RemoteProjectStateInspectResult;
 });

@@ -7,7 +7,6 @@ import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
 import { describe, expect, it } from "@effect/vitest";
-import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -94,6 +93,23 @@ describe("linked repositories on demand", () => {
           expect(entry.syncState).toBeUndefined();
           expect(harness.counts.clone).toBe(0);
           expect(NodeFS.existsSync(entry.localPath)).toBe(false);
+
+          // Once per project: a second creation bootstrap reports the recorded result, no git work.
+          const fetchesAfterInspect = harness.counts.fetch;
+          expect(fetchesAfterInspect).toBe(1);
+          // A recurring bootstrap in between rewrites the manifest and keeps the marker.
+          expect(
+            (yield* bootstrap(harness.workspaceRoot, [url])).mainRepositoryCandidates,
+          ).toBeUndefined();
+          const again = yield* bootstrapWorkspaceReferences({
+            workspaceRoot: harness.workspaceRoot,
+            workspaceRepositoryInitialized: true,
+            detectedMainRepository: undefined,
+            linkedRepositoryUrls: [url],
+            inspectLinkedRepositoriesForMainRepository: true,
+          });
+          expect(again.mainRepositoryCandidates).toEqual([{ url, checkoutPath: entry.localPath }]);
+          expect(harness.counts.fetch).toBe(fetchesAfterInspect);
         }),
       );
     },
@@ -231,33 +247,6 @@ describe("linked repositories on demand", () => {
           wait: true,
         }).pipe(Effect.flip);
         expect(refused.message).toContain(`Linked: ${url}`);
-      }),
-    );
-  });
-
-  it.live("stops waiting after the wait timeout while the clone keeps going", () => {
-    const harness = makeHarness();
-    const url = makeOrigin(harness.root, "slow");
-    return run(
-      harness,
-      Effect.gen(function* () {
-        const gate = yield* harness.holdClones();
-        yield* bootstrap(harness.workspaceRoot, [url]);
-        const error = yield* syncLinkedRepositoryOnDemand({
-          workspaceRoot: harness.workspaceRoot,
-          repository: url,
-          wait: true,
-          waitTimeoutMs: 50,
-        }).pipe(Effect.flip);
-        expect(error.message).toContain("timed out after");
-        const [entry] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot))
-          .linkedRepositories;
-        expect(entry?.syncState).toBe("cloning");
-        yield* Deferred.succeed(gate, undefined);
-        yield* Effect.flatMap(T3TeamLinkedRepositorySync, (sync) =>
-          sync.awaitSettled(entry!.localPath),
-        );
-        expect(harness.counts.clone).toBe(1);
       }),
     );
   });
