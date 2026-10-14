@@ -43,7 +43,7 @@ function trimNonEmpty(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function normalizeSecureUrl(value: unknown): string | null {
+export function normalizeSecureUrl(value: unknown): string | null {
   const raw = trimNonEmpty(value);
   if (raw === null) {
     return null;

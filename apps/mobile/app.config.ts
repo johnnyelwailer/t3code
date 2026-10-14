@@ -477,6 +477,12 @@ const config: ExpoConfig = {
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,
     },
+    // Supplied by the GHE distribution; see src/features/distribution for the dev fallbacks.
+    distribution: {
+      providerEndpoint:
+        repoEnv.EXPO_PUBLIC_NEXI_PROVIDER_ENDPOINT ?? repoEnv.T3CODE_NEXI_PROVIDER_ENDPOINT ?? null,
+      brokerUrl: repoEnv.EXPO_PUBLIC_NEXI_BROKER_URL ?? repoEnv.T3CODE_NEXI_BROKER_URL ?? null,
+    },
     clerk: {
       publishableKey: repoEnv.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? null,
       jwtTemplate: repoEnv.EXPO_PUBLIC_CLERK_JWT_TEMPLATE ?? null,

@@ -7,6 +7,7 @@ import { resolveOfficialAcpRegistryIconUrl } from "@t3tools/contracts";
 import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
 import { AppText as Text } from "./AppText";
 import { getProviderClient } from "../lib/providerClients";
+import { isNexiProviderDriver } from "../lib/t3team-nexiProvider";
 
 type ProviderIconProps = {
   readonly provider: string | null | undefined;
@@ -73,6 +74,15 @@ export function ProviderIcon(props: ProviderIconProps) {
     return (
       <Image
         source={require("../../assets/antigravity.png")}
+        style={{ width: size, height: size }}
+        contentFit="contain"
+      />
+    );
+  }
+  if (isNexiProviderDriver(props.provider)) {
+    return (
+      <Image
+        source={require("../../assets/brand/nexplore-mark-1024.png")}
         style={{ width: size, height: size }}
         contentFit="contain"
       />
