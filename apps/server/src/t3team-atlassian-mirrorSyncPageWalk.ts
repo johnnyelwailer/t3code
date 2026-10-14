@@ -1,7 +1,8 @@
 /**
- * The paging core shared by the mirror's catch-up and reconcile walks: fetch
- * `ORDER BY updated ASC` pages, pace them in bursts, upsert each page, and say
- * how the walk ended. Callers decide what a page means (watermark, seen ids).
+ * The paging core shared by the mirror's walks: fetch `ORDER BY updated ASC`
+ * (or DESC for the recent window) pages, pace them in bursts, upsert each page,
+ * and say how the walk ended. Callers decide what a page means (watermark,
+ * seen ids).
  */
 import type { IntegrationAccountRef } from "@t3tools/integrations-core";
 import * as Effect from "effect/Effect";
@@ -25,6 +26,7 @@ export type MirrorPageSource = {
     account: IntegrationAccountRef;
     externalProjectId: string;
     updatedWithinMinutes?: number;
+    newestFirst?: boolean;
     cursor?: string;
     limit?: number;
   }) => Promise<{ items: ReadonlyArray<MirrorPageItem>; nextCursor: string | undefined }>;
@@ -42,6 +44,7 @@ export function walkMirrorPages<E, R>(options: {
   readonly identity: MirrorSyncIdentity;
   readonly isSuperseded: () => boolean;
   readonly updatedWithinMinutes: number | undefined;
+  readonly newestFirst?: boolean;
   readonly failureMessage: string;
   readonly onPageStored: (items: ReadonlyArray<MirrorPageItem>) => Effect.Effect<void, E, R>;
 }) {
@@ -60,6 +63,7 @@ export function walkMirrorPages<E, R>(options: {
             ...(options.updatedWithinMinutes !== undefined
               ? { updatedWithinMinutes: options.updatedWithinMinutes }
               : {}),
+            ...(options.newestFirst ? { newestFirst: true } : {}),
             ...(pageCursor ? { cursor: pageCursor } : {}),
             limit: mirrorPageSize,
           }),

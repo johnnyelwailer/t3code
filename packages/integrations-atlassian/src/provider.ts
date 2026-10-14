@@ -1306,6 +1306,8 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
    *   JQL's absolute-datetime format constraints (it rejects ISO-8601 with
    *   T/Z/millis) and any server/Jira timezone or clock skew. Omit for a full
    *   backfill / reconcile walk over the entire project.
+   * @param newestFirst - Orders `updated DESC` instead of ASC, so a bounded
+   *   recent window lands its newest issues on the first pages.
    * @param cursor - Opaque page token from a previous call's `nextCursor`.
    * @param limit - Page size; defaults to jiraIssueSearchPageSize.
    * @throws AtlassianMirrorSourceUnavailableError when no client is registered
@@ -1317,6 +1319,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     account: IntegrationAccountRef;
     externalProjectId: string;
     updatedWithinMinutes?: number;
+    newestFirst?: boolean;
     cursor?: string;
     limit?: number;
   }): Promise<{
@@ -1351,7 +1354,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     if (input.updatedWithinMinutes && input.updatedWithinMinutes > 0) {
       jqlParts.push(`updated >= -${Math.floor(input.updatedWithinMinutes)}m`);
     }
-    const jql = `${jqlParts.join(" AND ")} ORDER BY updated ASC`;
+    const jql = `${jqlParts.join(" AND ")} ORDER BY updated ${input.newestFirst ? "DESC" : "ASC"}`;
 
     const extraFields: string[] = [
       ...(estimateField ? [estimateField.id] : []),

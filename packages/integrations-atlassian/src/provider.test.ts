@@ -385,6 +385,15 @@ describe("AtlassianIntegrationProvider", () => {
     expect(incrementalJql).toContain("updated >= -15m");
     // Must NOT emit an absolute ISO datetime — Jira JQL rejects the T/Z form.
     expect(incrementalJql).not.toMatch(/updated >= "?\d{4}-\d{2}-\d{2}T/);
+    expect(incrementalJql).toMatch(/ORDER BY updated ASC$/);
+
+    await provider.listProjectMirrorPage({
+      account,
+      externalProjectId: "project-1",
+      updatedWithinMinutes: 64_800,
+      newestFirst: true,
+    });
+    expect(seenJql[2]).toMatch(/updated >= -64800m ORDER BY updated DESC$/);
   });
 
   it("throws a typed error from the mirror page when no client is available", async () => {
