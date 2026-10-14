@@ -6,6 +6,8 @@ import { DigestStoryGroup } from "~/t3team/t3team-ProjectMyWorkDigestStoryGroup"
 import type { DigestGraph, DigestSection } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import { groupByParent } from "~/t3team/t3team-projectMyWorkDigestGroups";
 import type { ProjectTicket } from "~/t3team/t3team-types";
+import { digestTransitionStyle } from "~/t3team/t3team-digestViewTransition";
+import { useDigestTransitionNames } from "~/t3team/t3team-digestTransitionNames";
 
 export type LaneProps = {
   graph: DigestGraph;
@@ -25,6 +27,7 @@ export function SideSection({
   nowMs,
   onOpenTicket,
 }: LaneProps & { section: DigestSection }) {
+  const names = useDigestTransitionNames();
   return (
     <section className="space-y-2">
       <DigestKicker count={section.items.length}>{section.heading}</DigestKicker>
@@ -38,6 +41,7 @@ export function SideSection({
           return ticket ? (
             <DigestItemRow
               key={ticket.id}
+              transitionName={names.row(section.id, ticket.id)}
               ticket={ticket}
               why={item.why}
               graph={graph}
@@ -60,6 +64,7 @@ export function MainSection({
   shownTicketIds,
   rowTicketIds,
 }: LaneProps & { section: DigestSection }) {
+  const names = useDigestTransitionNames();
   return (
     <section className="space-y-2">
       <DigestKicker count={section.items.length}>{section.heading}</DigestKicker>
@@ -72,6 +77,7 @@ export function MainSection({
                 key="standalone"
                 tone="muted"
                 className="min-w-0 divide-y divide-border/50 overflow-hidden"
+                style={digestTransitionStyle(names.standalone(section.id))}
               >
                 {group.items.map((item) => {
                   const ticket = ticketsById.get(item.ticketId);
@@ -79,6 +85,7 @@ export function MainSection({
                   return (
                     <DigestItemRow
                       key={ticket.id}
+                      transitionName={names.row(section.id, ticket.id)}
                       ticket={ticket}
                       why={item.why}
                       graph={graph}
@@ -93,6 +100,7 @@ export function MainSection({
           return (
             <DigestStoryGroup
               key={group.parent.id}
+              transitionName={names.story(section.id, group.parent.id)}
               story={group.parent}
               graph={graph}
               nowMs={nowMs}
@@ -106,6 +114,7 @@ export function MainSection({
                 return (
                   <DigestItemRow
                     key={ticket.id}
+                    transitionName={names.row(section.id, ticket.id)}
                     ticket={ticket}
                     why={item.why}
                     graph={graph}
@@ -130,6 +139,7 @@ export function FooterSection({
   nowMs,
   onOpenTicket,
 }: LaneProps & { section: DigestSection }) {
+  const names = useDigestTransitionNames();
   const [open, setOpen] = useState(false);
   return (
     <section className="space-y-2">
@@ -150,6 +160,7 @@ export function FooterSection({
               return ticket ? (
                 <DigestItemRow
                   key={ticket.id}
+                  transitionName={names.row(section.id, ticket.id)}
                   ticket={ticket}
                   why={item.why}
                   graph={graph}
