@@ -78,6 +78,19 @@ describe("what a cloud session row offers", () => {
     expect(cloudSessionActions(session({ phase: "cancelled", machineSetup: true }))).toEqual([]);
   });
 
+  it("opens a ready broker session on the phone once its environment is known", () => {
+    const ready = session({ phase: "ready", transport: "nexi_broker" });
+    expect(cloudSessionActions(ready).map((choice) => choice.action)).toEqual(["cancel"]);
+    expect(
+      cloudSessionActions({ ...ready, environmentId: "env-a" }).map((choice) => choice.action),
+    ).toEqual(["open", "cancel"]);
+    expect(
+      cloudSessionActions({ ...ready, transport: "t3_connect", environmentId: "env-a" }).map(
+        (choice) => choice.action,
+      ),
+    ).toEqual(["cancel"]);
+  });
+
   it("reads each phase in the desktop's words", () => {
     expect(cloudSessionRowDetail(session({ phase: "queued" }))).toBe("Queued · 12s");
     expect(cloudSessionRowDetail(session({ phase: "ready", remainingSeconds: 3600 }))).toBe(

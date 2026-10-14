@@ -17,6 +17,7 @@ import {
   makeNexiBrokerClient,
   type StandbyClaim,
 } from "@t3tools/shared/t3team-nexiBrokerClient";
+import { sessionToAttach } from "@t3tools/shared/t3team-nexiBrokerAttach";
 import { resolveNexiBrokerConfig } from "./t3team-NexiBrokerConfig.ts";
 import { type BrokerForwarder, startBrokerForwarder } from "./t3team-NexiBrokerForwarder.ts";
 
@@ -62,29 +63,7 @@ export class NexiBrokerService extends Context.Service<
   }
 >()("t3/cloud/t3team-NexiBrokerService/NexiBrokerService") {}
 
-/**
- * The listed session an attach reaches: the one asked for, else — a workspace's sessions share
- * their environment, since the snapshot keeps its id — the live one serving the same environment.
- */
-export function sessionToAttach<
-  S extends { readonly runId: string; readonly environmentId?: string | null | undefined },
->(sessions: readonly S[], input: CloudSessionAttachInput): S | undefined {
-  const asked = sessions.find(
-    (s) =>
-      s.runId === input.sessionId &&
-      s.environmentId &&
-      (input.environmentId === undefined || s.environmentId === input.environmentId),
-  );
-  if (asked !== undefined || input.environmentId === undefined) return asked;
-  // Two live sessions in one workspace (started side by side) serve the same environment: the
-  // newest run wins, so reconnects stay on one machine instead of following list order.
-  return sessions
-    .filter((s) => s.environmentId === input.environmentId)
-    .reduce<S | undefined>(
-      (newest, s) => (newest === undefined || Number(s.runId) > Number(newest.runId) ? s : newest),
-      undefined,
-    );
-}
+export { sessionToAttach };
 
 const notEnabled = new CloudSessionFailedError({
   reason: "broker_unavailable",

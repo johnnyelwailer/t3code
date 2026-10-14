@@ -11,6 +11,10 @@
       "types": "./src/t3team-accountOAuth.ts",
       "import": "./src/t3team-accountOAuth.ts"
     },
+    "./t3team-nexiBrokerAttach": {
+      "types": "./src/t3team-nexiBrokerAttach.ts",
+      "import": "./src/t3team-nexiBrokerAttach.ts"
+    },
     "./t3team-nexiBrokerClient": {
       "types": "./src/t3team-nexiBrokerClient.ts",
       "import": "./src/t3team-nexiBrokerClient.ts"

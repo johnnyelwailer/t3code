@@ -13,6 +13,7 @@ import {
 } from "./t3team-cloudSessionActions";
 import type { CloudSessionLauncher } from "./t3team-cloudSessionLaunchers";
 import { useCloudSessionList } from "./t3team-useCloudSessionList";
+import type { BrokerDeviceToOpen } from "./t3team-useOpenBrokerDevice";
 
 function offerActions(
   session: CloudSession,
@@ -51,11 +52,15 @@ export function CloudSessionSection(props: {
   readonly launcher: CloudSessionLauncher;
   readonly launchers: ReadonlyArray<CloudSessionLauncher>;
   readonly onChooseLauncher: (environmentId: EnvironmentId) => void;
+  readonly onOpen: (device: BrokerDeviceToOpen) => void;
 }) {
   const { launcher, launchers } = props;
   const { list, pending, failure, start, cancel } = useCloudSessionList(launcher.environmentId);
-  const onAction = (action: CloudSessionAction, session: CloudSession) =>
-    void (action === "cancel" ? cancel(session.sessionId) : start());
+  const onAction = (action: CloudSessionAction, session: CloudSession) => {
+    if (action === "open") {
+      props.onOpen({ key: session.sessionId, label: cloudSessionDisplayName(session) });
+    } else void (action === "cancel" ? cancel(session.sessionId) : start());
+  };
   const footer =
     failure ??
     list.loadError ??

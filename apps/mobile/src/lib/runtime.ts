@@ -4,9 +4,14 @@ import * as Socket from "effect/socket/Socket";
 
 import { layerRemoteHttpClient } from "@t3tools/client-runtime/rpc";
 
+import {
+  brokerProxyFetch,
+  brokerProxyWebSocketConstructor,
+} from "../features/broker/t3team-brokerProxyTransport";
 import * as Dpop from "../features/cloud/dpop";
 import * as ManagedRelayLayer from "../features/cloud/managedRelayLayer";
 import { resolveCloudPublicConfig } from "../features/cloud/publicConfig";
+import { resolveNexiDistributionConfig } from "../features/distribution/t3team-nexiDistributionConfig";
 import * as Tracing from "../features/observability/tracing";
 import * as Persistence from "../persistence/layer";
 import { disposeOnFoundationReplace, type FoundationHotModule } from "./foundation-fast-refresh";
@@ -17,11 +22,18 @@ function configuredRelayUrl(): string {
   return resolveCloudPublicConfig().relay.url ?? "http://relay.invalid";
 }
 
-const layerHttpClient = layerRemoteHttpClient(fetch);
+const brokerUrl = resolveNexiDistributionConfig().broker.url;
+
+const layerHttpClient = layerRemoteHttpClient(brokerProxyFetch(fetch, brokerUrl));
+
+const layerWebSocketConstructor = Layer.succeed(
+  Socket.WebSocketConstructor,
+  brokerProxyWebSocketConstructor(brokerUrl),
+);
 
 type RuntimeLayerSource =
   | ReturnType<typeof ManagedRelayLayer.layer>
-  | typeof Socket.layerWebSocketConstructorGlobal
+  | typeof layerWebSocketConstructor
   | typeof Dpop.layer
   | typeof layerHttpClient
   | typeof Persistence.layer
@@ -29,7 +41,7 @@ type RuntimeLayerSource =
 
 const layerRuntime = Layer.merge(
   ManagedRelayLayer.layer(configuredRelayUrl()),
-  Socket.layerWebSocketConstructorGlobal,
+  layerWebSocketConstructor,
 ).pipe(
   Layer.provideMerge(Dpop.layer),
   Layer.provideMerge(layerHttpClient),

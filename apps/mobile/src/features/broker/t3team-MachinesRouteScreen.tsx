@@ -4,10 +4,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
-import { BrokerDeviceSections } from "./t3team-BrokerDeviceSections";
+import { BrokerDeviceSections, Hint } from "./t3team-BrokerDeviceSections";
 import { CloudSessionSection, NoCloudSessionLauncher } from "./t3team-CloudSessionSection";
 import { useBrokerDevices } from "./t3team-useBrokerDevices";
 import { useCloudSessionLauncher } from "./t3team-useCloudSessionLauncher";
+import { useOpenBrokerDevice } from "./t3team-useOpenBrokerDevice";
 
 /**
  * "My machines": the user's enrolled machines and running cloud sessions as the Nexi broker sees
@@ -18,6 +19,7 @@ export function MachinesRouteScreen() {
   const insets = useSafeAreaInsets();
   const devices = useBrokerDevices();
   const { launcher, launchers, choose } = useCloudSessionLauncher();
+  const device = useOpenBrokerDevice();
 
   return (
     <View collapsable={false} className="flex-1 bg-sheet">
@@ -37,7 +39,13 @@ export function MachinesRouteScreen() {
           />
         }
       >
-        <BrokerDeviceSections state={devices.state} onRetry={() => void devices.refresh()} />
+        <BrokerDeviceSections
+          state={devices.state}
+          onRetry={() => void devices.refresh()}
+          opening={device.opening}
+          onOpen={(target) => void device.open(target)}
+        />
+        {device.failure === null ? null : <Hint>{device.failure}</Hint>}
         {launcher === null ? (
           <NoCloudSessionLauncher />
         ) : (
@@ -46,6 +54,7 @@ export function MachinesRouteScreen() {
             launcher={launcher}
             launchers={launchers}
             onChooseLauncher={choose}
+            onOpen={(target) => void device.open(target)}
           />
         )}
       </ScrollView>
