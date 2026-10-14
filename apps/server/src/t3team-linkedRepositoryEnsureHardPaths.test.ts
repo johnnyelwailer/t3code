@@ -151,8 +151,11 @@ describe("lazy linked repository ensure on hard-requirement paths", () => {
               fileSystem,
               path,
               gitWorkflow: {
-                createWorktree: (args) => driver.createWorktree(args),
-                localStatus: ({ cwd }) => Effect.sync(() => ({ isRepo: true, refName: "main" })),
+                createWorktree: (
+                  args: Parameters<GitWorkflowService["Service"]["createWorktree"]>[0],
+                ) => driver.createWorktree(args),
+                localStatus: ({ cwd: _cwd }: { readonly cwd: string }) =>
+                  Effect.sync(() => ({ isRepo: true, refName: "main" })),
               } as unknown as GitWorkflowService["Service"],
               sourceControlProviders: {
                 resolve: () => Effect.succeed({ getDefaultBranch: () => Effect.succeed("main") }),

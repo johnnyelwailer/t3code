@@ -21,10 +21,7 @@ import {
   REFERENCES_DIR_NAME,
   type LinkedRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
-import {
-  findLinkedRepository,
-  repositoryLookupCandidates,
-} from "./t3team-toolBrokerStartChildLinkedRepository.ts";
+import { repositoryLookupCandidates } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 import { VcsProcess } from "./vcs/VcsProcess.ts";
 
 const matchesRepository = (entryUrl: string, target: string): boolean =>

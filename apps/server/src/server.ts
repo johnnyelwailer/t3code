@@ -485,25 +485,29 @@ const layerGitManager = GitManager.layer.pipe(
   Layer.provideMerge(GitVcsDriver.layer),
   Layer.provideMerge(layerSourceControlProviderRegistry),
   Layer.provideMerge(TextGeneration.layer.pipe(Layer.provide(layerSourceControlProviderRegistry))),
-  // Pull request checkout on linked repositories may queue lazy reference clones.
-  Layer.provideMerge(
-    T3TeamLinkedRepositorySyncLive.pipe(Layer.provideMerge(layerSourceControlRepositoryService)),
-  ),
+);
+
+const layerSourceControlRepositoryService = SourceControlRepositoryService.layer.pipe(
+  Layer.provideMerge(GitVcsDriver.layer),
+  Layer.provideMerge(layerSourceControlProviderRegistry),
 );
 
 const layerGit = Layer.empty.pipe(
-  Layer.provideMerge(layerGitManager),
+  Layer.provideMerge(
+    layerGitManager.pipe(
+      Layer.provideMerge(
+        T3TeamLinkedRepositorySyncLive.pipe(
+          Layer.provideMerge(layerSourceControlRepositoryService),
+        ),
+      ),
+    ),
+  ),
   Layer.provideMerge(GitVcsDriver.layer),
 );
 
 const layerGitWorkflow = GitWorkflowService.layer.pipe(
   Layer.provideMerge(layerVcsDriverRegistry),
   Layer.provideMerge(layerGit),
-);
-
-const layerSourceControlRepositoryService = SourceControlRepositoryService.layer.pipe(
-  Layer.provideMerge(GitVcsDriver.layer),
-  Layer.provideMerge(layerSourceControlProviderRegistry),
 );
 
 const layerProjectCloneTracker = ProjectCloneTracker.layer.pipe(
