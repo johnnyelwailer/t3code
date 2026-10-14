@@ -118,9 +118,6 @@ export class BackendWatchdogKillHistory {
   }
 }
 
-const describe = (cause: unknown): string =>
-  cause instanceof Error ? cause.message : typeof cause === "string" ? cause : String(cause);
-
 /**
  * Probes until `failureThreshold` consecutive probes fail, then returns the
  * failure summary. A successful probe resets the counter. Never fails.
@@ -143,7 +140,9 @@ export const watchBackendHealth = <R>(options: {
             onSome: () => Option.none<string>(),
           }),
         ),
-        Effect.catchCause((cause) => Effect.succeedSome(describe(Cause.squash(cause)))),
+        Effect.catchCause((cause) =>
+          Effect.succeedSome(Cause.pretty(cause).split("\n")[0] ?? "probe failed"),
+        ),
       );
       if (Option.isNone(result)) {
         failures = 0;
