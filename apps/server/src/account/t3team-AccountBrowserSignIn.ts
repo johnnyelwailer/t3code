@@ -5,8 +5,7 @@ import type { ExternalLauncherError } from "@t3tools/contracts";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 
-import { makePkceRequest } from "../cloud/t3team-ConnectBrowserRoundTrip.ts";
-import type { AccountOAuthClient } from "./t3team-AccountOAuth.ts";
+import { type AccountOAuthClient, makePkceRequest } from "@t3tools/shared/t3team-accountOAuth";
 
 /**
  * The browser half of an account sign-in: authorization code + PKCE through the user's default

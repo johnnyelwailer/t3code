@@ -14,7 +14,7 @@ import type * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import type * as ExternalLauncher from "../process/externalLauncher.ts";
 import { NO_BROWSER, runAccountBrowserSignIn } from "./t3team-AccountBrowserSignIn.ts";
 import { AccountError } from "./t3team-AccountError.ts";
-import { makeAccountOAuthClient } from "./t3team-AccountOAuth.ts";
+import { makeAccountOAuthClient } from "@t3tools/shared/t3team-accountOAuth";
 import { makeAccountTokenStore } from "./t3team-AccountTokenStore.ts";
 
 /**

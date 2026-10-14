@@ -1,9 +1,11 @@
+import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 
 import { nexploreAccount, type MobileAccountDefinition } from "./t3team-accountIssuer";
+import type { AccountSecretStorage } from "./t3team-accountTokenStore";
 
 /**
  * An in-memory OAuth 2.0 issuer speaking the Entra ID v2 wire format: device code (RFC 8628),
@@ -59,6 +61,7 @@ export function makeMockAccountIssuer(
 ) {
   const name = options.name ?? "Ada Lovelace";
   let device: DeviceDecision = "pending";
+  let pendingBeforeApproval = 0;
   let serial = 0;
   let unreachable = false;
   const liveRefreshTokens = new Set<string>();
@@ -81,8 +84,8 @@ export function makeMockAccountIssuer(
   const token = async (params: URLSearchParams) => {
     const grantType = params.get("grant_type");
     if (grantType === "urn:ietf:params:oauth:grant-type:device_code") {
-      if (device === "approved") return grant("device");
-      return json(400, { error: DEVICE_ERRORS[device] });
+      if (device === "approved" && pendingBeforeApproval-- <= 0) return grant("device");
+      return json(400, { error: DEVICE_ERRORS[device === "approved" ? "pending" : device] });
     }
     if (grantType === "authorization_code") {
       const issued = codes.get(params.get("code") ?? "");
@@ -143,7 +146,11 @@ export function makeMockAccountIssuer(
     account,
     httpClient,
     requests,
-    approveDevice: () => void (device = "approved"),
+    /** The user entering the code; the issuer still answers "pending" to the next `afterPolls`. */
+    approveDevice: (afterPolls = 0) => {
+      device = "approved";
+      pendingBeforeApproval = afterPolls;
+    },
     declineDevice: () => void (device = "declined"),
     expireDevice: () => void (device = "expired"),
     revokeAll: () => liveRefreshTokens.clear(),
@@ -163,3 +170,23 @@ export function makeMockAccountIssuer(
 }
 
 export type MockAccountIssuer = ReturnType<typeof makeMockAccountIssuer>;
+
+/** The platform's Web Crypto as the Effect `Crypto` service (expo-crypto in the app). */
+export const webCrypto = Crypto.make({
+  randomBytes: (size) => globalThis.crypto.getRandomValues(new Uint8Array(size)),
+  digest: (algorithm, data) =>
+    Effect.promise(async () => {
+      const input = new Uint8Array(data.length);
+      input.set(data);
+      return new Uint8Array(await globalThis.crypto.subtle.digest(algorithm, input));
+    }),
+});
+
+/** The keychain as a Map, inspectable by the test. */
+export const memorySecretStorage = (entries = new Map<string, string>()) =>
+  ({
+    entries,
+    get: (key) => Effect.sync(() => entries.get(key) ?? null),
+    set: (key, value) => Effect.sync(() => void entries.set(key, value)),
+    remove: (key) => Effect.sync(() => void entries.delete(key)),
+  }) satisfies AccountSecretStorage & { readonly entries: Map<string, string> };

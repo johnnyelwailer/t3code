@@ -1,10 +1,9 @@
 import { ExternalLauncherError } from "@t3tools/contracts";
 import { buildConnectAuthorizeRequestUrl } from "@t3tools/shared/connectAuth";
-import * as Crypto from "effect/Crypto";
+import { makePkceRequest } from "@t3tools/shared/t3team-accountOAuth";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Base64Url from "effect/encoding/Base64Url";
 
 import type { CloudCliTokenManagerError, PersistedToken } from "./CliTokenManager.ts";
 import { cloudCliOAuthConfig, hostedAppUrlConfig } from "./publicConfig.ts";
@@ -18,17 +17,6 @@ const fail = (
   cause: unknown,
 ): Effect.Effect<never, ConnectCredentialMintError> =>
   Effect.fail(new ConnectCredentialMintError({ reason, cause }));
-
-/** PKCE verifier + S256 challenge and a CSRF state, for any loopback browser sign-in. */
-export const makePkceRequest = Effect.gen(function* () {
-  const crypto = yield* Crypto.Crypto;
-  const verifier = Base64Url.encode(yield* crypto.randomBytes(32));
-  const challenge = Base64Url.encode(
-    yield* crypto.digest("SHA-256", new TextEncoder().encode(verifier)),
-  );
-  const state = Base64Url.encode(yield* crypto.randomBytes(16));
-  return { verifier, challenge, state };
-});
 
 /**
  * One in-app T3 Connect browser round-trip: generate PKCE, listen on the
