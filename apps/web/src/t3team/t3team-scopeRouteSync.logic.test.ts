@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   readScopeFooterActiveEntry,
+  resolveAllProjectsDigestRouteTarget,
   resolveScopeRouteTarget,
   scopeProjectSearch,
 } from "./t3team-scopeRouteSync.logic";
@@ -143,5 +144,28 @@ describe("readScopeFooterActiveEntry", () => {
   it("lights nothing elsewhere", () => {
     expect(readScopeFooterActiveEntry("/t3team/projects/a/threads/t1", {})).toBeNull();
     expect(readScopeFooterActiveEntry("/settings", {})).toBeNull();
+  });
+});
+
+describe("resolveAllProjectsDigestRouteTarget", () => {
+  const digestTarget = (pathname: string, search: Record<string, unknown>) =>
+    resolveAllProjectsDigestRouteTarget({ pathname, search });
+
+  it("sends a project's my-work board to all-projects my-work, lens included", () => {
+    expect(digestTarget("/t3team/projects/a", { projectView: "my-work" })).toEqual({
+      to: "/t3team/my-work",
+    });
+    expect(digestTarget("/t3team/projects/a", {})).toEqual({ to: "/t3team/my-work" });
+    expect(digestTarget("/t3team/projects/a", { myWorkLens: "board" })).toEqual({
+      to: "/t3team/my-work",
+      search: { myWorkLens: "board" },
+    });
+  });
+
+  it("leaves backlog, all-projects my-work, tickets and threads alone", () => {
+    expect(digestTarget("/t3team/projects/a", { projectView: "backlog" })).toBeNull();
+    expect(digestTarget("/t3team/my-work", {})).toBeNull();
+    expect(digestTarget("/t3team/projects/a/tickets/t1", {})).toBeNull();
+    expect(digestTarget("/t3team/projects/a/threads/t1", {})).toBeNull();
   });
 });

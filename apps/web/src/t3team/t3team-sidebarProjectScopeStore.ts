@@ -11,6 +11,8 @@ import { create } from "zustand";
 type T3TeamSidebarProjectScopeState = {
   /** Representative project id of the scoped group, or `null` for "All projects". */
   scopedProjectId: string | null;
+  /** The persisted scope key, or `null` for "All projects" — set even while its group is unresolved. */
+  scopedProjectKey: string | null;
   /** Every physical project the scoped group spans, or `null` for "All projects". */
   scopedProjectRefs: ReadonlyArray<ScopedProjectRef> | null;
   /**
@@ -22,6 +24,7 @@ type T3TeamSidebarProjectScopeState = {
   setScopedProject: (
     projectId: string | null,
     projectRefs: ReadonlyArray<ScopedProjectRef> | null,
+    projectKey: string | null,
   ) => void;
   setLinkedRepositoryKeysByProjectId: (
     keysByProjectId: ReadonlyMap<string, ReadonlyArray<string>>,
@@ -30,13 +33,20 @@ type T3TeamSidebarProjectScopeState = {
 
 export const useT3TeamSidebarProjectScope = create<T3TeamSidebarProjectScopeState>((set) => ({
   scopedProjectId: null,
+  scopedProjectKey: null,
   scopedProjectRefs: null,
   linkedRepositoryKeysByProjectId: new Map(),
-  setScopedProject: (projectId, projectRefs) =>
+  setScopedProject: (projectId, projectRefs, projectKey) =>
     set((state) =>
-      state.scopedProjectId === projectId && state.scopedProjectRefs === projectRefs
+      state.scopedProjectId === projectId &&
+      state.scopedProjectRefs === projectRefs &&
+      state.scopedProjectKey === projectKey
         ? state
-        : { scopedProjectId: projectId, scopedProjectRefs: projectRefs },
+        : {
+            scopedProjectId: projectId,
+            scopedProjectRefs: projectRefs,
+            scopedProjectKey: projectKey,
+          },
     ),
   setLinkedRepositoryKeysByProjectId: (keysByProjectId) =>
     set((state) =>

@@ -69,6 +69,7 @@ export function JiraConnectionCard({
             >
               {view.lastSync.text}
             </p>
+            {view.catchUp ? <p className="text-2xs text-muted-foreground">{view.catchUp}</p> : null}
             {view.problem ? <p className="text-2xs text-destructive">{view.problem}</p> : null}
             {disconnectFailed ? (
               <p className="text-2xs text-destructive">Could not disconnect. Try again.</p>

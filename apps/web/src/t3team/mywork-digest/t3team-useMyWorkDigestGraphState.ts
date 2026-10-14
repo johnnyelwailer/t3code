@@ -11,6 +11,7 @@ import { useState } from "react";
 
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import { readInitialDigestState } from "./t3team-digestGraphCache";
+import { shareStructure } from "./t3team-digestStructuralSharing";
 
 export type MyWorkDigestGraphState = {
   readonly graph: DigestGraph | null;
@@ -36,6 +37,24 @@ export function initialMyWorkDigestGraphState(signature: string): MyWorkDigestGr
   };
 }
 
+/**
+ * One round landing on the current state. A landing graph keeps every part of the one on screen
+ * that did not change, so a round that only moved a timestamp leaves the tickets, claims and PRs
+ * `===` to what they were.
+ */
+function landRound(
+  current: MyWorkDigestGraphState,
+  next: Partial<MyWorkDigestGraphState>,
+): MyWorkDigestGraphState {
+  return {
+    ...current,
+    ...next,
+    ...(current.graph !== null && next.graph != null
+      ? { graph: shareStructure(current.graph, next.graph) }
+      : {}),
+  };
+}
+
 export function useMyWorkDigestGraphState(resetSignature: string) {
   const [state, setState] = useState(() => initialMyWorkDigestGraphState(resetSignature));
   // Scope changed since the last render: reset in place (React's "adjust state on prop change"
@@ -46,6 +65,6 @@ export function useMyWorkDigestGraphState(resetSignature: string) {
     setState(initialMyWorkDigestGraphState(resetSignature));
   }
   const patch = (next: Partial<MyWorkDigestGraphState>) =>
-    setState((current) => ({ ...current, ...next }));
+    setState((current) => landRound(current, next));
   return { state, patch };
 }
