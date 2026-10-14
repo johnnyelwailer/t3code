@@ -207,6 +207,12 @@ export const OrchestratorMcpDelegateTaskInput = Schema.Struct({
   ),
   title: Schema.optional(OrchestratorMcpTitle),
   role: Schema.optional(OrchestratorMcpTaskRole),
+  isolation: Schema.optional(
+    Schema.Literals(["shared", "worktree"]).annotate({
+      description:
+        "Defaults to shared: use the parent's checkout. Worktree creates a separate checkout from the parent's current local commit before starting the child. Uncommitted edits are not copied.",
+    }),
+  ),
   mode: Schema.optional(
     Schema.Literals(["async", "wait"]).annotate({
       description:
