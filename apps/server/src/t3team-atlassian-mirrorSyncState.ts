@@ -5,6 +5,8 @@
  *   fetch everything updated since it, so a gap of any length is closed.
  * - `lastSuccessAtMs`: when a catch-up walk last reached the end of Jira's
  *   change list — the only honest "synced at" for the mirror.
+ * - `lastReconcileAtMs`: when the prune-only full reconcile last completed, so a restarted
+ *   loop keeps its ~24 h cadence instead of walking the whole project again.
  * - `lastError` / `lastErrorAtMs`: the most recent failure since that success;
  *   cleared by the next successful catch-up.
  *
@@ -20,6 +22,7 @@ import type { MirrorSyncIdentity } from "./t3team-atlassian-backlog-mirrorSyncSh
 export type T3TeamMirrorSyncStatus = {
   readonly watermarkMs: number | undefined;
   readonly lastSuccessAtMs: number | undefined;
+  readonly lastReconcileAtMs: number | undefined;
   readonly lastError: string | undefined;
   readonly lastErrorAtMs: number | undefined;
 };
@@ -27,12 +30,17 @@ export type T3TeamMirrorSyncStatus = {
 type MirrorSyncStateRow = {
   readonly watermarkMs: number | null;
   readonly lastSuccessAtMs: number | null;
+  readonly lastReconcileAtMs: number | null;
   readonly lastError: string | null;
   readonly lastErrorAtMs: number | null;
 };
 
+/** SQL clients whose table already carries every column: the check runs once per database. */
+const ensuredClients = new WeakSet<object>();
+
 const ensureMirrorSyncStateTable = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+  if (ensuredClients.has(sql)) return;
   yield* sql`
     CREATE TABLE IF NOT EXISTS t3team_atlassian_mirror_sync_state (
       provider TEXT NOT NULL,
@@ -45,6 +53,14 @@ const ensureMirrorSyncStateTable = Effect.gen(function* () {
       PRIMARY KEY (provider, account_id, external_project_id)
     )
   `;
+  // Added after the table shipped: older databases gain the column on first use.
+  const columns = yield* sql<{ readonly name: string }>`
+    SELECT name FROM pragma_table_info('t3team_atlassian_mirror_sync_state')
+  `;
+  if (!columns.some((column) => column.name === "last_reconcile_at")) {
+    yield* sql`ALTER TABLE t3team_atlassian_mirror_sync_state ADD COLUMN last_reconcile_at INTEGER`;
+  }
+  ensuredClients.add(sql);
 });
 
 const insertMissingStateRow = (identity: MirrorSyncIdentity) =>
@@ -63,6 +79,7 @@ function toStatus(row: MirrorSyncStateRow | undefined): T3TeamMirrorSyncStatus {
   return {
     watermarkMs: row?.watermarkMs ?? undefined,
     lastSuccessAtMs: row?.lastSuccessAtMs ?? undefined,
+    lastReconcileAtMs: row?.lastReconcileAtMs ?? undefined,
     lastError: row?.lastError ?? undefined,
     lastErrorAtMs: row?.lastErrorAtMs ?? undefined,
   };
@@ -77,6 +94,7 @@ export function readT3TeamMirrorSyncStatus(identity: MirrorSyncIdentity) {
       SELECT
         watermark_ms AS "watermarkMs",
         last_success_at AS "lastSuccessAtMs",
+        last_reconcile_at AS "lastReconcileAtMs",
         last_error AS "lastError",
         last_error_at AS "lastErrorAtMs"
       FROM t3team_atlassian_mirror_sync_state
@@ -97,6 +115,7 @@ export function readT3TeamMirrorSyncStatusesForAccount(accountId: string) {
       SELECT
         watermark_ms AS "watermarkMs",
         last_success_at AS "lastSuccessAtMs",
+        last_reconcile_at AS "lastReconcileAtMs",
         last_error AS "lastError",
         last_error_at AS "lastErrorAtMs"
       FROM t3team_atlassian_mirror_sync_state
@@ -148,4 +167,18 @@ export function recordT3TeamMirrorSyncFailure(
         AND external_project_id = ${identity.externalProjectId}
     `;
   }).pipe(Effect.mapError(toPersistenceSqlError("t3team.atlassianMirrorSync.recordFailure")));
+}
+
+/** The prune-only full reconcile reached the end of the project at `atMs`. */
+export function recordT3TeamMirrorReconcile(identity: MirrorSyncIdentity, atMs: number) {
+  return Effect.gen(function* () {
+    const sql = yield* insertMissingStateRow(identity);
+    yield* sql`
+      UPDATE t3team_atlassian_mirror_sync_state
+      SET last_reconcile_at = ${atMs}
+      WHERE provider = ${identity.provider}
+        AND account_id = ${identity.accountId}
+        AND external_project_id = ${identity.externalProjectId}
+    `;
+  }).pipe(Effect.mapError(toPersistenceSqlError("t3team.atlassianMirrorSync.recordReconcile")));
 }

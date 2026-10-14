@@ -7,6 +7,11 @@ import {
   recordT3TeamMirrorSyncKick,
 } from "./t3team-atlassian-mirrorSyncIdleTracking.ts";
 import { resolveJiraPageSource, runMirrorLoop } from "./t3team-atlassian-mirrorSyncLoop.ts";
+import {
+  forgetMirrorSyncLane,
+  type MirrorSyncLane,
+  noteMirrorSyncLane,
+} from "./t3team-atlassian-mirrorSyncLanes.ts";
 
 export { isT3TeamMirrorSyncIdle } from "./t3team-atlassian-mirrorSyncIdleTracking.ts";
 
@@ -64,9 +69,13 @@ export function hasActiveT3TeamAtlassianMirrorSync(input: {
  * runs until no kick has been seen for the idle TTL; a later kick restarts it
  * from the persisted watermark.
  */
-export function kickT3TeamAtlassianMirrorSync(input: T3TeamAtlassianMirrorSyncRequest) {
+export function kickT3TeamAtlassianMirrorSync(
+  input: T3TeamAtlassianMirrorSyncRequest,
+  options?: { readonly lane?: MirrorSyncLane },
+) {
   const mapKey = mirrorSyncMapKey(input);
   recordT3TeamMirrorSyncKick(mapKey);
+  noteMirrorSyncLane(mapKey, options?.lane ?? "foreground");
   if (activeMirrorSyncs.has(mapKey)) {
     return Effect.void;
   }
@@ -78,6 +87,7 @@ export function kickT3TeamAtlassianMirrorSync(input: T3TeamAtlassianMirrorSyncRe
   const unregister = Effect.sync(() => {
     if (activeMirrorSyncs.get(mapKey)?.token === token) {
       activeMirrorSyncs.delete(mapKey);
+      forgetMirrorSyncLane(mapKey);
     }
   });
 

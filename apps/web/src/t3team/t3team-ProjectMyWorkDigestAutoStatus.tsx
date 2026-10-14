@@ -57,6 +57,38 @@ function RefreshHint({ refreshing }: { refreshing: boolean }) {
   );
 }
 
+/** Projects of the All projects digest still on their way: a quiet badge, never a skeleton. */
+export function DigestSyncingProjectsBadge({
+  projects,
+}: {
+  readonly projects: readonly string[] | undefined;
+}) {
+  if (projects === undefined || projects.length === 0) return null;
+  const label =
+    projects.length === 1 ? `Syncing ${projects[0]}…` : `Syncing ${projects.length} projects…`;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full border border-border/70 px-2 py-0.5 text-muted-foreground"
+            data-testid="digest-syncing-projects"
+          >
+            <span
+              className="size-1.5 animate-pulse rounded-full bg-info motion-reduce:animate-none"
+              aria-hidden
+            />
+            {label}
+          </span>
+        }
+      />
+      <TooltipPopup side="top" className="max-w-xs">
+        Still loading: {projects.join(", ")}. What is shown is already synced.
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
 export function DigestAutoStatus({
   updatedAtMs,
   jiraSyncedAt,
@@ -65,6 +97,7 @@ export function DigestAutoStatus({
   nowMs,
   refreshing = false,
   needsAttention = false,
+  syncingProjects,
 }: {
   updatedAtMs: number | undefined;
   jiraSyncedAt: string | undefined;
@@ -76,7 +109,10 @@ export function DigestAutoStatus({
   refreshing?: boolean;
   /** The Jira half cannot be trusted (signed out, failing sync): the dot is amber whatever the age. */
   needsAttention?: boolean;
+  /** All projects digest: projects not painted yet (see DigestSyncingProjectsBadge). */
+  syncingProjects?: readonly string[] | undefined;
 }) {
+  const syncingBadge = <DigestSyncingProjectsBadge projects={syncingProjects} />;
   // PRs that may be old or missing (the host rate-limited the read): said here, beside the sync.
   const prNotice = changeRequestNote ? (
     <Tooltip>
@@ -97,6 +133,7 @@ export function DigestAutoStatus({
   if (label === null) {
     return (
       <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+        {syncingBadge}
         {prNotice}
         <RefreshHint refreshing={refreshing} />
       </span>
@@ -114,6 +151,7 @@ export function DigestAutoStatus({
         <span className={`size-1.5 rounded-full ${dot}`} aria-hidden />
         {label}
       </span>
+      {syncingBadge}
       {prNotice}
       <RefreshHint refreshing={refreshing} />
     </span>

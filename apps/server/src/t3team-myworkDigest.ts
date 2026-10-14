@@ -99,6 +99,7 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
           loadDigestProjectSource(
             {
               nowMs,
+              mirrorLane: input.scope === "all" ? "background" : "foreground",
               nowIso,
               requestedViewerName,
               mergedPrs,
