@@ -1,5 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off globalDate:off globalRandom:off globalTimers:off preferSchemaOverJson:off - the cross-process lock must use real OS time, pids and exclusive file creation, outside the TestClock.
-import * as NodeFS from "node:fs/promises";
+import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as Effect from "effect/Effect";
@@ -36,7 +36,7 @@ function processAlive(pid: number): boolean {
 
 async function readOwner(lockPath: string): Promise<LockOwner | null> {
   try {
-    return JSON.parse(await NodeFS.readFile(lockPath, "utf8")) as LockOwner;
+    return JSON.parse(await NodeFSP.readFile(lockPath, "utf8")) as LockOwner;
   } catch {
     return null;
   }
@@ -44,7 +44,7 @@ async function readOwner(lockPath: string): Promise<LockOwner | null> {
 
 /** True when the lock file at `lockPath` may be taken over. Exported for tests. */
 export async function isAtlassianAuthLockStale(lockPath: string, now = Date.now()) {
-  const stat = await NodeFS.stat(lockPath).catch(() => null);
+  const stat = await NodeFSP.stat(lockPath).catch(() => null);
   if (!stat) return true;
   if (now - stat.mtimeMs > STALE_LOCK_MS) return true;
   const owner = await readOwner(lockPath);
@@ -61,15 +61,15 @@ export async function tryAcquireAtlassianAuthLock(
   const token = `${process.pid}-${Math.random().toString(36).slice(2)}`;
   const owner = { pid: process.pid, host: NodeOS.hostname(), at: Date.now(), token };
   try {
-    await NodeFS.writeFile(lockPath, JSON.stringify(owner), { flag: "wx", mode: 0o600 });
+    await NodeFSP.writeFile(lockPath, JSON.stringify(owner), { flag: "wx", mode: 0o600 });
   } catch (cause) {
     if ((cause as NodeJS.ErrnoException).code !== "EEXIST") throw cause;
     if (!(await isAtlassianAuthLockStale(lockPath))) return null;
     // Take over a stale lock: rename it away atomically so only one contender wins the removal.
     const stalePath = `${lockPath}.${token}.stale`;
     try {
-      await NodeFS.rename(lockPath, stalePath);
-      await NodeFS.rm(stalePath, { force: true });
+      await NodeFSP.rename(lockPath, stalePath);
+      await NodeFSP.rm(stalePath, { force: true });
     } catch {
       return null;
     }
@@ -78,7 +78,7 @@ export async function tryAcquireAtlassianAuthLock(
   return async () => {
     const current = (await readOwner(lockPath)) as (LockOwner & { token?: string }) | null;
     // Never remove a lock some other process took over after ours went stale.
-    if (current?.token === token) await NodeFS.rm(lockPath, { force: true }).catch(() => {});
+    if (current?.token === token) await NodeFSP.rm(lockPath, { force: true }).catch(() => {});
   };
 }
 
@@ -99,7 +99,7 @@ export function withAtlassianAuthFileLock<A, E, R>(
   return Effect.gen(function* () {
     const { secretsDir } = yield* ServerConfig;
     const lockPath = NodePath.join(secretsDir, ATLASSIAN_AUTH_LOCK_FILE);
-    yield* Effect.promise(() => NodeFS.mkdir(secretsDir, { recursive: true }).catch(() => {}));
+    yield* Effect.promise(() => NodeFSP.mkdir(secretsDir, { recursive: true }).catch(() => {}));
     return yield* Effect.acquireUseRelease(
       Effect.promise(() => acquireWithRetry(lockPath)).pipe(
         Effect.tap(({ acquired }) =>

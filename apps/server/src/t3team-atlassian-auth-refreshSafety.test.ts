@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalDate:off globalDateInEffect:off globalTimersInEffect:off preferSchemaOverJson:off - integration test simulates another process writing the secret and holding the lock file.
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as NodeFS from "node:fs/promises";
+import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
 import * as Clock from "effect/Clock";
@@ -160,7 +160,7 @@ it.effect("after invalid_grant, waits and adopts a newer token written meanwhile
     globalThis.fetch = vi.fn(async () => {
       // An unlocked writer (older build) stores its rotated token just after our rejection.
       setTimeout(() => {
-        void NodeFS.writeFile(
+        void NodeFSP.writeFile(
           secretPath,
           JSON.stringify({ version: 1, auths: [{ accountId: "cloud-1", auth: newer }] }),
         );
@@ -217,7 +217,7 @@ it.effect("a deferred 401 flag is dropped when a newer token is on disk (CAS)", 
 // --- 2) cross-process lock --------------------------------------------------------------------
 
 async function tempLockPath() {
-  const dir = await NodeFS.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3team-atl-lock-"));
+  const dir = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3team-atl-lock-"));
   return NodePath.join(dir, ATLASSIAN_AUTH_LOCK_FILE);
 }
 
@@ -238,7 +238,7 @@ it.effect("a lock held by a dead process or too old is taken over", () =>
   Effect.promise(async () => {
     const lockPath = await tempLockPath();
     // A pid that can not exist on this host.
-    await NodeFS.writeFile(
+    await NodeFSP.writeFile(
       lockPath,
       JSON.stringify({ pid: 2 ** 22 + 12345, host: NodeOS.hostname(), at: Date.now() }),
     );
@@ -248,7 +248,7 @@ it.effect("a lock held by a dead process or too old is taken over", () =>
     await release?.();
 
     // A live owner (this process) is not stale while fresh, but is once older than the limit.
-    await NodeFS.writeFile(
+    await NodeFSP.writeFile(
       lockPath,
       JSON.stringify({ pid: process.pid, host: NodeOS.hostname(), at: Date.now() }),
     );
@@ -267,7 +267,7 @@ it.effect("refresh runs under the lock file and releases it afterwards", () =>
     const lockPath = NodePath.join(config.secretsDir, ATLASSIAN_AUTH_LOCK_FILE);
     let lockHeldDuringRefresh = false;
     globalThis.fetch = vi.fn(async () => {
-      lockHeldDuringRefresh = await NodeFS.stat(lockPath).then(
+      lockHeldDuringRefresh = await NodeFSP.stat(lockPath).then(
         () => true,
         () => false,
       );
@@ -278,7 +278,7 @@ it.effect("refresh runs under the lock file and releases it afterwards", () =>
 
     assert.isTrue(lockHeldDuringRefresh);
     const lockLeft = yield* Effect.promise(() =>
-      NodeFS.stat(lockPath).then(
+      NodeFSP.stat(lockPath).then(
         () => true,
         () => false,
       ),
@@ -303,7 +303,7 @@ it.effect("a refresh waits for another process holding the lock", () =>
 
     // The "other process" finishes its refresh, stores a fresh token and releases the lock.
     setTimeout(() => {
-      void NodeFS.writeFile(
+      void NodeFSP.writeFile(
         NodePath.join(config.secretsDir, "t3team-atlassian-auths.bin"),
         JSON.stringify({
           version: 1,
