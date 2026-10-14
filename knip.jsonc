@@ -118,6 +118,7 @@
         "src/claude-history-worker.ts!",
         "src/t3team-hostEffect.ts!",
         "src/t3team-hostSdk.ts!",
+        "src/t3team-stallProfiler.fixture.mjs",
         "scripts/cli.ts",
         "scripts/evaluate-thread-titles.ts",
         "scripts/measure-pr-preview.ts",

@@ -17,6 +17,7 @@ import type { ModelSelection } from "@t3tools/contracts";
 import {
   type AccountDefinition,
   type AgentProviderDefinition,
+  type ColdLocalCompactionRouteDefinition,
   type CompletionWakeRendererDefinition,
   defineAccount,
   type ModelPolicyDefinition,
@@ -45,6 +46,7 @@ import { registerCompiledPackPersistence } from "./t3team-compiledPackPersistenc
 import { setPackAccounts } from "./account/t3team-packAccounts.ts";
 import { setDistributionModelPolicy } from "./t3team-configuredDefaultModelSelection.ts";
 import { packAiProvidersToInstanceConfigMap } from "./t3team-pack-aiProvider.ts";
+import { setPackColdLocalCompactionRoutes } from "./t3team-pack-coldLocalCompactionRoute.ts";
 import { setPackCompletionWakeRenderer } from "./t3team-pack-completionWakeRenderer.ts";
 import { setPackAppearanceOverlay } from "./t3team-pack-appearanceOverlay.ts";
 import { toPackProviderDriverDefinition } from "./t3team-pack-driverDefinition.ts";
@@ -101,6 +103,7 @@ export const activateCompiledInDistribution = async (): Promise<void> => {
   let ephemeralPolicy: WorkflowEphemeralConcurrencyPolicyDefinition | undefined;
   let modelPolicy: ModelPolicyDefinition | undefined;
   let wakeRenderer: CompletionWakeRendererDefinition | undefined;
+  const coldCompactionRoutes: ColdLocalCompactionRouteDefinition[] = [];
   const accounts: AccountDefinition[] = [];
 
   if (activateDistribution) {
@@ -137,6 +140,9 @@ export const activateCompiledInDistribution = async (): Promise<void> => {
       },
       defineCompletionWakeRenderer: (definition) => {
         wakeRenderer = definition;
+      },
+      defineColdLocalCompactionRoute: (definition) => {
+        coldCompactionRoutes.push(definition);
       },
       defineAccount: (definition) => {
         accounts.push(defineAccount(definition));
@@ -214,6 +220,7 @@ export const activateCompiledInDistribution = async (): Promise<void> => {
   if (ephemeralPolicy) setWorkflowEphemeralConcurrencyPolicy(ephemeralPolicy);
   if (modelPolicy) setDistributionModelPolicy(modelPolicy);
   if (wakeRenderer) setPackCompletionWakeRenderer(wakeRenderer);
+  setPackColdLocalCompactionRoutes(coldCompactionRoutes);
   if (accounts.length > 0) setPackAccounts(accounts);
   if (distributionTheme) {
     const theme = decodeThemeDefinition(resolveThemeBrand(distributionTheme, distributionAssets));
