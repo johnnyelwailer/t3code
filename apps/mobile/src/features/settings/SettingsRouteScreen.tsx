@@ -5,6 +5,7 @@ import { Platform, View } from "react-native";
 import { deriveProjectGroupLabel } from "@t3tools/client-runtime/state/project-grouping";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AccountSection } from "../account/t3team-AccountSection";
 import { hasCloudPublicConfig } from "../cloud/publicConfig";
 import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
@@ -76,6 +77,8 @@ function ConfiguredSettingsRouteScreen() {
         contentContainerClassName="gap-4 px-5 pt-4"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
+        <AccountSection />
+
         <SettingsSection title="Connections">
           <SettingsRow
             icon="person.crop.circle"
@@ -116,6 +119,8 @@ function LocalSettingsRouteScreen() {
           paddingBottom: Math.max(insets.bottom, 18) + 18,
         }}
       >
+        <AccountSection />
+
         <SettingsSection title="Connections">
           <SettingsRow
             icon="desktopcomputer"

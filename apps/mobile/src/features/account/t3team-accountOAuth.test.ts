@@ -100,7 +100,7 @@ describe("authorization code + PKCE", () => {
       const dismissed = yield* runAccountBrowserSignIn({
         oauth,
         redirectUri: REDIRECT,
-        openAuthSession: () => Effect.succeed({ type: "dismiss" }),
+        openAuthSession: () => Effect.succeed({ type: "closed" }),
       }).pipe(Effect.flip, Effect.provideService(Crypto.Crypto, webCrypto));
       expect(dismissed).toBe("The browser sign-in was cancelled.");
     }),

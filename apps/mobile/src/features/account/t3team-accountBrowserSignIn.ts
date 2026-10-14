@@ -11,7 +11,7 @@ import * as Effect from "effect/Effect";
 /** What the system auth session returned: the redirect it caught, or that the user left. */
 export type AuthSessionOutcome =
   | { readonly type: "success"; readonly url: string }
-  | { readonly type: "cancel" | "dismiss" | "locked" | "opened" };
+  | { readonly type: "closed" };
 
 export type OpenAuthSession = (
   authorizeUrl: string,
