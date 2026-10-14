@@ -3,7 +3,7 @@
 // the schema DDL and the effect_sql_migrations ledger only. No row data is copied,
 // so the fixture carries no user content.
 //
-//   node scripts/t3team-dump-migration-upgrade-fixture.mjs <statev2.sqlite> <out.json> [label]
+//   pnpm t3team:migrations:dump-upgrade-fixture <statev2.sqlite> <out.json> [label]
 //
 // Run it against a database written by the previously released (pinned) fork core
 // and commit the result under apps/server/src/persistence/__fixtures__/ as t3team-fork-release-<core>.fixtures.json. The
