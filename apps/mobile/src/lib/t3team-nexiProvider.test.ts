@@ -27,9 +27,9 @@ describe("Nexplore provider default", () => {
     const standard = option("nexplore", "medium");
 
     expect(findNexiProviderDefaultSelection([instant, standard])).toBe(standard.selection);
-    expect(
-      findNexiProviderDefaultSelection([instant, { ...standard, isUnavailable: true }]),
-    ).toBe(instant.selection);
+    expect(findNexiProviderDefaultSelection([instant, { ...standard, isUnavailable: true }])).toBe(
+      instant.selection,
+    );
   });
 
   it("leaves environments without the Nexplore provider to the server default", () => {
@@ -39,7 +39,10 @@ describe("Nexplore provider default", () => {
   it("outranks the server default for fresh tasks but never an explicit or sticky pick", () => {
     const serverDefault = option("codex", "gpt-5", { isDefault: true });
     const nexplore = option("nexplore", "medium");
-    const sticky: ModelSelection = { instanceId: ProviderInstanceId.make("codex"), model: "sticky" };
+    const sticky: ModelSelection = {
+      instanceId: ProviderInstanceId.make("codex"),
+      model: "sticky",
+    };
     const resolve = (stickySelection: ModelSelection | null) =>
       resolveNewTaskModelSelection({
         draftSelection: null,

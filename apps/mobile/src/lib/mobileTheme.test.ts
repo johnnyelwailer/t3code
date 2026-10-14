@@ -318,8 +318,7 @@ describe("mobile themes", () => {
     "slightly strengthens default %s messages and separates fallback materials",
     (appearance) => {
       const variables = getMobileThemeVariables("t3-code", appearance);
-      const desktop =
-        appearance === "dark" ? NEXI_DARK_THEME_COLORS : NEXI_LIGHT_THEME_COLORS;
+      const desktop = appearance === "dark" ? NEXI_DARK_THEME_COLORS : NEXI_LIGHT_THEME_COLORS;
       const bubbleContrast = contrastRatio(
         variables["--color-user-bubble"],
         variables["--color-screen"],
