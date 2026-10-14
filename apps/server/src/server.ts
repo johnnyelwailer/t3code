@@ -1153,7 +1153,7 @@ const layerMakeServer = Layer.unwrap(
     // Recipes of the pack on disk (T3TEAM_PACKS_DIR), for a host that compiles its distribution in.
     yield* activatePackRecipeSources;
 
-    // Survive @cursor/sdk writes after close; log event-loop stalls to the trace.
+    // Survive unawaited @cursor/sdk writes after their stream closed (was a backend crash).
     yield* installProcessResilience;
 
     const layerHttpListening = Layer.effectDiscard(

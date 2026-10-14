@@ -11,9 +11,8 @@
  * then goes through the manager's normal restart path with exponential backoff,
  * and the client reconnects as usual.
  *
- * Restart storms: each watchdog kill doubles the warm-up before the next run's
- * watchdog arms, and after `maxKillsPerWindow` kills inside `killWindow` the
- * watchdog only logs instead of killing until the window has passed.
+ * Restart storms: each recent kill doubles the next warm-up; after
+ * `maxKillsPerWindow` kills within `killWindow` it only logs.
  */
 import * as Cause from "effect/Cause";
 import * as Duration from "effect/Duration";

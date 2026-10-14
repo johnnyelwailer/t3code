@@ -10,12 +10,9 @@
  *    us (the run is already over and its failure is reported through the SDK
  *    result), so the guard logs and drops exactly that error and keeps Node's
  *    crash-on-unhandled behaviour for everything else.
- * 2. A lightweight event-loop stall detector: a detached fiber that measures its
- *    own sleep drift and logs a warning (with a cheap summary of active handles) to the
- *    server trace when the loop was blocked for longer than the threshold.
+ * 2. `activeResourceSummary()` adds a cheap "what was in flight" snapshot to the
+ *    existing stall profiler's warning (see `t3team-stallProfiler.ts`).
  */
-import * as Clock from "effect/Clock";
-import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 
 const CLOSED_ITERABLE_ERROR_NAME = "WriteIterableClosedError";
@@ -95,88 +92,28 @@ export function installClosedIterableGuard(options: ClosedIterableGuardOptions):
   };
 }
 
-export interface EventLoopStall {
-  readonly blockedMs: number;
-  readonly thresholdMs: number;
-  readonly activeResources: Record<string, number>;
-}
-
-export const DEFAULT_STALL_INTERVAL_MS = 500;
-export const DEFAULT_STALL_THRESHOLD_MS = 3_000;
-
 export function summarizeResources(names: ReadonlyArray<string>): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const name of names) counts[name] = (counts[name] ?? 0) + 1;
   return counts;
 }
 
-/**
- * Drift tracker: call `tick(now)` every `intervalMs`; it returns how long the
- * loop was blocked beyond the interval when that exceeds the threshold.
- */
-export function makeStallTracker(options: {
-  readonly intervalMs: number;
-  readonly thresholdMs: number;
-  readonly start: number;
-}): (now: number) => number | undefined {
-  let last = options.start;
-  return (now) => {
-    const blockedMs = Math.round(now - last - options.intervalMs);
-    last = now;
-    return blockedMs >= options.thresholdMs ? blockedMs : undefined;
-  };
-}
-
-const activeResourceNames = (): ReadonlyArray<string> => {
+/** Cheap snapshot of what is in flight (sockets, timers, fs requests), counted by kind. */
+export function activeResourceSummary(): Record<string, number> {
   try {
-    return typeof process.getActiveResourcesInfo === "function"
-      ? process.getActiveResourcesInfo()
-      : [];
-  } catch {
-    return [];
-  }
-};
-
-/** Forever loop (run it detached): sleeps `intervalMs`, measures drift, reports stalls. */
-export const runEventLoopStallDetector = (options: {
-  readonly intervalMs?: number;
-  readonly thresholdMs?: number;
-  readonly onStall: (stall: EventLoopStall) => Effect.Effect<void>;
-}): Effect.Effect<never> =>
-  Effect.gen(function* () {
-    const intervalMs = options.intervalMs ?? DEFAULT_STALL_INTERVAL_MS;
-    const thresholdMs = options.thresholdMs ?? DEFAULT_STALL_THRESHOLD_MS;
-    const tick = makeStallTracker({
-      intervalMs,
-      thresholdMs,
-      start: yield* Clock.currentTimeMillis,
-    });
-    return yield* Effect.forever(
-      Effect.gen(function* () {
-        yield* Effect.sleep(Duration.millis(intervalMs));
-        const blockedMs = tick(yield* Clock.currentTimeMillis);
-        if (blockedMs !== undefined) {
-          yield* options.onStall({
-            blockedMs,
-            thresholdMs,
-            activeResources: summarizeResources(activeResourceNames()),
-          });
-        }
-      }),
+    return summarizeResources(
+      typeof process.getActiveResourcesInfo === "function" ? process.getActiveResourcesInfo() : [],
     );
-  });
-
-function readPositiveInt(value: string | undefined, fallback: number): number {
-  const parsed = value === undefined ? Number.NaN : Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  } catch {
+    return {};
+  }
 }
 
 let installed = false;
 
 /**
- * Installs both safeguards once per process and routes their reports through the
- * Effect logger (server trace) of the fiber that installed them.
- * `T3TEAM_STALL_THRESHOLD_MS` tunes the detector, `T3TEAM_STALL_DETECTOR=0` turns it off.
+ * Installs the closed-iterable guard once per process and routes its reports through
+ * the Effect logger (server trace) of the fiber that installed it.
  */
 export const installProcessResilience: Effect.Effect<void> = Effect.withFiber((fiber) => {
   if (installed) return Effect.void;
@@ -193,9 +130,5 @@ export const installProcessResilience: Effect.Effect<void> = Effect.withFiber((f
         }),
       ),
   });
-  if (process.env.T3TEAM_STALL_DETECTOR === "0") return Effect.void;
-  return runEventLoopStallDetector({
-    thresholdMs: readPositiveInt(process.env.T3TEAM_STALL_THRESHOLD_MS, DEFAULT_STALL_THRESHOLD_MS),
-    onStall: (stall) => Effect.logWarning("event loop was blocked", stall),
-  }).pipe(Effect.forkDetach, Effect.asVoid);
+  return Effect.void;
 });

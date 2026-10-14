@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "@effect/vitest";
 import {
   installClosedIterableGuard,
   isClosedWriteIterableError,
-  makeStallTracker,
+  activeResourceSummary,
   summarizeResources,
   type ProcessLike,
 } from "./t3team-processResilience.ts";
@@ -85,19 +85,12 @@ describe("installClosedIterableGuard", () => {
   });
 });
 
-describe("makeStallTracker", () => {
-  it("reports drift above the threshold only", () => {
-    const tick = makeStallTracker({ intervalMs: 500, thresholdMs: 3_000, start: 0 });
-    expect(tick(500)).toBeUndefined();
-    expect(tick(1_200)).toBeUndefined();
-    expect(tick(1_200 + 500 + 4_000)).toBe(4_000);
-    expect(tick(6_200)).toBeUndefined();
-  });
-
-  it("summarizes active resources", () => {
+describe("summarizeResources", () => {
+  it("counts resources by kind", () => {
     expect(summarizeResources(["TCPWrap", "TCPWrap", "Timeout"])).toEqual({
       TCPWrap: 2,
       Timeout: 1,
     });
+    expect(typeof activeResourceSummary()).toBe("object");
   });
 });
