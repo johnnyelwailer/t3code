@@ -156,6 +156,7 @@
     "apps/server/src/persistence/Layers/SqliteJournalStore.ts",
     "apps/server/src/persistence/Layers/WorkflowRuns.ts",
     "apps/server/src/persistence/Migrations.ts",
+    "apps/server/src/persistence/Migrations.test.ts",
     "apps/server/src/persistence/Migrations/035_ProjectionThreadTitleRegeneration.test.ts",
     "apps/server/src/persistence/Migrations/040_ProjectionProjectFaviconPath.test.ts",
     "apps/server/src/persistence/Migrations/055_OrchestrationV2.test.ts",
