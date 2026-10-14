@@ -11,6 +11,7 @@ import { ServerConfig, type StartupPresentation } from "../config.ts";
 // silently drifted on every upstream sync (it lost BackgroundPolicy/ResourceTelemetry/Usage in
 // the 2026-08 sync); it is gone, and with it the "register the route in BOTH registries" trap.
 import { runServer } from "../server.ts";
+import { activeResourceSummary } from "../t3team-processResilience.ts";
 import { startStallProfiler } from "../t3team-stallProfiler.ts";
 import { activateCompiledInDistribution } from "../t3team-distribution-bootstrap.ts";
 import {
@@ -292,7 +293,12 @@ export const runT3TeamServerCommand = (
     const stallProfiler = startStallProfiler({
       directory: `${config.logsDir}/stalls`,
       onStall: (event) =>
-        Effect.runFork(Effect.logWarning("The server's event loop stalled", event)),
+        Effect.runFork(
+          Effect.logWarning("The server's event loop stalled", {
+            ...event,
+            activeResources: activeResourceSummary(),
+          }),
+        ),
       onUnavailable: (reason) =>
         Effect.runFork(Effect.logDebug("Stall profiler unavailable", { reason })),
     });

@@ -402,3 +402,10 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
   nothing until a view is registered, so the panel is unchanged without one.
 - `apps/web/src/components/pullRequest/PullRequestSummaryTab.test.tsx` — one case: a throwing
   registered Summary view leaves the real panel standing.
+
+## Backend health watchdog
+
+- `apps/desktop/src/backend/DesktopBackendManager.ts` — one optional `healthWatchdog` option on
+  `runBackendProcess`, chained after the readiness loop, and one per-instance kill history passed
+  from `makeBackendInstance`. The logic lives in `t3team-backendHealthWatchdog.ts`; without the
+  option the process runner is unchanged.
