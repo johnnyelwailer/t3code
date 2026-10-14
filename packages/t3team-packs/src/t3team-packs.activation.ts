@@ -61,6 +61,16 @@ export type CompletionWakeRendererRegistration = {
   readonly render: (input: never) => string | Promise<string>;
 };
 
+/** Cold-cache local compaction route; mirrors `@t3team/pack-api` `ColdLocalCompactionRouteDefinition`. */
+export type ColdLocalCompactionRouteRegistration = {
+  readonly driver: string;
+  readonly ttlMs: number;
+  readonly minUsedTokens: number;
+  readonly localProviderInstance: string;
+  readonly localModel: string;
+  readonly enabled: boolean;
+};
+
 export type WorkflowEphemeralConcurrencyPolicyDefinition = {
   readonly maxActiveSteps: number | "unlimited";
 };
@@ -93,6 +103,10 @@ export type PackActivationContext = {
   ) => void;
   readonly defineModelPolicy: (definition: ModelPolicyDefinition) => void;
   readonly defineCompletionWakeRenderer: (definition: CompletionWakeRendererRegistration) => void;
+  /** Requires the `cold-local-compaction:v1` capability. */
+  readonly defineColdLocalCompactionRoute: (
+    definition: ColdLocalCompactionRouteRegistration,
+  ) => void;
   /** Requires the `account:<id>` capability. */
   readonly defineAccount: (definition: AccountRegistration) => void;
   readonly resolveAssetDataUrl: (relativePath: string, mimeType: string) => Promise<string>;

@@ -142,6 +142,52 @@ describe("t3team project thread persistence", () => {
     expect(localStorage.getItem("t3team:threads")).toBeNull();
   });
 
+  describe("write throttling", () => {
+    const settingsWrites = () =>
+      vi
+        .mocked(localStorage.setItem)
+        .mock.calls.filter(([key]) => key === CLIENT_SETTINGS_STORAGE_KEY)
+        .map(([, value]) => JSON.parse(value).t3teamStoredThreadsJson as string);
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.spyOn(localStorage, "setItem");
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("never writes the same thread list twice", async () => {
+      const { persistStoredThreads } = await loadPersistenceModules();
+      const threads = [makeStoredThread()];
+
+      persistStoredThreads(threads);
+      await vi.advanceTimersByTimeAsync(50);
+      persistStoredThreads([...threads]);
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(settingsWrites()).toHaveLength(1);
+    });
+
+    it("writes the first change at once, then only the latest of a burst after the interval", async () => {
+      const { persistStoredThreads } = await loadPersistenceModules();
+      const first = makeStoredThread({ title: "first" });
+      const second = makeStoredThread({ title: "second" });
+      const third = makeStoredThread({ title: "third" });
+
+      persistStoredThreads([first]);
+      await vi.advanceTimersByTimeAsync(50);
+      persistStoredThreads([second]);
+      persistStoredThreads([third]);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(settingsWrites()).toEqual([JSON.stringify([first])]);
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(settingsWrites()).toEqual([JSON.stringify([first]), JSON.stringify([third])]);
+    });
+  });
+
   it("migrates legacy raw local storage threads into backend-backed client settings", async () => {
     const { CLIENT_SETTINGS_STORAGE_KEY, hydrateStoredThreads } = await loadPersistenceModules();
     const legacyThread = makeStoredThread({ title: "Project kickoff" });

@@ -5,6 +5,7 @@ import {
   CONDUCTOR_MODEL_ID,
   conductorUsageBlock,
   latestProviderTurnForAttempt,
+  type OrchestrationV2ContextHandoff,
   type OrchestrationV2DomainEvent,
   type OrchestrationV2ExecutionNode,
   type OrchestrationV2ProviderThread,
@@ -47,6 +48,7 @@ import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 import * as RunExecutionService from "./RunExecutionService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
+import { ColdLocalCompaction, tryColdLocalCompaction } from "./t3team-coldLocalCompaction.ts";
 import { DelegatedCompletionWakeRenderer } from "../t3team-v2/t3team-delegatedCompletionWakeRenderer.ts";
 import { refreshStartingDelegatedCompletionWake } from "../t3team-v2/t3team-delegatedCompletionWakeRefresh.ts";
 import {
@@ -118,6 +120,8 @@ export const layer: Layer.Layer<
     const runtimePolicy = yield* RuntimePolicy.RuntimePolicyV2;
     // t3team: wake renderer for a delegated-completion wake whose task set changed while queued.
     const wakeRenderer = yield* DelegatedCompletionWakeRenderer;
+    // t3team: pack-registered local summarizer for compacting a cold-cache thread.
+    const coldLocalCompaction = yield* ColdLocalCompaction;
 
     // These callbacks outlive startup while a run drains background work. Build
     // them outside start's scope so they cannot retain its full thread history.
@@ -314,9 +318,15 @@ export const layer: Layer.Layer<
             | Pick<
                 Extract<OrchestrationV2TurnItem, { type: "command_execution" }>,
                 "type" | "title" | "input" | "output" | "exitCode"
+              >
+            | Pick<
+                Extract<OrchestrationV2TurnItem, { type: "compaction" }>,
+                "type" | "title" | "driver"
               >;
           /** Emitted after the run events when the provider thread should go idle. */
           readonly providerThreadUpdate?: OrchestrationV2ProviderThread;
+          /** Written in the same batch, so a run never completes without its handoff. */
+          readonly contextHandoff?: OrchestrationV2ContextHandoff;
         }) {
           const { now, status } = input;
           const started = input.startedAt === undefined ? {} : { startedAt: input.startedAt };
@@ -361,6 +371,9 @@ export const layer: Layer.Layer<
                     payload: input.providerThreadUpdate,
                   },
                 ]),
+            ...(input.contextHandoff === undefined
+              ? []
+              : [{ type: "context-handoff.updated" as const, payload: input.contextHandoff }]),
           ] as const;
           const events = yield* Effect.forEach(eventPayloads, (event) =>
             Effect.gen(function* () {
@@ -465,6 +478,42 @@ export const layer: Layer.Layer<
               ...providerThread,
               status: providerThread.nativeThreadRef === null ? "not_loaded" : "idle",
               updatedAt: now,
+            },
+          });
+          return;
+        }
+        const localCompactionAt = yield* DateTime.now;
+        const localHandoff =
+          message.text.trim().toLowerCase() === "/compact"
+            ? yield* tryColdLocalCompaction({
+                compaction: coldLocalCompaction,
+                contextHandoffService,
+                projection,
+                run,
+                nativeThread,
+                loadItems: projectionStore.getTurnStartHistory(input.threadId),
+                now: localCompactionAt,
+              })
+            : undefined;
+        if (localHandoff !== undefined && nativeThread !== undefined) {
+          // The next turn starts a fresh native session on this provider thread and receives
+          // the summary through the pending handoff, instead of re-reading the cold context.
+          yield* settleRunBeforeStart({
+            signal: "cold-local-compaction",
+            status: "completed",
+            now: localCompactionAt,
+            startedAt: localCompactionAt,
+            providerInstanceId: nativeThread.providerInstanceId,
+            itemProviderThreadId: nativeThread.id,
+            item: { type: "compaction", title: "Context compacted", driver: nativeThread.driver },
+            contextHandoff: localHandoff,
+            providerThreadUpdate: {
+              ...nativeThread,
+              nativeThreadRef: null,
+              nativeConversationHeadRef: null,
+              contextUsage: null,
+              status: "not_loaded",
+              updatedAt: localCompactionAt,
             },
           });
           return;
