@@ -1339,7 +1339,6 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     const { project, estimateField, sprintField } = await resolveMirrorWalkContext(
       entry.client,
       input.externalProjectId,
-      Date.now(),
     );
     if (!project) {
       throw new AtlassianMirrorSourceUnavailableError({

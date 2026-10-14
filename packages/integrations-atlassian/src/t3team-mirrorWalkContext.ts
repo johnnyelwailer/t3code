@@ -55,8 +55,8 @@ async function fetchMirrorWalkContext(
 export async function resolveMirrorWalkContext(
   client: JiraApiClient,
   projectId: string,
-  nowMs: number,
 ): Promise<MirrorWalkContext> {
+  const nowMs = performance.now();
   const cache = cachedContextByClient.get(client) ?? new Map<string, CachedContext>();
   cachedContextByClient.set(client, cache);
   const cached = cache.get(projectId);
