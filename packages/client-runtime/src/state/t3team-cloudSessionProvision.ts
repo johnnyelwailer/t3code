@@ -1,0 +1,157 @@
+import type { CloudSession } from "@t3tools/contracts";
+
+import { cloudSessionProgress, formatDuration } from "./t3team-cloudSessionPhase.ts";
+
+/**
+ * Presentation logic for provisioning a *cloud session*: a full Nexi workspace
+ * started on fleet compute that joins the user's T3 Connect environment list
+ * once its relay link is up. Pure and React-free on purpose — the panel and its
+ * story both import from here, so the phase vocabulary and wording cannot
+ * drift between them; web and mobile both render it. Phases mirror what the job observably does,
+ * not what a provider's API happens to call it.
+ */
+
+export interface CloudSessionProvisionPresentation {
+  readonly title: string;
+  /** One line under the title. Never the raw phase id. */
+  readonly detail: string;
+  readonly tone: "ready" | "working" | "error" | "idle";
+  /** 0–1, or null when the phase has no meaningful progress. */
+  readonly progress: number | null;
+  /** Label for the row's primary action, or null when it has none. */
+  readonly actionLabel: string | null;
+  /** Label for a secondary action on the row, or null when it has none. Kept
+   *  apart from the primary so a ready machine's release is never buried behind
+   *  its connect. */
+  readonly secondaryActionLabel: string | null;
+  /** True when `detail` ends with a live "· <elapsed>" suffix the row ticks on
+   *  a one-second timer rather than the frozen server snapshot. */
+  readonly liveElapsed: boolean;
+}
+
+/**
+ * An ended session offers a fresh one, not a replay of itself. Not for a setup session: its record
+ * keeps no project, so "another" would start a plain session; the Run-on menu starts setup again.
+ */
+function startAnotherLabel(session: CloudSession): string | null {
+  return session.machineSetup === true ? null : "Start another";
+}
+
+/** A project machine's milestones read as its own; a plain session builds the workspace. */
+function preparingWords(session: CloudSession): {
+  readonly title: string;
+  readonly detail: string;
+} {
+  const elapsed = formatDuration(session.elapsedSeconds);
+  if (session.machineSetup === true) {
+    return { title: "Checking out project", detail: elapsed };
+  }
+  if (session.projectMachine !== true) {
+    return { title: "Building workspace", detail: elapsed };
+  }
+  switch (session.machineStage) {
+    case "building":
+      return { title: "Building machine", detail: elapsed };
+    case "checking":
+      return { title: "Checking machine", detail: elapsed };
+    case "installing":
+      return { title: "Installing Nexi", detail: elapsed };
+    case undefined:
+      return { title: "Starting machine", detail: elapsed };
+  }
+}
+
+export function presentCloudSession(session: CloudSession): CloudSessionProvisionPresentation {
+  const elapsed = formatDuration(session.elapsedSeconds);
+
+  switch (session.phase) {
+    case "requested":
+      return {
+        title: "Requesting",
+        detail: "sending to the fleet",
+        tone: "working",
+        progress: cloudSessionProgress(session.elapsedSeconds),
+        actionLabel: "Cancel",
+        secondaryActionLabel: null,
+        liveElapsed: false,
+      };
+    case "queued":
+      return {
+        title: "Queued",
+        detail: elapsed,
+        tone: "working",
+        progress: cloudSessionProgress(session.elapsedSeconds),
+        actionLabel: "Cancel",
+        secondaryActionLabel: null,
+        liveElapsed: true,
+      };
+    case "preparing":
+      return {
+        ...preparingWords(session),
+        tone: "working",
+        progress: cloudSessionProgress(session.elapsedSeconds),
+        actionLabel: "Cancel",
+        secondaryActionLabel: null,
+        liveElapsed: true,
+      };
+    case "starting":
+      return {
+        title: "Connecting",
+        detail: elapsed,
+        tone: "working",
+        progress: cloudSessionProgress(session.elapsedSeconds),
+        actionLabel: "Cancel",
+        secondaryActionLabel: null,
+        liveElapsed: true,
+      };
+    case "ready":
+      return {
+        title: "Ready",
+        detail:
+          session.remainingSeconds === null
+            ? session.machineLabel
+            : `${session.machineLabel} · ${formatDuration(session.remainingSeconds)} left`,
+        tone: "ready",
+        progress: null,
+        actionLabel: "Connect",
+        secondaryActionLabel: "Stop",
+        liveElapsed: false,
+      };
+    case "failed":
+      return {
+        title: "Failed",
+        // The title already says "Failed"; "Failed at X." reads as "Failed · at X".
+        detail: (session.failureReason ?? "stopped before it became reachable").replace(
+          /^Failed\s+(?=at\b)/i,
+          "",
+        ),
+        tone: "error",
+        progress: null,
+        actionLabel: startAnotherLabel(session),
+        secondaryActionLabel: null,
+        liveElapsed: false,
+      };
+    case "stopped":
+      return {
+        title: "Stopped",
+        detail: `ran ${
+          session.durationSeconds === undefined ? elapsed : formatDuration(session.durationSeconds)
+        }`,
+        tone: "idle",
+        progress: null,
+        actionLabel: startAnotherLabel(session),
+        secondaryActionLabel: null,
+        liveElapsed: false,
+      };
+    case "cancelled":
+      return {
+        title: "Cancelled",
+        detail: "by you",
+        tone: "idle",
+        progress: null,
+        actionLabel: startAnotherLabel(session),
+        secondaryActionLabel: null,
+        liveElapsed: false,
+      };
+  }
+}
