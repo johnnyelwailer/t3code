@@ -50,6 +50,7 @@ import type { ComposerEditorSelection } from "../../components/ComposerEditor";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useComposerPathSearch, useComposerPullRequestSearch } from "../../state/queries";
+import { matchNexiRecipes, nexiRecipeLaunchText } from "../distribution/t3team-nexiRecipes";
 import type { ComposerCommandItem } from "./ComposerCommandPopover";
 import { matchesSlashSkillQuery } from "./composerSlashSkillSearch";
 
@@ -128,6 +129,20 @@ export function buildComposerSlashCommandItems(input: {
       description: command.description ?? "",
     });
   }
+  const recipes = matchNexiRecipes({
+    query,
+    atMessageStart: input.atMessageStart,
+    providerDriver: input.selectedProviderStatus?.driver,
+  });
+  for (const recipe of recipes) {
+    items.push({
+      id: `recipe:${recipe.id}`,
+      type: "recipe",
+      recipe,
+      label: `/${recipe.slashAlias}`,
+      description: recipe.title,
+    });
+  }
   return items;
 }
 
@@ -162,6 +177,8 @@ export function resolveComposerCommandSelection(input: {
     replacement = `/${item.command} `;
   } else if (item.type === "provider-slash-command") {
     replacement = `/${item.command.name} `;
+  } else if (item.type === "recipe") {
+    replacement = nexiRecipeLaunchText(item.recipe);
   }
   return {
     ...replaceTextRange(draftMessage, trigger.rangeStart, trigger.rangeEnd, replacement),
