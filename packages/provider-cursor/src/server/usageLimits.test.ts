@@ -5,6 +5,8 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientError from "effect/http/HttpClientError";
+import type * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as CursorKeychain from "./CursorKeychain.ts";
 import { cursorUsageResponseToLimits, readCursorUsageLimits } from "./usageLimits.ts";
@@ -160,29 +162,107 @@ describe("Cursor usage limits", () => {
       }),
   );
 
-  it.effect("reports failed requests without exposing credentials or response bodies", () =>
-    Effect.gen(function* () {
-      const limits = yield* withNodeServices(
+  it.effect(
+    "reads the Windows login from %APPDATA%\\Cursor\\auth.json, as the Cursor CLI does",
+    () =>
+      Effect.gen(function* () {
+        yield* withNodeServices(
+          Effect.gen(function* () {
+            const fs = yield* FileSystem.FileSystem;
+            const path = yield* Path.Path;
+            const home = yield* fs.makeTempDirectoryScoped();
+            const appData = path.join(home, "AppData", "Roaming");
+            yield* fs.makeDirectory(path.join(appData, "Cursor"), { recursive: true });
+            yield* fs.writeFileString(
+              path.join(appData, "Cursor", "auth.json"),
+              '{"accessToken":"windows-cli-token","refreshToken":"unused"}',
+            );
+            yield* fs.makeDirectory(path.join(home, ".cursor"));
+            yield* fs.writeFileString(
+              path.join(home, ".cursor", "auth.json"),
+              '{"accessToken":"macos-style-token"}',
+            );
+            const client = HttpClient.make((request) => {
+              expect(request.headers.authorization).toBe("Bearer windows-cli-token");
+              return Effect.succeed(
+                HttpClientResponse.fromWeb(
+                  request,
+                  Response.json({ planUsage: { totalPercentUsed: 61 } }),
+                ),
+              );
+            });
+            const limits = yield* readCursorUsageLimits(
+              { apiEndpoint: "" },
+              { APPDATA: appData, USERPROFILE: home },
+            ).pipe(
+              Effect.provideService(HostProcess.Platform, "win32"),
+              Effect.provideService(HttpClient.HttpClient, client),
+            );
+            expect(limits.windows[0]?.usedPercent).toBe(61);
+          }).pipe(Effect.scoped),
+        );
+      }),
+  );
+
+  describe("failed requests name their cause without exposing credentials or response bodies", () => {
+    const failWith = (respond: (request: HttpClientRequest.HttpClientRequest) => Response) =>
+      withNodeServices(
         readCursorUsageLimits({ apiEndpoint: "" }, { CURSOR_AUTH_TOKEN: "private-token" }).pipe(
           Effect.provideService(
             HttpClient.HttpClient,
             HttpClient.make((request) =>
-              Effect.succeed(
-                HttpClientResponse.fromWeb(
-                  request,
-                  new Response("private response", { status: 401 }),
-                ),
-              ),
+              Effect.succeed(HttpClientResponse.fromWeb(request, respond(request))),
             ),
           ),
         ),
       );
-      expect(limits.unavailable).toEqual({
-        reason: "probeFailed",
-        message: "Cursor could not read usage limits.",
-      });
-    }),
-  );
+
+    it.effect("tells the user to sign in again when Cursor rejects the login", () =>
+      Effect.gen(function* () {
+        for (const status of [401, 403]) {
+          const limits = yield* failWith(() => new Response("private response", { status }));
+          expect(limits.unavailable).toEqual({
+            reason: "probeFailed",
+            message:
+              "Cursor rejected the saved login (it may have expired). Run `agent login` to sign in again.",
+          });
+        }
+      }),
+    );
+
+    it.effect("reports the HTTP status of other failures", () =>
+      Effect.gen(function* () {
+        const limits = yield* failWith(() => new Response("private response", { status: 503 }));
+        expect(limits.unavailable).toEqual({
+          reason: "probeFailed",
+          message: "Cursor usage request failed (HTTP 503).",
+        });
+      }),
+    );
+
+    it.effect("reports an unreachable Cursor host", () =>
+      Effect.gen(function* () {
+        const limits = yield* withNodeServices(
+          readCursorUsageLimits({ apiEndpoint: "" }, { CURSOR_AUTH_TOKEN: "private-token" }).pipe(
+            Effect.provideService(
+              HttpClient.HttpClient,
+              HttpClient.make((request) =>
+                Effect.fail(
+                  new HttpClientError.HttpClientError({
+                    reason: new HttpClientError.TransportError({ request, cause: "private" }),
+                  }),
+                ),
+              ),
+            ),
+          ),
+        );
+        expect(limits.unavailable).toEqual({
+          reason: "probeFailed",
+          message: "Could not reach Cursor to read usage limits.",
+        });
+      }),
+    );
+  });
 
   it.effect("does not use a stored login for an explicit API key", () =>
     Effect.gen(function* () {
