@@ -9,11 +9,15 @@ import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const router = vi.hoisted(() => ({
-  state: { location: { pathname: "/", search: {} as Record<string, unknown> } },
+  state: { location: { pathname: "/", search: {} as Record<string, unknown>, href: "/" } },
   navigate: vi.fn(async (_target: unknown) => undefined),
 }));
 
-vi.mock("@tanstack/react-router", () => ({ useRouter: () => router }));
+vi.mock("@tanstack/react-router", () => ({
+  useRouter: () => router,
+  useLocation: ({ select }: { select: (location: { href: string }) => string }) =>
+    select(router.state.location),
+}));
 
 import { useT3TeamScopeRouteSync } from "./t3team-useScopeRouteSync";
 
@@ -34,7 +38,7 @@ describe("useT3TeamScopeRouteSync", () => {
       root.render(<Probe scopeKey={scopeKey} projectId={projectId} />);
     });
   const locate = (pathname: string, search: Record<string, unknown> = {}) => {
-    router.state.location = { pathname, search };
+    router.state.location = { pathname, search, href: `${pathname}?${JSON.stringify(search)}` };
   };
 
   beforeEach(() => {
@@ -115,6 +119,39 @@ describe("useT3TeamScopeRouteSync", () => {
     await render("key-b", "proj-b");
     locate("/t3team/drafts/d1");
     await render("key-c", "proj-c");
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it("sends an in-app arrival at a project's my-work board back to all-projects my-work", async () => {
+    locate("/t3team/my-work");
+    await render(null, null);
+    locate("/t3team/projects/proj-a", { projectView: "my-work" });
+    await render(null, null);
+    expect(router.navigate).toHaveBeenCalledExactlyOnceWith({
+      to: "/t3team/my-work",
+      replace: true,
+    });
+  });
+
+  it("leaves a project board that a deep link or restart opened under All projects", async () => {
+    locate("/t3team/projects/proj-a", { projectView: "my-work" });
+    await render(null, null);
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it("lets an arrival at a project's backlog stand under All projects", async () => {
+    locate("/t3team/my-work");
+    await render(null, null);
+    locate("/t3team/projects/proj-a", { projectView: "backlog" });
+    await render(null, null);
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it("does not bounce a project board while the persisted scope is still resolving", async () => {
+    locate("/t3team/my-work");
+    await render("key-a", null);
+    locate("/t3team/projects/proj-a", { projectView: "my-work" });
+    await render("key-a", null);
     expect(router.navigate).not.toHaveBeenCalled();
   });
 });
