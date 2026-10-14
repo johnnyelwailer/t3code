@@ -6,21 +6,21 @@ import { themeColorToNativeColor } from "../../lib/mobileTheme";
 import { buildGhosttyThemeConfig, getMobileTerminalTheme } from "./terminalTheme";
 
 describe("getMobileTerminalTheme", () => {
-  it("uses the shared default light terminal colors", () => {
+  it("uses the Nexi default light terminal colors", () => {
     expect(getMobileTerminalTheme("t3-code", "light")).toMatchObject({
-      background: "#fcfcfc",
-      foreground: "#27272a",
+      background: "#faf9fb",
+      foreground: "#1c1b21",
       cursorForeground: "#26384e",
-      cursorBackground: "#fcfcfc",
+      cursorBackground: "#faf9fb",
     });
   });
 
-  it("uses the shared default dark terminal colors", () => {
+  it("uses the Nexi default dark terminal colors", () => {
     expect(getMobileTerminalTheme("t3-code", "dark")).toMatchObject({
-      background: "#0a0a0a",
-      foreground: "#f5f5f5",
+      background: "#17181c",
+      foreground: "#e9e9ec",
       cursorForeground: "#b4cbff",
-      cursorBackground: "#0a0a0a",
+      cursorBackground: "#17181c",
     });
   });
   it("applies the selected palette without replacing ANSI status colors", () => {
@@ -47,8 +47,8 @@ describe("buildGhosttyThemeConfig", () => {
   it("serializes theme colors into a ghostty config file", () => {
     const config = buildGhosttyThemeConfig(getMobileTerminalTheme("t3-code", "dark"));
 
-    expect(config).toContain("background = #0a0a0a");
-    expect(config).toContain("foreground = #f5f5f5");
+    expect(config).toContain("background = #17181c");
+    expect(config).toContain("foreground = #e9e9ec");
     expect(config).toContain("cursor-color = #b4cbff");
     expect(config).toContain("palette = 0=#141415");
     expect(config).toContain("palette = 15=#c6c6c8");
