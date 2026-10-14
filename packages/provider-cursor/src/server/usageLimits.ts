@@ -17,6 +17,7 @@ import {
   makeUsageLimits,
 } from "@t3tools/provider-core/server/usageLimits";
 import * as CursorKeychain from "./CursorKeychain.ts";
+import { describeCursorUsageFailure } from "./usageFailure.ts";
 
 const CursorCredentials = Schema.Struct({ accessToken: Schema.optional(Schema.String) });
 const DEFAULT_CURSOR_API_ENDPOINT = "https://api2.cursor.sh";
@@ -143,11 +144,11 @@ export const readCursorUsageLimits = Effect.fn("readCursorUsageLimits")(function
     return cursorUsageResponseToLimits(body, checkedAt);
   }).pipe(
     Effect.timeout("10 seconds"),
-    Effect.orElseSucceed(() =>
+    Effect.orElseSucceed((error) =>
       makeUnavailableUsageLimits({
         checkedAt,
         reason: "probeFailed",
-        message: "Cursor could not read usage limits.",
+        message: describeCursorUsageFailure(error),
       }),
     ),
   );
