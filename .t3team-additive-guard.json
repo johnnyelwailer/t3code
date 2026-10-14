@@ -627,6 +627,7 @@
     "packages/t3team-skill-packs/src/recipeActionViews.ts",
     "packages/t3team-skill-packs/src/recipes.ts",
     "packages/t3team-skill-packs/src/sidecarSections.ts",
+    "patches/effect@4.0.2.patch",
     "pnpm-lock.yaml",
     "pnpm-workspace.yaml",
     "scripts/build-desktop-artifact.test.ts",
