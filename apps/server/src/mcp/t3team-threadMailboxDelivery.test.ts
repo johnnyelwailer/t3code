@@ -83,8 +83,8 @@ const projection = (threadId: ThreadId) =>
 
 const makeLayer = (mailbox: Layer.Layer<never>) =>
   OrchestratorMcpService.layer.pipe(
-  Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
-  Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
+    Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
+    Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
 
     Layer.provide(mailbox),
     Layer.provide(

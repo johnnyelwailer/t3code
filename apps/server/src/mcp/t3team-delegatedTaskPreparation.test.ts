@@ -218,9 +218,10 @@ describe("OrchestratorMcpService delegateTask preparation hook", () => {
       }).pipe(
         Effect.provide(
           OrchestratorMcpService.layer.pipe(
-  Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
-  Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
-Layer.provide(makeDependencies(dispatched))),
+            Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
+            Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
+            Layer.provide(makeDependencies(dispatched)),
+          ),
         ),
       );
     }),
@@ -270,8 +271,8 @@ Layer.provide(makeDependencies(dispatched))),
       }).pipe(
         Effect.provide(
           OrchestratorMcpService.layer.pipe(
-  Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
-  Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
+            Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
+            Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
 
             Layer.provide(makeDependencies(dispatched)),
             Layer.provide(preparation),
@@ -310,8 +311,8 @@ Layer.provide(makeDependencies(dispatched))),
       }).pipe(
         Effect.provide(
           OrchestratorMcpService.layer.pipe(
-  Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
-  Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
+            Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
+            Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
 
             Layer.provide(makeDependencies(dispatched, { rejectDispatch: true })),
             Layer.provide(trackingPreparation(calls)),
@@ -337,8 +338,8 @@ Layer.provide(makeDependencies(dispatched))),
       }).pipe(
         Effect.provide(
           OrchestratorMcpService.layer.pipe(
-  Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
-  Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
+            Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
+            Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
 
             Layer.provide(makeDependencies(dispatched, { alreadyDelegated: true })),
             Layer.provide(trackingPreparation(calls)),
