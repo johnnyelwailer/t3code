@@ -93,6 +93,10 @@ import Migration0061 from "./Migrations/043_ProjectionThreadsUnsettledAt.ts";
 import Migration0062 from "./Migrations/044_ClearAutomaticProjectModelDefaults.ts";
 import Migration0063 from "./Migrations/t3team-053_WorkflowTurnRetries.ts";
 import Migration0064 from "./Migrations/t3team-054_ProjectionThreadMessageSequenceBackfill.ts";
+// Append incoming migrations after the established fork IDs so existing databases apply them.
+import Migration0065 from "./Migrations/045_ProjectionProjectsAutoPull.ts";
+import Migration0066 from "./Migrations/046_RepairAutomaticSettlementTimestamps.ts";
+import Migration0067 from "./Migrations/047_ProjectionProjectIcon.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -169,6 +173,9 @@ export const migrationEntries = [
   [62, "ClearAutomaticProjectModelDefaults", Migration0062],
   [63, "WorkflowTurnRetries", Migration0063],
   [64, "ProjectionThreadMessageSequenceBackfill", Migration0064],
+  [65, "ProjectionProjectsAutoPull", Migration0065],
+  [66, "RepairAutomaticSettlementTimestamps", Migration0066],
+  [67, "ProjectionProjectIcon", Migration0067],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
