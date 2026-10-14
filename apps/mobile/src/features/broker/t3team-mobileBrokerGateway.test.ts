@@ -6,14 +6,15 @@ import * as HttpClient from "effect/http/HttpClient";
 import * as Option from "effect/Option";
 import { afterEach, vi } from "vite-plus/test";
 
-import { brokerProxyFetch, setBrokerProxyTokenSource } from "./t3team-brokerProxyTransport";
+import { makeMobileNexiBroker } from "../account/t3team-nexiBroker";
+import { brokerProxyFetch, registerBrokerProxy } from "../../lib/t3team-brokerProxyTransport";
 import { makeMobileBrokerGateway } from "./t3team-mobileBrokerGateway";
 import { MOCK_BROKER, makeMockBroker } from "./t3team-mockBroker.fixtures";
 import { makeMockBrokerProxy } from "./t3team-mockBrokerProxy.fixtures";
 
 vi.mock("expo-constants", () => ({ default: { expoConfig: { extra: {} } } }));
 
-afterEach(() => setBrokerProxyTokenSource(null));
+afterEach(() => registerBrokerProxy(null));
 
 const envA = EnvironmentId.make("env-a");
 
@@ -40,7 +41,7 @@ const setup = (options: { readonly proxyEnabled?: boolean } = {}) =>
       },
     });
     const http = yield* HttpClient.HttpClient.pipe(
-      Effect.provide(layerRemoteHttpClient(brokerProxyFetch(proxy.fetch, MOCK_BROKER))),
+      Effect.provide(layerRemoteHttpClient(brokerProxyFetch(proxy.fetch))),
     );
     const gateway = makeMobileBrokerGateway({
       broker: Effect.succeed(Option.some(mock.broker)),
@@ -50,7 +51,7 @@ const setup = (options: { readonly proxyEnabled?: boolean } = {}) =>
     const signIn = Effect.gen(function* () {
       yield* mock.signIn;
       const token = yield* mock.session.accessToken("broker");
-      setBrokerProxyTokenSource(async () => token);
+      registerBrokerProxy({ brokerUrl: MOCK_BROKER, token: async () => token });
     });
     return { ...mock, proxy, gateway, signIn };
   });
@@ -63,6 +64,22 @@ describe("the phone's broker gateway", () => {
         gateway.attach({ sessionId: "41", expectedEnvironmentId: envA }),
       );
       expect(error).toMatchObject({ _tag: "ConnectionBlockedError", reason: "authentication" });
+    }),
+  );
+
+  it.live("blocks on sign-in when the broker no longer accepts the account's token", () =>
+    Effect.gen(function* () {
+      const { http } = yield* setup();
+      const revoked = yield* makeMobileNexiBroker({
+        url: MOCK_BROKER,
+        accessToken: () => Effect.succeed("revoked.token.value"),
+      }).pipe(Effect.provideService(HttpClient.HttpClient, http));
+      const gateway = makeMobileBrokerGateway({ broker: Effect.succeed(revoked), http });
+      expect(yield* Effect.flip(gateway.pair({ sessionId: "45" }))).toMatchObject({
+        _tag: "ConnectionBlockedError",
+        reason: "authentication",
+        detail: "Your sign-in was not accepted. Sign in again.",
+      });
     }),
   );
 

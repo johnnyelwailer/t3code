@@ -6,7 +6,7 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Schema from "effect/Schema";
 
-import { brokerDeviceAddress } from "./t3team-brokerProxy";
+import { brokerDeviceAddress } from "../../lib/t3team-brokerProxy";
 import { deviceSignInRejected, deviceUnreachableFromPhone } from "./t3team-brokerConnectionErrors";
 
 const Descriptor = Schema.Struct({ environmentId: Schema.String, label: Schema.String });

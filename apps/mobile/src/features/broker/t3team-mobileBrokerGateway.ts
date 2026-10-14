@@ -15,7 +15,7 @@ import {
 } from "./t3team-brokerConnectionErrors";
 import { isBrokerHostKey } from "./t3team-brokerDevices";
 import { probeBrokerDevice } from "./t3team-brokerDeviceProbe";
-import { brokerDeviceAddress } from "./t3team-brokerProxy";
+import { brokerDeviceAddress } from "../../lib/t3team-brokerProxy";
 
 /**
  * The phone's side of `BrokerEnvironmentGateway`. The desktop makes a session reachable through a

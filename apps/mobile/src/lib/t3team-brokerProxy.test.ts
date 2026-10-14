@@ -3,15 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { brokerDeviceAddress, brokerProxyUrl } from "./t3team-brokerProxy";
 import {
   brokerProxyFetch,
-  brokerProxyToken,
   brokerProxyWebSocketConstructor,
-  setBrokerProxyTokenSource,
+  registerBrokerProxy,
 } from "./t3team-brokerProxyTransport";
 
 const BROKER = "https://ca-nexi-broker.example.test";
 
 afterEach(() => {
-  setBrokerProxyTokenSource(null);
+  registerBrokerProxy(null);
   vi.unstubAllGlobals();
 });
 
@@ -46,9 +45,9 @@ describe("the transport seam", () => {
   };
 
   it("sends the Entra token to the broker and moves the server's bearer aside", async () => {
-    setBrokerProxyTokenSource(async () => "entra.token.value");
+    registerBrokerProxy({ brokerUrl: BROKER, token: async () => "entra.token.value" });
     const { seen, fetch } = recordingFetch();
-    await brokerProxyFetch(fetch, BROKER)("https://41.nexi-broker.invalid/api/auth/session", {
+    await brokerProxyFetch(fetch)("https://41.nexi-broker.invalid/api/auth/session", {
       headers: { authorization: "Bearer t3-bearer", cookie: "t3_session=1" },
     });
 
@@ -60,24 +59,29 @@ describe("the transport seam", () => {
     expect(seen[0]?.init?.credentials).toBe("omit");
   });
 
-  it("passes other requests through untouched, and refuses a device without a sign-in", async () => {
+  it("passes other requests through untouched", async () => {
+    registerBrokerProxy({ brokerUrl: BROKER, token: async () => "entra.token.value" });
     const { seen, fetch } = recordingFetch();
-    const proxied = brokerProxyFetch(fetch, BROKER);
-    await proxied("https://desktop.local/api", { headers: { authorization: "Bearer t3" } });
-    expect(seen[0]).toEqual({
-      url: "https://desktop.local/api",
-      init: { headers: { authorization: "Bearer t3" } },
+    await brokerProxyFetch(fetch)("https://desktop.local/api", {
+      headers: { authorization: "Bearer t3" },
     });
-    await expect(proxied("https://41.nexi-broker.invalid/api")).rejects.toThrow(/Sign in/);
-    expect(seen).toHaveLength(1);
+    expect(seen).toEqual([
+      { url: "https://desktop.local/api", init: { headers: { authorization: "Bearer t3" } } },
+    ]);
+  });
+
+  it("never sends a device request to the broker before the gateway registered it", async () => {
+    const { seen, fetch } = recordingFetch();
+    await brokerProxyFetch(fetch)("https://41.nexi-broker.invalid/api");
+    expect(seen.map((request) => request.url)).toEqual(["https://41.nexi-broker.invalid/api"]);
   });
 
   it("opens a device's WebSocket on the proxy with the last Entra token", async () => {
     const NativeWebSocket = vi.fn();
     vi.stubGlobal("WebSocket", NativeWebSocket);
-    setBrokerProxyTokenSource(async () => "entra.ws.token");
-    await brokerProxyToken();
-    const make = brokerProxyWebSocketConstructor(BROKER);
+    registerBrokerProxy({ brokerUrl: BROKER, token: async () => "entra.ws.token" });
+    await brokerProxyFetch(recordingFetch().fetch)("https://45.nexi-broker.invalid/api/ticket");
+    const make = brokerProxyWebSocketConstructor();
     make("wss://45.nexi-broker.invalid/ws?wsTicket=abc");
     make("wss://desktop.local/ws");
     expect(NativeWebSocket.mock.calls).toEqual([
