@@ -29,6 +29,7 @@ export function LinkedRepositoryBranchControl({
     entry !== undefined &&
     entry.syncState === undefined &&
     entry.status !== "pending" &&
+    entry.status !== "not-cloned" &&
     entry.status !== "failed";
   const url = entry?.url;
   const syncedAt = entry?.syncedAt;

@@ -1,18 +1,24 @@
 /**
  * Linked-repository worktree resolution for delegate_task workspace isolation
  * (`t3team-delegateTaskWorkspace.ts`): creates a dedicated worktree of a LINKED
- * repository named by `workspace.repository`.
+ * repository named by `workspace.repository`. Linked repositories sync on demand: one with no
+ * usable checkout yet is cloned (or fetched back into shape) here, before the worktree is made.
  *
  * @module t3team-toolBrokerStartChildLinkedWorktree
  */
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
+import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
+import { syncLinkedRepositoryOnDemand } from "./t3team-linkedRepositoryOnDemand.ts";
 import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
   isLinkedRepositoryReady,
   REFERENCES_DIR_NAME,
+  type LinkedRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
 import {
   buildScopedChildWorktreePath,
@@ -63,36 +69,24 @@ export const resolveLinkedRepositoryWorktree = (input: {
           `Failed to parse linked repository metadata: ${error instanceof Error ? error.message : String(error)}`,
       ),
     );
-    const linkedRepository = findLinkedRepository(
+    const recorded = findLinkedRepository(
       readLinkedRepositories(manifest.linkedRepositories),
       input.repoFullName,
     );
-    if (!linkedRepository) {
+    if (!recorded) {
       return yield* Effect.fail(
         `No linked repository matched '${input.repoFullName}' in this project workspace.`,
       );
     }
-    if (!isLinkedRepositoryReady(linkedRepository)) {
+    const linkedRepository = (yield* hasUsableCheckout(input.services, recorded))
+      ? recorded
+      : yield* cloneOnDemand(input.services, input.projectWorkspaceRoot, recorded);
+    if (!(yield* hasUsableCheckout(input.services, linkedRepository))) {
       return yield* Effect.fail(
-        `Linked repository '${input.repoFullName}' is not ready: ${linkedRepository.error ?? (linkedRepository.status === "pending" ? "it is still being cloned" : "bootstrap failed")}.`,
+        `Linked repository '${input.repoFullName}' has no usable checkout: ${linkedRepository.error ?? "it is not cloned on this machine"}.`,
       );
     }
-
     const repositoryPath = linkedRepository.localPath.trim();
-    if (repositoryPath.length === 0) {
-      return yield* Effect.fail(
-        `Linked repository '${input.repoFullName}' does not have a usable local path.`,
-      );
-    }
-
-    const repositoryExists = yield* input.services.fileSystem
-      .exists(repositoryPath)
-      .pipe(Effect.orElseSucceed(() => false));
-    if (!repositoryExists) {
-      return yield* Effect.fail(
-        `Linked repository '${input.repoFullName}' is missing locally at '${repositoryPath}'.`,
-      );
-    }
 
     const baseRef =
       input.repoRef ??
@@ -127,3 +121,31 @@ export const resolveLinkedRepositoryWorktree = (input: {
 
     return { repoFullName: input.repoFullName, repoRef: baseRef, ...worktree };
   }).pipe(Effect.mapError((error) => (error instanceof Error ? error.message : String(error))));
+
+const hasUsableCheckout = (
+  services: T3TeamStartChildLinkedRepositoryServices,
+  entry: LinkedRepositoryBootstrapResult,
+) =>
+  isLinkedRepositoryReady(entry) && entry.localPath.trim() !== ""
+    ? services.fileSystem.exists(entry.localPath.trim()).pipe(Effect.orElseSucceed(() => false))
+    : Effect.succeed(false);
+
+/** Clones (or repairs) the checkout and waits for it; without the sync service, nothing changes. */
+const cloneOnDemand = (
+  services: T3TeamStartChildLinkedRepositoryServices,
+  projectWorkspaceRoot: string,
+  entry: LinkedRepositoryBootstrapResult,
+) =>
+  services.linkedRepositorySync === undefined
+    ? Effect.succeed(entry)
+    : syncLinkedRepositoryOnDemand({
+        workspaceRoot: projectWorkspaceRoot,
+        repository: entry.url,
+        wait: true,
+      }).pipe(
+        Effect.map((result) => result.entry),
+        Effect.provideService(T3TeamLinkedRepositorySync, services.linkedRepositorySync),
+        Effect.provideService(FileSystem.FileSystem, services.fileSystem),
+        Effect.provideService(Path.Path, services.path),
+        Effect.mapError((error) => error.message),
+      );

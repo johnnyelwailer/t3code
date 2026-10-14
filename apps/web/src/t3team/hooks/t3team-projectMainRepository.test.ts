@@ -57,8 +57,28 @@ const switched: ProjectMainRepositorySwitchResult = {
   migratedPaths: ["context/entrypoint.json"],
 };
 
-const backendWith = (setMainRepository: ReturnType<typeof vi.fn>) =>
-  ({ projectWorkspace: { setMainRepository } }) as unknown as BackendApi;
+/** The detected candidate's clone is requested, then reads as cloned; `calls` keeps the order. */
+const backendWith = (
+  setMainRepository: (input: unknown) => Promise<unknown>,
+  calls: Array<string> = [],
+) =>
+  ({
+    projectWorkspace: {
+      syncLinkedRepository: vi.fn(async (input: { url: string }) => {
+        calls.push(`sync ${input.url}`);
+        return {
+          linkedRepository: { url: input.url, localPath: ALPHA_CHECKOUT, status: "not-cloned" },
+        };
+      }),
+      readLinkedRepositoryStatus: vi.fn(async () => ({
+        linkedRepositories: [{ url: ALPHA, localPath: ALPHA_CHECKOUT, status: "cloned" }],
+      })),
+      setMainRepository: vi.fn(async (input: unknown) => {
+        calls.push("switch");
+        return setMainRepository(input);
+      }),
+    },
+  }) as unknown as BackendApi;
 
 describe("project main repository (client)", () => {
   it("re-roots the project on the main repository's checkout", () => {
@@ -75,10 +95,11 @@ describe("project main repository (client)", () => {
     expect(readLinkedRepositoryUrlsFromProject(next)).toEqual([ALPHA, BETA]);
   });
 
-  it("auto-selects the single candidate that already carries project state", async () => {
+  it("clones the single candidate that carries project state, then switches to it", async () => {
     const setMainRepository = vi.fn(async () => switched);
+    const calls: Array<string> = [];
     const next = await applyMainRepositoryAutoDetection({
-      backend: backendWith(setMainRepository),
+      backend: backendWith(setMainRepository, calls),
       project: project(),
       bootstrap: bootstrap({
         mainRepositoryCandidates: [{ url: ALPHA, checkoutPath: ALPHA_CHECKOUT }],
@@ -89,6 +110,7 @@ describe("project main repository (client)", () => {
       url: ALPHA,
       selection: "detected",
     });
+    expect(calls).toEqual([`sync ${ALPHA}`, "switch"]);
     expect(next.workspace?.rootPath).toBe(ALPHA_CHECKOUT);
   });
 

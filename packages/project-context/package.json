@@ -35,6 +35,10 @@
     "./t3teamFeatureFlags": {
       "types": "./src/t3teamFeatureFlags.ts",
       "import": "./src/t3teamFeatureFlags.ts"
+    },
+    "./t3teamRepositoryIdentity": {
+      "types": "./src/t3teamRepositoryIdentity.ts",
+      "import": "./src/t3teamRepositoryIdentity.ts"
     }
   },
   "scripts": {

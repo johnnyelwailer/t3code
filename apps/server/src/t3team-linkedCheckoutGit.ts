@@ -18,6 +18,8 @@ export const linkedCheckoutGit = Effect.fn("linkedCheckoutGit")(function* (
   cwd: string,
   args: ReadonlyArray<string>,
   timeoutMs: number,
+  /** Replaces the default env (a no-prompt one), e.g. the clone's own for a remote read. */
+  env: Readonly<Record<string, string>> = { GIT_TERMINAL_PROMPT: "0" },
 ) {
   const vcs = yield* VcsProcess;
   return yield* vcs.run({
@@ -28,6 +30,6 @@ export const linkedCheckoutGit = Effect.fn("linkedCheckoutGit")(function* (
     allowNonZeroExit: true,
     timeoutMs,
     maxOutputBytes: 64 * 1024,
-    env: { GIT_TERMINAL_PROMPT: "0" },
+    env,
   });
 });

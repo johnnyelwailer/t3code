@@ -64,8 +64,11 @@ const syncByUrl = new Map<string, LinkedRepositorySyncResult>(
   LINKED.map((url, index): [string, LinkedRepositorySyncResult] => [
     url,
     index === 4
-      ? { url, localPath: "/r", status: "pending", syncState: "cloning" }
-      : { url, localPath: "/r", status: "cloned" },
+      ? { url, localPath: "/r", status: "not-cloned", syncState: "cloning" }
+      : // Linked repositories sync on demand: most are recorded, not cloned.
+        index >= 2
+        ? { url, localPath: "/r", status: "not-cloned" }
+        : { url, localPath: "/r", status: "cloned", syncedAt: "2026-10-13T09:00:00Z" },
   ]),
 );
 
@@ -113,7 +116,7 @@ const meta = {
     onToggle: () => {},
     onLinkMany: () => {},
     renderLinkedStatus: (url: string) => (
-      <LinkedRepositorySyncStatusLine entry={syncByUrl.get(url)} />
+      <LinkedRepositorySyncStatusLine entry={syncByUrl.get(url)} onSync={async () => {}} />
     ),
     renderLinkedControls: (url: string) => (
       <LinkedRepositoryBranchControl

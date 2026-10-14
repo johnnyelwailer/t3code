@@ -24,6 +24,7 @@ export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3_mywork_digest: "t3team.mywork.digest.read",
   t3_mywork_arrange: "t3team.mywork.arrange",
   t3_change_request_publish: "t3team.change_request.publish",
+  t3_linked_repository_sync: "t3team.project.sync_linked_repository",
 } as const;
 
 const MCP_NAME_BY_TOOL_ID: ReadonlyMap<string, string> = new Map(

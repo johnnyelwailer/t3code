@@ -7,6 +7,7 @@ import * as Path from "effect/Path";
 import type { GitWorkflowService } from "./git/GitWorkflowService.ts";
 import type { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
 import type { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
+import type { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
@@ -89,6 +90,8 @@ export type T3TeamStartChildLinkedRepositoryServices = {
   readonly path: Path.Path;
   readonly sourceControlProviders: SourceControlProviderRegistry["Service"];
   readonly gitWorkflow: GitWorkflowService["Service"];
+  /** Clones a linked repository on demand when a child is delegated into one not cloned yet. */
+  readonly linkedRepositorySync?: T3TeamLinkedRepositorySync["Service"];
 };
 
 /** Whether the project workspace carries linked-repository metadata — the context switch that

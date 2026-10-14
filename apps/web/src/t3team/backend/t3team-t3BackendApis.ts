@@ -64,7 +64,8 @@ export function createProjectWorkspaceBackendApi(httpBaseUrl: string): ProjectWo
       readonly workspaceRoot: string;
       readonly linkedRepositoryUrls?: ReadonlyArray<string>;
       readonly setupProfileId?: string;
-      readonly refreshLinkedRepositories?: boolean;
+      readonly syncLinkedRepositoryUrls?: ReadonlyArray<string>;
+      readonly inspectLinkedRepositoriesForMainRepository?: boolean;
     }): Promise<ProjectWorkspaceBootstrapResult> {
       return postJson<typeof input, ProjectWorkspaceBootstrapResult>(
         httpBaseUrl,
@@ -76,6 +77,13 @@ export function createProjectWorkspaceBackendApi(httpBaseUrl: string): ProjectWo
       return postJson<typeof input, { linkedRepositories: LinkedRepositorySyncResult[] }>(
         httpBaseUrl,
         "/api/t3team/project/workspace/linked-repositories/status",
+        input,
+      );
+    },
+    syncLinkedRepository(input) {
+      return postJson<typeof input, { linkedRepository: LinkedRepositorySyncResult }>(
+        httpBaseUrl,
+        "/api/t3team/project/workspace/linked-repositories/sync",
         input,
       );
     },
