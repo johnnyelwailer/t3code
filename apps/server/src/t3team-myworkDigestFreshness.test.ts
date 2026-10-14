@@ -2,6 +2,7 @@ import { assert, it } from "@effect/vitest";
 import type { PullRequestListEntry } from "@t3tools/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as TestClock from "effect/testing/TestClock";
 import { afterEach } from "vite-plus/test";
@@ -67,9 +68,13 @@ it.effect("keeps saying pending while a stale read refreshes in the background",
     const first = yield* loadDigestPrEntries("p").pipe(Effect.provide(layer));
     assert.isFalse(first.pending);
 
-    yield* TestClock.adjust("31 seconds");
-    const stale = yield* loadDigestPrEntries("p").pipe(Effect.provide(layer));
-    // The stale read serves at once, and says a newer one is on its way.
+    yield* TestClock.adjust("101 seconds");
+    const staleRead = yield* loadDigestPrEntries("p").pipe(Effect.provide(layer), Effect.forkChild);
+    yield* Effect.yieldNow;
+    yield* TestClock.adjust("2 seconds");
+    const stale = yield* Fiber.join(staleRead);
+    // The stale read waits briefly for its refresh, then serves what it has and says a newer one
+    // is on its way.
     assert.equal(stale.read?.entries.length, 1);
     assert.isTrue(stale.pending);
 
