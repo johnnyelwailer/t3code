@@ -12,7 +12,7 @@ export const FEATURE_FLAG_DEFINITIONS = {
     description: "Store project state in .nexi. Changes apply on the next server start.",
   },
   MACHINE_SETUP: {
-    defaultEnabled: false,
+    defaultEnabled: true,
     requiresRestart: false,
     description:
       "Set up a project machine from the first message of a cloud session for a project that has none. Changes apply immediately.",

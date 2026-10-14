@@ -4,7 +4,7 @@
  * The server advertises it as `ServerConfig.machineSetup`. Off, a project without a machine
  * still starts a plain cloud session, and a setup request is refused.
  *
- * Layering: `NEXI_FF_MACHINE_SETUP` > feature_flags row > code default (off).
+ * Layering: `NEXI_FF_MACHINE_SETUP` > feature_flags row > code default (on).
  */
 
 import { readFeatureFlag } from "@t3tools/project-context/t3teamFeatureFlags";
