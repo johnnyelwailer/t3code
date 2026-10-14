@@ -65,6 +65,8 @@ export function makeMockAccountIssuer(
   let serial = 0;
   let unreachable = false;
   const liveRefreshTokens = new Set<string>();
+  /** Every access token this issuer minted: what a resource server would accept. */
+  const issuedAccessTokens = new Set<string>();
   const codes = new Map<string, { challenge: string; redirectUri: string; scope: string }>();
   const requests: Array<{ readonly path: string; readonly params: URLSearchParams }> = [];
 
@@ -72,8 +74,10 @@ export function makeMockAccountIssuer(
     serial += 1;
     const refreshToken = `refresh-${serial}`;
     liveRefreshTokens.add(refreshToken);
+    const accessToken = accessTokenFor(scope, name, serial);
+    issuedAccessTokens.add(accessToken);
     return json(200, {
-      access_token: accessTokenFor(scope, name, serial),
+      access_token: accessToken,
       refresh_token: refreshToken,
       expires_in: options.expiresIn ?? 3600,
       token_type: "Bearer",
@@ -146,6 +150,7 @@ export function makeMockAccountIssuer(
     account,
     httpClient,
     requests,
+    issuedAccessTokens,
     /** The user entering the code; the issuer still answers "pending" to the next `afterPolls`. */
     approveDevice: (afterPolls = 0) => {
       device = "approved";

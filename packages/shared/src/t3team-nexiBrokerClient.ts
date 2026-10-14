@@ -1,17 +1,34 @@
-import { CloudSessionFailedError } from "@t3tools/contracts";
+import { type AccountError, CloudSessionFailedError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 
-import type { NexiBrokerConfig } from "./t3team-NexiBrokerConfig.ts";
-
 /**
  * The broker's v1 HTTP API (distribution `services/nexi-broker`), called with the user's account
- * access token. Grants go into the session workflow's inputs; pairing credentials are minted by the
- * VM's own server on demand and are one-time.
+ * access token (the account's `broker` resource). Grants go into the session workflow's inputs;
+ * pairing credentials are minted by the VM's own server on demand and are one-time. Shared by the
+ * server's `t3team-NexiBrokerService` and the mobile app, which each hold their own sign-in.
  */
+
+/** The account resource whose token authenticates every broker call. */
+export const BROKER_RESOURCE = "broker";
+
+/** An account token failure in the broker's terms: sign in again, or try later. */
+export const brokerAccessToken = <R>(
+  accessToken: Effect.Effect<string, AccountError, R>,
+): Effect.Effect<string, CloudSessionFailedError, R> =>
+  accessToken.pipe(
+    Effect.mapError(
+      (error) =>
+        new CloudSessionFailedError({
+          reason:
+            error.reason === "sign_in_required" ? "broker_sign_in_required" : "broker_unavailable",
+          message: error.message,
+        }),
+    ),
+  );
 
 const GrantResponse = Schema.Struct({ grant: Schema.String });
 const PairingResponse = Schema.Struct({ credential: Schema.String });
@@ -48,7 +65,8 @@ const failed = (message: string, status?: number) =>
   });
 
 export const makeNexiBrokerClient = Effect.fn("cloud.broker.client.make")(function* (
-  config: NexiBrokerConfig,
+  /** https://… of the broker, without a trailing slash. */
+  config: { readonly url: string },
   accessToken: Effect.Effect<string, CloudSessionFailedError>,
 ) {
   const http = yield* HttpClient.HttpClient;

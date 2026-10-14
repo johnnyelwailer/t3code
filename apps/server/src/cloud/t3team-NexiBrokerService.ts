@@ -10,12 +10,14 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
 import { Accounts } from "../account/t3team-Accounts.ts";
-import { BROKER_RESOURCE, resolveNexiBrokerConfig } from "./t3team-NexiBrokerConfig.ts";
 import {
+  BROKER_RESOURCE,
   type BrokerSession,
+  brokerAccessToken,
   makeNexiBrokerClient,
   type StandbyClaim,
-} from "./t3team-NexiBrokerClient.ts";
+} from "@t3tools/shared/t3team-nexiBrokerClient";
+import { resolveNexiBrokerConfig } from "./t3team-NexiBrokerConfig.ts";
 import { type BrokerForwarder, startBrokerForwarder } from "./t3team-NexiBrokerForwarder.ts";
 
 /**
@@ -105,16 +107,7 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
   if (Option.isNone(resolved)) return disabled;
   const config = resolved.value;
   const accounts = yield* Accounts;
-  const accessToken = accounts.accessToken(config.account, BROKER_RESOURCE).pipe(
-    Effect.mapError(
-      (error) =>
-        new CloudSessionFailedError({
-          reason:
-            error.reason === "sign_in_required" ? "broker_sign_in_required" : "broker_unavailable",
-          message: error.message,
-        }),
-    ),
-  );
+  const accessToken = brokerAccessToken(accounts.accessToken(config.account, BROKER_RESOURCE));
   const client = yield* makeNexiBrokerClient(config, accessToken);
   const forwarders = new Map<string, BrokerForwarder>();
   yield* Effect.addFinalizer(() => Effect.sync(() => forwarders.forEach((f) => f.close())));

@@ -2,6 +2,8 @@ import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
+import { BROKER_RESOURCE } from "@t3tools/shared/t3team-nexiBrokerClient";
+
 import { packAccounts } from "../account/t3team-packAccounts.ts";
 
 /**
@@ -19,8 +21,6 @@ import { packAccounts } from "../account/t3team-packAccounts.ts";
 const BROKER_URL_ENV = "T3CODE_NEXI_BROKER_URL";
 const BROKER_FLAG_ENV = "NEXI_FF_CLOUD_BROKER";
 const BROKER_ACCOUNT_ENV = "T3CODE_NEXI_BROKER_ACCOUNT";
-/** The resource name the broker asks its account for; the account maps it to a scope. */
-export const BROKER_RESOURCE = "broker";
 
 export interface NexiBrokerConfig {
   /** https://… of the broker, without a trailing slash. */

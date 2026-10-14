@@ -1,16 +1,20 @@
 import type { AccountError, AccountStatus } from "@t3tools/contracts";
+import type { NexiBrokerClient } from "@t3tools/shared/t3team-nexiBrokerClient";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as HttpClient from "effect/http/HttpClient";
+import type * as Option from "effect/Option";
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 
 import { runtime } from "../../lib/runtime";
+import { resolveNexiDistributionConfig } from "../distribution/t3team-nexiDistributionConfig";
 import type { AuthSessionOutcome, OpenAuthSession } from "./t3team-accountBrowserSignIn";
 import { resolveMobileAccount } from "./t3team-accountIssuer";
 import { continuesToVerification } from "./t3team-accountPresentation";
 import { accountSecureStorage } from "./t3team-accountSecureStorage";
 import { type AccountSession, makeAccountSession } from "./t3team-accountSession";
+import { makeMobileNexiBroker } from "./t3team-nexiBroker";
 
 /**
  * The app's one account session, bound to the app runtime (HTTP, crypto), the keychain and the
@@ -85,3 +89,16 @@ export const signOutAccount = async () => {
 /** A token for `resource` (e.g. `"broker"`), refreshed from the stored grant when needed. */
 export const accountAccessToken = (resource: string) =>
   Effect.promise(accountSession).pipe(Effect.flatMap((current) => current.accessToken(resource)));
+
+let broker: Promise<Option.Option<NexiBrokerClient>> | null = null;
+
+/** The Nexi broker signed in as this account; `None` for a build with no broker URL. */
+export const nexiBroker = (): Promise<Option.Option<NexiBrokerClient>> => {
+  broker ??= runtime.runPromise(
+    makeMobileNexiBroker({
+      url: resolveNexiDistributionConfig().broker.url,
+      accessToken: accountAccessToken,
+    }),
+  );
+  return broker;
+};

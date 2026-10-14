@@ -1,3 +1,4 @@
+import { BROKER_RESOURCE } from "@t3tools/shared/t3team-nexiBrokerClient";
 import Constants from "expo-constants";
 
 import { normalizeSecureUrl } from "../cloud/publicConfig";
@@ -39,9 +40,6 @@ export interface ResolvedMobileAccount {
  */
 export const DEV_NEXPLORE_TENANT = "be4f2c2f-7478-413e-9569-aa6278d6f7f1";
 export const DEV_NEXPLORE_CLIENT_ID = "9fff57c4-d8ab-4d4c-9267-c5528b7ae345";
-
-/** The resource the Nexi broker asks the account for, as the server names it. */
-export const BROKER_RESOURCE = "broker";
 
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
