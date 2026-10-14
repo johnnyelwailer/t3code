@@ -12,6 +12,7 @@ vi.mock("../../state/use-composer-drafts", () => ({
   readComposerDraftSelection: vi.fn(),
   setComposerDraftContext: vi.fn(),
 }));
+vi.mock("../../lib/uuid", () => ({ uuidv4: () => "context-id" }));
 vi.mock("../../state/server", () => ({ serverEnvironment: {} }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
 
