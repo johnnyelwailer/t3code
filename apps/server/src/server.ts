@@ -255,6 +255,7 @@ import { t3teamThreadPlacementRouteLayer } from "./t3team-thread-placement-route
 import { t3teamMyWorkDigestRouteLayer } from "./t3team-myworkDigest-routes.ts";
 import { T3TeamThreadToolContextStoreLive } from "./t3team-threadToolContextStore.ts";
 import { turnInactivityPolicyLive } from "./orchestration-v2/t3team-turnInactivityPolicy.ts";
+import { coldLocalCompactionLive } from "./orchestration-v2/t3team-coldLocalCompactionLive.ts";
 import { packCompletionWakeRendererLive } from "./t3team-pack-completionWakeRenderer.ts";
 import { t3teamWidgetToolCallRouteLayer } from "./t3team-widget-tool-call-route.ts";
 import { T3TeamWidgetRegistryLive } from "./t3team-widgetRegistry.ts";
@@ -744,6 +745,8 @@ const layerOrchestrationV2Runtime = RuntimeLayer.layerProduction.pipe(
   Layer.provide(T3TeamSettleGuardsLive),
   // t3team: pack-registered delegated-completion wake text (default text without a pack).
   Layer.provide(packCompletionWakeRendererLive.pipe(Layer.provide(ProjectionStoreV2.layer))),
+  // t3team: pack-registered cold-cache local compaction (native `/compact` without a route).
+  Layer.provide(coldLocalCompactionLive),
   Layer.provide(layerScheduledTaskWebhookOrigin),
   Layer.provide(ProviderEventIngestor.layerAnalytics),
   Layer.provide(layerCheckpointStore),

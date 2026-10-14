@@ -26,6 +26,10 @@ import { setDistributionModelPolicy } from "../t3team-configuredDefaultModelSele
 import { packAccounts, setPackAccounts } from "../account/t3team-packAccounts.ts";
 import { loadPackAccounts } from "../t3team-pack-accounts.ts";
 import {
+  loadPackColdLocalCompactionRoutes,
+  setPackColdLocalCompactionRoutes,
+} from "../t3team-pack-coldLocalCompactionRoute.ts";
+import {
   loadPackCompletionWakeRenderer,
   setPackCompletionWakeRenderer,
 } from "../t3team-pack-completionWakeRenderer.ts";
@@ -201,6 +205,21 @@ export const runT3TeamServerCommand = (
         ),
         Effect.catch((cause) =>
           Effect.logWarning("Workspace pack completion wake renderer loading failed", {
+            cause,
+          }).pipe(Effect.as(undefined)),
+        ),
+      );
+      yield* Effect.tryPromise({
+        try: () => loadPackColdLocalCompactionRoutes(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        Effect.tap((routes) =>
+          Effect.sync(() => {
+            if (routes.length > 0) setPackColdLocalCompactionRoutes(routes);
+          }),
+        ),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack cold local compaction route loading failed", {
             cause,
           }).pipe(Effect.as(undefined)),
         ),
