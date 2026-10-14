@@ -22,7 +22,7 @@ import type { MirrorSyncIdentity } from "./t3team-atlassian-backlog-mirrorSyncSh
 export type T3TeamMirrorSyncStatus = {
   readonly watermarkMs: number | undefined;
   readonly lastSuccessAtMs: number | undefined;
-  readonly lastReconcileAtMs: number | undefined;
+  readonly lastReconcileAtMs?: number | undefined;
   readonly lastError: string | undefined;
   readonly lastErrorAtMs: number | undefined;
 };
