@@ -11,8 +11,6 @@ import { readFeatureFlag } from "@t3tools/project-context/t3teamFeatureFlags";
 type ReadEnv = (key: string) => string | undefined;
 const processEnv: ReadEnv = (key) => process.env[key];
 
-export const TRANSIENT_AUTO_RESUME_FLAG_ENV = "NEXI_FF_TRANSIENT_AUTO_RESUME";
-
 export function isTransientAutoResumeEnabled(readEnv: ReadEnv = processEnv): boolean {
   return readFeatureFlag("TRANSIENT_AUTO_RESUME", readEnv);
 }
