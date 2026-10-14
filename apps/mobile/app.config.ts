@@ -483,6 +483,17 @@ const config: ExpoConfig = {
         repoEnv.EXPO_PUBLIC_NEXI_PROVIDER_ENDPOINT ?? repoEnv.T3CODE_NEXI_PROVIDER_ENDPOINT ?? null,
       brokerUrl: repoEnv.EXPO_PUBLIC_NEXI_BROKER_URL ?? repoEnv.T3CODE_NEXI_BROKER_URL ?? null,
     },
+    // The Entra ID account (defineAccount seam); see src/features/account for the dev fallbacks.
+    account: {
+      tenant: repoEnv.EXPO_PUBLIC_NEXI_BROKER_TENANT ?? repoEnv.T3CODE_NEXI_BROKER_TENANT ?? null,
+      clientId: repoEnv.EXPO_PUBLIC_NEXI_BROKER_APP ?? repoEnv.T3CODE_NEXI_BROKER_APP ?? null,
+      redirectUri: repoEnv.T3CODE_NEXI_ACCOUNT_REDIRECT_URI ?? null,
+      endpoints: {
+        authorization: repoEnv.T3CODE_NEXI_ACCOUNT_AUTHORIZATION_ENDPOINT ?? null,
+        token: repoEnv.T3CODE_NEXI_ACCOUNT_TOKEN_ENDPOINT ?? null,
+        deviceAuthorization: repoEnv.T3CODE_NEXI_ACCOUNT_DEVICE_ENDPOINT ?? null,
+      },
+    },
     clerk: {
       publishableKey: repoEnv.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? null,
       jwtTemplate: repoEnv.EXPO_PUBLIC_CLERK_JWT_TEMPLATE ?? null,
