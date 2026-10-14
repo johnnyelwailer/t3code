@@ -65,6 +65,7 @@ export function createProjectWorkspaceBackendApi(httpBaseUrl: string): ProjectWo
       readonly linkedRepositoryUrls?: ReadonlyArray<string>;
       readonly setupProfileId?: string;
       readonly syncLinkedRepositoryUrls?: ReadonlyArray<string>;
+      readonly inspectLinkedRepositoriesForMainRepository?: boolean;
     }): Promise<ProjectWorkspaceBootstrapResult> {
       return postJson<typeof input, ProjectWorkspaceBootstrapResult>(
         httpBaseUrl,

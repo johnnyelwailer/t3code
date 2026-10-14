@@ -486,19 +486,30 @@ const layerGitManager = GitManager.layer.pipe(
   Layer.provideMerge(TextGeneration.layer.pipe(Layer.provide(layerSourceControlProviderRegistry))),
 );
 
+const layerSourceControlRepositoryService = SourceControlRepositoryService.layer.pipe(
+  Layer.provideMerge(GitVcsDriver.layer),
+  Layer.provideMerge(layerSourceControlProviderRegistry),
+);
+
 const layerGit = Layer.empty.pipe(
-  Layer.provideMerge(layerGitManager),
+  Layer.provideMerge(
+    layerGitManager.pipe(
+      // t3team: a pull request checkout in a linked repository clones it on demand. Same
+      // `T3TeamLinkedRepositorySyncLive` reference as the application's provision below: one build
+      // memoizes it, so routes, MCP tools, delegations and GitManager share one job registry.
+      Layer.provideMerge(
+        T3TeamLinkedRepositorySyncLive.pipe(
+          Layer.provideMerge(layerSourceControlRepositoryService),
+        ),
+      ),
+    ),
+  ),
   Layer.provideMerge(GitVcsDriver.layer),
 );
 
 const layerGitWorkflow = GitWorkflowService.layer.pipe(
   Layer.provideMerge(layerVcsDriverRegistry),
   Layer.provideMerge(layerGit),
-);
-
-const layerSourceControlRepositoryService = SourceControlRepositoryService.layer.pipe(
-  Layer.provideMerge(GitVcsDriver.layer),
-  Layer.provideMerge(layerSourceControlProviderRegistry),
 );
 
 const layerProjectCloneTracker = ProjectCloneTracker.layer.pipe(

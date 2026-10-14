@@ -6,17 +6,12 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 
-import { ServerConfig } from "./config.ts";
-import type { GitWorkflowService } from "./git/GitWorkflowService.ts";
-import type { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
-import { resolveDelegatedWorkspace } from "./t3team-delegateTaskWorkspace.ts";
 import {
   LINKED_REPOSITORIES_CONTEXT_PATH,
   withLinkedRepositoryCheckouts,
@@ -25,16 +20,27 @@ import { syncLinkedRepositoryOnDemand } from "./t3team-linkedRepositoryOnDemand.
 import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 import { bootstrap, git, makeHarness, makeOrigin } from "./t3team-linkedRepositorySync.fixtures.ts";
 import { readLinkedRepositoryStatus } from "./t3team-project-repository-routesStatus.ts";
+import { bootstrapWorkspaceReferences } from "./t3team-project-repository-routesReferences.ts";
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
   REFERENCES_DIR_NAME,
 } from "./t3team-project-repository-utils.ts";
-import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
+import { VcsProcess } from "./vcs/VcsProcess.ts";
+import { SourceControlRepositoryService } from "./sourceControl/SourceControlRepositoryService.ts";
 
 const run = <A, E>(
   harness: ReturnType<typeof makeHarness>,
-  effect: Effect.Effect<A, E, T3TeamLinkedRepositorySync | FileSystem.FileSystem | Path.Path>,
+  effect: Effect.Effect<
+    A,
+    E,
+    | T3TeamLinkedRepositorySync
+    | FileSystem.FileSystem
+    | Path.Path
+    | VcsProcess
+    | SourceControlRepositoryService
+  >,
 ) => effect.pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
 
 describe("linked repositories on demand", () => {
@@ -57,6 +63,41 @@ describe("linked repositories on demand", () => {
       }),
     );
   });
+
+  it.live(
+    "only a creation bootstrap finds a main repository in a linked repository not cloned",
+    () => {
+      const harness = makeHarness();
+      const url = makeOrigin(harness.root, "with-state");
+      NodeFS.mkdirSync(NodePath.join(url, PROJECT_STATE_DIR), { recursive: true });
+      NodeFS.writeFileSync(NodePath.join(url, PROJECT_STATE_DIR, "AGENTS.md"), "team\n");
+      git(url, "add", ".");
+      git(url, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "state");
+      return run(
+        harness,
+        Effect.gen(function* () {
+          const recurring = yield* bootstrap(harness.workspaceRoot, [url]);
+          expect(recurring.mainRepositoryCandidates).toBeUndefined();
+          const created = yield* bootstrapWorkspaceReferences({
+            workspaceRoot: harness.workspaceRoot,
+            workspaceRepositoryInitialized: true,
+            detectedMainRepository: undefined,
+            linkedRepositoryUrls: [url],
+            inspectLinkedRepositoriesForMainRepository: true,
+          });
+          const entry = created.linkedRepositories[0]!;
+          expect(created.mainRepositoryCandidates).toEqual([
+            { url, checkoutPath: entry.localPath },
+          ]);
+          // Inspect only: no clone, nothing at the reference path, no sync left behind.
+          expect(entry).toMatchObject({ status: "not-cloned" });
+          expect(entry.syncState).toBeUndefined();
+          expect(harness.counts.clone).toBe(0);
+          expect(NodeFS.existsSync(entry.localPath)).toBe(false);
+        }),
+      );
+    },
+  );
 
   it.live("a legacy pending entry without a clone reads as not cloned after a bootstrap", () => {
     const harness = makeHarness();
@@ -194,6 +235,33 @@ describe("linked repositories on demand", () => {
     );
   });
 
+  it.live("stops waiting after the wait timeout while the clone keeps going", () => {
+    const harness = makeHarness();
+    const url = makeOrigin(harness.root, "slow");
+    return run(
+      harness,
+      Effect.gen(function* () {
+        const gate = yield* harness.holdClones();
+        yield* bootstrap(harness.workspaceRoot, [url]);
+        const error = yield* syncLinkedRepositoryOnDemand({
+          workspaceRoot: harness.workspaceRoot,
+          repository: url,
+          wait: true,
+          waitTimeoutMs: 50,
+        }).pipe(Effect.flip);
+        expect(error.message).toContain("timed out after");
+        const [entry] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot))
+          .linkedRepositories;
+        expect(entry?.syncState).toBe("cloning");
+        yield* Deferred.succeed(gate, undefined);
+        yield* Effect.flatMap(T3TeamLinkedRepositorySync, (sync) =>
+          sync.awaitSettled(entry!.localPath),
+        );
+        expect(harness.counts.clone).toBe(1);
+      }),
+    );
+  });
+
   it.live("the linked-repositories context file carries each repository's checkout state", () => {
     const harness = makeHarness();
     const [cloned, absent] = ["cloned", "absent"].map((name) => makeOrigin(harness.root, name));
@@ -228,72 +296,6 @@ describe("linked repositories on demand", () => {
           ],
           syncTool: "t3_linked_repository_sync",
         });
-      }),
-    );
-  });
-
-  const delegate = (harness: ReturnType<typeof makeHarness>, url: string, withSync: boolean) =>
-    Effect.gen(function* () {
-      yield* bootstrap(harness.workspaceRoot, [url]);
-      const driver = yield* GitVcsDriver.GitVcsDriver;
-      const sync = yield* T3TeamLinkedRepositorySync;
-      return yield* resolveDelegatedWorkspace({
-        services: {
-          fileSystem: yield* FileSystem.FileSystem,
-          path: yield* Path.Path,
-          gitWorkflow: {
-            createWorktree: (
-              args: Parameters<GitWorkflowService["Service"]["createWorktree"]>[0],
-            ) => driver.createWorktree(args),
-            localStatus: ({ cwd }: { readonly cwd: string }) =>
-              Effect.sync(() => ({
-                isRepo: true,
-                refName: git(cwd, "branch", "--show-current").stdout.trim(),
-              })),
-          } as unknown as GitWorkflowService["Service"],
-          sourceControlProviders: {
-            resolve: () => Effect.succeed({ getDefaultBranch: () => Effect.succeed("main") }),
-          } as unknown as SourceControlProviderRegistry["Service"],
-          ...(withSync ? { linkedRepositorySync: sync } : {}),
-        },
-        projectWorkspaceRoot: harness.workspaceRoot,
-        repository: url,
-        baseRef: undefined,
-        branchSeed: "Fix checkout",
-        worktreeKey: "0123abcd",
-      });
-    }).pipe(
-      Effect.provide(
-        GitVcsDriver.layer.pipe(
-          Layer.provideMerge(ServerConfig.layerTest(harness.root, { prefix: "t3-linked-od-" })),
-          Layer.provideMerge(NodeServices.layer),
-        ),
-      ),
-      Effect.scoped,
-    );
-
-  it.live("delegating into a linked repository that is not cloned clones it first", () => {
-    const harness = makeHarness();
-    const url = makeOrigin(harness.root, "delegated");
-    return run(
-      harness,
-      Effect.gen(function* () {
-        const workspace = yield* delegate(harness, url, true);
-        expect(harness.counts.clone).toBe(1);
-        expect(NodeFS.existsSync(NodePath.join(workspace.worktreePath, "a.txt"))).toBe(true);
-      }),
-    );
-  });
-
-  it.live("without the sync service, delegating into an uncloned repository says why", () => {
-    const harness = makeHarness();
-    const url = makeOrigin(harness.root, "unsynced");
-    return run(
-      harness,
-      Effect.gen(function* () {
-        const error = yield* delegate(harness, url, false).pipe(Effect.flip);
-        expect(error).toContain("it is not cloned on this machine");
-        expect(harness.counts.clone).toBe(0);
       }),
     );
   });

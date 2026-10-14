@@ -25,6 +25,7 @@ import {
   isLinkedRepositoryReady,
   type LinkedRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
+import { inspectRemoteProjectStateOnDefaultBranch } from "./t3team-linkedRemoteProjectStateInspect.ts";
 
 /** Linked clones (ready, real git checkouts) whose working tree already holds a state dir. */
 export const detectMainRepositoryCandidates = Effect.fn("detectMainRepositoryCandidates")(
@@ -47,6 +48,27 @@ export const detectMainRepositoryCandidates = Effect.fn("detectMainRepositoryCan
     return candidates;
   },
 );
+
+/** Like {@link detectMainRepositoryCandidates}, plus repositories whose **committed** remote
+ * default branch already carries a project state dir (see `t3team-linkedRemoteProjectStateInspect`).
+ * Pending clones with no local tree yet can still appear when the remote inspect succeeds. */
+export const detectMainRepositoryCandidatesWithRemote = Effect.fn(
+  "detectMainRepositoryCandidatesWithRemote",
+)(function* (linkedRepositories: ReadonlyArray<LinkedRepositoryBootstrapResult>) {
+  const local = yield* detectMainRepositoryCandidates(linkedRepositories);
+  const seen = new Set(local.map((candidate) => candidate.checkoutPath));
+  const remoteCandidates: ProjectMainRepositoryCandidate[] = [];
+  for (const entry of linkedRepositories) {
+    const checkoutPath = entry.localPath?.trim();
+    if (!checkoutPath || seen.has(checkoutPath)) continue;
+    const remote = yield* inspectRemoteProjectStateOnDefaultBranch(entry.url).pipe(Effect.option);
+    if (remote._tag === "Some" && remote.value.hasProjectStateDir) {
+      remoteCandidates.push({ url: entry.url, checkoutPath });
+      seen.add(checkoutPath);
+    }
+  }
+  return [...local, ...remoteCandidates];
+});
 
 /** Entries never copied by a migration: reference clones and child worktrees stay where they
  * are (the copied reference manifest keeps pointing at them by absolute path), and copying a

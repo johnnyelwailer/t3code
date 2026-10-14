@@ -119,6 +119,9 @@ export interface ProjectWorkspaceBackendApi {
     readonly setupProfileId?: string;
     /** Linked repositories to clone/fetch now; every other one is only recorded. */
     readonly syncLinkedRepositoryUrls?: ReadonlyArray<string>;
+    /** Project creation only: find main-repository candidates in linked repositories that are not
+     * cloned, from their committed default branch. */
+    readonly inspectLinkedRepositoriesForMainRepository?: boolean;
     readonly customProfile?: import("@t3tools/t3team-skill-packs").T3TeamProfile;
   }) => Promise<ProjectWorkspaceBootstrapResult>;
   /** The linked repositories' recorded state plus live background-sync phases. No git work. */

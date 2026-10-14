@@ -22,6 +22,8 @@ import {
   REFERENCES_DIR_NAME,
   type LinkedRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
+import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
+import { syncLinkedRepositoryOnDemand } from "./t3team-linkedRepositoryOnDemand.ts";
 import { ensureNexiProjectStateDir } from "./t3team-projectMainRepositoryState.ts";
 import { readNormalizedReferenceManifest } from "./t3team-referenceManifestNormalization.ts";
 import {
@@ -97,6 +99,9 @@ export const resolvePullRequestCheckoutRoot = (input: {
   readonly cwd: string;
   readonly reference: string;
   readonly sourceControlProviders: SourceControlProviderRegistry["Service"];
+  /** Clones (or fetches) the pull request's linked repository on demand when it has no usable
+   * checkout; absent, such a repository fails with what to do instead. */
+  readonly linkedRepositorySync?: T3TeamLinkedRepositorySync["Service"];
 }): Effect.Effect<string, GitManagerError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
@@ -113,13 +118,31 @@ export const resolvePullRequestCheckoutRoot = (input: {
 
     const fail = (detail: string) =>
       new GitManagerError({ operation: input.operation, cwd: input.cwd, detail });
-    const linked = linkedRepositoryFor(yield* readLinkedRepositoriesAt(input.cwd), reference);
-    if (linked === undefined) {
+    const recorded = linkedRepositoryFor(yield* readLinkedRepositoriesAt(input.cwd), reference);
+    if (recorded === undefined) {
       if (ownRemoteUrl !== null) return input.cwd;
       return yield* fail(
         `This project's folder has no git remote, and none of its linked repositories contains ${reference}. Link the repository the pull request belongs to, then try again.`,
       );
     }
+    const hasCheckout = (entry: LinkedRepositoryBootstrapResult) =>
+      isLinkedRepositoryReady(entry) && entry.localPath.trim() !== ""
+        ? fileSystem.exists(entry.localPath.trim()).pipe(Effect.orElseSucceed(() => false))
+        : Effect.succeed(false);
+    const sync = input.linkedRepositorySync;
+    // Linked repositories sync on demand: the same path an agent's tool and "Sync now" use.
+    const linked =
+      sync !== undefined && !(yield* hasCheckout(recorded))
+        ? yield* syncLinkedRepositoryOnDemand({
+            workspaceRoot: input.cwd,
+            repository: recorded.url,
+            wait: true,
+          }).pipe(
+            Effect.map((result) => result.entry),
+            Effect.provideService(T3TeamLinkedRepositorySync, sync),
+            Effect.mapError((error) => fail(error.message)),
+          )
+        : recorded;
     const localPath = linked.localPath.trim();
     if (!isLinkedRepositoryReady(linked) || localPath === "") {
       return yield* fail(

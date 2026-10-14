@@ -10,6 +10,8 @@ import * as Schema from "effect/Schema";
 import { describe, expect } from "vite-plus/test";
 
 import type { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
+import { recordLinkedRepositoryOutcome } from "./t3team-linkedRepositoryManifestEntry.ts";
+import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
@@ -49,6 +51,25 @@ const resolve = (input: { cwd: string; reference: string; remoteUrl?: string | n
     reference: input.reference,
     sourceControlProviders: registry(input.remoteUrl ?? null),
   }).pipe(Effect.provide(NodeServices.layer));
+
+/** Stands in for the sync service: a request "clones" the checkout and records it as the real job
+ * does (outcome in the manifest before the request settles). */
+const syncThatClones = (requested: Array<string>) =>
+  T3TeamLinkedRepositorySync.of({
+    request: (input) =>
+      Effect.gen(function* () {
+        requested.push(input.url);
+        NodeFS.mkdirSync(NodePath.join(input.localPath, ".git"), { recursive: true });
+        yield* recordLinkedRepositoryOutcome(input.referencesRoot, {
+          url: input.url,
+          localPath: input.localPath,
+          status: "cloned",
+        }).pipe(Effect.provide(NodeServices.layer), Effect.orDie);
+      }),
+    phase: () => undefined,
+    awaitSettled: () => Effect.void,
+    withManifestLock: (effect) => effect,
+  });
 
 describe("repositoryContainsPullRequest", () => {
   it("matches every provider's pull request URL against any spelling of the repository", () => {
@@ -135,6 +156,31 @@ describe("resolvePullRequestCheckoutRoot", () => {
       const error = yield* resolve({ cwd: root, reference: prUrl }).pipe(Effect.flip);
       expect(error.message).toContain("no git remote");
       expect(error.message).toContain(prUrl);
+    }),
+  );
+
+  it.effect("clones a linked repository that is not cloned yet, then checks out in it", () =>
+    Effect.gen(function* () {
+      const root = workspaceWith([]);
+      const target = NodePath.join(root, HIDDEN_T3TEAM_DIR, REFERENCES_DIR_NAME, "01-api");
+      NodeFS.writeFileSync(
+        NodePath.join(root, HIDDEN_T3TEAM_DIR, REFERENCES_DIR_NAME, MANIFEST_FILE_NAME),
+        encodeJson({
+          linkedRepositories: [
+            { url: "https://github.com/acme/api.git", localPath: target, status: "not-cloned" },
+          ],
+        }),
+      );
+      const requested: Array<string> = [];
+      const checkoutRoot = yield* resolvePullRequestCheckoutRoot({
+        operation: "test",
+        cwd: root,
+        reference: prUrl,
+        sourceControlProviders: registry(null),
+        linkedRepositorySync: syncThatClones(requested),
+      }).pipe(Effect.provide(NodeServices.layer));
+      expect(checkoutRoot).toBe(target);
+      expect(requested).toEqual(["https://github.com/acme/api.git"]);
     }),
   );
 

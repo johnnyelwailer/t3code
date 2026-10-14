@@ -59,6 +59,8 @@ export const makeHarness = () => {
       }),
   });
   const sourceControl = Layer.succeed(SourceControlRepositoryService, {
+    // No provider knows a local origin path: the remote inspect then fetches the URL as given.
+    prepareClone: () => Effect.fail("no provider for a local origin"),
     cloneRepository: (input: { remoteUrl?: string; destinationPath: string }) =>
       Effect.gen(function* () {
         counts.clone += 1;

@@ -19,6 +19,9 @@ export type BootstrapWorkspaceRequest = {
   /** Linked repositories to clone/fetch now (an explicit user choice, e.g. the main repository
    * being switched to). Every other linked repository is only recorded: syncs are on demand. */
   readonly syncLinkedRepositoryUrls?: ReadonlyArray<string>;
+  /** Project creation only: look for main-repository candidates in linked repositories that are
+   * not cloned, by a shallow read of their committed default branch (nothing is checked out). */
+  readonly inspectLinkedRepositoriesForMainRepository?: boolean;
   readonly customProfile?: import("@t3tools/t3team-skill-packs").T3TeamProfile;
 };
 

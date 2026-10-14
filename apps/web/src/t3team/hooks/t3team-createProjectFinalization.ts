@@ -54,6 +54,8 @@ export async function finalizeCreatedProject(input: {
       linkedRepositoryUrls: input.linkedRepositoryUrls,
       setupProfileId: input.setupProfileId,
       ...(input.customProfile ? { customProfile: input.customProfile } : {}),
+      // Once, at creation: a linked repository not cloned can still be the main repository.
+      inspectLinkedRepositoriesForMainRepository: true,
     });
     const bootstrappedProject = await applyMainRepositoryAutoDetection({
       backend: input.backend,

@@ -6,6 +6,7 @@
  *
  * @module t3team-linkedRepositoryOnDemand
  */
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
@@ -14,6 +15,7 @@ import {
   describeLinkedRepositoryForAgent,
   type LinkedRepositoryAgentView,
 } from "./t3team-linkedRepositoryAgentView.ts";
+import { LINKED_REPOSITORY_CLONE_TIMEOUT_MS } from "./t3team-linkedCheckoutGit.ts";
 import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 import { readPreservedReferenceManifest } from "./t3team-project-repository-routesBootstrap.ts";
 import {
@@ -36,6 +38,16 @@ export class LinkedRepositoryNotLinkedError extends Schema.TaggedError<LinkedRep
   }
 }
 
+/** Waiting for the sync gave up (it keeps running in the background). */
+export class LinkedRepositorySyncTimedOutError extends Schema.TaggedError<LinkedRepositorySyncTimedOutError>()(
+  "LinkedRepositorySyncTimedOutError",
+  { repository: Schema.String, waitMs: Schema.Number },
+) {
+  override get message(): string {
+    return `Linked repository '${this.repository}' checkout timed out after ${Math.round(this.waitMs / 1000)}s while waiting for the clone to finish. It keeps syncing in the background; try again later.`;
+  }
+}
+
 export type LinkedRepositoryOnDemandResult = {
   /** The manifest entry once the sync settled (or as queued, without `wait`). */
   readonly entry: LinkedRepositoryBootstrapResult;
@@ -49,6 +61,8 @@ export const syncLinkedRepositoryOnDemand = Effect.fn("syncLinkedRepositoryOnDem
     readonly repository: string;
     /** Resolve once the clone/fetch settled; otherwise return as soon as it is queued. */
     readonly wait: boolean;
+    /** How long `wait` waits (default: the clone timeout); the sync itself is not cancelled. */
+    readonly waitTimeoutMs?: number;
   }) {
     const path = yield* Path.Path;
     const sync = yield* T3TeamLinkedRepositorySync;
@@ -83,7 +97,16 @@ export const syncLinkedRepositoryOnDemand = Effect.fn("syncLinkedRepositoryOnDem
     // A job records its outcome before it leaves the registry and before `awaitSettled` resolves,
     // so a job that settled before this call is already in the manifest. The re-read takes the
     // manifest lock so it never interleaves with a bootstrap rewriting the file.
-    yield* sync.awaitSettled(entry.localPath);
+    const waitMs = input.waitTimeoutMs ?? LINKED_REPOSITORY_CLONE_TIMEOUT_MS;
+    yield* sync.awaitSettled(entry.localPath).pipe(
+      Effect.timeoutOrElse({
+        duration: Duration.millis(waitMs),
+        orElse: () =>
+          Effect.fail(
+            new LinkedRepositorySyncTimedOutError({ repository: input.repository, waitMs }),
+          ),
+      }),
+    );
     const settled = (yield* sync.withManifestLock(readEntry)).entry ?? entry;
     return {
       entry: settled,

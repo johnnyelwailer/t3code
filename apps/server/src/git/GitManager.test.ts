@@ -79,6 +79,7 @@ import {
   REFERENCES_DIR_NAME,
 } from "../t3team-project-repository-utils.ts";
 import * as GitManager from "./GitManager.ts";
+import { T3TeamLinkedRepositorySync } from "../t3team-linkedRepositorySync.ts";
 
 const encodeCliJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 const decodeForgejoPullRequest = Schema.decodeEffect(ForgejoPullRequestSchema);
@@ -852,7 +853,19 @@ function makeManager(input?: {
     ),
   );
 
+  // PR checkout in a linked repository clones it on demand; these tests never reach that path.
+  const layerLinkedRepositorySync = Layer.succeed(
+    T3TeamLinkedRepositorySync,
+    T3TeamLinkedRepositorySync.of({
+      request: () => Effect.void,
+      phase: () => undefined,
+      awaitSettled: () => Effect.void,
+      withManifestLock: (effect) => effect,
+    }),
+  );
+
   const layerManager = Layer.mergeAll(
+    layerLinkedRepositorySync,
     Layer.succeed(TextGeneration.TextGeneration, textGeneration),
     Layer.mock(ProviderRegistry.ProviderRegistry)({
       getProviders: Effect.succeed([]),

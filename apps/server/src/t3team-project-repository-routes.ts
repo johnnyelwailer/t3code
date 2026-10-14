@@ -155,6 +155,9 @@ const bootstrapRouteLayer = HttpRouter.add(
       ...(input.syncLinkedRepositoryUrls
         ? { syncLinkedRepositoryUrls: input.syncLinkedRepositoryUrls }
         : {}),
+      ...(input.inspectLinkedRepositoriesForMainRepository === true
+        ? { inspectLinkedRepositoriesForMainRepository: true }
+        : {}),
     });
     return okJson(response);
   }).pipe(

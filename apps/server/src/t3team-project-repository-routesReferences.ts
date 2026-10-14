@@ -29,7 +29,10 @@ import {
   type BootstrapWorkspaceResponse,
   type MainRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
-import { detectMainRepositoryCandidates } from "./t3team-projectMainRepositoryState.ts";
+import {
+  detectMainRepositoryCandidates,
+  detectMainRepositoryCandidatesWithRemote,
+} from "./t3team-projectMainRepositoryState.ts";
 import { repositoryLookupCandidates } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 
 export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferences")(
@@ -42,6 +45,9 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
     readonly linkedRepositoryBranches?: Readonly<Record<string, string>>;
     /** Linked repositories to clone/fetch now; every other one is only recorded. */
     readonly syncLinkedRepositoryUrls?: ReadonlyArray<string>;
+    /** Project creation: also find main-repository candidates among linked repositories that are
+     * not cloned, from their committed default branch. Never set on recurring bootstraps. */
+    readonly inspectLinkedRepositoriesForMainRepository?: boolean;
   }) {
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -93,7 +99,9 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
         );
         const mainRepositoryCandidates =
           !mainRepository && isMainRepositoryEnabled()
-            ? yield* detectMainRepositoryCandidates(manifestLinkedRepositories)
+            ? input.inspectLinkedRepositoriesForMainRepository === true
+              ? yield* detectMainRepositoryCandidatesWithRemote(manifestLinkedRepositories)
+              : yield* detectMainRepositoryCandidates(manifestLinkedRepositories)
             : [];
 
         yield* writeReferenceManifest(referencesRoot, {
