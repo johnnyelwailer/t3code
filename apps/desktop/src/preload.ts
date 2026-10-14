@@ -12,6 +12,8 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
 
 import * as IpcChannels from "./ipc/channels.ts";
 import { mergeLegacyLocalStorage } from "./legacyLocalStorageMerge.ts";
+// t3team: exposes window.t3teamTranscription (native speech-to-text for the voice composer).
+import "./transcription/t3team-transcriptionPreload.ts";
 
 const SNAP_SHOT_EVENT_TYPES = new Set([
   "requested",

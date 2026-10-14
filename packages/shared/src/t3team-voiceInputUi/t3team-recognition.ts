@@ -5,6 +5,20 @@ import type {
   SpeechRecognitionWindow,
 } from "../t3team-voiceInput.ts";
 import { LANGUAGE_SWITCH_DELAY_MS } from "./t3team-types.ts";
+import {
+  getNativeTranscriptionBridge,
+  NativeBridgeRecognition,
+} from "./t3team-nativeRecognition.ts";
+
+/**
+ * Recognition engine for this host: the desktop app's native bridge (OS speech-to-text or a
+ * configured custom engine) when present, else the browser's Web Speech API.
+ */
+function resolveRecognitionCtor(): (new () => SpeechRecognitionLike) | undefined {
+  if (getNativeTranscriptionBridge()) return NativeBridgeRecognition;
+  const win = window as SpeechRecognitionWindow;
+  return win.SpeechRecognition || win.webkitSpeechRecognition;
+}
 
 export interface VoiceRecognitionCallbacks {
   /** A final transcript chunk landed (interim results are ignored). */
@@ -38,8 +52,7 @@ export class VoiceRecognitionSession {
   }
 
   static isSupported(): boolean {
-    const win = window as SpeechRecognitionWindow;
-    return !!(win.SpeechRecognition || win.webkitSpeechRecognition);
+    return !!resolveRecognitionCtor();
   }
 
   /** Begin recognition. @returns false when no recognition API is available. */
@@ -76,6 +89,8 @@ export class VoiceRecognitionSession {
     const recognition = this.recognition;
     this.recognition = null;
     if (!recognition) return;
+    // Native engines commit the in-flight hypothesis before the handlers are detached.
+    (recognition as { flushPending?: () => void }).flushPending?.();
     recognition.onresult = null;
     recognition.onerror = null;
     recognition.onend = null;
@@ -87,8 +102,7 @@ export class VoiceRecognitionSession {
   }
 
   private attach(language: string): boolean {
-    const win = window as SpeechRecognitionWindow;
-    const Ctor = win.SpeechRecognition || win.webkitSpeechRecognition;
+    const Ctor = resolveRecognitionCtor();
     if (!Ctor) return false;
 
     const recognition = new Ctor();
