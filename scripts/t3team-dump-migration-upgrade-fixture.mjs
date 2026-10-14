@@ -10,15 +10,15 @@
 // "upgrades a database written by a previous fork release" test then migrates every
 // fixture there with the current manifest, so a sync PR whose migrations cannot
 // upgrade old installs fails CI.
-import { DatabaseSync } from "node:sqlite";
-import { writeFileSync } from "node:fs";
+import * as NodeSqlite from "node:sqlite";
+import * as NodeFS from "node:fs";
 
 const [source, out, label = "unlabelled"] = process.argv.slice(2);
 if (!source || !out) {
   console.error("usage: t3team-dump-migration-upgrade-fixture.mjs <db> <out.json> [label]");
   process.exit(2);
 }
-const db = new DatabaseSync(source, { readOnly: true });
+const db = new NodeSqlite.DatabaseSync(source, { readOnly: true });
 const order = { table: 0, view: 1, index: 2, trigger: 3 };
 // FTS/virtual-table shadow tables are created by their CREATE VIRTUAL TABLE; replaying them fails.
 const shadow = new Set(
@@ -40,5 +40,5 @@ const ledger = db
   .all()
   .map((row) => [row.migration_id, row.name]);
 db.close();
-writeFileSync(out, `${JSON.stringify({ label, statements, ledger }, null, 2)}\n`);
+NodeFS.writeFileSync(out, `${JSON.stringify({ label, statements, ledger }, null, 2)}\n`);
 console.log(`wrote ${statements.length} statements and ${ledger.length} ledger rows to ${out}`);
