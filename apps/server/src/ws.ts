@@ -114,6 +114,7 @@ import {
   HttpServerResponse,
 } from "effect/http";
 import { RpcSerialization, RpcServer } from "effect/rpc";
+import type { Rpc, RpcGroup } from "effect/rpc";
 
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as ServerConfig from "./config.ts";
@@ -245,6 +246,7 @@ import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
 import { T3TeamActorMailbox } from "./t3team-actorMailboxService.ts";
 import { stopThreadCascade } from "./t3team-threadStopCascade.ts";
+import type { WsRpcHandlerServices } from "./t3team-wsRpcServices.ts";
 import { prepareThreadHandoff, recordThreadHandoff } from "./t3team-threadHandoff.ts";
 import * as VcsProcess from "./vcs/VcsProcess.ts";
 import { makeSettleParkedWorkflowStop } from "./t3team-settleParkedWorkflowStopLive.ts";
@@ -3423,6 +3425,20 @@ const layerWsRpc = (
     }),
   );
 
+// t3team: `layerWsRpc` with its type written out, so a module importing the server graph reads
+// this declared type instead of re-inferring `toLayer` over every handler (t3team-wsRpcServices.ts).
+const declaredLayerWsRpc: (
+  currentSession: EnvironmentAuth.AuthenticatedSession,
+  clientOrigin: OrchestrationClientOrigin,
+  clientAnalyticsProps: Readonly<Record<string, unknown>>,
+  previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
+  serverBrowser: ServerBrowser.ServerBrowser["Service"],
+) => Layer.Layer<
+  Rpc.ToHandler<RpcGroup.Rpcs<typeof ServerWsRpcGroup>>,
+  never,
+  WsRpcHandlerServices
+> = layerWsRpc;
+
 // A defect in a handler's effect fails only its own request. RpcServer's default
 // sends a socket-level Defect frame instead, and the client ends every pending
 // request on the socket with it. DefectReporter logs these defects.
@@ -3500,7 +3516,7 @@ export const layer = Layer.unwrap(
           return httpEffect;
         }).pipe(
           Effect.provide(
-            layerWsRpc(
+            declaredLayerWsRpc(
               session,
               clientOrigin,
               clientAnalyticsProps,
