@@ -22,6 +22,8 @@ import type {
 } from "./t3team-githubTypes";
 import { postJson } from "./t3team-t3BackendHttp";
 
+/** `POST /api/t3team/project/main-repository` migrates the state dir before it answers. */
+export const MAIN_REPOSITORY_SWITCH_TIMEOUT_MS = 180_000;
 export { createAtlassianBackendApi } from "./t3team-atlassianBackendApi";
 
 export function createGitHubBackendApi(httpBaseUrl: string): GitHubBackendApi {
@@ -99,6 +101,9 @@ export function createProjectWorkspaceBackendApi(httpBaseUrl: string): ProjectWo
         httpBaseUrl,
         "/api/t3team/project/main-repository",
         input,
+        // The switch copies the project state dir into the new checkout; a large one takes well
+        // over the default 15s, and aborting at 15s left the switch unrecorded.
+        { timeoutMs: MAIN_REPOSITORY_SWITCH_TIMEOUT_MS },
       );
     },
     discoverRecipes(input: DiscoverProjectRecipesRequest): Promise<DiscoverProjectRecipesResponse> {
