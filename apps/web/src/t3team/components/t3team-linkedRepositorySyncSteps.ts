@@ -45,7 +45,10 @@ function repositoryStep(
   if (entry.status === "failed") {
     return { id, label, state: "failed", ...(entry.error ? { detail: entry.error } : {}) };
   }
-  if (entry.status === "pending") return { id, label, state: "pending", detail: "In the queue" };
+  // Linked repositories sync on demand: recording one is all a save does for it.
+  if (entry.status === "pending" || entry.status === "not-cloned") {
+    return { id, label, state: "done", detail: "Linked — cloned when needed" };
+  }
   return { id, label, state: "done", detail: "Ready" };
 }
 

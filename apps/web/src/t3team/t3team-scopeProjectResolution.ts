@@ -37,6 +37,22 @@ export function resolveScopeTeamProjectId(input: {
 }
 
 /**
+ * The project the Team home opens on. A resolved scope names it; "All projects" (`scopeKey` null)
+ * names none, so the store's remembered pick — whatever project was last opened — must not stand
+ * in for it. Only a scope that has not resolved yet (key set, group not loaded) falls back to it.
+ */
+export function resolveScopeHomeProjectId(input: {
+  readonly scopeTeamProjectId: string | null;
+  readonly scopeKey: string | null;
+  readonly storeSelectedProjectId: string | null;
+}): string | null {
+  if (input.scopeTeamProjectId !== null) {
+    return input.scopeTeamProjectId;
+  }
+  return input.scopeKey === null ? null : input.storeSelectedProjectId;
+}
+
+/**
  * The project a new thread starts in when nothing more specific (an open thread or draft) names
  * one: the first scoped project that can take a thread, else `fallback` (the unscoped default —
  * also used when every scoped project sits on an unreachable machine). `orderedProjects` carries

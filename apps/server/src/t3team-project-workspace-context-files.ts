@@ -9,6 +9,7 @@ import * as Schema from "effect/Schema";
 import { normalizeProjectContextStateFile } from "./t3team-projectContextStatePaths.ts";
 import { ensureNexiProjectStateDir } from "./t3team-projectMainRepositoryState.ts";
 import { writeT3TeamContextCasFiles } from "./t3team-context-blob-store.ts";
+import { withLinkedRepositoryCheckouts } from "./t3team-linkedRepositoryContextFile.ts";
 import { ensureT3TeamContextCacheTables } from "./t3team-context-cache-tables.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import { WorkspacePaths } from "./workspace/WorkspacePaths.ts";
@@ -75,7 +76,10 @@ function writeT3TeamWorkspaceContextFilesUnlocked(input: {
 
     const writtenFiles = yield* writeT3TeamContextCasFiles({
       workspaceRoot: input.workspaceRoot,
-      files: input.files.map((file) => normalizeProjectContextStateFile(file)),
+      files: yield* withLinkedRepositoryCheckouts(
+        input.workspaceRoot,
+        input.files.map((file) => normalizeProjectContextStateFile(file)),
+      ),
     });
 
     const commitMarker = yield* workspacePaths.resolveRelativePathWithinRoot({

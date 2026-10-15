@@ -4,7 +4,11 @@ import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
-import { ProjectId, SourceControlProviderError } from "@t3tools/contracts";
+import {
+  ProjectId,
+  SourceControlProviderError,
+  SourceControlProviderKind,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -72,7 +76,7 @@ const makePublisher = (hostFailure?: SourceControlProviderError) =>
                       return {
                         status:
                           opened.length === 1 ? ("created" as const) : ("opened_existing" as const),
-                        provider: "github" as const,
+                        provider: SourceControlProviderKind.make("github"),
                         repository: "acme/widgets",
                         url: "https://github.com/acme/widgets/pull/7",
                         number: 7,
@@ -440,7 +444,7 @@ it.layer(layerGit)("T3TeamChangeRequestPublisher", (it) => {
       const detail = "GitHub CLI is not authenticated. Run `gh auth login` and retry.";
       const { publisher } = yield* makePublisher(
         new SourceControlProviderError({
-          provider: "github",
+          provider: SourceControlProviderKind.make("github"),
           operation: "createChangeRequest",
           cwd: repo,
           detail,

@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/require-centered-scroll-gutter -- Existing merged lint debt; keep green while preserving behavior. */
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { XIcon } from "lucide-react";
 import { useEffect, useId, useState, type KeyboardEvent } from "react";

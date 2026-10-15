@@ -49,6 +49,7 @@ import {
   type DesktopTelemetryControlMessage as DesktopTelemetryControlMessageValue,
 } from "@t3tools/contracts";
 import { waitForHttpReady as waitForHttpReadyShared } from "@t3tools/shared/httpReadiness";
+import * as BackendHealthWatchdog from "./t3team-backendHealthWatchdog.ts";
 
 import * as DesktopObservability from "../app/DesktopObservability.ts";
 import * as DesktopTelemetryPublisher from "../telemetry/DesktopTelemetryPublisher.ts";
@@ -236,6 +237,11 @@ interface RunBackendProcessOptions extends DesktopBackendStartConfig {
   readonly onExitObserved?: () => Effect.Effect<void>;
   readonly onReady?: () => Effect.Effect<void>;
   readonly onReadinessFailure?: (error: BackendReadinessTimeoutError) => Effect.Effect<void>;
+  /** Fork: kill a backend that stops answering HTTP after it was ready. */
+  readonly healthWatchdog?: {
+    readonly config: BackendHealthWatchdog.BackendHealthWatchdogConfig;
+    readonly history: BackendHealthWatchdog.BackendWatchdogKillHistory;
+  };
   readonly onOutput?: (
     streamName: BackendProcessOutputStream,
     chunk: Uint8Array,
@@ -630,7 +636,25 @@ export const runBackendProcess = Effect.fn("runBackendProcess")(function* (
     ),
   );
 
-  yield* probeReadiness().pipe(Effect.repeat({ while: (ready) => !ready }), Effect.forkScoped);
+  const healthWatchdog = options.healthWatchdog;
+  const watchHealth = healthWatchdog
+    ? BackendHealthWatchdog.runBackendHealthWatchdog({
+        ...healthWatchdog,
+        probe: BackendHealthWatchdog.makeBackendHttpHealthProbe(
+          options.httpBaseUrl,
+          BACKEND_READINESS_PATH,
+        ),
+        kill: handle.kill().pipe(Effect.ignore),
+        log: (message, details) =>
+          logBackendProcessWarning(message, { pid: Number(handle.pid), ...details }),
+      })
+    : Effect.void;
+
+  yield* probeReadiness().pipe(
+    Effect.repeat({ while: (ready) => !ready }),
+    Effect.andThen(watchHealth),
+    Effect.forkScoped,
+  );
 
   const exit = yield* handle.exitCode.pipe(
     Effect.mapError(
@@ -694,6 +718,10 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
   const httpClient = yield* HttpClient.HttpClient;
   const state = yield* Ref.make(initialState);
   const mutex = yield* Semaphore.make(1);
+  const healthWatchdog = {
+    config: BackendHealthWatchdog.resolveBackendHealthWatchdogConfig(process.env),
+    history: new BackendHealthWatchdog.BackendWatchdogKillHistory(),
+  };
 
   const { logWarning: logInstanceWarning, logError: logInstanceError } =
     DesktopObservability.makeComponentLogger(`desktop-backend-instance:${spec.id}`);
@@ -945,6 +973,7 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
 
         const program = runBackendProcess({
           ...config.value,
+          healthWatchdog,
           desktopTelemetryStream: desktopTelemetryPublisher.encoded,
           // Only a bootstrap that names the browser fds (the local primary) gets them.
           desktopBrowserStream: desktopBrowserHost.events,

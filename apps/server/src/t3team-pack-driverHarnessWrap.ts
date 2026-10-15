@@ -13,7 +13,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 
-import type { ProviderInstance } from "./provider/ProviderDriver.ts";
+import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
 import { adapterToPack } from "./t3team-pack-driverHarnessSession.ts";
 
 const serverToPackSnapshot = (snapshot: ServerProvider): PackProviderSnapshot => ({

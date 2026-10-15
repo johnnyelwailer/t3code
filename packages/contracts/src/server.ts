@@ -69,6 +69,12 @@ export const ServerProviderAuth = Schema.Struct({
   canLogout: Schema.optional(Schema.Boolean),
   subscriptionSharing: Schema.optional(Schema.Boolean),
   profileId: Schema.optional(TrimmedNonEmptyString),
+  /**
+   * The workspace or organization whose quota the login draws on, such as a
+   * ChatGPT workspace or Claude organization id. One email can belong to
+   * several, each with its own quota.
+   */
+  workspaceId: Schema.optional(TrimmedNonEmptyString),
 });
 export type ServerProviderAuth = typeof ServerProviderAuth.Type;
 
@@ -85,6 +91,19 @@ export const ServerProviderModel = Schema.Struct({
   capabilities: Schema.NullOr(ModelCapabilities),
 });
 export type ServerProviderModel = typeof ServerProviderModel.Type;
+
+/**
+ * A model the model manifest announces that the installed provider version is
+ * too old to run. It is never selectable; clients show it so users learn that
+ * updating the provider unlocks it.
+ */
+export const ServerProviderUpdateRequiredModel = Schema.Struct({
+  slug: TrimmedNonEmptyString,
+  name: TrimmedNonEmptyString,
+  badge: Schema.optional(Schema.Literal("new")),
+  minVersion: TrimmedNonEmptyString,
+});
+export type ServerProviderUpdateRequiredModel = typeof ServerProviderUpdateRequiredModel.Type;
 
 export const ServerProviderSlashCommandInput = Schema.Struct({
   hint: TrimmedNonEmptyString,
@@ -289,6 +308,8 @@ export const ServerProvider = Schema.Struct({
   // Surfaces in the UI alongside the missing-driver affordance.
   unavailableReason: Schema.optional(TrimmedNonEmptyString),
   models: Schema.Array(ServerProviderModel),
+  // Kept apart from `models` so clients that predate it never offer them.
+  updateRequiredModels: Schema.optionalKey(Schema.Array(ServerProviderUpdateRequiredModel)),
   slashCommands: Schema.Array(ServerProviderSlashCommand).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
@@ -339,6 +360,27 @@ export const ServerObservability = Schema.Struct({
   otlpLogsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
 });
 export type ServerObservability = typeof ServerObservability.Type;
+
+export const OtlpSignal = Schema.Literals(["traces", "metrics", "logs"]);
+export type OtlpSignal = typeof OtlpSignal.Type;
+
+export const OtlpEndpointCheckInput = Schema.Struct({
+  signal: OtlpSignal,
+  // Receivers are HTTP only; other schemes, such as data:, answer without contacting one.
+  url: TrimmedNonEmptyString.check(Schema.isPattern(/^https?:\/\/./i)),
+});
+export type OtlpEndpointCheckInput = typeof OtlpEndpointCheckInput.Type;
+
+/**
+ * What the server saw when it sent an empty export to an endpoint: accepted,
+ * answered with an error status, or never answered.
+ */
+export const OtlpEndpointCheckResult = Schema.Union([
+  Schema.TaggedStruct("Accepted", { latencyMs: Schema.Number }),
+  Schema.TaggedStruct("Rejected", { status: Schema.Number }),
+  Schema.TaggedStruct("Unreachable", { timedOut: Schema.Boolean }),
+]);
+export type OtlpEndpointCheckResult = typeof OtlpEndpointCheckResult.Type;
 
 export const ServerTraceDiagnosticsErrorKind = Schema.Literals([
   "trace-file-not-found",
@@ -621,6 +663,10 @@ export function environmentThemeFileHasColors(file: EnvironmentThemeFile): boole
   );
 }
 
+/**
+ * "tailnet" when the address is on this machine's Tailscale interface, "lan"
+ * for any other private address, including other VPNs in 100.64.0.0/10.
+ */
 export const ServerDirectEndpointKind = Schema.Literals(["lan", "tailnet"]);
 export type ServerDirectEndpointKind = typeof ServerDirectEndpointKind.Type;
 
@@ -714,6 +760,13 @@ export const ServerConfig = Schema.Struct({
    */
   myWorkRightPanel: Schema.optionalKey(Schema.Boolean),
   /**
+   * Whether a run that failed on a transient gateway error auto-resumes on a durable backoff, with
+   * the live composer retry banner and its toggle. Runtime feature flag (env
+   * `NEXI_FF_TRANSIENT_AUTO_RESUME`, default on); absent on older servers, which clients treat as
+   * off (no banner, no toggle).
+   */
+  transientAutoResume: Schema.optionalKey(Schema.Boolean),
+  /**
    * Whether this server names the project state dir `.nexi` instead of `.t3team`. Runtime
    * feature flag (env `NEXI_FF_NEXI_STATE_DIR`, default on); absent on older servers.
    */
@@ -726,6 +779,13 @@ export const ServerConfig = Schema.Struct({
   threadSnapshotPagination: Schema.optionalKey(Schema.Boolean),
   /** Whether thread reads accept the reasoningMessages opt-in. */
   reasoningMessages: Schema.optionalKey(Schema.Boolean),
+  threadFind: Schema.optionalKey(Schema.Boolean),
+  threadFindProgressive: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Whether this server registers its working directory (`cwd`) as a project on startup.
+   * Absent on servers that predate the field.
+   */
+  projectFromCwd: Schema.optionalKey(Schema.Boolean),
   /**
    * Folder behind this environment's Scratch project, for threads that need
    * no repository. Present only on servers that answer projects.ensureScratch

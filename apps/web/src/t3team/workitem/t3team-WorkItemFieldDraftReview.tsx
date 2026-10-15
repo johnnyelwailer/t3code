@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-outset-state-indicators -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ReactNode } from "react";
 
 import { cn } from "~/t3team/lib/t3team-utils";

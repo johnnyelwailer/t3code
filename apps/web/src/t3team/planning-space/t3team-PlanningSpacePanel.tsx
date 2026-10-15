@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-outset-state-indicators -- Existing merged lint debt; keep green while preserving behavior. */
 /* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Story detail panel (spec §7): the quick-edit + navigation companion for bands 0–4 (per-item

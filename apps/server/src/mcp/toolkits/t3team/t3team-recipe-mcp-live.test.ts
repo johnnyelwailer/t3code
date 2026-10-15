@@ -31,6 +31,14 @@ import { makeRecipeToolHandlers } from "../../../t3team-toolBrokerRecipeTools.ts
 import { T3TeamToolkitRegistrationLive } from "../../McpHttpServer.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpSessionRegistry from "../../McpSessionRegistry.ts";
+import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
+import { T3TeamAskUserWriter } from "./t3team-askUserWriter.ts";
+
+/** Services the T3Team toolkit's tools declare; registration captures them, these calls never reach them. */
+const t3TeamRegistrationServices = Layer.mergeAll(
+  Layer.mock(ThreadManagementService.ThreadManagementService)({}),
+  Layer.mock(T3TeamAskUserWriter)({}),
+);
 
 const environmentId = EnvironmentId.make("environment-recipe-mcp-live");
 const threadId = ThreadId.make("thread-recipe-mcp-live");
@@ -107,6 +115,7 @@ const broker = T3TeamToolBroker.of({
 });
 
 const TestLayer = T3TeamToolkitRegistrationLive.pipe(
+  Layer.provide(t3TeamRegistrationServices),
   Layer.provideMerge(McpServer.McpServer.layer),
   Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
 );

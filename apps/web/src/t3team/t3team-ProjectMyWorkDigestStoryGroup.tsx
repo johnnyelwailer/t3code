@@ -6,6 +6,7 @@ import { digestStoryProgress } from "~/t3team/t3team-projectMyWorkDigestFacts";
 import type { DigestStoryAdjacency } from "~/t3team/t3team-projectMyWorkDigestAdjacency";
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import type { ProjectTicket } from "~/t3team/t3team-types";
+import { digestTransitionStyle } from "~/t3team/t3team-digestViewTransition";
 import { DigestAdjacentWork } from "~/t3team/t3team-ProjectMyWorkDigestAdjacentPills";
 import { DigestAgentDots } from "~/t3team/t3team-ProjectMyWorkDigestAgentDots";
 import { DigestProjectChip, DigestStatusDot } from "~/t3team/t3team-ProjectMyWorkDigestRows";
@@ -114,6 +115,7 @@ export function DigestStoryGroupHeader({
  * count. Items without a story parent render flat in a plain panel instead.
  */
 export function DigestStoryGroup({
+  transitionName,
   story,
   graph,
   nowMs,
@@ -122,6 +124,7 @@ export function DigestStoryGroup({
   onOpenTicket,
   children,
 }: {
+  transitionName?: string | undefined;
   story: ProjectTicket | null;
   graph: DigestGraph;
   nowMs: number;
@@ -131,7 +134,11 @@ export function DigestStoryGroup({
   children: ReactNode;
 }) {
   return (
-    <T3SurfacePanel tone="muted" className="overflow-hidden">
+    <T3SurfacePanel
+      tone="muted"
+      className="overflow-hidden"
+      style={digestTransitionStyle(transitionName)}
+    >
       {story ? (
         <DigestStoryGroupHeader
           story={story}

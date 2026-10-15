@@ -9,7 +9,7 @@
  * shared T3 home. `--tailscale` publishes the server over Tailscale Serve
  * HTTPS and pairs through the tailnet URL instead.
  */
-import { distributionBranding } from "@t3code/distribution";
+import { distributionHomeDirName } from "../t3team-distribution-homeDir.ts";
 import {
   type AuthEnvironmentScope,
   AuthStandardClientScopes,
@@ -237,10 +237,7 @@ interface DiscoveredPairTarget {
   readonly descriptor: ExecutionEnvironmentDescriptor;
 }
 
-const distroDirName = (() => {
-  const name = distributionBranding?.userDataDirName;
-  return name ? (name.startsWith(".") ? name : `.${name}`) : undefined;
-})();
+const distroDirName = distributionHomeDirName;
 
 const discoverPairTarget = Effect.fn("pair.discoverPairTarget")(function* (
   explicitBaseDir: string | undefined,

@@ -3,7 +3,7 @@
  *
  * Inner half of the `createOpenCodeHarness` double bridge: a pack composes the reviewed host
  * OpenCode adapter, decorates it in pack terms, and hands it back to the driver bridge, which maps
- * it onto `ProviderAdapterV2Shape` again (`t3team-pack-driverAdapter.ts`). Each method decodes the
+ * it onto `ProviderAdapterV2` again (`t3team-pack-driverAdapter.ts`). Each method decodes the
  * pack's JSON input, runs the host Effect in the ambient driver context, and encodes the result.
  * A session's scope is owned here and closed by the pack's `close()`.
  *
@@ -19,8 +19,8 @@ import * as Stream from "effect/Stream";
 
 import type {
   ProviderAdapterV2SessionRuntime,
-  ProviderAdapterV2Shape,
-} from "./orchestration-v2/ProviderAdapter.ts";
+  ProviderAdapterV2,
+} from "@t3tools/provider-core/server/ProviderAdapter";
 import { asPack, PackCodec } from "./t3team-pack-driverCodec.ts";
 
 type Run = <A, E>(effect: Effect.Effect<A, E>) => Promise<A>;
@@ -136,7 +136,7 @@ const sessionToPack = (
   );
 
 export const adapterToPack = (
-  adapter: ProviderAdapterV2Shape,
+  adapter: ProviderAdapterV2["Service"],
   ambient: Context.Context<never>,
 ): PackOrchestrationAdapter => {
   const run: Run = (effect) => Effect.runPromiseWith(ambient)(effect);

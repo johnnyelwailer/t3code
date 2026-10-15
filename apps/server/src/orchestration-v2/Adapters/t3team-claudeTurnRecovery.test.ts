@@ -28,8 +28,12 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
-import * as IdAllocator from "../IdAllocator.ts";
-import { ProviderAdapterV2RuntimePolicy, type ProviderAdapterV2Event } from "../ProviderAdapter.ts";
+import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
+import {
+  ProviderAdapterV2RuntimePolicy,
+  type ProviderAdapterV2Event,
+} from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ClaudeAdapterV2 from "./ClaudeAdapterV2.ts";
 import {
   isClaudeInterruptedCause,
@@ -145,7 +149,7 @@ const makeHarness = Effect.gen(function* () {
     ClaudeAdapterV2.ClaudeAgentSdkQueryRunnerError
   >();
   const offered: Array<SDKUserMessage> = [];
-  const adapter = ClaudeAdapterV2.makeClaudeAdapterV2({
+  const adapter = yield* ClaudeAdapterV2.makeClaudeAdapterV2({
     instanceId: ClaudeAdapterV2.CLAUDE_DEFAULT_INSTANCE_ID,
     settings: SETTINGS,
     environment: {},
@@ -163,6 +167,7 @@ const makeHarness = Effect.gen(function* () {
           offer: (message: SDKUserMessage) => Effect.sync(() => void offered.push(message)),
           setModel: () => Effect.void,
           setPermissionMode: () => Effect.void,
+          stopTask: () => Effect.void,
           interrupt: Effect.void,
           close: Effect.void,
         }),
@@ -248,7 +253,7 @@ const awaitUntil = (predicate: () => boolean, label: string) =>
     return yield* Effect.die(`Timed out waiting for ${label}.`);
   });
 
-const testLayer = Layer.merge(IdAllocator.layer, NodeServices.layer);
+const testLayer = Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer);
 
 describe("ClaudeAdapterV2 t3team recovery", () => {
   it.effect("re-drives a transient gateway failure inside the same turn", () =>

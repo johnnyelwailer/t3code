@@ -8,6 +8,7 @@ import {
   reconnectRequiredError,
 } from "./t3team-atlassian-auth-staleToken.ts";
 import { T3TeamAtlassianError } from "./t3team-atlassian-errors.ts";
+import { logNeedsReconnect } from "./t3team-atlassian-auth-refreshTrace.ts";
 
 /**
  * Jira answers an expired or revoked credential with 401. A 403 is a permission gap on one project
@@ -48,7 +49,20 @@ export function classifyRejectedSession<E>(error: E) {
   const baseUrl = rejectedBaseUrl(error);
   const rejected = baseUrl === undefined ? [] : accountsRejectedAt(baseUrl);
   if (rejected.length === 0) return Effect.fail(error);
-  return Effect.sync(() => rejected.forEach(flagNeedsReconnectUnsaved)).pipe(
+  return Effect.sync(() =>
+    rejected.forEach((accountId) => {
+      const auth = atlassianAuths.get(accountId);
+      flagNeedsReconnectUnsaved(
+        accountId,
+        auth === undefined ? undefined : auth.kind === "oauth" ? auth.accessToken : auth.apiToken,
+      );
+    }),
+  ).pipe(
+    Effect.tap(() =>
+      Effect.forEach(rejected, (accountId) =>
+        logNeedsReconnect(accountId, "jira-rejected-access-token"),
+      ),
+    ),
     Effect.flatMap(() => Effect.fail(reconnectRequiredError())),
   );
 }

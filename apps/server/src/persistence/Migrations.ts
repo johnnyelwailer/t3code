@@ -162,6 +162,8 @@ import Migration0106 from "./Migrations/t3team-080_WorkflowRunWatchAny.ts";
 // main shipped 105 (PackDocuments) and 106 (WorkflowRunWatchAny) first, so these take 107/108.
 import Migration0107 from "./Migrations/059_McpAppModelContext.ts";
 import Migration0108 from "./Migrations/060_ThreadSnapshotWindowIndexes.ts";
+// New from the 2026-10-11 upstream sync (upstream 061). Appended above the fork's maximum id (108).
+import Migration0109 from "./Migrations/061_PullRequestReviewGuides.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -284,6 +286,8 @@ export const migrationEntries = [
   // Upstream 059/060 live at 107/108 in this fork's ledger; see the import comment.
   [107, "McpAppModelContext", Migration0107],
   [108, "ThreadSnapshotWindowIndexes", Migration0108],
+  // Upstream 061 lives at 109 in this fork's ledger; see the import comment.
+  [109, "PullRequestReviewGuides", Migration0109],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
@@ -296,6 +300,59 @@ const makeMigrationLoader = (throughId?: number) =>
         .map(([id, name, migration]) => [`${id}_${name}`, migration]),
     ),
   );
+
+// V2's schema migrations start at upstream id 55, which this fork's ledger registers at 84
+// (OrchestrationV2). Upstream's guard below hard-coded 55, but on fork databases 55-83 hold
+// fork and earlier-sync migrations, including the known GHE #382 collision where id 60 was
+// recorded as ProjectionThreadsUnsettledAt (repaired by 78). Checking from 55 refused every
+// pre-sync fork install. Fork convention: upstream migrations keep upstream filenames but are
+// registered ABOVE the fork's current maximum id, so this constant is the fork id of upstream 055.
+export const FIRST_V2_MIGRATION_ID = 84;
+
+// Fork migrations whose schema a later fork migration re-ensures idempotently, so a ledger that
+// skipped them still upgrades: 86-92 and 98 are re-run by 99 (RepairForkPortTables). The guard
+// only refuses skips that nothing repairs.
+export const REPAIRED_BY_LATER_MIGRATION = new Set([86, 87, 90, 91, 92, 98]);
+
+/**
+ * Fail before migrating when the migrator would skip one of V2's own
+ * migrations. It skips every id up to the highest recorded one, whatever name
+ * was recorded, so a database that took a V2 id for another migration would
+ * start without V2's schema and fail on first use. Earlier ids keep the
+ * warning below: databases with a site-local migration there still work.
+ */
+const assertV2MigrationsCanRun = Effect.fn("assertV2MigrationsCanRun")(function* (
+  throughId?: number,
+) {
+  const sql = yield* SqlClient.SqlClient;
+  const tables = yield* sql`
+    SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'
+  `;
+  if (tables.length === 0) return;
+  const recorded = yield* sql<{
+    readonly migration_id: number;
+    readonly name: string;
+  }>`SELECT migration_id, name FROM effect_sql_migrations`;
+  const latestRecordedId = Math.max(0, ...recorded.map((row) => row.migration_id));
+  const recordedNames = new Map(recorded.map((row) => [row.migration_id, row.name]));
+  const skipped = migrationEntries.flatMap(([id, name]) => {
+    if (
+      id < FIRST_V2_MIGRATION_ID ||
+      id > latestRecordedId ||
+      REPAIRED_BY_LATER_MIGRATION.has(id) ||
+      (throughId !== undefined && id > throughId)
+    )
+      return [];
+    const recordedName = recordedNames.get(id);
+    if (recordedName === name) return [];
+    return [`${id}_${name} (recorded: ${recordedName ?? "nothing"})`];
+  });
+  if (skipped.length === 0) return;
+  return yield* new Migrator.MigrationError({
+    kind: "BadState",
+    message: `This database's migration history would skip required schema migrations: ${skipped.join(", ")}. The migrator skips every id up to the highest recorded id (${latestRecordedId}), regardless of name. It was probably written by a different build. Start the build that wrote it, or report this migration history so an upgrade path can be added.`,
+  });
+});
 
 /**
  * Migrator run function - no schema dumping needed
@@ -320,14 +377,18 @@ export interface RunMigrationsOptions {
 export const runMigrations = Effect.fn("runMigrations")(function* ({
   toMigrationInclusive,
 }: RunMigrationsOptions = {}) {
-  const previewMigrations =
-    toMigrationInclusive === undefined || toMigrationInclusive >= 55
-      ? yield* reconcileV2PreviewMigration()
-      : [];
+  const includesV2 =
+    toMigrationInclusive === undefined || toMigrationInclusive >= FIRST_V2_MIGRATION_ID;
+  const previewMigrations = includesV2 ? yield* reconcileV2PreviewMigration() : [];
+  // Relabel the fork sprint ledger (84/85) first: those databases are repairable, so the guard
+  // must judge the reconciled ledger, not refuse it.
   const sprintLedgerMigrations =
     toMigrationInclusive === undefined || toMigrationInclusive >= 84
       ? yield* reconcileForkSprintLedger()
       : [];
+  if (includesV2) {
+    yield* assertV2MigrationsCanRun(toMigrationInclusive);
+  }
   const executedMigrations = [
     ...previewMigrations,
     ...sprintLedgerMigrations,

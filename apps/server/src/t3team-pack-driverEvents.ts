@@ -30,7 +30,7 @@ import {
   ProviderAdapterProtocolError,
   type ProviderAdapterV2Error,
   type ProviderAdapterV2Event,
-} from "./orchestration-v2/ProviderAdapter.ts";
+} from "@t3tools/provider-core/server/ProviderAdapter";
 import { PackCodec } from "./t3team-pack-driverCodec.ts";
 
 const decodeEvent = Schema.decodeUnknownOption(PackCodec.event);

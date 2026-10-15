@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import {
   ProjectId,
+  SourceControlProviderKind,
   type PullRequestListEntry,
   type PullRequestListInput,
   type PullRequestListResult,
@@ -47,7 +48,7 @@ const result: PullRequestListResult = {
   providers: [
     {
       host: "nexplore.ghe.com",
-      kind: "github",
+      kind: SourceControlProviderKind.make("github"),
       searchesOnHost: true,
       projectCount: 1,
       configured: true,
@@ -55,7 +56,7 @@ const result: PullRequestListResult = {
     },
     {
       host: "github.com",
-      kind: "github",
+      kind: SourceControlProviderKind.make("github"),
       searchesOnHost: true,
       projectCount: 1,
       configured: false,

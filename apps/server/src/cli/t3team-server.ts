@@ -11,6 +11,8 @@ import { ServerConfig, type StartupPresentation } from "../config.ts";
 // silently drifted on every upstream sync (it lost BackgroundPolicy/ResourceTelemetry/Usage in
 // the 2026-08 sync); it is gone, and with it the "register the route in BOTH registries" trap.
 import { runServer } from "../server.ts";
+import { activeResourceSummary } from "../t3team-processResilience.ts";
+import { startStallProfiler } from "../t3team-stallProfiler.ts";
 import { activateCompiledInDistribution } from "../t3team-distribution-bootstrap.ts";
 import {
   inspectConfiguredWorkspacePacks,
@@ -24,6 +26,10 @@ import {
 import { setDistributionModelPolicy } from "../t3team-configuredDefaultModelSelection.ts";
 import { packAccounts, setPackAccounts } from "../account/t3team-packAccounts.ts";
 import { loadPackAccounts } from "../t3team-pack-accounts.ts";
+import {
+  loadPackColdLocalCompactionRoutes,
+  setPackColdLocalCompactionRoutes,
+} from "../t3team-pack-coldLocalCompactionRoute.ts";
 import {
   loadPackCompletionWakeRenderer,
   setPackCompletionWakeRenderer,
@@ -205,6 +211,21 @@ export const runT3TeamServerCommand = (
         ),
       );
       yield* Effect.tryPromise({
+        try: () => loadPackColdLocalCompactionRoutes(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        Effect.tap((routes) =>
+          Effect.sync(() => {
+            if (routes.length > 0) setPackColdLocalCompactionRoutes(routes);
+          }),
+        ),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack cold local compaction route loading failed", {
+            cause,
+          }).pipe(Effect.as(undefined)),
+        ),
+      );
+      yield* Effect.tryPromise({
         try: () => loadPackWorkflowRepairPolicy(packDiagnostic),
         catch: (cause) => new WorkspacePackLoadError({ cause }),
       }).pipe(
@@ -267,7 +288,24 @@ export const runT3TeamServerCommand = (
         setupProfiles: setupProfileOverlay?.map((profile) => profile.id) ?? [],
       });
     }
-    return yield* runServer.pipe(Effect.provideService(ServerConfig, config));
+    // A stalled event loop drops every client with "stopped responding" and leaves no trace of
+    // why; this writes a CPU profile of each stall next to the logs (see the module).
+    const stallProfiler = startStallProfiler({
+      directory: `${config.logsDir}/stalls`,
+      onStall: (event) =>
+        Effect.runFork(
+          Effect.logWarning("The server's event loop stalled", {
+            ...event,
+            activeResources: activeResourceSummary(),
+          }),
+        ),
+      onUnavailable: (reason) =>
+        Effect.runFork(Effect.logDebug("Stall profiler unavailable", { reason })),
+    });
+    return yield* runServer.pipe(
+      Effect.provideService(ServerConfig, config),
+      Effect.ensuring(Effect.sync(stallProfiler.stop)),
+    );
   });
 
 export const t3teamStartCommand = Command.make("start", { ...sharedServerCommandFlags }).pipe(

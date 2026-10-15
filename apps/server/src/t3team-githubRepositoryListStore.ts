@@ -13,12 +13,12 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
-import { writeFileStringAtomically } from "./atomicWrite.ts";
+import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 import { ServerConfig } from "./config.ts";
 import type { GitHubRepositoryCandidate } from "./t3team-github-routes-shared.ts";
 
 /** Older than this and the stored list is shown, then refreshed in the background. */
-export const REPOSITORY_LIST_SOFT_TTL_MS = 6 * 60 * 60_000;
+const REPOSITORY_LIST_SOFT_TTL_MS = 6 * 60 * 60_000;
 const STORE_FILE = "github-repository-lists.json";
 const MAX_STORED_LISTS = 64;
 

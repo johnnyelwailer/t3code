@@ -51,4 +51,45 @@ describe("waitForLinkedRepositoryReady", () => {
       }),
     ).rejects.toThrow("Repository not found");
   });
+
+  it("finds the repository under another spelling instead of skipping the wait", async () => {
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce({
+        linkedRepositories: [
+          {
+            url: "example/main",
+            localPath: "/tmp/main",
+            status: "not-cloned",
+            syncState: "cloning",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        linkedRepositories: [{ url: "example/main", localPath: "/tmp/main", status: "cloned" }],
+      });
+    const backend = {
+      projectWorkspace: { readLinkedRepositoryStatus: read },
+    } as unknown as BackendApi;
+    await waitForLinkedRepositoryReady({
+      backend,
+      workspaceRoot: "/tmp/project",
+      url: URL,
+      sleep: async () => {},
+    });
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects instead of polling forever when nothing is syncing a repository that is not cloned", async () => {
+    const { backend, read } = backendReturning({ status: "not-cloned" });
+    await expect(
+      waitForLinkedRepositoryReady({
+        backend,
+        workspaceRoot: "/tmp/project",
+        url: URL,
+        sleep: async () => {},
+      }),
+    ).rejects.toThrow("not cloned and no sync is running");
+    expect(read).toHaveBeenCalledTimes(1);
+  });
 });

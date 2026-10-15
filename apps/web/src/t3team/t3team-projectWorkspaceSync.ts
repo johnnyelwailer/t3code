@@ -27,9 +27,9 @@ export { getProjectWorkspaceSyncStatus, retainProjectWorkspaceSync };
 
 /** The bootstrap inputs each workspace was last bootstrapped with, and when. Context syncs re-run
  * whenever tickets or visible context change (every few seconds while a project is open);
- * bootstrapping — scaffolding and queueing linked-repository syncs — re-runs when these inputs
- * change, or after `BOOTSTRAP_REFRESH_MS` so the server can requeue syncs a restart dropped and
- * apply its own (throttled) refetch. The bootstrap itself never waits on git. */
+ * bootstrapping — scaffolding and recording the linked repositories — re-runs when these inputs
+ * change, or after `BOOTSTRAP_REFRESH_MS`. It never clones or fetches a linked repository: they
+ * sync on demand (an agent's `t3_linked_repository_sync`, the dialog's "Sync now"). */
 const BOOTSTRAP_REFRESH_MS = 10 * 60_000;
 const bootstrappedByWorkspaceRoot = new Map<string, { key: string; atMs: number }>();
 

@@ -6,7 +6,6 @@ import { RepositoryPicker } from "~/t3team/components/t3team-RepositoryPicker";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { Card } from "~/t3team/components/ui/t3team-card";
 import { splitRepositoryInput } from "~/t3team/components/t3team-linkedRepositories";
-import { useBackend } from "~/t3team/backend/t3team-index";
 import { MainRepositoryPicker } from "~/t3team/components/t3team-MainRepositoryPicker";
 import {
   normalizeRepositoryUrls,
@@ -16,14 +15,13 @@ import {
   readMainRepositoryCandidatesFromProject,
   readMainRepositoryFromProject,
 } from "~/t3team/hooks/t3team-projectMainRepository";
-import { saveProjectRepositories } from "~/t3team/hooks/t3team-saveProjectRepositories";
+import { useSaveProjectRepositories } from "~/t3team/hooks/t3team-useSaveProjectRepositories";
 import { useLinkedRepositorySyncStatus } from "~/t3team/hooks/t3team-useLinkedRepositorySyncStatus";
 import { LinkedRepositorySyncStatusLine } from "~/t3team/components/t3team-LinkedRepositorySyncStatusLine";
 import { useGitHubRepositoryDiscovery } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
 import { LinkedRepositorySyncModal } from "~/t3team/components/t3team-LinkedRepositorySyncModal";
 import { LinkedRepositoryBranchControl } from "~/t3team/components/t3team-LinkedRepositoryBranchControl";
 import { useLinkedRepositoryBranches } from "~/t3team/hooks/t3team-useLinkedRepositoryBranches";
-import { useLinkedRepositorySyncView } from "~/t3team/hooks/t3team-useLinkedRepositorySyncView";
 import { useServerConfig } from "~/t3team/t3team-serverState";
 
 export function ManageProjectRepositoriesDialog({
@@ -35,16 +33,8 @@ export function ManageProjectRepositoriesDialog({
   onClose: () => void;
   onProjectUpdated: (project: ProjectShellProject) => void;
 }) {
-  const backend = useBackend();
   const currentUrls = useMemo(() => readLinkedRepositoryUrlsFromProject(project), [project]);
   const [linkedRepositoryUrls, setLinkedRepositoryUrls] = useState(currentUrls);
-  const [saveError, setSaveError] = useState<unknown>(null);
-  const [saving, setSaving] = useState(false);
-  // Saving returns before clones finish; the dialog stays open to show their progress.
-  const [saved, setSaved] = useState<{
-    urls: ReadonlyArray<string>;
-    main: string | null;
-  } | null>(null);
   const syncStatus = useLinkedRepositorySyncStatus({
     workspaceRoot: project.workspace?.rootPath,
     enabled: true,
@@ -54,8 +44,6 @@ export function ManageProjectRepositoriesDialog({
   const currentMain = readMainRepositoryFromProject(project);
   const initialMainUrl = currentMain?.status === "adopted" ? null : (currentMain?.url ?? null);
   const [mainRepositoryUrl, setMainRepositoryUrl] = useState<string | null>(initialMainUrl);
-  const unchangedSinceSave =
-    saved !== null && saved.urls === linkedRepositoryUrls && saved.main === mainRepositoryUrl;
 
   const discovery = useGitHubRepositoryDiscovery({
     enabled: true,
@@ -87,6 +75,19 @@ export function ManageProjectRepositoriesDialog({
   const linkRepositories = (urls: ReadonlyArray<string>) =>
     setLinkedRepositoryUrls((current) => normalizeRepositoryUrls([...current, ...urls]));
 
+  const mainChange =
+    mainRepositoryEnabled && mainRepositoryUrl !== initialMainUrl ? mainRepositoryUrl : undefined;
+  const { save, saving, saved, saveError, syncView, unchangedSinceSave } =
+    useSaveProjectRepositories({
+      project,
+      linkedRepositoryUrls,
+      linkedRepositoryBranches: branches.branches,
+      mainRepositoryUrl,
+      mainChange,
+      syncStatus,
+      onProjectUpdated,
+    });
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !saving) onClose();
@@ -94,40 +95,6 @@ export function ManageProjectRepositoriesDialog({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose, saving]);
-
-  const mainChange =
-    mainRepositoryEnabled && mainRepositoryUrl !== initialMainUrl ? mainRepositoryUrl : undefined;
-  const syncView = useLinkedRepositorySyncView({
-    urls: linkedRepositoryUrls,
-    byUrl: syncStatus.byUrl,
-    mainRepositoryUrl: mainChange,
-  });
-
-  const saveLinkedRepositories = async () => {
-    setSaveError(null);
-    setSaving(true);
-    syncView.begin();
-    try {
-      const nextProject = await saveProjectRepositories({
-        backend,
-        project,
-        linkedRepositoryUrls,
-        linkedRepositoryBranches: branches.branches,
-        // Show clone progress while the save waits on the chosen main repository's clone.
-        onSaved: () => syncStatus.refresh(),
-        onPhase: syncView.setPhase,
-        ...(mainChange !== undefined ? { mainRepositoryUrl: mainChange } : {}),
-      });
-      onProjectUpdated(nextProject);
-      setSaved({ urls: linkedRepositoryUrls, main: mainRepositoryUrl });
-      syncStatus.refresh();
-    } catch (error) {
-      setSaveError(error);
-      syncView.hide();
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <div
@@ -168,7 +135,10 @@ export function ManageProjectRepositoriesDialog({
               onToggle={toggleRepository}
               onLinkMany={linkRepositories}
               renderLinkedStatus={(url) => (
-                <LinkedRepositorySyncStatusLine entry={syncStatus.byUrl.get(url)} />
+                <LinkedRepositorySyncStatusLine
+                  entry={syncStatus.byUrl.get(url)}
+                  onSync={syncStatus.syncNow}
+                />
               )}
               renderLinkedControls={(url) => (
                 <LinkedRepositoryBranchControl
@@ -197,7 +167,7 @@ export function ManageProjectRepositoriesDialog({
                 <T3TeamErrorState
                   error={saveError}
                   action="updating linked repositories"
-                  onRetry={() => void saveLinkedRepositories()}
+                  onRetry={() => void save()}
                 />
               </div>
             ) : null}
@@ -206,7 +176,7 @@ export function ManageProjectRepositoriesDialog({
               <span className="text-xs text-muted-foreground">
                 {linkedRepositoryUrls.length} linked
                 {unchangedSinceSave
-                  ? " · saved, repositories sync in the background"
+                  ? " · saved, repositories sync when needed"
                   : dirty
                     ? " · unsaved changes"
                     : ""}
@@ -216,7 +186,7 @@ export function ManageProjectRepositoriesDialog({
                   {saved === null ? "Cancel" : "Close"}
                 </Button>
                 <Button
-                  onClick={() => void saveLinkedRepositories()}
+                  onClick={() => void save()}
                   disabled={saving || !dirty || unchangedSinceSave}
                 >
                   {saving ? "Saving..." : unchangedSinceSave ? "Saved" : "Save"}

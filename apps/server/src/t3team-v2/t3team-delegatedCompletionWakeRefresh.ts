@@ -22,7 +22,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import type { EventSinkV2Shape } from "../orchestration-v2/EventSink.ts";
-import type { IdAllocatorV2Shape } from "../orchestration-v2/IdAllocator.ts";
+import type { IdAllocatorV2Allocate } from "@t3tools/provider-core/server/IdAllocator";
 import { delegatedCompletionWakeDetail } from "../orchestration-v2/Orchestrator.ts";
 import {
   type DelegatedCompletionWakeRendererShape,
@@ -32,7 +32,7 @@ import {
 export interface DelegatedCompletionWakeRefreshInput {
   readonly renderer: DelegatedCompletionWakeRendererShape;
   readonly eventSink: Pick<EventSinkV2Shape, "writeIfRunCurrent">;
-  readonly ids: Pick<IdAllocatorV2Shape["allocate"], "event">;
+  readonly ids: Pick<IdAllocatorV2Allocate, "event">;
   /** The starting run's own turn items (`getTurnStartContext`). */
   readonly turnItems: ReadonlyArray<OrchestrationV2TurnItem>;
   readonly run: OrchestrationV2Run;

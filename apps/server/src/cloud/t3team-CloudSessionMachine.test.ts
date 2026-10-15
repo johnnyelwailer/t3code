@@ -14,7 +14,7 @@ import * as Redacted from "effect/Redacted";
 
 import { ProjectService } from "../project/ProjectService.ts";
 import * as ProjectMachineDiscovery from "../project/t3team-ProjectMachineDiscovery.ts";
-import * as GitHubApi from "../sourceControl/GitHubApi.ts";
+import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import { CloudSessionMachines, layer } from "./t3team-CloudSessionMachine.ts";
 
@@ -69,7 +69,8 @@ const sessionIn = <A, E>(
   use: (machines: CloudSessionMachines["Service"]) => Effect.Effect<A, E>,
 ) => {
   const projects = Layer.mock(ProjectService)({
-    getById: () => Effect.succeed(Option.some({ workspaceRoot: root } as unknown as Project)),
+    getById: () =>
+      Effect.succeed(Option.some({ workspaceRoot: root, title: "IES NG" } as unknown as Project)),
   });
   const unavailable = (host: string) =>
     Effect.fail(new GitHubApi.GitHubApiAuthenticationError({ host, operation: "test" }) as never);
@@ -105,6 +106,9 @@ const resolveIn = (root: string, token = "ghp_user-token") =>
 
 const setupIn = (root: string, token = "ghp_user-token") =>
   sessionIn(root, token, (machines) => machines.resolveSetup(projectId));
+
+const plainIn = (root: string, token = "ghp_user-token") =>
+  sessionIn(root, token, (machines) => machines.resolvePlain(projectId));
 
 describe("CloudSessionMachines.resolve", () => {
   it.effect("pins a pushed definition and carries the user's token, never a credential URL", () =>
@@ -249,6 +253,75 @@ describe("CloudSessionMachines.resolveSetup", () => {
       const error = yield* Effect.flip(setupIn(checkout({ "README.md": "hi" }, { pushed: false })));
       expect(error.reason).toBe("machine_unavailable");
       expect(error.message).toContain("Push");
+    }),
+  );
+});
+
+describe("CloudSessionMachines.resolvePlain", () => {
+  it.effect("checks a project without a machine out at its pushed HEAD, as the user", () =>
+    Effect.gen(function* () {
+      const root = checkout({ "README.md": "hi" });
+      const plain = yield* plainIn(root);
+      expect(plain).toEqual({
+        kind: "checkout",
+        checkout: {
+          repository: {
+            url: "https://nexplore.ghe.com/acme/api.git",
+            host: "nexplore.ghe.com",
+            owner: "acme",
+            name: "api",
+          },
+          commit: git(root, "rev-parse", "HEAD"),
+          token: "ghp_user-token",
+          author: { name: "Philip J", email: "7+pj@users.noreply.nexplore.ghe.com" },
+        },
+      });
+    }),
+  );
+
+  it.effect("falls back to the default branch when nothing of the current branch is pushed", () =>
+    Effect.gen(function* () {
+      const root = checkout({ "README.md": "hi" });
+      const pushed = git(root, "rev-parse", "HEAD");
+      git(root, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+      git(root, "checkout", "-q", "-b", "local-only");
+      git(root, "commit", "-q", "--allow-empty", "-m", "unpushed");
+      const plain = yield* plainIn(root);
+      expect(plain.kind === "checkout" ? plain.checkout.commit : null).toBe(pushed);
+    }),
+  );
+
+  it.effect("refuses a repository origin has nothing of, naming the fix", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(plainIn(checkout({ "README.md": "hi" }, { pushed: false })));
+      expect(error.reason).toBe("machine_unavailable");
+      expect(error.message).toContain("Push");
+    }),
+  );
+
+  it.effect("starts a project with no remote in a workspace named after it", () =>
+    Effect.gen(function* () {
+      const repository = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-plain-"));
+      git(repository, "init", "-q", "-b", "main");
+      expect(yield* plainIn(repository)).toEqual({ kind: "workspace", folder: "IES NG-781a8188" });
+      const folder = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-plain-"));
+      expect(yield* plainIn(folder)).toEqual({ kind: "workspace", folder: "IES NG-781a8188" });
+    }),
+  );
+
+  it.effect("refuses an origin the session cannot clone instead of starting an empty one", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        plainIn(checkout({ "README.md": "hi" }, { remote: "/srv/git/api.git" })),
+      );
+      expect(error.reason).toBe("machine_unavailable");
+    }),
+  );
+
+  it.effect("asks for a gh sign-in when the host has none", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(plainIn(checkout({ "README.md": "hi" }), ""));
+      expect(error.reason).toBe("repository_sign_in_required");
     }),
   );
 });

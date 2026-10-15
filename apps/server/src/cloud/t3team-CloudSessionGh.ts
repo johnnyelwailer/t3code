@@ -12,8 +12,9 @@
  */
 import { CloudSessionFailedError } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import type * as GitHubApi from "../sourceControl/GitHubApi.ts";
+import type * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
 import {
   currentLoginRequest,
   listRunsRequest,
@@ -38,6 +39,16 @@ export type SessionGhRunOptions = {
    */
   readonly allowReserve?: boolean;
 };
+
+/**
+ * Background reads share one answer process-wide (see `GitHubRestInput.coalesce`); a user's own
+ * create/cancel always reads fresh, since it acts on what it reads.
+ */
+function coalesceFor(coalesce: { readonly ttlMs: number } | undefined, allowReserve: boolean) {
+  return coalesce === undefined || allowReserve
+    ? {}
+    : { coalesce: { ttl: Duration.millis(coalesce.ttlMs) } };
+}
 
 /**
  * Bundle the three GitHub operations a cloud session needs, bound to one API
@@ -87,6 +98,7 @@ export const makeSessionGh = Effect.fn("cloud.session_gh.make")(function* (
             ...(request.method === undefined ? {} : { method: request.method }),
             ...(request.body === undefined ? {} : { body: request.body }),
             allowReserve,
+            ...coalesceFor(request.coalesce, allowReserve),
           })
           .pipe(Effect.map((response) => ({ body: response.body, truncated: response.truncated })))
     ).pipe(Effect.mapError(toCloudSessionFailure));

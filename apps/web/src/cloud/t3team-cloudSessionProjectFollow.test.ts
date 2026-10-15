@@ -1,20 +1,32 @@
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
+import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
+import { decodeCloudQueuedSend } from "./t3team-cloudQueuedSendModel";
+import { getDraftCloudQueuedSend, writeDraftCloudQueuedSend } from "./t3team-cloudQueuedSendStore";
 import {
-  CLOUD_SESSION_PROJECT_CHANGED_MESSAGE,
   cloudSessionTargetBelongsToOtherProject,
   followCloudSessionProject,
 } from "./t3team-cloudSessionProjectFollow";
 import {
   clearCloudSessionTarget,
   getCloudSessionTarget,
-  requestCloudSessionBind,
   resolveCloudSessionCreating,
   selectCloudSessionCreating,
   selectCloudSessionTarget,
 } from "./t3team-cloudSessionTargetStore";
 
-const queued = { messageId: "msg-1", messageText: "hello", createdAt: "2026-10-12T00:00:00.000Z" };
+const queued = decodeCloudQueuedSend({
+  messageId: "msg-1",
+  messageText: "hello",
+  outgoingText: "hello",
+  titleSeed: "hello",
+  modelSelection: { instanceId: "codex", model: "gpt-5" },
+  runtimeMode: "full-access",
+  interactionMode: "default",
+  sessionId: "session-9",
+  sessionLabel: "machine-a",
+  createdAt: "2026-10-12T00:00:00.000Z",
+})!;
 
 describe("cloud session follows the composer project (409)", () => {
   beforeEach(() => {
@@ -64,16 +76,14 @@ describe("cloud session follows the composer project (409)", () => {
       label: "machine-a",
       projectKey: "project-a",
     });
-    requestCloudSessionBind("draft-1", queued);
-    expect(followCloudSessionProject("draft-1", "project-b")).toEqual({
-      kind: "restored",
-      queued,
-    });
-    expect(getCloudSessionTarget("draft-1")).toMatchObject({
-      bindRequested: false,
-      queuedSend: null,
-      failureMessage: CLOUD_SESSION_PROJECT_CHANGED_MESSAGE,
-    });
+    const draftId = DraftId.make("draft-1");
+    useComposerDraftStore.getState().setPrompt(draftId, "hello");
+    writeDraftCloudQueuedSend("draft-1", queued);
+    useComposerDraftStore.getState().setPrompt(draftId, "");
+    expect(followCloudSessionProject("draft-1", "project-b")).toEqual({ kind: "restored" });
+    expect(getCloudSessionTarget("draft-1")).toBeNull();
+    expect(getDraftCloudQueuedSend("draft-1")).toBeNull();
+    expect(useComposerDraftStore.getState().draftsByThreadKey["draft-1"]?.prompt).toBe("hello");
   });
 
   it("leaves a target with no project stamp alone", () => {

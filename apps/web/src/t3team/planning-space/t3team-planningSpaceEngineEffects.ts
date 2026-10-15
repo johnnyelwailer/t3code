@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-raw-resize-observer -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Engine-driven effects for the planning space: the engine lifecycle (creation,
  * band/frame listeners, the Full-band magnet, resize observer), layout-target

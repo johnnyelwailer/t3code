@@ -14,6 +14,7 @@ import {
   presentCloudSession,
 } from "./t3team-cloudSessionProvisionPresentation";
 import { cloudSessionDisplayName } from "./t3team-cloudSessionDisplayName";
+import { CloudSessionProgressBar } from "./t3team-CloudSessionProgressBar";
 
 /**
  * One provisioning session rendered as a list row, plus the skeleton rows the
@@ -23,28 +24,6 @@ import { cloudSessionDisplayName } from "./t3team-cloudSessionDisplayName";
  * presentation module), the determinate progress bar, and the row's primary
  * action. The panel composes these rows; it adds nothing per-session itself.
  */
-
-/**
- * A determinate bar for a session that is still provisioning. Deliberately not
- * a spinner: the timings are predictable enough (~2.5 min) that an indeterminate
- * spinner would understate how much is known.
- */
-function CloudSessionProgressBar({ progress }: { readonly progress: number }) {
-  return (
-    <div
-      className="h-1 w-full overflow-hidden rounded-full bg-muted"
-      role="progressbar"
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={Math.round(progress * 100)}
-    >
-      <div
-        className="h-full rounded-full bg-warning transition-[width] duration-500 ease-out"
-        style={{ width: `${Math.round(progress * 100)}%` }}
-      />
-    </div>
-  );
-}
 
 export function CloudSessionRowsSkeleton() {
   return (

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { PullRequestListEntry } from "@t3tools/contracts";
+import { SourceControlProviderKind, type PullRequestListEntry } from "@t3tools/contracts";
 import { toGitHubWorkActivityItemsFromPullRequestEntries } from "./t3team-githubActivityFromPullRequests";
 
 function entry(overrides: Partial<PullRequestListEntry>): PullRequestListEntry {
   return {
-    provider: "github",
+    provider: SourceControlProviderKind.make("github"),
     host: "github.com",
     projectId: "project-1" as PullRequestListEntry["projectId"],
     projectTitle: "Acme project",

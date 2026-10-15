@@ -16,6 +16,14 @@ import {
   T3TeamToolkit,
 } from "./tools.ts";
 import { TOOL_SPECS } from "../../../t3team-toolBrokerHelpers.ts";
+import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
+import { T3TeamAskUserWriter } from "./t3team-askUserWriter.ts";
+
+/** Services the T3Team toolkit's tools declare; registration captures them, these calls never reach them. */
+const t3TeamRegistrationServices = Layer.mergeAll(
+  Layer.mock(ThreadManagementService.ThreadManagementService)({}),
+  Layer.mock(T3TeamAskUserWriter)({}),
+);
 
 it("maps or explicitly policy-excludes every canonical implemented tool", () => {
   const exposed: ReadonlySet<string> = new Set(Object.values(T3TEAM_MCP_CANONICAL_TOOL_MAP));
@@ -75,6 +83,7 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
     bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
   });
   const TestLayer = T3TeamToolkitRegistrationLive.pipe(
+    Layer.provide(t3TeamRegistrationServices),
     Layer.provideMerge(McpServer.McpServer.layer),
     Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
   );
@@ -149,6 +158,7 @@ it.effect("routes t3_recipe_list through the bound broker callTool dispatch", ()
     bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
   });
   const TestLayer = T3TeamToolkitRegistrationLive.pipe(
+    Layer.provide(t3TeamRegistrationServices),
     Layer.provideMerge(McpServer.McpServer.layer),
     Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
   );
@@ -198,6 +208,7 @@ it.effect("routes t3_recipe_validate through the bound broker callTool dispatch"
     bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
   });
   const TestLayer = T3TeamToolkitRegistrationLive.pipe(
+    Layer.provide(t3TeamRegistrationServices),
     Layer.provideMerge(McpServer.McpServer.layer),
     Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
   );
@@ -237,6 +248,7 @@ it.effect(
       bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
     });
     const TestLayer = T3TeamToolkitRegistrationLive.pipe(
+      Layer.provide(t3TeamRegistrationServices),
       Layer.provideMerge(McpServer.McpServer.layer),
       Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
     );
@@ -302,6 +314,7 @@ const skillMetadataCall = Effect.fn("T3TeamToolkitTest.skillMetadataCall")(funct
 });
 
 const emptySkillMetadataLayer = T3TeamToolkitRegistrationLive.pipe(
+  Layer.provide(t3TeamRegistrationServices),
   Layer.provideMerge(McpServer.McpServer.layer),
   Layer.provideMerge(
     Layer.succeed(

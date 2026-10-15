@@ -43,10 +43,11 @@ describe("feature flag layering", () => {
     expect(isMainRepositoryEnabled(() => "yes")).toBe(true);
   });
 
-  test("MACHINE_SETUP is off by default, on from the DB, and the env wins either way", () => {
-    expect(isMachineSetupEnabled(noEnv)).toBe(false);
-    replaceFeatureFlagDatabaseValues(new Map([["MACHINE_SETUP", true]]));
+  test("MACHINE_SETUP is on by default, off from the DB, and the env wins either way", () => {
     expect(isMachineSetupEnabled(noEnv)).toBe(true);
+    replaceFeatureFlagDatabaseValues(new Map([["MACHINE_SETUP", false]]));
+    expect(isMachineSetupEnabled(noEnv)).toBe(false);
+    expect(isMachineSetupEnabled(() => "1")).toBe(true);
     expect(isMachineSetupEnabled(() => "0")).toBe(false);
     replaceFeatureFlagDatabaseValues(new Map());
     expect(isMachineSetupEnabled(() => "1")).toBe(true);
@@ -91,6 +92,11 @@ describe("feature flag layering", () => {
       }),
       expect.objectContaining({
         key: "MYWORK_RIGHT_PANEL",
+        requiresRestart: false,
+        defaultEnabled: true,
+      }),
+      expect.objectContaining({
+        key: "TRANSIENT_AUTO_RESUME",
         requiresRestart: false,
         defaultEnabled: true,
       }),

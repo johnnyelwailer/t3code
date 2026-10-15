@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-outset-state-indicators -- Existing merged lint debt; keep green while preserving behavior. */
 /* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import { ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";

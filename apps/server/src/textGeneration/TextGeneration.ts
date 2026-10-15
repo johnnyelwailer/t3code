@@ -1,180 +1,45 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import type {
-  BranchNamingOptions,
-  ChatAttachment,
-  ModelSelection,
-  ProviderInstanceId,
-} from "@t3tools/contracts";
-import type * as Schema from "effect/Schema";
+import type { ProviderInstanceId } from "@t3tools/contracts";
+import type { ProviderTextGeneration } from "@t3tools/provider-core/server/textGeneration";
 import { TextGenerationError } from "@t3tools/contracts";
 
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
-import type { ProviderInstance } from "../provider/ProviderDriver.ts";
+import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as ThreadTitleLinks from "./ThreadTitleLinks.ts";
-import type { TextGenerationPolicy } from "./TextGenerationPolicy.ts";
 import { withPinnedTextGenerationModel } from "./t3team-textGenerationModelPin.ts";
 
-export interface CommitMessageGenerationInput {
-  cwd: string;
-  branch: string | null;
-  stagedSummary: string;
-  stagedPatch: string;
-  /** When true, the model also returns a semantic branch name for the change. */
-  includeBranch?: boolean;
-  policy?: TextGenerationPolicy | undefined;
-  /** What model and provider to use for generation. */
-  modelSelection: ModelSelection;
-}
-
-export interface CommitMessageGenerationResult {
-  subject: string;
-  body: string;
-  /** Only present when `includeBranch` was set on the input. */
-  branch?: string | undefined;
-}
-
-export interface PrContentGenerationInput {
-  cwd: string;
-  baseBranch: string;
-  headBranch: string;
-  commitSummary: string;
-  diffSummary: string;
-  diffPatch: string;
-  changeRequestTemplate?: string | undefined;
-  policy?: TextGenerationPolicy | undefined;
-  /** What model and provider to use for generation. */
-  modelSelection: ModelSelection;
-}
-
-export interface PrContentGenerationResult {
-  title: string;
-  body: string;
-}
-
-export interface BranchNameGenerationInput {
-  naming?: BranchNamingOptions | undefined;
-  cwd: string;
-  message: string;
-  attachments?: ReadonlyArray<ChatAttachment> | undefined;
-  /** What model and provider to use for generation. */
-  modelSelection: ModelSelection;
-}
-
-export interface BranchNameGenerationResult {
-  branch: string;
-}
-
-export interface ThreadTitleGenerationInput {
-  linkedContext?: string | undefined;
-  cwd: string;
-  message: string;
-  /** Present when replacing an existing title from the current thread history. */
-  previousTitle?: string | undefined;
-  attachments?: ReadonlyArray<ChatAttachment> | undefined;
-  /** What model and provider to use for generation. */
-  modelSelection: ModelSelection;
-}
-
-export interface ThreadTitleGenerationResult {
-  title: string;
-  needsRefinement?: boolean | undefined;
-}
-
-export interface ActivityLabelGenerationInput {
-  cwd: string;
-  /**
-   * Tiny, hard-capped context: the last few meaningful activities plus an
-   * optional one-line user-intent gist. NEVER the whole thread or tool
-   * results — the prompt builder re-caps it as a second line of defence.
-   */
-  context: string;
-  /** What model and provider to use for generation. */
-  modelSelection: ModelSelection;
-}
-
-export interface ActivityLabelGenerationResult {
-  label: string;
-}
-
-export type StructuredGenerationInput<S extends Schema.Top> = {
-  readonly cwd: string;
-  readonly prompt: string;
-  readonly outputSchema: S;
-  readonly modelSelection: ModelSelection;
-};
-
-export interface TextGenerationService {
-  generateCommitMessage(
-    input: CommitMessageGenerationInput,
-  ): Promise<CommitMessageGenerationResult>;
-  generatePrContent(input: PrContentGenerationInput): Promise<PrContentGenerationResult>;
-  generateBranchName(input: BranchNameGenerationInput): Promise<BranchNameGenerationResult>;
-  generateThreadTitle(input: ThreadTitleGenerationInput): Promise<ThreadTitleGenerationResult>;
-  /**
-   * Generate a 2–4 word "working on" label for an active thread from its
-   * most recent activities (GHE #40). Drivers MUST not attach a reasoning
-   * effort / thinking budget to this call.
-   */
-  generateActivityLabel(
-    input: ActivityLabelGenerationInput,
-  ): Promise<ActivityLabelGenerationResult>;
-  generateStructured?<S extends Schema.Top>(
-    input: StructuredGenerationInput<S>,
-  ): Promise<S["Type"]>;
-}
+export type {
+  BranchNameGenerationInput,
+  BranchNameGenerationResult,
+  CommitMessageGenerationInput,
+  CommitMessageGenerationResult,
+  PrContentGenerationInput,
+  PrContentGenerationResult,
+  ReviewGuideGenerationInput,
+  ReviewGuideGenerationResult,
+  ActivityLabelGenerationInput,
+  ActivityLabelGenerationResult,
+  StructuredGenerationInput,
+  ThreadTitleGenerationInput,
+  ThreadTitleGenerationResult,
+} from "@t3tools/provider-core/server/textGeneration";
 
 /**
  * TextGeneration - Service tag for commit and change request text generation.
  */
-export class TextGeneration extends Context.Service<
-  TextGeneration,
-  {
-    /**
-     * Generate a commit message from staged change context.
-     */
-    readonly generateCommitMessage: (
-      input: CommitMessageGenerationInput,
-    ) => Effect.Effect<CommitMessageGenerationResult, TextGenerationError>;
-
-    /**
-     * Generate change request title/body from branch and diff context.
-     */
-    readonly generatePrContent: (
-      input: PrContentGenerationInput,
-    ) => Effect.Effect<PrContentGenerationResult, TextGenerationError>;
-
-    /**
-     * Generate a concise branch name from a user message.
-     */
-    readonly generateBranchName: (
-      input: BranchNameGenerationInput,
-    ) => Effect.Effect<BranchNameGenerationResult, TextGenerationError>;
-
-    /** Generate a concise thread title from a first message or thread history. */
-    readonly generateThreadTitle: (
-      input: ThreadTitleGenerationInput,
-    ) => Effect.Effect<ThreadTitleGenerationResult, TextGenerationError>;
-
-    /** Generate a live 2–4 word activity label for what the thread is doing now (GHE #40).
-     *  Optional like `generateStructured`: hosts without a supporting driver leave the
-     *  thread on the static "Working" pill (fail-open). */
-    readonly generateActivityLabel?: (
-      input: ActivityLabelGenerationInput,
-    ) => Effect.Effect<ActivityLabelGenerationResult, TextGenerationError>;
-    readonly generateStructured?: <S extends Schema.Top>(
-      input: StructuredGenerationInput<S>,
-    ) => Effect.Effect<S["Type"], TextGenerationError, S["DecodingServices"]>;
-  }
->()("t3/textGeneration/TextGeneration") {}
+export class TextGeneration extends Context.Service<TextGeneration, ProviderTextGeneration>()(
+  "t3/textGeneration/TextGeneration",
+) {}
 
 type TextGenerationOp =
   | "generateCommitMessage"
   | "generatePrContent"
   | "generateBranchName"
   | "generateThreadTitle"
+  | "generateReviewGuide"
   | "generateActivityLabel"
   | "generateStructured";
 
@@ -212,6 +77,10 @@ export const make = Effect.gen(function* () {
     generateBranchName: (input) =>
       resolveInstance(registry, "generateBranchName", input.modelSelection.instanceId).pipe(
         Effect.flatMap((textGeneration) => textGeneration.generateBranchName(input)),
+      ),
+    generateReviewGuide: (input) =>
+      resolveInstance(registry, "generateReviewGuide", input.modelSelection.instanceId).pipe(
+        Effect.flatMap((textGeneration) => textGeneration.generateReviewGuide(input)),
       ),
     generateThreadTitle: (input) =>
       resolveInstance(registry, "generateThreadTitle", input.modelSelection.instanceId).pipe(

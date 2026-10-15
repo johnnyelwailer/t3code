@@ -10,6 +10,7 @@ import {
 } from "~/t3team/t3team-projectMyWorkDigestFacts";
 import type { DigestClaim, DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import type { ProjectTicket } from "~/t3team/t3team-types";
+import { digestTransitionStyle } from "~/t3team/t3team-digestViewTransition";
 import { DigestAgentDots } from "~/t3team/t3team-ProjectMyWorkDigestAgentDots";
 import { DigestItemActions } from "~/t3team/t3team-ProjectMyWorkDigestActions";
 import { DigestDependencyLine } from "~/t3team/t3team-ProjectMyWorkDigestDependencies";
@@ -79,6 +80,7 @@ export function DigestChips({
 }
 
 export function DigestItemRow({
+  transitionName,
   ticket,
   why,
   graph,
@@ -86,6 +88,8 @@ export function DigestItemRow({
   onOpenTicket,
   dependencies = true,
 }: {
+  /** The view-transition name this row travels under; absent when another row already has it. */
+  transitionName?: string | undefined;
   ticket: ProjectTicket;
   why?: string | undefined;
   graph: DigestGraph;
@@ -111,6 +115,7 @@ export function DigestItemRow({
   return (
     <div
       className="group min-w-0 cursor-pointer px-3 py-2 hover:bg-accent/30"
+      style={digestTransitionStyle(transitionName)}
       onClick={() =>
         onOpenTicket ? onOpenTicket(ticket.id) : window.open(ticket.ref.url, "_blank", "noopener")
       }

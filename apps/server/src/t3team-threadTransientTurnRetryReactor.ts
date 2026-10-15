@@ -15,6 +15,8 @@
  * message during the backoff makes the continuation ineligible (no longer the
  * latest run), so it is dropped. The backoff timer is in-memory (up to 10 min
  * for a network outage): a restart during the wait leaves the failed run to the user's Resume.
+ * With flag `TRANSIENT_AUTO_RESUME` on, the wait is durable instead
+ * (`t3team-transientAutoResume.ts`). Live layer: `t3team-threadTransientTurnRetryLive.ts`.
  *
  * @module t3team-threadTransientTurnRetryReactor
  */
@@ -32,27 +34,19 @@ import { latestRootProviderFailure } from "@t3tools/shared/orchestrationV2Thread
 import * as Cause from "effect/Cause";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Stream from "effect/Stream";
 
 import { classifyTransientRunFailure } from "./orchestration-v2/t3team-transientRunFailure.ts";
-import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
-import { forkParked } from "./serverActivation.ts";
+import { armTransientAutoResume } from "./t3team-transientAutoResume.ts";
 import {
   transientRetryLeftToParentText,
   transientRetryReason,
-  transientTurnRetryDelayMs,
 } from "./t3team-threadTransientTurnRetryPolicy.ts";
 import {
   planTransientRetry,
   transientRetryMessageId,
   transientRetryNoteId,
 } from "./t3team-threadTransientTurnRetryPlan.ts";
-import {
-  TRANSIENT_RETRY_TURN_ITEM_TYPES,
-  transientRetryOwner,
-} from "./t3team-threadTransientTurnRetryOwner.ts";
-import { T3TeamThreadMessageRecorder } from "./t3team-v2/t3team-threadMessageRecorder.ts";
+import { transientRetryOwner } from "./t3team-threadTransientTurnRetryOwner.ts";
 
 export interface TransientRetryDeps {
   /**
@@ -75,6 +69,8 @@ export interface TransientRetryDeps {
     readonly text: string;
   }) => Effect.Effect<unknown, string>;
   readonly delayMs: (attempt: number, directiveSeconds: number | null, outage: boolean) => number;
+  /** Flag `TRANSIENT_AUTO_RESUME`: arm the durable continuation instead of sleeping here. */
+  readonly autoResume?: () => boolean;
 }
 
 /** Handles one failed run: note, back off, continue. Fail-open (logs). */
@@ -107,6 +103,9 @@ export const handleTransientRunFailure = (
       failure,
       delayMs: deps.delayMs,
     });
+    if (deps.autoResume?.() === true) {
+      return yield* armTransientAutoResume(deps, { ...input, runs: records.runs, failure, plan });
+    }
     yield* deps.recordNote({
       threadId: input.threadId,
       messageId: transientRetryNoteId(run.id),
@@ -147,59 +146,3 @@ export const handleTransientRunFailure = (
           }),
     ),
   );
-
-const parseBackoffOverride = (raw: string | undefined): number | undefined => {
-  if (raw === undefined) return undefined;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) ? parsed : undefined;
-};
-
-export const T3TeamThreadTransientTurnRetryLive = Layer.effectDiscard(
-  Effect.gen(function* () {
-    const threads = yield* ThreadManagementService;
-    const recorder = yield* T3TeamThreadMessageRecorder;
-    const scope = yield* Effect.scope;
-    const backoffOverride = parseBackoffOverride(
-      process.env.T3TEAM_TRANSIENT_TURN_RETRY_BACKOFF_MS,
-    );
-    const deps: TransientRetryDeps = {
-      loadRecords: (threadId, runId) =>
-        threads
-          .getThreadRecords(threadId, ["runs", "turnItems", "messages"], {
-            turnItemRunId: runId,
-            turnItemTypes: TRANSIENT_RETRY_TURN_ITEM_TYPES,
-            messageRunIds: [runId],
-            messageRoles: ["user"],
-          })
-          .pipe(
-            Effect.orElseSucceed(() => ({ thread: null, runs: [], turnItems: [], messages: [] })),
-          ),
-      dispatch: (command) => threads.dispatch(command).pipe(Effect.mapError(String)),
-      recordNote: ({ threadId, messageId, text }) =>
-        recorder
-          .record({ threadId, messageId, role: "system", text })
-          .pipe(Effect.mapError(String)),
-      delayMs: (attempt, directive, outage) =>
-        transientTurnRetryDelayMs(attempt, directive, backoffOverride, Math.random, outage),
-    };
-    // A run can be re-published as failed; handle each failed run once per process.
-    const handled = new Set<string>();
-    yield* forkParked(
-      Stream.runForEach(threads.streamDomainEvents, (event) => {
-        if (event.type !== "run.updated" || event.payload.status !== "failed") return Effect.void;
-        if (handled.has(event.payload.id)) return Effect.void;
-        handled.add(event.payload.id);
-        return handleTransientRunFailure(deps, {
-          threadId: event.threadId,
-          runId: event.payload.id,
-        }).pipe(Effect.forkIn(scope), Effect.asVoid);
-      }).pipe(
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.failCause(cause)
-            : Effect.logWarning("transient-retry: domain event stream failed", { cause }),
-        ),
-      ),
-    );
-  }),
-);

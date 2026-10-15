@@ -1,4 +1,4 @@
-import { distributionBranding } from "@t3code/distribution";
+import { distributionHomeDirName } from "../t3team-distribution-homeDir.ts";
 import * as NetService from "@t3tools/shared/Net";
 import {
   OtlpHeadersFromString,
@@ -320,12 +320,7 @@ export const resolveServerConfig = (
       normalizedFlags.baseDir,
       Option.fromUndefinedOr(env.t3Home),
     ).pipe(Option.filter((value) => value.trim().length > 0));
-    const distroDir = distributionBranding?.userDataDirName;
-    const defaultDirName = distroDir
-      ? distroDir.startsWith(".")
-        ? distroDir
-        : `.${distroDir}`
-      : undefined;
+    const defaultDirName = distributionHomeDirName;
     const baseDir = yield* resolveBaseDir(
       Option.getOrUndefined(
         resolveOptionPrecedence(explicitBaseDir, Option.fromUndefinedOr(bootstrap?.t3Home)),
@@ -367,6 +362,7 @@ export const resolveServerConfig = (
     );
     const desktopBootstrapToken = bootstrap?.desktopBootstrapToken;
     const desktopBootstrapSecret = bootstrap?.desktopBootstrapSecret;
+    const shellEnvironmentPrepared = bootstrap?.shellEnvironmentPrepared;
     const desktopTelemetryFd = bootstrap?.desktopTelemetryFd;
     const desktopTelemetryControlFd = bootstrap?.desktopTelemetryControlFd;
     const desktopBrowserFd = bootstrap?.desktopBrowserFd;
@@ -480,6 +476,7 @@ export const resolveServerConfig = (
       startupPresentation,
       desktopBootstrapToken,
       ...(desktopBootstrapSecret === undefined ? {} : { desktopBootstrapSecret }),
+      ...(shellEnvironmentPrepared === undefined ? {} : { shellEnvironmentPrepared }),
       desktopTelemetryFd,
       desktopTelemetryControlFd,
       desktopBrowserFd,

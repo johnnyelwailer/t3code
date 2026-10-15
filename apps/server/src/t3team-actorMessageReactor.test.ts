@@ -7,6 +7,7 @@ import * as Layer from "effect/Layer";
 
 import * as EventSink from "./orchestration-v2/EventSink.ts";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
+import * as CommandReceiptStore from "./orchestration-v2/CommandReceiptStore.ts";
 import * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
 import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { T3TeamActorMailboxStore, T3TeamActorMailboxStoreLive } from "./t3team-actorMailbox.ts";
@@ -16,9 +17,15 @@ import {
   createTestThread,
   makeT3TeamV2TestLayer,
 } from "./t3team-v2/t3team-v2Orchestrator.testkit.ts";
+import * as ServerSettings from "./serverSettings.ts";
+
+const threadManagementLayer = ThreadManagementService.layer.pipe(
+  Layer.provide(ServerSettings.layerTest()),
+  Layer.provide(CommandReceiptStore.layer),
+);
 
 const TestLayer = Layer.mergeAll(
-  ThreadManagementService.layer.pipe(
+  threadManagementLayer.pipe(
     Layer.provideMerge(makeT3TeamV2TestLayer("t3team-actor-message-reactor")),
   ),
   T3TeamActorMailboxStoreLive.pipe(Layer.provide(SqlitePersistenceMemory)),

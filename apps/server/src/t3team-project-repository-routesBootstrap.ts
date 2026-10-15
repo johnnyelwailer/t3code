@@ -1,8 +1,9 @@
 /**
  * Sub-logic for the project workspace bootstrap route (split out of
  * `t3team-project-repository-routes.ts`): the tolerant reference-manifest
- * decoder, the linked-repository sync plan (no git: clones and fetches run in the background,
- * see `t3team-linkedRepositorySync`), and the preserved-manifest read
+ * decoder, the linked-repository plan (no git: linked repositories sync on demand, and the clones
+ * and fetches asked for run in the background, see `t3team-linkedRepositorySync`), and the
+ * preserved-manifest read
  * that keeps entries alive across re-bootstraps (GHE #42) and across a
  * main-repository switch, whose new workspace reuses the clones recorded here.
  */
@@ -14,16 +15,22 @@ import * as Schema from "effect/Schema";
 
 import {
   deriveReferenceDirectoryName,
-  isLinkedRepositoryReady,
   type LinkedRepositoryBootstrapResult,
   type LinkedRepositorySyncPhase,
   type MainRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
 import { findExistingLinkedCheckout } from "./t3team-linkedRepositoryExistingCheckout.ts";
-import { findLinkedRepository } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
+import {
+  findLinkedRepository,
+  isSameRepository,
+} from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 import { mainRepositoryFromManifestJson } from "./t3team-toolBrokerStartChildContext.ts";
 
 import { readNormalizedReferenceManifest } from "./t3team-referenceManifestNormalization.ts";
+import {
+  mainRepositoryInspectionFromManifestJson,
+  type MainRepositoryInspection,
+} from "./t3team-mainRepositoryInspection.ts";
 
 /** Tolerant read of the `linkedRepositories` array from a persisted reference manifest. */
 const ReferenceManifestLinkedRepositoriesJson = Schema.Struct({
@@ -33,30 +40,30 @@ const decodeReferenceManifestLinkedRepositories = Schema.decodeEffect(
   Schema.fromJsonString(ReferenceManifestLinkedRepositoriesJson),
 );
 
-/** How long a settled sync (success or failure) stands before a plain bootstrap refetches. */
-const LINKED_REPOSITORY_REFETCH_INTERVAL_MS = 15 * 60_000;
-
 export type PlannedLinkedRepository = {
-  /** The manifest entry as persisted now; a background sync replaces it when it settles. */
+  /** The manifest entry as persisted now; a sync replaces it when it settles. */
   readonly entry: LinkedRepositoryBootstrapResult;
   /** A sync of this checkout is already queued or running. */
   readonly phase?: LinkedRepositorySyncPhase;
-  /** Queue (or join) a background clone/fetch for this checkout. */
+  /** Queue (or join) a clone/fetch for this checkout. */
   readonly request: boolean;
 };
 
-/** Decides each linked repository's checkout path and whether it needs a background sync —
- * without running git. A recent sync is not repeated unless `refresh` (an explicit save). */
+/** Decides each linked repository's checkout path and whether to sync it now — without running
+ * git. Linked repositories sync on demand: a bootstrap only records them, and syncs the ones named
+ * in `syncUrls` (an explicit user choice) or whose chosen branch changed. A usable checkout already
+ * on disk is kept, never refetched here; one on disk that is not recorded as usable yet is adopted
+ * with a single fetch. */
 export const planLinkedRepositoriesForBootstrap = Effect.fn("planLinkedRepositoriesForBootstrap")(
   function* (input: {
     readonly referencesRoot: string;
     readonly urls: ReadonlyArray<string>;
     readonly preserved: ReadonlyArray<LinkedRepositoryBootstrapResult>;
-    readonly refresh: boolean;
+    /** Repositories to clone/fetch now. */
+    readonly syncUrls: ReadonlyArray<string>;
     /** The branch each repository should be on, by URL; undefined keeps the recorded choice. */
     readonly branches?: Readonly<Record<string, string>>;
     readonly phaseOf: (localPath: string) => LinkedRepositorySyncPhase | undefined;
-    readonly nowMs: number;
   }) {
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -69,9 +76,9 @@ export const planLinkedRepositoriesForBootstrap = Effect.fn("planLinkedRepositor
             .pipe(Effect.orElseSucceed(() => false))
         : false;
       // A recorded clone is reused (possibly under another workspace's state dir, after a
-      // main-repository switch); a pending one keeps its path so its running sync is found.
+      // main-repository switch); so is a recorded path a sync is running on, so it is found.
       const recordedPath =
-        previous?.localPath && (previousIsClone || previous.status === "pending")
+        previous?.localPath && (previousIsClone || input.phaseOf(previous.localPath))
           ? previous.localPath
           : undefined;
       const onDiskPath =
@@ -90,30 +97,36 @@ export const planLinkedRepositoriesForBootstrap = Effect.fn("planLinkedRepositor
           `${String(index + 1).padStart(2, "0")}-${deriveReferenceDirectoryName(url)}`,
         );
       const phase = input.phaseOf(localPath);
-      const syncedAtMs = previous?.syncedAt ? Date.parse(previous.syncedAt) : Number.NaN;
-      const recentlySettled =
-        previous?.localPath === localPath &&
-        input.nowMs - syncedAtMs < LINKED_REPOSITORY_REFETCH_INTERVAL_MS &&
-        (previous.status === "failed" || (isLinkedRepositoryReady(previous) && previousIsClone));
       const branch = input.branches ? input.branches[url] : previous?.branch;
-      const { branch: _previousBranch, ...entryWithoutBranch } =
-        previous &&
+      // A recorded settled state stands while its checkout does; anything else (a new repository,
+      // a vanished clone, a legacy `pending` whose sync is gone) is not cloned until asked for.
+      // An unrecorded checkout found on disk is not trusted without git: the next sync adopts it.
+      const keepsRecordedState =
+        previous !== undefined &&
         previous.localPath === localPath &&
-        (previousIsClone || !isLinkedRepositoryReady(previous))
-          ? stripSyncState({ ...previous, url })
-          : ({ url, localPath, status: "pending" } satisfies LinkedRepositoryBootstrapResult);
+        (previousIsClone || previous.status === "failed" || phase !== undefined);
+      const { branch: _previousBranch, ...entryWithoutBranch } = keepsRecordedState
+        ? stripSyncState({ ...previous, url })
+        : ({ url, localPath, status: "not-cloned" } satisfies LinkedRepositoryBootstrapResult);
       const entry: LinkedRepositoryBootstrapResult = {
         ...entryWithoutBranch,
         ...(branch ? { branch } : {}),
       };
-      // Choosing another branch is a reason to sync now, whatever the refetch throttle says.
+      // Choosing another branch is an explicit request to put the checkout on it.
       const branchChanged = input.branches !== undefined && previous?.branch !== branch;
+      // A checkout on disk not recorded as usable (a legacy `pending` entry whose clone landed, or
+      // a clone found after its entry was lost) is adopted once: one fetch, which also checks its
+      // origin. Afterwards it is `updated` (or `failed`) and never synced here again.
+      const unadoptedCheckout =
+        (previousIsClone || onDiskPath !== undefined) &&
+        (entry.status === "pending" || entry.status === "not-cloned");
+      const requested = input.syncUrls.some((candidate) => isSameRepository(candidate, url));
       planned.push({
         entry,
         ...(phase ? { phase } : {}),
         // A running sync is still requested: that registers this manifest for its outcome
         // (the sync service deduplicates the work).
-        request: phase !== undefined || input.refresh || !recentlySettled || branchChanged,
+        request: phase !== undefined || requested || branchChanged || unadoptedCheckout,
       });
     }
     return planned;
@@ -139,6 +152,7 @@ export function mergeLinkedRepositoryEntries(
 export type PreservedReferenceManifest = {
   readonly linkedRepositories: ReadonlyArray<LinkedRepositoryBootstrapResult>;
   readonly mainRepository?: MainRepositoryBootstrapResult;
+  readonly mainRepositoryInspection?: MainRepositoryInspection;
 };
 
 export const readPreservedReferenceManifest = Effect.fn("readPreservedReferenceManifest")(
@@ -158,9 +172,11 @@ export const readPreservedReferenceManifest = Effect.fn("readPreservedReferenceM
         typeof (entry as { url?: unknown }).url === "string",
     );
     const mainRepository = mainRepositoryFromManifestJson(preservedRaw);
+    const mainRepositoryInspection = mainRepositoryInspectionFromManifestJson(preservedRaw);
     return {
       linkedRepositories,
       ...(mainRepository ? { mainRepository } : {}),
+      ...(mainRepositoryInspection ? { mainRepositoryInspection } : {}),
     } satisfies PreservedReferenceManifest;
   },
 );

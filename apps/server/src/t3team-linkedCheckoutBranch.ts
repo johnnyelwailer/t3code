@@ -32,7 +32,7 @@ const isScaffoldPath = (relativePath: string): boolean =>
   relativePath.startsWith(".t3team/");
 
 /** The paths git lists under "untracked working tree files would be overwritten by checkout". */
-export const untrackedBlockers = (stderr: string): ReadonlyArray<string> => {
+const untrackedBlockers = (stderr: string): ReadonlyArray<string> => {
   const lines = stderr.split(/\r?\n/);
   const start = lines.findIndex((line) =>
     /untracked working tree files would be overwritten/i.test(line),

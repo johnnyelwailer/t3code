@@ -275,7 +275,10 @@ export const make = Effect.gen(function* () {
           if (updates.length === 0) return;
 
           if (detected !== null && first.branch !== null) {
-            const current = yield* git.branchPullRequest({ cwd, branch: first.branch });
+            const current = yield* git.branchPullRequest(
+              { cwd, branch: first.branch },
+              { freshGitState: true },
+            );
             const currentIdentity = yield* repositoryIdentities.resolve(project.workspaceRoot, {
               refresh: true,
             });
@@ -397,7 +400,10 @@ export const make = Effect.gen(function* () {
         yield* Effect.gen(function* () {
           yield* worker.enqueue({ threadId: null, refresh: false });
           yield* worker.drain;
-        }).pipe(Effect.repeat(Schedule.spaced("1 minute")), Effect.delay("1 minute"));
+        }).pipe(
+          Effect.repeat(Schedule.spaced("1 minute").pipe(Schedule.jittered)),
+          Effect.delay("1 minute"),
+        );
       }).pipe(Effect.asVoid),
     );
   });

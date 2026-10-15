@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   pickScopedDefaultProject,
+  resolveScopeHomeProjectId,
   resolveScopeTeamProjectId,
 } from "./t3team-scopeProjectResolution";
 
@@ -126,5 +127,34 @@ describe("pickScopedDefaultProject", () => {
         fallback: projects[0],
       }),
     ).toBe(projects[0]);
+  });
+});
+
+describe("resolveScopeHomeProjectId", () => {
+  it("never adopts the store's remembered project under All projects", () => {
+    expect(
+      resolveScopeHomeProjectId({
+        scopeTeamProjectId: null,
+        scopeKey: null,
+        storeSelectedProjectId: "nexi",
+      }),
+    ).toBeNull();
+  });
+
+  it("follows the scoped project, and the store's pick only while a scope is still resolving", () => {
+    expect(
+      resolveScopeHomeProjectId({
+        scopeTeamProjectId: "b",
+        scopeKey: "key-b",
+        storeSelectedProjectId: "nexi",
+      }),
+    ).toBe("b");
+    expect(
+      resolveScopeHomeProjectId({
+        scopeTeamProjectId: null,
+        scopeKey: "key-b",
+        storeSelectedProjectId: "nexi",
+      }),
+    ).toBe("nexi");
   });
 });

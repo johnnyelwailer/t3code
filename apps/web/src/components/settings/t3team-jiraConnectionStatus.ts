@@ -8,6 +8,8 @@ export type JiraConnectionView = {
   readonly statusLabel: "Connected" | "Needs sign-in";
   readonly needsSignIn: boolean;
   readonly lastSync: { readonly text: string; readonly stale: boolean };
+  /** Where the first sync has got, in a short sentence; null once it is done. */
+  readonly catchUp: string | null;
   /** Why the account needs attention, in plain words; null when nothing does. */
   readonly problem: string | null;
 };
@@ -32,6 +34,19 @@ function describeLastSync(account: AtlassianAccountStatus, nowMs: number) {
   };
 }
 
+function describeCatchUp(account: AtlassianAccountStatus): string | null {
+  if (account.catchUp === undefined) return null;
+  if (account.catchUp.reachedAt === undefined) {
+    return "Catching up: loading your most recent tickets first";
+  }
+  const reached = new Date(account.catchUp.reachedAt).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  return `Catching up: reached ${reached}`;
+}
+
 export function describeJiraConnection(
   account: AtlassianAccountStatus,
   nowMs: number,
@@ -44,6 +59,7 @@ export function describeJiraConnection(
     statusLabel: needsSignIn ? "Needs sign-in" : "Connected",
     needsSignIn,
     lastSync: describeLastSync(account, nowMs),
+    catchUp: describeCatchUp(account),
     problem: needsSignIn
       ? "Your Jira session expired. Sign in again to keep your tickets up to date."
       : (account.lastSyncError ?? null),

@@ -32,6 +32,7 @@ import {
   getCloudSessionTargets,
   subscribeCloudSessionTargets,
 } from "./t3team-cloudSessionTargetStore";
+import { useHasPendingCloudQueuedSends } from "./t3team-cloudQueuedSendStore";
 
 /**
  * Drives the cloud session surfaces (settings panel + "Run on" menu): create,
@@ -64,6 +65,7 @@ export function useCloudSessionController() {
     () => cloudSessionTargetsNeedListRefresh(getCloudSessionTargets()),
     () => false,
   );
+  const queuedSendsPending = useHasPendingCloudQueuedSends();
   const [relayIdsBefore, setRelayIdsBefore] = useState<ReadonlySet<string> | null>(null);
   const [cloudMenuOpen, setCloudMenuOpen] = useState(false);
   const [panelVisible, setPanelVisible] = useState(false);
@@ -90,10 +92,14 @@ export function useCloudSessionController() {
   });
   // Keep listing while the menu/panel is open, while anything is still
   // provisioning (so a create survives thread navigation), or while a draft
-  // has an optimistic create/bind in flight.
+  // has an optimistic create in flight or a first message queued for its session.
   const { refreshCloudSessionList, refreshRelayEnvironments } = useCloudSessionListRefresh(
     environmentId,
-    cloudMenuOpen || panelVisible || provisioningVisible || targetsNeedRefresh,
+    cloudMenuOpen ||
+      panelVisible ||
+      provisioningVisible ||
+      targetsNeedRefresh ||
+      queuedSendsPending,
     sessions,
     rateLimitedUntilMs,
   );

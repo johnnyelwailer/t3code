@@ -40,6 +40,7 @@ import { DeepMutable } from "effect/Types";
 import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
 import { useMemo } from "react";
 import { getLocalStorageItem } from "./hooks/useLocalStorage";
+import { readThreadPreviewState } from "./previewStateStore";
 import { resolveAppModelSelection, resolveAppModelSelectionForInstance } from "./modelSelection";
 import {
   DEFAULT_INTERACTION_MODE,
@@ -80,6 +81,12 @@ import { getDefaultServerModel } from "./providerModels";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
 import { UnifiedSettings } from "@t3tools/contracts/settings";
 import { ReviewCommentContextSchema, type ReviewCommentContext } from "./reviewCommentContext";
+import {
+  CloudQueuedSendSchema,
+  decodeCloudQueuedSend,
+  toPersistedCloudQueuedSend,
+  type CloudQueuedSend,
+} from "./cloud/t3team-cloudQueuedSendModel";
 const isRuntimeMode = Schema.is(RuntimeMode);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
 const isReviewCommentContext = Schema.is(ReviewCommentContextSchema);
@@ -129,6 +136,11 @@ const composerPersistStorage: PersistStorage<ComposerPersistState> = {
   setItem: (name, value) => composerDebouncedStorage.setItem(name, value),
   removeItem: (name) => composerDebouncedStorage.removeItem(name),
 };
+
+/** Writes pending composer draft state now (t3team: other windows read it under a claim). */
+export function flushComposerDraftStorage(): void {
+  composerDebouncedStorage.flush();
+}
 
 // Flush pending composer draft writes before page unload to prevent data loss.
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
@@ -277,6 +289,8 @@ const PersistedComposerThreadDraftState = Schema.Struct({
   modelSelectionExplicit: Schema.optionalKey(Schema.Boolean),
   runtimeMode: Schema.optionalKey(RuntimeMode),
   interactionMode: Schema.optionalKey(ProviderInteractionMode),
+  // t3team: a first message waiting for its cloud session (see t3team-cloudQueuedSendModel).
+  cloudQueuedSend: Schema.optionalKey(CloudQueuedSendSchema),
 });
 type PersistedComposerThreadDraftState = typeof PersistedComposerThreadDraftState.Type;
 
@@ -437,6 +451,8 @@ export interface ComposerThreadDraftState {
   modelSelectionExplicit?: boolean;
   runtimeMode: RuntimeMode | null;
   interactionMode: ProviderInteractionMode | null;
+  /** t3team: a sent first message still waiting for its cloud session. Persisted. */
+  cloudQueuedSend?: CloudQueuedSend | null;
 }
 
 /**
@@ -461,7 +477,9 @@ export function composerDraftHasUserContent(
     draft.terminalContexts.length > 0 ||
     draft.previewAnnotations.length > 0 ||
     draft.reviewComments.length > 0 ||
-    draft.threadContexts.length > 0
+    draft.threadContexts.length > 0 ||
+    // t3team: a queued cloud send is a sent message: the draft keeps its row and is never reused.
+    draft.cloudQueuedSend != null
   );
 }
 
@@ -1006,7 +1024,8 @@ function shouldRemoveDraft(draft: ComposerThreadDraftState): boolean {
     Object.keys(draft.modelSelectionByProvider).length === 0 &&
     draft.activeProvider === null &&
     draft.runtimeMode === null &&
-    draft.interactionMode === null
+    draft.interactionMode === null &&
+    draft.cloudQueuedSend == null
   );
 }
 
@@ -1583,6 +1602,16 @@ function getComposerDraftState(
   return state.draftsByThreadKey[threadKey] ?? null;
 }
 
+/**
+ * A draft holding an open page, such as one started for a link another app
+ * opened, is work in progress even with an empty composer.
+ */
+function draftThreadHasOpenPreview(draftThread: DraftThreadState | undefined): boolean {
+  if (draftThread === undefined) return false;
+  const ref = scopeThreadRef(draftThread.environmentId, draftThread.threadId);
+  return Object.keys(readThreadPreviewState(ref).sessions).length > 0;
+}
+
 function isComposerThreadKeyInUse(mappings: Record<string, string>, threadKey: string): boolean {
   return Object.values(mappings).includes(threadKey);
 }
@@ -2008,6 +2037,7 @@ function normalizePersistedDraftsByThreadId(
     const runtimeMode = isRuntimeMode(draftCandidate.runtimeMode)
       ? draftCandidate.runtimeMode
       : null;
+    const cloudQueuedSend = decodeCloudQueuedSend(draftCandidate.cloudQueuedSend);
     const interactionMode =
       draftCandidate.interactionMode === "plan" || draftCandidate.interactionMode === "default"
         ? draftCandidate.interactionMode
@@ -2107,7 +2137,8 @@ function normalizePersistedDraftsByThreadId(
       threadContexts.length === 0 &&
       !hasModelData &&
       !runtimeMode &&
-      !interactionMode
+      !interactionMode &&
+      cloudQueuedSend === null
     ) {
       continue;
     }
@@ -2140,6 +2171,7 @@ function normalizePersistedDraftsByThreadId(
         : {}),
       ...(runtimeMode ? { runtimeMode } : {}),
       ...(interactionMode ? { interactionMode } : {}),
+      ...(cloudQueuedSend ? { cloudQueuedSend: toPersistedCloudQueuedSend(cloudQueuedSend) } : {}),
     };
   }
 
@@ -2154,7 +2186,8 @@ function persistedComposerDraftHasUserContent(draft: PersistedComposerThreadDraf
     (draft.terminalContexts?.length ?? 0) > 0 ||
     (draft.previewAnnotations?.length ?? 0) > 0 ||
     (draft.reviewComments?.length ?? 0) > 0 ||
-    (draft.threadContexts?.length ?? 0) > 0
+    (draft.threadContexts?.length ?? 0) > 0 ||
+    draft.cloudQueuedSend !== undefined
   );
 }
 
@@ -2201,10 +2234,10 @@ export function partializeComposerDraftStoreState(
   state: ComposerDraftStoreState,
 ): PersistedComposerDraftStoreState {
   // Draft sessions worth persisting: mapped (a new-thread flow targets
-  // them), promoting (mid-send), or holding real user content (they back a
-  // sidebar row). Everything else is a zombie — and its composer blob must
-  // be dropped WITH it, or model/mode-only entries would persist forever
-  // keyed to a session that no longer exists.
+  // them), promoting (mid-send), holding real user content (they back a
+  // sidebar row), or holding an open page. Everything else is a zombie — and
+  // its composer blob must be dropped WITH it, or model/mode-only entries
+  // would persist forever keyed to a session that no longer exists.
   const mappedDraftKeys = new Set(
     Object.values(state.logicalProjectDraftThreadKeyByLogicalProjectKey),
   );
@@ -2214,7 +2247,8 @@ export function partializeComposerDraftStoreState(
         ([threadKey, draftThread]) =>
           mappedDraftKeys.has(threadKey) ||
           isDraftThreadPromoting(draftThread) ||
-          composerDraftHasUserContent(state.draftsByThreadKey[threadKey]),
+          composerDraftHasUserContent(state.draftsByThreadKey[threadKey]) ||
+          draftThreadHasOpenPreview(draftThread),
       )
       .map(([threadKey]) => threadKey),
   );
@@ -2242,7 +2276,8 @@ export function partializeComposerDraftStoreState(
       draft.threadContexts.length === 0 &&
       !hasModelData &&
       draft.runtimeMode === null &&
-      draft.interactionMode === null
+      draft.interactionMode === null &&
+      draft.cloudQueuedSend == null
     ) {
       continue;
     }
@@ -2309,6 +2344,9 @@ export function partializeComposerDraftStoreState(
         : {}),
       ...(draft.runtimeMode ? { runtimeMode: draft.runtimeMode } : {}),
       ...(draft.interactionMode ? { interactionMode: draft.interactionMode } : {}),
+      ...(draft.cloudQueuedSend
+        ? { cloudQueuedSend: toPersistedCloudQueuedSend(draft.cloudQueuedSend) }
+        : {}),
     };
     persistedDraftsByThreadKey[threadKey] = persistedDraft;
   }
@@ -2600,6 +2638,7 @@ function toHydratedThreadDraft(
     ...(persistedDraft.modelSelectionExplicit ? { modelSelectionExplicit: true } : {}),
     runtimeMode: persistedDraft.runtimeMode ?? null,
     interactionMode: persistedDraft.interactionMode ?? null,
+    ...(persistedDraft.cloudQueuedSend ? { cloudQueuedSend: persistedDraft.cloudQueuedSend } : {}),
   };
 }
 
@@ -2835,7 +2874,8 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               !isDraftThreadPromoting(previousDraftThread) &&
               !composerDraftHasUserContent(
                 state.draftsByThreadKey[previousThreadKeyForLogicalProject],
-              )
+              ) &&
+              !draftThreadHasOpenPreview(previousDraftThread)
             ) {
               delete nextDraftThreadsByThreadKey[previousThreadKeyForLogicalProject];
               if (state.draftsByThreadKey[previousThreadKeyForLogicalProject] !== undefined) {

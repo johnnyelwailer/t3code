@@ -14,11 +14,11 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import * as GitHubApi from "./sourceControl/GitHubApi.ts";
+import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
 import {
   findAuthenticatedGitHubAccounts,
   parseGitHubAuthStatus,
-} from "./sourceControl/gitHubAuthStatus.ts";
+} from "@t3tools/source-control-github/server/gitHubAuthStatus";
 import * as VcsProcess from "./vcs/VcsProcess.ts";
 
 /** GitHub's search page cap; a digest round reads one page and never pages past it. */

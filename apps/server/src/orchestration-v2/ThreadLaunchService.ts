@@ -43,10 +43,10 @@ import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import * as CommandReceiptStore from "./CommandReceiptStore.ts";
-import * as IdAllocator from "./IdAllocator.ts";
+import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import type * as Orchestrator from "./Orchestrator.ts";
-import { makeProviderFailure } from "./ProviderFailure.ts";
-import { randomUuidV4 } from "./RandomUuid.ts";
+import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
+import { randomUuidV4 } from "@t3tools/provider-core/server/randomUuid";
 import * as ThreadManagement from "./ThreadManagementService.ts";
 
 export type ThreadLaunchWorkspaceStrategy =
@@ -147,16 +147,46 @@ export class ThreadLaunchError extends Schema.TaggedError<ThreadLaunchError>()(
   }
 }
 
+/** A new worktree was asked to start from a ref that gives it no commit. */
+export class ThreadLaunchBaseRefError extends Schema.TaggedError<ThreadLaunchBaseRefError>()(
+  "ThreadLaunchBaseRefError",
+  {
+    projectId: ProjectId,
+    projectTitle: Schema.String,
+    workspaceRoot: Schema.String,
+    baseRef: Schema.String,
+  },
+) {
+  override get message(): string {
+    return `Base ref "${this.baseRef}" does not resolve to a commit in project "${this.projectTitle}" (${this.workspaceRoot}).`;
+  }
+}
+
 export class ThreadLaunchService extends Context.Service<
   ThreadLaunchService,
   {
     readonly launch: (
       input: ThreadLaunchInput,
-    ) => Effect.Effect<ThreadLaunchResult, ThreadLaunchError>;
+    ) => Effect.Effect<
+      ThreadLaunchResult,
+      ThreadLaunchError | ThreadManagement.ThreadManagementProviderInstanceDisabledError
+    >;
+    /**
+     * Fails when a new worktree's base ref cannot give provisioning a commit.
+     * `launch` accepts such a launch and reports the failure inside the
+     * thread; a caller that needs it before a thread exists checks first.
+     */
+    readonly checkWorktreeBase: (
+      input: Pick<ThreadLaunchInput, "projectId" | "workspaceStrategy">,
+    ) => Effect.Effect<void, ThreadLaunchBaseRefError>;
     /** Dispatches prepared-run.retry and prepares the run's workspace again. */
-    readonly retryPreparation: (
-      input: ThreadLaunchRetryInput,
-    ) => Effect.Effect<Orchestrator.OrchestratorV2DispatchResult, Orchestrator.OrchestratorV2Error>;
+    readonly retryPreparation: (input: ThreadLaunchRetryInput) => Effect.Effect<
+      Orchestrator.OrchestratorV2DispatchResult,
+      // Dispatches prepared-run.retry, a command the enablement chokepoint
+      // never gates; the type stays accurate anyway.
+      | Orchestrator.OrchestratorV2Error
+      | ThreadManagement.ThreadManagementProviderInstanceDisabledError
+    >;
   }
 >()("t3/orchestration-v2/ThreadLaunchService") {}
 
@@ -229,40 +259,42 @@ const make = Effect.gen(function* () {
     }
   });
 
-  /**
-   * Reject worktree launches before thread.create when the base ref cannot start
-   * a worktree. An unborn/missing local baseRef otherwise creates a failed thread
-   * after an opaque `git worktree add` error (e.g. `fatal: invalid reference: main`).
-   * When startFromOrigin is set and origin exists, preparation still fetches later.
-   */
-  const validateWorktreeBaseRef = Effect.fn("ThreadLaunchService.validateWorktreeBaseRef")(
-    function* (
-      input: ThreadLaunchInput & {
-        readonly workspaceStrategy: Extract<ThreadLaunchWorkspaceStrategy, { type: "worktree" }>;
-      },
-      workspaceRoot: string,
-    ) {
-      const baseRef = input.workspaceStrategy.baseRef;
-      const hasLocalBase = yield* git
-        .hasCommit({ cwd: workspaceRoot, refName: baseRef })
-        .pipe(Effect.mapError(mapError(input, "provision-worktree")));
-      if (hasLocalBase) return;
-
-      const canFetchFromOrigin =
-        input.workspaceStrategy.startFromOrigin === true &&
-        (yield* git
-          .remoteExists({ cwd: workspaceRoot, remoteName: "origin" })
-          .pipe(Effect.mapError(mapError(input, "provision-worktree"))));
-      if (canFetchFromOrigin) return;
-
-      return yield* mapError(
-        input,
-        "provision-worktree",
-      )(
-        `Cannot create a worktree from baseRef '${baseRef}' in '${workspaceRoot}': that ref does not resolve to a commit (unborn branch or missing). Choose a baseRef that exists locally, set startFromOrigin when origin has it, or launch with an existing worktree.`,
-      );
-    },
-  );
+  const checkWorktreeBase: ThreadLaunchService["Service"]["checkWorktreeBase"] = Effect.fn(
+    "ThreadLaunchService.checkWorktreeBase",
+  )(function* (input) {
+    const strategy = input.workspaceStrategy;
+    // `:/text` is a commit search, which cannot be asked for a commit type.
+    if (strategy.type !== "worktree" || strategy.baseRef.startsWith(":")) return;
+    const { baseRef } = strategy;
+    // Anything this cannot establish is left for the launch to report: a
+    // missing project, a folder that is not a repository, a failing Git.
+    const unresolved = yield* Effect.gen(function* () {
+      const project = Option.getOrUndefined(yield* projects.getById(input.projectId));
+      if (project === undefined) return undefined;
+      const cwd = project.workspaceRoot;
+      // `git worktree add` reads `-` as the previous checkout.
+      if (yield* git.hasCommit({ cwd, refName: baseRef === "-" ? "@{-1}" : baseRef }))
+        return undefined;
+      // Provisioning fetches the base from origin when it can, and runs a
+      // repository with no commits yet without a worktree.
+      if (
+        strategy.startFromOrigin === true &&
+        (yield* git.remoteExists({ cwd, remoteName: "origin" }))
+      )
+        return undefined;
+      // `git worktree add` also starts from a remote-tracking branch of that
+      // name; any ref carrying it is reason enough to let Git decide.
+      if (yield* git.hasRefNamed({ cwd, refName: baseRef })) return undefined;
+      return (yield* git.hasCommit({ cwd, refName: "HEAD" })) ? project : undefined;
+    }).pipe(Effect.orElseSucceed(() => undefined));
+    if (unresolved !== undefined)
+      return yield* new ThreadLaunchBaseRefError({
+        projectId: unresolved.id,
+        projectTitle: unresolved.title,
+        workspaceRoot: unresolved.workspaceRoot,
+        baseRef,
+      });
+  });
 
   const prepareInBackground = Effect.fn("ThreadLaunchService.prepareInBackground")(function* (
     input: PreparationInput,
@@ -316,6 +348,7 @@ const make = Effect.gen(function* () {
               : ServerSettings.resolveSourceControlWriterModelSelection(
                   settings,
                   yield* providerRegistry.getProviders,
+                  input.projectId,
                 );
           return yield* textGeneration
             .generateBranchName({
@@ -754,11 +787,18 @@ const make = Effect.gen(function* () {
       // Fail before allocating/creating a thread when the worktree base cannot
       // resolve. Skip on idempotent replay of an already-accepted claim.
       if (input.workspaceStrategy.type === "worktree" && !replayingAcceptedClaim) {
-        yield* validateWorktreeBaseRef(
-          { ...input, workspaceStrategy: input.workspaceStrategy },
-          project.workspaceRoot,
-        );
+        // Upstream only runs this check from the MCP launch handler; every other launch path
+        // (UI, scheduled tasks) gets the same refusal here instead of a failed thread.
+        yield* checkWorktreeBase({
+          projectId: input.projectId,
+          workspaceStrategy: input.workspaceStrategy,
+        }).pipe(Effect.mapError(mapError(input, "provision-worktree")));
       }
+      yield* threads.assertProviderInstanceEnabled({
+        projectId: input.projectId,
+        commandId: input.commandId,
+        instanceId: input.modelSelection.instanceId,
+      });
       return yield* Effect.gen(function* () {
         // A retried launch has no client-supplied id to replay against, so
         // recover the thread id its accepted create was recorded under before
@@ -1027,7 +1067,7 @@ const make = Effect.gen(function* () {
     );
   };
 
-  return ThreadLaunchService.of({ launch, retryPreparation });
+  return ThreadLaunchService.of({ launch, checkWorktreeBase, retryPreparation });
 });
 
 export const layer = Layer.effect(ThreadLaunchService, make);

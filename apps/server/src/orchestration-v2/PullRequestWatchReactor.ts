@@ -29,7 +29,7 @@ import type * as Scope from "effect/Scope";
 import {
   type ProviderChangeRequestWatchFingerprint,
   PullRequestProviderError,
-} from "../pullRequest/PullRequestProvider.ts";
+} from "@t3tools/source-control-core/server/PullRequestProvider";
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 import { forkParked } from "../serverActivation.ts";
 import * as Orchestrator from "./Orchestrator.ts";
@@ -643,7 +643,10 @@ export const make = Effect.gen(function* () {
 
   const start: PullRequestWatchReactor["Service"]["start"] = () =>
     forkParked(
-      sweep.pipe(Effect.repeat(Schedule.spaced(`${SWEEP_MINUTES} minutes`)), Effect.asVoid),
+      sweep.pipe(
+        Effect.repeat(Schedule.spaced(`${SWEEP_MINUTES} minutes`).pipe(Schedule.jittered)),
+        Effect.asVoid,
+      ),
     );
 
   return { start, sweep } satisfies PullRequestWatchReactor["Service"];

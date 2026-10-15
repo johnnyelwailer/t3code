@@ -7,6 +7,7 @@ import { mayCallT3TeamBrokerTool } from "../../../t3team-workflowAuthorMcpScope.
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import { t3TeamAskUser, type T3TeamAskUserOption } from "./t3team-askUser.ts";
+import { makeLinkedRepositorySyncHandler } from "./t3team-linkedRepositoryTools.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP, T3TeamMcpToolError, T3TeamToolkit } from "./tools.ts";
 
 /**
@@ -113,55 +114,66 @@ const threadSkillMetadata = Effect.fn("T3TeamMcpToolkit.threadSkillMetadata")(fu
  * behaviour change, tracked separately rather than made during the upstream
  * merge.
  */
-export const T3TeamToolkitHandlersLive = McpToolAccess.toLayer(T3TeamToolkit, {
-  t3_provider_usage: McpToolAccess.readsAsCaller((input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_provider_usage, input),
-  ),
-  t3_search_thread: McpToolAccess.readsAsCaller((input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_search_thread, input),
-  ),
-  t3_search_source: McpToolAccess.readsAsCaller((input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_search_source, input),
-  ),
-  t3_read_message: McpToolAccess.readsAsCaller((input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_read_message, input),
-  ),
-  t3_ask_user: McpToolAccess.readsAsCaller((input) => askUser(input)),
-  t3_task_ops: McpToolAccess.readsAsCaller((input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_task_ops, input),
-  ),
-  t3_orchestration_run: McpToolAccess.readsAsCaller((input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_run, input),
-  ),
-  t3_orchestration_status: McpToolAccess.readsAsCaller((input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_status, input),
-  ),
-  t3_orchestration_resume: McpToolAccess.readsAsCaller((input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_resume, input),
-  ),
-  t3_orchestration_pause: McpToolAccess.readsAsCaller((input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_pause, input),
-  ),
-  t3_orchestration_stop: McpToolAccess.readsAsCaller((input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_stop, input),
-  ),
-  t3_show_widget: McpToolAccess.readsAsCaller((input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_show_widget, input),
-  ),
-  t3_recipe_list: McpToolAccess.readsAsCaller((input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_list, input),
-  ),
-  t3_recipe_validate: McpToolAccess.readsAsCaller((input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_validate, input),
-  ),
-  t3_mywork_digest: McpToolAccess.readsAsCaller((input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_mywork_digest, input),
-  ),
-  t3_mywork_arrange: McpToolAccess.readsAsCaller((input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_mywork_arrange, input),
-  ),
-  t3_change_request_publish: McpToolAccess.actsAsCaller((input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_change_request_publish, input),
-  ),
-  t3team_thread_skill_metadata: McpToolAccess.readsAsCaller((input) => threadSkillMetadata(input)),
-} satisfies McpToolAccess.Handlers<typeof T3TeamToolkit.tools>);
+export const T3TeamToolkitHandlersLive = McpToolAccess.toLayer(
+  T3TeamToolkit,
+  Effect.map(makeLinkedRepositorySyncHandler, (syncLinkedRepository) => ({
+    t3_provider_usage: McpToolAccess.readsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_provider_usage, input),
+    ),
+    t3_search_thread: McpToolAccess.readsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_search_thread, input),
+    ),
+    t3_search_source: McpToolAccess.readsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_search_source, input),
+    ),
+    t3_read_message: McpToolAccess.readsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_read_message, input),
+    ),
+    t3_ask_user: McpToolAccess.readsAsCaller((input) => askUser(input)),
+    t3_task_ops: McpToolAccess.readsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_task_ops, input),
+    ),
+    t3_orchestration_run: McpToolAccess.readsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_run, input),
+    ),
+    t3_orchestration_status: McpToolAccess.readsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_status, input),
+    ),
+    t3_orchestration_resume: McpToolAccess.readsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_resume, input),
+    ),
+    t3_orchestration_pause: McpToolAccess.readsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_pause, input),
+    ),
+    t3_orchestration_stop: McpToolAccess.readsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_stop, input),
+    ),
+    t3_show_widget: McpToolAccess.readsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_show_widget, input),
+    ),
+    t3_recipe_list: McpToolAccess.readsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_list, input),
+    ),
+    t3_recipe_validate: McpToolAccess.readsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_validate, input),
+    ),
+    t3_mywork_digest: McpToolAccess.readsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_mywork_digest, input),
+    ),
+    t3_mywork_arrange: McpToolAccess.readsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_mywork_arrange, input),
+    ),
+    t3_change_request_publish: McpToolAccess.actsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_change_request_publish, input),
+    ),
+    // Not a broker tool: like t3_ask_user it acts on the calling thread's own project directly.
+    t3_linked_repository_sync: McpToolAccess.actsAsCaller((input) =>
+      requireOrchestrationScope.pipe(
+        Effect.flatMap((invocation) => syncLinkedRepository(invocation.thread.threadId, input)),
+      ),
+    ),
+    t3team_thread_skill_metadata: McpToolAccess.readsAsCaller((input) =>
+      threadSkillMetadata(input),
+    ),
+  })) satisfies Effect.Effect<McpToolAccess.Handlers<typeof T3TeamToolkit.tools>>,
+);

@@ -12,7 +12,7 @@ import * as Effect from "effect/Effect";
 import {
   ProviderAdapterProtocolError,
   type ProviderAdapterV2SessionRuntime,
-} from "./orchestration-v2/ProviderAdapter.ts";
+} from "@t3tools/provider-core/server/ProviderAdapter";
 import { packCall } from "./t3team-pack-driverCall.ts";
 import { asPack, PackCodec } from "./t3team-pack-driverCodec.ts";
 
