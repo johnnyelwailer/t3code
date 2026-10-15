@@ -9,6 +9,8 @@ import { Tool, Toolkit } from "effect/ai";
 
 import {
   T3TEAM_WIDGET_AUTHORING_GUIDANCE,
+  T3TEAM_WIDGET_FORMAT_DESCRIPTION,
+  T3TEAM_WIDGET_INTENT_DESCRIPTION,
   T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
 } from "@t3tools/project-context/t3teamWidgetGuidance";
 import {
@@ -388,8 +390,7 @@ export const T3TeamShowWidgetTool = Tool.make("t3_show_widget", {
         "Short snake_case identifier for this widget (e.g. 'q4_revenue_chart'). Used as the artifact name.",
     }),
     intent: Schema.optional(Schema.String).annotate({
-      description:
-        "Preferred default: describe what to show. A builder subagent authors the widget (theme/icon contract) and html output goes through the upstream HTML render shim. Omit when passing widget_code.",
+      description: T3TEAM_WIDGET_INTENT_DESCRIPTION,
     }),
     // The full authoring contract rides the property annotation: it is the text the model reads
     // while writing the widget body, and it is the single source of truth for the theme-token,
@@ -399,8 +400,7 @@ export const T3TeamShowWidgetTool = Tool.make("t3_show_widget", {
       description: T3TEAM_WIDGET_AUTHORING_GUIDANCE,
     }),
     format: Schema.optional(Schema.Literals(["html", "svg"])).annotate({
-      description:
-        "html is shimmed onto upstream html_render storage/theme; svg stays on the widget tier.",
+      description: T3TEAM_WIDGET_FORMAT_DESCRIPTION,
     }),
     loading_messages: Schema.optional(Schema.Array(Schema.String)),
     capabilities: Schema.optional(

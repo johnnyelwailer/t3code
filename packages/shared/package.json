@@ -23,6 +23,10 @@
       "types": "./src/t3team-manualContinuation.ts",
       "import": "./src/t3team-manualContinuation.ts"
     },
+    "./t3team-widgetIconSprite": {
+      "types": "./src/t3team-widgetIconSprite.ts",
+      "import": "./src/t3team-widgetIconSprite.ts"
+    },
     "./t3team-githubActivity": {
       "types": "./src/t3team-githubActivity.ts",
       "import": "./src/t3team-githubActivity.ts"

@@ -471,3 +471,12 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
 
 - `apps/desktop/scripts/main-process-bundle.test.mjs` — fixture writes the `src/voice/t3team-whisperWorker.ts` worker entry that the desktop `pack` config now builds.
 - `third-party-licenses.config.json` — notice overrides for the `@fugood/node-whisper-*` platform binaries pulled in by `@fugood/whisper.node`.
+
+## `t3_show_widget` maps to upstream HTML renders (2026-10-13)
+
+- `packages/shared/src/t3McpToolPresentation.ts` — one import and one spread of
+  `T3TEAM_MCP_TOOLS` (`t3team-mcpToolPresentation.ts`) into the T3 tool inventory, so fork tools
+  on the `t3-code` server get upstream's cards, summaries and ACP identity recovery.
+- `packages/shared/src/toolOutput.ts` — `htmlRenderFromToolItem` gates on the tool's
+  `html-render` summary action instead of the literal `html_render` name, so `t3_show_widget`
+  results render inline (and are cleaned up on thread deletion) through upstream's path.

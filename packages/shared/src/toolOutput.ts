@@ -4,13 +4,9 @@ import {
 } from "@t3tools/contracts";
 import * as Predicate from "effect/Predicate";
 
-import {
-  HTML_RENDER_TOOL_NAME,
-  readHtmlRenderReference,
-  type HtmlRenderReference,
-} from "./htmlRender.ts";
+import { readHtmlRenderReference, type HtmlRenderReference } from "./htmlRender.ts";
 import { MCP_APP_OUTPUT_KEY, readMcpAppReference, type McpAppReference } from "./mcpApp.ts";
-import { resolveT3McpToolId } from "./t3McpToolPresentation.ts";
+import { resolveT3McpToolSummaryAction } from "./t3McpToolPresentation.ts";
 
 const MAX_PARSED_BYTES = 16_384;
 const MAX_METADATA_BYTES = 8_192;
@@ -177,11 +173,16 @@ export function compactDynamicToolOutput(value: unknown): CompactToolOutput | un
   return Object.keys(output).length === 0 ? undefined : output;
 }
 
+/**
+ * The page a completed `html_render` tool call published, if this item is one.
+ * Any T3 tool whose summary action is `html-render` publishes the same way
+ * (t3team: `t3_show_widget`).
+ */
 export function htmlRenderFromToolItem(item: {
   readonly toolName: string | null | undefined;
   readonly output?: unknown;
 }): HtmlRenderReference | undefined {
-  if (resolveT3McpToolId(item.toolName) !== HTML_RENDER_TOOL_NAME) return undefined;
+  if (resolveT3McpToolSummaryAction(item.toolName) !== "html-render") return undefined;
   const output = compactDynamicToolOutput(item.output);
   return output?.isError ? undefined : output?.htmlRender;
 }
