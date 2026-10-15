@@ -146,3 +146,20 @@ export function digestYesterdaySummaryText(summary: DigestYesterdaySummary): str
 export function isDigestMorning(nowMs: number): boolean {
   return new Date(nowMs).getHours() < 12;
 }
+
+/**
+ * A story group's roll-up of its subtasks' outcomes, most common first: "3 → Done · 1 → In Test",
+ * plus merged PRs. Empty when nothing moved or merged.
+ */
+export function digestYesterdayGroupSummary(items: readonly DigestYesterdayWorkItem[]): string {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    if (item.outcome) counts.set(item.outcome.to, (counts.get(item.outcome.to) ?? 0) + 1);
+  }
+  const merged = items.reduce((sum, item) => sum + item.merged.length, 0);
+  const parts = [...counts]
+    .toSorted((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([to, count]) => `${count} → ${to}`);
+  if (merged > 0) parts.push(`${merged} PR${merged === 1 ? "" : "s"} merged`);
+  return parts.join(" · ");
+}
