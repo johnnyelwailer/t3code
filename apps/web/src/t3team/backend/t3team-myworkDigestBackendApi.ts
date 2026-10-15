@@ -19,6 +19,8 @@ export type MyWorkDigestProjectInput = {
   readonly externalProjectId: string;
   readonly appProjectId?: string;
   readonly name?: string;
+  /** Explicit board/sprint pick (t3team-projectSprintChoice); absent = shared resolver. */
+  readonly sprintChoice?: { readonly boardId?: string; readonly sprintId?: string };
 };
 
 export type MyWorkDigestScope = "project" | "all";

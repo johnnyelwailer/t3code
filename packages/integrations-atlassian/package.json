@@ -11,6 +11,10 @@
     "./oauthPopup": {
       "types": "./src/oauthPopup.ts",
       "import": "./src/oauthPopup.ts"
+    },
+    "./sprintResolver": {
+      "types": "./src/sprintResolver.ts",
+      "import": "./src/sprintResolver.ts"
     }
   },
   "scripts": {
