@@ -21,7 +21,7 @@ import {
   T3TEAM_WIDGET_ICON_CSS,
   T3TEAM_WIDGET_ICON_NAMES,
   t3teamWidgetIconId,
-} from "~/t3team/chat/t3team-widgetIconSprite";
+} from "@t3tools/shared/t3team-widgetIconSprite";
 
 /** Mirrors the app's real mechanism: one `:root` block, overridden under `.dark`. */
 const LIGHT_AND_DARK_TOKENS: ReadonlyArray<readonly [string, string, string]> = [

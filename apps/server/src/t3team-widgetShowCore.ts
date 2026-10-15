@@ -1,15 +1,12 @@
 /**
  * Pure input validation + attachment construction for the `t3team.widget.show` broker tool
- * (Epic 24 ad-hoc widget tier). Effectful orchestration lives in `t3team-widgetShowTool.ts`.
- *
- * `format: "html"` is shimmed onto upstream HtmlRender storage (Phil 2026-10-06): the fragment
- * stays on the attachment for back-compat; an optional `htmlRender` ref points at the published
- * attachment clients render via HtmlRenderFrame. Other formats stay on the widget tier.
+ * (Epic 24 ad-hoc widget tier). Effectful orchestration lives in `t3team-widgetShowTool.ts`;
+ * the attachment is only the carrier for bridge widgets (sendPrompt/callTool) — every other
+ * widget publishes through upstream HTML renders (`t3team-widgetHtmlDocument.ts`).
  */
 
 import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import type { T3TeamMessageWidgetAttachment } from "@t3tools/contracts";
-import type { HtmlRenderReference } from "@t3tools/shared/htmlRender";
 
 import { resolveWidgetCapabilityPolicy } from "./t3team-widgetCapabilityPolicy.ts";
 
@@ -20,13 +17,6 @@ const INTENT_MAX_LENGTH = 8_000;
 const LOADING_MESSAGES_MAX = 8;
 const LOADING_MESSAGE_MAX_LENGTH = 200;
 const TOOLS_MAX = 16;
-
-/** CSP kept for widget html even when stored via HtmlRender (no remote network). */
-export const T3TEAM_WIDGET_HTML_CSP =
-  "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'";
-
-/** Default frame height when shim-publishing via HtmlRender (clients refine via measured heights). */
-export const T3TEAM_WIDGET_HTML_RENDER_DEFAULT_HEIGHT = 400;
 
 export type T3TeamWidgetFormat = "html" | "svg" | "mdx" | "tsx";
 const WIDGET_FORMATS: ReadonlySet<T3TeamWidgetFormat> = new Set(["html", "svg", "mdx", "tsx"]);
@@ -57,21 +47,6 @@ function readStringArray(value: unknown, max: number): ReadonlyArray<string> | u
     .map((item) => item.trim())
     .filter((item) => item.length > 0)
     .slice(0, max);
-}
-
-/**
- * Wrap a validated HTML fragment into a full document suitable for HtmlRender.publish,
- * preserving the widget CSP (`connect-src 'none'`) — never route through publicProxy.
- */
-export function wrapWidgetHtmlFragmentForHtmlRender(fragment: string): string {
-  return [
-    "<!DOCTYPE html>",
-    '<html><head><meta charset="utf-8">',
-    `<meta http-equiv="Content-Security-Policy" content="${T3TEAM_WIDGET_HTML_CSP}">`,
-    "</head><body>",
-    fragment,
-    "</body></html>",
-  ].join("");
 }
 
 /** Validate raw tool arguments. Returns the parsed input or a human-readable error string. */
@@ -136,7 +111,7 @@ export function parseT3TeamWidgetShowInput(
     format = args.format as T3TeamWidgetFormat;
   }
   // Mirror the Claude desktop convention: auto-detect svg vs html from the code itself.
-  // Intent-only defaults to html (builder / shim path).
+  // Intent-only defaults to html (builder path).
   const resolvedFormat =
     format ?? (widgetCode.length > 0 ? (widgetCode.startsWith("<svg") ? "svg" : "html") : "html");
   if (!IMPLEMENTED_WIDGET_FORMATS.has(resolvedFormat)) {
@@ -212,9 +187,8 @@ export function buildT3TeamWidgetAttachment(input: {
   readonly widgetId: string;
   readonly parsed: T3TeamWidgetShowInput;
   readonly artifactRelativePath: string | undefined;
-  readonly htmlRender?: HtmlRenderReference | undefined;
 }): T3TeamMessageWidgetAttachment {
-  const { widgetId, parsed, artifactRelativePath, htmlRender } = input;
+  const { widgetId, parsed, artifactRelativePath } = input;
   return {
     kind: "widget",
     widget: {
@@ -222,16 +196,6 @@ export function buildT3TeamWidgetAttachment(input: {
       title: parsed.title,
       format: parsed.format,
       html: parsed.widgetCode,
-      ...(htmlRender
-        ? {
-            htmlRender: {
-              attachmentId: htmlRender.attachmentId,
-              title: htmlRender.title,
-              height: htmlRender.height,
-              ...(htmlRender.heights === undefined ? {} : { heights: [...htmlRender.heights] }),
-            },
-          }
-        : {}),
       ...(artifactRelativePath
         ? {
             artifact: {

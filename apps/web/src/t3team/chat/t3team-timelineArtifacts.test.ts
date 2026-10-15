@@ -185,6 +185,25 @@ describe("decorateT3TeamTimelineEntries", () => {
     });
     expect(decorated).toBe(entries);
   });
+
+  it("skips a legacy published widget, which its t3_show_widget tool call already renders", () => {
+    const entries = entriesOf([assistant("a-1", "hello", "2026-10-01T10:00:00Z", 0)]);
+    const published = {
+      kind: "widget",
+      widget: {
+        ...widgetPayload.widget,
+        htmlRender: { attachmentId: "thread-1-widget-html", title: "chart", height: 400 },
+      },
+    };
+    const decorated = decorateT3TeamTimelineEntries({
+      entries,
+      artifacts: [
+        artifact({ id: "widget:w-1", kind: "widget", messageId: null, payload: published }),
+      ],
+      contextByMessageId: new Map(),
+    });
+    expect(decorated).toBe(entries);
+  });
 });
 
 describe("t3teamThreadActivitiesOf", () => {

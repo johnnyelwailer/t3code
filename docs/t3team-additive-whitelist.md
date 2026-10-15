@@ -185,7 +185,7 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
 - `apps/server/src/persistence/Migrations.ts`
   - Register the additive t3team migration that adds `projection_thread_messages.t3team_ext_json`.
 - `apps/server/src/persistence/Migrations.test.ts`
-  - Upstream's V2 guard tests hard-code ids 54/55/56; this fork registers upstream 055 at 84 (`FIRST_V2_MIGRATION_ID`), so the same assertions are expressed relative to that constant. Unavoidable: with literal ids they assert the bug that refused pre-sync fork databases (2026-10-14).
+  - Upstream's V2 guard tests hard-code ids 54/55/56; this fork registers upstream 055 at 84 (`FIRST_V2_MIGRATION_ID`), so the same assertions are expressed relative to that constant. Unavoidable: with literal ids they assert the bug that refused pre-sync fork databases (2026-10-14). Refusal is asserted for upstream-owned ids only (`UPSTREAM_V2_MIGRATION_IDS`); fork-owned ledger gaps must still start.
 - `apps/server/src/persistence/Services/ProjectionThreadMessages.ts`
   - Extend the projection-thread message schema with optional `t3teamExt` so the persistence layer can carry the namespaced message extension.
 - `packages/contracts/src/settings.ts`
@@ -413,3 +413,12 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
   `runBackendProcess`, chained after the readiness loop, and one per-instance kill history passed
   from `makeBackendInstance`. The logic lives in `t3team-backendHealthWatchdog.ts`; without the
   option the process runner is unchanged.
+
+## `t3_show_widget` maps to upstream HTML renders (2026-10-13)
+
+- `packages/shared/src/t3McpToolPresentation.ts` — one import and one spread of
+  `T3TEAM_MCP_TOOLS` (`t3team-mcpToolPresentation.ts`) into the T3 tool inventory, so fork tools
+  on the `t3-code` server get upstream's cards, summaries and ACP identity recovery.
+- `packages/shared/src/toolOutput.ts` — `htmlRenderFromToolItem` gates on the tool's
+  `html-render` summary action instead of the literal `html_render` name, so `t3_show_widget`
+  results render inline (and are cleaned up on thread deletion) through upstream's path.
