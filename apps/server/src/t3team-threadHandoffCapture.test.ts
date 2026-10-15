@@ -369,7 +369,7 @@ describe("readHandoffBranchState", () => {
     }),
   );
 
-  it.effect("reads origin as present, absent (also outside a repository), or unknown", () =>
+  it.effect("reads origin as present, absent, or unknown", () =>
     Effect.gen(function* () {
       const probe = (exitCode: number, stdout: string) =>
         readHandoffHasOrigin(
@@ -380,11 +380,10 @@ describe("readHandoffBranchState", () => {
           "/repo",
         );
       assert.isTrue(yield* probe(0, "git@github.com:o/r.git\n"));
-      assert.isFalse(yield* probe(1, ""));
+      assert.isFalse(yield* probe(2, ""));
+      assert.isNull(yield* probe(1, ""));
       assert.isNull(yield* probe(128, ""));
-      const { vcs, calls } = fakeVcs(() => "x");
-      yield* readHandoffHasOrigin(vcs, "/repo");
-      assert.deepStrictEqual(calls, [["config", "--get", "remote.origin.url"]]);
+      assert.isNull(yield* readHandoffHasOrigin(fakeVcs(() => null).vcs, "/repo"));
     }),
   );
 

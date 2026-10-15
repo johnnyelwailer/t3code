@@ -49,7 +49,7 @@ export type T3TeamThreadHandoffRefusalReason = typeof T3TeamThreadHandoffRefusal
  * machines it will not offer, so the reason reads the same before and after asking.
  */
 export const T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE =
-  "No git remote: another machine can't get this project's files. Add an origin remote and push, then move.";
+  "No `origin` remote: another machine can't get this project's files. Add an origin remote and push, then move.";
 
 export const T3TeamThreadHandoffRefusal = Schema.Struct({
   reason: T3TeamThreadHandoffRefusalReason,

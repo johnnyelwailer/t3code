@@ -68,7 +68,9 @@ it.each([
             machine: "server",
           }))}
           onCreateCloudSession={onCreateCloudSession}
-          {...(started ? { onHandoffToEnvironment } : { onEnvironmentChange })}
+          {...(started
+            ? { onHandoffToEnvironment, projectHasRemote: true }
+            : { onEnvironmentChange })}
         />,
       );
     });
@@ -125,7 +127,7 @@ it.each([
 
 // "Move to" a cloud machine, on the real menu: a connected machine (a choice) and a ready one not
 // connected yet (a connect button). A project without a git remote can't reach either: both are
-// shown disabled with the server's reason, and nothing moves or connects.
+// shown disabled with the server's reason, no new cloud session is offered, and nothing moves.
 it.each([
   ["with a git remote moves to the cloud machine", true],
   ["without a git remote is refused on the row", false],
@@ -136,6 +138,8 @@ it.each([
   const root = createRoot(container);
   const onHandoffToEnvironment = vi.fn();
   const onConnectCloudSession = vi.fn();
+  const onCreateCloudSession = vi.fn();
+  const onSetupProjectMachine = vi.fn();
   const session = (id: string, name: string) =>
     ({
       sessionId: id,
@@ -164,7 +168,8 @@ it.each([
           pendingCloudSessions={[connected, notConnected]}
           connectedEnvironmentIds={new Set(["local", "env-cloud-a"])}
           cloudEnvironmentIds={new Set(["env-cloud-a", "env-cloud-b"])}
-          onCreateCloudSession={vi.fn()}
+          onCreateCloudSession={onCreateCloudSession}
+          onSetupProjectMachine={onSetupProjectMachine}
           onHandoffToEnvironment={onHandoffToEnvironment}
           onConnectCloudSession={onConnectCloudSession}
           projectHasRemote={projectHasRemote}
@@ -184,6 +189,7 @@ it.each([
     if (projectHasRemote) {
       expect(options()).toEqual(["local", "cloud-aReady · ubuntu-slim"]);
       expect(listbox.textContent).not.toContain(T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE);
+      expect(listbox.textContent).toContain("New cloud session");
       await press(rowNamed("cloud-b"));
       expect(onConnectCloudSession).toHaveBeenCalledExactlyOnceWith(notConnected);
       await press(row);
@@ -201,8 +207,15 @@ it.each([
         expect(blocked.textContent).toContain(T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE);
         await press(blocked);
       }
+      // No paid machine is started for a move that could not use it.
+      expect(listbox.textContent).not.toContain("New cloud session");
+      expect(
+        [...listbox.querySelectorAll("button")].map((button) => button.textContent),
+      ).not.toContainEqual(expect.stringContaining("set up"));
       expect(onConnectCloudSession).not.toHaveBeenCalled();
       expect(onHandoffToEnvironment).not.toHaveBeenCalled();
+      expect(onCreateCloudSession).not.toHaveBeenCalled();
+      expect(onSetupProjectMachine).not.toHaveBeenCalled();
     }
   } finally {
     await act(async () => root.unmount());

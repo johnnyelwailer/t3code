@@ -77,12 +77,14 @@ export const readHandoffBranchState = Effect.fn("t3team.threadHandoff.readBranch
 
 /**
  * Whether the checkout has an `origin` remote, the one the other machine fetches the project
- * from. A folder that is not a git repository has none either. Null when git could not tell.
+ * from. Null when git could not tell (a folder that is not a repository, an unreadable `.git`).
+ * `git remote get-url` reads the repository's remotes only, so an `origin` set in the global or
+ * system git config does not count.
  */
 export const readHandoffHasOrigin = (vcs: Vcs, cwd: string) =>
-  git(vcs, cwd, ["config", "--get", "remote.origin.url"]).pipe(
-    // Exit 1: the key is not set (also outside a repository); anything else: could not tell.
+  git(vcs, cwd, ["remote", "get-url", "origin"]).pipe(
+    // Exit 2: no such remote; 128 (not a repository) or anything else: could not tell.
     Effect.map((out) =>
-      out?.exitCode === 0 ? out.stdout.trim().length > 0 : out?.exitCode === 1 ? false : null,
+      out?.exitCode === 0 ? out.stdout.trim().length > 0 : out?.exitCode === 2 ? false : null,
     ),
   );

@@ -119,7 +119,7 @@ describe("prepareThreadHandoff", () => {
       run: (input: { readonly args: ReadonlyArray<string> }) => {
         const command = input.args.find((arg) => !arg.startsWith("--"));
         const out = (exitCode: number, stdout = "") => Effect.succeed({ exitCode, stdout });
-        if (command === "config") return origin === null ? out(1) : out(0, `${origin}\n`);
+        if (command === "remote") return origin === null ? out(2) : out(0, `${origin}\n`);
         if (command === "rev-parse") return out(0, "abc123\n");
         if (command === "rev-list") return out(0, "0\n");
         return out(0);
