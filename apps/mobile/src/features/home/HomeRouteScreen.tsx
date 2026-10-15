@@ -186,15 +186,7 @@ export function HomeRouteScreen() {
         ) : null}
         {Platform.OS === "android" ? <AndroidScreenHeader title="Threads" /> : null}
         <WorkspaceEmptyDetail
-          onAddConnection={
-            Platform.OS === "android" && !catalogState.hasConnections
-              ? () =>
-                  navigation.navigate("SettingsSheet", {
-                    screen: "SettingsContent",
-                    params: { screen: "SettingsEnvironmentNew" },
-                  })
-              : undefined
-          }
+          noEnvironments={Platform.OS === "android" && !catalogState.hasConnections}
           onStartNewTask={
             Platform.OS === "android" && panes.primarySidebarVisible
               ? undefined

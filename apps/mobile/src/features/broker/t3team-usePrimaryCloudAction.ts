@@ -3,23 +3,28 @@ import {
   cloudSessionFailureDescription,
 } from "@t3tools/client-runtime/state/cloud-sessions";
 import { isAtomCommandInterrupted } from "@t3tools/client-runtime/state/runtime";
-import type { AccountStatus, EnvironmentId } from "@t3tools/contracts";
-import { useCallback, useState } from "react";
+import type { EnvironmentId } from "@t3tools/contracts";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import { Alert } from "react-native";
 
 import { appAtomRegistry } from "../../state/atom-registry";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { cloudSessionEnvironment, refreshCloudSessionList } from "../../state/t3team-cloudSessions";
-import { startAccountSignIn } from "../account/t3team-accountController";
-import { chooseCloudSessionLauncher } from "../broker/t3team-chooseCloudSessionLauncher";
-import { useCloudSessionLauncher } from "../broker/t3team-useCloudSessionLauncher";
+import {
+  accountStatusSnapshot,
+  startAccountSignIn,
+  subscribeAccountStatus,
+} from "../account/t3team-accountController";
+import { chooseCloudSessionLauncher } from "./t3team-chooseCloudSessionLauncher";
+import { useCloudSessionLauncher } from "./t3team-useCloudSessionLauncher";
 
 /**
- * The Environments screen's primary header action: "New cloud session" when the Microsoft account
- * is signed in, "Sign in" otherwise. Starting a session reuses the Machines screen's launcher
- * pick and the cloud-session create command.
+ * The primary action of the Environments header and the home empty state: "New cloud session" when
+ * the Microsoft account is signed in, "Sign in" otherwise. Starting a session reuses the Machines
+ * screen's launcher pick and the cloud-session create command.
  */
-export function useEnvironmentsHeaderAction(account: AccountStatus | null) {
+export function usePrimaryCloudAction() {
+  const account = useSyncExternalStore(subscribeAccountStatus, accountStatusSnapshot);
   const { launchers } = useCloudSessionLauncher();
   const createSession = useAtomCommand(cloudSessionEnvironment.create, {
     reportFailure: false,

@@ -3,7 +3,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
 import { managedRelaySessionAtom } from "@t3tools/client-runtime/relay";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { useCallback, useRef, useSyncExternalStore, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Platform, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -18,8 +18,7 @@ import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import { useRemoteConnections } from "../../state/use-remote-environment-registry";
 import { relayEnvironmentDiscovery } from "../../state/relay";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { accountStatusSnapshot, subscribeAccountStatus } from "../account/t3team-accountController";
-import { useEnvironmentsHeaderAction } from "./t3team-useEnvironmentsHeaderAction";
+import { usePrimaryCloudAction } from "../broker/t3team-usePrimaryCloudAction";
 import {
   applyShowcaseLocalEnvironmentDisplayUrls,
   resolveShowcaseEnvironmentUpdateDisplayUrl,
@@ -86,8 +85,7 @@ export function SettingsEnvironmentsRouteScreen() {
       }),
     [navigation],
   );
-  const account = useSyncExternalStore(subscribeAccountStatus, accountStatusSnapshot);
-  const { signedIn, loading, onPress: onPrimaryPress } = useEnvironmentsHeaderAction(account);
+  const { signedIn, loading, onPress: onPrimaryPress } = usePrimaryCloudAction();
   const addEnvironmentMenuItems = [
     {
       id: "add-environment",
