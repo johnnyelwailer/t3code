@@ -157,6 +157,7 @@ patchedDependencies:
   '@react-navigation/native-stack@7.17.6': d2d52f3776e30765519748fd5e177592dc3b9cc778c52fb00e02674dfa9042c5
   alchemy@2.0.0-beta.80: bea1b6c0c0b23157fd5f439a1d7feff430f28ac1621ba135d8a13eeec60ccacd
   dbus-next@0.10.2: cfff57561b0ee59b5addb3b2e6c6f20906e967507a530ab67e8db8108e520ba4
+  effect@4.0.4: e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d
   expo-audio@58.0.4: c20cb927d6848c53e7bf6ec14fe12f19daae9210165d2dbaf4e0f97ce31e8742
   expo-blur@58.0.3: d0311b0c0b05bd94393bd9a84653cb42503d5f3c8a19eb2627c34ace08bedf18
   expo-glass-effect@58.0.3: f750041c45ab838a3530451dc7b50d6640a79141037a1b0499c5e3412a860c57
@@ -210,7 +211,7 @@ importers:
         version: 0.13.0
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@napi-rs/keyring':
         specifier: ^1.3.0
         version: 1.3.0
@@ -237,7 +238,7 @@ importers:
         version: 0.10.2(patch_hash=cfff57561b0ee59b5addb3b2e6c6f20906e967507a530ab67e8db8108e520ba4)
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       electron:
         specifier: 44.4.5
         version: 44.4.5
@@ -265,7 +266,7 @@ importers:
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -314,7 +315,7 @@ importers:
         version: 4.6.8(patch_hash=b8b22ab733de5bea846ad9e88046c10582352fe9ad86f314f368b2a823f0f281)(9fda653cb5598772915b4a39a7aee91d)
       '@effect/atom-react':
         specifier: 4.0.4
-        version: 4.0.4(effect@4.0.4)(react@19.3.0)(scheduler@0.28.0)
+        version: 4.0.4(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(react@19.3.0)(scheduler@0.28.0)
       '@expo-google-fonts/dm-sans':
         specifier: ^0.4.2
         version: 0.4.2
@@ -413,7 +414,7 @@ importers:
         version: 8.0.3
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       expo:
         specifier: 58.0.2
         version: 58.0.2(bd4444e61fed72e958d45f73733b7f54)
@@ -585,7 +586,7 @@ importers:
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@pierre/trees':
         specifier: 1.0.0-beta.6
         version: 1.0.0-beta.6(@pierre/theme@2.0.0)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(shiki@4.2.0)
@@ -624,10 +625,10 @@ importers:
         version: 0.80.10(@modelcontextprotocol/sdk@1.29.0(zod@4.6.5))(bufferutil@4.1.0)(utf-8-validate@6.0.6)(ws@8.22.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.5)
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@effect/platform-node-shared':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(utf-8-validate@6.0.6)
       '@ff-labs/fff-node':
         specifier: 0.11.0
         version: 0.11.0(patch_hash=8956d6ed6938a1bce69b2d0b067ff258dd9ca753c5bbe7006f7b68f760ea3ad2)
@@ -717,7 +718,7 @@ importers:
         version: link:../../packages/t3team-skill-packs
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       jose:
         specifier: 'catalog:'
         version: 6.2.2
@@ -751,7 +752,7 @@ importers:
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@modelcontextprotocol/sdk':
         specifier: 1.29.0
         version: 1.29.0(zod@4.6.5)
@@ -826,7 +827,7 @@ importers:
         version: 3.2.2(react@19.2.6)
       '@effect/atom-react':
         specifier: 4.0.4
-        version: 4.0.4(effect@4.0.4)(react@19.2.6)(scheduler@0.28.0)
+        version: 4.0.4(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(react@19.2.6)(scheduler@0.28.0)
       '@formkit/auto-animate':
         specifier: ^0.9.0
         version: 0.9.0
@@ -961,7 +962,7 @@ importers:
         version: 3.4.16
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       hast-util-to-html:
         specifier: ^9.0.5
         version: 9.0.5
@@ -1016,10 +1017,10 @@ importers:
     devDependencies:
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@rolldown/plugin-babel':
         specifier: ^0.2.0
         version: 0.2.3(@babel/core@7.29.7)(@babel/plugin-transform-runtime@7.29.7(@babel/core@7.29.7))(@babel/runtime@7.29.7)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@24.12.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(yaml@2.9.0))(rolldown@1.2.5)
@@ -1109,10 +1110,10 @@ importers:
         version: 3.18.1(react-dom@19.3.0(react@19.3.0))(react@19.2.6)
       '@effect/sql-pg':
         specifier: 4.0.4
-        version: 4.0.4(effect@4.0.4)
+        version: 4.0.4(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
       '@effect/sql-sqlite-do':
         specifier: 'catalog:'
-        version: 4.0.4(effect@4.0.4)
+        version: 4.0.4(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
       '@noble/curves':
         specifier: 'catalog:'
         version: 1.9.1
@@ -1130,23 +1131,23 @@ importers:
         version: link:../../packages/shared
       alchemy:
         specifier: 2.0.0-beta.80
-        version: 2.0.0-beta.80(patch_hash=bea1b6c0c0b23157fd5f439a1d7feff430f28ac1621ba135d8a13eeec60ccacd)(ffafb30067089f6b4027eb0da4fe05e9)
+        version: 2.0.0-beta.80(patch_hash=bea1b6c0c0b23157fd5f439a1d7feff430f28ac1621ba135d8a13eeec60ccacd)(4b5e13f9506c5e5778f6440489b6301d)
       drizzle-orm:
         specifier: 1.0.0-rc.5-ab785fc
-        version: 1.0.0-rc.5-ab785fc(@cloudflare/workers-types@4.20260604.1)(@effect/sql-d1@4.0.0(effect@4.0.4))(@effect/sql-pg@4.0.4(effect@4.0.4))(@effect/sql-sqlite-bun@4.0.0-rc.112(effect@4.0.4))(@effect/sql-sqlite-do@4.0.4(effect@4.0.4))(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(bun-types@1.3.14)(effect@4.0.4)(expo-sqlite@58.0.8(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(react@19.3.0))(pg@8.23.0)(valibot@1.2.0(typescript@7.0.2))(zod@4.4.3)
+        version: 1.0.0-rc.5-ab785fc(94dc38e4cefc0945b5e63ba94141d9f0)
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20260601.1
         version: 4.20260604.1
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -1167,17 +1168,17 @@ importers:
     dependencies:
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@oxlint/plugins':
         specifier: ^1.63.0
         version: 1.68.0
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       vite-plus:
         specifier: 1.0.0
         version: 1.0.0(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1(vitest@5.0.1))(bufferutil@4.1.0)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
@@ -1235,14 +1236,14 @@ importers:
         version: link:../source-control-gitlab
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       three:
         specifier: 0.180.0
         version: 0.180.0
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@types/three':
         specifier: 0.180.0
         version: 0.180.0
@@ -1254,11 +1255,11 @@ importers:
     dependencies:
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       vite-plus:
         specifier: 1.0.0
         version: 1.0.0(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1(vitest@5.0.1))(bufferutil@4.1.0)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
@@ -1267,17 +1268,17 @@ importers:
     dependencies:
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/openapi-generator':
         specifier: 'catalog:'
-        version: 4.0.4(@effect/platform-node@4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6))(effect@4.0.4)(encoding@0.1.13)
+        version: 4.0.4(@effect/platform-node@4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6))(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(encoding@0.1.13)
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -1289,17 +1290,17 @@ importers:
     dependencies:
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/openapi-generator':
         specifier: 'catalog:'
-        version: 4.0.4(@effect/platform-node@4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6))(effect@4.0.4)(encoding@0.1.13)
+        version: 4.0.4(@effect/platform-node@4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6))(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(encoding@0.1.13)
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -1317,11 +1318,11 @@ importers:
         version: link:../project-context
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -1336,11 +1337,11 @@ importers:
         version: link:../project-context
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -1349,11 +1350,11 @@ importers:
     dependencies:
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -1368,11 +1369,11 @@ importers:
         version: link:../project-context
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -1393,14 +1394,14 @@ importers:
         version: 8.0.3
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -1430,14 +1431,14 @@ importers:
         version: link:../shared
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@t3tools/provider-testing':
         specifier: workspace:*
         version: link:../provider-testing
@@ -1461,14 +1462,14 @@ importers:
         version: link:../shared
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -1495,17 +1496,17 @@ importers:
         version: link:../shared
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
     devDependencies:
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@t3tools/provider-testing':
         specifier: workspace:*
         version: link:../provider-testing
@@ -1532,14 +1533,14 @@ importers:
         version: link:../shared
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@t3tools/provider-testing':
         specifier: workspace:*
         version: link:../provider-testing
@@ -1569,14 +1570,14 @@ importers:
         version: link:../shared
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@t3tools/provider-testing':
         specifier: workspace:*
         version: link:../provider-testing
@@ -1594,7 +1595,7 @@ importers:
         version: 1.15.13
       '@opencode/client':
         specifier: 2.0.28
-        version: 2.0.28(effect@4.0.4)
+        version: 2.0.28(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
       '@opencode/protocol':
         specifier: 2.0.28
         version: 2.0.28
@@ -1612,14 +1613,14 @@ importers:
         version: link:../shared
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@t3tools/provider-testing':
         specifier: workspace:*
         version: link:../provider-testing
@@ -1643,14 +1644,14 @@ importers:
         version: link:../shared
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@t3tools/provider-testing':
         specifier: workspace:*
         version: link:../provider-testing
@@ -1665,7 +1666,7 @@ importers:
     dependencies:
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@t3tools/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -1677,11 +1678,11 @@ importers:
         version: link:../shared
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -1693,11 +1694,11 @@ importers:
     dependencies:
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -1725,7 +1726,7 @@ importers:
         version: link:../runbook-core
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@types/node':
         specifier: 24.12.4
@@ -1741,7 +1742,7 @@ importers:
         version: link:../runbook-core
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@types/node':
         specifier: 24.12.4
@@ -1757,7 +1758,7 @@ importers:
         version: link:../runbook-core
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@types/node':
         specifier: 24.12.4
@@ -1773,7 +1774,7 @@ importers:
         version: link:../runbook-core
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       typescript:
         specifier: ~6.0.3
         version: 6.0.3
@@ -1798,7 +1799,7 @@ importers:
         version: link:../contracts
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       jose:
         specifier: 'catalog:'
         version: 6.2.2
@@ -1841,10 +1842,10 @@ importers:
     devDependencies:
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -1880,14 +1881,14 @@ importers:
         version: 8.0.3
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@t3tools/source-control-testing':
         specifier: workspace:*
         version: link:../source-control-testing
@@ -1914,11 +1915,11 @@ importers:
         version: link:../source-control-core
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -1936,11 +1937,11 @@ importers:
         version: link:../shared
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -1964,11 +1965,11 @@ importers:
         version: link:../source-control-core
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@t3tools/source-control-testing':
         specifier: workspace:*
         version: link:../source-control-testing
@@ -1995,11 +1996,11 @@ importers:
         version: link:../source-control-core
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@t3tools/source-control-testing':
         specifier: workspace:*
         version: link:../source-control-testing
@@ -2026,14 +2027,14 @@ importers:
         version: link:../source-control-core
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@t3tools/source-control-testing':
         specifier: workspace:*
         version: link:../source-control-testing
@@ -2057,11 +2058,11 @@ importers:
         version: link:../source-control-core
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@t3tools/source-control-testing':
         specifier: workspace:*
         version: link:../source-control-testing
@@ -2085,7 +2086,7 @@ importers:
         version: link:../source-control-core
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@types/node':
         specifier: 24.12.4
@@ -2101,14 +2102,14 @@ importers:
         version: link:../shared
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -2132,7 +2133,7 @@ importers:
         version: link:../contracts
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@types/react':
         specifier: ~19.3.0
@@ -2148,7 +2149,7 @@ importers:
         version: link:../t3team-pack-api
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@types/node':
         specifier: 24.12.4
@@ -2182,14 +2183,14 @@ importers:
         version: 5.10.2
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       typescript:
         specifier: ~6.0.3
         version: 6.0.3
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@6.0.3))(terser@5.48.0)(tsx@4.23.15)(typescript@6.0.3)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@6.0.3))(terser@5.48.0)(tsx@4.23.15)(typescript@6.0.3)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -2220,11 +2221,11 @@ importers:
         version: link:../shared
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -2236,7 +2237,7 @@ importers:
     dependencies:
       '@effect/platform-node':
         specifier: 4.0.4
-        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+        version: 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       '@electron/asar':
         specifier: ^4.3.0
         version: 4.3.0
@@ -2251,7 +2252,7 @@ importers:
         version: link:../packages/tailscale
       effect:
         specifier: 4.0.4
-        version: 4.0.4
+        version: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       plist:
         specifier: 'catalog:'
         version: 3.1.1
@@ -2264,7 +2265,7 @@ importers:
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.4
-        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+        version: 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@types/plist':
         specifier: 'catalog:'
         version: 3.0.5
@@ -13791,14 +13792,14 @@ snapshots:
     dependencies:
       json-schema: 0.4.0
 
-  '@alchemy.run/cloudflare-runtime@2.0.0-beta.80(@distilled.cloud/cloudflare@1.0.0-rc.13(effect@4.0.4))(@effect/platform-node@4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6))(@types/node@24.12.4)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@24.12.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(yaml@2.9.0))(effect@4.0.4)(rolldown@1.2.5)(typescript@7.0.2)':
+  '@alchemy.run/cloudflare-runtime@2.0.0-beta.80(@distilled.cloud/cloudflare@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)))(@effect/platform-node@4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6))(@types/node@24.12.4)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@24.12.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(yaml@2.9.0))(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(rolldown@1.2.5)(typescript@7.0.2)':
     dependencies:
       '@alchemy.run/node-utils': 2.0.0-beta.80
       '@cloudflare/unenv-preset': 2.16.1(unenv@2.0.0-rc.24)(workerd@1.20260918.1)
-      '@distilled.cloud/cloudflare': 1.0.0-rc.13(effect@4.0.4)
+      '@distilled.cloud/cloudflare': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
       '@puppeteer/browsers': 3.2.2(yauzl@3.4.0)
       capnp-es: 0.0.16(typescript@7.0.2)
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       magic-string: 0.30.21
       mime: 4.1.0
       sharp: 0.35.4(@types/node@24.12.4)
@@ -13806,7 +13807,7 @@ snapshots:
       workerd: 1.20260918.1
       yauzl: 3.4.0
     optionalDependencies:
-      '@effect/platform-node': 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+      '@effect/platform-node': 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
       rolldown: 1.2.5
       vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@24.12.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(yaml@2.9.0)'
     transitivePeerDependencies:
@@ -13814,9 +13815,9 @@ snapshots:
       - proxy-agent
       - typescript
 
-  '@alchemy.run/floci@2.0.0-beta.80(effect@4.0.4)':
+  '@alchemy.run/floci@2.0.0-beta.80(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
   '@alchemy.run/node-utils@2.0.0-beta.80':
     dependencies:
@@ -13993,7 +13994,7 @@ snapshots:
       '@aws-crypto/sha256-js': 5.2.0
       '@aws-crypto/supports-web-crypto': 5.2.0
       '@aws-crypto/util': 5.2.0
-      '@aws-sdk/types': 3.974.5
+      '@aws-sdk/types': 3.974.6
       '@aws-sdk/util-locate-window': 3.965.5
       '@smithy/util-utf8': 2.3.0
       tslib: 2.8.1
@@ -14001,7 +14002,7 @@ snapshots:
   '@aws-crypto/sha256-js@5.2.0':
     dependencies:
       '@aws-crypto/util': 5.2.0
-      '@aws-sdk/types': 3.974.5
+      '@aws-sdk/types': 3.974.6
       tslib: 2.8.1
 
   '@aws-crypto/supports-web-crypto@5.2.0':
@@ -14010,7 +14011,7 @@ snapshots:
 
   '@aws-crypto/util@5.2.0':
     dependencies:
-      '@aws-sdk/types': 3.974.5
+      '@aws-sdk/types': 3.974.6
       '@smithy/util-utf8': 2.3.0
       tslib: 2.8.1
 
@@ -14035,13 +14036,13 @@ snapshots:
     dependencies:
       '@aws-crypto/sha256-browser': 5.2.0
       '@aws-crypto/sha256-js': 5.2.0
-      '@aws-sdk/core': 3.974.17
+      '@aws-sdk/core': 3.978.3
       '@aws-sdk/credential-provider-node': 3.972.51
-      '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.34.1
-      '@smithy/fetch-http-handler': 5.4.6
+      '@aws-sdk/types': 3.974.6
+      '@smithy/core': 3.36.0
+      '@smithy/fetch-http-handler': 5.8.0
       '@smithy/node-http-handler': 4.7.7
-      '@smithy/types': 4.18.0
+      '@smithy/types': 4.19.0
       tslib: 2.8.1
     optional: true
 
@@ -14070,33 +14071,33 @@ snapshots:
   '@aws-sdk/credential-provider-cognito-identity@3.972.41':
     dependencies:
       '@aws-sdk/nested-clients': 3.997.16
-      '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.34.1
-      '@smithy/types': 4.18.0
+      '@aws-sdk/types': 3.974.6
+      '@smithy/core': 3.36.0
+      '@smithy/types': 4.19.0
       tslib: 2.8.1
     optional: true
 
   '@aws-sdk/credential-provider-env@3.972.43':
     dependencies:
-      '@aws-sdk/core': 3.974.17
-      '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.34.1
-      '@smithy/types': 4.18.0
+      '@aws-sdk/core': 3.978.3
+      '@aws-sdk/types': 3.974.6
+      '@smithy/core': 3.36.0
+      '@smithy/types': 4.19.0
       tslib: 2.8.1
 
   '@aws-sdk/credential-provider-http@3.972.45':
     dependencies:
-      '@aws-sdk/core': 3.974.17
-      '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.34.1
-      '@smithy/fetch-http-handler': 5.4.6
+      '@aws-sdk/core': 3.978.3
+      '@aws-sdk/types': 3.974.6
+      '@smithy/core': 3.36.0
+      '@smithy/fetch-http-handler': 5.8.0
       '@smithy/node-http-handler': 4.7.7
-      '@smithy/types': 4.18.0
+      '@smithy/types': 4.19.0
       tslib: 2.8.1
 
   '@aws-sdk/credential-provider-ini@3.972.49':
     dependencies:
-      '@aws-sdk/core': 3.974.17
+      '@aws-sdk/core': 3.978.3
       '@aws-sdk/credential-provider-env': 3.972.43
       '@aws-sdk/credential-provider-http': 3.972.45
       '@aws-sdk/credential-provider-login': 3.972.48
@@ -14104,19 +14105,19 @@ snapshots:
       '@aws-sdk/credential-provider-sso': 3.972.48
       '@aws-sdk/credential-provider-web-identity': 3.972.48
       '@aws-sdk/nested-clients': 3.997.16
-      '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.34.1
+      '@aws-sdk/types': 3.974.6
+      '@smithy/core': 3.36.0
       '@smithy/credential-provider-imds': 4.3.8
-      '@smithy/types': 4.18.0
+      '@smithy/types': 4.19.0
       tslib: 2.8.1
 
   '@aws-sdk/credential-provider-login@3.972.48':
     dependencies:
-      '@aws-sdk/core': 3.974.17
+      '@aws-sdk/core': 3.978.3
       '@aws-sdk/nested-clients': 3.997.16
-      '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.34.1
-      '@smithy/types': 4.18.0
+      '@aws-sdk/types': 3.974.6
+      '@smithy/core': 3.36.0
+      '@smithy/types': 4.19.0
       tslib: 2.8.1
 
   '@aws-sdk/credential-provider-node@3.972.51':
@@ -14127,43 +14128,43 @@ snapshots:
       '@aws-sdk/credential-provider-process': 3.972.43
       '@aws-sdk/credential-provider-sso': 3.972.48
       '@aws-sdk/credential-provider-web-identity': 3.972.48
-      '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.34.1
+      '@aws-sdk/types': 3.974.6
+      '@smithy/core': 3.36.0
       '@smithy/credential-provider-imds': 4.3.8
-      '@smithy/types': 4.18.0
+      '@smithy/types': 4.19.0
       tslib: 2.8.1
 
   '@aws-sdk/credential-provider-process@3.972.43':
     dependencies:
-      '@aws-sdk/core': 3.974.17
-      '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.34.1
-      '@smithy/types': 4.18.0
+      '@aws-sdk/core': 3.978.3
+      '@aws-sdk/types': 3.974.6
+      '@smithy/core': 3.36.0
+      '@smithy/types': 4.19.0
       tslib: 2.8.1
 
   '@aws-sdk/credential-provider-sso@3.972.48':
     dependencies:
-      '@aws-sdk/core': 3.974.17
+      '@aws-sdk/core': 3.978.3
       '@aws-sdk/nested-clients': 3.997.16
       '@aws-sdk/token-providers': 3.1062.0
-      '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.34.1
-      '@smithy/types': 4.18.0
+      '@aws-sdk/types': 3.974.6
+      '@smithy/core': 3.36.0
+      '@smithy/types': 4.19.0
       tslib: 2.8.1
 
   '@aws-sdk/credential-provider-web-identity@3.972.48':
     dependencies:
-      '@aws-sdk/core': 3.974.17
+      '@aws-sdk/core': 3.978.3
       '@aws-sdk/nested-clients': 3.997.16
-      '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.34.1
-      '@smithy/types': 4.18.0
+      '@aws-sdk/types': 3.974.6
+      '@smithy/core': 3.36.0
+      '@smithy/types': 4.19.0
       tslib: 2.8.1
 
   '@aws-sdk/credential-providers@3.1062.0':
     dependencies:
       '@aws-sdk/client-cognito-identity': 3.1062.0
-      '@aws-sdk/core': 3.974.17
+      '@aws-sdk/core': 3.978.3
       '@aws-sdk/credential-provider-cognito-identity': 3.972.41
       '@aws-sdk/credential-provider-env': 3.972.43
       '@aws-sdk/credential-provider-http': 3.972.45
@@ -14174,10 +14175,10 @@ snapshots:
       '@aws-sdk/credential-provider-sso': 3.972.48
       '@aws-sdk/credential-provider-web-identity': 3.972.48
       '@aws-sdk/nested-clients': 3.997.16
-      '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.34.1
+      '@aws-sdk/types': 3.974.6
+      '@smithy/core': 3.36.0
       '@smithy/credential-provider-imds': 4.3.8
-      '@smithy/types': 4.18.0
+      '@smithy/types': 4.19.0
       tslib: 2.8.1
     optional: true
 
@@ -14209,20 +14210,20 @@ snapshots:
     dependencies:
       '@aws-crypto/sha256-browser': 5.2.0
       '@aws-crypto/sha256-js': 5.2.0
-      '@aws-sdk/core': 3.974.17
+      '@aws-sdk/core': 3.978.3
       '@aws-sdk/signature-v4-multi-region': 3.996.31
-      '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.34.1
-      '@smithy/fetch-http-handler': 5.4.6
+      '@aws-sdk/types': 3.974.6
+      '@smithy/core': 3.36.0
+      '@smithy/fetch-http-handler': 5.8.0
       '@smithy/node-http-handler': 4.7.7
-      '@smithy/types': 4.18.0
+      '@smithy/types': 4.19.0
       tslib: 2.8.1
 
   '@aws-sdk/signature-v4-multi-region@3.996.31':
     dependencies:
-      '@aws-sdk/types': 3.974.5
-      '@smithy/signature-v4': 5.4.6
-      '@smithy/types': 4.18.0
+      '@aws-sdk/types': 3.974.6
+      '@smithy/signature-v4': 5.7.4
+      '@smithy/types': 4.19.0
       tslib: 2.8.1
 
   '@aws-sdk/token-providers@3.1048.0':
@@ -14236,11 +14237,11 @@ snapshots:
 
   '@aws-sdk/token-providers@3.1062.0':
     dependencies:
-      '@aws-sdk/core': 3.974.17
+      '@aws-sdk/core': 3.978.3
       '@aws-sdk/nested-clients': 3.997.16
-      '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.34.1
-      '@smithy/types': 4.18.0
+      '@aws-sdk/types': 3.974.6
+      '@smithy/core': 3.36.0
+      '@smithy/types': 4.19.0
       tslib: 2.8.1
 
   '@aws-sdk/types@3.974.5':
@@ -15157,86 +15158,86 @@ snapshots:
 
   '@dimforge/rapier3d-compat@0.12.0': {}
 
-  '@distilled.cloud/acme@1.0.0-rc.13(effect@4.0.4)':
+  '@distilled.cloud/acme@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4)
-      effect: 4.0.4
+      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
-  '@distilled.cloud/aws@1.0.0-rc.13(effect@4.0.4)':
+  '@distilled.cloud/aws@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4)
+      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
       '@smithy/types': 4.18.0
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
-  '@distilled.cloud/axiom@1.0.0-rc.13(effect@4.0.4)':
+  '@distilled.cloud/axiom@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4)
-      effect: 4.0.4
+      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
-  '@distilled.cloud/cloudflare@1.0.0-rc.13(effect@4.0.4)':
+  '@distilled.cloud/cloudflare@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4)
-      effect: 4.0.4
+      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
-  '@distilled.cloud/core@1.0.0-rc.13(effect@4.0.4)':
+  '@distilled.cloud/core@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       graphql: 16.11.0
 
-  '@distilled.cloud/doppler@1.0.0-rc.13(effect@4.0.4)':
+  '@distilled.cloud/doppler@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4)
-      effect: 4.0.4
+      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
-  '@distilled.cloud/fly-io@1.0.0-rc.13(effect@4.0.4)':
+  '@distilled.cloud/fly-io@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4)
-      effect: 4.0.4
+      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
-  '@distilled.cloud/gcp@1.0.0-rc.13(effect@4.0.4)':
+  '@distilled.cloud/gcp@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4)
-      effect: 4.0.4
+      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
-  '@distilled.cloud/hetzner@1.0.0-rc.13(effect@4.0.4)':
+  '@distilled.cloud/hetzner@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4)
-      effect: 4.0.4
+      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
-  '@distilled.cloud/infisical@1.0.0-rc.13(effect@4.0.4)':
+  '@distilled.cloud/infisical@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4)
-      effect: 4.0.4
+      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
-  '@distilled.cloud/neon@1.0.0-rc.13(effect@4.0.4)':
+  '@distilled.cloud/neon@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4)
-      effect: 4.0.4
+      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
-  '@distilled.cloud/planetscale@1.0.0-rc.13(effect@4.0.4)':
+  '@distilled.cloud/planetscale@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4)
-      effect: 4.0.4
+      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
-  '@distilled.cloud/prisma@1.0.0-rc.13(effect@4.0.4)':
+  '@distilled.cloud/prisma@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4)
-      effect: 4.0.4
+      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
-  '@distilled.cloud/railway@1.0.0-rc.13(effect@4.0.4)':
+  '@distilled.cloud/railway@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4)
-      effect: 4.0.4
+      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
-  '@distilled.cloud/stripe@1.0.0-rc.13(effect@4.0.4)':
+  '@distilled.cloud/stripe@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4)
-      effect: 4.0.4
+      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
-  '@distilled.cloud/zerossl@1.0.0-rc.13(effect@4.0.4)':
+  '@distilled.cloud/zerossl@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4)
-      effect: 4.0.4
+      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
   '@dnd-kit/accessibility@3.1.1(react@19.2.6)':
     dependencies:
@@ -15342,62 +15343,62 @@ snapshots:
       get-east-asian-width: 1.6.0
       marked: 18.0.5
 
-  '@effect/atom-react@4.0.4(effect@4.0.4)(react@19.2.6)(scheduler@0.28.0)':
+  '@effect/atom-react@4.0.4(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(react@19.2.6)(scheduler@0.28.0)':
     dependencies:
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       react: 19.2.6
       scheduler: 0.28.0
 
-  '@effect/atom-react@4.0.4(effect@4.0.4)(react@19.3.0)(scheduler@0.28.0)':
+  '@effect/atom-react@4.0.4(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(react@19.3.0)(scheduler@0.28.0)':
     dependencies:
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       react: 19.3.0
       scheduler: 0.28.0
 
-  '@effect/openapi-generator@4.0.4(@effect/platform-node@4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6))(effect@4.0.4)(encoding@0.1.13)':
+  '@effect/openapi-generator@4.0.4(@effect/platform-node@4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6))(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(encoding@0.1.13)':
     dependencies:
-      '@effect/platform-node': 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
-      effect: 4.0.4
+      '@effect/platform-node': 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       swagger2openapi: 7.0.8(encoding@0.1.13)
     transitivePeerDependencies:
       - encoding
 
-  '@effect/platform-node-shared@4.0.4(bufferutil@4.1.0)(effect@4.0.4)(utf-8-validate@6.0.6)':
+  '@effect/platform-node-shared@4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(utf-8-validate@6.0.6)':
     dependencies:
       '@types/ws': 8.18.2
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       ws: 8.22.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/platform-node@4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)':
+  '@effect/platform-node@4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)':
     dependencies:
-      '@effect/platform-node-shared': 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(utf-8-validate@6.0.6)
-      effect: 4.0.4
+      '@effect/platform-node-shared': 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(utf-8-validate@6.0.6)
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       redis: 6.2.1(@opentelemetry/api@1.9.0)
       undici: 8.11.2
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/sql-d1@4.0.0(effect@4.0.4)':
+  '@effect/sql-d1@4.0.0(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
       '@cloudflare/workers-types': 5.20261004.1
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
-  '@effect/sql-pg@4.0.4(effect@4.0.4)':
+  '@effect/sql-pg@4.0.4(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
-  '@effect/sql-sqlite-bun@4.0.0-rc.112(effect@4.0.4)':
+  '@effect/sql-sqlite-bun@4.0.0-rc.112(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
     optional: true
 
-  '@effect/sql-sqlite-do@4.0.4(effect@4.0.4)':
+  '@effect/sql-sqlite-do@4.0.4(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
   '@effect/tsgo-darwin-arm64@0.51.1':
     optional: true
@@ -15430,9 +15431,9 @@ snapshots:
       '@effect/tsgo-win32-arm64': 0.51.1
       '@effect/tsgo-win32-x64': 0.51.1
 
-  '@effect/vitest@4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@6.0.3))(terser@5.48.0)(tsx@4.23.15)(typescript@6.0.3)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)':
+  '@effect/vitest@4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@6.0.3))(terser@5.48.0)(tsx@4.23.15)(typescript@6.0.3)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)':
     dependencies:
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       vite-plus: 1.0.0(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1(vitest@5.0.1))(bufferutil@4.1.0)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@6.0.3))(terser@5.48.0)(tsx@4.23.15)(typescript@6.0.3)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
     transitivePeerDependencies:
       - '@arethetypeswrong/core'
@@ -15466,9 +15467,9 @@ snapshots:
       - utf-8-validate
       - yaml
 
-  '@effect/vitest@4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)':
+  '@effect/vitest@4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)':
     dependencies:
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       vite-plus: 1.0.0(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1(vitest@5.0.1))(bufferutil@4.1.0)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
     transitivePeerDependencies:
       - '@arethetypeswrong/core'
@@ -16129,7 +16130,7 @@ snapshots:
       lightningcss: 1.33.0
       noxcturnal: 0.1.1
       picomatch: 4.0.7
-      postcss: 8.5.28
+      postcss: 8.5.30
       resolve-from: 5.0.0
     optionalDependencies:
       expo: 58.0.2(bd4444e61fed72e958d45f73733b7f54)
@@ -17009,22 +17010,22 @@ snapshots:
     dependencies:
       cross-spawn: 7.0.6
 
-  '@opencode/client@2.0.28(effect@4.0.4)':
+  '@opencode/client@2.0.28(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))':
     dependencies:
       '@opencode/protocol': 2.0.28
       '@opencode/schema': 2.0.28
     optionalDependencies:
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
   '@opencode/protocol@2.0.28':
     dependencies:
       '@opencode/schema': 2.0.28
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
   '@opencode/schema@2.0.28':
     dependencies:
       '@standard-schema/spec': 1.1.0
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
 
   '@opentelemetry/api@1.9.0': {}
 
@@ -18059,8 +18060,8 @@ snapshots:
 
   '@smithy/credential-provider-imds@4.3.8':
     dependencies:
-      '@smithy/core': 3.34.1
-      '@smithy/types': 4.18.0
+      '@smithy/core': 3.36.0
+      '@smithy/types': 4.19.0
       tslib: 2.8.1
 
   '@smithy/fetch-http-handler@5.4.6':
@@ -18071,8 +18072,8 @@ snapshots:
 
   '@smithy/fetch-http-handler@5.8.0':
     dependencies:
-      '@smithy/core': 3.34.1
-      '@smithy/types': 4.18.0
+      '@smithy/core': 3.36.0
+      '@smithy/types': 4.19.0
       tslib: 2.8.1
 
   '@smithy/is-array-buffer@2.2.0':
@@ -18087,8 +18088,8 @@ snapshots:
 
   '@smithy/node-http-handler@4.7.7':
     dependencies:
-      '@smithy/core': 3.34.1
-      '@smithy/types': 4.18.0
+      '@smithy/core': 3.36.0
+      '@smithy/types': 4.19.0
       tslib: 2.8.1
 
   '@smithy/signature-v4@5.4.6':
@@ -19557,37 +19558,37 @@ snapshots:
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
-  alchemy@2.0.0-beta.80(patch_hash=bea1b6c0c0b23157fd5f439a1d7feff430f28ac1621ba135d8a13eeec60ccacd)(ffafb30067089f6b4027eb0da4fe05e9):
+  alchemy@2.0.0-beta.80(patch_hash=bea1b6c0c0b23157fd5f439a1d7feff430f28ac1621ba135d8a13eeec60ccacd)(4b5e13f9506c5e5778f6440489b6301d):
     dependencies:
-      '@alchemy.run/cloudflare-runtime': 2.0.0-beta.80(@distilled.cloud/cloudflare@1.0.0-rc.13(effect@4.0.4))(@effect/platform-node@4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6))(@types/node@24.12.4)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@24.12.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(yaml@2.9.0))(effect@4.0.4)(rolldown@1.2.5)(typescript@7.0.2)
-      '@alchemy.run/floci': 2.0.0-beta.80(effect@4.0.4)
+      '@alchemy.run/cloudflare-runtime': 2.0.0-beta.80(@distilled.cloud/cloudflare@1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)))(@effect/platform-node@4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6))(@types/node@24.12.4)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@24.12.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(yaml@2.9.0))(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(rolldown@1.2.5)(typescript@7.0.2)
+      '@alchemy.run/floci': 2.0.0-beta.80(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
       '@alchemy.run/node-utils': 2.0.0-beta.80
       '@alchemy.run/sigil': 0.1.0-alpha.1(@types/react@19.3.0)(react-devtools-core@6.1.5(bufferutil@4.1.0)(utf-8-validate@6.0.6))
-      '@distilled.cloud/acme': 1.0.0-rc.13(effect@4.0.4)
-      '@distilled.cloud/aws': 1.0.0-rc.13(effect@4.0.4)
-      '@distilled.cloud/axiom': 1.0.0-rc.13(effect@4.0.4)
-      '@distilled.cloud/cloudflare': 1.0.0-rc.13(effect@4.0.4)
-      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4)
-      '@distilled.cloud/doppler': 1.0.0-rc.13(effect@4.0.4)
-      '@distilled.cloud/fly-io': 1.0.0-rc.13(effect@4.0.4)
-      '@distilled.cloud/gcp': 1.0.0-rc.13(effect@4.0.4)
-      '@distilled.cloud/hetzner': 1.0.0-rc.13(effect@4.0.4)
-      '@distilled.cloud/infisical': 1.0.0-rc.13(effect@4.0.4)
-      '@distilled.cloud/neon': 1.0.0-rc.13(effect@4.0.4)
-      '@distilled.cloud/planetscale': 1.0.0-rc.13(effect@4.0.4)
-      '@distilled.cloud/prisma': 1.0.0-rc.13(effect@4.0.4)
-      '@distilled.cloud/railway': 1.0.0-rc.13(effect@4.0.4)
-      '@distilled.cloud/stripe': 1.0.0-rc.13(effect@4.0.4)
-      '@distilled.cloud/zerossl': 1.0.0-rc.13(effect@4.0.4)
-      '@effect/sql-d1': 4.0.0(effect@4.0.4)
-      '@effect/sql-sqlite-do': 4.0.4(effect@4.0.4)
+      '@distilled.cloud/acme': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@distilled.cloud/aws': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@distilled.cloud/axiom': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@distilled.cloud/cloudflare': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@distilled.cloud/doppler': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@distilled.cloud/fly-io': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@distilled.cloud/gcp': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@distilled.cloud/hetzner': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@distilled.cloud/infisical': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@distilled.cloud/neon': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@distilled.cloud/planetscale': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@distilled.cloud/prisma': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@distilled.cloud/railway': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@distilled.cloud/stripe': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@distilled.cloud/zerossl': 1.0.0-rc.13(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@effect/sql-d1': 4.0.0(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@effect/sql-sqlite-do': 4.0.4(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
       '@libsql/client': 0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       '@neon/functions': 0.11.0(hono@4.13.7)
       '@octokit/rest': 22.0.1
       '@octokit/webhooks': 14.2.0
       '@types/aws-lambda': 8.10.161
       capnweb: 0.12.0
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       fflate: 0.8.3
       libsodium-wrappers: 0.8.4
       pathe: 2.0.3
@@ -19596,11 +19597,11 @@ snapshots:
       tinyglobby: 0.2.17
       yaml: 2.9.0
     optionalDependencies:
-      '@effect/platform-node': 4.0.4(bufferutil@4.1.0)(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
-      '@effect/sql-pg': 4.0.4(effect@4.0.4)
-      '@effect/vitest': 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+      '@effect/platform-node': 4.0.4(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(redis@6.2.1(@opentelemetry/api@1.9.0))(utf-8-validate@6.0.6)
+      '@effect/sql-pg': 4.0.4(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@effect/vitest': 4.0.4(patch_hash=ebaec66c6bdd25e1b8d5bfd4a14f25ab959bdcca6e22ed8871d061e50e2db0ad)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       drizzle-kit: 1.0.0-rc.5-ab785fc
-      drizzle-orm: 1.0.0-rc.5-ab785fc(@cloudflare/workers-types@4.20260604.1)(@effect/sql-d1@4.0.0(effect@4.0.4))(@effect/sql-pg@4.0.4(effect@4.0.4))(@effect/sql-sqlite-bun@4.0.0-rc.112(effect@4.0.4))(@effect/sql-sqlite-do@4.0.4(effect@4.0.4))(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(bun-types@1.3.14)(effect@4.0.4)(expo-sqlite@58.0.8(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(react@19.3.0))(pg@8.23.0)(valibot@1.2.0(typescript@7.0.2))(zod@4.4.3)
+      drizzle-orm: 1.0.0-rc.5-ab785fc(94dc38e4cefc0945b5e63ba94141d9f0)
       mongodb: 6.21.0(@aws-sdk/credential-providers@3.1062.0)(socks@2.8.9)
       pg: 8.23.0
       vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@24.12.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.15)(typescript@7.0.2)(unrun@0.2.39)(yaml@2.9.0)'
@@ -20416,7 +20417,7 @@ snapshots:
   css-tree@3.2.1:
     dependencies:
       mdn-data: 2.27.1
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
 
   css-what@6.2.2: {}
 
@@ -20796,18 +20797,18 @@ snapshots:
       get-tsconfig: 4.14.3
       jiti: 2.7.0
 
-  drizzle-orm@1.0.0-rc.5-ab785fc(@cloudflare/workers-types@4.20260604.1)(@effect/sql-d1@4.0.0(effect@4.0.4))(@effect/sql-pg@4.0.4(effect@4.0.4))(@effect/sql-sqlite-bun@4.0.0-rc.112(effect@4.0.4))(@effect/sql-sqlite-do@4.0.4(effect@4.0.4))(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(bun-types@1.3.14)(effect@4.0.4)(expo-sqlite@58.0.8(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(react@19.3.0))(pg@8.23.0)(valibot@1.2.0(typescript@7.0.2))(zod@4.4.3):
+  drizzle-orm@1.0.0-rc.5-ab785fc(94dc38e4cefc0945b5e63ba94141d9f0):
     optionalDependencies:
       '@cloudflare/workers-types': 4.20260604.1
-      '@effect/sql-d1': 4.0.0(effect@4.0.4)
-      '@effect/sql-pg': 4.0.4(effect@4.0.4)
-      '@effect/sql-sqlite-bun': 4.0.0-rc.112(effect@4.0.4)
-      '@effect/sql-sqlite-do': 4.0.4(effect@4.0.4)
+      '@effect/sql-d1': 4.0.0(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@effect/sql-pg': 4.0.4(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@effect/sql-sqlite-bun': 4.0.0-rc.112(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
+      '@effect/sql-sqlite-do': 4.0.4(effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))
       '@electric-sql/pglite': 0.3.15
       '@libsql/client': 0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       '@opentelemetry/api': 1.9.0
       bun-types: 1.3.14
-      effect: 4.0.4
+      effect: 4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d)
       expo-sqlite: 58.0.8(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(react@19.3.0)
       pg: 8.23.0
       valibot: 1.2.0(typescript@7.0.2)
@@ -20835,7 +20836,7 @@ snapshots:
 
   ee-first@1.1.1: {}
 
-  effect@4.0.4: {}
+  effect@4.0.4(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d): {}
 
   ejs@3.1.10:
     dependencies:

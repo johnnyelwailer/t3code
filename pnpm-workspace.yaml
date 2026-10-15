@@ -313,6 +313,8 @@ patchedDependencies:
   react-native-keyboard-controller@1.22.6: patches/react-native-keyboard-controller@1.22.6.patch
   # Android: a nested WebView hands a vertical drag to its scrolling parent at the page's edge.
   react-native-webview@14.0.1: patches/react-native-webview@14.0.1.patch
+  # t3team: RpcGroup.HandlersServices linear in the RPC count (TS2589 on WsRpcGroup.toLayer); type-only.
+  effect@4.0.4: patches/t3team-effect@4.0.4.patch
 
 peerDependencyRules:
   allowAny:
