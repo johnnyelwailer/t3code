@@ -4,6 +4,7 @@ import * as Socket from "effect/socket/Socket";
 
 import { layerRemoteHttpClient } from "@t3tools/client-runtime/rpc";
 
+import { brokerProxyFetch, brokerProxyWebSocketConstructor } from "./t3team-brokerProxyTransport";
 import * as Dpop from "../features/cloud/dpop";
 import * as ManagedRelayLayer from "../features/cloud/managedRelayLayer";
 import { resolveCloudPublicConfig } from "../features/cloud/publicConfig";
@@ -17,11 +18,16 @@ function configuredRelayUrl(): string {
   return resolveCloudPublicConfig().relay.url ?? "http://relay.invalid";
 }
 
-const layerHttpClient = layerRemoteHttpClient(fetch);
+const layerHttpClient = layerRemoteHttpClient(brokerProxyFetch(fetch));
+
+const layerWebSocketConstructor = Layer.succeed(
+  Socket.WebSocketConstructor,
+  brokerProxyWebSocketConstructor(),
+);
 
 type RuntimeLayerSource =
   | ReturnType<typeof ManagedRelayLayer.layer>
-  | typeof Socket.layerWebSocketConstructorGlobal
+  | typeof layerWebSocketConstructor
   | typeof Dpop.layer
   | typeof layerHttpClient
   | typeof Persistence.layer
@@ -29,7 +35,7 @@ type RuntimeLayerSource =
 
 const layerRuntime = Layer.merge(
   ManagedRelayLayer.layer(configuredRelayUrl()),
-  Socket.layerWebSocketConstructorGlobal,
+  layerWebSocketConstructor,
 ).pipe(
   Layer.provideMerge(Dpop.layer),
   Layer.provideMerge(layerHttpClient),

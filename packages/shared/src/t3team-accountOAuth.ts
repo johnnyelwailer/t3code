@@ -1,6 +1,7 @@
-import type { AccountDefinition } from "@t3team/pack-api";
+import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import type * as HttpClient from "effect/http/HttpClient";
@@ -8,11 +9,36 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 
 /**
- * The OAuth 2.0 public-client calls behind an account sign-in (`AccountDefinition`): device code
- * (RFC 8628), authorization code + PKCE (RFC 7636) for the browser sign-in
- * (`t3team-AccountBrowserSignIn`), and the refresh grant, redeemed per resource. Stateless —
- * `t3team-AccountSession` owns the state. Nothing here knows which issuer it talks to.
+ * The OAuth 2.0 public-client calls behind an account sign-in (`defineAccount` in
+ * `@t3team/pack-api`): device code (RFC 8628), authorization code + PKCE (RFC 7636) and the
+ * refresh grant, redeemed per resource. Stateless — each host's account session owns the state:
+ * the server's (`apps/server/src/account`) and the mobile app's (`apps/mobile/src/features/account`).
+ * Nothing here knows which issuer it talks to.
  */
+
+/** The part of an account definition the OAuth calls read. */
+export interface OAuthPublicClientAccount {
+  readonly issuer: {
+    readonly clientId: string;
+    readonly authorizationEndpoint: string;
+    readonly tokenEndpoint: string;
+    readonly deviceAuthorizationEndpoint?: string | null | undefined;
+  };
+  readonly baseScopes: string;
+  readonly resources: Readonly<Record<string, string>>;
+  readonly signInResource: string;
+}
+
+/** A fresh PKCE verifier/challenge (S256) and `state` for one authorization request. */
+export const makePkceRequest = Effect.gen(function* () {
+  const crypto = yield* Crypto.Crypto;
+  const verifier = Base64Url.encode(yield* crypto.randomBytes(32));
+  const challenge = Base64Url.encode(
+    yield* crypto.digest("SHA-256", new TextEncoder().encode(verifier)),
+  );
+  const state = Base64Url.encode(yield* crypto.randomBytes(16));
+  return { verifier, challenge, state };
+});
 
 const DEVICE_CODE_GRANT = "urn:ietf:params:oauth:grant-type:device_code";
 const SLOW_DOWN = Duration.seconds(5);
@@ -39,7 +65,12 @@ const ErrorResponse = Schema.Struct({
 /** Why a refresh did not produce tokens: the grant is dead (sign in again) or the issuer is unreachable. */
 export type RefreshFailure = "rejected" | "unreachable";
 
-export const makeAccountOAuthClient = (account: AccountDefinition, http: HttpClient.HttpClient) => {
+export const CODE_EXPIRED = "The sign-in code expired. Start again.";
+
+export const makeAccountOAuthClient = (
+  account: OAuthPublicClientAccount,
+  http: HttpClient.HttpClient,
+) => {
   const { issuer } = account;
   const scopeFor = (resource: string) =>
     `${account.resources[resource] ?? ""} ${account.baseScopes}`.trim();
@@ -81,19 +112,15 @@ export const makeAccountOAuthClient = (account: AccountDefinition, http: HttpCli
             continue;
           }
           return yield* Effect.fail(
-            failure.error === "expired_token"
-              ? "The sign-in code expired. Start again."
-              : "The sign-in was declined.",
+            failure.error === "expired_token" ? CODE_EXPIRED : "The sign-in was declined.",
           );
         }
       }).pipe(
         Effect.timeout(Duration.seconds(code.expires_in)),
-        Effect.mapError((error) =>
-          typeof error === "string" ? error : "The sign-in code expired. Start again.",
-        ),
+        Effect.mapError((error) => (typeof error === "string" ? error : CODE_EXPIRED)),
       ),
 
-    /** The page the browser sign-in opens; the issuer redirects the code to `redirectUri`. */
+    /** The issuer page the browser sign-in opens; it redirects the code to `redirectUri`. */
     authorizeUrl: (input: { redirectUri: string; challenge: string; state: string }) => {
       const url = new URL(issuer.authorizationEndpoint);
       for (const [key, value] of Object.entries({

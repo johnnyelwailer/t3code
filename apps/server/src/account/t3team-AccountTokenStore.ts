@@ -4,7 +4,7 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 
 import type * as ServerSecretStore from "../auth/ServerSecretStore.ts";
-import type { Tokens } from "./t3team-AccountOAuth.ts";
+import type { Tokens } from "@t3tools/shared/t3team-accountOAuth";
 
 /**
  * Where one account's sign-in lives: the refresh grant in this install's secret store (it survives

@@ -16,7 +16,7 @@ import * as TestClock from "effect/testing/TestClock";
 import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
 import * as CliTokenManager from "./CliTokenManager.ts";
 import * as ConnectCredentialMinter from "./t3team-ConnectCredentialMinter.ts";
-import type { StandbyClaim } from "./t3team-NexiBrokerClient.ts";
+import type { StandbyClaim } from "@t3tools/shared/t3team-nexiBrokerClient";
 import * as NexiBrokerService from "./t3team-NexiBrokerService.ts";
 import { ConnectCredentialMintError } from "./t3team-ConnectCredentialMintError.ts";
 import * as CloudSessionService from "./t3team-CloudSessionService.ts";

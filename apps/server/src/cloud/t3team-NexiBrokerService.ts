@@ -10,12 +10,15 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
 import { Accounts } from "../account/t3team-Accounts.ts";
-import { BROKER_RESOURCE, resolveNexiBrokerConfig } from "./t3team-NexiBrokerConfig.ts";
 import {
+  BROKER_RESOURCE,
   type BrokerSession,
+  brokerAccessToken,
   makeNexiBrokerClient,
   type StandbyClaim,
-} from "./t3team-NexiBrokerClient.ts";
+} from "@t3tools/shared/t3team-nexiBrokerClient";
+import { sessionToAttach } from "@t3tools/shared/t3team-nexiBrokerAttach";
+import { resolveNexiBrokerConfig } from "./t3team-NexiBrokerConfig.ts";
 import { type BrokerForwarder, startBrokerForwarder } from "./t3team-NexiBrokerForwarder.ts";
 
 /**
@@ -60,29 +63,7 @@ export class NexiBrokerService extends Context.Service<
   }
 >()("t3/cloud/t3team-NexiBrokerService/NexiBrokerService") {}
 
-/**
- * The listed session an attach reaches: the one asked for, else — a workspace's sessions share
- * their environment, since the snapshot keeps its id — the live one serving the same environment.
- */
-export function sessionToAttach<
-  S extends { readonly runId: string; readonly environmentId?: string | null | undefined },
->(sessions: readonly S[], input: CloudSessionAttachInput): S | undefined {
-  const asked = sessions.find(
-    (s) =>
-      s.runId === input.sessionId &&
-      s.environmentId &&
-      (input.environmentId === undefined || s.environmentId === input.environmentId),
-  );
-  if (asked !== undefined || input.environmentId === undefined) return asked;
-  // Two live sessions in one workspace (started side by side) serve the same environment: the
-  // newest run wins, so reconnects stay on one machine instead of following list order.
-  return sessions
-    .filter((s) => s.environmentId === input.environmentId)
-    .reduce<S | undefined>(
-      (newest, s) => (newest === undefined || Number(s.runId) > Number(newest.runId) ? s : newest),
-      undefined,
-    );
-}
+export { sessionToAttach };
 
 const notEnabled = new CloudSessionFailedError({
   reason: "broker_unavailable",
@@ -105,16 +86,7 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
   if (Option.isNone(resolved)) return disabled;
   const config = resolved.value;
   const accounts = yield* Accounts;
-  const accessToken = accounts.accessToken(config.account, BROKER_RESOURCE).pipe(
-    Effect.mapError(
-      (error) =>
-        new CloudSessionFailedError({
-          reason:
-            error.reason === "sign_in_required" ? "broker_sign_in_required" : "broker_unavailable",
-          message: error.message,
-        }),
-    ),
-  );
+  const accessToken = brokerAccessToken(accounts.accessToken(config.account, BROKER_RESOURCE));
   const client = yield* makeNexiBrokerClient(config, accessToken);
   const forwarders = new Map<string, BrokerForwarder>();
   yield* Effect.addFinalizer(() => Effect.sync(() => forwarders.forEach((f) => f.close())));

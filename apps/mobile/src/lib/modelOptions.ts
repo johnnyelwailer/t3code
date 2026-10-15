@@ -12,6 +12,12 @@ import {
   getProviderOptionDescriptors,
 } from "@t3tools/shared/model";
 
+import {
+  findNexiProviderDefaultSelection,
+  isNexiProviderDriver,
+  NEXI_PROVIDER,
+} from "./t3team-nexiProvider";
+
 export type ModelOption = {
   readonly key: string;
   readonly label: string;
@@ -53,6 +59,7 @@ function providerDisplayLabel(provider: {
   if (provider.driver === "codex") return "Codex";
   if (provider.driver === "claudeAgent") return "Claude";
   if (provider.driver === "pi") return "Pi";
+  if (isNexiProviderDriver(provider.driver)) return NEXI_PROVIDER.displayName;
   return provider.instanceId;
 }
 
@@ -259,6 +266,7 @@ export function resolveNewTaskModelSelection(input: {
     input.draftSelection ??
     input.projectDefaultSelection ??
     input.stickySelection ??
+    findNexiProviderDefaultSelection(input.modelOptions) ??
     input.modelOptions.find((option) => option.isDefault && !option.isUnavailable)?.selection ??
     input.modelOptions.find((option) => !option.isUnavailable)?.selection ??
     null

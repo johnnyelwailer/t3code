@@ -4,6 +4,7 @@ import { View } from "react-native";
 
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
+import { BrokerSignInPrompt } from "../broker/t3team-BrokerSignInPrompt";
 import { ConnectionEnvironmentRow } from "./ConnectionEnvironmentRow";
 
 type EnvironmentRowProps = ComponentProps<typeof ConnectionEnvironmentRow>;
@@ -45,17 +46,20 @@ export function LocalEnvironmentList({
   }
 
   return (
-    <View collapsable={false} className="overflow-hidden rounded-[24px] bg-grouped-card">
-      {environments.map((environment) => (
-        <View key={environment.environmentId} collapsable={false}>
-          <ConnectionEnvironmentRow
-            environment={environment}
-            expanded={expandedId === environment.environmentId}
-            onToggle={() => onToggle(environment.environmentId)}
-            {...rowActions}
-          />
-        </View>
-      ))}
-    </View>
+    <>
+      <View collapsable={false} className="overflow-hidden rounded-[24px] bg-grouped-card">
+        {environments.map((environment) => (
+          <View key={environment.environmentId} collapsable={false}>
+            <ConnectionEnvironmentRow
+              environment={environment}
+              expanded={expandedId === environment.environmentId}
+              onToggle={() => onToggle(environment.environmentId)}
+              {...rowActions}
+            />
+          </View>
+        ))}
+      </View>
+      <BrokerSignInPrompt />
+    </>
   );
 }

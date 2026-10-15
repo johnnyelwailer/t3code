@@ -16,6 +16,7 @@ import { SymbolView, type AppSymbolName } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
 import { GlassSurface } from "../../components/GlassSurface";
 import { PierreEntryIcon } from "../../components/PierreEntryIcon";
+import type { NexiRecipe } from "../distribution/t3team-nexiRecipes";
 export type ComposerCommandItem =
   | {
       readonly id: string;
@@ -57,6 +58,13 @@ export type ComposerCommandItem =
       readonly id: string;
       readonly type: "skill";
       readonly skill: ServerProviderSkill;
+      readonly label: string;
+      readonly description: string;
+    }
+  | {
+      readonly id: string;
+      readonly type: "recipe";
+      readonly recipe: NexiRecipe;
       readonly label: string;
       readonly description: string;
     };
@@ -109,6 +117,8 @@ function itemIcon(item: ComposerCommandItem): AppSymbolName | null {
       return null;
     case "thread":
       return "text.bubble";
+    case "recipe":
+      return { ios: "sparkles", android: "auto_awesome" };
   }
 }
 

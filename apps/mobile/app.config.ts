@@ -1,6 +1,5 @@
 import type { ExpoConfig } from "expo/config";
 
-import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
 type AppVariant = "development" | "preview" | "production";
@@ -17,82 +16,79 @@ const runtimeVersionPolicy =
 const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 
-const fromRepoRoot = (relativePath: string) => `../../${relativePath}`;
-// Android layers are rendered by scripts/export-android-icons.ts from the Icon Composer sources.
-// The wordmark sits inside the adaptive safe zone; the variant artwork is a full-bleed background.
-const androidAdaptiveForeground = "./assets/android-icon-foreground.png";
-
 if (
   isIosPersonalTeamBuild &&
   (!personalTeamBundleIdentifier ||
     !IOS_BUNDLE_IDENTIFIER_PATTERN.test(personalTeamBundleIdentifier))
 ) {
   throw new Error(
-    "T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID must be a reverse-DNS identifier such as com.example.t3code when T3CODE_IOS_PERSONAL_TEAM=1.",
+    "T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID must be a reverse-DNS identifier such as com.example.nexiwork when T3CODE_IOS_PERSONAL_TEAM=1.",
   );
 }
 
+const BRAND_DIR = "./assets/brand";
+
 const DEVELOPMENT_ASSETS = {
-  appIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIosIconPng),
-  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIconComposerProject),
-  splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIosIconPng),
-  androidAdaptiveForeground,
-  androidAdaptiveBackgroundColor: "#347FF8",
-  androidAdaptiveBackgroundImage: "./assets/android-icon-background-dev.png",
-  androidSplashIcon: "./assets/android-splash-icon-dev.png",
-  androidMonochromeIcon: "./assets/android-icon-mark.png",
-  androidNotificationIcon: "./assets/android-notification-icon.png",
-  androidNotificationColor: "#00639B",
+  appIcon: `${BRAND_DIR}/nexi-icon-dev-1024.png`,
+  iosIcon: `${BRAND_DIR}/nexi-icon-dev-1024.png`,
+  splashIcon: `${BRAND_DIR}/nexi-icon-dev-1024.png`,
+  androidAdaptiveForeground: `${BRAND_DIR}/android-icon-foreground.png`,
+  androidAdaptiveBackgroundColor: "#17181C",
+  androidAdaptiveBackgroundImage: undefined,
+  androidSplashIcon: `${BRAND_DIR}/android-splash-icon-dev.png`,
+  androidMonochromeIcon: `${BRAND_DIR}/android-icon-mark.png`,
+  androidNotificationIcon: `${BRAND_DIR}/android-notification-icon.png`,
+  androidNotificationColor: "#F05A0A",
 } as const;
 
 const PREVIEW_ASSETS = {
-  appIcon: fromRepoRoot(BRAND_ASSET_PATHS.nightlyIosIconPng),
-  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.nightlyIconComposerProject),
-  splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.nightlyIosIconPng),
-  androidAdaptiveForeground,
-  androidAdaptiveBackgroundColor: "#111533",
-  androidAdaptiveBackgroundImage: "./assets/android-icon-background-nightly.png",
-  androidSplashIcon: "./assets/android-splash-icon-nightly.png",
-  androidMonochromeIcon: "./assets/android-icon-mark.png",
-  androidNotificationIcon: "./assets/android-notification-icon.png",
-  androidNotificationColor: "#7565C7",
+  appIcon: `${BRAND_DIR}/nexi-icon-preview-1024.png`,
+  iosIcon: `${BRAND_DIR}/nexi-icon-preview-1024.png`,
+  splashIcon: `${BRAND_DIR}/nexi-icon-preview-1024.png`,
+  androidAdaptiveForeground: `${BRAND_DIR}/android-icon-foreground-light.png`,
+  androidAdaptiveBackgroundColor: "#F05A0A",
+  androidAdaptiveBackgroundImage: undefined,
+  androidSplashIcon: `${BRAND_DIR}/android-splash-icon-preview.png`,
+  androidMonochromeIcon: `${BRAND_DIR}/android-icon-mark.png`,
+  androidNotificationIcon: `${BRAND_DIR}/android-notification-icon.png`,
+  androidNotificationColor: "#F05A0A",
 } as const;
 
 const RELEASE_ASSETS = {
-  appIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
-  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIconComposerProject),
-  splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
-  androidAdaptiveForeground,
-  androidAdaptiveBackgroundColor: "#000000",
+  appIcon: `${BRAND_DIR}/nexi-icon-prod-1024.png`,
+  iosIcon: `${BRAND_DIR}/nexi-icon-prod-1024.png`,
+  splashIcon: `${BRAND_DIR}/nexi-icon-prod-1024.png`,
+  androidAdaptiveForeground: `${BRAND_DIR}/android-icon-foreground.png`,
+  androidAdaptiveBackgroundColor: "#FFFFFF",
   androidAdaptiveBackgroundImage: undefined,
-  androidSplashIcon: "./assets/android-splash-icon-prod.png",
-  androidMonochromeIcon: "./assets/android-icon-mark.png",
-  androidNotificationIcon: "./assets/android-notification-icon.png",
-  androidNotificationColor: "#FFFFFF",
+  androidSplashIcon: `${BRAND_DIR}/android-splash-icon-prod.png`,
+  androidMonochromeIcon: `${BRAND_DIR}/android-icon-mark.png`,
+  androidNotificationIcon: `${BRAND_DIR}/android-notification-icon.png`,
+  androidNotificationColor: "#F05A0A",
 } as const;
 
 const VARIANT_CONFIG = {
   development: {
-    appName: "T3 Code Dev",
-    scheme: "t3code-dev",
-    iosBundleIdentifier: "com.t3tools.t3code.dev",
-    androidPackage: "com.t3tools.t3code.dev",
+    appName: "Nexi Work Dev",
+    scheme: "nexiwork-dev",
+    iosBundleIdentifier: "com.nexplore.nexiwork.dev",
+    androidPackage: "com.nexplore.nexiwork.dev",
     relyingParty: "clerk.t3.codes",
     assets: DEVELOPMENT_ASSETS,
   },
   preview: {
-    appName: "T3 Code Preview",
-    scheme: "t3code-preview",
-    iosBundleIdentifier: "com.t3tools.t3code.preview",
-    androidPackage: "com.t3tools.t3code.preview",
+    appName: "Nexi Work Preview",
+    scheme: "nexiwork-preview",
+    iosBundleIdentifier: "com.nexplore.nexiwork.preview",
+    androidPackage: "com.nexplore.nexiwork.preview",
     relyingParty: "clerk.t3.codes",
     assets: PREVIEW_ASSETS,
   },
   production: {
-    appName: "T3 Code",
-    scheme: "t3code",
-    iosBundleIdentifier: "com.t3tools.t3code",
-    androidPackage: "com.t3tools.t3code",
+    appName: "Nexi Work",
+    scheme: "nexiwork",
+    iosBundleIdentifier: "com.nexplore.nexiwork",
+    androidPackage: "com.nexplore.nexiwork",
     relyingParty: "clerk.t3.codes",
     assets: RELEASE_ASSETS,
   },
@@ -120,6 +116,9 @@ const dmSansFonts = {
   bold: "@expo-google-fonts/dm-sans/700Bold/DMSans_700Bold.ttf",
 } as const;
 
+// Static Bold instance of the Nexplore pack display font (buenos-aires-vf.ttf).
+const displayFont = "./assets/fonts/BuenosAires-Bold.ttf";
+
 const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
   "expo-widgets",
   {
@@ -134,7 +133,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "SubscriptionUsage",
         displayName: "Subscription usage",
-        description: "Subscription quotas from your connected T3 Code environments.",
+        description: "Subscription quotas from your connected Nexi Work environments.",
         ios: {
           configuration: {
             title: "Subscription usage",
@@ -185,7 +184,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "AgentActivity",
         displayName: "Agent Activity",
-        description: "Shows the current state of active T3 Code agents.",
+        description: "Shows the current state of active Nexi Work agents.",
         // Live Activity companion; there is no Android presentation for it.
         android: null,
         ios: { supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"] },
@@ -273,8 +272,8 @@ const config: ExpoConfig = {
         NSAllowsArbitraryLoads: true,
       },
       NSLocalNetworkUsageDescription:
-        "Allow T3 Code to connect to T3 Code servers on your local network or tailnet.",
-      NSPhotoLibraryAddUsageDescription: "Allow T3 Code to save images to your photo library.",
+        "Allow Nexi Work to connect to Nexi Work servers on your local network or tailnet.",
+      NSPhotoLibraryAddUsageDescription: "Allow Nexi Work to save images to your photo library.",
       // "Audio, AirPlay, and Picture in Picture": the browser screen's system
       // picture in picture needs it to start and to stay up outside the app.
       UIBackgroundModes: ["audio"],
@@ -326,7 +325,7 @@ const config: ExpoConfig = {
       "expo-font",
       {
         ios: {
-          fonts: [dmSansFonts.regular, dmSansFonts.medium, dmSansFonts.bold],
+          fonts: [dmSansFonts.regular, dmSansFonts.medium, dmSansFonts.bold, displayFont],
         },
         android: {
           fonts: [
@@ -341,6 +340,10 @@ const config: ExpoConfig = {
             {
               fontFamily: "DMSans-Bold",
               fontDefinitions: [{ path: dmSansFonts.bold, weight: 700 }],
+            },
+            {
+              fontFamily: "BuenosAires-Bold",
+              fontDefinitions: [{ path: displayFont, weight: 700 }],
             },
           ],
         },
@@ -382,7 +385,7 @@ const config: ExpoConfig = {
     [
       "expo-audio",
       {
-        microphonePermission: "Allow T3 Code to use your microphone for voice input.",
+        microphonePermission: "Allow Nexi Work to use your microphone for voice input.",
         recordAudioAndroid: false,
         enableBackgroundPlayback: false,
         enableBackgroundRecording: false,
@@ -391,7 +394,7 @@ const config: ExpoConfig = {
     [
       "expo-camera",
       {
-        cameraPermission: "Allow T3 Code to access your camera so you can scan pairing QR codes.",
+        cameraPermission: "Allow Nexi Work to access your camera so you can scan pairing QR codes.",
         microphonePermission: false,
         barcodeScannerEnabled: true,
         recordAudioAndroid: false,
@@ -473,6 +476,23 @@ const config: ExpoConfig = {
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,
+    },
+    // Supplied by the GHE distribution; see src/features/distribution for the dev fallbacks.
+    distribution: {
+      providerEndpoint:
+        repoEnv.EXPO_PUBLIC_NEXI_PROVIDER_ENDPOINT ?? repoEnv.T3CODE_NEXI_PROVIDER_ENDPOINT ?? null,
+      brokerUrl: repoEnv.EXPO_PUBLIC_NEXI_BROKER_URL ?? repoEnv.T3CODE_NEXI_BROKER_URL ?? null,
+    },
+    // The Entra ID account (defineAccount seam); see src/features/account for the dev fallbacks.
+    account: {
+      tenant: repoEnv.EXPO_PUBLIC_NEXI_BROKER_TENANT ?? repoEnv.T3CODE_NEXI_BROKER_TENANT ?? null,
+      clientId: repoEnv.EXPO_PUBLIC_NEXI_BROKER_APP ?? repoEnv.T3CODE_NEXI_BROKER_APP ?? null,
+      redirectUri: repoEnv.T3CODE_NEXI_ACCOUNT_REDIRECT_URI ?? null,
+      endpoints: {
+        authorization: repoEnv.T3CODE_NEXI_ACCOUNT_AUTHORIZATION_ENDPOINT ?? null,
+        token: repoEnv.T3CODE_NEXI_ACCOUNT_TOKEN_ENDPOINT ?? null,
+        deviceAuthorization: repoEnv.T3CODE_NEXI_ACCOUNT_DEVICE_ENDPOINT ?? null,
+      },
     },
     clerk: {
       publishableKey: repoEnv.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? null,
