@@ -12,6 +12,7 @@ import { MessageId, type OrchestrationV2Run, type RunId } from "@t3tools/contrac
 import type { TransientRunFailure } from "./orchestration-v2/t3team-transientRunFailure.ts";
 import {
   maxTransientRetries,
+  providerUnreachableText,
   transientRetryExhaustedText,
   transientRetryInFlightText,
   transientRetryReason,
@@ -60,7 +61,10 @@ export const planTransientRetry = (input: {
 }): TransientRetryPlan => {
   const reason = transientRetryReason(input.failure);
   const attempt = priorRetryAttempts(input.runs, input.failedRunId) + 1;
-  const max = maxTransientRetries(input.failure.outage);
+  const max = maxTransientRetries(input.failure.outage, input.failure.unreachable === true);
+  if (input.failure.unreachable === true) {
+    return { kind: "exhausted", note: providerUnreachableText(reason) };
+  }
   if (attempt > max) {
     return { kind: "exhausted", note: transientRetryExhaustedText(reason, max) };
   }

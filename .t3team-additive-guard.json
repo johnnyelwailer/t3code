@@ -110,6 +110,8 @@
     "apps/server/src/orchestration-v2/ContextHandoffDelivery.ts",
     "apps/server/src/orchestration-v2/DeadSessionSendRecovery.test.ts",
     "apps/server/src/orchestration-v2/DelegatedCompletionDelivery.test.ts",
+    "apps/server/src/orchestration-v2/EffectOutbox.ts",
+    "apps/server/src/orchestration-v2/EffectWorker.ts",
     "apps/server/src/orchestration-v2/EventSink.ts",
     "apps/server/src/orchestration-v2/Orchestrator.ts",
     "apps/server/src/orchestration-v2/ProjectCommands.test.ts",

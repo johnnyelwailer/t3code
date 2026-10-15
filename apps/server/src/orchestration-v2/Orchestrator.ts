@@ -9683,6 +9683,25 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         };
       }
 
+      if (providerTurn === undefined && run.status === "waiting") {
+        // The provider turn already finished; the run only waits for its
+        // post-turn checkpoint capture, which can take minutes on big
+        // worktrees. There is nothing left to interrupt, so Stop succeeds and
+        // only stops the remaining work instead of failing as "not
+        // interruptible" while the thread still shows as busy.
+        yield* emitEvent({
+          type: "turn-item.updated",
+          threadId: command.threadId,
+          runId: run.id,
+          nodeId: rootNode.id,
+          providerInstanceId: run.providerInstanceId,
+          occurredAt: now,
+          payload: interruptRequestItem,
+        });
+        yield* stopRemainingWork();
+        yield* Ref.update(effects, (existing) => [...existing, ...otherProviderInterrupts]);
+        return undefined;
+      }
       if (providerTurn === undefined) {
         return yield* new OrchestratorDispatchError({
           commandId: command.commandId,
