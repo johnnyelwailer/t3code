@@ -44,7 +44,7 @@ import {
  */
 const SETUP_CLOUD_SESSIONS_SELECT_VALUE = "__setup-cloud-sessions__";
 
-export interface BranchToolbarEnvironmentSelectorProps {
+export interface BranchToolbarEnvironmentSelectorBaseProps {
   autoEnvironmentLabel?: string | undefined;
   onAutoEnvironment?: (() => void) | undefined;
   envLocked: boolean;
@@ -112,20 +112,30 @@ export interface BranchToolbarEnvironmentSelectorProps {
    * the menu closed: no polling.
    */
   onCloudMenuOpenChange?: (open: boolean) => void;
-  /**
-   * t3team: present for a started thread in the details panel. The locked row becomes a
-   * "Move to" menu; picking another machine continues the thread there (cloud handoff).
-   * Never routed through `onEnvironmentChange`, which only re-targets a draft.
-   */
-  onHandoffToEnvironment?: (environmentId: EnvironmentId) => void;
   /** t3team: connects a ready, not-yet-connected cloud session from the "Move to" menu. */
   onConnectCloudSession?: (session: CloudSession) => void;
-  /**
-   * t3team: false when the thread's project has no git remote. A cloud machine then has no way to
-   * get its files, so "Move to" shows its cloud rows disabled with the reason the server gives.
-   */
-  projectHasRemote?: boolean;
 }
+
+/** t3team: a caller that offers "Move to" must also say whether the cloud can get the files. */
+type BranchToolbarEnvironmentSelectorHandoffProps =
+  | { onHandoffToEnvironment?: undefined; projectHasRemote?: undefined }
+  | {
+      /**
+       * Present for a started thread in the details panel. The locked row becomes a "Move to"
+       * menu; picking another machine continues the thread there (cloud handoff). Never routed
+       * through `onEnvironmentChange`, which only re-targets a draft.
+       */
+      onHandoffToEnvironment: (environmentId: EnvironmentId) => void;
+      /**
+       * False when the thread's project has no `origin` remote. A cloud machine then has no way
+       * to get its files, so "Move to" shows its cloud rows disabled with the reason the server
+       * gives and offers no new cloud session.
+       */
+      projectHasRemote: boolean;
+    };
+
+export type BranchToolbarEnvironmentSelectorProps = BranchToolbarEnvironmentSelectorBaseProps &
+  BranchToolbarEnvironmentSelectorHandoffProps;
 
 export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvironmentSelector({
   autoEnvironmentLabel,
@@ -150,14 +160,14 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   onCloudMenuOpenChange,
   onHandoffToEnvironment,
   onConnectCloudSession,
-  projectHasRemote = true,
+  projectHasRemote,
 }: BranchToolbarEnvironmentSelectorProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
   // A started thread cannot switch machines; in the panel it can move to one instead.
   const moveMode = envLocked && displayMode === "panel" && onHandoffToEnvironment !== undefined;
   const pickable = onEnvironmentChange !== undefined || moveMode;
   const cloudMoveBlockedReason =
-    moveMode && !projectHasRemote ? T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE : null;
+    moveMode && projectHasRemote !== true ? T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE : null;
   // The optimistic cloud pick belongs to a draft; a moving thread still shows where it runs.
   const optimisticCloudSession = moveMode ? null : selectedCloudSession;
   const hasCloudAffordance =
@@ -419,21 +429,24 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                   onDismiss={onDismissCloudSession}
                 />
               ))}
-              <NewCloudSessionItem
-                project={cloudSessionProject}
-                pending={cloudSessionCreatePending}
-                setupPending={cloudSessionSetupPending}
-                onCreate={createCloudSession}
-                onSetup={
-                  onSetupProjectMachine
-                    ? () => {
-                        onSetupProjectMachine({ selectAsTarget: !moveMode });
-                        setMenuOpen(false);
-                        onCloudMenuOpenChange?.(false);
-                      }
-                    : undefined
-                }
-              />
+              {/* A paid machine this thread could not move to anyway: not offered. */}
+              {cloudMoveBlockedReason === null && (
+                <NewCloudSessionItem
+                  project={cloudSessionProject}
+                  pending={cloudSessionCreatePending}
+                  setupPending={cloudSessionSetupPending}
+                  onCreate={createCloudSession}
+                  onSetup={
+                    onSetupProjectMachine
+                      ? () => {
+                          onSetupProjectMachine({ selectAsTarget: !moveMode });
+                          setMenuOpen(false);
+                          onCloudMenuOpenChange?.(false);
+                        }
+                      : undefined
+                  }
+                />
+              )}
             </>
           )}
           {onSetupCloudSessions && (

@@ -87,6 +87,7 @@ vi.mock("./chat/composerEventScope", () => ({
 
 import {
   BranchToolbarEnvironmentSelector,
+  type BranchToolbarEnvironmentSelectorBaseProps,
   type BranchToolbarEnvironmentSelectorProps,
 } from "./BranchToolbarEnvironmentSelector";
 import {
@@ -121,14 +122,28 @@ const RELAY_B = {
 
 const RELAY_DUPES = [PRIMARY, RELAY_A, RELAY_B];
 
-function renderSelector(props: Partial<BranchToolbarEnvironmentSelectorProps>): string {
-  const base: BranchToolbarEnvironmentSelectorProps = {
+type SelectorTestProps = Partial<BranchToolbarEnvironmentSelectorBaseProps> & {
+  onHandoffToEnvironment?: (environmentId: EnvironmentId) => void;
+  projectHasRemote?: boolean;
+};
+
+/** A project with a remote unless a test says otherwise. */
+function withDefaults({
+  onHandoffToEnvironment,
+  projectHasRemote = true,
+  ...props
+}: SelectorTestProps): BranchToolbarEnvironmentSelectorProps {
+  return {
     envLocked: false,
     environmentId: PRIMARY.environmentId,
     availableEnvironments: [PRIMARY],
     ...props,
+    ...(onHandoffToEnvironment ? { onHandoffToEnvironment, projectHasRemote } : {}),
   };
-  return renderToStaticMarkup(<BranchToolbarEnvironmentSelector {...base} />);
+}
+
+function renderSelector(props: SelectorTestProps): string {
+  return renderToStaticMarkup(<BranchToolbarEnvironmentSelector {...withDefaults(props)} />);
 }
 
 function countOccurrences(markup: string, needle: string): number {
@@ -151,16 +166,11 @@ function makeValueChangeDetails() {
 let liveRoot: Root | null = null;
 let liveContainer: HTMLElement | null = null;
 
-function mountSelector(props: Partial<BranchToolbarEnvironmentSelectorProps>) {
+function mountSelector(props: SelectorTestProps) {
   liveContainer = document.createElement("div");
   document.body.appendChild(liveContainer);
   liveRoot = createRoot(liveContainer);
-  const base: BranchToolbarEnvironmentSelectorProps = {
-    envLocked: false,
-    environmentId: PRIMARY.environmentId,
-    availableEnvironments: [PRIMARY],
-    ...props,
-  };
+  const base = withDefaults(props);
   act(() => {
     liveRoot?.render(<BranchToolbarEnvironmentSelector {...base} />);
   });
@@ -497,7 +507,7 @@ describe("BranchToolbarEnvironmentSelector — Move to (started thread, panel)",
       ...(environmentId ? { environmentId } : {}),
       machineLabel: "ubuntu-slim",
     }) as unknown as CloudSession;
-  const mountMove = (props: Partial<BranchToolbarEnvironmentSelectorProps> = {}) => {
+  const mountMove = (props: SelectorTestProps = {}) => {
     const handlers = {
       onEnvironmentChange: vi.fn(),
       onHandoffToEnvironment: vi.fn(),
@@ -587,7 +597,7 @@ describe("BranchToolbarEnvironmentSelector — Move to (started thread, panel)",
   // The started thread's composer reads this target on send; a Move-mode create must not set it.
   const THREAD_SCOPE = "env-primary:thread-started";
   const COMPOSER_PROJECT_KEY = "github.com/acme/app";
-  const mountCreate = (props: Partial<BranchToolbarEnvironmentSelectorProps>) => {
+  const mountCreate = (props: SelectorTestProps) => {
     const create = vi.fn();
     mountMove({
       onCreateCloudSession: (options) =>
