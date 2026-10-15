@@ -7,7 +7,11 @@ import {
   scopeProjectRef,
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import {
+  t3teamProjectHasOriginRemote,
+  type EnvironmentId,
+  type ThreadId,
+} from "@t3tools/contracts";
 import {
   ChevronDownIcon,
   FolderGit2Icon,
@@ -772,8 +776,10 @@ export const BranchToolbar = memo(function BranchToolbar({
                 {...(onHandoffToEnvironment && serverThread !== null
                   ? {
                       onHandoffToEnvironment,
-                      // No remote, no repository identity: a cloud machine can't get the files.
-                      projectHasRemote: activeProject.repositoryIdentity != null,
+                      // No `origin` remote: a cloud machine can't get the files.
+                      projectHasRemote: t3teamProjectHasOriginRemote(
+                        activeProject.repositoryIdentity,
+                      ),
                     }
                   : {})}
               />
