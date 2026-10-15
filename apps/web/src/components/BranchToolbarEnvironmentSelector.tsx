@@ -1,3 +1,4 @@
+import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { ComposerSelectControl } from "./chat/ComposerControl";
 import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
@@ -302,8 +303,10 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
         <TooltipTrigger
           render={
             displayMode === "panel" ? (
-              <ThreadDetailsControl
-                part="select"
+              // The row must be the Select's own trigger: a bare row button neither opens the
+              // menu nor anchors it, so the popup would render unpositioned at (0, 0).
+              <SelectPrimitive.Trigger
+                render={<ThreadDetailsControl part="select" />}
                 className="min-w-0 max-w-full"
                 aria-label="Run on"
                 data-composer-shortcut="composer.host"
