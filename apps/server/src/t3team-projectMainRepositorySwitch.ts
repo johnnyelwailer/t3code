@@ -113,6 +113,7 @@ export const switchProjectMainRepository = Effect.fn("switchProjectMainRepositor
       input.url !== null
         ? { url: input.url, localPath: checkoutPath, status: input.selection }
         : target.mainRepository;
+    const inspection = target.mainRepositoryInspection ?? source.mainRepositoryInspection;
     yield* writeReferenceManifest(path.dirname(manifestPath(checkoutPath)), {
       workspaceRoot: checkoutPath,
       referencesRoot: path.dirname(manifestPath(checkoutPath)),
@@ -122,6 +123,8 @@ export const switchProjectMainRepository = Effect.fn("switchProjectMainRepositor
         source.linkedRepositories,
       ),
       ...(targetMain ? { mainRepository: targetMain } : {}),
+      // Every manifest rewrite keeps the once-per-project main-repository inspection marker.
+      ...(inspection ? { mainRepositoryInspection: inspection } : {}),
       updatedAt: DateTime.formatIso(yield* DateTime.now),
     });
 

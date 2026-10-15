@@ -51,8 +51,8 @@ import {
 /** Sessions shown to the user. The window above is for correctness, not display. */
 const SESSION_DISPLAY_LIMIT = 20;
 
-/** One-second polls after a dispatch, waiting for the run to become visible. */
-const DISPATCH_DISCOVERY_ATTEMPTS = 10;
+/** Backed-off looks after a dispatch (about 40 seconds in all), waiting for the run to appear. */
+const DISPATCH_DISCOVERY_ATTEMPTS = 8;
 
 /**
  * How long a create may spend on a fresh in-app sign-in before it gives up

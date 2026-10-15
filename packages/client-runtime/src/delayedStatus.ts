@@ -11,6 +11,12 @@ export interface ShownStatus<A> {
   readonly value: A;
 }
 
+/** Overrides for one status; a slow-changing surface can ask for longer than the shared defaults. */
+export interface DelayedStatusTiming {
+  readonly showDelayMs?: number;
+  readonly minVisibleMs?: number;
+}
+
 export interface DelayedStatus<A> {
   /** Reports the real status for `key`. A new key drops the shown status at once. */
   readonly update: (key: string, value: A | null) => void;
@@ -28,7 +34,10 @@ export interface DelayedStatus<A> {
  */
 export function createDelayedStatus<A>(
   onChange: (shown: ShownStatus<A> | null) => void,
+  timing: DelayedStatusTiming = {},
 ): DelayedStatus<A> {
+  const showDelayMs = timing.showDelayMs ?? STATUS_SHOW_DELAY_MS;
+  const minVisibleMs = timing.minVisibleMs ?? STATUS_MIN_VISIBLE_MS;
   let key = "";
   let latest: A | null = null;
   let shown: A | null = null;
@@ -51,7 +60,7 @@ export function createDelayedStatus<A>(
     timer = setTimeout(() => {
       timer = undefined;
       if (latest === null) hide();
-    }, STATUS_MIN_VISIBLE_MS);
+    }, minVisibleMs);
   };
 
   return {
@@ -70,7 +79,7 @@ export function createDelayedStatus<A>(
           timer = setTimeout(() => {
             timer = undefined;
             if (latest !== null) show(latest);
-          }, STATUS_SHOW_DELAY_MS);
+          }, showDelayMs);
         }
         return;
       }

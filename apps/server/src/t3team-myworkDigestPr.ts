@@ -66,6 +66,7 @@ function digestPrKey(entry: {
 function enrichOnePr(service: PullRequestService["Service"], entry: PullRequestListEntry) {
   return enrichPr(service, {
     projectId: entry.projectId,
+    host: entry.host,
     repository: entry.repository,
     number: entry.number,
   });

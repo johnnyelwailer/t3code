@@ -12,12 +12,10 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
-import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
-import * as SqlClient from "effect/sql/SqlClient";
 import * as TestClock from "effect/testing/TestClock";
 
 import { layerFromPath, layerMemory } from "./persistence/Sqlite.ts";
@@ -28,24 +26,27 @@ import {
 } from "./t3team-atlassian-backlog-mirrorSyncWalks.ts";
 import { MIRROR_SYNC_RATE_LIMITED_TEXT } from "./t3team-atlassian-mirrorSyncFailureText.ts";
 import { runMirrorLoop } from "./t3team-atlassian-mirrorSyncLoop.ts";
-import type { MirrorPageSource } from "./t3team-atlassian-mirrorSyncPageWalk.ts";
+import {
+  account,
+  dayMs,
+  type FakeIssue,
+  fakeJira,
+  identity,
+  isoAt,
+  jiraNowMs,
+  minuteMs,
+  mirroredIds,
+  notSuperseded,
+  request,
+  settle,
+  settleValue,
+  startAtJiraNow,
+} from "./t3team-atlassian-mirrorSyncFakeJira.fixtures.ts";
 import {
   advanceT3TeamMirrorWatermark,
   readT3TeamMirrorSyncStatus,
 } from "./t3team-atlassian-mirrorSyncState.ts";
 import { readDigestJiraHealth } from "./t3team-myworkDigestJiraHealth.ts";
-
-const minuteMs = 60_000;
-const dayMs = 24 * 60 * minuteMs;
-const jiraNowMs = Date.UTC(2026, 9, 12, 12);
-const account = { id: "https://catch-up.atlassian.net", provider: "atlassian" };
-const request = { account, externalProjectId: "IES" };
-const identity = { provider: "atlassian", accountId: account.id, externalProjectId: "IES" };
-const notSuperseded = () => false;
-
-type FakeIssue = { readonly id: string; readonly displayId: string; readonly updatedAt: string };
-
-const isoAt = (ms: number) => DateTime.formatIso(DateTime.makeUnsafe(ms));
 
 /** 20,000 issues last touched before the gap, then 1,100 changed during the last 25 days. */
 const issuesBeforeGap: ReadonlyArray<FakeIssue> = Array.from({ length: 20_000 }, (_, i) => ({
@@ -59,66 +60,6 @@ const issuesChangedInGap: ReadonlyArray<FakeIssue> = Array.from({ length: 1_100 
   updatedAt: isoAt(jiraNowMs - 25 * dayMs + i * 30 * minuteMs),
 }));
 const allIssues = [...issuesBeforeGap, ...issuesChangedInGap];
-
-type PageCall = { readonly updatedWithinMinutes: number | undefined };
-
-/**
- * A Jira project answering `updated >= -Nm ORDER BY updated ASC` with offset
- * cursors. `failCall` makes that (1-based) call throw `failure`.
- */
-function fakeJira(
-  issues: ReadonlyArray<FakeIssue>,
-  options: { readonly failCall?: number; readonly failure?: unknown } = {},
-) {
-  const calls: Array<PageCall> = [];
-  const source: MirrorPageSource = {
-    listProjectMirrorPage: async (input) => {
-      calls.push({ updatedWithinMinutes: input.updatedWithinMinutes });
-      if (calls.length === options.failCall) throw options.failure ?? new Error("Jira is down");
-      const cutoffMs = input.updatedWithinMinutes
-        ? jiraNowMs - input.updatedWithinMinutes * minuteMs
-        : Number.NEGATIVE_INFINITY;
-      const matching = issues.filter((issue) => Date.parse(issue.updatedAt) >= cutoffMs);
-      const offset = Number(input.cursor ?? 0);
-      const end = offset + (input.limit ?? 100);
-      return {
-        items: matching.slice(offset, end),
-        nextCursor: end < matching.length ? String(end) : undefined,
-      };
-    },
-  };
-  return { source, calls };
-}
-
-/** Runs `effect` to completion while advancing the TestClock past its sleeps. */
-const settle = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  Effect.gen(function* () {
-    const fiber = yield* Effect.forkChild(effect);
-    for (let step = 0; step < 20_000 && fiber.pollUnsafe() === undefined; step++) {
-      yield* TestClock.adjust("3 seconds");
-      yield* TestClock.withLive(Effect.sleep("0 millis"));
-    }
-    return yield* Fiber.await(fiber);
-  });
-
-const settleValue = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  settle(effect).pipe(
-    Effect.flatMap((exit) =>
-      Exit.isSuccess(exit) ? Effect.succeed(exit.value) : Effect.die(exit.cause),
-    ),
-  );
-
-const mirroredIds = Effect.gen(function* () {
-  const sql = yield* SqlClient.SqlClient;
-  const rows = yield* sql<{ issueId: string }>`
-    SELECT issue_id AS "issueId" FROM t3team_atlassian_backlog_issues
-    WHERE provider = ${identity.provider} AND account_id = ${identity.accountId}
-      AND external_project_id = ${identity.externalProjectId}
-  `;
-  return new Set(rows.map((row) => row.issueId));
-});
-
-const startAtJiraNow = TestClock.setTime(jiraNowMs);
 
 it.effect(
   "a first catch-up walks past the 20,000-issue page cap by resuming at the watermark",

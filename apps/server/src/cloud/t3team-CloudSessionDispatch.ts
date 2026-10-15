@@ -1,5 +1,6 @@
 import { CloudSessionFailedError, ORCHESTRATION_PROTOCOL_VERSION } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 
 import {
@@ -25,6 +26,21 @@ import {
  */
 const sessionServerRef = `protocol-${ORCHESTRATION_PROTOCOL_VERSION}`;
 
+const DISCOVERY_FIRST_DELAY_MS = 1_000;
+const DISCOVERY_MAX_DELAY_MS = 8_000;
+const DISCOVERY_GROWTH = 1.6;
+
+/**
+ * Wait before the `attempt`th look for the dispatched run (0-based): a quick first look, then
+ * backing off, so a slow host is not asked ten times in ten seconds.
+ */
+export function discoveryDelayMs(attempt: number): number {
+  return Math.min(
+    Math.round(DISCOVERY_FIRST_DELAY_MS * DISCOVERY_GROWTH ** attempt),
+    DISCOVERY_MAX_DELAY_MS,
+  );
+}
+
 type RunExecutor = (
   request: GitHubActionsRequest,
 ) => Effect.Effect<GitHubActionsResponse, CloudSessionFailedError>;
@@ -47,7 +63,7 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
     readonly machineLabel: string;
     readonly run: RunExecutor;
     readonly listRuns: ListRuns;
-    /** One-second polls before giving up (the session is then "pending"). */
+    /** Backed-off looks (`discoveryDelayMs`) before giving up (the session is then "pending"). */
     readonly discoveryAttempts: number;
     /** Set when the session is reached through the Nexi broker instead of T3 Connect. */
     readonly brokerGrant?: string | null;
@@ -95,18 +111,18 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
 
     // The run does not appear instantly, so poll for the one carrying our tag.
     const pollForTaggedRun = (
-      attemptsLeft: number,
+      attempt: number,
     ): Effect.Effect<WorkflowRunSummary | null, CloudSessionFailedError> =>
-      attemptsLeft <= 0
+      attempt >= input.discoveryAttempts
         ? Effect.succeed(null)
         : Effect.gen(function* () {
-            yield* Effect.sleep("1 second");
+            yield* Effect.sleep(Duration.millis(discoveryDelayMs(attempt)));
             const runs = yield* input.listRuns;
             const mine = runs.find((item) => item.name.includes(marker));
-            return mine === undefined ? yield* pollForTaggedRun(attemptsLeft - 1) : mine;
+            return mine === undefined ? yield* pollForTaggedRun(attempt + 1) : mine;
           });
 
-    const discovered = yield* pollForTaggedRun(input.discoveryAttempts);
+    const discovered = yield* pollForTaggedRun(0);
 
     if (discovered === null) {
       return {

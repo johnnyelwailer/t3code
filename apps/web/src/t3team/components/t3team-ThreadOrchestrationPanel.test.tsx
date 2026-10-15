@@ -130,7 +130,28 @@ describe("ThreadOrchestrationPanel", () => {
     const fallback = await render(
       <ThreadOrchestrationPanel environmentId={ENV} threadId={THREAD} dockItems={[]} />,
     );
-    expect(fallback.textContent).toContain("Orchestration");
+    expect(fallback.textContent?.match(/Orchestration/g)).toHaveLength(1);
+  });
+
+  it("does not repeat a sleeping run's wake time in the expanded detail", async () => {
+    factsRef.current = facts("sleeping", {
+      wakeAt: "2026-07-17T10:00:00.000Z" as OrchestrationWorkflowRunStatus["wakeAt"],
+      messageId: "t3team-wf-shape:run-1" as OrchestrationWorkflowRunStatus["messageId"],
+    });
+    const container = await render(
+      <ThreadOrchestrationPanel
+        environmentId={ENV}
+        threadId={THREAD}
+        dockItems={[]}
+        onLocate={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>("[data-orchestration-status] > button")!.click();
+    });
+    expect(container.querySelector("[data-orchestration-detail]")?.textContent).not.toContain(
+      "Wakes",
+    );
   });
 
   it("shows pause and stop for a scheduled run and sends controls through the shared callback", async () => {

@@ -105,6 +105,22 @@ describe("finalizeCreatedProject", () => {
     });
   });
 
+  it("asks the creation bootstrap, and only it, to look for a main repository on the remotes", async () => {
+    const backend = createBackend(vi.fn(async () => undefined));
+    await finalizeCreatedProject({
+      backend,
+      project: createJiraProject(),
+      linkedRepositoryUrls: ["https://github.com/acme/api"],
+      setupProfileId: "product-partner",
+    });
+    const calls = vi.mocked(backend.projectWorkspace.bootstrapWorkspace).mock.calls;
+    expect(calls[0]?.[0]).toMatchObject({ inspectLinkedRepositoriesForMainRepository: true });
+    // The workspace context sync that follows bootstraps without it (it runs again every 10 min).
+    for (const [input] of calls.slice(1)) {
+      expect(input.inspectLinkedRepositoriesForMainRepository).toBeUndefined();
+    }
+  });
+
   it("creates the project with a local binding for a loose workspace", async () => {
     const createProject = vi.fn<BackendApi["orchestration"]["createProject"]>(
       async () => undefined,

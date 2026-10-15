@@ -3,6 +3,10 @@
 // @effect-diagnostics globalConsole:off - CLI build script: stdout/stderr ARE its operator contract.
 // @effect-diagnostics preferSchemaOverJson:off - stages and patches package.json files on disk; untyped filesystem JSON, not a domain payload.
 
+import {
+  T3TeamPackagedEnvError,
+  t3teamFillPackagedAtlassianEnv,
+} from "./lib/t3team-packaged-env.ts";
 import * as NodeFS from "node:fs";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeCrypto from "node:crypto";
@@ -4474,6 +4478,25 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
           break;
         }
       }
+    }
+    // t3team: bake the Atlassian OAuth client secret in from the build env (see t3team-packaged-env).
+    const stagedEnvPath = path.join(stageProdResourcesDir, ".env");
+    const stagedEnvText = (yield* fs.exists(stagedEnvPath).pipe(Effect.orElseSucceed(() => false)))
+      ? yield* fs.readFileString(stagedEnvPath)
+      : "";
+    const packagedEnv = yield* Effect.try({
+      try: () => t3teamFillPackagedAtlassianEnv(stagedEnvText, process.env),
+      catch: (cause) =>
+        cause instanceof T3TeamPackagedEnvError
+          ? cause
+          : new T3TeamPackagedEnvError({ message: String(cause) }),
+    });
+    if (packagedEnv.text !== stagedEnvText) {
+      yield* fs.writeFileString(stagedEnvPath, packagedEnv.text);
+      includePackagedEnvFiles = true;
+      yield* Effect.log(
+        `Packaged .env: filled ${packagedEnv.filledKeys.join(", ")} from build env`,
+      );
     }
   }
   if (options.productName !== undefined) {

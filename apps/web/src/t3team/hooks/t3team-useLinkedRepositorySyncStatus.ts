@@ -11,6 +11,7 @@ const ERROR_RETRY_MS = 10_000;
  * The linked repositories' recorded state and live background-sync phase for one workspace.
  * Reads a cheap status endpoint (no git on the server); polls only while a clone or fetch is
  * queued or running, and again after `refresh()` (call it after a save queues new syncs).
+ * `syncNow(url)` asks the server to clone or fetch one repository (they sync on demand).
  */
 export function useLinkedRepositorySyncStatus(input: {
   readonly workspaceRoot: string | undefined;
@@ -53,5 +54,13 @@ export function useLinkedRepositorySyncStatus(input: {
 
   const byUrl = useMemo(() => new Map(entries.map((entry) => [entry.url, entry])), [entries]);
   const refresh = useCallback(() => restartRef.current(), []);
-  return { byUrl, refresh };
+  const syncNow = useCallback(
+    async (url: string) => {
+      if (!backend || !workspaceRoot) return;
+      await backend.projectWorkspace.syncLinkedRepository({ workspaceRoot, url });
+      restartRef.current();
+    },
+    [backend, workspaceRoot],
+  );
+  return { byUrl, refresh, syncNow };
 }

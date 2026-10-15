@@ -1,7 +1,10 @@
 import { useMemo } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
-import { resolveScopeTeamProjectId } from "~/t3team/t3team-scopeProjectResolution";
+import {
+  resolveScopeHomeProjectId,
+  resolveScopeTeamProjectId,
+} from "~/t3team/t3team-scopeProjectResolution";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
 
 /**
@@ -9,7 +12,7 @@ import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScop
  * store (`useProjectStore` is not a shared singleton, so the sidebar cannot resolve it for us).
  * `null` when the sidebar is on "All projects" or the scope names no known project.
  */
-export function useT3TeamScopeTeamProjectId(input: {
+function useT3TeamScopeTeamProjectId(input: {
   readonly allProjects: ReadonlyArray<ProjectShellProject>;
   readonly resolveProjectId: (projectId: string) => string;
 }): string | null {
@@ -26,4 +29,20 @@ export function useT3TeamScopeTeamProjectId(input: {
       }),
     [allProjects, resolveProjectId, scopedProjectId, scopedProjectRefs],
   );
+}
+
+/**
+ * The project the Team home opens on: the scoped project, nothing under "All projects", and the
+ * store's own selection only while a persisted scope has not resolved yet.
+ */
+export function useT3TeamScopeHomeProjectId(
+  input: {
+    readonly allProjects: ReadonlyArray<ProjectShellProject>;
+    readonly resolveProjectId: (projectId: string) => string;
+  },
+  storeSelectedProjectId: string | null,
+): string | null {
+  const scopeTeamProjectId = useT3TeamScopeTeamProjectId(input);
+  const scopeKey = useT3TeamSidebarProjectScope((state) => state.scopedProjectKey);
+  return resolveScopeHomeProjectId({ scopeTeamProjectId, scopeKey, storeSelectedProjectId });
 }

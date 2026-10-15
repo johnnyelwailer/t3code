@@ -2,6 +2,7 @@ import type { JiraApiAuth } from "@t3tools/integrations-atlassian";
 import * as Effect from "effect/Effect";
 import * as Semaphore from "effect/Semaphore";
 
+import { withAtlassianAuthFileLock } from "./t3team-atlassian-auth-fileLock.ts";
 import {
   loadPersistedAtlassianAuthsPayload,
   type PersistedAtlassianAuths,
@@ -29,8 +30,13 @@ export const atlassianAuths = new Map<string, JiraApiAuth>();
 
 const authStoreLock = Semaphore.makeUnsafe(1);
 
-/** Run `effect` as one critical section over the accounts and their persisted secret. */
-export const withAuthStoreLock = authStoreLock.withPermits(1);
+/**
+ * Run `effect` as one critical section over the accounts and their persisted secret: the
+ * in-process semaphore first, then the cross-process lock file, so a second server on the same
+ * T3 home can not redeem the same single-use refresh token in parallel.
+ */
+export const withAuthStoreLock = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  authStoreLock.withPermits(1)(withAtlassianAuthFileLock(effect));
 
 function persistedAuthsPayload(): PersistedAtlassianAuths {
   return {
@@ -65,6 +71,10 @@ export const reloadAuthsFromDisk = Effect.gen(function* () {
       setAccountNeedsReconnect(entry.accountId, entry.needsReconnect === true);
     }
   }
-  reapplyUnsavedReconnectFlags((accountId) => atlassianAuths.has(accountId));
+  reapplyUnsavedReconnectFlags((accountId) => {
+    const auth = atlassianAuths.get(accountId);
+    if (!auth) return null;
+    return auth.kind === "oauth" ? auth.accessToken : auth.apiToken;
+  });
   if (hasUnsavedReconnectFlags()) yield* persistAuthsToDisk.pipe(Effect.ignore);
 });

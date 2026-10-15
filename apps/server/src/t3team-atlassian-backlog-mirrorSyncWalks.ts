@@ -8,6 +8,7 @@ import {
   type T3TeamAtlassianMirrorSyncRequest,
 } from "./t3team-atlassian-backlog-mirrorSyncShared.ts";
 import { deleteMirrorIssuesAbsentFromWalk } from "./t3team-atlassian-backlog-mirrorSyncDb.ts";
+import { clearMirrorProgress, recordMirrorReached } from "./t3team-atlassian-mirrorSyncProgress.ts";
 import {
   type MirrorPageItem,
   type MirrorPageSource,
@@ -52,24 +53,28 @@ export function runMirrorCatchUpWalk(
 ) {
   return Effect.gen(function* () {
     const walkStartMs = yield* Clock.currentTimeMillis;
-    const { watermarkMs } = yield* readT3TeamMirrorSyncStatus(identity);
+    const { watermarkMs, lastSuccessAtMs } = yield* readT3TeamMirrorSyncStatus(identity);
+    const trackProgress = lastSuccessAtMs === undefined;
     const end = yield* walkMirrorPages({
       request: input,
       source,
       identity,
       isSuperseded,
       updatedWithinMinutes: computeWatermarkLookbackMinutes({ nowMs: walkStartMs, watermarkMs }),
+      walk: "catch-up",
+      trackProgress,
       failureMessage: "Failed to fetch Atlassian mirror page (catch-up).",
       onPageStored: (items) => {
         const newestMs = newestUpdatedAtMs(items);
-        return newestMs === undefined
-          ? Effect.void
-          : advanceT3TeamMirrorWatermark(identity, newestMs);
+        if (newestMs === undefined) return Effect.void;
+        if (trackProgress) recordMirrorReached(identity, newestMs);
+        return advanceT3TeamMirrorWatermark(identity, newestMs);
       },
     });
     if (end === "superseded") return "superseded" satisfies MirrorCatchUpOutcome;
     if (end === "page-cap") return "more-pending" satisfies MirrorCatchUpOutcome;
     yield* recordT3TeamMirrorCatchUp(identity, walkStartMs);
+    clearMirrorProgress(identity);
     return "caught-up" satisfies MirrorCatchUpOutcome;
   });
 }
@@ -108,6 +113,7 @@ export function runMirrorReconcile(
       identity,
       isSuperseded,
       updatedWithinMinutes: undefined,
+      walk: "reconcile",
       failureMessage: "Failed to fetch Atlassian mirror page (reconcile).",
       onPageStored: (items) =>
         Effect.sync(() => {

@@ -26,6 +26,7 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 
 import { activateCompiledInDistribution } from "./t3team-distribution-bootstrap.ts";
 import { activatePackRecipeSources } from "./t3team-packRecipeSourcesFromEnv.ts";
+import { installProcessResilience } from "./t3team-processResilience.ts";
 
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as HostPowerMonitor from "./background/HostPowerMonitor.ts";
@@ -255,6 +256,7 @@ import { t3teamThreadPlacementRouteLayer } from "./t3team-thread-placement-route
 import { t3teamMyWorkDigestRouteLayer } from "./t3team-myworkDigest-routes.ts";
 import { T3TeamThreadToolContextStoreLive } from "./t3team-threadToolContextStore.ts";
 import { turnInactivityPolicyLive } from "./orchestration-v2/t3team-turnInactivityPolicy.ts";
+import { coldLocalCompactionLive } from "./orchestration-v2/t3team-coldLocalCompactionLive.ts";
 import { packCompletionWakeRendererLive } from "./t3team-pack-completionWakeRenderer.ts";
 import { t3teamWidgetToolCallRouteLayer } from "./t3team-widget-tool-call-route.ts";
 import { T3TeamWidgetRegistryLive } from "./t3team-widgetRegistry.ts";
@@ -485,19 +487,30 @@ const layerGitManager = GitManager.layer.pipe(
   Layer.provideMerge(TextGeneration.layer.pipe(Layer.provide(layerSourceControlProviderRegistry))),
 );
 
+const layerSourceControlRepositoryService = SourceControlRepositoryService.layer.pipe(
+  Layer.provideMerge(GitVcsDriver.layer),
+  Layer.provideMerge(layerSourceControlProviderRegistry),
+);
+
 const layerGit = Layer.empty.pipe(
-  Layer.provideMerge(layerGitManager),
+  Layer.provideMerge(
+    layerGitManager.pipe(
+      // t3team: a pull request checkout in a linked repository clones it on demand. Same
+      // `T3TeamLinkedRepositorySyncLive` reference as the application's provision below: one build
+      // memoizes it, so routes, MCP tools, delegations and GitManager share one job registry.
+      Layer.provideMerge(
+        T3TeamLinkedRepositorySyncLive.pipe(
+          Layer.provideMerge(layerSourceControlRepositoryService),
+        ),
+      ),
+    ),
+  ),
   Layer.provideMerge(GitVcsDriver.layer),
 );
 
 const layerGitWorkflow = GitWorkflowService.layer.pipe(
   Layer.provideMerge(layerVcsDriverRegistry),
   Layer.provideMerge(layerGit),
-);
-
-const layerSourceControlRepositoryService = SourceControlRepositoryService.layer.pipe(
-  Layer.provideMerge(GitVcsDriver.layer),
-  Layer.provideMerge(layerSourceControlProviderRegistry),
 );
 
 const layerProjectCloneTracker = ProjectCloneTracker.layer.pipe(
@@ -744,6 +757,8 @@ const layerOrchestrationV2Runtime = RuntimeLayer.layerProduction.pipe(
   Layer.provide(T3TeamSettleGuardsLive),
   // t3team: pack-registered delegated-completion wake text (default text without a pack).
   Layer.provide(packCompletionWakeRendererLive.pipe(Layer.provide(ProjectionStoreV2.layer))),
+  // t3team: pack-registered cold-cache local compaction (native `/compact` without a route).
+  Layer.provide(coldLocalCompactionLive),
   Layer.provide(layerScheduledTaskWebhookOrigin),
   Layer.provide(ProviderEventIngestor.layerAnalytics),
   Layer.provide(layerCheckpointStore),
@@ -1148,6 +1163,9 @@ const layerMakeServer = Layer.unwrap(
 
     // Recipes of the pack on disk (T3TEAM_PACKS_DIR), for a host that compiles its distribution in.
     yield* activatePackRecipeSources;
+
+    // Survive unawaited @cursor/sdk writes after their stream closed (was a backend crash).
+    yield* installProcessResilience;
 
     const layerHttpListening = Layer.effectDiscard(
       Effect.gen(function* () {

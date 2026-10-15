@@ -24,6 +24,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import { noJitter } from "./t3team-testNoJitter.ts";
 import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
@@ -688,7 +689,7 @@ const startHarness = Effect.fn("startThreadSettlementHarness")(function* (
   activation: Deferred.Deferred<void>,
   snapshotReads: Queue.Queue<number>,
 ) {
-  yield* reactor.start();
+  yield* reactor.start().pipe(Effect.provide(noJitter));
   yield* Deferred.succeed(activation, undefined);
   yield* Queue.take(snapshotReads);
   yield* reactor.drain;

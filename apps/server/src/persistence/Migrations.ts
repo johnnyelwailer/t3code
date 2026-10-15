@@ -305,8 +305,18 @@ const makeMigrationLoader = (throughId?: number) =>
     ),
   );
 
-// V2's schema migrations start at 55 after the legacy schema migrations.
-const FIRST_V2_MIGRATION_ID = 55;
+// V2's schema migrations start at upstream id 55, which this fork's ledger registers at 84
+// (OrchestrationV2). Upstream's guard below hard-coded 55, but on fork databases 55-83 hold
+// fork and earlier-sync migrations, including the known GHE #382 collision where id 60 was
+// recorded as ProjectionThreadsUnsettledAt (repaired by 78). Checking from 55 refused every
+// pre-sync fork install. Fork convention: upstream migrations keep upstream filenames but are
+// registered ABOVE the fork's current maximum id, so this constant is the fork id of upstream 055.
+export const FIRST_V2_MIGRATION_ID = 84;
+
+// Fork migrations whose schema a later fork migration re-ensures idempotently, so a ledger that
+// skipped them still upgrades: 86-92 and 98 are re-run by 99 (RepairForkPortTables). The guard
+// only refuses skips that nothing repairs.
+export const REPAIRED_BY_LATER_MIGRATION = new Set([86, 87, 90, 91, 92, 98]);
 
 /**
  * Fail before migrating when the migrator would skip one of V2's own
@@ -333,6 +343,7 @@ const assertV2MigrationsCanRun = Effect.fn("assertV2MigrationsCanRun")(function*
     if (
       id < FIRST_V2_MIGRATION_ID ||
       id > latestRecordedId ||
+      REPAIRED_BY_LATER_MIGRATION.has(id) ||
       (throughId !== undefined && id > throughId)
     )
       return [];
@@ -373,13 +384,15 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
   const includesV2 =
     toMigrationInclusive === undefined || toMigrationInclusive >= FIRST_V2_MIGRATION_ID;
   const previewMigrations = includesV2 ? yield* reconcileV2PreviewMigration() : [];
-  if (includesV2) {
-    yield* assertV2MigrationsCanRun(toMigrationInclusive);
-  }
+  // Relabel the fork sprint ledger (84/85) first: those databases are repairable, so the guard
+  // must judge the reconciled ledger, not refuse it.
   const sprintLedgerMigrations =
     toMigrationInclusive === undefined || toMigrationInclusive >= 84
       ? yield* reconcileForkSprintLedger()
       : [];
+  if (includesV2) {
+    yield* assertV2MigrationsCanRun(toMigrationInclusive);
+  }
   const executedMigrations = [
     ...previewMigrations,
     ...sprintLedgerMigrations,

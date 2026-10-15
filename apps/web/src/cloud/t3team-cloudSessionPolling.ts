@@ -50,6 +50,17 @@ export function cloudSessionPollIntervalMs(
     : CLOUD_SESSION_IDLE_REFRESH_INTERVAL_MS;
 }
 
+/** The share of an interval a poll may be pushed back by, so surfaces and desktops drift apart. */
+const POLL_JITTER_SPAN = 0.2;
+
+/**
+ * `intervalMs` stretched by up to a fifth. Only ever later, so the shared refresh floor still
+ * holds, and every desktop polling the same fleet repository stops ticking in step.
+ */
+export function jitteredPollIntervalMs(intervalMs: number, random: () => number): number {
+  return Math.round(intervalMs * (1 + POLL_JITTER_SPAN * random()));
+}
+
 /** Whether the window is hidden, and a way to hear when that changes. */
 export interface CloudSessionPollingVisibility {
   readonly isHidden: () => boolean;
@@ -95,7 +106,7 @@ export function useCloudSessionListPolling(
 ): void {
   useEffect(() => {
     if (!active) return;
-    return startCloudSessionListPolling(refresh, intervalMs);
+    return startCloudSessionListPolling(refresh, intervalMs, undefined, Math.random);
   }, [refresh, active, intervalMs]);
 }
 
@@ -108,6 +119,7 @@ export function startCloudSessionListPolling(
   refresh: () => void,
   intervalMs: number,
   visibility: CloudSessionPollingVisibility = documentVisibility(),
+  random: () => number = () => 0,
 ): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
@@ -119,7 +131,7 @@ export function startCloudSessionListPolling(
     timer = null;
     if (stopped || visibility.isHidden()) return;
     refresh();
-    timer = setTimeout(tick, intervalMs);
+    timer = setTimeout(tick, jitteredPollIntervalMs(intervalMs, random));
   };
   const unsubscribe = visibility.subscribe(() => {
     if (stopped) return;

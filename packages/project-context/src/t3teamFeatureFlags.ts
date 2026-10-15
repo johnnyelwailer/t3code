@@ -12,7 +12,7 @@ export const FEATURE_FLAG_DEFINITIONS = {
     description: "Store project state in .nexi. Changes apply on the next server start.",
   },
   MACHINE_SETUP: {
-    defaultEnabled: false,
+    defaultEnabled: true,
     requiresRestart: false,
     description:
       "Set up a project machine from the first message of a cloud session for a project that has none. Changes apply immediately.",
@@ -32,6 +32,12 @@ export const FEATURE_FLAG_DEFINITIONS = {
     requiresRestart: false,
     description:
       "My Work aside uses RightPanelTabs (PR/thread/browser tabs) with Agent kickoff when empty. Off: legacy DigestPrAside swap.",
+  },
+  TRANSIENT_AUTO_RESUME: {
+    defaultEnabled: true,
+    requiresRestart: false,
+    description:
+      "A run that failed on a transient gateway error (timeout, queue full) keeps retrying on a durable backoff, with a live composer banner and an auto-resume toggle. Off: the run stays failed after the retry budget, as before.",
   },
 } as const;
 

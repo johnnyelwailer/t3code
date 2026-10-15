@@ -643,7 +643,10 @@ export const make = Effect.gen(function* () {
 
   const start: PullRequestWatchReactor["Service"]["start"] = () =>
     forkParked(
-      sweep.pipe(Effect.repeat(Schedule.spaced(`${SWEEP_MINUTES} minutes`)), Effect.asVoid),
+      sweep.pipe(
+        Effect.repeat(Schedule.spaced(`${SWEEP_MINUTES} minutes`).pipe(Schedule.jittered)),
+        Effect.asVoid,
+      ),
     );
 
   return { start, sweep } satisfies PullRequestWatchReactor["Service"];

@@ -68,6 +68,8 @@ export type GitHubActionsRequest =
       readonly lifetime?: "live" | "settled";
       /** The run attempt a cached read belongs to; part of its cache identity. */
       readonly attempt?: number;
+      /** A background read may be shared process-wide for this long (see `GitHubRestInput`). */
+      readonly coalesce?: { readonly ttlMs: number };
     }
   | {
       readonly kind: "graphql";
@@ -104,6 +106,11 @@ export function dispatchSessionRequest(
  * List session-workflow runs. `actor=` is included, but this GHE ignores it
  * (`created_by` too); `sessionRunsForLogin` is what actually scopes the list.
  */
+/** Concurrent surfaces and WebSocket clients of one server share a runs listing this long. */
+const RUNS_COALESCE_MS = 4_000;
+/** The signed-in identity does not move on the poll cadence. */
+const LOGIN_COALESCE_MS = 60_000;
+
 export function listRunsRequest(
   ref: CloudSessionRepoRef,
   limit: number,
@@ -117,6 +124,7 @@ export function listRunsRequest(
     kind: "rest",
     operation: "cloudSession.listRuns",
     path: repoApiPath(ref, `actions/workflows/${ref.workflowFileName}/runs?${query}`),
+    coalesce: { ttlMs: RUNS_COALESCE_MS },
   };
 }
 
@@ -126,7 +134,12 @@ export function listRunsRequest(
  * sessions" sound.
  */
 export function currentLoginRequest(_ref: CloudSessionRepoRef): GitHubActionsRequest {
-  return { kind: "rest", operation: "cloudSession.viewer", path: "user" };
+  return {
+    kind: "rest",
+    operation: "cloudSession.viewer",
+    path: "user",
+    coalesce: { ttlMs: LOGIN_COALESCE_MS },
+  };
 }
 
 /**

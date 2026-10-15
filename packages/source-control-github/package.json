@@ -15,6 +15,14 @@
       "types": "./src/server/GitHubApi.ts",
       "import": "./src/server/GitHubApi.ts"
     },
+    "./server/t3team-githubApiTestHarness": {
+      "types": "./src/server/t3team-githubApiTestHarness.ts",
+      "import": "./src/server/t3team-githubApiTestHarness.ts"
+    },
+    "./server/t3team-githubReadCoalescer": {
+      "types": "./src/server/t3team-githubReadCoalescer.ts",
+      "import": "./src/server/t3team-githubReadCoalescer.ts"
+    },
     "./server/t3team-githubLinkPaging": {
       "types": "./src/server/t3team-githubLinkPaging.ts",
       "import": "./src/server/t3team-githubLinkPaging.ts"

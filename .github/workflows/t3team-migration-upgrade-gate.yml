@@ -1,0 +1,47 @@
+# Migration upgrade gate, enforced on every PR.
+#
+# Why: ci.yml runs the test suites only on schedule/dispatch, so a sync PR could merge with
+# migrations that cannot upgrade existing installs (2026-10-14: the upstream V2 guard from the
+# 2026-10-13 sync refused every pre-sync fork database and the desktop app would not start).
+# This job runs only the persistence migration tests, including t3team-Migrations.upgrade.test.ts,
+# which migrates schema+ledger fixtures written by previous pinned fork releases.
+name: T3Team Migration Upgrade Gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: t3team-migration-upgrade-gate-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  migration-upgrade-gate:
+    name: Migration upgrade gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Upgrade previous fork release databases
+        working-directory: apps/server
+        run: >-
+          vp test run
+          src/persistence/Migrations.test.ts
+          src/persistence/t3team-Migrations.upgrade.test.ts
+          src/persistence/Migrations/

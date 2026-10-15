@@ -34,6 +34,7 @@ import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProv
 import { bootstrapWorkspaceReferences } from "./t3team-project-repository-routesReferences.ts";
 import { t3teamLinkedRepositoryBranchesRouteLayer } from "./t3team-project-repository-routesBranches.ts";
 import { t3teamLinkedRepositoryStatusRouteLayer } from "./t3team-project-repository-routesStatus.ts";
+import { t3teamLinkedRepositorySyncRouteLayer } from "./t3team-project-repository-routesSync.ts";
 
 const bootstrapRouteLayer = HttpRouter.add(
   "POST",
@@ -151,7 +152,12 @@ const bootstrapRouteLayer = HttpRouter.add(
       ...(input.linkedRepositoryBranches
         ? { linkedRepositoryBranches: input.linkedRepositoryBranches }
         : {}),
-      ...(input.refreshLinkedRepositories ? { refreshLinkedRepositories: true } : {}),
+      ...(input.syncLinkedRepositoryUrls
+        ? { syncLinkedRepositoryUrls: input.syncLinkedRepositoryUrls }
+        : {}),
+      ...(input.inspectLinkedRepositoriesForMainRepository === true
+        ? { inspectLinkedRepositoriesForMainRepository: true }
+        : {}),
     });
     return okJson(response);
   }).pipe(
@@ -160,10 +166,11 @@ const bootstrapRouteLayer = HttpRouter.add(
   ),
 );
 
-/** The bootstrap and linked-repository status routes. Both read `T3TeamLinkedRepositorySync`,
- * provided once in `server.ts`: the status route reports the phases of the syncs bootstrap queued. */
+/** The bootstrap and linked-repository status/sync routes. All read `T3TeamLinkedRepositorySync`,
+ * provided once in `server.ts`: the status route reports the phases of the syncs the others queued. */
 export const t3teamProjectWorkspaceBootstrapRouteLayer = Layer.mergeAll(
   bootstrapRouteLayer,
   t3teamLinkedRepositoryStatusRouteLayer,
+  t3teamLinkedRepositorySyncRouteLayer,
   t3teamLinkedRepositoryBranchesRouteLayer,
 );

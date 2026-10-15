@@ -1,3 +1,5 @@
+import { isSameRepository } from "@t3tools/project-context/t3teamRepositoryIdentity";
+
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 
 const POLL_MS = 2_000;
@@ -5,8 +7,9 @@ const POLL_MS = 2_000;
 /**
  * Resolves once the linked repository `url` has a usable checkout, polling the cheap status
  * endpoint (each poll is a file read on the server, so no single request nears a timeout).
- * Rejects when its background sync fails. Used before switching the main repository to a
- * repository whose first clone is still running.
+ * Rejects when its background sync fails, or when no sync is running for a repository that is
+ * not cloned (linked repositories sync on demand: the caller must have asked for this one). Used
+ * before switching the main repository to a repository whose first clone is still running.
  */
 export async function waitForLinkedRepositoryReady(input: {
   readonly backend: BackendApi;
@@ -19,7 +22,10 @@ export async function waitForLinkedRepositoryReady(input: {
     const { linkedRepositories } = await input.backend.projectWorkspace.readLinkedRepositoryStatus({
       workspaceRoot: input.workspaceRoot,
     });
-    const entry = linkedRepositories.find((candidate) => candidate.url === input.url);
+    // The same repository may be recorded under another spelling (https / ssh / owner/repo).
+    const entry = linkedRepositories.find((candidate) =>
+      isSameRepository(candidate.url, input.url),
+    );
     // Not a reference clone (e.g. the workspace's own repository): nothing to wait for.
     if (!entry) return;
     if (entry.syncState === undefined) {
@@ -27,6 +33,7 @@ export async function waitForLinkedRepositoryReady(input: {
       if (entry.status === "failed") {
         throw new Error(entry.error ?? `Linked repository '${input.url}' could not be cloned.`);
       }
+      throw new Error(`Linked repository '${input.url}' is not cloned and no sync is running.`);
     }
     await sleep(POLL_MS);
   }

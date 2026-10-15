@@ -144,6 +144,8 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
   - Allow Atlassian OAuth `window.open` popups inside Electron instead of delegating them to the system browser.
 - `apps/desktop/src/window/DesktopWindow.test.ts`
   - Cover in-app OAuth popup handling in the desktop shell.
+- `scripts/build-desktop-artifact.ts`
+  - Fill the Atlassian OAuth client id/secret into the packaged `Resources/.env` from the build environment (`scripts/lib/t3team-packaged-env.ts`) and fail a build that ships a client id without its secret, so Jira token refresh does not depend on how the app was launched.
 - `apps/web/vite.config.ts`
   - Add dev proxy/defaults and compile-time constants used by migrated t3team route.
 - `apps/web/src/routeTree.gen.ts`
@@ -182,6 +184,8 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
   - Persist optional `t3teamExt` JSON alongside existing projection-thread message fields as the smallest storage seam for workflow message metadata.
 - `apps/server/src/persistence/Migrations.ts`
   - Register the additive t3team migration that adds `projection_thread_messages.t3team_ext_json`.
+- `apps/server/src/persistence/Migrations.test.ts`
+  - Upstream's V2 guard tests hard-code ids 54/55/56; this fork registers upstream 055 at 84 (`FIRST_V2_MIGRATION_ID`), so the same assertions are expressed relative to that constant. Unavoidable: with literal ids they assert the bug that refused pre-sync fork databases (2026-10-14).
 - `apps/server/src/persistence/Services/ProjectionThreadMessages.ts`
   - Extend the projection-thread message schema with optional `t3teamExt` so the persistence layer can carry the namespaced message extension.
 - `packages/contracts/src/settings.ts`
@@ -402,3 +406,10 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
   nothing until a view is registered, so the panel is unchanged without one.
 - `apps/web/src/components/pullRequest/PullRequestSummaryTab.test.tsx` — one case: a throwing
   registered Summary view leaves the real panel standing.
+
+## Backend health watchdog
+
+- `apps/desktop/src/backend/DesktopBackendManager.ts` — one optional `healthWatchdog` option on
+  `runBackendProcess`, chained after the readiness loop, and one per-instance kill history passed
+  from `makeBackendInstance`. The logic lives in `t3team-backendHealthWatchdog.ts`; without the
+  option the process runner is unchanged.

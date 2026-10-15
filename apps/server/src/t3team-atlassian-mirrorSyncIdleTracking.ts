@@ -13,6 +13,15 @@ import * as DateTime from "effect/DateTime";
  */
 const idleTtlMs = 30 * 60 * 1_000; // 30 minutes
 
+/**
+ * Idle TTL while the project's first catch-up has not completed. Kicks only
+ * come from a view that is open, and a first sync of a large project spans many
+ * paced bursts, so closing the view must not strand it half-mirrored; the
+ * bound keeps a project nobody returns to (or one that keeps failing) from
+ * polling Jira indefinitely.
+ */
+const firstCatchUpIdleTtlMs = 6 * 60 * 60 * 1_000; // 6 hours
+
 /** Last time (epoch ms) a kick was seen for each (provider|account|project) key. */
 const lastKickedMsByKey = new Map<string, number>();
 
@@ -39,6 +48,8 @@ export function clearT3TeamMirrorSyncKickHistory(): void {
 export function isT3TeamMirrorSyncIdle(input: {
   readonly nowMs: number;
   readonly lastKickedMs: number;
+  readonly firstCatchUpPending?: boolean;
 }): boolean {
-  return input.nowMs - input.lastKickedMs >= idleTtlMs;
+  const ttlMs = input.firstCatchUpPending ? firstCatchUpIdleTtlMs : idleTtlMs;
+  return input.nowMs - input.lastKickedMs >= ttlMs;
 }
