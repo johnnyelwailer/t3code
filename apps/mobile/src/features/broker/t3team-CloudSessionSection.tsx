@@ -11,6 +11,7 @@ import {
   cloudSessionActions,
   cloudSessionRowDetail,
 } from "./t3team-cloudSessionActions";
+import { chooseCloudSessionLauncher } from "./t3team-chooseCloudSessionLauncher";
 import type { CloudSessionLauncher } from "./t3team-cloudSessionLaunchers";
 import { useCloudSessionList } from "./t3team-useCloudSessionList";
 import type { BrokerDeviceToOpen } from "./t3team-useOpenBrokerDevice";
@@ -26,19 +27,6 @@ function offerActions(
       text: choice.label,
       style: choice.destructive ? ("destructive" as const) : ("default" as const),
       onPress: () => onAction(choice.action, session),
-    })),
-    { text: "Close", style: "cancel" as const },
-  ]);
-}
-
-function chooseLauncher(
-  launchers: ReadonlyArray<CloudSessionLauncher>,
-  onChoose: (environmentId: EnvironmentId) => void,
-) {
-  Alert.alert("Start cloud sessions through", undefined, [
-    ...launchers.map((launcher) => ({
-      text: launcher.label,
-      onPress: () => onChoose(launcher.environmentId),
     })),
     { text: "Close", style: "cancel" as const },
   ]);
@@ -75,7 +63,7 @@ export function CloudSessionSection(props: {
           icon="desktopcomputer"
           label="Start through"
           detail={launcher.label}
-          onPress={() => chooseLauncher(launchers, props.onChooseLauncher)}
+          onPress={() => chooseCloudSessionLauncher(launchers, props.onChooseLauncher)}
         />
       ) : null}
       <SettingsActionRow

@@ -3,7 +3,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
 import { managedRelaySessionAtom } from "@t3tools/client-runtime/relay";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useSyncExternalStore, useState } from "react";
 import { Platform, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -18,6 +18,8 @@ import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import { useRemoteConnections } from "../../state/use-remote-environment-registry";
 import { relayEnvironmentDiscovery } from "../../state/relay";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { accountStatusSnapshot, subscribeAccountStatus } from "../account/t3team-accountController";
+import { useEnvironmentsHeaderAction } from "./t3team-useEnvironmentsHeaderAction";
 import {
   applyShowcaseLocalEnvironmentDisplayUrls,
   resolveShowcaseEnvironmentUpdateDisplayUrl,
@@ -76,6 +78,23 @@ export function SettingsEnvironmentsRouteScreen() {
     },
     [navigation],
   );
+  const openAddEnvironment = useCallback(
+    () =>
+      navigation.navigate("SettingsSheet", {
+        screen: "SettingsContent",
+        params: { screen: "SettingsEnvironmentNew" },
+      }),
+    [navigation],
+  );
+  const account = useSyncExternalStore(subscribeAccountStatus, accountStatusSnapshot);
+  const { signedIn, loading, onPress: onPrimaryPress } = useEnvironmentsHeaderAction(account);
+  const addEnvironmentMenuItems = [
+    {
+      id: "add-environment",
+      title: "Add environment…",
+      onPress: openAddEnvironment,
+    },
+  ];
   const handleUpdateEnvironment = useCallback(
     (
       environmentId: EnvironmentId,
@@ -106,19 +125,35 @@ export function SettingsEnvironmentsRouteScreen() {
   return (
     <SettingsScreen
       title="Environments"
+      menus={
+        Platform.OS === "ios"
+          ? [
+              {
+                title: "Environment options",
+                icon: "ellipsis",
+                items: addEnvironmentMenuItems,
+              },
+            ]
+          : undefined
+      }
       trailing={
-        Platform.OS === "android" && relaySession ? (
+        Platform.OS === "android" ? (
           <AndroidAnchoredMenu
             title="Environment options"
             actions={[
               {
                 id: "refresh",
                 title: "Refresh cloud environments",
-                attributes: { disabled: isRefreshingCloud },
+                attributes: { disabled: isRefreshingCloud || relaySession === null },
+              },
+              {
+                id: "add-environment",
+                title: "Add environment…",
               },
             ]}
             onPressAction={({ nativeEvent }) => {
               if (nativeEvent.event === "refresh") void refreshCloudEnvironments();
+              if (nativeEvent.event === "add-environment") openAddEnvironment();
             }}
           >
             {(open) => (
@@ -133,14 +168,11 @@ export function SettingsEnvironmentsRouteScreen() {
       }
       actions={[
         {
-          accessibilityLabel: "Add environment",
+          accessibilityLabel: signedIn ? "New cloud session" : "Sign in",
           icon: "plus",
           tintColor: headerIconColor,
-          onPress: () =>
-            navigation.navigate("SettingsSheet", {
-              screen: "SettingsContent",
-              params: { screen: "SettingsEnvironmentNew" },
-            }),
+          loading,
+          onPress: onPrimaryPress,
         },
       ]}
     >
