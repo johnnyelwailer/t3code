@@ -134,20 +134,28 @@ function StoryGroupLine({
   return (
     <li className={lineClassName} data-testid="digest-yesterday-story-group">
       <div className="flex min-w-0 items-baseline gap-2">
-        {onOpenTicket ? (
-          <button
-            type="button"
-            onClick={() => onOpenTicket(parent.id)}
-            className={`${titleClassName} hover:text-foreground`}
-            title={`${parent.ref.displayId} · ${parent.ref.title}`}
-          >
-            {label}
-          </button>
-        ) : (
-          <span className={titleClassName} title={`${parent.ref.displayId} · ${parent.ref.title}`}>
-            {label}
-          </span>
-        )}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              onOpenTicket ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenTicket(parent.id)}
+                  className={`${titleClassName} hover:text-foreground`}
+                >
+                  {label}
+                </button>
+              ) : (
+                <span tabIndex={0} className={titleClassName}>
+                  {label}
+                </span>
+              )
+            }
+          />
+          <TooltipPopup side="top" className="max-w-sm">
+            {parent.ref.displayId} · {parent.ref.title}
+          </TooltipPopup>
+        </Tooltip>
         {parentItem?.outcome ? (
           <span className="inline-flex shrink-0 items-center gap-1 text-2xs text-muted-foreground">
             <span aria-hidden="true" className={digestStatusDotClassName(parentItem.outcome.to)} />→{" "}
@@ -227,7 +235,12 @@ export function DigestYesterdayWidget({
           <Menu>
             <MenuTrigger
               aria-label="Yesterday options"
-              className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover/yesterday:opacity-100 hover:text-foreground focus-visible:opacity-100 data-[popup-open]:opacity-100"
+              render={
+                <button
+                  type="button"
+                  className="inline-flex size-5 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity group-hover/yesterday:opacity-100 group-focus-within/yesterday:opacity-100 hover:text-foreground focus-visible:opacity-100 data-[popup-open]:opacity-100"
+                />
+              }
             >
               <EllipsisIcon className="size-3.5" />
             </MenuTrigger>

@@ -53,7 +53,6 @@ function ParentGroupedRows({
   return digestParentGroups(section.items, (item) => item.ticketId, ticketsById).map((group) => {
     const { parent } = group;
     if (!parent) return group.items.map((item) => row(item));
-    const header = `${parent.ref.displayId} · ${parent.ref.title}`;
     return (
       <div key={`story:${parent.id}`} data-testid="digest-section-story-group">
         {group.parentItem !== undefined ? (
@@ -63,7 +62,6 @@ function ParentGroupedRows({
             type="button"
             disabled={!onOpenTicket}
             onClick={() => onOpenTicket?.(parent.id)}
-            title={header}
             className="flex w-full min-w-0 items-baseline gap-2 px-3 pt-2 text-left text-2xs text-muted-foreground hover:text-foreground disabled:hover:text-muted-foreground"
           >
             <span className="shrink-0 font-mono">{parent.ref.displayId}</span>
