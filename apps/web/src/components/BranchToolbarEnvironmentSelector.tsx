@@ -3,7 +3,12 @@ import { ComposerSelectControl } from "./chat/ComposerControl";
 import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
-import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
+import {
+  type CloudSession,
+  type EnvironmentId,
+  type ProjectId,
+  T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE,
+} from "@t3tools/contracts";
 import type { CloudSessionCreateOptions } from "~/cloud/t3team-cloudSessionTargetStore";
 import { ScaleIcon, SettingsIcon } from "lucide-react";
 import { memo, useMemo, useState } from "react";
@@ -115,6 +120,11 @@ export interface BranchToolbarEnvironmentSelectorProps {
   onHandoffToEnvironment?: (environmentId: EnvironmentId) => void;
   /** t3team: connects a ready, not-yet-connected cloud session from the "Move to" menu. */
   onConnectCloudSession?: (session: CloudSession) => void;
+  /**
+   * t3team: false when the thread's project has no git remote. A cloud machine then has no way to
+   * get its files, so "Move to" shows its cloud rows disabled with the reason the server gives.
+   */
+  projectHasRemote?: boolean;
 }
 
 export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvironmentSelector({
@@ -140,11 +150,14 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   onCloudMenuOpenChange,
   onHandoffToEnvironment,
   onConnectCloudSession,
+  projectHasRemote = true,
 }: BranchToolbarEnvironmentSelectorProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
   // A started thread cannot switch machines; in the panel it can move to one instead.
   const moveMode = envLocked && displayMode === "panel" && onHandoffToEnvironment !== undefined;
   const pickable = onEnvironmentChange !== undefined || moveMode;
+  const cloudMoveBlockedReason =
+    moveMode && !projectHasRemote ? T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE : null;
   // The optimistic cloud pick belongs to a draft; a moving thread still shows where it runs.
   const optimisticCloudSession = moveMode ? null : selectedCloudSession;
   const hasCloudAffordance =
@@ -240,7 +253,10 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
     }
     if (parseCloudSessionSelectValue(value) !== null) return;
     if (moveMode) {
-      if (value !== environmentId) onHandoffToEnvironment?.(value as EnvironmentId);
+      const blocked =
+        cloudMoveBlockedReason !== null &&
+        connectedCloudEnvironments.some((env) => env.environmentId === value);
+      if (value !== environmentId && !blocked) onHandoffToEnvironment?.(value as EnvironmentId);
       return;
     }
     onEnvironmentChange?.(value as EnvironmentId);
@@ -398,6 +414,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                   row={row}
                   selectable={pickable}
                   selected={optimisticCloudSession?.sessionId === row.session.sessionId}
+                  blockedReason={cloudMoveBlockedReason}
                   onSelect={selectCloudSession}
                   onDismiss={onDismissCloudSession}
                 />

@@ -7,6 +7,7 @@ import {
   TurnItemId,
   type OrchestrationV2TurnItem,
   T3TEAM_THREAD_HANDOFF_FACT_KEY,
+  T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE,
   type T3TeamThreadHandoffBranchState,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -15,6 +16,7 @@ import * as Effect from "effect/Effect";
 import {
   parseCommitCount,
   readHandoffBranchState,
+  readHandoffHasOrigin,
   UNKNOWN_BRANCH_STATE,
 } from "./t3team-threadHandoffBranchState.ts";
 import { recordThreadHandoff } from "./t3team-threadHandoff.ts";
@@ -121,6 +123,7 @@ const refusalsFor = (overrides: Partial<Parameters<typeof threadHandoffRefusals>
   threadHandoffRefusals({
     shell: idle,
     branchState: clean,
+    hasOrigin: true,
     liveSubagentChildren: 0,
     boundScheduledTasks: 0,
     ...overrides,
@@ -135,6 +138,7 @@ describe("threadHandoffRefusals", () => {
     const [refusal] = threadHandoffRefusals({
       shell: idle,
       branchState: { ...clean, unpushedCommits: 3 },
+      hasOrigin: true,
       liveSubagentChildren: 0,
       boundScheduledTasks: 0,
     });
@@ -146,6 +150,7 @@ describe("threadHandoffRefusals", () => {
     const [refusal] = threadHandoffRefusals({
       shell: idle,
       branchState: { upstream: null, unpushedCommits: 0, uncommittedChanges: false },
+      hasOrigin: true,
       liveSubagentChildren: 0,
       boundScheduledTasks: 0,
     });
@@ -157,6 +162,7 @@ describe("threadHandoffRefusals", () => {
     const [refusal] = threadHandoffRefusals({
       shell: { branch: null, pendingRuntimeRequest: null },
       branchState: { upstream: null, unpushedCommits: 1, uncommittedChanges: false },
+      hasOrigin: true,
       liveSubagentChildren: 0,
       boundScheduledTasks: 0,
     });
@@ -185,11 +191,40 @@ describe("threadHandoffRefusals", () => {
     assert.deepStrictEqual(
       refusalsFor({
         branchState: UNKNOWN_BRANCH_STATE,
+        hasOrigin: null,
         liveSubagentChildren: null,
         boundScheduledTasks: null,
       }),
       ["unverified", "unverified", "unverified", "unverified"],
     );
+  });
+
+  it("refuses a checkout without origin as such, not as unpushed or dirty", () => {
+    const refusals = threadHandoffRefusals({
+      shell: idle,
+      branchState: { upstream: null, unpushedCommits: 5, uncommittedChanges: true },
+      hasOrigin: false,
+      liveSubagentChildren: 0,
+      boundScheduledTasks: 0,
+    });
+    assert.deepStrictEqual(refusals, [
+      { reason: "no_git_remote", message: T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE },
+    ]);
+  });
+
+  it("refuses a folder that is no git checkout at all (a scratch thread) the same way", () => {
+    assert.deepStrictEqual(
+      refusalsFor({
+        shell: { branch: null, pendingRuntimeRequest: null },
+        branchState: UNKNOWN_BRANCH_STATE,
+        hasOrigin: false,
+      }),
+      ["no_git_remote"],
+    );
+  });
+
+  it("refuses as unverified when only the origin check could not be read", () => {
+    assert.deepStrictEqual(refusalsFor({ hasOrigin: null }), ["unverified"]);
   });
 });
 
@@ -259,6 +294,7 @@ describe("readHandoffBranchState", () => {
         threadHandoffRefusals({
           shell: { branch: "feature/new", pendingRuntimeRequest: null },
           branchState: state,
+          hasOrigin: true,
           liveSubagentChildren: 0,
           boundScheduledTasks: 0,
         }).map((refusal) => refusal.reason),
@@ -284,6 +320,7 @@ describe("readHandoffBranchState", () => {
     threadHandoffRefusals({
       shell: { branch: "feature/x", pendingRuntimeRequest: null },
       branchState: state,
+      hasOrigin: true,
       liveSubagentChildren: 0,
       boundScheduledTasks: 0,
     });
@@ -329,6 +366,25 @@ describe("readHandoffBranchState", () => {
         yield* readHandoffBranchState(vcs, "/gone", "feature/x"),
         UNKNOWN_BRANCH_STATE,
       );
+    }),
+  );
+
+  it.effect("reads origin as present, absent (also outside a repository), or unknown", () =>
+    Effect.gen(function* () {
+      const probe = (exitCode: number, stdout: string) =>
+        readHandoffHasOrigin(
+          fakeVcs(
+            () => stdout,
+            () => exitCode,
+          ).vcs,
+          "/repo",
+        );
+      assert.isTrue(yield* probe(0, "git@github.com:o/r.git\n"));
+      assert.isFalse(yield* probe(1, ""));
+      assert.isNull(yield* probe(128, ""));
+      const { vcs, calls } = fakeVcs(() => "x");
+      yield* readHandoffHasOrigin(vcs, "/repo");
+      assert.deepStrictEqual(calls, [["config", "--get", "remote.origin.url"]]);
     }),
   );
 

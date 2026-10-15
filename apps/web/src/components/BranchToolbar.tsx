@@ -770,7 +770,11 @@ export const BranchToolbar = memo(function BranchToolbar({
                 {...(onEnvironmentChange ? { onEnvironmentChange: handleEnvironmentChange } : {})}
                 {...cloudSessions.selectorProps}
                 {...(onHandoffToEnvironment && serverThread !== null
-                  ? { onHandoffToEnvironment }
+                  ? {
+                      onHandoffToEnvironment,
+                      // No remote, no repository identity: a cloud machine can't get the files.
+                      projectHasRemote: activeProject.repositoryIdentity != null,
+                    }
                   : {})}
               />
             ) : null}

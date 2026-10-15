@@ -5,12 +5,13 @@
  * verdict. Nothing here reads or writes state.
  * @module t3team-threadHandoffCapture
  */
-import type {
-  OrchestrationV2Run,
-  OrchestrationV2ThreadShell,
-  OrchestrationV2TurnItem,
-  T3TeamThreadHandoffBranchState,
-  T3TeamThreadHandoffRefusal,
+import {
+  type OrchestrationV2Run,
+  type OrchestrationV2ThreadShell,
+  type OrchestrationV2TurnItem,
+  T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE,
+  type T3TeamThreadHandoffBranchState,
+  type T3TeamThreadHandoffRefusal,
 } from "@t3tools/contracts";
 
 import {
@@ -54,18 +55,29 @@ const unverified = (what: string): T3TeamThreadHandoffRefusal => ({
 /**
  * Why this thread may not move now. Empty means eligible. An active run is NOT a refusal: the
  * client interrupts it (or waits for the turn) as part of the move. A check that could not be
- * read (`null`) refuses: unknown state never moves.
+ * read (`null`) refuses: unknown state never moves. Without an `origin` remote the other machine
+ * has no way to get the project's files, so that is the only branch refusal it gets.
  */
 export function threadHandoffRefusals(input: {
   readonly shell: Pick<OrchestrationV2ThreadShell, "branch" | "pendingRuntimeRequest">;
   readonly branchState: T3TeamThreadHandoffBranchState;
+  /** Whether the checkout has an `origin` remote (`readHandoffHasOrigin`); null: could not tell. */
+  readonly hasOrigin: boolean | null;
   readonly liveSubagentChildren: number | null;
   readonly boundScheduledTasks: number | null;
 }): ReadonlyArray<T3TeamThreadHandoffRefusal> {
   const refusals: T3TeamThreadHandoffRefusal[] = [];
-  const { unpushedCommits, uncommittedChanges, upstream } = input.branchState;
+  const { unpushedCommits, upstream } = input.branchState;
+  // Without origin nothing on this checkout reaches the other machine: its changes are moot.
+  const uncommittedChanges =
+    input.hasOrigin === false ? false : input.branchState.uncommittedChanges;
   const { branch } = input.shell;
-  if (unpushedCommits === null) {
+  if (input.hasOrigin === false) {
+    refusals.push({
+      reason: "no_git_remote",
+      message: T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE,
+    });
+  } else if (unpushedCommits === null) {
     refusals.push(unverified(`that ${branch ?? "this checkout"} is pushed`));
   } else if (branch !== null && upstream === null) {
     refusals.push({
@@ -80,6 +92,9 @@ export function threadHandoffRefusals(input: {
           ? `This checkout has ${plural(unpushedCommits, "commit", "commits")} no remote has. Push first: unpushed work stays on this machine.`
           : `${plural(unpushedCommits, "commit", "commits")} on ${branch ?? "this branch"} ${unpushedCommits === 1 ? "is" : "are"} not pushed to ${upstream}. Push first: unpushed work stays on this machine.`,
     });
+  }
+  if (input.hasOrigin === null && unpushedCommits !== null) {
+    refusals.push(unverified("that this checkout has an origin remote"));
   }
   if (uncommittedChanges === null) {
     refusals.push(unverified("that the checkout has no uncommitted changes"));

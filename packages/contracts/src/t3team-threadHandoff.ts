@@ -37,10 +37,19 @@ export const T3TeamThreadHandoffRefusalReason = Schema.Literals([
   "pending_user_input",
   "live_subagent_children",
   "scheduled_task_bound",
+  /** The project has no `origin` remote: another machine cannot get its files. */
+  "no_git_remote",
   /** A check could not be read; unknown state never moves. */
   "unverified",
 ]);
 export type T3TeamThreadHandoffRefusalReason = typeof T3TeamThreadHandoffRefusalReason.Type;
+
+/**
+ * The `no_git_remote` refusal's sentence. The server refuses with it; a client shows it on the
+ * machines it will not offer, so the reason reads the same before and after asking.
+ */
+export const T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE =
+  "No git remote: another machine can't get this project's files. Add an origin remote and push, then move.";
 
 export const T3TeamThreadHandoffRefusal = Schema.Struct({
   reason: T3TeamThreadHandoffRefusalReason,
