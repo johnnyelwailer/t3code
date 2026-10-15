@@ -62,9 +62,11 @@ vi.mock("./ui/select", () => ({
   ),
   SelectValue: () => <span data-testid="select-value">SELECTED</span>,
 }));
-// The trigger is upstream's `ThreadDetailsSelectControl`, a Base UI `Select.Trigger` that needs
-// the real Select root; the Select is mocked above, so the trigger is too.
-// The trigger is either row control, by display mode; both render as the same stand-in.
+// Both triggers are Base UI `Select.Trigger`s that need the real Select root; the Select is mocked
+// above, so the triggers are too. The real one is exercised in `*.panel.test.tsx`.
+vi.mock("@base-ui/react/select", () => ({
+  Select: { Trigger: ({ children }: { children?: ReactNode }) => <div>{children}</div> },
+}));
 vi.mock("./chat/ThreadDetailsControl", () => ({
   ThreadDetailsControl: ({ children }: { children?: ReactNode }) => (
     <div data-testid="trigger">{children}</div>
