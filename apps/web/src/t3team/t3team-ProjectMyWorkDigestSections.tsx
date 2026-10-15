@@ -1,3 +1,4 @@
+import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
 
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
@@ -5,6 +6,7 @@ import { DigestItemRow, DigestKicker } from "~/t3team/t3team-ProjectMyWorkDigest
 import { DigestStoryGroup } from "~/t3team/t3team-ProjectMyWorkDigestStoryGroup";
 import type { DigestGraph, DigestSection } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import { groupByParent } from "~/t3team/t3team-projectMyWorkDigestGroups";
+import { digestParentGroups } from "~/t3team/t3team-projectMyWorkDigestParentGroups";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import { digestTransitionStyle } from "~/t3team/t3team-digestViewTransition";
 import { useDigestTransitionNames } from "~/t3team/t3team-digestTransitionNames";
@@ -20,7 +22,12 @@ export type LaneProps = {
   rowTicketIds?: ReadonlySet<string>;
 };
 
-export function SideSection({
+/**
+ * A flat section's rows with subtasks under their parent story, so a bare "FE: Review" row reads
+ * in context: the story's own row (or, when the section does not list it, a slim key + title
+ * line) heads the group, its subtasks nest below. Other rows stay as they were.
+ */
+function ParentGroupedRows({
   section,
   graph,
   ticketsById,
@@ -28,6 +35,54 @@ export function SideSection({
   onOpenTicket,
 }: LaneProps & { section: DigestSection }) {
   const names = useDigestTransitionNames();
+  const row = (item: DigestSection["items"][number], nested = false) => {
+    const ticket = ticketsById.get(item.ticketId);
+    return ticket ? (
+      <DigestItemRow
+        key={ticket.id}
+        transitionName={names.row(section.id, ticket.id)}
+        ticket={ticket}
+        why={item.why}
+        graph={graph}
+        nowMs={nowMs}
+        onOpenTicket={onOpenTicket}
+        {...(nested ? { dependencies: false } : {})}
+      />
+    ) : null;
+  };
+  return digestParentGroups(section.items, (item) => item.ticketId, ticketsById).map((group) => {
+    const { parent } = group;
+    if (!parent) return group.items.map((item) => row(item));
+    return (
+      <div key={`story:${parent.id}`} data-testid="digest-section-story-group">
+        {group.parentItem !== undefined ? (
+          row(group.parentItem)
+        ) : (
+          <button
+            type="button"
+            disabled={!onOpenTicket}
+            onClick={() => onOpenTicket?.(parent.id)}
+            className="flex w-full min-w-0 items-baseline gap-2 px-3 pt-2 text-left text-2xs text-muted-foreground hover:text-foreground disabled:hover:text-muted-foreground"
+          >
+            <span className="shrink-0 font-mono">{parent.ref.displayId}</span>
+            <span className="min-w-0 truncate">{parent.ref.title}</span>
+          </button>
+        )}
+        <div className="ml-3 border-l border-border/70">
+          {group.items.map((item) => row(item, true))}
+        </div>
+      </div>
+    );
+  });
+}
+
+export function SideSection({
+  section,
+  graph,
+  ticketsById,
+  nowMs,
+  onOpenTicket,
+}: LaneProps & { section: DigestSection }) {
   return (
     <section className="space-y-2">
       <DigestKicker count={section.items.length}>{section.heading}</DigestKicker>
@@ -36,20 +91,13 @@ export function SideSection({
         tone={section.id.includes("needs-you") ? "default" : "muted"}
         className="divide-y divide-border/60"
       >
-        {section.items.map((item) => {
-          const ticket = ticketsById.get(item.ticketId);
-          return ticket ? (
-            <DigestItemRow
-              key={ticket.id}
-              transitionName={names.row(section.id, ticket.id)}
-              ticket={ticket}
-              why={item.why}
-              graph={graph}
-              nowMs={nowMs}
-              onOpenTicket={onOpenTicket}
-            />
-          ) : null;
-        })}
+        <ParentGroupedRows
+          section={section}
+          graph={graph}
+          ticketsById={ticketsById}
+          nowMs={nowMs}
+          onOpenTicket={onOpenTicket}
+        />
       </T3SurfacePanel>
     </section>
   );
@@ -139,7 +187,6 @@ export function FooterSection({
   nowMs,
   onOpenTicket,
 }: LaneProps & { section: DigestSection }) {
-  const names = useDigestTransitionNames();
   const [open, setOpen] = useState(false);
   return (
     <section className="space-y-2">
@@ -148,28 +195,25 @@ export function FooterSection({
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
           className="flex w-full items-center gap-3 px-3 py-2 text-left text-xs"
         >
           <span className="text-xl font-semibold tabular-nums">{section.items.length}</span>
           <span className="text-muted-foreground">{section.hint ?? "nothing needed from you"}</span>
-          <span className="ml-auto text-2xs text-muted-foreground">{open ? "Hide" : "Show"}</span>
+          <ChevronDownIcon
+            aria-hidden="true"
+            className={`ml-auto size-3.5 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+          />
         </button>
-        {open
-          ? section.items.map((item) => {
-              const ticket = ticketsById.get(item.ticketId);
-              return ticket ? (
-                <DigestItemRow
-                  key={ticket.id}
-                  transitionName={names.row(section.id, ticket.id)}
-                  ticket={ticket}
-                  why={item.why}
-                  graph={graph}
-                  nowMs={nowMs}
-                  onOpenTicket={onOpenTicket}
-                />
-              ) : null;
-            })
-          : null}
+        {open ? (
+          <ParentGroupedRows
+            section={section}
+            graph={graph}
+            ticketsById={ticketsById}
+            nowMs={nowMs}
+            onOpenTicket={onOpenTicket}
+          />
+        ) : null}
       </T3SurfacePanel>
     </section>
   );
