@@ -311,10 +311,14 @@ const makeMigrationLoader = (throughId?: number) =>
 // registered ABOVE the fork's current maximum id, so this constant is the fork id of upstream 055.
 export const FIRST_V2_MIGRATION_ID = 84;
 
-// Fork migrations whose schema a later fork migration re-ensures idempotently, so a ledger that
-// skipped them still upgrades: 86-92 and 98 are re-run by 99 (RepairForkPortTables). The guard
-// only refuses skips that nothing repairs.
-export const REPAIRED_BY_LATER_MIGRATION = new Set([86, 87, 90, 91, 92, 98]);
+// The ledger ids that carry upstream-owned V2 migrations in this fork's ledger (upstream 055/056
+// at 84/85, 057/058 at 103/104, 059/060 at 107/108, 061 at 109). Only these are checked for being
+// skipped: fork migrations (and the repair migrations for fork DBs that have gaps, e.g. 99, which
+// re-ensures 86-92 and 98) must keep starting on databases whose history has holes. Add each id a
+// sync appends from upstream.
+export const UPSTREAM_V2_MIGRATION_IDS: ReadonlySet<number> = new Set([
+  84, 85, 103, 104, 107, 108, 109,
+]);
 
 /**
  * Fail before migrating when the migrator would skip one of V2's own
@@ -338,9 +342,8 @@ const assertV2MigrationsCanRun = Effect.fn("assertV2MigrationsCanRun")(function*
   const recordedNames = new Map(recorded.map((row) => [row.migration_id, row.name]));
   const skipped = migrationEntries.flatMap(([id, name]) => {
     if (
-      id < FIRST_V2_MIGRATION_ID ||
+      !UPSTREAM_V2_MIGRATION_IDS.has(id) ||
       id > latestRecordedId ||
-      REPAIRED_BY_LATER_MIGRATION.has(id) ||
       (throughId !== undefined && id > throughId)
     )
       return [];
