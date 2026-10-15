@@ -36,6 +36,13 @@ import { applyWebBrandAssets } from "./apply-web-brand-assets.ts";
 import { applyDistributionWebIcons } from "./lib/t3team-distributionWebIcons.ts";
 import { resolveDmgBackgroundOverride } from "./lib/t3team-dmgBackground.ts";
 import {
+  MAC_AUDIO_INPUT_ENTITLEMENT,
+  MAC_TRANSCRIPTION_USAGE_DESCRIPTIONS,
+  TRANSCRIPTION_EXTRA_RESOURCES,
+  TRANSCRIPTION_FILE_EXCLUSIONS,
+  stageTranscriptionHelper,
+} from "./lib/t3team-transcriptionHelper.ts";
+import {
   BRAND_ASSET_PATHS,
   resolveWebAssetBrandForChannel,
   type WebAssetBrand,
@@ -1169,6 +1176,7 @@ export const DESKTOP_FILE_EXCLUSIONS = [
   "!apps/desktop/prod-resources/wsl-runtime.tar.gz.sha256",
   "!apps/desktop/gnome-extension",
   "!apps/desktop/gnome-extension/**/*",
+  ...TRANSCRIPTION_FILE_EXCLUSIONS,
 ] as const;
 // Windows terminal helpers cannot run on macOS and slow signing and notarization.
 export const MAC_FILE_EXCLUSIONS = [
@@ -1589,6 +1597,8 @@ ${associatedDomains}
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
     <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <key>${MAC_AUDIO_INPUT_ENTITLEMENT}</key>
     <true/>
   </dict>
 </plist>
@@ -3335,6 +3345,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         : []),
       ...(platform === "win" ? WINDOWS_SERVER_EXTRA_RESOURCES : []),
       ...(platform === "win" && wslRuntimeBundled ? WSL_RUNTIME_EXTRA_RESOURCES : []),
+      ...(platform === "mac" || platform === "win" ? TRANSCRIPTION_EXTRA_RESOURCES : []),
     ],
   };
   const updateChannel = resolveDesktopUpdateChannel(version);
@@ -3364,6 +3375,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
           "T3 Code connects to devices on your local network for remote environments and commands run by terminals and coding agents.",
         NSScreenCaptureUsageDescription:
           "T3 Code captures the active window when you use the window capture shortcut.",
+        ...MAC_TRANSCRIPTION_USAGE_DESCRIPTIONS,
         // macOS lists an app under Default web browser only when it opens web
         // pages as documents as well as http and https links (see protocols).
         CFBundleDocumentTypes: [
@@ -4431,6 +4443,14 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     arch: options.arch,
     verbose: options.verbose,
   });
+  yield* Effect.sync(() =>
+    stageTranscriptionHelper({
+      repoRoot,
+      stageResourcesDir,
+      platform: options.platform,
+      arch: options.arch,
+    }),
+  );
 
   yield* assertPlatformBuildResources(
     options.platform,

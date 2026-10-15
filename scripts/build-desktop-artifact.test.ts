@@ -109,6 +109,10 @@ import {
   WslRuntimeArchiveMissingError,
   wslRuntimeArchiveStem,
 } from "./build-desktop-artifact.ts";
+import {
+  TRANSCRIPTION_EXTRA_RESOURCES,
+  TRANSCRIPTION_FILE_EXCLUSIONS,
+} from "./lib/t3team-transcriptionHelper.ts";
 import { BRAND_ASSET_PATHS } from "./lib/brand-assets.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { symlinksSupported } from "@t3tools/shared/testing/symlinks";
@@ -689,6 +693,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "!apps/desktop/prod-resources/wsl-runtime.tar.gz.sha256",
       "!apps/desktop/gnome-extension",
       "!apps/desktop/gnome-extension/**/*",
+      ...TRANSCRIPTION_FILE_EXCLUSIONS,
     ]);
     assert.equal(WINDOWS_SERVER_RESOURCE_SOURCE_DIR, "apps/desktop/prod-resources/windows-server");
     assert.deepStrictEqual(WINDOWS_SERVER_EXTRA_RESOURCES, [
@@ -752,7 +757,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.notProperty(win, "afterPack");
       // Upstream #7261: the Linux browser-secret helper ships as an extra resource on
       // Linux only; the mac config stays the plain base set.
-      assert.deepStrictEqual(mac.extraResources, DESKTOP_EXTRA_RESOURCES);
+      assert.deepStrictEqual(mac.extraResources, [
+        ...DESKTOP_EXTRA_RESOURCES,
+        ...TRANSCRIPTION_EXTRA_RESOURCES,
+      ]);
       assert.deepStrictEqual(linux.extraResources, [
         ...DESKTOP_EXTRA_RESOURCES,
         ...LINUX_CAPTURE_EXTRA_RESOURCES,
@@ -762,12 +770,14 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         ...DESKTOP_EXTRA_RESOURCES,
         ...WINDOWS_SERVER_EXTRA_RESOURCES,
         ...WSL_RUNTIME_EXTRA_RESOURCES,
+        ...TRANSCRIPTION_EXTRA_RESOURCES,
       ]);
       // No Linux CLI archive means staging never writes the runtime, so
       // listing it here would fail the build on a missing source file.
       assert.deepStrictEqual(winWithoutWslPrebuild.extraResources, [
         ...DESKTOP_EXTRA_RESOURCES,
         ...WINDOWS_SERVER_EXTRA_RESOURCES,
+        ...TRANSCRIPTION_EXTRA_RESOURCES,
       ]);
       assert.deepStrictEqual(win.nsis, { differentialPackage: true });
       // The Claude SDK platform packages and .bin shims never ship.

@@ -413,3 +413,19 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
   `runBackendProcess`, chained after the readiness loop, and one per-instance kill history passed
   from `makeBackendInstance`. The logic lives in `t3team-backendHealthWatchdog.ts`; without the
   option the process runner is unchanged.
+
+## Desktop native voice transcription
+
+- `apps/desktop/src/main.ts` — one side-effect import of `transcription/t3team-transcriptionMain.ts`,
+  which registers the transcription IPC handlers once the app is ready. There is no fork extension
+  point for main-process IPC outside the Effect layer graph; the import keeps the layer graph untouched.
+- `apps/desktop/src/preload.ts` — one side-effect import of
+  `transcription/t3team-transcriptionPreload.ts`, which exposes `window.t3teamTranscription`. The
+  preload is a single bundle, so a fork bridge can only be added from inside it.
+- `apps/web/src/components/chat/ChatComposer.tsx` (already listed) — drops the `available={!isElectron}`
+  host gate on the composer mic; the gate now lives in `t3team-ComposerVoiceInput.tsx` (shown in
+  Electron only when a native engine is available).
+- `scripts/build-desktop-artifact.ts` / `.test.ts` (already listed) — stages the helper
+  (`scripts/lib/t3team-transcriptionHelper.ts`), ships it as an extra resource on mac/win, keeps the
+  staging copy out of app.asar, and adds the mic/speech Info.plist strings plus the
+  `com.apple.security.device.audio-input` entitlement.

@@ -134,3 +134,10 @@ export function ComposerVoiceInput({
 }
 
 export default ComposerVoiceInput;
+
+// Desktop native transcription bridge (OS speech-to-text in the Electron app).
+export {
+  getNativeTranscriptionBridge,
+  type NativeTranscriptionBridge,
+  type NativeTranscriptionStatus,
+} from "./t3team-voiceInputUi/t3team-nativeRecognition.ts";

@@ -1,6 +1,7 @@
 /* oxlint-disable t3code/no-native-title-tooltip -- shared package has no Tooltip primitive; importing the web app's would create a shared->web dependency. */
 import { useState, type ReactNode } from "react";
 import { STOP_MODES, type StopMode, type VoiceState } from "./t3team-types.ts";
+import { getLastNativeTranscriptionError } from "./t3team-nativeRecognition.ts";
 
 /**
  * The record/stop control as ONE connected element (approved lab variant
@@ -33,7 +34,12 @@ export function RecordingPill({
         disabled={disabled}
         onClick={onToggle}
         aria-label={denied ? "Mikrofon nicht verfügbar" : "Spracherkennung starten"}
-        title={denied ? "Mikrofon-Zugriff verweigert — Erlaubnis im Browser erteilen" : undefined}
+        title={
+          denied
+            ? (getLastNativeTranscriptionError() ??
+              "Mikrofon-Zugriff verweigert — Erlaubnis im Browser erteilen")
+            : undefined
+        }
         className={
           "flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-foreground transition-all hover:bg-accent" +
           (denied ? " opacity-50" : disabled ? " opacity-40" : "")

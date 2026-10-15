@@ -272,7 +272,6 @@ import { useEnvironmentQuery } from "~/state/query";
 import { useDebouncedValue } from "~/state/queries";
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { ComposerVoiceInput } from "./t3team-ComposerVoiceInput";
-import { isElectron } from "../../env";
 import { resolveModelPickerSelectedModel } from "./ModelPickerContent";
 import {
   type ComposerCommandItem,
@@ -7854,7 +7853,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                         disabled={
                           isConnecting || isComposerApprovalState || projectSelectionRequired
                         }
-                        available={!isElectron}
                       />
                     </>
                   ) : null}
