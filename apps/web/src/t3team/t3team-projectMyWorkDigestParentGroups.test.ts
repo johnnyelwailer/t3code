@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { createProjectBacklogTestTicket as createTicket } from "./t3team-projectBacklogTestUtils";
 import { digestParentGroups, digestSubtaskParent } from "./t3team-projectMyWorkDigestParentGroups";
-import { digestYesterdayGroupSummary } from "./t3team-projectMyWorkDigestYesterdayRecap";
+import { digestYesterdayGroupProgress } from "./t3team-projectMyWorkDigestYesterdayRecap";
 
 const story = (id: string, key: string) =>
   createTicket({
@@ -83,24 +83,20 @@ describe("digest parent groups", () => {
   });
 });
 
-describe("the yesterday group summary", () => {
-  it("rolls up outcomes most common first, then merged PRs", () => {
-    const item = (to: string | undefined, merged = 0) => ({
+describe("the yesterday group progress", () => {
+  it("counts the subtasks that ended up done, out of all of them", () => {
+    const item = (to: string | undefined) => ({
       id: Math.random().toString(),
       key: "k",
       title: "t",
       ...(to ? { outcome: { to } } : {}),
-      merged: Array.from({ length: merged }, () => ({}) as never),
+      merged: [],
       lastAtMs: 0,
     });
-    expect(
-      digestYesterdayGroupSummary([
-        item("Done"),
-        item("In Test"),
-        item("Done", 1),
-        item(undefined),
-      ]),
-    ).toBe("2 → Done · 1 → In Test · 1 PR merged");
-    expect(digestYesterdayGroupSummary([])).toBe("");
+    expect(digestYesterdayGroupProgress([item("Done"), item("Time Logging"), item("Done")])).toBe(
+      "2/3 done",
+    );
+    expect(digestYesterdayGroupProgress([item("In Test"), item(undefined)])).toBe("0/2 done");
+    expect(digestYesterdayGroupProgress([])).toBe("");
   });
 });

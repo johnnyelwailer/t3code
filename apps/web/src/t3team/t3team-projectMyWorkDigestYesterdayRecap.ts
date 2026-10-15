@@ -148,18 +148,14 @@ export function isDigestMorning(nowMs: number): boolean {
 }
 
 /**
- * A story group's roll-up of its subtasks' outcomes, most common first: "3 → Done · 1 → In Test",
- * plus merged PRs. Empty when nothing moved or merged.
+ * A story group's compact progress for the header's right edge: how many of the subtasks that
+ * moved yesterday ended up done, out of all of them ("2/3 done"). Each subtask row shows its own
+ * status, so the header only counts.
  */
-export function digestYesterdayGroupSummary(items: readonly DigestYesterdayWorkItem[]): string {
-  const counts = new Map<string, number>();
-  for (const item of items) {
-    if (item.outcome) counts.set(item.outcome.to, (counts.get(item.outcome.to) ?? 0) + 1);
-  }
-  const merged = items.reduce((sum, item) => sum + item.merged.length, 0);
-  const parts = [...counts]
-    .toSorted((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .map(([to, count]) => `${count} → ${to}`);
-  if (merged > 0) parts.push(`${merged} PR${merged === 1 ? "" : "s"} merged`);
-  return parts.join(" · ");
+export function digestYesterdayGroupProgress(items: readonly DigestYesterdayWorkItem[]): string {
+  if (items.length === 0) return "";
+  const done = items.filter(
+    (item) => item.outcome && outcomeLane(item.outcome.to) === "done",
+  ).length;
+  return `${done}/${items.length} done`;
 }

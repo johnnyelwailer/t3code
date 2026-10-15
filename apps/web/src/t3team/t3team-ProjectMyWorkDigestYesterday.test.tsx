@@ -75,12 +75,13 @@ const markup = renderToStaticMarkup(
 );
 
 describe("the yesterday widget", () => {
-  it("heads subtasks with their parent story and its roll-up", () => {
+  it("heads subtasks with their parent story and a compact progress, no roll-up subrow", () => {
     expect(markup.match(/digest-yesterday-story-group/g)).toHaveLength(1);
     const group = markup.slice(markup.indexOf("digest-yesterday-story-group"));
     expect(group.indexOf("IES-23265")).toBeLessThan(group.indexOf("IES-23704"));
     expect(markup).toContain("Einheitliche Formulardarstellung");
-    expect(markup).toContain("1 → Done · 1 → In Test");
+    expect(markup).toContain("1/2 done");
+    expect(markup).not.toContain("1 → Done ·");
   });
 
   it("keeps a standalone story as its own row", () => {

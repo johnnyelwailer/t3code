@@ -19,7 +19,7 @@ import {
 } from "~/t3team/t3team-projectMyWorkDigestParentGroups";
 import { digestRepoLabeler } from "~/t3team/t3team-projectMyWorkDigestRepoLabels";
 import {
-  digestYesterdayGroupSummary,
+  digestYesterdayGroupProgress,
   digestYesterdayRecap,
   digestYesterdaySummaryText,
   isDigestMorning,
@@ -111,8 +111,8 @@ function WorkItemLine({
 
 /**
  * A story with the subtasks that moved under it: the story's key and title as the header with
- * the roll-up of its subtasks' outcomes (and the story's own outcome and PRs when it moved too),
- * the subtasks nested below.
+ * a compact "2/3 done" (and the story's own outcome and PRs when it moved too), the subtasks
+ * nested below with their own statuses.
  */
 function StoryGroupLine({
   group,
@@ -124,7 +124,7 @@ function StoryGroupLine({
   onOpenTicket?: ((ticketId: string) => void) | undefined;
 }) {
   const { parent, parentItem } = group;
-  const summary = digestYesterdayGroupSummary(group.items);
+  const progress = digestYesterdayGroupProgress(group.items);
   const label = (
     <>
       <span className="shrink-0 font-mono text-muted-foreground">{parent.ref.displayId}</span>
@@ -162,8 +162,15 @@ function StoryGroupLine({
             {parentItem.outcome.to}
           </span>
         ) : null}
+        {progress !== "" ? (
+          <span
+            data-testid="digest-yesterday-group-progress"
+            className="ml-auto shrink-0 truncate text-2xs whitespace-nowrap text-muted-foreground tabular-nums"
+          >
+            {progress}
+          </span>
+        ) : null}
       </div>
-      {summary !== "" ? <p className="text-2xs text-muted-foreground">{summary}</p> : null}
       {parentItem && parentItem.merged.length > 0 ? (
         <DigestPrChips
           prs={parentItem.merged.map(asChangeRequest)}
