@@ -74,3 +74,15 @@ export const readHandoffBranchState = Effect.fn("t3team.threadHandoff.readBranch
     uncommittedChanges,
   } satisfies T3TeamThreadHandoffBranchState;
 });
+
+/**
+ * Whether the checkout has an `origin` remote, the one the other machine fetches the project
+ * from. A folder that is not a git repository has none either. Null when git could not tell.
+ */
+export const readHandoffHasOrigin = (vcs: Vcs, cwd: string) =>
+  git(vcs, cwd, ["config", "--get", "remote.origin.url"]).pipe(
+    // Exit 1: the key is not set (also outside a repository); anything else: could not tell.
+    Effect.map((out) =>
+      out?.exitCode === 0 ? out.stdout.trim().length > 0 : out?.exitCode === 1 ? false : null,
+    ),
+  );

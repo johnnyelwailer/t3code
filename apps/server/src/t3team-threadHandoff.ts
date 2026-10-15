@@ -33,7 +33,11 @@ import {
 } from "@t3tools/provider-core/server/handoffBudget";
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
-import { readHandoffBranchState, UNKNOWN_BRANCH_STATE } from "./t3team-threadHandoffBranchState.ts";
+import {
+  readHandoffBranchState,
+  readHandoffHasOrigin,
+  UNKNOWN_BRANCH_STATE,
+} from "./t3team-threadHandoffBranchState.ts";
 import {
   renderThreadHandoffSummary,
   threadHandoffRefusals,
@@ -105,6 +109,8 @@ export const prepareThreadHandoff = Effect.fn("t3team.threadHandoff.prepare")(fu
     deps.vcs === undefined || cwd === null
       ? UNKNOWN_BRANCH_STATE
       : yield* readHandoffBranchState(deps.vcs, cwd, shell.branch);
+  const hasOrigin =
+    deps.vcs === undefined || cwd === null ? null : yield* readHandoffHasOrigin(deps.vcs, cwd);
 
   // A read that fails is `null`: the verdict refuses it instead of counting none.
   const snapshot = yield* threads.getShellSnapshot({ location: "active" }).pipe(
@@ -141,6 +147,7 @@ export const prepareThreadHandoff = Effect.fn("t3team.threadHandoff.prepare")(fu
     refusals: threadHandoffRefusals({
       shell,
       branchState,
+      hasOrigin,
       liveSubagentChildren,
       boundScheduledTasks,
     }),

@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 
-import { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import {
+  type CloudSession,
+  EnvironmentId,
+  ProjectId,
+  T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE,
+} from "@t3tools/contracts";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vite-plus/test";
@@ -112,6 +117,94 @@ it.each([
     expect(row.getAttribute("aria-expanded")).toBe("false");
   } finally {
     for (const spy of spies) spy.mockRestore();
+    await act(async () => root.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+  }
+});
+
+// "Move to" a cloud machine, on the real menu: a connected machine (a choice) and a ready one not
+// connected yet (a connect button). A project without a git remote can't reach either: both are
+// shown disabled with the server's reason, and nothing moves or connects.
+it.each([
+  ["with a git remote moves to the cloud machine", true],
+  ["without a git remote is refused on the row", false],
+] as const)("a started thread %s", async (_, projectHasRemote) => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const onHandoffToEnvironment = vi.fn();
+  const onConnectCloudSession = vi.fn();
+  const session = (id: string, name: string) =>
+    ({
+      sessionId: id,
+      name,
+      phase: "ready",
+      environmentId: `env-${id}`,
+      machineLabel: "ubuntu-slim",
+      remainingSeconds: null,
+    }) as unknown as CloudSession;
+  const connected = session("cloud-a", "cloud-a");
+  const notConnected = session("cloud-b", "cloud-b");
+  try {
+    await act(async () => {
+      root.render(
+        <BranchToolbarEnvironmentSelector
+          displayMode="panel"
+          envLocked
+          environmentId={EnvironmentId.make("local")}
+          availableEnvironments={["local", "env-cloud-a"].map((id) => ({
+            environmentId: EnvironmentId.make(id),
+            projectId: ProjectId.make("project"),
+            label: id,
+            isPrimary: id === "local",
+            machine: id === "local" ? "server" : "cloud",
+          }))}
+          pendingCloudSessions={[connected, notConnected]}
+          connectedEnvironmentIds={new Set(["local", "env-cloud-a"])}
+          cloudEnvironmentIds={new Set(["env-cloud-a", "env-cloud-b"])}
+          onCreateCloudSession={vi.fn()}
+          onHandoffToEnvironment={onHandoffToEnvironment}
+          onConnectCloudSession={onConnectCloudSession}
+          projectHasRemote={projectHasRemote}
+        />,
+      );
+    });
+    const row = container.querySelector('[aria-label="Run on"]')!;
+    await press(row);
+    const listbox = document.querySelector<HTMLElement>('[role="listbox"]')!;
+    const options = () =>
+      [...listbox.querySelectorAll<HTMLElement>('[role="option"]')].map((o) => o.textContent);
+    const rowNamed = (name: string) =>
+      [...listbox.querySelectorAll<HTMLElement>("button, [aria-disabled]")].find((element) =>
+        element.textContent?.startsWith(name),
+      )!;
+
+    if (projectHasRemote) {
+      expect(options()).toEqual(["local", "cloud-aReady · ubuntu-slim"]);
+      expect(listbox.textContent).not.toContain(T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE);
+      await press(rowNamed("cloud-b"));
+      expect(onConnectCloudSession).toHaveBeenCalledExactlyOnceWith(notConnected);
+      await press(row);
+      const cloudOption = [
+        ...document.querySelectorAll<HTMLElement>('[role="listbox"] [role="option"]'),
+      ].find((option) => option.textContent?.startsWith("cloud-a"))!;
+      await press(cloudOption);
+      expect(onHandoffToEnvironment).toHaveBeenCalledExactlyOnceWith("env-cloud-a");
+    } else {
+      // Only this computer is still a choice; both cloud rows say why they are not.
+      expect(options()).toEqual(["local"]);
+      for (const name of ["cloud-a", "cloud-b"]) {
+        const blocked = rowNamed(name);
+        expect(blocked.getAttribute("aria-disabled")).toBe("true");
+        expect(blocked.textContent).toContain(T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE);
+        await press(blocked);
+      }
+      expect(onConnectCloudSession).not.toHaveBeenCalled();
+      expect(onHandoffToEnvironment).not.toHaveBeenCalled();
+    }
+  } finally {
     await act(async () => root.unmount());
     container.remove();
     vi.unstubAllGlobals();

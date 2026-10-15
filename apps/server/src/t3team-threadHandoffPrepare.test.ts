@@ -8,6 +8,7 @@ import {
   ThreadManagementService,
 } from "./orchestration-v2/ThreadManagementService.ts";
 import { prepareThreadHandoff } from "./t3team-threadHandoff.ts";
+import type { VcsProcess } from "./vcs/VcsProcess.ts";
 
 const THREAD = ThreadId.make("thread:source");
 const RUN = RunId.make("run:long");
@@ -29,6 +30,7 @@ const prepare = (input: {
   readonly waitForTurnEnd: boolean;
   readonly snapshotFails?: boolean;
   readonly scheduledTasks?: Effect.Effect<ReadonlyArray<never>, ScheduledTaskError>;
+  readonly vcs?: VcsProcess["Service"];
 }) => {
   const calls: string[] = [];
   let reads = 0;
@@ -64,7 +66,10 @@ const prepare = (input: {
   } as unknown as ProjectStore.ProjectStoreV2["Service"];
   const effect = prepareThreadHandoff(
     { threadId: THREAD, waitForTurnEnd: input.waitForTurnEnd },
-    input.scheduledTasks === undefined ? {} : { scheduledTasks: input.scheduledTasks },
+    {
+      ...(input.scheduledTasks === undefined ? {} : { scheduledTasks: input.scheduledTasks }),
+      ...(input.vcs === undefined ? {} : { vcs: input.vcs }),
+    },
   ).pipe(
     Effect.provideService(ThreadManagementService, threads),
     Effect.provideService(ProjectStore.ProjectStoreV2, projects),
@@ -105,6 +110,43 @@ describe("prepareThreadHandoff", () => {
         capture.refusals.map((refusal) => refusal.reason),
         ["unverified", "unverified", "unverified", "unverified"],
       );
+    }),
+  );
+
+  /** A git checkout of `/repo` on `feature/x`, pushed and clean; `origin` as given. */
+  const gitAt = (origin: string | null) =>
+    ({
+      run: (input: { readonly args: ReadonlyArray<string> }) => {
+        const command = input.args.find((arg) => !arg.startsWith("--"));
+        const out = (exitCode: number, stdout = "") => Effect.succeed({ exitCode, stdout });
+        if (command === "config") return origin === null ? out(1) : out(0, `${origin}\n`);
+        if (command === "rev-parse") return out(0, "abc123\n");
+        if (command === "rev-list") return out(0, "0\n");
+        return out(0);
+      },
+    }) as unknown as VcsProcess["Service"];
+
+  it.effect("refuses a checkout without an origin remote: the other machine can't get it", () =>
+    Effect.gen(function* () {
+      const { effect } = prepare({ shells: [null], waitForTurnEnd: false, vcs: gitAt(null) });
+      const capture = yield* effect;
+      assert.deepStrictEqual(
+        capture.refusals.map((refusal) => refusal.reason),
+        ["no_git_remote"],
+      );
+    }),
+  );
+
+  it.effect("lets a pushed, clean checkout with an origin remote move", () =>
+    Effect.gen(function* () {
+      const { effect } = prepare({
+        shells: [null],
+        waitForTurnEnd: false,
+        vcs: gitAt("git@github.com:o/r.git"),
+      });
+      const capture = yield* effect;
+      assert.deepStrictEqual(capture.refusals, []);
+      assert.strictEqual(capture.branchState.upstream, "origin/feature/x");
     }),
   );
 });
