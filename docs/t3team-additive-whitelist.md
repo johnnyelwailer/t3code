@@ -413,3 +413,12 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
   `runBackendProcess`, chained after the readiness loop, and one per-instance kill history passed
   from `makeBackendInstance`. The logic lives in `t3team-backendHealthWatchdog.ts`; without the
   option the process runner is unchanged.
+
+## `t3_show_widget` maps to upstream HTML renders (2026-10-13)
+
+- `packages/shared/src/t3McpToolPresentation.ts` — one import and one spread of
+  `T3TEAM_MCP_TOOLS` (`t3team-mcpToolPresentation.ts`) into the T3 tool inventory, so fork tools
+  on the `t3-code` server get upstream's cards, summaries and ACP identity recovery.
+- `packages/shared/src/toolOutput.ts` — `htmlRenderFromToolItem` gates on the tool's
+  `html-render` summary action instead of the literal `html_render` name, so `t3_show_widget`
+  results render inline (and are cleaned up on thread deletion) through upstream's path.
