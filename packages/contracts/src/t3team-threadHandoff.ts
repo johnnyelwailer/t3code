@@ -20,6 +20,7 @@ import {
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
+import type { RepositoryIdentity } from "./environment.ts";
 
 /** Thread facts `extensions` key holding a {@link T3TeamThreadHandoffLink}. */
 export const T3TEAM_THREAD_HANDOFF_FACT_KEY = "t3team.threadHandoff";
@@ -50,6 +51,13 @@ export type T3TeamThreadHandoffRefusalReason = typeof T3TeamThreadHandoffRefusal
  */
 export const T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE =
   "No `origin` remote: another machine can't get this project's files. Add an origin remote and push, then move.";
+
+/**
+ * Whether a project resolved its identity from `origin`, the remote the server's refusal checks.
+ * The resolver prefers `origin`, so an identity from any other remote means there is none.
+ */
+export const t3teamProjectHasOriginRemote = (identity: RepositoryIdentity | null | undefined) =>
+  identity?.locator.remoteName === "origin";
 
 export const T3TeamThreadHandoffRefusal = Schema.Struct({
   reason: T3TeamThreadHandoffRefusalReason,

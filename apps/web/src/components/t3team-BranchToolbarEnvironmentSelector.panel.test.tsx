@@ -5,6 +5,7 @@ import {
   EnvironmentId,
   ProjectId,
   T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE,
+  t3teamProjectHasOriginRemote,
 } from "@t3tools/contracts";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -125,13 +126,22 @@ it.each([
   }
 });
 
+const identityFrom = (remoteName: string) =>
+  ({
+    canonicalKey: "github.com/acme/app",
+    locator: { source: "git-remote", remoteName, remoteUrl: "git@github.com:acme/app.git" },
+  }) as const;
+
 // "Move to" a cloud machine, on the real menu: a connected machine (a choice) and a ready one not
-// connected yet (a connect button). A project without a git remote can't reach either: both are
-// shown disabled with the server's reason, no new cloud session is offered, and nothing moves.
+// connected yet (a connect button). A project without an `origin` remote can't reach either (the
+// server refuses on `origin` alone, so an upstream-only checkout is blocked too): both are shown
+// disabled with the server's reason, no new cloud session is offered, and nothing moves.
 it.each([
-  ["with a git remote moves to the cloud machine", true],
-  ["without a git remote is refused on the row", false],
-] as const)("a started thread %s", async (_, projectHasRemote) => {
+  ["with an origin remote moves to the cloud machine", identityFrom("origin")],
+  ["with only an upstream remote is refused on the row", identityFrom("upstream")],
+  ["without a git remote is refused on the row", null],
+] as const)("a started thread %s", async (_, repositoryIdentity) => {
+  const projectHasRemote = t3teamProjectHasOriginRemote(repositoryIdentity);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const container = document.createElement("div");
   document.body.append(container);
