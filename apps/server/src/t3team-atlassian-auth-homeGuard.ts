@@ -29,8 +29,7 @@ export function atlassianHomeIdForSecretsDir(
 ): string {
   let resolved = NodePath.resolve(secretsDir);
   // Case-insensitive filesystems: the same directory must hash to the same id.
-  if (platform === "win32" || platform === "darwin")
-    resolved = resolved.toLowerCase();
+  if (platform === "win32" || platform === "darwin") resolved = resolved.toLowerCase();
   return NodeCrypto.createHash("sha256").update(resolved).digest("hex").slice(0, 32);
 }
 
