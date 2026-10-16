@@ -67,7 +67,7 @@ export class GitHubApi extends Context.Service<
       GitHubApiError
     >;
   }
->()("@t3tools/source-control-github/server/GitHubApi") {}
+>()("@t3tools/source-control-github/server/t3team-GitHubApi/GitHubApi") {}
 
 /** A stable short id for a GraphQL document, so traces group by query without its text. */
 function queryHash(query: string): string {

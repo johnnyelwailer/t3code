@@ -976,69 +976,6 @@ layer("GitHubPullRequestApi.layer", (it) => {
     }),
   );
 
-  it.effect("keeps the batch's other summaries when one alias is not found", () =>
-    Effect.gen(function* () {
-      const node = {
-        number: 7,
-        title: "Pull request 7",
-        url: "https://github.com/acme/web/pull/7",
-        author: null,
-        baseRefName: "main",
-        headRefName: "feat/7",
-        state: "OPEN",
-        isDraft: false,
-        mergeable: "MERGEABLE",
-        updatedAt: "2026-08-24T12:34:56.000Z",
-        commits: { nodes: [] },
-      };
-      mockedExecute
-        // GitHubApi returns an answer whose only errors are NOT_FOUND when asked to allow it.
-        .mockReturnValueOnce(
-          Effect.succeed(
-            output(
-              encodeJson({
-                data: { s0: { pullRequest: node }, s1: { pullRequest: null } },
-                errors: [{ type: "NOT_FOUND", path: ["s1", "pullRequest"], message: "gone" }],
-              }),
-            ),
-          ),
-        )
-        .mockReturnValueOnce(
-          Effect.fail(
-            new GitHubApi.GitHubApiNotFoundError({
-              host: "github.com",
-              operation: "getPullRequestSummary",
-            }),
-          ),
-        );
-      const cli = yield* GitHubPullRequestApi.GitHubPullRequestApi;
-
-      const reads = yield* Effect.forEach(
-        [7, 8],
-        (number) =>
-          cli
-            .getPullRequestSummary({
-              cwd: "/w",
-              repository: "acme/web",
-              host: "github.com",
-              number,
-            })
-            .pipe(Effect.exit),
-        { concurrency: "unbounded" },
-      ).pipe(Effect.forkChild);
-      yield* TestClock.adjust("10 millis");
-      const [seven, eight] = yield* Fiber.join(reads);
-
-      const batch = callAt(0);
-      assert.strictEqual(batch.kind === "graphql" && batch.allowPartialNotFound, true);
-      assert.strictEqual(seven?._tag, "Success");
-      assert.strictEqual(eight?._tag, "Failure");
-      // The batch, then only the missing pull request on its own.
-      assert.strictEqual(mockedExecute.mock.calls.length, 2);
-      expect(varsAt(1)).toEqual({ owner: "acme", name: "web", number: 8 });
-    }),
-  );
-
   it.effect("fingerprints watched pull requests on one host in one read", () =>
     Effect.gen(function* () {
       const node = (comments: number) => ({

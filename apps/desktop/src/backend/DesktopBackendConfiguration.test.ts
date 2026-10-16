@@ -376,7 +376,7 @@ describe("DesktopBackendConfiguration", () => {
         return yield* configuration.resolvePrimary;
       }).pipe(
         Effect.provide(
-          DesktopBackendConfiguration.layer.pipe(
+          layerBackendConfiguration().pipe(
             Layer.provideMerge(layerServerExposure),
             Layer.provideMerge(DesktopAppSettings.layerTest()),
             Layer.provideMerge(DesktopWslEnvironment.layerTest()),
@@ -461,7 +461,7 @@ describe("DesktopBackendConfiguration", () => {
           return yield* configuration.resolvePrimary;
         }).pipe(
           Effect.provide(
-            DesktopBackendConfiguration.layer.pipe(
+            layerBackendConfiguration().pipe(
               Layer.provideMerge(layerServerExposure),
               Layer.provideMerge(DesktopAppSettings.layerTest()),
               Layer.provideMerge(DesktopWslEnvironment.layerTest()),
@@ -521,7 +521,7 @@ describe("DesktopBackendConfiguration", () => {
               return yield* configuration.resolvePrimary;
             }).pipe(
               Effect.provide(
-                DesktopBackendConfiguration.layer.pipe(
+                layerBackendConfiguration().pipe(
                   Layer.provideMerge(layerServerExposure),
                   Layer.provideMerge(DesktopAppSettings.layerTest()),
                   Layer.provideMerge(DesktopWslEnvironment.layerTest()),

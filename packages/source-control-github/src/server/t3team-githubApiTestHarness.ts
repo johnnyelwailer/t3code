@@ -47,7 +47,7 @@ export function makeGitHubApiHarness(
   );
   const layer = GitHubApi.layer.pipe(
     Layer.provideMerge(GitHubRest.layer),
-    Layer.provide(Layer.mergeAll(credentials, http)),
+    Layer.provideMerge(Layer.mergeAll(credentials, http)),
     Layer.provideMerge(GitHubQuota.layer),
     Layer.provideMerge(SourceControlRateLimit.layer),
   );
