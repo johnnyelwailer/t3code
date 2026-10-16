@@ -405,6 +405,13 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
 - `apps/web/src/components/auth/ConnectAgentSurface.tsx`, `apps/web/src/routes/connect-agent.tsx`
 - `oxlint-plugin-t3code/rules/no-raw-mcp-registration.ts`, `…/no-raw-mcp-registration.test.ts`
 
+### Upstream sync 2026-10-16
+
+- `apps/server/src/cli/sshHelper.test.ts`
+  - The pick-port case spawns `bin.ts` directly; the fork's `bin.ts` boots the distribution layer, which needs `scripts/t3team-distribution-devLoader.ts`, so the spawn adds `--import` of that loader. Test-only.
+- `apps/server/src/persistence/Sqlite.test.ts`
+  - The planner-stats case asserted the exact `sqlite_stat1` row `"1000 100"`; under the fork's runtime the bounded `PRAGMA optimize = 0x10012` sample reports `"1000 90"`. The case now asserts the exact row count and a sane per-key estimate. Test-only.
+
 ## `changeRequest.summary` slot (T8)
 
 - `apps/web/src/components/pullRequest/PullRequestSummaryTab.tsx` — one import and one
