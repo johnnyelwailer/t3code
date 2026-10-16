@@ -18,7 +18,7 @@ import * as ForgejoDriver from "@t3tools/source-control-forgejo/server/driver";
 import * as GitCafeApi from "@t3tools/source-control-gitcafe/server/GitCafeApi";
 import * as GitCafeCredentials from "@t3tools/source-control-gitcafe/server/GitCafeCredentials";
 import * as GitCafeDriver from "@t3tools/source-control-gitcafe/server/driver";
-import * as GitHubRest from "@t3tools/source-control-github/server/GitHubRest";
+import * as T3TeamGitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as GitHubPullRequestApi from "@t3tools/source-control-github/server/GitHubPullRequestApi";
 import * as GitHubDriver from "@t3tools/source-control-github/server/driver";
 import * as GitLabCli from "@t3tools/source-control-gitlab/server/GitLabCli";
@@ -47,8 +47,11 @@ export const BUILT_IN_SOURCE_CONTROL_DRIVERS: ReadonlyArray<
   SourceControlDriver<BuiltInSourceControlDriversEnv>
 > = drivers;
 
-/** The GitHub transport with the credential, quota and pause its readers share. */
-type GitHubTransportLayer = typeof GitHubRest.layerWithDependencies;
+/**
+ * The GitHub transport with the credential, quota and pause its readers share: upstream's
+ * `GitHubRest.layerWithDependencies` plus the fork's `GitHubApi` facade over it (t3team).
+ */
+type GitHubTransportLayer = typeof T3TeamGitHubApi.layerWithDependencies;
 
 /**
  * The services the built-in drivers' packages own, plus the host port they all run against.
@@ -57,7 +60,7 @@ type GitHubTransportLayer = typeof GitHubRest.layerWithDependencies;
  * it so it is not built a second time.
  */
 export const makeLayer = (
-  gitHubTransport: GitHubTransportLayer = GitHubRest.layerWithDependencies,
+  gitHubTransport: GitHubTransportLayer = T3TeamGitHubApi.layerWithDependencies,
 ) =>
   Layer.mergeAll(
     GitHubPullRequestApi.layer.pipe(Layer.provideMerge(gitHubTransport)),

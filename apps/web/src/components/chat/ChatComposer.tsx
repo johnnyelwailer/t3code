@@ -296,7 +296,6 @@ import {
   composerSuggestionOptionId,
 } from "./ComposerCommandMenu";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
-import { useComposerPathSearch } from "../../lib/composerPathSearchState";
 import { searchProviderSkills } from "../../providerSkillSearch";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";

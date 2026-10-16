@@ -275,6 +275,8 @@ import * as OtlpEndpointCheck from "./observability/OtlpEndpointCheck.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as GitHubCredentials from "@t3tools/source-control-github/server/GitHubCredentials";
+import * as GitHubRequestPolicy from "@t3tools/source-control-github/server/GitHubRequestPolicy";
+import * as GitHubRest from "@t3tools/source-control-github/server/GitHubRest";
 import * as GitHubQuota from "@t3tools/source-control-github/server/GitHubQuota";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import * as SourceControlBuiltInDrivers from "./sourceControl/builtInDrivers.ts";
@@ -3433,6 +3435,11 @@ export const layer = Layer.unwrap(
     // connection; rebuilding `layerWithDependencies` per connection gave each client its own budget.
     const gitHubTransport = Layer.mergeAll(
       Layer.succeed(GitHubApi.GitHubApi, yield* GitHubApi.GitHubApi),
+      Layer.succeed(GitHubRest.GitHubRest, yield* GitHubRest.GitHubRest),
+      Layer.succeed(
+        GitHubRequestPolicy.GitHubRequestPolicy,
+        yield* GitHubRequestPolicy.GitHubRequestPolicy,
+      ),
       Layer.succeed(
         GitHubCredentials.GitHubCredentials,
         yield* GitHubCredentials.GitHubCredentials,
