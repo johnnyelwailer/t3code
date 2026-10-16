@@ -6728,10 +6728,9 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           });
           // Upstream #16897 retired the attempt-derived prompt uuid: Claude acks a uuid its
           // transcript already holds without running a turn, so every offer needs a fresh one.
-          const promptUuid = yield* crypto.randomUUIDv4().pipe(
-            Effect.filterOrFail(isClaudePromptUuid),
-            Effect.orDie,
-          );
+          const promptUuid = yield* crypto
+            .randomUUIDv4()
+            .pipe(Effect.filterOrFail(isClaudePromptUuid), Effect.orDie);
           // Gate the turn on the re-drive prompt NOW, not after the wait: a wake turn the idle
           // CLI runs during the backoff (a background task finished) must not settle this turn.
           context.promptUuid = promptUuid;
