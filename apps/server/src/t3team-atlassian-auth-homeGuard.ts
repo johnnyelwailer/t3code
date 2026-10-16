@@ -2,6 +2,7 @@
 import * as NodeCrypto from "node:crypto";
 import * as NodePath from "node:path";
 import * as Effect from "effect/Effect";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import { ServerConfig } from "./config.ts";
 
@@ -22,16 +23,21 @@ import { ServerConfig } from "./config.ts";
  */
 let secretHomeId: string | undefined;
 
-export function atlassianHomeIdForSecretsDir(secretsDir: string): string {
+export function atlassianHomeIdForSecretsDir(
+  secretsDir: string,
+  platform: NodeJS.Platform = "linux",
+): string {
   let resolved = NodePath.resolve(secretsDir);
-  if (process.platform === "win32" || process.platform === "darwin")
+  // Case-insensitive filesystems: the same directory must hash to the same id.
+  if (platform === "win32" || platform === "darwin")
     resolved = resolved.toLowerCase();
   return NodeCrypto.createHash("sha256").update(resolved).digest("hex").slice(0, 32);
 }
 
 export const currentAtlassianHomeId = Effect.gen(function* () {
   const { secretsDir } = yield* ServerConfig;
-  return atlassianHomeIdForSecretsDir(secretsDir);
+  const platform = yield* HostProcess.Platform;
+  return atlassianHomeIdForSecretsDir(secretsDir, platform);
 });
 
 /** After a reload: the id stored in the file, or undefined for a file written before ids existed. */
