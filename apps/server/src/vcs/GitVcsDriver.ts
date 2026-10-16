@@ -862,7 +862,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       // HEAD, and an idempotent update-ref — so retrying a timed-out attempt
       // from scratch is always safe.
       const attempt = Effect.gen(function* () {
-        const indexId = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
+        const indexId = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
         const tempIndexPath = path.join(gitCommonDir, `t3-checkpoint-index-${indexId}`);
         const commitEnv: NodeJS.ProcessEnv = {
           ...process.env,

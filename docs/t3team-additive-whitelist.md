@@ -22,7 +22,13 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20261012` → the 2026-10-12 upstream sync merge commit
+- Current: `t3team/fork-baseline-20261015` → the 2026-10-15 upstream sync merge commit
+  `9c38e942cd` (107 upstream commits absorbed, `11fd54fcbb..e536bfd33b`, after merging fork main
+  `1d15b3ecfc`). Grandfathered: upstream's tree plus the conflict resolutions in that merge.
+  Post-merge fixes on the sync branch stay measured.
+- Before that: `t3team/fork-baseline-20261013` → fork commit `8d151d69b9` (post-fix tip of the
+  2026-10-12/13 sync branch).
+- Before that: `t3team/fork-baseline-20261012` → the 2026-10-12 upstream sync merge commit
   `7006978420` (434 upstream commits absorbed, `04ad17425a..48595c787c`). Grandfathered: upstream's
   tree plus the conflict resolutions in that merge. Post-merge fixes on the sync branch stay measured.
 - Before that: `t3team/fork-baseline-20261008` → the 2026-10-08 upstream sync merge commit

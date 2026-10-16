@@ -13,6 +13,7 @@ import {
   type OrchestrationV2Subagent,
   type OrchestrationV2ThreadProjection,
   type OrchestrationV2ThreadShell,
+  type OrchestrationV2ThreadLaunchWorkspaceStrategy,
   type OrchestrationV2TurnItem,
   OrchestratorMcpFailure,
   type OrchestratorMcpCapabilitiesResult,
@@ -83,7 +84,10 @@ import {
   DispatchModeLimit,
   type DispatchModeRefusal,
 } from "../orchestration-v2/DispatchModeLimit.ts";
+import { runOutcome } from "../orchestration-v2/RestartBackgroundNote.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
+import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
+import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import { isSnoozed } from "../orchestration-v2/ThreadSettlementService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
@@ -102,13 +106,14 @@ import { ThreadMailboxDelivery } from "./t3team-threadMailboxDelivery.ts";
 
 const DEFAULT_WAIT_TIMEOUT_MS = 10 * 60 * 1_000;
 const MAX_WAIT_TIMEOUT_MS = 60 * 60 * 1_000;
-// Events that can make a delegated task terminal: the parent's task record,
-// and the child's runs, nested tasks, and pending provider background work.
+// Events that can end a delegated task wait: the parent's task record,
+// and the child's runs, nested tasks, provider background work, and questions.
 const TASK_WAKE_EVENTS = [
   { thread: "parent", eventType: "subagent.updated" },
   { thread: "child", eventType: "run.updated" },
   { thread: "child", eventType: "subagent.updated" },
   { thread: "child", eventType: "provider-thread.updated" },
+  { thread: "child", eventType: "runtime-request.updated" },
 ] as const;
 /** A person answers the card, so a slower poll is plenty. */
 const SECRET_REQUEST_POLL_INTERVAL_MS = 500;
@@ -332,9 +337,9 @@ function invalidOptionSelections(
 }
 
 function taskStatusForRun(
-  run: Pick<OrchestrationV2Run, "status"> | undefined,
+  run: Pick<OrchestrationV2Run, "status" | "restartCancelledBackgroundWork"> | undefined,
 ): OrchestratorMcpDelegateTaskResult["status"] {
-  switch (run?.status) {
+  switch (run === undefined ? undefined : runOutcome(run)) {
     case "queued":
       return "queued";
     case "waiting":
@@ -909,6 +914,8 @@ const make = Effect.gen(function* () {
   const providerAdapters = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
   const scheduledTasks = yield* ScheduledTaskService.ScheduledTaskService;
   const projects = yield* ProjectService.ProjectService;
+  const threadLaunch = yield* ThreadLaunchService.ThreadLaunchService;
+  const gitDriver = yield* GitVcsDriver.GitVcsDriver;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
 
   /** A caller-named project, which must exist before anything is recorded against it. */
@@ -1334,7 +1341,7 @@ const make = Effect.gen(function* () {
 
   const requestKey = (clientRequestId: string | undefined): Effect.Effect<string> =>
     clientRequestId === undefined
-      ? crypto.randomUUIDv4.pipe(Effect.orDie)
+      ? crypto.randomUUIDv4().pipe(Effect.orDie)
       : Effect.succeed(clientRequestId);
 
   const readTask = (
@@ -1362,7 +1369,14 @@ const make = Effect.gen(function* () {
       const childControls = yield* threadManagement
         .getThreadRecords(
           task.childThreadId,
-          ["runs", "messages", "contextTransfers", "subagents", "providerThreads"],
+          [
+            "runs",
+            "messages",
+            "contextTransfers",
+            "subagents",
+            "providerThreads",
+            "runtimeRequests",
+          ],
           { messageRoles: ["user"] },
         )
         .pipe(Effect.mapError(threadManagementFailure));
@@ -1467,6 +1481,15 @@ const make = Effect.gen(function* () {
             : subagentResultForRun(childProjection, terminalRun).text
           : null,
         latestTerminalResultContextTransferId: resultTransferForRun(terminalRun)?.id ?? null,
+        // A finished task has no question of its own; later child runs belong to other tasks.
+        hasPendingQuestion:
+          !isTerminalTaskStatus(status) &&
+          childControls.runtimeRequests.some(
+            (request) =>
+              request.kind === "user_input" &&
+              request.status === "pending" &&
+              request.responseCapability.type === "live",
+          ),
         waitTimedOut,
       } satisfies OrchestratorMcpDelegateTaskResult;
       if (
@@ -1519,7 +1542,9 @@ const make = Effect.gen(function* () {
         .getThreadEventSequence(scope.thread.threadId)
         .pipe(Effect.mapError(streamError));
       const initial = yield* readTask(scope, taskId, false, true);
-      if (isTerminalTaskStatus(initial.status)) return Option.some(initial);
+      if (initial.hasPendingQuestion || isTerminalTaskStatus(initial.status)) {
+        return Option.some(initial);
+      }
       // One stream per event type, so transcript events never fill a buffer.
       return yield* Stream.mergeAll(
         TASK_WAKE_EVENTS.map(({ thread, eventType }) =>
@@ -1533,7 +1558,7 @@ const make = Effect.gen(function* () {
       ).pipe(
         Stream.mapError(streamError),
         Stream.mapEffect(() => readTask(scope, taskId, false, true)),
-        Stream.filter((result) => isTerminalTaskStatus(result.status)),
+        Stream.filter((result) => result.hasPendingQuestion || isTerminalTaskStatus(result.status)),
         Stream.runHead,
       );
     }).pipe(Effect.timeoutOption(Duration.millis(timeoutMs)), Effect.map(Option.flatten));
@@ -2020,6 +2045,30 @@ const make = Effect.gen(function* () {
           parent.thread.interactionMode,
           input.interactionMode,
         );
+        // t3team: upstream's isolation:"worktree" (checkout from the parent's local commit) and the
+        // fork's workspace:{isolation:"worktree"} (new branch from the repository default/baseRef)
+        // each create a worktree; one request may use only one of them.
+        if (input.isolation === "worktree" && input.workspace?.isolation === "worktree") {
+          return yield* failure(
+            "invalid_request",
+            'Pass either isolation:"worktree" or workspace:{isolation:"worktree"}, not both.',
+          );
+        }
+        let workspaceStrategy: OrchestrationV2ThreadLaunchWorkspaceStrategy | undefined;
+        if (input.isolation === "worktree" && !isRetryOfAcceptedDelegation) {
+          const project = yield* requireProject(parent.thread.projectId);
+          const base = yield* gitDriver
+            .resolveCommit({
+              cwd: parent.thread.worktreePath ?? project.workspaceRoot,
+              revision: "HEAD",
+            })
+            .pipe(
+              Effect.mapError(() =>
+                failure("invalid_request", "Unable to resolve the parent checkout commit."),
+              ),
+            );
+          workspaceStrategy = { type: "worktree", baseRef: base.commitSha, startFromOrigin: false };
+        }
         // ThreadManagementService.dispatch is the chokepoint for this command
         // type's own enablement check, using the same command id and its
         // receipt-replay exemption, so no separate assert runs here.
@@ -2047,6 +2096,7 @@ const make = Effect.gen(function* () {
             modelSelection: prepared.modelSelection,
             runtimeMode,
             interactionMode,
+            ...(workspaceStrategy === undefined ? {} : { workspaceStrategy }),
             // Async delegations wake the parent on every child terminal; wait
             // delegations deliver through the blocking tool call, so a wake is
             // only needed if the parent settled first (timeout, disconnect).
@@ -2078,6 +2128,21 @@ const make = Effect.gen(function* () {
         }
         const taskId = taskEvent.event.payload.id;
         const childThreadId = taskEvent.event.payload.childThreadId;
+        const childRunEvent = result.storedEvents.find(
+          (stored) =>
+            stored.event.type === "run.created" && stored.event.threadId === childThreadId,
+        );
+        if (
+          childThreadId !== null &&
+          childRunEvent?.event.type === "run.created" &&
+          childRunEvent.event.payload.workspacePreparation !== undefined
+        ) {
+          yield* threadLaunch.prepareRun({
+            commandId,
+            threadId: childThreadId,
+            runId: childRunEvent.event.payload.id,
+          });
+        }
         // t3team: a retried request whose child already existed replays the receipt; its
         // post-create effects (setup script, tool context) already ran once.
         const replayed = parent.subagents.some((existing) => existing.id === taskId);
@@ -2110,13 +2175,12 @@ const make = Effect.gen(function* () {
           Math.max(1, input.timeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS),
         );
         const waited = yield* waitForTask(scope, taskId, timeoutMs);
-        if (Option.isSome(waited)) {
+        if (Option.isSome(waited) && isTerminalTaskStatus(waited.value.status)) {
           return withDelegation(waited.value);
         }
-        // The blocking wait timed out, so it no longer owns delivery: upgrade
-        // the task so a later terminal wakes the parent even mid-turn. Best
-        // effort; on failure the settled_only policy still wakes a settled
-        // parent.
+        // An incomplete wait gives up delivery: upgrade so a later terminal
+        // wakes the parent even mid-turn. Best effort; settled_only still
+        // wakes a settled parent if the upgrade fails.
         yield* threadManagement
           .dispatch({
             type: "delegated_task.wake-policy",
@@ -2130,7 +2194,7 @@ const make = Effect.gen(function* () {
             completionWake: "always",
           })
           .pipe(
-            // The tool result is the timed-out task either way, so failures
+            // The tool result still returns after a timeout or question, so failures
             // stay warnings. Keep the two shapes apart: a rejected receipt
             // means this exact command id already failed (a replay of a
             // no-op upgrade), while anything else is a fresh dispatch fault.
@@ -2152,7 +2216,7 @@ const make = Effect.gen(function* () {
               }),
             ),
           );
-        return withDelegation(yield* readTask(scope, taskId, true, true));
+        return withDelegation(yield* readTask(scope, taskId, Option.isNone(waited), true));
       }),
     taskStatus: (callerScope, taskId) =>
       Effect.gen(function* () {
@@ -2695,7 +2759,7 @@ const make = Effect.gen(function* () {
         return {
           threadId: input.threadId,
           runId: result.run?.id ?? null,
-          status: result.run?.status ?? "idle",
+          status: result.run === null ? "idle" : runOutcome(result.run),
           timedOut: result.timedOut,
         } satisfies OrchestratorMcpThreadWaitResult;
       }),
@@ -2750,6 +2814,8 @@ export const layer: Layer.Layer<
   never,
   | Crypto.Crypto
   | ThreadManagementService.ThreadManagementService
+  | ThreadLaunchService.ThreadLaunchService
+  | GitVcsDriver.GitVcsDriver
   | ProviderRegistry.ProviderRegistry
   | ProviderAdapterRegistry.ProviderAdapterRegistryV2
   | ScheduledTaskService.ScheduledTaskService
