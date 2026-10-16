@@ -15,5 +15,7 @@ export const T3TeamEnvironmentCapabilities = Schema.Struct({
   packStore: Schema.optionalKey(Schema.Boolean),
   /** Server serves "stop including sub-runs" (`t3team.stopThreadCascade`). */
   stopCascade: Schema.optionalKey(Schema.Boolean),
+  /** Server serves thread handoff capture/record (`t3team.threadHandoff.*`). */
+  threadHandoff: Schema.optionalKey(Schema.Boolean),
 });
 export type T3TeamEnvironmentCapabilities = typeof T3TeamEnvironmentCapabilities.Type;
