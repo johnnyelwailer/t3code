@@ -138,6 +138,21 @@ const stripSyncState = ({
   ...entry
 }: LinkedRepositoryBootstrapResult): LinkedRepositoryBootstrapResult => entry;
 
+/** The manifest's linked repositories after a bootstrap. An explicit list (a user save) is
+ * authoritative: a repository the user removed leaves the manifest, so it cannot come back on the
+ * next read (it used to be kept forever and re-appeared after every removal). Without a list
+ * (a recurring bootstrap that only re-records) earlier entries are kept, see
+ * {@link mergeLinkedRepositoryEntries}. */
+export function resolveManifestLinkedRepositories(input: {
+  readonly preserved: ReadonlyArray<LinkedRepositoryBootstrapResult>;
+  readonly fresh: ReadonlyArray<LinkedRepositoryBootstrapResult>;
+  readonly explicitList: boolean;
+}): ReadonlyArray<LinkedRepositoryBootstrapResult> {
+  return input.explicitList
+    ? [...input.fresh]
+    : mergeLinkedRepositoryEntries(input.preserved, input.fresh);
+}
+
 /** Earlier manifest entries, each replaced by this bootstrap's result for the same repository;
  * repositories new to the manifest are appended. */
 export function mergeLinkedRepositoryEntries(
