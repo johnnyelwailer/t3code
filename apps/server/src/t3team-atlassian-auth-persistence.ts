@@ -11,6 +11,8 @@ import { t3teamRandomUUID } from "./t3team-random.ts";
 
 export type PersistedAtlassianAuths = {
   readonly version: 1;
+  /** Hash of the secrets directory this secret was written for; see auth-homeGuard. */
+  readonly homeId?: string;
   readonly auths: ReadonlyArray<{
     readonly accountId: string;
     readonly auth: JiraApiAuth;
@@ -45,6 +47,7 @@ const PersistedJiraApiAuth = Schema.Union([
 
 const PersistedAtlassianAuths = Schema.Struct({
   version: Schema.Literal(1),
+  homeId: Schema.optional(Schema.String),
   auths: Schema.Array(
     Schema.Struct({
       accountId: Schema.String,

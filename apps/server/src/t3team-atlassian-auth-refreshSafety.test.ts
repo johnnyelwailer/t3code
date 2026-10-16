@@ -179,6 +179,46 @@ it.effect("after invalid_grant, waits and adopts a newer token written meanwhile
   }).pipe(Effect.provide(testLayer("t3team-atlassian-refresh-adopt-late-"))),
 );
 
+it.effect("unauthorized_client with refresh_token is invalid re-reads before flagging", () =>
+  Effect.gen(function* () {
+    setDeadTokenRecheckDelayMsForTest(150);
+    vi.stubEnv("T3TEAM_ATLASSIAN_CLIENT_ID", "client-id");
+    vi.stubEnv("T3TEAM_ATLASSIAN_CLIENT_SECRET", "client-secret");
+    replaceAtlassianAuths([{ accountId: "cloud-1", auth: expiredOAuthAuth("cloud-1") }]);
+    yield* savePersistedAuths;
+    const now = yield* Clock.currentTimeMillis;
+    const newer = {
+      ...expiredOAuthAuth("cloud-1", "newer-refresh"),
+      accessToken: "newer-access",
+      expiresAt: now + 3_600_000,
+    };
+    const config = yield* ServerConfig.ServerConfig;
+    const secretPath = NodePath.join(config.secretsDir, "t3team-atlassian-auths.bin");
+    globalThis.fetch = vi.fn(async () => {
+      setTimeout(() => {
+        void NodeFSP.writeFile(
+          secretPath,
+          JSON.stringify({ version: 1, auths: [{ accountId: "cloud-1", auth: newer }] }),
+        );
+      }, 30);
+      return Response.json(
+        {
+          error: "unauthorized_client",
+          error_description: "The refresh_token is invalid",
+        },
+        { status: 403 },
+      );
+    }) as unknown as typeof fetch;
+
+    const provider = yield* providerForAccount("cloud-1");
+
+    assert.isDefined(provider);
+    assert.isFalse(accountNeedsReconnect("cloud-1"));
+    const auth = (yield* loadPersistedAtlassianAuthsPayload)?.auths.at(0)?.auth;
+    assert.equal(auth?.kind === "oauth" ? auth.refreshToken : undefined, "newer-refresh");
+  }).pipe(Effect.provide(testLayer("t3team-atlassian-refresh-unauthorized-adopt-"))),
+);
+
 it.effect("a deferred 401 flag is dropped when a newer token is on disk (CAS)", () =>
   Effect.gen(function* () {
     replaceAtlassianAuths([
