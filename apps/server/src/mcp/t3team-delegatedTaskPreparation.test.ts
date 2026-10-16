@@ -123,6 +123,7 @@ const childProjection = {
   subagents: [],
   providerThreads: [],
   turnItems: [],
+  runtimeRequests: [],
 } as unknown as OrchestrationV2ThreadProjection;
 
 const makeDependencies = (

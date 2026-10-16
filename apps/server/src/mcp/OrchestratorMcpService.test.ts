@@ -2230,6 +2230,7 @@ describe("provider usage echo", () => {
     subagents: [],
     providerThreads: [],
     turnItems: [],
+    runtimeRequests: [],
   } as unknown as OrchestrationV2ThreadProjection;
 
   const scope: McpInvocationScope = {
