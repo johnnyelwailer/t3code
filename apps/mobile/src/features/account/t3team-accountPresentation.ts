@@ -1,6 +1,6 @@
 import type { AccountStatus } from "@t3tools/contracts";
 
-import type { SignInMethod, SignInMethods } from "./t3team-accountIssuer";
+import type { SignInMethods } from "./t3team-accountIssuer";
 
 /**
  * What the Settings account section shows for each sign-in state: a status line and the actions
@@ -8,7 +8,14 @@ import type { SignInMethod, SignInMethods } from "./t3team-accountIssuer";
  * browser sign-in is the one primary action; the sign-in code is a second, explicit row.
  */
 
-export type AccountAction = "signIn" | "signInWithCode" | "openVerification" | "cancel" | "signOut";
+export type AccountAction =
+  | "signIn"
+  | "signInWithCode"
+  | "copyCode"
+  | "copyLink"
+  | "shareLink"
+  | "cancel"
+  | "signOut";
 
 export interface AccountSectionPresentation {
   readonly title: string;
@@ -51,14 +58,14 @@ export function presentAccountSection(
     case "SigningIn":
       return auth.userCode !== null && auth.verificationUri !== null
         ? {
-            title: `Code ${auth.userCode}`,
-            detail: status.lastError ?? `Enter it at ${hostOf(auth.verificationUri)}`,
+            title: "Sign in on another device",
+            detail:
+              status.lastError ??
+              `Open ${hostOf(auth.verificationUri)} on that device and enter the code. This phone waits.`,
             actions: [
-              {
-                action: "openVerification",
-                label: "Copy code and open Microsoft",
-                tone: "default",
-              },
+              { action: "copyCode", label: "Copy code", tone: "default" },
+              { action: "copyLink", label: "Copy page address", tone: "default" },
+              { action: "shareLink", label: "Share page address and code", tone: "default" },
               { action: "cancel", label: "Cancel sign-in", tone: "danger" },
             ],
           }
@@ -75,17 +82,3 @@ export function presentAccountSection(
       };
   }
 }
-
-/**
- * After "Sign in" on a build with only a device code, the one tap continues straight to
- * Microsoft's page with the code on the clipboard. A code the user asked for explicitly
- * ("Use a sign-in code instead") waits for its own "Copy code and open Microsoft" tap.
- */
-export const continuesToVerification = (
-  status: AccountStatus,
-  signIn: { readonly method: SignInMethod; readonly explicit: boolean },
-): boolean =>
-  signIn.method === "code" &&
-  !signIn.explicit &&
-  status.auth._tag === "SigningIn" &&
-  status.auth.userCode !== null;

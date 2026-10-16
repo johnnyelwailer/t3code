@@ -74,7 +74,7 @@ export function BrokerDeviceSections(props: {
           <DeviceRows devices={machines} opening={props.opening} onOpen={props.onOpen} />
         </SettingsSection>
       ) : (
-        <Hint>No machines yet. Turn on phone access in Nexi Work on your desktop.</Hint>
+        <Hint>Machines with phone access turned on in Nexi Work show up here.</Hint>
       )}
       {cloudSessions.length > 0 ? (
         <SettingsSection title="Running cloud sessions">

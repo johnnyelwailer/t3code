@@ -4,24 +4,29 @@ import {
 } from "@t3tools/client-runtime/state/cloud-sessions";
 import { isAtomCommandInterrupted } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId } from "@t3tools/contracts";
+import * as Effect from "effect/Effect";
 import { useCallback, useState, useSyncExternalStore } from "react";
 import { Alert } from "react-native";
 
 import { appAtomRegistry } from "../../state/atom-registry";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { cloudSessionEnvironment, refreshCloudSessionList } from "../../state/t3team-cloudSessions";
+import { runtime } from "../../lib/runtime";
 import {
   accountStatusSnapshot,
+  nexiBroker,
   startAccountSignIn,
   subscribeAccountStatus,
 } from "../account/t3team-accountController";
 import { chooseCloudSessionLauncher } from "./t3team-chooseCloudSessionLauncher";
+import { startBrokerCloudSession } from "./t3team-startBrokerCloudSession";
 import { useCloudSessionLauncher } from "./t3team-useCloudSessionLauncher";
 
 /**
  * The primary action of the Environments header and the home empty state: "New cloud session" when
- * the Microsoft account is signed in, "Sign in" otherwise. Starting a session reuses the Machines
- * screen's launcher pick and the cloud-session create command.
+ * the Microsoft account is signed in, "Sign in" otherwise. A session starts through a connected
+ * machine (the Machines screen's launcher pick and create command) when there is one, and through
+ * the broker with the phone's own sign-in when there is not: no desktop is ever required.
  */
 export function usePrimaryCloudAction() {
   const account = useSyncExternalStore(subscribeAccountStatus, accountStatusSnapshot);
@@ -51,12 +56,34 @@ export function usePrimaryCloudAction() {
     [createSession],
   );
 
+  const startOnBroker = useCallback(async () => {
+    setPending("cloud");
+    try {
+      const result = await runtime.runPromise(
+        Effect.result(
+          Effect.promise(nexiBroker).pipe(
+            Effect.flatMap((broker) => startBrokerCloudSession(broker)),
+          ),
+        ),
+      );
+      Alert.alert(
+        "New cloud session",
+        result._tag === "Success"
+          ? "Your session is starting. It appears under Running cloud sessions in Machines & cloud sessions."
+          : result.failure.message,
+      );
+    } finally {
+      setPending(null);
+    }
+  }, []);
+
   const onPress = useCallback(async () => {
     if (pending !== null) return;
     if (account?.auth._tag !== "SignedIn") {
       setPending("sign-in");
       try {
-        await startAccountSignIn();
+        const failure = await startAccountSignIn();
+        if (failure !== null) Alert.alert("Sign in", failure.message);
       } finally {
         setPending(null);
       }
@@ -64,10 +91,7 @@ export function usePrimaryCloudAction() {
     }
     const [only] = launchers;
     if (only === undefined) {
-      Alert.alert(
-        "New cloud session",
-        "Connect Nexi Work on your desktop to start cloud sessions from here.",
-      );
+      await startOnBroker();
       return;
     }
     if (launchers.length > 1) {
@@ -75,7 +99,7 @@ export function usePrimaryCloudAction() {
       return;
     }
     void start(only.environmentId);
-  }, [account, launchers, pending, start]);
+  }, [account, launchers, pending, start, startOnBroker]);
 
   return {
     signedIn: account?.auth._tag === "SignedIn",

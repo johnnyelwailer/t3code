@@ -5,6 +5,9 @@ import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 
+import { failed } from "./t3team-nexiBrokerFailure.ts";
+import { makeStartSession } from "./t3team-nexiBrokerSessionStart.ts";
+
 /**
  * The broker's v1 HTTP API (distribution `services/nexi-broker`), called with the user's account
  * access token (the account's `broker` resource). Grants go into the session workflow's inputs;
@@ -73,12 +76,6 @@ export interface StandbyClaim {
     readonly teamSecrets?: string;
   };
 }
-
-const failed = (message: string, status?: number) =>
-  new CloudSessionFailedError({
-    reason: status === 401 ? "broker_sign_in_required" : "broker_unavailable",
-    message: status === 401 ? "Your sign-in was not accepted. Sign in again." : message,
-  });
 
 export const makeNexiBrokerClient = Effect.fn("cloud.broker.client.make")(function* (
   /** https://… of the broker, without a trailing slash. */
@@ -173,6 +170,7 @@ export const makeNexiBrokerClient = Effect.fn("cloud.broker.client.make")(functi
           Effect.mapError(() => failed("The Nexi broker answered a claim unexpectedly.")),
         );
       }),
+    startSession: makeStartSession(config, http, accessToken),
     /** The projects this user has here, for the broker's warm-pool demand (#562 option B). */
     reportInterest: (pools: ReadonlyArray<string>) =>
       call(

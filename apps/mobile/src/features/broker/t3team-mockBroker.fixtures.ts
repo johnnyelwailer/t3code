@@ -22,6 +22,8 @@ export const MOCK_BROKER = "https://broker.mock.test";
 
 export interface MockBrokerState {
   hostsEnabled: boolean;
+  /** `POST /v1/sessions`: "absent" is a broker that cannot dispatch sessions itself (404). */
+  sessionStart: "absent" | "ok" | "busy";
   hosts: Array<{ id: string; label: string; online: boolean; lastSeen?: string }>;
   sessions: Array<{ runId: string; environmentId?: string; label?: string; since?: string }>;
   /** Paths (and the bearer each carried) of every call the broker received. */
@@ -40,6 +42,12 @@ const brokerRoute = (state: MockBrokerState, method: string, path: string) => {
   if (path === "/v1/hosts" && method === "GET") {
     return state.hostsEnabled
       ? ([200, { hosts: state.hosts }] as const)
+      : ([404, { error: "not found" }] as const);
+  }
+  if (path === "/v1/sessions" && method === "POST") {
+    if (state.sessionStart === "ok") return [200, { runId: "run-started" }] as const;
+    return state.sessionStart === "busy"
+      ? ([429, { error: "too many" }] as const)
       : ([404, { error: "not found" }] as const);
   }
   if (path === "/v1/sessions" && method === "GET") {
@@ -62,6 +70,7 @@ export const makeMockBroker = (initial: Partial<MockBrokerState> = {}) =>
     const issuer = makeMockAccountIssuer();
     const state: MockBrokerState = {
       hostsEnabled: true,
+      sessionStart: "absent",
       hosts: [],
       sessions: [],
       calls: [],

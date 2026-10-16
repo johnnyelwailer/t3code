@@ -2,7 +2,7 @@ import type { AccountStatus } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { SignInMethods } from "./t3team-accountIssuer";
-import { continuesToVerification, presentAccountSection } from "./t3team-accountPresentation";
+import { presentAccountSection } from "./t3team-accountPresentation";
 
 const status = (auth: AccountStatus["auth"], lastError: string | null = null): AccountStatus => ({
   id: "nexplore",
@@ -34,7 +34,7 @@ describe("presentAccountSection", () => {
     expect(actions(status({ _tag: "SignedOut" }), CODE_ONLY)).toEqual(["signIn"]);
   });
 
-  it("shows the device code and where to enter it while signing in", () => {
+  it("hands the code to another device and never offers to open the page on the phone", () => {
     const view = presentAccountSection(
       status({
         _tag: "SigningIn",
@@ -44,9 +44,14 @@ describe("presentAccountSection", () => {
       }),
       BOTH,
     );
-    expect(view.title).toBe("Code ABCD-1234");
-    expect(view.detail).toBe("Enter it at microsoft.com/devicelogin");
-    expect(view.actions.map((entry) => entry.action)).toEqual(["openVerification", "cancel"]);
+    expect(view.title).toBe("Sign in on another device");
+    expect(view.detail).toContain("microsoft.com/devicelogin");
+    expect(view.actions.map((entry) => entry.action)).toEqual([
+      "copyCode",
+      "copyLink",
+      "shareLink",
+      "cancel",
+    ]);
   });
 
   it("offers only cancel while a browser sign-in is open", () => {
@@ -63,23 +68,5 @@ describe("presentAccountSection", () => {
 
   it("offers nothing while the stored grant is read", () => {
     expect(actions(null)).toEqual([]);
-  });
-});
-
-describe("continuesToVerification", () => {
-  const signingIn = status({
-    _tag: "SigningIn",
-    userCode: "ABCD-1234",
-    verificationUri: "https://microsoft.com/devicelogin",
-    expiresAtMs: 0,
-  });
-
-  it("continues to Microsoft's page only for the default sign-in of a code-only build", () => {
-    expect(continuesToVerification(signingIn, { method: "code", explicit: false })).toBe(true);
-    expect(continuesToVerification(signingIn, { method: "code", explicit: true })).toBe(false);
-    expect(continuesToVerification(signingIn, { method: "browser", explicit: false })).toBe(false);
-    expect(
-      continuesToVerification(status({ _tag: "SignedOut" }), { method: "code", explicit: false }),
-    ).toBe(false);
   });
 });

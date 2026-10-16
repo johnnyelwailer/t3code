@@ -4,7 +4,6 @@ import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as HttpClient from "effect/http/HttpClient";
 import type * as Option from "effect/Option";
-import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 
 import { runtime } from "../../lib/runtime";
@@ -16,7 +15,6 @@ import {
   type SignInMethod,
   signInMethods,
 } from "./t3team-accountIssuer";
-import { continuesToVerification } from "./t3team-accountPresentation";
 import { accountSecureStorage } from "./t3team-accountSecureStorage";
 import { type AccountSession, makeAccountSession } from "./t3team-accountSession";
 import { makeMobileNexiBroker } from "./t3team-nexiBroker";
@@ -67,19 +65,13 @@ export const subscribeAccountStatus = (listener: () => void) => {
   return () => void listeners.delete(listener);
 };
 
-/** Copies the code and opens the issuer's code page: the device-code half of the sign-in. */
-export const openVerification = async (status: AccountStatus) => {
-  if (status.auth._tag !== "SigningIn" || status.auth.verificationUri === null) return;
-  if (status.auth.userCode !== null) await Clipboard.setStringAsync(status.auth.userCode);
-  await WebBrowser.openBrowserAsync(status.auth.verificationUri);
-};
-
 /** Which sign-in methods this build offers: the browser by default, the code as the alternative. */
 export const accountSignInMethods = () => signInMethods(resolveMobileAccount().account);
 
 /**
- * The one tap: starts the browser sign-in. Only a build without the browser sign-in starts the
- * code instead and goes straight to Microsoft; the code is otherwise an explicit `"code"` choice.
+ * The one tap: starts the browser sign-in on this phone. The code (for signing in on another
+ * device) is an explicit `"code"` choice, and the default only for a build without the browser
+ * sign-in; either way nothing opens the code page on this phone.
  */
 export const startAccountSignIn = async (method?: SignInMethod): Promise<AccountError | null> => {
   const current = await accountSession();
@@ -91,11 +83,7 @@ export const startAccountSignIn = async (method?: SignInMethod): Promise<Account
     });
   }
   const result = await runtime.runPromise(Effect.result(current.signIn(chosen)));
-  if (result._tag === "Failure") return result.failure;
-  if (continuesToVerification(result.success, { method: chosen, explicit: method !== undefined })) {
-    await openVerification(result.success);
-  }
-  return null;
+  return result._tag === "Failure" ? result.failure : null;
 };
 
 /** Cancels a pending sign-in or signs out; either way the stored grant is gone. */
