@@ -10,20 +10,20 @@ import * as Ref from "effect/Ref";
 import type * as HttpClient from "effect/http/HttpClient";
 
 import { makeAccessTokens } from "./t3team-accountAccessToken";
+import { type OpenAuthSession, runAccountBrowserSignIn } from "./t3team-accountBrowserSignIn";
 import {
-  BROWSER_CANCELLED,
-  type OpenAuthSession,
-  runAccountBrowserSignIn,
-} from "./t3team-accountBrowserSignIn";
-import type { MobileAccountDefinition } from "./t3team-accountIssuer";
+  type MobileAccountDefinition,
+  type SignInMethod,
+  signInMethods,
+} from "./t3team-accountIssuer";
 import { type AccountSecretStorage, makeAccountTokenStore } from "./t3team-accountTokenStore";
 
 /**
  * The app's sign-in to one account (`defineAccount`), in the same `AccountStatus` shape the
- * server's `/api/t3team/accounts` routes serve. Two ways in run at once and the first to finish
- * wins, as on the server: the browser (auth session + PKCE, when the issuer has the app's redirect
- * registered) and the device code (a short code entered at the issuer's page, which works without
- * any redirect). `subscribe` / `snapshot` feed the UI.
+ * server's `/api/t3team/accounts` routes serve. Two ways in, each an explicit choice: the browser
+ * (auth session + PKCE, when the issuer has the app's redirect registered) and the device code (a
+ * short code entered at the issuer's page, which works without any redirect). `subscribe` /
+ * `snapshot` feed the UI.
  */
 
 const BROWSER_ONLY_TIMEOUT = Duration.minutes(10);
@@ -74,63 +74,67 @@ export const makeAccountSession = Effect.fn("mobile.account.session.make")(funct
       message: `Could not reach the ${account.label} sign-in. Check your connection and try again.`,
     });
 
-  const signIn: Effect.Effect<AccountStatus, AccountError> = Effect.gen(function* () {
-    if (Option.isSome(yield* Ref.get(pending))) return yield* status;
-    const code = yield* Option.match(oauth.requestDeviceCode, {
-      onNone: () => Effect.succeed(null),
-      onSome: (request) => request.pipe(Effect.mapError(unavailable)),
+  const notOffered = (method: SignInMethod) =>
+    new AccountError({
+      reason: "unavailable",
+      message:
+        method === "browser"
+          ? "Browser sign-in is not set up in this build. Use a sign-in code instead."
+          : `The ${account.label} issuer offers no sign-in code.`,
     });
-    if (code === null && account.redirectUri === null) return yield* Effect.fail(unavailable());
-    const startedIn = yield* Ref.get(generation);
-    yield* Ref.set(lastError, null);
-    const timeout = code === null ? BROWSER_ONLY_TIMEOUT : Duration.seconds(code.expires_in);
-    const browser =
-      account.redirectUri === null
-        ? Effect.never
-        : runAccountBrowserSignIn({
-            oauth,
-            redirectUri: account.redirectUri,
-            openAuthSession: deps.openAuthSession,
-          }).pipe(Effect.provideService(Crypto.Crypto, deps.crypto));
-    // With a device code, it decides the end: closing the browser is shown but never ends the
-    // attempt, the code keeps working. Without one, the browser is the attempt.
-    const attempt =
-      code === null
-        ? browser
-        : Effect.raceFirst(
-            oauth.pollDeviceToken(code),
-            browser.pipe(
-              Effect.tapError((reason) =>
-                reason === BROWSER_CANCELLED ? Effect.void : Ref.set(lastError, reason),
-              ),
-              Effect.catch(() => Effect.never),
-            ),
-          );
-    const fiber = yield* attempt.pipe(
-      Effect.flatMap((granted) =>
-        Effect.gen(function* () {
-          if ((yield* Ref.get(generation)) === startedIn) {
-            yield* tokens.store(account.signInResource, granted);
-          }
+
+  /** The method's own attempt: the browser round trip, or polling the code the issuer handed out. */
+  const startAttempt = (method: SignInMethod) =>
+    Effect.gen(function* () {
+      if (method === "browser") {
+        if (account.redirectUri === null) return yield* Effect.fail(notOffered(method));
+        const attempt = runAccountBrowserSignIn({
+          oauth,
+          redirectUri: account.redirectUri,
+          openAuthSession: deps.openAuthSession,
+        }).pipe(Effect.provideService(Crypto.Crypto, deps.crypto));
+        return { code: null, attempt, timeout: BROWSER_ONLY_TIMEOUT };
+      }
+      if (Option.isNone(oauth.requestDeviceCode)) return yield* Effect.fail(notOffered(method));
+      const code = yield* oauth.requestDeviceCode.value.pipe(Effect.mapError(unavailable));
+      return {
+        code,
+        attempt: oauth.pollDeviceToken(code),
+        timeout: Duration.seconds(code.expires_in),
+      };
+    });
+
+  const signIn = (method: SignInMethod): Effect.Effect<AccountStatus, AccountError> =>
+    Effect.gen(function* () {
+      if (Option.isSome(yield* Ref.get(pending))) return yield* status;
+      const { code, attempt, timeout } = yield* startAttempt(method);
+      const startedIn = yield* Ref.get(generation);
+      yield* Ref.set(lastError, null);
+      const fiber = yield* attempt.pipe(
+        Effect.flatMap((granted) =>
+          Effect.gen(function* () {
+            if ((yield* Ref.get(generation)) === startedIn) {
+              yield* tokens.store(account.signInResource, granted);
+            }
+          }),
+        ),
+        Effect.catch((message) => Ref.set(lastError, message)),
+        Effect.ensuring(Ref.set(pending, Option.none()).pipe(Effect.andThen(publish))),
+        Effect.forkDetach,
+      );
+      const now = yield* Clock.currentTimeMillis;
+      yield* Ref.set(
+        pending,
+        Option.some({
+          userCode: code?.user_code ?? null,
+          verificationUri: code?.verification_uri ?? null,
+          expiresAtMs: now + Duration.toMillis(timeout),
+          fiber,
         }),
-      ),
-      Effect.catch((message) => Ref.set(lastError, message)),
-      Effect.ensuring(Ref.set(pending, Option.none()).pipe(Effect.andThen(publish))),
-      Effect.forkDetach,
-    );
-    const now = yield* Clock.currentTimeMillis;
-    yield* Ref.set(
-      pending,
-      Option.some({
-        userCode: code?.user_code ?? null,
-        verificationUri: code?.verification_uri ?? null,
-        expiresAtMs: now + Duration.toMillis(timeout),
-        fiber,
-      }),
-    );
-    yield* publish;
-    return current;
-  });
+      );
+      yield* publish;
+      return current;
+    });
 
   const signOut: Effect.Effect<void> = Effect.gen(function* () {
     yield* Ref.update(generation, (n) => n + 1);
@@ -144,6 +148,7 @@ export const makeAccountSession = Effect.fn("mobile.account.session.make")(funct
 
   return {
     account,
+    methods: signInMethods(account),
     status,
     signIn,
     signOut,

@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
 import { BrokerDeviceSections, Hint } from "./t3team-BrokerDeviceSections";
-import { CloudSessionSection, NoCloudSessionLauncher } from "./t3team-CloudSessionSection";
+import { BrokerCloudSessionSection, CloudSessionSection } from "./t3team-CloudSessionSection";
 import { useBrokerDevices } from "./t3team-useBrokerDevices";
 import { useCloudSessionLauncher } from "./t3team-useCloudSessionLauncher";
 import { useOpenBrokerDevice } from "./t3team-useOpenBrokerDevice";
@@ -47,7 +47,7 @@ export function MachinesRouteScreen() {
         />
         {device.failure === null ? null : <Hint>{device.failure}</Hint>}
         {launcher === null ? (
-          <NoCloudSessionLauncher />
+          <BrokerCloudSessionSection />
         ) : (
           <CloudSessionSection
             key={launcher.environmentId}

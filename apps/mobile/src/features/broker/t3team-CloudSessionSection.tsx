@@ -2,7 +2,6 @@ import { cloudSessionDisplayName } from "@t3tools/client-runtime/state/cloud-ses
 import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
 import { Alert } from "react-native";
 
-import { AppText as Text } from "../../components/AppText";
 import { ListRow } from "../../components/ListRow";
 import { SettingsActionRow } from "../settings/components/SettingsActionRow";
 import { SettingsSection } from "../settings/components/SettingsSection";
@@ -11,8 +10,10 @@ import {
   cloudSessionActions,
   cloudSessionRowDetail,
 } from "./t3team-cloudSessionActions";
+import { chooseCloudSessionLauncher } from "./t3team-chooseCloudSessionLauncher";
 import type { CloudSessionLauncher } from "./t3team-cloudSessionLaunchers";
 import { useCloudSessionList } from "./t3team-useCloudSessionList";
+import { usePrimaryCloudAction } from "./t3team-usePrimaryCloudAction";
 import type { BrokerDeviceToOpen } from "./t3team-useOpenBrokerDevice";
 
 function offerActions(
@@ -26,19 +27,6 @@ function offerActions(
       text: choice.label,
       style: choice.destructive ? ("destructive" as const) : ("default" as const),
       onPress: () => onAction(choice.action, session),
-    })),
-    { text: "Close", style: "cancel" as const },
-  ]);
-}
-
-function chooseLauncher(
-  launchers: ReadonlyArray<CloudSessionLauncher>,
-  onChoose: (environmentId: EnvironmentId) => void,
-) {
-  Alert.alert("Start cloud sessions through", undefined, [
-    ...launchers.map((launcher) => ({
-      text: launcher.label,
-      onPress: () => onChoose(launcher.environmentId),
     })),
     { text: "Close", style: "cancel" as const },
   ]);
@@ -75,7 +63,7 @@ export function CloudSessionSection(props: {
           icon="desktopcomputer"
           label="Start through"
           detail={launcher.label}
-          onPress={() => chooseLauncher(launchers, props.onChooseLauncher)}
+          onPress={() => chooseCloudSessionLauncher(launchers, props.onChooseLauncher)}
         />
       ) : null}
       <SettingsActionRow
@@ -99,10 +87,18 @@ export function CloudSessionSection(props: {
   );
 }
 
-export function NoCloudSessionLauncher() {
+/** Cloud sessions with no connected machine: the same "New cloud session" start, through the broker. */
+export function BrokerCloudSessionSection() {
+  const { signedIn, loading, onPress } = usePrimaryCloudAction();
   return (
-    <Text className="px-2 text-sm text-foreground-muted">
-      Connect Nexi Work on your desktop to start cloud sessions from here.
-    </Text>
+    <SettingsSection title="Cloud sessions">
+      <SettingsActionRow
+        icon="plus"
+        label={signedIn ? "New cloud session" : "Sign in"}
+        loading={loading}
+        disabled={loading}
+        onPress={onPress}
+      />
+    </SettingsSection>
   );
 }

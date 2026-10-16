@@ -1,11 +1,21 @@
 import type { AccountStatus } from "@t3tools/contracts";
 
+import type { SignInMethods } from "./t3team-accountIssuer";
+
 /**
  * What the Settings account section shows for each sign-in state: a status line and the actions
- * the state allows. `null` status means the stored grant is still being read.
+ * the state allows. `null` status means the stored grant is still being read. Signed out, the
+ * browser sign-in is the one primary action; the sign-in code is a second, explicit row.
  */
 
-export type AccountAction = "signIn" | "openVerification" | "cancel" | "signOut";
+export type AccountAction =
+  | "signIn"
+  | "signInWithCode"
+  | "copyCode"
+  | "copyLink"
+  | "shareLink"
+  | "cancel"
+  | "signOut";
 
 export interface AccountSectionPresentation {
   readonly title: string;
@@ -25,7 +35,17 @@ const hostOf = (uri: string) => {
   }
 };
 
-export function presentAccountSection(status: AccountStatus | null): AccountSectionPresentation {
+const signedOutActions = (methods: SignInMethods): AccountSectionPresentation["actions"] => [
+  { action: "signIn", label: "Sign in with Microsoft", tone: "default" },
+  ...(methods.browser && methods.code
+    ? [{ action: "signInWithCode", label: "Use a sign-in code instead", tone: "default" } as const]
+    : []),
+];
+
+export function presentAccountSection(
+  status: AccountStatus | null,
+  methods: SignInMethods,
+): AccountSectionPresentation {
   if (status === null) return { title: "Microsoft account", detail: "Checking…", actions: [] };
   const { auth } = status;
   switch (auth._tag) {
@@ -33,19 +53,19 @@ export function presentAccountSection(status: AccountStatus | null): AccountSect
       return {
         title: "Not signed in",
         detail: status.lastError,
-        actions: [{ action: "signIn", label: "Sign in with Microsoft", tone: "default" }],
+        actions: signedOutActions(methods),
       };
     case "SigningIn":
       return auth.userCode !== null && auth.verificationUri !== null
         ? {
-            title: `Code ${auth.userCode}`,
-            detail: status.lastError ?? `Enter it at ${hostOf(auth.verificationUri)}`,
+            title: "Sign in on another device",
+            detail:
+              status.lastError ??
+              `Open ${hostOf(auth.verificationUri)} on that device and enter the code. This phone waits.`,
             actions: [
-              {
-                action: "openVerification",
-                label: "Copy code and open Microsoft",
-                tone: "default",
-              },
+              { action: "copyCode", label: "Copy code", tone: "default" },
+              { action: "copyLink", label: "Copy page address", tone: "default" },
+              { action: "shareLink", label: "Share page address and code", tone: "default" },
               { action: "cancel", label: "Cancel sign-in", tone: "danger" },
             ],
           }
@@ -62,11 +82,3 @@ export function presentAccountSection(status: AccountStatus | null): AccountSect
       };
   }
 }
-
-/**
- * After "Sign in" with only a device code, the one tap continues straight to Microsoft's page with
- * the code on the clipboard, instead of making the user tap again. With a browser sign-in the auth
- * session is already opening; a second page would cover it.
- */
-export const continuesToVerification = (status: AccountStatus, browserSignIn: boolean): boolean =>
-  !browserSignIn && status.auth._tag === "SigningIn" && status.auth.userCode !== null;

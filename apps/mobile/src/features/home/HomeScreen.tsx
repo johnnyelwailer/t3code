@@ -78,6 +78,8 @@ import {
 import { createSwipeRowActivation } from "./swipe-row-activation";
 import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "./thread-swipe-actions";
 import { useMaterialFabScroll } from "./MaterialFabScrollContext";
+import { type NoEnvironmentsHero, noEnvironmentsHero } from "../broker/t3team-noEnvironmentsHero";
+import { usePrimaryCloudAction } from "../broker/t3team-usePrimaryCloudAction";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
 import { ThreadListFilters } from "./ThreadListFilters";
 
@@ -160,9 +162,25 @@ const THREAD_LIST_V2_DRAW_DISTANCE = 1_000;
  * room here.
  */
 
+function emptyStateAction(props: {
+  readonly catalogState: WorkspaceState;
+  readonly noEnvironments: NoEnvironmentsHero;
+  readonly onPrimaryCloudAction: () => void;
+  readonly onAddConnection: () => void;
+}): { readonly label: string; readonly onPress: () => void } | null {
+  const { catalogState } = props;
+  if (!catalogState.isLoadingConnections && !catalogState.hasConnections) {
+    return { label: props.noEnvironments.actionLabel, onPress: props.onPrimaryCloudAction };
+  }
+  return catalogState.hasReadyEnvironment
+    ? null
+    : { label: "Add environment", onPress: props.onAddConnection };
+}
+
 function deriveEmptyState(props: {
   readonly catalogState: WorkspaceState;
   readonly projectCount: number;
+  readonly noEnvironments: NoEnvironmentsHero;
 }): { readonly title: string; readonly detail: string; readonly loading: boolean } {
   const { catalogState } = props;
   if (catalogState.isLoadingConnections) {
@@ -175,8 +193,8 @@ function deriveEmptyState(props: {
 
   if (!catalogState.hasConnections) {
     return {
-      title: "No environments connected",
-      detail: "Add an environment to load projects and start coding sessions.",
+      title: props.noEnvironments.title,
+      detail: props.noEnvironments.detail,
       loading: false,
     };
   }
@@ -927,9 +945,18 @@ export function HomeScreen(props: HomeScreenProps) {
   // Connection state surfaces in the header title slot
   // (WorkspaceConnectionTitle) — nothing renders inside the list, so
   // reconnects never shift the rows.
+  const primaryCloudAction = usePrimaryCloudAction();
+  const noEnvironments = noEnvironmentsHero(primaryCloudAction.signedIn);
   const emptyState = deriveEmptyState({
     catalogState: props.catalogState,
     projectCount: props.projects.length,
+    noEnvironments,
+  });
+  const emptyAction = emptyStateAction({
+    catalogState: props.catalogState,
+    noEnvironments,
+    onPrimaryCloudAction: primaryCloudAction.onPress,
+    onAddConnection: props.onAddConnection,
   });
 
   if (!hasAnyThreads) {
@@ -952,16 +979,16 @@ export function HomeScreen(props: HomeScreenProps) {
             <EmptyState
               title={emptyState.title}
               detail={emptyState.detail}
-              actionLabel={!props.catalogState.hasReadyEnvironment ? "Add environment" : undefined}
-              onAction={!props.catalogState.hasReadyEnvironment ? props.onAddConnection : undefined}
+              actionLabel={emptyAction?.label}
+              onAction={emptyAction?.onPress}
               action={
-                Platform.OS === "android" && !props.catalogState.hasReadyEnvironment ? (
+                Platform.OS === "android" && emptyAction ? (
                   <MaterialFloatingActionButton
-                    label="Add environment"
+                    label={emptyAction.label}
                     icon="plus"
                     variant="extended"
                     tone="primary"
-                    onPress={props.onAddConnection}
+                    onPress={emptyAction.onPress}
                   />
                 ) : undefined
               }

@@ -9,8 +9,9 @@ import { normalizeSecureUrl } from "../cloud/publicConfig";
  * stored grant and the UI; this config only says where the issuer is and what the app may ask for.
  *
  * Unlike the desktop server, a phone cannot listen on loopback, so the browser sign-in redirects to
- * the app's own scheme (`redirectUri`). It is null until that URI is registered on the issuer;
- * the device code is then the only way in.
+ * the app's own scheme (`redirectUri`, `<scheme>://auth`, registered on the issuer). The browser
+ * is the default way in; the device code is the explicit alternative, and the only way in for a
+ * build whose `redirectUri` is null.
  */
 export interface MobileAccountDefinition {
   readonly id: string;
@@ -26,6 +27,20 @@ export interface MobileAccountDefinition {
   readonly signInResource: string;
   readonly redirectUri: string | null;
 }
+
+/** How the account can be signed in to: the browser is the default, the code the alternative. */
+export type SignInMethod = "browser" | "code";
+
+export const signInMethods = (account: MobileAccountDefinition) =>
+  ({
+    browser: account.redirectUri !== null,
+    code: account.issuer.deviceAuthorizationEndpoint !== null,
+  }) as const;
+
+export type SignInMethods = ReturnType<typeof signInMethods>;
+
+export const defaultSignInMethod = (methods: SignInMethods): SignInMethod | null =>
+  methods.browser ? "browser" : methods.code ? "code" : null;
 
 export interface ResolvedMobileAccount {
   readonly account: MobileAccountDefinition;

@@ -18,9 +18,21 @@ export type OpenAuthSession = (
   redirectUri: string,
 ) => Effect.Effect<AuthSessionOutcome>;
 
-export const BROWSER_CANCELLED = "The browser sign-in was cancelled.";
+/** A closed browser is often Microsoft's own error page for an unregistered redirect address. */
+export const browserNotFinished = (redirectUri: string) =>
+  `The browser sign-in did not finish. If Microsoft showed an error, this app's sign-in address (${redirectUri}) may not be registered yet.`;
 
-/** Fails with a user-facing message; the device code (when offered) keeps running beside it. */
+const firstLine = (text: string) => text.slice(0, 160).split(String.fromCharCode(10), 1)[0]!.trim();
+
+export const browserDeclined = (callback: URL) => {
+  const reason =
+    callback.searchParams.get("error_description") ?? callback.searchParams.get("error");
+  return reason === null
+    ? "Microsoft declined the sign-in."
+    : `Microsoft declined the sign-in: ${firstLine(reason)}`;
+};
+
+/** Fails with a user-facing message. */
 export const runAccountBrowserSignIn = (input: {
   readonly oauth: AccountOAuthClient;
   readonly redirectUri: string;
@@ -34,18 +46,13 @@ export const runAccountBrowserSignIn = (input: {
       input.oauth.authorizeUrl({ redirectUri: input.redirectUri, challenge, state }),
       input.redirectUri,
     );
-    if (outcome.type !== "success") return yield* Effect.fail(BROWSER_CANCELLED);
+    if (outcome.type !== "success")
+      return yield* Effect.fail(browserNotFinished(input.redirectUri));
     const callback = new URL(outcome.url);
     if (callback.searchParams.get("state") !== state) {
       return yield* Effect.fail("The browser sign-in answered a different request. Try again.");
     }
     const code = callback.searchParams.get("code");
-    if (code === null) {
-      return yield* Effect.fail(
-        callback.searchParams.get("error_description") ??
-          callback.searchParams.get("error") ??
-          BROWSER_CANCELLED,
-      );
-    }
+    if (code === null) return yield* Effect.fail(browserDeclined(callback));
     return yield* input.oauth.exchangeCode({ code, verifier, redirectUri: input.redirectUri });
   });

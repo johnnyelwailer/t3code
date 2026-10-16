@@ -102,7 +102,8 @@ describe("authorization code + PKCE", () => {
         redirectUri: REDIRECT,
         openAuthSession: () => Effect.succeed({ type: "closed" }),
       }).pipe(Effect.flip, Effect.provideService(Crypto.Crypto, webCrypto));
-      expect(dismissed).toBe("The browser sign-in was cancelled.");
+      expect(dismissed).toContain("The browser sign-in did not finish.");
+      expect(dismissed).toContain(REDIRECT);
     }),
   );
 });

@@ -60,7 +60,7 @@ describe("the Nexi broker on the app's Microsoft account", () => {
       expect(seen).toEqual([]);
 
       issuer.approveDevice();
-      yield* session.signIn;
+      yield* session.signIn("code");
       yield* Effect.promise(
         () =>
           new Promise<void>((resolve) => {

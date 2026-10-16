@@ -3,8 +3,10 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import {
   DEV_NEXPLORE_CLIENT_ID,
   DEV_NEXPLORE_TENANT,
+  defaultSignInMethod,
   normalizeAppRedirectUri,
   resolveMobileAccount,
+  signInMethods,
 } from "./t3team-accountIssuer";
 
 vi.mock("expo-constants", () => ({ default: { expoConfig: { extra: {} } } }));
@@ -76,5 +78,18 @@ describe("normalizeAppRedirectUri", () => {
     expect(normalizeAppRedirectUri("https://evil.example.test/callback")).toBeNull();
     expect(normalizeAppRedirectUri("")).toBeNull();
     expect(normalizeAppRedirectUri(42)).toBeNull();
+  });
+});
+
+describe("signInMethods", () => {
+  it("defaults to the browser when the app redirect is set, else to the code", () => {
+    const withRedirect = resolveMobileAccount({ account: { redirectUri: "nexiwork-dev://auth" } });
+    const without = resolveMobileAccount({});
+
+    expect(signInMethods(withRedirect.account)).toEqual({ browser: true, code: true });
+    expect(defaultSignInMethod(signInMethods(withRedirect.account))).toBe("browser");
+    expect(signInMethods(without.account)).toEqual({ browser: false, code: true });
+    expect(defaultSignInMethod(signInMethods(without.account))).toBe("code");
+    expect(defaultSignInMethod({ browser: false, code: false })).toBeNull();
   });
 });

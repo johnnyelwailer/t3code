@@ -3,12 +3,11 @@ import { Platform, Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
 import { MaterialNewThreadButton } from "../../components/MaterialNewThreadButton";
-import { MaterialFloatingActionButton } from "../../components/MaterialFloatingActionButton";
-import { EmptyState } from "../../components/EmptyState";
+import { NoEnvironmentsDetail } from "./t3team-NoEnvironmentsDetail";
 
 export function WorkspaceEmptyDetail(props: {
   readonly onStartNewTask?: () => void;
-  readonly onAddConnection?: () => void;
+  readonly noEnvironments?: boolean;
 }) {
   return (
     <View
@@ -18,23 +17,8 @@ export function WorkspaceEmptyDetail(props: {
           : "flex-1 items-center justify-center bg-screen px-10"
       }
     >
-      {props.onAddConnection ? (
-        <View className="w-full max-w-[430px]">
-          <EmptyState
-            title="No environments connected"
-            detail="Add an environment to load projects and start coding sessions."
-            variant="plain"
-            action={
-              <MaterialFloatingActionButton
-                label="Add environment"
-                icon="plus"
-                variant="extended"
-                tone="primary"
-                onPress={props.onAddConnection}
-              />
-            }
-          />
-        </View>
+      {props.noEnvironments ? (
+        <NoEnvironmentsDetail />
       ) : (
         <View className="max-w-[360px] items-center gap-3">
           <SymbolView
