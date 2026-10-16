@@ -49,7 +49,6 @@ const layerTest = Layer.mergeAll(
   ),
 );
 
-
 it.effect("stops a run that only waits for its checkpoint capture instead of failing", () =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;

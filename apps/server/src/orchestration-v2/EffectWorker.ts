@@ -750,9 +750,7 @@ export const layerWithOptions = (
             );
           const exit = yield* Effect.exit(
             Effect.raceFirst(Effect.raceFirst(execution, cancellation), leaseHeartbeat),
-          ).pipe(
-            Effect.ensuring(outbox.clearCancellation(effect.id)),
-          );
+          ).pipe(Effect.ensuring(outbox.clearCancellation(effect.id)));
           if (Exit.isSuccess(exit) && exit.value === "cancelled") {
             return true;
           }
