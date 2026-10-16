@@ -44,7 +44,7 @@ const UNREACHABLE_TEXT =
   /\bnever (?:been )?reach(?:able|ed)\b|\bunable to (?:connect|reach)\b|\bcould not (?:connect|reach)\b|\bE(?:CONNREFUSED|NOTFOUND|AI_AGAIN)\b/i;
 
 /** Whether the failure says the provider endpoint could never be reached at all. */
-export const isProviderUnreachableFailure = (
+const isProviderUnreachableFailure = (
   failure: Pick<OrchestrationV2ProviderFailure, "message">,
 ): boolean => UNREACHABLE_TEXT.test(failure.message);
 
