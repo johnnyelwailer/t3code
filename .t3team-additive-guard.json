@@ -629,7 +629,9 @@
     "scripts/release-smoke.ts",
     "third-party-licenses.config.json",
     "tsconfig.base.json",
-    "vite.config.ts"
+    "vite.config.ts",
+    "apps/server/src/cli/sshHelper.test.ts",
+    "apps/server/src/persistence/Sqlite.test.ts"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",

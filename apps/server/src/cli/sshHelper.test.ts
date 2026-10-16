@@ -53,6 +53,9 @@ describe("__ssh-helper pick-port", () => {
         const child = yield* spawner.spawn(
           ChildProcess.make(process.execPath, [
             ...(linuxHost ? ["--require", `${root}/preload.cjs`] : []),
+            // The fork's bin.ts boots the distribution layer, which needs the dev loader.
+            "--import",
+            new URL("../../scripts/t3team-distribution-devLoader.ts", import.meta.url).pathname,
             "--experimental-strip-types",
             new URL("../bin.ts", import.meta.url).pathname,
             "__ssh-helper",
