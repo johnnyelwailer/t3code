@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   extraEnvironments: [] as Array<{
     environmentId: string;
     label: string;
+    entry?: { enabled: boolean };
     connection: { phase: string };
   }>,
 }));
