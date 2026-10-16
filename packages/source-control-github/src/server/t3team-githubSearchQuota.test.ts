@@ -2,7 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as TestClock from "effect/testing/TestClock";
 
-import * as GitHubApi from "./GitHubApi.ts";
+import * as GitHubApi from "./t3team-GitHubApi.ts";
 import { jsonResponse, makeGitHubApiHarness } from "./t3team-githubApiTestHarness.ts";
 
 const NOW = Date.parse("2026-10-12T12:00:00.000Z");

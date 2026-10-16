@@ -1917,6 +1917,10 @@ export function PullRequestDetailPanel({
                       <button
                         type="button"
                         onClick={() => void readLocalApi()?.shell.openExternal(detail.url)}
+                        onAuxClick={(event) => {
+                          if (event.button === 1)
+                            void readLocalApi()?.shell.openExternal(detail.url);
+                        }}
                         onContextMenu={(event) => openNumberContextMenu(event, detail)}
                         className={cn(
                           "inline-flex shrink-0 cursor-pointer items-center gap-0.5 font-medium underline-offset-2 hover:underline",
@@ -1978,6 +1982,10 @@ export function PullRequestDetailPanel({
                         type="button"
                         tabIndex={condensed ? 0 : -1}
                         onClick={() => void readLocalApi()?.shell.openExternal(detail.url)}
+                        onAuxClick={(event) => {
+                          if (event.button === 1)
+                            void readLocalApi()?.shell.openExternal(detail.url);
+                        }}
                         onContextMenu={(event) => openNumberContextMenu(event, detail)}
                         className={cn(
                           "inline-flex shrink-0 cursor-pointer items-center gap-0.5 font-medium underline-offset-2 hover:underline",
