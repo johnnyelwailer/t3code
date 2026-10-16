@@ -1386,8 +1386,46 @@ function settleSupersededReasoning(entries: ReadonlyArray<TimelineEntry>) {
   });
 }
 
+/** The user message id of a server automatic restart (`t3team-transient-retry:<failedRunId>`). */
+const TRANSIENT_RETRY_MESSAGE_PREFIX = "t3team-transient-retry:";
+
+function timelineEntryErrorRunId(entry: TimelineEntry): RunId | null {
+  const item =
+    entry.kind === "work"
+      ? (entry.entry.projectedItem?.item ?? entry.entry.structuredPayload)
+      : "projectedItem" in entry
+        ? entry.projectedItem?.item
+        : undefined;
+  return item?.type === "error" ? item.runId : null;
+}
+
+/**
+ * t3team: an automatic restart replaced the failed run, so only the latest failure keeps its
+ * error row; the retry note (SYSTEM card) already counts the attempts. A failed run is replaced
+ * once a later run's user message is that run's retry message.
+ */
+export function withoutSupersededRetryErrors(
+  entries: ReadonlyArray<TimelineEntry>,
+): ReadonlyArray<TimelineEntry> {
+  const supersededRunIds = new Set<string>();
+  for (const entry of entries) {
+    if (entry.kind !== "message") continue;
+    const id = String(entry.message.id);
+    if (id.startsWith(TRANSIENT_RETRY_MESSAGE_PREFIX)) {
+      supersededRunIds.add(id.slice(TRANSIENT_RETRY_MESSAGE_PREFIX.length));
+    }
+  }
+  if (supersededRunIds.size === 0) return entries;
+  return entries.filter((entry) => {
+    const runId = timelineEntryErrorRunId(entry);
+    return runId === null || !supersededRunIds.has(runId);
+  });
+}
+
 function timelineRowEntries(entries: ReadonlyArray<TimelineEntry>) {
-  return withoutSubagentDelegationRows(settleSupersededReasoning(entries));
+  return withoutSubagentDelegationRows(
+    settleSupersededReasoning(withoutSupersededRetryErrors(entries)),
+  );
 }
 
 /** The turn folds the timeline would draw, before applying expansion state. */

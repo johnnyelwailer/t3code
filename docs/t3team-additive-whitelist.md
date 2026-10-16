@@ -426,3 +426,8 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
   `runBackendProcess`, chained after the readiness loop, and one per-instance kill history passed
   from `makeBackendInstance`. The logic lives in `t3team-backendHealthWatchdog.ts`; without the
   option the process runner is unchanged.
+
+## Stop during checkpoint drain + effect lease renewal (2026-10-15)
+
+- `apps/server/src/orchestration-v2/EffectOutbox.ts` — `renewLease`: a worker extends the lease of an effect it still runs.
+- `apps/server/src/orchestration-v2/EffectWorker.ts` — heartbeat that renews the lease while an effect executes, so a slow checkpoint capture is not reclaimed and run twice.
