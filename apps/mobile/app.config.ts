@@ -487,7 +487,7 @@ const config: ExpoConfig = {
     account: {
       tenant: repoEnv.EXPO_PUBLIC_NEXI_BROKER_TENANT ?? repoEnv.T3CODE_NEXI_BROKER_TENANT ?? null,
       clientId: repoEnv.EXPO_PUBLIC_NEXI_BROKER_APP ?? repoEnv.T3CODE_NEXI_BROKER_APP ?? null,
-      redirectUri: repoEnv.T3CODE_NEXI_ACCOUNT_REDIRECT_URI ?? null,
+      redirectUri: `${variant.scheme}://auth`,
       endpoints: {
         authorization: repoEnv.T3CODE_NEXI_ACCOUNT_AUTHORIZATION_ENDPOINT ?? null,
         token: repoEnv.T3CODE_NEXI_ACCOUNT_TOKEN_ENDPOINT ?? null,

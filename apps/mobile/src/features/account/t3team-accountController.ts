@@ -1,4 +1,4 @@
-import type { AccountError, AccountStatus } from "@t3tools/contracts";
+import { AccountError, type AccountStatus } from "@t3tools/contracts";
 import type { NexiBrokerClient } from "@t3tools/shared/t3team-nexiBrokerClient";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -10,7 +10,12 @@ import * as WebBrowser from "expo-web-browser";
 import { runtime } from "../../lib/runtime";
 import { resolveNexiDistributionConfig } from "../distribution/t3team-nexiDistributionConfig";
 import type { AuthSessionOutcome, OpenAuthSession } from "./t3team-accountBrowserSignIn";
-import { resolveMobileAccount } from "./t3team-accountIssuer";
+import {
+  defaultSignInMethod,
+  resolveMobileAccount,
+  type SignInMethod,
+  signInMethods,
+} from "./t3team-accountIssuer";
 import { continuesToVerification } from "./t3team-accountPresentation";
 import { accountSecureStorage } from "./t3team-accountSecureStorage";
 import { type AccountSession, makeAccountSession } from "./t3team-accountSession";
@@ -69,12 +74,25 @@ export const openVerification = async (status: AccountStatus) => {
   await WebBrowser.openBrowserAsync(status.auth.verificationUri);
 };
 
-/** The one tap: starts the sign-in and, with only a device code, goes straight to Microsoft. */
-export const startAccountSignIn = async (): Promise<AccountError | null> => {
+/** Which sign-in methods this build offers: the browser by default, the code as the alternative. */
+export const accountSignInMethods = () => signInMethods(resolveMobileAccount().account);
+
+/**
+ * The one tap: starts the browser sign-in. Only a build without the browser sign-in starts the
+ * code instead and goes straight to Microsoft; the code is otherwise an explicit `"code"` choice.
+ */
+export const startAccountSignIn = async (method?: SignInMethod): Promise<AccountError | null> => {
   const current = await accountSession();
-  const result = await runtime.runPromise(Effect.result(current.signIn));
+  const chosen = method ?? defaultSignInMethod(current.methods);
+  if (chosen === null) {
+    return new AccountError({
+      reason: "unavailable",
+      message: "Sign-in is not set up in this build.",
+    });
+  }
+  const result = await runtime.runPromise(Effect.result(current.signIn(chosen)));
   if (result._tag === "Failure") return result.failure;
-  if (continuesToVerification(result.success, current.account.redirectUri !== null)) {
+  if (continuesToVerification(result.success, { method: chosen, explicit: method !== undefined })) {
     await openVerification(result.success);
   }
   return null;

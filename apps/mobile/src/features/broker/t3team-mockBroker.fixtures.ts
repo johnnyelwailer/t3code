@@ -96,7 +96,7 @@ export const makeMockBroker = (initial: Partial<MockBrokerState> = {}) =>
     /** Signs the account in through the issuer's device-code flow, as the user would. */
     const signIn = Effect.gen(function* () {
       issuer.approveDevice();
-      yield* session.signIn;
+      yield* session.signIn("code");
       yield* Effect.promise(
         () =>
           new Promise<void>((resolve) => {

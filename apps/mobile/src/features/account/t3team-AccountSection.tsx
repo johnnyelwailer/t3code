@@ -4,6 +4,7 @@ import { SettingsActionRow } from "../settings/components/SettingsActionRow";
 import { SettingsRow } from "../settings/components/SettingsRow";
 import { SettingsSection } from "../settings/components/SettingsSection";
 import {
+  accountSignInMethods,
   accountStatusSnapshot,
   openVerification,
   signOutAccount,
@@ -14,18 +15,19 @@ import { type AccountAction, presentAccountSection } from "./t3team-accountPrese
 
 const ACTION_ICONS = {
   signIn: "person.badge.plus",
+  signInWithCode: "keyboard",
   openVerification: "arrow.up.right",
   cancel: "xmark.circle.fill",
   signOut: "person.fill.xmark",
 } as const satisfies Record<AccountAction, string>;
 
 /**
- * The Microsoft (Entra ID) account in Settings: sign in with one tap, the device code while a
- * sign-in waits, and who is signed in. The sign-in authenticates Nexi cloud sessions.
+ * The Microsoft (Entra ID) account in Settings: one-tap browser sign-in, the device code as an
+ * explicit alternative (shown with its page link while it waits), and who is signed in. The sign-in authenticates Nexi cloud sessions.
  */
 export function AccountSection() {
   const status = useSyncExternalStore(subscribeAccountStatus, accountStatusSnapshot);
-  const view = presentAccountSection(status);
+  const view = presentAccountSection(status, accountSignInMethods());
   const [running, setRunning] = useState<AccountAction | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -35,6 +37,9 @@ export function AccountSection() {
     setFailure(null);
     try {
       if (action === "signIn") setFailure((await startAccountSignIn())?.message ?? null);
+      if (action === "signInWithCode") {
+        setFailure((await startAccountSignIn("code"))?.message ?? null);
+      }
       if (action === "openVerification") await openVerification(status);
       if (action === "cancel" || action === "signOut") await signOutAccount();
     } catch (cause) {
