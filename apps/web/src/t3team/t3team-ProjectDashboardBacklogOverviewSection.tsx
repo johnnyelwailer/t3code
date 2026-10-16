@@ -7,12 +7,14 @@
  */
 
 import { ProjectBacklogOverview } from "~/t3team/t3team-ProjectBacklogOverview";
+import { writeProjectSprintChoice } from "~/t3team/t3team-projectSprintChoice";
 import type { useProjectDashboardBacklogState } from "~/t3team/hooks/t3team-useProjectDashboardBacklogState";
 
 type BacklogStateApi = ReturnType<typeof useProjectDashboardBacklogState>;
 type OverviewProps = React.ComponentProps<typeof ProjectBacklogOverview>;
 
 export function ProjectDashboardBacklogOverviewSection({
+  projectId,
   backlogState,
   setBacklogState,
   loading,
@@ -29,6 +31,8 @@ export function ProjectDashboardBacklogOverviewSection({
   onExpandTableGroups,
   onRefreshData,
 }: {
+  /** Explicit board/sprint picks are remembered per project for every view. */
+  projectId: string;
   backlogState: BacklogStateApi["state"];
   setBacklogState: BacklogStateApi["setState"];
   loading: boolean;
@@ -98,7 +102,8 @@ export function ProjectDashboardBacklogOverviewSection({
       sprints={sprints}
       selectedBoardId={backlogState.boardId}
       selectedSprintId={backlogState.sprintId}
-      onBoardChange={(boardId) =>
+      onBoardChange={(boardId) => {
+        writeProjectSprintChoice(projectId, { boardId });
         setBacklogState((current) => ({
           ...current,
           boardId,
@@ -106,9 +111,15 @@ export function ProjectDashboardBacklogOverviewSection({
           // Quick filters are board-scoped; stale ids from the previous board
           // would render as chips without actually filtering.
           selectedQuickFilterIds: [],
-        }))
-      }
-      onSprintChange={(sprintId) => setBacklogState((current) => ({ ...current, sprintId }))}
+        }));
+      }}
+      onSprintChange={(sprintId) => {
+        writeProjectSprintChoice(projectId, {
+          ...(backlogState.boardId ? { boardId: backlogState.boardId } : {}),
+          ...(sprintId ? { sprintId } : {}),
+        });
+        setBacklogState((current) => ({ ...current, sprintId }));
+      }}
       onRefreshData={onRefreshData}
     />
   );

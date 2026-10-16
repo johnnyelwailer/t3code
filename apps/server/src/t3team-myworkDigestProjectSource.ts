@@ -90,7 +90,12 @@ export function loadDigestProjectSource(
     });
     const { viewerName } = viewer;
     const boardSprints = yield* readDigestSprints(identity);
-    const { tickets, sprints } = alignDigestSprints(viewer.tickets, boardSprints, ctx.nowMs);
+    const { tickets, sprints } = alignDigestSprints(
+      viewer.tickets,
+      boardSprints,
+      ctx.nowMs,
+      project.sprintChoice,
+    );
     const estimateUnit = yield* readDigestEstimateUnit(identity);
     const transitions = ctx.transitionRows.map((row) => ({
       ticketRef: {

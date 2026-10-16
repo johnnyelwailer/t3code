@@ -10,6 +10,7 @@ import type { MutableRefObject } from "react";
 
 import type { PlanningSpaceEngine } from "./t3team-planningSpaceRenderer";
 import type { PlanningSpaceCtx } from "./t3team-planningSpaceControllerTypes";
+import { createWheelClassifier, wheelIntent } from "./t3team-planningSpaceWheelIntent";
 
 export interface PlanningPointerGesture {
   lastPan: { dx: number; dy: number };
@@ -28,6 +29,7 @@ export function createPlanningPointerGesture(
   stage: HTMLDivElement,
   engine: PlanningSpaceEngine,
 ): PlanningPointerGesture {
+  const wheelClassifier = createWheelClassifier();
   const g: PlanningPointerGesture = {
     lastPan: { dx: 0, dy: 0 },
     dropHotEl: null,
@@ -62,26 +64,30 @@ export function createPlanningPointerGesture(
       event.preventDefault();
       c.userNavigated.current = true;
       c.lastInputAt.current = performance.now();
-      if (!event.ctrlKey && !event.metaKey) {
+      const legacy = event as WheelEvent & { wheelDeltaY?: number; wheelDeltaX?: number };
+      const sample = {
+        deltaX: event.deltaX,
+        deltaY: event.deltaY,
+        deltaMode: event.deltaMode,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        wheelDeltaY: legacy.wheelDeltaY,
+        wheelDeltaX: legacy.wheelDeltaX,
+        timeStamp: event.timeStamp,
+      };
+      // Mouse wheel zooms at the pointer (Shift pans x, Ctrl/⌘ pans y);
+      // trackpad scroll pans and pinch zooms. See t3team-planningSpaceWheelIntent.ts.
+      const intent = wheelIntent(sample, wheelClassifier.device(sample));
+      c.setAllModeRef.current(false);
+      if (intent.kind === "zoom") {
+        const rect = stage.getBoundingClientRect();
+        engine.zoomAtCursor(event.clientX - rect.left, event.clientY - rect.top, intent.delta);
+      } else {
         // Scroll-panning is deliberate repositioning; release the snap pin so
         // the Full-band magnet doesn't tug back.
         c.snapTargetRef.current = null;
-      }
-      c.setAllModeRef.current(false);
-      // Trackpad-first navigation: pinch (ctrlKey wheel) and ⌘/ctrl+scroll
-      // zoom at the cursor; plain two-finger scroll pans the view. Pinch
-      // gestures emit small fractional deltas per event and need a much
-      // stronger multiplier than discrete wheel notches (|deltaY| ≈ 100+).
-      if (event.ctrlKey || event.metaKey) {
-        const pinchLike = Math.abs(event.deltaY) < 50;
-        const rect = stage.getBoundingClientRect();
-        engine.zoomAtCursor(
-          event.clientX - rect.left,
-          event.clientY - rect.top,
-          event.deltaY * (pinchLike ? 14 : 4),
-        );
-      } else {
-        engine.panByScreenDelta(-event.deltaX, -event.deltaY);
+        engine.panByScreenDelta(intent.dx, intent.dy);
       }
     },
     onPointerDown(event: PointerEvent) {
