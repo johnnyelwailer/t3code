@@ -173,6 +173,7 @@ function makeHarness(input: {
           getTurnStartContext: () => readProjection,
           getRuntimeRecoveryProjection: () => readProjection,
           getTurnStartHistory: () => Effect.succeed(conversationItems),
+          getThreadRecords: () => readProjection as never,
         }),
         Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({ open }),
         Layer.mock(ProviderAuthService.ProviderAuthService)({
