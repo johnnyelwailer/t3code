@@ -39,10 +39,6 @@
       "types": "./src/t3team-workflowOutputText.ts",
       "import": "./src/t3team-workflowOutputText.ts"
     },
-    "./legacyCliLauncher": {
-      "types": "./src/legacyCliLauncher.ts",
-      "import": "./src/legacyCliLauncher.ts"
-    },
     "./delimitedPreview": {
       "types": "./src/delimitedPreview.ts",
       "import": "./src/delimitedPreview.ts"
@@ -142,6 +138,10 @@
     "./toolActivity": {
       "types": "./src/toolActivity.ts",
       "import": "./src/toolActivity.ts"
+    },
+    "./terminalOutput": {
+      "types": "./src/terminalOutput.ts",
+      "import": "./src/terminalOutput.ts"
     },
     "./toolOutput": {
       "types": "./src/toolOutput.ts",

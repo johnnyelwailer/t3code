@@ -1,12 +1,3 @@
-/**
- * The source control drivers this build ships with. Both registries, repository operations and
- * pull requests, iterate this list; a host with no driver here shows up as unsupported.
- *
- * Adding a host means writing its `@t3tools/source-control-<host>` package, adding its driver
- * here, and providing its services' layers in `layer` below.
- *
- * @module sourceControl/builtInDrivers
- */
 import * as AzureDevOpsCli from "@t3tools/source-control-azure-devops/server/AzureDevOpsCli";
 import * as AzureDevOpsPullRequestCli from "@t3tools/source-control-azure-devops/server/AzureDevOpsPullRequestCli";
 import * as AzureDevOpsDriver from "@t3tools/source-control-azure-devops/server/driver";
@@ -18,7 +9,7 @@ import * as ForgejoDriver from "@t3tools/source-control-forgejo/server/driver";
 import * as GitCafeApi from "@t3tools/source-control-gitcafe/server/GitCafeApi";
 import * as GitCafeCredentials from "@t3tools/source-control-gitcafe/server/GitCafeCredentials";
 import * as GitCafeDriver from "@t3tools/source-control-gitcafe/server/driver";
-import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as T3TeamGitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as GitHubPullRequestApi from "@t3tools/source-control-github/server/GitHubPullRequestApi";
 import * as GitHubDriver from "@t3tools/source-control-github/server/driver";
 import * as GitLabCli from "@t3tools/source-control-gitlab/server/GitLabCli";
@@ -38,17 +29,18 @@ const drivers = [
   GitCafeDriver.driver,
 ];
 
-/** Every service a built-in driver's `make` needs; the server's layers must provide them all. */
 export type BuiltInSourceControlDriversEnv =
   (typeof drivers)[number] extends SourceControlDriver<infer R> ? R : never;
 
-/** Ordered as the hosts appear in discovery. */
 export const BUILT_IN_SOURCE_CONTROL_DRIVERS: ReadonlyArray<
   SourceControlDriver<BuiltInSourceControlDriversEnv>
 > = drivers;
 
-/** The GitHub transport with the credential, quota and pause its readers share. */
-type GitHubTransportLayer = typeof GitHubApi.layerWithDependencies;
+/**
+ * The GitHub transport with the credential, quota and pause its readers share: upstream's
+ * `GitHubRest.layerWithDependencies` plus the fork's `GitHubApi` facade over it (t3team).
+ */
+type GitHubTransportLayer = typeof T3TeamGitHubApi.layerWithDependencies;
 
 /**
  * The services the built-in drivers' packages own, plus the host port they all run against.
@@ -57,7 +49,7 @@ type GitHubTransportLayer = typeof GitHubApi.layerWithDependencies;
  * it so it is not built a second time.
  */
 export const makeLayer = (
-  gitHubTransport: GitHubTransportLayer = GitHubApi.layerWithDependencies,
+  gitHubTransport: GitHubTransportLayer = T3TeamGitHubApi.layerWithDependencies,
 ) =>
   Layer.mergeAll(
     GitHubPullRequestApi.layer.pipe(Layer.provideMerge(gitHubTransport)),

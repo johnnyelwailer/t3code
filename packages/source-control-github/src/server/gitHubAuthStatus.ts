@@ -25,7 +25,6 @@ export interface GitHubAuthStatusAccount {
   readonly authenticated: boolean;
   readonly active: boolean;
   readonly error: string | null;
-  /** The variable (GH_TOKEN and kin) the login came from; it overrides every stored login. */
   readonly environmentVariable: string | null;
 }
 
@@ -92,11 +91,6 @@ export function findAuthenticatedGitHubAccounts(
   return accounts.filter((account) => account.authenticated);
 }
 
-/**
- * The login GitHub requests for a host will use, honoring Settings: an environment token
- * first (gh's own precedence), then the pinned account, then gh's active login.
- * Returns undefined when the host is turned off or has no usable login.
- */
 export function effectiveGitHubAccount(
   host: string,
   accounts: ReadonlyArray<GitHubAuthStatusAccount>,

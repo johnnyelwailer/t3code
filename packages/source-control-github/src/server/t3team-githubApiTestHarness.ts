@@ -3,7 +3,8 @@ import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import { HttpClient, HttpClientResponse, type HttpClientRequest } from "effect/http";
 
-import * as GitHubApi from "./GitHubApi.ts";
+import * as GitHubApi from "./t3team-GitHubApi.ts";
+import * as GitHubRest from "./GitHubRest.ts";
 import * as GitHubCredentials from "./GitHubCredentials.ts";
 import * as GitHubQuota from "./GitHubQuota.ts";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
@@ -45,7 +46,8 @@ export function makeGitHubApiHarness(
     }),
   );
   const layer = GitHubApi.layer.pipe(
-    Layer.provide(Layer.mergeAll(credentials, http)),
+    Layer.provideMerge(GitHubRest.layer),
+    Layer.provideMerge(Layer.mergeAll(credentials, http)),
     Layer.provideMerge(GitHubQuota.layer),
     Layer.provideMerge(SourceControlRateLimit.layer),
   );

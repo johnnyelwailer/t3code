@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Scope from "effect/Scope";
 
-import * as GitHubApi from "./GitHubApi.ts";
+import * as GitHubApi from "./t3team-GitHubApi.ts";
 import { jsonResponse, makeGitHubApiHarness } from "./t3team-githubApiTestHarness.ts";
 
 class Connection extends Context.Service<
