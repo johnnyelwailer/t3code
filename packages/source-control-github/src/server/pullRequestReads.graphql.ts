@@ -364,9 +364,9 @@ export const PullRequestCoreRepositoryPullRequestPullRequest = Schema.Struct({
   /** Identifies the oid of the head ref associated with the pull request, even if the ref has been deleted. */
   headRefOid: Shared.GitObjectID,
   /** Identifies the oid of the base ref associated with the pull request, even if the ref has been deleted. */
-  baseRefOid: Shared.GitObjectID,
+  baseRefOid: Schema.optionalKey(Shared.GitObjectID),
   /** Author's association with the subject of the comment. */
-  authorAssociation: GraphQL.enumLiterals(Shared.CommentAuthorAssociation.literals),
+  authorAssociation: Schema.optionalKey(GraphQL.enumLiterals(Shared.CommentAuthorAssociation.literals)),
   /** The head and base repositories are different. */
   isCrossRepository: Schema.Boolean,
   /** The owner of the repository associated with this pull request's head Ref. */
@@ -425,10 +425,11 @@ export const PullRequestCore = GraphQL.query("PullRequestCore", {
       { name: "name", body: "String!" },
       { name: "number", body: "Int!" },
       { name: "headRef", body: "String!" },
-      { name: "required", body: "Boolean!" }
+      { name: "required", body: "Boolean!" },
+      { name: "t3teamForkFields", body: "Boolean=true" }
     ],
     selections: [
-      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed viewerPermission pullRequest(number:$", "number", "){number title url body state isDraft mergeable reviewDecision additions deletions changedFiles createdAt updatedAt mergedAt closedAt headRefName baseRefName headRefOid baseRefOid authorAssociation isCrossRepository headRepositoryOwner{__typename login}headRepository{nameWithOwner viewerPermission}headRef{id}author{__typename login avatarUrl...on User{id name}}autoMergeRequest{mergeMethod}viewerCanUpdate viewerDidAuthor viewerCanUpdateBranch baseRef{compare(headRef:$", "headRef", "){behindBy}}reviewRequests(first:100){nodes{requestedReviewer{__typename...on User{login name}...on Bot{login}...on Team{slug combinedSlug teamName:name teamAvatarUrl:avatarUrl}}}}labels(first:100){nodes{name color}}commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){nodes{__typename...", "CheckContext", "}pageInfo{hasNextPage}}}}}}}}"] }
+      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed viewerPermission pullRequest(number:$", "number", "){number title url body state isDraft mergeable reviewDecision additions deletions changedFiles createdAt updatedAt mergedAt closedAt headRefName baseRefName headRefOid baseRefOid@include(if:$", "t3teamForkFields", ")authorAssociation@include(if:$", "t3teamForkFields", ")isCrossRepository headRepositoryOwner{__typename login}headRepository{nameWithOwner viewerPermission}headRef{id}author{__typename login avatarUrl...on User{id name}}autoMergeRequest{mergeMethod}viewerCanUpdate viewerDidAuthor viewerCanUpdateBranch baseRef{compare(headRef:$", "headRef", "){behindBy}}reviewRequests(first:100){nodes{requestedReviewer{__typename...on User{login name}...on Bot{login}...on Team{slug combinedSlug teamName:name teamAvatarUrl:avatarUrl}}}}labels(first:100){nodes{name color}}commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){nodes{__typename...", "CheckContext", "}pageInfo{hasNextPage}}}}}}}}"] }
     ],
     fragments: [
       { name: "CheckContext", body: ["on StatusCheckRollupContext{__typename...on StatusContext{context state targetUrl createdAt description isRequired(pullRequestNumber:$", "number", ")@include(if:$", "required", ")}...on CheckRun{name status conclusion startedAt completedAt detailsUrl isRequired(pullRequestNumber:$", "number", ")@include(if:$", "required", ")checkSuite{workflowRun{workflow{name}}}}}"] }
@@ -439,7 +440,9 @@ export const PullRequestCore = GraphQL.query("PullRequestCore", {
     name: Schema.String,
     number: Shared.Int,
     headRef: Schema.String,
-    required: Schema.Boolean
+    required: Schema.Boolean,
+    /** @default true */
+    t3teamForkFields: Schema.optional(Schema.NullOr(Schema.Boolean))
   },
   result: Schema.Struct({
     /** Lookup a given repository by the owner and repository name. */

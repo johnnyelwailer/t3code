@@ -702,10 +702,19 @@ describe("pull request detail decoding", () => {
   });
 
   it("carries the base commit and the author's standing, and omits them when GitHub does not say", () => {
-    const raw = JSON.parse(detailJson) as Record<string, unknown>;
+    const raw = {
+      number: 7,
+      title: "Detail",
+      url: "https://github.com/pingdotgg/t3code/pull/7",
+      headRefName: "feat/detail",
+      baseRefName: "main",
+      createdAt: "2026-07-01T00:00:00Z",
+      updatedAt: "2026-07-05T00:00:00Z",
+    };
     const read = (entry: Record<string, unknown>) =>
       expectSuccess(decodePullRequestDetailJson(JSON.stringify({ ...raw, ...entry })));
 
+    expect(read({})).toMatchObject({ baseSha: null, authorAssociation: null });
     expect(
       read({ baseRefOid: " b4se ", authorAssociation: "FIRST_TIME_CONTRIBUTOR" }),
     ).toMatchObject({ baseSha: "b4se", authorAssociation: "FIRST_TIME_CONTRIBUTOR" });

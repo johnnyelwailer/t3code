@@ -51,6 +51,7 @@ query PullRequestCore(
   $number: Int!
   $headRef: String!
   $required: Boolean!
+  $t3teamForkFields: Boolean = true
 ) {
   repository(owner: $owner, name: $name) {
     mergeCommitAllowed
@@ -77,8 +78,10 @@ query PullRequestCore(
       baseRefName
       headRefOid
       # t3team: the base commit and the author's standing, which a launch policy reads off the detail.
-      baseRefOid
-      authorAssociation
+      # Always requested; @include keeps them optional keys so an answer without them still decodes
+      # (the detail then omits them, which a policy reads as "unknown").
+      baseRefOid @include(if: $t3teamForkFields)
+      authorAssociation @include(if: $t3teamForkFields)
       isCrossRepository
       headRepositoryOwner {
         login

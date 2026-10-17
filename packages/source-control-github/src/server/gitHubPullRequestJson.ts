@@ -887,6 +887,9 @@ const decodeDetail = decodeJsonResult(
     state: Schema.optional(Schema.String),
     createdAt: Schema.String,
     updatedAt: Schema.String,
+    // t3team: the base commit and the author's standing, kept so fixtures can carry them.
+    baseRefOid: Schema.optional(Schema.NullOr(Schema.String)),
+    authorAssociation: Schema.optional(Schema.NullOr(Schema.String)),
   }),
 );
 const decodeWorkflowRuns = decodeJsonResult(RawWorkflowRunsSchema);
