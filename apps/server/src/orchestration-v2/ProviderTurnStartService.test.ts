@@ -175,19 +175,13 @@ function makeLocalCommandHarness(input: {
   readonly previousMessages?: ReadonlyArray<string>;
   readonly logoutFailure?: string;
   readonly openFailure?: unknown;
-  /** Opens the session, then fails loading its provider thread. */
   readonly ensureThreadFailure?: unknown;
-  /**
-   * Resumes a thread that has a native ref: resume fails, the fresh-thread
-   * fallback succeeds, then reading history for its handoff fails.
-   */
   readonly historyReadFailureAfterFallback?: unknown;
   readonly interruptOpen?: boolean;
   readonly interruptRunBeforeOpenFailure?: boolean;
   readonly writeFailure?: unknown;
   /** t3team: makes the turn's message a queued delegated-completion wake. */
   readonly delegatedCompletion?: OrchestrationV2ThreadProjection["messages"][number]["delegatedCompletion"];
-  /** Loads the thread and starts the run, then fails every later state read. */
   readonly failReadsAfterRunning?: boolean;
   /** The run's selected model id (default "gpt-5.4"). */
   readonly model?: string;
@@ -952,8 +946,6 @@ effectIt.effect(
 
       const error = yield* harness.start.pipe(Effect.flip);
 
-      // The provider succeeded; the failing stage is the projection read, so
-      // the run is not failed as a provider error on the last attempt.
       expect(error._tag).toBe("ProviderTurnStartError");
       expect((error.cause as { _tag?: string } | undefined)?._tag).toBe("ProjectionStoreReadError");
       expect(harness.writeIfRunCurrent).not.toHaveBeenCalled();
@@ -972,8 +964,6 @@ effectIt.effect("does not mistake a failed state read for a superseded run", () 
     const controls = harness.startRootRun.mock.calls[0]?.[0];
     expect(controls).toBeDefined();
     if (controls === undefined) return;
-    // "false" would skip the provider turn or the terminal write and leave the
-    // run active. A read failure must reach the caller instead.
     const startCheck = yield* Effect.flip(controls.shouldStartProviderTurn!());
     const finalizeCheck = yield* Effect.flip(controls.shouldFinalizeRun!());
     expect(startCheck._tag).toBe("ProjectionStoreReadError");

@@ -124,7 +124,6 @@ export class VcsProcessExitError extends Schema.TaggedError<VcsProcessExitError>
     failureKind: Schema.optional(VcsProcessExitFailureKind),
     /** Truncated (< 4KB) stderr — the diagnostics that make a non-zero exit actionable. */
     stderr: Schema.optional(Schema.String),
-    /** Process-boundary hint for a recognized transient failure; absence is not retryable. */
     retryable: Schema.optional(Schema.Boolean),
     stderrLength: Schema.optional(NonNegativeInt),
     stderrTruncated: Schema.optional(Schema.Boolean),

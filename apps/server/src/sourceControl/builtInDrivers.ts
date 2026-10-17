@@ -1,12 +1,3 @@
-/**
- * The source control drivers this build ships with. Both registries, repository operations and
- * pull requests, iterate this list; a host with no driver here shows up as unsupported.
- *
- * Adding a host means writing its `@t3tools/source-control-<host>` package, adding its driver
- * here, and providing its services' layers in `layer` below.
- *
- * @module sourceControl/builtInDrivers
- */
 import * as AzureDevOpsCli from "@t3tools/source-control-azure-devops/server/AzureDevOpsCli";
 import * as AzureDevOpsPullRequestCli from "@t3tools/source-control-azure-devops/server/AzureDevOpsPullRequestCli";
 import * as AzureDevOpsDriver from "@t3tools/source-control-azure-devops/server/driver";
@@ -38,11 +29,9 @@ const drivers = [
   GitCafeDriver.driver,
 ];
 
-/** Every service a built-in driver's `make` needs; the server's layers must provide them all. */
 export type BuiltInSourceControlDriversEnv =
   (typeof drivers)[number] extends SourceControlDriver<infer R> ? R : never;
 
-/** Ordered as the hosts appear in discovery. */
 export const BUILT_IN_SOURCE_CONTROL_DRIVERS: ReadonlyArray<
   SourceControlDriver<BuiltInSourceControlDriversEnv>
 > = drivers;
