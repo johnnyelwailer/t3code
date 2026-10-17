@@ -270,7 +270,7 @@ export function WelcomeWizard({
               autoSelectedComputers={autoSelectedComputers}
               onSelectionChange={setSelection}
               onToggleEnvironment={(environmentId, checked) => {
-                autoSelectedComputers.current.add(environmentId);
+                autoSelectedComputers.add(environmentId);
                 setSelection((current) => {
                   const next = new Set(current ?? selectedIds);
                   if (checked) next.add(environmentId);

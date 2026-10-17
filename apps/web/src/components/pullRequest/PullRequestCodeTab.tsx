@@ -326,8 +326,8 @@ function useParsedDiffSlices(
         : [],
     ),
   );
-  const fileTreeEntries = diffFileTreeEntries(files);
-  return { parsedSlices, files, filePaths, sourceFileStats, omittedFileStats, fileTreeEntries };
+  // t3team: the explorer tree builds its own entries (t3team-DiffExplorerFileTree).
+  return { parsedSlices, files, filePaths, sourceFileStats, omittedFileStats };
 }
 
 function useAnnotatedDiffFiles(
@@ -699,8 +699,12 @@ function PullRequestCodeTab({
     resolve: hostReview.resolve && detail.viewerPermissions.resolve,
   };
   const canCommentOnLines = review.inlineComment && commit === null;
-  const { parsedSlices, files, filePaths, sourceFileStats, omittedFileStats, fileTreeEntries } =
-    useParsedDiffSlices(loadedSlices, scopeKey, resolvedTheme, ignoreWhitespace);
+  const { parsedSlices, files, filePaths, sourceFileStats, omittedFileStats } = useParsedDiffSlices(
+    loadedSlices,
+    scopeKey,
+    resolvedTheme,
+    ignoreWhitespace,
+  );
   const viewedFilesStore = detail.capabilities.viewedFiles;
   const filesViewed = usePullRequestFilesViewed({
     environmentId,

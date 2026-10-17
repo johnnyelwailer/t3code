@@ -165,6 +165,7 @@ export const AuthStandardClientScopes = [
   AuthRelayReadScope,
   AuthAccessReadScope,
   AuthAccessWriteScope,
+  AuthRelayWriteScope,
 ] as const;
 
 export const AuthTokenExchangeGrantType =

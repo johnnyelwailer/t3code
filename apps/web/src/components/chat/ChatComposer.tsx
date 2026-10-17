@@ -1848,7 +1848,7 @@ function useModelOptionsByInstance(
 function useComposerImageGroups(
   pendingSnapShotAnimations: ReturnType<typeof getPendingSnapShotAnimations>,
   composerDraftTarget: ScopedThreadRef | DraftId,
-  composerImages: ReadonlyArray<ComposerImageAttachment>,
+  composerImages: ReadonlyArray<ComposerAttachment>,
   composerPreviewAnnotations: ReadonlyArray<{ readonly id: string }>,
 ) {
   // Calls no hooks, so the compiler needs the directive to memoize it.
