@@ -16,12 +16,12 @@ const settingsState = vi.hoisted(() => ({
   activityLabelsEnabled: true,
 }));
 
-const serverConfigsState = vi.hoisted(() => ({
-  configs: new Map<string, unknown>(),
+const providersState = vi.hoisted(() => ({
+  byEnvironment: new Map<string, unknown>(),
 }));
 
-vi.mock("~/state/entities", () => ({
-  useServerConfigs: () => serverConfigsState.configs,
+vi.mock("~/state/environments", () => ({
+  useEnvironmentProviders: () => providersState.byEnvironment,
 }));
 
 vi.mock("~/hooks/useSettings", () => ({
@@ -81,7 +81,7 @@ function setProviders(
     iconDataUrl?: string;
   }>,
 ) {
-  serverConfigsState.configs = new Map([["env-1", { providers }]]);
+  providersState.byEnvironment = new Map([["env-1", providers]]);
 }
 
 /** The folded row for one sub-run title (the fold's own toggle button is not a row). */
@@ -100,7 +100,7 @@ afterEach(() => {
   }
   container?.remove();
   container = null;
-  serverConfigsState.configs = new Map();
+  providersState.byEnvironment = new Map();
 });
 
 describe("T3TeamAgentsPanelSubRunTree status language (GHE #254)", () => {
