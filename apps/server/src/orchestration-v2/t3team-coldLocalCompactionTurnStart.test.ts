@@ -14,10 +14,12 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 
+import * as ServerConfig from "../config.ts";
 import * as GitWorkflow from "../git/GitWorkflowService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as ContextHandoffService from "./ContextHandoffService.ts";
 import * as EventSink from "./EventSink.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
@@ -167,6 +169,10 @@ function makeHarness(input: {
         IdAllocator.layer,
         FileSystem.layerNoop({}),
         Path.layer,
+        Layer.mock(ServerConfig.ServerConfig)({
+          worktreesDir: "/tmp/t3team-cold-compaction-worktrees",
+        } as ServerConfig.ServerConfig["Service"]),
+        ServerSettings.layerTest(),
         Layer.mock(GitWorkflow.GitWorkflowService)({}),
         Layer.mock(ProjectService.ProjectService)({}),
         Layer.mock(ProjectionStore.ProjectionStoreV2)({
