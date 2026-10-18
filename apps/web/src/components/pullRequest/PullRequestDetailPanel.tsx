@@ -660,16 +660,18 @@ export function PullRequestDetailPanel({
     });
   }, [tab, activeFile, onViewChange]);
   // Sync the tab when the URL changes (e.g., Back/Forward). The panel's own tab
-  // changes are already reflected in the URL, so this only fires for external
+  // changes are already reflected in the URL, so this only acts on external
   // navigation that the URL drives.
-  useEffect(() => {
-    const urlTab = initialView?.tab;
+  const urlTab = initialView?.tab;
+  const [syncedUrlTab, setSyncedUrlTab] = useState(urlTab);
+  if (syncedUrlTab !== urlTab) {
+    setSyncedUrlTab(urlTab);
     // The Guide reports itself as "summary", so that echo is not a navigation away from it.
     if (urlTab && urlTab !== tab && !(tab === "guide" && urlTab === "summary")) {
       setTab(urlTab);
       if (urlTab !== "code") setActiveFile(null);
     }
-  }, [initialView?.tab]);
+  }
   const [timelineOrder, setTimelineOrder] = useState<"newest" | "oldest">("newest");
   const [codeCommitScope, setCodeCommitScope] = useState<{
     readonly pullRequestKey: string;

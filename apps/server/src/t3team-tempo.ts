@@ -76,7 +76,7 @@ type TempoPage<T> = {
   readonly metadata?: { readonly next?: string };
 };
 
-// --- Tempo HTTP --------------------------------------------------------------
+// Tempo HTTP.
 
 async function tempoGetAllPages<T>(token: string, firstUrl: string): Promise<T[]> {
   const collected: T[] = [];
@@ -109,7 +109,7 @@ function fetchUserPlans(token: string, accountId: string, from: string, to: stri
   return tempoGetAllPages<TempoPlan>(token, url);
 }
 
-// --- route entry point --------------------------------------------------------
+// route entry point.
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 

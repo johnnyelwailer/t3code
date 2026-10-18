@@ -98,7 +98,6 @@ import {
   memo,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useReducer,
   useRef,
   useState,
@@ -3084,9 +3083,8 @@ export default function Sidebar() {
       projectScopeKey,
     );
   }, [projectScopeKey, scopedProjectGroup, setScopedProjectForChrome]);
-  const scopedProjectIds = useMemo(
-    () => scopedProjectGroup?.memberProjectRefs.map((projectRef) => projectRef.projectId as string),
-    [scopedProjectGroup],
+  const scopedProjectIds = scopedProjectGroup?.memberProjectRefs.map(
+    (projectRef) => projectRef.projectId as string,
   );
   // t3team: a scope pick re-targets the active My work / Backlog board (never a thread or draft).
   useT3TeamScopeRouteSync(projectScopeKey, scopedProjectGroup?.id ?? null, scopedProjectIds);

@@ -14,7 +14,6 @@ import {
   type KeyboardEvent,
   type ReactNode,
   memo,
-  useCallback,
   useEffect,
   useId,
   useRef,
@@ -2065,12 +2064,13 @@ export function ConnectionsSettings() {
   // The connections page is a surface that shows the cloud session list, so it
   // drives polling while visible — the settings panel used to be a dead screen
   // that never refreshed (finding: a session in flight froze on one phase).
+  const onCloudPanelVisibilityChange = cloudSessions.onPanelVisibilityChange;
   useEffect(() => {
-    cloudSessions.onPanelVisibilityChange(true);
+    onCloudPanelVisibilityChange(true);
     return () => {
-      cloudSessions.onPanelVisibilityChange(false);
+      onCloudPanelVisibilityChange(false);
     };
-  }, [cloudSessions.onPanelVisibilityChange]);
+  }, [onCloudPanelVisibilityChange]);
   const primaryEnvironmentId = primaryEnvironment?.environmentId ?? null;
   const primarySessionState = usePrimarySessionState();
   const currentSessionScopes = primarySessionState.data?.authenticated
@@ -2754,18 +2754,12 @@ export function ConnectionsSettings() {
 
   // The cloud panel owns a session's "Forget": the same confirmed removal the
   // saved-backend row used, offered only when the machine was actually saved.
-  const forgetCloudSession = useCallback(
-    (session: CloudSession) => {
-      const saved = savedEnvironmentForCloudSession(session, listedEnvironments);
-      if (saved !== null) void handleRemoveSavedBackend(saved);
-    },
-    [handleRemoveSavedBackend, listedEnvironments],
-  );
-  const canForgetCloudSession = useCallback(
-    (session: CloudSession) =>
-      savedEnvironmentForCloudSession(session, listedEnvironments) !== null,
-    [listedEnvironments],
-  );
+  const forgetCloudSession = (session: CloudSession) => {
+    const saved = savedEnvironmentForCloudSession(session, listedEnvironments);
+    if (saved !== null) void handleRemoveSavedBackend(saved);
+  };
+  const canForgetCloudSession = (session: CloudSession) =>
+    savedEnvironmentForCloudSession(session, listedEnvironments) !== null;
 
   const visibleDesktopPairingLinks = desktopPairingLinks;
   const tailscaleHttpsEndpoint = desktopAdvertisedEndpoints.find(isTailscaleHttpsEndpoint) ?? null;

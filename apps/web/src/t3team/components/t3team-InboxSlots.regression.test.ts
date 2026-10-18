@@ -4,7 +4,6 @@
  * `useProjectStore` (directly or through the hooks that wrap it).
  *
  * Why this test exists
- * --------------------
  * Before the fix in `t3team-sidebarThreadDataStore`, `InboxSubRunsChip` called
  * `useT3TeamChildThreadRelations()` and `InboxThreadAttribution` called
  * `useT3TeamInboxAttribution()`.  Both of those hooks call `useProjectStore()`

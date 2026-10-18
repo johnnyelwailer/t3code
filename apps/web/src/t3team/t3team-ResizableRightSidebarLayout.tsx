@@ -86,7 +86,7 @@ export function ResizableRightSidebarLayout({
   // one-at-a-time tabs instead of squeezing the main content into a sliver.
   const pane = useElementFitsWidth(minMainWidth + minAsideWidth);
   const showTabs = !isDesktop || (!asideCollapsed && !pane.fits);
-  const measurePane = pane.ref;
+  const measurePane = pane.attach;
   const setContainerNode = useCallback(
     (node: HTMLDivElement | null) => {
       containerRef.current = node;
@@ -188,7 +188,7 @@ export function ResizableRightSidebarLayout({
 
   if (showTabs) {
     return (
-      <div ref={pane.ref} className="flex h-full min-h-0 min-w-0 flex-1">
+      <div ref={pane.attach} className="flex h-full min-h-0 min-w-0 flex-1">
         <T3TeamMobilePanelLayout
           activePanel={mobilePanel}
           onActivePanelChange={setMobilePanel}

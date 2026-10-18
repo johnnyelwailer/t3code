@@ -108,56 +108,6 @@ export function deriveProviderInstanceEntries(
 }
 
 /**
- * Render-relevant equality for provider-entry maps.
- *
- * Provider snapshots stream continuously (session starts, turn lifecycle,
- * capacity probes all republish them), so a map derived per emission gets a
- * fresh identity many times per user interaction even when nothing a list row
- * renders has changed. Comparing the fields rows actually consume lets callers
- * keep the previous map reference and preserve `memo` bailouts downstream
- * (GHE #61: every sidebar thread row re-rendered on thread selection).
- *
- * Deliberately ignores `snapshot` (always a fresh wire object) — callers that
- * need the raw snapshot should read it from the atom, not from a map kept
- * stable for rendering.
- */
-export function providerInstanceEntryMapsRenderEqual(
-  left: ReadonlyMap<string, ProviderInstanceEntry>,
-  right: ReadonlyMap<string, ProviderInstanceEntry>,
-): boolean {
-  if (left === right) return true;
-  if (left.size !== right.size) return false;
-  for (const [instanceId, a] of left) {
-    const b = right.get(instanceId);
-    if (b === undefined) return false;
-    if (
-      a.driverKind !== b.driverKind ||
-      a.displayName !== b.displayName ||
-      a.accentColor !== b.accentColor ||
-      a.iconDataUrl !== b.iconDataUrl ||
-      a.configurationSource !== b.configurationSource ||
-      a.acpRegistryAgentId !== b.acpRegistryAgentId ||
-      a.acpRegistryIconUrl !== b.acpRegistryIconUrl ||
-      a.continuationGroupKey !== b.continuationGroupKey ||
-      a.enabled !== b.enabled ||
-      a.installed !== b.installed ||
-      a.status !== b.status ||
-      a.isDefault !== b.isDefault ||
-      a.isAvailable !== b.isAvailable
-    ) {
-      return false;
-    }
-    if (a.models.length !== b.models.length) return false;
-    for (let i = 0; i < a.models.length; i++) {
-      if (a.models[i]!.slug !== b.models[i]!.slug || a.models[i]!.name !== b.models[i]!.name) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
-/**
  * Instance ids are per-environment routing keys, and `defaultInstanceIdForDriver` makes the
  * default id literally the driver slug, so every environment running the same driver reports
  * the same id. Flattening across environments would clobber entries and mis-resolve accent

@@ -18,7 +18,6 @@ import {
  * Side chat as a standard right-panel tab.
  *
  * WHAT THIS STORY IS
- * ------------------
  * The REAL `RightPanelTabs` chrome driven by the REAL `rightPanelStore`, with story-side
  * stand-in content panes. The "Side chat" controls call the SAME `openThreadSurface` action
  * the actor-message thread chip calls in-app (`useT3TeamOpenSenderThread`), so tab creation,

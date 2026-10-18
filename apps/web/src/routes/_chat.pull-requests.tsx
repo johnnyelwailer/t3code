@@ -462,14 +462,19 @@ function PullRequestsRouteView() {
   // reports its view, we stamp the counter. If the counter moves since
   // that stamp (Back/Forward), the mismatch is external and the view sync
   // must not re-push the panel's stale report.
-  const searchChangeCounterRef = useRef(0);
+  // The first count is 1 so a mount reads as "changed since the last report" until the panel
+  // reports, as the counter's old mount-time effect tick did.
+  const searchViewKey = `${search.tab ?? ""}\0${search.file ?? ""}`;
+  const [searchViewChanges, setSearchViewChanges] = useState({ key: searchViewKey, count: 1 });
+  if (searchViewChanges.key !== searchViewKey) {
+    setSearchViewChanges({ key: searchViewKey, count: searchViewChanges.count + 1 });
+  }
+  const searchChangeCount =
+    searchViewChanges.key === searchViewKey ? searchViewChanges.count : searchViewChanges.count + 1;
   const reportedAtCounterRef = useRef(0);
-  useEffect(() => {
-    searchChangeCounterRef.current++;
-  }, [search.tab, search.file]);
   const handlePanelViewChange = (view: PullRequestDetailViewState) => {
     if (activeSurfaceId === undefined) return;
-    reportedAtCounterRef.current = searchChangeCounterRef.current;
+    reportedAtCounterRef.current = searchChangeCount;
     setViewBySurface((previous) => {
       const current = previous[activeSurfaceId];
       if (current?.tab === view.tab && current?.file === view.file) return previous;
@@ -491,13 +496,13 @@ function PullRequestsRouteView() {
     // If the URL changed since the panel last reported (Back/Forward), the
     // mismatch is external — let the panel sync from the URL instead of
     // re-pushing its stale report.
-    if (reportedAtCounterRef.current !== searchChangeCounterRef.current) return;
+    if (reportedAtCounterRef.current !== searchChangeCount) return;
     // Always replace: tab and file changes are view state, not navigation.
     // Back should close the PR panel (undo the selection), not step through
     // tabs. Pushing here would make Back undo the tab click instead of the
     // PR open, which is the opposite of what the reader expects.
     updateSearch(pullRequestDetailViewStateSearchPatch(view));
-  }, [activeSurfaceView, search, updateSearch]);
+  }, [activeSurfaceView, search, searchChangeCount, updateSearch]);
 
   const clearedSelection = {
     repository: undefined,

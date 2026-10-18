@@ -336,13 +336,17 @@ function PullRequestCodeTab({
   // and opens over the diff instead, closing again once a file is picked. The stored preference
   // is the wide layout's alone.
   // Measured on the row the tree shares with the diff, and a split diff needs more of it.
-  const treeRow = useElementFitsWidth(prCodeTreeDockMinWidth(diffLayout));
+  const { attach: attachTreeRow, fits: treeRowFits } = useElementFitsWidth(
+    prCodeTreeDockMinWidth(diffLayout),
+  );
   // Too narrow for every control inline: the secondary toggles move into View options so the
   // tree toggle and the menu are never clipped off the right edge.
-  const toolbarRoom = useElementFitsWidth(PR_CODE_TOOLBAR_FULL_MIN_WIDTH);
-  const compactToolbar = !toolbarRoom.fits;
+  const { attach: attachToolbar, fits: toolbarFits } = useElementFitsWidth(
+    PR_CODE_TOOLBAR_FULL_MIN_WIDTH,
+  );
+  const compactToolbar = !toolbarFits;
   const [overlayTreeOpen, setOverlayTreeOpen] = useState(false);
-  const treeAsOverlay = !treeRow.fits;
+  const treeAsOverlay = !treeRowFits;
   const fileTreeOpen = treeAsOverlay ? overlayTreeOpen : storedFileTreeOpen;
   const setFileTreeOpen = treeAsOverlay ? setOverlayTreeOpen : setStoredFileTreeOpen;
   const [selectedLines, setSelectedLines] = useState<{
@@ -723,6 +727,15 @@ function PullRequestCodeTab({
   // The explorer's read of the files: the checkbox tree and the focus navigation both work in
   // this shape rather than against the raw diff metadata.
   const explorerFiles = files.map(diffExplorerFileInfo);
+  // A link into this view names its file by path: the one thing a reader can check against the
+  // host. It lands as soon as the diff has files to match against; a path no file carries is
+  // dropped silently, and the explorer falls back to its first file like any stale selection.
+  const [seededInitialFile, setSeededInitialFile] = useState(false);
+  if (!seededInitialFile && initialFile !== undefined && explorerFiles.length > 0) {
+    setSeededInitialFile(true);
+    const match = explorerFiles.find((file) => file.path === initialFile);
+    if (match !== undefined) setSelectedKey(match.key);
+  }
   // The focused file, kept valid: when the last-clicked file leaves the diff (a refresh, a
   // force-push, a slice replacing itself) it falls back to the first file rather than pointing
   // the tree and the pane at a row that no longer exists.
@@ -730,17 +743,6 @@ function PullRequestCodeTab({
     selectedKey !== null && explorerFiles.some((file) => file.key === selectedKey)
       ? selectedKey
       : (explorerFiles[0]?.key ?? null);
-  // A link into this view names its file by path: the one thing a reader can check against the
-  // host. It lands as soon as the diff has files to match against; a path no file carries is
-  // dropped silently, and the explorer falls back to its first file like any stale selection.
-  const seededInitialFile = useRef(false);
-  useEffect(() => {
-    if (seededInitialFile.current || initialFile === undefined) return;
-    if (explorerFiles.length === 0) return;
-    seededInitialFile.current = true;
-    const match = explorerFiles.find((file) => file.path === initialFile);
-    if (match !== undefined) setSelectedKey(match.key);
-  }, [explorerFiles, initialFile]);
   // The page writes this file into the URL, so a copied link or a second tab lands on the file
   // the reader is looking at rather than on the change's first file.
   const activePath =
@@ -1140,7 +1142,7 @@ function PullRequestCodeTab({
     // The padding must not follow `compactToolbar`: the toolbar measures its own content box, so
     // a padding that changed with the result would flip it back and forth at the threshold.
     <div
-      ref={toolbarRoom.ref}
+      ref={attachToolbar}
       className="flex h-10 min-h-10 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-background px-2 text-xs text-muted-foreground sm:px-4"
     >
       {/* Clipped, so on a narrow pane the counts give way instead of sliding under the controls. */}
@@ -1715,7 +1717,7 @@ function PullRequestCodeTab({
           </Collapsible>
         </div>
       ) : null}
-      <div ref={treeRow.ref} className="relative flex min-h-0 flex-1 overflow-hidden">
+      <div ref={attachTreeRow} className="relative flex min-h-0 flex-1 overflow-hidden">
         {/* Relative wrapper so the review overlay floats over the diff rather than pushing it
             up; the viewer inside still owns its own scrolling. */}
         <div

@@ -19,12 +19,10 @@ import {
   type Ref,
   type MouseEvent as ReactMouseEvent,
   memo,
-  useCallback,
   useImperativeHandle,
   useEffect,
   useEffectEvent,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -672,28 +670,23 @@ export const BranchToolbar = memo(function BranchToolbar({
   // scopeKey owns the optimistic cloud preference across thread navigation.
   const cloudSessionScopeKey = draftId ?? scopedThreadKey(threadRef);
   const cloudSessions = useT3TeamRunOnCloudSessionProps(activeProjectRef, cloudSessionScopeKey);
-  const handleEnvironmentChange = useCallback(
-    (nextEnvironmentId: EnvironmentId) => {
-      clearCloudSessionTargetIfLocal(
-        cloudSessionScopeKey,
-        nextEnvironmentId,
-        cloudSessions.selectorProps.cloudEnvironmentIds,
-      );
-      onEnvironmentChange?.(nextEnvironmentId);
-    },
-    [cloudSessionScopeKey, cloudSessions.selectorProps.cloudEnvironmentIds, onEnvironmentChange],
-  );
+  const handleEnvironmentChange = (nextEnvironmentId: EnvironmentId) => {
+    clearCloudSessionTargetIfLocal(
+      cloudSessionScopeKey,
+      nextEnvironmentId,
+      cloudSessions.selectorProps.cloudEnvironmentIds,
+    );
+    onEnvironmentChange?.(nextEnvironmentId);
+  };
 
   // The same machine can reach the catalog under two environment ids (its T3
   // Connect identity and a relay id minted when a cloud session's relay link
   // was published). The Run-on menus must not list it twice; the dedupe is
   // scoped to these menus so no other surface's environment list changes. The Run-on selector
   // takes the full list: it de-duplicates itself, and must see every cloud machine.
-  const runOnEnvironments = useMemo(
-    () =>
-      availableEnvironments ? dedupeRunOnEnvironments(availableEnvironments, environmentId) : null,
-    [availableEnvironments, environmentId],
-  );
+  const runOnEnvironments = availableEnvironments
+    ? dedupeRunOnEnvironments(availableEnvironments, environmentId)
+    : null;
   // The cloud entry is always offered whenever a primary environment exists,
   // so the selector shows even where the environment indicator itself is
   // hidden (single-primary desktop): that is the case it exists for.

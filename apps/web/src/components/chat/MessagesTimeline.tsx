@@ -34,12 +34,7 @@ import {
   type ToolActivityIcon,
 } from "@t3tools/contracts";
 import { parseScopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import {
-  createThreadJobsController,
-  type ThreadJobsController,
-} from "~/t3team/backend/t3team-thread-jobsBackend";
-import { resolveHttpBaseUrl } from "~/t3team/backend/t3team-t3BackendHttp";
-import { resolveWsBaseUrl } from "~/t3team/t3team-route-surface-wsUrl";
+import type { ThreadJobsController } from "~/t3team/backend/t3team-thread-jobsBackend";
 import { EMPTY_ACTIVE_AGENTS, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
 import { T3TeamActiveAgentsIndicator } from "~/t3team/chat/t3team-activeAgentsIndicator";
 import { WorkingLeadText } from "~/t3team/chat/t3team-workingLeadText";
@@ -63,10 +58,11 @@ import { useT3TeamOutboundSendLabel } from "~/t3team/chat/t3team-useOutboundSend
 import { t3teamDisplayedUserMessage } from "~/t3team/chat/t3team-messageFraming";
 import { getT3TeamRenderableAttachments } from "~/t3team/chat/t3team-messageExtViews";
 import { T3TeamMessageAttachmentList } from "~/t3team/chat/t3team-messageAttachmentList";
+import type { BackgroundJobState } from "@t3tools/client-runtime/work-log/background-jobs";
 import {
-  foldBackgroundJobs,
-  type BackgroundJobState,
-} from "@t3tools/client-runtime/work-log/background-jobs";
+  useT3TeamBackgroundJobFold,
+  useT3TeamThreadJobsController,
+} from "./t3team-useBackgroundJobFold";
 import {
   BackgroundJobRunningBadge,
   BackgroundJobsRunningIndicator,
@@ -112,7 +108,6 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -408,7 +403,7 @@ interface TimelineRowActivityState {
   isPreparingWorktree: boolean;
   latestRunId: RunId | null;
   backgroundWorktreeSetup: WorktreeSetupSnapshot | null;
-  // --- t3team working-row extension (GHE #201/#208/#236) ---
+  // t3team working-row extension (GHE #201/#208/#236).
   /**
    * Dedup vs. the provider's own thinking trace: an active live row that shows a
    * reasoning entry already renders the live "Thinking" surface for the current
@@ -532,30 +527,6 @@ export interface MessagesTimelineT3TeamProps extends T3TeamTimelineRowProps {
 }
 
 const EMPTY_T3TEAM_TIMELINE_PROPS: MessagesTimelineT3TeamProps = {};
-
-interface T3TeamBackgroundJobFold {
-  readonly jobs: readonly BackgroundJobState[];
-  readonly starters: ReadonlyMap<string, BackgroundJobState>;
-  readonly startEntryIds: ReadonlySet<string>;
-}
-
-/** Job states are flat records of primitives, so a key-wise compare is exact. */
-function sameBackgroundJobs(
-  previous: readonly BackgroundJobState[],
-  next: readonly BackgroundJobState[],
-): boolean {
-  return (
-    previous.length === next.length &&
-    previous.every((job, index) => {
-      const other = next[index];
-      if (other === undefined) return false;
-      const keys = Object.keys(job) as Array<keyof BackgroundJobState>;
-      return (
-        keys.length === Object.keys(other).length && keys.every((key) => job[key] === other[key])
-      );
-    })
-  );
-}
 
 export interface MessagesTimelineHistoryControls {
   readonly hasMoreHistory: boolean;
@@ -785,16 +756,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     setExpandedAttemptIds(paintedExpandedAttemptIds);
   }
   const citationThreadRef = parseScopedThreadKey(routeThreadKey);
-  // t3team: out-of-band job control for the background-jobs indicator. The backend
-  // URL is stable for the life of this surface; a broken URL degrades to no
-  // affordances rather than a crash.
-  const threadJobsController = useMemo(() => {
-    try {
-      return createThreadJobsController(resolveHttpBaseUrl(resolveWsBaseUrl()));
-    } catch {
-      return undefined;
-    }
-  }, []);
+  const threadJobsController = useT3TeamThreadJobsController();
   const openPullRequest = useOpenPrLink(citationThreadRef ?? undefined);
   const expandCitedRun = (runId: RunId) => {
     setExpandedRunIds((current) => (current.has(runId) ? current : new Set([...current, runId])));
@@ -944,43 +906,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
     });
   }, [latestRun, listIdentityKey]);
 
-  // t3team: background bash jobs. No provider event marks job start/settle, so the
-  // fold is transcript-driven — the "background job: job_xxx" marker in a tool
-  // result opens the job, later process-tool results settle it, and the marker's
-  // hard deadline keeps stale threads quiet (client-runtime work-log/background-jobs).
-  // It runs before the row derivation: a running job keeps the working-row slot
-  // alive after the run settles, and a collapsed tool group needs to know one of
-  // its hidden rows started a job. An unchanged fold keeps its identity so text
-  // streaming does not invalidate the rows projection or the shared row context.
-  const backgroundJobFoldRef = useRef<T3TeamBackgroundJobFold | null>(null);
-  const backgroundJobFold = useMemo<T3TeamBackgroundJobFold>(() => {
-    const foldEntries = timelineEntries
-      .filter((entry): entry is Extract<TimelineEntry, { kind: "work" }> => entry.kind === "work")
-      .map((entry) => ({
-        id: entry.id,
-        createdAt: entry.createdAt,
-        detail: entry.entry.detail,
-        // Rows persisted before the pack named its commands carry the result text
-        // here instead, with `detail` empty — see BackgroundJobFoldEntry.command.
-        command: entry.entry.command,
-        // The tool call's human label, so the job row reads like the tool card.
-        label: entry.entry.label,
-      }));
-    const jobs = foldBackgroundJobs(foldEntries, Date.now(), serverStartedAtMs ?? undefined);
-    const previous = backgroundJobFoldRef.current;
-    if (previous !== null && sameBackgroundJobs(previous.jobs, jobs)) {
-      return previous;
-    }
-    const starters = new Map<string, BackgroundJobState>();
-    for (const job of jobs) {
-      if (job.state === "running" && job.startedEntryId !== undefined) {
-        starters.set(job.startedEntryId, job);
-      }
-    }
-    const next = { jobs, starters, startEntryIds: new Set(starters.keys()) };
-    backgroundJobFoldRef.current = next;
-    return next;
-  }, [timelineEntries, serverStartedAtMs]);
+  // t3team: background bash jobs, folded before the row derivation (see the hook).
+  const backgroundJobFold = useT3TeamBackgroundJobFold(timelineEntries, serverStartedAtMs);
   const idleActiveAgentsPresent = activeAgents.length > 0;
   // Find the fold that hides the match: imported turns have no run id but still
   // fold under a synthetic key, so the match's own run id cannot open them.
@@ -1048,10 +975,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   });
   // t3team: rich system rows (workflow / decision / widget cards) and their hidden replies.
   const t3teamRows = useT3TeamTimelineRowsState(t3team, timelineEntries);
-  const visibleRawRows = useMemo(
-    () => rawRows.filter((row) => isT3TeamTimelineRowVisible(row, t3teamRows)),
-    [rawRows, t3teamRows],
-  );
+  const visibleRawRows = rawRows.filter((row) => isT3TeamTimelineRowVisible(row, t3teamRows));
   const rows = useStableRows(visibleRawRows, listIdentityKey);
   useT3TeamWorkflowCardNavigation({
     request: t3team.workflowCardNavigationRequest,

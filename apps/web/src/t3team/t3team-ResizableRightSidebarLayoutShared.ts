@@ -92,5 +92,5 @@ export function useElementFitsWidth(minWidth: number) {
     observer.observe(node);
     return () => observer.disconnect();
   }, [minWidth, node]);
-  return { ref: setNode, fits };
+  return { attach: setNode, fits };
 }

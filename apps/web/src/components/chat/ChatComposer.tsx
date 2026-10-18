@@ -2546,9 +2546,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     terminalContexts: composerTerminalContexts,
     elementContextCount: composerPreviewAnnotations.length + composerReviewComments.length,
   });
-  // ------------------------------------------------------------------
   // Composer text plumbing shared with the command menu
-  // ------------------------------------------------------------------
   const setPrompt = (nextPrompt: string) => {
     setComposerDraftPrompt(composerDraftTarget, nextPrompt);
   };
@@ -2582,9 +2580,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }
   };
 
-  // ------------------------------------------------------------------
   // Composer command menu: shared `/`, `@`, `$` controller
-  // ------------------------------------------------------------------
   const composerSelectLockRef = useRef(false);
   const composerMenuOpenRef = useRef(false);
   const composerMenuItemsRef = useRef<ComposerCommandItem[]>([]);
@@ -3520,11 +3516,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         const stagedAttachmentById = new Map<string, PersistedComposerImageAttachment>();
         await Promise.all(
           composerImages.map(async (image) => {
-            try {
-              if (image.file === null) {
-                throw new Error("attachment has no bytes");
+            // A restored attachment can have no bytes; it keeps its persisted copy.
+            let dataUrl: string | null = null;
+            if (image.file !== null) {
+              try {
+                dataUrl = await readFileAsDataUrl(image.file);
+              } catch {
+                dataUrl = null;
               }
-              const dataUrl = await readFileAsDataUrl(image.file);
+            }
+            if (dataUrl !== null) {
               stagedAttachmentById.set(image.id, {
                 id: image.id,
                 name: image.name,
@@ -3534,11 +3535,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 type: image.type,
                 ...(image.source && "kind" in image.source ? { source: image.source } : {}),
               });
-            } catch {
-              const existingPersisted = existingPersistedById.get(image.id);
-              if (existingPersisted) {
-                stagedAttachmentById.set(image.id, existingPersisted);
-              }
+              return;
+            }
+            const existingPersisted = existingPersistedById.get(image.id);
+            if (existingPersisted) {
+              stagedAttachmentById.set(image.id, existingPersisted);
             }
           }),
         );
