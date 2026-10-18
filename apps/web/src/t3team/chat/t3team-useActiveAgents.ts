@@ -3,7 +3,7 @@ import { projectedSubagentsToRuntime } from "@t3tools/client-runtime/state/subag
 import { useMemo } from "react";
 
 import { usePrimarySettings } from "~/hooks/useSettings";
-import { useServerConfigs } from "~/state/entities";
+import { useEnvironmentProviders } from "~/state/environments";
 import {
   type ActiveAgentEntry,
   EMPTY_ACTIVE_AGENTS,
@@ -15,12 +15,12 @@ import type { ProjectThread } from "~/t3team/t3team-types";
 const NO_CHILDREN: ReadonlyArray<ProjectThread> = [];
 
 function findProvider(
-  configs: ReturnType<typeof useServerConfigs>,
+  providersByEnvironment: ReturnType<typeof useEnvironmentProviders>,
   instanceId: string | undefined,
 ): ServerProvider | undefined {
   if (instanceId === undefined) return undefined;
-  for (const config of configs.values()) {
-    const found = config.providers.find((provider) => provider.instanceId === instanceId);
+  for (const providers of providersByEnvironment.values()) {
+    const found = providers.find((provider) => provider.instanceId === instanceId);
     if (found) return found;
   }
   return undefined;
@@ -53,7 +53,7 @@ export function useT3TeamActiveAgents(input: {
   const activityLabelsEnabled = usePrimarySettings(
     (settings) => settings.t3teamActivityLabelsEnabled,
   );
-  const configs = useServerConfigs();
+  const configs = useEnvironmentProviders();
   const children = useT3TeamChildThreadRelationsStore((state) =>
     threadId === null ? undefined : state.childThreadsByParentId.get(threadId),
   );

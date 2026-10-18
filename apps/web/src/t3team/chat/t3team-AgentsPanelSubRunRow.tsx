@@ -12,7 +12,7 @@ import { RollLabel } from "~/components/t3team-ThreadActivityStatus-rollLabel";
 import { usePrimarySettings } from "~/hooks/useSettings";
 import { formatRelativeTime } from "~/t3team/components/t3team-projectSidebarTimeLabels";
 import type { ProjectThread } from "~/t3team/t3team-types";
-import { useServerConfigs } from "~/state/entities";
+import { useEnvironmentProviders } from "~/state/environments";
 import {
   resolveSubRunStatusLabel,
   type SubRunOpenCallback,
@@ -48,12 +48,12 @@ export function SubRunDriverMark({
   instanceId: string | undefined;
   iconClassName?: string;
 }) {
-  const configs = useServerConfigs();
+  const providersByEnvironment = useEnvironmentProviders();
   const provider =
     instanceId === undefined
       ? undefined
-      : [...configs.values()]
-          .flatMap((config) => config.providers)
+      : [...providersByEnvironment.values()]
+          .flat()
           .find((entry) => entry.instanceId === instanceId);
   if (!provider) {
     return <BotIcon aria-hidden className={cn("shrink-0 text-muted-foreground", iconClassName)} />;

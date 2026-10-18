@@ -240,7 +240,6 @@ function matchMedia() {
 }
 
 let MessagesTimeline: typeof import("./MessagesTimeline").MessagesTimeline;
-let resolvePreviewAnnotationImage: typeof import("./MessagesTimeline").resolvePreviewAnnotationImage;
 
 const ElementStub = class ElementStub {};
 function stubDomGlobals() {
@@ -284,7 +283,7 @@ beforeEach(stubDomGlobals);
 // Cold transformation of the full chat dependency graph needs extra time on slower CI workers.
 beforeAll(async () => {
   Object.defineProperty(window, "matchMedia", { value: matchMedia, configurable: true });
-  ({ MessagesTimeline, resolvePreviewAnnotationImage } = await import("./MessagesTimeline"));
+  ({ MessagesTimeline } = await import("./MessagesTimeline"));
 }, 120_000);
 
 const ACTIVE_THREAD_ENVIRONMENT_ID = EnvironmentId.make("environment-local");
