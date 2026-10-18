@@ -5,6 +5,8 @@ import * as NodeURL from "node:url";
 import { transform } from "oxc-transform-react";
 import { describe, expect, it } from "vite-plus/test";
 
+import { t3teamReactCompilerPending } from "../vite/t3team-reactCompilerPending.ts";
+
 const repoRoot = NodePath.resolve(
   NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)),
   "../../..",
@@ -16,7 +18,8 @@ const webSourceFiles = NodeFS.readdirSync(NodePath.join(repoRoot, "apps/web/src"
   .map(String)
   .filter((file) => /\.tsx?$/.test(file) && !/\.(test|browser)\.tsx?$/.test(file))
   .filter((file) => !file.endsWith(".gen.ts"))
-  .map((file) => `apps/web/src/${file}`);
+  .map((file) => `apps/web/src/${file}`)
+  .filter((file) => !t3teamReactCompilerPending.bailouts.includes(file));
 
 // Lint reports most compiler bailouts, but not every one (try/finally, throw
 // inside try). A skipped file still builds, just unmemoized, so check the output.

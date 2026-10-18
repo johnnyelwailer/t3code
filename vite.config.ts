@@ -1,6 +1,7 @@
 import "vite-plus/test/config";
 import { defineConfig } from "vite-plus";
 import * as NodeURL from "node:url";
+import { t3teamReactCompilerPending as T3TEAM_REACT_COMPILER_PENDING } from "./apps/web/vite/t3team-reactCompilerPending.ts";
 
 const RESTRICTED_IMPORT_PATHS = [
   {
@@ -350,6 +351,27 @@ export default defineConfig({
           "react/static-components": "error",
           "react/unsupported-syntax": "error",
           "t3code/no-manual-memo": "error",
+        },
+      },
+      {
+        // t3team: fork-only files on the React Compiler ratchet. This list only shrinks.
+        files: [
+          ...T3TEAM_REACT_COMPILER_PENDING.bailouts,
+          ...T3TEAM_REACT_COMPILER_PENDING.lintOnly,
+        ],
+        rules: {
+          "react/exhaustive-effect-dependencies": "off",
+          "react/globals": "off",
+          "react/immutability": "off",
+          "react/memo-dependencies": "off",
+          "react/preserve-manual-memoization": "off",
+          "react/purity": "off",
+          "react/refs": "off",
+          "react/set-state-in-effect": "off",
+          "react/set-state-in-render": "off",
+          "react/static-components": "off",
+          "react/unsupported-syntax": "off",
+          "t3code/no-manual-memo": "off",
         },
       },
       {

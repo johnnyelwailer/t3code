@@ -22,7 +22,12 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20261017` → the 2026-10-17 upstream sync merge commit
+- Current: `t3team/fork-baseline-20261018` → the 2026-10-18 upstream sync merge commit
+  `96be412fa` (290 upstream commits absorbed, `79ad856b4e..6a6ebb278d`, onto the 2026-10-17 sync
+  branch tip `0cd545243d`; fork main `86c966fe1d` already contained). Grandfathered: upstream's
+  tree (browser-test split, compiler lint rules on every web file) plus the conflict resolutions
+  in that merge. Post-merge fixes (typecheck, React Compiler style ports, lint) stay measured.
+- Before that: `t3team/fork-baseline-20261017` → the 2026-10-17 upstream sync merge commit
   `f794c02535` (133 upstream commits absorbed, `3962ae8586..79ad856b4e`, fork main `86c966fe1d`
   already contained). Grandfathered: upstream's tree (React Compiler conversion, ChatView /
   Sidebar / right-panel splits, comment prune #19559) plus the conflict resolutions in that merge,
@@ -423,6 +428,16 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
   - The pick-port case spawns `bin.ts` directly; the fork's `bin.ts` boots the distribution layer, which needs `scripts/t3team-distribution-devLoader.ts`, so the spawn adds `--import` of that loader. Test-only.
 - `apps/server/src/persistence/Sqlite.test.ts`
   - The planner-stats case asserted the exact `sqlite_stat1` row `"1000 100"`; under the fork's runtime the bounded `PRAGMA optimize = 0x10012` sample reports `"1000 90"`. The case now asserts the exact row count and a sane per-key estimate. Test-only.
+
+### Upstream sync 2026-10-18
+
+- `apps/web/src/reactCompilerCoverage.test.ts`
+  - One import and one `.filter` line: skip the fork-only files listed in
+    `apps/web/src/t3team-reactCompilerPending.bailouts.txt` (the fork's React Compiler ratchet,
+    kept honest by `t3team-reactCompilerPending.test.ts`). Upstream files are never listed.
+- `packages/provider-core/src/server/textGenerationPrompts.ts`
+  - Comment-only: the fork's "Activity label" section divider is dropped for upstream's stricter
+    `t3code/no-low-value-comments`. The fork code in the file was already grandfathered.
 
 ## `changeRequest.summary` slot (T8)
 
