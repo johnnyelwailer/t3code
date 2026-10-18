@@ -24,7 +24,7 @@ import { pullRequestEnvironment } from "~/state/pullRequests";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { cn } from "~/lib/utils";
 import { useOpenLink } from "~/browser/useOpenLink";
-import { formatRelativeTimeLabel } from "~/timestampFormat";
+import { RelativeTime } from "~/components/RelativeTime";
 import { ChangeRequestSummarySlot } from "~/t3team/packs/t3team-changeRequestSlots";
 
 import { Button } from "../ui/button";
@@ -105,7 +105,9 @@ function CommentIdentity({
             )
           }
         >
-          <time dateTime={comment.createdAt}>{formatRelativeTimeLabel(comment.createdAt)}</time>
+          <time dateTime={comment.createdAt}>
+            <RelativeTime timestamp={comment.createdAt} />
+          </time>
         </TooltipTrigger>
         <TooltipPopup>
           {new Date(comment.createdAt).toLocaleString()}

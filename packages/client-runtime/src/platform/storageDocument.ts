@@ -135,6 +135,7 @@ export function registerConnectionInCatalog(
     case "BrokerConnectionRegistration":
       return next;
     case "BearerConnectionRegistration":
+    case "SshConnectionRegistration":
       return {
         ...next,
         profiles: replaceCatalogValue(
@@ -146,15 +147,6 @@ export function registerConnectionInCatalog(
           connectionId: registration.target.connectionId,
           credential: registration.credential,
         }),
-      };
-    case "SshConnectionRegistration":
-      return {
-        ...next,
-        profiles: replaceCatalogValue(
-          next.profiles,
-          (value) => value.connectionId,
-          registration.profile,
-        ),
       };
   }
 }

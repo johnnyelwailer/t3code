@@ -4,7 +4,7 @@ import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { ScaleIcon, SettingsIcon } from "lucide-react";
-import { memo, useMemo, useState } from "react";
+import { memo, useState } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
 import { cn } from "../lib/utils";
@@ -131,40 +131,30 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   const composerFloatingLayerProps = useComposerMenuProps();
   const hasCloudAffordance =
     onCreateCloudSession !== undefined || onSetupCloudSessions !== undefined;
-  const { machines: runOnEnvironments, cloud: cloudRows } = useMemo(
-    () =>
-      runOnRows(availableEnvironments, pendingCloudSessions ?? [], environmentId, {
-        connected: connectedEnvironmentIds,
-        cloud: cloudEnvironmentIds,
-      }),
-    [
-      availableEnvironments,
-      cloudEnvironmentIds,
-      connectedEnvironmentIds,
-      environmentId,
-      pendingCloudSessions,
-    ],
+  const { machines: runOnEnvironments, cloud: cloudRows } = runOnRows(
+    availableEnvironments,
+    pendingCloudSessions ?? [],
+    environmentId,
+    {
+      connected: connectedEnvironmentIds,
+      cloud: cloudEnvironmentIds,
+    },
   );
-  const connectedCloudEnvironments = useMemo(
-    () => cloudRows.flatMap((row) => (row.environment === null ? [] : [row.environment])),
-    [cloudRows],
+  const connectedCloudEnvironments = cloudRows.flatMap((row) =>
+    row.environment === null ? [] : [row.environment],
   );
-  const activeEnvironment = useMemo(() => {
-    if (selectedCloudSession !== null) {
-      return {
-        environmentId: cloudSessionSelectValue(selectedCloudSession.sessionId) as EnvironmentId,
-        label: selectedCloudSession.label,
-        machine: "cloud" as const,
-        isPrimary: false,
-        projectId: null,
-      };
-    }
-    return (
-      [...runOnEnvironments, ...connectedCloudEnvironments].find(
-        (env) => env.environmentId === environmentId,
-      ) ?? null
-    );
-  }, [connectedCloudEnvironments, environmentId, runOnEnvironments, selectedCloudSession]);
+  const activeEnvironment =
+    selectedCloudSession !== null
+      ? {
+          environmentId: cloudSessionSelectValue(selectedCloudSession.sessionId) as EnvironmentId,
+          label: selectedCloudSession.label,
+          machine: "cloud" as const,
+          isPrimary: false,
+          projectId: null,
+        }
+      : ([...runOnEnvironments, ...connectedCloudEnvironments].find(
+          (env) => env.environmentId === environmentId,
+        ) ?? null);
 
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -174,39 +164,28 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       ? cloudSessionSelectValue(selectedCloudSession.sessionId)
       : environmentId;
 
-  const environmentItems = useMemo(
-    () => [
-      ...(onAutoEnvironment
-        ? [{ value: "auto", label: autoEnvironmentLabel ?? "Auto balance" }]
-        : []),
-      ...(onEnvironmentChange !== undefined
-        ? [...runOnEnvironments, ...connectedCloudEnvironments].map((env) => ({
-            value: env.environmentId,
-            label: env.label,
-          }))
-        : []),
-      ...(selectedCloudSession !== null
-        ? [
-            {
-              value: cloudSessionSelectValue(selectedCloudSession.sessionId),
-              label: selectedCloudSession.label,
-            },
-          ]
-        : []),
-      ...(onSetupCloudSessions
-        ? [{ value: SETUP_CLOUD_SESSIONS_SELECT_VALUE, label: "Set up cloud sessions" }]
-        : []),
-    ],
-    [
-      runOnEnvironments,
-      connectedCloudEnvironments,
-      autoEnvironmentLabel,
-      onAutoEnvironment,
-      onEnvironmentChange,
-      onSetupCloudSessions,
-      selectedCloudSession,
-    ],
-  );
+  const environmentItems = [
+    ...(onAutoEnvironment
+      ? [{ value: "auto", label: autoEnvironmentLabel ?? "Auto balance" }]
+      : []),
+    ...(onEnvironmentChange !== undefined
+      ? [...runOnEnvironments, ...connectedCloudEnvironments].map((env) => ({
+          value: env.environmentId,
+          label: env.label,
+        }))
+      : []),
+    ...(selectedCloudSession !== null
+      ? [
+          {
+            value: cloudSessionSelectValue(selectedCloudSession.sessionId),
+            label: selectedCloudSession.label,
+          },
+        ]
+      : []),
+    ...(onSetupCloudSessions
+      ? [{ value: SETUP_CLOUD_SESSIONS_SELECT_VALUE, label: "Set up cloud sessions" }]
+      : []),
+  ];
 
   const handleValueChange = (value: string | null) => {
     if (value === null) return;

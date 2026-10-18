@@ -155,6 +155,12 @@ import Migration0108 from "./Migrations/060_ThreadSnapshotWindowIndexes.ts";
 import Migration0109 from "./Migrations/061_PullRequestReviewGuides.ts";
 // New from the 2026-10-14 upstream sync (upstream 062). Appended above the fork's maximum id (109).
 import Migration0110 from "./Migrations/062_ThreadFailureLookupIndex.ts";
+// Upstream 063 (DropUnusedV1Projections, 2026-10-18 sync) is NOT registered yet. It drops
+// projection_thread_activities, which the fork's one-shot V1 lineage cutover
+// (orchestration-v2/legacy/t3team-legacyLineageRead.ts) still reads at startup, after
+// migrations. Dropping it first would silently lose V1 handoff lineage on any database whose
+// cutover is not ledgered. Held for the user's decision (sync PR overlap E); when it lands it
+// appends above the fork's maximum id like every earlier upstream migration.
 
 export const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
