@@ -8,6 +8,7 @@ import {
   ProjectId,
   ThreadId,
 } from "@t3tools/contracts";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import * as Cause from "effect/Cause";
 import * as Console from "effect/Console";
@@ -152,7 +153,8 @@ const recordStartupHeartbeat = Effect.gen(function* () {
 
   const { threadCount, projectCount } = yield* Effect.all({
     projects: projects.snapshot,
-    threads: threads.getShellSnapshot(),
+    // Every thread's shell, only to count them: keep it on the reader worker, off the event loop.
+    threads: threads.getShellSnapshot().pipe(NodeSqliteClient.readOnly),
   }).pipe(
     Effect.map(({ projects: projectSnapshot, threads: shellSnapshot }) => ({
       projectCount: projectSnapshot.projects.length,

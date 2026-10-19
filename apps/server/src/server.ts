@@ -169,6 +169,7 @@ import * as DesktopTelemetryReceiver from "./resourceTelemetry/DesktopTelemetryR
 import * as NativeTelemetryClient from "./resourceTelemetry/NativeTelemetryClient.ts";
 import * as ResourceAttribution from "./resourceTelemetry/ResourceAttribution.ts";
 import * as ResourceMonitorBinary from "./resourceTelemetry/ResourceMonitorBinary.ts";
+import * as OffThreadChildProcessSpawner from "./process/t3team-offThreadChildProcessSpawner.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as AntigravityUsage from "./provider/Drivers/AntigravityUsage.ts";
 import * as CursorAccountReader from "@t3tools/provider-cursor/server/CursorAccountReader";
@@ -351,8 +352,11 @@ const layerServerSettings = ServerSettings.layer.pipe(
   Layer.provideMerge(SqlitePersistence.layerConfig),
 );
 
+// The resource monitor is an unsigned sidecar launched on every boot: its CreateProcess can sit in
+// an antivirus reputation check for seconds, so it is spawned off the event loop.
 const layerNativeTelemetry = NativeTelemetryClient.layer.pipe(
   Layer.provide(ResourceMonitorBinary.layer),
+  Layer.provide(OffThreadChildProcessSpawner.layer),
 );
 const layerDesktopTelemetryReceiver = DesktopTelemetryReceiver.layer.pipe(
   Layer.provideMerge(layerServerSettings),
