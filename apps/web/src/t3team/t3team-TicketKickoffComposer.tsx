@@ -152,7 +152,7 @@ export const TicketKickoffComposer = forwardRef<
               editorRef={editorRef}
               text={text}
               cursor={cursor}
-              skills={selectedProvider?.skills ?? []}
+              skills={commandMenu.skills}
               commandMenu={commandMenu}
               placeholder={
                 isConnected
