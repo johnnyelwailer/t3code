@@ -39,6 +39,8 @@ const RPC_AGGREGATES = {
   [WS_METHODS.t3teamSubscribePackDocuments]: "t3team",
   [WS_METHODS.t3teamPackStorePut]: "t3team",
   [WS_METHODS.t3teamStopThreadCascade]: "t3team",
+  [WS_METHODS.t3teamThreadHandoffPrepare]: "t3team",
+  [WS_METHODS.t3teamThreadHandoffRecord]: "t3team",
   [WS_METHODS.serverProbe]: "server",
   [WS_METHODS.serverGetConfig]: "server",
   [WS_METHODS.serverRefreshProviders]: "server",
