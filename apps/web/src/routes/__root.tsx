@@ -74,6 +74,7 @@ import { isDetachedSurfacePath } from "@t3tools/shared/t3team-detachedSurface";
 import { useUpstreamRouteBridge } from "../t3team/t3team-useUpstreamRouteBridge";
 import { T3TeamPackAppearanceDefaultsSync } from "../t3team/t3team-PackAppearanceDefaultsSync";
 import { T3TeamPackAppearanceSync } from "../t3team/t3team-PackAppearanceSync";
+import { withT3TeamWindowDragStrip } from "../t3team/t3team-WindowDragStrip";
 import { CloudSessionSignInDialogHost } from "../cloud/t3team-CloudSessionSignInDialogHost";
 import { CloudQueuedSendFlusher } from "../cloud/t3team-CloudQueuedSendFlusher";
 import { t3teamPackProductName, useT3TeamAppDisplayName } from "../t3team/t3team-appBrandName";
@@ -138,9 +139,9 @@ export const Route = createRootRoute({
       authGateState,
     };
   },
-  component: RootRouteView,
-  errorComponent: RootRouteErrorView,
-  notFoundComponent: RootRouteNotFoundView,
+  component: withT3TeamWindowDragStrip(RootRouteView),
+  errorComponent: withT3TeamWindowDragStrip(RootRouteErrorView),
+  notFoundComponent: withT3TeamWindowDragStrip(RootRouteNotFoundView),
   head: () => ({
     meta: [{ name: "title", content: APP_DISPLAY_NAME }],
   }),
