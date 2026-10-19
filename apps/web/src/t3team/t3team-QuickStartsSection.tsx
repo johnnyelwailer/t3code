@@ -52,7 +52,12 @@ function QuickStartsSectionList({
         {...(sectionProps.selectedRecipeId
           ? { selectedRecipeId: sectionProps.selectedRecipeId }
           : {})}
-        onSelectRecipe={(recipe, customization) => host.stageKickoff(recipe, customization)}
+        onSelectRecipe={(recipe, customization) => {
+          // A Quick Start sends on click — it starts its workflow or sends its prompt on the new
+          // thread, with no extra Submit. (The composer `/<alias>` still stages, so a slash pick can
+          // be extended before it is sent.)
+          void host.launchQuickStart(recipe, customization);
+        }}
         renderRecipe={
           sectionProps.shell?.wrapItem
             ? (recipe, content) => sectionProps.shell?.wrapItem?.(recipe, content) ?? content
