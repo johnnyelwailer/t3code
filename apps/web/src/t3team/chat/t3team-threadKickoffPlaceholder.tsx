@@ -1,7 +1,6 @@
-import { CheckCircle2Icon, LoaderCircleIcon, WandSparklesIcon } from "lucide-react";
-
-import { Badge } from "~/components/ui/badge";
 import { hasGuidedKickoffInputStep } from "~/t3team/t3team-recipeKickoffProgram";
+import type { ThreadLaunchStepPresentation } from "~/t3team/chat/t3team-threadBootstrapProgress";
+import { ThreadRecipeLaunchCard } from "~/t3team/chat/t3team-threadRecipeLaunchCard";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 
 /** Human label for a recipe's source (Epic 16 §Recipe Sources And Precedence). */
@@ -15,7 +14,6 @@ type ThreadKickoffPlaceholderProps = {
   message: string;
   kickoffPending?: boolean;
   workflow?: T3TeamKickoffWorkflow;
-  hasServerThread?: boolean;
 };
 
 export function shouldShowThreadKickoffPlaceholder(input: {
@@ -45,100 +43,25 @@ export function isWaitingForKickoffInput(
   );
 }
 
-function renderRecipeWorkflowCard(input: {
-  message: string;
-  kickoffPending: boolean | undefined;
-  workflow: T3TeamKickoffWorkflow;
-  hasServerThread: boolean;
-}) {
-  const isRecipeAuthoringIntro = isWaitingForKickoffInput(input.workflow, input.kickoffPending);
-  const steps: ReadonlyArray<{
-    readonly label: string;
-    readonly complete?: boolean;
-    readonly active?: boolean;
-  }> = isRecipeAuthoringIntro
-    ? [
-        {
-          label: "Recipe selected",
-          complete: true,
-        },
-        {
-          label: input.hasServerThread ? "Conversation created" : "Creating conversation",
-          complete: input.hasServerThread,
-          active: !input.hasServerThread,
-        },
-        {
-          label: input.hasServerThread
-            ? "Waiting for your recipe prompt"
-            : "Waiting for live thread",
-          active: input.hasServerThread,
-        },
-      ]
-    : [
-        {
-          label: "Recipe selected",
-          complete: true,
-        },
-        {
-          label: input.hasServerThread ? "Conversation created" : "Creating conversation",
-          complete: input.hasServerThread,
-          active: !input.hasServerThread,
-        },
-        {
-          label: input.hasServerThread ? "Handing recipe to agent" : "Waiting for live thread",
-          active: input.hasServerThread,
-        },
-      ];
-
-  return (
-    <div className="mt-2 max-h-[min(50dvh,28rem)] overflow-x-hidden overflow-y-auto overscroll-y-contain rounded-2xl border border-border/70 bg-card px-4 py-3 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <WandSparklesIcon className="size-4 text-primary" />
-            <p className="text-sm font-semibold text-foreground">{input.workflow.title}</p>
-          </div>
-          <p className="text-sm leading-6 text-muted-foreground">{input.workflow.description}</p>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          <Badge variant="secondary">{recipeSourceLabel(input.workflow.source)}</Badge>
-          {input.workflow.reason ? <Badge variant="outline">{input.workflow.reason}</Badge> : null}
-        </div>
-      </div>
-
-      <div className="mt-3 space-y-2 rounded-xl border border-border/60 bg-muted/20 p-3">
-        {steps.map((step) => (
-          <div key={step.label} className="flex items-center gap-2 text-sm text-muted-foreground">
-            {step.complete === true ? (
-              <CheckCircle2Icon className="size-4 text-success-foreground" />
-            ) : step.active === true ? (
-              <LoaderCircleIcon className="size-4 animate-spin text-primary" />
-            ) : (
-              <div className="size-4 rounded-full border border-border/70" />
-            )}
-            <span>{step.label}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-3 rounded-xl border border-border/60 bg-background/70 px-3 py-2.5">
-        <p className="text-2xs font-medium uppercase tracking-widest text-muted-foreground">
-          Launch instruction
-        </p>
-        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-foreground">
-          {input.message}
-        </p>
-      </div>
-    </div>
-  );
-}
-
+/**
+ * Post-shell placeholder: the thread exists and the kickoff was sent, but no server message has
+ * landed yet. For a guided recipe the launch is waiting on the user's input, so the card shows
+ * that wait; the pre-shell launch panel owns everything before the shell exists.
+ */
 export function ThreadKickoffPlaceholder({
   message,
   kickoffPending,
   workflow,
-  hasServerThread = false,
 }: ThreadKickoffPlaceholderProps) {
+  const waitingForInput = isWaitingForKickoffInput(workflow, kickoffPending);
+  const recipeSteps: ReadonlyArray<ThreadLaunchStepPresentation> = [
+    { label: "Recipe selected", status: "done" },
+    { label: "Conversation created", status: "done" },
+    ...(waitingForInput
+      ? [{ label: "Waiting for your recipe prompt", status: "busy" as const }]
+      : []),
+  ];
+
   return (
     <div className="border-b border-border/60 bg-muted/20 px-4 py-3 sm:px-6">
       <div className="mx-auto max-w-3xl">
@@ -146,13 +69,14 @@ export function ThreadKickoffPlaceholder({
           Kickoff queued locally
         </p>
         {workflow?.kind === "recipe" ? (
-          renderRecipeWorkflowCard({ message, kickoffPending, workflow, hasServerThread })
+          <div className="mt-2">
+            <ThreadRecipeLaunchCard workflow={workflow} message={message} steps={recipeSteps} />
+          </div>
         ) : (
           <div className="mt-2 max-h-[min(50dvh,28rem)] overflow-x-hidden overflow-y-auto overscroll-y-contain rounded-2xl border border-border/70 bg-card px-4 py-3 shadow-sm">
             <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">{message}</p>
           </div>
         )}
-        <p className="mt-2 text-xs leading-5 text-muted-foreground">Starting…</p>
       </div>
     </div>
   );

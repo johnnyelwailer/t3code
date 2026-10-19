@@ -104,7 +104,7 @@ export function ThreadChatView({
     projectWorkspaceRoot,
   });
 
-  const { bootstrapStatus, retryThreadBootstrap } = useThreadBootstrap({
+  const { bootstrapStatus, bootstrapProgress, retryThreadBootstrap } = useThreadBootstrap({
     backend,
     environmentId,
     threadId,
@@ -173,6 +173,7 @@ export function ThreadChatView({
       embeddedMode={embeddedMode}
       backend={backend}
       bootstrapStatus={bootstrapStatus}
+      bootstrapProgress={bootstrapProgress}
       retryThreadBootstrap={retryThreadBootstrap}
       composerState={composerState}
     />
