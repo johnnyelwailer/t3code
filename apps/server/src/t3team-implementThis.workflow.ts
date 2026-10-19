@@ -5,6 +5,9 @@
  * beside the shared `unit.workflow.ts`.
  *
  * The plan unit only reads code; nothing is changed before the Go-Ahead gate.
+ *
+ * The work item comes from the launch's `issueIdOrKey` or `workItem.key` when it passes them; a
+ * launch that passes neither has the launch thread's agent find the thread's linked work item.
  */
 import { Schema } from "effect";
 import { defineWorkflow, getArgs, getThread, phase, workflow } from "@t3team/sdk";
@@ -13,6 +16,13 @@ import type * as Unit from "./t3team-workItemUnit.workflow.ts";
 
 export const Inputs = Schema.Struct({
   issueIdOrKey: Schema.optional(Schema.String),
+  workItem: Schema.optional(
+    Schema.Struct({
+      key: Schema.String,
+      provider: Schema.optional(Schema.String),
+      project: Schema.optional(Schema.String),
+    }),
+  ),
   instructions: Schema.optional(Schema.String),
 });
 
@@ -52,7 +62,7 @@ const Checkpoint = Schema.Struct({
 });
 
 function understandPrompt(input: typeof Inputs.Type): string {
-  const named = input.issueIdOrKey ?? "";
+  const named = input.issueIdOrKey ?? input.workItem?.key ?? "";
   return [
     named.length > 0
       ? "Read the work item " + named + "."

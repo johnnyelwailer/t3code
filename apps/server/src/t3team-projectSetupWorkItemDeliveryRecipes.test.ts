@@ -66,7 +66,11 @@ function unitReport(overrides: Record<string, unknown> = {}) {
 }
 
 /** Runs a scaffolded body, answering each park in order; returns what the run asked and did. */
-async function runRecipe(recipeId: string, replies: ReadonlyArray<unknown>) {
+async function runRecipe(
+  recipeId: string,
+  replies: ReadonlyArray<unknown>,
+  args: Readonly<Record<string, unknown>> = {},
+) {
   const { broker } = await makeRecordingDraftBroker();
   const host = makeFakeWorkflowHost();
   const registry = makeWorkflowEngineRegistry();
@@ -78,7 +82,7 @@ async function runRecipe(recipeId: string, replies: ReadonlyArray<unknown>) {
   const launched = await launchWorkflowRecipe({
     runId,
     workflowPath: workflowPaths.get(recipeId) ?? "",
-    args: {},
+    args,
     runsRoot,
     launchThreadId: threadId,
     projectId,
@@ -253,6 +257,36 @@ describe("implement-this bundled workflow", () => {
     expect(run.prompts.at(-1)).toContain("t3_thread_send");
     expect(run.prompts.at(-1)).toContain("Revise the previous plan: Merge both slices.");
     expect(run.prompts.join("\n")).not.toContain("Slice 1 of");
+  });
+});
+
+describe("launch arguments", () => {
+  const LAUNCH_ARGS = {
+    issueIdOrKey: "SHOP-7",
+    workItem: { key: "SHOP-7", provider: "atlassian", project: "project-1" },
+  };
+
+  it.each([
+    [FIX_THIS_BUG_RECIPE_ID, "Read the bug SHOP-7."],
+    [IMPLEMENT_THIS_RECIPE_ID, "Read the work item SHOP-7."],
+  ])(
+    "%s reads the work item the launch names before asking the agent to find it",
+    async (recipeId, line) => {
+      const run = await runRecipe(recipeId, [], LAUNCH_ARGS);
+      expect(run.errors).toHaveLength(0);
+      expect(run.prompts[0]).toContain(line);
+      expect(run.prompts[0]).not.toContain("this thread was started for");
+    },
+  );
+
+  it("falls back to the workItem key when the launch passes no issueIdOrKey", async () => {
+    const run = await runRecipe(FIX_THIS_BUG_RECIPE_ID, [], { workItem: { key: "SHOP-8" } });
+    expect(run.prompts[0]).toContain("Read the bug SHOP-8.");
+  });
+
+  it("has the agent find the thread's work item when the launch passes nothing", async () => {
+    const run = await runRecipe(FIX_THIS_BUG_RECIPE_ID, []);
+    expect(run.prompts[0]).toContain("Find the bug this thread was started for");
   });
 });
 
