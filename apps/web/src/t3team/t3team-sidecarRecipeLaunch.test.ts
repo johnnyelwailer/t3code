@@ -176,6 +176,33 @@ describe("launchSidecarRecipeQuickStartThread work item", () => {
     expect(launched).toBe(true);
     expect(createdWorkflow?.parameters).toBeUndefined();
   });
+
+  it("lets explicit workflow parameters win over the work item for the same key", async () => {
+    let createdWorkflow: LaunchWorkflow | undefined;
+    const createThread = vi.fn(
+      async (input: { readonly kickoffWorkflow?: LaunchWorkflow }) => {
+        createdWorkflow = input.kickoffWorkflow;
+        return "thread-1";
+      },
+    );
+
+    await launchSidecarRecipeQuickStartThread({
+      backend,
+      environmentId: "env-1",
+      projectId: "project-alpha",
+      quickStart: {
+        title: "Fix this bug",
+        prompt: "Fix the bug.",
+        workflow: { ...recipeWorkflow, parameters: { issueIdOrKey: "USER-SET-9" } },
+      },
+      launchConfig,
+      ...(workItem ? { workItem } : {}),
+      createThread,
+    });
+
+    expect(createdWorkflow?.parameters?.issueIdOrKey).toBe("USER-SET-9");
+    expect(createdWorkflow?.parameters?.workItem).toMatchObject({ key: "PRJ-1" });
+  });
 });
 
 describe("launchBundledSidecarRecipeThread work item", () => {

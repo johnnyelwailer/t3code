@@ -81,7 +81,9 @@ function withWorkItemParameters(
   if (Object.keys(parameters).length === 0) {
     return workflow;
   }
-  return { ...workflow, parameters: { ...workflow.parameters, ...parameters } };
+  // Explicit parameters (user customization) win over the auto-injected work item, matching the
+  // bundled path; the `workItem` reference has no counterpart so it is always added.
+  return { ...workflow, parameters: { ...parameters, ...workflow.parameters } };
 }
 
 /**
