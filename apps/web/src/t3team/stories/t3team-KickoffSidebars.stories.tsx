@@ -56,6 +56,17 @@ const ticketDetailRecipes = buildT3TeamSidecarRecipeQuickStarts({
   availableContextKeys: ["project.summary", "ticket.summary"],
 });
 
+const storyDetailRecipes = buildT3TeamSidecarRecipeQuickStarts({
+  surface: "workitem.detail.sidepanel",
+  project: engineeringProject,
+  profileId: "engineering-copilot",
+  selectedWorkLabel: "ALPHA-51",
+  selectedWorkTitle: "Export the backlog as CSV",
+  resourceKind: "ticket",
+  jiraIssueType: "Story",
+  availableContextKeys: ["project.summary", "ticket.summary"],
+});
+
 function KickoffRecipePreview() {
   return (
     <div className="grid min-h-screen gap-8 bg-background p-8 text-foreground md:grid-cols-2">
@@ -77,6 +88,16 @@ function KickoffRecipePreview() {
           <h2 className="text-lg font-semibold">Ticket side panel quick starts</h2>
         </header>
         <T3TeamKickoffRecipeList recipes={ticketDetailRecipes} onSelectRecipe={() => {}} />
+      </section>
+
+      <section className="space-y-4 rounded-xl border border-border/70 bg-card p-5">
+        <header className="space-y-1">
+          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            Story detail
+          </p>
+          <h2 className="text-lg font-semibold">Story side panel quick starts</h2>
+        </header>
+        <T3TeamKickoffRecipeList recipes={storyDetailRecipes} onSelectRecipe={() => {}} />
       </section>
     </div>
   );

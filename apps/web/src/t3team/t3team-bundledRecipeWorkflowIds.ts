@@ -14,4 +14,6 @@ export const T3TEAM_DESCRIPTION_REWRITE_RECIPE_ID = "describe-rewrite";
  * (see `apps/server/src/t3team-projectSetupRecipes.ts`). */
 export const WORKFLOW_BACKED_BUNDLED_RECIPE_IDS: ReadonlySet<string> = new Set([
   T3TEAM_DESCRIPTION_REWRITE_RECIPE_ID,
+  "fix-this-bug",
+  "implement-this",
 ]);
