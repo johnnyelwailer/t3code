@@ -37,6 +37,8 @@ import type {
 } from "@t3tools/client-runtime/state/thread-requests";
 import type { ThreadRunSummary, ThreadRuntimeSummary } from "@t3tools/client-runtime/state/shell";
 import { threadRuntimeHasInterruptibleRun } from "@t3tools/client-runtime/state/thread-execution";
+import { derivePendingBackgroundWork } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
+import { usageLimitRunPresentedAsLatest } from "@t3tools/shared/orchestrationV2ThreadError";
 import { turnItemIsWorkspacePreparation } from "@t3tools/client-runtime/state/turn-item-presentation";
 
 import {
@@ -1112,6 +1114,29 @@ export function deriveCanInterruptRunningThread(
     (threadRuntimeHasInterruptibleRun(runtime) ||
       (runtime?.status === "waiting" && hasPendingBackgroundWork))
   );
+}
+
+/**
+ * Background work the thread's latest started turn left running. A queued follow-up never
+ * started and owns none, so it does not hide that turn's work; a usage-limited run that
+ * the thread presents as its latest stays the one that is checked.
+ */
+export function deriveThreadPendingBackgroundWork(projection: OrchestrationV2ThreadProjection) {
+  const sessionError =
+    projection.providerSessions.findLast(
+      (session) => session.providerInstanceId === projection.thread.providerInstanceId,
+    )?.lastError ?? null;
+  const latestRun =
+    usageLimitRunPresentedAsLatest(projection.runs, projection.turnItems, sessionError) ??
+    projection.runs.findLast((run) => run.status !== "queued");
+  return derivePendingBackgroundWork({
+    latestRun,
+    providerThreads: projection.providerThreads,
+    turnItems: projection.turnItems,
+    activeProviderThreadId: projection.thread.activeProviderThreadId,
+    runs: projection.runs,
+    pullRequests: projection.thread.pullRequests,
+  });
 }
 
 export type { TurnDiffSummary };

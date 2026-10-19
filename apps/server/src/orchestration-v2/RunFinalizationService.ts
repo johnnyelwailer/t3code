@@ -3,6 +3,7 @@ import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
@@ -55,6 +56,8 @@ export class RunFinalizationService extends Context.Service<
   }
 >()("t3/orchestration-v2/RunFinalizationService") {}
 
+const SETTLE_RETRIES = 3;
+
 const make = Effect.gen(function* () {
   const checkpointCapture = yield* CheckpointCapture.CheckpointCaptureServiceV2;
   const projections = yield* ProjectionStore.ProjectionStoreV2;
@@ -68,6 +71,9 @@ const make = Effect.gen(function* () {
         willRetry || Cause.hasInterruptsOnly(cause)
           ? Effect.void
           : checkpointCapture.completeWithoutCheckpoint(input).pipe(
+              // The worker records this attempt as failed for good, so nothing runs the
+              // settle again before a restart: a transient write failure gets retried here.
+              Effect.retry({ times: SETTLE_RETRIES, schedule: Schedule.exponential("200 millis") }),
               Effect.catchCause((settleCause) =>
                 Effect.logWarning("Failed to complete a run whose checkpoint capture failed", {
                   ...input,

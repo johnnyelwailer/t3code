@@ -1,4 +1,3 @@
-import { assert, it } from "@effect/vitest";
 import {
   CheckpointId,
   CheckpointRef,
@@ -14,25 +13,24 @@ import {
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
-import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
-import * as CheckpointCaptureService from "./CheckpointCaptureService.ts";
-import * as CheckpointService from "./CheckpointService.ts";
-import * as EventSink from "./EventSink.ts";
-import * as IdAllocator from "./IdAllocator.ts";
-import * as Orchestrator from "./Orchestrator.ts";
-import * as ProjectionStore from "./ProjectionStore.ts";
-import type { ProviderAdapterV2Shape } from "./ProviderAdapter.ts";
-import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
-import * as RunFinalizationService from "./RunFinalizationService.ts";
-import * as ProviderReplayHarness from "./testkit/ProviderReplayHarness.ts";
+import * as SqlitePersistence from "../../persistence/Sqlite.ts";
+import { CodexProviderCapabilitiesV2 } from "../Adapters/CodexAdapterV2.ts";
+import * as CheckpointCaptureService from "../CheckpointCaptureService.ts";
+import * as CheckpointService from "../CheckpointService.ts";
+import * as EventSink from "../EventSink.ts";
+import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+import * as Orchestrator from "../Orchestrator.ts";
+import * as ProjectionStore from "../ProjectionStore.ts";
+import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import * as ProviderAdapterRegistry from "../ProviderAdapterRegistry.ts";
+import * as RunFinalizationService from "../RunFinalizationService.ts";
+import * as ProviderReplayHarness from "./ProviderReplayHarness.ts";
 
 // A run is "waiting" once its provider turn finished and its checkpoint is saving.
-// These tests park a run there, then drive Stop, a queued send, and the capture.
+// Tests park a run there, then drive Stop, queued sends, and the capture themselves.
 
 const instanceId = ProviderInstanceId.make("codex");
 const modelSelection = { instanceId, model: "gpt-5.1-codex" };
@@ -42,7 +40,7 @@ const adapter = {
   getCapabilities: () => Effect.succeed(CodexProviderCapabilitiesV2),
   planSelectionTransition: () => Effect.succeed({ type: "apply_on_next_turn" as const }),
   openSession: () => Effect.die("Runs here never reach a provider"),
-} as ProviderAdapterV2Shape;
+} as ProviderAdapter.ProviderAdapterV2["Service"];
 const layerDatabase = SqlitePersistence.layerMemory;
 
 const checkpointFor = (
@@ -63,7 +61,7 @@ const checkpointFor = (
 });
 
 /** Snapshots of this workspace fail, as when git cannot write its checkpoint ref. */
-const unsnapshottableCwd = "/repo-without-snapshots";
+export const unsnapshottableCwd = "/repo-without-snapshots";
 
 const checkpoints = Layer.mock(CheckpointService.CheckpointServiceV2)({
   materializeBaselineCheckpoint: ({ scope, ordinalWithinScope }) =>
@@ -100,7 +98,7 @@ const checkpoints = Layer.mock(CheckpointService.CheckpointServiceV2)({
 
 // No effect worker: each test drives the run's checkpoint capture itself. The harness
 // builds its own capture over real git; fresh layers keep these on the mock above.
-const layerTest = Layer.fresh(RunFinalizationService.layer).pipe(
+export const layerTest = Layer.fresh(RunFinalizationService.layer).pipe(
   Layer.provideMerge(
     Layer.fresh(CheckpointCaptureService.layer).pipe(
       Layer.provide(Layer.mergeAll(checkpoints, IdAllocator.layer)),
@@ -119,7 +117,7 @@ const layerTest = Layer.fresh(RunFinalizationService.layer).pipe(
   ),
 );
 
-const createThread = (threadId: ThreadId) =>
+export const createThread = (threadId: ThreadId) =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
     yield* orchestrator.dispatch({
@@ -138,7 +136,11 @@ const createThread = (threadId: ThreadId) =>
     });
   });
 
-const send = (threadId: ThreadId, text: string, type: "start_immediately" | "queue_after_active") =>
+export const send = (
+  threadId: ThreadId,
+  text: string,
+  type: "start_immediately" | "queue_after_active",
+) =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
     yield* orchestrator.dispatch({
@@ -155,7 +157,7 @@ const send = (threadId: ThreadId, text: string, type: "start_immediately" | "que
   });
 
 /** Finishes the thread's first run's provider turn, leaving it waiting on its checkpoint. */
-const finishTurn = (threadId: ThreadId, cwd = "/repo") =>
+export const finishTurn = (threadId: ThreadId, cwd = "/repo") =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
     const projections = yield* ProjectionStore.ProjectionStoreV2;
@@ -205,7 +207,7 @@ const finishTurn = (threadId: ThreadId, cwd = "/repo") =>
     return { runId: run.id, scopeId };
   });
 
-const runStatuses = (threadId: ThreadId) =>
+export const runStatuses = (threadId: ThreadId) =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
     const projection = yield* orchestrator.getThreadProjection(threadId);
@@ -213,7 +215,10 @@ const runStatuses = (threadId: ThreadId) =>
   });
 
 /** Runs `settle`, then waits for the thread's queued run to leave the queue. */
-const settleAndAwaitQueueStart = <E, R>(threadId: ThreadId, settle: Effect.Effect<void, E, R>) =>
+export const settleAndAwaitQueueStart = <E, R>(
+  threadId: ThreadId,
+  settle: Effect.Effect<void, E, R>,
+) =>
   Effect.gen(function* () {
     const eventSink = yield* EventSink.EventSinkV2;
     const orchestrator = yield* Orchestrator.OrchestratorV2;
@@ -231,7 +236,7 @@ const settleAndAwaitQueueStart = <E, R>(threadId: ThreadId, settle: Effect.Effec
     );
   });
 
-const finalize = (
+export const finalize = (
   threadId: ThreadId,
   target: { readonly runId: RunId; readonly scopeId: CheckpointScopeId },
   willRetry: boolean,
@@ -241,91 +246,40 @@ const finalize = (
     return yield* Effect.exit(finalization.finalize({ threadId, ...target, willRetry }));
   });
 
-it.effect.each([true, false])(
-  "Stop on a run waiting for its checkpoint succeeds, holdQueue=%s",
-  (holdQueue) =>
-    Effect.gen(function* () {
-      const orchestrator = yield* Orchestrator.OrchestratorV2;
-      const threadId = ThreadId.make(`thread:waiting-stop:${holdQueue}`);
-      yield* createThread(threadId);
-      yield* send(threadId, "work", "start_immediately");
-      const { runId } = yield* finishTurn(threadId);
-      yield* send(threadId, "next", "queue_after_active");
+export const stop = (input: {
+  readonly threadId: ThreadId;
+  readonly runId: RunId;
+  readonly holdQueue: boolean;
+  readonly click: number;
+}) =>
+  Orchestrator.OrchestratorV2.pipe(
+    Effect.flatMap((orchestrator) =>
+      orchestrator.dispatch({
+        type: "run.interrupt",
+        commandId: CommandId.make(`stop:${input.threadId}:${input.click}`),
+        threadId: input.threadId,
+        runId: input.runId,
+        holdQueue: input.holdQueue,
+      }),
+    ),
+  );
 
-      // A second Stop click finds the run already reached and has nothing to add.
-      for (const click of [1, 2]) {
-        yield* orchestrator.dispatch({
-          type: "run.interrupt",
-          commandId: CommandId.make(`stop:${threadId}:${click}`),
-          threadId,
-          runId,
-          holdQueue,
-        });
-      }
+export const threadProjection = (threadId: ThreadId) =>
+  Orchestrator.OrchestratorV2.pipe(
+    Effect.flatMap((orchestrator) => orchestrator.getThreadProjection(threadId)),
+  );
 
-      // The capture still settles the run; a full Stop holds what was queued behind it.
-      assert.deepEqual(yield* runStatuses(threadId), [
-        "waiting",
-        holdQueue ? "queued:held" : "queued",
-      ]);
-      const stopMarkers = (yield* orchestrator.getThreadProjection(threadId)).turnItems.filter(
-        (item) => item.type === "run_interrupt_request",
-      );
-      assert.lengthOf(stopMarkers, 1);
-    }).pipe(Effect.provide(layerTest)),
-);
-
-it.effect("a message sent while a run waits queues, then starts when the checkpoint commits", () =>
+/**
+ * Parks a run on its own thread and settles it, waiting for its queued follow-up to
+ * start. The orchestrator reacts to finished runs one at a time, in commit order, so
+ * once this returns it has also reacted to every run that finished before.
+ */
+export const awaitEarlierRunReactions = (label: string) =>
   Effect.gen(function* () {
-    const threadId = ThreadId.make("thread:waiting-queue");
+    const threadId = ThreadId.make(`thread:barrier:${label}`);
     yield* createThread(threadId);
     yield* send(threadId, "work", "start_immediately");
     const target = yield* finishTurn(threadId);
     yield* send(threadId, "next", "queue_after_active");
-    assert.deepEqual(yield* runStatuses(threadId), ["waiting", "queued"]);
-
     yield* settleAndAwaitQueueStart(threadId, finalize(threadId, target, false));
-
-    const [first, next] = (yield* Orchestrator.OrchestratorV2.pipe(
-      Effect.flatMap((orchestrator) => orchestrator.getThreadProjection(threadId)),
-    )).runs;
-    assert.equal(first?.status, "completed");
-    assert.isNotNull(first?.checkpointId);
-    assert.notEqual(next?.status, "queued");
-  }).pipe(Effect.provide(layerTest)),
-);
-
-it.effect("a checkpoint capture that fails for good completes the run and starts the queue", () =>
-  Effect.gen(function* () {
-    const threadId = ThreadId.make("thread:waiting-capture-fails");
-    yield* createThread(threadId);
-    yield* send(threadId, "work", "start_immediately");
-    const target = yield* finishTurn(threadId, unsnapshottableCwd);
-    yield* send(threadId, "next", "queue_after_active");
-
-    // Attempts the worker will retry leave the run waiting for the next one.
-    for (let attempt = 1; attempt < 5; attempt += 1) {
-      assert.isTrue(Exit.isFailure(yield* finalize(threadId, target, true)));
-      assert.deepEqual(yield* runStatuses(threadId), ["waiting", "queued"]);
-    }
-
-    yield* settleAndAwaitQueueStart(
-      threadId,
-      finalize(threadId, target, false).pipe(
-        Effect.map((exit) => assert.isTrue(Exit.isFailure(exit))),
-      ),
-    );
-
-    const projection = yield* Orchestrator.OrchestratorV2.pipe(
-      Effect.flatMap((orchestrator) => orchestrator.getThreadProjection(threadId)),
-    );
-    const [first, next] = projection.runs;
-    assert.equal(first?.status, "completed");
-    assert.isNull(first?.checkpointId);
-    assert.equal(
-      projection.nodes.find((node) => node.id === first?.rootNodeId)?.status,
-      "completed",
-    );
-    assert.notEqual(next?.status, "queued");
-  }).pipe(Effect.provide(layerTest)),
-);
+  });

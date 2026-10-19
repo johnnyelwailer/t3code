@@ -15,6 +15,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
+import { makeCompleteWithoutCheckpoint } from "./t3team-checkpointCaptureFallback.ts";
 import * as CheckpointService from "./CheckpointService.ts";
 import * as EventSink from "./EventSink.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
@@ -38,10 +39,7 @@ export interface CheckpointCaptureServiceV2Shape {
     readonly runId: RunId;
     readonly scopeId: CheckpointScopeId;
   }) => Effect.Effect<void, CheckpointCaptureExecutionError>;
-  /**
-   * Settles a run still waiting on a capture that failed for good, so the thread's
-   * queue can start. The turn's work stands; it only has no restore point.
-   */
+  /** Completes a run whose capture failed for good; see `makeCompleteWithoutCheckpoint`. */
   readonly completeWithoutCheckpoint: (input: {
     readonly threadId: ThreadId;
     readonly runId: RunId;
@@ -247,54 +245,10 @@ export const layer: Layer.Layer<
       });
     });
 
-    const completeWithoutCheckpoint = Effect.fn(
-      "orchestrationV2.checkpointCapture.completeWithoutCheckpoint",
-    )(function* (input: {
-      readonly threadId: ThreadId;
-      readonly runId: RunId;
-      readonly scopeId: CheckpointScopeId;
-    }) {
-      const { run, rootNode } = yield* projections.getCheckpointCaptureContext(
-        input.threadId,
-        input,
-      );
-      if (run?.status !== "waiting") return;
-      const completedAt = yield* DateTime.now;
-      const { delegatedCompletion: _delegatedCompletion, ...runWithoutDelegatedCompletion } = run;
-      const commandId = CommandId.make(`command:effect:checkpoint.capture-failed:${run.id}`);
-      yield* eventSink.commitCommand({
-        commandId,
-        threadId: input.threadId,
-        commandType: "checkpoint.capture",
-        acceptedAt: completedAt,
-        effects: [],
-        events: [
-          {
-            id: yield* ids.allocate.event({ threadId: input.threadId, commandId }),
-            type: "run.updated",
-            threadId: input.threadId,
-            runId: run.id,
-            ...(rootNode === undefined ? {} : { nodeId: rootNode.id }),
-            providerInstanceId: run.providerInstanceId,
-            occurredAt: completedAt,
-            payload: { ...runWithoutDelegatedCompletion, status: "completed", completedAt },
-          },
-          ...(rootNode === undefined
-            ? []
-            : [
-                {
-                  id: yield* ids.allocate.event({ threadId: input.threadId, commandId }),
-                  type: "node.updated" as const,
-                  threadId: input.threadId,
-                  runId: run.id,
-                  nodeId: rootNode.id,
-                  providerInstanceId: run.providerInstanceId,
-                  occurredAt: completedAt,
-                  payload: { ...rootNode, status: "completed" as const, completedAt },
-                },
-              ]),
-        ],
-      });
+    const completeWithoutCheckpoint = makeCompleteWithoutCheckpoint({
+      eventSink,
+      ids,
+      projections,
     });
 
     return CheckpointCaptureServiceV2.of({
