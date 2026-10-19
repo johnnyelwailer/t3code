@@ -10,6 +10,17 @@ import type { MirrorSyncIdentity } from "./t3team-atlassian-backlog-mirrorSyncSh
 
 // ─── DB helpers ──────────────────────────────────────────────────────────────
 
+/** Rows per multi-row upsert: 8 bound values each, well inside SQLite's parameter limit. */
+export const MIRROR_UPSERT_CHUNK_SIZE = 50;
+
+function chunked<T>(items: ReadonlyArray<T>, size: number): ReadonlyArray<ReadonlyArray<T>> {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
 /**
  * Upserts mirror-walked issues into the shared backlog issues table.
  *
@@ -44,47 +55,53 @@ export function upsertMirrorIssues(input: {
 
     yield* captureDigestStatusTransitionsOf(input.identity, input.items);
 
+    // One multi-row statement per chunk, all chunks in one transaction: a 100-issue page used to
+    // be 100 statements, each holding the write lock the digest's reads were waiting on.
     yield* sql.withTransaction(
-      Effect.gen(function* () {
-        for (const item of input.items) {
-          const assigneeAccountId =
-            typeof item["assigneeAccountId"] === "string" ? item["assigneeAccountId"] : null;
-          const issueKey = typeof item["displayId"] === "string" ? item["displayId"] : null;
-          yield* sql`
-            INSERT INTO t3team_atlassian_backlog_issues (
-              provider,
-              account_id,
-              external_project_id,
-              issue_id,
-              issue_key,
-              resource_json,
-              updated_at,
-              assignee_account_id
+      Effect.forEach(
+        chunked(input.items, MIRROR_UPSERT_CHUNK_SIZE),
+        (chunk) => sql`
+          INSERT INTO t3team_atlassian_backlog_issues (
+            provider,
+            account_id,
+            external_project_id,
+            issue_id,
+            issue_key,
+            resource_json,
+            updated_at,
+            assignee_account_id
+          )
+          VALUES ${sql.csv(
+            chunk.map((item) => {
+              const assigneeAccountId =
+                typeof item["assigneeAccountId"] === "string" ? item["assigneeAccountId"] : null;
+              const issueKey = typeof item["displayId"] === "string" ? item["displayId"] : null;
+              return sql`(
+                ${input.identity.provider},
+                ${input.identity.accountId},
+                ${input.identity.externalProjectId},
+                ${item.id},
+                ${issueKey},
+                ${serializeBacklogCacheJson(item)},
+                ${updatedAt},
+                ${assigneeAccountId}
+              )`;
+            }),
+          )}
+          ON CONFLICT (provider, account_id, external_project_id, issue_id)
+          DO UPDATE SET
+            issue_key = excluded.issue_key,
+            resource_json = excluded.resource_json,
+            updated_at = excluded.updated_at,
+            assignee_account_id = excluded.assignee_account_id
+          WHERE json_extract(excluded.resource_json, '$.updatedAt') >
+            COALESCE(
+              json_extract(t3team_atlassian_backlog_issues.resource_json, '$.updatedAt'),
+              ''
             )
-            VALUES (
-              ${input.identity.provider},
-              ${input.identity.accountId},
-              ${input.identity.externalProjectId},
-              ${item.id},
-              ${issueKey},
-              ${serializeBacklogCacheJson(item)},
-              ${updatedAt},
-              ${assigneeAccountId}
-            )
-            ON CONFLICT (provider, account_id, external_project_id, issue_id)
-            DO UPDATE SET
-              issue_key = excluded.issue_key,
-              resource_json = excluded.resource_json,
-              updated_at = excluded.updated_at,
-              assignee_account_id = excluded.assignee_account_id
-            WHERE json_extract(excluded.resource_json, '$.updatedAt') >
-              COALESCE(
-                json_extract(t3team_atlassian_backlog_issues.resource_json, '$.updatedAt'),
-                ''
-              )
-          `;
-        }
-      }),
+        `,
+        { discard: true },
+      ),
     );
   }).pipe(Effect.mapError(toPersistenceSqlError("t3team.atlassianMirrorSync.upsertIssues")));
 }

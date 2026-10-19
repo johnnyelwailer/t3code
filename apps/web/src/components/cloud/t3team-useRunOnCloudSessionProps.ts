@@ -11,9 +11,10 @@ import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useEnvironments } from "~/state/environments";
 import { getCloudSessionLocal } from "~/cloud/t3team-cloudSessionLocalStore";
 import {
+  beginCloudSessionCreate,
   clearCloudSessionTarget,
+  type CloudSessionCreateOptions,
   resolveCloudSessionCreating,
-  selectCloudSessionCreating,
   selectCloudSessionTarget,
   useCloudSessionTarget,
 } from "~/cloud/t3team-cloudSessionTargetStore";
@@ -41,6 +42,7 @@ type CloudSelectorProps = Pick<
   | "cloudSessionProject"
   | "connectedEnvironmentIds"
   | "cloudEnvironmentIds"
+  | "onConnectCloudSession"
 >;
 
 /**
@@ -59,7 +61,14 @@ export function useT3TeamRunOnCloudSessionProps(
   const { available, configured, sessions, onCreate, createPending, createPendingSetup } =
     cloudSessions;
   const { primaryEnvironmentId } = cloudSessions;
-  const { onCloudMenuOpenChange, connectFailure: _connectFailure } = cloudSessions;
+  const { onCloudMenuOpenChange, onSessionAction, connectFailure: _connectFailure } = cloudSessions;
+  // "Move to" connects a ready session first; the connected machine then lists as a choice.
+  const onConnectCloudSession = useCallback(
+    (session: CloudSession) => {
+      if (session.phase === "ready") onSessionAction(session);
+    },
+    [onSessionAction],
+  );
   const target = useCloudSessionTarget(scopeKey);
   const projectKey = useCloudSessionProjectKey(projectRef);
   const [dismissed, setDismissed] = useLocalStorage(
@@ -97,16 +106,22 @@ export function useT3TeamRunOnCloudSessionProps(
     resolveCloudSessionCreating(scopeKey, session.sessionId, cloudSessionDisplayName(session));
   }, [scopeKey, sessions, target?.sessionId]);
 
-  const onCreateCloudSession = useCallback(() => {
-    if (scopeKey !== null) selectCloudSessionCreating(scopeKey, undefined, projectKey);
-    onCreate(cloudSessionProject?.projectId);
-  }, [cloudSessionProject, onCreate, projectKey, scopeKey]);
+  const onCreateCloudSession = useCallback(
+    (options?: CloudSessionCreateOptions) =>
+      beginCloudSessionCreate({ scopeKey, projectKey }, options, () =>
+        onCreate(cloudSessionProject?.projectId),
+      ),
+    [cloudSessionProject, onCreate, projectKey, scopeKey],
+  );
 
   const machineSetupEnabled = useServerConfig()?.machineSetup === true;
-  const onSetupProjectMachine = useCallback(() => {
-    if (scopeKey !== null) selectCloudSessionCreating(scopeKey, undefined, projectKey);
-    onCreate(cloudSessionProject?.projectId, { machineSetup: true });
-  }, [cloudSessionProject, onCreate, projectKey, scopeKey]);
+  const onSetupProjectMachine = useCallback(
+    (options?: CloudSessionCreateOptions) =>
+      beginCloudSessionCreate({ scopeKey, projectKey }, options, () =>
+        onCreate(cloudSessionProject?.projectId, { machineSetup: true }),
+      ),
+    [cloudSessionProject, onCreate, projectKey, scopeKey],
+  );
 
   const onSelectCloudSession = useCallback(
     (session: CloudSession) => {
@@ -170,6 +185,7 @@ export function useT3TeamRunOnCloudSessionProps(
               onSelectCloudSession,
               onDismissCloudSession,
               onCloudMenuOpenChange,
+              onConnectCloudSession,
             }
           : { onSetupCloudSessions },
     [
@@ -181,6 +197,7 @@ export function useT3TeamRunOnCloudSessionProps(
       createPending,
       createPendingSetup,
       onCloudMenuOpenChange,
+      onConnectCloudSession,
       machineSetupEnabled,
       onCreateCloudSession,
       onSetupProjectMachine,

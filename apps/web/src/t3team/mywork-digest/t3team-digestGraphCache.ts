@@ -86,8 +86,10 @@ export function readInitialDigestState(signature: string): {
 }
 
 const PENDING_RETRY_MS = 2_500;
-/** ~30 s of fast retries per pending episode; past that the regular poll takes over. */
+/** ~30 s of fast retries per pending episode; past that the retries slow down but keep going. */
 const MAX_PENDING_RETRIES = 12;
+/** Retry cadence once the fast episode is spent: a mirror catch-up can take minutes. */
+const SLOW_PENDING_RETRY_MS = 10_000;
 
 /**
  * Re-polls soon while the server says change requests are still being read. A
@@ -105,9 +107,14 @@ export function createDigestPendingRetry() {
       clearTimeout(timer);
       if (nextPending !== undefined) pending = nextPending;
       if (!pending) attempts = 0;
-      if (!pending || attempts >= MAX_PENDING_RETRIES) return;
+      if (!pending) return;
       attempts += 1;
-      timer = setTimeout(run, PENDING_RETRY_MS);
+      // Never give up while the server still says pending: the view would freeze on a partial
+      // answer until the next regular poll. Past the fast episode, retry at a gentler pace.
+      timer = setTimeout(
+        run,
+        attempts > MAX_PENDING_RETRIES ? SLOW_PENDING_RETRY_MS : PENDING_RETRY_MS,
+      );
     },
     dispose(): void {
       clearTimeout(timer);

@@ -3,12 +3,7 @@ import type { JiraApiAuth } from "@t3tools/integrations-atlassian";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 
-import {
-  atlassianAuths,
-  persistAuthsToDisk,
-  reloadAuthsFromDisk,
-} from "./t3team-atlassian-auth-state.ts";
-import { markNeedsReconnect } from "./t3team-atlassian-auth-staleToken.ts";
+import { atlassianAuths, reloadAuthsFromDisk } from "./t3team-atlassian-auth-state.ts";
 
 const OAUTH_REFRESH_SKEW_MS = 60_000;
 
@@ -26,20 +21,19 @@ export function setDeadTokenRecheckDelayMsForTest(ms: number): void {
   deadTokenRecheckDelayMs = ms;
 }
 
+export type DeadTokenRecheck =
+  | { readonly _tag: "adopted"; readonly auth: JiraApiAuth }
+  | { readonly _tag: "newer-on-disk"; readonly auth: JiraApiAuth }
+  | { readonly _tag: "same"; readonly auth: JiraApiAuth }
+  | { readonly _tag: "gone" };
+
 /**
- * The refresh grant rejected `redeemed` as dead. Another installation sharing the secret may have
- * rotated it a moment ago (one without the cross-process lock may still be writing), so wait
- * briefly and re-read the secret: if it now holds a different, current token, use that. Otherwise
- * keep the account, flag it needs-reconnect and fail with the typed sign-in error. Never delete the
- * credentials: that turned every rotation conflict into a silent sign-out on the next start.
- *
- * The flag is compare-and-swap on the record: it is written only while the file still holds the
- * token that was rejected, right after the re-read and under the store lock, so it can never
- * overwrite a newer token on disk.
- *
- * Callers hold the store lock.
+ * Pause briefly and re-read the secret after Atlassian refused `redeemed`. Another installation
+ * sharing the secret may have rotated it a moment ago (one without the cross-process lock may still
+ * be writing). Callers hold the store lock and decide whether to flag, adopt, or report a config
+ * error — this never writes the reconnect flag by itself.
  */
-export function recoverFromDeadRefreshToken(accountId: string, redeemed: string) {
+export function recheckAfterDeadRefreshToken(accountId: string, redeemed: string) {
   return Effect.gen(function* () {
     if (deadTokenRecheckDelayMs > 0) {
       const delay = deadTokenRecheckDelayMs;
@@ -48,17 +42,13 @@ export function recoverFromDeadRefreshToken(accountId: string, redeemed: string)
     yield* reloadAuthsFromDisk;
     const current = atlassianAuths.get(accountId);
     const now = yield* Clock.currentTimeMillis;
-    if (current?.kind === "oauth" && current.refreshToken !== redeemed) {
+    if (!current) return { _tag: "gone" } satisfies DeadTokenRecheck;
+    if (current.kind === "oauth" && current.refreshToken !== redeemed) {
       if (!oauthAuthExpiresSoon(current, now)) {
-        return { _tag: "adopted" as const, auth: current };
+        return { _tag: "adopted", auth: current } satisfies DeadTokenRecheck;
       }
-      // A newer (but already expiring) token: leave it unflagged for the next refresh to redeem.
-      return { _tag: "newer-on-disk" as const, auth: current };
+      return { _tag: "newer-on-disk", auth: current } satisfies DeadTokenRecheck;
     }
-    if (!current) {
-      // The account was disconnected meanwhile; nothing to flag.
-      return { _tag: "gone" as const };
-    }
-    return yield* markNeedsReconnect(accountId, persistAuthsToDisk, "refresh-token-invalid");
+    return { _tag: "same", auth: current } satisfies DeadTokenRecheck;
   });
 }

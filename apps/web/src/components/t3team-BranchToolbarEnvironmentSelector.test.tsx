@@ -62,9 +62,11 @@ vi.mock("./ui/select", () => ({
   ),
   SelectValue: () => <span data-testid="select-value">SELECTED</span>,
 }));
-// The trigger is upstream's `ThreadDetailsSelectControl`, a Base UI `Select.Trigger` that needs
-// the real Select root; the Select is mocked above, so the trigger is too.
-// The trigger is either row control, by display mode; both render as the same stand-in.
+// Both triggers are Base UI `Select.Trigger`s that need the real Select root; the Select is mocked
+// above, so the triggers are too. The real one is exercised in `*.panel.test.tsx`.
+vi.mock("@base-ui/react/select", () => ({
+  Select: { Trigger: ({ children }: { children?: ReactNode }) => <div>{children}</div> },
+}));
 vi.mock("./chat/ThreadDetailsControl", () => ({
   ThreadDetailsControl: ({ children }: { children?: ReactNode }) => (
     <div data-testid="trigger">{children}</div>
@@ -85,8 +87,14 @@ vi.mock("./chat/composerEventScope", () => ({
 
 import {
   BranchToolbarEnvironmentSelector,
+  type BranchToolbarEnvironmentSelectorBaseProps,
   type BranchToolbarEnvironmentSelectorProps,
 } from "./BranchToolbarEnvironmentSelector";
+import {
+  beginCloudSessionCreate,
+  clearCloudSessionTarget,
+  getCloudSessionTarget,
+} from "~/cloud/t3team-cloudSessionTargetStore";
 
 const PRIMARY = {
   environmentId: EnvironmentId.make("env-primary"),
@@ -114,14 +122,28 @@ const RELAY_B = {
 
 const RELAY_DUPES = [PRIMARY, RELAY_A, RELAY_B];
 
-function renderSelector(props: Partial<BranchToolbarEnvironmentSelectorProps>): string {
-  const base: BranchToolbarEnvironmentSelectorProps = {
+type SelectorTestProps = Partial<BranchToolbarEnvironmentSelectorBaseProps> & {
+  onHandoffToEnvironment?: (environmentId: EnvironmentId) => void;
+  projectHasRemote?: boolean;
+};
+
+/** A project with a remote unless a test says otherwise. */
+function withDefaults({
+  onHandoffToEnvironment,
+  projectHasRemote = true,
+  ...props
+}: SelectorTestProps): BranchToolbarEnvironmentSelectorProps {
+  return {
     envLocked: false,
     environmentId: PRIMARY.environmentId,
     availableEnvironments: [PRIMARY],
     ...props,
+    ...(onHandoffToEnvironment ? { onHandoffToEnvironment, projectHasRemote } : {}),
   };
-  return renderToStaticMarkup(<BranchToolbarEnvironmentSelector {...base} />);
+}
+
+function renderSelector(props: SelectorTestProps): string {
+  return renderToStaticMarkup(<BranchToolbarEnvironmentSelector {...withDefaults(props)} />);
 }
 
 function countOccurrences(markup: string, needle: string): number {
@@ -144,16 +166,11 @@ function makeValueChangeDetails() {
 let liveRoot: Root | null = null;
 let liveContainer: HTMLElement | null = null;
 
-function mountSelector(props: Partial<BranchToolbarEnvironmentSelectorProps>) {
+function mountSelector(props: SelectorTestProps) {
   liveContainer = document.createElement("div");
   document.body.appendChild(liveContainer);
   liveRoot = createRoot(liveContainer);
-  const base: BranchToolbarEnvironmentSelectorProps = {
-    envLocked: false,
-    environmentId: PRIMARY.environmentId,
-    availableEnvironments: [PRIMARY],
-    ...props,
-  };
+  const base = withDefaults(props);
   act(() => {
     liveRoot?.render(<BranchToolbarEnvironmentSelector {...base} />);
   });
@@ -474,3 +491,146 @@ function findCreateButton(): HTMLButtonElement | null {
     buttons.find((button) => button.textContent?.includes("New cloud session") === true) ?? null
   );
 }
+
+describe("BranchToolbarEnvironmentSelector — Move to (started thread, panel)", () => {
+  const CLOUD_ENV = {
+    environmentId: EnvironmentId.make("env-cloud"),
+    projectId: ProjectId.make("project-x"),
+    label: "Cloud session",
+    isPrimary: false,
+    machine: "server" as const,
+  };
+  const session = (phase: string, environmentId?: string) =>
+    ({
+      sessionId: `s-${phase}`,
+      phase,
+      ...(environmentId ? { environmentId } : {}),
+      machineLabel: "ubuntu-slim",
+    }) as unknown as CloudSession;
+  const mountMove = (props: SelectorTestProps = {}) => {
+    const handlers = {
+      onEnvironmentChange: vi.fn(),
+      onHandoffToEnvironment: vi.fn(),
+      onConnectCloudSession: vi.fn(),
+      onSelectCloudSession: vi.fn(),
+    };
+    mountSelector({
+      envLocked: true,
+      displayMode: "panel",
+      availableEnvironments: [PRIMARY, CLOUD_ENV],
+      onCreateCloudSession: () => {},
+      pendingCloudSessions: [session("ready", "env-cloud"), session("preparing")],
+      ...handlers,
+      ...props,
+    });
+    return handlers;
+  };
+
+  it("stays the locked label for a started thread without a handoff handler", () => {
+    const markup = renderSelector({
+      envLocked: true,
+      displayMode: "panel",
+      availableEnvironments: [PRIMARY, CLOUD_ENV],
+      onEnvironmentChange: () => {},
+      onCreateCloudSession: () => {},
+    });
+    expect(testState.selectProps).toBeUndefined();
+    expect(markup).not.toContain("Move to");
+  });
+
+  it("stays locked in the composer strip even with a handoff handler", () => {
+    renderSelector({
+      envLocked: true,
+      displayMode: "toolbar",
+      onHandoffToEnvironment: () => {},
+      onCreateCloudSession: () => {},
+    });
+    expect(testState.selectProps).toBeUndefined();
+  });
+
+  it("opens an interactive 'Move to' menu with machines, cloud sessions and create", () => {
+    mountMove();
+    expect(liveContainer?.textContent).toContain("Move to");
+    expect(liveContainer?.textContent).not.toContain("Run on");
+    const items = Array.from(liveContainer?.querySelectorAll("[data-select-item]") ?? []).map(
+      (item) => item.getAttribute("data-select-item"),
+    );
+    expect(items).toEqual(["env-primary", "env-cloud"]);
+    expect(findCreateButton()).not.toBeNull();
+    expect(testState.selectProps?.value).toBe("env-primary");
+  });
+
+  it("routes a pick to onHandoffToEnvironment, never onEnvironmentChange", () => {
+    const handlers = mountMove();
+    act(() => {
+      testState.selectProps?.onValueChange?.("env-cloud", makeValueChangeDetails());
+    });
+    expect(handlers.onHandoffToEnvironment).toHaveBeenCalledWith(CLOUD_ENV.environmentId);
+    expect(handlers.onEnvironmentChange).not.toHaveBeenCalled();
+  });
+
+  it("ignores re-picking the machine the thread already runs on", () => {
+    const handlers = mountMove();
+    act(() => {
+      testState.selectProps?.onValueChange?.("env-primary", makeValueChangeDetails());
+    });
+    expect(handlers.onHandoffToEnvironment).not.toHaveBeenCalled();
+    expect(handlers.onEnvironmentChange).not.toHaveBeenCalled();
+  });
+
+  it("connects a ready, unconnected session instead of setting a draft cloud target", () => {
+    const handlers = mountMove({
+      availableEnvironments: [PRIMARY],
+      pendingCloudSessions: [session("ready", "env-elsewhere")],
+    });
+    const row = Array.from(liveContainer?.querySelectorAll("button") ?? []).find((button) =>
+      button.textContent?.startsWith("Cloud session"),
+    );
+    act(() => {
+      row?.click();
+    });
+    expect(handlers.onConnectCloudSession).toHaveBeenCalledTimes(1);
+    expect(handlers.onSelectCloudSession).not.toHaveBeenCalled();
+    expect(handlers.onHandoffToEnvironment).not.toHaveBeenCalled();
+  });
+
+  // The started thread's composer reads this target on send; a Move-mode create must not set it.
+  const THREAD_SCOPE = "env-primary:thread-started";
+  const COMPOSER_PROJECT_KEY = "github.com/acme/app";
+  const mountCreate = (props: SelectorTestProps) => {
+    const create = vi.fn();
+    mountMove({
+      onCreateCloudSession: (options) =>
+        beginCloudSessionCreate(
+          { scopeKey: THREAD_SCOPE, projectKey: COMPOSER_PROJECT_KEY },
+          options,
+          create,
+        ),
+      ...props,
+    });
+    act(() => {
+      findCreateButton()?.click();
+    });
+    return create;
+  };
+
+  it("creates a cloud session in Move mode without writing a Run-on target", () => {
+    const create = mountCreate({});
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(getCloudSessionTarget(THREAD_SCOPE)).toBeNull();
+  });
+
+  it("still selects the creating session as the target for a draft's Run on menu", () => {
+    const create = mountCreate({ envLocked: false });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(getCloudSessionTarget(THREAD_SCOPE)?.sessionId).toBeDefined();
+    clearCloudSessionTarget(THREAD_SCOPE);
+  });
+
+  // The project follow drops a target set up for another project, so the create must record it.
+  it("tags a draft's creating target with the composer's project", () => {
+    mountCreate({ envLocked: false });
+    expect(getCloudSessionTarget(THREAD_SCOPE)?.projectKey).toBe(COMPOSER_PROJECT_KEY);
+    clearCloudSessionTarget(THREAD_SCOPE);
+  });
+});

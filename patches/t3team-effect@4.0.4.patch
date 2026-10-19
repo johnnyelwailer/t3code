@@ -1,0 +1,21 @@
+diff --git a/dist/rpc/RpcGroup.d.ts b/dist/rpc/RpcGroup.d.ts
+index 3c71aa61d3e105a6c5d479b59a3be9d969d04e18..9530d8a46b0dc6224d0c9d1b736a7a5bd7c31766 100644
+--- a/dist/rpc/RpcGroup.d.ts
++++ b/dist/rpc/RpcGroup.d.ts
+@@ -137,11 +137,15 @@ export type HandlerFrom<Rpc extends Rpc.Any, Tag extends Rpc["_tag"]> = Extract<
+  * Computes the services required by all handlers in a handler object for an RPC
+  * union.
+  *
++ * Distributes over `Rpcs` so each handler is matched against its own RPC once.
++ * Distributing over the handler keys re-scans the whole union per key, which
++ * exceeds the compiler's instantiation limit for large groups.
++ *
+  * @stability unstable
+  * @category utility types
+  * @since 4.0.0
+  */
+-export type HandlersServices<Rpcs extends Rpc.Any, Handlers> = keyof Handlers extends infer K ? K extends keyof Handlers & string ? HandlerServices<Rpcs, K, Handlers[K]> : never : never;
++export type HandlersServices<Rpcs extends Rpc.Any, Handlers> = Rpcs extends Rpc.Any ? Rpcs["_tag"] extends infer K extends keyof Handlers & string ? HandlerServices<Rpcs, K, Handlers[K]> : never : never;
+ /**
+  * Computes the services required by a single RPC handler, excluding services
+  * provided by middleware and `Scope` where the server supplies it.

@@ -60,6 +60,7 @@ export function ProjectMyWorkDigestHeader({
             updatedAtMs={updatedAtMs}
             jiraSyncedAt={graph.jiraSyncedAt}
             jiraSyncPending={graph.jiraSyncPending === true}
+            syncingProjects={graph.syncingProjects}
             changeRequestNote={graph.changeRequestNote}
             nowMs={nowMs}
             refreshing={refreshing}
@@ -100,6 +101,7 @@ export function ProjectMyWorkDigestHeader({
             updatedAtMs={updatedAtMs}
             jiraSyncedAt={graph.jiraSyncedAt}
             jiraSyncPending={graph.jiraSyncPending === true}
+            syncingProjects={graph.syncingProjects}
             changeRequestNote={graph.changeRequestNote}
             nowMs={nowMs}
             refreshing={refreshing}

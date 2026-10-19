@@ -146,3 +146,16 @@ export function digestYesterdaySummaryText(summary: DigestYesterdaySummary): str
 export function isDigestMorning(nowMs: number): boolean {
   return new Date(nowMs).getHours() < 12;
 }
+
+/**
+ * A story group's compact progress for the header's right edge: how many of the subtasks that
+ * moved yesterday ended up done, out of all of them ("2/3 done"). Each subtask row shows its own
+ * status, so the header only counts.
+ */
+export function digestYesterdayGroupProgress(items: readonly DigestYesterdayWorkItem[]): string {
+  if (items.length === 0) return "";
+  const done = items.filter(
+    (item) => item.outcome && outcomeLane(item.outcome.to) === "done",
+  ).length;
+  return `${done}/${items.length} done`;
+}

@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AtlassianAccountStatus } from "~/t3team/backend/t3team-atlassianAccountStatus";
 import { useBackend } from "~/t3team/backend/t3team-index";
 
+const CATCH_UP_REFRESH_MS = 5_000;
+
 export type JiraAccountStatusesState =
   | { readonly kind: "loading" }
   | { readonly kind: "error" }
@@ -32,6 +34,14 @@ export function useJiraAccountStatuses() {
       unmountedRef.current = true;
     };
   }, [reload]);
+
+  const catchingUp =
+    state.kind === "ready" && state.accounts.some((account) => account.catchUp !== undefined);
+  useEffect(() => {
+    if (!catchingUp) return;
+    const timer = setInterval(reload, CATCH_UP_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [catchingUp, reload]);
 
   const disconnect = useCallback(
     async (accountId: string) => {

@@ -161,7 +161,7 @@ const makeIdentity = Effect.gen(function* () {
       return persisted;
     }
 
-    const generated = yield* crypto.randomUUIDv4;
+    const generated = yield* crypto.randomUUIDv4();
     yield* persistEnvironmentId(generated, "create");
     let winner = yield* readPersistedEnvironmentId;
     if (winner === null) {
@@ -242,7 +242,9 @@ export const make = Effect.gen(function* () {
       storageCleanupRun: true,
       otlpEndpointCheck: true,
       projectWorktreeCleanup: true,
+      settledWorktreeCleanup: true,
       worktreesDirectory: true,
+      threadAutoSettlementScope: true,
       threadRestartContinuation: true,
       projectSettingsOverrides: true,
       projectProviderInstanceOverrides: true,
@@ -273,7 +275,13 @@ export const make = Effect.gen(function* () {
         : {}),
       ...(desktopAppUpdate ? { desktopAppUpdate: true } : {}),
       // t3team: fork side streams served by this build (t3team-v2/t3team-v2FoundationLive.ts).
-      t3team: { threadFacts: true, threadArtifacts: true, packStore: true, stopCascade: true },
+      t3team: {
+        threadFacts: true,
+        threadArtifacts: true,
+        packStore: true,
+        stopCascade: true,
+        threadHandoff: true,
+      },
       serverBrowser: true,
     },
   };

@@ -11,6 +11,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 
 import * as GitWorkflow from "../git/GitWorkflowService.ts";
@@ -165,12 +166,14 @@ function makeHarness(input: {
         Layer.mock(EventSink.EventSinkV2)({ writeIfRunCurrent }),
         IdAllocator.layer,
         FileSystem.layerNoop({}),
+        Path.layer,
         Layer.mock(GitWorkflow.GitWorkflowService)({}),
         Layer.mock(ProjectService.ProjectService)({}),
         Layer.mock(ProjectionStore.ProjectionStoreV2)({
           getTurnStartContext: () => readProjection,
           getRuntimeRecoveryProjection: () => readProjection,
           getTurnStartHistory: () => Effect.succeed(conversationItems),
+          getThreadRecords: () => readProjection as never,
         }),
         Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({ open }),
         Layer.mock(ProviderAuthService.ProviderAuthService)({
