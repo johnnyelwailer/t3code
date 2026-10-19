@@ -7,6 +7,8 @@ export * from "./acpRegistry.ts";
 export * from "./auth.ts";
 export * from "./environment.ts";
 export * from "./environmentHttp.ts";
+export * from "./t3team-voiceSettings.ts";
+export * from "./t3team-desktopVoice.ts";
 export * from "./t3team-cloudSession.ts";
 export * from "./t3team-account.ts";
 export * from "./t3team-cloudBroker.ts";

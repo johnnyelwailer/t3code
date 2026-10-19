@@ -10,7 +10,11 @@ import {
   type VoiceInputControllerDependencies,
   type VoiceRecorder,
 } from "./controller.ts";
-import type { PreparedVoiceTranscription, VoiceTranscriber } from "./transcription.ts";
+import {
+  VoiceTranscriptionError,
+  type PreparedVoiceTranscription,
+  type VoiceTranscriber,
+} from "./transcription.ts";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -636,5 +640,61 @@ describe("VoiceInputController", () => {
 
     expect(harness.recorder.record).not.toHaveBeenCalled();
     expect(harness.controller.currentState.error).toContain("background");
+  });
+  describe("transcript sink", () => {
+    function createSinkHarness(transcript: string) {
+      const harness = createHarness();
+      const sent: string[] = [];
+      const controller = new VoiceInputController({
+        recorder: harness.recorder,
+        getTranscriber: () => ({
+          prepare: async () => preparedTranscription(async () => transcript),
+        }),
+        requestPermission: async () => ({ granted: true, canAskAgain: true }),
+        configureRecording: async () => undefined,
+        releaseRecording: async () => undefined,
+        deleteRecording: () => undefined,
+        readDraft: () => draft(),
+        commitTranscript: (text) => sent.push(text),
+        onStateChange: vi.fn(),
+      });
+      return { controller, sent };
+    }
+
+    it("hands the trimmed transcript to the sink instead of editing a draft", async () => {
+      const { controller, sent } = createSinkHarness("  open the voice thread ");
+      await controller.start();
+      await controller.stop();
+
+      expect(sent).toEqual(["open the voice thread"]);
+      expect(controller.currentState.phase).toBe("idle");
+    });
+
+    it("never calls the sink for an empty transcript", async () => {
+      const { controller, sent } = createSinkHarness("   ");
+      await controller.start();
+      await controller.stop();
+
+      expect(sent).toEqual([]);
+      expect(controller.currentState).toMatchObject({
+        phase: "error",
+        error: "No speech was detected.",
+      });
+    });
+  });
+
+  it("shows the transcriber's own message when the model is unavailable", async () => {
+    const message = "No whisper model was found and the download failed.";
+    const harness = createHarness({
+      getTranscriber: () => ({
+        prepare: async () => {
+          throw new VoiceTranscriptionError("model-unavailable", message);
+        },
+      }),
+    });
+    await harness.controller.start();
+
+    expect(harness.controller.currentState).toMatchObject({ phase: "error", error: message });
+    expect(harness.recorder.record).not.toHaveBeenCalled();
   });
 });
