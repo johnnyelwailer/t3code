@@ -15,7 +15,7 @@ const GATEWAY_STATUSES: ReadonlySet<number> = new Set([502, 503, 504]);
  * its whole deadline and a slow query is slow again; a rate limit, a refused credential and a
  * missing resource are answers, not hiccups.
  */
-export function isTransientGitHubFailure(error: GitHubApiError): boolean {
+function isTransientGitHubFailure(error: GitHubApiError): boolean {
   if (error._tag === "GitHubApiRequestError") return !Cause.isTimeoutError(error.cause);
   return error._tag === "GitHubApiResponseError" && GATEWAY_STATUSES.has(error.status);
 }
