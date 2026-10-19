@@ -99,9 +99,9 @@ import type {
 import * as PullRequestReadCache from "./PullRequestReadCache.ts";
 import * as PullRequestProviderRegistry from "./PullRequestProviderRegistry.ts";
 import { readProjectLinkedRepositories } from "./t3team-LinkedRepositories.ts";
-import { unreadableRepositoryMessage } from "./t3team-unreadableRepositoryMessage.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import * as ViewedFiles from "./pullRequestViewedFiles.ts";
+import { unreadableRepositoryMessage } from "./t3team-unreadableRepositoryMessage.ts";
 
 export interface PullRequestMergeEvent extends PullRequestRef {
   readonly mergedAt: string;
