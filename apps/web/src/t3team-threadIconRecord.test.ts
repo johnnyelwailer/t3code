@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { parsePersistedState, setThreadIcon, type PersistedUiState } from "./uiStateStore";
-import { sanitizeThreadIconRecord, withThreadIcon } from "./threadIconRecord";
+import { sanitizeThreadIconRecord, withThreadIcon } from "./t3team-threadIconRecord";
 
 describe("sanitizeThreadIconRecord", () => {
   it("keeps valid emoji, lucide and monogram icons", () => {

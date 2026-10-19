@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import { describe, expect, it } from "vite-plus/test";
-import { ProjectIconGlyph } from "./ProjectIconGlyph";
+import { ProjectIconGlyph } from "./t3team-ProjectIconGlyph";
 
 describe("ProjectIconGlyph", () => {
   it("renders a Lucide icon name in its color", () => {

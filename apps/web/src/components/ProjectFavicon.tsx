@@ -9,7 +9,7 @@ import { useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { projectFaviconUrlAtom } from "../state/assets";
 import { deriveProjectIdentity } from "../projectIdentity";
-import { ProjectIconGlyph } from "./ProjectIconGlyph";
+import { ProjectIconGlyph } from "./t3team-ProjectIconGlyph";
 import { ProjectMonogram } from "./ProjectMonogram";
 import { cn } from "~/lib/utils";
 

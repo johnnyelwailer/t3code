@@ -100,6 +100,21 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
 
 ## Allowed Modified Upstream Files
 
+### Client-only thread icon (voice V1 item 8, PR #606)
+
+- `apps/web/src/uiStateStore.ts`
+  - Adds the persisted `threadIconByThreadId` record and its `setThreadIcon` action beside the other per-thread UI state.
+- `apps/web/src/uiStateStore.test.ts`
+  - Expects the new `threadIconByThreadId` field in the hydrate and persist round-trips.
+- `apps/web/src/components/ProjectFavicon.tsx`
+  - Delegates the monogram, emoji, and Lucide branches to the extracted `t3team-ProjectIconGlyph` so thread and project icons share one render path.
+- `apps/web/src/components/ProjectFavicon.test.tsx`
+  - Asserts the delegation to `ProjectIconGlyph`; the glyph markup is covered in `t3team-ProjectIconGlyph.test.tsx`.
+- `apps/web/src/components/threadActionMenu.logic.ts`
+  - Adds the local, non-operate-gated `set-icon` item to the shared thread action menu.
+- `apps/web/src/components/threadActionMenu.logic.test.ts`
+  - Expects the `set-icon` item in the local and capability-gated menu lists.
+
 ### Upstream sync 2026-10-12
 
 - `apps/server/src/mcp/toolkits/worktree/registration.test.ts`

@@ -3,8 +3,8 @@
 import { memo, useCallback, useState } from "react";
 import { EllipsisIcon, MessageSquareIcon } from "lucide-react";
 import type { ProjectThread } from "~/t3team/t3team-types";
-import { ProjectIconGlyph } from "~/components/ProjectIconGlyph";
-import { ThreadIconPicker } from "~/components/ThreadIconPicker";
+import { ProjectIconGlyph } from "~/components/t3team-ProjectIconGlyph";
+import { ThreadIconPicker } from "~/components/t3team-ThreadIconPicker";
 import { useUiStateStore } from "~/uiStateStore";
 import { SidebarMenuSubItem } from "~/t3team/components/ui/t3team-sidebar";
 import { T3SidebarSubRow } from "~/t3team/components/ui/t3team-sidebar-row";

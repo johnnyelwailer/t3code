@@ -264,8 +264,8 @@ import {
 } from "./ThreadStatusIndicators";
 import { resolveSnoozePresets, snoozeWakeLabel, type SnoozePreset } from "./Sidebar.snooze";
 import { ProjectFavicon, type ProjectFaviconProject } from "./ProjectFavicon";
-import { ProjectIconGlyph } from "./ProjectIconGlyph";
-import { ThreadIconPicker } from "./ThreadIconPicker";
+import { ProjectIconGlyph } from "./t3team-ProjectIconGlyph";
+import { ThreadIconPicker } from "./t3team-ThreadIconPicker";
 import { ThreadSearchMatchExcerpt } from "./ThreadSearchMatch";
 import { makeWorkspaceFileDropHandlers } from "./chat/workspaceFileDrop";
 import { ProviderInstanceIcon } from "./chat/ProviderInstanceIcon";

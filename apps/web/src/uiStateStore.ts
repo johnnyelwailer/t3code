@@ -6,7 +6,7 @@ import {
   sanitizeThreadIconRecord,
   withThreadIcon,
   type ThreadIconByThreadId,
-} from "./threadIconRecord";
+} from "./t3team-threadIconRecord";
 
 export const PERSISTED_STATE_KEY = "t3code:ui-state:v1";
 // Version 1 stored card visibility, not folder expansion.
