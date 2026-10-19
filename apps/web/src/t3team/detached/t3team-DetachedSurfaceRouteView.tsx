@@ -21,9 +21,12 @@ export function DetachedSurfaceRouteView({
   const title = params[DETACHED_SURFACE_TITLE_PARAM];
   // The pack's name, as the main window's title uses it (Nexi Work, not the build's own name).
   const appName = useT3TeamPackAppearance()?.labels?.appName ?? APP_DISPLAY_NAME;
+  // An undocked view's window is titled by the route it hands over to; this page, still mounted
+  // for a moment after the handover, must not write over that.
+  const ownsTitle = kind !== DETACHED_VIEW_KIND;
   useEffect(() => {
-    document.title = title ? `${title} — ${appName}` : appName;
-  }, [title, appName]);
+    if (ownsTitle) document.title = title ? `${title} — ${appName}` : appName;
+  }, [ownsTitle, title, appName]);
 
   const View = detachedSurfaceView(kind);
   if (View === undefined) {

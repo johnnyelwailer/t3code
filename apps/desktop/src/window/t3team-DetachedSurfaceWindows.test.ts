@@ -190,6 +190,12 @@ describe("makeDetachedSurfaceWindows", () => {
     expect(window.raw.loadURL).not.toHaveBeenCalled();
     expect(window.raw.focus).toHaveBeenCalled();
 
+    // The window's own lens and filters are its own: still the same view.
+    window.raw.loadURL("t3code://app/#/t3team/my-work?myWorkLens=list");
+    window.raw.loadURL.mockClear();
+    open(myWorkDetails);
+    expect(window.raw.loadURL).not.toHaveBeenCalled();
+
     // Navigated elsewhere inside the window, asking again brings it back to the view.
     window.raw.loadURL("t3code://app/#/t3team/projects/p1/tickets/NEX-1");
     window.raw.loadURL.mockClear();

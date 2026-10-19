@@ -5,8 +5,9 @@
  *
  * The request names the route it is for, and the detached page hands the window over to that
  * route: the window then runs the real view, with its own route params, loaders and live state,
- * minus the app's navigation chrome. Its window is keyed by the route, so asking again for a
- * view that is already undocked brings its window forward.
+ * minus the app's navigation chrome. Its window is keyed by the route's path — one window per
+ * view, whatever its search (lens, filters) — so asking again for a view that is already
+ * undocked brings its window forward, on the newly asked search.
  *
  * Both the renderer and the desktop main process read this module.
  *
@@ -52,33 +53,38 @@ export function detachedViewRequest(input: {
 }): DetachedSurfaceRequest {
   const route = detachedViewRoute(input.route);
   if (route === null) throw new Error(`Not an undockable route: ${JSON.stringify(input.route)}`);
+  const queryAt = route.indexOf("?");
   return {
     kind: DETACHED_VIEW_KIND,
-    key: route,
+    key: queryAt === -1 ? route : route.slice(0, queryAt),
     params: { [DETACHED_VIEW_PATH_PARAM]: route },
     title: input.title,
   };
 }
 
 /**
- * The URL a detached-surface window shows once it has loaded `url`: for an undocked view, the
- * view's own route, in the routing form `url` uses; any other surface stays on its URL. The
- * desktop compares a window's current URL against this, so asking again for a view that is
- * already showing only brings its window forward instead of loading it afresh.
+ * Whether a detached-surface window now at `currentUrl` already shows what `requestUrl` asks
+ * for, so asking again only brings it forward. An undocked view counts as shown while its window
+ * is on the view's route path, whatever search the window has moved on to (its own lens and
+ * filters are its own); any other surface, while its window is on the requested URL.
  */
-export function detachedSurfaceLandingUrl(url: string): string {
-  let parsed: URL;
+export function isDetachedSurfaceShowing(currentUrl: string, requestUrl: string): boolean {
+  if (currentUrl === requestUrl) return true;
+  let current: URL;
+  let request: URL;
   try {
-    parsed = new URL(url);
+    current = new URL(currentUrl);
+    request = new URL(requestUrl);
   } catch {
-    return url;
+    return false;
   }
-  const routing = parsed.hash.startsWith("#/") ? "hash" : "path";
-  if (detachedSurfaceKindFromPath(appRoutePathname(parsed)) !== DETACHED_VIEW_KIND) return url;
-  const search = new URLSearchParams(routing === "hash" ? hashQuery(parsed.hash) : parsed.search);
+  if (detachedSurfaceKindFromPath(appRoutePathname(request)) !== DETACHED_VIEW_KIND) return false;
+  const routing = request.hash.startsWith("#/") ? "hash" : "path";
+  const search = new URLSearchParams(routing === "hash" ? hashQuery(request.hash) : request.search);
   const route = detachedViewRoute(search.get(DETACHED_VIEW_PATH_PARAM) ?? undefined);
-  if (route === null) return url;
-  return routing === "hash" ? new URL(`/#${route}`, parsed).href : new URL(route, parsed).href;
+  if (route === null) return false;
+  const queryAt = route.indexOf("?");
+  return appRoutePathname(current) === (queryAt === -1 ? route : route.slice(0, queryAt));
 }
 
 function hashQuery(hash: string): string {

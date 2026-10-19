@@ -1,8 +1,8 @@
 /**
  * "Open in new window" for a whole routed view: the request for the view at a location, and the
  * one call that opens it. The view opens on the route the reader is on — path, params and search
- * (lens, selected work item, embedded chat) — and its window is keyed by that route, so asking
- * twice brings the existing window forward.
+ * (lens, filters, embedded chat) — and its window is keyed by the route's path, so asking twice
+ * brings the existing window forward.
  */
 import { detachedViewRequest } from "@t3tools/shared/t3team-detachedView";
 import type { DetachedSurfaceRequest } from "@t3tools/shared/t3team-detachedSurface";

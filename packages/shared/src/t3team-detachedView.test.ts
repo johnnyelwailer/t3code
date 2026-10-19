@@ -6,8 +6,8 @@ import {
   isDetachedSurfaceWindowRequest,
 } from "./t3team-detachedSurface.ts";
 import {
-  detachedSurfaceLandingUrl,
   detachedViewRequest,
+  isDetachedSurfaceShowing,
   detachedViewRoute,
 } from "./t3team-detachedView.ts";
 
@@ -37,9 +37,9 @@ describe("detachedViewRoute", () => {
 });
 
 describe("detachedViewRequest", () => {
-  it("keys the window by route, so the same view is one window", () => {
+  it("keys the window by the route's path, so the same view is one window", () => {
     const first = detachedViewRequest({ route: "/usage", title: "Usage" });
-    const again = detachedViewRequest({ route: "/usage", title: "Usage (renamed)" });
+    const again = detachedViewRequest({ route: "/usage?metric=cost", title: "Usage (renamed)" });
     const other = detachedViewRequest({ route: "/pull-requests", title: "Pull requests" });
     expect(detachedSurfaceWindowName(first)).toBe(detachedSurfaceWindowName(again));
     expect(detachedSurfaceWindowName(first)).not.toBe(detachedSurfaceWindowName(other));
@@ -67,27 +67,31 @@ describe("detachedViewRequest", () => {
   });
 });
 
-describe("detachedSurfaceLandingUrl", () => {
+describe("isDetachedSurfaceShowing", () => {
   const request = detachedViewRequest({
     route: "/t3team/projects/p1/tickets/NEX-1?chatThreadId=t1",
     title: "NEX-1",
   });
+  const hashUrl = detachedSurfaceUrl("t3code://app/", request, "hash");
+  const pathUrl = detachedSurfaceUrl("http://localhost:5733/", request, "path");
+  const showing = (current: string, url = hashUrl) => isDetachedSurfaceShowing(current, url);
 
-  it("is the view's own route, in the routing form of the request", () => {
-    expect(detachedSurfaceLandingUrl(detachedSurfaceUrl("t3code://app/", request, "hash"))).toBe(
-      "t3code://app/#/t3team/projects/p1/tickets/NEX-1?chatThreadId=t1",
-    );
+  it("counts an undocked view as shown while its window is on the view's route path", () => {
+    expect(showing("t3code://app/#/t3team/projects/p1/tickets/NEX-1")).toBe(true);
     expect(
-      detachedSurfaceLandingUrl(detachedSurfaceUrl("http://localhost:5733/", request, "path")),
-    ).toBe("http://localhost:5733/t3team/projects/p1/tickets/NEX-1?chatThreadId=t1");
+      showing("http://localhost:5733/t3team/projects/p1/tickets/NEX-1?tab=details", pathUrl),
+    ).toBe(true);
   });
 
-  it("leaves every other URL as it is", () => {
+  it("does not count it once the window has navigated to another view", () => {
+    expect(showing("t3code://app/#/t3team/projects/p1/tickets/NEX-2")).toBe(false);
+    expect(showing("t3code://app/#/t3team/my-work")).toBe(false);
+  });
+
+  it("compares every other surface by its whole URL", () => {
     const pullRequest = "t3code://app/#/t3team-detached/pull-request?number=12";
-    expect(detachedSurfaceLandingUrl(pullRequest)).toBe(pullRequest);
-    expect(detachedSurfaceLandingUrl("t3code://app/#/t3team-detached/view")).toBe(
-      "t3code://app/#/t3team-detached/view",
-    );
-    expect(detachedSurfaceLandingUrl("not a url")).toBe("not a url");
+    expect(showing(pullRequest, pullRequest)).toBe(true);
+    expect(showing(`${pullRequest}&tab=code`, pullRequest)).toBe(false);
+    expect(showing("not a url")).toBe(false);
   });
 });

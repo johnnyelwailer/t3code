@@ -15,7 +15,7 @@
  * it caused: no opener, no WindowProxy to navigate or script it with.
  */
 import { isDetachedSurfaceWindowRequest } from "@t3tools/shared/t3team-detachedSurface";
-import { detachedSurfaceLandingUrl } from "@t3tools/shared/t3team-detachedView";
+import { isDetachedSurfaceShowing } from "@t3tools/shared/t3team-detachedView";
 import type * as Electron from "electron";
 
 const DETACHED_WINDOW_MIN_WIDTH = 480;
@@ -123,8 +123,8 @@ export function makeDetachedSurfaceWindows(input: {
     if (!isRequest(details)) return null;
     const existing = windowsByName.get(details.frameName);
     if (existing !== undefined && !existing.isDestroyed()) {
-      // An undocked view lands on its own route; a window already there is only brought forward.
-      if (existing.webContents.getURL() !== detachedSurfaceLandingUrl(details.url)) {
+      // A window already showing the surface (an undocked view on its route) only comes forward.
+      if (!isDetachedSurfaceShowing(existing.webContents.getURL(), details.url)) {
         void existing.loadURL(details.url).catch(() => undefined);
       }
       reveal(existing);
