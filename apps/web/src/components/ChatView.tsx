@@ -4777,7 +4777,11 @@ export default function ChatView(props: ChatViewProps) {
   }, [composerRef]);
   const canInterruptRunningThread =
     (canOperateThread &&
-      deriveCanInterruptRunningThread(activeThread !== undefined, activeRuntime)) ||
+      deriveCanInterruptRunningThread(
+        activeThread !== undefined,
+        activeRuntime,
+        pendingBackgroundTasks.length > 0,
+      )) ||
     cloudSessionComposerGate.hasQueuedBind;
   const onInterrupt = useCallback(async () => {
     if (cloudSessionComposerGate.hasQueuedBind) {

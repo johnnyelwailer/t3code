@@ -87,26 +87,31 @@ describe("V2 session presentation", () => {
 
     for (const status of ["preparing", "starting", "running"] as const) {
       const runtime = runtimeWithStatus(status, runId);
-      expect(deriveCanInterruptRunningThread(true, runtime)).toBe(true);
+      expect(deriveCanInterruptRunningThread(true, runtime, false)).toBe(true);
     }
 
     // No active thread: never offer Stop, regardless of run status.
-    expect(deriveCanInterruptRunningThread(false, runtimeWithStatus("running", runId))).toBe(false);
+    expect(deriveCanInterruptRunningThread(false, runtimeWithStatus("running", runId), false)).toBe(
+      false,
+    );
 
     // Queued with nothing interruptible: the server rejects interrupting a
     // queued run, so Stop stays hidden.
     expect(derivePhase(runtimeWithStatus("queued"))).toBe("connecting");
-    expect(deriveCanInterruptRunningThread(true, runtimeWithStatus("queued"))).toBe(false);
+    expect(deriveCanInterruptRunningThread(true, runtimeWithStatus("queued"), false)).toBe(false);
     // Queued behind a run that is still interruptible: Stop targets that run.
-    expect(deriveCanInterruptRunningThread(true, runtimeWithStatus("queued", runId))).toBe(true);
+    expect(deriveCanInterruptRunningThread(true, runtimeWithStatus("queued", runId), false)).toBe(
+      true,
+    );
 
-    // Waiting (e.g. on a subagent) is treated as "running" by derivePhase and
-    // keeps offering Stop, unchanged from before.
+    // A waiting run's turn is over while its checkpoint saves: it still reads as
+    // working, but offers Stop only for background work its turn left running.
     expect(derivePhase(runtimeWithStatus("waiting"))).toBe("running");
-    expect(deriveCanInterruptRunningThread(true, runtimeWithStatus("waiting"))).toBe(true);
+    expect(deriveCanInterruptRunningThread(true, runtimeWithStatus("waiting"), false)).toBe(false);
+    expect(deriveCanInterruptRunningThread(true, runtimeWithStatus("waiting"), true)).toBe(true);
 
     // No runtime at all: nothing to interrupt.
-    expect(deriveCanInterruptRunningThread(true, null)).toBe(false);
+    expect(deriveCanInterruptRunningThread(true, null, true)).toBe(false);
   });
 
   it("labels provider retry progress, delay, recovery, and exhaustion", () => {

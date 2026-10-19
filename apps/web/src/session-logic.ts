@@ -1099,14 +1099,18 @@ export function derivePhase(runtime: ThreadRuntimeSummary | null): SessionPhase 
  * a preparing or starting run on `run.interrupt` (Orchestrator.dispatchRunInterrupt),
  * so Stop must not wait for the phase to reach "running". A queued thread offers
  * Stop only while an earlier run is still interruptible; Stop targets that run.
+ * A waiting run's turn is over while its checkpoint saves, so it offers Stop
+ * only for background work its turn left running.
  */
 export function deriveCanInterruptRunningThread(
   hasActiveThread: boolean,
   runtime: ThreadRuntimeSummary | null,
+  hasPendingBackgroundWork: boolean,
 ): boolean {
   return (
     hasActiveThread &&
-    (derivePhase(runtime) === "running" || threadRuntimeHasInterruptibleRun(runtime))
+    (threadRuntimeHasInterruptibleRun(runtime) ||
+      (runtime?.status === "waiting" && hasPendingBackgroundWork))
   );
 }
 

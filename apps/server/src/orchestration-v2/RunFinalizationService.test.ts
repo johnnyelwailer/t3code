@@ -44,7 +44,7 @@ it.effect("refreshes workspace after checkpoint capture without reading history"
   );
   return Effect.gen(function* () {
     const service = yield* RunFinalization.RunFinalizationService;
-    yield* service.finalize({ threadId, runId, scopeId });
+    yield* service.finalize({ threadId, runId, scopeId, willRetry: false });
     assert.equal(capture.mock.calls.length, 1);
     assert.deepEqual(refresh.mock.calls[0], [{ cwd: "/repo", threadId, runId }]);
   }).pipe(Effect.provide(layer));
