@@ -15,6 +15,11 @@ import { collectUint8StreamText } from "@t3tools/provider-core/server/collectStr
 import * as GitHubCredentials from "./GitHubCredentials.ts";
 import * as GitHubQuota from "./GitHubQuota.ts";
 import { isCoalescible, makeGitHubReadCoalescer } from "./t3team-githubReadCoalescer.ts";
+import {
+  isGraphQlQuery,
+  isIdempotentRestMethod,
+  retryTransientRead,
+} from "./t3team-githubTransientRetry.ts";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 
 const DEFAULT_TIMEOUT = Duration.seconds(30);
@@ -427,6 +432,8 @@ export const make = Effect.gen(function* () {
     readonly timeout?: Duration.Input | undefined;
     readonly allowReserve: boolean;
     readonly acceptNotModified: boolean;
+    /** Whether sending the request again is harmless, which is what lets a hiccup be retried. */
+    readonly idempotent: boolean;
     /** Reads the body for GraphQL `errors`, which GitHub sends with HTTP 200. */
     readonly graphql?: boolean;
     readonly allowPartialNotFound?: boolean;
@@ -562,9 +569,12 @@ export const make = Effect.gen(function* () {
       );
     });
     // The rate-limit scope follows the credential, so a pause on one account never blocks another.
-    return yield* gate
-      .withPermit(run)
-      .pipe(Effect.provideService(SourceControlRateLimit.CredentialScope, scope || fingerprint));
+    return yield* retryTransientRead(
+      gate
+        .withPermit(run)
+        .pipe(Effect.provideService(SourceControlRateLimit.CredentialScope, scope || fingerprint)),
+      input.idempotent,
+    );
   });
 
   const rest: GitHubApi["Service"]["rest"] = (input) => {
@@ -590,6 +600,7 @@ export const make = Effect.gen(function* () {
           timeout: input.timeout,
           allowReserve: input.allowReserve ?? interactive,
           acceptNotModified: input.ifNoneMatch !== undefined,
+          idempotent: isIdempotentRestMethod(input.method),
         }),
       ),
     );
@@ -633,6 +644,7 @@ export const make = Effect.gen(function* () {
         maxResponseBytes: input.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES,
         allowReserve,
         acceptNotModified: false,
+        idempotent: isGraphQlQuery(input.query),
         graphql: true,
         allowPartialNotFound: input.allowPartialNotFound === true,
         allowPartialResourceLimits: input.allowPartialResourceLimits === true,
