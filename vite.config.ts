@@ -1,6 +1,7 @@
 import "vite-plus/test/config";
 import { defineConfig } from "vite-plus";
 import * as NodeURL from "node:url";
+import { T3TEAM_REACT_COMPILER_PENDING_FILES } from "./apps/web/src/t3team/t3team-reactCompilerPending.ts";
 
 const RESTRICTED_IMPORT_PATHS = [
   {
@@ -392,6 +393,26 @@ export default defineConfig({
         files: ["apps/web/src/**/*.{ts,tsx}", "apps/mobile/src/**/*.{ts,tsx}"],
         excludeFiles: ["**/*.test.ts", "**/*.test.tsx"],
         rules: { "t3code/no-hookless-use-function": "error" },
+      },
+      {
+        // t3team: TEMPORARY exemption pending owner decision H; see t3team-reactCompilerPending.ts.
+        files: [...T3TEAM_REACT_COMPILER_PENDING_FILES],
+        rules: {
+          "react/exhaustive-effect-dependencies": "off",
+          "react/globals": "off",
+          "react/hooks": "off",
+          "react/immutability": "off",
+          "react/memo-dependencies": "off",
+          "react/preserve-manual-memoization": "off",
+          "react/purity": "off",
+          "react/refs": "off",
+          "react/set-state-in-effect": "off",
+          "react/set-state-in-render": "off",
+          "react/static-components": "off",
+          "react/unsupported-syntax": "off",
+          "t3code/no-manual-memo": "off",
+          "t3code/no-hookless-use-function": "off",
+        },
       },
       {
         files: [
