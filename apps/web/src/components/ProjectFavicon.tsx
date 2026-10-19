@@ -4,23 +4,14 @@ import {
   isProjectFaviconFallbackUrl,
 } from "@t3tools/shared/projectFavicon";
 import { FolderCodeIcon } from "lucide-react";
-import type { IconName } from "lucide-react/dynamic";
 import type { ComponentType } from "react";
-import { lazy, Suspense, useState } from "react";
+import { useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { projectFaviconUrlAtom } from "../state/assets";
 import { deriveProjectIdentity } from "../projectIdentity";
-import { projectIconColorClassName } from "../projectIconColors";
+import { ProjectIconGlyph } from "./t3team-ProjectIconGlyph";
 import { ProjectMonogram } from "./ProjectMonogram";
 import { cn } from "~/lib/utils";
-
-const DynamicIcon = lazy(() =>
-  import("lucide-react/dynamic").then((module) => ({ default: module.DynamicIcon })),
-);
-
-function DynamicProjectIconFallback() {
-  return <FolderCodeIcon className="size-full text-inherit" />;
-}
 
 // The slice of a project that decides its icon. Every surface must pass the
 // project record itself (or a snapshot spread from it) so the saved title, favicon
@@ -43,42 +34,8 @@ export function ProjectFavicon(input: {
       faviconPath: project.faviconPath,
     }),
   );
-  if (project.projectIcon?.kind === "monogram") {
-    return (
-      <ProjectMonogram
-        text={project.projectIcon.text}
-        color={project.projectIcon.color}
-        className={input.className}
-      />
-    );
-  }
-  if (project.projectIcon?.kind === "emoji") {
-    return (
-      <ProjectFaviconFallback
-        className={input.className}
-        icon={FolderCodeIcon}
-        emoji={project.projectIcon.emoji}
-      />
-    );
-  }
-  if (project.projectIcon?.kind === "lucide") {
-    const colorClassName = projectIconColorClassName(project.projectIcon.color);
-    const iconClassName = cn(
-      "inline-flex size-3.5 shrink-0 items-center justify-center",
-      colorClassName,
-      input.className,
-    );
-    return (
-      <span aria-hidden="true" className={iconClassName}>
-        <Suspense fallback={<DynamicProjectIconFallback />}>
-          <DynamicIcon
-            name={project.projectIcon.name as IconName}
-            className={cn("size-full", colorClassName)}
-            fallback={DynamicProjectIconFallback}
-          />
-        </Suspense>
-      </span>
-    );
+  if (project.projectIcon) {
+    return <ProjectIconGlyph icon={project.projectIcon} className={input.className} />;
   }
   const FallbackIcon = input.fallbackIcon ?? FolderCodeIcon;
 
@@ -112,32 +69,16 @@ export function ProjectFavicon(input: {
 function ProjectFaviconFallback({
   className,
   icon: Icon,
-  emoji,
   projectName,
 }: {
   readonly className?: string | undefined;
   readonly icon: ComponentType<{ className?: string }>;
-  readonly emoji?: string | undefined;
   readonly projectName?: string | undefined;
 }) {
   if (projectName && projectName.trim().length > 0) {
     const identity = deriveProjectIdentity(projectName);
     return (
       <ProjectMonogram text={identity.monogram} color={identity.color} className={className} />
-    );
-  }
-
-  if (emoji) {
-    return (
-      <span
-        aria-hidden="true"
-        className={cn(
-          "inline-flex size-3.5 shrink-0 items-center justify-center leading-none [container-type:size]",
-          className,
-        )}
-      >
-        <span className="text-[length:80cqh] leading-none">{emoji}</span>
-      </span>
     );
   }
 

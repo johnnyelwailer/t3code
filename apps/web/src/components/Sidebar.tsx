@@ -264,6 +264,8 @@ import {
 } from "./ThreadStatusIndicators";
 import { resolveSnoozePresets, snoozeWakeLabel, type SnoozePreset } from "./Sidebar.snooze";
 import { ProjectFavicon, type ProjectFaviconProject } from "./ProjectFavicon";
+import { ProjectIconGlyph } from "./t3team-ProjectIconGlyph";
+import { ThreadIconPicker } from "./t3team-ThreadIconPicker";
 import { ThreadSearchMatchExcerpt } from "./ThreadSearchMatch";
 import { makeWorkspaceFileDropHandlers } from "./chat/workspaceFileDrop";
 import { ProviderInstanceIcon } from "./chat/ProviderInstanceIcon";
@@ -1254,6 +1256,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   const { leaseLiveStatus, rowRef } = useSidebarRowSubscriptionLease(props.isActive);
   const isRegeneratingTitle = thread.titleRegeneration != null;
   const localLastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[threadKey]);
+  const threadIcon = useUiStateStore((state) => state.threadIconByThreadId[threadRef.threadId]);
+  const threadIconGlyph = threadIcon ? (
+    <ProjectIconGlyph icon={threadIcon} className="size-4 shrink-0" />
+  ) : null;
   const lastVisitedAt = resolveThreadLastVisitedAt(thread.lastVisitedAt, localLastVisitedAt);
   const isSelected = useThreadSelectionStore((state) => state.selectedThreadKeys.has(threadKey));
   const openPrLink = useOpenPrLink();
@@ -1908,6 +1914,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             >
               {props.project ? <ProjectFavicon project={props.project} className="size-4" /> : null}
             </span>
+            {threadIconGlyph}
             {draftIndicator}
             {title}
             {pinIndicator}
@@ -2065,6 +2072,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           <div className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
             <div className="flex h-5 min-w-0 items-center gap-1.5">
               {draftIndicator}
+              {threadIconGlyph}
               {props.project ? (
                 <ProjectFavicon project={props.project} className="size-4 shrink-0" />
               ) : null}
@@ -3482,6 +3490,10 @@ export default function Sidebar() {
     ],
   );
 
+  const [iconPickerTarget, setIconPickerTarget] = useState<{
+    threadId: string;
+    title: string;
+  } | null>(null);
   const [renamingThreadKey, setRenamingThreadKey] = useState<string | null>(null);
   const [renamingTitle, setRenamingTitle] = useState("");
   const startThreadRename = useCallback((threadRef: ScopedThreadRef, title: string) => {
@@ -5005,6 +5017,9 @@ export default function Sidebar() {
           case "rename":
             startThreadRename(threadRef, thread.title);
             return;
+          case "set-icon":
+            setIconPickerTarget({ threadId: threadRef.threadId, title: thread.title });
+            return;
           case "regenerate-title": {
             if (isRegeneratingTitle) return;
             const result = await updateThreadMetadata({
@@ -5273,6 +5288,13 @@ export default function Sidebar() {
   return (
     <>
       <ThreadContextDragGhost />
+      {iconPickerTarget ? (
+        <ThreadIconPicker
+          threadId={iconPickerTarget.threadId}
+          title={iconPickerTarget.title}
+          onClose={() => setIconPickerTarget(null)}
+        />
+      ) : null}
       {/* t3team: Team chrome so the Work lens keeps the pack brand + header background. */}
       <InboxHeader />
       <SidebarContent

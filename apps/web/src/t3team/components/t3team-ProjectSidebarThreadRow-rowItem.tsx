@@ -12,6 +12,7 @@ export function useThreadRowContextMenu({
   setRenameTitle,
   setIsRenaming,
   renameInputRef,
+  onSetIcon,
 }: {
   thread: ProjectThread;
   workspacePath: string | null;
@@ -19,6 +20,7 @@ export function useThreadRowContextMenu({
   setRenameTitle: Dispatch<SetStateAction<string>>;
   setIsRenaming: Dispatch<SetStateAction<boolean>>;
   renameInputRef: RefObject<HTMLInputElement | null>;
+  onSetIcon: () => void;
 }) {
   return useCallback(
     async (x: number, y: number) => {
@@ -28,6 +30,7 @@ export function useThreadRowContextMenu({
       const action = await api.contextMenu.show(
         [
           { id: "rename", label: "Rename thread" },
+          { id: "set-icon", label: "Set icon" },
           { id: "copy-path", label: "Copy Path" },
           { id: "copy-thread-id", label: "Copy Thread ID" },
           { id: "delete", label: "Delete", destructive: true },
@@ -42,6 +45,8 @@ export function useThreadRowContextMenu({
           renameInputRef.current?.focus();
           renameInputRef.current?.select();
         });
+      } else if (action === "set-icon") {
+        onSetIcon();
       } else if (action === "delete") {
         const confirmed = await api.dialogs.confirm(
           [
@@ -60,7 +65,7 @@ export function useThreadRowContextMenu({
         }
       }
     },
-    [onDelete, thread, workspacePath],
+    [onDelete, onSetIcon, thread, workspacePath],
   );
 }
 
