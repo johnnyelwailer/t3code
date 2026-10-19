@@ -1,6 +1,8 @@
 {
   "allowedModifiedFiles": [
     "apps/server/src/orchestration-v2/ThreadManagementService.ts",
+    "apps/server/src/config.ts",
+    "packages/contracts/src/desktopBootstrap.ts",
     "packages/shared/src/changeRequestUrl.test.ts",
     "packages/shared/src/changeRequestUrl.ts",
     ".agents/skills/test-t3-app/SKILL.md",

@@ -65,6 +65,10 @@ const resolve = (input: ResolveInput) =>
       gitWorkflow: {
         createWorktree: (args: Parameters<GitWorkflowService["Service"]["createWorktree"]>[0]) =>
           driver.createWorktree(args),
+        remoteExists: driver.remoteExists,
+        fetchRemote: driver.fetchRemote,
+        remoteBranchExists: driver.remoteBranchExists,
+        resolveRemoteTrackingCommit: driver.resolveRemoteTrackingCommit,
         localStatus: ({ cwd }: { readonly cwd: string }) =>
           Effect.sync(() => ({ isRepo: true, refName: git(cwd, ["branch", "--show-current"]) })),
       } as unknown as GitWorkflowService["Service"],
