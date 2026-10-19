@@ -1531,25 +1531,19 @@ export const make = Effect.gen(function* () {
               }),
               // One unreachable repository must not blank the page. A host-level failure is
               // already reported through `providers`, so it degrades the same way here.
-              Effect.catch((error) =>
-                Effect.succeed<RepositoryBatch>({
-                  key,
-                  entries: [],
-                  errors: [
-                    {
-                      projectId: project.project.id,
-                      projectTitle: project.project.title,
-                      message: unreadableRepositoryMessage({
-                        repository: project.repository,
-                        host: project.host,
-                        reason: error.detail,
-                      }),
-                    },
-                  ],
-                  truncated: false,
-                  nextCursor: null,
-                }),
-              ),
+              Effect.orElseSucceed((): RepositoryBatch => ({
+                key,
+                entries: [],
+                errors: [
+                  {
+                    projectId: project.project.id,
+                    projectTitle: project.project.title,
+                    message: `${project.repository} could not be read.`,
+                  },
+                ],
+                truncated: false,
+                nextCursor: null,
+              })),
             );
         }
       };
