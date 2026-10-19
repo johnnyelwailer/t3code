@@ -102,7 +102,10 @@ import {
 import { assignProjectsToEnvironments } from "../components/pullRequest/pullRequestProjectAssignment.logic";
 import { pullRequestFilterProjects } from "../components/pullRequest/pullRequestProjectFilter.logic";
 import { environmentMachineIcon } from "../components/EnvironmentMachineIcon";
-import { PullRequestDetailPanel } from "../components/pullRequest/PullRequestDetailPanel";
+import {
+  pullRequestDetailPanelKey,
+  PullRequestDetailPanel,
+} from "../components/pullRequest/PullRequestDetailPanel";
 import {
   pullRequestDetailViewStateMatches,
   pullRequestDetailViewStateSearchFields,
@@ -2418,8 +2421,13 @@ function PullRequestsRouteView() {
             <PullRequestDetailPanel
               getShortcutContext={getShortcutContext}
               shortcutsEnabled={activePullRequestSurface?.id === renderedPullRequestSurface.id}
-              key={renderedPullRequestSurface.id}
+              key={pullRequestDetailPanelKey(renderedPullRequestSurface)}
               environmentId={panelEnvironmentId}
+              viewTarget={
+                rightPanelRef === null
+                  ? null
+                  : { ref: rightPanelRef, surfaceId: renderedPullRequestSurface.id }
+              }
               onGuideShown={onGuideShown}
               onSelectPullRequest={(reference) => {
                 if (rightPanelRef === null) return;

@@ -286,7 +286,10 @@ import {
   pullRequestPanelContext,
   threadPullRequestPanelTarget,
 } from "./pullRequest/pullRequestDetail.logic";
-import { PullRequestDetailPanel } from "./pullRequest/PullRequestDetailPanel";
+import {
+  pullRequestDetailPanelKey,
+  PullRequestDetailPanel,
+} from "./pullRequest/PullRequestDetailPanel";
 import { PullRequestDetailGhost } from "./pullRequest/PullRequestGhosts";
 import { PullRequestsUnavailableState } from "./pullRequest/PullRequestsUnavailableState";
 import { RightPanelTabs } from "./RightPanelTabs";
@@ -11562,7 +11565,7 @@ export default function ChatView(props: ChatViewProps) {
         shortcutsEnabled={
           rightPanelOpen && activeRightPanelSurface?.id === renderedRightPanelSurface.id
         }
-        key={`${renderedRightPanelSurface.host ?? ""}:${renderedRightPanelSurface.repository}#${renderedRightPanelSurface.number}`}
+        key={pullRequestDetailPanelKey(renderedRightPanelSurface)}
         environmentId={activeThread.environmentId}
         onSelectPullRequest={(reference) => {
           if (activeThreadRef)
@@ -11574,6 +11577,11 @@ export default function ChatView(props: ChatViewProps) {
             });
         }}
         threadRef={activeThreadRef}
+        viewTarget={
+          activeThreadRef === null
+            ? null
+            : { ref: activeThreadRef, surfaceId: renderedRightPanelSurface.id }
+        }
         reference={{
           projectId: renderedRightPanelSurface.projectId as ProjectId,
           ...(renderedRightPanelSurface.host ? { host: renderedRightPanelSurface.host } : {}),

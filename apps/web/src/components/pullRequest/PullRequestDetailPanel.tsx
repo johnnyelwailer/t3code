@@ -64,7 +64,7 @@ import {
 } from "react";
 
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
-import { useRightPanelStore } from "~/rightPanelStore";
+import { selectPullRequestSurfaceView, useRightPanelStore } from "~/rightPanelStore";
 import { useEnvironmentSettings } from "~/hooks/useSettings";
 import { useNewThreadHandler } from "~/hooks/useHandleNewThread";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
@@ -417,6 +417,19 @@ function PullRequestBaseFreshnessWarning({
   );
 }
 
+/**
+ * The panel's React key, shared by every mount site so the same pull request keeps one component
+ * instance across them: host, repository and number, nothing that changes between the in-thread
+ * panel and the shared page.
+ */
+export function pullRequestDetailPanelKey(reference: {
+  readonly host?: string;
+  readonly repository: string;
+  readonly number: number;
+}): string {
+  return `${reference.host ?? ""}:${reference.repository}#${reference.number}`;
+}
+
 export function PullRequestDetailPanel({
   environmentId,
   shortcutsEnabled,
@@ -431,6 +444,7 @@ export function PullRequestDetailPanel({
   composerDraftTarget,
   initialView,
   onViewChange,
+  viewTarget,
   onBack,
   onSelectPullRequest,
   onGuideShown,
@@ -486,6 +500,13 @@ export function PullRequestDetailPanel({
    */
   onViewChange?: (view: PullRequestDetailViewState) => void;
   /**
+   * Where this panel's open tab, focused file, and commit persist and restore: the thread whose
+   * right panel holds the surface and that surface's id. Read on mount, written on change, so a
+   * panel that drops (a thread switch) remounts where the reader left off. Absent where nothing
+   * holds the view (the detached surface, the digests).
+   */
+  viewTarget?: { readonly ref: ScopedThreadRef; readonly surfaceId: string } | null;
+  /**
    * Beside a thread, the way back to that thread's list of pull requests. The tab strip can
    * close this surface, but closing is not going back: the reader came from the list and
    * expects to land on it, with this one still open behind.
@@ -526,10 +547,24 @@ export function PullRequestDetailPanel({
   const [threadPickerOpen, setThreadPickerOpen] = useState(false);
   // Counted up by the guide's last stop to open the composer on the review.
   const [openReviewRequest, setOpenReviewRequest] = useState(0);
-  const [tab, setTab] = useState<DetailTab>(() => initialView?.tab ?? "summary");
+  // The view this surface remembered, read once on mount: a thread switch drops the panel, so
+  // the reader should land where they left off, not on the panel's default tab. A link's
+  // initialView still wins — it is the view the reader explicitly asked to arrive on. The ref and
+  // surface id are pulled out of the target so the write effect below keys on stable values
+  // rather than the target object the caller rebuilds each render.
+  const viewStoreRef = viewTarget?.ref ?? null;
+  const viewStoreSurfaceId = viewTarget?.surfaceId ?? null;
+  const [seedView] = useState(() =>
+    selectPullRequestSurfaceView(
+      useRightPanelStore.getState().byThreadKey,
+      viewStoreRef,
+      viewStoreSurfaceId,
+    ),
+  );
+  const [tab, setTab] = useState<DetailTab>(() => initialView?.tab ?? seedView?.tab ?? "summary");
   // The file a link asked for: read on the panel's own mount so a later URL change
   // pointing elsewhere cannot steer the focused file away from what the reader selected.
-  const [initialFile] = useState(() => initialView?.file ?? null);
+  const [initialFile] = useState(() => initialView?.file ?? seedView?.file ?? null);
   const [activeFile, setActiveFile] = useState<string | null>(null);
   useEffect(() => {
     // The URL carries no Guide tab; it is reported as the Summary it sits beside.
@@ -553,7 +588,7 @@ export function PullRequestDetailPanel({
   const [codeCommitScope, setCodeCommitScope] = useState<{
     readonly pullRequestKey: string;
     readonly oid: string | null;
-  }>(() => ({ pullRequestKey, oid: null }));
+  }>(() => ({ pullRequestKey, oid: seedView?.commit ?? null }));
   const selectedCodeCommitOid =
     codeCommitScope.pullRequestKey === pullRequestKey ? codeCommitScope.oid : null;
   const selectCodeCommit = (oid: string | null) => {
@@ -563,6 +598,17 @@ export function PullRequestDetailPanel({
     selectCodeCommit(oid);
     setTab("code");
   };
+  // Remember this surface's view as the reader moves through it, so a remount (a thread switch
+  // drops the panel) lands where they left off. Written through the store's automatic path and
+  // no-oped when nothing moved, so re-reporting the seed on mount is free.
+  useEffect(() => {
+    if (viewStoreRef === null || viewStoreSurfaceId === null) return;
+    useRightPanelStore.getState().updatePullRequestView(viewStoreRef, viewStoreSurfaceId, {
+      tab,
+      file: tab === "code" ? activeFile : null,
+      commit: tab === "code" ? selectedCodeCommitOid : null,
+    });
+  }, [tab, activeFile, selectedCodeCommitOid, viewStoreRef, viewStoreSurfaceId]);
   // The guide names files; following one shows it in the whole diff, not a single commit's.
   const [codeRevealRequest, setCodeRevealRequest] = useState<{
     readonly path: string;
