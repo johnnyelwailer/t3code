@@ -16,6 +16,7 @@ import { AppOverlays } from "~/t3team/t3team-AppOverlays";
 import { CreateProjectRoute } from "~/t3team/t3team-CreateProjectRoute";
 import { resolveManageRepositoriesProject } from "~/t3team/t3team-manageRepositoriesProject";
 import { T3TeamLeftSidebarDesktopToggle } from "~/t3team/t3team-LeftSidebarDesktopToggle";
+import { isUndockedWindow } from "~/t3team/detached/t3team-undockedWindow";
 import { useAppHandlers } from "~/t3team/t3team-useAppHandlers";
 import {
   useMergedRouteAndStoreView,
@@ -115,60 +116,62 @@ export function App({
       defaultOpen
       style={macosTitlebarInsetStyle}
     >
-      <Sidebar
-        side="left"
-        collapsible="offcanvas"
-        className="min-h-0 overflow-hidden"
-        resizable={{
-          minWidth: T3TEAM_LEFT_SIDEBAR_MIN_WIDTH,
-          shouldAcceptWidth: ({ nextWidth, wrapper }) =>
-            wrapper.clientWidth - nextWidth >= T3TEAM_MAIN_CONTENT_MIN_WIDTH,
-          storageKey: T3TEAM_LEFT_SIDEBAR_WIDTH_STORAGE_KEY,
-        }}
-      >
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <AppSidebarLens
-            projects={store.projects}
-            looseWorkspaceProjects={store.looseWorkspaceProjects}
-            selectedId={selectedProjectId}
-            expandedIds={store.expandedProjectIds}
-            threads={store.threads}
-            getThreadsForProject={store.getThreadsForProject}
-            view={resolvedView}
-            projectSortOrder={sidebarState.projectSortOrder}
-            threadSortOrder={sidebarState.threadSortOrder}
-            threadPreviewCount={sidebarState.threadPreviewCount}
-            sidebarState={sidebarState}
-            activeDashboardMode={activeDashboardMode}
-            onSelectProject={handleSelectProject}
-            onSelectProjectDashboardMode={handleSelectProjectDashboardMode}
-            onSelectTicket={handleSelectTicket}
-            onSelectThread={handleSelectThread}
-            onToggleExpand={store.toggleProjectExpanded}
-            onOpenSearch={() => setShowSearchPalette(true)}
-            onCreateProject={() => setShowCreate(true)}
-            onOpenSettings={onOpenSettings}
-            onManageProjectRepositories={setManageRepositoriesProjectId}
-            onDeleteProject={handleDeleteProject}
-            onRenameProject={handleRenameProject}
-            onCreateThread={handleCreateThread}
-            onCreateTicketThread={handleCreateTicketThreadFromSidebar}
-            onDeleteThread={handleDeleteThread}
-            onRenameThread={store.renameThread}
-            onProjectSortOrderChange={(projectSortOrder) => {
-              setSidebarState((current) => ({ ...current, projectSortOrder }));
-            }}
-            onThreadSortOrderChange={(threadSortOrder) => {
-              setSidebarState((current) => ({ ...current, threadSortOrder }));
-            }}
-            onThreadPreviewCountChange={(threadPreviewCount) => {
-              setSidebarState((current) => ({ ...current, threadPreviewCount }));
-            }}
-            onSidebarStateChange={setSidebarState}
-          />
-        </div>
-        <SidebarRail />
-      </Sidebar>
+      {isUndockedWindow() ? null : (
+        <Sidebar
+          side="left"
+          collapsible="offcanvas"
+          className="min-h-0 overflow-hidden"
+          resizable={{
+            minWidth: T3TEAM_LEFT_SIDEBAR_MIN_WIDTH,
+            shouldAcceptWidth: ({ nextWidth, wrapper }) =>
+              wrapper.clientWidth - nextWidth >= T3TEAM_MAIN_CONTENT_MIN_WIDTH,
+            storageKey: T3TEAM_LEFT_SIDEBAR_WIDTH_STORAGE_KEY,
+          }}
+        >
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <AppSidebarLens
+              projects={store.projects}
+              looseWorkspaceProjects={store.looseWorkspaceProjects}
+              selectedId={selectedProjectId}
+              expandedIds={store.expandedProjectIds}
+              threads={store.threads}
+              getThreadsForProject={store.getThreadsForProject}
+              view={resolvedView}
+              projectSortOrder={sidebarState.projectSortOrder}
+              threadSortOrder={sidebarState.threadSortOrder}
+              threadPreviewCount={sidebarState.threadPreviewCount}
+              sidebarState={sidebarState}
+              activeDashboardMode={activeDashboardMode}
+              onSelectProject={handleSelectProject}
+              onSelectProjectDashboardMode={handleSelectProjectDashboardMode}
+              onSelectTicket={handleSelectTicket}
+              onSelectThread={handleSelectThread}
+              onToggleExpand={store.toggleProjectExpanded}
+              onOpenSearch={() => setShowSearchPalette(true)}
+              onCreateProject={() => setShowCreate(true)}
+              onOpenSettings={onOpenSettings}
+              onManageProjectRepositories={setManageRepositoriesProjectId}
+              onDeleteProject={handleDeleteProject}
+              onRenameProject={handleRenameProject}
+              onCreateThread={handleCreateThread}
+              onCreateTicketThread={handleCreateTicketThreadFromSidebar}
+              onDeleteThread={handleDeleteThread}
+              onRenameThread={store.renameThread}
+              onProjectSortOrderChange={(projectSortOrder) => {
+                setSidebarState((current) => ({ ...current, projectSortOrder }));
+              }}
+              onThreadSortOrderChange={(threadSortOrder) => {
+                setSidebarState((current) => ({ ...current, threadSortOrder }));
+              }}
+              onThreadPreviewCountChange={(threadPreviewCount) => {
+                setSidebarState((current) => ({ ...current, threadPreviewCount }));
+              }}
+              onSidebarStateChange={setSidebarState}
+            />
+          </div>
+          <SidebarRail />
+        </Sidebar>
+      )}
 
       {showCreate ? (
         <SidebarInset className="h-full min-h-0 overflow-hidden">
@@ -203,7 +206,7 @@ export function App({
       )}
       {/* After the content: its header's drag region would otherwise override this toggle's
           no-drag (t3team-WindowDragStrip.tsx). */}
-      <T3TeamLeftSidebarDesktopToggle />
+      {isUndockedWindow() ? null : <T3TeamLeftSidebarDesktopToggle />}
 
       <AppOverlays
         setShowCreate={setShowCreate}

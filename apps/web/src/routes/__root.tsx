@@ -71,6 +71,9 @@ import { hasHostedPairingRequest, isHostedStaticApp } from "../hostedPairing";
 import { isAtlassianOAuthCallbackPath } from "../t3team/hooks/t3team-atlassianOAuthRedirect";
 import { isT3TeamShellPath } from "../t3team/t3team-upstreamRouteBridge";
 import { isDetachedSurfacePath } from "@t3tools/shared/t3team-detachedSurface";
+import { UndockViewShortcut } from "../t3team/detached/t3team-UndockViewControls";
+import { UndockedWindowTitleSync } from "../t3team/detached/t3team-UndockedWindowTitleSync";
+import { isUndockedWindow } from "../t3team/detached/t3team-undockedWindow";
 import { useUpstreamRouteBridge } from "../t3team/t3team-useUpstreamRouteBridge";
 import { T3TeamPackAppearanceDefaultsSync } from "../t3team/t3team-PackAppearanceDefaultsSync";
 import { T3TeamPackAppearanceSync } from "../t3team/t3team-PackAppearanceSync";
@@ -266,27 +269,6 @@ function RootRouteView() {
     );
   }
 
-  // t3team: a detached surface is a second window onto an app that is already running. It
-  // gets the providers and appearance, and none of the once-per-app coordinators (startup
-  // navigation, notifications, activation, capture) — the main window already runs those, and
-  // a second copy would steer this window away or say everything twice. It sets its own title.
-  if (isDetachedSurfacePath(pathname)) {
-    return (
-      <ToastProvider>
-        <AnchoredToastProvider>
-          <ContrastAppearanceSync />
-          <EnvironmentThemeSync />
-          <GlassAppearanceSync />
-          <FontAppearanceSync />
-          <T3TeamPackAppearanceSync />
-          <T3TeamPackAppearanceDefaultsSync />
-          <ConfirmDialogHost />
-          <Outlet />
-        </AnchoredToastProvider>
-      </ToastProvider>
-    );
-  }
-
   const appShell = (
     <CommandPalette>
       {isT3TeamRoute ? (
@@ -298,6 +280,42 @@ function RootRouteView() {
       )}
     </CommandPalette>
   );
+
+  // t3team: a detached surface is a second window onto an app that is already running. It
+  // gets the providers and appearance, and none of the once-per-app coordinators (startup
+  // navigation, notifications, activation, capture) — the main window already runs those, and
+  // a second copy would steer this window away or say everything twice. It sets its own title.
+  // An undocked view is one too, running a whole route in the app shell, without its sidebar.
+  const undockedWindow = isUndockedWindow();
+  if (isDetachedSurfacePath(pathname) || undockedWindow) {
+    return (
+      <ToastProvider>
+        <AnchoredToastProvider>
+          {undockedWindow ? <UndockedWindowTitleSync /> : null}
+          <ContrastAppearanceSync />
+          <EnvironmentThemeSync />
+          <GlassAppearanceSync />
+          <FontAppearanceSync />
+          <T3TeamPackAppearanceSync />
+          <T3TeamPackAppearanceDefaultsSync />
+          <ConfirmDialogHost />
+          {undockedWindow ? (
+            <>
+              <HostedStaticEnvironmentBootstrap />
+              {primaryEnvironmentAuthenticated ? (
+                <EventRouter skipInitialBootstrapNavigation />
+              ) : null}
+              <CustomSnoozeDialogHost />
+              <CloudSessionSignInDialogHost />
+              {appShell}
+            </>
+          ) : (
+            <Outlet />
+          )}
+        </AnchoredToastProvider>
+      </ToastProvider>
+    );
+  }
 
   // FirstRunGate holds back everything below it — including EventRouter,
   // whose welcome payload navigates into a thread — until the first-run
@@ -338,6 +356,7 @@ function RootRouteView() {
           <SnapShotCoordinator />
           <ThreadNotificationCoordinator />
           <ReopenClosedViewShortcut />
+          <UndockViewShortcut />
           <ConfirmDialogHost />
           <CustomSnoozeDialogHost />
           <SlowRpcRequestToastCoordinator />

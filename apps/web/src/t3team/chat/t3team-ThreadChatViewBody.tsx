@@ -1,3 +1,4 @@
+import { UndockViewButton } from "~/t3team/detached/t3team-UndockViewControls";
 import { useRef } from "react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import ChatView from "~/components/ChatView";
@@ -147,6 +148,7 @@ export function ThreadChatViewBody({
           {...(onBack ? { onBack } : {})}
           {...(titleBarControlsAccessory ? { titleBarControlsAccessory } : {})}
           hideHeader={hideHeader || embeddedMode}
+          {...(embeddedMode ? {} : { headerAccessory: <UndockViewButton /> })}
           hideBranchToolbar={embeddedMode}
           minimalComposer={embeddedMode}
           beforeDispatchTurnStart={prepareTurnStart}

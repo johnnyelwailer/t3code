@@ -3,10 +3,13 @@
  * (a component that renders the panel from its params) plus a {@link DetachSurfaceButton} — or
  * any other call to `openDetachedSurface` — on the panel itself.
  */
+import { DETACHED_VIEW_KIND } from "@t3tools/shared/t3team-detachedView";
 import type { ComponentType } from "react";
 
 import { PULL_REQUEST_DETACHED_SURFACE_KIND } from "~/components/pullRequest/t3team-pullRequestDetachedSurface.logic";
 import { PullRequestDetachedSurfaceView } from "~/components/pullRequest/t3team-PullRequestDetachedSurfaceView";
+
+import { DetachedViewHandover } from "./t3team-DetachedViewHandover";
 
 export interface DetachedSurfaceViewProps {
   /** The request's params, as the page's URL carries them now. */
@@ -20,6 +23,7 @@ export interface DetachedSurfaceViewProps {
 
 const DETACHED_SURFACE_VIEWS: Readonly<Record<string, ComponentType<DetachedSurfaceViewProps>>> = {
   [PULL_REQUEST_DETACHED_SURFACE_KIND]: PullRequestDetachedSurfaceView,
+  [DETACHED_VIEW_KIND]: DetachedViewHandover,
 };
 
 export function detachedSurfaceView(

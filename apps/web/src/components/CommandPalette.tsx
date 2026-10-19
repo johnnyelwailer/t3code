@@ -55,6 +55,7 @@ import {
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
+import { useUndockViewPaletteAction } from "~/t3team/detached/t3team-useUndockViewPaletteAction";
 import * as Option from "effect/Option";
 import {
   ArrowLeftIcon,
@@ -1817,7 +1818,9 @@ function OpenCommandPaletteDialog(props: {
     });
   }, [clearOpenIntent, browseNavigation, openIntent, projectThreadItems, pushPaletteView]);
 
+  const undockViewAction = useUndockViewPaletteAction();
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
+  if (undockViewAction !== null) actionItems.push(undockViewAction);
 
   if (projects.length > 0) {
     const activeProjectTitle =

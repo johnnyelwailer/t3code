@@ -1,3 +1,4 @@
+import { UndockViewButton } from "~/t3team/detached/t3team-UndockViewControls";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { Spinner } from "~/components/ui/spinner";
 import { useShortcutModifierState } from "~/shortcutModifierState";
@@ -2845,6 +2846,7 @@ function PullRequestsColumn({
             <PullRequestRefreshControl compact refreshing={refreshing} onRefresh={onRefresh} />
           </div>
         ) : null}
+        <UndockViewButton />
         {rightPanelControl}
       </WorkspacePageHeader>
 

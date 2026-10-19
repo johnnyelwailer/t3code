@@ -13,6 +13,7 @@ import { ProjectDashboardBacklogView } from "~/t3team/t3team-ProjectDashboardBac
 import { ProjectDashboardMyWorkView } from "~/t3team/t3team-ProjectDashboardMyWorkView";
 import { ProjectMyWorkViewSwitch } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 import { t3teamScopeContentWidthClass } from "~/t3team/t3team-scopeContentWidth";
+import { UndockViewButton } from "~/t3team/detached/t3team-UndockViewControls";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
 export function ProjectDashboard({
@@ -76,6 +77,7 @@ export function ProjectDashboard({
               </MenuItem>
             </MenuPopup>
           </Menu>
+          <UndockViewButton />
         </div>
         <ProjectMyWorkViewSwitch
           lens={lens}

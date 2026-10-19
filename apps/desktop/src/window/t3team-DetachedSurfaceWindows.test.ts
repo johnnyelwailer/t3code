@@ -2,6 +2,7 @@ import {
   detachedSurfacePath,
   detachedSurfaceWindowName,
 } from "@t3tools/shared/t3team-detachedSurface";
+import { detachedViewRequest } from "@t3tools/shared/t3team-detachedView";
 import type * as Electron from "electron";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -20,7 +21,7 @@ type Listener = (...args: unknown[]) => void;
 function fakeWindow(url = "") {
   const windowListeners = new Map<string, Listener>();
   const contentsListeners = new Map<string, Listener>();
-  let openHandler: ((details: { url: string }) => unknown) | undefined;
+  let openHandler: ((details: { url: string; frameName: string }) => unknown) | undefined;
   let currentUrl = url;
   const raw = {
     isDestroyed: () => false,
@@ -53,7 +54,7 @@ function fakeWindow(url = "") {
       contentsListeners.get("will-navigate")?.(event, target);
       return event.preventDefault;
     },
-    openFromInside: (target: string) => openHandler?.({ url: target }),
+    openFromInside: (target: string, frameName = "") => openHandler?.({ url: target, frameName }),
   };
 }
 
@@ -66,6 +67,7 @@ function make() {
     applicationUrl,
     preloadPath: "/preload.js",
     backgroundColor: () => "#000000",
+    titleBar: () => ({ titleBarStyle: "hidden", titleBarOverlay: { height: 40 } }),
     createWindow: (options) => {
       createOptions.push(options);
       const next = fakeWindow();
@@ -110,7 +112,8 @@ describe("makeDetachedSurfaceWindows", () => {
     expect(createOptions[0]).toMatchObject({
       width: 1500,
       height: 950,
-      titleBarStyle: "default",
+      titleBarStyle: "hidden",
+      titleBarOverlay: { height: 40 },
       fullscreenable: true,
       webPreferences: { preload: "/preload.js", sandbox: true, contextIsolation: true },
     });
@@ -166,5 +169,52 @@ describe("makeDetachedSurfaceWindows", () => {
     tick(61_000);
     window.crash("crashed");
     expect(window.raw.webContents.reload).toHaveBeenCalledTimes(4);
+  });
+
+  it("only brings an undocked view forward when its window is already on that view", () => {
+    const { open, created } = make();
+    const myWork = detachedViewRequest({ route: "/t3team/my-work", title: "My Work" });
+    const myWorkDetails = {
+      url: `t3code://app/#${detachedSurfacePath(myWork)}`,
+      frameName: detachedSurfaceWindowName(myWork),
+    };
+    open(myWorkDetails);
+    const window = created[0]!;
+    // The detached page has handed the window to the view's own route.
+    window.raw.loadURL.mockClear();
+    window.raw.loadURL("t3code://app/#/t3team/my-work");
+    window.raw.loadURL.mockClear();
+
+    open(myWorkDetails);
+    expect(created).toHaveLength(1);
+    expect(window.raw.loadURL).not.toHaveBeenCalled();
+    expect(window.raw.focus).toHaveBeenCalled();
+
+    // The window's own lens and filters are its own: still the same view.
+    window.raw.loadURL("t3code://app/#/t3team/my-work?myWorkLens=list");
+    window.raw.loadURL.mockClear();
+    open(myWorkDetails);
+    expect(window.raw.loadURL).not.toHaveBeenCalled();
+
+    // Navigated elsewhere inside the window, asking again brings it back to the view.
+    window.raw.loadURL("t3code://app/#/t3team/projects/p1/tickets/NEX-1");
+    window.raw.loadURL.mockClear();
+    open(myWorkDetails);
+    expect(window.raw.loadURL).toHaveBeenCalledWith(myWorkDetails.url);
+  });
+
+  it("lets a detached window detach surfaces of its own, into windows like any other", () => {
+    const { open, created, openExternal, prepare } = make();
+    open();
+    const thread = created[0]!;
+    const other = { ...request, key: "acme/app#13" };
+    const result = thread.openFromInside(
+      `t3code://app/#${detachedSurfacePath(other)}`,
+      detachedSurfaceWindowName(other),
+    );
+    expect(result).toEqual({ action: "deny" });
+    expect(openExternal).not.toHaveBeenCalled();
+    expect(created).toHaveLength(2);
+    expect(prepare).toHaveBeenCalledWith(created[1]!.window);
   });
 });

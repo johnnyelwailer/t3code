@@ -3,16 +3,19 @@
  *
  * The renderer detaches a surface with `window.open` on a same-origin detached-surface URL. The
  * main window's open handler hands that request here, and it becomes an app window of its own:
- * the app's preload and session, so it is already signed in; a native title bar, so it can be
- * dragged to another screen and put in full screen on its own; and independent of the main
- * window, so it is neither held above it nor closed with it. Each surface has one window: asking
- * again for a surface that is already open brings its window forward, on the newly asked view.
+ * the app's preload and session, so it is already signed in; the main window's title bar, which
+ * the app's shared drag strip drags, so it can go to another screen and full screen on its own;
+ * and independent of the main window, so it is neither held above it nor closed with it. Each
+ * surface has one window: asking again for a surface that is already open brings its window
+ * forward, on the newly asked view. A detached window can detach surfaces of its own (a pull
+ * request from an undocked thread, say); those are windows like any other.
  *
  * The request itself is always denied and the window created here instead. Whatever asked — the
  * renderer, or a sandboxed document preview with popups allowed — gets no handle on the window
  * it caused: no opener, no WindowProxy to navigate or script it with.
  */
 import { isDetachedSurfaceWindowRequest } from "@t3tools/shared/t3team-detachedSurface";
+import { isDetachedSurfaceShowing } from "@t3tools/shared/t3team-detachedView";
 import type * as Electron from "electron";
 
 const DETACHED_WINDOW_MIN_WIDTH = 480;
@@ -46,6 +49,11 @@ export function makeDetachedSurfaceWindows(input: {
   readonly applicationUrl: string;
   readonly preloadPath: string;
   readonly backgroundColor: () => string;
+  /** The title bar a window gets: the main window's, so the app draws and drags it the same. */
+  readonly titleBar: () => Pick<
+    Electron.BrowserWindowConstructorOptions,
+    "titleBarStyle" | "titleBarOverlay" | "trafficLightPosition"
+  >;
   readonly createWindow: (
     options: Electron.BrowserWindowConstructorOptions,
   ) => Electron.BrowserWindow;
@@ -71,12 +79,18 @@ export function makeDetachedSurfaceWindows(input: {
     window.focus();
   };
 
-  const guard = (window: Electron.BrowserWindow, frameName: string) => {
+  const guard = (
+    window: Electron.BrowserWindow,
+    frameName: string,
+    prepareWindow: (window: Electron.BrowserWindow) => void,
+  ) => {
     const contents = window.webContents;
     // Links out of a detached surface go where the main window's go: the system browser. Without
     // a handler of its own, Electron would open them as bare windows of the app.
-    contents.setWindowOpenHandler(({ url }) => {
-      input.openExternal(url);
+    contents.setWindowOpenHandler((details) => {
+      const detachedSurface = handleWindowOpen(details, window, prepareWindow);
+      if (detachedSurface !== null) return detachedSurface;
+      input.openExternal(details.url);
       return { action: "deny" };
     });
     // A detached window only ever shows a detached surface; anything else it is asked to load
@@ -101,58 +115,64 @@ export function makeDetachedSurfaceWindows(input: {
     });
   };
 
-  return {
-    handleWindowOpen: (details, opener, prepareWindow) => {
-      if (!isRequest(details)) return null;
-      const existing = windowsByName.get(details.frameName);
-      if (existing !== undefined && !existing.isDestroyed()) {
-        if (existing.webContents.getURL() !== details.url) {
-          void existing.loadURL(details.url).catch(() => undefined);
-        }
-        reveal(existing);
-        return { action: "deny" };
+  const handleWindowOpen: DetachedSurfaceWindows["handleWindowOpen"] = (
+    details,
+    opener,
+    prepareWindow,
+  ) => {
+    if (!isRequest(details)) return null;
+    const existing = windowsByName.get(details.frameName);
+    if (existing !== undefined && !existing.isDestroyed()) {
+      // A window already showing the surface (an undocked view on its route) only comes forward.
+      if (!isDetachedSurfaceShowing(existing.webContents.getURL(), details.url)) {
+        void existing.loadURL(details.url).catch(() => undefined);
       }
-      // The opener's size, not its position: the new window cascades from where the system puts
-      // it, and the reader moves it to whichever screen it is for.
-      const openerBounds = opener.isDestroyed() ? null : opener.getNormalBounds();
-      let window: Electron.BrowserWindow;
-      try {
-        window = input.createWindow({
-          width: openerBounds?.width ?? DETACHED_WINDOW_DEFAULT_SIZE.width,
-          height: openerBounds?.height ?? DETACHED_WINDOW_DEFAULT_SIZE.height,
-          minWidth: DETACHED_WINDOW_MIN_WIDTH,
-          minHeight: DETACHED_WINDOW_MIN_HEIGHT,
-          show: true,
-          // A native title bar: the detached page has no app top bar to drag by.
-          titleBarStyle: "default",
-          autoHideMenuBar: true,
-          fullscreenable: true,
-          backgroundColor: input.backgroundColor(),
-          webPreferences: {
-            preload: input.preloadPath,
-            contextIsolation: true,
-            nodeIntegration: false,
-            sandbox: true,
-            // The main window hosts browser previews; a detached surface does not.
-            webviewTag: false,
-          },
-        });
-      } catch (cause) {
-        input.logWarning("failed to create a detached surface window", { cause: String(cause) });
-        return { action: "deny" };
-      }
-      detached.add(window);
-      windowsByName.set(details.frameName, window);
-      window.on("closed", () => {
-        if (windowsByName.get(details.frameName) === window) {
-          windowsByName.delete(details.frameName);
-        }
-      });
-      prepareWindow(window);
-      guard(window, details.frameName);
-      void window.loadURL(details.url).catch(() => undefined);
+      reveal(existing);
       return { action: "deny" };
-    },
+    }
+    // The opener's size, not its position: the new window cascades from where the system puts
+    // it, and the reader moves it to whichever screen it is for.
+    const openerBounds = opener.isDestroyed() ? null : opener.getNormalBounds();
+    let window: Electron.BrowserWindow;
+    try {
+      window = input.createWindow({
+        width: openerBounds?.width ?? DETACHED_WINDOW_DEFAULT_SIZE.width,
+        height: openerBounds?.height ?? DETACHED_WINDOW_DEFAULT_SIZE.height,
+        minWidth: DETACHED_WINDOW_MIN_WIDTH,
+        minHeight: DETACHED_WINDOW_MIN_HEIGHT,
+        show: true,
+        ...input.titleBar(),
+        autoHideMenuBar: true,
+        fullscreenable: true,
+        backgroundColor: input.backgroundColor(),
+        webPreferences: {
+          preload: input.preloadPath,
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: true,
+          // The main window hosts browser previews; a detached surface does not.
+          webviewTag: false,
+        },
+      });
+    } catch (cause) {
+      input.logWarning("failed to create a detached surface window", { cause: String(cause) });
+      return { action: "deny" };
+    }
+    detached.add(window);
+    windowsByName.set(details.frameName, window);
+    window.on("closed", () => {
+      if (windowsByName.get(details.frameName) === window) {
+        windowsByName.delete(details.frameName);
+      }
+    });
+    prepareWindow(window);
+    guard(window, details.frameName, prepareWindow);
+    void window.loadURL(details.url).catch(() => undefined);
+    return { action: "deny" };
+  };
+
+  return {
+    handleWindowOpen,
     isDetached: (window) => detached.has(window),
   };
 }

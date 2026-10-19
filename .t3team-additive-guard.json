@@ -637,7 +637,12 @@
     "tsconfig.base.json",
     "vite.config.ts",
     "apps/server/src/cli/sshHelper.test.ts",
-    "apps/server/src/persistence/Sqlite.test.ts"
+    "apps/server/src/persistence/Sqlite.test.ts",
+    "apps/web/src/components/settings/KeybindingsSettings.logic.ts",
+    "apps/web/src/components/usage/UsagePage.tsx",
+    "apps/web/src/routes/settings.tsx",
+    "packages/contracts/src/keybindings.ts",
+    "packages/shared/src/keybindings.ts"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",
