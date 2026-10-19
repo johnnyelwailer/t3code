@@ -5,6 +5,10 @@ import { runThreadBootstrapKickoff } from "~/t3team/chat/t3team-runThreadBootstr
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { WORKFLOW_BACKED_BUNDLED_RECIPE_IDS } from "~/t3team/t3team-bundledRecipeWorkflowIds";
 import type { T3TeamKickoffLaunchConfig } from "~/t3team/t3team-kickoffLaunchConfig";
+import {
+  type T3TeamKickoffWorkItemRef,
+  buildT3TeamKickoffWorkItemParameters,
+} from "~/t3team/t3team-kickoffWorkItemRef";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 
@@ -68,6 +72,17 @@ type CreateSidecarRecipeThread = (input: {
   kickoffWorkflow?: BundledRecipeWorkflow;
   launchConfig: T3TeamKickoffLaunchConfig;
 }) => unknown | Promise<unknown>;
+
+function withWorkItemParameters(
+  workflow: BundledRecipeWorkflow,
+  workItem: T3TeamKickoffWorkItemRef | undefined,
+): BundledRecipeWorkflow {
+  const parameters = buildT3TeamKickoffWorkItemParameters(workItem);
+  if (Object.keys(parameters).length === 0) {
+    return workflow;
+  }
+  return { ...workflow, parameters: { ...workflow.parameters, ...parameters } };
+}
 
 /**
  * Creates the thread through the host's composer path, then runs the bootstrap kickoff that
@@ -134,6 +149,7 @@ export async function launchBundledSidecarRecipeThread(input: {
   readonly projectWorkspaceRoot?: string | undefined;
   readonly recipeId: string;
   readonly parameters?: Record<string, unknown> | undefined;
+  readonly workItem?: T3TeamKickoffWorkItemRef;
   readonly launchConfig: T3TeamKickoffLaunchConfig;
   readonly createThread: CreateSidecarRecipeThread;
 }): Promise<boolean> {
@@ -141,6 +157,11 @@ export async function launchBundledSidecarRecipeThread(input: {
   if (!recipe) {
     return false;
   }
+  const parameters = {
+    ...buildT3TeamKickoffWorkItemParameters(input.workItem),
+    ...input.parameters,
+  };
+  const hasParameters = Object.keys(parameters).length > 0;
   return launchSidecarRecipeThread({
     backend: input.backend,
     environmentId: input.environmentId,
@@ -148,13 +169,13 @@ export async function launchBundledSidecarRecipeThread(input: {
     title: recipe.title,
     kickoffMessage: buildBundledSidecarRecipeKickoffMessage({
       recipeId: input.recipeId,
-      ...(input.parameters ? { parameters: input.parameters } : {}),
+      ...(hasParameters ? { parameters } : {}),
     }),
     kickoffWorkflow: buildBundledSidecarRecipeWorkflowLaunch({
       recipeId: input.recipeId,
       surface: input.surface,
       projectWorkspaceRoot: input.projectWorkspaceRoot,
-      ...(input.parameters ? { parameters: input.parameters } : {}),
+      ...(hasParameters ? { parameters } : {}),
     }),
     launchConfig: input.launchConfig,
     createThread: input.createThread,
@@ -168,6 +189,7 @@ export async function launchSidecarRecipeQuickStartThread(input: {
   readonly projectId: string;
   readonly quickStart: Pick<T3TeamSidecarRecipeQuickStart, "title" | "prompt" | "workflow">;
   readonly launchConfig: T3TeamKickoffLaunchConfig;
+  readonly workItem?: T3TeamKickoffWorkItemRef;
   readonly createThread: CreateSidecarRecipeThread;
 }): Promise<boolean> {
   const workflow = input.quickStart.workflow;
@@ -180,7 +202,7 @@ export async function launchSidecarRecipeQuickStartThread(input: {
     projectId: input.projectId,
     title: input.quickStart.title,
     kickoffMessage: input.quickStart.prompt,
-    kickoffWorkflow: workflow,
+    kickoffWorkflow: withWorkItemParameters(workflow, input.workItem),
     launchConfig: input.launchConfig,
     createThread: input.createThread,
   });

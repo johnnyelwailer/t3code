@@ -9,6 +9,7 @@ import {
   type T3TeamSelectedRecipeQuickStart,
 } from "~/t3team/t3team-recipeQuickStartLaunch";
 import { type T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipes";
+import { type T3TeamKickoffWorkItemRef } from "~/t3team/t3team-kickoffWorkItemRef";
 import {
   launchBundledSidecarRecipeThread,
   launchSidecarRecipeQuickStartThread,
@@ -31,6 +32,7 @@ type UseBundledSidecarRecipeLaunchInput = {
   readonly projectId: string;
   readonly surface: RecipeSurface;
   readonly projectWorkspaceRoot: string | undefined;
+  readonly workItem?: T3TeamKickoffWorkItemRef;
   readonly openThread: (threadId: string) => void;
   readonly buildSelectedRecipe: BuildSelectedRecipe;
   readonly createThread: CreateBundledRecipeThread;
@@ -92,6 +94,7 @@ export function useBundledSidecarRecipeLaunch(input: UseBundledSidecarRecipeLaun
             projectWorkspaceRoot: input.projectWorkspaceRoot,
             recipeId,
             ...(parameters ? { parameters } : {}),
+            ...(input.workItem ? { workItem: input.workItem } : {}),
             launchConfig:
               composerRef.current?.getLaunchConfig() ?? createDefaultT3TeamKickoffLaunchConfig(),
             createThread: input.createThread,
@@ -110,6 +113,7 @@ export function useBundledSidecarRecipeLaunch(input: UseBundledSidecarRecipeLaun
             environmentId: input.environmentId,
             projectId: input.projectId,
             quickStart: recipe,
+            ...(input.workItem ? { workItem: input.workItem } : {}),
             launchConfig:
               composerRef.current?.getLaunchConfig() ?? createDefaultT3TeamKickoffLaunchConfig(),
             createThread: input.createThread,
@@ -128,6 +132,7 @@ export function useBundledSidecarRecipeLaunch(input: UseBundledSidecarRecipeLaun
       input.projectId,
       input.projectWorkspaceRoot,
       input.surface,
+      input.workItem,
       stageRecipeKickoff,
     ],
   );
