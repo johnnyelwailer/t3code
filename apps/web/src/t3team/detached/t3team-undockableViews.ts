@@ -22,12 +22,14 @@ const stays = (reason: string): UndockPolicy => ({ undock: false, reason });
 const REDIRECTS = "redirects to a Team route, which is the one that undocks";
 const SIGN_IN = "a sign-in or pairing step; it belongs to the window that asked for it";
 
+/** The Team home shows the selected project's dashboard, so both are titled by its lens. */
+const dashboardTitle = ({ search }: UndockRoute) =>
+  search.get("projectView") === "backlog" ? "Backlog" : "My Work";
+
 export const UNDOCK_POLICY: Readonly<Record<string, UndockPolicy>> = {
-  "/t3team": undockAs("Home"),
+  "/t3team": undockAs(dashboardTitle),
   "/t3team/my-work": undockAs("My Work"),
-  "/t3team/projects/$projectId": undockAs(({ search }) =>
-    search.get("projectView") === "backlog" ? "Backlog" : "My Work",
-  ),
+  "/t3team/projects/$projectId": undockAs(dashboardTitle),
   "/t3team/projects/$projectId/tickets/$ticketId": undockAs(
     ({ segments }) => segments.ticketId ?? "Work item",
   ),
