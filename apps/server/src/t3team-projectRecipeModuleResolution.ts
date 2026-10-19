@@ -99,6 +99,27 @@ export function withConfigVersion(
   return child.toString();
 }
 
+/**
+ * Recipe, workflow and script modules are always ESM, but Node picks a `.ts` file's format from
+ * the nearest ancestor `package.json`: `"type": "commonjs"` makes it CommonJS outright ("Cannot
+ * use import statement outside a module"), and a missing `"type"` leaves the format to Node's
+ * syntax detection. A recipe lives in the user's own workspace, so whatever `package.json` sits
+ * above it is not ours to depend on.
+ *
+ * Only a result Node already decided is CommonJS is re-loaded as ESM; everything else, including
+ * `.cts`/`.mts` files whose extension fixes the format, passes through untouched.
+ */
+const loadTypescriptAsEsm: NonNullable<Parameters<typeof NodeModule.registerHooks>[0]["load"]> = (
+  url,
+  context,
+  nextLoad,
+) => {
+  const loaded = nextLoad(url, context);
+  return loaded.format === "commonjs-typescript"
+    ? nextLoad(url, { ...context, format: "module-typescript" })
+    : loaded;
+};
+
 let installed = false;
 
 /**
@@ -111,6 +132,7 @@ export function ensureProjectRecipeModuleResolution(): void {
   }
   installed = true;
   NodeModule.registerHooks({
+    load: loadTypescriptAsEsm,
     resolve(specifier, context, nextResolve) {
       try {
         const resolved = nextResolve(specifier, context);

@@ -169,7 +169,6 @@ export function App({
         </div>
         <SidebarRail />
       </Sidebar>
-      <T3TeamLeftSidebarDesktopToggle />
 
       {showCreate ? (
         <SidebarInset className="h-full min-h-0 overflow-hidden">
@@ -202,6 +201,9 @@ export function App({
           onManageRepositories={setManageRepositoriesProjectId}
         />
       )}
+      {/* After the content: its header's drag region would otherwise override this toggle's
+          no-drag (t3team-WindowDragStrip.tsx). */}
+      <T3TeamLeftSidebarDesktopToggle />
 
       <AppOverlays
         setShowCreate={setShowCreate}

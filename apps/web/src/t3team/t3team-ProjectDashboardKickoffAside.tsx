@@ -11,6 +11,7 @@ import { T3TeamSidecarComposition } from "~/t3team/t3team-SidecarComposition";
 import { useRunT3TeamDashboardRecipeAction } from "~/t3team/t3team-dashboardRecipeActions";
 import { buildProjectDashboardSelectedRecipe } from "~/t3team/t3team-dashboardRecipeSelection";
 import { buildT3TeamSelectedRecipeKickoffLaunch } from "~/t3team/t3team-recipeQuickStartLaunch";
+import { useT3TeamKickoffWorkItemRef } from "~/t3team/t3team-useKickoffWorkItemRef";
 import { useT3TeamDashboardRecipeViewSummary } from "~/t3team/t3team-dashboardRecipeViewContext";
 import { runT3TeamViewTransition } from "~/t3team/t3team-runViewTransition";
 import { useT3TeamSidecarRecipeQuickStarts } from "~/t3team/t3team-sidecarRecipes";
@@ -82,6 +83,7 @@ export function ProjectDashboardKickoffAside({
     ],
   );
   const slashRecipes = useT3TeamSidecarRecipeQuickStarts(quickStartRecipeInput);
+  const workItemRef = useT3TeamKickoffWorkItemRef(quickStartRecipeInput);
   const { clearSelectedRecipe, composerRef, selectedRecipe, sidecarHost, stageRecipeKickoff } =
     useBundledSidecarRecipeLaunch({
       backend,
@@ -89,6 +91,7 @@ export function ProjectDashboardKickoffAside({
       projectId: project.id,
       surface: sidecarSurface,
       projectWorkspaceRoot: project.workspace?.rootPath,
+      ...(workItemRef ? { workItem: workItemRef } : {}),
       openThread: onOpenThread,
       buildSelectedRecipe: (recipe, customization) =>
         buildProjectDashboardSelectedRecipe({
@@ -164,6 +167,7 @@ export function ProjectDashboardKickoffAside({
         onClearSelectedRecipe={clearSelectedRecipe}
         providers={providers}
         isConnected={isConnected}
+        projectId={project.id}
         {...(project.workspace?.rootPath ? { workspaceRoot: project.workspace.rootPath } : {})}
         slashRecipes={slashRecipes}
         onSelectSlashRecipe={stageRecipeKickoff}

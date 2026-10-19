@@ -5418,26 +5418,22 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                   AND plan.kind = 'proposed_plan'
                   AND plan.status = 'active'
               ) AS has_actionable_proposed_plan,
-              -- Count per run on the covering (thread_id, run_id) index, then
-              -- look up each run once, instead of one run lookup per item.
+              -- Trigger-maintained per-run counts (migration 111): counting the
+              -- items themselves walked every item of every thread on each read.
               (
                 SELECT COALESCE(SUM(per_run.item_count), 0)
-                FROM (
-                  SELECT i.run_id, COUNT(*) AS item_count
-                  FROM orchestration_v2_projection_turn_items i
-                  WHERE i.thread_id = t.thread_id
-                  GROUP BY i.run_id
-                ) per_run
+                FROM orchestration_v2_projection_thread_item_counts per_run
                 LEFT JOIN orchestration_v2_projection_runs r
-                  ON r.run_id = per_run.run_id
-                WHERE per_run.run_id IS NULL OR r.status <> 'rolled_back'
+                  ON r.run_id = per_run.run_key
+                WHERE per_run.thread_id = t.thread_id
+                  AND (per_run.run_key = '' OR r.status <> 'rolled_back')
               ) AS item_count,
-              (
-                SELECT COUNT(*)
-                FROM orchestration_v2_projection_turn_items i
-                WHERE i.thread_id = t.thread_id
-                  AND i.run_id IS NULL
-              ) AS runless_item_count
+              COALESCE((
+                SELECT runless.item_count
+                FROM orchestration_v2_projection_thread_item_counts runless
+                WHERE runless.thread_id = t.thread_id
+                  AND runless.run_key = ''
+              ), 0) AS runless_item_count
             FROM orchestration_v2_projection_threads t
             -- The newest run not waiting in a held queue, matching latestUnheldRun.
             LEFT JOIN orchestration_v2_projection_runs presented ON presented.run_id = (
@@ -5496,17 +5492,15 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
     const selectShellRunItemCounts = (threadIds?: ReadonlyArray<ThreadId>) =>
       threadIds === undefined
         ? sql<ShellRunItemCountRow>`
-            SELECT thread_id, run_id, COUNT(*) AS item_count
-            FROM orchestration_v2_projection_turn_items
-            WHERE run_id IS NOT NULL
-            GROUP BY thread_id, run_id
+            SELECT thread_id, run_key AS run_id, item_count
+            FROM orchestration_v2_projection_thread_item_counts
+            WHERE run_key <> ''
           `
         : sql<ShellRunItemCountRow>`
-            SELECT thread_id, run_id, COUNT(*) AS item_count
-            FROM orchestration_v2_projection_turn_items
-            WHERE run_id IS NOT NULL
+            SELECT thread_id, run_key AS run_id, item_count
+            FROM orchestration_v2_projection_thread_item_counts
+            WHERE run_key <> ''
               AND thread_id IN ${sql.in(threadIds)}
-            GROUP BY thread_id, run_id
           `;
 
     const selectShellProviderThreadRows = (threadIds?: ReadonlyArray<ThreadId>) =>

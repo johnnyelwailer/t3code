@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useImperativeHandle } from "react";
+import { ProjectId } from "@t3tools/contracts";
 import { cn } from "~/lib/utils";
 import { useBackendState } from "~/t3team/backend/t3team-index";
 import { KickoffComposerEditor } from "~/t3team/composer/t3team-KickoffComposerEditor";
@@ -36,6 +37,7 @@ export const TicketKickoffComposer = forwardRef<
       providers: providersProp,
       // Prop kept for API compatibility; live connection comes from useBackendState below.
       isConnected: _ignoredIsConnectedProp,
+      projectId,
       workspaceRoot,
       slashRecipes,
       onSelectSlashRecipe,
@@ -61,11 +63,13 @@ export const TicketKickoffComposer = forwardRef<
       selectedProvider,
       selectedProviderEntry,
       showInteractionModeToggle,
+      selectModel,
       setInteractionMode,
       setRuntimeMode,
-      setSelectedInstanceId,
-      setSelectedModel,
-    } = useT3TeamKickoffComposerState(providers);
+    } = useT3TeamKickoffComposerState(
+      providers,
+      projectId !== undefined ? ProjectId.make(projectId) : null,
+    );
     const { text, cursor, editorRef, setText, setCursor } = useT3TeamKickoffComposerText({
       prefillText,
       hasSelectedRecipe: Boolean(selectedRecipe),
@@ -148,7 +152,7 @@ export const TicketKickoffComposer = forwardRef<
               editorRef={editorRef}
               text={text}
               cursor={cursor}
-              skills={selectedProvider?.skills ?? []}
+              skills={commandMenu.skills}
               commandMenu={commandMenu}
               placeholder={
                 isConnected
@@ -180,8 +184,7 @@ export const TicketKickoffComposer = forwardRef<
               showInteractionModeToggle={showInteractionModeToggle}
               text={text}
               canSend={canSend}
-              setSelectedInstanceId={setSelectedInstanceId}
-              setSelectedModel={setSelectedModel}
+              selectModel={selectModel}
               setInteractionMode={setInteractionMode}
               setRuntimeMode={setRuntimeMode}
             />

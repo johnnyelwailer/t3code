@@ -20,6 +20,7 @@ import {
   buildChildBranchName,
   buildScopedChildWorktreePath,
 } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
+import { resolveChildStartPoint } from "./t3team-toolBrokerStartChildStartPoint.ts";
 import {
   mainRepositoryFromManifestJson,
   type T3TeamStartChildLinkedRepositoryServices,
@@ -133,13 +134,17 @@ export const createOrReuseChildWorktree = (input: {
           worktreePath: input.worktreePath,
           repositoryPath: input.cwd,
           created: false,
+          startedFrom: null,
         };
       }
     }
+    const baseRef = input.baseRef.trim().length > 0 ? input.baseRef.trim() : "main";
+    const startPoint = yield* resolveChildStartPoint({ gitWorkflow, cwd: input.cwd, baseRef });
     const worktree = yield* gitWorkflow.createWorktree({
       cwd: input.cwd,
-      refName: input.baseRef.trim().length > 0 ? input.baseRef.trim() : "main",
+      refName: startPoint.refName,
       newRefName: buildChildBranchName(input.sessionName),
+      baseRefName: baseRef,
       path: input.worktreePath,
     });
     return {
@@ -147,5 +152,6 @@ export const createOrReuseChildWorktree = (input: {
       worktreePath: worktree.worktree.path,
       repositoryPath: input.cwd,
       created: true,
+      startedFrom: startPoint.description,
     };
   });

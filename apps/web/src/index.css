@@ -990,9 +990,9 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   /*
    * macOS collapsed-sidebar fix: the expand button (T3TeamLeftSidebarDesktopToggle) is a
    * position:fixed sibling of the content header. Electron's -webkit-app-region hit-testing
-   * ignores z-index — a floating sibling always loses to a drag-region ancestor, so the
-   * button's own no-drag class can't win. A no-drag DESCENDANT of the drag region does win,
-   * so we carve one out with a ::before covering the button's area. The button is
+   * follows document order, not z-index — a no-drag element rendered before a drag region
+   * loses to it. A no-drag DESCENDANT of the drag region does win, so we carve one out with
+   * a ::before covering the button's area. The button is
    * --workspace-titlebar-control-size (2rem) at --workspace-controls-left (≈12px), so 3rem
    * clears it with room to spare.
    */
@@ -2307,6 +2307,22 @@ code {
 /* Window drag region (frameless titlebar) */
 .drag-region {
   -webkit-app-region: drag;
+}
+
+/* Mounted by T3TeamWindowDragStrip ahead of every route; see that component. */
+.window-drag-strip {
+  position: fixed;
+  top: var(--workspace-controls-top);
+  right: 0;
+  left: 0;
+  height: var(--workspace-topbar-height);
+  pointer-events: none;
+  -webkit-app-region: drag;
+}
+
+/* Portaled popups land after every drag region in the document, so opting out wins over them. */
+[data-slot$="-popup"] {
+  -webkit-app-region: no-drag;
 }
 
 /* Electron 44 inherits app-region. Reset children to the initial value so they

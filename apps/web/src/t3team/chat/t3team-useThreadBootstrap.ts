@@ -6,6 +6,7 @@ import {
   runThreadBootstrapEffect,
   type ThreadBootstrapStatus,
 } from "~/t3team/chat/t3team-runThreadBootstrapEffect";
+import type { ThreadBootstrapProgress } from "~/t3team/chat/t3team-threadBootstrapProgress";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 
@@ -51,20 +52,31 @@ export function useThreadBootstrap({
   serverThread,
 }: ThreadBootstrapInput): {
   bootstrapStatus: ThreadBootstrapStatus;
+  bootstrapProgress: ThreadBootstrapProgress | null;
   retryThreadBootstrap: () => void;
 } {
   const onInitialUserMessageSentRef = useRef(onInitialUserMessageSent);
   const [bootstrapStatus, setBootstrapStatus] = useState<ThreadBootstrapStatus>("idle");
+  // Per-step launch progress (in-thread): which preparation step is busy/done/errored. Null until
+  // the bootstrap's first report; the view falls back to "creating" while that is pending.
+  const [bootstrapProgress, setBootstrapProgress] = useState<ThreadBootstrapProgress | null>(null);
   const [retryGeneration, setRetryGeneration] = useState(0);
   const launchAttemptRef = useRef(0);
   const threadIdRef = useRef(threadId);
   onInitialUserMessageSentRef.current = onInitialUserMessageSent;
   threadIdRef.current = threadId;
 
+  // A different thread on the same hook instance starts with no progress: the guard above only
+  // stops stale UPDATES, it would not clear the previous thread's steps.
+  useEffect(() => {
+    setBootstrapProgress(null);
+  }, [threadId]);
+
   const retryThreadBootstrap = useCallback(() => {
     resetThreadBootstrapDispatchState(threadId);
     launchAttemptRef.current += 1;
     setBootstrapStatus("idle");
+    setBootstrapProgress(null);
     setRetryGeneration((value) => value + 1);
   }, [threadId]);
 
@@ -77,6 +89,10 @@ export function useThreadBootstrap({
     const updateBootstrapStatus = (status: ThreadBootstrapStatus) => {
       if (launchAttemptRef.current !== attempt || threadIdRef.current !== threadAtStart) return;
       setBootstrapStatus(status);
+    };
+    const updateBootstrapProgress = (progress: ThreadBootstrapProgress) => {
+      if (launchAttemptRef.current !== attempt || threadIdRef.current !== threadAtStart) return;
+      setBootstrapProgress(progress);
     };
 
     runThreadBootstrapEffect({
@@ -97,6 +113,7 @@ export function useThreadBootstrap({
       initialToolContext,
       onInitialUserMessageSent: onInitialUserMessageSentRef.current,
       serverThread,
+      updateBootstrapProgress,
       updateBootstrapStatus,
     });
   }, [
@@ -121,6 +138,7 @@ export function useThreadBootstrap({
 
   return {
     bootstrapStatus,
+    bootstrapProgress,
     retryThreadBootstrap,
   };
 }
