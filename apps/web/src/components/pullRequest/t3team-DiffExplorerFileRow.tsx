@@ -29,11 +29,21 @@ export interface DiffExplorerFileRowProps {
   readonly onToggleViewed: (key: string) => void;
 }
 
+/** The folders of a path, with a line-break opportunity after each slash. */
+function breakableDirectory(directory: string) {
+  const segments = directory.split("/").slice(0, -1);
+  return segments.map((segment, depth) => (
+    <span key={segments.slice(0, depth + 1).join("/")}>
+      {segment}/<wbr />
+    </span>
+  ));
+}
+
 function FullPath({ path, viewed }: { path: string; viewed: boolean }) {
   const slash = path.lastIndexOf("/");
   return (
-    <span className="min-w-0 flex-1 break-all">
-      <span className="text-muted-foreground">{path.slice(0, slash + 1)}</span>
+    <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+      <span className="text-muted-foreground">{breakableDirectory(path.slice(0, slash + 1))}</span>
       <span className={viewed ? "text-muted-foreground" : "text-foreground"}>
         {path.slice(slash + 1)}
       </span>

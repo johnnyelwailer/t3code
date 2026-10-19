@@ -13,6 +13,13 @@ const PR_TREE_MAX_WIDTH = 56 * 16;
 /** What the diff keeps however wide the tree is dragged, so it never drops to a sliver. */
 const PR_TREE_DIFF_RESERVE = 20 * 16;
 
+/**
+ * The docked tree's width ceiling as CSS, from the same reserve as the drag limit: a width
+ * stored in a wider window must not squeeze the diff in a narrower one, and a second, different
+ * cap would show a pane narrower than the width the handle reports.
+ */
+export const PR_TREE_DOCKED_MAX_WIDTH = `calc(100% - ${PR_TREE_DIFF_RESERVE}px)`;
+
 /** One arrow press on the resize handle. */
 export const PR_TREE_KEYBOARD_STEP = 16;
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  PR_TREE_DOCKED_MAX_WIDTH,
   PR_TREE_KEYBOARD_STEP,
   PR_TREE_MIN_WIDTH,
   clampPrTreeWidth,
@@ -21,6 +22,11 @@ describe("prTreeMaxWidth", () => {
 
   it("never drops below the tree's own minimum in a tight row", () => {
     expect(prTreeMaxWidth(300)).toBe(PR_TREE_MIN_WIDTH);
+  });
+
+  it("is the same ceiling the stylesheet applies to a docked tree", () => {
+    const reserve = 1000 - prTreeMaxWidth(1000);
+    expect(PR_TREE_DOCKED_MAX_WIDTH).toBe(`calc(100% - ${reserve}px)`);
   });
 });
 

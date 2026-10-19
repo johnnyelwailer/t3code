@@ -112,6 +112,7 @@ import {
 import { PullRequestDiffStat, PullRequestMetaLine } from "./pullRequestPresentation";
 import { DiffExplorerFileTree } from "./t3team-DiffExplorerFileTree";
 import { PrTreeResizeHandle } from "./t3team-PrTreeResizeHandle";
+import { PR_TREE_DOCKED_MAX_WIDTH } from "./t3team-prCodeTreeDock.logic";
 import { usePrTreeDock } from "./t3team-usePrTreeDock";
 import { useElementFitsWidth } from "~/t3team/t3team-ResizableRightSidebarLayoutShared";
 import {
@@ -1966,7 +1967,10 @@ function PullRequestCodeTab({
           <div
             // The reader's width, held by the pane's share of the row so a stored width that no
             // longer fits (a narrower window, a split diff) never squeezes the diff away.
-            style={{ width: treeDock.width, maxWidth: treeAsOverlay ? "85%" : "60%" }}
+            style={{
+              width: treeDock.width,
+              maxWidth: treeAsOverlay ? "85%" : PR_TREE_DOCKED_MAX_WIDTH,
+            }}
             className={cn(
               "relative flex min-h-0 min-w-56",
               treeAsOverlay
