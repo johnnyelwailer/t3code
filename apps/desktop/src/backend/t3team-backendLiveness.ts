@@ -36,7 +36,7 @@ export interface BackendLivenessConfig {
   readonly busyStall: Duration.Duration;
 }
 
-export const DEFAULT_BACKEND_LIVENESS_CONFIG: BackendLivenessConfig = {
+const DEFAULT_BACKEND_LIVENESS_CONFIG: BackendLivenessConfig = {
   staleAfter: Duration.seconds(5),
   busyStall: Duration.seconds(1),
 };
@@ -46,7 +46,7 @@ interface ReceivedBeacon {
   readonly beacon: DesktopBackendLivenessBeacon;
 }
 
-export const classifyBackendLiveness = (
+const classifyBackendLiveness = (
   latest: Option.Option<ReceivedBeacon>,
   nowMs: number,
   config: BackendLivenessConfig,

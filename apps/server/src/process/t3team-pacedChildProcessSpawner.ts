@@ -29,13 +29,13 @@ export interface SpawnPacingConfig {
   readonly maxPause: Duration.Duration;
 }
 
-export const DEFAULT_SPAWN_PACING_CONFIG: SpawnPacingConfig = {
+const DEFAULT_SPAWN_PACING_CONFIG: SpawnPacingConfig = {
   minPause: Duration.millis(1),
   maxPause: Duration.millis(100),
 };
 
 /** The pause after a spawn that took `elapsed`: as long as the spawn, within the bounds. */
-export const pauseAfterSpawn = (
+const pauseAfterSpawn = (
   elapsed: Duration.Duration,
   config: SpawnPacingConfig,
 ): Duration.Duration =>
@@ -60,7 +60,7 @@ export const makeSpawnPacer = (
   }));
 
 /** Wraps a spawner so all of its process creation goes through one pacer. */
-export const pacedChildProcessSpawner = (
+const pacedChildProcessSpawner = (
   inner: ChildProcessSpawner["Service"],
   pacer: SpawnPacer,
 ): ChildProcessSpawner["Service"] =>
