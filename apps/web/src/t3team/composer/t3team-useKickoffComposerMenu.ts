@@ -1,9 +1,14 @@
 import { useCallback, useMemo } from "react";
 import type { ProviderInteractionMode, ServerProvider } from "@t3tools/contracts";
+import {
+  resolveProviderSkillsForCwd,
+  resolveProviderSlashCommandsForCwd,
+} from "@t3tools/client-runtime/providerSkills";
 
 import type { ComposerTrigger } from "~/composer-logic";
 import type { ComposerPromptEditorHandle } from "~/components/ComposerPromptEditor";
-import { useT3TeamKickoffPathSearchScope } from "~/t3team/composer/t3team-kickoffPathSearchScope";
+import { useProviderWorkspaceSnapshotRefresh } from "~/hooks/t3team-useProviderWorkspaceSnapshotRefresh";
+import { useT3TeamKickoffWorkspaceScopes } from "~/t3team/composer/t3team-kickoffPathSearchScope";
 import { T3TEAM_COMPOSER_BUILT_IN_SLASH_COMMANDS } from "~/t3team/composer/t3team-composerMenuItems";
 import { buildT3TeamRecipeSlashItems } from "~/t3team/composer/t3team-composerRecipeSlashItems";
 import { useT3TeamComposerCommandMenu } from "~/t3team/composer/t3team-useComposerCommandMenu";
@@ -32,20 +37,36 @@ export type T3TeamKickoffComposerMenuInput = {
 };
 
 export function useT3TeamKickoffComposerMenu(input: T3TeamKickoffComposerMenuInput) {
-  const pathSearch = useT3TeamKickoffPathSearchScope(input.workspaceRoot);
+  const { pathSearch, providerWorkspace } = useT3TeamKickoffWorkspaceScopes(input.workspaceRoot);
   const provider = input.selectedProvider;
+  // Skills and slash commands are workspace-scoped (the repo's `.claude/skills`, `.agents/skills`):
+  // resolve them for the project's workspace and keep its snapshot scanned, as the thread composer
+  // does for its `gitCwd`.
+  useProviderWorkspaceSnapshotRefresh({
+    provider: provider ?? null,
+    instanceId: provider?.instanceId ?? null,
+    cwd: providerWorkspace.cwd,
+    environmentId: providerWorkspace.environmentId,
+    revalidationKey: input.text,
+  });
+  const skills = useMemo(
+    () => (provider ? resolveProviderSkillsForCwd(provider, providerWorkspace.cwd) : []),
+    [provider, providerWorkspace.cwd],
+  );
   const sources = useMemo(
     () => ({
       builtInSlashCommands: KICKOFF_BUILT_IN_SLASH_COMMANDS,
       provider: provider?.driver ?? null,
-      providerSlashCommands: provider?.slashCommands ?? [],
-      skills: provider?.skills ?? [],
+      providerSlashCommands: provider
+        ? resolveProviderSlashCommandsForCwd(provider, providerWorkspace.cwd)
+        : [],
+      skills,
       // The kickoff composer cannot reach the thread-scoped settings; the
       // upstream `showSkillsInSlashMenu` default is `true` (settings.ts), so
       // skills list in the `/` menu there until this gets settings access.
       showSkillsInSlashMenu: true,
     }),
-    [provider],
+    [provider, providerWorkspace.cwd, skills],
   );
 
   const slashRecipes = input.slashRecipes;
@@ -66,7 +87,7 @@ export function useT3TeamKickoffComposerMenu(input: T3TeamKickoffComposerMenuInp
     [slashRecipes, sources],
   );
 
-  return useT3TeamComposerCommandMenu({
+  const menu = useT3TeamComposerCommandMenu({
     sources,
     pathSearch,
     buildExtraItems,
@@ -93,4 +114,5 @@ export function useT3TeamKickoffComposerMenu(input: T3TeamKickoffComposerMenuInp
       }
     },
   });
+  return { ...menu, skills };
 }

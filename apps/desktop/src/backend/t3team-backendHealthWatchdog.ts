@@ -13,65 +13,37 @@
  *
  * Restart storms: each recent kill doubles the next warm-up; after
  * `maxKillsPerWindow` kills within `killWindow` it only logs.
+ *
+ * Busy is not dead: a backend whose event loop is blocked for seconds at a time
+ * (a burst of process spawns, a large synchronous read) fails probes too. When
+ * the failure threshold is reached the watchdog asks the backend's liveness
+ * beacon (`t3team-backendLiveness.ts`). A busy backend gets `busyGrace` more to
+ * recover; a frozen, wedged, or silent one is killed as before, and so is one
+ * still busy when the grace runs out.
  */
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientRequest } from "effect/http";
 
-export interface BackendHealthWatchdogConfig {
-  readonly enabled: boolean;
-  readonly interval: Duration.Duration;
-  readonly probeTimeout: Duration.Duration;
-  readonly failureThreshold: number;
-  readonly warmup: Duration.Duration;
-  readonly maxKillsPerWindow: number;
-  readonly killWindow: Duration.Duration;
-}
+import {
+  backendLivenessUnavailable,
+  describeBackendLiveness,
+  type BackendLiveness,
+  type BackendLivenessVerdict,
+} from "./t3team-backendLiveness.ts";
+import type { BackendHealthWatchdogConfig } from "./t3team-backendHealthWatchdogConfig.ts";
+import type { BackendWatchdogKillHistory } from "./t3team-backendWatchdogKillHistory.ts";
 
-// 5 failures x (3s timeout + 3s spacing) ≈ 30s before a kill.
-export const DEFAULT_BACKEND_HEALTH_WATCHDOG_CONFIG: BackendHealthWatchdogConfig = {
-  enabled: true,
-  interval: Duration.seconds(3),
-  probeTimeout: Duration.seconds(3),
-  failureThreshold: 5,
-  warmup: Duration.seconds(10),
-  maxKillsPerWindow: 3,
-  killWindow: Duration.minutes(15),
-};
-
-const readPositiveInt = (value: string | undefined): Option.Option<number> => {
-  if (value === undefined || value.trim() === "") return Option.none();
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? Option.some(parsed) : Option.none();
-};
-
-/**
- * Env overrides: T3TEAM_BACKEND_WATCHDOG=0 disables it;
- * T3TEAM_BACKEND_WATCHDOG_INTERVAL_MS, _TIMEOUT_MS, _FAILURES tune it.
- */
-export function resolveBackendHealthWatchdogConfig(
-  env: Readonly<Record<string, string | undefined>>,
-  base: BackendHealthWatchdogConfig = DEFAULT_BACKEND_HEALTH_WATCHDOG_CONFIG,
-): BackendHealthWatchdogConfig {
-  const ms = (key: string, fallback: Duration.Duration) =>
-    Option.match(readPositiveInt(env[key]), {
-      onNone: () => fallback,
-      onSome: (value) => Duration.millis(value),
-    });
-  return {
-    ...base,
-    enabled: env.T3TEAM_BACKEND_WATCHDOG !== "0" && base.enabled,
-    interval: ms("T3TEAM_BACKEND_WATCHDOG_INTERVAL_MS", base.interval),
-    probeTimeout: ms("T3TEAM_BACKEND_WATCHDOG_TIMEOUT_MS", base.probeTimeout),
-    failureThreshold: Option.getOrElse(
-      readPositiveInt(env.T3TEAM_BACKEND_WATCHDOG_FAILURES),
-      () => base.failureThreshold,
-    ),
-  };
-}
+export {
+  DEFAULT_BACKEND_HEALTH_WATCHDOG_CONFIG,
+  resolveBackendHealthWatchdogConfig,
+  type BackendHealthWatchdogConfig,
+} from "./t3team-backendHealthWatchdogConfig.ts";
+export { BackendWatchdogKillHistory } from "./t3team-backendWatchdogKillHistory.ts";
 
 export class BackendHealthProbeError extends Schema.TaggedError<BackendHealthProbeError>()(
   "BackendHealthProbeError",
@@ -84,73 +56,76 @@ export class BackendHealthProbeError extends Schema.TaggedError<BackendHealthPro
 
 const isBackendHealthProbeError = Schema.is(BackendHealthProbeError);
 
-export interface BackendUnhealthy {
+export interface BackendProbeFailure {
   readonly consecutiveFailures: number;
   readonly lastFailure: string;
 }
 
-/** Tracks watchdog kills across runs of one backend instance. */
-export class BackendWatchdogKillHistory {
-  private kills: Array<number> = [];
-  private readonly now: () => number;
-  constructor(now: () => number = Date.now) {
-    this.now = now;
-  }
-
-  private prune(config: BackendHealthWatchdogConfig): void {
-    const cutoff = this.now() - Duration.toMillis(config.killWindow);
-    this.kills = this.kills.filter((at) => at >= cutoff);
-  }
-  recordKill(): void {
-    this.kills.push(this.now());
-  }
-  recentKills(config: BackendHealthWatchdogConfig): number {
-    this.prune(config);
-    return this.kills.length;
-  }
-  /** Warm-up doubles with every recent kill, capped at the kill window. */
-  warmupFor(config: BackendHealthWatchdogConfig): Duration.Duration {
-    const factor = 2 ** this.recentKills(config);
-    return Duration.min(Duration.times(config.warmup, factor), config.killWindow);
-  }
-  mayKill(config: BackendHealthWatchdogConfig): boolean {
-    return this.recentKills(config) < config.maxKillsPerWindow;
-  }
+export interface BackendUnhealthy extends BackendProbeFailure {
+  readonly verdict: BackendLivenessVerdict;
+  readonly failingForMs: number;
 }
 
+const probeOnce = <R>(
+  probe: Effect.Effect<void, BackendHealthProbeError, R>,
+  timeout: Duration.Duration,
+): Effect.Effect<Option.Option<string>, never, R> =>
+  probe.pipe(
+    Effect.timeoutOption(timeout),
+    Effect.map(
+      Option.match({
+        onNone: () => Option.some(`no reply within ${Duration.toMillis(timeout)}ms`),
+        onSome: () => Option.none<string>(),
+      }),
+    ),
+    Effect.catchCause((cause) =>
+      Effect.succeedSome(Cause.pretty(cause).split("\n")[0] ?? "probe failed"),
+    ),
+  );
+
 /**
- * Probes until `failureThreshold` consecutive probes fail, then returns the
- * failure summary. A successful probe resets the counter. Never fails.
+ * Probes until `failureThreshold` consecutive probes fail and the backend is
+ * not merely busy within `busyGrace`, then returns the failure summary. A
+ * successful probe resets the counter. Never fails.
  */
 export const watchBackendHealth = <R>(options: {
   readonly config: BackendHealthWatchdogConfig;
   readonly probe: Effect.Effect<void, BackendHealthProbeError, R>;
-  readonly onProbeFailure?: (info: BackendUnhealthy) => Effect.Effect<void>;
+  readonly liveness?: BackendLiveness;
+  readonly onProbeFailure?: (info: BackendProbeFailure) => Effect.Effect<void>;
+  readonly onBusy?: (info: BackendUnhealthy) => Effect.Effect<void>;
 }): Effect.Effect<BackendUnhealthy, never, R> =>
   Effect.gen(function* () {
     const { config } = options;
+    const liveness = options.liveness ?? backendLivenessUnavailable;
     let failures = 0;
+    let failingSinceMs: number | undefined;
+    let waitingOnBusy = false;
     while (true) {
-      const result = yield* options.probe.pipe(
-        Effect.timeoutOption(config.probeTimeout),
-        Effect.map(
-          Option.match({
-            onNone: () =>
-              Option.some(`no reply within ${Duration.toMillis(config.probeTimeout)}ms`),
-            onSome: () => Option.none<string>(),
-          }),
-        ),
-        Effect.catchCause((cause) =>
-          Effect.succeedSome(Cause.pretty(cause).split("\n")[0] ?? "probe failed"),
-        ),
-      );
-      if (Option.isNone(result)) {
+      const failure = yield* probeOnce(options.probe, config.probeTimeout);
+      if (Option.isNone(failure)) {
         failures = 0;
+        failingSinceMs = undefined;
+        waitingOnBusy = false;
       } else {
         failures += 1;
-        const info = { consecutiveFailures: failures, lastFailure: result.value };
+        const nowMs = yield* Clock.currentTimeMillis;
+        failingSinceMs ??= nowMs;
+        const info = { consecutiveFailures: failures, lastFailure: failure.value };
         yield* options.onProbeFailure?.(info) ?? Effect.void;
-        if (failures >= config.failureThreshold) return info;
+        if (failures >= config.failureThreshold) {
+          const unhealthy = {
+            ...info,
+            verdict: yield* liveness.assess,
+            failingForMs: nowMs - failingSinceMs,
+          };
+          const withinBusyGrace =
+            unhealthy.verdict.kind === "busy" &&
+            unhealthy.failingForMs < Duration.toMillis(config.busyGrace);
+          if (!withinBusyGrace) return unhealthy;
+          if (!waitingOnBusy) yield* options.onBusy?.(unhealthy) ?? Effect.void;
+          waitingOnBusy = true;
+        }
       }
       yield* Effect.sleep(config.interval);
     }
@@ -180,6 +155,12 @@ export const makeBackendHttpHealthProbe = (
     ),
   );
 
+const describeUnhealthy = ({ verdict, ...rest }: BackendUnhealthy) => ({
+  ...rest,
+  liveness: verdict.kind,
+  livenessDetail: describeBackendLiveness(verdict),
+});
+
 /**
  * Full watchdog cycle for one ready backend run: warm-up, watch, then either
  * kill (via `kill`) or, when the kill budget is spent, only log and stop.
@@ -188,6 +169,7 @@ export const runBackendHealthWatchdog = <R>(options: {
   readonly config: BackendHealthWatchdogConfig;
   readonly history: BackendWatchdogKillHistory;
   readonly probe: Effect.Effect<void, BackendHealthProbeError, R>;
+  readonly liveness?: BackendLiveness;
   readonly kill: Effect.Effect<void>;
   readonly log: (message: string, details: Record<string, unknown>) => Effect.Effect<void>;
 }): Effect.Effect<void, never, R> =>
@@ -195,18 +177,30 @@ export const runBackendHealthWatchdog = <R>(options: {
     const { config, history } = options;
     if (!config.enabled) return;
     yield* Effect.sleep(history.warmupFor(config));
-    const unhealthy = yield* watchBackendHealth({ config, probe: options.probe });
+    const unhealthy = yield* watchBackendHealth({
+      config,
+      probe: options.probe,
+      ...(options.liveness ? { liveness: options.liveness } : {}),
+      onBusy: (busy) =>
+        options.log("backend not answering but busy; waiting before killing it", {
+          ...describeUnhealthy(busy),
+          busyGraceMs: Duration.toMillis(config.busyGrace),
+        }),
+    });
+    const details = { ...describeUnhealthy(unhealthy), recentKills: history.recentKills(config) };
     if (!history.mayKill(config)) {
-      yield* options.log("backend unresponsive; watchdog restart budget spent, not killing", {
-        ...unhealthy,
-        recentKills: history.recentKills(config),
-      });
+      yield* options.log(
+        "backend unresponsive; watchdog restart budget spent, not killing",
+        details,
+      );
       return;
     }
     history.recordKill();
-    yield* options.log("backend unresponsive; killing it so it restarts", {
-      ...unhealthy,
-      recentKills: history.recentKills(config),
-    });
+    yield* options.log(
+      unhealthy.verdict.kind === "busy"
+        ? "backend stayed busy past the watchdog's grace; killing it so it restarts"
+        : "backend unresponsive; killing it so it restarts",
+      { ...details, recentKills: history.recentKills(config) },
+    );
     yield* options.kill;
   });

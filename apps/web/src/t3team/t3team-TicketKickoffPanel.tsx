@@ -7,6 +7,7 @@ import { mergeContextAttachmentsById } from "~/t3team/t3team-contextAttachmentMe
 import { T3TeamSidecarComposition } from "~/t3team/t3team-SidecarComposition";
 import { applyT3TeamRecipeQuickStartLaunchCustomization } from "~/t3team/t3team-recipeQuickStartLaunch";
 import { requestTicketKickoffPanelRecipeThread } from "~/t3team/t3team-ticketKickoffPanelRecipeThread";
+import { useT3TeamKickoffWorkItemRef } from "~/t3team/t3team-useKickoffWorkItemRef";
 import type { T3TeamSidecarRecipeInput } from "~/t3team/t3team-sidecarRecipeTypes";
 import {
   useT3TeamStagedComposerAction,
@@ -58,6 +59,7 @@ export function TicketKickoffPanel({
   const [dismissedAttachmentIds, setDismissedAttachmentIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const workItemRef = useT3TeamKickoffWorkItemRef(quickStartRecipeInput);
   const { clearSelectedRecipe, composerRef, selectedRecipe, sidecarHost } =
     useBundledSidecarRecipeLaunch({
       backend: quickStartRecipeInput.backend,
@@ -65,6 +67,7 @@ export function TicketKickoffPanel({
       projectId,
       surface: "workitem.detail.sidepanel",
       projectWorkspaceRoot: quickStartRecipeInput.project.workspace?.rootPath,
+      ...(workItemRef ? { workItem: workItemRef } : {}),
       openThread: onOpenThread,
       buildSelectedRecipe: (recipe, customization) => ({
         recipe: applyT3TeamRecipeQuickStartLaunchCustomization(recipe, customization),

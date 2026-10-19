@@ -1365,6 +1365,48 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
     }),
   );
 
+  it.effect("a warm merged PR lookup rereads git only when it must confirm the answer", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      yield* initRepo(repoDir);
+      const remoteDir = yield* createBareRemote();
+      yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
+      yield* runGit(repoDir, ["checkout", "-b", "feature/warm-merged", "main"]);
+      yield* runGit(repoDir, ["push", "-u", "origin", "feature/warm-merged"]);
+      const gitCommands: string[] = [];
+      const { manager } = yield* makeManager({
+        gitCommands,
+        ghScenario: {
+          prListByHeadSelector: {
+            "feature/warm-merged": encodeCliJson([
+              {
+                number: 231,
+                title: "Merged PR",
+                url: "https://github.com/pingdotgg/codething-mvp/pull/231",
+                baseRefName: "main",
+                headRefName: "feature/warm-merged",
+                state: "MERGED",
+                mergedAt: "2026-04-07T16:00:00Z",
+                updatedAt: "2026-04-07T16:00:00Z",
+              },
+            ]),
+          },
+        },
+      });
+      const input = { cwd: repoDir, branch: "feature/warm-merged" };
+      expect((yield* manager.branchPullRequest(input))?.state).toBe("merged");
+
+      gitCommands.length = 0;
+      const unconfirmed = yield* manager.branchPullRequest(input, { confirmClosed: false });
+      expect(unconfirmed?.number).toBe(231);
+      expect(gitCommands).toEqual([]);
+
+      const confirmed = yield* manager.branchPullRequest(input);
+      expect(confirmed?.number).toBe(231);
+      expect(gitCommands.length).toBeGreaterThan(0);
+    }),
+  );
+
   it.effect(
     "a branch PR lookup sees an upstream change on request, after a T3 git action, or after the TTL",
     () =>

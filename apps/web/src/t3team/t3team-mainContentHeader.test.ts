@@ -15,16 +15,14 @@ describe("getT3TeamMainContentHeaderClassName", () => {
     expect(className).toContain("wco:pl-(--workspace-controls-left)");
   });
 
-  // App-region hit-testing ignores z-index: a drag-region header claims every
-  // click in its box for window dragging, and the shell's fixed desktop
-  // toggle — a no-drag floating sibling at the 90px inset — would lose to it.
-  // The header must stay out of the drag layer so the toggle receives clicks.
-  it("never marks the header as a window drag region", () => {
+  // The header lies inside the window drag strip's band; without `.drag-region`
+  // its buttons, links and inputs would not opt out and could not be clicked.
+  it("is a drag region so its controls stay clickable under the window drag strip", () => {
     const className = getT3TeamMainContentHeaderClassName({
       shouldInsetDesktopHeader: true,
     });
 
-    expect(className).not.toContain("drag-region");
+    expect(className.split(" ")).toContain("drag-region");
   });
 
   it("adds the app-title fallback inset when the desktop sidebar is collapsed", () => {

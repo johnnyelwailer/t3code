@@ -105,6 +105,7 @@ import {
 } from "./t3team-repositoryReadFailure.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import * as ViewedFiles from "./pullRequestViewedFiles.ts";
+import { unreadableRepositoryMessage } from "./t3team-unreadableRepositoryMessage.ts";
 
 export interface PullRequestMergeEvent extends PullRequestRef {
   readonly mergedAt: string;
@@ -1430,11 +1431,18 @@ export const make = Effect.gen(function* () {
       // Reporting them keeps "N repositories were unavailable" honest instead of dropping them.
       const unreadable = selected
         .filter(({ host }) => viewers[host] === undefined)
-        .map(({ project, repository }) => ({
-          projectId: project.id,
-          projectTitle: project.title,
-          message: `${repository} could not be read.`,
-        }));
+        .map(({ project, repository, host }) => {
+          const hostError = viewerResults.find((result) => result.host === host)?.error;
+          return {
+            projectId: project.id,
+            projectTitle: project.title,
+            message: unreadableRepositoryMessage({
+              repository,
+              host,
+              reason: hostError ? providerDetail(hostError) : null,
+            }),
+          };
+        });
       if (readable.length === 0) {
         // No host this request covers can be read, so it is not a per-project problem. An
         // unusable host is preferred as the reported cause because it names the fix; a host

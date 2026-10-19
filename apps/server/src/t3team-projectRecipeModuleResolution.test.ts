@@ -1,4 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off - the tests build a pack directory on disk.
+import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -12,12 +13,7 @@ import {
   withConfigVersion,
 } from "./t3team-projectRecipeModuleResolution.ts";
 
-/**
- * The end-to-end behaviour (a `recipe.ts` outside any install resolving `@t3team/sdk`) cannot be
- * exercised here: `vp test` runs through vite-plus, which owns module resolution in this
- * environment, so a Node `registerHooks` fallback never fires. What IS worth pinning is the
- * allow-list — it is a security boundary, not a convenience.
- */
+/** The allow-list is a security boundary, not a convenience. */
 describe("isResolvableFromHost", () => {
   it("allows the authoring SDK and its subpaths", () => {
     expect(isResolvableFromHost("@t3team/sdk")).toBe(true);
@@ -69,9 +65,18 @@ describe("resolveFromHost", () => {
     return NodeURL.pathToFileURL(NodePath.join(dir, "server-abc123.mjs")).href;
   };
 
-  it("prefers what the server's installation resolves", () => {
-    const hostUrl = bundleDir(["t3team-hostEffect.mjs"]);
-    expect(resolveFromHost("effect", hostUrl, () => "file:///installed/effect.js")).toBe(
+  // The packaged desktop app installs @t3team/sdk as raw .ts under node_modules, which Node will
+  // not type-strip; the bundle entry is the only copy that loads, and the one the host runs.
+  it("prefers the bundle's host-module entry over an installed copy", () => {
+    const hostUrl = bundleDir(["t3team-hostSdk.mjs"]);
+    const installedTs = () => "file:///app/node_modules/@t3team/sdk/src/t3team-sdk.index.ts";
+    expect(resolveFromHost("@t3team/sdk", hostUrl, installedTs)).toBe(
+      new URL("./t3team-hostSdk.mjs", hostUrl).href,
+    );
+  });
+
+  it("uses the server's installation when there is no bundle entry", () => {
+    expect(resolveFromHost("effect", bundleDir([]), () => "file:///installed/effect.js")).toBe(
       "file:///installed/effect.js",
     );
   });
@@ -128,6 +133,86 @@ describe("resolveFromHost", () => {
     const hostSource = NodeFS.readFileSync(hostEffectPath, "utf8");
     expect(schemaFrom(serverSource)).toBe(schemaFrom(hostSource));
     expect(NodeFS.existsSync(NodePath.join(dist, schemaFrom(hostSource).slice(2)))).toBe(true);
+  });
+});
+
+/**
+ * Runs the hook in a real Node process (vite-plus owns resolution under `vp test`) against the
+ * packaged desktop layout: the server bundle sits beside a `node_modules/@t3team/sdk` holding raw
+ * `.ts` sources, and the project's path contains a space, like `projects/Nexi AI`.
+ */
+describe("a project recipe imported by the packaged server", () => {
+  const write = (file: string, content: string) => {
+    NodeFS.mkdirSync(NodePath.dirname(file), { recursive: true });
+    NodeFS.writeFileSync(file, content);
+  };
+
+  const makePackagedLayout = () => {
+    const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "recipe host "));
+    const install = NodePath.join(root, "server asar");
+    const dist = NodePath.join(install, "apps", "server", "dist");
+    const sdk = NodePath.join(install, "node_modules", "@t3team", "sdk");
+    write(NodePath.join(root, "package.json"), '{ "type": "module" }');
+    write(
+      NodePath.join(sdk, "package.json"),
+      '{ "name": "@t3team/sdk", "type": "module", "exports": { ".": { "import": "./src/index.ts" } } }',
+    );
+    write(NodePath.join(sdk, "src", "index.ts"), "export const defineRecipe = (r: object) => r;\n");
+    write(
+      NodePath.join(dist, "t3team-hostSdk.mjs"),
+      [
+        'export const defineRecipe = (recipe) => ({ ...recipe, kind: "recipe", from: "bundle" });',
+        'export const definePrompt = (path) => ({ kind: "prompt", path });',
+      ].join("\n"),
+    );
+    NodeFS.copyFileSync(
+      NodeURL.fileURLToPath(new URL("./t3team-projectRecipeModuleResolution.ts", import.meta.url)),
+      NodePath.join(dist, "server-abc123.ts"),
+    );
+    const recipe = NodePath.join(
+      root,
+      "Nexi AI",
+      ".nexi",
+      "recipes",
+      "next-best-task",
+      "recipe.ts",
+    );
+    write(
+      recipe,
+      [
+        'import { definePrompt, defineRecipe } from "@t3team/sdk";',
+        'export default defineRecipe({ id: "next-best-task", defaultAction: definePrompt("./prompt.md") });',
+      ].join("\n"),
+    );
+    const loader = NodePath.join(root, "load.mjs");
+    write(
+      loader,
+      [
+        "const [host, recipe] = process.argv.slice(2);",
+        "(await import(host)).ensureProjectRecipeModuleResolution();",
+        "try {",
+        "  const { default: ref } = await import(recipe);",
+        "  process.stdout.write(JSON.stringify({ id: ref.id, from: ref.from }));",
+        "} catch (error) {",
+        "  process.stdout.write(JSON.stringify({ code: error.code, message: error.message }));",
+        "}",
+      ].join("\n"),
+    );
+    return { host: NodePath.join(dist, "server-abc123.ts"), recipe, loader };
+  };
+
+  it("loads the recipe against the bundle's SDK, not the installed .ts sources", () => {
+    const layout = makePackagedLayout();
+    const output = NodeChildProcess.execFileSync(
+      process.execPath,
+      [
+        layout.loader,
+        NodeURL.pathToFileURL(layout.host).href,
+        `${NodeURL.pathToFileURL(layout.recipe).href}?v=1`,
+      ],
+      { encoding: "utf8" },
+    );
+    expect(JSON.parse(output)).toEqual({ id: "next-best-task", from: "bundle" });
   });
 });
 
