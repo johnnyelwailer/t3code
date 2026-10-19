@@ -1,4 +1,4 @@
-import { type RuntimeRequestId } from "@t3tools/contracts";
+import { type RuntimeRequestId, type ScopedThreadRef } from "@t3tools/contracts";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { type PendingUserInput } from "../../session-logic";
 import {
@@ -13,6 +13,9 @@ import { T3TeamPendingQuestionMarkdown } from "./t3team-pendingQuestionMarkdown"
 
 interface PendingUserInputPanelProps {
   pendingUserInputs: PendingUserInput[];
+  /** Resolves file links in the question text. */
+  cwd: string | undefined;
+  threadRef: ScopedThreadRef;
   disabled?: boolean;
   respondingRequestIds: RuntimeRequestId[];
   answers: Record<string, PendingUserInputDraftAnswer>;
@@ -24,6 +27,8 @@ interface PendingUserInputPanelProps {
 
 export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserInputPanel({
   pendingUserInputs,
+  cwd,
+  threadRef,
   disabled = false,
   respondingRequestIds,
   answers,
@@ -40,6 +45,8 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
     <ComposerPendingUserInputCard
       key={activePrompt.requestId}
       prompt={activePrompt}
+      cwd={cwd}
+      threadRef={threadRef}
       disabled={disabled}
       isResponding={respondingRequestIds.includes(activePrompt.requestId)}
       answers={answers}
@@ -53,6 +60,8 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
 
 const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard({
   prompt,
+  cwd,
+  threadRef,
   disabled,
   isResponding,
   answers,
@@ -62,6 +71,8 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   onDismiss,
 }: {
   prompt: PendingUserInput;
+  cwd: string | undefined;
+  threadRef: ScopedThreadRef;
   disabled: boolean;
   isResponding: boolean;
   answers: Record<string, PendingUserInputDraftAnswer>;
@@ -95,13 +106,6 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   }, [onAdvance]);
 
   useEffect(() => {
-    if (disabled && autoAdvanceTimerRef.current !== null) {
-      window.clearTimeout(autoAdvanceTimerRef.current);
-      autoAdvanceTimerRef.current = null;
-    }
-  }, [disabled]);
-
-  useEffect(() => {
     if (!activeQuestion || activeQuestion.multiSelect || !optimisticSingleSelect) {
       return;
     }
@@ -122,14 +126,17 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
     progress.selectedOptionValues,
   ]);
 
-  // Clear auto-advance timer on unmount
+  // A delayed answer only advances its own question, while permission remains granted.
   useEffect(() => {
-    return () => {
+    const clearAutoAdvance = () => {
       if (autoAdvanceTimerRef.current !== null) {
         window.clearTimeout(autoAdvanceTimerRef.current);
+        autoAdvanceTimerRef.current = null;
       }
     };
-  }, []);
+    if (disabled || activeQuestion?.id === undefined) clearAutoAdvance();
+    return clearAutoAdvance;
+  }, [activeQuestion?.id, disabled]);
 
   const handleOptionSelection = useCallback(
     (questionId: string, optionValue: string) => {
@@ -260,6 +267,8 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
               // pattern the card itself uses.
               <div className="mb-2 rounded-md bg-muted/40 px-2.5 py-1.5">
                 <T3TeamPendingQuestionMarkdown
+                  cwd={cwd}
+                  threadRef={threadRef}
                   text={activeQuestion.context}
                   className="text-secondary-label text-2xs line-clamp-4"
                 />
@@ -273,6 +282,8 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                   <CollapsiblePanel>
                     <div className="pt-0.5">
                       <T3TeamPendingQuestionMarkdown
+                        cwd={cwd}
+                        threadRef={threadRef}
                         text={activeQuestion.context}
                         className="text-secondary-label text-2xs"
                       />
@@ -281,7 +292,11 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                 </Collapsible>
               </div>
             ) : null}
-            <T3TeamPendingQuestionMarkdown text={activeQuestion.question} />
+            <T3TeamPendingQuestionMarkdown
+              cwd={cwd}
+              threadRef={threadRef}
+              text={activeQuestion.question}
+            />
             {activeQuestion.multiSelect ? (
               <p className="mt-1 text-secondary-label text-xs">Select one or more options.</p>
             ) : null}
@@ -296,7 +311,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                   (!customAnswerActive && progress.selectedOptionValues.includes(optionValue));
                 const shortcutKey = index < 9 ? index + 1 : null;
                 const className = cn(
-                  "group flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-primary/25",
+                  "group flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/25",
                   isSelected
                     ? "bg-muted/55 text-foreground"
                     : "bg-transparent text-foreground/85 hover:bg-muted/30",
@@ -309,6 +324,8 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                       <span className="text-sm font-medium">{option.label}</span>
                       {option.description && option.description !== option.label ? (
                         <T3TeamPendingQuestionMarkdown
+                          cwd={cwd}
+                          threadRef={threadRef}
                           text={option.description}
                           className="text-secondary-label text-2xs"
                         />

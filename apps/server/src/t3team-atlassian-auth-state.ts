@@ -2,6 +2,8 @@ import type { JiraApiAuth } from "@t3tools/integrations-atlassian";
 import * as Effect from "effect/Effect";
 import * as Semaphore from "effect/Semaphore";
 
+import { withAtlassianAuthFileLock } from "./t3team-atlassian-auth-fileLock.ts";
+import { homeIdToPersist, setLoadedSecretHomeId } from "./t3team-atlassian-auth-homeGuard.ts";
 import {
   loadPersistedAtlassianAuthsPayload,
   type PersistedAtlassianAuths,
@@ -10,6 +12,9 @@ import {
 import {
   accountNeedsReconnect,
   clearAllNeedsReconnect,
+  hasUnsavedReconnectFlags,
+  markReconnectFlagsSaved,
+  reapplyUnsavedReconnectFlags,
   setAccountNeedsReconnect,
 } from "./t3team-atlassian-auth-staleToken.ts";
 
@@ -26,12 +31,18 @@ export const atlassianAuths = new Map<string, JiraApiAuth>();
 
 const authStoreLock = Semaphore.makeUnsafe(1);
 
-/** Run `effect` as one critical section over the accounts and their persisted secret. */
-export const withAuthStoreLock = authStoreLock.withPermits(1);
+/**
+ * Run `effect` as one critical section over the accounts and their persisted secret: the
+ * in-process semaphore first, then the cross-process lock file, so a second server on the same
+ * T3 home can not redeem the same single-use refresh token in parallel.
+ */
+export const withAuthStoreLock = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  authStoreLock.withPermits(1)(withAtlassianAuthFileLock(effect));
 
-function persistedAuthsPayload(): PersistedAtlassianAuths {
+function persistedAuthsPayload(homeId: string): PersistedAtlassianAuths {
   return {
     version: 1,
+    homeId,
     auths: [...atlassianAuths].map(([accountId, auth]) => ({
       accountId,
       auth,
@@ -40,19 +51,33 @@ function persistedAuthsPayload(): PersistedAtlassianAuths {
   };
 }
 
-/** Replace memory with the persisted secret. Callers hold the lock. */
+/**
+ * Write memory to the persisted secret. Callers hold the lock. Whatever flags were waiting for a
+ * write are in the file once this succeeds.
+ */
+export const persistAuthsToDisk = Effect.flatMap(homeIdToPersist, (homeId) =>
+  savePersistedAtlassianAuthsPayload(persistedAuthsPayload(homeId)),
+).pipe(Effect.tap(() => Effect.sync(markReconnectFlagsSaved)));
+
+/**
+ * Replace memory with the persisted secret, keeping the flags a refused call raised since the last
+ * write and writing them out. Callers hold the lock.
+ */
 export const reloadAuthsFromDisk = Effect.gen(function* () {
   const parsed = yield* loadPersistedAtlassianAuthsPayload;
-  if (!parsed) return;
-  atlassianAuths.clear();
-  clearAllNeedsReconnect();
-  for (const entry of parsed.auths) {
-    atlassianAuths.set(entry.accountId, entry.auth);
-    setAccountNeedsReconnect(entry.accountId, entry.needsReconnect === true);
+  if (parsed) {
+    setLoadedSecretHomeId(parsed.homeId);
+    atlassianAuths.clear();
+    clearAllNeedsReconnect();
+    for (const entry of parsed.auths) {
+      atlassianAuths.set(entry.accountId, entry.auth);
+      setAccountNeedsReconnect(entry.accountId, entry.needsReconnect === true);
+    }
   }
+  reapplyUnsavedReconnectFlags((accountId) => {
+    const auth = atlassianAuths.get(accountId);
+    if (!auth) return null;
+    return auth.kind === "oauth" ? auth.accessToken : auth.apiToken;
+  });
+  if (hasUnsavedReconnectFlags()) yield* persistAuthsToDisk.pipe(Effect.ignore);
 });
-
-/** Write memory to the persisted secret. Callers hold the lock. */
-export const persistAuthsToDisk = Effect.suspend(() =>
-  savePersistedAtlassianAuthsPayload(persistedAuthsPayload()),
-);

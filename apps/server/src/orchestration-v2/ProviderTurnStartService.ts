@@ -5,6 +5,7 @@ import {
   CONDUCTOR_MODEL_ID,
   conductorUsageBlock,
   latestProviderTurnForAttempt,
+  type OrchestrationV2ContextHandoff,
   type OrchestrationV2DomainEvent,
   type OrchestrationV2ExecutionNode,
   type OrchestrationV2ProviderThread,
@@ -21,9 +22,11 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
+import { withWorkspaceLease } from "../workspace/workspaceLease.ts";
 import * as GitWorkflowService from "../git/GitWorkflowService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
@@ -38,20 +41,16 @@ import {
   contextUsageForHandoff,
   historicalMessage,
   latestNativeContextUsage,
-} from "./ContextHandoffBudget.ts";
+} from "@t3tools/provider-core/server/handoffBudget";
 import { deliverContextHandoffs } from "./ContextHandoffDelivery.ts";
-import {
-  ProviderAdapterTurnStartError,
-  type ProviderAdapterV2Error,
-  type ProviderAdapterV2HistoricalContext,
-  type ProviderAdapterV2SessionRuntime,
-} from "./ProviderAdapter.ts";
-import * as IdAllocator from "./IdAllocator.ts";
+import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
-import { makeProviderFailure } from "./ProviderFailure.ts";
+import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 import * as RunExecutionService from "./RunExecutionService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
+import { ColdLocalCompaction, tryColdLocalCompaction } from "./t3team-coldLocalCompaction.ts";
 import { DelegatedCompletionWakeRenderer } from "../t3team-v2/t3team-delegatedCompletionWakeRenderer.ts";
 import { refreshStartingDelegatedCompletionWake } from "../t3team-v2/t3team-delegatedCompletionWakeRefresh.ts";
 import {
@@ -100,6 +99,7 @@ export const layer: Layer.Layer<
   | ContextHandoffService.ContextHandoffServiceV2
   | IdAllocator.IdAllocatorV2
   | FileSystem.FileSystem
+  | Path.Path
   | GitWorkflowService.GitWorkflowService
   | ProjectService.ProjectService
   | ProviderAuthService.ProviderAuthService
@@ -114,6 +114,7 @@ export const layer: Layer.Layer<
     const contextHandoffService = yield* ContextHandoffService.ContextHandoffServiceV2;
     const idAllocator = yield* IdAllocator.IdAllocatorV2;
     const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
     const gitWorkflow = yield* GitWorkflowService.GitWorkflowService;
     const projects = yield* ProjectService.ProjectService;
     const providerAuth = yield* ProviderAuthService.ProviderAuthService;
@@ -123,6 +124,8 @@ export const layer: Layer.Layer<
     const runtimePolicy = yield* RuntimePolicy.RuntimePolicyV2;
     // t3team: wake renderer for a delegated-completion wake whose task set changed while queued.
     const wakeRenderer = yield* DelegatedCompletionWakeRenderer;
+    // t3team: pack-registered local summarizer for compacting a cold-cache thread.
+    const coldLocalCompaction = yield* ColdLocalCompaction;
 
     // These callbacks outlive startup while a run drains background work. Build
     // them outside start's scope so they cannot retain its full thread history.
@@ -191,15 +194,15 @@ export const layer: Layer.Layer<
     };
 
     const makeDeliverySession = (
-      session: ProviderAdapterV2SessionRuntime,
+      session: ProviderAdapter.ProviderAdapterV2SessionRuntime,
       startWithHandoffs: (
-        input: Parameters<ProviderAdapterV2SessionRuntime["startTurn"]>[0],
+        input: Parameters<ProviderAdapter.ProviderAdapterV2SessionRuntime["startTurn"]>[0],
         compact?: boolean,
-      ) => ReturnType<ProviderAdapterV2SessionRuntime["startTurn"]>,
+      ) => ReturnType<ProviderAdapter.ProviderAdapterV2SessionRuntime["startTurn"]>,
     ) => {
       let deliver: typeof startWithHandoffs | undefined = startWithHandoffs;
       const start = (
-        input: Parameters<ProviderAdapterV2SessionRuntime["startTurn"]>[0],
+        input: Parameters<ProviderAdapter.ProviderAdapterV2SessionRuntime["startTurn"]>[0],
         compact = false,
       ) =>
         Effect.suspend(() => {
@@ -319,9 +322,15 @@ export const layer: Layer.Layer<
             | Pick<
                 Extract<OrchestrationV2TurnItem, { type: "command_execution" }>,
                 "type" | "title" | "input" | "output" | "exitCode"
+              >
+            | Pick<
+                Extract<OrchestrationV2TurnItem, { type: "compaction" }>,
+                "type" | "title" | "driver"
               >;
           /** Emitted after the run events when the provider thread should go idle. */
           readonly providerThreadUpdate?: OrchestrationV2ProviderThread;
+          /** Written in the same batch, so a run never completes without its handoff. */
+          readonly contextHandoff?: OrchestrationV2ContextHandoff;
         }) {
           const { now, status } = input;
           const started = input.startedAt === undefined ? {} : { startedAt: input.startedAt };
@@ -366,6 +375,9 @@ export const layer: Layer.Layer<
                     payload: input.providerThreadUpdate,
                   },
                 ]),
+            ...(input.contextHandoff === undefined
+              ? []
+              : [{ type: "context-handoff.updated" as const, payload: input.contextHandoff }]),
           ] as const;
           const events = yield* Effect.forEach(eventPayloads, (event) =>
             Effect.gen(function* () {
@@ -470,6 +482,42 @@ export const layer: Layer.Layer<
               ...providerThread,
               status: providerThread.nativeThreadRef === null ? "not_loaded" : "idle",
               updatedAt: now,
+            },
+          });
+          return;
+        }
+        const localCompactionAt = yield* DateTime.now;
+        const localHandoff =
+          message.text.trim().toLowerCase() === "/compact"
+            ? yield* tryColdLocalCompaction({
+                compaction: coldLocalCompaction,
+                contextHandoffService,
+                projection,
+                run,
+                nativeThread,
+                loadItems: projectionStore.getTurnStartHistory(input.threadId),
+                now: localCompactionAt,
+              })
+            : undefined;
+        if (localHandoff !== undefined && nativeThread !== undefined) {
+          // The next turn starts a fresh native session on this provider thread and receives
+          // the summary through the pending handoff, instead of re-reading the cold context.
+          yield* settleRunBeforeStart({
+            signal: "cold-local-compaction",
+            status: "completed",
+            now: localCompactionAt,
+            startedAt: localCompactionAt,
+            providerInstanceId: nativeThread.providerInstanceId,
+            itemProviderThreadId: nativeThread.id,
+            item: { type: "compaction", title: "Context compacted", driver: nativeThread.driver },
+            contextHandoff: localHandoff,
+            providerThreadUpdate: {
+              ...nativeThread,
+              nativeThreadRef: null,
+              nativeConversationHeadRef: null,
+              contextUsage: null,
+              status: "not_loaded",
+              updatedAt: localCompactionAt,
             },
           });
           return;
@@ -609,7 +657,7 @@ export const layer: Layer.Layer<
       // Only the provider's own thread load fails the run on the last attempt;
       // store, id and handoff failures around it keep their typed errors.
       const loadFromProvider = (
-        load: Effect.Effect<OrchestrationV2ProviderThread, ProviderAdapterV2Error>,
+        load: Effect.Effect<OrchestrationV2ProviderThread, ProviderAdapter.ProviderAdapterV2Error>,
       ) =>
         Effect.gen(function* () {
           const loaded = yield* Effect.result(load);
@@ -670,6 +718,7 @@ export const layer: Layer.Layer<
           return yield* loadFromProvider(
             session.ensureThread({
               threadId: projection.thread.id,
+              title: projection.thread.title,
               modelSelection: run.modelSelection,
               runtimePolicy: resolvedRuntimePolicy,
               providerSessionId,
@@ -686,7 +735,7 @@ export const layer: Layer.Layer<
         const resumed = yield* Effect.result(
           uncertainDelivery
             ? Effect.fail(
-                new ProviderAdapterTurnStartError({
+                new ProviderAdapter.ProviderAdapterTurnStartError({
                   driver: session.driver,
                   threadId: projection.thread.id,
                   providerThreadId: providerThread.id,
@@ -715,6 +764,7 @@ export const layer: Layer.Layer<
         const replacement = yield* loadFromProvider(
           session.ensureThread({
             threadId: projection.thread.id,
+            title: projection.thread.title,
             modelSelection: run.modelSelection,
             runtimePolicy: resolvedRuntimePolicy,
             providerSessionId,
@@ -1168,7 +1218,7 @@ export const layer: Layer.Layer<
             ...(session.injectHistory === undefined
               ? {}
               : {
-                  inject: (history: ProviderAdapterV2HistoricalContext) =>
+                  inject: (history: ProviderAdapter.ProviderAdapterV2HistoricalContext) =>
                     session.injectHistory!({
                       providerThread: runningProviderThread,
                       ...history,
@@ -1236,7 +1286,7 @@ export const layer: Layer.Layer<
           Effect.mapError((cause) =>
             cause._tag === "ProviderAdapterTurnStartError"
               ? cause
-              : new ProviderAdapterTurnStartError({
+              : new ProviderAdapter.ProviderAdapterTurnStartError({
                   driver: session.driver,
                   threadId: projection.thread.id,
                   providerThreadId: providerThread.id,
@@ -1252,7 +1302,7 @@ export const layer: Layer.Layer<
         !noteContinuation
           ? session
           : makeDeliverySession(session, startWithHandoffs);
-      yield* runExecution.startRootRun({
+      return runExecution.startRootRun({
         commandId: CommandId.make(`command:effect:provider-turn.start:${run.id}`),
         appThread: projection.thread,
         providerSessionId,
@@ -1307,7 +1357,15 @@ export const layer: Layer.Layer<
 
     return ProviderTurnStartServiceV2.of({
       start: (input) =>
-        start(input).pipe(
+        Effect.gen(function* () {
+          // Storage cleanup removes worktrees under the same lease. Only startup
+          // holds it; the provider turn runs after it is released.
+          const { thread } = yield* projectionStore.getThreadRecords(input.threadId, []);
+          const providerTurn = yield* thread.worktreePath === null
+            ? start(input)
+            : withWorkspaceLease(path.resolve(thread.worktreePath), start(input));
+          if (providerTurn !== undefined) yield* providerTurn;
+        }).pipe(
           Effect.mapError((cause) =>
             isProviderTurnStartError(cause)
               ? cause

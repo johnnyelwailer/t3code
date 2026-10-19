@@ -13,7 +13,7 @@ import { ToolAuthSpawnError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
-import * as PtyAdapter from "../terminal/PtyAdapter.ts";
+import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 import { adapterForHost, getAdapter } from "./t3team-adapters.ts";
 import { wireLoginProcess } from "./t3team-loginProcessWiring.ts";
 import { killSessionProcess, makeToolAuthSessionControl } from "./t3team-loginSessionControl.ts";

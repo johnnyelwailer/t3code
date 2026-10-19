@@ -5,6 +5,7 @@ import type {
 import type {
   GitHubBackendApi,
   GitHubInboxDiscoverResponse,
+  LinkedRepositoryBranches,
   LinkedRepositorySyncResult,
   ProjectMainRepositorySwitchResult,
   ProjectWorkspaceContextFile,
@@ -21,6 +22,8 @@ import type {
 } from "./t3team-githubTypes";
 import { postJson } from "./t3team-t3BackendHttp";
 
+/** `POST /api/t3team/project/main-repository` migrates the state dir before it answers. */
+export const MAIN_REPOSITORY_SWITCH_TIMEOUT_MS = 180_000;
 export { createAtlassianBackendApi } from "./t3team-atlassianBackendApi";
 
 export function createGitHubBackendApi(httpBaseUrl: string): GitHubBackendApi {
@@ -32,6 +35,7 @@ export function createGitHubBackendApi(httpBaseUrl: string): GitHubBackendApi {
       readonly linkedRepositoryUrls?: ReadonlyArray<string>;
       readonly discoveryMode?: "inbox" | "repositories";
       readonly trigger?: "user" | "background";
+      readonly refresh?: boolean;
     }) {
       return postJson<typeof input, GitHubInboxDiscoverResponse>(
         httpBaseUrl,
@@ -62,7 +66,8 @@ export function createProjectWorkspaceBackendApi(httpBaseUrl: string): ProjectWo
       readonly workspaceRoot: string;
       readonly linkedRepositoryUrls?: ReadonlyArray<string>;
       readonly setupProfileId?: string;
-      readonly refreshLinkedRepositories?: boolean;
+      readonly syncLinkedRepositoryUrls?: ReadonlyArray<string>;
+      readonly inspectLinkedRepositoriesForMainRepository?: boolean;
     }): Promise<ProjectWorkspaceBootstrapResult> {
       return postJson<typeof input, ProjectWorkspaceBootstrapResult>(
         httpBaseUrl,
@@ -77,11 +82,28 @@ export function createProjectWorkspaceBackendApi(httpBaseUrl: string): ProjectWo
         input,
       );
     },
+    syncLinkedRepository(input) {
+      return postJson<typeof input, { linkedRepository: LinkedRepositorySyncResult }>(
+        httpBaseUrl,
+        "/api/t3team/project/workspace/linked-repositories/sync",
+        input,
+      );
+    },
+    listLinkedRepositoryBranches(input) {
+      return postJson<typeof input, LinkedRepositoryBranches>(
+        httpBaseUrl,
+        "/api/t3team/project/workspace/linked-repositories/branches",
+        input,
+      );
+    },
     setMainRepository(input) {
       return postJson<typeof input, ProjectMainRepositorySwitchResult>(
         httpBaseUrl,
         "/api/t3team/project/main-repository",
         input,
+        // The switch copies the project state dir into the new checkout; a large one takes well
+        // over the default 15s, and aborting at 15s left the switch unrecorded.
+        { timeoutMs: MAIN_REPOSITORY_SWITCH_TIMEOUT_MS },
       );
     },
     discoverRecipes(input: DiscoverProjectRecipesRequest): Promise<DiscoverProjectRecipesResponse> {

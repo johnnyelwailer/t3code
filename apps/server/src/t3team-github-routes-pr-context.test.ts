@@ -4,7 +4,7 @@ import * as Stream from "effect/Stream";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
-import { PullRequestOperationError } from "@t3tools/contracts";
+import { PullRequestOperationError, SourceControlProviderKind } from "@t3tools/contracts";
 import type {
   OrchestrationProjectShell,
   PullRequestActivity,
@@ -43,7 +43,7 @@ const projectsLayer = (projects: ReadonlyArray<OrchestrationProjectShell>) =>
 const projectionLayer = projectsLayer([project]);
 
 const detail: PullRequestDetail = {
-  provider: "github",
+  provider: SourceControlProviderKind.make("github"),
   capabilities: {
     diff: true,
     comment: true,
@@ -173,6 +173,7 @@ function pullRequestServiceLayer(
     stack: () => Effect.die("not used"),
     labelCandidates: () => Effect.die("not used"),
     setLabels: () => Effect.die("not used"),
+    reportState: () => Effect.die("not used"),
     detail: () => Effect.succeed(detail),
     projectRepositories: () => Effect.die("not used"),
     preview: () => Effect.die("not used"),
@@ -216,7 +217,7 @@ const providerRegistryLayer = Layer.succeed(
   PullRequestProviderRegistry,
   PullRequestProviderRegistry.of({
     get: (kind) => (kind === "github" ? ({ kind } as never) : null),
-    kinds: ["github"],
+    kinds: [SourceControlProviderKind.make("github")],
   }),
 );
 

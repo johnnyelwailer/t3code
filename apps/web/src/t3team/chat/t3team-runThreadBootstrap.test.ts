@@ -49,6 +49,10 @@ function createBackend(): BackendApi {
         linkedRepositories: [],
       })),
       readLinkedRepositoryStatus: vi.fn(async () => ({ linkedRepositories: [] })),
+      syncLinkedRepository: vi.fn(async () => ({
+        linkedRepository: { url: "", localPath: "", status: "not-cloned" as const },
+      })),
+      listLinkedRepositoryBranches: vi.fn(async () => ({ branches: [] })),
       setMainRepository: vi.fn(async () => {
         throw new Error("not used");
       }),

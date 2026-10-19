@@ -23,6 +23,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import { afterAll } from "vite-plus/test";
 import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -35,7 +36,7 @@ import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
 import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
 import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
-import { expandHomePath } from "./pathExpansion.ts";
+import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import { resolveLaunchWorkflowPath } from "./t3team-projectRecipeActionLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { launchPreparedWorkflow } from "./t3team-workflowEphemeralLaunch.ts";
@@ -85,7 +86,8 @@ it.effect(
       // Mirrors t3team-thread-recipe-workflow-routes.ts's own expansion, exactly: the single
       // point every downstream consumer (reads, engine launch, persisted row) is fed from.
       const tildeRecipePath = toTildePath(recipeRoot);
-      const recipePath = tildeRecipePath && expandHomePath(tildeRecipePath);
+      const recipePath =
+        tildeRecipePath && expandHomePath(tildeRecipePath, yield* HostProcess.HomeDirectory);
       const workflowPath = yield* resolveLaunchWorkflowPath({
         recipePath,
         workflowPath: toTildePath(workflowPathReal),

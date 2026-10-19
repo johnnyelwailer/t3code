@@ -22,6 +22,8 @@ import {
   type LaneProps,
 } from "~/t3team/t3team-ProjectMyWorkDigestSections";
 import type { DigestSection } from "~/t3team/t3team-projectMyWorkDigestPlan";
+import { digestTransitionStyle } from "~/t3team/t3team-digestViewTransition";
+import { useDigestTransitionNames } from "~/t3team/t3team-digestTransitionNames";
 
 export type DashboardWidgetProps = LaneProps & {
   readonly section: DigestSection;
@@ -82,6 +84,7 @@ export function dashboardWidgetResetKeys(
  */
 export function DashboardWidget(props: DashboardWidgetProps) {
   const widgetId = digestSectionWidgetId(props.section);
+  const names = useDigestTransitionNames();
   const entry = appViewRegistry().get("dashboard.widget", widgetId);
   if (entry === undefined || !entry.definition.placements.includes(props.placement)) return null;
   return (
@@ -90,7 +93,9 @@ export function DashboardWidget(props: DashboardWidgetProps) {
       resetKeys={dashboardWidgetResetKeys(widgetId, props)}
       fallback={null}
     >
-      <entry.component {...props} />
+      <div className="min-w-0" style={digestTransitionStyle(names.section(props.section.id))}>
+        <entry.component {...props} />
+      </div>
     </ViewInstance>
   );
 }

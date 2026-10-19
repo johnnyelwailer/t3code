@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { SidebarInset, useSidebar } from "~/t3team/components/ui/t3team-sidebar";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
-import { useT3TeamScopeTeamProjectId } from "~/t3team/hooks/t3team-useScopeTeamProjectId";
+import { useT3TeamScopeHomeProjectId } from "~/t3team/hooks/t3team-useScopeTeamProjectId";
 import { AppMainContent } from "~/t3team/t3team-AppMainContent";
 import { DigestTicketChatProvider } from "~/t3team/t3team-digestTicketChatContext";
 import { T3TeamInlineRecipeLaunchProvider } from "~/t3team/t3team-inlineRecipeLaunch";
@@ -49,9 +49,9 @@ export function AppContentPane({
 }) {
   const { isMobile, open } = useSidebar();
   const shouldInsetDesktopHeader = !isMobile && !open;
-  // The sidebar's project scope is the "current project" for the home composer; without a scope
-  // the store's own selection applies.
-  const scopeProjectId = useT3TeamScopeTeamProjectId(store);
+  // The sidebar's project scope is the "current project" for the home composer; "All projects"
+  // has none, and the store's own selection applies only while a scope is still resolving.
+  const homeProjectId = useT3TeamScopeHomeProjectId(store, store.selectedProjectId);
   const ticketChatActions = useMemo(
     () => ({
       onKickoffThread: onKickoffTicketThreadBeside,
@@ -70,7 +70,7 @@ export function AppContentPane({
             <AppMainContent
               view={resolvedView}
               activeDashboardMode={activeDashboardMode}
-              selectedProjectId={scopeProjectId ?? store.selectedProjectId}
+              selectedProjectId={homeProjectId}
               projects={store.projects}
               allProjects={store.allProjects}
               reopenInitialSetup={reopenInitialSetup}

@@ -18,7 +18,7 @@ import { createModelSelection } from "@t3tools/shared/model";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 
-import { checkpointWorkspace } from "./orchestration-v2/testkit/ReplayFixtureWorkspace.ts";
+import { checkpointWorkspace } from "@t3tools/provider-testing/replayWorkspace";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import type { LaunchWorkflowRecipeInput } from "./t3team-workflowEngineLaunchTypes.ts";

@@ -51,6 +51,8 @@ export class ProjectMachineDiscovery extends Context.Service<
         readonly source: ProjectMachineSource | null;
         /** Checkouts that were scanned, own repository first. Empty when the project has none. */
         readonly checkouts: ReadonlyArray<{ readonly repository: string; readonly root: string }>;
+        /** The project's title, so a session without a checkout can name its workspace after it. */
+        readonly title: string;
       },
       ProjectMachineDiscoveryError
     >;
@@ -149,6 +151,7 @@ const make = Effect.gen(function* () {
         } satisfies Discovery,
         source: sources[0] ?? null,
         checkouts: roots,
+        title: project.value.title,
       };
     }).pipe(
       Effect.provideService(FileSystem.FileSystem, fileSystem),

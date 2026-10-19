@@ -1,6 +1,6 @@
 import * as Option from "effect/Option";
 import { describe, expect, it } from "vite-plus/test";
-import type { SourceControlDiscoveryResult } from "@t3tools/contracts";
+import { SourceControlProviderKind, type SourceControlDiscoveryResult } from "@t3tools/contracts";
 import {
   mergeGitHubDiscoveryResults,
   parseGitHubAuth,
@@ -13,7 +13,7 @@ function discoveryWithGitHubAuth(
     versionControlSystems: [],
     sourceControlProviders: [
       {
-        kind: "github",
+        kind: SourceControlProviderKind.make("github"),
         label: "GitHub",
         status: "available",
         version: Option.none(),

@@ -1,8 +1,16 @@
 import { afterEach, describe, expect } from "vite-plus/test";
 import { it } from "@effect/vitest";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
+import * as TestClock from "effect/testing/TestClock";
 
-import * as GitHubApi from "./sourceControl/GitHubApi.ts";
+import { ServerConfig } from "./config.ts";
+import { writeStoredRepositoryList } from "./t3team-githubRepositoryListStore.ts";
+
+import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
 import { loadGitHubInboxResponse } from "./t3team-github-inbox-loader.ts";
 import {
   accountCache,
@@ -15,6 +23,22 @@ import {
 } from "./t3team-github-routes-shared.ts";
 import { makeFakeGitHubApi, rateLimited, restOk } from "./t3team-githubRestApi.fixtures.ts";
 
+/** Each test gets its own state directory, so a stored repository list never leaks between tests. */
+const itLoader = (
+  name: string,
+  body: () => Effect.Effect<void, never, FileSystem.FileSystem | Path.Path | ServerConfig>,
+) =>
+  it.effect(name, () =>
+    body().pipe(
+      Effect.provide(
+        Layer.provideMerge(
+          ServerConfig.layerTest("/tmp", { prefix: "t3-repo-list-" }),
+          NodeServices.layer,
+        ),
+      ),
+    ),
+  );
+
 afterEach(() => {
   accountCache.clear();
   inboxCache.clear();
@@ -26,7 +50,7 @@ afterEach(() => {
 });
 
 describe("loadGitHubInboxResponse repository discovery", () => {
-  it.effect("uses the authenticated GitHub repository list instead of public search results", () =>
+  itLoader("uses the authenticated GitHub repository list instead of public search results", () =>
     Effect.gen(function* () {
       const { api, calls } = makeFakeGitHubApi((call) => {
         if (call.operation === "t3team.github.account") return restOk({ login: "johnnyelwailer" });
@@ -79,7 +103,7 @@ describe("loadGitHubInboxResponse repository discovery", () => {
     }),
   );
 
-  it.effect(
+  itLoader(
     "falls back to the complete repository list when fast search has no matching candidate",
     () =>
       Effect.gen(function* () {
@@ -129,7 +153,7 @@ describe("loadGitHubInboxResponse repository discovery", () => {
       }),
   );
 
-  it.effect("follows the repository list's next pages the way gh --paginate did", () =>
+  itLoader("follows the repository list's next pages the way gh --paginate did", () =>
     Effect.gen(function* () {
       const { api, calls } = makeFakeGitHubApi((call) => {
         if (call.operation === "t3team.github.account") return restOk({ login: "pj" });
@@ -164,7 +188,7 @@ describe("loadGitHubInboxResponse repository discovery", () => {
     }),
   );
 
-  it.effect("lets an explicit inbox refresh spend the reserve, whatever the mode", () =>
+  itLoader("lets an explicit inbox refresh spend the reserve, whatever the mode", () =>
     Effect.gen(function* () {
       const { api, calls } = makeFakeGitHubApi((call) =>
         call.operation === "t3team.github.account" ? restOk({ login: "pj" }) : restOk([]),
@@ -179,7 +203,7 @@ describe("loadGitHubInboxResponse repository discovery", () => {
     }),
   );
 
-  it.effect("keeps repository-mode discovery in the background unless a user asked", () =>
+  itLoader("keeps repository-mode discovery in the background unless a user asked", () =>
     Effect.gen(function* () {
       const { api, calls } = makeFakeGitHubApi((call) =>
         call.operation === "t3team.github.account" ? restOk({ login: "pj" }) : restOk([]),
@@ -193,7 +217,7 @@ describe("loadGitHubInboxResponse repository discovery", () => {
     }),
   );
 
-  it.effect("does not remember what the rate limit cut short, so the reset serves real data", () =>
+  itLoader("does not remember what the rate limit cut short, so the reset serves real data", () =>
     Effect.gen(function* () {
       let paused = true;
       const { api, calls } = makeFakeGitHubApi((call) => {
@@ -226,7 +250,94 @@ describe("loadGitHubInboxResponse repository discovery", () => {
     }),
   );
 
-  it.effect("runs the activity refresh as a background read that never spends the reserve", () =>
+  itLoader("serves the stored list without asking GitHub again once memory has expired", () =>
+    Effect.gen(function* () {
+      const { api, calls } = makeFakeGitHubApi((call) => {
+        if (call.operation === "t3team.github.account") return restOk({ login: "pj" });
+        return call.operation === "t3team.github.repositories"
+          ? restOk([{ id: 1, full_name: "pj/app", html_url: "https://github.com/pj/app" }])
+          : restOk([]);
+      });
+      const read = loadGitHubInboxResponse({
+        host: "github.com",
+        discoveryMode: "repositories",
+      }).pipe(Effect.provideService(GitHubApi.GitHubApi, api));
+      const listings = () =>
+        calls.filter((call) => call.operation === "t3team.github.repositories").length;
+
+      const first = yield* read;
+      expect(listings()).toBe(1);
+      expect(first.repositoriesFetchedAt).toBeDefined();
+
+      repositoriesCache.clear();
+      responseCache.clear();
+      const second = yield* read;
+      expect(listings()).toBe(1);
+      expect(second.repositories.map((repository) => repository.nameWithOwner)).toEqual(["pj/app"]);
+      expect(second.repositoriesFetchedAt).toBe(first.repositoriesFetchedAt);
+      expect(second.repositoriesRefreshing).toBeUndefined();
+    }),
+  );
+
+  itLoader("shows a stale stored list at once and refreshes it in the background", () =>
+    Effect.gen(function* () {
+      // The background refresh is held back by the rate limit, so it writes nothing into the test's
+      // state directory while the test tears it down.
+      const { api } = makeFakeGitHubApi((call) => {
+        if (call.operation === "t3team.github.account") return restOk({ login: "pj" });
+        return rateLimited(call.host, 1_790_000_000_000);
+      });
+      yield* writeStoredRepositoryList(
+        "repos:github.com:pj",
+        [
+          {
+            id: "1",
+            nameWithOwner: "pj/old",
+            url: "https://github.com/pj/old",
+            host: "github.com",
+          },
+        ],
+        "1970-01-01T00:00:00.000Z",
+      );
+      yield* TestClock.adjust("7 hours");
+      const result = yield* loadGitHubInboxResponse({
+        host: "github.com",
+        discoveryMode: "repositories",
+      }).pipe(Effect.provideService(GitHubApi.GitHubApi, api));
+      expect(result.repositories.map((repository) => repository.nameWithOwner)).toEqual(["pj/old"]);
+      expect(result.repositoriesFetchedAt).toBe("1970-01-01T00:00:00.000Z");
+      expect(result.repositoriesRefreshing).toBe(true);
+    }),
+  );
+
+  itLoader("keeps showing the stored list when an explicit refresh hits the rate limit", () =>
+    Effect.gen(function* () {
+      const { api } = makeFakeGitHubApi((call) => {
+        if (call.operation === "t3team.github.account") return restOk({ login: "pj" });
+        return rateLimited(call.host, 1_790_000_000_000);
+      });
+      yield* writeStoredRepositoryList("repos:github.com:pj", [
+        {
+          id: "1",
+          nameWithOwner: "pj/kept",
+          url: "https://github.com/pj/kept",
+          host: "github.com",
+        },
+      ]);
+      const result = yield* loadGitHubInboxResponse({
+        host: "github.com",
+        discoveryMode: "repositories",
+        refresh: true,
+        trigger: "user",
+      }).pipe(Effect.provideService(GitHubApi.GitHubApi, api));
+      expect(result.repositories.map((repository) => repository.nameWithOwner)).toEqual([
+        "pj/kept",
+      ]);
+      expect(result.inboxWarning).toContain("paused until");
+    }),
+  );
+
+  itLoader("runs the activity refresh as a background read that never spends the reserve", () =>
     Effect.gen(function* () {
       const { api, calls } = makeFakeGitHubApi((call) =>
         call.operation === "t3team.github.account" ? restOk({ login: "pj" }) : restOk([]),
@@ -247,7 +358,7 @@ describe("loadGitHubInboxResponse repository discovery", () => {
     }),
   );
 
-  it.effect("answers a rate-limited account read with the pause, not a sign-in prompt", () =>
+  itLoader("answers a rate-limited account read with the pause, not a sign-in prompt", () =>
     Effect.gen(function* () {
       const { api, calls } = makeFakeGitHubApi((call) => rateLimited(call.host, 1_790_000_000_000));
 
@@ -264,7 +375,7 @@ describe("loadGitHubInboxResponse repository discovery", () => {
     }),
   );
 
-  it.effect("names the pause on each read that hit the rate limit after the account", () =>
+  itLoader("names the pause on each read that hit the rate limit after the account", () =>
     Effect.gen(function* () {
       const { api } = makeFakeGitHubApi((call) =>
         call.operation === "t3team.github.account"

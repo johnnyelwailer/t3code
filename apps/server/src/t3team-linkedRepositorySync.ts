@@ -1,6 +1,8 @@
 /**
  * T3TeamLinkedRepositorySync - clones and fetches linked reference repositories in the
- * background, so saving a project's linked repositories never waits on git.
+ * background, on demand: a user's "Sync now", an agent's `t3_linked_repository_sync`, a
+ * delegation into a linked repository, an explicit main-repository choice. Nothing here syncs
+ * on a timer.
  *
  * Jobs run in this service's own scope, not the HTTP request fiber that asked for them: a client
  * giving up on a request cannot interrupt a clone halfway. One job per checkout path (a second
@@ -28,17 +30,19 @@ import type {
   LinkedRepositorySyncPhase,
 } from "./t3team-project-repository-utils.ts";
 import { VcsProcess } from "./vcs/VcsProcess.ts";
-
-const LINKED_REPOSITORY_SYNC_CONCURRENCY = 3;
+import { LINKED_REPOSITORY_SYNC_CONCURRENCY } from "./t3team-linkedRepositorySyncConcurrency.ts";
 
 export type LinkedRepositorySyncRequest = {
   readonly referencesRoot: string;
   readonly url: string;
   readonly localPath: string;
+  /** The branch the checkout should be on once synced; absent leaves it as it is. */
+  readonly branch?: string;
 };
 
 type Job = {
   readonly url: string;
+  readonly branch?: string;
   phase: LinkedRepositorySyncPhase;
   /** Every requester to record the outcome for: reference manifest → the URL it lists the
    * checkout under (a joined request may spell the same repository differently). */
@@ -51,9 +55,6 @@ export class T3TeamLinkedRepositorySync extends Context.Service<
   {
     /** Queues a clone/fetch and returns at once; joins a sync of the same checkout in flight. */
     readonly request: (input: LinkedRepositorySyncRequest) => Effect.Effect<void>;
-    /** Like `request`, but at most once per manifest entry for this server's lifetime: re-queues a
-     * sync a restart dropped without letting repeated status polls turn into a fetch loop. */
-    readonly recover: (input: LinkedRepositorySyncRequest) => Effect.Effect<void>;
     /** The phase of the checkout's queued or running sync; `undefined` when idle. */
     readonly phase: (localPath: string) => LinkedRepositorySyncPhase | undefined;
     /** Resolves once the checkout's sync in flight (if any) has been recorded. */
@@ -74,7 +75,12 @@ const make = Effect.gen(function* () {
   const jobs = new Map<string, Job>();
 
   const sync = (job: Job, localPath: string) =>
-    syncLinkedCheckout({ url: job.url, localPath, onPhase: (phase) => (job.phase = phase) });
+    syncLinkedCheckout({
+      url: job.url,
+      localPath,
+      ...(job.branch ? { branch: job.branch } : {}),
+      onPhase: (phase) => (job.phase = phase),
+    });
 
   const record = (job: Job, localPath: string, outcome: Effect.Success<ReturnType<typeof sync>>) =>
     Effect.gen(function* () {
@@ -82,7 +88,13 @@ const make = Effect.gen(function* () {
       for (const [referencesRoot, urls] of job.requesters) {
         for (const url of urls) {
           const entry: LinkedRepositoryBootstrapResult = isSameRepository(url, job.url)
-            ? { url, localPath, ...outcome, syncedAt }
+            ? {
+                url,
+                localPath,
+                ...outcome,
+                ...(job.branch ? { branch: job.branch } : {}),
+                syncedAt,
+              }
             : {
                 url,
                 localPath,
@@ -128,6 +140,7 @@ const make = Effect.gen(function* () {
         }
         const job: Job = {
           url: input.url,
+          ...(input.branch ? { branch: input.branch } : {}),
           phase: "queued",
           requesters: new Map([[input.referencesRoot, new Set([input.url])]]),
           settled: Deferred.makeUnsafe<void>(),
@@ -137,17 +150,8 @@ const make = Effect.gen(function* () {
       }),
     );
 
-  const recovered = new Set<string>();
   return T3TeamLinkedRepositorySync.of({
     request,
-    recover: (input) =>
-      Effect.suspend(() => {
-        // Per requester, so each manifest listing the checkout is recovered (and joins one job).
-        const key = `${input.referencesRoot}\n${input.url}\n${input.localPath}`;
-        if (recovered.has(key)) return Effect.void;
-        recovered.add(key);
-        return request(input);
-      }),
     phase: (localPath) => jobs.get(localPath)?.phase,
     awaitSettled: (localPath) =>
       Effect.suspend(() => {

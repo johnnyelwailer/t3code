@@ -19,6 +19,21 @@ describe("isT3TeamMirrorSyncIdle", () => {
   });
 });
 
+describe("isT3TeamMirrorSyncIdle while the first catch-up is pending", () => {
+  const nowMs = 24 * 60 * 60_000;
+
+  it("keeps the loop alive well past the usual TTL", () => {
+    const lastKickedMs = nowMs - 5 * 60 * 60_000;
+    expect(isT3TeamMirrorSyncIdle({ nowMs, lastKickedMs })).toBe(true);
+    expect(isT3TeamMirrorSyncIdle({ nowMs, lastKickedMs, firstCatchUpPending: true })).toBe(false);
+  });
+
+  it("still ends the loop after 6 h so an abandoned project does not poll forever", () => {
+    const lastKickedMs = nowMs - 6 * 60 * 60_000;
+    expect(isT3TeamMirrorSyncIdle({ nowMs, lastKickedMs, firstCatchUpPending: true })).toBe(true);
+  });
+});
+
 describe("kick history tracking", () => {
   it("records and reads back a kick timestamp", () => {
     const key = "atlassian|acct-1|proj-1";

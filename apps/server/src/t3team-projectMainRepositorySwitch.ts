@@ -24,10 +24,7 @@ import {
   ensureWorkspaceGitignore,
   writeReferenceManifest,
 } from "./t3team-project-repository-services.ts";
-import {
-  mergeLinkedRepositoryEntries,
-  readPreservedReferenceManifest,
-} from "./t3team-project-repository-routesBootstrap.ts";
+import { readPreservedReferenceManifest } from "./t3team-project-repository-routesBootstrap.ts";
 import {
   HIDDEN_T3TEAM_DIR,
   MAIN_REPOSITORY_GITIGNORE_ENTRIES,
@@ -113,15 +110,17 @@ export const switchProjectMainRepository = Effect.fn("switchProjectMainRepositor
       input.url !== null
         ? { url: input.url, localPath: checkoutPath, status: input.selection }
         : target.mainRepository;
+    const inspection = target.mainRepositoryInspection ?? source.mainRepositoryInspection;
     yield* writeReferenceManifest(path.dirname(manifestPath(checkoutPath)), {
       workspaceRoot: checkoutPath,
       referencesRoot: path.dirname(manifestPath(checkoutPath)),
       workspaceRepositoryInitialized: false,
-      linkedRepositories: mergeLinkedRepositoryEntries(
-        target.linkedRepositories,
-        source.linkedRepositories,
-      ),
+      // The project's current list wins: the target checkout may carry an old manifest whose
+      // repositories the user has since removed (they used to be merged back in on every switch).
+      linkedRepositories: [...source.linkedRepositories],
       ...(targetMain ? { mainRepository: targetMain } : {}),
+      // Every manifest rewrite keeps the once-per-project main-repository inspection marker.
+      ...(inspection ? { mainRepositoryInspection: inspection } : {}),
       updatedAt: DateTime.formatIso(yield* DateTime.now),
     });
 

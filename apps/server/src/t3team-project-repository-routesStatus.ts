@@ -1,8 +1,8 @@
 /**
  * `POST /api/t3team/project/workspace/linked-repositories/status`: the linked repositories as the
  * reference manifest records them, with any background sync's live phase. Reads files only — no
- * git, no network — so a client may poll it while clones are running. A `pending` entry whose
- * sync was lost to a server restart is queued again.
+ * git, no network — so a client may poll it while clones are running. It never queues a sync:
+ * linked repositories sync on demand (a sync a restart dropped stays dropped until asked again).
  *
  * @module t3team-project-repository-routesStatus
  */
@@ -36,12 +36,6 @@ export const readLinkedRepositoryStatus = Effect.fn("readLinkedRepositoryStatus"
   const manifest = yield* readPreservedReferenceManifest(
     path.join(referencesRoot, MANIFEST_FILE_NAME),
   );
-  // A `pending` entry with no job lost its sync to a server restart: queue it again (no git here).
-  for (const entry of manifest.linkedRepositories) {
-    if (entry.status === "pending" && !sync.phase(entry.localPath)) {
-      yield* sync.recover({ referencesRoot, url: entry.url, localPath: entry.localPath });
-    }
-  }
   return {
     linkedRepositories: manifest.linkedRepositories.map((entry) =>
       withSyncState(entry, sync.phase(entry.localPath)),

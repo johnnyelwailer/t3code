@@ -1,187 +1,147 @@
-import { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 
-import { tryAtlassianPromise } from "./t3team-atlassian-http.ts";
 import { pruneStaleT3TeamAtlassianBacklogViews } from "./t3team-atlassian-backlog-reconcilePrune.ts";
 import {
-  burstPause,
-  maxPagesPerBurst,
-  maxPagesPerWalk,
-  mirrorPageSize,
+  computeWatermarkLookbackMinutes,
   type MirrorSyncIdentity,
   type T3TeamAtlassianMirrorSyncRequest,
 } from "./t3team-atlassian-backlog-mirrorSyncShared.ts";
+import { deleteMirrorIssuesAbsentFromWalk } from "./t3team-atlassian-backlog-mirrorSyncDb.ts";
+import { clearMirrorProgress, recordMirrorReached } from "./t3team-atlassian-mirrorSyncProgress.ts";
 import {
-  deleteMirrorIssuesAbsentFromWalk,
-  upsertMirrorIssues,
-} from "./t3team-atlassian-backlog-mirrorSyncDb.ts";
+  type MirrorPageItem,
+  type MirrorPageSource,
+  walkMirrorPages,
+} from "./t3team-atlassian-mirrorSyncPageWalk.ts";
+import {
+  advanceT3TeamMirrorWatermark,
+  readT3TeamMirrorSyncStatus,
+  recordT3TeamMirrorCatchUp,
+} from "./t3team-atlassian-mirrorSyncState.ts";
 
-// ─── Incremental walk (watermark-based) ──────────────────────────────────────
+// ─── Catch-up walk (persisted watermark) ─────────────────────────────────────
 
-export function runMirrorIncrementalWalk(
+/** `caught-up`: Jira has no change newer than the watermark. `more-pending`: page cap hit, resume next walk. */
+export type MirrorCatchUpOutcome = "caught-up" | "more-pending" | "superseded";
+
+function newestUpdatedAtMs(items: ReadonlyArray<MirrorPageItem>): number | undefined {
+  let newest: number | undefined;
+  for (const item of items) {
+    const updatedAt = item["updatedAt"];
+    const updatedMs = typeof updatedAt === "string" ? Date.parse(updatedAt) : Number.NaN;
+    if (Number.isFinite(updatedMs) && (newest === undefined || updatedMs > newest)) {
+      newest = updatedMs;
+    }
+  }
+  return newest;
+}
+
+/**
+ * Fetches every issue updated since the project's persisted watermark, oldest
+ * first, and advances the watermark after each durably stored page. A gap of
+ * any length is closed: a walk that hits the page cap reports `more-pending`
+ * and the next walk resumes from the advanced watermark, as does one that
+ * fails mid-way (crash, rate limit). Only a walk that reaches the last page
+ * records a successful catch-up.
+ */
+export function runMirrorCatchUpWalk(
   input: T3TeamAtlassianMirrorSyncRequest,
-  provider: AtlassianIntegrationProvider,
+  source: MirrorPageSource,
   identity: MirrorSyncIdentity,
   isSuperseded: () => boolean,
-  lookbackMinutes: number,
 ) {
   return Effect.gen(function* () {
-    let cursor: string | undefined;
-    let pagesThisBurst = 0;
-    let pagesThisWalk = 0;
-
-    while (pagesThisWalk < maxPagesPerWalk) {
-      if (isSuperseded()) return;
-
-      if (pagesThisBurst >= maxPagesPerBurst) {
-        pagesThisBurst = 0;
-        yield* Effect.sleep(burstPause);
-        if (isSuperseded()) return;
-      }
-
-      const page = yield* tryAtlassianPromise(
-        () =>
-          provider.listProjectMirrorPage({
-            account: input.account,
-            externalProjectId: input.externalProjectId,
-            updatedWithinMinutes: lookbackMinutes,
-            ...(cursor ? { cursor } : {}),
-            limit: mirrorPageSize,
-          }),
-        "Failed to fetch Atlassian mirror page (incremental).",
-      );
-
-      pagesThisBurst += 1;
-      pagesThisWalk += 1;
-
-      if (isSuperseded()) return;
-
-      yield* upsertMirrorIssues({
-        identity,
-        items: page.items as ReadonlyArray<Record<string, unknown> & { id: string }>,
-      });
-
-      if (!page.nextCursor) return;
-      cursor = page.nextCursor;
-    }
-
-    yield* Effect.logDebug("t3team atlassian mirror incremental walk hit page cap").pipe(
-      Effect.annotateLogs({
-        provider: identity.provider,
-        accountId: identity.accountId,
-        externalProjectId: identity.externalProjectId,
-        pagesThisWalk,
-      }),
-    );
+    const walkStartMs = yield* Clock.currentTimeMillis;
+    const { watermarkMs, lastSuccessAtMs } = yield* readT3TeamMirrorSyncStatus(identity);
+    const trackProgress = lastSuccessAtMs === undefined;
+    const end = yield* walkMirrorPages({
+      request: input,
+      source,
+      identity,
+      isSuperseded,
+      updatedWithinMinutes: computeWatermarkLookbackMinutes({ nowMs: walkStartMs, watermarkMs }),
+      walk: "catch-up",
+      trackProgress,
+      failureMessage: "Failed to fetch Atlassian mirror page (catch-up).",
+      onPageStored: (items) => {
+        const newestMs = newestUpdatedAtMs(items);
+        if (newestMs === undefined) return Effect.void;
+        if (trackProgress) recordMirrorReached(identity, newestMs);
+        return advanceT3TeamMirrorWatermark(identity, newestMs);
+      },
+    });
+    if (end === "superseded") return "superseded" satisfies MirrorCatchUpOutcome;
+    if (end === "page-cap") return "more-pending" satisfies MirrorCatchUpOutcome;
+    yield* recordT3TeamMirrorCatchUp(identity, walkStartMs);
+    clearMirrorProgress(identity);
+    return "caught-up" satisfies MirrorCatchUpOutcome;
   });
 }
 
-// ─── Full reconcile walk ──────────────────────────────────────────────────────
+// ─── Full reconcile walk (prune only) ────────────────────────────────────────
+
+/** `incomplete`: the walk did not see every issue (page cap or superseded), so nothing was pruned. */
+export type MirrorReconcileOutcome = "complete" | "incomplete";
 
 /**
  * Walks every issue in the project (no updated filter), collects all seen IDs,
- * then deletes rows for issues that are no longer in the project at all.
+ * then deletes rows for issues that are no longer in the project at all. It
+ * exists for pruning only; freshness comes from `runMirrorCatchUpWalk`.
  *
  * Failure modes are explicit: `listProjectMirrorPage` THROWS
  * `AtlassianMirrorSourceUnavailableError` when the client or project lookup is
  * unavailable (it never silently returns an empty page for those cases), so a
- * provider failure aborts the walk here before `walkComplete` is set and the
- * prune is skipped. Conversely, a completed walk that saw zero issues means
- * the project is genuinely empty and pruning every mirrored row is correct.
+ * provider failure fails the walk and the prune is skipped. Conversely, a
+ * completed walk that saw zero issues means the project is genuinely empty and
+ * pruning every mirrored row is correct.
  *
  * Exported for tests; production code enters through
  * `kickT3TeamAtlassianMirrorSync`.
  */
 export function runMirrorReconcile(
   input: T3TeamAtlassianMirrorSyncRequest,
-  provider: AtlassianIntegrationProvider,
+  source: MirrorPageSource,
   identity: MirrorSyncIdentity,
   isSuperseded: () => boolean,
 ) {
   return Effect.gen(function* () {
     const seenIds = new Set<string>();
-    let cursor: string | undefined;
-    let pagesThisBurst = 0;
-    let pagesThisWalk = 0;
-    let walkComplete = false;
-
-    while (pagesThisWalk < maxPagesPerWalk) {
-      if (isSuperseded()) return;
-
-      if (pagesThisBurst >= maxPagesPerBurst) {
-        pagesThisBurst = 0;
-        yield* Effect.sleep(burstPause);
-        if (isSuperseded()) return;
-      }
-
-      const page = yield* tryAtlassianPromise(
-        () =>
-          provider.listProjectMirrorPage({
-            account: input.account,
-            externalProjectId: input.externalProjectId,
-            // No updatedSinceIso: walk the whole project
-            ...(cursor ? { cursor } : {}),
-            limit: mirrorPageSize,
-          }),
-        "Failed to fetch Atlassian mirror page (reconcile).",
-      );
-
-      pagesThisBurst += 1;
-      pagesThisWalk += 1;
-
-      for (const item of page.items) {
-        seenIds.add(item.id);
-      }
-
-      if (isSuperseded()) return;
-
-      yield* upsertMirrorIssues({
-        identity,
-        items: page.items as ReadonlyArray<Record<string, unknown> & { id: string }>,
-      });
-
-      if (!page.nextCursor) {
-        walkComplete = true;
-        break;
-      }
-      cursor = page.nextCursor;
-    }
-
-    if (isSuperseded()) return;
-
-    // Only prune when the walk actually reached the end of the project. If it
-    // stopped early (hit the page cap on a very large project), seenIds is
-    // incomplete and pruning would wrongly delete issues beyond the cap.
-    if (!walkComplete) {
-      yield* Effect.logWarning(
-        "t3team atlassian mirror reconcile hit page cap before completing; skipping prune to avoid deleting unseen issues",
-      ).pipe(
-        Effect.annotateLogs({
-          provider: identity.provider,
-          accountId: identity.accountId,
-          externalProjectId: identity.externalProjectId,
-          pagesThisWalk,
+    const end = yield* walkMirrorPages({
+      request: input,
+      source,
+      identity,
+      isSuperseded,
+      updatedWithinMinutes: undefined,
+      walk: "reconcile",
+      failureMessage: "Failed to fetch Atlassian mirror page (reconcile).",
+      onPageStored: (items) =>
+        Effect.sync(() => {
+          for (const item of items) seenIds.add(item.id);
         }),
-      );
-      return;
+    });
+
+    if (end !== "complete" || isSuperseded()) {
+      yield* Effect.logWarning(
+        "t3team atlassian mirror reconcile did not see every issue; skipping prune to avoid deleting unseen issues",
+      ).pipe(Effect.annotateLogs({ ...identity, end }));
+      return "incomplete" satisfies MirrorReconcileOutcome;
     }
 
-    // Prune rows for issues that no longer exist in the project at all.
     yield* deleteMirrorIssuesAbsentFromWalk({ identity, seenIds }).pipe(
       Effect.catchCause((cause) =>
         Effect.logWarning("t3team atlassian mirror reconcile prune failed", cause),
       ),
     );
 
-    // Also prune view rows (one per board/sprint/filter selection ever
-    // opened) that haven't been refreshed in ~30 days — nothing else ever
-    // deletes them. Degrades to a warning rather than failing the walk.
+    // View rows (one per board/sprint/filter selection ever opened) are pruned
+    // here too — nothing else ever deletes them.
     const nowMs = yield* Clock.currentTimeMillis;
     yield* pruneStaleT3TeamAtlassianBacklogViews({ identity, nowMs }).pipe(
       Effect.catchCause((cause) =>
         Effect.logWarning("t3team atlassian mirror reconcile view prune failed", cause),
       ),
     );
+    return "complete" satisfies MirrorReconcileOutcome;
   });
 }

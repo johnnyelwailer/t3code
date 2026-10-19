@@ -10,46 +10,33 @@
 
 import { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/sql/SqlClient";
 
 import { providerForAccount } from "./t3team-atlassian-auth-store.ts";
-import {
-  kickT3TeamAtlassianMirrorSync,
-  mirrorSyncMapKey,
-} from "./t3team-atlassian-backlog-mirrorSyncService.ts";
-import { lastT3TeamMirrorWalkMs } from "./t3team-atlassian-mirrorSyncIdleTracking.ts";
+import { kickT3TeamAtlassianMirrorSync } from "./t3team-atlassian-backlog-mirrorSyncService.ts";
+import type { MirrorSyncLane } from "./t3team-atlassian-mirrorSyncLanes.ts";
 import type { T3TeamMyWorkDigestProjectInput } from "./t3team-myworkDigestTypes.ts";
 
-/** Keep this project's mirror loop alive; a provider that cannot resolve is not the digest's failure. */
-export function kickDigestMirrorSync(project: T3TeamMyWorkDigestProjectInput) {
+/**
+ * Keep this project's mirror loop alive. True when the loop was kicked; a provider that cannot
+ * resolve (not Jira, or a dead session) is not the digest's failure and answers false.
+ *
+ * The "All projects" digest kicks in the background lane, where loops take turns walking Jira
+ * (t3team-atlassian-mirrorSyncLanes.ts); one project's own digest walks in the foreground.
+ */
+export function kickDigestMirrorSync(
+  project: T3TeamMyWorkDigestProjectInput,
+  lane: MirrorSyncLane = "foreground",
+) {
   return Effect.gen(function* () {
     const provider = yield* providerForAccount(project.account.id);
-    if (!(provider instanceof AtlassianIntegrationProvider)) return;
-    yield* kickT3TeamAtlassianMirrorSync({
-      account: project.account,
-      externalProjectId: project.externalProjectId,
-    });
-  }).pipe(Effect.ignore);
-}
-
-/**
- * When this project's Jira half last matched Jira: this process's last mirror
- * walk, else — before the first walk of a fresh start — the newest backlog
- * view sync on disk. `undefined` when neither ever happened. The digest shows this instead
- * of its own fetch time, which reads "just now" over a mirror days old.
- */
-export function readDigestJiraSyncedAtMs(project: T3TeamMyWorkDigestProjectInput) {
-  return Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    const rows = yield* sql<{ readonly at: number | null }>`
-      SELECT MAX(updated_at) AS "at"
-      FROM t3team_atlassian_backlog_views
-      WHERE provider = ${project.account.provider}
-        AND account_id = ${project.account.id}
-        AND external_project_id = ${project.externalProjectId}
-    `;
-    const walked = lastT3TeamMirrorWalkMs(mirrorSyncMapKey(project));
-    // A view sync only refreshes that view's issues, so it stands in only until the first walk.
-    return walked ?? rows[0]?.at ?? undefined;
-  }).pipe(Effect.orElseSucceed(() => undefined));
+    if (!(provider instanceof AtlassianIntegrationProvider)) return false;
+    yield* kickT3TeamAtlassianMirrorSync(
+      {
+        account: project.account,
+        externalProjectId: project.externalProjectId,
+      },
+      { lane },
+    );
+    return true;
+  }).pipe(Effect.orElseSucceed(() => false));
 }

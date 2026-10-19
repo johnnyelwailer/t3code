@@ -108,3 +108,19 @@ export function resolveScopeRouteTarget(input: {
     search: scopeProjectSearch(surface.mode, surface.lens),
   };
 }
+
+/**
+ * Where an in-app arrival must go when it lands on one project's my-work board while the scope is
+ * "All projects" — the digest would otherwise show that single project under the All header — or
+ * `null` to stay put. Backlog is project-specific by nature and is left alone.
+ */
+export function resolveAllProjectsDigestRouteTarget(input: {
+  readonly pathname: string;
+  readonly search: Record<string, unknown>;
+}): ScopeRouteTarget | null {
+  const surface = readScopeRouteSurface(input.pathname, input.search);
+  if (surface === null || surface.projectId === null || surface.mode !== "my-work") {
+    return null;
+  }
+  return resolveScopeRouteTarget({ ...input, scopeProjectId: null });
+}

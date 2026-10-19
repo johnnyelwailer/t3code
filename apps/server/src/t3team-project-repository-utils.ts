@@ -9,28 +9,41 @@ import * as Path from "effect/Path";
 
 import { T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
 import { ensureNexiProjectStateDir } from "./t3team-projectMainRepositoryState.ts";
+import type { MainRepositoryInspection } from "./t3team-mainRepositoryInspection.ts";
 
 export type BootstrapWorkspaceRequest = {
   readonly workspaceRoot: string;
   readonly linkedRepositoryUrls?: ReadonlyArray<string>;
+  /** The branch each linked repository's checkout should be on, by URL. Absent: left as is. */
+  readonly linkedRepositoryBranches?: Readonly<Record<string, string>>;
   readonly setupProfileId?: string;
-  /** An explicit save: refetch every linked repository instead of honoring the refetch throttle. */
-  readonly refreshLinkedRepositories?: boolean;
+  /** Linked repositories to clone/fetch now (an explicit user choice, e.g. the main repository
+   * being switched to). Every other linked repository is only recorded: syncs are on demand. */
+  readonly syncLinkedRepositoryUrls?: ReadonlyArray<string>;
+  /** Project creation only: look for main-repository candidates in linked repositories that are
+   * not cloned, by a shallow read of their committed default branch (nothing is checked out). */
+  readonly inspectLinkedRepositoriesForMainRepository?: boolean;
   readonly customProfile?: import("@t3tools/t3team-skill-packs").T3TeamProfile;
 };
 
 /** One linked repository in the reference manifest. `status` is the checkout's last settled state:
- * `pending` until a first clone lands, `cloned`/`updated` once usable, `failed` when no usable
- * checkout exists. Clones and fetches run in the background (`t3team-linkedRepositorySync`);
- * `syncState` is only set on responses, never persisted, while that work is queued or running. */
+ * `not-cloned` while no sync was ever asked for (linked repositories sync on demand: an agent's
+ * `t3_linked_repository_sync`, a user's "Sync now", a delegation into it), `cloned`/`updated` once
+ * usable, `failed` when no usable checkout exists. `pending` is a legacy state (a first clone a
+ * pre-on-demand bootstrap queued); it reads as not cloned. Clones and fetches run in the
+ * background (`t3team-linkedRepositorySync`); `syncState` is only set on responses, never
+ * persisted, while that work is queued or running. `localPath` is where the checkout lives or
+ * will be cloned to. */
 export type LinkedRepositoryBootstrapResult = {
   readonly url: string;
   readonly localPath: string;
-  readonly status: "pending" | "cloned" | "updated" | "failed";
+  readonly status: "not-cloned" | "pending" | "cloned" | "updated" | "failed";
   readonly error?: string;
-  /** When the last background clone/fetch settled (success or failure); throttles refetches. */
+  /** When the last clone/fetch settled (success or failure). */
   readonly syncedAt?: string;
   readonly syncState?: LinkedRepositorySyncPhase;
+  /** The branch the project chose for this checkout; absent means it is left as cloned. */
+  readonly branch?: string;
 };
 
 export type LinkedRepositorySyncPhase = "queued" | "cloning" | "updating";
@@ -102,6 +115,8 @@ export type ReferenceManifestFile = {
   readonly workspaceRepositoryInitialized: boolean;
   readonly linkedRepositories: ReadonlyArray<LinkedRepositoryBootstrapResult>;
   readonly mainRepository?: MainRepositoryBootstrapResult;
+  /** The once-per-project remote main-repository inspection (`t3team-mainRepositoryInspection`). */
+  readonly mainRepositoryInspection?: MainRepositoryInspection;
   readonly updatedAt: string;
 };
 

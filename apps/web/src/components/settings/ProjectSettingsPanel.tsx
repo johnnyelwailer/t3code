@@ -25,7 +25,7 @@ import {
   type SidebarProjectSnapshot,
 } from "../../sidebarProjectGrouping";
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
-import { useThreadShells } from "../../state/entities";
+import { useThreadShells, waitForProjectRemoval } from "../../state/entities";
 import { projectEnvironment } from "../../state/projects";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { Alert, AlertDescription } from "../ui/alert";
@@ -44,6 +44,7 @@ import {
 } from "./ProjectFaviconPickerDialog";
 import { ProjectActionsSettings } from "./ProjectActionsSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
+import { T3TeamProjectLinkedRepositoriesSetting } from "./t3team-ProjectLinkedRepositoriesSetting";
 import { projectGroupTitleNeedsUpdate } from "./ProjectSettingsPanel.logic";
 import { useSettingsProjectGroups } from "./useSettingsProjectGroups";
 
@@ -395,6 +396,7 @@ function ProjectDetail({
           return;
         }
         const projectRef = scopeProjectRef(member.environmentId, member.id);
+        await waitForProjectRemoval(projectRef);
         releaseProjectDraftUploads(
           projectRef,
           memberThreads.map((thread) => scopeThreadRef(thread.environmentId, thread.id)),
@@ -538,6 +540,7 @@ function ProjectDetail({
         </SettingsSection>
         <ProjectDefaultsSettings category="project" />
         <ProjectActionsSettings />
+        <T3TeamProjectLinkedRepositoriesSetting projectId={representative.id} />
         {hasMultipleCheckouts ? checkoutChoices : null}
         <SettingsSection title="Danger">
           <SettingsRow

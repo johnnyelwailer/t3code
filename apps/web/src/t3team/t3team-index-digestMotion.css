@@ -1,0 +1,52 @@
+/*
+ * My Work digest motion (t3team-useDigestViewTransition.ts, t3team-digestViewTransition.ts).
+ * Loaded app-wide through t3team-index-global.css: the transition runs against the document's
+ * root, so its pseudo-elements are styled from here.
+ */
+
+/* My Work digest: one duration and easing for everything that moves, however it moves. */
+:root {
+  --t3team-digest-motion-duration: 220ms;
+  --t3team-digest-motion-easing: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* First paint: the digest arrives instead of cutting in over its loading state. */
+@keyframes t3team-digest-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.t3team-digest-fade-in {
+  animation: t3team-digest-fade-in var(--t3team-digest-motion-duration)
+    var(--t3team-digest-motion-easing) backwards;
+}
+
+/* A layout change: sections and rows travel to their new places; the rest of the page stays put. */
+@supports (view-transition-name: none) {
+  html[data-t3team-view-transition-types~="digest"]::view-transition-old(root) {
+    display: none;
+  }
+
+  html[data-t3team-view-transition-types~="digest"]::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+
+  html[data-t3team-view-transition-types~="digest"]::view-transition-group(*) {
+    animation-duration: var(--t3team-digest-motion-duration);
+    animation-timing-function: var(--t3team-digest-motion-easing);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t3team-digest-fade-in {
+    animation: none;
+  }
+
+  html[data-t3team-view-transition-types~="digest"]::view-transition-group(*),
+  html[data-t3team-view-transition-types~="digest"]::view-transition-old(*),
+  html[data-t3team-view-transition-types~="digest"]::view-transition-new(*) {
+    animation: none;
+  }
+}

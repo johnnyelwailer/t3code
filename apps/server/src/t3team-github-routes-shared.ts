@@ -15,6 +15,8 @@ export type GitHubInboxDiscoverRequest = {
    * else (the command palette's activity fan-out) is a background read that honours a pause.
    */
   readonly trigger?: "user" | "background";
+  /** Ask GitHub for the repository list now instead of serving the stored one. */
+  readonly refresh?: boolean;
 };
 
 export type GitHubRepositoryCandidate = {
@@ -67,6 +69,10 @@ export type GitHubInboxDiscoverResponse = {
   readonly inboxItems: ReadonlyArray<GitHubInboxItem>;
   readonly suggestedRepositoryUrls: ReadonlyArray<string>;
   readonly inboxWarning?: string;
+  /** When `repositories` was fetched from GitHub; the list may be older than this request. */
+  readonly repositoriesFetchedAt?: string;
+  /** The stored list was stale and a background refresh is running. */
+  readonly repositoriesRefreshing?: true;
 };
 
 export type RawGitHubRepo = {

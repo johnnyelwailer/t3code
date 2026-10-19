@@ -59,9 +59,14 @@ export function ProjectMyWorkDigestHeader({
           <DigestAutoStatus
             updatedAtMs={updatedAtMs}
             jiraSyncedAt={graph.jiraSyncedAt}
+            jiraSyncPending={graph.jiraSyncPending === true}
+            syncingProjects={graph.syncingProjects}
             changeRequestNote={graph.changeRequestNote}
             nowMs={nowMs}
             refreshing={refreshing}
+            needsAttention={
+              graph.jiraAuth === "needs-reconnect" || graph.jiraSyncError !== undefined
+            }
           />
           <PrWatchDigestStatus projectId={watchProjectId} />
         </div>
@@ -95,9 +100,14 @@ export function ProjectMyWorkDigestHeader({
           <DigestAutoStatus
             updatedAtMs={updatedAtMs}
             jiraSyncedAt={graph.jiraSyncedAt}
+            jiraSyncPending={graph.jiraSyncPending === true}
+            syncingProjects={graph.syncingProjects}
             changeRequestNote={graph.changeRequestNote}
             nowMs={nowMs}
             refreshing={refreshing}
+            needsAttention={
+              graph.jiraAuth === "needs-reconnect" || graph.jiraSyncError !== undefined
+            }
           />
           <PrWatchDigestStatus projectId={watchProjectId} />
         </div>

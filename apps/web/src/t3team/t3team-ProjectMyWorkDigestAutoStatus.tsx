@@ -1,30 +1,118 @@
 /**
  * The digest header's status strip. Its own file so the header stays inside the t3team line cap.
  */
+import { useDelayedStatus } from "~/hooks/useDelayedStatus";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { formatDigestAgo } from "~/t3team/t3team-ProjectMyWorkDigestChips";
 
 /**
  * The digest's data-source status: when Jira was last matched, not when this view fetched —
  * a fetch reads "just now" over a mirror days old. Amber once the sync is over an hour old.
+ * While a project's first sync is still running there is no sync time to show, and the fetch time
+ * would pass a half-filled mirror off as current, so the strip says the sync is in progress.
  * Falls back to the fetch time only when the server reports no sync at all.
  */
 const JIRA_SYNC_STALE_MS = 60 * 60 * 1000;
 
+/** A round that answers faster than this is not worth telling the reader about. */
+const REFRESH_HINT_TIMING = { showDelayMs: 600, minVisibleMs: 600 };
+
+/** The strip's one line about Jira's freshness; `null` when there is nothing to say. */
+export function digestJiraSyncLabel(input: {
+  readonly jiraSyncedAt: string | undefined;
+  readonly jiraSyncPending: boolean;
+  readonly updatedAtMs: number | undefined;
+  readonly nowMs: number;
+}): string | null {
+  if (input.jiraSyncPending) return "Jira sync in progress";
+  if (input.jiraSyncedAt !== undefined) {
+    return `Jira synced ${formatDigestAgo(input.nowMs, input.jiraSyncedAt)} ago`;
+  }
+  if (input.updatedAtMs === undefined) return null;
+  return `auto · updated ${formatDigestAgo(input.nowMs, new Date(input.updatedAtMs).toISOString())} ago`;
+}
+
+/**
+ * Quiet on purpose: the content below is usable, this only explains why it may be a moment old.
+ * Its slot is always laid out and only fades, so it appearing never moves the strip.
+ */
+function RefreshHint({ refreshing }: { refreshing: boolean }) {
+  const shown = useDelayedStatus(
+    "digest-refresh",
+    refreshing ? "refreshing" : null,
+    REFRESH_HINT_TIMING,
+  );
+  return (
+    <>
+      <span
+        aria-hidden
+        className={`text-muted-foreground/80 transition-opacity duration-200 motion-reduce:transition-none ${shown === null ? "opacity-0" : "opacity-100"}`}
+      >
+        Refreshing…
+      </span>
+      <span className="sr-only" aria-live="polite">
+        {shown === null ? "" : "Refreshing…"}
+      </span>
+    </>
+  );
+}
+
+/** Projects of the All projects digest still on their way: a quiet badge, never a skeleton. */
+export function DigestSyncingProjectsBadge({
+  projects,
+}: {
+  readonly projects: readonly string[] | undefined;
+}) {
+  if (projects === undefined || projects.length === 0) return null;
+  const label =
+    projects.length === 1 ? `Syncing ${projects[0]}…` : `Syncing ${projects.length} projects…`;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full border border-border/70 px-2 py-0.5 text-muted-foreground"
+            data-testid="digest-syncing-projects"
+          >
+            <span
+              className="size-1.5 animate-pulse rounded-full bg-info motion-reduce:animate-none"
+              aria-hidden
+            />
+            {label}
+          </span>
+        }
+      />
+      <TooltipPopup side="top" className="max-w-xs">
+        Still loading: {projects.join(", ")}. What is shown is already synced.
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
 export function DigestAutoStatus({
   updatedAtMs,
   jiraSyncedAt,
+  jiraSyncPending = false,
   changeRequestNote,
   nowMs,
   refreshing = false,
+  needsAttention = false,
+  syncingProjects,
 }: {
   updatedAtMs: number | undefined;
   jiraSyncedAt: string | undefined;
+  /** A project's first Jira sync is still running. */
+  jiraSyncPending?: boolean;
   changeRequestNote?: string | undefined;
   nowMs: number;
   /** A round is in flight over content that is already on screen (often a cold-start cache paint). */
   refreshing?: boolean;
+  /** The Jira half cannot be trusted (signed out, failing sync): the dot is amber whatever the age. */
+  needsAttention?: boolean;
+  /** All projects digest: projects not painted yet (see DigestSyncingProjectsBadge). */
+  syncingProjects?: readonly string[] | undefined;
 }) {
+  const syncingBadge = <DigestSyncingProjectsBadge projects={syncingProjects} />;
   // PRs that may be old or missing (the host rate-limited the read): said here, beside the sync.
   const prNotice = changeRequestNote ? (
     <Tooltip>
@@ -41,34 +129,31 @@ export function DigestAutoStatus({
       </TooltipPopup>
     </Tooltip>
   ) : null;
-  // Quiet on purpose: the content below is usable, this only explains why it may be a moment old.
-  const refreshNotice = refreshing ? (
-    <span className="text-muted-foreground/80" aria-live="polite">
-      Refreshing…
-    </span>
-  ) : null;
-  if (jiraSyncedAt === undefined && updatedAtMs === undefined) {
-    return refreshNotice || prNotice ? (
+  const label = digestJiraSyncLabel({ jiraSyncedAt, jiraSyncPending, updatedAtMs, nowMs });
+  if (label === null) {
+    return (
       <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+        {syncingBadge}
         {prNotice}
-        {refreshNotice}
+        <RefreshHint refreshing={refreshing} />
       </span>
-    ) : null;
+    );
   }
-  const stale = jiraSyncedAt !== undefined && nowMs - Date.parse(jiraSyncedAt) > JIRA_SYNC_STALE_MS;
+  const stale =
+    needsAttention ||
+    (!jiraSyncPending &&
+      jiraSyncedAt !== undefined &&
+      nowMs - Date.parse(jiraSyncedAt) > JIRA_SYNC_STALE_MS);
+  const dot = stale ? "bg-warning" : jiraSyncPending ? "bg-muted-foreground/60" : "bg-success";
   return (
     <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span className="inline-flex items-center gap-1.5">
-        <span
-          className={`size-1.5 rounded-full ${stale ? "bg-warning" : "bg-success"}`}
-          aria-hidden
-        />
-        {jiraSyncedAt !== undefined
-          ? `Jira synced ${formatDigestAgo(nowMs, jiraSyncedAt)} ago`
-          : `auto · updated ${formatDigestAgo(nowMs, new Date(updatedAtMs ?? nowMs).toISOString())} ago`}
+      <span className="inline-flex min-w-[9.5rem] items-center gap-1.5 tabular-nums">
+        <span className={`size-1.5 rounded-full ${dot}`} aria-hidden />
+        {label}
       </span>
+      {syncingBadge}
       {prNotice}
-      {refreshNotice}
+      <RefreshHint refreshing={refreshing} />
     </span>
   );
 }

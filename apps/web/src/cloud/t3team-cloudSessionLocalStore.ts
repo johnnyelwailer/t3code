@@ -3,8 +3,6 @@
  * Module-level so every Run-on / Settings controller shares one record: a create
  * must not vanish when the composer remounts or the user opens another thread.
  */
-import { useSyncExternalStore } from "react";
-
 import type { LocalCloudSession } from "~/components/cloud/t3team-cloudSessionSplit";
 
 const listeners = new Set<() => void>();
@@ -27,12 +25,4 @@ export function setCloudSessionLocal(next: LocalCloudSession | null): void {
 export function subscribeCloudSessionLocal(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
-}
-
-export function useCloudSessionLocal(): LocalCloudSession | null {
-  return useSyncExternalStore(
-    subscribeCloudSessionLocal,
-    getCloudSessionLocal,
-    getCloudSessionLocal,
-  );
 }

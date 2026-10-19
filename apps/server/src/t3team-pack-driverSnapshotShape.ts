@@ -1,5 +1,5 @@
 /**
- * Pack driver snapshot service (`ServerProviderShape`) — joins pack
+ * Pack driver snapshot service (`ManagedServerProvider`) — joins pack
  * providers to upstream's provider-usage pipeline.
  *
  * `getSnapshot` / `refresh` recompute from the pack instance and attach the
@@ -19,9 +19,9 @@ import * as Effect from "effect/Effect";
 import * as PubSub from "effect/PubSub";
 import * as Stream from "effect/Stream";
 
-import { makeManualOnlyProviderMaintenanceCapabilities } from "./provider/providerMaintenance.ts";
-import { applyUsageLimitsUpdate } from "./provider/providerUsageLimits.ts";
-import type { ServerProviderShape } from "./provider/ServerProvider.ts";
+import { makeManualOnlyProviderMaintenanceCapabilities } from "@t3tools/provider-core/server/maintenanceResolver";
+import { applyUsageLimitsUpdate } from "@t3tools/provider-core/server/usageLimits";
+import type { ManagedServerProvider } from "@t3tools/provider-core/server/snapshot";
 import {
   degradedServerProvider,
   packSnapshotToServerProvider,
@@ -60,7 +60,7 @@ export const makePackProviderSnapshot = Effect.fn("makePackProviderSnapshot")(fu
     );
   });
 
-  const applyUsageLimits: ServerProviderShape["applyUsageLimits"] = (update) =>
+  const applyUsageLimits: ManagedServerProvider["applyUsageLimits"] = (update) =>
     Effect.gen(function* () {
       const next = applyUsageLimitsUpdate({
         previous: usageLimits,
@@ -108,5 +108,5 @@ export const makePackProviderSnapshot = Effect.fn("makePackProviderSnapshot")(fu
     get streamChanges() {
       return Stream.fromPubSub(changes);
     },
-  } satisfies ServerProviderShape;
+  } satisfies ManagedServerProvider;
 });

@@ -13,6 +13,7 @@ import type {
   ProjectMainRepositorySwitchResult,
   ProjectWorkspaceBootstrapResult,
 } from "~/t3team/backend/t3team-types";
+import { waitForLinkedRepositoryReady } from "~/t3team/hooks/t3team-waitForLinkedRepositoryReady";
 import type {
   MainRepositoryReference,
   ProjectAgentReferences,
@@ -77,7 +78,8 @@ export function applyMainRepositorySwitchToProject(
   };
 }
 
-/** Applies auto-detection after a bootstrap. Best-effort: a failed switch keeps the project. */
+/** Applies auto-detection after a bootstrap: clones the one detected candidate, then switches to
+ * it. Best-effort: a failed clone or switch keeps the project. */
 export async function applyMainRepositoryAutoDetection(input: {
   readonly backend: BackendApi;
   readonly project: ProjectShellProject;
@@ -87,6 +89,17 @@ export async function applyMainRepositoryAutoDetection(input: {
   const detected = candidates.length === 1 ? candidates[0] : undefined;
   if (!detected) return input.project;
   try {
+    // The main repository syncs by default (linked ones on demand): the switch needs its checkout,
+    // which a candidate found on its remote does not have yet.
+    await input.backend.projectWorkspace.syncLinkedRepository({
+      workspaceRoot: input.bootstrap.workspaceRoot,
+      url: detected.url,
+    });
+    await waitForLinkedRepositoryReady({
+      backend: input.backend,
+      workspaceRoot: input.bootstrap.workspaceRoot,
+      url: detected.url,
+    });
     const result = await input.backend.projectWorkspace.setMainRepository({
       projectId: input.project.id,
       url: detected.url,

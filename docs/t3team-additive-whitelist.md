@@ -22,7 +22,16 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20261008` → the 2026-10-08 upstream sync merge commit
+- Current: `t3team/fork-baseline-20261015` → the 2026-10-15 upstream sync merge commit
+  `9c38e942cd` (107 upstream commits absorbed, `11fd54fcbb..e536bfd33b`, after merging fork main
+  `1d15b3ecfc`). Grandfathered: upstream's tree plus the conflict resolutions in that merge.
+  Post-merge fixes on the sync branch stay measured.
+- Before that: `t3team/fork-baseline-20261013` → fork commit `8d151d69b9` (post-fix tip of the
+  2026-10-12/13 sync branch).
+- Before that: `t3team/fork-baseline-20261012` → the 2026-10-12 upstream sync merge commit
+  `7006978420` (434 upstream commits absorbed, `04ad17425a..48595c787c`). Grandfathered: upstream's
+  tree plus the conflict resolutions in that merge. Post-merge fixes on the sync branch stay measured.
+- Before that: `t3team/fork-baseline-20261008` → the 2026-10-08 upstream sync merge commit
   `7deceab97b` (114 upstream commits absorbed, `9ae9f2ba1f..04ad17425a`, in three merges: upstream
   `365aa87982`, upstream `04ad17425a`, then fork main `0b3b3d67b3`). Grandfathered: upstream's tree
   plus the conflict resolutions in those merges. Post-merge fixes on the sync branch stay measured.
@@ -85,10 +94,26 @@ git push origin t3team/fork-baseline-YYYYMMDD
 | 2026-10-03 | `t3team/fork-baseline-20260927`          | `t3team/fork-baseline-20261003` (`88992deee`)           | The 2026-10-03 upstream sync (orchestration V2 rewrite, 123 commits). Tag points at the merge commit so the post-merge V2 port stays measured.                                                                          |
 | 2026-10-06 | `t3team/fork-baseline-20261003`          | `t3team/fork-baseline-20261006` (`ba03dadc53`)          | The 2026-10-06 upstream sync (9ae9f2ba1f, 247 commits per johnnyelwailer/t3code#385). Tag points at the merge commit so the Effect/layout port + cutover fix stay measured.                                             |
 | 2026-10-08 | `t3team/fork-baseline-20261006`          | `t3team/fork-baseline-20261008` (`7deceab97b`)          | The 2026-10-08 upstream sync (04ad17425a, 114 commits since 9ae9f2ba1f, incl. the unpushed 10-07 batch). Tag points at the final merge commit (fork main 0b3b3d67b3 merged in) so post-merge fixes stay measured.       |
+| 2026-10-12 | `t3team/fork-baseline-20261008`          | `t3team/fork-baseline-20261012` (`7006978420`)          | The 2026-10-12 upstream sync (48595c787c, 434 commits since 04ad17425a). Tag points at the merge commit so the post-merge type/lint fixes stay measured.                                                                |
 
 Until the new tag is pushed, the guard fails loudly on CI (missing tag), never silently.
 
 ## Allowed Modified Upstream Files
+
+### Upstream sync 2026-10-12
+
+- `apps/server/src/mcp/toolkits/worktree/registration.test.ts`
+  - Upstream toolkit registration now resolves every registered toolkit's services; the stub layer mocks the fork toolkit's T3TeamToolBroker and T3TeamAskUserWriter.
+- `apps/server/src/orchestration-v2/DeadSessionSendRecovery.test.ts`
+  - Fork-authored test (already an allowed unprefixed new file); retyped from the removed ProviderAdapterV2Shape to ProviderAdapterV2["Service"].
+- `packages/provider-cursor/src/server/textGeneration.ts`
+  - Upstream moved CursorTextGeneration.ts (whitelisted) here; carries the fork's activity-label and structured generation operations.
+- `packages/provider-grok/src/server/textGeneration.ts`
+  - Upstream moved GrokTextGeneration.ts (whitelisted) here; carries the fork's activity-label and structured generation operations.
+- `packages/provider-opencode/src/server/textGeneration.ts`
+  - Upstream moved OpenCodeTextGeneration.ts (whitelisted) here; carries the fork's activity-label and structured generation operations.
+- `packages/provider-opencode/src/server/v2/textGeneration.ts`
+  - Upstream moved OpenCode2TextGeneration.ts here; carries the fork's activity-label and structured generation operations.
 
 ### Rebaseline 2026-09-08 (guard machinery)
 
@@ -125,6 +150,8 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
   - Allow Atlassian OAuth `window.open` popups inside Electron instead of delegating them to the system browser.
 - `apps/desktop/src/window/DesktopWindow.test.ts`
   - Cover in-app OAuth popup handling in the desktop shell.
+- `scripts/build-desktop-artifact.ts`
+  - Fill the Atlassian OAuth client id/secret into the packaged `Resources/.env` from the build environment (`scripts/lib/t3team-packaged-env.ts`) and fail a build that ships a client id without its secret, so Jira token refresh does not depend on how the app was launched.
 - `apps/web/vite.config.ts`
   - Add dev proxy/defaults and compile-time constants used by migrated t3team route.
 - `apps/web/src/routeTree.gen.ts`
@@ -163,6 +190,8 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
   - Persist optional `t3teamExt` JSON alongside existing projection-thread message fields as the smallest storage seam for workflow message metadata.
 - `apps/server/src/persistence/Migrations.ts`
   - Register the additive t3team migration that adds `projection_thread_messages.t3team_ext_json`.
+- `apps/server/src/persistence/Migrations.test.ts`
+  - Upstream's V2 guard tests hard-code ids 54/55/56; this fork registers upstream 055 at 84 (`FIRST_V2_MIGRATION_ID`), so the same assertions are expressed relative to that constant. Unavoidable: with literal ids they assert the bug that refused pre-sync fork databases (2026-10-14).
 - `apps/server/src/persistence/Services/ProjectionThreadMessages.ts`
   - Extend the projection-thread message schema with optional `t3teamExt` so the persistence layer can carry the namespaced message extension.
 - `packages/contracts/src/settings.ts`
@@ -376,6 +405,13 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
 - `apps/web/src/components/auth/ConnectAgentSurface.tsx`, `apps/web/src/routes/connect-agent.tsx`
 - `oxlint-plugin-t3code/rules/no-raw-mcp-registration.ts`, `…/no-raw-mcp-registration.test.ts`
 
+### Upstream sync 2026-10-16
+
+- `apps/server/src/cli/sshHelper.test.ts`
+  - The pick-port case spawns `bin.ts` directly; the fork's `bin.ts` boots the distribution layer, which needs `scripts/t3team-distribution-devLoader.ts`, so the spawn adds `--import` of that loader. Test-only.
+- `apps/server/src/persistence/Sqlite.test.ts`
+  - The planner-stats case asserted the exact `sqlite_stat1` row `"1000 100"`; under the fork's runtime the bounded `PRAGMA optimize = 0x10012` sample reports `"1000 90"`. The case now asserts the exact row count and a sane per-key estimate. Test-only.
+
 ## `changeRequest.summary` slot (T8)
 
 - `apps/web/src/components/pullRequest/PullRequestSummaryTab.tsx` — one import and one
@@ -383,3 +419,15 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
   nothing until a view is registered, so the panel is unchanged without one.
 - `apps/web/src/components/pullRequest/PullRequestSummaryTab.test.tsx` — one case: a throwing
   registered Summary view leaves the real panel standing.
+
+## Backend health watchdog
+
+- `apps/desktop/src/backend/DesktopBackendManager.ts` — one optional `healthWatchdog` option on
+  `runBackendProcess`, chained after the readiness loop, and one per-instance kill history passed
+  from `makeBackendInstance`. The logic lives in `t3team-backendHealthWatchdog.ts`; without the
+  option the process runner is unchanged.
+
+## Stop during checkpoint drain + effect lease renewal (2026-10-15)
+
+- `apps/server/src/orchestration-v2/EffectOutbox.ts` — `renewLease`: a worker extends the lease of an effect it still runs.
+- `apps/server/src/orchestration-v2/EffectWorker.ts` — heartbeat that renews the lease while an effect executes, so a slow checkpoint capture is not reclaimed and run twice.

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { EnvironmentId, type CloudSession } from "@t3tools/contracts";
+import { CLOUD_SESSION_REFRESH_INTERVAL_MS } from "@t3tools/client-runtime/state/cloud-sessions";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -42,6 +43,7 @@ function mount(environmentId: string, sessions: CloudSession[]) {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  vi.spyOn(Math, "random").mockReturnValue(0);
   mocks.refresh.mockClear();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 });
@@ -50,15 +52,16 @@ afterEach(() => {
   act(() => root?.unmount());
   root = null;
   vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
 describe("useCloudSessionListRefresh cadence", () => {
-  it("polls every 5 s while a session is provisioning", () => {
+  it("polls at the busy interval while a session is provisioning", () => {
     // A distinct environment per test: the refresh gate is module-level.
     mount("env-busy", [session("preparing")]);
     expect(mocks.refresh).toHaveBeenCalledTimes(1);
-    act(() => vi.advanceTimersByTime(15_000));
+    act(() => vi.advanceTimersByTime(3 * CLOUD_SESSION_REFRESH_INTERVAL_MS));
     expect(mocks.refresh).toHaveBeenCalledTimes(4);
   });
 

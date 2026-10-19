@@ -4,7 +4,7 @@ import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
-import { runMigrations } from "../Migrations.ts";
+import { migrationManifest, runMigrations } from "../Migrations.ts";
 
 const PORT_TABLES = [
   "t3team_child_thread_metadata",
@@ -44,7 +44,7 @@ it.layer(NodeSqliteClient.layer({ filename: ":memory:" }))("t3team-077 repair", 
       // 98 and 99 are the repair; 100+ are later migrations that run on any ledger at 97.
       assert.deepStrictEqual(
         executed.map(([id]) => id),
-        [98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108],
+        migrationManifest.filter(([id]) => id > 97).map(([id]) => id),
       );
       assert.deepStrictEqual(yield* portTables, PORT_TABLES);
     }),

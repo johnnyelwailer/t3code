@@ -20,7 +20,7 @@ export function RollLabel({ text, shimmer }: { text: string; shimmer: boolean })
     return () => window.clearTimeout(t);
   }, [text]);
   return (
-    <span className="t3team-roll-stage relative block">
+    <span className="t3team-roll-stage relative block whitespace-nowrap">
       {rolling && previous ? (
         <span
           aria-hidden

@@ -1,27 +1,17 @@
-import { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
 import type { IntegrationAccountRef } from "@t3tools/integrations-core";
-import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 
-import { providerForAccount } from "./t3team-atlassian-auth-store.ts";
-import {
-  nextMirrorSleepMs,
-  normalSleepMs,
-  reconcileIntervalMs,
-  type T3TeamAtlassianMirrorSyncRequest,
-} from "./t3team-atlassian-backlog-mirrorSyncShared.ts";
-import { computeIncrementalLookbackMinutes } from "./t3team-atlassian-backlog-mirrorSyncShared.ts";
-import {
-  runMirrorIncrementalWalk,
-  runMirrorReconcile,
-} from "./t3team-atlassian-backlog-mirrorSyncWalks.ts";
+import { type T3TeamAtlassianMirrorSyncRequest } from "./t3team-atlassian-backlog-mirrorSyncShared.ts";
 import {
   clearT3TeamMirrorSyncKickHistory,
-  isT3TeamMirrorSyncIdle,
-  lastT3TeamMirrorSyncKickMs,
   recordT3TeamMirrorSyncKick,
-  recordT3TeamMirrorWalkSuccess,
 } from "./t3team-atlassian-mirrorSyncIdleTracking.ts";
+import { resolveJiraPageSource, runMirrorLoop } from "./t3team-atlassian-mirrorSyncLoop.ts";
+import {
+  forgetMirrorSyncLane,
+  type MirrorSyncLane,
+  noteMirrorSyncLane,
+} from "./t3team-atlassian-mirrorSyncLanes.ts";
 
 export { isT3TeamMirrorSyncIdle } from "./t3team-atlassian-mirrorSyncIdleTracking.ts";
 
@@ -35,7 +25,7 @@ type ActiveMirrorSync = { readonly token: symbol };
  */
 const activeMirrorSyncs = new Map<string, ActiveMirrorSync>();
 
-export function mirrorSyncMapKey(input: {
+function mirrorSyncMapKey(input: {
   readonly account: IntegrationAccountRef;
   readonly externalProjectId: string;
 }): string {
@@ -75,15 +65,17 @@ export function hasActiveT3TeamAtlassianMirrorSync(input: {
  * Kick off the whole-project mirror sync background loop for one project.
  *
  * Single-flight: if a loop is already running for this (provider, account,
- * project) triple the call is a no-op. The loop runs indefinitely until the
- * process exits, sleeping ~90 s between incremental walks and doing a full
- * reconcile every ~24 h.
- *
- * Nothing calls this yet — Wave 3 wires it into the My Work endpoint.
+ * project) triple the call is a no-op. The loop (t3team-atlassian-mirrorSyncLoop.ts)
+ * runs until no kick has been seen for the idle TTL; a later kick restarts it
+ * from the persisted watermark.
  */
-export function kickT3TeamAtlassianMirrorSync(input: T3TeamAtlassianMirrorSyncRequest) {
+export function kickT3TeamAtlassianMirrorSync(
+  input: T3TeamAtlassianMirrorSyncRequest,
+  options?: { readonly lane?: MirrorSyncLane },
+) {
   const mapKey = mirrorSyncMapKey(input);
   recordT3TeamMirrorSyncKick(mapKey);
+  noteMirrorSyncLane(mapKey, options?.lane ?? "foreground");
   if (activeMirrorSyncs.has(mapKey)) {
     return Effect.void;
   }
@@ -95,10 +87,11 @@ export function kickT3TeamAtlassianMirrorSync(input: T3TeamAtlassianMirrorSyncRe
   const unregister = Effect.sync(() => {
     if (activeMirrorSyncs.get(mapKey)?.token === token) {
       activeMirrorSyncs.delete(mapKey);
+      forgetMirrorSyncLane(mapKey);
     }
   });
 
-  return runMirrorLoop(input, isSuperseded).pipe(
+  return runMirrorLoop(input, mapKey, isSuperseded, resolveJiraPageSource).pipe(
     Effect.catchCause((cause) =>
       Effect.logDebug("t3team atlassian mirror sync loop terminated", cause),
     ),
@@ -108,113 +101,8 @@ export function kickT3TeamAtlassianMirrorSync(input: T3TeamAtlassianMirrorSyncRe
   );
 }
 
-// ─── Main loop ───────────────────────────────────────────────────────────────
-
-function runMirrorLoop(input: T3TeamAtlassianMirrorSyncRequest, isSuperseded: () => boolean) {
-  const identity = {
-    provider: input.account.provider,
-    accountId: input.account.id,
-    externalProjectId: input.externalProjectId,
-  };
-
-  return Effect.gen(function* () {
-    let lastReconcileMs = 0;
-    let lastSuccessfulWalkMs = 0;
-    let sleepMs = normalSleepMs;
-
-    const mapKey = mirrorSyncMapKey(input);
-
-    while (true) {
-      if (isSuperseded()) return;
-
-      const idleNowMs = yield* Clock.currentTimeMillis;
-      const lastKickedMs = lastT3TeamMirrorSyncKickMs(mapKey) ?? idleNowMs;
-      if (isT3TeamMirrorSyncIdle({ nowMs: idleNowMs, lastKickedMs })) {
-        yield* Effect.logDebug(
-          "t3team atlassian mirror sync: no kick within idle TTL; terminating loop",
-        ).pipe(Effect.annotateLogs(identity));
-        return;
-      }
-
-      // Re-resolve the provider every iteration instead of using a captured
-      // instance: JiraApiClient freezes its auth at construction (no
-      // in-place refresh), so a provider resolved once at kick time goes
-      // stale as soon as the OAuth access token expires (~1h). Re-resolving
-      // via providerForAccount re-reads persisted auth and runs
-      // refreshOAuthAuthIfNeeded, so a refreshed token is picked up here.
-      const provider = yield* providerForAccount(input.account.id);
-
-      if (!(provider instanceof AtlassianIntegrationProvider)) {
-        // Resolved to the mock provider (no real Atlassian auth persisted
-        // for this account) — nothing to walk. Terminate so the single-flight
-        // map unblocks a future kick once real auth is available, rather
-        // than looping forever on a walk that can never succeed.
-        yield* Effect.logDebug(
-          "t3team atlassian mirror sync: resolved provider is not an AtlassianIntegrationProvider; terminating loop",
-        ).pipe(Effect.annotateLogs(identity));
-        return;
-      }
-
-      const nowMs = yield* Clock.currentTimeMillis;
-      const doReconcile = nowMs - lastReconcileMs >= reconcileIntervalMs;
-
-      if (doReconcile) {
-        // A reconcile covers everything an incremental walk would, so on
-        // success it also counts as a successful walk for lookback purposes.
-        const outcome = yield* runMirrorReconcile(input, provider, identity, isSuperseded).pipe(
-          Effect.andThen(
-            Effect.sync(() => {
-              lastSuccessfulWalkMs = recordT3TeamMirrorWalkSuccess(mapKey, nowMs);
-              return "ok" as const;
-            }),
-          ),
-          Effect.catch((error) =>
-            Effect.logWarning("t3team atlassian mirror reconcile walk failed", error).pipe(
-              Effect.as(error),
-            ),
-          ),
-        );
-        sleepMs = nextMirrorSleepMs(sleepMs, outcome);
-        lastReconcileMs = yield* Clock.currentTimeMillis;
-      } else {
-        // Widen the JQL lookback to cover the gap since the last successful
-        // walk (laptop suspend, failed walks) instead of a fixed 15 m window.
-        // Anchor to the walk's *start* so updates landing mid-walk aren't
-        // skipped by the next window.
-        const lookbackMinutes = computeIncrementalLookbackMinutes({
-          nowMs,
-          lastSuccessfulWalkMs,
-        });
-        const outcome = yield* runMirrorIncrementalWalk(
-          input,
-          provider,
-          identity,
-          isSuperseded,
-          lookbackMinutes,
-        ).pipe(
-          Effect.andThen(
-            Effect.sync(() => {
-              lastSuccessfulWalkMs = recordT3TeamMirrorWalkSuccess(mapKey, nowMs);
-              return "ok" as const;
-            }),
-          ),
-          Effect.catch((error) =>
-            Effect.logWarning("t3team atlassian mirror incremental walk failed", error).pipe(
-              Effect.as(error),
-            ),
-          ),
-        );
-        sleepMs = nextMirrorSleepMs(sleepMs, outcome);
-      }
-
-      if (isSuperseded()) return;
-      yield* Effect.sleep(sleepMs);
-    }
-  });
-}
-
 export {
-  computeIncrementalLookbackMinutes,
+  computeWatermarkLookbackMinutes,
   nextMirrorSleepMs,
 } from "./t3team-atlassian-backlog-mirrorSyncShared.ts";
 export type { T3TeamAtlassianMirrorSyncRequest } from "./t3team-atlassian-backlog-mirrorSyncShared.ts";

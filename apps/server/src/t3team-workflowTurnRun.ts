@@ -15,7 +15,7 @@
  */
 import type { OrchestrationV2Run, OrchestrationV2ThreadProjection } from "@t3tools/contracts";
 
-import { subagentResultForRun } from "./orchestration-v2/SubagentProjection.ts";
+import { subagentResultForRun } from "@t3tools/provider-core/server/subagentProjection";
 import { isTerminalRunStatus } from "./orchestration-v2/ThreadManagementService.ts";
 
 export type WorkflowTurnSettlement =

@@ -51,3 +51,26 @@ export function resolveMyWorkDigestRenderState(
   if (input.freshness !== "fresh" || input.status !== "ready") return "loading";
   return input.viewerUnresolved ? "sign-in" : "empty";
 }
+
+export type DigestEmptyLanes =
+  /** The round that would say "nothing" has not landed yet. */
+  | "loading"
+  | "nothing"
+  /** No tickets, but the Jira half is stale or signed out: an empty list proves nothing. */
+  | "unverified";
+
+/**
+ * What an empty digest says. "Nothing needs you" is a claim about the user's work, so it needs the
+ * Jira half to be current as well as the round to be fresh; when it is not, the Jira notice above
+ * is the whole message and the empty panel stays out of its way. A first Jira sync still running
+ * keeps the lanes loading: the header already says so, and the mirror is not done filling.
+ */
+export function resolveDigestEmptyLanes(input: {
+  readonly emptyStateAllowed: boolean;
+  readonly jiraNoticeShown: boolean;
+  readonly jiraSyncPending?: boolean;
+}): DigestEmptyLanes {
+  if (!input.emptyStateAllowed) return "loading";
+  if (input.jiraNoticeShown) return "unverified";
+  return input.jiraSyncPending === true ? "loading" : "nothing";
+}

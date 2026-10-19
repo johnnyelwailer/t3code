@@ -22,6 +22,7 @@ const T3TEAM_ALL_MY_WORK_SEGMENT = "my-work";
 const T3TEAM_CHAT_THREAD_SEARCH_KEY = "chatThreadId";
 const T3TEAM_SETUP_SEARCH_KEY = "setup";
 const T3TEAM_SETUP_WELCOME_VALUE = "welcome";
+const T3TEAM_MANAGE_REPOSITORIES_SEARCH_KEY = "manageRepositories";
 
 export type T3TeamRouteSearch = ProjectDashboardBacklogRouteSearch &
   ProjectDashboardMyWorkRouteSearch &
@@ -30,6 +31,8 @@ export type T3TeamRouteSearch = ProjectDashboardBacklogRouteSearch &
   CreateProjectRouteSearch & {
     chatThreadId?: string;
     setup?: "welcome";
+    /** The project whose "Linked repositories" dialog is open (deep-linked from project settings). */
+    manageRepositories?: string;
   };
 
 export type T3TeamRouteSearchTarget =
@@ -53,6 +56,9 @@ export function parseT3TeamRouteSearch(search: Record<string, unknown>): T3TeamR
   const chatThreadId =
     typeof rawChatThreadId === "string" && rawChatThreadId.length > 0 ? rawChatThreadId : null;
   const setup = rawSetup === T3TEAM_SETUP_WELCOME_VALUE ? T3TEAM_SETUP_WELCOME_VALUE : null;
+  const rawManage = search[T3TEAM_MANAGE_REPOSITORIES_SEARCH_KEY];
+  const manageRepositories =
+    typeof rawManage === "string" && rawManage.length > 0 ? rawManage : null;
 
   return {
     ...parseProjectDashboardBacklogRouteSearch(search),
@@ -62,6 +68,7 @@ export function parseT3TeamRouteSearch(search: Record<string, unknown>): T3TeamR
     ...parseCreateProjectRouteSearch(search),
     ...(chatThreadId ? { chatThreadId } : {}),
     ...(setup ? { setup } : {}),
+    ...(manageRepositories ? { manageRepositories } : {}),
   };
 }
 

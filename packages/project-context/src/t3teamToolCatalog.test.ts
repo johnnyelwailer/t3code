@@ -62,6 +62,7 @@ describe("t3teamToolCatalog", () => {
       "t3team.mywork.digest.read",
       "t3team.mywork.arrange",
       "t3team.change_request.publish",
+      "t3team.project.sync_linked_repository",
     ]);
   });
 
@@ -83,6 +84,7 @@ describe("t3teamToolCatalog", () => {
       "t3team.thread.ask_user",
       "t3team.thread.children",
       "t3team.work_item.refresh_context_bundle",
+      "t3team.project.sync_linked_repository",
     ]);
   });
 

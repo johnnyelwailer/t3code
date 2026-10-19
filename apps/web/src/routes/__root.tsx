@@ -27,13 +27,16 @@ import { RelayClientInstallDialog } from "../components/cloud/RelayClientInstall
 import { SshPasswordPromptDialog } from "../components/desktop/SshPasswordPromptDialog";
 import { SnapShotCoordinator } from "../components/desktop/SnapShotCoordinator";
 import { DesktopAppActivationCoordinator } from "../components/desktop/DesktopAppActivationCoordinator";
+import { DesktopWebLinkCoordinator } from "../components/desktop/DesktopWebLinkCoordinator";
 import { RunningThreadKeepAlive } from "../components/desktop/RunningThreadKeepAlive";
 import { ProviderUpdateLaunchNotification } from "../components/ProviderUpdateLaunchNotification";
+import { DesktopUpdateLaunchNotice } from "../components/sidebar/updateEverythingRun";
 import { NightlyMobileBetaNotice } from "../components/NightlyMobileBeta";
 import { LegacyThreadMigrationToast } from "../components/LegacyThreadMigrationToast";
 import { ThreadNotificationCoordinator } from "../components/ThreadNotificationCoordinator";
 import { ReopenClosedViewShortcut } from "../components/ReopenClosedViewShortcut";
 import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoordinator";
+import { PullRequestGuideRunCoordinator } from "../components/pullRequest/guide/PullRequestGuideRunCoordinator";
 import { SlowRpcRequestToastCoordinator } from "../components/SlowRpcRequestToastCoordinator";
 import { ChatGptWelcomeCoordinator } from "../components/settings/ChatGptWelcomeCoordinator";
 import { ProviderAuthCallbackCoordinator } from "../components/settings/ProviderAuthCallbackCoordinator";
@@ -72,10 +75,12 @@ import { useUpstreamRouteBridge } from "../t3team/t3team-useUpstreamRouteBridge"
 import { T3TeamPackAppearanceDefaultsSync } from "../t3team/t3team-PackAppearanceDefaultsSync";
 import { T3TeamPackAppearanceSync } from "../t3team/t3team-PackAppearanceSync";
 import { CloudSessionSignInDialogHost } from "../cloud/t3team-CloudSessionSignInDialogHost";
+import { CloudQueuedSendFlusher } from "../cloud/t3team-CloudQueuedSendFlusher";
 import { t3teamPackProductName, useT3TeamAppDisplayName } from "../t3team/t3team-appBrandName";
 import { useT3TeamPackAppearance } from "../t3team/t3team-packAppearance";
 // Registers the composing heartbeat with the composer draft store's sink (side effect only).
 import "../t3team/chat/t3team-threadComposingSignal";
+import { useHostedPromptLinkLanding } from "../components/promptLinks/HostedPromptLinkLanding";
 import { isLocalEnvironmentDisabled } from "../localEnvironment";
 import { useAtomValue } from "@effect/atom-react";
 import { useEnvironments, usePrimaryEnvironment } from "../state/environments";
@@ -163,6 +168,9 @@ function RootRouteView() {
   const { authGateState } = Route.useRouteContext();
   const primaryEnvironmentAuthenticated = authGateState.status === "authenticated";
   const returningFromWelcomeRef = useRef(pathname === "/welcome");
+  const hostedPromptLinkLanding = useHostedPromptLinkLanding(
+    authGateState.status === "hosted-static",
+  );
 
   useEffect(() => {
     if (pathname === "/welcome") {
@@ -201,6 +209,18 @@ function RootRouteView() {
         <T3TeamPackAppearanceSync />
         <T3TeamPackAppearanceDefaultsSync />
         <Outlet />
+      </>
+    );
+  }
+
+  // Ahead of first-run onboarding, which would otherwise send a new visitor to the welcome
+  // wizard and lose the link.
+  if (hostedPromptLinkLanding !== null) {
+    return (
+      <>
+        <DocumentTitleSync />
+        <T3TeamPackAppearanceSync />
+        {hostedPromptLinkLanding}
       </>
     );
   }
@@ -306,7 +326,10 @@ function RootRouteView() {
         >
           {primaryEnvironmentAuthenticated ? <AuthenticatedTracingBootstrap /> : null}
           {primaryEnvironmentAuthenticated ? <DesktopAppActivationCoordinator /> : null}
+          {primaryEnvironmentAuthenticated ? <DesktopWebLinkCoordinator /> : null}
           {isElectron ? <RunningThreadKeepAlive /> : null}
+          {/* t3team: delivers drafts' first messages queued for a cloud session, app-wide. */}
+          {primaryEnvironmentAuthenticated ? <CloudQueuedSendFlusher /> : null}
           <RelayClientInstallDialog />
           <CloudSessionSignInDialogHost />
           <ConnectOnboardingDialog />
@@ -320,11 +343,13 @@ function RootRouteView() {
           <PermissionUpdateNotice />
           {primaryEnvironmentAuthenticated ? <LegacyThreadMigrationToast /> : null}
           <ProjectCloneToastCoordinator />
+          <PullRequestGuideRunCoordinator />
           <HostedStaticEnvironmentBootstrap />
           {primaryEnvironmentAuthenticated ? (
             <EventRouter skipInitialBootstrapNavigation={returningFromWelcomeRef.current} />
           ) : null}
           {primaryEnvironmentAuthenticated ? <ProviderUpdateLaunchNotification /> : null}
+          {isElectron ? <DesktopUpdateLaunchNotice /> : null}
           {/* Hosted Nightly is "hosted-static", not authenticated, and needs it too. */}
           <NightlyMobileBetaNotice />
           {appShell}

@@ -53,6 +53,7 @@ const READ_VERBS = [
   "classif",
   "poll",
   "diff",
+  "collect",
 ];
 
 function truncate(text: string): string {

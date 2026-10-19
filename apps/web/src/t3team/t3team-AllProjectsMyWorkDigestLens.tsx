@@ -79,6 +79,7 @@ export function AllProjectsMyWorkDigestLens({
       burndownVariant={flags.digestBurndownVariant}
       refreshing={digest.refreshing}
       emptyStateAllowed={digest.freshness === "fresh"}
+      onReload={digest.reload}
       {...(digest.updatedAt !== undefined ? { updatedAtMs: digest.updatedAt } : {})}
       onOpenTicket={
         // Beta flag: rows open the ticket in-app, beside the digest (each ticket knows its

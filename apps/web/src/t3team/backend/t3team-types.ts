@@ -89,30 +89,55 @@ export interface BackendApi {
   readonly projectWorkspace: ProjectWorkspaceBackendApi;
 }
 
-/** One linked repository. `status` is its checkout's last settled state (`pending` until the
- * first clone lands); `syncState` is set while a background clone/fetch is queued or running. */
+/** One linked repository. `status` is its checkout's last settled state: `not-cloned` until a sync
+ * is asked for (linked repositories sync on demand; `pending` is the legacy spelling of it);
+ * `syncState` is set while a background clone/fetch is queued or running. */
 export type LinkedRepositorySyncResult = {
   readonly url: string;
   readonly localPath: string;
-  readonly status: "pending" | "cloned" | "updated" | "failed";
+  readonly status: "not-cloned" | "pending" | "cloned" | "updated" | "failed";
   readonly error?: string;
   readonly syncedAt?: string;
   readonly syncState?: "queued" | "cloning" | "updating";
+  /** The branch the project chose for this checkout; absent means as cloned. */
+  readonly branch?: string;
+};
+
+/** The branches a linked repository's checkout knows (from its last fetch). */
+export type LinkedRepositoryBranches = {
+  readonly branches: ReadonlyArray<string>;
+  readonly current?: string;
+  readonly defaultBranch?: string;
 };
 
 export interface ProjectWorkspaceBackendApi {
   readonly bootstrapWorkspace: (input: {
     readonly workspaceRoot: string;
     readonly linkedRepositoryUrls?: ReadonlyArray<string>;
+    /** The branch each linked repository's checkout should be on, by URL. */
+    readonly linkedRepositoryBranches?: Readonly<Record<string, string>>;
     readonly setupProfileId?: string;
-    /** An explicit save: refetch every linked repository instead of honoring the throttle. */
-    readonly refreshLinkedRepositories?: boolean;
+    /** Linked repositories to clone/fetch now; every other one is only recorded. */
+    readonly syncLinkedRepositoryUrls?: ReadonlyArray<string>;
+    /** Project creation only: find main-repository candidates in linked repositories that are not
+     * cloned, from their committed default branch. */
+    readonly inspectLinkedRepositoriesForMainRepository?: boolean;
     readonly customProfile?: import("@t3tools/t3team-skill-packs").T3TeamProfile;
   }) => Promise<ProjectWorkspaceBootstrapResult>;
   /** The linked repositories' recorded state plus live background-sync phases. No git work. */
   readonly readLinkedRepositoryStatus: (input: {
     readonly workspaceRoot: string;
   }) => Promise<{ readonly linkedRepositories: ReadonlyArray<LinkedRepositorySyncResult> }>;
+  /** Queues a clone (absent) or fetch (present) of one linked repository; follow it by status. */
+  readonly syncLinkedRepository: (input: {
+    readonly workspaceRoot: string;
+    readonly url: string;
+  }) => Promise<{ readonly linkedRepository: LinkedRepositorySyncResult }>;
+  /** The branches a linked checkout knows. Local to the server: no network, no credential. */
+  readonly listLinkedRepositoryBranches: (input: {
+    readonly workspaceRoot: string;
+    readonly url: string;
+  }) => Promise<LinkedRepositoryBranches>;
   /** Sets the project's main repository (`url: null` = the project's own workspace). */
   readonly setMainRepository: (input: {
     readonly projectId: string;

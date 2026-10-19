@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import type { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
-import { writeFileStringAtomically } from "./atomicWrite.ts";
+import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 import { toAtlassianError } from "./t3team-atlassian-http.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import {

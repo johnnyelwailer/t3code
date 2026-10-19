@@ -22,7 +22,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 
-import type { ProviderAdapterV2Event } from "./ProviderAdapter.ts";
+import type { ProviderAdapterV2Event } from "@t3tools/provider-core/server/ProviderAdapter";
 
 /** The longest blocking MCP wait upstream allows (60 min) plus slack for the call around it. */
 export const OPEN_TOOL_BUDGET_MS = 62 * 60_000;

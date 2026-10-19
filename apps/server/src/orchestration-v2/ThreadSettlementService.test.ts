@@ -1,3 +1,4 @@
+import { SourceControlProviderKind } from "@t3tools/contracts";
 import { assert, describe, expect, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
 import {
@@ -23,6 +24,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import { noJitter } from "./t3team-testNoJitter.ts";
 import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
@@ -251,6 +253,38 @@ describe("threadHasQueuedTurnStart", () => {
 });
 
 describe("resolveAutoSettlementAt", () => {
+  it("keeps threads with a PR from inactivity settlement only when asked", () => {
+    const input = {
+      thread: shell({
+        latestUserMessageAt: at(-4 * DAY_MS),
+        linkedPullRequest: {
+          projectId: ProjectId.make("project-1"),
+          repository: "owner/repo",
+          number: 1,
+          url: "https://example.test/owner/repo/pull/1",
+        },
+      }),
+      pullRequest: null,
+      nowMs: NOW_MS,
+      autoSettleAfterDays: 3,
+      autoSettleOnMerge: true,
+      autoSettleKeepPullRequests: true,
+    };
+    expect(ThreadSettlementService.resolveAutoSettlementAt(input)).toBeNull();
+    expect(
+      ThreadSettlementService.resolveAutoSettlementAt({
+        ...input,
+        autoSettleKeepPullRequests: false,
+      }),
+    ).toEqual(at(-4 * DAY_MS));
+    expect(
+      ThreadSettlementService.resolveAutoSettlementAt({
+        ...input,
+        pullRequest: { state: "merged", mergedAt: DateTime.formatIso(at(-1)) },
+      }),
+    ).toEqual(at(-4 * DAY_MS));
+  });
+
   it("uses the latest activity time when the inactivity window elapses", () => {
     const idle = shell({
       latestUserMessageAt: at(-4 * DAY_MS),
@@ -275,6 +309,26 @@ describe("resolveAutoSettlementAt", () => {
     expect(
       ThreadSettlementService.resolveAutoSettlementAt({ ...input, thread: shell() }),
     ).toBeNull();
+  });
+
+  it.each(["manual", "timer"])("restarts inactivity on a %s snooze wake", (wake) => {
+    const thread = {
+      ...shell({ latestRunCompletedAt: at(-4 * DAY_MS) }),
+      ...(wake === "manual"
+        ? { lastSnoozeWakeAt: at(-1_000) }
+        : { snoozedAt: at(-3 * DAY_MS), snoozedUntil: at(-1_000) }),
+    };
+    const input = {
+      thread,
+      pullRequest: null,
+      nowMs: NOW_MS,
+      autoSettleAfterDays: 1,
+      autoSettleOnMerge: false,
+    };
+    expect(ThreadSettlementService.resolveAutoSettlementAt(input)).toBeNull();
+    expect(
+      ThreadSettlementService.resolveAutoSettlementAt({ ...input, nowMs: NOW_MS + DAY_MS }),
+    ).toEqual(at(-1_000));
   });
 
   it("settles on merge only after the user's last action and preserves the activity time", () => {
@@ -453,7 +507,7 @@ function makePullRequestSummary(input: {
   readonly updatedAt?: string;
 }): PullRequestSummary {
   return {
-    provider: "github",
+    provider: SourceControlProviderKind.make("github"),
     projectId: input.projectId,
     repository: input.repository,
     number: input.number,
@@ -667,7 +721,7 @@ const startHarness = Effect.fn("startThreadSettlementHarness")(function* (
   activation: Deferred.Deferred<void>,
   snapshotReads: Queue.Queue<number>,
 ) {
-  yield* reactor.start();
+  yield* reactor.start().pipe(Effect.provide(noJitter));
   yield* Deferred.succeed(activation, undefined);
   yield* Queue.take(snapshotReads);
   yield* reactor.drain;

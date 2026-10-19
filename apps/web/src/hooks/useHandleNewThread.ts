@@ -22,8 +22,15 @@ import {
   getProjectOrderKey,
   selectProjectGroupingSettings,
 } from "../logicalProject";
-import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
-import { readProjects, readThreadShell, useProjects, useThreadShell } from "../state/entities";
+import { resolveNewThreadEnvMode, resolveProjectSettings } from "@t3tools/shared/projectSettings";
+import {
+  readProject,
+  readProjects,
+  readThreadShell,
+  readThreadShells,
+  useProjects,
+  useThreadShell,
+} from "../state/entities";
 import {
   hasExplicitComposerModelSelection,
   resolveNewDraftStartFromOrigin,
@@ -131,6 +138,10 @@ export function useNewThreadHandler() {
           candidate.id === projectRef.projectId &&
           candidate.environmentId === projectRef.environmentId,
       );
+      // Removal can land while the project file is read; a draft opened
+      // after that belongs to a project that no longer exists.
+      const abandonedSinceRequest = () =>
+        routeChangedSinceRequest() || (project !== undefined && readProject(projectRef) === null);
       // The resolver applies project overrides and, until the server has
       // folded them, the aggregate's own legacy fields.
       const projectSettings = resolveProjectSettings(
@@ -157,12 +168,21 @@ export function useNewThreadHandler() {
         const projectFile = consultProjectFile
           ? await readT3ProjectFile(project.environmentId, project.workspaceRoot)
           : null;
-        return resolveProjectSettings(
-          targetServerSettings,
-          project?.id ?? null,
-          project,
-          projectFile,
-        ).settings.defaultThreadEnvMode;
+        return resolveNewThreadEnvMode({
+          projectSettings: resolveProjectSettings(
+            targetServerSettings,
+            project?.id ?? null,
+            project,
+            projectFile,
+          ),
+          workspaceRoot: project?.workspaceRoot ?? null,
+          newProjectsRoot: environmentServerConfigs.get(projectRef.environmentId)?.newProjectsRoot,
+          projectHasThreads: readThreadShells().some(
+            (thread) =>
+              thread.environmentId === projectRef.environmentId &&
+              thread.projectId === projectRef.projectId,
+          ),
+        });
       };
       const logicalProjectKey = project
         ? deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings)
@@ -225,7 +245,7 @@ export function useNewThreadHandler() {
             workspaceContext = pickExplicitWorkspaceOptions(options);
           } else if (!isDraftAlreadyOpen) {
             const defaultEnvMode = await resolveDefaultEnvMode();
-            if (routeChangedSinceRequest()) {
+            if (abandonedSinceRequest()) {
               return null;
             }
             // The await yields. If the draft was opened (a concurrent
@@ -364,7 +384,7 @@ export function useNewThreadHandler() {
       const createdAt = new Date().toISOString();
       return (async () => {
         const initialEnvMode = options?.envMode ?? (await resolveDefaultEnvMode());
-        if (routeChangedSinceRequest()) {
+        if (abandonedSinceRequest()) {
           return null;
         }
         // The await yields, so a concurrent invocation may have registered a

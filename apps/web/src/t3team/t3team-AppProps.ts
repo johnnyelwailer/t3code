@@ -13,6 +13,9 @@ export type AppProps = {
   showCreate?: boolean;
   reopenInitialSetup?: boolean;
   onCreateOpenChange?: (open: boolean) => void;
+  /** The project whose linked-repositories dialog is open; when given, the route owns the state. */
+  manageRepositoriesProjectId?: string | null;
+  onManageRepositoriesChange?: (projectId: string | null) => void;
   onOpenHome?: () => void;
   onOpenSettings?: () => void;
   onOpenDashboard?: (

@@ -9,7 +9,7 @@
  * in-memory SQLite (every layer reference below memoizes to one instance per build).
  */
 import type { PackTurnInput } from "@t3team/pack-api";
-import { CommandId, EventId, ProjectId, ThreadId } from "@t3tools/contracts";
+import { CommandId, EventId, ProjectId, ProviderDriverKind, ThreadId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -18,6 +18,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
 import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
+import * as CommandReceiptStore from "./orchestration-v2/CommandReceiptStore.ts";
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import { layerWithRegistry } from "./orchestration-v2/testkit/ProviderReplayHarness.ts";
 import * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
@@ -26,6 +27,8 @@ import { T3TeamWorkflowEngineReactorLayer } from "./t3team-workflowEngineReactor
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
 import { makeThreadLaunchFake } from "./t3team-threadLaunchFake.fixtures.ts";
 import * as T3TeamWorkflowHost from "./t3team-workflowHost.ts";
+import * as ServerSettings from "./serverSettings.ts";
+import { PACK_DRIVER } from "./t3team-pack-driver.fixtures.ts";
 import {
   makeWorkflowStubProvider,
   WORKFLOW_STUB_MODEL_SELECTION,
@@ -41,7 +44,20 @@ export function makeWorkflowStubRuntime(options: {
   const orchestration = layerWithRegistry({ name: options.name }, provider.registryLayer, {
     databaseLayer: database,
   });
-  const threads = ThreadManagementService.layer.pipe(Layer.provide(orchestration));
+  const threads = ThreadManagementService.layer.pipe(
+    Layer.provide(orchestration),
+    Layer.provide(
+      ServerSettings.layerTest({
+        providerInstances: {
+          [WORKFLOW_STUB_MODEL_SELECTION.instanceId]: {
+            driver: ProviderDriverKind.make(PACK_DRIVER),
+            enabled: true,
+          },
+        },
+      }),
+    ),
+    Layer.provide(CommandReceiptStore.layer.pipe(Layer.provide(database))),
+  );
   const foundation = T3TeamV2FoundationLive.pipe(Layer.provide(database));
   const persistence = Layer.mergeAll(
     WorkflowRunRepositoryLive,

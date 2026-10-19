@@ -8,7 +8,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { afterEach, describe, expect } from "vite-plus/test";
 
-import type { ProviderInstance } from "../provider/ProviderDriver.ts";
+import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import {
@@ -46,6 +46,8 @@ const recordingInstance = (id: string, calls: Call[]): ProviderInstance => {
         record("title", input.modelSelection).pipe(Effect.as({ title: "t" })),
       generateActivityLabel: (input) =>
         record("label", input.modelSelection).pipe(Effect.as({ label: "l" })),
+      generateReviewGuide: () =>
+        Effect.die("generateReviewGuide stub not configured for this test"),
       generateStructured: (input) =>
         record("structured", input.modelSelection).pipe(Effect.as({ status: "ok" }) as never),
     }),

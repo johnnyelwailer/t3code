@@ -15,6 +15,14 @@ import {
   allProjectsAgentScenario,
   allProjectsHeuristicScenario,
 } from "~/t3team/t3team-projectMyWorkDigestFixtureScenariosAllProjects";
+import {
+  jiraSessionExpiredEmptyScenario,
+  jiraSessionExpiredScenario,
+  jiraSyncFailedScenario,
+  jiraSyncInProgressEmptyScenario,
+  jiraSyncInProgressScenario,
+  staleJiraSyncScenario,
+} from "~/t3team/t3team-projectMyWorkDigestFixtureScenariosJira";
 import { storyCardAttentionScenario } from "~/t3team/t3team-projectMyWorkDigestFixtureScenariosStoryCards";
 import {
   digestFixtureOffsetToLocalHour,
@@ -149,4 +157,32 @@ export const AllProjectsHeuristic: Story = createStory(
 export const AllProjectsAgent: Story = createStory(
   allProjectsAgentScenario,
   "All projects, one arrangement across projects.",
+);
+export const JiraSyncStale: Story = createStory(
+  staleJiraSyncScenario,
+  "The Jira sync is 26 days old: the notice offers a retry, the status strip prints the age.",
+);
+export const JiraSessionExpired: Story = createStory(
+  jiraSessionExpiredScenario,
+  "The Jira session is dead: the notice asks to sign in again over the last good read.",
+);
+export const JiraSessionExpiredNarrow: Story = {
+  ...JiraSessionExpired,
+  decorators: narrow,
+};
+export const JiraSessionExpiredEmpty: Story = createStory(
+  jiraSessionExpiredEmptyScenario,
+  "A dead session over an empty read: the notice stands alone, never 'Nothing needs you'.",
+);
+export const JiraSyncFailed: Story = createStory(
+  jiraSyncFailedScenario,
+  "The last sync failed with a reason: the notice offers a retry.",
+);
+export const JiraSyncInProgress: Story = createStory(
+  jiraSyncInProgressScenario,
+  "The first Jira sync is still walking the project: the status strip says so instead of a time.",
+);
+export const JiraSyncInProgressEmpty: Story = createStory(
+  jiraSyncInProgressEmptyScenario,
+  "The first sync before any ticket has landed: the lanes keep loading, never 'Nothing needs you'.",
 );

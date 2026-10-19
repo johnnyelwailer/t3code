@@ -10,8 +10,10 @@ import { afterEach, vi } from "vite-plus/test";
 
 import * as ServerConfig from "./config.ts";
 import { loadPersistedAtlassianAuthsPayload } from "./t3team-atlassian-auth-persistence.ts";
+import { setDeadTokenRecheckDelayMsForTest } from "./t3team-atlassian-auth-deadToken.ts";
 import {
   ATLASSIAN_SESSION_EXPIRED_MESSAGE,
+  accountNeedsReconnect,
   setAccountNeedsReconnect,
 } from "./t3team-atlassian-auth-staleToken.ts";
 import {
@@ -22,6 +24,7 @@ import {
 } from "./t3team-atlassian-auth-store.ts";
 
 const originalFetch = globalThis.fetch;
+setDeadTokenRecheckDelayMsForTest(0);
 
 afterEach(() => {
   replaceAtlassianAuths([]);
@@ -185,10 +188,9 @@ it.effect("explains expired OAuth records that cannot be refreshed", () =>
 
     const error = yield* providerForPersistedAuths().pipe(Effect.flip);
 
-    assert.equal(
-      error.message,
-      "Atlassian OAuth token expired and no refresh token is stored. Reconnect Atlassian to grant offline access.",
-    );
+    assert.equal(error.code, "jira_session_expired");
+    assert.equal(error.message, ATLASSIAN_SESSION_EXPIRED_MESSAGE);
+    assert.isTrue(accountNeedsReconnect("old-cloud"));
   }).pipe(Effect.provide(testLayer("t3team-atlassian-auth-expired-"))),
 );
 
@@ -210,6 +212,7 @@ it.effect(
         },
       ]);
       process.env.T3TEAM_ATLASSIAN_CLIENT_ID = "test-client";
+      vi.stubEnv("T3TEAM_ATLASSIAN_CLIENT_SECRET", "test-secret");
 
       const refreshCalls: string[] = [];
       globalThis.fetch = vi.fn(async (input: string | URL) => {
@@ -265,6 +268,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       vi.stubEnv("T3TEAM_ATLASSIAN_CLIENT_ID", "client-id");
+      vi.stubEnv("T3TEAM_ATLASSIAN_CLIENT_SECRET", "client-secret");
       replaceAtlassianAuths([{ accountId: "cloud-1", auth: expiredOAuthAuth("cloud-1") }]);
       // Flagged by a rotated-away refresh (or rehydrated from the persisted secret).
       setAccountNeedsReconnect("cloud-1", true);
@@ -294,6 +298,7 @@ it.effect(
 it.effect("keeps the raw refresh error for failures that are not a dead refresh token", () =>
   Effect.gen(function* () {
     vi.stubEnv("T3TEAM_ATLASSIAN_CLIENT_ID", "client-id");
+    vi.stubEnv("T3TEAM_ATLASSIAN_CLIENT_SECRET", "client-secret");
     replaceAtlassianAuths([{ accountId: "cloud-1", auth: expiredOAuthAuth("cloud-1") }]);
     const requestedUrls = stubTokenEndpoint(500, '{"error":"server_error"}');
 
@@ -312,6 +317,7 @@ it.effect("keeps the raw refresh error for failures that are not a dead refresh 
 it.effect("reconnecting clears the needs-reconnect flag", () =>
   Effect.gen(function* () {
     vi.stubEnv("T3TEAM_ATLASSIAN_CLIENT_ID", "client-id");
+    vi.stubEnv("T3TEAM_ATLASSIAN_CLIENT_SECRET", "client-secret");
     replaceAtlassianAuths([{ accountId: "cloud-1", auth: expiredOAuthAuth("cloud-1") }]);
     setAccountNeedsReconnect("cloud-1", true);
 
@@ -358,6 +364,7 @@ function writeSecretAsOtherInstallation(
 it.effect("adopts a token another installation rotated instead of redeeming a dead one", () =>
   Effect.gen(function* () {
     vi.stubEnv("T3TEAM_ATLASSIAN_CLIENT_ID", "client-id");
+    vi.stubEnv("T3TEAM_ATLASSIAN_CLIENT_SECRET", "client-secret");
     replaceAtlassianAuths([{ accountId: "cloud-1", auth: expiredOAuthAuth("cloud-1") }]);
     yield* savePersistedAuths;
     const now = yield* Clock.currentTimeMillis;
@@ -400,6 +407,7 @@ it.effect("adopts a token another installation rotated instead of redeeming a de
 it.effect("refreshes once for a burst of concurrent reads after a restart", () =>
   Effect.gen(function* () {
     vi.stubEnv("T3TEAM_ATLASSIAN_CLIENT_ID", "client-id");
+    vi.stubEnv("T3TEAM_ATLASSIAN_CLIENT_SECRET", "client-secret");
     replaceAtlassianAuths([{ accountId: "cloud-1", auth: expiredOAuthAuth("cloud-1") }]);
     yield* savePersistedAuths;
     let issued = 0;

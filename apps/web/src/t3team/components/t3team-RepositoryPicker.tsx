@@ -1,20 +1,18 @@
 import { type ReactNode, useMemo, useState } from "react";
-import { ShieldAlert } from "lucide-react";
 import { Skeleton } from "~/t3team/components/ui/t3team-skeleton";
-import { PullRequestCopyableCode } from "~/components/pullRequest/PullRequestCopyableCode";
 import { PickerSearchInput } from "~/t3team/components/t3team-PickerSearchInput";
 import { PickerSection as Section } from "~/t3team/components/t3team-PickerSection";
 import {
   buildRepositoryPickerEntries,
   entryFromUrl,
 } from "~/t3team/components/t3team-repositoryPickerEntries";
+import { RepositoryPickerSignInNotice } from "~/t3team/components/t3team-RepositoryPickerSignInNotice";
 import { RepositoryPickerStatus } from "~/t3team/components/t3team-RepositoryPickerStatus";
 import {
   RepositoryPickerRow,
   type RepositoryPickerEntry,
 } from "~/t3team/components/t3team-RepositoryPickerRow";
 import type { GitHubDiscoveryState } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
-import { CalmNotice } from "~/t3team/t3team-CalmNotice";
 
 const BROWSE_LIMIT = 30;
 const SEARCH_LIMIT = 60;
@@ -30,6 +28,7 @@ export function RepositoryPicker({
   onToggle,
   onLinkMany,
   renderLinkedStatus,
+  renderLinkedControls,
 }: {
   discovery: GitHubDiscoveryState;
   linkedUrls: ReadonlyArray<string>;
@@ -37,6 +36,8 @@ export function RepositoryPicker({
   onLinkMany: (urls: ReadonlyArray<string>) => void;
   /** Extra line under a linked repository, e.g. its clone/sync state. */
   renderLinkedStatus?: (url: string) => ReactNode;
+  /** Controls under a linked repository's status, e.g. which branch it follows. */
+  renderLinkedControls?: (url: string) => ReactNode;
 }) {
   const [query, setQuery] = useState("");
   const loading = discovery.authStatus === "checking" || discovery.loadingAuth;
@@ -73,6 +74,7 @@ export function RepositoryPicker({
       showHost={withHost && showHost}
       onToggle={onToggle}
       status={linked.has(entry.url) ? renderLinkedStatus?.(entry.url) : undefined}
+      controls={linked.has(entry.url) ? renderLinkedControls?.(entry.url) : undefined}
     />
   );
   const otherByHost = new Map<string, RepositoryPickerEntry[]>();
@@ -111,32 +113,17 @@ export function RepositoryPicker({
           </div>
         ) : null}
 
-        {!loading && !signedIn ? (
-          <CalmNotice
-            compact
-            icon={ShieldAlert}
-            headline="Not signed in to GitHub"
-            detail="Add --hostname your.ghe.host for Enterprise. You can still paste a URL above."
-            primaryAction={{ label: "Recheck", onClick: () => discovery.refresh() }}
-            className="m-3"
-          >
-            <PullRequestCopyableCode
-              value="gh auth login"
-              target="the GitHub sign-in command"
-              copyLabel="Copy command"
-              copiedLabel="Command copied"
-              className="font-mono text-2xs"
-            />
-          </CalmNotice>
-        ) : null}
+        {!loading && !signedIn ? <RepositoryPickerSignInNotice discovery={discovery} /> : null}
 
         {pastedUrl && !linked.has(pastedUrl) && !entries.has(pastedUrl) ? (
-          <Section title="Link this URL">{row(entryFromUrl(pastedUrl), true)}</Section>
+          <Section title="Link this URL" layout="grid">
+            {row(entryFromUrl(pastedUrl), true)}
+          </Section>
         ) : null}
 
         {!loading && needle ? (
           matches.length > 0 ? (
-            <Section title="Results" count={matches.length}>
+            <Section title="Results" count={matches.length} layout="grid">
               {matches.map((entry) => row(entry, true))}
             </Section>
           ) : pastedUrl ? null : (
@@ -151,7 +138,7 @@ export function RepositoryPicker({
         {!loading && !needle ? (
           <>
             {linkedEntries.length > 0 ? (
-              <Section title="Linked" count={linkedEntries.length}>
+              <Section title="Linked" count={linkedEntries.length} layout="grid">
                 {linkedEntries.map((entry) => row(entry, true))}
               </Section>
             ) : null}
@@ -159,6 +146,7 @@ export function RepositoryPicker({
               <Section
                 title="Suggested for this project"
                 count={suggestedEntries.length}
+                layout="grid"
                 action={
                   <button
                     type="button"
@@ -177,6 +165,7 @@ export function RepositoryPicker({
                 {[...otherByHost].map(([host, list]) => (
                   <Section
                     key={host}
+                    layout="grid"
                     title={
                       otherByHost.size > 1 ? `Your repositories · ${host}` : "Your repositories"
                     }

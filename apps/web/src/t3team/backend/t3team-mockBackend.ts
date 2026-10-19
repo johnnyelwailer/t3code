@@ -124,6 +124,10 @@ export function createMockBackend(): BackendApi {
         })),
       }),
       readLinkedRepositoryStatus: async () => ({ linkedRepositories: [] }),
+      syncLinkedRepository: async (input) => ({
+        linkedRepository: { url: input.url, localPath: "", status: "not-cloned" },
+      }),
+      listLinkedRepositoryBranches: async () => ({ branches: [] }),
       setMainRepository: async () => {
         throw new Error("Main repositories are not available in the mock backend.");
       },

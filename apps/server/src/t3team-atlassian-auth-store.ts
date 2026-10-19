@@ -1,6 +1,5 @@
 import {
   AtlassianIntegrationProvider,
-  AtlassianOAuthSessionExpiredError,
   type AtlassianAccessibleResource,
   type JiraApiAuth,
   type TokenExchangeResult,
@@ -10,6 +9,10 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { T3TeamAtlassianError, tryAtlassianPromise } from "./t3team-atlassian-http.ts";
 import { invalidateT3TeamAtlassianAuthDependents } from "./t3team-atlassian-auth-changeHooks.ts";
+import {
+  claimSecretForThisHome,
+  secretBelongsToThisHome,
+} from "./t3team-atlassian-auth-homeGuard.ts";
 import { findAuthForAccountId } from "./t3team-atlassian-auth-lookup.ts";
 import {
   atlassianAuths,
@@ -19,17 +22,21 @@ import {
 } from "./t3team-atlassian-auth-state.ts";
 import {
   oauthAuthExpiresSoon,
-  recoverFromDeadRefreshToken,
+  recheckAfterDeadRefreshToken,
 } from "./t3team-atlassian-auth-deadToken.ts";
 import {
   accountNeedsReconnect,
-  clearAllNeedsReconnect,
+  markNeedsReconnect,
   reconnectRequiredError,
+  resetAllNeedsReconnect,
 } from "./t3team-atlassian-auth-staleToken.ts";
 import {
+  ATLASSIAN_OAUTH_ENV_HINT,
   readAtlassianOAuthClientId,
   readAtlassianOAuthClientSecret,
 } from "./t3team-atlassian-oauthEnv.ts";
+import { JIRA_OAUTH_CONFIG_CODE } from "./t3team-atlassian-errors.ts";
+import { logRefreshAttempt, refreshFailureDetails } from "./t3team-atlassian-auth-refreshTrace.ts";
 import { t3teamFixtureOrMockProvider } from "./t3team-fixtureProjectRegistry.ts";
 
 export type BasicConnectInput = {
@@ -68,13 +75,6 @@ export function commitAtlassianAuths(
   );
 }
 
-function missingRefreshTokenError() {
-  return new T3TeamAtlassianError({
-    message:
-      "Atlassian OAuth token expired and no refresh token is stored. Reconnect Atlassian to grant offline access.",
-  });
-}
-
 function atlassianOAuthClientConfig(): { clientId: string; clientSecret?: string } {
   const clientId = readAtlassianOAuthClientId();
   const clientSecret = readAtlassianOAuthClientSecret() || undefined;
@@ -102,40 +102,130 @@ function refreshOAuthAuthIfNeeded(accountId: string, auth: JiraApiAuth) {
 
     const refreshToken = auth.refreshToken;
     if (!refreshToken) {
-      return yield* missingRefreshTokenError();
+      return yield* markNeedsReconnect(accountId, persistAuthsToDisk, "no-refresh-token");
     }
 
     const config = atlassianOAuthClientConfig();
+    const clientSecretPresent = config.clientSecret !== undefined;
+    // A copy of another installation's secret must never rotate the shared refresh token: that
+    // signs the real installation out. Keep the account unflagged and report it instead.
+    if (!(yield* secretBelongsToThisHome)) {
+      yield* logRefreshAttempt({ accountId, outcome: "copied-secret", clientSecretPresent });
+      return yield* copiedSecretError();
+    }
     if (!config.clientId) {
+      yield* logRefreshAttempt({ accountId, outcome: "missing-client-id", clientSecretPresent });
       return auth;
     }
+    // Atlassian rejects a refresh without the client secret. Redeeming anyway only burned the
+    // single-use token and flagged the account, so a launch without the secret looked like a
+    // signed-out session on every later start. Report the setup problem instead, unflagged.
+    if (!clientSecretPresent) {
+      yield* logRefreshAttempt({
+        accountId,
+        outcome: "missing-client-secret",
+        clientSecretPresent,
+      });
+      return yield* oauthConfigError();
+    }
 
-    const refreshed = yield* tryAtlassianPromise(
+    const outcome = yield* tryAtlassianPromise(
       () => refreshAccessToken(config, refreshToken),
       "Failed to refresh Atlassian OAuth token.",
     ).pipe(
-      Effect.map((token): JiraApiAuth => ({
-        kind: "oauth",
-        cloudId: auth.cloudId,
-        ...(auth.siteUrl ? { siteUrl: auth.siteUrl } : {}),
-        accessToken: token.accessToken,
-        refreshToken: token.refreshToken,
-        expiresAt: now + token.expiresIn * 1000,
+      Effect.map((token): RefreshResult => ({
+        _tag: "refreshed",
+        auth: {
+          kind: "oauth",
+          cloudId: auth.cloudId,
+          ...(auth.siteUrl ? { siteUrl: auth.siteUrl } : {}),
+          accessToken: token.accessToken,
+          refreshToken: token.refreshToken,
+          expiresAt: now + token.expiresIn * 1000,
+        },
       })),
-      // Only a dead refresh token is terminal; any other failure keeps its original error.
-      Effect.catchIf(
-        (error) =>
-          error instanceof T3TeamAtlassianError &&
-          error.cause instanceof AtlassianOAuthSessionExpiredError,
-        () => recoverFromDeadRefreshToken(accountId, refreshToken),
+      Effect.catch((error) =>
+        Effect.gen(function* () {
+          const details = refreshFailureDetails(error);
+          // Always re-read once on a session-expired class response. Another installation (or a
+          // crash between Atlassian redeem and our persist) may have written a newer token.
+          if (details.refreshTokenInvalid || details.sessionExpiredResponse) {
+            const rechecked = yield* recheckAfterDeadRefreshToken(accountId, refreshToken);
+            if (rechecked._tag === "adopted" || rechecked._tag === "newer-on-disk") {
+              yield* logRefreshAttempt({
+                accountId,
+                outcome: "adopted-newer-token",
+                clientSecretPresent,
+                details,
+              });
+              return { _tag: "unchanged", auth: rechecked.auth } satisfies RefreshResult;
+            }
+            if (rechecked._tag === "gone") {
+              yield* logRefreshAttempt({
+                accountId,
+                outcome: "refresh-token-invalid",
+                clientSecretPresent,
+                details,
+              });
+              return yield* reconnectRequiredError();
+            }
+            // Same dead token still on disk. invalid_grant / "refresh_token is invalid" means the
+            // session is gone; a bare unauthorized_client is a client-id/secret mismatch.
+            if (details.refreshTokenInvalid) {
+              yield* logRefreshAttempt({
+                accountId,
+                outcome: "refresh-token-invalid",
+                clientSecretPresent,
+                details,
+              });
+              return yield* markNeedsReconnect(
+                accountId,
+                persistAuthsToDisk,
+                "refresh-token-invalid",
+              );
+            }
+            yield* logRefreshAttempt({
+              accountId,
+              outcome: "client-rejected",
+              clientSecretPresent,
+              details,
+            });
+            return yield* oauthConfigError();
+          }
+          yield* logRefreshAttempt({
+            accountId,
+            outcome: "failed",
+            clientSecretPresent,
+            details,
+          });
+          return yield* Effect.fail(error);
+        }),
       ),
     );
-    if (refreshed === atlassianAuths.get(accountId)) {
-      return refreshed;
-    }
-    atlassianAuths.set(accountId, refreshed);
+    if (outcome._tag === "unchanged") return outcome.auth;
+    yield* logRefreshAttempt({ accountId, outcome: "refreshed", clientSecretPresent });
+    atlassianAuths.set(accountId, outcome.auth);
     yield* persistAuthsToDisk;
-    return refreshed;
+    return outcome.auth;
+  });
+}
+
+type RefreshResult =
+  | { readonly _tag: "refreshed"; readonly auth: JiraApiAuth }
+  | { readonly _tag: "unchanged"; readonly auth: JiraApiAuth };
+
+function copiedSecretError() {
+  return new T3TeamAtlassianError({
+    code: JIRA_OAUTH_CONFIG_CODE,
+    message:
+      "Jira sign-in can not be renewed here: these credentials were copied from another installation. Sign in to Jira again on this one.",
+  });
+}
+
+function oauthConfigError() {
+  return new T3TeamAtlassianError({
+    code: JIRA_OAUTH_CONFIG_CODE,
+    message: `Jira sign-in can not be renewed: the Atlassian OAuth client is not configured correctly (${ATLASSIAN_OAUTH_ENV_HINT}).`,
   });
 }
 
@@ -192,7 +282,8 @@ export function replaceAtlassianAuths(
   entries: ReadonlyArray<{ readonly accountId: string; readonly auth: JiraApiAuth }>,
 ): void {
   atlassianAuths.clear();
-  clearAllNeedsReconnect();
+  resetAllNeedsReconnect();
+  claimSecretForThisHome();
   for (const entry of entries) {
     atlassianAuths.set(entry.accountId, entry.auth);
   }

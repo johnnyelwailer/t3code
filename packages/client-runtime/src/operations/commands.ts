@@ -10,6 +10,7 @@ import {
   type ChatAttachment,
   type MessageId,
   type ModelSelection,
+  type NodeId,
   type OrchestrationV2Command,
   type OrchestrationV2CreationSource,
   type PlanId,
@@ -128,6 +129,7 @@ export type MarkThreadUnreadInput = ThreadCommandInput;
 
 export interface UpdateThreadMetadataInput extends ThreadCommandInput {
   readonly limitRecovery?: import("@t3tools/contracts").OrchestrationV2LimitRecoveryUpdate | null;
+  readonly transientRecovery?: import("@t3tools/contracts").OrchestrationV2TransientRecoveryUpdate;
   readonly title?: string;
   readonly modelSelection?: ModelSelection;
   readonly branch?: string | null;
@@ -136,6 +138,8 @@ export interface UpdateThreadMetadataInput extends ThreadCommandInput {
   readonly regenerateTitle?: boolean;
   /** Link (object) or unlink (null) a pull request (#8160). */
   readonly linkedPullRequest?: ThreadLinkedPullRequest | null;
+  /** Apply only while no message or run has landed on the thread. */
+  readonly expectedEmpty?: boolean;
 }
 
 export interface SetThreadRuntimeModeInput extends ThreadCommandInput {
@@ -188,6 +192,7 @@ export interface StartThreadTurnInput extends ThreadCommandInput {
 
 export interface InterruptThreadTurnInput extends ThreadCommandInput {
   readonly runId?: RunId;
+  readonly subagentId?: NodeId;
   /** Temporary caller compatibility while UI naming moves from turns to runs. */
   readonly turnId?: string;
 }
@@ -268,7 +273,7 @@ const allocateCommandId = Effect.fn("EnvironmentCommands.allocateCommandId")(fun
 ) {
   if (input.commandId !== undefined) return input.commandId;
   const crypto = yield* Crypto.Crypto;
-  return CommandId.make(yield* crypto.randomUUIDv4.pipe(Effect.orDie));
+  return CommandId.make(yield* crypto.randomUUIDv4().pipe(Effect.orDie));
 });
 
 const dispatch = (command: OrchestrationV2Command) =>
@@ -576,16 +581,21 @@ export const updateThreadMetadata = Effect.fn("EnvironmentCommands.updateThreadM
       input.worktreePath !== undefined ||
       input.regenerateTitle !== undefined ||
       input.linkedPullRequest !== undefined ||
-      input.limitRecovery !== undefined
+      input.limitRecovery !== undefined ||
+      input.transientRecovery !== undefined
     ) {
       result = yield* dispatch({
         type: "thread.metadata.update",
         ...(input.limitRecovery === undefined ? {} : { limitRecovery: input.limitRecovery }),
+        ...(input.transientRecovery === undefined
+          ? {}
+          : { transientRecovery: input.transientRecovery }),
         commandId,
         threadId: input.threadId,
         ...(input.title === undefined ? {} : { title: input.title }),
         ...(input.branch === undefined ? {} : { branch: input.branch }),
         ...(input.worktreePath === undefined ? {} : { worktreePath: input.worktreePath }),
+        ...(input.expectedEmpty === true ? { expectedEmpty: true } : {}),
         ...(input.regenerateTitle === undefined ? {} : { regenerateTitle: input.regenerateTitle }),
         ...(input.linkedPullRequest === undefined
           ? {}
@@ -789,6 +799,18 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
 export const interruptThreadTurn = Effect.fn("EnvironmentCommands.interruptThreadTurn")(function* (
   input: InterruptThreadTurnInput,
 ) {
+  if (input.subagentId !== undefined) {
+    const projection = yield* getProjection(input.threadId);
+    const subagent = projection.subagents.find((agent) => agent.id === input.subagentId);
+    if (subagent?.runId == null) return { sequence: 0 };
+    return yield* dispatch({
+      type: "subagent.stop",
+      commandId: yield* allocateCommandId(input),
+      threadId: input.threadId,
+      runId: subagent.runId,
+      subagentId: subagent.id,
+    });
+  }
   let runId = input.runId ?? (input.turnId as RunId | undefined);
   if (runId === undefined) {
     const projection = yield* getProjection(input.threadId);
