@@ -33,8 +33,7 @@ export function TicketKickoffComposerControls({
   showInteractionModeToggle,
   text,
   canSend,
-  setSelectedInstanceId,
-  setSelectedModel,
+  selectModel,
   setInteractionMode,
   setRuntimeMode,
 }: {
@@ -55,8 +54,7 @@ export function TicketKickoffComposerControls({
   showInteractionModeToggle: boolean;
   text: string;
   canSend: boolean;
-  setSelectedInstanceId: (instanceId: ProviderInstanceId) => void;
-  setSelectedModel: (model: string) => void;
+  selectModel: (instanceId: ProviderInstanceId, model: string) => void;
   setInteractionMode: (updater: (mode: ProviderInteractionMode) => ProviderInteractionMode) => void;
   setRuntimeMode: (mode: RuntimeMode) => void;
 }) {
@@ -82,10 +80,7 @@ export function TicketKickoffComposerControls({
             instanceEntries={providerInstanceEntries}
             modelOptionsByInstance={modelOptionsByInstance}
             disabled={providerPickerDisabled}
-            onInstanceModelChange={(instanceId, model) => {
-              setSelectedInstanceId(instanceId);
-              setSelectedModel(model);
-            }}
+            onInstanceModelChange={selectModel}
           />
           {showInteractionModeToggle ? (
             <>

@@ -749,9 +749,14 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     () => filteredItemKeys.length * MODEL_LIST_ESTIMATED_ITEM_SIZE,
   );
   const [searchHeight, setSearchHeight] = useState(0);
+  // The list unmounts behind the provider connect panel, so the listener follows its mount.
+  const isModelListMounted = connectPanelTarget === null;
   useLayoutEffect(
-    () => modelListRef.current?.getState().listen("totalSize", setModelListContentSize),
-    [],
+    () =>
+      isModelListMounted
+        ? modelListRef.current?.getState().listen("totalSize", setModelListContentSize)
+        : undefined,
+    [isModelListMounted],
   );
   // Fit the list to its rows plus the combobox list `py-1` and LegendList `py-1.5`.
   const modelListHeight =
