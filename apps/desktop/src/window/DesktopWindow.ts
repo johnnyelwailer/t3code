@@ -386,6 +386,12 @@ export const make = Effect.gen(function* () {
     preloadPath: environment.preloadPath,
     backgroundColor: () =>
       getInitialWindowBackgroundColor(Electron.nativeTheme.shouldUseDarkColors),
+    // macOS keeps a native title bar: the renderer seats nothing around traffic lights in a
+    // window without the app sidebar.
+    titleBar: () =>
+      environment.platform === "darwin"
+        ? { titleBarStyle: "default" }
+        : getWindowTitleBarOptions(Electron.nativeTheme.shouldUseDarkColors, environment.platform),
     createWindow: (options) => new Electron.BrowserWindow(options),
     openExternal: (url) => {
       if (Option.isSome(ElectronShell.parseSafeExternalUrl(url))) {
@@ -1152,15 +1158,10 @@ export const make = Effect.gen(function* () {
     }),
     syncAppearance: Effect.gen(function* () {
       const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
+      // Detached windows carry the main window's title bar overlay, so it is recoloured alike;
+      // on macOS neither has one and only the background changes.
       yield* electronWindow.syncAllAppearance((window) =>
-        detachedSurfaceWindows.isDetached(window)
-          ? Effect.sync(() => {
-              // A native title bar has no overlay to recolour (setting one throws).
-              if (!window.isDestroyed()) {
-                window.setBackgroundColor(getInitialWindowBackgroundColor(shouldUseDarkColors));
-              }
-            })
-          : syncWindowAppearance(window, shouldUseDarkColors, environment.platform),
+        syncWindowAppearance(window, shouldUseDarkColors, environment.platform),
       );
     }).pipe(Effect.withSpan("desktop.window.syncAppearance")),
   });

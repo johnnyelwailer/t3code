@@ -1,3 +1,4 @@
+import { UndockViewButton } from "~/t3team/detached/t3team-UndockViewControls";
 import { useCallback } from "react";
 import { useCanGoBack } from "@tanstack/react-router";
 import type { ProjectShellProject } from "@t3tools/project-context";
@@ -106,6 +107,7 @@ export function TicketDetailView({
         shouldInsetDesktopHeader={shouldInsetDesktopHeader}
         onBack={handleBack}
         onRefresh={() => void view.reload()}
+        actions={<UndockViewButton />}
       />
 
       <TicketDetailBody

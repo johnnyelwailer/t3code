@@ -16,6 +16,7 @@
  * The scoped project list comes from `useMyWorkBoundProjects` — the same hook the startup gate
  * probes with, so the cold-start redirect lands on the digest cache the gate's own round filled.
  */
+import { UndockViewButton } from "~/t3team/detached/t3team-UndockViewControls";
 import { useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
@@ -97,13 +98,14 @@ export function AllProjectsMyWorkView({
       <div
         className={`mx-auto flex w-full ${t3teamScopeContentWidthClass} flex-col gap-8 p-4 sm:p-6`}
       >
-        <div>
+        <div className="flex items-center gap-2">
           <ProjectMyWorkViewSwitch
             lens={lens}
             onLensChange={setLens}
             backlog={{ kind: "pick-project", projects: boundProjects, onPick: openBacklog }}
             planning={{ kind: "pick-project", projects: boundProjects, onPick: openPlanning }}
           />
+          <UndockViewButton className="ms-auto" />
         </div>
         {lens === "digest" ? (
           <AllProjectsMyWorkDigestLens boundProjects={boundProjects} onOpenTicket={onOpenTicket} />

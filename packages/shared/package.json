@@ -23,6 +23,10 @@
       "types": "./src/t3team-threadRunStatus.ts",
       "import": "./src/t3team-threadRunStatus.ts"
     },
+    "./t3team-detachedView": {
+      "types": "./src/t3team-detachedView.ts",
+      "import": "./src/t3team-detachedView.ts"
+    },
     "./t3team-detachedSurface": {
       "types": "./src/t3team-detachedSurface.ts",
       "import": "./src/t3team-detachedSurface.ts"

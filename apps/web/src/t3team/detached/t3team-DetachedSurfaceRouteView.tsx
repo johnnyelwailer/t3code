@@ -4,6 +4,7 @@
  * full-screen; the page's job is to fill it.
  */
 import { DETACHED_SURFACE_TITLE_PARAM } from "@t3tools/shared/t3team-detachedSurface";
+import { DETACHED_VIEW_KIND } from "@t3tools/shared/t3team-detachedView";
 import { useEffect } from "react";
 
 import { StandalonePage, StandalonePageHeader } from "~/components/ui/standalone-page";
@@ -36,8 +37,17 @@ export function DetachedSurfaceRouteView({
       </StandalonePage>
     );
   }
+  // An undocked view hands the window to its route at once, which draws its own header.
+  if (kind === DETACHED_VIEW_KIND) {
+    return <View params={params} onParamsChange={onParamsChange} />;
+  }
   return (
     <div className="flex h-dvh w-full min-w-0 flex-col overflow-hidden bg-background text-foreground">
+      {/* Where the window draws its title bar over the page (Windows, Linux), the panel gets a
+          band of its own to drag by and to keep the window buttons off its controls. */}
+      <div className="drag-region hidden h-(--workspace-topbar-height) shrink-0 items-center truncate border-b border-border px-3 text-sm text-muted-foreground wco:flex wco:pr-(--workspace-native-controls-inset)">
+        {title ?? appName}
+      </div>
       <View params={params} onParamsChange={onParamsChange} />
     </div>
   );
