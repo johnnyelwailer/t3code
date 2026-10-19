@@ -457,9 +457,6 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
   return { prompt, outputSchema };
 }
 
-// ---------------------------------------------------------------------------
-// Activity label
-// ---------------------------------------------------------------------------
 
 /**
  * Hard cap on the context a caller may attach to an activity-label request

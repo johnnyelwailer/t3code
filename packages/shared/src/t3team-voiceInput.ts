@@ -6,9 +6,6 @@
  * WebView) can reuse it without React or any UI framework.
  */
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 // Shared types (state machine + SpeechRecognition browser globals) moved to
 
@@ -24,9 +21,6 @@ import type {
   VoiceInputState,
 } from "./t3team-voiceInputTypes.ts";
 
-// ---------------------------------------------------------------------------
-// Controller
-// ---------------------------------------------------------------------------
 
 export class VoiceInputController {
   private _state: VoiceInputState = "idle";
@@ -171,7 +165,6 @@ export class VoiceInputController {
     this._callbacks.onPartialTranscript?.("");
   }
 
-  // -- internals ------------------------------------------------------------
 
   private _setState(next: VoiceInputState) {
     if (this._state === next) return;
@@ -189,9 +182,6 @@ export class VoiceInputController {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 export type SpeechRecognitionWindow = Window & {
   SpeechRecognition?: new () => SpeechRecognitionLike;

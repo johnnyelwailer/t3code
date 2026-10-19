@@ -2555,9 +2555,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     terminalContexts: composerTerminalContexts,
     elementContextCount: composerPreviewAnnotations.length + composerReviewComments.length,
   });
-  // ------------------------------------------------------------------
-  // Composer text plumbing shared with the command menu
-  // ------------------------------------------------------------------
   const setPrompt = (nextPrompt: string) => {
     setComposerDraftPrompt(composerDraftTarget, nextPrompt);
   };
@@ -2591,9 +2588,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }
   };
 
-  // ------------------------------------------------------------------
-  // Composer command menu: shared `/`, `@`, `$` controller
-  // ------------------------------------------------------------------
   const composerSelectLockRef = useRef(false);
   const composerMenuOpenRef = useRef(false);
   const composerMenuItemsRef = useRef<ComposerCommandItem[]>([]);

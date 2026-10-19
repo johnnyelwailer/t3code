@@ -416,7 +416,6 @@ interface TimelineRowActivityState {
   isPreparingWorktree: boolean;
   latestRunId: RunId | null;
   backgroundWorktreeSetup: WorktreeSetupSnapshot | null;
-  // --- t3team working-row extension (GHE #201/#208/#236) ---
   /**
    * Dedup vs. the provider's own thinking trace: an active live row that shows a
    * reasoning entry already renders the live "Thinking" surface for the current

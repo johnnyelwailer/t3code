@@ -407,7 +407,6 @@ describe("createEnvironmentThreadStateAtoms", () => {
     }),
   );
 
-  // ---------------------------------------------------------------------------
   // Live-state idle TTL. These pin WHEN teardown happens, at the shipped value;
   // everything else pins what survives ACROSS a teardown, at TTL 0.
   //
@@ -417,7 +416,6 @@ describe("createEnvironmentThreadStateAtoms", () => {
   // `subscribeThread` re-opens per persisted domain event — 17 of 19
   // subscriptions aborted inside one second, median lifetime 2.9ms. Do not
   // "simplify" this back to an immediate close.
-  // ---------------------------------------------------------------------------
 
   it.effect("keeps the live stream open across a consumer gap inside the idle TTL", () =>
     Effect.gen(function* () {

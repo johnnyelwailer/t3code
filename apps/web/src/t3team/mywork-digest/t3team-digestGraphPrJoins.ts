@@ -39,7 +39,7 @@ export function digestTicketChangeRequests(
           projectId: projectIdAt(position),
           state: pr.state,
           updatedAt: pr.updatedAt,
-          // TODO(digest-data): per-reviewer verdicts have no host source yet; PR-level only.
+          // Per-reviewer verdicts have no host source yet; PR-level only.
           reviewers: pr.reviewers ?? [],
           ...(pr.additions !== undefined ? { additions: pr.additions } : {}),
           ...(pr.deletions !== undefined ? { deletions: pr.deletions } : {}),
