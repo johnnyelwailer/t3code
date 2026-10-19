@@ -20,6 +20,7 @@ import type {
   DesktopVoiceTranscribeRequest,
   DesktopVoiceTranscribeResult,
 } from "./t3team-desktopVoice.ts";
+import type { DesktopVoiceHotkeyState } from "./t3team-voiceHotkey.ts";
 
 import type {
   DesktopAppActivationRequest,
@@ -1161,6 +1162,7 @@ export interface DesktopBridge {
   resolveSshHost: (alias: string) => Promise<DesktopSshEnvironmentTarget>;
   requestSnapShotPermissions?: (includeAccessibility: boolean) => Promise<void>;
   getSnapShotState?: () => Promise<DesktopSnapShotState>;
+  getVoiceHotkeyState?: () => Promise<DesktopVoiceHotkeyState>;
   setupSnapShot?: (action: DesktopSnapShotSetupAction) => Promise<void>;
   previewSnapShotConfig?: (
     request: DesktopCaptureConfigRequest,

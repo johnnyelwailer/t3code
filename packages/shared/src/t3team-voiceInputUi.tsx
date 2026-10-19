@@ -45,6 +45,8 @@ export interface ComposerVoiceInputHandle {
    * Returns the committed text ("" when idle).
    */
   stop: () => string;
+  /** Start recording when idle, stop and commit when recording (the global-hotkey toggle). */
+  toggle: () => void;
 }
 
 export interface ComposerVoiceInputProps {
@@ -100,7 +102,10 @@ export function ComposerVoiceInput({
     initialLanguage,
   });
 
-  useImperativeHandle(ref, () => ({ stop: voice.stop }), [voice.stop]);
+  useImperativeHandle(ref, () => ({ stop: voice.stop, toggle: voice.toggle }), [
+    voice.stop,
+    voice.toggle,
+  ]);
 
   if (available === false || !voice.supported) return null;
 

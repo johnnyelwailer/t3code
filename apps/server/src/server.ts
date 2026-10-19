@@ -253,6 +253,7 @@ import { T3TeamLinkedRepositorySyncLive } from "./t3team-linkedRepositorySync.ts
 import { t3teamProjectMainRepositoryRouteLayer } from "./t3team-projectMainRepositoryRoute.ts";
 import { t3teamThreadToolContextRouteLayer } from "./t3team-thread-tool-context-routes.ts";
 import { t3teamThreadPlacementRouteLayer } from "./t3team-thread-placement-routes.ts";
+import { t3teamVoiceRouteLayer } from "./t3team-voice-routes.ts";
 import { t3teamMyWorkDigestRouteLayer } from "./t3team-myworkDigest-routes.ts";
 import { T3TeamThreadToolContextStoreLive } from "./t3team-threadToolContextStore.ts";
 import { turnInactivityPolicyLive } from "./orchestration-v2/t3team-turnInactivityPolicy.ts";
@@ -1102,6 +1103,7 @@ const layerMakeRoutes = Layer.mergeAll(
     t3teamThreadPlacementRouteLayer,
     t3teamMyWorkDigestRouteLayer,
     t3teamWidgetToolCallRouteLayer,
+    t3teamVoiceRouteLayer,
   ).pipe(Layer.provide(t3teamRouteAuthLayer)),
   // The MCP session registry is provided globally (shared with V2 provider
   // sessions) rather than inline here. The orchestrator toolkit resolves

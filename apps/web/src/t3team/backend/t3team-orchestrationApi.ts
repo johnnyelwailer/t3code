@@ -49,7 +49,7 @@ type EnvironmentCommand<I> = AtomCommand<
   unknown
 >;
 
-async function runOnPrimaryEnvironment<I>(
+export async function runOnPrimaryEnvironment<I>(
   command: EnvironmentCommand<I>,
   input: I,
   label: string,

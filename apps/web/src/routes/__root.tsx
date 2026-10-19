@@ -77,6 +77,7 @@ import { T3TeamPackAppearanceSync } from "../t3team/t3team-PackAppearanceSync";
 import { withT3TeamWindowDragStrip } from "../t3team/t3team-WindowDragStrip";
 import { CloudSessionSignInDialogHost } from "../cloud/t3team-CloudSessionSignInDialogHost";
 import { CloudQueuedSendFlusher } from "../cloud/t3team-CloudQueuedSendFlusher";
+import { T3TeamVoiceAgentPill } from "../t3team/voice/t3team-VoiceAgentPill";
 import { t3teamPackProductName, useT3TeamAppDisplayName } from "../t3team/t3team-appBrandName";
 import { useT3TeamPackAppearance } from "../t3team/t3team-packAppearance";
 // Registers the composing heartbeat with the composer draft store's sink (side effect only).
@@ -331,6 +332,8 @@ function RootRouteView() {
           {isElectron ? <RunningThreadKeepAlive /> : null}
           {/* t3team: delivers drafts' first messages queued for a cloud session, app-wide. */}
           {primaryEnvironmentAuthenticated ? <CloudQueuedSendFlusher /> : null}
+          {/* t3team: the voice agent pill + global-hotkey session, app-wide. */}
+          {primaryEnvironmentAuthenticated ? <T3TeamVoiceAgentPill /> : null}
           <RelayClientInstallDialog />
           <CloudSessionSignInDialogHost />
           <ConnectOnboardingDialog />
