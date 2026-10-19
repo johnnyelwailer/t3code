@@ -184,7 +184,13 @@ export const make = Effect.gen(function* () {
     if (backoff !== undefined && nowMs < backoff.retryAt) return false;
     const active = entries.filter((entry) => isUnsettled(entry.thread));
     if (active.some((entry) => entry.link.snapshot === null)) return true;
-    if (active.every((entry) => entry.link.snapshot?.state === "merged")) {
+    // A merged snapshot without its merge time cannot settle the thread, so it keeps the slow
+    // cadence until the host supplies one (Bitbucket snapshots saved before it was read).
+    if (
+      active.every(
+        (entry) => entry.link.snapshot?.state === "merged" && entry.link.snapshot.mergedAt != null,
+      )
+    ) {
       // What is left unread belongs to settled threads: one try, then the slow cadence.
       const attempted = lastAttemptedAt.get(key);
       return (
@@ -301,7 +307,14 @@ export const make = Effect.gen(function* () {
         number: first.link.number,
       };
       const generation = requested.get(key);
-      if (generation !== undefined) yield* pullRequests.invalidate({ reference: ref });
+      // A held merged summary is served without asking the host, so a snapshot still missing its
+      // merge time has to drop it or the slow-cadence re-read would hand back the same gap.
+      const missingMergedAt = entries.some(
+        (entry) => entry.link.snapshot?.state === "merged" && entry.link.snapshot.mergedAt == null,
+      );
+      if (generation !== undefined || missingMergedAt) {
+        yield* pullRequests.invalidate({ reference: ref });
+      }
       const summary = yield* pullRequests.summary(ref, { recoverTransientFailure: false });
       const fields = snapshotFieldsOf(summary);
       const needsStack =

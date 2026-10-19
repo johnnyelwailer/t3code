@@ -1,7 +1,8 @@
-import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
+import { RegistryContext, useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
+import { useContext } from "react";
 
 const EMPTY_ASYNC_RESULT_ATOM = Atom.make(AsyncResult.initial<never, never>(false)).pipe(
   Atom.withLabel("web-environment-query:empty"),
@@ -24,9 +25,16 @@ export function formatEnvironmentQueryError(cause: Cause.Cause<unknown>): string
     : "The environment request failed.";
 }
 
-// Module-level selector: `useAtomValue` memoizes the derived atom on the
-// selector's identity, so an inline arrow would rebuild the subscription on
-// every render and defeat the point of subscribing narrowly.
+function queryUpdatedAt(result: AsyncResult.AsyncResult<unknown, unknown>): number {
+  return result._tag === "Success"
+    ? result.timestamp
+    : result._tag === "Failure"
+      ? (Option.getOrNull(result.previousSuccess)?.timestamp ?? 0)
+      : 0;
+}
+
+// Module-level selectors: `useEnvironmentQuerySelector` memoizes the derived atom on the
+// selector's identity, so an inline arrow would rebuild the subscription every render.
 const selectQueryData = <A, E>(result: AsyncResult.AsyncResult<A, E>): A | null =>
   Option.getOrNull(AsyncResult.value(result));
 
@@ -38,33 +46,20 @@ const selectQueryDataOrNullOnError = <A, E>(result: AsyncResult.AsyncResult<A, E
   result._tag === "Failure" ? null : Option.getOrNull(AsyncResult.value(result));
 
 /**
- * Subscribe to only the DATA of an environment query.
- *
- * `useEnvironmentQuery` re-renders its component on every emission of the
- * underlying atom — including `waiting` flips around a refresh — and builds a
- * fresh view object each time. In lists where many rows share one atom (e.g.
- * every sidebar thread row of a project subscribing to the same
- * `vcs.status({cwd})`), a single refresh re-rendered every row several times.
- * Subscribing through a mapped atom means the component only re-renders when
- * the resolved data itself changes.
+ * Subscribe to only the DATA of an environment query, so a refresh that resolves to the same
+ * data (a `waiting` flip, a new timestamp) does not re-render lists of rows sharing one atom.
  */
 export function useEnvironmentQueryData<A, E>(
   atom: Atom.Atom<AsyncResult.AsyncResult<A, E>> | null,
 ): A | null {
-  return useAtomValue(
-    (atom ?? EMPTY_ASYNC_RESULT_ATOM) as Atom.Atom<AsyncResult.AsyncResult<A, E>>,
-    selectQueryData,
-  );
+  return useEnvironmentQuerySelector(atom, selectQueryData);
 }
 
 /** Like {@link useEnvironmentQueryData}, but a failed refresh reads as no data instead of stale data. */
 export function useEnvironmentQueryDataOrNullOnError<A, E>(
   atom: Atom.Atom<AsyncResult.AsyncResult<A, E>> | null,
 ): A | null {
-  return useAtomValue(
-    (atom ?? EMPTY_ASYNC_RESULT_ATOM) as Atom.Atom<AsyncResult.AsyncResult<A, E>>,
-    selectQueryDataOrNullOnError,
-  );
+  return useEnvironmentQuerySelector(atom, selectQueryDataOrNullOnError);
 }
 
 export function useEnvironmentQuery<A, E>(
@@ -75,12 +70,7 @@ export function useEnvironmentQuery<A, E>(
   const refresh = useAtomRefresh(selectedAtom);
   return {
     data: Option.getOrNull(AsyncResult.value(result)),
-    dataUpdatedAt:
-      result._tag === "Success"
-        ? result.timestamp
-        : result._tag === "Failure"
-          ? (Option.getOrNull(result.previousSuccess)?.timestamp ?? 0)
-          : 0,
+    dataUpdatedAt: queryUpdatedAt(result),
     error: result._tag === "Failure" ? formatEnvironmentQueryError(result.cause) : null,
     failure:
       result._tag === "Failure" ? Option.getOrNull(Cause.findErrorOption(result.cause)) : null,
@@ -88,4 +78,60 @@ export function useEnvironmentQuery<A, E>(
     isSuccess: result._tag === "Success",
     refresh,
   };
+}
+
+/**
+ * Reads one part of a query's result. Every refetch publishes a new result (a
+ * new timestamp, `waiting` on and off), and this re-renders only when the
+ * selected part changes. `select` must be defined outside the component: a new
+ * function per render would rebuild the derived atom every render.
+ */
+export function useEnvironmentQuerySelector<A, E, B>(
+  atom: Atom.Atom<AsyncResult.AsyncResult<A, E>> | null,
+  select: (result: AsyncResult.AsyncResult<A, E>) => B,
+): B {
+  return useAtomValue(atom ?? EMPTY_ASYNC_RESULT_ATOM, select);
+}
+
+type QueryResultAtom = Atom.Atom<AsyncResult.AsyncResult<unknown, unknown>>;
+// Lives as long as both queries do, so a row keeps the same comparison atom across renders.
+const queryIsNewerAtoms = new WeakMap<
+  QueryResultAtom,
+  WeakMap<QueryResultAtom, Atom.Atom<boolean>>
+>();
+function queryIsNewerAtom(query: QueryResultAtom, than: QueryResultAtom): Atom.Atom<boolean> {
+  let byThan = queryIsNewerAtoms.get(query);
+  if (byThan === undefined) {
+    byThan = new WeakMap();
+    queryIsNewerAtoms.set(query, byThan);
+  }
+  let atom = byThan.get(than);
+  if (atom === undefined) {
+    atom = Atom.make((get) => queryUpdatedAt(get(query)) >= queryUpdatedAt(get(than)));
+    byThan.set(than, atom);
+  }
+  return atom;
+}
+
+/** Whether `query` last succeeded no earlier than `than`, without re-rendering on every refetch. */
+export function useEnvironmentQueryIsNewer(
+  query: QueryResultAtom | null,
+  than: QueryResultAtom | null,
+): boolean {
+  return useAtomValue(
+    queryIsNewerAtom(query ?? EMPTY_ASYNC_RESULT_ATOM, than ?? EMPTY_ASYNC_RESULT_ATOM),
+  );
+}
+
+/**
+ * The query's refresh, plus its pending state read when called rather than
+ * subscribed to, for callers that only gate a refresh on it.
+ */
+export function useEnvironmentQueryRefresh<A, E>(
+  atom: Atom.Atom<AsyncResult.AsyncResult<A, E>> | null,
+): { readonly refresh: () => void; readonly isPending: () => boolean } {
+  const registry = useContext(RegistryContext);
+  const selectedAtom = atom ?? EMPTY_ASYNC_RESULT_ATOM;
+  const refresh = useAtomRefresh(selectedAtom);
+  return { refresh, isPending: () => atom !== null && registry.get(selectedAtom).waiting };
 }

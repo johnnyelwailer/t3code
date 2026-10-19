@@ -2,6 +2,9 @@ import { ComposerSelectControl } from "./chat/ComposerControl";
 import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
+import { useAtomValue } from "@effect/atom-react";
+import { shortcutLabelForCommand } from "../keybindings";
+import { primaryServerKeybindingsAtom } from "../state/server";
 import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { ScaleIcon, SettingsIcon } from "lucide-react";
 import { memo, useMemo, useState } from "react";
@@ -207,6 +210,10 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       selectedCloudSession,
     ],
   );
+  const shortcutLabel = shortcutLabelForCommand(
+    useAtomValue(primaryServerKeybindingsAtom),
+    "composer.host",
+  );
 
   const handleValueChange = (value: string | null) => {
     if (value === null) return;
@@ -319,7 +326,10 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             )}
           </ComposerContextLabel>
         </TooltipTrigger>
-        <TooltipPopup>{autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on"}</TooltipPopup>
+        <TooltipPopup>
+          {autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on"}
+          {shortcutLabel ? ` · ${shortcutLabel}` : null}
+        </TooltipPopup>
       </Tooltip>
       <SelectPopup
         alignItemWithTrigger={false}

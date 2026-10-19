@@ -32,7 +32,6 @@
     "vite",
     "vite.config.ts",
     "vercel.ts",
-    "reactCompiledFiles.ts",
     "test",
     "scripts/warm-dep-cache.ts",
     "scripts/t3team-distributionWebPlugin.ts",

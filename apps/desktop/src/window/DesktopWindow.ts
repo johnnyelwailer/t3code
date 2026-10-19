@@ -406,6 +406,29 @@ export const make = Effect.gen(function* () {
     });
   };
 
+  const zoomWindow = Effect.fn("desktop.window.zoomWindow")(function* (
+    window: Electron.BrowserWindow,
+    direction: MainWindowZoomDirection,
+  ) {
+    const webContents = window.webContents;
+    webContents.setZoomLevel(
+      direction === "reset" ? 0 : webContents.getZoomLevel() + (direction === "in" ? 0.5 : -0.5),
+    );
+    // Chromium keeps zoom per origin, so zooming a detached surface zooms the main window too;
+    // it is the main window whose custom-placed window buttons need re-seating (a detached
+    // window has native ones).
+    const buttonsWindow = detachedSurfaceWindows.isDetached(window)
+      ? yield* electronWindow.main
+      : Option.some(window);
+    if (environment.platform === "darwin" && Option.isSome(buttonsWindow)) {
+      if (!buttonsWindow.value.isDestroyed()) syncMacosWindowButtons(buttonsWindow.value);
+    }
+    // Chromium pushes the new level down to embedded guests, which would zoom
+    // the previewed page along with the app UI. The preview browser keeps its
+    // own zoom, so put each guest back where the preview left it.
+    yield* previewManager.reapplyZoom();
+  });
+
   const createWindow = Effect.fn("desktop.window.createWindow")(function* (): Effect.fn.Return<
     Electron.BrowserWindow,
     DesktopWindowError
@@ -715,6 +738,13 @@ export const make = Effect.gen(function* () {
     window.webContents.on("input-event", (_event, input) => {
       if (input.type === "gestureScrollEnd") window.webContents.send(TRACKPAD_SCROLL_END_CHANNEL);
     });
+    // Ctrl+wheel never reaches the menu accelerators: Chromium reports it here
+    // and leaves applying the zoom to the app. A preview guest under the
+    // pointer emits this on its own webContents and keeps its own zoom.
+    window.webContents.on("zoom-changed", (_event, direction) => {
+      if (window.isDestroyed()) return;
+      runFork(zoomWindow(window, direction));
+    });
 
     window.on("page-title-updated", (event, title) => {
       event.preventDefault();
@@ -839,9 +869,11 @@ export const make = Effect.gen(function* () {
       const recoverable =
         details.reason === "crashed" ||
         details.reason === "oom" ||
+        details.reason === "killed" ||
         details.reason === "abnormal-exit";
       // Recovery attempts are bounded so a renderer that dies immediately on
       // boot cannot reload-loop forever.
+
       runFork(
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
@@ -1057,23 +1089,7 @@ export const make = Effect.gen(function* () {
       if (Option.isNone(window) || window.value.isDestroyed()) {
         return;
       }
-      const webContents = window.value.webContents;
-      webContents.setZoomLevel(
-        direction === "reset" ? 0 : webContents.getZoomLevel() + (direction === "in" ? 0.5 : -0.5),
-      );
-      // Chromium keeps zoom per origin, so zooming a detached surface zooms the main window too;
-      // it is the main window whose custom-placed window buttons need re-seating (a detached
-      // window has native ones).
-      const buttonsWindow = detachedSurfaceWindows.isDetached(window.value)
-        ? yield* electronWindow.main
-        : window;
-      if (environment.platform === "darwin" && Option.isSome(buttonsWindow)) {
-        if (!buttonsWindow.value.isDestroyed()) syncMacosWindowButtons(buttonsWindow.value);
-      }
-      // Chromium pushes the new level down to embedded guests, which would zoom
-      // the previewed page along with the app UI. The preview browser keeps its
-      // own zoom, so put each guest back where the preview left it.
-      yield* previewManager.reapplyZoom();
+      yield* zoomWindow(window.value, direction);
     }),
     runMainContentsCommand: Effect.fn("desktop.window.runMainContentsCommand")(function* (command) {
       yield* Effect.annotateCurrentSpan({ command });

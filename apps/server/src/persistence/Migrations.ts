@@ -155,6 +155,11 @@ import Migration0108 from "./Migrations/060_ThreadSnapshotWindowIndexes.ts";
 import Migration0109 from "./Migrations/061_PullRequestReviewGuides.ts";
 // New from the 2026-10-14 upstream sync (upstream 062). Appended above the fork's maximum id (109).
 import Migration0110 from "./Migrations/062_ThreadFailureLookupIndex.ts";
+// New from the 2026-10-19 upstream sync (upstream 064). Appended above the fork's maximum id (110).
+// Upstream 063 (DropUnusedV1Projections) is held: it drops projection_thread_activities, which the
+// fork's one-time V1 lineage cutover still reads. Register it above the maximum once the cutover
+// is confirmed done everywhere.
+import Migration0111 from "./Migrations/064_CanonicalizeThreadPullRequestLinks.ts";
 
 export const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -242,7 +247,7 @@ export const migrationEntries = [
   [83, "OrchestrationEventsTypeSequenceIndex", Migration0083],
   // Upstream 055/056 (orchestration V2) live at 84/85 in this fork's ledger; see the import comment.
   // Preserve this migration's schema. Future V2 schema changes need new migrations. A new
-  // migration must take an id ABOVE the highest id registered here (currently 110) — never one of
+  // migration must take an id ABOVE the highest id registered here (currently 111) — never one of
   // the gaps (88-89, 93-96): upgraded databases have recorded the maximum, and the Migrator skips
   // every id at or below it. Upstream's reconcileV2PreviewMigration stays a no-op on fork ledgers
   // (fork ids 53/54 are never named OrchestrationV2).
@@ -271,6 +276,8 @@ export const migrationEntries = [
   [109, "PullRequestReviewGuides", Migration0109],
   // Upstream 062 lives at 110 in this fork's ledger; see the import comment.
   [110, "ThreadFailureLookupIndex", Migration0110],
+  // Upstream 064 lives at 111 in this fork's ledger; upstream 063 is held. See the import comment.
+  [111, "CanonicalizeThreadPullRequestLinks", Migration0111],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

@@ -52,7 +52,7 @@ export interface SavedCloudEnvironmentConnection {
   readonly environmentId: EnvironmentId;
   readonly connection: EnvironmentConnectionPresentation;
   readonly relayManaged: boolean;
-  readonly serverConfig?: ServerConfig | null;
+  readonly serverConfig?: Pick<ServerConfig, "environment"> | null;
 }
 
 function RemoteEnvironmentRowsSkeleton() {
