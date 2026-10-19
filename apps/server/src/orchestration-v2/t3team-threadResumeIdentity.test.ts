@@ -17,6 +17,7 @@ import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import { subscribeOrchestrationV2Thread } from "../ws.ts";
 import * as EventSink from "./EventSink.ts";
 import * as EventStore from "./EventStore.ts";
+import * as ProjectionMaintenance from "./ProjectionMaintenance.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 
@@ -131,6 +132,10 @@ const resumeWith = (
     return { stored, items: Array.from(items) };
   }).pipe(Effect.provide(layerServices));
 
+const layerServicesWithMaintenance = ProjectionMaintenance.layer.pipe(
+  Layer.provideMerge(layerServices),
+);
+
 const kinds = (items: ReadonlyArray<OrchestrationV2ThreadStreamItem>) =>
   items.map((item) => item.kind);
 
@@ -184,5 +189,30 @@ describe("thread resume cursor identity", () => {
       const first = items[0];
       assert.equal(first?.kind === "event" && first.sequence, stored[2]!.sequence);
     }),
+  );
+
+  it.effect("replays the delta when background compaction deleted the cursor's event", () =>
+    Effect.gen(function* () {
+      const sink = yield* EventSink.EventSinkV2;
+      const stored = yield* sink.write({ events });
+      const maintenance = yield* ProjectionMaintenance.ProjectionMaintenanceV2;
+      const summary = yield* maintenance.compactEventStore;
+      // Title 1 and 2 are superseded by title 3, so the client's cursor event is gone.
+      assert.equal(summary.deletedEventCount, 2);
+      const items = yield* Stream.unwrap(
+        subscribeOrchestrationV2Thread({
+          threadId: THREAD_ID,
+          requestCompletionMarker: true,
+          afterSequence: stored[1]!.sequence,
+          afterEventId: EventId.make("e-title-1"),
+        }),
+      ).pipe(
+        Stream.takeUntil((item: OrchestrationV2ThreadStreamItem) => item.kind === "synchronized"),
+        Stream.runCollect,
+      );
+      assert.deepStrictEqual(kinds(Array.from(items)), ["event", "synchronized"]);
+      const [first] = Array.from(items);
+      assert.equal(first?.kind === "event" && first.sequence, stored[3]!.sequence);
+    }).pipe(Effect.provide(layerServicesWithMaintenance)),
   );
 });
