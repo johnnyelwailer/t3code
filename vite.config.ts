@@ -1,7 +1,15 @@
 import "vite-plus/test/config";
 import { defineConfig } from "vite-plus";
 import * as NodeURL from "node:url";
-import { T3TEAM_REACT_COMPILER_PENDING_FILES } from "./apps/web/src/t3team/t3team-reactCompilerPending.ts";
+import * as NodeFS from "node:fs";
+
+// t3team: TEMPORARY exemption pending owner decision H; see apps/web/t3team-react-compiler-pending.txt.
+const T3TEAM_REACT_COMPILER_PENDING_FILES = NodeFS.readFileSync(
+  NodeURL.fileURLToPath(new URL("./apps/web/t3team-react-compiler-pending.txt", import.meta.url)),
+  "utf8",
+)
+  .split("\n")
+  .filter((line) => line.length > 0 && !line.startsWith("#"));
 
 const RESTRICTED_IMPORT_PATHS = [
   {
@@ -395,7 +403,7 @@ export default defineConfig({
         rules: { "t3code/no-hookless-use-function": "error" },
       },
       {
-        // t3team: TEMPORARY exemption pending owner decision H; see t3team-reactCompilerPending.ts.
+        // t3team: TEMPORARY exemption pending owner decision H (see the list file above).
         files: [...T3TEAM_REACT_COMPILER_PENDING_FILES],
         rules: {
           "react/exhaustive-effect-dependencies": "off",

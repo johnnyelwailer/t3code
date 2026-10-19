@@ -457,7 +457,6 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
   return { prompt, outputSchema };
 }
 
-
 /**
  * Hard cap on the context a caller may attach to an activity-label request
  * (GHE #40, requirement: VERY LIGHT ON INFERENCE). The payload is only the
