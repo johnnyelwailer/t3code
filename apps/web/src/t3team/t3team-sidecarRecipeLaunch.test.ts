@@ -117,19 +117,19 @@ describe("launchSidecarRecipeQuickStartThread work item", () => {
 
   it("passes the selected work item into the launched workflow args", async () => {
     let createdWorkflow: LaunchWorkflow | undefined;
-    const createThread = vi.fn(
-      async (input: { readonly kickoffWorkflow?: LaunchWorkflow }) => {
-        createdWorkflow = input.kickoffWorkflow;
-        return "thread-1";
-      },
-    );
+    const createThread = vi.fn(async (input: { readonly kickoffWorkflow?: LaunchWorkflow }) => {
+      createdWorkflow = input.kickoffWorkflow;
+      return "thread-1";
+    });
 
     const launched = await launchSidecarRecipeQuickStartThread({
       backend,
       environmentId: "env-1",
       projectId: "project-alpha",
       quickStart: {
+        id: "fix-this-bug",
         title: "Fix this bug",
+        description: "Reproduce, fix and verify a bug.",
         prompt: "Fix the bug on PRJ-1.",
         workflow: recipeWorkflow,
       },
@@ -153,19 +153,19 @@ describe("launchSidecarRecipeQuickStartThread work item", () => {
 
   it("leaves the workflow untouched when there is no work item", async () => {
     let createdWorkflow: LaunchWorkflow | undefined;
-    const createThread = vi.fn(
-      async (input: { readonly kickoffWorkflow?: LaunchWorkflow }) => {
-        createdWorkflow = input.kickoffWorkflow;
-        return "thread-1";
-      },
-    );
+    const createThread = vi.fn(async (input: { readonly kickoffWorkflow?: LaunchWorkflow }) => {
+      createdWorkflow = input.kickoffWorkflow;
+      return "thread-1";
+    });
 
     const launched = await launchSidecarRecipeQuickStartThread({
       backend,
       environmentId: "env-1",
       projectId: "project-alpha",
       quickStart: {
+        id: "fix-this-bug",
         title: "Fix this bug",
+        description: "Reproduce, fix and verify a bug.",
         prompt: "Fix the bug.",
         workflow: recipeWorkflow,
       },
@@ -179,19 +179,19 @@ describe("launchSidecarRecipeQuickStartThread work item", () => {
 
   it("lets explicit workflow parameters win over the work item for the same key", async () => {
     let createdWorkflow: LaunchWorkflow | undefined;
-    const createThread = vi.fn(
-      async (input: { readonly kickoffWorkflow?: LaunchWorkflow }) => {
-        createdWorkflow = input.kickoffWorkflow;
-        return "thread-1";
-      },
-    );
+    const createThread = vi.fn(async (input: { readonly kickoffWorkflow?: LaunchWorkflow }) => {
+      createdWorkflow = input.kickoffWorkflow;
+      return "thread-1";
+    });
 
     await launchSidecarRecipeQuickStartThread({
       backend,
       environmentId: "env-1",
       projectId: "project-alpha",
       quickStart: {
+        id: "fix-this-bug",
         title: "Fix this bug",
+        description: "Reproduce, fix and verify a bug.",
         prompt: "Fix the bug.",
         workflow: { ...recipeWorkflow, parameters: { issueIdOrKey: "USER-SET-9" } },
       },
@@ -203,6 +203,75 @@ describe("launchSidecarRecipeQuickStartThread work item", () => {
     expect(createdWorkflow?.parameters?.issueIdOrKey).toBe("USER-SET-9");
     expect(createdWorkflow?.parameters?.workItem).toMatchObject({ key: "PRJ-1" });
   });
+
+  it("sends a prompt-backed recipe's prompt with no workflow on click", async () => {
+    let created:
+      | {
+          readonly kickoffMessage?: string;
+          readonly kickoffWorkflow?: unknown;
+        }
+      | undefined;
+    const createThread = vi.fn(
+      async (input: { readonly kickoffMessage: string; readonly kickoffWorkflow?: unknown }) => {
+        created = input;
+        return "thread-1";
+      },
+    );
+
+    const launched = await launchSidecarRecipeQuickStartThread({
+      backend,
+      environmentId: "env-1",
+      projectId: "project-alpha",
+      quickStart: {
+        id: "explain-selected-work",
+        title: "Explain this simply",
+        description: "Summarize the selected work.",
+        prompt: "Explain PRJ-1 in plain language.",
+      },
+      launchConfig,
+      createThread,
+    });
+
+    expect(launched).toBe(true);
+    expect(created?.kickoffMessage).toBe("Explain PRJ-1 in plain language.");
+    expect(created?.kickoffWorkflow).toBeUndefined();
+  });
+
+  it("applies the quick-start customization to the prompt sent on click", async () => {
+    let created: { readonly kickoffMessage?: string } | undefined;
+    const createThread = vi.fn(async (input: { readonly kickoffMessage: string }) => {
+      created = input;
+      return "thread-1";
+    });
+
+    await launchSidecarRecipeQuickStartThread({
+      backend,
+      environmentId: "env-1",
+      projectId: "project-alpha",
+      quickStart: {
+        id: "explain-selected-work",
+        title: "Explain this simply",
+        description: "Summarize the selected work.",
+        prompt: "Explain PRJ-1 in plain language.",
+      },
+      customization: {
+        selections: [
+          {
+            name: "explanationAudience",
+            label: "Explain for",
+            value: "qa",
+            promptText: "Bias toward behavior changes and open verification questions.",
+          },
+        ],
+      },
+      launchConfig,
+      createThread,
+    });
+
+    expect(created?.kickoffMessage).toBe(
+      "Explain PRJ-1 in plain language.\n\nAdditional launch guidance:\n- Bias toward behavior changes and open verification questions.",
+    );
+  });
 });
 
 describe("launchBundledSidecarRecipeThread work item", () => {
@@ -212,12 +281,10 @@ describe("launchBundledSidecarRecipeThread work item", () => {
 
   it("merges the selected work item into the built workflow parameters", async () => {
     let createdWorkflow: LaunchWorkflow | undefined;
-    const createThread = vi.fn(
-      async (input: { readonly kickoffWorkflow?: LaunchWorkflow }) => {
-        createdWorkflow = input.kickoffWorkflow;
-        return "thread-1";
-      },
-    );
+    const createThread = vi.fn(async (input: { readonly kickoffWorkflow?: LaunchWorkflow }) => {
+      createdWorkflow = input.kickoffWorkflow;
+      return "thread-1";
+    });
 
     const launched = await launchBundledSidecarRecipeThread({
       backend,
@@ -240,12 +307,10 @@ describe("launchBundledSidecarRecipeThread work item", () => {
 
   it("lets explicit parameters win over the work item for the same key", async () => {
     let createdWorkflow: LaunchWorkflow | undefined;
-    const createThread = vi.fn(
-      async (input: { readonly kickoffWorkflow?: LaunchWorkflow }) => {
-        createdWorkflow = input.kickoffWorkflow;
-        return "thread-1";
-      },
-    );
+    const createThread = vi.fn(async (input: { readonly kickoffWorkflow?: LaunchWorkflow }) => {
+      createdWorkflow = input.kickoffWorkflow;
+      return "thread-1";
+    });
 
     await launchBundledSidecarRecipeThread({
       backend,

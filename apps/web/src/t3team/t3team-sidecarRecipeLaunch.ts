@@ -6,6 +6,10 @@ import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { WORKFLOW_BACKED_BUNDLED_RECIPE_IDS } from "~/t3team/t3team-bundledRecipeWorkflowIds";
 import type { T3TeamKickoffLaunchConfig } from "~/t3team/t3team-kickoffLaunchConfig";
 import {
+  applyT3TeamRecipeQuickStartLaunchCustomization,
+  type T3TeamRecipeQuickStartLaunchCustomization,
+} from "~/t3team/t3team-recipeQuickStartLaunch";
+import {
   type T3TeamKickoffWorkItemRef,
   buildT3TeamKickoffWorkItemParameters,
 } from "~/t3team/t3team-kickoffWorkItemRef";
@@ -184,27 +188,34 @@ export async function launchBundledSidecarRecipeThread(input: {
   });
 }
 
-/** A discovered (project or pack) quick start with a workflow: the RunToggle card's "on". */
+/**
+ * A discovered quick start, sent on click. Workflow-backed recipes start their workflow on the new
+ * thread; prompt-backed ones send their prompt as the thread's pending first message. Either way the
+ * thread is created and the prompt reaches the model with no extra Submit — the Quick Start card's
+ * body click and the RunToggle's "on" both route through here.
+ */
 export async function launchSidecarRecipeQuickStartThread(input: {
   readonly backend: BackendApi | null | undefined;
   readonly environmentId: string | null | undefined;
   readonly projectId: string;
-  readonly quickStart: Pick<T3TeamSidecarRecipeQuickStart, "title" | "prompt" | "workflow">;
+  readonly quickStart: T3TeamSidecarRecipeQuickStart;
+  readonly customization?: T3TeamRecipeQuickStartLaunchCustomization;
   readonly launchConfig: T3TeamKickoffLaunchConfig;
   readonly workItem?: T3TeamKickoffWorkItemRef;
   readonly createThread: CreateSidecarRecipeThread;
 }): Promise<boolean> {
-  const workflow = input.quickStart.workflow;
-  if (workflow?.kind !== "recipe" || !workflow.workflowPath) {
-    return false;
-  }
+  const recipe = input.customization
+    ? applyT3TeamRecipeQuickStartLaunchCustomization(input.quickStart, input.customization)
+    : input.quickStart;
+  const workflow = recipe.workflow;
+  const recipeWorkflow = workflow && workflow.kind === "recipe" ? workflow : null;
   return launchSidecarRecipeThread({
     backend: input.backend,
     environmentId: input.environmentId,
     projectId: input.projectId,
-    title: input.quickStart.title,
-    kickoffMessage: input.quickStart.prompt,
-    kickoffWorkflow: withWorkItemParameters(workflow, input.workItem),
+    title: recipe.title,
+    kickoffMessage: recipe.prompt,
+    kickoffWorkflow: recipeWorkflow ? withWorkItemParameters(recipeWorkflow, input.workItem) : null,
     launchConfig: input.launchConfig,
     createThread: input.createThread,
   });

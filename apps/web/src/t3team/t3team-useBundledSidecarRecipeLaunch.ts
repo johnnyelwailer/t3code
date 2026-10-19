@@ -107,12 +107,13 @@ export function useBundledSidecarRecipeLaunch(input: UseBundledSidecarRecipeLaun
             setSelectedRecipe(null);
           });
         },
-        launchQuickStart: (recipe) =>
+        launchQuickStart: (recipe, customization) =>
           launchSidecarRecipeQuickStartThread({
             backend: input.backend,
             environmentId: input.environmentId,
             projectId: input.projectId,
             quickStart: recipe,
+            ...(customization ? { customization } : {}),
             ...(input.workItem ? { workItem: input.workItem } : {}),
             launchConfig:
               composerRef.current?.getLaunchConfig() ?? createDefaultT3TeamKickoffLaunchConfig(),
