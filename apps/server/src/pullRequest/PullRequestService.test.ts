@@ -6700,10 +6700,10 @@ it.effect("names the host and the fix when a linked repository's host has no cre
           project({ id: "p1", title: "IES NG", workspaceRoot: root, repository: "acme/web" }),
         ],
         providers: [
-          fakeProvider("github", {
+          fakeProvider(SourceControlProviderKind.make("github"), {
             getViewer: (input) =>
               input.host === "nexplore.ghe.com"
-                ? Effect.fail(unusable("github", "unauthenticated"))
+                ? Effect.fail(unusable(SourceControlProviderKind.make("github"), "unauthenticated"))
                 : Effect.succeed("pj"),
           }),
         ],
