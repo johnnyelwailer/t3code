@@ -59,33 +59,56 @@ export function resolveT3TeamKickoffPathSearchScope(input: {
   readonly liveProjects: ReadonlyArray<T3TeamKickoffPathSearchProject>;
 }): T3TeamComposerPathSearchScope {
   const storedRoot = normalizeRootPath(input.workspaceRoot);
-  if (storedRoot) {
-    const liveProject = input.liveProjects.find((candidate) =>
-      matchesT3TeamWorkspaceRoot(candidate.workspaceRoot, storedRoot),
-    );
-    if (liveProject) {
-      return {
-        environmentId: liveProject.environmentId,
-        cwd: normalizeRootPath(liveProject.workspaceRoot) ?? liveProject.workspaceRoot,
-      };
-    }
+  const liveProject = findLiveProject(storedRoot, input.liveProjects);
+  if (liveProject) {
+    return {
+      environmentId: liveProject.environmentId,
+      cwd: normalizeRootPath(liveProject.workspaceRoot) ?? liveProject.workspaceRoot,
+    };
   }
   return { environmentId: input.primaryEnvironmentId, cwd: storedRoot };
 }
 
-/** React binding for {@link resolveT3TeamKickoffPathSearchScope}. */
-export function useT3TeamKickoffPathSearchScope(
-  workspaceRoot: string | null,
-): T3TeamComposerPathSearchScope {
+function findLiveProject(
+  storedRoot: string | null,
+  liveProjects: ReadonlyArray<T3TeamKickoffPathSearchProject>,
+): T3TeamKickoffPathSearchProject | undefined {
+  if (!storedRoot) return undefined;
+  return liveProjects.find((candidate) =>
+    matchesT3TeamWorkspaceRoot(candidate.workspaceRoot, storedRoot),
+  );
+}
+
+/**
+ * The workspace whose provider skills and slash commands a kickoff composer offers. Provider
+ * workspace snapshots are keyed by the exact cwd string the scan was requested for, and the thread
+ * composer requests it with the live project's `workspaceRoot` verbatim (its `gitCwd`), so this
+ * keeps that spelling rather than the normalized path-search one.
+ */
+export function resolveT3TeamKickoffProviderWorkspace(input: {
+  readonly workspaceRoot: string | null;
+  readonly primaryEnvironmentId: EnvironmentId | null;
+  readonly liveProjects: ReadonlyArray<T3TeamKickoffPathSearchProject>;
+}): T3TeamComposerPathSearchScope {
+  const liveProject = findLiveProject(normalizeRootPath(input.workspaceRoot), input.liveProjects);
+  if (liveProject) {
+    return { environmentId: liveProject.environmentId, cwd: liveProject.workspaceRoot };
+  }
+  return { environmentId: input.primaryEnvironmentId, cwd: input.workspaceRoot };
+}
+
+/** React binding for the kickoff composer's path-search and provider-workspace scopes. */
+export function useT3TeamKickoffWorkspaceScopes(workspaceRoot: string | null): {
+  pathSearch: T3TeamComposerPathSearchScope;
+  providerWorkspace: T3TeamComposerPathSearchScope;
+} {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const liveProjects = useProjects();
-  return useMemo(
-    () =>
-      resolveT3TeamKickoffPathSearchScope({
-        workspaceRoot,
-        primaryEnvironmentId,
-        liveProjects,
-      }),
-    [liveProjects, primaryEnvironmentId, workspaceRoot],
-  );
+  return useMemo(() => {
+    const input = { workspaceRoot, primaryEnvironmentId, liveProjects };
+    return {
+      pathSearch: resolveT3TeamKickoffPathSearchScope(input),
+      providerWorkspace: resolveT3TeamKickoffProviderWorkspace(input),
+    };
+  }, [liveProjects, primaryEnvironmentId, workspaceRoot]);
 }
