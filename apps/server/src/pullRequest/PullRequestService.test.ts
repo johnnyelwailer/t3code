@@ -4746,7 +4746,7 @@ it.effect("asks on its own for a repository a search answered nothing for", () =
       {
         projectId: "p2" as ProjectId,
         projectTitle: "docs",
-        message: "acme/docs could not be read.",
+        message: "acme/docs on github.com could not be read: HTTP 404.",
       },
     ]);
     assert.deepStrictEqual(
@@ -6683,6 +6683,80 @@ it.effect("reports a linked repository on an unsupported host as unimplemented",
       assert.isNotNull(unimplemented);
       assert.strictEqual(unimplemented!.kind, "unknown");
       assert.strictEqual(unimplemented!.configured, false);
+    } finally {
+      yield* removeWorkspace(root);
+    }
+  }),
+);
+
+const GHE_REFERENCE_REPOSITORY = "https://nexplore.ghe.com/hive/common-agentdirectives";
+
+it.effect("names the host and the fix when a linked repository's host has no credential", () =>
+  Effect.gen(function* () {
+    const root = yield* workspaceWithLinkedRepositories([GHE_REFERENCE_REPOSITORY]);
+    try {
+      const service = yield* makeService({
+        projects: [
+          project({ id: "p1", title: "IES NG", workspaceRoot: root, repository: "acme/web" }),
+        ],
+        providers: [
+          fakeProvider("github", {
+            getViewer: (input) =>
+              input.host === "nexplore.ghe.com"
+                ? Effect.fail(unusable("github", "unauthenticated"))
+                : Effect.succeed("pj"),
+          }),
+        ],
+      });
+
+      const result = yield* service.list({ state: "all", projectId: "p1" as ProjectId });
+
+      assert.deepStrictEqual(
+        result.errors.map((error) => error.message),
+        [
+          "hive/common-agentdirectives on nexplore.ghe.com could not be read: GitHub has no working credential for this host. Run `gh auth login`, or check the account and hosts in Settings → Source Control.",
+        ],
+      );
+    } finally {
+      yield* removeWorkspace(root);
+    }
+  }),
+);
+
+it.effect("carries the provider's reason when a linked repository's read fails", () =>
+  Effect.gen(function* () {
+    const root = yield* workspaceWithLinkedRepositories([GHE_REFERENCE_REPOSITORY]);
+    try {
+      const service = yield* makeService({
+        projects: [
+          project({ id: "p1", title: "IES NG", workspaceRoot: root, repository: "acme/web" }),
+        ],
+        providers: [
+          fakeProvider("github", {
+            listChangeRequests: (input) =>
+              input.host === "nexplore.ghe.com"
+                ? Effect.fail(
+                    new PullRequestProviderError({
+                      provider: "github",
+                      operation: "listChangeRequests",
+                      reason: "failed",
+                      detail:
+                        "GitHub refused the credential for nexplore.ghe.com. Run `gh auth login --hostname nexplore.ghe.com` and retry.",
+                    }),
+                  )
+                : Effect.succeed({ items: [], truncated: false, continues: false }),
+          }),
+        ],
+      });
+
+      const result = yield* service.list({ state: "all", projectId: "p1" as ProjectId });
+
+      assert.deepStrictEqual(
+        result.errors.map((error) => error.message),
+        [
+          "hive/common-agentdirectives on nexplore.ghe.com could not be read: GitHub refused the credential for nexplore.ghe.com. Run `gh auth login --hostname nexplore.ghe.com` and retry.",
+        ],
+      );
     } finally {
       yield* removeWorkspace(root);
     }
