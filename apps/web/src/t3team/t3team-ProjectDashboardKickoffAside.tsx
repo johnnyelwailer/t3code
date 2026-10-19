@@ -167,6 +167,7 @@ export function ProjectDashboardKickoffAside({
         onClearSelectedRecipe={clearSelectedRecipe}
         providers={providers}
         isConnected={isConnected}
+        projectId={project.id}
         {...(project.workspace?.rootPath ? { workspaceRoot: project.workspace.rootPath } : {})}
         slashRecipes={slashRecipes}
         onSelectSlashRecipe={stageRecipeKickoff}

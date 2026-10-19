@@ -160,10 +160,16 @@ export class GitManager extends Context.Service<
      * Resolve the PR for a saved branch without changing the current checkout.
      * `refresh` asks the host again. `freshGitState` rereads the branch's git
      * state without forcing a host refresh; use it before persisting a result.
+     * A merged or closed answer is confirmed against fresh git state unless
+     * `confirmClosed` is false, for callers that confirm before they act.
      */
     readonly branchPullRequest: (
       input: { readonly cwd: string; readonly branch: string },
-      options?: { readonly refresh?: boolean; readonly freshGitState?: boolean },
+      options?: {
+        readonly refresh?: boolean;
+        readonly freshGitState?: boolean;
+        readonly confirmClosed?: boolean;
+      },
     ) => Effect.Effect<GitBranchPullRequest | null, GitManagerServiceError>;
     readonly invalidateLocalStatus: (cwd: string) => Effect.Effect<void, never>;
     readonly invalidateRemoteStatus: (cwd: string) => Effect.Effect<void, never>;
@@ -2704,7 +2710,10 @@ export const make = Effect.gen(function* () {
       refresh,
       freshGitState,
     });
-    if (pullRequest === null || pullRequest.state === "open" || freshGitState) return pullRequest;
+    const confirmClosed = options?.confirmClosed !== false;
+    if (pullRequest === null || pullRequest.state === "open" || freshGitState || !confirmClosed) {
+      return pullRequest;
+    }
     return yield* lookupBranchPullRequest(cacheCwd, branch, {
       refresh: false,
       freshGitState: true,
