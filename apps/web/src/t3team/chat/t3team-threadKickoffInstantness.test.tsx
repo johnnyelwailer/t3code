@@ -200,6 +200,12 @@ function createLatencyBackend(input: {
         includedCount: 0,
         skippedCount: 0,
       })),
+      syncLinkedRepository: vi.fn(async () => {
+        throw new Error("not used");
+      }),
+      listLinkedRepositoryBranches: vi.fn(async () => {
+        throw new Error("not used");
+      }),
     },
   };
   return { calls, backend };

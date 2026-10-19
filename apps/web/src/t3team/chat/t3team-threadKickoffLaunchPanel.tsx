@@ -42,7 +42,7 @@ export function ThreadKickoffLaunchPanel({
   ];
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+    <div className="scrollbar-gutter-both flex-1 overflow-y-auto px-4 py-4 sm:px-6">
       <div className="mx-auto flex max-w-3xl flex-col gap-4">
         {kickoffMessage ? <ThreadKickoffFirstMessage text={kickoffMessage} /> : null}
         {workflow?.kind === "recipe" ? (
