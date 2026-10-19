@@ -220,6 +220,9 @@ minimumReleaseAgeExclude:
   - "@expo/schema-utils@58.0.2"
 
 overrides:
+  # mdx-js augments hast nodes; two @types/hast copies make the augmented union
+  # incompatible with hast-util-to-html and hast-util-to-jsx-runtime.
+  "@types/hast": 3.0.5
   # Keep jsdom's optional peer consistent so Vite+ has one test-runner instance.
   "@exodus/bytes>@noble/hashes": "1.8.0"
   # Earlier React Navigation declarations create a circular type alias in TypeScript 7.

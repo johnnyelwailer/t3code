@@ -25,6 +25,11 @@ import * as Path from "effect/Path";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 
 import * as ServerConfig from "./config.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { T3TeamChildThreadMetadataLive } from "./t3team-childThreadMetadata.ts";
+import * as ThreadArtifactsStore from "./t3team-v2/t3team-threadArtifactsStore.ts";
+import * as ThreadFactsStore from "./t3team-v2/t3team-threadFactsStore.ts";
+import * as ThreadLineage from "./t3team-v2/t3team-threadLineage.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
@@ -75,6 +80,12 @@ it.effect.each([
       };
       const imports = { importedThreadCount: 0, importedMessageCount: 0 };
       const dependencies = Layer.mergeAll(
+        Layer.mergeAll(
+          T3TeamChildThreadMetadataLive,
+          ThreadArtifactsStore.layer,
+          ThreadFactsStore.layer,
+          ThreadLineage.layer,
+        ).pipe(Layer.provideMerge(SqlitePersistenceMemory)),
         NodeCrypto.layer,
         Path.layer,
         Layer.mock(ServerConfig.ServerConfig)({

@@ -2009,7 +2009,7 @@ describe("orchestrator MCP toolkit", () => {
                   Effect.orDie,
                 );
                 expect(sent).toMatchObject({ runId: run.id, delivery: "steered" });
-                return { child, sent };
+                return { child, sent: { ...sent, runId: run.id } };
               });
             const waitForChildRun = (
               childThreadId: ThreadId,

@@ -329,6 +329,7 @@ type SidebarProviderEntry = Pick<
   | "driverKind"
   | "displayName"
   | "accentColor"
+  | "iconDataUrl"
   | "acpRegistryAgentId"
   | "acpRegistryIconUrl"
   | "models"
@@ -346,6 +347,7 @@ function sameSidebarProviderEntries(
       other.driverKind !== entry.driverKind ||
       other.displayName !== entry.displayName ||
       other.accentColor !== entry.accentColor ||
+      other.iconDataUrl !== entry.iconDataUrl ||
       other.acpRegistryAgentId !== entry.acpRegistryAgentId ||
       other.acpRegistryIconUrl !== entry.acpRegistryIconUrl ||
       other.models !== entry.models

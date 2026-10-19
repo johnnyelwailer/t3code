@@ -48,6 +48,7 @@ import type {
   ProviderAdapterV2SessionRuntime,
 } from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ProviderEventIngestor from "./ProviderEventIngestor.ts";
+import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
 import * as RunExecutionService from "./RunExecutionService.ts";
 import { settleRunlessWorkflowAuthorRequest } from "./t3team-workflowAuthorGate.ts";
 
@@ -149,6 +150,9 @@ const runScenario = (threadId: string, makeEvents: (ids: Ids) => ProviderAdapter
             write: () => Effect.succeed([]),
             writeWithEffects: () => Effect.succeed([]),
             writeIfRunCurrent: () => Effect.succeed({ committed: true, storedEvents: [] }),
+          }),
+          Layer.mock(TurnItemPositionStore.TurnItemPositionStoreV2)({
+            allocate: () => Effect.succeed(1),
           }),
           IdAllocator.layer,
           Layer.mock(ProviderEventIngestor.ProviderEventIngestorV2)({
