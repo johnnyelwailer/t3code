@@ -21,6 +21,8 @@ import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import type * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
+import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
+import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import {
   ThreadMailboxDelivery,
   type ThreadMailboxSendInput,
@@ -81,6 +83,9 @@ const projection = (threadId: ThreadId) =>
 
 const makeLayer = (mailbox: Layer.Layer<never>) =>
   OrchestratorMcpService.layer.pipe(
+    Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
+    Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
+
     Layer.provide(mailbox),
     Layer.provide(
       Layer.mergeAll(

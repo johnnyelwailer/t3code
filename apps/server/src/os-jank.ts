@@ -3,7 +3,7 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   listLoginShellCandidates,
   mergePathEntries,
-  readPathFromLoginShell,
+  readEnvironmentFromLoginShell,
   readPathFromLaunchctl,
   resolveKnownPosixCliDirs,
   resolveWindowsEnvironment,
@@ -24,12 +24,23 @@ export function hydratePosixPath(
   env: NodeJS.ProcessEnv,
   platform: NodeJS.Platform,
   options: {
-    readonly readLoginShellPath?: typeof readPathFromLoginShell;
+    /** t3team: test seam; overrides the login-shell read with a PATH-only reader. */
+    readonly readLoginShellPath?: (shell: string) => string | undefined;
     readonly readLaunchctlPath?: typeof readPathFromLaunchctl;
     readonly isDirectory?: (path: string) => boolean;
   } = {},
 ): void {
-  const readLoginShellPath = options.readLoginShellPath ?? readPathFromLoginShell;
+  const overrideLoginShellPath = options.readLoginShellPath;
+  const readLoginShellEnvironment = (shell: string): Partial<Record<string, string>> => {
+    if (overrideLoginShellPath === undefined) {
+      // mise's record of the PATH entries it added. It must travel with the
+      // shell's PATH, or `mise x` can rebuild PATH behind a same-named wrapper
+      // (`exec mise x claude -- claude`) that then re-runs itself forever.
+      return readEnvironmentFromLoginShell(shell, ["PATH", "__MISE_DIFF"]);
+    }
+    const path = overrideLoginShellPath(shell);
+    return path === undefined ? {} : { PATH: path };
+  };
   const readLaunchctlPath = options.readLaunchctlPath ?? readPathFromLaunchctl;
   const isDirectory =
     options.isDirectory ??
@@ -40,17 +51,18 @@ export function hydratePosixPath(
         return false;
       }
     });
-  let shellPath: string | undefined;
+  let shellEnvironment: Partial<Record<string, string>> = {};
   for (const shell of listLoginShellCandidates(platform, env.SHELL)) {
     try {
-      shellPath = readLoginShellPath(shell);
+      shellEnvironment = readLoginShellEnvironment(shell);
     } catch (error) {
       logPathHydrationWarning(`Failed to read PATH from login shell ${shell}.`, error);
     }
 
-    if (shellPath) break;
+    if (shellEnvironment.PATH) break;
   }
 
+  const shellPath = shellEnvironment.PATH;
   const launchctlPath = platform === "darwin" && !shellPath ? readLaunchctlPath() : undefined;
   const knownCliPath = resolveKnownPosixCliDirs(env).filter(isDirectory).join(":");
   const mergedPath = mergePathEntries(
@@ -60,6 +72,9 @@ export function hydratePosixPath(
   );
   if (mergedPath) {
     env.PATH = mergedPath;
+  }
+  if (shellPath && shellEnvironment.__MISE_DIFF) {
+    env.__MISE_DIFF = shellEnvironment.__MISE_DIFF;
   }
 }
 

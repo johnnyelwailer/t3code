@@ -7,6 +7,10 @@
       "types": "./src/composerThreadItems.ts",
       "default": "./src/composerThreadItems.ts"
     },
+    "./image-attachment-size": {
+      "types": "./src/imageAttachmentSize.ts",
+      "default": "./src/imageAttachmentSize.ts"
+    },
     "./handoff": {
       "types": "./src/handoff.ts",
       "default": "./src/handoff.ts"
@@ -282,6 +286,10 @@
     "./state/message-framing": {
       "types": "./src/state/t3team-messageFraming.ts",
       "default": "./src/state/t3team-messageFraming.ts"
+    },
+    "./state/thread-handoff": {
+      "types": "./src/state/t3team-threadHandoff.ts",
+      "default": "./src/state/t3team-threadHandoff.ts"
     },
     "./state/thread-stop-cascade": {
       "types": "./src/state/t3team-threadStopCascade.ts",

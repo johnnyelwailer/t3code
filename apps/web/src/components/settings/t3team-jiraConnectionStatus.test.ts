@@ -29,6 +29,7 @@ describe("Jira connection card view", () => {
       statusLabel: "Connected",
       needsSignIn: false,
       lastSync: { text: "Last synced 3 h ago", stale: false },
+      catchUp: null,
       problem: null,
     });
   });
@@ -58,6 +59,18 @@ describe("Jira connection card view", () => {
     );
     expect(view.lastSync).toEqual({ text: "Not synced yet", stale: false });
     expect(view.problem).toBe("Jira did not answer.");
+  });
+
+  it("says how far a first sync has got in one plain sentence", () => {
+    const reachedAt = new Date(NOW - 5 * 24 * HOUR).toISOString();
+    expect(
+      describeJiraConnection({ ...neverSynced, catchUp: { pagesWalked: 12, reachedAt } }, NOW)
+        .catchUp,
+    ).toBe("Catching up: reached 7 Oct 2026");
+    expect(
+      describeJiraConnection({ ...neverSynced, catchUp: { pagesWalked: 3, lastPageMs: 800 } }, NOW)
+        .catchUp,
+    ).toBe("Catching up: loading your most recent tickets first");
   });
 
   it("does not print the site twice when the label is the host", () => {

@@ -75,6 +75,9 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.t3teamPackStorePut]: AuthOrchestrationOperateScope,
   // t3team: "stop including sub-runs" interrupts runs, like interrupting one thread.
   [WS_METHODS.t3teamStopThreadCascade]: AuthOrchestrationOperateScope,
+  // t3team: "Move to" another machine — capture is read-only but only serves an operate flow.
+  [WS_METHODS.t3teamThreadHandoffPrepare]: AuthOrchestrationOperateScope,
+  [WS_METHODS.t3teamThreadHandoffRecord]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverProbe]: AuthOrchestrationReadScope,
   [WS_METHODS.serverGetConfig]: AuthOrchestrationReadScope,
   [WS_METHODS.serverRefreshProviders]: AuthOrchestrationReadScope,

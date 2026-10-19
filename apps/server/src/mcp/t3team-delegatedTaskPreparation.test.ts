@@ -25,6 +25,8 @@ import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import type { McpInvocationScope } from "./McpInvocationContext.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
+import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
+import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import {
   DelegatedTaskPreparation,
   defaultDelegatedTaskPreparation,
@@ -121,6 +123,7 @@ const childProjection = {
   subagents: [],
   providerThreads: [],
   turnItems: [],
+  runtimeRequests: [],
 } as unknown as OrchestrationV2ThreadProjection;
 
 const makeDependencies = (
@@ -215,7 +218,11 @@ describe("OrchestratorMcpService delegateTask preparation hook", () => {
         assert.isUndefined(capabilities.delegation);
       }).pipe(
         Effect.provide(
-          OrchestratorMcpService.layer.pipe(Layer.provide(makeDependencies(dispatched))),
+          OrchestratorMcpService.layer.pipe(
+            Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
+            Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
+            Layer.provide(makeDependencies(dispatched)),
+          ),
         ),
       );
     }),
@@ -265,6 +272,9 @@ describe("OrchestratorMcpService delegateTask preparation hook", () => {
       }).pipe(
         Effect.provide(
           OrchestratorMcpService.layer.pipe(
+            Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
+            Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
+
             Layer.provide(makeDependencies(dispatched)),
             Layer.provide(preparation),
           ),
@@ -302,6 +312,9 @@ describe("OrchestratorMcpService delegateTask preparation hook", () => {
       }).pipe(
         Effect.provide(
           OrchestratorMcpService.layer.pipe(
+            Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
+            Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
+
             Layer.provide(makeDependencies(dispatched, { rejectDispatch: true })),
             Layer.provide(trackingPreparation(calls)),
           ),
@@ -326,6 +339,9 @@ describe("OrchestratorMcpService delegateTask preparation hook", () => {
       }).pipe(
         Effect.provide(
           OrchestratorMcpService.layer.pipe(
+            Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
+            Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
+
             Layer.provide(makeDependencies(dispatched, { alreadyDelegated: true })),
             Layer.provide(trackingPreparation(calls)),
           ),

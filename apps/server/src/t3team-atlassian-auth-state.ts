@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Semaphore from "effect/Semaphore";
 
 import { withAtlassianAuthFileLock } from "./t3team-atlassian-auth-fileLock.ts";
+import { homeIdToPersist, setLoadedSecretHomeId } from "./t3team-atlassian-auth-homeGuard.ts";
 import {
   loadPersistedAtlassianAuthsPayload,
   type PersistedAtlassianAuths,
@@ -38,9 +39,10 @@ const authStoreLock = Semaphore.makeUnsafe(1);
 export const withAuthStoreLock = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   authStoreLock.withPermits(1)(withAtlassianAuthFileLock(effect));
 
-function persistedAuthsPayload(): PersistedAtlassianAuths {
+function persistedAuthsPayload(homeId: string): PersistedAtlassianAuths {
   return {
     version: 1,
+    homeId,
     auths: [...atlassianAuths].map(([accountId, auth]) => ({
       accountId,
       auth,
@@ -53,8 +55,8 @@ function persistedAuthsPayload(): PersistedAtlassianAuths {
  * Write memory to the persisted secret. Callers hold the lock. Whatever flags were waiting for a
  * write are in the file once this succeeds.
  */
-export const persistAuthsToDisk = Effect.suspend(() =>
-  savePersistedAtlassianAuthsPayload(persistedAuthsPayload()),
+export const persistAuthsToDisk = Effect.flatMap(homeIdToPersist, (homeId) =>
+  savePersistedAtlassianAuthsPayload(persistedAuthsPayload(homeId)),
 ).pipe(Effect.tap(() => Effect.sync(markReconnectFlagsSaved)));
 
 /**
@@ -64,6 +66,7 @@ export const persistAuthsToDisk = Effect.suspend(() =>
 export const reloadAuthsFromDisk = Effect.gen(function* () {
   const parsed = yield* loadPersistedAtlassianAuthsPayload;
   if (parsed) {
+    setLoadedSecretHomeId(parsed.homeId);
     atlassianAuths.clear();
     clearAllNeedsReconnect();
     for (const entry of parsed.auths) {
