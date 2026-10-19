@@ -152,6 +152,13 @@ export interface GitHubGraphQlInput {
    * the caller reads each alias for null.
    */
   readonly allowPartialNotFound?: boolean;
+  /**
+   * An answer whose only errors are `RESOURCE_LIMITS_EXCEEDED` is returned with its `data` instead
+   * of failing. GitHub answers a heavy field (a pull request's check rollup) with that error and
+   * null at its path while every other field of every row is still there, so a listing reads the
+   * rows it has and treats the field it could not compute as unknown.
+   */
+  readonly allowPartialResourceLimits?: boolean;
 }
 
 export class GitHubApi extends Context.Service<
@@ -315,6 +322,7 @@ function classify(input: {
   readonly graphql: boolean;
   readonly acceptNotModified: boolean;
   readonly allowPartialNotFound?: boolean;
+  readonly allowPartialResourceLimits?: boolean;
 }): Answer {
   const { status, headers, body } = input;
   const errors = input.graphql
@@ -339,12 +347,16 @@ function classify(input: {
     return Answer.RateLimited();
   }
   if (status === 401) return Answer.Unauthorized();
+  const tolerated = [
+    ...(input.allowPartialNotFound === true ? ["NOT_FOUND"] : []),
+    ...(input.allowPartialResourceLimits === true ? ["RESOURCE_LIMITS_EXCEEDED"] : []),
+  ];
   if (
-    input.allowPartialNotFound === true &&
+    tolerated.length > 0 &&
     status >= 200 &&
     status < 300 &&
     errors !== undefined &&
-    errors.every((error) => error.type === "NOT_FOUND")
+    errors.every((error) => error.type !== undefined && tolerated.includes(error.type))
   ) {
     return Answer.Ok();
   }
@@ -418,6 +430,7 @@ export const make = Effect.gen(function* () {
     /** Reads the body for GraphQL `errors`, which GitHub sends with HTTP 200. */
     readonly graphql?: boolean;
     readonly allowPartialNotFound?: boolean;
+    readonly allowPartialResourceLimits?: boolean;
   }) {
     const host = normalizeHost(input.host);
     // Only the path: a query string can carry a SHA or a branch, and never needs to be in a trace.
@@ -505,6 +518,7 @@ export const make = Effect.gen(function* () {
           graphql: input.graphql === true,
           acceptNotModified: input.acceptNotModified,
           allowPartialNotFound: input.allowPartialNotFound === true,
+          allowPartialResourceLimits: input.allowPartialResourceLimits === true,
         }),
         {
           Ok: () =>
@@ -621,6 +635,7 @@ export const make = Effect.gen(function* () {
         acceptNotModified: false,
         graphql: true,
         allowPartialNotFound: input.allowPartialNotFound === true,
+        allowPartialResourceLimits: input.allowPartialResourceLimits === true,
       });
       // A body cut at the byte cap hides any `errors` past the cut and cannot be decoded.
       if (response.truncated) {

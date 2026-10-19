@@ -99,6 +99,10 @@ import type {
 import * as PullRequestReadCache from "./PullRequestReadCache.ts";
 import * as PullRequestProviderRegistry from "./PullRequestProviderRegistry.ts";
 import { readProjectLinkedRepositories } from "./t3team-LinkedRepositories.ts";
+import {
+  logRepositoryReadFailure,
+  repositoryReadFailureMessage,
+} from "./t3team-repositoryReadFailure.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import * as ViewedFiles from "./pullRequestViewedFiles.ts";
 
@@ -1523,19 +1527,23 @@ export const make = Effect.gen(function* () {
               }),
               // One unreachable repository must not blank the page. A host-level failure is
               // already reported through `providers`, so it degrades the same way here.
-              Effect.orElseSucceed((): RepositoryBatch => ({
-                key,
-                entries: [],
-                errors: [
-                  {
-                    projectId: project.project.id,
-                    projectTitle: project.project.title,
-                    message: `${project.repository} could not be read.`,
-                  },
-                ],
-                truncated: false,
-                nextCursor: null,
-              })),
+              Effect.catch((error) =>
+                logRepositoryReadFailure(project, error).pipe(
+                  Effect.as<RepositoryBatch>({
+                    key,
+                    entries: [],
+                    errors: [
+                      {
+                        projectId: project.project.id,
+                        projectTitle: project.project.title,
+                        message: repositoryReadFailureMessage(project.repository, error),
+                      },
+                    ],
+                    truncated: false,
+                    nextCursor: null,
+                  }),
+                ),
+              ),
             );
         }
       };
