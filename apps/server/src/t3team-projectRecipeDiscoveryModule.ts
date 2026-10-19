@@ -54,6 +54,12 @@ class T3TeamRecipeModuleShapeError extends Data.TaggedError("T3TeamRecipeModuleS
   readonly message: string;
 }> {}
 
+/** A `recipe.ts` module could not be imported (unresolvable import, syntax error, throw at load). */
+class T3TeamRecipeModuleImportError extends Data.TaggedError("T3TeamRecipeModuleImportError")<{
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
 /**
  * Project the SDK `RecipeRef`'s discovery metadata onto a project-recipes `Recipe` so the locked
  * {@link matchRecipes} applicability/scoring engine — the same one bundled recipes use — decides
@@ -116,9 +122,14 @@ export const importRecipeModuleRef = Effect.fn("importRecipeModuleRef")(function
   ensureProjectRecipeModuleResolution();
   const moduleUrl = NodeURL.pathToFileURL(modulePath);
   moduleUrl.searchParams.set("v", String(yield* Clock.currentTimeMillis));
-  const imported = (yield* Effect.tryPromise(() => import(moduleUrl.toString()))) as {
-    readonly default?: AnyRecipeRef;
-  };
+  const imported = yield* Effect.tryPromise({
+    try: (): Promise<{ readonly default?: AnyRecipeRef }> => import(moduleUrl.toString()),
+    catch: (cause) =>
+      new T3TeamRecipeModuleImportError({
+        message: cause instanceof Error ? cause.message : String(cause),
+        cause,
+      }),
+  });
 
   const ref = imported.default;
   if (!ref || ref.kind !== "recipe") {
