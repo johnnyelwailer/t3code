@@ -284,8 +284,7 @@ import {
 import { useEnvironmentQuery } from "~/state/query";
 import { useDebouncedValue } from "~/state/queries";
 import { ProviderModelPicker } from "./ProviderModelPicker";
-import { ComposerVoiceInput } from "./t3team-ComposerVoiceInput";
-import { isElectron } from "../../env";
+import { ComposerMicInput } from "./t3team-ComposerMicInput";
 import { resolveModelPickerSelectedModel } from "./ModelPickerContent";
 import {
   type ComposerCommandItem,
@@ -7966,12 +7965,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                         </TooltipTrigger>
                         <TooltipPopup>Attach files</TooltipPopup>
                       </Tooltip>
-                      <ComposerVoiceInput
+                      <ComposerMicInput
                         onTranscript={(text) => insertComposerTextAtEnd(text)}
                         disabled={
                           isConnecting || isComposerApprovalState || projectSelectionRequired
                         }
-                        available={!isElectron}
                       />
                     </>
                   ) : null}

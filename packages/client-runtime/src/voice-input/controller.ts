@@ -54,10 +54,17 @@ export type VoiceInputControllerDependencies = {
   readonly releaseRecording: () => Promise<void>;
   readonly deleteRecording: (uri: string) => void;
   readonly readDraft: () => VoiceDraftSnapshot | null;
-  readonly commitDraft: (
+  /** Inserts the transcript into the draft at the selection captured when recording started. */
+  readonly commitDraft?: (
     text: string,
     selection: { readonly start: number; readonly end: number },
   ) => void;
+  /**
+   * Receives the trimmed transcript instead of `commitDraft` for sinks that own their destination
+   * (desktop composer, voice thread); the controller then never edits a draft. At least one of the
+   * two commit dependencies is required.
+   */
+  readonly commitTranscript?: (text: string) => void;
   readonly onStateChange: (state: VoiceInputState) => void;
 };
 
@@ -132,7 +139,10 @@ let activeTranscriptionOperation: Promise<unknown> | null = null;
 
 function acquireSession(): VoiceInputSession | null {
   if (activeSession) return null;
-  const { promise, resolve } = Promise.withResolvers<void>();
+  let resolve!: () => void;
+  const promise = new Promise<void>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
   const token = { abandoned: false, released: promise, release: resolve };
   activeSession = token;
   return token;
@@ -171,6 +181,9 @@ function preparationErrorMessage(error: unknown): string {
   if (errorCode(error) === "unsupported-locale") {
     return "Voice transcription is not available for this language.";
   }
+  if (error instanceof Error && errorCode(error) === "model-unavailable") {
+    return error.message;
+  }
   return "Could not prepare voice transcription.";
 }
 
@@ -197,6 +210,9 @@ export class VoiceInputController {
   private finishing = false;
 
   constructor(dependencies: VoiceInputControllerDependencies) {
+    if (!dependencies.commitDraft && !dependencies.commitTranscript) {
+      throw new Error("VoiceInputController needs commitDraft or commitTranscript.");
+    }
     this.dependencies = dependencies;
   }
 
@@ -408,6 +424,17 @@ export class VoiceInputController {
       }
       if (!this.isCurrent(operationToken)) return;
 
+      if (this.dependencies.commitTranscript) {
+        const spoken = transcript.trim();
+        if (spoken.length === 0) {
+          this.setError("No speech was detected.", "retry");
+          return;
+        }
+        this.dependencies.commitTranscript(spoken);
+        this.setState(IDLE_STATE);
+        return;
+      }
+
       const result = resolveTranscriptCommit(
         capturedDraft,
         this.dependencies.readDraft(),
@@ -426,7 +453,7 @@ export class VoiceInputController {
         return;
       }
 
-      this.dependencies.commitDraft(result.text, result.selection);
+      this.dependencies.commitDraft?.(result.text, result.selection);
       this.setState(IDLE_STATE);
     } catch {
       if (this.isCurrent(operationToken)) {

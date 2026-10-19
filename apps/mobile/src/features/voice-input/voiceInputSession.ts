@@ -10,7 +10,7 @@ export type VoiceInputTarget = {
   /** Names the draft being dictated into while its composer is off screen. */
   readonly label?: string;
   readonly readDraft: () => VoiceDraftSnapshot | null;
-  readonly commitDraft: VoiceInputControllerDependencies["commitDraft"];
+  readonly commitDraft: NonNullable<VoiceInputControllerDependencies["commitDraft"]>;
   readonly subscribe: () => () => void;
 };
 

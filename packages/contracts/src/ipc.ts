@@ -14,6 +14,12 @@ import { ExecutionEnvironmentDescriptor } from "./environment.ts";
 import { type ClientSettings, type QuitConfirmationMode, SnapShotShortcut } from "./settings.ts";
 import type { EditorId } from "./editor.ts";
 import type { PreviewForwardedShortcut } from "./keybindings.ts";
+import type {
+  DesktopVoicePrepareRequest,
+  DesktopVoicePrepareResult,
+  DesktopVoiceTranscribeRequest,
+  DesktopVoiceTranscribeResult,
+} from "./t3team-desktopVoice.ts";
 
 import type {
   DesktopAppActivationRequest,
@@ -1171,6 +1177,13 @@ export interface DesktopBridge {
   ) => Promise<void>;
   dismissSnapShotAnimation?: (id: DesktopSnapShotId) => Promise<void>;
   acknowledgeSnapShot?: (id: string) => Promise<void>;
+  /** Native on-device whisper transcription; absent on desktop builds predating it. */
+  prepareVoiceTranscriber?: (
+    request: DesktopVoicePrepareRequest,
+  ) => Promise<DesktopVoicePrepareResult>;
+  transcribeVoice?: (
+    request: DesktopVoiceTranscribeRequest,
+  ) => Promise<DesktopVoiceTranscribeResult>;
   ensureSshEnvironment: (
     target: DesktopSshEnvironmentTarget,
     options?: { issuePairingToken?: boolean },
