@@ -446,3 +446,6 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
 
 - `apps/server/src/orchestration-v2/EffectOutbox.ts` — `renewLease`: a worker extends the lease of an effect it still runs.
 - `apps/server/src/orchestration-v2/EffectWorker.ts` — heartbeat that renews the lease while an effect executes, so a slow checkpoint capture is not reclaimed and run twice.
+- `apps/server/src/orchestration-v2/RunFinalizationService.ts` — on the last capture attempt, a failed checkpoint capture completes the run without a checkpoint (retrying that settle), so a `waiting` run cannot hold the queue until restart.
+- `apps/server/src/orchestration-v2/CheckpointCaptureService.ts` — exposes `completeWithoutCheckpoint`; the logic lives in `t3team-checkpointCaptureFallback.ts`.
+- `apps/server/src/orchestration-v2/RunFinalizationService.test.ts`, `EffectWorker.test.ts`, `packages/client-runtime/src/operations/commands.test.ts` — cover the last-attempt settle, its wiring, and that Stop never targets a finished `waiting` run.

@@ -9683,21 +9683,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         };
       }
 
-      if (providerTurn === undefined && run.status === "waiting") {
-        // The provider turn already finished; the run only waits for its
-        // post-turn checkpoint capture, which can take minutes on big
-        // worktrees. There is nothing left to interrupt, so Stop succeeds and
-        // only stops the remaining work instead of failing as "not
-        // interruptible" while the thread still shows as busy.
-        yield* emitEvent({
-          type: "turn-item.updated",
-          threadId: command.threadId,
-          runId: run.id,
-          nodeId: rootNode.id,
-          providerInstanceId: run.providerInstanceId,
-          occurredAt: now,
-          payload: interruptRequestItem,
-        });
+      // A waiting run's agent turn is over; only its checkpoint is still saving,
+      // which can take minutes on big worktrees, and that capture settles the
+      // run on its own. Unless the turn left background work, Stop has no turn
+      // to reach: it records itself on the run once and stops what remains.
+      if (run.status === "waiting" && (providerTurn === undefined || !hasBackgroundWork)) {
+        yield* markStoppedRun({ command, events, thread: projection.thread, run, now });
         yield* stopRemainingWork();
         yield* Ref.update(effects, (existing) => [...existing, ...otherProviderInterrupts]);
         return undefined;
@@ -11379,12 +11370,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     const plan = yield* dispatchOnce(command).pipe(
       Effect.flatMap((planned) =>
         // A settle that finds the provider already ended everything, or a
-        // stop that finds nothing running, has nothing to record. That is
-        // its expected outcome, not a failure.
+        // stop that finds nothing running (or a waiting run it already
+        // reached), has nothing to record. That is its expected outcome, not
+        // a failure.
         planned.events.length > 0 ||
         command.type === "thread.background-work.settle" ||
         command.type === "thread.stop" ||
-        command.type === "subagent.stop"
+        command.type === "subagent.stop" ||
+        command.type === "run.interrupt"
           ? Effect.succeed(planned)
           : Effect.fail(
               new OrchestratorDispatchError({
