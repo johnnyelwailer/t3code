@@ -166,6 +166,8 @@ import Migration0108 from "./Migrations/060_ThreadSnapshotWindowIndexes.ts";
 import Migration0109 from "./Migrations/061_PullRequestReviewGuides.ts";
 // New from the 2026-10-14 upstream sync (upstream 062). Appended above the fork's maximum id (109).
 import Migration0110 from "./Migrations/062_ThreadFailureLookupIndex.ts";
+// Trigger-maintained per-thread item counts and a user-authored message index for shell reads.
+import Migration0111 from "./Migrations/t3team-081_ShellItemCounts.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -292,6 +294,7 @@ export const migrationEntries = [
   [109, "PullRequestReviewGuides", Migration0109],
   // Upstream 062 lives at 110 in this fork's ledger; see the import comment.
   [110, "ThreadFailureLookupIndex", Migration0110],
+  [111, "ShellItemCounts", Migration0111],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

@@ -35,10 +35,25 @@ export const DesktopBackendBootstrap = Schema.Struct({
   desktopBrowserFd: Schema.optionalKey(PositiveInt),
   /** Server -> desktop: commands for those tabs. */
   desktopBrowserControlFd: Schema.optionalKey(PositiveInt),
+  /** Server -> desktop: `DesktopBackendLivenessBeacon` lines from a thread beside the event loop. */
+  desktopLivenessFd: Schema.optionalKey(PositiveInt),
   resourceMonitorPath: Schema.optionalKey(TrimmedNonEmptyString),
 });
 
 export type DesktopBackendBootstrap = typeof DesktopBackendBootstrap.Type;
+
+/**
+ * Written about once a second by a backend worker thread, so it keeps arriving while the
+ * backend's event loop is blocked. `stalledForMs` is how long the event loop has not turned;
+ * `maxStallMs` is the longest such stall over the recent window.
+ */
+export const DesktopBackendLivenessBeacon = Schema.Struct({
+  version: Schema.Literal(1),
+  stalledForMs: Schema.Number,
+  maxStallMs: Schema.Number,
+});
+
+export type DesktopBackendLivenessBeacon = typeof DesktopBackendLivenessBeacon.Type;
 
 /** Written to `<t3Home>/runtime` just before the desktop app stops its
     backend to install an update. The updated app starts a new backend right

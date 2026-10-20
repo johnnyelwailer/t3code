@@ -16,6 +16,7 @@ export type VoiceTranscriber = {
 export type VoiceTranscriptionErrorCode =
   | "unavailable"
   | "unsupported-locale"
+  | "model-unavailable"
   | "preparation-failed"
   | "transcription-failed"
   | "cancelled";

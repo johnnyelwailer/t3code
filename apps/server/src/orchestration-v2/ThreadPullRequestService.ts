@@ -207,7 +207,9 @@ export const make = Effect.gen(function* () {
               ? null
               : yield* git.branchPullRequest(
                   { cwd, branch: first.branch },
-                  { refresh: request.refresh },
+                  // A changed answer is confirmed with fresh git state below before it is
+                  // persisted, so a merged or closed one needs no second read here.
+                  { refresh: request.refresh, confirmClosed: false },
                 );
           if (detected !== null && !pullRequestMatchesProject(detected, resolvedProject)) {
             return finishBackfill(group);

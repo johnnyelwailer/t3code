@@ -7,6 +7,8 @@ import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { resolveInChatLaunchStatus } from "~/t3team/chat/t3team-inChatLaunchStatus";
 import { ThreadPendingChat } from "~/t3team/chat/t3team-threadPendingChat";
 import type { ThreadBootstrapStatus } from "~/t3team/chat/t3team-useThreadBootstrap";
+import type { ThreadBootstrapProgress } from "~/t3team/chat/t3team-threadBootstrapProgress";
+import { ThreadKickoffLaunchPanel } from "~/t3team/chat/t3team-threadKickoffLaunchPanel";
 import { useThreadChatComposerState } from "~/t3team/chat/t3team-useThreadChatComposerState";
 import { useT3TeamThreadOutboxDock } from "~/t3team/chat/t3team-useThreadOutboxDock";
 import { ThreadKickoffPlaceholder } from "~/t3team/chat/t3team-threadKickoffPlaceholder";
@@ -34,6 +36,8 @@ export interface ThreadChatViewBodyProps {
   embeddedMode: boolean;
   backend: BackendApi | null | undefined;
   bootstrapStatus: ThreadBootstrapStatus;
+  /** Per-step preparation progress for the in-thread launch view. */
+  bootstrapProgress: ThreadBootstrapProgress | null;
   retryThreadBootstrap: () => void;
   composerState: ThreadChatComposerState;
 }
@@ -56,6 +60,7 @@ export function ThreadChatViewBody({
   embeddedMode,
   backend,
   bootstrapStatus,
+  bootstrapProgress,
   retryThreadBootstrap,
   composerState: {
     clearThreadAttachments,
@@ -95,12 +100,29 @@ export function ThreadChatViewBody({
     showKickoffPlaceholder && kickoffMessage ? (
       <ThreadKickoffPlaceholder
         message={kickoffMessage}
-        hasServerThread={hasServerThread}
         {...(kickoffPending !== undefined ? { kickoffPending } : {})}
         {...(kickoffWorkflow ? { workflow: kickoffWorkflow } : {})}
       />
     ) : null;
   const launchStatus = resolveInChatLaunchStatus({ hasServerThread, bootstrapStatus });
+
+  // Before the server shell exists, the thread content is the launch panel: the kickoff message
+  // (or the recipe card) renders immediately, with each preparation step inline below it. No
+  // full-panel spinner: a slow context refresh or launch shows as a busy step, not a blank wait.
+  if (!hasServerThread) {
+    return (
+      <div className="flex h-full min-h-0 flex-1 flex-col bg-background">
+        <ThreadKickoffLaunchPanel
+          threadId={threadId}
+          kickoffMessage={kickoffMessage}
+          workflow={kickoffWorkflow}
+          progress={bootstrapProgress}
+          bootstrapStatus={bootstrapStatus}
+          onRetry={retryThreadBootstrap}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-background">
@@ -111,40 +133,38 @@ export function ThreadChatViewBody({
           phase={launchStatus.phase}
           threadId={threadId}
           onRetryLaunch={retryThreadBootstrap}
-          compact={hasServerThread}
+          compact
         />
       ) : null}
-      {hasServerThread ? (
-        <ComposerHandleContext
-          value={embeddedMode ? embeddedComposerHandleRef : appComposerHandleRef}
-        >
-          <ChatView
-            environmentId={environmentId}
-            threadId={threadId as never}
-            routeKind="server"
-            {...(kickoffHistoryMessage ? { syntheticMessages: [kickoffHistoryMessage] } : {})}
-            {...(onBack ? { onBack } : {})}
-            {...(titleBarControlsAccessory ? { titleBarControlsAccessory } : {})}
-            hideHeader={hideHeader || embeddedMode}
-            hideBranchToolbar={embeddedMode}
-            minimalComposer={embeddedMode}
-            beforeDispatchTurnStart={prepareTurnStart}
-            dispatchTurnStartOverride={dispatchTurnStartOverride}
-            enqueueOfflineTurnStart={enqueueOfflineTurnStart}
-            composerContextAttachmentSlot={contextAttachmentSlot}
-            composerContainerProps={composerDropTarget.composerContainerProps}
-            composerContainerOverlay={composerDropTarget.composerContainerOverlay}
-            composerContextAttachments={contextAttachments}
-            prepareComposerContextAttachments={prepareComposerContextAttachments}
-            onComposerContextAttachmentsConsumed={clearThreadAttachments}
-            onSubmitRecipeCardAction={submitRecipeCardAction}
-            dispatchWorkflowDecision={resolveWorkflowDecision}
-            {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
-            onOpenThread={onOpenThread}
-            {...(outboxDock ? { composerBannerLeading: outboxDock } : {})}
-          />
-        </ComposerHandleContext>
-      ) : null}
+      <ComposerHandleContext
+        value={embeddedMode ? embeddedComposerHandleRef : appComposerHandleRef}
+      >
+        <ChatView
+          environmentId={environmentId}
+          threadId={threadId as never}
+          routeKind="server"
+          {...(kickoffHistoryMessage ? { syntheticMessages: [kickoffHistoryMessage] } : {})}
+          {...(onBack ? { onBack } : {})}
+          {...(titleBarControlsAccessory ? { titleBarControlsAccessory } : {})}
+          hideHeader={hideHeader || embeddedMode}
+          hideBranchToolbar={embeddedMode}
+          minimalComposer={embeddedMode}
+          beforeDispatchTurnStart={prepareTurnStart}
+          dispatchTurnStartOverride={dispatchTurnStartOverride}
+          enqueueOfflineTurnStart={enqueueOfflineTurnStart}
+          composerContextAttachmentSlot={contextAttachmentSlot}
+          composerContainerProps={composerDropTarget.composerContainerProps}
+          composerContainerOverlay={composerDropTarget.composerContainerOverlay}
+          composerContextAttachments={contextAttachments}
+          prepareComposerContextAttachments={prepareComposerContextAttachments}
+          onComposerContextAttachmentsConsumed={clearThreadAttachments}
+          onSubmitRecipeCardAction={submitRecipeCardAction}
+          dispatchWorkflowDecision={resolveWorkflowDecision}
+          {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
+          onOpenThread={onOpenThread}
+          {...(outboxDock ? { composerBannerLeading: outboxDock } : {})}
+        />
+      </ComposerHandleContext>
     </div>
   );
 }

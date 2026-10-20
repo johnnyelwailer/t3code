@@ -119,6 +119,11 @@
         "src/t3team-hostEffect.ts!",
         "src/t3team-hostSdk.ts!",
         "src/t3team-stallProfiler.fixture.mjs",
+        // Bundled recipe bodies, read as raw text (`?raw`) and scaffolded into workspaces, where
+        // the recipe loader requires their top-level `export const meta`.
+        "src/t3team-fixThisBug.workflow.ts",
+        "src/t3team-implementThis.workflow.ts",
+        "src/t3team-livenessBeacon.fixture.mjs",
         "scripts/cli.ts",
         "scripts/evaluate-thread-titles.ts",
         "scripts/measure-pr-preview.ts",

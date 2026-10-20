@@ -45,6 +45,7 @@ import { activeWindow, type ActiveWindow } from "./ActiveWindow.ts";
 import { captureMacWindowSnapshot, type MacSnapShotSource } from "./MacSnapShot.ts";
 import type { LinuxCaptureFeedback, LinuxWindowMetadata } from "./LinuxSnapShot.ts";
 import { niriSocketPath } from "./NiriSnapShot.ts";
+import { probeGlobalShortcut } from "./t3team-globalShortcutProbe.ts";
 import { CaptureShortcutConfig, niriCaptureConfigPath } from "./CaptureShortcutConfig.ts";
 import type { PortalCaptureShortcut } from "./PortalCaptureShortcut.ts";
 import {
@@ -687,21 +688,6 @@ function observedPairMessage(
     return `${base} This key can also activate app menu bars.`;
   }
   return base;
-}
-
-function probeGlobalShortcut(accelerator: string): DesktopSnapShotShortcutAvailability {
-  try {
-    if (!Electron.globalShortcut.register(accelerator, () => undefined)) {
-      return {
-        available: false,
-        message: "This shortcut is already used by the system or another app.",
-      };
-    }
-    Electron.globalShortcut.unregister(accelerator);
-    return { available: true, message: null };
-  } catch {
-    return { available: false, message: "The system could not register this shortcut." };
-  }
 }
 
 export const make = Effect.gen(function* () {

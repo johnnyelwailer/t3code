@@ -137,11 +137,6 @@ import {
   resolveProjectScripts,
 } from "@t3tools/shared/projectScripts";
 import { CHAT_LIST_ANCHOR_OFFSET } from "@t3tools/shared/chatList";
-import { derivePendingBackgroundWork } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
-import {
-  latestUnheldRun,
-  usageLimitRunPresentedAsLatest,
-} from "@t3tools/shared/orchestrationV2ThreadError";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { sourceControlRepositorySelector } from "@t3tools/shared/sourceControl";
 import { truncate } from "@t3tools/shared/String";
@@ -198,6 +193,7 @@ import {
   deriveActivePlanState,
   deriveActiveWorkStartedAt,
   deriveCanInterruptRunningThread,
+  deriveThreadPendingBackgroundWork,
   findLatestProposedPlan,
   hasActionableProposedPlan,
   isLatestRunSettled,
@@ -3768,31 +3764,13 @@ export default function ChatView(props: ChatViewProps) {
       ),
     [activeThreadLiveTokenUsage, serverVisibleTurnItems, serverProjection],
   );
-  const pendingBackgroundTasks = useMemo(() => {
-    if (serverProjection === null || serverProjection === undefined) {
-      return [];
-    }
-    const sessionError =
-      serverProjection.providerSessions.findLast(
-        (session) => session.providerInstanceId === serverProjection.thread.providerInstanceId,
-      )?.lastError ?? null;
-    const latestRun =
-      usageLimitRunPresentedAsLatest(
-        serverProjection.runs,
-        serverProjection.turnItems,
-        sessionError,
-      ) ?? latestUnheldRun(serverProjection.runs);
-    return [
-      ...derivePendingBackgroundWork({
-        latestRun,
-        providerThreads: serverProjection.providerThreads,
-        turnItems: serverProjection.turnItems,
-        activeProviderThreadId: serverProjection.thread.activeProviderThreadId,
-        runs: serverProjection.runs,
-        pullRequests: serverProjection.thread.pullRequests,
-      }),
-    ];
-  }, [serverProjection]);
+  const pendingBackgroundTasks = useMemo(
+    () =>
+      serverProjection === null || serverProjection === undefined
+        ? []
+        : [...deriveThreadPendingBackgroundWork(serverProjection)],
+    [serverProjection],
+  );
   const activeWorkStartedAt =
     deriveActiveWorkStartedAt(activeActivityRun, activeRuntime, localDispatchStartedAt) ??
     runlessWorkStartedAt;
@@ -4777,7 +4755,11 @@ export default function ChatView(props: ChatViewProps) {
   }, [composerRef]);
   const canInterruptRunningThread =
     (canOperateThread &&
-      deriveCanInterruptRunningThread(activeThread !== undefined, activeRuntime)) ||
+      deriveCanInterruptRunningThread(
+        activeThread !== undefined,
+        activeRuntime,
+        pendingBackgroundTasks.length > 0,
+      )) ||
     cloudSessionComposerGate.hasQueuedBind;
   const onInterrupt = useCallback(async () => {
     if (cloudSessionComposerGate.hasQueuedBind) {

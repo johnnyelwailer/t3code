@@ -8,8 +8,8 @@
  * `chat_template_kwargs`.
  */
 
-const GATEWAY_URL = "https://chat.nexplore.dev/v1/chat/completions";
-const GATEWAY_FALLBACK_KEY = "nexplore-open-gateway";
+import { postNexploreChat } from "./t3team-nexploreGateway.ts";
+
 const T3TEAM_ASK_MODEL_ID = "qwen3.8-27b-nvfp4-mtp-192k";
 /** Well under any turn budget — a slow gateway must never stall the caller. */
 const T3TEAM_ASK_TIMEOUT_MS = 60_000;
@@ -60,36 +60,11 @@ export function buildThreadAskMessages(
   ];
 }
 
-function readAnswer(body: unknown): string {
-  const choices = (body as { choices?: Array<{ message?: { content?: unknown } }> } | null)
-    ?.choices;
-  const content = choices?.[0]?.message?.content;
-  if (typeof content !== "string" || content.trim().length === 0) {
-    throw new Error("The model returned an empty answer.");
-  }
-  return content.trim();
-}
-
 /** Real gateway call. Injected as a dependency so the binding stays testable. */
-export const askThreadQuestion: ThreadAskFn = async (request) => {
-  const key = process.env["NEXPLORE_API_KEY"] ?? GATEWAY_FALLBACK_KEY;
-  // A plain request to one external gateway, kept outside Effect so the ask
-  // stays injectable as a promise (same shape as `t3team-tempo.ts`).
-  // @effect-diagnostics-next-line globalFetch:off
-  const response = await fetch(GATEWAY_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model: T3TEAM_ASK_MODEL_ID,
-      messages: buildThreadAskMessages(request),
-      chat_template_kwargs: { enable_thinking: false },
-      stream: false,
-    }),
-    signal: AbortSignal.timeout(T3TEAM_ASK_TIMEOUT_MS),
+export const askThreadQuestion: ThreadAskFn = (request) =>
+  postNexploreChat({
+    model: T3TEAM_ASK_MODEL_ID,
+    messages: buildThreadAskMessages(request),
+    body: { chat_template_kwargs: { enable_thinking: false } },
+    timeoutMs: T3TEAM_ASK_TIMEOUT_MS,
   });
-  if (!response.ok) {
-    const detail = (await response.text().catch(() => "")).slice(0, 300);
-    throw new Error(`gateway HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
-  }
-  return readAnswer(await response.json());
-};
