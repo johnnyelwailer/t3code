@@ -25,7 +25,7 @@ function decodeMuLaw(byte: number): number {
 }
 
 /** Reads a 16-bit PCM or 8-bit mu-law WAV (the minds14 clips) and downmixes it to mono floats. */
-export function decodeWav(wav: Buffer): WavPcm {
+function decodeWav(wav: Buffer): WavPcm {
   const chunks = readChunks(wav);
   const format = chunks.get("fmt ");
   const data = chunks.get("data");
@@ -52,7 +52,7 @@ export function decodeWav(wav: Buffer): WavPcm {
   return { sampleRate: format.readUInt32LE(4), samples };
 }
 
-export function resampleLinear(input: WavPcm, targetRate: number): Float32Array {
+function resampleLinear(input: WavPcm, targetRate: number): Float32Array {
   if (input.sampleRate === targetRate) return input.samples;
   const length = Math.floor((input.samples.length * targetRate) / input.sampleRate);
   const output = new Float32Array(length);

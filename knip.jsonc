@@ -167,10 +167,15 @@
         "src/preview-pip-preload.ts!",
         "src/mac-permission-preload.ts!",
         "src/preview/Annotation.css!",
+        // Forked as a child process by path (voiceRuntime.ts) from the cjs pack entry in vite.config.ts.
+        "src/voice/t3team-whisperWorker.ts!",
+        // Operator-run WER check (`node --experimental-strip-types scripts/t3team-voice-eval.ts`).
+        "scripts/t3team-voice-eval.ts",
       ],
       // The injected runtime resolves Playwright by string; release tooling runs
       // electron-builder from this workspace, outside its package scripts.
-      "ignoreDependencies": ["playwright-core", "electron-builder"],
+      // @fugood/whisper.node is loaded by name via createRequire inside the whisper worker.
+      "ignoreDependencies": ["playwright-core", "electron-builder", "@fugood/whisper.node"],
     },
     "apps/web": {
       // Vitest loads this through the per-file @vitest-environment directive.

@@ -62,7 +62,7 @@ function activityTrackerRoot(environment: WhisperModelLocatorEnvironment): strin
   );
 }
 
-export function whisperModelSearchDirs(environment: WhisperModelLocatorEnvironment) {
+function whisperModelSearchDirs(environment: WhisperModelLocatorEnvironment) {
   return [
     { dir: environment.appModelsDir, source: "app-models" },
     {

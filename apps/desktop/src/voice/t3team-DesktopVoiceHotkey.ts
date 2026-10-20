@@ -24,7 +24,7 @@ export class DesktopVoiceHotkey extends Context.Service<
   }
 >()("@t3tools/desktop/voice/t3team-DesktopVoiceHotkey/DesktopVoiceHotkey") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const desktopWindow = yield* DesktopWindow.DesktopWindow;
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());

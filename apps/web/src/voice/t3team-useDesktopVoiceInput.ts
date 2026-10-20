@@ -14,7 +14,7 @@ import { decodeRecordingToPcm16Base64 } from "./t3team-recordingToPcm";
 const IDLE_STATE: VoiceInputState = { phase: "idle", error: null, errorAction: null };
 const VIRTUAL_DRAFT = { ownerKey: "desktop-composer", text: "", selection: { start: 0, end: 0 } };
 
-export function getDesktopVoiceBridge(): DesktopVoiceBridge | undefined {
+function getDesktopVoiceBridge(): DesktopVoiceBridge | undefined {
   const bridge = typeof window === "undefined" ? undefined : window.desktopBridge;
   const { prepareVoiceTranscriber, transcribeVoice } = bridge ?? {};
   return prepareVoiceTranscriber && transcribeVoice

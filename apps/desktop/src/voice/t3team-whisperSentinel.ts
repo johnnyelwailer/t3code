@@ -10,7 +10,7 @@ import * as NodePath from "node:path";
  * (design carried over from nx-activity-tracker `WhisperCrashSentinelPolicy`).
  */
 export const SENTINEL_MAX_HISTORY = 20;
-export const SENTINEL_RETRY_AFTER_MS = 6 * 60 * 60 * 1000;
+const SENTINEL_RETRY_AFTER_MS = 6 * 60 * 60 * 1000;
 
 export type SentinelDecision = {
   readonly blocked: boolean;
