@@ -8,14 +8,14 @@ import { isValidWhisperModelId, whisperModelFileNames } from "./t3team-whisperMo
 
 const MODEL_BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
 
-export class WhisperModelDownloadError extends Error {
+class WhisperModelDownloadError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "WhisperModelDownloadError";
   }
 }
 
-export function whisperModelDownloadUrl(model: string): string {
+function whisperModelDownloadUrl(model: string): string {
   const [fileName] = whisperModelFileNames(model);
   return `${MODEL_BASE_URL}/${fileName}`;
 }

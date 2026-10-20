@@ -9,7 +9,7 @@ import {
 
 export type { WhisperWorkerHandle } from "./t3team-whisperWorkerClient.ts";
 
-export const WHISPER_IDLE_UNLOAD_MS = 2 * 60 * 1000;
+const WHISPER_IDLE_UNLOAD_MS = 2 * 60 * 1000;
 
 export type WhisperTranscription = {
   readonly text: string;
