@@ -633,6 +633,41 @@ describe("V2 environment commands", () => {
     }).pipe(Effect.provide(layerTestCrypto)),
   );
 
+  it.effect("does not target a waiting run whose turn left no background work", () =>
+    Effect.gen(function* () {
+      const run = (id: string, status: "waiting" | "queued", ordinal: number) => ({
+        id: RunId.make(id),
+        threadId: v2ThreadId,
+        ordinal,
+        providerInstanceId: v2Projection.thread.providerInstanceId,
+        modelSelection: v2Projection.thread.modelSelection,
+        providerThreadId: null,
+        userMessageId: MessageId.make(`message-${id}`),
+        rootNodeId: null,
+        activeAttemptId: null,
+        status,
+        requestedAt: v2Now,
+        startedAt: status === "queued" ? null : v2Now,
+        completedAt: null,
+        checkpointId: null,
+        contextHandoffId: null,
+      });
+      const projection: OrchestrationV2ThreadProjection = {
+        ...v2Projection,
+        runs: [run("run-saving-checkpoint", "waiting", 1), run("run-queued", "queued", 2)],
+      };
+      const commands: OrchestrationV2Command[] = [];
+      const supervisor = yield* makeSupervisor({ commands, projects: [], projection });
+
+      const result = yield* interruptThreadTurn({ threadId: v2ThreadId }).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+      );
+
+      expect(result).toEqual({ sequence: 0 });
+      expect(commands).toEqual([]);
+    }).pipe(Effect.provide(layerTestCrypto)),
+  );
+
   it.effect(
     "dispatches V2-native relationship and queue commands without compatibility shaping",
     () =>

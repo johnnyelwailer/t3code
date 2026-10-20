@@ -4746,13 +4746,51 @@ it.effect("asks on its own for a repository a search answered nothing for", () =
       {
         projectId: "p2" as ProjectId,
         projectTitle: "docs",
-        message: "acme/docs could not be read.",
+        message: "acme/docs could not be read: HTTP 404",
       },
     ]);
     assert.deepStrictEqual(
       result.entries.map((entry) => entry.number),
       [1],
     );
+  }),
+);
+it.effect("says why a repository could not be read, in the host's own words", () =>
+  Effect.gen(function* () {
+    const service = yield* makeService({
+      projects: [
+        project({ id: "p1", title: "web", workspaceRoot: "/a", repository: "acme/web" }),
+        project({ id: "p2", title: "docs", workspaceRoot: "/b", repository: "acme/docs" }),
+      ],
+      providers: [
+        fakeProvider(SourceControlProviderKind.make("github"), {
+          listChangeRequests: ({ repository }) =>
+            repository === "acme/docs"
+              ? Effect.fail(
+                  new PullRequestProviderError({
+                    provider: SourceControlProviderKind.make("github"),
+                    operation: "listChangeRequests",
+                    reason: "failed",
+                    detail: "Could not reach GitHub at nexplore.ghe.com.",
+                  }),
+                )
+              : Effect.succeed({
+                  items: [changeRequest(1, "2026-07-02T00:00:00Z")],
+                  truncated: false,
+                  continues: true,
+                }),
+          listChangeRequestsAcross: () => Effect.fail(requestFailed),
+        }),
+      ],
+    });
+
+    const result = yield* service.list({ state: "open" });
+
+    assert.deepStrictEqual(
+      result.errors.map((error) => error.message),
+      ["acme/docs could not be read: Could not reach GitHub at nexplore.ghe.com."],
+    );
+    assert.strictEqual(result.entries.length, 1);
   }),
 );
 it.effect("reads the repositories one at a time when the search itself fails", () =>
@@ -6683,6 +6721,40 @@ it.effect("reports a linked repository on an unsupported host as unimplemented",
       assert.isNotNull(unimplemented);
       assert.strictEqual(unimplemented!.kind, "unknown");
       assert.strictEqual(unimplemented!.configured, false);
+    } finally {
+      yield* removeWorkspace(root);
+    }
+  }),
+);
+
+const GHE_REFERENCE_REPOSITORY = "https://nexplore.ghe.com/hive/common-agentdirectives";
+
+it.effect("names the host and the fix when a linked repository's host has no credential", () =>
+  Effect.gen(function* () {
+    const root = yield* workspaceWithLinkedRepositories([GHE_REFERENCE_REPOSITORY]);
+    try {
+      const service = yield* makeService({
+        projects: [
+          project({ id: "p1", title: "IES NG", workspaceRoot: root, repository: "acme/web" }),
+        ],
+        providers: [
+          fakeProvider(SourceControlProviderKind.make("github"), {
+            getViewer: (input) =>
+              input.host === "nexplore.ghe.com"
+                ? Effect.fail(unusable(SourceControlProviderKind.make("github"), "unauthenticated"))
+                : Effect.succeed("pj"),
+          }),
+        ],
+      });
+
+      const result = yield* service.list({ state: "all", projectId: "p1" as ProjectId });
+
+      assert.deepStrictEqual(
+        result.errors.map((error) => error.message),
+        [
+          "hive/common-agentdirectives on nexplore.ghe.com could not be read: GitHub has no working credential for this host. Run `gh auth login`, or check the account and hosts in Settings → Source Control.",
+        ],
+      );
     } finally {
       yield* removeWorkspace(root);
     }

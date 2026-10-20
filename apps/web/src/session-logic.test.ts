@@ -29,6 +29,7 @@ import {
   deriveTimelineEntriesFromVisibleTurnItemsWithState,
   deriveRevertTurnCountByUserMessageId,
   derivePhase,
+  deriveThreadPendingBackgroundWork,
   findLatestProposedPlan,
   isLatestRunSettled,
   selectHandoffImageResources,
@@ -87,26 +88,90 @@ describe("V2 session presentation", () => {
 
     for (const status of ["preparing", "starting", "running"] as const) {
       const runtime = runtimeWithStatus(status, runId);
-      expect(deriveCanInterruptRunningThread(true, runtime)).toBe(true);
+      expect(deriveCanInterruptRunningThread(true, runtime, false)).toBe(true);
     }
 
     // No active thread: never offer Stop, regardless of run status.
-    expect(deriveCanInterruptRunningThread(false, runtimeWithStatus("running", runId))).toBe(false);
+    expect(deriveCanInterruptRunningThread(false, runtimeWithStatus("running", runId), false)).toBe(
+      false,
+    );
 
     // Queued with nothing interruptible: the server rejects interrupting a
     // queued run, so Stop stays hidden.
     expect(derivePhase(runtimeWithStatus("queued"))).toBe("connecting");
-    expect(deriveCanInterruptRunningThread(true, runtimeWithStatus("queued"))).toBe(false);
+    expect(deriveCanInterruptRunningThread(true, runtimeWithStatus("queued"), false)).toBe(false);
     // Queued behind a run that is still interruptible: Stop targets that run.
-    expect(deriveCanInterruptRunningThread(true, runtimeWithStatus("queued", runId))).toBe(true);
+    expect(deriveCanInterruptRunningThread(true, runtimeWithStatus("queued", runId), false)).toBe(
+      true,
+    );
 
-    // Waiting (e.g. on a subagent) is treated as "running" by derivePhase and
-    // keeps offering Stop, unchanged from before.
+    // A waiting run's turn is over while its checkpoint saves: it still reads as
+    // working, but offers Stop only for background work its turn left running.
     expect(derivePhase(runtimeWithStatus("waiting"))).toBe("running");
-    expect(deriveCanInterruptRunningThread(true, runtimeWithStatus("waiting"))).toBe(true);
+    expect(deriveCanInterruptRunningThread(true, runtimeWithStatus("waiting"), false)).toBe(false);
+    expect(deriveCanInterruptRunningThread(true, runtimeWithStatus("waiting"), true)).toBe(true);
 
     // No runtime at all: nothing to interrupt.
-    expect(deriveCanInterruptRunningThread(true, null)).toBe(false);
+    expect(deriveCanInterruptRunningThread(true, null, true)).toBe(false);
+  });
+
+  it("keeps Stop for a waiting turn's background work when a follow-up is queued behind it", () => {
+    const base = makeThreadProjectionFixture();
+    const at = base.updatedAt;
+    const run = (id: string, ordinal: number, status: "waiting" | "queued") => ({
+      id: RunId.make(id),
+      threadId: base.thread.id,
+      ordinal,
+      providerInstanceId: base.thread.providerInstanceId,
+      modelSelection: base.thread.modelSelection,
+      providerThreadId: null,
+      userMessageId: MessageId.make(`message-${id}`),
+      rootNodeId: null,
+      activeAttemptId: null,
+      status,
+      requestedAt: at,
+      startedAt: status === "queued" ? null : at,
+      completedAt: null,
+      checkpointId: null,
+      contextHandoffId: null,
+    });
+    const projection = {
+      ...base,
+      runs: [run("run-saving", 1, "waiting"), run("run-follow-up", 2, "queued")],
+      turnItems: [
+        {
+          id: TurnItemId.make("item-dev-server"),
+          threadId: base.thread.id,
+          runId: RunId.make("run-saving"),
+          nodeId: null,
+          providerThreadId: null,
+          providerTurnId: null,
+          nativeItemRef: null,
+          parentItemId: null,
+          ordinal: 1,
+          status: "running" as const,
+          title: null,
+          startedAt: at,
+          completedAt: null,
+          updatedAt: at,
+          type: "command_execution" as const,
+          input: "vp run dev",
+        },
+      ],
+    };
+    const runtime: ThreadRuntimeSummary = {
+      status: "waiting",
+      activeRunId: null,
+      providerInstanceId: base.thread.providerInstanceId,
+      providerName: null,
+      lastError: null,
+      updatedAt: "2026-09-29T00:00:00.000Z",
+    };
+
+    const pending = deriveThreadPendingBackgroundWork(projection);
+
+    expect(pending).toHaveLength(1);
+    expect(deriveCanInterruptRunningThread(true, runtime, pending.length > 0)).toBe(true);
   });
 
   it("labels provider retry progress, delay, recovery, and exhaustion", () => {

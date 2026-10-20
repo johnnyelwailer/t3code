@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import type { ChatComposerHandle } from "~/components/chat/ChatComposer";
 import { ComposerHandleContext, useComposerHandleContext } from "~/composerHandleContext";
+import type { ThreadBootstrapProgress } from "~/t3team/chat/t3team-threadBootstrapProgress";
 
 // ChatComposer binds its handle into the context ref; the stub does the same with a marker.
 vi.mock("~/components/ChatView", () => ({
@@ -47,7 +48,8 @@ function body(
     hideHeader: embeddedMode,
     embeddedMode,
     backend: null,
-    bootstrapStatus: "ready" as never,
+    bootstrapStatus: "idle" as never,
+    bootstrapProgress: null,
     retryThreadBootstrap: () => {},
     composerState: {
       composerDropTarget: { composerContainerProps: {}, composerContainerOverlay: null },
@@ -74,18 +76,52 @@ describe("ThreadChatViewBody composer handle scope", () => {
     expect(appHandleRef.current).toEqual({ threadId: "primary-thread" });
   });
 
-  it("shows creating progress before the server shell exists", () => {
+  it("renders the kickoff as the first message before the server shell exists", () => {
     const markup = renderToStaticMarkup(
       body("local-thread", true, {
         hasServerThread: false,
         bootstrapStatus: "running",
+        bootstrapProgress: {
+          steps: [
+            { id: "create", status: "busy" },
+            { id: "context", status: "pending" },
+            { id: "launch", status: "pending" },
+          ],
+        } satisfies ThreadBootstrapProgress,
         kickoffMessage: "Investigate the regression",
         showKickoffPlaceholder: true,
       }),
     );
 
-    expect(markup).toContain("Creating thread...");
-    expect(markup).toContain("Creating the conversation on the server.");
+    // The prompt is a first user message, and every preparation step is inline and live.
+    expect(markup).toContain("Investigate the regression");
+    expect(markup).toContain("Creating the conversation");
+    expect(markup).toContain("Preparing context");
+    expect(markup).toContain("Starting the run");
+    // The old blocking panel is gone.
+    expect(markup).not.toContain("Creating thread...");
+    expect(markup).not.toContain('data-testid="chat-view"');
+  });
+
+  it("shows a step as done, busy, and error as the bootstrap reports it", () => {
+    const markup = renderToStaticMarkup(
+      body("local-thread", true, {
+        hasServerThread: false,
+        bootstrapStatus: "failed",
+        bootstrapProgress: {
+          steps: [
+            { id: "create", status: "done" },
+            { id: "context", status: "error", error: "Context refresh timed out." },
+            { id: "launch", status: "pending" },
+          ],
+        } satisfies ThreadBootstrapProgress,
+        kickoffMessage: "Investigate the regression",
+      }),
+    );
+
+    expect(markup).toContain("Launch interrupted");
+    expect(markup).toContain("Context refresh timed out.");
+    expect(markup).toContain("Retry launch");
   });
 
   it("shows launch interrupted inside the open chat after the shell exists", () => {

@@ -815,14 +815,12 @@ export const interruptThreadTurn = Effect.fn("EnvironmentCommands.interruptThrea
   if (runId === undefined) {
     const projection = yield* getProjection(input.threadId);
     runId = projection.runs.findLast(
-      (run) =>
-        run.status === "preparing" ||
-        run.status === "starting" ||
-        run.status === "running" ||
-        run.status === "waiting",
+      (run) => run.status === "preparing" || run.status === "starting" || run.status === "running",
     )?.id;
+    // A waiting run's turn is over, so Stop reaches it only through its background work.
+    // Queued runs never started and cannot own background work.
     if (runId === undefined) {
-      const latestRun = projection.runs.at(-1);
+      const latestRun = projection.runs.findLast((run) => run.status !== "queued");
       if (
         derivePendingBackgroundWork({
           latestRun,

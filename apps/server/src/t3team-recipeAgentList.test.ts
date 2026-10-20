@@ -142,6 +142,38 @@ describe("listProjectRecipesForAgent", () => {
     );
   });
 
+  it("reports why a typed recipe failed to import", async () => {
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fileSystem = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const workspaceRoot = yield* fileSystem.makeTempDirectoryScoped({
+            directory: fixturesRoot,
+            prefix: "t3team recipe agent list ",
+          });
+          const recipeRoot = path.join(workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes`, "missing");
+          yield* fileSystem.makeDirectory(recipeRoot, { recursive: true });
+          yield* fileSystem.writeFileString(
+            path.join(recipeRoot, "recipe.ts"),
+            `import { defineRecipe } from "@t3team/does-not-exist";\nexport default defineRecipe({});\n`,
+          );
+
+          const result = yield* listProjectRecipesForAgent({ workspaceRoot });
+
+          expect(result.recipes).toEqual([]);
+          expect(result.errors).toEqual([
+            {
+              path: expect.stringContaining("missing"),
+              phase: "load",
+              message: expect.stringContaining("@t3team/does-not-exist"),
+            },
+          ]);
+        }).pipe(Effect.provide(NodeServices.layer)),
+      ),
+    );
+  });
+
   it("returns an empty result when the recipes root does not exist", async () => {
     await Effect.runPromise(
       Effect.scoped(

@@ -12,9 +12,9 @@ import {
 } from "~/components/chat/ComposerCommandMenu";
 import { useTheme } from "~/hooks/useTheme";
 import { isT3TeamComposerMenuKey } from "~/t3team/composer/t3team-composerMenuKeyboard";
-import type { useT3TeamKickoffComposerMenu } from "~/t3team/composer/t3team-useKickoffComposerMenu";
+import type { useT3TeamComposerCommandMenu } from "~/t3team/composer/t3team-useComposerCommandMenu";
 
-type KickoffComposerCommandMenu = ReturnType<typeof useT3TeamKickoffComposerMenu>;
+type KickoffComposerCommandMenu = ReturnType<typeof useT3TeamComposerCommandMenu>;
 
 type KickoffComposerEditorProps = {
   readonly editorRef: React.RefObject<ComposerPromptEditorHandle | null>;

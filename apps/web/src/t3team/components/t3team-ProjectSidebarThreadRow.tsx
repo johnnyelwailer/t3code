@@ -1,8 +1,11 @@
 /* oxlint-disable t3code/no-outset-state-indicators -- Existing merged lint debt; keep green while preserving behavior. */
 /* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
-import { memo } from "react";
+import { memo, useCallback, useState } from "react";
 import { EllipsisIcon, MessageSquareIcon } from "lucide-react";
 import type { ProjectThread } from "~/t3team/t3team-types";
+import { ProjectIconGlyph } from "~/components/t3team-ProjectIconGlyph";
+import { ThreadIconPicker } from "~/components/t3team-ThreadIconPicker";
+import { useUiStateStore } from "~/uiStateStore";
 import { SidebarMenuSubItem } from "~/t3team/components/ui/t3team-sidebar";
 import { T3SidebarSubRow } from "~/t3team/components/ui/t3team-sidebar-row";
 import { usePrimarySettings } from "~/hooks/useSettings";
@@ -55,6 +58,9 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
   // porcelain-orb module when the pill maps onto the orb vocabulary; unmapped
   // pills keep the legacy tailwind dot class.
   const statusOrbState = resolveStatusOrbState(statusPill);
+  const threadIcon = useUiStateStore((store) => store.threadIconByThreadId[thread.id]);
+  const [isIconPicking, setIsIconPicking] = useState(false);
+  const openIconPicker = useCallback(() => setIsIconPicking(true), []);
 
   const openThreadMenu = useThreadRowContextMenu({
     thread,
@@ -63,7 +69,15 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
     setRenameTitle,
     setIsRenaming,
     renameInputRef,
+    onSetIcon: openIconPicker,
   });
+  const iconPicker = isIconPicking ? (
+    <ThreadIconPicker
+      threadId={thread.id}
+      title={thread.title}
+      onClose={() => setIsIconPicking(false)}
+    />
+  ) : null;
 
   const { handleContextMenu, handleOpenMenu } = useThreadRowMenuHandlers(openThreadMenu);
 
@@ -80,6 +94,7 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
         {variant === "issue" ? (
           <MessageSquareIcon className="size-3 shrink-0 text-muted-foreground/70" />
         ) : null}
+        {threadIcon ? <ProjectIconGlyph icon={threadIcon} className="size-3 shrink-0" /> : null}
         {statusPill && (
           <span
             data-t3team-state={statusOrbState ?? undefined}
@@ -141,16 +156,22 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
 
   if (!wrapWithMenuItem) {
     return (
-      <div className="group/menu-sub-item relative w-full" onContextMenu={handleContextMenu}>
-        {content}
-      </div>
+      <>
+        <div className="group/menu-sub-item relative w-full" onContextMenu={handleContextMenu}>
+          {content}
+        </div>
+        {iconPicker}
+      </>
     );
   }
 
   return (
-    <SidebarMenuSubItem className="w-full" onContextMenu={handleContextMenu}>
-      {content}
-    </SidebarMenuSubItem>
+    <>
+      <SidebarMenuSubItem className="w-full" onContextMenu={handleContextMenu}>
+        {content}
+      </SidebarMenuSubItem>
+      {iconPicker}
+    </>
   );
 });
 

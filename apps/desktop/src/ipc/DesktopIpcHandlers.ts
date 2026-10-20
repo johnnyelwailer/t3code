@@ -68,6 +68,8 @@ import {
   setSnapShotAnimationDestination,
   setSnapShotShortcutSuppressed,
 } from "./methods/snapShot.ts";
+import { prepareVoiceTranscriber, transcribeVoice } from "./methods/t3team-voice.ts";
+import { getVoiceHotkeyState } from "./methods/t3team-voiceHotkey.ts";
 import * as PreviewIpc from "./methods/preview.ts";
 import * as AppActivationIpc from "./methods/appActivation.ts";
 import * as WebLinksIpc from "./methods/webLinks.ts";
@@ -105,6 +107,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(setClientSettings);
   yield* ipc.handle(getConnectionCatalog);
   yield* ipc.handle(getSnapShotState);
+  yield* ipc.handle(getVoiceHotkeyState);
   yield* ipc.handle(setupSnapShot);
   yield* ipc.handle(previewSnapShotConfig);
   yield* ipc.handle(applySnapShotConfig);
@@ -116,6 +119,8 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(setSnapShotAnimationDestination);
   yield* ipc.handle(dismissSnapShotAnimation);
   yield* ipc.handle(acknowledgeSnapShot);
+  yield* ipc.handle(prepareVoiceTranscriber);
+  yield* ipc.handle(transcribeVoice);
   yield* ipc.handle(setConnectionCatalog);
   yield* ipc.handle(clearConnectionCatalog);
 

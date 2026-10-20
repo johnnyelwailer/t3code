@@ -331,6 +331,32 @@ describe("validateProjectRecipeWorkflowForAgent", () => {
       ),
     );
   });
+
+  it("reports why a recipe directory's recipe.ts failed to import", async () => {
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const workspaceRoot = yield* makeTempWorkspace();
+          yield* writeWorkspaceFile({
+            workspaceRoot,
+            relativePath: ".t3team/recipes/missing dep/recipe.ts",
+            content: `import { defineRecipe } from "@t3team/does-not-exist";\nexport default defineRecipe({});\n`,
+          });
+
+          const result = yield* validateProjectRecipeWorkflowForAgent({
+            workspaceRoot,
+            path: ".t3team/recipes/missing dep",
+          });
+
+          expect(result.ok).toBe(false);
+          expect(result.errors[0]).toMatchObject({
+            phase: "load",
+            message: expect.stringContaining("@t3team/does-not-exist"),
+          });
+        }).pipe(Effect.provide(NodeServices.layer)),
+      ),
+    );
+  });
 });
 
 describe("validateInlineWorkflowSourceForAgent", () => {

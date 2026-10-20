@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import type { EnvironmentId } from "@t3tools/contracts";
+import {
+  ProviderDriverKind,
+  ProviderInstanceId,
+  type EnvironmentId,
+  type ServerProvider,
+  type ServerProviderSkill,
+} from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import type { ComposerPromptEditorHandle } from "~/components/ComposerPromptEditor";
@@ -46,6 +52,14 @@ vi.mock("~/state/environments", () => ({
   usePrimaryEnvironmentId: () => mockUsePrimaryEnvironmentId(),
 }));
 
+const { mockRefreshProviders } = vi.hoisted(() => ({
+  mockRefreshProviders: vi.fn((_request: unknown) => new Promise<never>(() => {})),
+}));
+
+vi.mock("~/state/use-atom-command", () => ({
+  useAtomCommand: () => mockRefreshProviders,
+}));
+
 import { useT3TeamKickoffComposerMenu } from "~/t3team/composer/t3team-useKickoffComposerMenu";
 
 type MenuValue = ReturnType<typeof useT3TeamKickoffComposerMenu>;
@@ -54,7 +68,10 @@ const PRIMARY_ENVIRONMENT_ID = "env-primary" as EnvironmentId;
 const WORKSPACE_ENVIRONMENT_ID = "env-workspace" as EnvironmentId;
 const ABSOLUTE_ROOT = "/Users/pj/.t3code/t3team/projects/IES NG";
 
-function renderMenu(workspaceRoot: string | null): { menu: () => MenuValue; unmount: () => void } {
+function renderMenu(
+  workspaceRoot: string | null,
+  selectedProvider?: ServerProvider,
+): { menu: () => MenuValue; unmount: () => void } {
   const captured = { current: null as MenuValue | null };
   const editorRef = createRef<ComposerPromptEditorHandle>();
   let text = "";
@@ -62,7 +79,7 @@ function renderMenu(workspaceRoot: string | null): { menu: () => MenuValue; unmo
 
   function Probe() {
     captured.current = useT3TeamKickoffComposerMenu({
-      selectedProvider: undefined,
+      selectedProvider,
       workspaceRoot,
       editorRef,
       text,
@@ -152,6 +169,90 @@ describe("useT3TeamKickoffComposerMenu path search", () => {
       query: "AGENTS",
     });
     expect(rendered.menu().menuItems).toEqual([]);
+    rendered.unmount();
+  });
+});
+
+describe("useT3TeamKickoffComposerMenu repo skills", () => {
+  const STORED_ROOT = "~/.t3code/t3team/projects/IES NG";
+  const LIVE_ROOT = String.raw`C:\Users\pj\.t3code\t3team\projects\IES NG`;
+  const repoSkill: ServerProviderSkill = {
+    name: "ies-work-item",
+    description: "Work a Jira work item.",
+    path: String.raw`C:\Users\pj\.t3code\t3team\projects\IES NG\.claude\skills\ies-work-item\SKILL.md`,
+    scope: "repo",
+    enabled: true,
+  };
+  const claude = (workspaceSnapshots: ServerProvider["workspaceSnapshots"]): ServerProvider => ({
+    instanceId: ProviderInstanceId.make("claudeAgent"),
+    driver: ProviderDriverKind.make("claudeAgent"),
+    enabled: true,
+    installed: true,
+    version: null,
+    status: "ready",
+    auth: { status: "authenticated" },
+    checkedAt: "2026-10-19T07:00:00.000Z",
+    models: [],
+    slashCommands: [],
+    skills: [],
+    ...(workspaceSnapshots ? { workspaceSnapshots } : {}),
+  });
+  const liveIesProject = {
+    id: "live-ies",
+    workspaceRoot: LIVE_ROOT,
+    environmentId: WORKSPACE_ENVIRONMENT_ID,
+  };
+  const slashMenuIds = (rendered: ReturnType<typeof renderMenu>) => {
+    act(() => {
+      rendered.menu().handleEditorChange("/", 1, false);
+    });
+    return rendered.menu().menuItems.map((item) => item.id);
+  };
+
+  it("scans the project's repo the way the thread composer does", () => {
+    mockRefreshProviders.mockClear();
+    mockUsePrimaryEnvironmentId.mockReturnValue(PRIMARY_ENVIRONMENT_ID);
+    mockUseProjects.mockReturnValue([liveIesProject]);
+
+    const rendered = renderMenu(STORED_ROOT, claude(undefined));
+
+    expect(mockRefreshProviders).toHaveBeenCalledWith({
+      environmentId: WORKSPACE_ENVIRONMENT_ID,
+      input: { instanceId: ProviderInstanceId.make("claudeAgent"), cwd: LIVE_ROOT },
+    });
+    rendered.unmount();
+  });
+
+  it("offers the repo's skills from that workspace's snapshot", () => {
+    mockUsePrimaryEnvironmentId.mockReturnValue(PRIMARY_ENVIRONMENT_ID);
+    mockUseProjects.mockReturnValue([liveIesProject]);
+    const snapshot = {
+      cwd: LIVE_ROOT,
+      checkedAt: new Date().toISOString(),
+      slashCommands: [],
+      skills: [repoSkill],
+    };
+
+    const rendered = renderMenu(STORED_ROOT, claude([snapshot]));
+
+    expect(slashMenuIds(rendered)).toContain("skill:claudeAgent:ies-work-item");
+    expect(rendered.menu().skills.map((skill) => skill.name)).toEqual(["ies-work-item"]);
+    rendered.unmount();
+  });
+
+  it("does not offer skills scanned for another workspace", () => {
+    mockUsePrimaryEnvironmentId.mockReturnValue(PRIMARY_ENVIRONMENT_ID);
+    mockUseProjects.mockReturnValue([liveIesProject]);
+    const otherRepo = {
+      cwd: String.raw`C:\Users\pj\.t3code\t3team\projects\Other`,
+      checkedAt: new Date().toISOString(),
+      slashCommands: [],
+      skills: [repoSkill],
+    };
+
+    const rendered = renderMenu(STORED_ROOT, claude([otherRepo]));
+
+    expect(slashMenuIds(rendered)).not.toContain("skill:claudeAgent:ies-work-item");
     rendered.unmount();
   });
 });
