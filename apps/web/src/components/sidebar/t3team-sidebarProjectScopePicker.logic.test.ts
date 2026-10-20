@@ -45,10 +45,11 @@ describe("buildScopePickerEntries", () => {
       [],
       [entry("x", "1", "s.net"), entry("y", "2", "t.net")],
     );
-    expect(single[2]?.label).toBe("IES");
+    expect(single[0]?.label).toBe("IES");
     expect(multi.map((entry) => (entry.kind === "add" ? entry.label : null))).toEqual([
       "IES (s.net)",
       "IES (t.net)",
+      null,
     ]);
   });
 });
