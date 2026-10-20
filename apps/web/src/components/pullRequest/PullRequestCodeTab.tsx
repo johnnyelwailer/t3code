@@ -19,6 +19,8 @@ import {
   InfoIcon,
   LinkIcon,
   MessageSquareOffIcon,
+  PanelLeftCloseIcon,
+  PanelLeftIcon,
   PanelRightCloseIcon,
   PanelRightIcon,
   PictureInPicture2Icon,
@@ -109,6 +111,9 @@ import {
 import { applyDiffSlicePage, type DiffSlice } from "./t3team-pullRequestDiffSlices.logic";
 import { PullRequestDiffStat, PullRequestMetaLine } from "./pullRequestPresentation";
 import { DiffExplorerFileTree } from "./t3team-DiffExplorerFileTree";
+import { PrTreeResizeHandle } from "./t3team-PrTreeResizeHandle";
+import { PR_TREE_DOCKED_MAX_WIDTH } from "./t3team-prCodeTreeDock.logic";
+import { usePrTreeDock } from "./t3team-usePrTreeDock";
 import { useElementFitsWidth } from "~/t3team/t3team-ResizableRightSidebarLayoutShared";
 import {
   PR_CODE_TOOLBAR_FULL_MIN_WIDTH,
@@ -276,6 +281,7 @@ function PullRequestCodeTab({
   const compactToolbar = !toolbarRoom.fits;
   const [overlayTreeOpen, setOverlayTreeOpen] = useState(false);
   const treeAsOverlay = !treeRow.fits;
+  const treeDock = usePrTreeDock();
   const fileTreeOpen = treeAsOverlay ? overlayTreeOpen : storedFileTreeOpen;
   const setFileTreeOpen = treeAsOverlay ? setOverlayTreeOpen : setStoredFileTreeOpen;
   const [selectedLines, setSelectedLines] = useState<{
@@ -1546,7 +1552,13 @@ function PullRequestCodeTab({
                 />
               }
             >
-              {fileTreeOpen ? (
+              {treeDock.side === "left" ? (
+                fileTreeOpen ? (
+                  <PanelLeftCloseIcon className="size-3.5" />
+                ) : (
+                  <PanelLeftIcon className="size-3.5" />
+                )
+              ) : fileTreeOpen ? (
                 <PanelRightCloseIcon className="size-3.5" />
               ) : (
                 <PanelRightIcon className="size-3.5" />
@@ -1848,10 +1860,15 @@ function PullRequestCodeTab({
           </Collapsible>
         </div>
       ) : null}
-      <div ref={treeRow.ref} className="relative flex min-h-0 flex-1 overflow-hidden">
+      <div
+        ref={treeRow.ref}
+        data-pr-tree-row
+        className="relative flex min-h-0 flex-1 overflow-hidden"
+      >
         {/* Relative wrapper so the review overlay floats over the diff rather than pushing it
             up; the viewer inside still owns its own scrolling. */}
         <div
+          data-zoom-region
           className="relative min-h-0 min-w-0 flex-1"
           // The chevron answers this too, but the whole header row is the target a reader
           // actually aims for. The header lives in the viewer's shadow tree, so the capture
@@ -1925,12 +1942,28 @@ function PullRequestCodeTab({
         ) : null}
         {fileTreeOpen ? (
           <div
-            className={
+            // The reader's width, held by the pane's share of the row so a stored width that no
+            // longer fits (a narrower window, a split diff) never squeezes the diff away.
+            style={{
+              width: treeDock.width,
+              maxWidth: treeAsOverlay ? "85%" : PR_TREE_DOCKED_MAX_WIDTH,
+            }}
+            className={cn(
+              "relative flex min-h-0 min-w-56",
               treeAsOverlay
-                ? "absolute inset-y-0 right-0 z-20 flex min-h-0 w-[min(20rem,85%)] shadow-lg"
-                : "flex min-h-0 w-[min(20rem,40%)] min-w-56 shrink-0"
-            }
+                ? cn(
+                    "absolute inset-y-0 z-20 shadow-lg",
+                    treeDock.side === "left" ? "left-0" : "right-0",
+                  )
+                : cn("shrink-0", treeDock.side === "left" ? "order-first" : "order-last"),
+            )}
           >
+            <PrTreeResizeHandle
+              side={treeDock.side}
+              width={treeDock.width}
+              onReset={treeDock.resetWidth}
+              {...treeDock.resizeHandlers}
+            />
             <DiffExplorerFileTree
               files={explorerFiles}
               selectedKey={activeKey}
@@ -1939,6 +1972,8 @@ function PullRequestCodeTab({
               onToggleViewed={toggleViewed}
               onMarkAllViewed={markAllViewed}
               ariaLabel={`Pull request #${detail.number} files`}
+              side={treeDock.side}
+              onSwapSide={treeDock.swapSide}
               // The tree lists only what has arrived; a footer says so while the diff is still
               // paging, and lets the reader pull the rest in without scrolling for it.
               footer={

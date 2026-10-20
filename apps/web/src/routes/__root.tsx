@@ -74,10 +74,13 @@ import { isDetachedSurfacePath } from "@t3tools/shared/t3team-detachedSurface";
 import { useUpstreamRouteBridge } from "../t3team/t3team-useUpstreamRouteBridge";
 import { T3TeamPackAppearanceDefaultsSync } from "../t3team/t3team-PackAppearanceDefaultsSync";
 import { T3TeamPackAppearanceSync } from "../t3team/t3team-PackAppearanceSync";
+import { withT3TeamWindowDragStrip } from "../t3team/t3team-WindowDragStrip";
 import { CloudSessionSignInDialogHost } from "../cloud/t3team-CloudSessionSignInDialogHost";
 import { CloudQueuedSendFlusher } from "../cloud/t3team-CloudQueuedSendFlusher";
+import { T3TeamVoiceAgentPill } from "../t3team/voice/t3team-VoiceAgentPill";
 import { t3teamPackProductName, useT3TeamAppDisplayName } from "../t3team/t3team-appBrandName";
 import { useT3TeamPackAppearance } from "../t3team/t3team-packAppearance";
+import { startRegionZoom } from "../t3team-regionZoom";
 // Registers the composing heartbeat with the composer draft store's sink (side effect only).
 import "../t3team/chat/t3team-threadComposingSignal";
 import { useHostedPromptLinkLanding } from "../components/promptLinks/HostedPromptLinkLanding";
@@ -138,9 +141,9 @@ export const Route = createRootRoute({
       authGateState,
     };
   },
-  component: RootRouteView,
-  errorComponent: RootRouteErrorView,
-  notFoundComponent: RootRouteNotFoundView,
+  component: withT3TeamWindowDragStrip(RootRouteView),
+  errorComponent: withT3TeamWindowDragStrip(RootRouteErrorView),
+  notFoundComponent: withT3TeamWindowDragStrip(RootRouteNotFoundView),
   head: () => ({
     meta: [{ name: "title", content: APP_DISPLAY_NAME }],
   }),
@@ -164,6 +167,8 @@ function RootRouteNotFoundView() {
 
 function RootRouteView() {
   useEffect(() => installDesktopPasteAsText(window.desktopBridge, window), []);
+  // Ctrl/Cmd+scroll hover-zoom for marked regions; document-level, app-wide.
+  useEffect(() => startRegionZoom(), []);
   const pathname = useLocation({ select: (location) => location.pathname });
   const { authGateState } = Route.useRouteContext();
   const primaryEnvironmentAuthenticated = authGateState.status === "authenticated";
@@ -330,6 +335,8 @@ function RootRouteView() {
           {isElectron ? <RunningThreadKeepAlive /> : null}
           {/* t3team: delivers drafts' first messages queued for a cloud session, app-wide. */}
           {primaryEnvironmentAuthenticated ? <CloudQueuedSendFlusher /> : null}
+          {/* t3team: the voice agent pill + global-hotkey session, app-wide. */}
+          {primaryEnvironmentAuthenticated ? <T3TeamVoiceAgentPill /> : null}
           <RelayClientInstallDialog />
           <CloudSessionSignInDialogHost />
           <ConnectOnboardingDialog />

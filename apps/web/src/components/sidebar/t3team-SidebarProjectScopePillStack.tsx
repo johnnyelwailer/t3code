@@ -6,29 +6,26 @@ import type {
 } from "react";
 
 import type { SidebarProjectSnapshot } from "~/sidebarProjectGrouping";
+import type { JiraCatalogProject } from "~/t3team/hooks/t3team-jiraProjectCatalog.logic";
 
 import { T3TeamSidebarProjectScopeDisc } from "./t3team-SidebarProjectScopeDisc";
-import { JiraProjectGlyph } from "./t3team-SidebarProjectScopeJiraGlyph";
 import { T3TeamSidebarProjectScopePicker } from "./t3team-SidebarProjectScopePicker";
-import {
-  GroupIcon,
-  addDisabledReason,
-  addJiraProject,
-} from "./t3team-sidebarProjectScopePills.actions";
-import { type ScopePillItem } from "./t3team-sidebarProjectScopePills.items";
+import { GroupIcon } from "./t3team-sidebarProjectScopePills.actions";
 import { projectScopeDiscDepth } from "./t3team-sidebarProjectScopePills.logic";
 
 /** The All disc, the discs that fit, and the picker disc ("+N" or search) for every project. */
 export function T3TeamSidebarProjectScopePillStack({
   shown,
   overflow,
+  addable,
   activeScopeKey,
   onSelectScope,
   onProjectContextMenu,
   pickerAnchor,
 }: {
-  shown: ReadonlyArray<ScopePillItem>;
-  overflow: ReadonlyArray<ScopePillItem>;
+  shown: ReadonlyArray<SidebarProjectSnapshot>;
+  overflow: ReadonlyArray<SidebarProjectSnapshot>;
+  addable: ReadonlyArray<JiraCatalogProject>;
   activeScopeKey: string | null;
   onSelectScope: (scopeKey: string | null) => void;
   onProjectContextMenu?:
@@ -39,7 +36,7 @@ export function T3TeamSidebarProjectScopePillStack({
     | undefined;
   pickerAnchor?: RefObject<HTMLElement | null> | undefined;
 }) {
-  const activeIndex = shown.findIndex((item) => item.projectKey === activeScopeKey) + 1;
+  const activeIndex = shown.findIndex((group) => group.projectKey === activeScopeKey) + 1;
   const total = shown.length + 1;
   const disc = (index: number) => projectScopeDiscDepth(index, activeIndex);
   return (
@@ -55,7 +52,7 @@ export function T3TeamSidebarProjectScopePillStack({
       >
         <FolderIcon className="size-4" />
       </T3TeamSidebarProjectScopeDisc>
-      {shown.map((item, i) => {
+      {shown.map((group, i) => {
         const index = i + 1;
         const common = {
           active: index === activeIndex,
@@ -63,34 +60,24 @@ export function T3TeamSidebarProjectScopePillStack({
           zIndex: total - disc(index).depth,
           first: false,
         };
-        return item.kind === "app" ? (
+        return (
           <T3TeamSidebarProjectScopeDisc
-            key={item.projectKey}
+            key={group.projectKey}
             {...common}
-            label={item.group.displayName}
-            onSelect={() => onSelectScope(item.projectKey)}
+            label={group.displayName}
+            onSelect={() => onSelectScope(group.projectKey)}
             onContextMenu={
-              onProjectContextMenu ? (event) => onProjectContextMenu(event, item.group) : undefined
+              onProjectContextMenu ? (event) => onProjectContextMenu(event, group) : undefined
             }
           >
-            <GroupIcon group={item.group} />
-          </T3TeamSidebarProjectScopeDisc>
-        ) : (
-          <T3TeamSidebarProjectScopeDisc
-            key={item.projectKey}
-            {...common}
-            label={item.label}
-            variant="add"
-            disabledReason={addDisabledReason}
-            onSelect={() => addJiraProject(item.entry)}
-          >
-            <JiraProjectGlyph entry={item.entry} />
+            <GroupIcon group={group} />
           </T3TeamSidebarProjectScopeDisc>
         );
       })}
       <T3TeamSidebarProjectScopePicker
         shown={shown}
         overflow={overflow}
+        addable={addable}
         activeScopeKey={activeScopeKey}
         onSelectScope={onSelectScope}
         onProjectContextMenu={onProjectContextMenu}

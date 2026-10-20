@@ -15,6 +15,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
+import { makeCompleteWithoutCheckpoint } from "./t3team-checkpointCaptureFallback.ts";
 import * as CheckpointService from "./CheckpointService.ts";
 import * as EventSink from "./EventSink.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
@@ -34,6 +35,12 @@ const isCheckpointCaptureExecutionError = Schema.is(CheckpointCaptureExecutionEr
 
 export interface CheckpointCaptureServiceV2Shape {
   readonly execute: (input: {
+    readonly threadId: ThreadId;
+    readonly runId: RunId;
+    readonly scopeId: CheckpointScopeId;
+  }) => Effect.Effect<void, CheckpointCaptureExecutionError>;
+  /** Completes a run whose capture failed for good; see `makeCompleteWithoutCheckpoint`. */
+  readonly completeWithoutCheckpoint: (input: {
     readonly threadId: ThreadId;
     readonly runId: RunId;
     readonly scopeId: CheckpointScopeId;
@@ -238,7 +245,17 @@ export const layer: Layer.Layer<
       });
     });
 
+    const completeWithoutCheckpoint = makeCompleteWithoutCheckpoint({
+      eventSink,
+      ids,
+      projections,
+    });
+
     return CheckpointCaptureServiceV2.of({
+      completeWithoutCheckpoint: (input) =>
+        completeWithoutCheckpoint(input).pipe(
+          Effect.mapError((cause) => new CheckpointCaptureExecutionError({ ...input, cause })),
+        ),
       execute: (input) =>
         execute(input).pipe(
           Effect.mapError((cause) =>

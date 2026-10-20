@@ -13,6 +13,7 @@ import { ServerConfig, type StartupPresentation } from "../config.ts";
 import { runServer } from "../server.ts";
 import { activeResourceSummary } from "../t3team-processResilience.ts";
 import { startStallProfiler } from "../t3team-stallProfiler.ts";
+import { startLivenessBeacon } from "../t3team-livenessBeacon.ts";
 import { activateCompiledInDistribution } from "../t3team-distribution-bootstrap.ts";
 import {
   inspectConfiguredWorkspacePacks,
@@ -302,9 +303,16 @@ export const runT3TeamServerCommand = (
       onUnavailable: (reason) =>
         Effect.runFork(Effect.logDebug("Stall profiler unavailable", { reason })),
     });
+    // Lets the desktop watchdog tell a busy event loop from a dead backend (see the module).
+    const livenessBeacon = startLivenessBeacon({
+      fd: config.desktopLivenessFd,
+      onUnavailable: (reason) =>
+        Effect.runFork(Effect.logWarning("Liveness beacon unavailable", { reason })),
+    });
     return yield* runServer.pipe(
       Effect.provideService(ServerConfig, config),
       Effect.ensuring(Effect.sync(stallProfiler.stop)),
+      Effect.ensuring(Effect.sync(livenessBeacon.stop)),
     );
   });
 

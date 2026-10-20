@@ -1398,6 +1398,7 @@ export const make = Effect.gen(function* () {
     readonly operation: string;
     readonly allowReserve?: boolean | undefined;
     readonly allowPartialNotFound?: boolean | undefined;
+    readonly allowPartialResourceLimits?: boolean | undefined;
     readonly variables?: Readonly<Record<string, unknown>>;
     readonly query: string;
     readonly decode: (raw: string) => Result.Result<A, unknown>;
@@ -1410,6 +1411,7 @@ export const make = Effect.gen(function* () {
         ...(input.variables === undefined ? {} : { variables: input.variables }),
         ...(input.allowReserve === true ? { allowReserve: true } : {}),
         ...(input.allowPartialNotFound === true ? { allowPartialNotFound: true } : {}),
+        ...(input.allowPartialResourceLimits === true ? { allowPartialResourceLimits: true } : {}),
       })
       .pipe(Effect.flatMap((raw) => decodeWith(input.cwd, input.operation, input.decode, raw)));
 
@@ -2045,6 +2047,7 @@ export const make = Effect.gen(function* () {
                 cwd: input.cwd,
                 host: input.host,
                 operation: "listPullRequests",
+                allowPartialResourceLimits: true,
                 // The reader's own words are in the query.
                 variables: { q: query, after },
                 query: pullRequestSearchGraphQlQuery(rows, false, true),
@@ -2054,6 +2057,7 @@ export const make = Effect.gen(function* () {
                 cwd: input.cwd,
                 host: input.host,
                 operation: "listPullRequests",
+                allowPartialResourceLimits: true,
                 variables: { owner, name, states: LIST_STATES[input.state], after },
                 query: pullRequestListGraphQlQuery(rows),
                 decode: decodePullRequestListJson,
@@ -2170,6 +2174,7 @@ export const make = Effect.gen(function* () {
         cwd: input.cwd,
         host: input.host,
         operation: "searchPullRequests",
+        allowPartialResourceLimits: true,
         variables: { q: query, after: null },
         query: pullRequestSearchGraphQlQuery(rows, input.host === "github.com"),
         decode: decodePullRequestSearchJson,

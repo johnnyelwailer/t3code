@@ -4,6 +4,7 @@ import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { planThreadBootstrap } from "~/t3team/chat/t3team-threadBootstrapPlan";
 import { maybeBackfillKickoffBranch } from "~/t3team/chat/t3team-kickoffBranchBackfill";
 import { runThreadBootstrap } from "~/t3team/chat/t3team-runThreadBootstrap";
+import type { ThreadBootstrapProgress } from "~/t3team/chat/t3team-threadBootstrapProgress";
 import { resolveThreadBootstrapKickoffDefaults } from "~/t3team/chat/t3team-threadBootstrapKickoffDefaults";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
@@ -34,6 +35,8 @@ export interface RunThreadBootstrapEffectInput {
   initialToolContext: T3TeamTurnToolContext | undefined;
   onInitialUserMessageSent: (() => void) | undefined;
   serverThread: { readonly branch: string | null } | null | undefined;
+  /** Reports per-step progress (in-thread launch progress) to the view. */
+  updateBootstrapProgress: (progress: ThreadBootstrapProgress) => void;
   updateBootstrapStatus: (status: ThreadBootstrapStatus) => void;
 }
 
@@ -64,6 +67,7 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
     initialToolContext,
     onInitialUserMessageSent,
     serverThread,
+    updateBootstrapProgress,
     updateBootstrapStatus,
   } = input;
 
@@ -176,6 +180,7 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
     action: bootstrapPlan.action,
     state: bootstrapPlan.state,
     onInitialUserMessageSent,
+    onProgress: updateBootstrapProgress,
     ...(serverThread != null ? { serverThreadExists: true } : {}),
   })
     .then(() => {

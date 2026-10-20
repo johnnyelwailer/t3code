@@ -5,6 +5,14 @@ import { runThreadBootstrapKickoff } from "~/t3team/chat/t3team-runThreadBootstr
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { WORKFLOW_BACKED_BUNDLED_RECIPE_IDS } from "~/t3team/t3team-bundledRecipeWorkflowIds";
 import type { T3TeamKickoffLaunchConfig } from "~/t3team/t3team-kickoffLaunchConfig";
+import {
+  applyT3TeamRecipeQuickStartLaunchCustomization,
+  type T3TeamRecipeQuickStartLaunchCustomization,
+} from "~/t3team/t3team-recipeQuickStartLaunch";
+import {
+  type T3TeamKickoffWorkItemRef,
+  buildT3TeamKickoffWorkItemParameters,
+} from "~/t3team/t3team-kickoffWorkItemRef";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 
@@ -68,6 +76,19 @@ type CreateSidecarRecipeThread = (input: {
   kickoffWorkflow?: BundledRecipeWorkflow;
   launchConfig: T3TeamKickoffLaunchConfig;
 }) => unknown | Promise<unknown>;
+
+function withWorkItemParameters(
+  workflow: BundledRecipeWorkflow,
+  workItem: T3TeamKickoffWorkItemRef | undefined,
+): BundledRecipeWorkflow {
+  const parameters = buildT3TeamKickoffWorkItemParameters(workItem);
+  if (Object.keys(parameters).length === 0) {
+    return workflow;
+  }
+  // Explicit parameters (user customization) win over the auto-injected work item, matching the
+  // bundled path; the `workItem` reference has no counterpart so it is always added.
+  return { ...workflow, parameters: { ...parameters, ...workflow.parameters } };
+}
 
 /**
  * Creates the thread through the host's composer path, then runs the bootstrap kickoff that
@@ -134,6 +155,7 @@ export async function launchBundledSidecarRecipeThread(input: {
   readonly projectWorkspaceRoot?: string | undefined;
   readonly recipeId: string;
   readonly parameters?: Record<string, unknown> | undefined;
+  readonly workItem?: T3TeamKickoffWorkItemRef;
   readonly launchConfig: T3TeamKickoffLaunchConfig;
   readonly createThread: CreateSidecarRecipeThread;
 }): Promise<boolean> {
@@ -141,6 +163,11 @@ export async function launchBundledSidecarRecipeThread(input: {
   if (!recipe) {
     return false;
   }
+  const parameters = {
+    ...buildT3TeamKickoffWorkItemParameters(input.workItem),
+    ...input.parameters,
+  };
+  const hasParameters = Object.keys(parameters).length > 0;
   return launchSidecarRecipeThread({
     backend: input.backend,
     environmentId: input.environmentId,
@@ -148,39 +175,47 @@ export async function launchBundledSidecarRecipeThread(input: {
     title: recipe.title,
     kickoffMessage: buildBundledSidecarRecipeKickoffMessage({
       recipeId: input.recipeId,
-      ...(input.parameters ? { parameters: input.parameters } : {}),
+      ...(hasParameters ? { parameters } : {}),
     }),
     kickoffWorkflow: buildBundledSidecarRecipeWorkflowLaunch({
       recipeId: input.recipeId,
       surface: input.surface,
       projectWorkspaceRoot: input.projectWorkspaceRoot,
-      ...(input.parameters ? { parameters: input.parameters } : {}),
+      ...(hasParameters ? { parameters } : {}),
     }),
     launchConfig: input.launchConfig,
     createThread: input.createThread,
   });
 }
 
-/** A discovered (project or pack) quick start with a workflow: the RunToggle card's "on". */
+/**
+ * A discovered quick start, sent on click. Workflow-backed recipes start their workflow on the new
+ * thread; prompt-backed ones send their prompt as the thread's pending first message. Either way the
+ * thread is created and the prompt reaches the model with no extra Submit — the Quick Start card's
+ * body click and the RunToggle's "on" both route through here.
+ */
 export async function launchSidecarRecipeQuickStartThread(input: {
   readonly backend: BackendApi | null | undefined;
   readonly environmentId: string | null | undefined;
   readonly projectId: string;
-  readonly quickStart: Pick<T3TeamSidecarRecipeQuickStart, "title" | "prompt" | "workflow">;
+  readonly quickStart: T3TeamSidecarRecipeQuickStart;
+  readonly customization?: T3TeamRecipeQuickStartLaunchCustomization;
   readonly launchConfig: T3TeamKickoffLaunchConfig;
+  readonly workItem?: T3TeamKickoffWorkItemRef;
   readonly createThread: CreateSidecarRecipeThread;
 }): Promise<boolean> {
-  const workflow = input.quickStart.workflow;
-  if (workflow?.kind !== "recipe" || !workflow.workflowPath) {
-    return false;
-  }
+  const recipe = input.customization
+    ? applyT3TeamRecipeQuickStartLaunchCustomization(input.quickStart, input.customization)
+    : input.quickStart;
+  const workflow = recipe.workflow;
+  const recipeWorkflow = workflow && workflow.kind === "recipe" ? workflow : null;
   return launchSidecarRecipeThread({
     backend: input.backend,
     environmentId: input.environmentId,
     projectId: input.projectId,
-    title: input.quickStart.title,
-    kickoffMessage: input.quickStart.prompt,
-    kickoffWorkflow: workflow,
+    title: recipe.title,
+    kickoffMessage: recipe.prompt,
+    kickoffWorkflow: recipeWorkflow ? withWorkItemParameters(recipeWorkflow, input.workItem) : null,
     launchConfig: input.launchConfig,
     createThread: input.createThread,
   });

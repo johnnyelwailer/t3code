@@ -2,11 +2,13 @@ import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3to
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { ensureThreadBootstrapProject } from "~/t3team/chat/t3team-runThreadBootstrapHelpers";
-import {
-  dispatchThreadBootstrapCreateWithRecovery,
-  runThreadBootstrapKickoff,
-} from "~/t3team/chat/t3team-runThreadBootstrapKickoff";
+import { runThreadBootstrapKickoff } from "~/t3team/chat/t3team-runThreadBootstrapKickoff";
+import { dispatchThreadBootstrapCreateWithRecovery } from "~/t3team/chat/t3team-threadBootstrapCreate";
 import { type ThreadBootstrapAction } from "~/t3team/chat/t3team-threadBootstrapInstrumentation";
+import {
+  ThreadBootstrapProgressTracker,
+  type ThreadBootstrapProgress,
+} from "~/t3team/chat/t3team-threadBootstrapProgress";
 import type { ThreadBootstrapDispatchState } from "~/t3team/chat/t3team-threadBootstrapPlan";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
@@ -34,6 +36,8 @@ type RunThreadBootstrapInput = {
   state: ThreadBootstrapDispatchState;
   onInitialUserMessageSent: (() => void) | undefined;
   serverThreadExists?: boolean;
+  /** Reports per-step progress to the view (in-thread launch progress). */
+  onProgress?: (progress: ThreadBootstrapProgress) => void;
 };
 
 export async function runThreadBootstrap({
@@ -57,6 +61,7 @@ export async function runThreadBootstrap({
   state,
   onInitialUserMessageSent,
   serverThreadExists,
+  onProgress,
 }: RunThreadBootstrapInput) {
   await ensureThreadBootstrapProject({
     backend,
@@ -93,10 +98,15 @@ export async function runThreadBootstrap({
       createdAt,
       onInitialUserMessageSent,
       ...(serverThreadExists === true ? { serverThreadExists } : {}),
+      ...(onProgress ? { reportProgress: onProgress } : {}),
     });
     return;
   }
 
+  const tracker = new ThreadBootstrapProgressTracker({
+    progress: { steps: [{ id: "create", status: "pending" }] },
+    report: onProgress,
+  });
   await dispatchThreadBootstrapCreateWithRecovery({
     backend,
     action,
@@ -110,5 +120,6 @@ export async function runThreadBootstrap({
     kickoffInteractionMode,
     kickoffBranch,
     createdAt,
+    tracker,
   });
 }

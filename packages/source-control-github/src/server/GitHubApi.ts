@@ -15,6 +15,11 @@ import { collectUint8StreamText } from "@t3tools/provider-core/server/collectStr
 import * as GitHubCredentials from "./GitHubCredentials.ts";
 import * as GitHubQuota from "./GitHubQuota.ts";
 import { isCoalescible, makeGitHubReadCoalescer } from "./t3team-githubReadCoalescer.ts";
+import {
+  isGraphQlQuery,
+  isIdempotentRestMethod,
+  retryTransientRead,
+} from "./t3team-githubTransientRetry.ts";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 
 const DEFAULT_TIMEOUT = Duration.seconds(30);
@@ -152,6 +157,13 @@ export interface GitHubGraphQlInput {
    * the caller reads each alias for null.
    */
   readonly allowPartialNotFound?: boolean;
+  /**
+   * An answer whose only errors are `RESOURCE_LIMITS_EXCEEDED` is returned with its `data` instead
+   * of failing. GitHub answers a heavy field (a pull request's check rollup) with that error and
+   * null at its path while every other field of every row is still there, so a listing reads the
+   * rows it has and treats the field it could not compute as unknown.
+   */
+  readonly allowPartialResourceLimits?: boolean;
 }
 
 export class GitHubApi extends Context.Service<
@@ -315,6 +327,7 @@ function classify(input: {
   readonly graphql: boolean;
   readonly acceptNotModified: boolean;
   readonly allowPartialNotFound?: boolean;
+  readonly allowPartialResourceLimits?: boolean;
 }): Answer {
   const { status, headers, body } = input;
   const errors = input.graphql
@@ -339,12 +352,16 @@ function classify(input: {
     return Answer.RateLimited();
   }
   if (status === 401) return Answer.Unauthorized();
+  const tolerated = [
+    ...(input.allowPartialNotFound === true ? ["NOT_FOUND"] : []),
+    ...(input.allowPartialResourceLimits === true ? ["RESOURCE_LIMITS_EXCEEDED"] : []),
+  ];
   if (
-    input.allowPartialNotFound === true &&
+    tolerated.length > 0 &&
     status >= 200 &&
     status < 300 &&
     errors !== undefined &&
-    errors.every((error) => error.type === "NOT_FOUND")
+    errors.every((error) => error.type !== undefined && tolerated.includes(error.type))
   ) {
     return Answer.Ok();
   }
@@ -415,9 +432,12 @@ export const make = Effect.gen(function* () {
     readonly timeout?: Duration.Input | undefined;
     readonly allowReserve: boolean;
     readonly acceptNotModified: boolean;
+    /** Whether sending the request again is harmless, which is what lets a hiccup be retried. */
+    readonly idempotent: boolean;
     /** Reads the body for GraphQL `errors`, which GitHub sends with HTTP 200. */
     readonly graphql?: boolean;
     readonly allowPartialNotFound?: boolean;
+    readonly allowPartialResourceLimits?: boolean;
   }) {
     const host = normalizeHost(input.host);
     // Only the path: a query string can carry a SHA or a branch, and never needs to be in a trace.
@@ -505,6 +525,7 @@ export const make = Effect.gen(function* () {
           graphql: input.graphql === true,
           acceptNotModified: input.acceptNotModified,
           allowPartialNotFound: input.allowPartialNotFound === true,
+          allowPartialResourceLimits: input.allowPartialResourceLimits === true,
         }),
         {
           Ok: () =>
@@ -548,9 +569,12 @@ export const make = Effect.gen(function* () {
       );
     });
     // The rate-limit scope follows the credential, so a pause on one account never blocks another.
-    return yield* gate
-      .withPermit(run)
-      .pipe(Effect.provideService(SourceControlRateLimit.CredentialScope, scope || fingerprint));
+    return yield* retryTransientRead(
+      gate
+        .withPermit(run)
+        .pipe(Effect.provideService(SourceControlRateLimit.CredentialScope, scope || fingerprint)),
+      input.idempotent,
+    );
   });
 
   const rest: GitHubApi["Service"]["rest"] = (input) => {
@@ -576,6 +600,7 @@ export const make = Effect.gen(function* () {
           timeout: input.timeout,
           allowReserve: input.allowReserve ?? interactive,
           acceptNotModified: input.ifNoneMatch !== undefined,
+          idempotent: isIdempotentRestMethod(input.method),
         }),
       ),
     );
@@ -619,8 +644,10 @@ export const make = Effect.gen(function* () {
         maxResponseBytes: input.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES,
         allowReserve,
         acceptNotModified: false,
+        idempotent: isGraphQlQuery(input.query),
         graphql: true,
         allowPartialNotFound: input.allowPartialNotFound === true,
+        allowPartialResourceLimits: input.allowPartialResourceLimits === true,
       });
       // A body cut at the byte cap hides any `errors` past the cut and cannot be decoded.
       if (response.truncated) {

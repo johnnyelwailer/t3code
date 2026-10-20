@@ -9,9 +9,9 @@
  * the runtime that imports these modules, so the host is what should supply their imports.
  *
  * Shape: a FALLBACK resolver, not an override. Default resolution runs first and is returned
- * untouched; only when it fails do we resolve an allow-listed specifier from the server's own
- * installation. Nothing that already resolved changes behaviour, which is what makes a
- * process-global hook safe to install here.
+ * untouched; only when it fails do we resolve an allow-listed specifier from the server itself.
+ * Nothing that already resolved changes behaviour, which is what makes a process-global hook safe
+ * to install here.
  *
  * The allow-list is deliberately tiny and matches Epic 16 §Supported authoring subset: the
  * authoring SDK, plus `effect` because a recipe's `scripts/<name>.ts` — reached by a real (not
@@ -20,10 +20,8 @@
  * have installed, so this is not a general escape hatch into the host's dependency tree.
  *
  * Testing note: `vp test` runs through vite-plus, which owns module resolution in that
- * environment, so a Node `registerHooks` fallback does not apply there — an end-to-end
- * "recipe outside any install" test cannot exercise this under the runner. The predicate below is
- * unit-tested; the end-to-end behaviour was verified by importing a recipe in `/tmp` from a real
- * Node process (it loaded, having failed with ERR_MODULE_NOT_FOUND before this hook existed).
+ * environment, so a Node `registerHooks` fallback does not apply there. The end-to-end test runs
+ * the hook in a child Node process against a published-bundle layout instead.
  */
 
 import * as NodeFS from "node:fs";
@@ -39,29 +37,39 @@ export function isResolvableFromHost(specifier: string): boolean {
 
 /**
  * Where a PUBLISHED bundle keeps the host's own copy of the two bare roots. `effect` and
- * `@t3team/sdk` are inlined into the bundle and not installed beside it, so `import.meta.resolve`
- * cannot find them there; the build emits one entry per root (vite.config.ts) that re-exports the
- * bundle's chunk, so a recipe shares the instance the host itself runs. Subpaths are not covered.
+ * `@t3team/sdk` are inlined into the bundle; the build emits one entry per root (vite.config.ts)
+ * that re-exports the bundle's chunk, so a recipe shares the instance the host itself runs.
+ * Subpaths are not covered.
  */
 const BUNDLED_HOST_MODULES: Readonly<Record<string, string>> = {
   effect: "./t3team-hostEffect.mjs",
   "@t3team/sdk": "./t3team-hostSdk.mjs",
 };
 
-/** The URL `specifier` resolves to from the server's own installation, or from its bundle. */
+function bundledHostModule(specifier: string, hostUrl: string): string | undefined {
+  const sibling = BUNDLED_HOST_MODULES[specifier];
+  if (sibling === undefined) return undefined;
+  const url = new URL(sibling, hostUrl);
+  return NodeFS.existsSync(NodeURL.fileURLToPath(url)) ? url.href : undefined;
+}
+
+/**
+ * The URL `specifier` resolves to from the server's bundle, or else from its own installation.
+ *
+ * The bundle entry wins because the installed copy is not loadable in the packaged desktop app:
+ * `server.asar/node_modules/@t3team/sdk` ships the workspace package's raw `.ts` sources, and Node
+ * refuses to strip types under `node_modules` (ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING).
+ */
 export function resolveFromHost(
   specifier: string,
   hostUrl: string = import.meta.url,
   resolve: (specifier: string) => string = (name) => import.meta.resolve(name),
 ): string {
+  const bundled = bundledHostModule(specifier, hostUrl);
+  if (bundled !== undefined) return bundled;
   try {
     return resolve(specifier);
   } catch (error) {
-    const sibling = BUNDLED_HOST_MODULES[specifier];
-    if (sibling !== undefined) {
-      const url = new URL(sibling, hostUrl);
-      if (NodeFS.existsSync(NodeURL.fileURLToPath(url))) return url.href;
-    }
     const root = RESOLVABLE_PACKAGES.find((name) => specifier.startsWith(`${name}/`));
     if (root !== undefined) {
       // A subpath resolves from a development checkout but has no entry in a published bundle.
@@ -99,6 +107,27 @@ export function withConfigVersion(
   return child.toString();
 }
 
+/**
+ * Recipe, workflow and script modules are always ESM, but Node picks a `.ts` file's format from
+ * the nearest ancestor `package.json`: `"type": "commonjs"` makes it CommonJS outright ("Cannot
+ * use import statement outside a module"), and a missing `"type"` leaves the format to Node's
+ * syntax detection. A recipe lives in the user's own workspace, so whatever `package.json` sits
+ * above it is not ours to depend on.
+ *
+ * Only a result Node already decided is CommonJS is re-loaded as ESM; everything else, including
+ * `.cts`/`.mts` files whose extension fixes the format, passes through untouched.
+ */
+const loadTypescriptAsEsm: NonNullable<Parameters<typeof NodeModule.registerHooks>[0]["load"]> = (
+  url,
+  context,
+  nextLoad,
+) => {
+  const loaded = nextLoad(url, context);
+  return loaded.format === "commonjs-typescript"
+    ? nextLoad(url, { ...context, format: "module-typescript" })
+    : loaded;
+};
+
 let installed = false;
 
 /**
@@ -111,6 +140,7 @@ export function ensureProjectRecipeModuleResolution(): void {
   }
   installed = true;
   NodeModule.registerHooks({
+    load: loadTypescriptAsEsm,
     resolve(specifier, context, nextResolve) {
       try {
         const resolved = nextResolve(specifier, context);
@@ -120,9 +150,9 @@ export function ensureProjectRecipeModuleResolution(): void {
         if (!isResolvableFromHost(specifier)) {
           throw error;
         }
-        // `import.meta.resolve` here resolves against THIS module — i.e. the server's own
-        // installation — which is exactly the copy the imported recipe should share, so an
-        // author's `defineRecipe` result is instanceof the same registry the host reads.
+        // Resolved against THIS module — the server's own bundle or installation — which is
+        // exactly the copy the imported recipe should share, so an author's `defineRecipe`
+        // result is instanceof the same registry the host reads.
         return { url: resolveFromHost(specifier), shortCircuit: true };
       }
     },

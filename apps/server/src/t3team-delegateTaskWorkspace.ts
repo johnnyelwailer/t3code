@@ -31,6 +31,8 @@ export interface DelegatedWorkspaceResolution {
   readonly repositoryPath: string;
   /** True when this call created the worktree and branch; false when it reused a retry's. */
   readonly created: boolean;
+  /** What the new branch started from; null when a retry reused the first attempt's worktree. */
+  readonly startedFrom: string | null;
 }
 
 export const resolveDelegatedWorkspace = (input: {
@@ -95,6 +97,7 @@ export const resolveDelegatedWorkspace = (input: {
           worktreePath: linked.worktreePath,
           repositoryPath: linked.repositoryPath,
           created: linked.created,
+          startedFrom: linked.startedFrom,
         };
       }
     } else if (manifestExists && metaRepository === undefined) {
@@ -111,6 +114,7 @@ export const resolveDelegatedWorkspace = (input: {
       worktreePath: local.worktreePath,
       repositoryPath: local.repositoryPath,
       created: local.created,
+      startedFrom: local.startedFrom,
     };
   }).pipe(Effect.mapError((error) => (error instanceof Error ? error.message : String(error))));
 
@@ -158,5 +162,5 @@ export const delegatedWorktreeKey = (threadId: string, requestKey: string): stri
 };
 
 export const describeDelegatedWorkspace = (workspace: DelegatedWorkspaceResolution): string =>
-  `Child works on branch ${workspace.branch} (from ${workspace.baseRef}` +
+  `Child works on branch ${workspace.branch} (from ${workspace.startedFrom ?? workspace.baseRef}` +
   `${workspace.repository === null ? "" : ` of ${workspace.repository}`}) in ${workspace.worktreePath}.`;

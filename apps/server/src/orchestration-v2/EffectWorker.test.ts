@@ -1,5 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import {
+  CheckpointScopeId,
   CommandId,
   NodeId,
   ProviderSessionId,
@@ -83,6 +84,7 @@ function layerExecutorFor(input: {
   readonly threads?: Partial<ThreadManagementService.ThreadManagementService["Service"]>;
   readonly continueAfterRestart?: boolean;
   readonly interrupt?: ProviderTurnControlService.ProviderTurnControlServiceV2Shape["interrupt"];
+  readonly finalize?: RunFinalizationService.RunFinalizationService["Service"]["finalize"];
 }) {
   const record = (event: string) => Ref.update(input.events, (events) => [...events, event]);
   const layerDependencies = Layer.mergeAll(
@@ -132,7 +134,9 @@ function layerExecutorFor(input: {
     ),
     Layer.succeed(
       RunFinalizationService.RunFinalizationService,
-      RunFinalizationService.RunFinalizationService.of({ finalize: () => Effect.void }),
+      RunFinalizationService.RunFinalizationService.of({
+        finalize: input.finalize ?? (() => Effect.void),
+      }),
     ),
     Layer.succeed(
       CheckpointRollbackService.CheckpointRollbackServiceV2,
@@ -907,4 +911,38 @@ it.effect.each(["confirmed", "unconfirmed", "failed"] as const)(
         outcome === "confirmed" ? ["stop-child", "settle-child"] : ["stop-child"],
       );
     }),
+);
+
+it.effect("tells run finalization which checkpoint capture attempt is the last", () =>
+  Effect.gen(function* () {
+    const timestamp = DateTime.formatIso(yield* DateTime.now);
+    const events = yield* Ref.make<ReadonlyArray<string>>([]);
+    const finalized = yield* Ref.make<ReadonlyArray<boolean>>([]);
+    const layer = layerExecutorFor({
+      events,
+      finalize: ({ willRetry }) => Ref.update(finalized, (calls) => [...calls, willRetry]),
+    });
+    const scopeId = CheckpointScopeId.make("scope:effect-worker-capture");
+    const effect: EffectOutbox.OrchestrationEffectV2 = {
+      id: `effect:checkpoint.capture:${runId}`,
+      commandId: CommandId.make(`command:effect:checkpoint.capture:${runId}`),
+      threadId,
+      request: { type: "checkpoint.capture", runId, scopeId },
+      status: "running",
+      attemptCount: 1,
+      availableAt: timestamp,
+      leaseOwner: "test-worker",
+      leaseExpiresAt: timestamp,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      completedAt: null,
+      lastError: null,
+    };
+    yield* Effect.gen(function* () {
+      const executor = yield* EffectWorker.OrchestrationEffectExecutorV2;
+      yield* executor.execute(effect, { willRetry: true });
+      yield* executor.execute(effect, { willRetry: false });
+      assert.deepEqual(yield* Ref.get(finalized), [true, false]);
+    }).pipe(Effect.provide(layer));
+  }),
 );

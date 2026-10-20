@@ -45,6 +45,7 @@ describe("delegating into a linked repository on demand", () => {
                 isRepo: true,
                 refName: git(cwd, "branch", "--show-current").stdout.trim(),
               })),
+            remoteExists: () => Effect.succeed(false),
           } as unknown as GitWorkflowService["Service"],
           sourceControlProviders: {
             resolve: () => Effect.succeed({ getDefaultBranch: () => Effect.succeed("main") }),
