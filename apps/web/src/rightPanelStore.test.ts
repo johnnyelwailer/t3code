@@ -1474,18 +1474,30 @@ describe("rightPanelStore", () => {
       const store = useRightPanelStore.getState();
       store.openPullRequest(refA, reference);
       const revision = store.getUserActionRevision(refA);
-      store.updatePullRequestView(refA, surfaceId, { tab: "code", file: "src/app.ts", commit: null });
+      store.updatePullRequestView(refA, surfaceId, {
+        tab: "code",
+        file: "src/app.ts",
+        commit: null,
+      });
       expect(store.getUserActionRevision(refA)).toBe(revision);
     });
 
     it("is a no-op when the reported view is already stored", () => {
       useRightPanelStore.getState().openPullRequest(refA, reference);
       const store = useRightPanelStore.getState();
-      store.updatePullRequestView(refA, surfaceId, { tab: "code", file: "src/app.ts", commit: null });
+      store.updatePullRequestView(refA, surfaceId, {
+        tab: "code",
+        file: "src/app.ts",
+        commit: null,
+      });
       const afterFirst = selectThreadRightPanelState(store.byThreadKey, refA);
       // Re-reporting the same view (the panel does this on every mount) must not churn the
       // thread's state, so the host's surfaces-dependent renderers are not woken.
-      store.updatePullRequestView(refA, surfaceId, { tab: "code", file: "src/app.ts", commit: null });
+      store.updatePullRequestView(refA, surfaceId, {
+        tab: "code",
+        file: "src/app.ts",
+        commit: null,
+      });
       expect(selectThreadRightPanelState(store.byThreadKey, refA)).toBe(afterFirst);
     });
 
@@ -1508,15 +1520,19 @@ describe("rightPanelStore", () => {
           },
         },
       });
-      expect(
-        selectPullRequestSurfaceView(migrated.byThreadKey, refA, surfaceId),
-      ).toEqual({ tab: "code", file: "src/app.ts", commit: "abc" });
+      expect(selectPullRequestSurfaceView(migrated.byThreadKey, refA, surfaceId)).toEqual({
+        tab: "code",
+        file: "src/app.ts",
+        commit: "abc",
+      });
     });
 
     it("coerces a malformed persisted view back to a known tab", () => {
-      expect(
-        normalizePullRequestView({ tab: "nonsense", file: 7, commit: null }),
-      ).toEqual({ tab: "summary", file: null, commit: null });
+      expect(normalizePullRequestView({ tab: "nonsense", file: 7, commit: null })).toEqual({
+        tab: "summary",
+        file: null,
+        commit: null,
+      });
       expect(normalizePullRequestView({ tab: "guide" })).toEqual({
         tab: "guide",
         file: null,
