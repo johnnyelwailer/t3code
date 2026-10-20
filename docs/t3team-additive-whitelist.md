@@ -449,3 +449,8 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
 - `apps/server/src/orchestration-v2/RunFinalizationService.ts` — on the last capture attempt, a failed checkpoint capture completes the run without a checkpoint (retrying that settle), so a `waiting` run cannot hold the queue until restart.
 - `apps/server/src/orchestration-v2/CheckpointCaptureService.ts` — exposes `completeWithoutCheckpoint`; the logic lives in `t3team-checkpointCaptureFallback.ts`.
 - `apps/server/src/orchestration-v2/RunFinalizationService.test.ts`, `EffectWorker.test.ts`, `packages/client-runtime/src/operations/commands.test.ts` — cover the last-attempt settle, its wiring, and that Stop never targets a finished `waiting` run.
+
+## Voice slice nightly-CI fixes (2026-10-20)
+
+- `apps/desktop/scripts/main-process-bundle.test.mjs` — fixture writes the `src/voice/t3team-whisperWorker.ts` worker entry that the desktop `pack` config now builds.
+- `third-party-licenses.config.json` — notice overrides for the `@fugood/node-whisper-*` platform binaries pulled in by `@fugood/whisper.node`.
