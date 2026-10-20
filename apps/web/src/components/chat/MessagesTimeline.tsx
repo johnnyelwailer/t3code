@@ -1890,6 +1890,12 @@ const ConversationTimeline = memo(function ConversationTimeline({
             <TooltipScrollDismissArea
               ref={setTimelineViewportElement}
               className="relative h-full min-h-0"
+              data-zoom-region /* Hover-zoom region: the timeline's outer scroll
+                 owner (the viewport the virtualizer scrolls inside), not a
+                 virtualized item, so zoom magnifies the whole visible
+                 timeline in place without touching LegendList's
+                 measurements. The ChatView wrapper's overflow-hidden clips
+                 the magnified box. */
               data-assistant-citation-viewport="true"
             >
               {onCiteAssistantText && citationThreadRef ? (

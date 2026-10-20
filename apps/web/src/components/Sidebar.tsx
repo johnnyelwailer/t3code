@@ -1710,6 +1710,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               : undefined,
         },
         ...sortable.listeners,
+        // Marks the row dnd-kit is dragging, so region hover-zoom skips it.
+        "data-dnd-dragging": sortable.isDragging ? true : undefined,
       }
     : {};
   // Sweeps reuse the corresponding row-drop action badge.

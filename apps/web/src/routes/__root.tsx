@@ -80,6 +80,7 @@ import { CloudQueuedSendFlusher } from "../cloud/t3team-CloudQueuedSendFlusher";
 import { T3TeamVoiceAgentPill } from "../t3team/voice/t3team-VoiceAgentPill";
 import { t3teamPackProductName, useT3TeamAppDisplayName } from "../t3team/t3team-appBrandName";
 import { useT3TeamPackAppearance } from "../t3team/t3team-packAppearance";
+import { startRegionZoom } from "../t3team-regionZoom";
 // Registers the composing heartbeat with the composer draft store's sink (side effect only).
 import "../t3team/chat/t3team-threadComposingSignal";
 import { useHostedPromptLinkLanding } from "../components/promptLinks/HostedPromptLinkLanding";
@@ -166,6 +167,8 @@ function RootRouteNotFoundView() {
 
 function RootRouteView() {
   useEffect(() => installDesktopPasteAsText(window.desktopBridge, window), []);
+  // Ctrl/Cmd+scroll hover-zoom for marked regions; document-level, app-wide.
+  useEffect(() => startRegionZoom(), []);
   const pathname = useLocation({ select: (location) => location.pathname });
   const { authGateState } = Route.useRouteContext();
   const primaryEnvironmentAuthenticated = authGateState.status === "authenticated";
