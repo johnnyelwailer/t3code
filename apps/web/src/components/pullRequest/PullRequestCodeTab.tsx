@@ -4,7 +4,6 @@ import type {
   EnvironmentId,
   PullRequestDetailView,
   PullRequestDiffSide,
-  PullRequestOmittedFileStat,
   PullRequestRef,
   PullRequestReviewPosition,
   PullRequestReviewThread,
@@ -109,6 +108,7 @@ import {
   toggleFileDiffFoldForViewed,
   type DiffFoldOverride,
 } from "./pullRequestDiff.logic";
+import { applyDiffSlicePage, type DiffSlice } from "./t3team-pullRequestDiffSlices.logic";
 import { PullRequestDiffStat, PullRequestMetaLine } from "./pullRequestPresentation";
 import { DiffExplorerFileTree } from "./t3team-DiffExplorerFileTree";
 import { PrTreeResizeHandle } from "./t3team-PrTreeResizeHandle";
@@ -153,16 +153,6 @@ const PULL_REQUEST_FILE_TREE_STORAGE_KEY = "t3code.pullRequestFileTreeOpen";
 // across renders (an inline codec would churn the storage hook's memo on every render).
 const DIFF_MODE_SCHEMA = Schema.Literals(["focus", "all"]);
 const VIEWED_KEYS_SCHEMA = Schema.Array(Schema.String);
-
-/** One answer from the host: a whole number of files, and where the next one carries on. */
-interface DiffSlice {
-  /** What was asked for, null being the first slice. Identifies the slice among the loaded ones. */
-  readonly cursor: string | null;
-  readonly patch: string;
-  readonly truncated: boolean;
-  readonly nextCursor: string | null;
-  readonly omittedFileStats: ReadonlyArray<PullRequestOmittedFileStat>;
-}
 
 /**
  * The viewer's own per-file counts are hidden and drawn from this side of its shadow root
@@ -378,32 +368,11 @@ function PullRequestCodeTab({
         nextCursor: data.nextCursor,
         omittedFileStats: data.omittedFileStats ?? [],
       };
-      const index = slices.findIndex((slice) => slice.cursor === cursor);
-      if (index === -1) {
-        return { key: scopeKey, cursor, slices: [...slices, next] };
-      }
-      const existing = slices[index];
-      if (
-        existing !== undefined &&
-        existing.patch === next.patch &&
-        existing.truncated === next.truncated &&
-        existing.nextCursor === next.nextCursor &&
-        existing.omittedFileStats.length === next.omittedFileStats.length &&
-        existing.omittedFileStats.every((file, index) => {
-          const refreshed = next.omittedFileStats[index];
-          return (
-            refreshed !== undefined &&
-            refreshed.path === file.path &&
-            refreshed.additions === file.additions &&
-            refreshed.deletions === file.deletions
-          );
-        })
-      ) {
-        return previous;
-      }
-      // A page that came back different means the diff moved under the review. The slices
-      // after it go with the replacement: their cursors were positions in the old diff.
-      return { key: scopeKey, cursor, slices: [...slices.slice(0, index), next] };
+      const applied = applyDiffSlicePage(slices, cursor, next);
+      // A no-op refresh (the same first page came back) hands the caller back the slices it
+      // already held, so the focused file and scroll position survive; only a page that changed
+      // replaces the slices and restarts paging from the top.
+      return applied === slices ? previous : { key: scopeKey, cursor, slices: applied };
     });
   }, [cursor, diffQuery.data, scopeKey]);
   // The refresh button rereads from the first page rather than the page the reader is on:
@@ -504,14 +473,21 @@ function PullRequestCodeTab({
     isViewed: isFileViewed,
     isStale: isFileViewedStale,
   } = filesViewed;
-  // The button goes around the host's cache, so everything the tab reads from it starts over:
-  // the diff from its first page, and with it the ticks, which a push since the last read can
-  // have marked as standing against an older version of the file.
+  // The button goes around the host's cache, so the diff is re-read from its first page and the
+  // viewed ticks start over (a push since the last read can mark them against an older version).
+  // The pages already on screen are kept until that answer arrives: the slice-append above
+  // compares the fresh first page against what we hold, and only a page that actually moved
+  // replaces its slices. A refresh that returns the same diff is a no-op, so the focused file
+  // and scroll position survive instead of resetting on every agent turn.
   const appliedRefreshToken = useRef(refreshToken);
   useEffect(() => {
     if (appliedRefreshToken.current === refreshToken) return;
     appliedRefreshToken.current = refreshToken;
-    setSliceState({ key: scopeKey, cursor: null, slices: NO_SLICES });
+    setSliceState((previous) => ({
+      key: scopeKey,
+      cursor: null,
+      slices: previous.key === scopeKey ? previous.slices : NO_SLICES,
+    }));
     refreshFirstDiffPage();
     refreshFilesViewed();
   }, [refreshToken, scopeKey, refreshFirstDiffPage, refreshFilesViewed]);
