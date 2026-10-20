@@ -30,6 +30,7 @@
     "README.md",
     "apps/desktop/package.json",
     "apps/desktop/scripts/dev-electron.mjs",
+    "apps/desktop/scripts/main-process-bundle.test.mjs",
     "apps/desktop/scripts/electron-launcher.mjs",
     "apps/desktop/scripts/electron-launcher.test.mjs",
     "apps/desktop/src/app/DesktopAssets.test.ts",

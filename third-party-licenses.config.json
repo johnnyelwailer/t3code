@@ -717,6 +717,216 @@
         "licenseId": "MIT",
         "copyrights": ["Copyright (c) 2019-present Fabio Spampinato, Andrew Maney"]
       }
+    },
+    {
+      "license": "MIT",
+      "name": "@fugood/node-whisper-darwin-arm64",
+      "sourceUrl": "https://github.com/mybigday/whisper.node",
+      "version": "1.2.0-rc.1",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": [
+          "Copyright (c) 2025 ggml / whisper.cpp contributors",
+          "Copyright (c) 2025 Jhen-Jie Hong <developer@jhen.me>",
+          "Copyright (c) 2025 Hans Chen <hans.chen@bricks.tools>"
+        ]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@fugood/node-whisper-darwin-x64",
+      "sourceUrl": "https://github.com/mybigday/whisper.node",
+      "version": "1.2.0-rc.1",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": [
+          "Copyright (c) 2025 ggml / whisper.cpp contributors",
+          "Copyright (c) 2025 Jhen-Jie Hong <developer@jhen.me>",
+          "Copyright (c) 2025 Hans Chen <hans.chen@bricks.tools>"
+        ]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@fugood/node-whisper-linux-arm64",
+      "sourceUrl": "https://github.com/mybigday/whisper.node",
+      "version": "1.2.0-rc.1",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": [
+          "Copyright (c) 2025 ggml / whisper.cpp contributors",
+          "Copyright (c) 2025 Jhen-Jie Hong <developer@jhen.me>",
+          "Copyright (c) 2025 Hans Chen <hans.chen@bricks.tools>"
+        ]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@fugood/node-whisper-linux-arm64-cuda",
+      "sourceUrl": "https://github.com/mybigday/whisper.node",
+      "version": "1.2.0-rc.1",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": [
+          "Copyright (c) 2025 ggml / whisper.cpp contributors",
+          "Copyright (c) 2025 Jhen-Jie Hong <developer@jhen.me>",
+          "Copyright (c) 2025 Hans Chen <hans.chen@bricks.tools>"
+        ]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@fugood/node-whisper-linux-arm64-snapdragon",
+      "sourceUrl": "https://github.com/mybigday/whisper.node",
+      "version": "1.2.0-rc.1",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": [
+          "Copyright (c) 2025 ggml / whisper.cpp contributors",
+          "Copyright (c) 2025 Jhen-Jie Hong <developer@jhen.me>",
+          "Copyright (c) 2025 Hans Chen <hans.chen@bricks.tools>"
+        ]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@fugood/node-whisper-linux-arm64-vulkan",
+      "sourceUrl": "https://github.com/mybigday/whisper.node",
+      "version": "1.2.0-rc.1",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": [
+          "Copyright (c) 2025 ggml / whisper.cpp contributors",
+          "Copyright (c) 2025 Jhen-Jie Hong <developer@jhen.me>",
+          "Copyright (c) 2025 Hans Chen <hans.chen@bricks.tools>"
+        ]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@fugood/node-whisper-linux-x64",
+      "sourceUrl": "https://github.com/mybigday/whisper.node",
+      "version": "1.2.0-rc.1",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": [
+          "Copyright (c) 2025 ggml / whisper.cpp contributors",
+          "Copyright (c) 2025 Jhen-Jie Hong <developer@jhen.me>",
+          "Copyright (c) 2025 Hans Chen <hans.chen@bricks.tools>"
+        ]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@fugood/node-whisper-linux-x64-cuda",
+      "sourceUrl": "https://github.com/mybigday/whisper.node",
+      "version": "1.2.0-rc.1",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": [
+          "Copyright (c) 2025 ggml / whisper.cpp contributors",
+          "Copyright (c) 2025 Jhen-Jie Hong <developer@jhen.me>",
+          "Copyright (c) 2025 Hans Chen <hans.chen@bricks.tools>"
+        ]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@fugood/node-whisper-linux-x64-vulkan",
+      "sourceUrl": "https://github.com/mybigday/whisper.node",
+      "version": "1.2.0-rc.1",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": [
+          "Copyright (c) 2025 ggml / whisper.cpp contributors",
+          "Copyright (c) 2025 Jhen-Jie Hong <developer@jhen.me>",
+          "Copyright (c) 2025 Hans Chen <hans.chen@bricks.tools>"
+        ]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@fugood/node-whisper-wasm",
+      "sourceUrl": "https://github.com/mybigday/whisper.node",
+      "version": "1.2.0-rc.1",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": [
+          "Copyright (c) 2025 ggml / whisper.cpp contributors",
+          "Copyright (c) 2025 Jhen-Jie Hong <developer@jhen.me>",
+          "Copyright (c) 2025 Hans Chen <hans.chen@bricks.tools>"
+        ]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@fugood/node-whisper-win32-arm64",
+      "sourceUrl": "https://github.com/mybigday/whisper.node",
+      "version": "1.2.0-rc.1",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": [
+          "Copyright (c) 2025 ggml / whisper.cpp contributors",
+          "Copyright (c) 2025 Jhen-Jie Hong <developer@jhen.me>",
+          "Copyright (c) 2025 Hans Chen <hans.chen@bricks.tools>"
+        ]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@fugood/node-whisper-win32-arm64-vulkan",
+      "sourceUrl": "https://github.com/mybigday/whisper.node",
+      "version": "1.2.0-rc.1",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": [
+          "Copyright (c) 2025 ggml / whisper.cpp contributors",
+          "Copyright (c) 2025 Jhen-Jie Hong <developer@jhen.me>",
+          "Copyright (c) 2025 Hans Chen <hans.chen@bricks.tools>"
+        ]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@fugood/node-whisper-win32-x64",
+      "sourceUrl": "https://github.com/mybigday/whisper.node",
+      "version": "1.2.0-rc.1",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": [
+          "Copyright (c) 2025 ggml / whisper.cpp contributors",
+          "Copyright (c) 2025 Jhen-Jie Hong <developer@jhen.me>",
+          "Copyright (c) 2025 Hans Chen <hans.chen@bricks.tools>"
+        ]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@fugood/node-whisper-win32-x64-cuda",
+      "sourceUrl": "https://github.com/mybigday/whisper.node",
+      "version": "1.2.0-rc.1",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": [
+          "Copyright (c) 2025 ggml / whisper.cpp contributors",
+          "Copyright (c) 2025 Jhen-Jie Hong <developer@jhen.me>",
+          "Copyright (c) 2025 Hans Chen <hans.chen@bricks.tools>"
+        ]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@fugood/node-whisper-win32-x64-vulkan",
+      "sourceUrl": "https://github.com/mybigday/whisper.node",
+      "version": "1.2.0-rc.1",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": [
+          "Copyright (c) 2025 ggml / whisper.cpp contributors",
+          "Copyright (c) 2025 Jhen-Jie Hong <developer@jhen.me>",
+          "Copyright (c) 2025 Hans Chen <hans.chen@bricks.tools>"
+        ]
+      }
     }
   ]
 }
