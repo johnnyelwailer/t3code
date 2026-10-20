@@ -1,10 +1,8 @@
 import { RouterProvider } from "@tanstack/react-router";
-import { useEffect } from "react";
 
 import { BrowserProfileReporter } from "./browser/BrowserProfileReporter";
 import { ElectronBrowserHost } from "./browser/ElectronBrowserHost";
 import { QuitHoldOverlay } from "./components/QuitHoldOverlay";
-import { startRegionZoom } from "./regionZoom";
 import { AppAtomRegistryProvider } from "./rpc/atomRegistry";
 import type { AppRouter } from "./router";
 
@@ -14,8 +12,6 @@ import type { AppRouter } from "./router";
  * share the same atom registry as routed UI.
  */
 export function AppRoot({ router }: { readonly router: AppRouter }) {
-  // Ctrl/Cmd+scroll hover-zoom for marked regions; document-level, app-wide.
-  useEffect(() => startRegionZoom(), []);
   return (
     <AppAtomRegistryProvider>
       <RouterProvider router={router} />

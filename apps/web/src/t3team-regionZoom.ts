@@ -4,8 +4,8 @@
  * and sidebar thread rows (`[data-thread-item]`) — instead of Chromium's
  * native whole-page zoom.
  *
- * Mounted once from AppRoot. Outside any region the gesture is left alone so
- * the native page zoom keeps working. A zoomed region returns to 1× ~600ms
+ * Mounted once from the root route view (routes/__root.tsx). Outside any
+ * region the gesture is left alone so the native page zoom keeps working. A zoomed region returns to 1× ~600ms
  * after the pointer leaves it.
  *
  * Limitations:
