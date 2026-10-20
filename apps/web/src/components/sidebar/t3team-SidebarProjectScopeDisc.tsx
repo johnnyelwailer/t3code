@@ -26,8 +26,6 @@ export function T3TeamSidebarProjectScopeDisc({
   first,
   onSelect,
   onContextMenu,
-  variant = "scope",
-  disabledReason,
   children,
 }: {
   label: string;
@@ -38,10 +36,6 @@ export function T3TeamSidebarProjectScopeDisc({
   first: boolean;
   onSelect: () => void;
   onContextMenu?: ((event: ReactMouseEvent<HTMLElement>) => void) | undefined;
-  /** "add" is a Jira project the app does not have yet: a dashed ghost that adds rather than scopes. */
-  variant?: "scope" | "add";
-  /** When set the disc is inert and the tooltip says why. */
-  disabledReason?: string | undefined;
   children: ReactNode;
 }) {
   const style: CSSProperties = {
@@ -55,16 +49,13 @@ export function T3TeamSidebarProjectScopeDisc({
         render={
           <button
             type="button"
-            aria-pressed={variant === "add" ? undefined : active}
-            aria-label={variant === "add" ? `Add ${label}` : label}
-            aria-disabled={disabledReason ? true : undefined}
+            aria-pressed={active}
+            aria-label={label}
             style={style}
-            onClick={disabledReason ? undefined : onSelect}
+            onClick={onSelect}
             onContextMenu={onContextMenu}
             className={cn(
               "relative inline-flex h-7 min-w-7 shrink-0 cursor-pointer items-center justify-center gap-1.5 overflow-hidden rounded-full border border-black/15 bg-card outline-none transition-[margin,transform,color] duration-150 focus-visible:ring-2 focus-visible:ring-ring/60 dark:border-white/15 dark:bg-sidebar-control-surface",
-              variant === "add" && "border-dashed bg-transparent opacity-80 hover:opacity-100",
-              disabledReason && "cursor-not-allowed opacity-50 hover:opacity-50",
               active
                 ? "px-1 pr-2.5 text-foreground"
                 : "text-muted-foreground hover:text-foreground",
@@ -95,9 +86,7 @@ export function T3TeamSidebarProjectScopeDisc({
           {label}
         </span>
       </TooltipTrigger>
-      <TooltipPopup side="bottom">
-        {disabledReason ?? (variant === "add" ? `Add ${label} to the app` : label)}
-      </TooltipPopup>
+      <TooltipPopup side="bottom">{label}</TooltipPopup>
     </Tooltip>
   );
 }

@@ -115,14 +115,15 @@ describe("project scope picker disc", () => {
 
   it("counts the overflow when projects do not fit", async () => {
     await renderRow(2);
-    expect(picker()?.getAttribute("aria-label")).toBe("3 more projects, search projects");
-    expect(picker()?.textContent).toBe("+3");
+    expect(picker()?.getAttribute("aria-label")).toBe("2 more projects, search projects");
+    expect(picker()?.textContent).toBe("+2");
   });
 
-  it("lists the overflow first, then the shown discs, then All", async () => {
+  it("lists the overflow first, then the shown discs, then All, hiding add candidates", async () => {
     await renderRow(2);
     await openAndType("");
-    expect(optionLabels()).toEqual(["bravo", "charlie", "Delta board", "alpha", "All projects"]);
+    // Add candidates stay hidden until a query is typed.
+    expect(optionLabels()).toEqual(["bravo", "charlie", "alpha", "All projects"]);
   });
 
   it("searches shown and overflow projects alike", async () => {
