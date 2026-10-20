@@ -655,13 +655,9 @@
     "apps/server/src/cli/sshHelper.test.ts",
     "apps/server/src/persistence/Sqlite.test.ts",
     "apps/desktop/src/app/DesktopApp.ts",
-    "apps/desktop/src/ipc/DesktopIpcHandlers.ts",
-    "apps/desktop/src/ipc/channels.ts",
     "apps/desktop/src/main.ts",
-    "apps/desktop/src/preload.ts",
     "apps/desktop/src/snapShot/DesktopSnapShot.ts",
-    "apps/desktop/src/snapShot/PortalCaptureShortcut.ts",
-    "packages/contracts/src/ipc.ts"
+    "apps/desktop/src/snapShot/PortalCaptureShortcut.ts"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",

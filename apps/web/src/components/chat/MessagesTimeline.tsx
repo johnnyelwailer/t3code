@@ -312,6 +312,8 @@ import { createContextPresentationRegistry } from "../contextPresentationRegistr
 import { useOpenPrLink } from "~/lib/openPullRequestLink";
 import { useClientSettings } from "~/hooks/useSettings";
 import type { ChatMarkdownContextReference } from "../ChatMarkdown";
+import { VOICE_STATE_KIND } from "../../t3team/voice/t3team-voiceLiveState";
+import { VoiceStateChip } from "../../t3team/voice/t3team-VoiceStateChip";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 import { cn } from "~/lib/utils";
 import { useUiStateStore } from "~/uiStateStore";
@@ -5206,7 +5208,12 @@ const userMessageContextPresentationRegistry = createContextPresentationRegistry
         ),
     },
   ],
-  fallback: (_kind, _record, context) => <UnavailableUserMessageContextChip {...context} />,
+  fallback: (kind, _record, context) =>
+    kind === VOICE_STATE_KIND ? (
+      <VoiceStateChip label={context.reference.label} copyMarkdown={context.copyMarkdown} />
+    ) : (
+      <UnavailableUserMessageContextChip {...context} />
+    ),
 });
 
 /** One inline context chip in a sent message, dispatched by the shared presentation registry. */

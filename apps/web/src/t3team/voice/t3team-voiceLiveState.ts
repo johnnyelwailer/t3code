@@ -7,7 +7,7 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/model
 import { ComposerContextId, type ComposerContextRecord, type ThreadId } from "@t3tools/contracts";
 import { formatComposerContextReference } from "@t3tools/shared/composerContextReferences";
 
-const VOICE_STATE_KIND = "voice-state";
+export const VOICE_STATE_KIND = "voice-state";
 const VOICE_STATE_CONTEXT_ID = ComposerContextId.make("voice-live-state");
 const MAX_LISTED_THREADS = 20;
 const MAX_TITLE_CHARS = 80;

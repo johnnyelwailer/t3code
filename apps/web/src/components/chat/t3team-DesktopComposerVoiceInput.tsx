@@ -1,17 +1,30 @@
 import { LoaderCircleIcon, MicIcon, SquareIcon } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useImperativeHandle, type Ref } from "react";
 
 import { toastManager } from "~/components/ui/toast";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { useDesktopVoiceInput } from "~/voice/t3team-useDesktopVoiceInput";
 
+export interface DesktopVoiceInputHandle {
+  /** Start recording when idle, stop and transcribe when recording (the global-hotkey toggle). */
+  toggle: () => void;
+}
+
 /** Composer mic for the Electron desktop app: records, then transcribes on-device with whisper. */
-export function DesktopComposerVoiceInput(props: {
+export function DesktopComposerVoiceInput({
+  onTranscript,
+  disabled,
+  className,
+  ref,
+}: {
   readonly onTranscript: (text: string) => void;
   readonly disabled: boolean;
+  readonly className?: string;
+  readonly ref?: Ref<DesktopVoiceInputHandle>;
 }) {
-  const { available, state, toggle } = useDesktopVoiceInput(props.onTranscript);
+  const { available, state, toggle } = useDesktopVoiceInput(onTranscript);
+  useImperativeHandle(ref, () => ({ toggle }), [toggle]);
   const { phase, error } = state;
 
   useEffect(() => {
@@ -39,7 +52,8 @@ export function DesktopComposerVoiceInput(props: {
             type="button"
             variant="ghost"
             size="icon-sm"
-            disabled={props.disabled || busy}
+            className={className}
+            disabled={disabled || busy}
             onPointerDown={(event) => event.preventDefault()}
             onClick={toggle}
             aria-label={label}

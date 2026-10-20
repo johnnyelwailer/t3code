@@ -2,6 +2,11 @@ import { ComposerVoiceInput, type ComposerVoiceInputHandle } from "@t3tools/shar
 import { useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import {
+  DesktopComposerVoiceInput,
+  type DesktopVoiceInputHandle,
+} from "../../components/chat/t3team-DesktopComposerVoiceInput";
+import { isElectron } from "../../env";
 import { voiceFailureMessage, type VoiceFailureCode } from "./t3team-voiceFailure";
 import { submitVoiceUtterance } from "./t3team-voiceSession";
 import { makeVoiceSessionDeps } from "./t3team-voiceSessionDeps";
@@ -20,11 +25,13 @@ const noticeText = (notice: Notice) =>
 
 /**
  * The persistent voice pill: owns the session, shows what was heard, and routes each committed
- * utterance to the global voice thread. A standalone consumer of the existing voice-input stack.
+ * utterance to the global voice thread. Desktop transcribes on-device with whisper (Web Speech is
+ * unreachable on-prem); the browser keeps the Web Speech input.
  */
 export function T3TeamVoiceAgentPill() {
   const router = useRouter();
-  const voiceRef = useRef<ComposerVoiceInputHandle>(null);
+  const webVoiceRef = useRef<ComposerVoiceInputHandle>(null);
+  const desktopVoiceRef = useRef<DesktopVoiceInputHandle>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   useEffect(() => {
@@ -56,7 +63,7 @@ export function T3TeamVoiceAgentPill() {
   );
 
   useVoiceHotkey({
-    onToggle: () => voiceRef.current?.toggle(),
+    onToggle: () => (desktopVoiceRef.current ?? webVoiceRef.current)?.toggle(),
     onUnavailable: (detail) => setNotice({ kind: "failure", code: "hotkey-unavailable", detail }),
   });
 
@@ -70,14 +77,23 @@ export function T3TeamVoiceAgentPill() {
           {noticeText(notice)}
         </p>
       )}
-      <ComposerVoiceInput
-        ref={voiceRef}
-        className="pointer-events-auto"
-        onTranscript={onTranscript}
-        onStateChange={(state) => {
-          if (state === "denied") setNotice({ kind: "failure", code: "mic-denied" });
-        }}
-      />
+      {isElectron ? (
+        <DesktopComposerVoiceInput
+          ref={desktopVoiceRef}
+          className="pointer-events-auto"
+          onTranscript={onTranscript}
+          disabled={false}
+        />
+      ) : (
+        <ComposerVoiceInput
+          ref={webVoiceRef}
+          className="pointer-events-auto"
+          onTranscript={onTranscript}
+          onStateChange={(state) => {
+            if (state === "denied") setNotice({ kind: "failure", code: "mic-denied" });
+          }}
+        />
+      )}
     </div>
   );
 }
