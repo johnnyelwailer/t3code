@@ -9,6 +9,10 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { T3TeamAtlassianError, tryAtlassianPromise } from "./t3team-atlassian-http.ts";
 import { invalidateT3TeamAtlassianAuthDependents } from "./t3team-atlassian-auth-changeHooks.ts";
+import {
+  claimSecretForThisHome,
+  secretBelongsToThisHome,
+} from "./t3team-atlassian-auth-homeGuard.ts";
 import { findAuthForAccountId } from "./t3team-atlassian-auth-lookup.ts";
 import {
   atlassianAuths,
@@ -18,7 +22,7 @@ import {
 } from "./t3team-atlassian-auth-state.ts";
 import {
   oauthAuthExpiresSoon,
-  recoverFromDeadRefreshToken,
+  recheckAfterDeadRefreshToken,
 } from "./t3team-atlassian-auth-deadToken.ts";
 import {
   accountNeedsReconnect,
@@ -103,6 +107,12 @@ function refreshOAuthAuthIfNeeded(accountId: string, auth: JiraApiAuth) {
 
     const config = atlassianOAuthClientConfig();
     const clientSecretPresent = config.clientSecret !== undefined;
+    // A copy of another installation's secret must never rotate the shared refresh token: that
+    // signs the real installation out. Keep the account unflagged and report it instead.
+    if (!(yield* secretBelongsToThisHome)) {
+      yield* logRefreshAttempt({ accountId, outcome: "copied-secret", clientSecretPresent });
+      return yield* copiedSecretError();
+    }
     if (!config.clientId) {
       yield* logRefreshAttempt({ accountId, outcome: "missing-client-id", clientSecretPresent });
       return auth;
@@ -137,35 +147,57 @@ function refreshOAuthAuthIfNeeded(accountId: string, auth: JiraApiAuth) {
       Effect.catch((error) =>
         Effect.gen(function* () {
           const details = refreshFailureDetails(error);
-          if (details.refreshTokenInvalid) {
-            const recovered = yield* recoverFromDeadRefreshToken(accountId, refreshToken).pipe(
-              Effect.tapError(() =>
-                logRefreshAttempt({
-                  accountId,
-                  outcome: "refresh-token-invalid",
-                  clientSecretPresent,
-                  details,
-                }),
-              ),
-            );
+          // Always re-read once on a session-expired class response. Another installation (or a
+          // crash between Atlassian redeem and our persist) may have written a newer token.
+          if (details.refreshTokenInvalid || details.sessionExpiredResponse) {
+            const rechecked = yield* recheckAfterDeadRefreshToken(accountId, refreshToken);
+            if (rechecked._tag === "adopted" || rechecked._tag === "newer-on-disk") {
+              yield* logRefreshAttempt({
+                accountId,
+                outcome: "adopted-newer-token",
+                clientSecretPresent,
+                details,
+              });
+              return { _tag: "unchanged", auth: rechecked.auth } satisfies RefreshResult;
+            }
+            if (rechecked._tag === "gone") {
+              yield* logRefreshAttempt({
+                accountId,
+                outcome: "refresh-token-invalid",
+                clientSecretPresent,
+                details,
+              });
+              return yield* reconnectRequiredError();
+            }
+            // Same dead token still on disk. invalid_grant / "refresh_token is invalid" means the
+            // session is gone; a bare unauthorized_client is a client-id/secret mismatch.
+            if (details.refreshTokenInvalid) {
+              yield* logRefreshAttempt({
+                accountId,
+                outcome: "refresh-token-invalid",
+                clientSecretPresent,
+                details,
+              });
+              return yield* markNeedsReconnect(
+                accountId,
+                persistAuthsToDisk,
+                "refresh-token-invalid",
+              );
+            }
             yield* logRefreshAttempt({
               accountId,
-              outcome: "adopted-newer-token",
+              outcome: "client-rejected",
               clientSecretPresent,
               details,
             });
-            if (recovered._tag === "gone") return yield* reconnectRequiredError();
-            return { _tag: "unchanged", auth: recovered.auth } satisfies RefreshResult;
+            return yield* oauthConfigError();
           }
-          // A bare `unauthorized_client` (no "refresh_token is invalid") means the client id or
-          // secret was refused: a configuration problem, so the session stays unflagged.
           yield* logRefreshAttempt({
             accountId,
-            outcome: details.sessionExpiredResponse ? "client-rejected" : "failed",
+            outcome: "failed",
             clientSecretPresent,
             details,
           });
-          if (details.sessionExpiredResponse) return yield* oauthConfigError();
           return yield* Effect.fail(error);
         }),
       ),
@@ -181,6 +213,14 @@ function refreshOAuthAuthIfNeeded(accountId: string, auth: JiraApiAuth) {
 type RefreshResult =
   | { readonly _tag: "refreshed"; readonly auth: JiraApiAuth }
   | { readonly _tag: "unchanged"; readonly auth: JiraApiAuth };
+
+function copiedSecretError() {
+  return new T3TeamAtlassianError({
+    code: JIRA_OAUTH_CONFIG_CODE,
+    message:
+      "Jira sign-in can not be renewed here: these credentials were copied from another installation. Sign in to Jira again on this one.",
+  });
+}
 
 function oauthConfigError() {
   return new T3TeamAtlassianError({
@@ -243,6 +283,7 @@ export function replaceAtlassianAuths(
 ): void {
   atlassianAuths.clear();
   resetAllNeedsReconnect();
+  claimSecretForThisHome();
   for (const entry of entries) {
     atlassianAuths.set(entry.accountId, entry.auth);
   }

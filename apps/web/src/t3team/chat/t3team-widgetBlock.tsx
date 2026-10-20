@@ -12,7 +12,6 @@ import type { ScopedThreadRef, T3TeamMessageWidgetAttachment } from "@t3tools/co
 import { readHtmlRenderReference } from "@t3tools/shared/htmlRender";
 
 import { HtmlRenderFrame } from "~/components/chat/HtmlRenderFrame";
-import type { ChatFileAttachment } from "~/types";
 import { useT3TeamWidgetBlockController } from "~/t3team/chat/t3team-useWidgetBlockController";
 
 function widgetUsesHtmlRenderShim(widget: T3TeamMessageWidgetAttachment["widget"]): boolean {
@@ -26,9 +25,8 @@ function widgetUsesHtmlRenderShim(widget: T3TeamMessageWidgetAttachment["widget"
 export function T3TeamWidgetBlock(props: {
   readonly widget: T3TeamMessageWidgetAttachment["widget"];
   readonly threadRef: ScopedThreadRef | null;
-  readonly onOpenHtmlRender?: (attachment: ChatFileAttachment) => void;
 }) {
-  const { widget, threadRef, onOpenHtmlRender } = props;
+  const { widget, threadRef } = props;
   const useShim = widgetUsesHtmlRenderShim(widget) && threadRef !== null;
   const htmlRender = useShim ? readHtmlRenderReference(widget.htmlRender) : undefined;
 
@@ -43,7 +41,7 @@ export function T3TeamWidgetBlock(props: {
         <HtmlRenderFrame
           environmentId={threadRef.environmentId}
           htmlRender={htmlRender}
-          onOpen={onOpenHtmlRender ?? (() => undefined)}
+          threadRef={threadRef}
         />
       </div>
     );

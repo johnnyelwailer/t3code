@@ -164,6 +164,10 @@ import Migration0107 from "./Migrations/059_McpAppModelContext.ts";
 import Migration0108 from "./Migrations/060_ThreadSnapshotWindowIndexes.ts";
 // New from the 2026-10-11 upstream sync (upstream 061). Appended above the fork's maximum id (108).
 import Migration0109 from "./Migrations/061_PullRequestReviewGuides.ts";
+// New from the 2026-10-14 upstream sync (upstream 062). Appended above the fork's maximum id (109).
+import Migration0110 from "./Migrations/062_ThreadFailureLookupIndex.ts";
+// Trigger-maintained per-thread item counts and a user-authored message index for shell reads.
+import Migration0111 from "./Migrations/t3team-081_ShellItemCounts.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -261,7 +265,7 @@ export const migrationEntries = [
   [83, "OrchestrationEventsTypeSequenceIndex", Migration0083],
   // Upstream 055/056 (orchestration V2) live at 84/85 in this fork's ledger; see the import comment.
   // Preserve this migration's schema. Future V2 schema changes need new migrations. A new
-  // migration must take an id ABOVE the highest id registered here (currently 108) — never one of
+  // migration must take an id ABOVE the highest id registered here (currently 110) — never one of
   // the gaps (88-89, 93-96): upgraded databases have recorded the maximum, and the Migrator skips
   // every id at or below it. Upstream's reconcileV2PreviewMigration stays a no-op on fork ledgers
   // (fork ids 53/54 are never named OrchestrationV2).
@@ -288,6 +292,9 @@ export const migrationEntries = [
   [108, "ThreadSnapshotWindowIndexes", Migration0108],
   // Upstream 061 lives at 109 in this fork's ledger; see the import comment.
   [109, "PullRequestReviewGuides", Migration0109],
+  // Upstream 062 lives at 110 in this fork's ledger; see the import comment.
+  [110, "ThreadFailureLookupIndex", Migration0110],
+  [111, "ShellItemCounts", Migration0111],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

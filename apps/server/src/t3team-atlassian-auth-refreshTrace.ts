@@ -55,6 +55,7 @@ export type RefreshOutcome =
   | "client-rejected"
   | "missing-client-secret"
   | "missing-client-id"
+  | "copied-secret"
   | "failed";
 
 export function logRefreshAttempt(input: {

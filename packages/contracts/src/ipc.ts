@@ -14,6 +14,13 @@ import { ExecutionEnvironmentDescriptor } from "./environment.ts";
 import { type ClientSettings, type QuitConfirmationMode, SnapShotShortcut } from "./settings.ts";
 import type { EditorId } from "./editor.ts";
 import type { PreviewForwardedShortcut } from "./keybindings.ts";
+import type {
+  DesktopVoicePrepareRequest,
+  DesktopVoicePrepareResult,
+  DesktopVoiceTranscribeRequest,
+  DesktopVoiceTranscribeResult,
+} from "./t3team-desktopVoice.ts";
+import type { DesktopVoiceHotkeyState } from "./t3team-voiceHotkey.ts";
 
 import type {
   DesktopAppActivationRequest,
@@ -284,6 +291,12 @@ export interface DesktopUpdateState {
   message: string | null;
   errorContext: "check" | "download" | "install" | null;
   canRetry: boolean;
+  /**
+   * The version the last install handed to the OS installer that did not
+   * apply: the app came back on its old version. Server-triggered updates do
+   * not install it again; the user can retry it from the update button.
+   */
+  notAppliedVersion?: string;
 }
 
 export interface DesktopUpdateReleaseNote {
@@ -315,6 +328,7 @@ export const DesktopUpdateStateSchema = Schema.Struct({
   message: Schema.NullOr(Schema.String),
   errorContext: Schema.NullOr(Schema.Literals(["check", "download", "install"])),
   canRetry: Schema.Boolean,
+  notAppliedVersion: Schema.optionalKey(Schema.String),
 });
 
 /** The desktop app's `t3` command on PATH, managed from Settings. */
@@ -1148,6 +1162,7 @@ export interface DesktopBridge {
   resolveSshHost: (alias: string) => Promise<DesktopSshEnvironmentTarget>;
   requestSnapShotPermissions?: (includeAccessibility: boolean) => Promise<void>;
   getSnapShotState?: () => Promise<DesktopSnapShotState>;
+  getVoiceHotkeyState?: () => Promise<DesktopVoiceHotkeyState>;
   setupSnapShot?: (action: DesktopSnapShotSetupAction) => Promise<void>;
   previewSnapShotConfig?: (
     request: DesktopCaptureConfigRequest,
@@ -1164,6 +1179,13 @@ export interface DesktopBridge {
   ) => Promise<void>;
   dismissSnapShotAnimation?: (id: DesktopSnapShotId) => Promise<void>;
   acknowledgeSnapShot?: (id: string) => Promise<void>;
+  /** Native on-device whisper transcription; absent on desktop builds predating it. */
+  prepareVoiceTranscriber?: (
+    request: DesktopVoicePrepareRequest,
+  ) => Promise<DesktopVoicePrepareResult>;
+  transcribeVoice?: (
+    request: DesktopVoiceTranscribeRequest,
+  ) => Promise<DesktopVoiceTranscribeResult>;
   ensureSshEnvironment: (
     target: DesktopSshEnvironmentTarget,
     options?: { issuePairingToken?: boolean },

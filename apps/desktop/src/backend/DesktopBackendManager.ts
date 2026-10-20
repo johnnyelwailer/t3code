@@ -42,6 +42,7 @@ import { HttpClient } from "effect/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import {
+  SERVER_EXIT_CODE_STATE_DIR_OWNED,
   DesktopBackendBootstrap,
   type DesktopBackendBootstrap as DesktopBackendBootstrapValue,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
@@ -50,6 +51,7 @@ import {
 } from "@t3tools/contracts";
 import { waitForHttpReady as waitForHttpReadyShared } from "@t3tools/shared/httpReadiness";
 import * as BackendHealthWatchdog from "./t3team-backendHealthWatchdog.ts";
+import * as BackendLiveness from "./t3team-backendLiveness.ts";
 
 import * as DesktopObservability from "../app/DesktopObservability.ts";
 import * as DesktopTelemetryPublisher from "../telemetry/DesktopTelemetryPublisher.ts";
@@ -66,7 +68,9 @@ const MAX_PREFLIGHT_FAILURE_ATTEMPTS = 5;
 const DEFAULT_BACKEND_READINESS_TIMEOUT = Duration.minutes(1);
 const DEFAULT_BACKEND_READINESS_INTERVAL = Duration.millis(100);
 const DEFAULT_BACKEND_READINESS_REQUEST_TIMEOUT = Duration.seconds(1);
-const DEFAULT_BACKEND_TERMINATE_GRACE = Duration.seconds(2);
+// Same as the service launcher. A killed backend leaves its agents running,
+// and a busy one needs a few seconds to stop every provider session.
+const DEFAULT_BACKEND_TERMINATE_GRACE = Duration.seconds(5);
 const DEFAULT_BACKEND_OUTPUT_DRAIN_TIMEOUT = Duration.seconds(5);
 const BACKEND_READINESS_PATH = "/.well-known/t3/environment";
 const { logWarning: logBackendProcessWarning } =
@@ -310,6 +314,7 @@ export interface BackendInstanceSpec {
   // retries. Returns true when the callback changed configuration and the
   // manager should resolve once more; false stops the failed instance.
   readonly onPreflightFailed?: (failure: PreflightFailure) => Effect.Effect<boolean>;
+  readonly onStateDirOwned?: () => Effect.Effect<void>;
 }
 
 interface ActiveBackendRun {
@@ -495,6 +500,9 @@ export const runBackendProcess = Effect.fn("runBackendProcess")(function* (
     if (options.bootstrap.desktopBrowserControlFd !== undefined) {
       additionalFds[`fd${options.bootstrap.desktopBrowserControlFd}`] = { type: "output" };
     }
+    if (options.bootstrap.desktopLivenessFd !== undefined) {
+      additionalFds[`fd${options.bootstrap.desktopLivenessFd}`] = { type: "output" };
+    }
   }
   const command = ChildProcess.make(options.executablePath, options.args, {
     cwd: options.cwd,
@@ -636,10 +644,17 @@ export const runBackendProcess = Effect.fn("runBackendProcess")(function* (
     ),
   );
 
+  const livenessFd = options.bootstrap.desktopLivenessFd;
+  const liveness = yield* BackendLiveness.forkBackendLivenessReader(
+    options.bootstrapDelivery === "fd3" && livenessFd !== undefined
+      ? handle.getOutputFd(livenessFd)
+      : undefined,
+  );
   const healthWatchdog = options.healthWatchdog;
   const watchHealth = healthWatchdog
     ? BackendHealthWatchdog.runBackendHealthWatchdog({
         ...healthWatchdog,
+        liveness,
         probe: BackendHealthWatchdog.makeBackendHttpHealthProbe(
           options.httpBaseUrl,
           BACKEND_READINESS_PATH,
@@ -895,7 +910,9 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
 
         const finalizeRun = Effect.fn("desktop.backendInstance.finalizeRun")(function* (
           reason: string,
+          exitCode?: number,
         ) {
+          const stateDirOwned = exitCode === SERVER_EXIT_CODE_STATE_DIR_OWNED;
           yield* mutex.withPermits(1)(
             Effect.gen(function* () {
               const { isCurrentRun, nextState, pid, exitObserved, stopRequested, wasReady } =
@@ -965,6 +982,11 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
               }
 
               if (isCurrentRun && nextState.desiredRunning) {
+                if (stateDirOwned && !stopRequested) {
+                  yield* Ref.update(state, (latest) => ({ ...latest, desiredRunning: false }));
+                  yield* (spec.onStateDirOwned?.() ?? Effect.void).pipe(Effect.ignore);
+                  return;
+                }
                 yield* scheduleRestart(reason);
               }
             }),
@@ -1042,7 +1064,7 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
           Scope.provide(runScope),
           Effect.matchEffect({
             onFailure: (error) => finalizeRun(error.message),
-            onSuccess: (exit) => finalizeRun(exit.reason),
+            onSuccess: (exit) => finalizeRun(exit.reason, Option.getOrUndefined(exit.code)),
           }),
           Effect.ensuring(Scope.close(runScope, Exit.void).pipe(Effect.ignore)),
         );

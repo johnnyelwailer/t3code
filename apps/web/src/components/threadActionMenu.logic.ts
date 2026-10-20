@@ -21,6 +21,7 @@ export type ThreadActionMenuId =
   | `snooze:${string}`
   | "unsnooze"
   | "rename"
+  | "set-icon"
   | "regenerate-title"
   | "mark-unread"
   | "copy"
@@ -106,6 +107,7 @@ export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean
   return ![
     "new-thread-on-branch",
     "project-settings",
+    "set-icon",
     "mark-unread",
     "copy",
     "copy-path",
@@ -169,6 +171,7 @@ export function buildThreadActionMenuItems(
         ]
       : []),
     { id: "rename", label: "Rename thread", icon: "pencil", separatorBefore: true },
+    { id: "set-icon", label: "Set icon", icon: "smile" },
     ...(state.supports.titleRegeneration
       ? [
           {

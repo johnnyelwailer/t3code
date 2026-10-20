@@ -24,6 +24,7 @@ import * as Effect from "effect/Effect";
 import type { TransientRunFailure } from "./orchestration-v2/t3team-transientRunFailure.ts";
 import {
   maxTransientRetries,
+  providerUnreachableText,
   transientRetryReason,
 } from "./t3team-threadTransientTurnRetryPolicy.ts";
 import {
@@ -81,7 +82,8 @@ export const armTransientAutoResume = (
 ) =>
   Effect.gen(function* () {
     const { plan } = input;
-    const max = maxTransientRetries(input.failure.outage);
+    const unreachable = input.failure.unreachable === true;
+    const max = maxTransientRetries(input.failure.outage, unreachable);
     const cycle = priorRetryAttempts(input.runs, input.runId) + 1 - max;
     const delayMs = plan.kind === "retry" ? plan.delayMs : autoResumeDelayMs(cycle);
     yield* deps.recordNote({
@@ -90,7 +92,9 @@ export const armTransientAutoResume = (
       text:
         plan.kind === "retry"
           ? plan.note
-          : autoResumeNoteText(transientRetryReason(input.failure), max, delayMs),
+          : unreachable
+            ? providerUnreachableText(transientRetryReason(input.failure), delayMs)
+            : autoResumeNoteText(transientRetryReason(input.failure), max, delayMs),
     });
     const now = yield* DateTime.now;
     yield* deps.dispatch({

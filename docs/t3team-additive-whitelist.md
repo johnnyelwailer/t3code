@@ -22,7 +22,13 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20261012` → the 2026-10-12 upstream sync merge commit
+- Current: `t3team/fork-baseline-20261015` → the 2026-10-15 upstream sync merge commit
+  `9c38e942cd` (107 upstream commits absorbed, `11fd54fcbb..e536bfd33b`, after merging fork main
+  `1d15b3ecfc`). Grandfathered: upstream's tree plus the conflict resolutions in that merge.
+  Post-merge fixes on the sync branch stay measured.
+- Before that: `t3team/fork-baseline-20261013` → fork commit `8d151d69b9` (post-fix tip of the
+  2026-10-12/13 sync branch).
+- Before that: `t3team/fork-baseline-20261012` → the 2026-10-12 upstream sync merge commit
   `7006978420` (434 upstream commits absorbed, `04ad17425a..48595c787c`). Grandfathered: upstream's
   tree plus the conflict resolutions in that merge. Post-merge fixes on the sync branch stay measured.
 - Before that: `t3team/fork-baseline-20261008` → the 2026-10-08 upstream sync merge commit
@@ -93,6 +99,21 @@ git push origin t3team/fork-baseline-YYYYMMDD
 Until the new tag is pushed, the guard fails loudly on CI (missing tag), never silently.
 
 ## Allowed Modified Upstream Files
+
+### Client-only thread icon (voice V1 item 8, PR #606)
+
+- `apps/web/src/uiStateStore.ts`
+  - Adds the persisted `threadIconByThreadId` record and its `setThreadIcon` action beside the other per-thread UI state.
+- `apps/web/src/uiStateStore.test.ts`
+  - Expects the new `threadIconByThreadId` field in the hydrate and persist round-trips.
+- `apps/web/src/components/ProjectFavicon.tsx`
+  - Delegates the monogram, emoji, and Lucide branches to the extracted `t3team-ProjectIconGlyph` so thread and project icons share one render path.
+- `apps/web/src/components/ProjectFavicon.test.tsx`
+  - Asserts the delegation to `ProjectIconGlyph`; the glyph markup is covered in `t3team-ProjectIconGlyph.test.tsx`.
+- `apps/web/src/components/threadActionMenu.logic.ts`
+  - Adds the local, non-operate-gated `set-icon` item to the shared thread action menu.
+- `apps/web/src/components/threadActionMenu.logic.test.ts`
+  - Expects the `set-icon` item in the local and capability-gated menu lists.
 
 ### Upstream sync 2026-10-12
 
@@ -399,6 +420,13 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
 - `apps/web/src/components/auth/ConnectAgentSurface.tsx`, `apps/web/src/routes/connect-agent.tsx`
 - `oxlint-plugin-t3code/rules/no-raw-mcp-registration.ts`, `…/no-raw-mcp-registration.test.ts`
 
+### Upstream sync 2026-10-16
+
+- `apps/server/src/cli/sshHelper.test.ts`
+  - The pick-port case spawns `bin.ts` directly; the fork's `bin.ts` boots the distribution layer, which needs `scripts/t3team-distribution-devLoader.ts`, so the spawn adds `--import` of that loader. Test-only.
+- `apps/server/src/persistence/Sqlite.test.ts`
+  - The planner-stats case asserted the exact `sqlite_stat1` row `"1000 100"`; under the fork's runtime the bounded `PRAGMA optimize = 0x10012` sample reports `"1000 90"`. The case now asserts the exact row count and a sane per-key estimate. Test-only.
+
 ## `changeRequest.summary` slot (T8)
 
 - `apps/web/src/components/pullRequest/PullRequestSummaryTab.tsx` — one import and one
@@ -413,3 +441,11 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
   `runBackendProcess`, chained after the readiness loop, and one per-instance kill history passed
   from `makeBackendInstance`. The logic lives in `t3team-backendHealthWatchdog.ts`; without the
   option the process runner is unchanged.
+
+## Stop during checkpoint drain + effect lease renewal (2026-10-15)
+
+- `apps/server/src/orchestration-v2/EffectOutbox.ts` — `renewLease`: a worker extends the lease of an effect it still runs.
+- `apps/server/src/orchestration-v2/EffectWorker.ts` — heartbeat that renews the lease while an effect executes, so a slow checkpoint capture is not reclaimed and run twice.
+- `apps/server/src/orchestration-v2/RunFinalizationService.ts` — on the last capture attempt, a failed checkpoint capture completes the run without a checkpoint (retrying that settle), so a `waiting` run cannot hold the queue until restart.
+- `apps/server/src/orchestration-v2/CheckpointCaptureService.ts` — exposes `completeWithoutCheckpoint`; the logic lives in `t3team-checkpointCaptureFallback.ts`.
+- `apps/server/src/orchestration-v2/RunFinalizationService.test.ts`, `EffectWorker.test.ts`, `packages/client-runtime/src/operations/commands.test.ts` — cover the last-attempt settle, its wiring, and that Stop never targets a finished `waiting` run.

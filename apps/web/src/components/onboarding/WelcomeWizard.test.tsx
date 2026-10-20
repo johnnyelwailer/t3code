@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   extraEnvironments: [] as Array<{
     environmentId: string;
     label: string;
+    entry?: { enabled: boolean };
     connection: { phase: string };
   }>,
 }));
@@ -177,7 +178,12 @@ it("enters the workspace after a partial import and warns after navigation finis
 
 it("leaves an unreachable computer unticked and never blocks Continue on it", async () => {
   mocks.extraEnvironments = [
-    { environmentId: "offline-env", label: "Offline box", connection: { phase: "error" } },
+    {
+      environmentId: "offline-env",
+      label: "Offline box",
+      entry: { enabled: true },
+      connection: { phase: "error" },
+    },
   ];
   await act(async () => root.render(<WelcomeWizard localAvailable onDone={vi.fn()} />));
 

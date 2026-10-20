@@ -99,8 +99,13 @@ import type {
 import * as PullRequestReadCache from "./PullRequestReadCache.ts";
 import * as PullRequestProviderRegistry from "./PullRequestProviderRegistry.ts";
 import { readProjectLinkedRepositories } from "./t3team-LinkedRepositories.ts";
+import {
+  logRepositoryReadFailure,
+  repositoryReadFailureMessage,
+} from "./t3team-repositoryReadFailure.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import * as ViewedFiles from "./pullRequestViewedFiles.ts";
+import { unreadableRepositoryMessage } from "./t3team-unreadableRepositoryMessage.ts";
 
 export interface PullRequestMergeEvent extends PullRequestRef {
   readonly mergedAt: string;
@@ -382,6 +387,7 @@ const ACTION_ACCESS_REFUSALS: Record<PullRequestAction, string> = {
   "disable-auto-merge":
     "You need write access on this repository to stop it being merged for you once it is ready.",
   revert: "You need write access on this repository to open a revert pull request.",
+  "delete-branch": "You need write access on the source repository to delete its branch.",
   "approve-workflows":
     "You need write access on this repository to approve workflows from a fork pull request.",
 };
@@ -1425,11 +1431,18 @@ export const make = Effect.gen(function* () {
       // Reporting them keeps "N repositories were unavailable" honest instead of dropping them.
       const unreadable = selected
         .filter(({ host }) => viewers[host] === undefined)
-        .map(({ project, repository }) => ({
-          projectId: project.id,
-          projectTitle: project.title,
-          message: `${repository} could not be read.`,
-        }));
+        .map(({ project, repository, host }) => {
+          const hostError = viewerResults.find((result) => result.host === host)?.error;
+          return {
+            projectId: project.id,
+            projectTitle: project.title,
+            message: unreadableRepositoryMessage({
+              repository,
+              host,
+              reason: hostError ? providerDetail(hostError) : null,
+            }),
+          };
+        });
       if (readable.length === 0) {
         // No host this request covers can be read, so it is not a per-project problem. An
         // unusable host is preferred as the reported cause because it names the fix; a host
@@ -1522,19 +1535,23 @@ export const make = Effect.gen(function* () {
               }),
               // One unreachable repository must not blank the page. A host-level failure is
               // already reported through `providers`, so it degrades the same way here.
-              Effect.orElseSucceed((): RepositoryBatch => ({
-                key,
-                entries: [],
-                errors: [
-                  {
-                    projectId: project.project.id,
-                    projectTitle: project.project.title,
-                    message: `${project.repository} could not be read.`,
-                  },
-                ],
-                truncated: false,
-                nextCursor: null,
-              })),
+              Effect.catch((error) =>
+                logRepositoryReadFailure(project, error).pipe(
+                  Effect.as<RepositoryBatch>({
+                    key,
+                    entries: [],
+                    errors: [
+                      {
+                        projectId: project.project.id,
+                        projectTitle: project.project.title,
+                        message: repositoryReadFailureMessage(project.repository, error),
+                      },
+                    ],
+                    truncated: false,
+                    nextCursor: null,
+                  }),
+                ),
+              ),
             );
         }
       };
@@ -2151,6 +2168,14 @@ export const make = Effect.gen(function* () {
   const runAction = (input: PullRequestActionInput): Effect.Effect<string, PullRequestError> =>
     requireProject(input).pipe(
       Effect.flatMap((project): Effect.Effect<string, PullRequestError> => {
+        if (input.action === "delete-branch" && project.api.capabilities.deleteBranch !== true) {
+          return Effect.fail(
+            new PullRequestOperationError({
+              operation: "runAction",
+              detail: "This host cannot delete a change request's source branch.",
+            }),
+          );
+        }
         if (
           input.stackNumber !== undefined &&
           (project.api.capabilities.stackActions !== true ||
@@ -2205,7 +2230,7 @@ export const make = Effect.gen(function* () {
         // What the host can do and what this account may ask of it are two questions, and both
         // have to say yes. The second is asked last, because it costs a request and the checks
         // above do not.
-        return viewerPermissionsOf(
+        const operation = viewerPermissionsOf(
           project,
           input,
           "runAction",
@@ -2290,6 +2315,17 @@ export const make = Effect.gen(function* () {
             );
           }),
         );
+        return input.action === "delete-branch" && project.api.withVerifiedCredential !== undefined
+          ? project.api
+              .withVerifiedCredential(
+                { cwd: project.project.workspaceRoot, host: project.host },
+                () => operation.pipe(Effect.result),
+              )
+              .pipe(
+                Effect.mapError(toPullRequestError("runAction")),
+                Effect.flatMap(Effect.fromResult),
+              )
+          : operation;
       }),
     );
 
@@ -2938,11 +2974,28 @@ export const make = Effect.gen(function* () {
       ref.repository.toLowerCase(),
       ref.number,
     ]);
-  const refEpoch = (ref: PullRequestRef) =>
-    Math.max(
-      projectEpochs.get(ref.projectId) ?? projectEpochFloor,
-      refEpochs.get(refScope(ref)) ?? 0,
+  /**
+   * The project epoch a pull request was first read merged under. A merged pull request cannot
+   * change again, so a turn in its project no longer moves its key; otherwise every reader showing
+   * it would read the host again after every turn. A refresh or a mutation still moves it.
+   */
+  const mergedEpochs = new Map<string, number>();
+  const refEpoch = (ref: PullRequestRef) => {
+    const scope = refScope(ref);
+    return Math.max(
+      mergedEpochs.get(scope) ?? projectEpochs.get(ref.projectId) ?? projectEpochFloor,
+      refEpochs.get(scope) ?? 0,
     );
+  };
+  const noteMerged = (ref: PullRequestRef) => {
+    const scope = refScope(ref);
+    if (mergedEpochs.has(scope)) return;
+    if (mergedEpochs.size >= REF_EPOCH_CAPACITY) {
+      const oldest = mergedEpochs.keys().next().value;
+      if (oldest !== undefined) mergedEpochs.delete(oldest);
+    }
+    mergedEpochs.set(scope, projectEpochs.get(ref.projectId) ?? projectEpochFloor);
+  };
   // Keys carry the reference back out of the cache loader, so the slot layout is shared with
   // `refOfCacheKey` rather than read positionally at every loader.
   const refCacheKey = (ref: CredentialRef) =>
@@ -3351,6 +3404,7 @@ export const make = Effect.gen(function* () {
     // regression and never ask the host again.
     const read = Cache.get(detailCache, key).pipe(
       Effect.tap((value) => {
+        if (value.state === "merged") noteMerged(input);
         const summary = summaryFromDetail(value, lastGoodSummary.peek(key));
         return noteDetailReading(input, summary).pipe(
           Effect.andThen(

@@ -961,6 +961,12 @@ function timelineEntryStartsResponse(entry: TimelineEntry): boolean {
   );
 }
 
+function responseBoundaryRunId(entry: TimelineEntry): RunId | null {
+  if (entry.kind === "message") return entry.message.runId ?? null;
+  if (entry.kind === "work") return entry.entry.runId ?? null;
+  return null;
+}
+
 /**
  * A promptless provider restart replaces the native turn without adding a
  * user message. Keep every provider turn since the initiating prompt in one
@@ -1044,7 +1050,12 @@ function deriveTurnFolds(input: {
   completeSupersededReplyEntryIds: ReadonlySet<string>;
 }): ReadonlyMap<string, TurnFold> {
   const interruptedRunIds = new Set<RunId>();
-  for (const entry of input.timelineEntries) {
+  const promptIndexByRunId = new Map<RunId, number>();
+  for (const [index, entry] of input.timelineEntries.entries()) {
+    if (timelineEntryStartsResponse(entry)) {
+      const runId = responseBoundaryRunId(entry);
+      if (runId !== null && !promptIndexByRunId.has(runId)) promptIndexByRunId.set(runId, index);
+    }
     if (
       entry.kind === "event" &&
       entry.projectedItem.item.runId !== null &&
@@ -1075,6 +1086,7 @@ function deriveTurnFolds(input: {
   // stable key of its own. Decide per prompt, not per thread: a V1 thread's
   // first V2 run must not unfold every imported turn above it.
   let runlessKey: RunId | null = null;
+  let responseKey: RunId | null = null;
   let pendingBoundary: { createdAt: string; anchorEntryId: string } | null = null;
   for (const [index, entry] of input.timelineEntries.entries()) {
     if (timelineEntryStartsResponse(entry)) {
@@ -1082,19 +1094,22 @@ function deriveTurnFolds(input: {
       pendingBoundary = nextEntry
         ? { createdAt: entry.createdAt, anchorEntryId: nextEntry.id }
         : null;
-      const boundaryRunId =
-        entry.kind === "message"
-          ? entry.message.runId
-          : entry.kind === "work"
-            ? entry.entry.runId
-            : null;
+      const boundaryRunId = responseBoundaryRunId(entry);
       runlessKey = boundaryRunId == null ? RunId.make(`runless:${entry.id}`) : null;
+      responseKey = boundaryRunId ?? runlessKey;
       continue;
     }
-    const runId = timelineEntryFoldRunId(entry, runlessKey);
-    if (!runId) {
+    const ownRunId = timelineEntryFoldRunId(entry, runlessKey);
+    if (!ownRunId) {
       continue;
     }
+    // Resuming a subagent moves its item to the resuming run, but the item
+    // keeps its place in the turn that started it. It folds with that turn,
+    // so the later run's fold still opens under its own prompt.
+    const runId =
+      responseKey !== null && (promptIndexByRunId.get(ownRunId) ?? -1) > index
+        ? responseKey
+        : ownRunId;
     if (runId === runlessKey && timelineEntryFailedItem(entry) !== null) {
       runlessFailedKeys.add(runId);
     }
@@ -1371,8 +1386,46 @@ function settleSupersededReasoning(entries: ReadonlyArray<TimelineEntry>) {
   });
 }
 
+/** The user message id of a server automatic restart (`t3team-transient-retry:<failedRunId>`). */
+const TRANSIENT_RETRY_MESSAGE_PREFIX = "t3team-transient-retry:";
+
+function timelineEntryErrorRunId(entry: TimelineEntry): RunId | null {
+  const item =
+    entry.kind === "work"
+      ? (entry.entry.projectedItem?.item ?? entry.entry.structuredPayload)
+      : "projectedItem" in entry
+        ? entry.projectedItem?.item
+        : undefined;
+  return item?.type === "error" ? item.runId : null;
+}
+
+/**
+ * t3team: an automatic restart replaced the failed run, so only the latest failure keeps its
+ * error row; the retry note (SYSTEM card) already counts the attempts. A failed run is replaced
+ * once a later run's user message is that run's retry message.
+ */
+export function withoutSupersededRetryErrors(
+  entries: ReadonlyArray<TimelineEntry>,
+): ReadonlyArray<TimelineEntry> {
+  const supersededRunIds = new Set<string>();
+  for (const entry of entries) {
+    if (entry.kind !== "message") continue;
+    const id = String(entry.message.id);
+    if (id.startsWith(TRANSIENT_RETRY_MESSAGE_PREFIX)) {
+      supersededRunIds.add(id.slice(TRANSIENT_RETRY_MESSAGE_PREFIX.length));
+    }
+  }
+  if (supersededRunIds.size === 0) return entries;
+  return entries.filter((entry) => {
+    const runId = timelineEntryErrorRunId(entry);
+    return runId === null || !supersededRunIds.has(runId);
+  });
+}
+
 function timelineRowEntries(entries: ReadonlyArray<TimelineEntry>) {
-  return withoutSubagentDelegationRows(settleSupersededReasoning(entries));
+  return withoutSubagentDelegationRows(
+    settleSupersededReasoning(withoutSupersededRetryErrors(entries)),
+  );
 }
 
 /** The turn folds the timeline would draw, before applying expansion state. */

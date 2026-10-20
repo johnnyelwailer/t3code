@@ -13,7 +13,10 @@ import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDi
 import * as Effect from "effect/Effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { releaseDelegatedWorkspace } from "./t3team-delegateTaskWorkspace.ts";
+import {
+  describeDelegatedWorkspace,
+  releaseDelegatedWorkspace,
+} from "./t3team-delegateTaskWorkspace.ts";
 import {
   commonDir,
   fails,
@@ -106,6 +109,51 @@ describe("resolveDelegatedWorkspace", () => {
     expect(second.worktreePath).toBe(first.worktreePath);
     expect(second.branch).toBe(first.branch);
     expect([first.created, second.created]).toEqual([true, false]);
+  });
+
+  it("branches from the fetched origin tip when local main lags the remote", async () => {
+    const remote = NodePath.join(root, "lag-remote.git");
+    const upstream = NodePath.join(root, "lag-upstream");
+    const checkout = NodePath.join(root, "lag-checkout");
+    initRepo(upstream);
+    git(root, ["clone", "--bare", upstream, remote]);
+    git(root, ["clone", remote, checkout]);
+    const staleTip = git(checkout, ["rev-parse", "HEAD"]);
+    NodeFS.writeFileSync(NodePath.join(upstream, "newer.txt"), "newer\n");
+    git(upstream, ["add", "."]);
+    git(upstream, ["commit", "-m", "newer"]);
+    git(upstream, ["push", remote, "main"]);
+    const remoteTip = git(upstream, ["rev-parse", "HEAD"]);
+
+    const resolved = await ok({ workspaceRoot: checkout, key: "lag" });
+
+    expect(git(checkout, ["rev-parse", "main"])).toBe(staleTip);
+    expect(git(resolved.worktreePath, ["rev-parse", "HEAD"])).toBe(remoteTip);
+    expect(describeDelegatedWorkspace(resolved)).toContain(
+      `from origin/main at ${remoteTip.slice(0, 10)}`,
+    );
+  });
+
+  it("keeps the local base and says so when origin cannot be fetched", async () => {
+    const checkout = NodePath.join(root, "offline-checkout");
+    initRepo(checkout);
+    git(checkout, ["remote", "add", "origin", NodePath.join(root, "does-not-exist.git")]);
+
+    const resolved = await ok({ workspaceRoot: checkout, key: "offline" });
+
+    expect(git(resolved.worktreePath, ["rev-parse", "HEAD"])).toBe(
+      git(checkout, ["rev-parse", "main"]),
+    );
+    expect(describeDelegatedWorkspace(resolved)).toContain(
+      "from local main, not origin/main: fetching origin failed",
+    );
+  });
+
+  it("names the local base when the repository has no origin", async () => {
+    const resolved = await ok({ workspaceRoot: localWorkspace, key: "no-origin" });
+    expect(describeDelegatedWorkspace(resolved)).toContain(
+      "from local main, not origin/main: the repository has no origin remote",
+    );
   });
 
   effectIt.effect("releases only the worktree and branch its own request created", () =>

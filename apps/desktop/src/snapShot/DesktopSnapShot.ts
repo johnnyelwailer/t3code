@@ -45,6 +45,7 @@ import { activeWindow, type ActiveWindow } from "./ActiveWindow.ts";
 import { captureMacWindowSnapshot, type MacSnapShotSource } from "./MacSnapShot.ts";
 import type { LinuxCaptureFeedback, LinuxWindowMetadata } from "./LinuxSnapShot.ts";
 import { niriSocketPath } from "./NiriSnapShot.ts";
+import { probeGlobalShortcut } from "./t3team-globalShortcutProbe.ts";
 import { CaptureShortcutConfig, niriCaptureConfigPath } from "./CaptureShortcutConfig.ts";
 import type { PortalCaptureShortcut } from "./PortalCaptureShortcut.ts";
 import {
@@ -689,21 +690,6 @@ function observedPairMessage(
   return base;
 }
 
-function probeGlobalShortcut(accelerator: string): DesktopSnapShotShortcutAvailability {
-  try {
-    if (!Electron.globalShortcut.register(accelerator, () => undefined)) {
-      return {
-        available: false,
-        message: "This shortcut is already used by the system or another app.",
-      };
-    }
-    Electron.globalShortcut.unregister(accelerator);
-    return { available: true, message: null };
-  } catch {
-    return { available: false, message: "The system could not register this shortcut." };
-  }
-}
-
 export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const permissions = yield* MacPermissions.MacPermissions;
@@ -858,7 +844,7 @@ export const make = Effect.gen(function* () {
   const prepareCapture = Effect.fn("desktop.snapShot.prepareCapture")(function* (
     settings: ClientSettings,
   ) {
-    const id = yield* crypto.randomUUIDv4.pipe(Effect.mapError((cause) => captureFailure(cause)));
+    const id = yield* crypto.randomUUIDv4().pipe(Effect.mapError((cause) => captureFailure(cause)));
     const mode = captureMode(environment.platform);
     if (mode === "unavailable") {
       return yield* new DesktopSnapShotError({ operation: "unsupported", captureId: id });

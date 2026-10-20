@@ -312,6 +312,8 @@ import { createContextPresentationRegistry } from "../contextPresentationRegistr
 import { useOpenPrLink } from "~/lib/openPullRequestLink";
 import { useClientSettings } from "~/hooks/useSettings";
 import type { ChatMarkdownContextReference } from "../ChatMarkdown";
+import { VOICE_STATE_KIND } from "../../t3team/voice/t3team-voiceLiveState";
+import { VoiceStateChip } from "../../t3team/voice/t3team-VoiceStateChip";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 import { cn } from "~/lib/utils";
 import { useUiStateStore } from "~/uiStateStore";
@@ -1888,6 +1890,12 @@ const ConversationTimeline = memo(function ConversationTimeline({
             <TooltipScrollDismissArea
               ref={setTimelineViewportElement}
               className="relative h-full min-h-0"
+              data-zoom-region /* Hover-zoom region: the timeline's outer scroll
+                 owner (the viewport the virtualizer scrolls inside), not a
+                 virtualized item, so zoom magnifies the whole visible
+                 timeline in place without touching LegendList's
+                 measurements. The ChatView wrapper's overflow-hidden clips
+                 the magnified box. */
               data-assistant-citation-viewport="true"
             >
               {onCiteAssistantText && citationThreadRef ? (
@@ -3342,6 +3350,11 @@ function ProposedPlanTimelineRow({
 
 function HtmlRenderTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "html-render" }> }) {
   const ctx = use(TimelineRowCtx);
+  const { onAppFullscreenChange } = ctx;
+  const onFullscreenChange = useCallback(
+    (fullscreen: boolean) => onAppFullscreenChange(row.id, fullscreen),
+    [onAppFullscreenChange, row.id],
+  );
 
   return (
     <div className="min-w-0 px-1">
@@ -3350,7 +3363,8 @@ function HtmlRenderTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "htm
         key={row.htmlRender.attachmentId}
         environmentId={ctx.activeThreadEnvironmentId}
         htmlRender={row.htmlRender}
-        onOpen={ctx.onFileOpen}
+        threadRef={ctx.threadRef ?? undefined}
+        onFullscreenChange={onFullscreenChange}
       />
     </div>
   );
@@ -5200,7 +5214,12 @@ const userMessageContextPresentationRegistry = createContextPresentationRegistry
         ),
     },
   ],
-  fallback: (_kind, _record, context) => <UnavailableUserMessageContextChip {...context} />,
+  fallback: (kind, _record, context) =>
+    kind === VOICE_STATE_KIND ? (
+      <VoiceStateChip label={context.reference.label} copyMarkdown={context.copyMarkdown} />
+    ) : (
+      <UnavailableUserMessageContextChip {...context} />
+    ),
 });
 
 /** One inline context chip in a sent message, dispatched by the shared presentation registry. */
@@ -5861,8 +5880,10 @@ function remarkThoughtPreview(fallback: string) {
 function ReasoningTraceContent({ entries }: { entries: ReadonlyArray<TimelineWorkEntry> }) {
   const ctx = use(TimelineRowCtx);
   const { isWorking, latestRunId } = use(TimelineRowActivityCtx);
+  const isStreaming = (entry: TimelineWorkEntry) =>
+    isWorking && entry.runId === latestRunId && entry.toolLifecycleStatus === "inProgress";
   return (
-    <WorkLogDetails>
+    <WorkLogDetails followLive={entries.some(isStreaming)}>
       {entries.map((entry) => (
         <ChatMarkdown
           key={entry.id}
@@ -5871,9 +5892,7 @@ function ReasoningTraceContent({ entries }: { entries: ReadonlyArray<TimelineWor
           cwd={ctx.markdownCwd}
           threadRef={ctx.threadRef ?? undefined}
           skills={ctx.skills}
-          isStreaming={
-            isWorking && entry.runId === latestRunId && entry.toolLifecycleStatus === "inProgress"
-          }
+          isStreaming={isStreaming(entry)}
           headingLevelOffset={MESSAGE_HEADING_LEVEL}
           onUseArtifactTemplate={ctx.onUseArtifactTemplate}
           onImageExpand={ctx.onImageExpand}

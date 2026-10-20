@@ -56,24 +56,29 @@ export const t3teamProjectMainRepositoryRouteLayer = HttpRouter.add(
 
     // The switch rewrites reference manifests; serialize it with bootstraps and sync outcomes.
     const sync = yield* T3TeamLinkedRepositorySync;
-    const result = yield* sync.withManifestLock(
-      switchProjectMainRepository({
-        project,
-        url,
-        selection: input.selection === "detected" ? "detected" : "user",
-      }),
-    );
-    if (result.changed && result.mainRepository) {
-      yield* projects.update({
-        commandId: CommandId.make(`server:t3team:main-repository:${t3teamRandomUUID()}`),
-        projectId: project.id,
-        ...(result.workspaceRoot !== project.workspaceRoot
-          ? { workspaceRoot: result.workspaceRoot }
-          : {}),
-        mainRepository: result.mainRepository,
-      });
-    }
-    return okJson(result);
+    // Uninterruptible: a client that gives up (timeout, closed window) must not cut the state-dir
+    // copy and the project update apart, which left the switch half-done and unrecorded.
+    const switched = Effect.gen(function* () {
+      const result = yield* sync.withManifestLock(
+        switchProjectMainRepository({
+          project,
+          url,
+          selection: input.selection === "detected" ? "detected" : "user",
+        }),
+      );
+      if (result.changed && result.mainRepository) {
+        yield* projects.update({
+          commandId: CommandId.make(`server:t3team:main-repository:${t3teamRandomUUID()}`),
+          projectId: project.id,
+          ...(result.workspaceRoot !== project.workspaceRoot
+            ? { workspaceRoot: result.workspaceRoot }
+            : {}),
+          mainRepository: result.mainRepository,
+        });
+      }
+      return result;
+    });
+    return okJson(yield* Effect.uninterruptible(switched));
   }).pipe(
     Effect.mapError((cause) => toT3TeamError(cause, "Failed to set the project main repository.")),
     Effect.catch(errorResponse),

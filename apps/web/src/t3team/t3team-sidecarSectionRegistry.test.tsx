@@ -50,9 +50,10 @@ const project: ProjectShellProject = {
 };
 
 describe("sidecar section registry", () => {
-  it("renders quick starts via the registry and forwards selection into host.stageKickoff", () => {
+  it("renders quick starts and sends the clicked card via host.launchQuickStart", () => {
     const quickStartsComponent = getT3TeamSidecarSectionComponent("quick-starts");
     const stageKickoff = vi.fn();
+    const launchQuickStart = vi.fn(async () => true);
 
     mockUseQuickStarts.mockReturnValue([
       {
@@ -80,7 +81,7 @@ describe("sidecar section registry", () => {
               projectId: "project-1",
               stageKickoff,
               launchRecipe: () => undefined,
-              launchQuickStart: async () => false,
+              launchQuickStart,
               openThread: () => undefined,
             }),
             props: {
@@ -98,11 +99,15 @@ describe("sidecar section registry", () => {
     );
 
     expect(markup).toContain("quick-starts:explain-selected-work");
-    expect(stageKickoff).toHaveBeenCalledWith(
+    // A Quick Start card click sends on click — it routes to launchQuickStart, not the
+    // composer-staging stageKickoff.
+    expect(launchQuickStart).toHaveBeenCalledTimes(1);
+    expect(launchQuickStart).toHaveBeenCalledWith(
       expect.objectContaining({ id: "explain-selected-work" }),
       expect.objectContaining({
         selections: [expect.objectContaining({ name: "tone", value: "focused" })],
       }),
     );
+    expect(stageKickoff).not.toHaveBeenCalled();
   });
 });

@@ -13,8 +13,10 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import * as TestClock from "effect/testing/TestClock";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -39,6 +41,12 @@ import * as SourceControlRateLimit from "@t3tools/source-control-core/server/Sou
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import * as ForgejoCli from "@t3tools/source-control-forgejo/server/ForgejoCli";
 import * as ForgejoPullRequestProvider from "@t3tools/source-control-forgejo/server/ForgejoPullRequestProvider";
+import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubCredentials from "@t3tools/source-control-github/server/GitHubCredentials";
+import * as GitHubPullRequestApi from "@t3tools/source-control-github/server/GitHubPullRequestApi";
+import * as GitHubPullRequestProvider from "@t3tools/source-control-github/server/GitHubPullRequestProvider";
+import * as GitHubQuota from "@t3tools/source-control-github/server/GitHubQuota";
+import * as TestSourceControlHost from "@t3tools/source-control-testing/TestSourceControlHost";
 import {
   PullRequestProviderError,
   type ProviderChangeRequest,
@@ -311,6 +319,57 @@ it.effect("shares detail and activity for a minute, and for ten once merged", ()
     assert.deepStrictEqual(yield* reread, ["activity #1", "activity #3", "detail #1", "detail #3"]);
     yield* TestClock.adjust("9 minutes");
     assert.deepStrictEqual(yield* reread, everything);
+  }),
+);
+
+it.effect("re-reads an open pull request after a turn, but not a merged one", () =>
+  Effect.gen(function* () {
+    const reads: Array<string> = [];
+    const service = yield* makeService({
+      projects: [project({ id: "p1", title: "web", workspaceRoot: "/w", repository: "acme/web" })],
+      providers: [
+        fakeProvider(SourceControlProviderKind.make("github"), {
+          getChangeRequest: ({ number }) =>
+            Effect.sync(() => {
+              reads.push(`detail #${number}`);
+              return {
+                ...hostedChangeRequest("Description"),
+                number,
+                state: number === 1 ? ("open" as const) : ("merged" as const),
+              };
+            }),
+          getChangeRequestActivity: ({ number }) =>
+            Effect.sync(() => {
+              reads.push(`activity #${number}`);
+              return {
+                comments: [],
+                commentCount: 0,
+                commentsTruncated: false,
+                reviewThreads: [],
+                commits: [],
+              };
+            }),
+        }),
+      ],
+    });
+    // What every client showing #1 (open) and #2 (merged) does on each refresh signal.
+    const merged = { projectId: "p1" as ProjectId, repository: "acme/web", number: 2 };
+    const reread = Effect.forEach([1, 2], (number) => {
+      const ref = { ...merged, number };
+      return Effect.andThen(service.detail(ref), service.activity(ref));
+    }).pipe(
+      Effect.andThen(Effect.yieldNow),
+      Effect.andThen(Effect.sync(() => reads.splice(0).toSorted())),
+    );
+
+    assert.deepStrictEqual(yield* reread, ["activity #1", "activity #2", "detail #1", "detail #2"]);
+    for (let turn = 0; turn < 3; turn++) {
+      yield* service.refreshAfterTurn(merged.projectId);
+      assert.deepStrictEqual(yield* reread, ["activity #1", "detail #1"]);
+    }
+    // The refresh button still reads a merged pull request again.
+    yield* service.invalidate({ reference: merged });
+    assert.deepStrictEqual(yield* reread, ["activity #2", "detail #2"]);
   }),
 );
 
@@ -1618,6 +1677,196 @@ it.effect("refreshes every reader before a queued merge confirmation finishes", 
       assert.isUndefined(observedMerge.pollUnsafe());
     }),
   ),
+);
+
+it.effect("runs branch deletion only when the host and viewer support it, never for a stack", () =>
+  Effect.gen(function* () {
+    let actions = 0;
+    let supported = false;
+    let allowed = true;
+    const base = fakeProvider(SourceControlProviderKind.make("github"));
+    const service = yield* makeService({
+      projects: [project({ id: "p1", title: "web", workspaceRoot: "/a", repository: "acme/web" })],
+      providers: [
+        {
+          ...base,
+          capabilities: {
+            ...base.capabilities,
+            actions: ["delete-branch"],
+            stackActions: true,
+            get deleteBranch() {
+              return supported;
+            },
+          },
+          getViewerPermissions: () =>
+            Effect.succeed({
+              actions: allowed ? ["delete-branch"] : [],
+              comment: true,
+              resolve: true,
+              verdicts: [],
+              requestReviewers: false,
+            }),
+          runAction: (input) =>
+            Effect.sync(() => {
+              assert.strictEqual(input.action, "delete-branch");
+              actions++;
+            }),
+        },
+      ],
+    });
+    const input = {
+      projectId: "p1" as ProjectId,
+      repository: "acme/web",
+      number: 1,
+      action: "delete-branch" as const,
+    };
+    assert.strictEqual(
+      (yield* Effect.flip(service.runAction(input)))._tag,
+      "PullRequestOperationError",
+    );
+    assert.strictEqual(actions, 0);
+    supported = true;
+    assert.strictEqual(
+      (yield* Effect.flip(
+        service.runAction({
+          ...input,
+          stackNumber: 2,
+          expectedStackHeads: [{ number: 1, headSha: "abc123" }],
+        }),
+      ))._tag,
+      "PullRequestOperationError",
+    );
+    assert.strictEqual(actions, 0);
+    allowed = false;
+    assert.strictEqual(
+      (yield* Effect.flip(service.runAction(input)))._tag,
+      "PullRequestOperationError",
+    );
+    assert.strictEqual(actions, 0);
+    allowed = true;
+    yield* service.runAction(input);
+    assert.strictEqual(actions, 1);
+  }),
+);
+
+it.effect("keeps branch deletion on the credential that passed source repository permissions", () =>
+  Effect.gen(function* () {
+    let activeToken = "account-a";
+    const requests: Array<{ operation: string; authorization: string | undefined }> = [];
+    const credentials = Layer.succeed(
+      GitHubCredentials.GitHubCredentials,
+      GitHubCredentials.GitHubCredentials.of({
+        get: (host) =>
+          Effect.sync(() => ({
+            host,
+            token: Redacted.make(activeToken),
+            source: "gh" as const,
+            fingerprint: `${host}:${activeToken}`,
+          })),
+        invalidate: () => Effect.void,
+      }),
+    );
+    const http = Layer.succeed(
+      HttpClient.HttpClient,
+      HttpClient.make((request) =>
+        Effect.sync(() => {
+          const operation = request.url.endsWith("/user")
+            ? "user"
+            : request.body._tag === "Uint8Array"
+              ? new TextDecoder().decode(request.body.body)
+              : "";
+          requests.push({ operation, authorization: request.headers["authorization"] });
+          let body;
+          if (operation === "user") {
+            body = { id: activeToken === "account-a" ? 101 : 202, login: activeToken };
+          } else if (operation.includes("query PullRequestBranchToDelete")) {
+            body = {
+              data: {
+                repository: {
+                  pullRequest: {
+                    state: "MERGED",
+                    headRefName: "feature",
+                    baseRefName: "main",
+                    headRefOid: "abc123",
+                    headRepository: { id: "FORK_REPO" },
+                  },
+                },
+              },
+            };
+          } else if (operation.includes("query PullRequestSourceBranch")) {
+            body = {
+              data: {
+                node: {
+                  defaultBranchRef: { name: "main" },
+                  ref: { target: { oid: "abc123" } },
+                },
+              },
+            };
+          } else if (operation.includes("updateRefs(")) {
+            body = { data: { updateRefs: {} } };
+          } else {
+            activeToken = "account-b";
+            body = {
+              data: {
+                repository: {
+                  mergeCommitAllowed: true,
+                  squashMergeAllowed: true,
+                  rebaseMergeAllowed: true,
+                  viewerPermission: "READ",
+                  pullRequest: {
+                    viewerCanUpdate: false,
+                    viewerDidAuthor: false,
+                    headRepository: { viewerPermission: "WRITE" },
+                  },
+                },
+              },
+            };
+          }
+          return HttpClientResponse.fromWeb(request, new Response(JSON.stringify(body)));
+        }),
+      ),
+    );
+    const provider = yield* GitHubPullRequestProvider.make.pipe(
+      Effect.provide(
+        GitHubPullRequestApi.layer.pipe(
+          Layer.provide(
+            GitHubApi.layer.pipe(
+              Layer.provide(Layer.mergeAll(credentials, http)),
+              Layer.provide(GitHubQuota.layer),
+              Layer.provide(SourceControlRateLimit.layer),
+            ),
+          ),
+          Layer.provide(TestSourceControlHost.layer()),
+          Layer.provide(NodeServices.layer),
+        ),
+      ),
+    );
+    const service = yield* makeService({
+      projects: [project({ id: "p1", title: "web", workspaceRoot: "/a", repository: "acme/web" })],
+      providers: [provider],
+    });
+    yield* service.runAction({
+      projectId: "p1" as ProjectId,
+      repository: "acme/web",
+      number: 1,
+      action: "delete-branch",
+    });
+    assert.strictEqual(activeToken, "account-b");
+    assert.strictEqual(
+      requests.filter(({ operation }) => operation.includes("updateRefs(")).length,
+      1,
+    );
+    assert.deepStrictEqual(
+      requests.map(({ authorization }) => authorization),
+      [
+        "Bearer account-a",
+        "Bearer account-a",
+        "Bearer account-a",
+        "Bearer account-a",
+        "Bearer account-a",
+      ],
+    );
+  }),
 );
 
 it.effect("refuses an action this viewer may not take, and says what access it takes", () =>
@@ -4497,13 +4746,51 @@ it.effect("asks on its own for a repository a search answered nothing for", () =
       {
         projectId: "p2" as ProjectId,
         projectTitle: "docs",
-        message: "acme/docs could not be read.",
+        message: "acme/docs could not be read: HTTP 404",
       },
     ]);
     assert.deepStrictEqual(
       result.entries.map((entry) => entry.number),
       [1],
     );
+  }),
+);
+it.effect("says why a repository could not be read, in the host's own words", () =>
+  Effect.gen(function* () {
+    const service = yield* makeService({
+      projects: [
+        project({ id: "p1", title: "web", workspaceRoot: "/a", repository: "acme/web" }),
+        project({ id: "p2", title: "docs", workspaceRoot: "/b", repository: "acme/docs" }),
+      ],
+      providers: [
+        fakeProvider(SourceControlProviderKind.make("github"), {
+          listChangeRequests: ({ repository }) =>
+            repository === "acme/docs"
+              ? Effect.fail(
+                  new PullRequestProviderError({
+                    provider: SourceControlProviderKind.make("github"),
+                    operation: "listChangeRequests",
+                    reason: "failed",
+                    detail: "Could not reach GitHub at nexplore.ghe.com.",
+                  }),
+                )
+              : Effect.succeed({
+                  items: [changeRequest(1, "2026-07-02T00:00:00Z")],
+                  truncated: false,
+                  continues: true,
+                }),
+          listChangeRequestsAcross: () => Effect.fail(requestFailed),
+        }),
+      ],
+    });
+
+    const result = yield* service.list({ state: "open" });
+
+    assert.deepStrictEqual(
+      result.errors.map((error) => error.message),
+      ["acme/docs could not be read: Could not reach GitHub at nexplore.ghe.com."],
+    );
+    assert.strictEqual(result.entries.length, 1);
   }),
 );
 it.effect("reads the repositories one at a time when the search itself fails", () =>
@@ -6434,6 +6721,40 @@ it.effect("reports a linked repository on an unsupported host as unimplemented",
       assert.isNotNull(unimplemented);
       assert.strictEqual(unimplemented!.kind, "unknown");
       assert.strictEqual(unimplemented!.configured, false);
+    } finally {
+      yield* removeWorkspace(root);
+    }
+  }),
+);
+
+const GHE_REFERENCE_REPOSITORY = "https://nexplore.ghe.com/hive/common-agentdirectives";
+
+it.effect("names the host and the fix when a linked repository's host has no credential", () =>
+  Effect.gen(function* () {
+    const root = yield* workspaceWithLinkedRepositories([GHE_REFERENCE_REPOSITORY]);
+    try {
+      const service = yield* makeService({
+        projects: [
+          project({ id: "p1", title: "IES NG", workspaceRoot: root, repository: "acme/web" }),
+        ],
+        providers: [
+          fakeProvider(SourceControlProviderKind.make("github"), {
+            getViewer: (input) =>
+              input.host === "nexplore.ghe.com"
+                ? Effect.fail(unusable(SourceControlProviderKind.make("github"), "unauthenticated"))
+                : Effect.succeed("pj"),
+          }),
+        ],
+      });
+
+      const result = yield* service.list({ state: "all", projectId: "p1" as ProjectId });
+
+      assert.deepStrictEqual(
+        result.errors.map((error) => error.message),
+        [
+          "hive/common-agentdirectives on nexplore.ghe.com could not be read: GitHub has no working credential for this host. Run `gh auth login`, or check the account and hosts in Settings → Source Control.",
+        ],
+      );
     } finally {
       yield* removeWorkspace(root);
     }

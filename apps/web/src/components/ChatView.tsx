@@ -93,6 +93,7 @@ import {
 import { readPastedComposerContext } from "./composerInlineTokenPaste";
 import { isPasteAsTextShortcut } from "@t3tools/client-runtime/text-paste";
 import { effectiveSnoozed, threadWokeAt } from "@t3tools/client-runtime/state/thread-settled";
+import { childThreadInputsTitle } from "@t3tools/client-runtime/state/threads";
 import { useAcknowledgeThreadWoke, useThreadActions } from "../hooks/useThreadActions";
 import {
   deriveProviderSubagentStatus,
@@ -106,6 +107,8 @@ import {
   presentProviderGoal,
 } from "@t3tools/client-runtime/state/thread-execution";
 import { threadSupportsProviderHandoff } from "@t3tools/client-runtime/state/thread-workflows";
+import { resolvePendingHandoff } from "@t3tools/client-runtime/handoff";
+import { HandoffRow } from "./chat/V2LifecycleRow";
 import {
   codexFeedbackMessage,
   parseCodexFeedbackCommand,
@@ -134,11 +137,6 @@ import {
   resolveProjectScripts,
 } from "@t3tools/shared/projectScripts";
 import { CHAT_LIST_ANCHOR_OFFSET } from "@t3tools/shared/chatList";
-import { derivePendingBackgroundWork } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
-import {
-  latestUnheldRun,
-  usageLimitRunPresentedAsLatest,
-} from "@t3tools/shared/orchestrationV2ThreadError";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { sourceControlRepositorySelector } from "@t3tools/shared/sourceControl";
 import { truncate } from "@t3tools/shared/String";
@@ -195,6 +193,7 @@ import {
   deriveActivePlanState,
   deriveActiveWorkStartedAt,
   deriveCanInterruptRunningThread,
+  deriveThreadPendingBackgroundWork,
   findLatestProposedPlan,
   hasActionableProposedPlan,
   isLatestRunSettled,
@@ -238,6 +237,7 @@ import {
 import { useTheme } from "../hooks/useTheme";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { isCommandPaletteOpen } from "../commandPaletteBus";
+import { settleAndAdvance } from "../settleAndAdvance";
 import { subscribeSnapShotComposerFocus } from "../lib/desktopSnapShot";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
@@ -282,7 +282,10 @@ import {
   pullRequestPanelContext,
   threadPullRequestPanelTarget,
 } from "./pullRequest/pullRequestDetail.logic";
-import { PullRequestDetailPanel } from "./pullRequest/PullRequestDetailPanel";
+import {
+  pullRequestDetailPanelKey,
+  PullRequestDetailPanel,
+} from "./pullRequest/PullRequestDetailPanel";
 import { PullRequestDetailGhost } from "./pullRequest/PullRequestGhosts";
 import { PullRequestsUnavailableState } from "./pullRequest/PullRequestsUnavailableState";
 import { RightPanelTabs } from "./RightPanelTabs";
@@ -307,6 +310,7 @@ import {
   ChevronLeftIcon,
   DownloadIcon,
   GitBranchIcon,
+  ShieldQuestionIcon,
   TargetIcon,
   WifiOffIcon,
 } from "lucide-react";
@@ -454,6 +458,8 @@ import {
 import { useT3TeamTimelineArtifacts } from "~/t3team/chat/t3team-useTimelineArtifacts";
 import { useResourcePressureBannerItem } from "./chat/t3team-ResourcePressureThreadBanner";
 import { useProviderRetryBannerItem } from "./chat/t3team-ProviderRetryBanner";
+import { useT3TeamThreadHandoff } from "../t3team/chat/t3team-useThreadHandoff";
+import { useThreadHandoffBannerItem } from "./chat/t3team-ThreadHandoffBanner";
 import { useT3TeamChatTimelineProps } from "~/t3team/chat/t3team-useChatTimelineProps";
 import { useT3TeamStopCascade } from "~/t3team/chat/t3team-useStopCascade";
 import { useT3TeamActiveAgents } from "~/t3team/chat/t3team-useActiveAgents";
@@ -1894,6 +1900,12 @@ export default function ChatView(props: ChatViewProps) {
   const composerActiveProvider = useComposerDraftStore(
     (store) => store.getComposerDraft(composerDraftTarget)?.activeProvider ?? null,
   );
+  const composerSelectedModelSelection = useComposerDraftStore((store) => {
+    const draft = store.getComposerDraft(composerDraftTarget);
+    return draft?.activeProvider
+      ? (draft.modelSelectionByProvider[draft.activeProvider] ?? null)
+      : null;
+  });
   const composerHasAttachments = useComposerDraftStore((store) => {
     const draft = store.getComposerDraft(composerDraftTarget);
     return (draft?.images.length ?? 0) > 0 || (draft?.files.length ?? 0) > 0;
@@ -3194,6 +3206,11 @@ export default function ChatView(props: ChatViewProps) {
     environmentId,
     threadId: activeThreadId,
   });
+  // t3team: "Moved to …" / "Moved here from …" (thread handoff link fact).
+  const threadHandoffBanner = useThreadHandoffBannerItem({
+    environmentId,
+    threadId: activeThreadId,
+  });
   const systemComposerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
     const items: ComposerBannerStackItem[] = [];
     const updateRunning = serverUpdateState.status === "running";
@@ -3329,11 +3346,13 @@ export default function ChatView(props: ChatViewProps) {
     }
     if (autoBalanceUpdateBanner) items.push(autoBalanceUpdateBanner);
     if (resourcePressureBanner) items.push(resourcePressureBanner);
+    if (threadHandoffBanner) items.push(threadHandoffBanner);
     return items;
   }, [
     automaticEnvironment,
     autoBalanceUpdateBanner,
     resourcePressureBanner,
+    threadHandoffBanner,
     activeEnvironmentUnavailableState,
     handleReconnectActiveEnvironment,
     canDisconnectActiveEnvironment,
@@ -3748,31 +3767,13 @@ export default function ChatView(props: ChatViewProps) {
       ),
     [activeThreadLiveTokenUsage, serverVisibleTurnItems, serverProjection],
   );
-  const pendingBackgroundTasks = useMemo(() => {
-    if (serverProjection === null || serverProjection === undefined) {
-      return [];
-    }
-    const sessionError =
-      serverProjection.providerSessions.findLast(
-        (session) => session.providerInstanceId === serverProjection.thread.providerInstanceId,
-      )?.lastError ?? null;
-    const latestRun =
-      usageLimitRunPresentedAsLatest(
-        serverProjection.runs,
-        serverProjection.turnItems,
-        sessionError,
-      ) ?? latestUnheldRun(serverProjection.runs);
-    return [
-      ...derivePendingBackgroundWork({
-        latestRun,
-        providerThreads: serverProjection.providerThreads,
-        turnItems: serverProjection.turnItems,
-        activeProviderThreadId: serverProjection.thread.activeProviderThreadId,
-        runs: serverProjection.runs,
-        pullRequests: serverProjection.thread.pullRequests,
-      }),
-    ];
-  }, [serverProjection]);
+  const pendingBackgroundTasks = useMemo(
+    () =>
+      serverProjection === null || serverProjection === undefined
+        ? []
+        : [...deriveThreadPendingBackgroundWork(serverProjection)],
+    [serverProjection],
+  );
   const activeWorkStartedAt =
     deriveActiveWorkStartedAt(activeActivityRun, activeRuntime, localDispatchStartedAt) ??
     runlessWorkStartedAt;
@@ -4757,7 +4758,11 @@ export default function ChatView(props: ChatViewProps) {
   }, [composerRef]);
   const canInterruptRunningThread =
     (canOperateThread &&
-      deriveCanInterruptRunningThread(activeThread !== undefined, activeRuntime)) ||
+      deriveCanInterruptRunningThread(
+        activeThread !== undefined,
+        activeRuntime,
+        pendingBackgroundTasks.length > 0,
+      )) ||
     cloudSessionComposerGate.hasQueuedBind;
   const onInterrupt = useCallback(async () => {
     if (cloudSessionComposerGate.hasQueuedBind) {
@@ -4786,6 +4791,13 @@ export default function ChatView(props: ChatViewProps) {
     environmentId,
     threadId: activeThread?.id ?? null,
     supported: serverConfig?.environment.capabilities.t3team?.stopCascade === true,
+  });
+  // t3team: panel "Move to" another machine for a started thread (capability-gated fork RPC).
+  const onHandoffToEnvironment = useT3TeamThreadHandoff({
+    environmentId,
+    threadId: activeThread?.id ?? null,
+    enabled: isServerThread && envLocked,
+    availableEnvironments: logicalProjectEnvironments,
   });
   useEffect(() => subscribeSnapShotComposerFocus(focusComposer), [focusComposer]);
   const scheduleComposerFocus = useCallback(() => {
@@ -5340,7 +5352,6 @@ export default function ChatView(props: ChatViewProps) {
         (script) => commandForProjectScript(script.id) === input.keybindingCommand,
       );
       const changesKeybinding =
-        isElectron &&
         input.keybinding !== undefined &&
         (input.keybinding?.trim() || null) !== previousKeybinding &&
         (!isDeletingScript || readEnvironmentScope(environmentId, AuthSettingsWriteScope));
@@ -5401,8 +5412,6 @@ export default function ChatView(props: ChatViewProps) {
           ),
         );
       }
-
-      if (!isElectron) return updateResult;
 
       const scriptId = input.keybindingCommand
         ? projectScriptIdFromCommand(input.keybindingCommand)
@@ -7640,22 +7649,22 @@ export default function ChatView(props: ChatViewProps) {
       id: `child-input:${first.id}`,
       variant: "info",
       priority: "activity",
-      icon: <MessageCircleIcon />,
-      title:
-        childThreadInputs.length === 1
-          ? "Subagent needs input"
-          : `${childThreadInputs.length} subagents need input`,
+      icon: first.hasPendingApprovals ? <ShieldQuestionIcon /> : <MessageCircleIcon />,
+      title: childThreadInputsTitle(childThreadInputs),
       description: childThreadInputs.map((child, index) => (
         <Fragment key={child.id}>
-          {index > 0 ? ", " : null}
-          <InlineButton tone="muted" onClick={() => onOpenRelatedThread(child.id)}>
-            {child.title}
-          </InlineButton>
+          {index > 0 ? " " : null}
+          <span className="whitespace-nowrap">
+            <InlineButton tone="muted" onClick={() => onOpenRelatedThread(child.id)}>
+              {child.title}
+            </InlineButton>
+            {index < childThreadInputs.length - 1 ? "," : null}
+          </span>
         </Fragment>
       )),
       actions: (
         <Button size="xs" variant="ghost" onClick={() => onOpenRelatedThread(first.id)}>
-          Open question
+          {first.hasPendingApprovals ? "Open approval" : "Open question"}
         </Button>
       ),
     };
@@ -7818,19 +7827,26 @@ export default function ChatView(props: ChatViewProps) {
           ? undefined
           : presentation.items.map((item, index) => {
               const childThreadId = item.childThreadId;
+              const separator = index < presentation.items.length - 1 ? "," : null;
               return (
                 <Fragment key={item.taskId}>
-                  {index > 0 ? ", " : null}
+                  {index > 0 ? " " : null}
                   {childThreadId === undefined ? (
-                    item.label
-                  ) : (
-                    <InlineButton
-                      tone="muted"
-                      aria-label={`Open subagent ${item.label}`}
-                      onClick={() => onOpenRelatedThread(childThreadId)}
-                    >
+                    <>
                       {item.label}
-                    </InlineButton>
+                      {separator}
+                    </>
+                  ) : (
+                    <span className="whitespace-nowrap">
+                      <InlineButton
+                        tone="muted"
+                        aria-label={`Open subagent ${item.label}`}
+                        onClick={() => onOpenRelatedThread(childThreadId)}
+                      >
+                        {item.label}
+                      </InlineButton>
+                      {separator}
+                    </span>
                   )}
                 </Fragment>
               );
@@ -7913,6 +7929,20 @@ export default function ChatView(props: ChatViewProps) {
     ({ item }) =>
       item.type === "user_message" &&
       (item.text.trim().toLowerCase() !== "/compact" || item.attachments.length > 0),
+  );
+  const pendingHandoff = useMemo(
+    () =>
+      resolvePendingHandoff(
+        serverProjection,
+        composerSelectedModelSelection ?? activeThread?.modelSelection,
+        providerStatuses,
+      ),
+    [
+      serverProjection,
+      composerSelectedModelSelection,
+      activeThread?.modelSelection,
+      providerStatuses,
+    ],
   );
   const compactThreadUnavailable =
     !canOperateThread ||
@@ -8281,6 +8311,8 @@ export default function ChatView(props: ChatViewProps) {
           void handleUnsettleActiveThread();
           return;
         }
+        // Same as the sidebar Settle button: settle, then open the next thread.
+        if (settleAndAdvance(activeThreadRef)) return;
 
         void settleThread(activeThreadRef).then((result) => {
           if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
@@ -10760,13 +10792,7 @@ export default function ChatView(props: ChatViewProps) {
   );
 
   const onChangeActivePendingUserInputCustomAnswer = useCallback(
-    (
-      questionId: string,
-      value: string,
-      nextCursor: number,
-      expandedCursor: number,
-      _cursorAdjacentToMention: boolean,
-    ) => {
+    (questionId: string, value: string) => {
       if (!activePendingUserInput) {
         return;
       }
@@ -10786,16 +10812,10 @@ export default function ChatView(props: ChatViewProps) {
           ),
         },
       }));
-      const snapshot = composerRef.current?.readSnapshot();
-      if (
-        snapshot?.value !== value ||
-        snapshot.cursor !== nextCursor ||
-        snapshot.expandedCursor !== expandedCursor
-      ) {
-        composerRef.current?.focusAt(nextCursor);
-      }
+      // The editor owns this selection. Resetting it before the answer renders
+      // can re-enter Lexical with offsets from the previous skill token.
     },
-    [activePendingUserInput, activePendingRequestKey, composerRef],
+    [activePendingUserInput, activePendingRequestKey],
   );
 
   const onAdvanceActivePendingUserInput = useCallback(() => {
@@ -11527,7 +11547,7 @@ export default function ChatView(props: ChatViewProps) {
         shortcutsEnabled={
           rightPanelOpen && activeRightPanelSurface?.id === renderedRightPanelSurface.id
         }
-        key={`${renderedRightPanelSurface.host ?? ""}:${renderedRightPanelSurface.repository}#${renderedRightPanelSurface.number}`}
+        key={pullRequestDetailPanelKey(renderedRightPanelSurface)}
         environmentId={activeThread.environmentId}
         onSelectPullRequest={(reference) => {
           if (activeThreadRef)
@@ -11539,6 +11559,11 @@ export default function ChatView(props: ChatViewProps) {
             });
         }}
         threadRef={activeThreadRef}
+        viewTarget={
+          activeThreadRef === null
+            ? null
+            : { ref: activeThreadRef, surfaceId: renderedRightPanelSurface.id }
+        }
         reference={{
           projectId: renderedRightPanelSurface.projectId as ProjectId,
           ...(renderedRightPanelSurface.host ? { host: renderedRightPanelSurface.host } : {}),
@@ -11663,6 +11688,7 @@ export default function ChatView(props: ChatViewProps) {
         ? onAutoEnvironment
         : undefined,
     onEnvironmentChange,
+    onHandoffToEnvironment,
     onEnvModeChange,
     envMode,
     ...(canOverrideServerThreadEnvMode
@@ -11917,7 +11943,9 @@ export default function ChatView(props: ChatViewProps) {
               />
             </div>
             {/* Messages Wrapper */}
-            <div className="relative flex min-h-0 flex-1 flex-col bg-background">
+            {/* overflow-hidden clips the hover-zoomed timeline so it magnifies in place
+                instead of pushing the composer down. */}
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
               {/* Messages — LegendList handles virtualization and scrolling internally */}
               <MessagesTimeline
                 citationRequest={paintOnlyDisplayedTimeline ? null : citationRequest}
@@ -11953,8 +11981,19 @@ export default function ChatView(props: ChatViewProps) {
                 footer={
                   paintOnlyDisplayedTimeline ? null : cloudSessionComposerGate.card ? (
                     <CloudQueuedSendCard {...cloudSessionComposerGate.card} />
-                  ) : (
+                  ) : pendingHandoff === null ? (
                     threadStatusLine
+                  ) : (
+                    <>
+                      <div className="chat-content-lane">
+                        <HandoffRow
+                          endpoints={pendingHandoff}
+                          providers={providerStatuses}
+                          pending
+                        />
+                      </div>
+                      {threadStatusLine}
+                    </>
                   )
                 }
                 listRef={legendListRef}
@@ -12255,6 +12294,7 @@ export default function ChatView(props: ChatViewProps) {
                               pullRequestRepository={
                                 supportsPullRequests ? activeProjectRepository : null
                               }
+                              threadPullRequests={(activeThreadShell ?? activeThread)?.pullRequests}
                               restingControlsHost={restingComposerControlsHost}
                               restingControlsHaveLeadingContext={
                                 mountComposerContextStrip &&

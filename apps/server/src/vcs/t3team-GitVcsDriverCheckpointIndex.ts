@@ -165,7 +165,7 @@ export const indexCheckpointPaths = (deps: {
     }
 
     const crypto = yield* Crypto.Crypto;
-    const pathspecUuid = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
+    const pathspecUuid = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
     const pathspecPath = path.join(gitCommonDir, `t3-checkpoint-pathspec-${pathspecUuid}`);
     const cleanupPathspec = fileSystem.remove(pathspecPath, { force: true }).pipe(Effect.ignore);
 

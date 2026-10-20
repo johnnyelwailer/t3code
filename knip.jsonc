@@ -119,6 +119,11 @@
         "src/t3team-hostEffect.ts!",
         "src/t3team-hostSdk.ts!",
         "src/t3team-stallProfiler.fixture.mjs",
+        // Bundled recipe bodies, read as raw text (`?raw`) and scaffolded into workspaces, where
+        // the recipe loader requires their top-level `export const meta`.
+        "src/t3team-fixThisBug.workflow.ts",
+        "src/t3team-implementThis.workflow.ts",
+        "src/t3team-livenessBeacon.fixture.mjs",
         "scripts/cli.ts",
         "scripts/evaluate-thread-titles.ts",
         "scripts/measure-pr-preview.ts",
@@ -162,10 +167,15 @@
         "src/preview-pip-preload.ts!",
         "src/mac-permission-preload.ts!",
         "src/preview/Annotation.css!",
+        // Forked as a child process by path (voiceRuntime.ts) from the cjs pack entry in vite.config.ts.
+        "src/voice/t3team-whisperWorker.ts!",
+        // Operator-run WER check (`node --experimental-strip-types scripts/t3team-voice-eval.ts`).
+        "scripts/t3team-voice-eval.ts",
       ],
       // The injected runtime resolves Playwright by string; release tooling runs
       // electron-builder from this workspace, outside its package scripts.
-      "ignoreDependencies": ["playwright-core", "electron-builder"],
+      // @fugood/whisper.node is loaded by name via createRequire inside the whisper worker.
+      "ignoreDependencies": ["playwright-core", "electron-builder", "@fugood/whisper.node"],
     },
     "apps/web": {
       // Vitest loads this through the per-file @vitest-environment directive.

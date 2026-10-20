@@ -464,6 +464,7 @@ export const layerExecutor: Layer.Layer<
                 threadId: effect.threadId,
                 runId: effect.request.runId,
                 scopeId: effect.request.scopeId,
+                willRetry,
               })
               .pipe(
                 Effect.mapError(
@@ -739,9 +740,18 @@ export const layerWithOptions = (
           const execution = executor
             .execute(effect, { willRetry: effect.attemptCount < maxAttempts })
             .pipe(Effect.as("executed" as const));
-          const exit = yield* Effect.exit(Effect.raceFirst(execution, cancellation)).pipe(
-            Effect.ensuring(outbox.clearCancellation(effect.id)),
-          );
+          // Keep the lease alive while the effect runs. Without this, an effect
+          // that outlives the lease is claimed again and runs twice in parallel.
+          const leaseHeartbeat = outbox
+            .renewLease({ effectId: effect.id, workerId, leaseDurationMs })
+            .pipe(
+              Effect.ignore,
+              Effect.delay(Duration.millis(Math.max(1, Math.floor(leaseDurationMs / 3)))),
+              Effect.forever,
+            );
+          const exit = yield* Effect.exit(
+            Effect.raceFirst(Effect.raceFirst(execution, cancellation), leaseHeartbeat),
+          ).pipe(Effect.ensuring(outbox.clearCancellation(effect.id)));
           if (Exit.isSuccess(exit) && exit.value === "cancelled") {
             return true;
           }

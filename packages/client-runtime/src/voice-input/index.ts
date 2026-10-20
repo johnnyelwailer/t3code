@@ -18,3 +18,9 @@ export {
   type VoiceTranscriptionErrorCode,
   type VoiceTranscriptionOptions,
 } from "./transcription.ts";
+export { sanitizeTranscript } from "./t3team-transcriptQuality.ts";
+export {
+  createDesktopVoiceTranscriber,
+  type DesktopVoiceBridge,
+  type DesktopVoiceRecordingDecoder,
+} from "./t3team-desktopTranscriber.ts";

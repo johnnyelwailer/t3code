@@ -10,11 +10,8 @@ import type { ScopePickerEntry } from "./t3team-sidebarProjectScopePicker.logic"
 
 function EntryIcon({ entry }: { entry: ScopePickerEntry }) {
   if (entry.kind === "all") return <FolderIcon className="size-4 shrink-0" />;
-  return entry.item.kind === "app" ? (
-    <GroupIcon group={entry.item.group} />
-  ) : (
-    <JiraProjectGlyph entry={entry.item.entry} />
-  );
+  if (entry.kind === "app") return <GroupIcon group={entry.group} />;
+  return <JiraProjectGlyph entry={entry.entry} />;
 }
 
 /** One picker row. A Jira project the app does not have yet reads italic with a plus. */
@@ -25,7 +22,7 @@ export function T3TeamSidebarProjectScopePickerItem({
   entry: ScopePickerEntry;
   onContextMenu: (event: ReactMouseEvent<HTMLElement>) => void;
 }) {
-  const add = entry.kind === "item" && entry.item.kind === "add";
+  const add = entry.kind === "add";
   return (
     <ComboboxItem
       hideIndicator

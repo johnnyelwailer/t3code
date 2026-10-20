@@ -2,7 +2,7 @@
  * The reference-repository step of the project workspace bootstrap (split out of
  * `t3team-project-repository-routes.ts`): records the linked repositories (they sync on demand;
  * the syncs asked for are queued in the background, never awaited), reports main-repository
- * candidates, and rewrites the reference manifest without dropping earlier entries.
+ * candidates, and rewrites the reference manifest (a saved list replaces the recorded one).
  *
  * @module t3team-project-repository-routesReferences
  */
@@ -16,9 +16,9 @@ import { toAtlassianError } from "./t3team-atlassian-http.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import { writeReferenceManifest } from "./t3team-project-repository-services.ts";
 import {
-  mergeLinkedRepositoryEntries,
   planLinkedRepositoriesForBootstrap,
   readPreservedReferenceManifest,
+  resolveManifestLinkedRepositories,
 } from "./t3team-project-repository-routesBootstrap.ts";
 import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 import {
@@ -97,10 +97,12 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
           ...(input.linkedRepositoryBranches ? { branches: input.linkedRepositoryBranches } : {}),
           phaseOf: sync.phase,
         });
-        const manifestLinkedRepositories = mergeLinkedRepositoryEntries(
-          preserved.linkedRepositories,
-          planned.map((item) => item.entry),
-        );
+        // A save sends the full list: it replaces the manifest's, so removals stick.
+        const manifestLinkedRepositories = resolveManifestLinkedRepositories({
+          preserved: preserved.linkedRepositories,
+          fresh: planned.map((item) => item.entry),
+          explicitList: input.linkedRepositoryUrls !== undefined,
+        });
         const detecting = !mainRepository && isMainRepositoryEnabled();
         const localCandidates = detecting
           ? yield* detectMainRepositoryCandidates(manifestLinkedRepositories)

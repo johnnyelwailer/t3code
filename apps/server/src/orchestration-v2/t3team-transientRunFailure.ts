@@ -32,7 +32,21 @@ export interface TransientRunFailure {
   readonly directiveSeconds: number | null;
   /** A network outage (can last minutes): the session retry gives it the longer budget. */
   readonly outage: boolean;
+  /**
+   * The provider was never reachable (connection refused, host not found, "never reachable"):
+   * an outage of the provider endpoint itself. The session retry says so once and backs off
+   * instead of restarting the run every 15-60s.
+   */
+  readonly unreachable?: boolean;
 }
+
+const UNREACHABLE_TEXT =
+  /\bnever (?:been )?reach(?:able|ed)\b|\bunable to (?:connect|reach)\b|\bcould not (?:connect|reach)\b|\bE(?:CONNREFUSED|NOTFOUND|AI_AGAIN)\b/i;
+
+/** Whether the failure says the provider endpoint could never be reached at all. */
+const isProviderUnreachableFailure = (
+  failure: Pick<OrchestrationV2ProviderFailure, "message">,
+): boolean => UNREACHABLE_TEXT.test(failure.message);
 
 export const classifyTransientRunFailure = (
   failure: OrchestrationV2ProviderFailure | null | undefined,
@@ -46,7 +60,8 @@ export const classifyTransientRunFailure = (
     return null;
   }
   if (failure.code !== null && NEVER_TRANSIENT_CODES.has(failure.code)) return null;
-  const outage = isNetworkOutageFailure(failure);
+  const unreachable = isProviderUnreachableFailure(failure);
+  const outage = unreachable || isNetworkOutageFailure(failure);
   const transient =
     failure.retryable === true ||
     failure.class === "transport_error" ||
@@ -57,6 +72,7 @@ export const classifyTransientRunFailure = (
         message: failure.message,
         directiveSeconds: retryDirectiveSeconds(failure.message),
         outage,
+        ...(unreachable ? { unreachable: true } : {}),
       }
     : null;
 };

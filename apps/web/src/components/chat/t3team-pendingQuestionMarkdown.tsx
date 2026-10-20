@@ -12,6 +12,7 @@
  *
  * @module components/chat/t3team-pendingQuestionMarkdown
  */
+import type { ScopedThreadRef } from "@t3tools/contracts";
 import type { ReactNode } from "react";
 import ChatMarkdown from "~/components/ChatMarkdown";
 import { cn } from "~/lib/utils";
@@ -19,11 +20,15 @@ import { cn } from "~/lib/utils";
 export function T3TeamPendingQuestionMarkdown(props: {
   readonly text: string;
   readonly className?: string | undefined;
+  /** Resolves file links in the question text (upstream #19197). */
+  readonly cwd?: string | undefined;
+  readonly threadRef?: ScopedThreadRef | undefined;
 }): ReactNode {
   return (
     <ChatMarkdown
       text={props.text}
-      cwd={undefined}
+      cwd={props.cwd}
+      threadRef={props.threadRef}
       isStreaming={false}
       lineBreaks
       className={cn("text-foreground/85", props.className)}

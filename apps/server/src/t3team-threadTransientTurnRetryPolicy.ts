@@ -26,8 +26,19 @@ const DEFAULT_RETRY_BACKOFF_MS = [15_000, 30_000, 60_000] as const;
 /** Backoff ladder (ms) for a network outage; the last step repeats. */
 const OUTAGE_RETRY_BACKOFF_MS = [15_000, 30_000, 60_000, 120_000, 300_000, 600_000] as const;
 
-export const maxTransientRetries = (outage: boolean): number =>
-  outage ? MAX_OUTAGE_TRANSIENT_RETRIES : MAX_SESSION_TRANSIENT_RETRIES;
+/**
+ * Retry budget for a failure. An unreachable provider gets none: restarting the run every
+ * 15-60s cannot help while the endpoint is down, so it goes straight to the long auto-resume
+ * backoff with one outage note.
+ */
+export const maxTransientRetries = (outage: boolean, unreachable = false): number =>
+  unreachable ? 0 : outage ? MAX_OUTAGE_TRANSIENT_RETRIES : MAX_SESSION_TRANSIENT_RETRIES;
+
+/** The one note shown while an unreachable provider is treated as an outage. */
+export function providerUnreachableText(reason: string, delayMs?: number): string {
+  const wait = delayMs === undefined ? "" : `; trying again in ~${waitText(delayMs)}`;
+  return `Provider unreachable, treating it as an outage — ${reason}${wait}`;
+}
 
 /** Hard cap for the env override — a "transient" wait longer than 2min is a hang. */
 const MAX_RETRY_BACKOFF_OVERRIDE_MS = 120_000;
@@ -102,10 +113,10 @@ export function transientTurnReasonText(reason: string): string {
 export const transientRetryReason = (failure: TransientRunFailure): string =>
   transientTurnReasonText(failure.message);
 
-const waitText = (delayMs: number): string => {
+function waitText(delayMs: number): string {
   const seconds = Math.max(1, Math.round(delayMs / 1000));
   return seconds >= 120 ? `${Math.round(seconds / 60)}m` : `${seconds}s`;
-};
+}
 
 /** "Retrying (n/N) — reason, next attempt in ~Ns" — the note while a retry waits. */
 export function transientRetryInFlightText(

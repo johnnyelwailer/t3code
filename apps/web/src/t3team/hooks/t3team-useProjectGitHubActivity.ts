@@ -61,7 +61,9 @@ export function useProjectGitHubActivity({
     () => (listQuery.data ? Object.values(listQuery.data.viewers)[0] : undefined),
     [listQuery.data],
   );
-  const listError = listQuery.data?.errors.find((error) => error.projectId === projectId);
+  const listErrors = (listQuery.data?.errors ?? [])
+    .filter((error) => error.projectId === projectId)
+    .map((error) => error.message);
   // Recomputed only when the answer itself changes, not on every render, so this reads as "the
   // moment this list last landed" rather than drifting forward on every unrelated re-render.
   const lastCheckedAt = useMemo(() => (listQuery.data ? Date.now() : undefined), [listQuery.data]);
@@ -80,7 +82,7 @@ export function useProjectGitHubActivity({
     loading: listQuery.isPending && listQuery.data === null,
     host,
     account,
-    warning: listQuery.error ?? listError?.message,
+    warning: listQuery.error ?? (listErrors.length > 0 ? listErrors.join(" ") : undefined),
     // Repository suggestions are a discovery-flow concept upstream has no listing counterpart
     // for; `useGitHubRepositoryDiscovery` still owns that surface.
     suggestedRepositoryCount: 0,

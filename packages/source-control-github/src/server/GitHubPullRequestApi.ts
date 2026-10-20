@@ -316,7 +316,37 @@ export class GitHubWorkflowApprovalHeadChangedError extends Schema.TaggedError<G
   }
 }
 
+export class GitHubBranchDeletionRefusedError extends Schema.TaggedError<GitHubBranchDeletionRefusedError>()(
+  "GitHubBranchDeletionRefusedError",
+  {
+    number: Schema.Int,
+    reason: Schema.Literals([
+      "open-pr",
+      "stack",
+      "source-unavailable",
+      "unsafe-branch",
+      "head-changed",
+    ]),
+  },
+) {
+  override get message(): string {
+    switch (this.reason) {
+      case "open-pr":
+        return `Close or merge pull request #${this.number} before deleting its source branch.`;
+      case "stack":
+        return "Branch deletion is not supported for a stack.";
+      case "source-unavailable":
+        return `GitHub did not report a complete source branch for pull request #${this.number}.`;
+      case "unsafe-branch":
+        return "The source branch is a default or base branch and cannot be deleted here.";
+      case "head-changed":
+        return "The source branch has new commits and was not deleted.";
+    }
+  }
+}
+
 export type GitHubPullRequestApiError =
+  | GitHubBranchDeletionRefusedError
   | GitHubStackActionError
   | GitHubApi.GitHubApiError
   | GitHubPullRequestReadError
@@ -1078,6 +1108,60 @@ const MERGE_PULL_REQUEST_GRAPHQL_MUTATION = `mutation($input: MergePullRequestIn
 const ENABLE_AUTO_MERGE_GRAPHQL_MUTATION = `mutation($input: EnablePullRequestAutoMergeInput!) {
   enablePullRequestAutoMerge(input: $input) { clientMutationId }
 }`;
+
+const BRANCH_TO_DELETE_GRAPHQL_QUERY = `query PullRequestBranchToDelete($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      state
+      headRefName
+      baseRefName
+      headRefOid
+      headRepository { id }
+    }
+  }
+}`;
+const decodeBranchToDelete = Schema.decodeUnknownResult(
+  Schema.fromJsonString(
+    Schema.Struct({
+      data: Schema.Struct({
+        repository: Schema.Struct({
+          pullRequest: Schema.Struct({
+            state: Schema.Literals(["OPEN", "CLOSED", "MERGED"]),
+            headRefName: Schema.String,
+            baseRefName: Schema.String,
+            headRefOid: Schema.String,
+            headRepository: Schema.NullOr(Schema.Struct({ id: Schema.String })),
+          }),
+        }),
+      }),
+    }),
+  ),
+);
+const SOURCE_BRANCH_GRAPHQL_QUERY = `query PullRequestSourceBranch($repositoryId: ID!, $ref: String!) {
+  node(id: $repositoryId) {
+    ... on Repository {
+      defaultBranchRef { name }
+      ref(qualifiedName: $ref) { target { oid } }
+    }
+  }
+}`;
+const decodeSourceBranch = Schema.decodeUnknownResult(
+  Schema.fromJsonString(
+    Schema.Struct({
+      data: Schema.Struct({
+        node: Schema.NullOr(
+          Schema.Struct({
+            defaultBranchRef: Schema.NullOr(Schema.Struct({ name: Schema.String })),
+            ref: Schema.NullOr(Schema.Struct({ target: Schema.Struct({ oid: Schema.String }) })),
+          }),
+        ),
+      }),
+    }),
+  ),
+);
+const DELETE_BRANCH_GRAPHQL_MUTATION = `mutation($input: UpdateRefsInput!) {
+  updateRefs(input: $input) { clientMutationId }
+}`;
 const DISABLE_AUTO_MERGE_GRAPHQL_MUTATION = `mutation($pullRequestId: ID!) {
   disablePullRequestAutoMerge(input: { pullRequestId: $pullRequestId }) { clientMutationId }
 }`;
@@ -1314,6 +1398,7 @@ export const make = Effect.gen(function* () {
     readonly operation: string;
     readonly allowReserve?: boolean | undefined;
     readonly allowPartialNotFound?: boolean | undefined;
+    readonly allowPartialResourceLimits?: boolean | undefined;
     readonly variables?: Readonly<Record<string, unknown>>;
     readonly query: string;
     readonly decode: (raw: string) => Result.Result<A, unknown>;
@@ -1326,6 +1411,7 @@ export const make = Effect.gen(function* () {
         ...(input.variables === undefined ? {} : { variables: input.variables }),
         ...(input.allowReserve === true ? { allowReserve: true } : {}),
         ...(input.allowPartialNotFound === true ? { allowPartialNotFound: true } : {}),
+        ...(input.allowPartialResourceLimits === true ? { allowPartialResourceLimits: true } : {}),
       })
       .pipe(Effect.flatMap((raw) => decodeWith(input.cwd, input.operation, input.decode, raw)));
 
@@ -1961,6 +2047,7 @@ export const make = Effect.gen(function* () {
                 cwd: input.cwd,
                 host: input.host,
                 operation: "listPullRequests",
+                allowPartialResourceLimits: true,
                 // The reader's own words are in the query.
                 variables: { q: query, after },
                 query: pullRequestSearchGraphQlQuery(rows, false, true),
@@ -1970,6 +2057,7 @@ export const make = Effect.gen(function* () {
                 cwd: input.cwd,
                 host: input.host,
                 operation: "listPullRequests",
+                allowPartialResourceLimits: true,
                 variables: { owner, name, states: LIST_STATES[input.state], after },
                 query: pullRequestListGraphQlQuery(rows),
                 decode: decodePullRequestListJson,
@@ -2086,6 +2174,7 @@ export const make = Effect.gen(function* () {
         cwd: input.cwd,
         host: input.host,
         operation: "searchPullRequests",
+        allowPartialResourceLimits: true,
         variables: { q: query, after: null },
         query: pullRequestSearchGraphQlQuery(rows, input.host === "github.com"),
         decode: decodePullRequestSearchJson,
@@ -2536,6 +2625,100 @@ export const make = Effect.gen(function* () {
     },
 
     runPullRequestAction: (input) => {
+      if (input.action === "delete-branch") {
+        return Effect.gen(function* () {
+          if (input.stackNumber !== undefined) {
+            return yield* new GitHubBranchDeletionRefusedError({
+              number: input.number,
+              reason: "stack",
+            });
+          }
+          const { owner, name } = parseRepositorySelector(input.repository);
+          const response = yield* graphqlRead({
+            cwd: input.cwd,
+            host: input.host,
+            operation: "deletePullRequestBranch",
+            allowReserve: true,
+            query: BRANCH_TO_DELETE_GRAPHQL_QUERY,
+            variables: { owner, name, number: input.number },
+            decode: decodeBranchToDelete,
+          });
+          const branch = response.data.repository.pullRequest;
+          if (branch.state === "OPEN") {
+            return yield* new GitHubBranchDeletionRefusedError({
+              number: input.number,
+              reason: "open-pr",
+            });
+          }
+          if (
+            branch.headRepository === null ||
+            !branch.headRepository.id ||
+            !branch.headRefName ||
+            !branch.headRefOid
+          ) {
+            return yield* new GitHubBranchDeletionRefusedError({
+              number: input.number,
+              reason: "source-unavailable",
+            });
+          }
+          if (branch.headRefName === branch.baseRefName) {
+            return yield* new GitHubBranchDeletionRefusedError({
+              number: input.number,
+              reason: "unsafe-branch",
+            });
+          }
+          const ref = `refs/heads/${branch.headRefName}`;
+          const source = yield* graphqlRead({
+            cwd: input.cwd,
+            host: input.host,
+            operation: "deletePullRequestBranch",
+            allowReserve: true,
+            query: SOURCE_BRANCH_GRAPHQL_QUERY,
+            variables: { repositoryId: branch.headRepository.id, ref },
+            decode: decodeSourceBranch,
+          });
+          const repository = source.data.node;
+          if (repository === null) {
+            return yield* new GitHubBranchDeletionRefusedError({
+              number: input.number,
+              reason: "source-unavailable",
+            });
+          }
+          if (repository.ref === null) return;
+          if (
+            repository.defaultBranchRef === null ||
+            branch.headRefName === repository.defaultBranchRef.name
+          ) {
+            return yield* new GitHubBranchDeletionRefusedError({
+              number: input.number,
+              reason: "unsafe-branch",
+            });
+          }
+          if (repository.ref.target.oid !== branch.headRefOid) {
+            return yield* new GitHubBranchDeletionRefusedError({
+              number: input.number,
+              reason: "head-changed",
+            });
+          }
+          yield* graphql({
+            host: input.host,
+            operation: "deletePullRequestBranch",
+            query: DELETE_BRANCH_GRAPHQL_MUTATION,
+            variables: {
+              input: {
+                repositoryId: branch.headRepository.id,
+                refUpdates: [
+                  {
+                    name: ref,
+                    beforeOid: branch.headRefOid,
+                    afterOid: "0000000000000000000000000000000000000000",
+                  },
+                ],
+              },
+            },
+          });
+        });
+      }
       if (input.stackNumber !== undefined)
         return runGitHubStackAction({ ...input, stackNumber: input.stackNumber }).pipe(
           Effect.provideService(GitHubApi.GitHubApi, api),

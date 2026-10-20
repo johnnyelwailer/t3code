@@ -11,6 +11,7 @@ import {
   type ThreadLinkedPullRequest,
 } from "@t3tools/contracts";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -127,10 +128,14 @@ export const make = Effect.gen(function* () {
    */
   const readThreadSnapshot = ({ threadId, backfill }: RefreshRequest) =>
     threadId === null
-      ? orchestrator.getShellSnapshot({
-          location: "active",
-          unsettledOnly: !(backfill || pendingBackfill.size > 0),
-        })
+      ? orchestrator
+          .getShellSnapshot({
+            location: "active",
+            unsettledOnly: !(backfill || pendingBackfill.size > 0),
+          })
+          // Reads every active thread once a minute: run it off the event loop. Writes keep
+          // landing during the read, and the snapshot's sequence guards the sync against them.
+          .pipe(NodeSqliteClient.readOnly)
       : Effect.gen(function* () {
           // Read the sequence first. The thread is then at least this new, so a
           // sync guarded by the sequence is rejected rather than missing a change.
@@ -202,7 +207,9 @@ export const make = Effect.gen(function* () {
               ? null
               : yield* git.branchPullRequest(
                   { cwd, branch: first.branch },
-                  { refresh: request.refresh },
+                  // A changed answer is confirmed with fresh git state below before it is
+                  // persisted, so a merged or closed one needs no second read here.
+                  { refresh: request.refresh, confirmClosed: false },
                 );
           if (detected !== null && !pullRequestMatchesProject(detected, resolvedProject)) {
             return finishBackfill(group);
@@ -308,7 +315,7 @@ export const make = Effect.gen(function* () {
                 if (!projectWorkspaceMatchesSnapshot(currentProject, project.workspaceRoot)) {
                   return failBackfill([thread]);
                 }
-                const uuid = yield* crypto.randomUUIDv4;
+                const uuid = yield* crypto.randomUUIDv4();
                 yield* orchestrator.dispatch({
                   type: "thread.pull-request.sync",
                   commandId: CommandId.make(`server:thread-pull-request:${thread.id}:${uuid}`),

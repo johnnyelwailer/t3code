@@ -114,6 +114,7 @@ import {
   HttpServerResponse,
 } from "effect/http";
 import { RpcSerialization, RpcServer } from "effect/rpc";
+import type { Rpc, RpcGroup } from "effect/rpc";
 
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as ServerConfig from "./config.ts";
@@ -245,6 +246,9 @@ import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
 import { T3TeamActorMailbox } from "./t3team-actorMailboxService.ts";
 import { stopThreadCascade } from "./t3team-threadStopCascade.ts";
+import type { WsRpcHandlerServices } from "./t3team-wsRpcServices.ts";
+import { prepareThreadHandoff, recordThreadHandoff } from "./t3team-threadHandoff.ts";
+import * as VcsProcess from "./vcs/VcsProcess.ts";
 import { makeSettleParkedWorkflowStop } from "./t3team-settleParkedWorkflowStopLive.ts";
 import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import * as PackDocumentStore from "./t3team-v2/t3team-packDocumentStore.ts";
@@ -1355,11 +1359,13 @@ const layerWsRpc = (
       );
       // t3team: the inter-agent mailbox the stop cascade holds (optional, as above).
       const actorMailbox = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamActorMailbox));
+      // t3team: thread handoff reads branch state with it (optional: unknown state refuses).
+      const vcsProcess = Option.getOrUndefined(yield* Effect.serviceOption(VcsProcess.VcsProcess));
       // t3team: a user's settle first stops the thread's parked workflow runs (outside the lock).
       const stopParkedWorkflowRunsBeforeSettle = yield* makeSettleParkedWorkflowStop;
       const crypto = yield* Crypto.Crypto;
       const serverCommandId = (tag: string) =>
-        crypto.randomUUIDv4.pipe(
+        crypto.randomUUIDv4().pipe(
           Effect.orDie,
           Effect.map((id) => CommandId.make(`server:${tag}:${id}`)),
         );
@@ -1613,7 +1619,7 @@ const layerWsRpc = (
               provider?.models.find((candidate) => candidate.isDefault)?.slug ??
               provider?.models[0]?.slug ??
               "default";
-            const commandId = CommandId.make(yield* crypto.randomUUIDv4.pipe(Effect.orDie));
+            const commandId = CommandId.make(yield* crypto.randomUUIDv4().pipe(Effect.orDie));
             const launched = yield* Effect.result(
               startup.enqueueCommand(
                 threadLaunch.launch({
@@ -2278,6 +2284,22 @@ const layerWsRpc = (
               ),
             ),
           ),
+        [WS_METHODS.t3teamThreadHandoffPrepare]: (input) =>
+          Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
+            Effect.andThen(
+              prepareThreadHandoff(input, {
+                vcs: vcsProcess,
+                scheduledTasks: scheduledTasks.list().pipe(Effect.map((result) => result.tasks)),
+              }).pipe(
+                Effect.provideService(
+                  ThreadManagementService.ThreadManagementService,
+                  threadManagement,
+                ),
+                Effect.provideService(ProjectStore.ProjectStoreV2, projectStore),
+              ),
+            ),
+          ),
+        [WS_METHODS.t3teamThreadHandoffRecord]: (input) => recordThreadHandoff(input, threadFacts),
         [WS_METHODS.scheduledTasksList]: (_input) =>
           scheduledTasks.list().pipe(Effect.map(withVisibleWebhookUrls)),
         [WS_METHODS.scheduledTasksSubscribe]: (_input) =>
@@ -3403,6 +3425,20 @@ const layerWsRpc = (
     }),
   );
 
+// t3team: `layerWsRpc` with its type written out, so a module importing the server graph reads
+// this declared type instead of re-inferring `toLayer` over every handler (t3team-wsRpcServices.ts).
+const declaredLayerWsRpc: (
+  currentSession: EnvironmentAuth.AuthenticatedSession,
+  clientOrigin: OrchestrationClientOrigin,
+  clientAnalyticsProps: Readonly<Record<string, unknown>>,
+  previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
+  serverBrowser: ServerBrowser.ServerBrowser["Service"],
+) => Layer.Layer<
+  Rpc.ToHandler<RpcGroup.Rpcs<typeof ServerWsRpcGroup>>,
+  never,
+  WsRpcHandlerServices
+> = layerWsRpc;
+
 // A defect in a handler's effect fails only its own request. RpcServer's default
 // sends a socket-level Defect frame instead, and the client ends every pending
 // request on the socket with it. DefectReporter logs these defects.
@@ -3480,7 +3516,7 @@ export const layer = Layer.unwrap(
           return httpEffect;
         }).pipe(
           Effect.provide(
-            layerWsRpc(
+            declaredLayerWsRpc(
               session,
               clientOrigin,
               clientAnalyticsProps,
