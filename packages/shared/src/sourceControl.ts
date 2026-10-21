@@ -196,6 +196,8 @@ const GITHUB_HOST_LABELS: ReadonlySet<string> = new Set(["github", "ghe"]);
  * as `unknown` and break every PR operation against them.
  */
 export function isGitHubHost(host: string): boolean {
+  // The bare `ghe.com` is GitHub's own marketing domain, not an enterprise's subdomain.
+  if (host === "ghe.com") return false;
   if (host === "github.com" || host.endsWith(".github.com")) {
     return true;
   }

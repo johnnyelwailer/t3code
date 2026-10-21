@@ -33,7 +33,7 @@ const partialAnswer = (errorType: string) =>
   jsonResponse({
     data: {
       search: {
-        pageInfo: { hasNextPage: false },
+        pageInfo: { hasNextPage: false, endCursor: null },
         nodes: [row(1, null), row(2, { state: "SUCCESS" })],
       },
     },

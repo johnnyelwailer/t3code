@@ -2073,17 +2073,24 @@ const runCommand = Effect.fn("runCommand")(function* (
   }
 });
 
-const resolveWorkspaceVpCommand = (
+// The workspace's own `vp` wins when it is installed; a bare `vp` (PATH) is the fallback, which is
+// what upstream's builds and tests use in a checkout without installed dependencies.
+const resolveWorkspaceVpCommand = Effect.fn("resolveWorkspaceVpCommand")(function* (
   repoRoot: string,
   args: ReadonlyArray<string>,
   options: Parameters<typeof resolveSpawnCommand>[2] = {},
-) =>
-  resolveSpawnCommand(
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const workspaceVp = NodePath.join(
+    repoRoot,
+    "node_modules",
+    ".bin",
     // oxlint-disable-next-line t3code/no-global-process-runtime -- Existing fork command resolution; preserve platform behavior during upstream sync.
-    NodePath.join(repoRoot, "node_modules", ".bin", process.platform === "win32" ? "vp.CMD" : "vp"),
-    args,
-    options,
+    process.platform === "win32" ? "vp.CMD" : "vp",
   );
+  const installed = yield* fs.exists(workspaceVp).pipe(Effect.orElseSucceed(() => false));
+  return yield* resolveSpawnCommand(installed ? workspaceVp : "vp", args, options);
+});
 
 export class DesktopBuildAlreadyRunningError extends Schema.TaggedError<DesktopBuildAlreadyRunningError>()(
   "DesktopBuildAlreadyRunningError",

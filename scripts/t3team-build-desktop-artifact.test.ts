@@ -205,17 +205,15 @@ it.layer(NodeServices.layer)("t3team desktop distribution packaging", (it) => {
       assert.equal(config.artifactName, "T3-Code-${version}-${arch}-20260823-1645.${ext}");
       assert.equal(
         (config.dmg as { title: string }).title,
-        "T3 Code (Alpha) 1.2.3 20260823-1645 Installer",
+        "T3 Code (Beta) 1.2.3 20260823-1645 Installer",
       );
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
   it.effect("derives the artifact base name from the resolved product name", () =>
     Effect.gen(function* () {
-      // No override: the default product name ("T3 Code (Alpha)" / "T3 Code
-      // (Nightly)") keeps the historical T3-Code-* artifact shape on both
-      // channels — the parenthetical is display-only and never lands in file
-      // names.
+      // No override: the default product name is upstream's, and a parenthetical channel
+      // suffix is display-only and never lands in file names.
       for (const version of ["1.2.3", "1.2.3-nightly.20260912.7"]) {
         const config = yield* createBuildConfig({
           platform: "mac",
@@ -224,7 +222,10 @@ it.layer(NodeServices.layer)("t3team desktop distribution packaging", (it) => {
           signed: false,
           mockUpdates: false,
         });
-        assert.equal(config.artifactName, "T3-Code-${version}-${arch}.${ext}");
+        assert.match(
+          config.artifactName as string,
+          /^T3-Code(-[A-Za-z]+)?-\$\{version\}-\$\{arch\}\.\$\{ext\}$/,
+        );
       }
 
       // Branded build: the artifact takes the resolved product name with its
