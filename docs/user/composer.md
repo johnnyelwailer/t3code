@@ -189,6 +189,41 @@ microphone.
 Transcription runs on your device. T3 Code deletes the temporary audio after
 transcription or cancellation; only the message text is sent when you submit.
 
+## Voice input on desktop
+
+In the desktop app, voice input transcribes with a Whisper model that runs on your computer.
+There are two ways to use it:
+
+- **Composer microphone.** In a normal thread, the microphone button dictates into the draft.
+  Recording stops when you press it again or after you stop speaking, and the text is inserted for
+  you to review before sending. In the voice thread, the same button talks to the voice agent
+  instead, and the heard text is sent as a message.
+- **Voice shortcut.** Press `Ctrl+Alt+Space` from any app to start or stop talking to the voice
+  agent. The sidebar's voice row shows the live recording. While T3 Code is minimized, hidden or in
+  the background, a small floating widget shows it and has a stop button.
+
+Recordings stop on their own after five minutes. If the shortcut does not work, another app has
+claimed it; choose a different one below.
+
+Open **Settings → Voice** to change:
+
+| Setting                 | What it does                                                                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Voice shortcut**      | The global shortcut that starts and stops talking to the voice agent.                                                          |
+| **Voice model**         | The Whisper model to use. Empty (the default) picks one for your hardware: `large-v3-turbo` with a dedicated GPU, else `base`. |
+| **Voice model file**    | A ggml `.bin` file to use instead. Leave empty to detect a model on this computer, else download **Voice model**.              |
+| **Voice language**      | **Auto** detects each recording's language from its first seconds of speech; a language is used for every recording.           |
+| **Voice language list** | The languages the picker offers after Auto, as codes such as `de,en,fr`. Default `de,en`.                                      |
+| **Voice silence**       | Milliseconds of silence after speech before the recording ends itself. `0` turns this off. Default 1500.                       |
+
+The first recording downloads the model when none is found (roughly 1.6 GB for `large-v3-turbo`, 150 MB for `base`). The
+microphone button and the voice row show the download progress, and the download happens once.
+
+Audio never leaves your computer: it is transcribed locally and not stored, and only the resulting
+text is sent when you submit a message. The browser app has no on-device model and uses the
+browser's own speech recognition for the microphone button, which follows the browser's privacy
+rules.
+
 ## Queued messages
 
 On web and desktop, the composer shows **Interrupt** while the agent is working and the draft is

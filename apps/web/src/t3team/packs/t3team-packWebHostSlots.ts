@@ -29,6 +29,12 @@ export function packSlotEntry(
     case "changeRequest.summary":
     case "myWork.changeRequest":
       return { ...registration, owner } as SlotViewEntry;
+    case "surface.companion": {
+      const { placements, component } = registration;
+      return placements === undefined
+        ? { slot: registration.slot, id, owner, component }
+        : { slot: registration.slot, id, owner, component, placements: [...placements] };
+    }
     case "dashboard.widget":
     case "sidecar.section": {
       const { definition } = registration;

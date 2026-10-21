@@ -1,7 +1,11 @@
 import { VOICE_WIDGET_EXIT_MS } from "@t3tools/contracts";
-import { useEffect, useRef } from "react";
+import { useContext, useEffect, useRef } from "react";
 
 import { cn } from "~/lib/utils";
+import {
+  CompanionPreferencesContext,
+  T3TeamCompanionSlot,
+} from "~/t3team/packs/t3team-CompanionSlot";
 import { AnimatedHeight } from "./surface/t3team-AnimatedHeight";
 import { VoiceHeardCard } from "./surface/t3team-VoiceHeardCard";
 import { VoiceRecordingCard } from "./surface/t3team-VoiceRecordingCard";
@@ -10,6 +14,7 @@ import { useFaceTransition } from "./surface/t3team-useFaceTransition";
 import { VOICE_CLASS } from "./surface/t3team-voiceClasses";
 import { voiceUiIsLive } from "./surface/t3team-voiceUiModel";
 import { useVoiceUiStore } from "./surface/t3team-voiceUiStore";
+import { voiceCompanionMood, voiceCompanionPreferences } from "./t3team-voiceCompanion";
 import { FrozenVoiceViewProvider, type VoiceUiView } from "./surface/t3team-voiceView";
 import "~/t3team/voice/surface/t3team-voice.css";
 
@@ -27,6 +32,8 @@ function useLastOpenView(open: boolean): VoiceUiView | null {
 /**
  * The floating widget's card with every transition eased: it eases in and out as a whole, a
  * change of face (recording to heard) cross-fades, and a change of height follows its content.
+ * A pack's `voice.overlay` companion sits on the card's top edge and leaves with it (unmounted
+ * once the card is gone, so nothing renders while the overlay is idle or hidden).
  */
 export function VoiceWidgetStage(props: {
   readonly keys: readonly string[];
@@ -39,6 +46,8 @@ export function VoiceWidgetStage(props: {
   const { mounted, expanded } = useExpandPresence(open, VOICE_WIDGET_EXIT_MS);
   const shownState = frozen?.snapshot.state ?? state;
   const faces = useFaceTransition(shownState === "committed" ? "heard" : "recording");
+  const companions = voiceCompanionPreferences(useContext(CompanionPreferencesContext));
+  const companionMood = voiceCompanionMood(shownState);
 
   if (!mounted) return null;
   return (
@@ -47,6 +56,16 @@ export function VoiceWidgetStage(props: {
       data-expanded={expanded ? "" : undefined}
       className={cn(VOICE_CLASS.scope, VOICE_CLASS.widget)}
     >
+      {companionMood ? (
+        <CompanionPreferencesContext value={companions}>
+          <T3TeamCompanionSlot
+            placement="voice.overlay"
+            mood={companionMood}
+            size="md"
+            className={VOICE_CLASS.companion}
+          />
+        </CompanionPreferencesContext>
+      ) : null}
       <FrozenVoiceViewProvider view={frozen}>
         <AnimatedHeight>
           {faces.map((face) => (

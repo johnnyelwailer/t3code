@@ -40,6 +40,7 @@ import {
 } from "~/t3team/backend/t3team-thread-jobsBackend";
 import { resolveHttpBaseUrl } from "~/t3team/backend/t3team-t3BackendHttp";
 import { resolveWsBaseUrl } from "~/t3team/t3team-route-surface-wsUrl";
+import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
 import { EMPTY_ACTIVE_AGENTS, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
 import { T3TeamActiveAgentsIndicator } from "~/t3team/chat/t3team-activeAgentsIndicator";
 import { WorkingLeadText } from "~/t3team/chat/t3team-workingLeadText";
@@ -1874,9 +1875,12 @@ const ConversationTimeline = memo(function ConversationTimeline({
         className="flex h-full items-center justify-center ps-(--chat-lane-inset-start) pe-(--chat-lane-inset-end)"
         style={{ paddingBottom: contentInsetEndAdjustment }}
       >
-        <p className="text-sm text-muted-foreground/30">
-          Send a message to start the conversation.
-        </p>
+        <div className="flex flex-col items-center gap-3">
+          <T3TeamCompanionSlot placement="thread.new" mood="newThread" size="md" />
+          <p className="text-sm text-muted-foreground/30">
+            Send a message to start the conversation.
+          </p>
+        </div>
       </div>
     );
   }

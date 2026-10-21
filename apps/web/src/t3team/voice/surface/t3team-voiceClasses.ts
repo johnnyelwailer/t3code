@@ -12,6 +12,7 @@ export const VOICE_CLASS = {
   glow: "t3team-voice-glow",
   dock: "t3team-voice-dock",
   widget: "t3team-voice-widget",
+  companion: "t3team-voice-companion",
   face: "t3team-voice-face",
   size: "t3team-voice-size",
   progress: "t3team-voice-progress",
