@@ -31,12 +31,25 @@ export type ProjectWorkspaceBootstrapResult = {
   readonly mainRepositoryCandidates?: ReadonlyArray<ProjectMainRepositoryCandidate>;
 };
 
-/** Result of `POST /api/t3team/project/main-repository`. */
+/** Progress of the background state migration a main-repository switch starts (the state is
+ * linked into the new checkout at once; the real files follow). Also on the linked-repository
+ * status response as `stateMigration`. */
+export type ProjectStateMigrationSummary = {
+  readonly status: "running" | "done";
+  readonly pending: number;
+  readonly lost: number;
+  readonly failed: number;
+  readonly copiedFiles: number;
+};
+
+/** Result of `POST /api/t3team/project/main-repository`. Answers at once. */
 export type ProjectMainRepositorySwitchResult = {
   readonly changed: boolean;
   readonly workspaceRoot: string;
   readonly mainRepository?: ProjectMainRepository;
+  /** Always empty on current servers: state moves in the background. */
   readonly migratedPaths: ReadonlyArray<string>;
+  readonly stateMigration?: ProjectStateMigrationSummary;
 };
 
 export type ProjectWorkspaceContextFile = {
