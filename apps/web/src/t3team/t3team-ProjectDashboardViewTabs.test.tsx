@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 /**
- * The header's Digest | List | Board | Backlog | Planning control ↔ dashboard mode ↔ My Work lens ↔
+ * The dashboard's Digest | List | Board | Backlog | Planning control ↔ dashboard mode ↔ My Work lens ↔
  * backlog view mode ↔ URL. The
  * router is a tiny in-memory location: `navigate` applies the `search` updater the persisted-route
  * hook passes, exactly as TanStack Router would.
