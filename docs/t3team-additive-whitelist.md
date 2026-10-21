@@ -454,3 +454,7 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
 
 - `apps/desktop/scripts/main-process-bundle.test.mjs` — fixture writes the `src/voice/t3team-whisperWorker.ts` worker entry that the desktop `pack` config now builds.
 - `third-party-licenses.config.json` — notice overrides for the `@fugood/node-whisper-*` platform binaries pulled in by `@fugood/whisper.node`.
+
+## Pre-existing Test Web nightly fixes (2026-10-21)
+
+- `apps/web/src/components/BranchToolbar.panel.test.tsx` — the mocked draft store gains `draftsByThreadKey`, which the cloud queued-send hook now reads.
