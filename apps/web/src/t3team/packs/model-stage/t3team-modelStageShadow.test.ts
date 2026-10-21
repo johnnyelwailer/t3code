@@ -7,7 +7,7 @@ describe("groundShadowCssOpacity", () => {
     expect(groundShadowCssOpacity(null, true)).toBe(0.55);
     expect(groundShadowCssOpacity({ lift: 0 }, true)).toBe(0.55);
     expect(groundShadowCssOpacity({ lift: 0.28 }, true)).toBe(0);
-    expect(groundShadowCssOpacity({ lift: 0.175 }, true)).toBeCloseTo(0.55 * (1 - 0.175 / 0.28), 3);
+    expect(groundShadowCssOpacity({ lift: 0.06 }, true)).toBeCloseTo(0.275, 3);
     expect(groundShadowCssOpacity({ lift: 0.28 }, false)).toBe(0);
   });
 });

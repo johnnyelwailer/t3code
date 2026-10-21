@@ -106,7 +106,7 @@ describe("ModelStage without WebGL", () => {
           loop={sprite}
           size={120}
           groundShadow
-          flight={{ lift: 0.14 }}
+          flight={{ lift: 0.06 }}
         />,
       ),
     );

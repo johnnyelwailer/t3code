@@ -47,10 +47,11 @@ export class ModelStageMotion {
       map: this.texture,
       transparent: true,
       depthWrite: false,
+      depthTest: false,
       opacity: 0.85,
     });
     this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.shadowMat);
-    this.shadow.rotation.x = -Math.PI / 2;
+    // Camera-facing flattened ellipse: a floor plane is edge-on to this near-level camera.
     this.shadow.renderOrder = -1;
     this.scene.add(this.shadow);
     this.scene.add(this.root);
@@ -63,12 +64,11 @@ export class ModelStageMotion {
     this.root.add(model);
     model.updateMatrixWorld(true);
     model.traverse((object) => (object as THREE.SkinnedMesh).skeleton?.update());
-    const sphere = new THREE.Box3().setFromObject(model).getBoundingSphere(new THREE.Sphere());
+    const box = new THREE.Box3().setFromObject(model);
+    const sphere = box.getBoundingSphere(new THREE.Sphere());
     this.height = Math.max(sphere.radius * 2, 0.01);
-    this.groundY = sphere.center.y - sphere.radius;
-    const span = sphere.radius * 1.35;
-    this.shadow.scale.set(span, span * 0.55, 1);
-    this.shadow.position.set(sphere.center.x, this.groundY + sphere.radius * 0.05, sphere.center.z);
+    this.groundY = box.min.y; // the soles, not the (looser) sphere bottom
+    this.shadow.position.set(sphere.center.x, this.groundY, sphere.center.z - sphere.radius * 0.3);
     this.shoulders = [];
     model.traverse((object) => {
       if (!(object as THREE.Bone).isBone) return;
@@ -95,6 +95,12 @@ export class ModelStageMotion {
     this.shadow.visible = enabled;
   }
 
+  /** How far above the rest pose the model can reach (lift + bob), in world units. */
+  reach(): number {
+    if (!this.flight) return 0;
+    return (this.flight.lift + (this.flight.bobAmp ?? DEFAULT_BOB_AMP)) * this.height;
+  }
+
   /** True while bobbing or flapping, so the scene keeps requesting frames. */
   active(): boolean {
     return this.flight !== null;
@@ -114,14 +120,14 @@ export class ModelStageMotion {
     const shadowOpacity = !this.showShadow
       ? 0
       : airborne
-        ? Math.max(0, 0.85 * (1 - Math.min(1, liftFrac / 0.28)))
+        ? Math.max(0, 0.85 * (1 - Math.min(1, liftFrac / 0.12)))
         : 0.85;
     this.shadowMat.opacity = shadowOpacity;
     this.shadow.visible = this.showShadow && shadowOpacity > 0.02;
     // Soften the blob a little more while rising (reads as distance).
     const shrink = airborne ? 1 - Math.min(0.35, liftFrac * 0.6) : 1;
-    this.shadow.scale.x = this.height * 0.9 * shrink;
-    this.shadow.scale.y = this.height * 0.48 * shrink;
+    this.shadow.scale.x = this.height * 0.62 * shrink;
+    this.shadow.scale.y = this.height * 0.12 * shrink;
 
     const flapOn = Boolean(flight && (flight.wingFlap ?? true) && airborne);
     if (flapOn) {

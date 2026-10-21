@@ -33,6 +33,7 @@ export class ModelStageScene {
   private last = 0;
   private probe: number[] | null;
   private disposed = false;
+  private bounds: THREE.Sphere | null = null;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -73,16 +74,8 @@ export class ModelStageScene {
       });
     }
     model.rotation.y = THREE.MathUtils.degToRad(yawDegrees);
-    const { center, radius } = this.motion.attach(model);
-    // Headroom for hover + a little floor under the feet so the ground shadow is not clipped.
-    const pad = radius * 0.45;
-    const floor = radius * 0.2;
-    this.camera.position.set(
-      center.x,
-      center.y + radius * 0.05 + pad * 0.45 - floor * 0.2,
-      center.z + radius * 2.75,
-    );
-    this.camera.lookAt(center.x, center.y + pad * 0.2 - floor * 0.55, center.z);
+    this.bounds = this.motion.attach(model);
+    this.frameCamera();
     this.clips = gltf.animations;
     if (this.clips.length > 0) {
       this.mixer = new THREE.AnimationMixer(model);
@@ -98,6 +91,7 @@ export class ModelStageScene {
 
   setFlight(flight: ModelStageFlight | null | undefined) {
     this.motion.setFlight(flight);
+    this.frameCamera();
     if (this.motion.active()) this.wake();
     else this.renderFrame(0);
   }
@@ -140,6 +134,18 @@ export class ModelStageScene {
     this.environment?.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();
+  }
+
+  /** Frames the rest pose plus the hover's reach, with a little floor for the ground shadow. */
+  private frameCamera() {
+    if (!this.bounds) return;
+    const { center, radius } = this.bounds;
+    const up = this.motion.reach();
+    const half = radius * 0.78 + up / 2;
+    const distance = half / Math.tan(THREE.MathUtils.degToRad(16));
+    const y = center.y - radius * 0.08 + up / 2;
+    this.camera.position.set(center.x, y + radius * 0.06, center.z + distance);
+    this.camera.lookAt(center.x, y, center.z);
   }
 
   private playStep() {
