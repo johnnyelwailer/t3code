@@ -16,7 +16,11 @@ import * as SqlClient from "effect/sql/SqlClient";
 import { Command, Flag } from "effect/cli";
 
 import * as ProjectionStore from "../src/orchestration-v2/ProjectionStore.ts";
-import { migrationManifest, runMigrations } from "../src/persistence/Migrations.ts";
+import {
+  migrationManifest,
+  runMigrations,
+  UPSTREAM_V2_MIGRATION_IDS,
+} from "../src/persistence/Migrations.ts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 
 export class MigrateDevDbNotInWorktreeError extends Schema.TaggedError<MigrateDevDbNotInWorktreeError>()(
@@ -237,7 +241,16 @@ const copySourceSlice = Effect.fn("copyDevDbSourceSlice")(function* (sourcePath:
     SELECT m.name, c."notnull" FROM src.sqlite_master m, pragma_table_info(m.name, 'src') c
     WHERE m.type = 'table' AND c.name = 'thread_id'`;
   const threadIdNullable = new Map(threadColumns.map((row) => [row.name, row.notnull === 0]));
-  const tables = schema.filter((entry) => entry.type === "table");
+  // A virtual table (the fork's FTS5 search index) creates its own shadow tables and rebuilds its
+  // content on demand, so neither can be copied: creating a shadow table by hand is rejected.
+  const virtualNames = schema
+    .filter((entry) => entry.type === "table" && /^CREATE VIRTUAL TABLE/i.test(entry.sql))
+    .map((entry) => entry.name);
+  const tables = schema.filter(
+    (entry) =>
+      entry.type === "table" &&
+      !virtualNames.some((name) => entry.name === name || entry.name.startsWith(`${name}_`)),
+  );
   const filtered = tables.some((table) => table.name === "orchestration_v2_projection_threads");
 
   yield* sql.withTransaction(
@@ -401,6 +414,9 @@ const verifyMigrationSlots = Effect.fn("verifyMigrationSlots")(function* () {
     SELECT migration_id, name FROM effect_sql_migrations`;
   const appliedById = new Map(applied.map((row) => [Number(row.migration_id), row.name]));
   for (const [slot, codeName] of migrationManifest) {
+    // Fork databases record fork ids under older names (the GHE #382 id 60 collision, repaired
+    // by 78); only upstream-owned slots decide whether the copy can run.
+    if (!UPSTREAM_V2_MIGRATION_IDS.has(slot)) continue;
     const appliedName = appliedById.get(slot);
     if (appliedName !== undefined && appliedName !== codeName) {
       return yield* new MigrateDevDbSlotCollisionError({ slot, codeName, appliedName });

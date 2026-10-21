@@ -669,6 +669,7 @@
     "apps/desktop/src/main.ts",
     "apps/desktop/src/snapShot/DesktopSnapShot.ts",
     "apps/desktop/src/snapShot/PortalCaptureShortcut.ts",
+    "apps/server/scripts/migrate-dev-db.ts",
     "apps/server/src/persistence/Migrations/063_DropUnusedV1Projections.test.ts",
     "apps/server/src/ws.test.ts",
     "apps/web/src/components/pullRequest/PullRequestSummaryTab.browser.test.tsx",
