@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import * as Struct from "effect/Struct";
 
 import { VoiceTranscriberSettings } from "./t3team-voiceSettings.ts";
 
@@ -27,7 +28,8 @@ const DesktopVoiceFailure = Schema.Struct({
   message: Schema.String,
 });
 
-export const DesktopVoiceConfig = Schema.Struct(VoiceTranscriberSettings.fields);
+/** What the transcriber needs; `languages` only feeds the settings picker, so it never crosses IPC. */
+export const DesktopVoiceConfig = VoiceTranscriberSettings.mapFields(Struct.omit(["languages"]));
 export type DesktopVoiceConfig = typeof DesktopVoiceConfig.Type;
 
 /** Main to renderer while the first-use model download runs; `totalBytes` is null when the server sent no length. */
