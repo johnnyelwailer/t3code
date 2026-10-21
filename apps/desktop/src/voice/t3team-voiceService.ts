@@ -48,6 +48,23 @@ export function makeDesktopVoiceService(deps: {
 }): DesktopVoiceService {
   const log = deps.log ?? (() => undefined);
   const download = deps.download ?? downloadWhisperModel;
+  const downloadsInFlight = new Map<string, Promise<string>>();
+
+  /**
+   * Cancelling and restarting while a multi-GB download runs would start a second writer on the
+   * same `.part` file and corrupt the model, so a second request joins the running download.
+   */
+  const downloadOnce = (model: string): Promise<string> => {
+    const running = downloadsInFlight.get(model);
+    if (running !== undefined) return running;
+    const started = download({
+      model,
+      targetDir: deps.environment.appModelsDir,
+      ...(deps.onDownloadProgress ? { onProgress: deps.onDownloadProgress } : {}),
+    }).finally(() => downloadsInFlight.delete(model));
+    downloadsInFlight.set(model, started);
+    return started;
+  };
 
   const resolveModel = async (
     config: DesktopVoiceConfig,
@@ -76,11 +93,7 @@ export function makeDesktopVoiceService(deps: {
       );
     }
     try {
-      const modelPath = await download({
-        model: config.model,
-        targetDir: deps.environment.appModelsDir,
-        ...(deps.onDownloadProgress ? { onProgress: deps.onDownloadProgress } : {}),
-      });
+      const modelPath = await downloadOnce(config.model);
       return { ok: true, modelPath, modelSource: "download" };
     } catch (error) {
       return failure("model-unavailable", error instanceof Error ? error.message : String(error));
