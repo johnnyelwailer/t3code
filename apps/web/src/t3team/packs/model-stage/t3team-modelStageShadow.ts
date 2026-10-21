@@ -11,6 +11,6 @@ export function groundShadowCssOpacity(
 ): number {
   if (!enabled) return 0;
   const lift = flight?.lift ?? 0;
-  if (lift <= 0.02) return 0.45;
-  return Math.max(0, 0.45 * (1 - Math.min(1, lift / 0.35)));
+  if (lift <= 0.02) return 0.55;
+  return Math.max(0, 0.55 * (1 - Math.min(1, lift / 0.28)));
 }

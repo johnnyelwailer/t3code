@@ -111,13 +111,13 @@ export function ModelStage(props: PackModelStageProps) {
           data-model-stage-shadow
           className="pointer-events-none absolute left-1/2 rounded-[50%]"
           style={{
-            width: size * 0.62,
-            height: size * 0.16,
-            bottom: size * 0.06,
+            width: size * 0.7,
+            height: size * 0.2,
+            bottom: size * 0.04,
             transform: "translateX(-50%)",
             opacity: shadowOpacity,
             background:
-              "radial-gradient(ellipse at center, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.12) 45%, transparent 72%)",
+              "radial-gradient(ellipse at center, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.18) 40%, transparent 70%)",
             transition: "opacity 300ms ease",
           }}
         />

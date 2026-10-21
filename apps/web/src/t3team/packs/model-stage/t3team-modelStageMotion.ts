@@ -16,8 +16,8 @@ function shadowTexture(): THREE.CanvasTexture {
   canvas.width = canvas.height = 128;
   const ctx = canvas.getContext("2d")!;
   const gradient = ctx.createRadialGradient(64, 64, 2, 64, 64, 62);
-  gradient.addColorStop(0, "rgba(0,0,0,0.38)");
-  gradient.addColorStop(0.45, "rgba(0,0,0,0.16)");
+  gradient.addColorStop(0, "rgba(0,0,0,0.55)");
+  gradient.addColorStop(0.4, "rgba(0,0,0,0.28)");
   gradient.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 128, 128);
@@ -47,7 +47,7 @@ export class ModelStageMotion {
       map: this.texture,
       transparent: true,
       depthWrite: false,
-      opacity: 0.55,
+      opacity: 0.7,
     });
     this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.shadowMat);
     this.shadow.rotation.x = -Math.PI / 2;
@@ -114,14 +114,14 @@ export class ModelStageMotion {
     const shadowOpacity = !this.showShadow
       ? 0
       : airborne
-        ? Math.max(0, 0.55 * (1 - Math.min(1, liftFrac / 0.35)))
-        : 0.55;
+        ? Math.max(0, 0.7 * (1 - Math.min(1, liftFrac / 0.28)))
+        : 0.7;
     this.shadowMat.opacity = shadowOpacity;
     this.shadow.visible = this.showShadow && shadowOpacity > 0.02;
     // Soften the blob a little more while rising (reads as distance).
     const shrink = airborne ? 1 - Math.min(0.35, liftFrac * 0.6) : 1;
-    this.shadow.scale.x = this.height * 0.675 * shrink;
-    this.shadow.scale.y = this.height * 0.37 * shrink;
+    this.shadow.scale.x = this.height * 0.78 * shrink;
+    this.shadow.scale.y = this.height * 0.42 * shrink;
 
     const flapOn = Boolean(flight && (flight.wingFlap ?? true) && airborne);
     if (flapOn) {

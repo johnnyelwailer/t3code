@@ -74,7 +74,7 @@ export class ModelStageScene {
     }
     model.rotation.y = THREE.MathUtils.degToRad(yawDegrees);
     const { center, radius } = this.motion.attach(model);
-    const pad = radius * 0.22; // headroom so a ~0.3-height lift stays in view
+    const pad = radius * 0.45; // headroom so a ~0.2-height lift + bob stays in view
     this.camera.position.set(
       center.x,
       center.y + radius * 0.12 + pad * 0.5,
