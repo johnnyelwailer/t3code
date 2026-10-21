@@ -21,6 +21,7 @@ describe("NEXI_FF_NEXI_STATE_DIR", () => {
     expect(utils.MAIN_REPOSITORY_GITIGNORE_ENTRIES).toEqual([
       ".nexi/references/",
       ".nexi/child-session-worktrees/",
+      ".nexi/context/_blobs/",
     ]);
     expect(setup.T3TEAM_PROJECT_RECIPES_ROOT).toBe(".nexi/recipes");
     expect(setup.T3TEAM_PROJECT_CONTEXT_ROOT).toBe(".nexi/context");
