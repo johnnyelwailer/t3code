@@ -480,3 +480,12 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
 - `packages/shared/src/toolOutput.ts` — `htmlRenderFromToolItem` gates on the tool's
   `html-render` summary action instead of the literal `html_render` name, so `t3_show_widget`
   results render inline (and are cleaned up on thread deletion) through upstream's path.
+
+## 2026-10-21 upstream sync (upstream 4f651cb10d)
+
+- `apps/server/src/persistence/Migrations/063_DropUnusedV1Projections.test.ts` — the held upstream 063 test stays skipped, with the quarantine marker the new lint rule asks for.
+- `apps/server/src/ws.test.ts` — the RPC-boundary test mocks the fork's handler services (`CloudSessionService`, `ProjectMachineDiscovery`, `ResourcePressureMonitor`, `ToolAuthService`).
+- `apps/web/src/components/pullRequest/PullRequestSummaryTab.browser.test.tsx` — the fork's pack-view test moved onto upstream's disposable `render` screen.
+- `apps/web/src/composerDraftStore.test.ts` — non-null assertion for the fork's nullable draft image `file`.
+- `apps/web/src/hooks/useLogicalProjectEnvironments.ts` — `cloudSessionScopeKey` defaults to `null`, so upstream's new `AddProjectToMachineDialog` keeps calling it with two arguments.
+- `packages/source-control-github/src/server/GitHubRest.ts` — the fork's read coalescer wrapper is an `Effect.fn`.
