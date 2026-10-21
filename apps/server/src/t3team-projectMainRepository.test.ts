@@ -137,6 +137,45 @@ it.layer(TestLayer)("project main repository", (it) => {
     }),
   );
 
+  it.effect("skips the context blob cache, so a large cache cannot stall a switch", () =>
+    Effect.gen(function* () {
+      const { home, alpha } = makeProject();
+      // A real project (Windows, Oct 21) had 70k blobs / 5.5 GB here; copying them inline made
+      // every switch outlast the client's request timeout and left it unrecorded.
+      const blobCount = 4000;
+      for (let index = 0; index < blobCount; index += 1) {
+        const sha = index.toString(16).padStart(64, "0");
+        write(state(home, "context", "_blobs", sha.slice(0, 2), sha), `blob ${index}\n`);
+      }
+      write(state(home, "context", "jira", "IES-1.json"), "{}\n");
+      const startedAt = performance.now();
+      const result = yield* switchProjectMainRepository({
+        project: { workspaceRoot: home },
+        url: "https://github.com/acme/alpha",
+        selection: "user",
+      });
+      const elapsedMs = performance.now() - startedAt;
+
+      expect(result.changed).toBe(true);
+      expect(result.workspaceRoot).toBe(alpha);
+      expect(result.migratedPaths.some((entry) => entry.startsWith("context/_blobs/"))).toBe(false);
+      expect(result.migratedPaths).toContain("context/jira/IES-1.json");
+      expect(NodeFS.existsSync(state(alpha, "context", "_blobs"))).toBe(false);
+      // Sticks: the target manifest records the new main repository.
+      const manifest = JSON.parse(
+        NodeFS.readFileSync(state(alpha, "references", "reference-repositories.json"), "utf8"),
+      );
+      expect(manifest.mainRepository).toMatchObject({
+        url: "https://github.com/acme/alpha",
+        localPath: alpha,
+      });
+      // Fast: only the handful of real state files is walked and copied.
+      expect(elapsedMs).toBeLessThan(1_500);
+      const gitignore = NodeFS.readFileSync(NodePath.join(alpha, ".gitignore"), "utf8");
+      expect(gitignore).toContain(`${HIDDEN_T3TEAM_DIR}/context/_blobs/`);
+    }),
+  );
+
   it.effect("switches to a linked clone, records it in the manifest, and can switch back", () =>
     Effect.gen(function* () {
       const { home, alpha } = makeProject();
