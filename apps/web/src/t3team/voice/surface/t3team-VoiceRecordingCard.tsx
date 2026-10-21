@@ -9,6 +9,7 @@ import { VoiceOrb } from "./t3team-VoiceOrb";
 import { VoiceTranscript } from "./t3team-VoiceTranscript";
 import { VOICE_CLASS } from "./t3team-voiceClasses";
 import { useVoiceCanvas } from "./t3team-useVoiceCanvas";
+import { useVoiceSessionNote } from "./t3team-useVoiceSessionNote";
 import { useVoiceUiStore } from "./t3team-voiceUiStore";
 import { useVoiceView } from "./t3team-voiceView";
 import "~/t3team/voice/surface/t3team-voice.css";
@@ -35,6 +36,7 @@ export function VoiceRecordingCard(props: {
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useVoiceCanvas({ kind: "ribbon", active: true, glowRef: rootRef });
   const writing = state === "transcribing";
+  const { note, writingLabel } = useVoiceSessionNote();
 
   return (
     <div ref={rootRef} className={cn(VOICE_CLASS.scope, "relative")}>
@@ -49,11 +51,14 @@ export function VoiceRecordingCard(props: {
           <VoiceOrb state={state} size="lg" onClick={() => controls?.toggle()} />
           <span className="flex flex-1 items-center gap-2 font-medium text-xs">
             {writing ? (
-              <span className="text-muted-foreground">Writing it down</span>
+              <span className="text-muted-foreground">{writingLabel}</span>
             ) : (
               <>
                 <i className={VOICE_CLASS.dot} />
-                Listening
+                {note.kind === "heard" ? "Heard, still listening" : "Listening"}
+                {note.kind === "writing" ? (
+                  <span className="font-normal text-muted-foreground">· {writingLabel}</span>
+                ) : null}
               </>
             )}
           </span>

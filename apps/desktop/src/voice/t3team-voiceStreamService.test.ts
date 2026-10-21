@@ -55,10 +55,38 @@ describe("makeDesktopVoiceStreamService", () => {
     push("s1", ROOM, 300);
     expect(events.every((event) => event.sessionId === "s1" && event.type === "level")).toBe(true);
 
-    service.stop({ sessionId: "s1" });
+    expect(await service.stop({ sessionId: "s1" })).toEqual({ text: "", committed: 0 });
     const seen = events.length;
     push("s1", ROOM, 300);
     expect(events).toHaveLength(seen);
+  });
+
+  it("finishes a session by writing down what was said and returns it", async () => {
+    const { service, voice, events, push } = setup(READY);
+    await service.start({ config });
+    push("s1", ROOM, 600);
+    push("s1", SPEECH, 1500);
+    expect(await service.stop({ sessionId: "s1", finish: true })).toEqual({
+      text: "hi",
+      committed: 0,
+    });
+    expect(voice.transcribe).toHaveBeenCalled();
+    const seen = events.length;
+    push("s1", SPEECH, 300);
+    expect(events).toHaveLength(seen);
+    expect(await service.stop({ sessionId: "s1", finish: true })).toEqual({
+      text: "",
+      committed: 0,
+    });
+  });
+
+  it("answers a finish for a session that is not active with nothing said", async () => {
+    const { service } = setup(READY);
+    await service.start({ config });
+    expect(await service.stop({ sessionId: "nope", finish: true })).toEqual({
+      text: "",
+      committed: 0,
+    });
   });
 
   it("ignores chunks for a session that is not the active one", async () => {

@@ -195,15 +195,21 @@ In the desktop app, voice input transcribes with a Whisper model that runs on yo
 There are two ways to use it:
 
 - **Composer microphone.** In a normal thread, the microphone button dictates into the draft.
-  Recording stops when you press it again or after you stop speaking, and the text is inserted for
-  you to review before sending. In the voice thread, the same button talks to the voice agent
-  instead, and the heard text is sent as a message.
-- **Voice shortcut.** Press `Ctrl+Alt+Space` from any app to start or stop talking to the voice
-  agent. The sidebar's voice row shows the live recording. While T3 Code is minimized, hidden or in
-  the background, a small floating widget shows it and has a stop button.
+  The text of each thing you say is inserted for you to review before sending. In the voice thread,
+  the same button talks to the voice agent instead, and the heard text is sent as a message.
+- **Voice shortcut.** Press `Ctrl+Alt+Space` from any app to start talking to the voice agent, and
+  press it again to stop. The sidebar's voice row shows the live recording; clicking the row opens
+  the voice thread, or starts and stops the recording when the thread is already open. While T3
+  Code is minimized, hidden or in the background, a small floating widget shows it and has a stop
+  button.
 
-Recordings stop on their own after five minutes. If the shortcut does not work, another app has
-claimed it; choose a different one below.
+One press opens a session that you can keep talking in. When you pause, what you said is written
+down and sent while the session stays open, so you can go on with the next sentence right away; the
+row and widget show **Transcribing… 3 s** while that happens, then a short **heard**. The next press
+ends the session and sends anything you said after your last pause. A session also ends on its own
+after eight seconds when you said nothing at all, after a minute of quiet following your last
+sentence, and after five minutes. If the shortcut does not work, another app has claimed it;
+choose a different one below.
 
 Open **Settings → Voice** to change:
 
@@ -212,12 +218,14 @@ Open **Settings → Voice** to change:
 | **Voice shortcut**      | The global shortcut that starts and stops talking to the voice agent.                                                          |
 | **Voice model**         | The Whisper model to use. Empty (the default) picks one for your hardware: `large-v3-turbo` with a dedicated GPU, else `base`. |
 | **Voice model file**    | A ggml `.bin` file to use instead. Leave empty to detect a model on this computer, else download **Voice model**.              |
-| **Voice language**      | **Auto** detects each recording's language from its first seconds of speech; a language is used for every recording.           |
+| **Voice language**      | **Auto** detects the language from the first seconds of speech and keeps it for the whole session; a language is used always.  |
 | **Voice language list** | The languages the picker offers after Auto, as codes such as `de,en,fr`. Default `de,en`.                                      |
-| **Voice silence**       | Milliseconds of silence after speech before the recording ends itself. `0` turns this off. Default 1500.                       |
+| **Voice silence**       | Milliseconds of silence after speech before what you said is written down and sent. `0` turns this off. Default 1500.          |
 
 The first recording downloads the model when none is found (roughly 1.6 GB for `large-v3-turbo`, 150 MB for `base`). The
-microphone button and the voice row show the download progress, and the download happens once.
+microphone button and the voice row show the download progress, and the download happens once. A
+large model on a computer without a dedicated GPU is slow; the row counts the seconds a pass takes
+so you can tell it is working.
 
 Audio never leaves your computer: it is transcribed locally and not stored, and only the resulting
 text is sent when you submit a message. The browser app has no on-device model and uses the

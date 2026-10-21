@@ -1,6 +1,7 @@
 import type {
   DesktopVoiceConfig,
   DesktopVoicePrepareResult,
+  DesktopVoiceStreamStopResult,
   DesktopVoiceTranscribeResult,
 } from "@t3tools/contracts";
 
@@ -27,15 +28,18 @@ export type DesktopVoiceBridge = {
 export type DesktopVoiceRecordingDecoder = (uri: string) => Promise<string>;
 
 /**
- * Batch transcriber for the Electron desktop app: one recording becomes one `transcribe` call on the
- * native whisper host in the main process. The model and language come from `getConfig` (server
- * settings), never from constants here; the transcribe call reads it again, so a language the
- * live stream locked while recording applies to the final pass.
+ * Transcriber for the Electron desktop app. With a live session, the stream already wrote down every
+ * utterance while the recording ran, so finishing asks it for the rest (what was said after the last
+ * utterance) and never touches the recording. Without one, the recording becomes one `transcribe`
+ * call on the native whisper host in the main process. The model and language come from `getConfig`
+ * (server settings), never from constants here.
  */
 export function createDesktopVoiceTranscriber(input: {
   readonly bridge: DesktopVoiceBridge;
   readonly getConfig: () => DesktopVoiceConfig;
   readonly decodeRecording: DesktopVoiceRecordingDecoder;
+  /** Ends the live session; null when the recording had none. */
+  readonly finishLiveSession?: () => Promise<DesktopVoiceStreamStopResult | null>;
 }): VoiceTranscriber {
   return {
     prepare: async (options) => {
@@ -53,6 +57,14 @@ export function createDesktopVoiceTranscriber(input: {
         locale: config.language,
         transcribe: async (uri, transcribeOptions) => {
           throwIfVoiceTranscriptionAborted(transcribeOptions.signal);
+          const live = await input.finishLiveSession?.();
+          throwIfVoiceTranscriptionAborted(transcribeOptions.signal);
+          if (live) {
+            if (live.error !== undefined) {
+              throw new VoiceTranscriptionError("transcription-failed", live.error);
+            }
+            return sanitizeTranscript(live.text);
+          }
           const pcm16Base64 = await input.decodeRecording(uri);
           throwIfVoiceTranscriptionAborted(transcribeOptions.signal);
           const result = await input.bridge.transcribeVoice({

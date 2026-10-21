@@ -19,7 +19,12 @@ class FakeMediaRecorder {
 }
 
 function fakeTap() {
-  return { start: vi.fn(async () => undefined), stop: vi.fn() };
+  return {
+    start: vi.fn(async () => undefined),
+    stop: vi.fn(),
+    finish: vi.fn(async () => null),
+    discard: vi.fn(),
+  };
 }
 
 const track = { stop: vi.fn() };

@@ -27,6 +27,7 @@ import type {
   DesktopVoiceStreamStartRequest,
   DesktopVoiceStreamStartResult,
   DesktopVoiceStreamStopRequest,
+  DesktopVoiceStreamStopResult,
 } from "./t3team-desktopVoiceStream.ts";
 import type {
   DesktopVoiceWidgetCommand,
@@ -1209,7 +1210,9 @@ export interface DesktopBridge {
     request: DesktopVoiceStreamStartRequest,
   ) => Promise<DesktopVoiceStreamStartResult>;
   pushVoiceStream?: (request: DesktopVoiceStreamPushRequest) => Promise<void>;
-  stopVoiceStream?: (request: DesktopVoiceStreamStopRequest) => Promise<void>;
+  stopVoiceStream?: (
+    request: DesktopVoiceStreamStopRequest,
+  ) => Promise<DesktopVoiceStreamStopResult>;
   onVoiceStream?: (listener: (event: DesktopVoiceStreamEvent) => void) => () => void;
   /** The voice session tells the floating widget what to show; main shows it only while the app is in the background. */
   publishVoiceWidget?: (snapshot: DesktopVoiceWidgetSnapshot) => Promise<void>;

@@ -27,16 +27,38 @@ export const DesktopVoiceStreamPushRequest = Schema.Struct({
 });
 export type DesktopVoiceStreamPushRequest = typeof DesktopVoiceStreamPushRequest.Type;
 
-export const DesktopVoiceStreamStopRequest = Schema.Struct({ sessionId: Schema.String });
+/**
+ * Ends a recording's stream. With `finish`, speech not yet committed as an utterance is
+ * transcribed first and every utterance still being written is awaited, so nothing said is lost.
+ */
+export const DesktopVoiceStreamStopRequest = Schema.Struct({
+  sessionId: Schema.String,
+  finish: Schema.optionalKey(Schema.Boolean),
+});
 export type DesktopVoiceStreamStopRequest = typeof DesktopVoiceStreamStopRequest.Type;
 
-export const DesktopVoiceStreamAutoCommitReason = Schema.Literals(["silence", "no-speech"]);
+/**
+ * `text` is the transcript of what was said after the last committed utterance (empty when nothing
+ * was), `committed` how many utterances the stream committed on its own during the recording.
+ */
+export const DesktopVoiceStreamStopResult = Schema.Struct({
+  text: Schema.String,
+  committed: Schema.Number,
+  error: Schema.optionalKey(Schema.String),
+});
+export type DesktopVoiceStreamStopResult = typeof DesktopVoiceStreamStopResult.Type;
+
+/** `silence` ends an utterance and the recording goes on; `no-speech` and `idle` end the recording. */
+export const DesktopVoiceStreamAutoCommitReason = Schema.Literals(["silence", "no-speech", "idle"]);
 export type DesktopVoiceStreamAutoCommitReason = typeof DesktopVoiceStreamAutoCommitReason.Type;
 
 /**
  * Main to renderer while a recording streams. `level` is 0-1 input loudness, `partial` the
- * transcript of the utterance so far, `language` the language the session locked to, and
- * `auto-commit` the signal that the speaker stopped, so the renderer ends the recording.
+ * transcript of the utterance so far, `language` the language the session locked to.
+ * `auto-commit` says the speaker paused: for `silence` the utterance is now being written and the
+ * recording stays open, for `no-speech` and `idle` the renderer ends it. `utterance` is the
+ * written text of one committed utterance (empty when it held no words) and `utterance-failed`
+ * says writing it down failed.
  */
 export const DesktopVoiceStreamEvent = Schema.Union([
   Schema.Struct({ sessionId: Schema.String, type: Schema.Literal("level"), level: Schema.Number }),
@@ -55,6 +77,17 @@ export const DesktopVoiceStreamEvent = Schema.Union([
     sessionId: Schema.String,
     type: Schema.Literal("auto-commit"),
     reason: DesktopVoiceStreamAutoCommitReason,
+  }),
+  Schema.Struct({
+    sessionId: Schema.String,
+    type: Schema.Literal("utterance"),
+    text: Schema.String,
+    elapsedMs: Schema.Number,
+  }),
+  Schema.Struct({
+    sessionId: Schema.String,
+    type: Schema.Literal("utterance-failed"),
+    message: Schema.String,
   }),
 ]);
 export type DesktopVoiceStreamEvent = typeof DesktopVoiceStreamEvent.Type;
