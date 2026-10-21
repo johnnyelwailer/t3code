@@ -75,6 +75,11 @@ import {
   startVoiceStream,
   stopVoiceStream,
 } from "./methods/t3team-voiceStream.ts";
+import {
+  openMicrophoneSettings,
+  publishVoiceWidget,
+  sendVoiceWidgetCommand,
+} from "./methods/t3team-voiceWidget.ts";
 import * as PreviewIpc from "./methods/preview.ts";
 import * as AppActivationIpc from "./methods/appActivation.ts";
 import * as WebLinksIpc from "./methods/webLinks.ts";
@@ -129,6 +134,9 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(startVoiceStream);
   yield* ipc.handle(pushVoiceStream);
   yield* ipc.handle(stopVoiceStream);
+  yield* ipc.handle(publishVoiceWidget);
+  yield* ipc.handle(sendVoiceWidgetCommand);
+  yield* ipc.handle(openMicrophoneSettings);
   yield* ipc.handle(setConnectionCatalog);
   yield* ipc.handle(clearConnectionCatalog);
 

@@ -1,0 +1,46 @@
+/* Part of the voice surfaces' paint; see t3team-voice.css. */
+
+.t3team-voice-shimmer {
+  position: relative;
+  overflow: hidden;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--vz-ink-8);
+}
+.t3team-voice-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--primary) 85%, transparent),
+    transparent
+  );
+  background-size: 45% 100%;
+  background-repeat: no-repeat;
+  animation: t3team-voice-sweep 1.5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+.t3team-voice-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: t3team-voice-dot 2.4s ease-in-out infinite;
+}
+
+.t3team-voice-progress {
+  display: block;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 1px;
+  background: var(--vz-ink-8);
+}
+.t3team-voice-progress > i {
+  display: block;
+  height: 100%;
+  border-radius: 1px;
+  background: var(--primary);
+  transition: width 600ms var(--vz-ease-std);
+}

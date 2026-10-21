@@ -1,3 +1,4 @@
+import { VOICE_WIDGET_ROUTE_PATH } from "@t3tools/contracts";
 import type { T3TeamRouteSearchTarget } from "~/t3team/t3team-routeState";
 
 /**
@@ -24,6 +25,8 @@ const PASSTHROUGH_PREFIXES = [
   "/t3team",
   // Detached surfaces render bare in a window of their own (t3team-detachedSurface).
   "/t3team-detached",
+  // The floating voice widget is a window of its own (desktop only).
+  VOICE_WIDGET_ROUTE_PATH,
   "/settings",
   // The first-run wizard renders outside the Team shell and is owned by
   // FirstRunGate's own navigation. Translating /welcome away makes the gate

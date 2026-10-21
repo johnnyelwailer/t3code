@@ -1,6 +1,7 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { deriveThreadQueueWorkflowState } from "@t3tools/client-runtime/state/thread-workflows";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
+import { VOICE_STATE_KIND } from "../../t3team/voice/t3team-voiceLiveState";
 import type {
   ChatAttachment as ContractChatAttachment,
   EnvironmentId,
@@ -273,7 +274,10 @@ export function QueuedRunsControl({
           <ComposerBanner.Children render={<ol />} id={queueListId}>
             {items.map((item) => {
               const previewText = replaceComposerContextReferences(item.text, (reference) =>
-                reference.kind === "image" && item.thumbnails.length > 0 ? "" : reference.label,
+                (reference.kind === "image" && item.thumbnails.length > 0) ||
+                reference.kind === VOICE_STATE_KIND
+                  ? ""
+                  : reference.label,
               ).trim();
               const rowRunId = item.runId;
               const rowServerIndex = item.serverIndex;

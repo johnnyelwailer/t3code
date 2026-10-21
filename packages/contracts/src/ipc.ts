@@ -28,6 +28,10 @@ import type {
   DesktopVoiceStreamStartResult,
   DesktopVoiceStreamStopRequest,
 } from "./t3team-desktopVoiceStream.ts";
+import type {
+  DesktopVoiceWidgetCommand,
+  DesktopVoiceWidgetSnapshot,
+} from "./t3team-desktopVoiceWidget.ts";
 import type { DesktopVoiceHotkeyState } from "./t3team-voiceHotkey.ts";
 
 import type {
@@ -1203,6 +1207,16 @@ export interface DesktopBridge {
   pushVoiceStream?: (request: DesktopVoiceStreamPushRequest) => Promise<void>;
   stopVoiceStream?: (request: DesktopVoiceStreamStopRequest) => Promise<void>;
   onVoiceStream?: (listener: (event: DesktopVoiceStreamEvent) => void) => () => void;
+  /** The voice session tells the floating widget what to show; main shows it only while the app is in the background. */
+  publishVoiceWidget?: (snapshot: DesktopVoiceWidgetSnapshot) => Promise<void>;
+  /** Widget window: the latest snapshot from the main window's voice session. */
+  onVoiceWidgetSnapshot?: (listener: (snapshot: DesktopVoiceWidgetSnapshot) => void) => () => void;
+  /** Widget window: stop the recording, or ask for the snapshot again. */
+  sendVoiceWidgetCommand?: (command: DesktopVoiceWidgetCommand) => Promise<void>;
+  /** Main window: a command from the floating widget. */
+  onVoiceWidgetCommand?: (listener: (command: DesktopVoiceWidgetCommand) => void) => () => void;
+  /** Opens the OS microphone privacy settings. */
+  openMicrophoneSettings?: () => Promise<void>;
   ensureSshEnvironment: (
     target: DesktopSshEnvironmentTarget,
     options?: { issuePairingToken?: boolean },

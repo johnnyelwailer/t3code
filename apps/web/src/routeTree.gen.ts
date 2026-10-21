@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as UsageRouteImport } from './routes/usage'
+import { Route as T3teamVoiceWidgetRouteImport } from './routes/t3team-voice-widget'
 import { Route as T3teamRouteImport } from './routes/t3team'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PairRouteImport } from './routes/pair'
@@ -55,6 +56,11 @@ const WelcomeRoute = WelcomeRouteImport.update({
 const UsageRoute = UsageRouteImport.update({
   id: '/usage',
   path: '/usage',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const T3teamVoiceWidgetRoute = T3teamVoiceWidgetRouteImport.update({
+  id: '/t3team-voice-widget',
+  path: '/t3team-voice-widget',
   getParentRoute: () => rootRouteImport,
 } as any)
 const T3teamRoute = T3teamRouteImport.update({
@@ -243,6 +249,7 @@ export interface FileRoutesByFullPath {
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/t3team': typeof T3teamRouteWithChildren
+  '/t3team-voice-widget': typeof T3teamVoiceWidgetRoute
   '/usage': typeof UsageRoute
   '/welcome': typeof WelcomeRoute
   '/new': typeof ChatNewRoute
@@ -280,6 +287,7 @@ export interface FileRoutesByTo {
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/t3team': typeof T3teamRouteWithChildren
+  '/t3team-voice-widget': typeof T3teamVoiceWidgetRoute
   '/usage': typeof UsageRoute
   '/welcome': typeof WelcomeRoute
   '/new': typeof ChatNewRoute
@@ -320,6 +328,7 @@ export interface FileRoutesById {
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/t3team': typeof T3teamRouteWithChildren
+  '/t3team-voice-widget': typeof T3teamVoiceWidgetRoute
   '/usage': typeof UsageRoute
   '/welcome': typeof WelcomeRoute
   '/_chat/new': typeof ChatNewRoute
@@ -361,6 +370,7 @@ export interface FileRouteTypes {
     | '/pair'
     | '/settings'
     | '/t3team'
+    | '/t3team-voice-widget'
     | '/usage'
     | '/welcome'
     | '/new'
@@ -398,6 +408,7 @@ export interface FileRouteTypes {
     | '/pair'
     | '/settings'
     | '/t3team'
+    | '/t3team-voice-widget'
     | '/usage'
     | '/welcome'
     | '/new'
@@ -437,6 +448,7 @@ export interface FileRouteTypes {
     | '/pair'
     | '/settings'
     | '/t3team'
+    | '/t3team-voice-widget'
     | '/usage'
     | '/welcome'
     | '/_chat/new'
@@ -477,6 +489,7 @@ export interface RootRouteChildren {
   PairRoute: typeof PairRoute
   SettingsRoute: typeof SettingsRouteWithChildren
   T3teamRoute: typeof T3teamRouteWithChildren
+  T3teamVoiceWidgetRoute: typeof T3teamVoiceWidgetRoute
   UsageRoute: typeof UsageRoute
   WelcomeRoute: typeof WelcomeRoute
   OauthCallbackRoute: typeof OauthCallbackRoute
@@ -498,6 +511,13 @@ declare module '@tanstack/react-router' {
       path: '/usage'
       fullPath: '/usage'
       preLoaderRoute: typeof UsageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/t3team-voice-widget': {
+      id: '/t3team-voice-widget'
+      path: '/t3team-voice-widget'
+      fullPath: '/t3team-voice-widget'
+      preLoaderRoute: typeof T3teamVoiceWidgetRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/t3team': {
@@ -848,6 +868,7 @@ const rootRouteChildren: RootRouteChildren = {
   PairRoute: PairRoute,
   SettingsRoute: SettingsRouteWithChildren,
   T3teamRoute: T3teamRouteWithChildren,
+  T3teamVoiceWidgetRoute: T3teamVoiceWidgetRoute,
   UsageRoute: UsageRoute,
   WelcomeRoute: WelcomeRoute,
   OauthCallbackRoute: OauthCallbackRoute,
