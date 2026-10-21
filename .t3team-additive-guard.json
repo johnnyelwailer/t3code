@@ -11,6 +11,7 @@
     "apps/web/src/uiStateStore.ts",
     "apps/server/src/orchestration-v2/ThreadManagementService.ts",
     "apps/server/src/config.ts",
+    "packages/client-runtime/src/state/projectGrouping.ts",
     "packages/client-runtime/src/voice-input/controller.test.ts",
     "packages/client-runtime/src/voice-input/controller.ts",
     "packages/client-runtime/src/voice-input/index.ts",

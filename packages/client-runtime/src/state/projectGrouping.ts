@@ -10,6 +10,7 @@ import type { ClientSettings } from "@t3tools/contracts/settings";
 
 import type { EnvironmentProject } from "./models.ts";
 import { normalizeProjectPathForComparison } from "./projects.ts";
+import { deriveWorkSourceProjectKey } from "./t3team-workSourceProjectKey.ts";
 
 const SCRATCH_PROJECT_SCOPE_KEY = "\0no-project";
 
@@ -129,7 +130,7 @@ function deriveRepositoryScopedKey(
 export function deriveLogicalProjectKey(
   project: Pick<
     EnvironmentProject,
-    "environmentId" | "id" | "workspaceRoot" | "repositoryIdentity" | "isScratch"
+    "environmentId" | "id" | "workspaceRoot" | "repositoryIdentity" | "isScratch" | "source"
   >,
   options?: {
     readonly groupingMode?: SidebarProjectGroupingMode;
@@ -143,6 +144,7 @@ export function deriveLogicalProjectKey(
   }
 
   return (
+    deriveWorkSourceProjectKey(project) ??
     deriveRepositoryScopedKey(project, groupingMode) ??
     derivePhysicalProjectKey(project) ??
     scopedProjectKey(scopeProjectRef(project.environmentId, project.id))
@@ -152,7 +154,7 @@ export function deriveLogicalProjectKey(
 export function deriveLogicalProjectKeyFromSettings(
   project: Pick<
     EnvironmentProject,
-    "environmentId" | "id" | "workspaceRoot" | "repositoryIdentity" | "isScratch"
+    "environmentId" | "id" | "workspaceRoot" | "repositoryIdentity" | "isScratch" | "source"
   >,
   settings: ProjectGroupingSettings,
   options?: { readonly groupScratchProjects?: boolean },
@@ -169,7 +171,7 @@ export function resolveScratchProjectScopeKey(
   projects: ReadonlyArray<
     Pick<
       EnvironmentProject,
-      "environmentId" | "id" | "workspaceRoot" | "repositoryIdentity" | "isScratch"
+      "environmentId" | "id" | "workspaceRoot" | "repositoryIdentity" | "isScratch" | "source"
     >
   >,
   settings: ProjectGroupingSettings = {
