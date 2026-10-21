@@ -1,5 +1,4 @@
 import type { ToolAuthState } from "@t3tools/contracts";
-import { useState } from "react";
 
 import { GitHubIcon } from "~/components/Icons";
 import { PullRequestCopyableCode } from "~/components/pullRequest/PullRequestCopyableCode";
@@ -12,7 +11,7 @@ function gitHubSignInCommand(host: string): string {
   return `gh auth login --hostname ${host}`;
 }
 
-/** The terminal route, for a server where the in-app sign-in cannot run (no gh, no pty). */
+/** The terminal route, offered only after the in-app sign-in failed (no gh, no pty, expired code). */
 function TerminalSignIn({ host }: { readonly host: string }) {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1 text-2xs text-muted-foreground">
@@ -38,7 +37,6 @@ export interface GitHubSignInViewProps {
 
 /** One host's sign-in, by phase: the button, the device code while gh polls, the outcome. */
 export function GitHubSignInView({ host, state, onStart, onCancel }: GitHubSignInViewProps) {
-  const [showCommand, setShowCommand] = useState(false);
   const phase = state?.phase ?? "idle";
 
   if (phase === "awaiting-open") {
@@ -66,21 +64,14 @@ export function GitHubSignInView({ host, state, onStart, onCancel }: GitHubSignI
   const failed = phase === "failed" || phase === "expired";
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" onClick={onStart}>
-          <GitHubIcon />
-          {failed ? `Sign in to ${host} again` : `Sign in to ${host}`}
-        </Button>
-        {failed || showCommand ? null : (
-          <Button size="xs" variant="ghost-muted" onClick={() => setShowCommand(true)}>
-            Use a terminal instead
-          </Button>
-        )}
-      </div>
+      <Button size="sm" className="self-start" onClick={onStart}>
+        <GitHubIcon />
+        {failed ? `Sign in to ${host} again` : `Sign in to ${host}`}
+      </Button>
       {failed && state?.message ? (
         <p className="whitespace-pre-line text-xs text-destructive">{state.message}</p>
       ) : null}
-      {failed || showCommand ? <TerminalSignIn host={host} /> : null}
+      {failed ? <TerminalSignIn host={host} /> : null}
     </div>
   );
 }

@@ -21,7 +21,7 @@ const meta: Meta<typeof GitHubSignInView> = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Not signed in: the sign-in button, with the terminal route one click away. */
+/** Not signed in: just the sign-in button; the terminal route only appears once sign-in fails. */
 export const SignedOut: Story = {};
 
 export const GitHubDotCom: Story = { args: { host: "github.com" } };
