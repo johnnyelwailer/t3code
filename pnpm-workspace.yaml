@@ -27,6 +27,8 @@ allowBuilds:
   tsc-rs: true
   utf-8-validate: false
   workerd: false
+  # Ships prebuilt whisper.cpp binaries; its install script only builds from source.
+  "@fugood/whisper.node": false
 
 catalog:
   "@clerk/backend": 3.25.0

@@ -98,17 +98,6 @@ describe("splitProjectScopePills", () => {
     expect(keys(result.overflow)).toEqual(["b", "c", "d"]);
   });
 
-  it("mixes app and add items by list order", () => {
-    const mixed = [
-      { projectKey: "app-1" },
-      { projectKey: "jira:x::1" },
-      { projectKey: "jira:x::2" },
-    ];
-    const result = splitProjectScopePills(mixed, null, 2);
-    expect(keys(result.shown)).toEqual(["app-1"]);
-    expect(keys(result.overflow)).toEqual(["jira:x::1", "jira:x::2"]);
-  });
-
   it("lists every site behind +N when no disc fits", () => {
     const result = splitProjectScopePills(groups, null, 1);
     expect(keys(result.shown)).toEqual([]);

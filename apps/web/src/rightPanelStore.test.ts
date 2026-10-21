@@ -6,10 +6,12 @@ import { useClosedViewStore } from "./closedViewStore";
 import {
   migratePersistedRightPanelState,
   MY_WORK_PANEL_REF,
+  normalizePullRequestView,
   pullRequestSurface,
   pullRequestSurfaceId,
   selectActiveRightPanel,
   selectActiveRightPanelSurface,
+  selectPullRequestSurfaceView,
   selectSelectedRightPanelSurface,
   selectThreadPanelOpen,
   selectThreadPanelVisibility,
@@ -1530,6 +1532,109 @@ describe("rightPanelStore", () => {
         },
         threadPanelVisibilityByThreadKey: {},
       });
+    });
+  });
+
+  describe("pull request view persistence", () => {
+    const reference = { projectId: "project-a", repository: "pingdotgg/t3code", number: 42 };
+    const surfaceId = pullRequestSurfaceId(reference);
+
+    it("round-trips tab, file, and commit on the surface", () => {
+      useRightPanelStore.getState().openPullRequest(refA, reference);
+      useRightPanelStore
+        .getState()
+        .updatePullRequestView(refA, surfaceId, { tab: "code", file: "src/app.ts", commit: "abc" });
+
+      expect(
+        selectPullRequestSurfaceView(useRightPanelStore.getState().byThreadKey, refA, surfaceId),
+      ).toEqual({ tab: "code", file: "src/app.ts", commit: "abc" });
+      // The view rides on the surface, so a surface the thread never opened has none.
+      expect(
+        selectPullRequestSurfaceView(useRightPanelStore.getState().byThreadKey, refB, surfaceId),
+      ).toBeNull();
+    });
+
+    it("does not advance the user-action revision (automatic path)", () => {
+      const store = useRightPanelStore.getState();
+      store.openPullRequest(refA, reference);
+      const revision = store.getUserActionRevision(refA);
+      store.updatePullRequestView(refA, surfaceId, {
+        tab: "code",
+        file: "src/app.ts",
+        commit: null,
+      });
+      expect(store.getUserActionRevision(refA)).toBe(revision);
+    });
+
+    it("is a no-op when the reported view is already stored", () => {
+      useRightPanelStore.getState().openPullRequest(refA, reference);
+      const store = useRightPanelStore.getState();
+      store.updatePullRequestView(refA, surfaceId, {
+        tab: "code",
+        file: "src/app.ts",
+        commit: null,
+      });
+      const afterFirst = selectThreadRightPanelState(store.byThreadKey, refA);
+      // Re-reporting the same view (the panel does this on every mount) must not churn the
+      // thread's state, so the host's surfaces-dependent renderers are not woken.
+      store.updatePullRequestView(refA, surfaceId, {
+        tab: "code",
+        file: "src/app.ts",
+        commit: null,
+      });
+      expect(selectThreadRightPanelState(store.byThreadKey, refA)).toBe(afterFirst);
+    });
+
+    it("normalizes a persisted view during migration", () => {
+      const migrated = migratePersistedRightPanelState({
+        byThreadKey: {
+          "env-1:thread-A": {
+            isOpen: true,
+            activeSurfaceId: surfaceId,
+            surfaces: [
+              {
+                id: surfaceId,
+                kind: "pull-request",
+                projectId: "project-a",
+                repository: "pingdotgg/t3code",
+                number: 42,
+                view: { tab: "code", file: "src/app.ts", commit: "abc" },
+              },
+            ],
+          },
+        },
+      });
+      expect(selectPullRequestSurfaceView(migrated.byThreadKey, refA, surfaceId)).toEqual({
+        tab: "code",
+        file: "src/app.ts",
+        commit: "abc",
+      });
+    });
+
+    it("coerces a malformed persisted view back to a known tab", () => {
+      expect(normalizePullRequestView({ tab: "nonsense", file: 7, commit: null })).toEqual({
+        tab: "summary",
+        file: null,
+        commit: null,
+      });
+      expect(normalizePullRequestView({ tab: "guide" })).toEqual({
+        tab: "guide",
+        file: null,
+        commit: null,
+      });
+      expect(normalizePullRequestView(undefined)).toBeUndefined();
+      expect(normalizePullRequestView("code")).toBeUndefined();
+    });
+
+    it("drops the view when the surface is closed", () => {
+      useRightPanelStore.getState().openPullRequest(refA, reference);
+      useRightPanelStore
+        .getState()
+        .updatePullRequestView(refA, surfaceId, { tab: "code", file: "src/app.ts", commit: null });
+      useRightPanelStore.getState().closeSurface(refA, surfaceId);
+      expect(
+        selectPullRequestSurfaceView(useRightPanelStore.getState().byThreadKey, refA, surfaceId),
+      ).toBeNull();
     });
   });
 });

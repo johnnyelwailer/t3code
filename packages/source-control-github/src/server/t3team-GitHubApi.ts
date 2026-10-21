@@ -20,6 +20,11 @@ import * as SourceControlRateLimit from "@t3tools/source-control-core/server/Sou
 import { collectUint8StreamText } from "@t3tools/provider-core/server/collectStreamText";
 import * as GitHubRequestPolicy from "./GitHubRequestPolicy.ts";
 import * as GitHubRest from "./GitHubRest.ts";
+import {
+  isGraphQlQuery,
+  isIdempotentRestMethod,
+  retryTransientRead,
+} from "./t3team-githubTransientRetry.ts";
 
 export {
   GitHubApiAuthenticationError,
@@ -51,6 +56,13 @@ export interface GitHubGraphQlInput {
    * the caller reads each alias for null.
    */
   readonly allowPartialNotFound?: boolean;
+  /**
+   * An answer whose only errors are `RESOURCE_LIMITS_EXCEEDED` is returned with its `data` instead
+   * of failing. GitHub answers a heavy field (a pull request's check rollup) with that error and
+   * null at its path while every other field of every row is still there, so a listing reads the
+   * rows it has and treats the field it could not compute as unknown.
+   */
+  readonly allowPartialResourceLimits?: boolean;
 }
 
 export class GitHubApi extends Context.Service<
@@ -101,6 +113,7 @@ function classifyGraphQl(input: {
   readonly headers: Readonly<Record<string, string | undefined>>;
   readonly body: string;
   readonly allowPartialNotFound: boolean;
+  readonly allowPartialResourceLimits: boolean;
 }): GitHubRequestPolicy.GitHubAnswer<string> {
   const { status, headers, body } = input;
   const meta = { status, headers };
@@ -117,7 +130,17 @@ function classifyGraphQl(input: {
   }
   if (status === 401) return { _tag: "Unauthorized", ...meta };
   const notFoundOnly = errors !== undefined && errors.every((error) => error.type === "NOT_FOUND");
-  if (input.allowPartialNotFound && status >= 200 && status < 300 && notFoundOnly) {
+  const tolerated = [
+    ...(input.allowPartialNotFound ? ["NOT_FOUND"] : []),
+    ...(input.allowPartialResourceLimits ? ["RESOURCE_LIMITS_EXCEEDED"] : []),
+  ];
+  if (
+    tolerated.length > 0 &&
+    status >= 200 &&
+    status < 300 &&
+    errors !== undefined &&
+    errors.every((error) => error.type !== undefined && tolerated.includes(error.type))
+  ) {
     return { _tag: "Ok", value: body, ...meta };
   }
   if (status === 404 || notFoundOnly) return { _tag: "NotFound", ...meta };
@@ -156,7 +179,8 @@ export const make = Effect.gen(function* () {
         HttpClientRequest.acceptJson,
         HttpClientRequest.bodyJsonUnsafe({ query: input.query, variables: input.variables ?? {} }),
       );
-      return yield* policy.request(
+      return yield* retryTransientRead(
+        policy.request(
         { host, operation: input.operation, resource: "graphql", allowReserve },
         (headers) =>
           Effect.gen(function* () {
@@ -185,6 +209,7 @@ export const make = Effect.gen(function* () {
               headers: response.headers,
               body: collected.text,
               allowPartialNotFound: input.allowPartialNotFound === true,
+              allowPartialResourceLimits: input.allowPartialResourceLimits === true,
             });
           }).pipe(
             Effect.mapError(
@@ -196,13 +221,15 @@ export const make = Effect.gen(function* () {
                 }),
             ),
           ),
+        ),
+        isGraphQlQuery(input.query),
       );
     },
   );
 
   return GitHubApi.of({
     graphql,
-    rest: restTransport.rest,
+    rest: (input) => retryTransientRead(restTransport.rest(input), isIdempotentRestMethod(input.method)),
     credential: restTransport.credential,
   });
 });

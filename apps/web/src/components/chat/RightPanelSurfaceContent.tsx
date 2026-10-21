@@ -18,7 +18,10 @@ import {
   type PersistentThreadTerminalPanelProps,
 } from "../PersistentThreadTerminals";
 import { pullRequestPanelContext } from "../pullRequest/pullRequestDetail.logic";
-import { PullRequestDetailPanel } from "../pullRequest/PullRequestDetailPanel";
+import {
+  pullRequestDetailPanelKey,
+  PullRequestDetailPanel,
+} from "../pullRequest/PullRequestDetailPanel";
 import { PullRequestDetailGhost } from "../pullRequest/PullRequestGhosts";
 import { PullRequestsUnavailableState } from "../pullRequest/PullRequestsUnavailableState";
 import { ThreadPullRequestsPanel } from "../pullRequest/ThreadPullRequestsPanel";
@@ -131,7 +134,7 @@ export function RightPanelSurfaceContent(props: {
         <PullRequestDetailPanel
           getShortcutContext={props.getShortcutContext}
           shortcutsEnabled={visible && props.activeSurfaceId === surface.id}
-          key={`${surface.host ?? ""}:${surface.repository}#${surface.number}`}
+          key={pullRequestDetailPanelKey(surface)}
           environmentId={props.environmentId}
           onSelectPullRequest={(reference) => {
             useRightPanelStore.getState().openPullRequest(threadRef, {
@@ -142,6 +145,7 @@ export function RightPanelSurfaceContent(props: {
             });
           }}
           threadRef={threadRef}
+          viewTarget={{ ref: threadRef, surfaceId: surface.id }}
           reference={{
             projectId: surface.projectId as ProjectId,
             ...(surface.host ? { host: surface.host } : {}),

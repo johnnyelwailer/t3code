@@ -4,7 +4,6 @@ import type {
   EnvironmentId,
   PullRequestDetailView,
   PullRequestDiffSide,
-  PullRequestOmittedFileStat,
   PullRequestRef,
   PullRequestReviewPosition,
   PullRequestReviewThread,
@@ -20,6 +19,8 @@ import {
   InfoIcon,
   LinkIcon,
   MessageSquareOffIcon,
+  PanelLeftCloseIcon,
+  PanelLeftIcon,
   PanelRightCloseIcon,
   PanelRightIcon,
   PictureInPicture2Icon,
@@ -117,8 +118,12 @@ import {
   toggleFileDiffFoldForViewed,
   type DiffFoldOverride,
 } from "./pullRequestDiff.logic";
+import { applyDiffSlicePage, type DiffSlice } from "./t3team-pullRequestDiffSlices.logic";
 import { PullRequestDiffStat, PullRequestMetaLine } from "./pullRequestPresentation";
 import { DiffExplorerFileTree } from "./t3team-DiffExplorerFileTree";
+import { PrTreeResizeHandle } from "./t3team-PrTreeResizeHandle";
+import { PR_TREE_DOCKED_MAX_WIDTH } from "./t3team-prCodeTreeDock.logic";
+import { usePrTreeDock } from "./t3team-usePrTreeDock";
 import { useElementFitsWidth } from "~/t3team/t3team-ResizableRightSidebarLayoutShared";
 import {
   PR_CODE_TOOLBAR_FULL_MIN_WIDTH,
@@ -157,14 +162,6 @@ const PULL_REQUEST_FILE_TREE_STORAGE_KEY = "t3code.pullRequestFileTreeOpen";
 // across renders (an inline codec would churn the storage hook's memo on every render).
 const DIFF_MODE_SCHEMA = Schema.Literals(["focus", "all"]);
 const VIEWED_KEYS_SCHEMA = Schema.Array(Schema.String);
-
-interface DiffSlice {
-  readonly cursor: string | null;
-  readonly patch: string;
-  readonly truncated: boolean;
-  readonly nextCursor: string | null;
-  readonly omittedFileStats: ReadonlyArray<PullRequestOmittedFileStat>;
-}
 
 /**
  * The viewer's own per-file counts are hidden and drawn from this side of its shadow root
@@ -345,6 +342,7 @@ function PullRequestCodeTab({
   const compactToolbar = !toolbarRoom.fits;
   const [overlayTreeOpen, setOverlayTreeOpen] = useState(false);
   const treeAsOverlay = !treeRow.fits;
+  const treeDock = usePrTreeDock();
   const fileTreeOpen = treeAsOverlay ? overlayTreeOpen : storedFileTreeOpen;
   const setFileTreeOpen = treeAsOverlay ? setOverlayTreeOpen : setStoredFileTreeOpen;
   const [selectedLines, setSelectedLines] = useState<{
@@ -439,32 +437,11 @@ function PullRequestCodeTab({
         nextCursor: data.nextCursor,
         omittedFileStats: data.omittedFileStats ?? [],
       };
-      const index = slices.findIndex((slice) => slice.cursor === cursor);
-      if (index === -1) {
-        return { key: scopeKey, cursor, slices: [...slices, next] };
-      }
-      const existing = slices[index];
-      if (
-        existing !== undefined &&
-        existing.patch === next.patch &&
-        existing.truncated === next.truncated &&
-        existing.nextCursor === next.nextCursor &&
-        existing.omittedFileStats.length === next.omittedFileStats.length &&
-        existing.omittedFileStats.every((file, index) => {
-          const refreshed = next.omittedFileStats[index];
-          return (
-            refreshed !== undefined &&
-            refreshed.path === file.path &&
-            refreshed.additions === file.additions &&
-            refreshed.deletions === file.deletions
-          );
-        })
-      ) {
-        return previous;
-      }
-      // A page that came back different means the diff moved under the review. The slices
-      // after it go with the replacement: their cursors were positions in the old diff.
-      return { key: scopeKey, cursor, slices: [...slices.slice(0, index), next] };
+      const applied = applyDiffSlicePage(slices, cursor, next);
+      // A no-op refresh (the same first page came back) hands the caller back the slices it
+      // already held, so the focused file and scroll position survive; only a page that changed
+      // replaces the slices and restarts paging from the top.
+      return applied === slices ? previous : { key: scopeKey, cursor, slices: applied };
     });
   }
   const refreshFirstDiffPage = useAtomRefresh(
@@ -508,7 +485,11 @@ function PullRequestCodeTab({
   useEffect(() => {
     if (appliedRefreshToken.current === refreshToken) return;
     appliedRefreshToken.current = refreshToken;
-    setSliceState({ key: scopeKey, cursor: null, slices: NO_SLICES });
+    setSliceState((previous) => ({
+      key: scopeKey,
+      cursor: null,
+      slices: previous.key === scopeKey ? previous.slices : NO_SLICES,
+    }));
     refreshFirstDiffPage();
     refreshFilesViewed();
   }, [refreshToken, scopeKey, refreshFirstDiffPage, refreshFilesViewed]);
@@ -1438,7 +1419,13 @@ function PullRequestCodeTab({
                 />
               }
             >
-              {fileTreeOpen ? (
+              {treeDock.side === "left" ? (
+                fileTreeOpen ? (
+                  <PanelLeftCloseIcon className="size-3.5" />
+                ) : (
+                  <PanelLeftIcon className="size-3.5" />
+                )
+              ) : fileTreeOpen ? (
                 <PanelRightCloseIcon className="size-3.5" />
               ) : (
                 <PanelRightIcon className="size-3.5" />
@@ -1734,10 +1721,15 @@ function PullRequestCodeTab({
           </Collapsible>
         </div>
       ) : null}
-      <div ref={treeRow.ref} className="relative flex min-h-0 flex-1 overflow-hidden">
+      <div
+        ref={treeRow.ref}
+        data-pr-tree-row
+        className="relative flex min-h-0 flex-1 overflow-hidden"
+      >
         {/* Relative wrapper so the review overlay floats over the diff rather than pushing it
             up; the viewer inside still owns its own scrolling. */}
         <div
+          data-zoom-region
           className="relative min-h-0 min-w-0 flex-1"
           // The header lives in the viewer's shadow tree, so the capture listener walks
           // `composedPath` — the only way to see through the shadow boundary.
@@ -1803,12 +1795,28 @@ function PullRequestCodeTab({
         ) : null}
         {fileTreeOpen ? (
           <div
-            className={
+            // The reader's width, held by the pane's share of the row so a stored width that no
+            // longer fits (a narrower window, a split diff) never squeezes the diff away.
+            style={{
+              width: treeDock.width,
+              maxWidth: treeAsOverlay ? "85%" : PR_TREE_DOCKED_MAX_WIDTH,
+            }}
+            className={cn(
+              "relative flex min-h-0 min-w-56",
               treeAsOverlay
-                ? "absolute inset-y-0 right-0 z-20 flex min-h-0 w-[min(20rem,85%)] shadow-lg"
-                : "flex min-h-0 w-[min(20rem,40%)] min-w-56 shrink-0"
-            }
+                ? cn(
+                    "absolute inset-y-0 z-20 shadow-lg",
+                    treeDock.side === "left" ? "left-0" : "right-0",
+                  )
+                : cn("shrink-0", treeDock.side === "left" ? "order-first" : "order-last"),
+            )}
           >
+            <PrTreeResizeHandle
+              side={treeDock.side}
+              width={treeDock.width}
+              onReset={treeDock.resetWidth}
+              {...treeDock.resizeHandlers}
+            />
             <DiffExplorerFileTree
               files={explorerFiles}
               selectedKey={activeKey}
@@ -1817,7 +1825,8 @@ function PullRequestCodeTab({
               onToggleViewed={toggleViewed}
               onMarkAllViewed={markAllViewed}
               ariaLabel={`Pull request #${detail.number} files`}
-
+              side={treeDock.side}
+              onSwapSide={treeDock.swapSide}
               footer={
                 nextCursor === null ? null : (
                   <div className="shrink-0 border-t border-border/60 p-2">

@@ -1,7 +1,9 @@
 import { CheckpointScopeId, ProjectId, RunId, ThreadId } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
@@ -40,13 +42,21 @@ export class RunFinalizationObserver extends Context.Reference<{
 export class RunFinalizationService extends Context.Service<
   RunFinalizationService,
   {
+    /**
+     * Captures the run's checkpoint, then refreshes its workspace. On the last attempt
+     * (`willRetry` false) a failed capture completes the run without a checkpoint, so the
+     * thread's queue is not left behind a run that waits forever.
+     */
     readonly finalize: (input: {
       readonly threadId: ThreadId;
       readonly runId: RunId;
       readonly scopeId: CheckpointScopeId;
+      readonly willRetry: boolean;
     }) => Effect.Effect<void, RunFinalizationError>;
   }
 >()("t3/orchestration-v2/RunFinalizationService") {}
+
+const SETTLE_RETRIES = 3;
 
 const make = Effect.gen(function* () {
   const checkpointCapture = yield* CheckpointCapture.CheckpointCaptureServiceV2;
@@ -55,14 +65,27 @@ const make = Effect.gen(function* () {
 
   const finalize: RunFinalizationService["Service"]["finalize"] = Effect.fn(
     "RunFinalizationService.finalize",
-  )(function* (input) {
-    yield* checkpointCapture
-      .execute(input)
-      .pipe(
-        Effect.mapError(
-          (cause) => new RunFinalizationError({ ...input, operation: "capture-checkpoint", cause }),
-        ),
-      );
+  )(function* ({ willRetry, ...input }) {
+    yield* checkpointCapture.execute(input).pipe(
+      Effect.tapCause((cause) =>
+        willRetry || Cause.hasInterruptsOnly(cause)
+          ? Effect.void
+          : checkpointCapture.completeWithoutCheckpoint(input).pipe(
+              // The worker records this attempt as failed for good, so nothing runs the
+              // settle again before a restart: a transient write failure gets retried here.
+              Effect.retry({ times: SETTLE_RETRIES, schedule: Schedule.exponential("200 millis") }),
+              Effect.catchCause((settleCause) =>
+                Effect.logWarning("Failed to complete a run whose checkpoint capture failed", {
+                  ...input,
+                  cause: settleCause,
+                }),
+              ),
+            ),
+      ),
+      Effect.mapError(
+        (cause) => new RunFinalizationError({ ...input, operation: "capture-checkpoint", cause }),
+      ),
+    );
     const projection = yield* projections
       .getCheckpointContext(input.threadId)
       .pipe(

@@ -318,6 +318,8 @@ import { createContextPresentationRegistry } from "../contextPresentationRegistr
 import { useOpenPrLink } from "~/lib/openPullRequestLink";
 import { useClientSettings } from "~/hooks/useSettings";
 import type { ChatMarkdownContextReference } from "../ChatMarkdown";
+import { VOICE_STATE_KIND } from "../../t3team/voice/t3team-voiceLiveState";
+import { VoiceStateChip } from "../../t3team/voice/t3team-VoiceStateChip";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 import { cn } from "~/lib/utils";
 import { useUiStateStore } from "~/uiStateStore";
@@ -1686,6 +1688,12 @@ const ConversationTimeline = memo(function ConversationTimeline({
         <TooltipScrollDismissArea
           ref={setTimelineViewportElement}
           className="relative h-full min-h-0"
+          data-zoom-region /* Hover-zoom region: the timeline's outer scroll
+             owner (the viewport the virtualizer scrolls inside), not a
+             virtualized item, so zoom magnifies the whole visible
+             timeline in place without touching LegendList's
+             measurements. The ChatView wrapper's overflow-hidden clips
+             the magnified box. */
           data-assistant-citation-viewport="true"
         >
           {onCiteAssistantText && citationThreadRef ? (
@@ -4915,7 +4923,12 @@ const userMessageContextPresentationRegistry = createContextPresentationRegistry
         ),
     },
   ],
-  fallback: (_kind, _record, context) => <UnavailableUserMessageContextChip {...context} />,
+  fallback: (kind, _record, context) =>
+    kind === VOICE_STATE_KIND ? (
+      <VoiceStateChip label={context.reference.label} copyMarkdown={context.copyMarkdown} />
+    ) : (
+      <UnavailableUserMessageContextChip {...context} />
+    ),
 });
 
 function UserMessageContextReferenceChip(props: {

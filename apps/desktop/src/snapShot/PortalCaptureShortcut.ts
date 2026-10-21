@@ -50,6 +50,17 @@ const decodeVersion = Schema.decodeUnknownSync(
   }),
 );
 
+/** Names one shortcut to the desktop's shortcut settings; each binding owns its own portal session. */
+export interface PortalShortcutBinding {
+  readonly idPrefix: string;
+  readonly description: string;
+}
+
+const SNAP_SHOT_BINDING: PortalShortcutBinding = {
+  idPrefix: "t3-snap-shot",
+  description: "Capture a window",
+};
+
 export interface PortalShortcutState {
   readonly shortcutActionRegistered?: boolean;
   readonly shortcutRegistered: boolean;
@@ -80,6 +91,7 @@ export class PortalCaptureShortcut {
   private readonly onStateChanged: () => void;
   private readonly bus: MessageBus;
   private readonly managedByHyprland: boolean;
+  private readonly binding: PortalShortcutBinding;
 
   constructor(
     appId: string,
@@ -88,7 +100,9 @@ export class PortalCaptureShortcut {
     onStateChanged: () => void,
     bus: MessageBus = sessionBus(),
     managedByHyprland = false,
+    binding: PortalShortcutBinding = SNAP_SHOT_BINDING,
   ) {
+    this.binding = binding;
     this.onCapture = onCapture;
     this.onStateChanged = onStateChanged;
     this.bus = bus;
@@ -403,7 +417,7 @@ export class PortalCaptureShortcut {
     this.session = session;
     this.shortcutId = this.managedByHyprland
       ? HYPRLAND_CAPTURE_ACTION
-      : `t3-snap-shot-${NodeCrypto.createHash("sha256").update(trigger).digest("hex").slice(0, 16)}`;
+      : `${this.binding.idPrefix}-${NodeCrypto.createHash("sha256").update(trigger).digest("hex").slice(0, 16)}`;
     // Every session must bind, even when the desktop remembers this shortcut's approval.
     const bound = await this.request("BindShortcuts", "oa(sa{sv})s", [
       this.session,
@@ -411,7 +425,7 @@ export class PortalCaptureShortcut {
         [
           this.shortcutId,
           {
-            description: new Variant("s", "Capture a window"),
+            description: new Variant("s", this.binding.description),
             ...(!this.managedByHyprland ? { preferred_trigger: new Variant("s", trigger) } : {}),
           },
         ],

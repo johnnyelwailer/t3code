@@ -5,10 +5,8 @@ import {
   type T3TeamProjectSetupFile,
 } from "./t3team-projectSetupShared.ts";
 import { renderBundledRecipeModule } from "./t3team-projectSetupRecipeModule.ts";
-import {
-  DESCRIPTION_REWRITE_RECIPE_ID,
-  descriptionRewriteSetupFiles,
-} from "./t3team-projectSetupDescriptionRewriteRecipe.ts";
+import { descriptionRewriteSetupFiles } from "./t3team-projectSetupDescriptionRewriteRecipe.ts";
+import { workItemDeliverySetupFiles } from "./t3team-projectSetupWorkItemDeliveryRecipes.ts";
 
 function renderBundledRecipePrompt(
   recipe: ReturnType<typeof listBundledT3TeamRecipes>[number],
@@ -18,14 +16,20 @@ function renderBundledRecipePrompt(
     : `# ${recipe.title}\n\n${recipe.shortDescription}\n\n## Prompt\n\nThis recipe runs as a deterministic workflow and does not require an agent prompt.\n`;
 }
 
+/** The workflow files a bundled recipe scaffolds beside its `recipe.ts`; empty for prompt-only ones. */
+function bundledRecipeWorkflowFiles(recipeId: string): ReadonlyArray<T3TeamProjectSetupFile> {
+  return [...descriptionRewriteSetupFiles(recipeId), ...workItemDeliverySetupFiles(recipeId)];
+}
+
 export function renderBundledRecipeSetupFiles(): ReadonlyArray<T3TeamProjectSetupFile> {
-  return listBundledT3TeamRecipes().flatMap((recipe) => {
-    const files: Array<T3TeamProjectSetupFile> = [
+  return listBundledT3TeamRecipes().flatMap((recipe): ReadonlyArray<T3TeamProjectSetupFile> => {
+    const workflowFiles = bundledRecipeWorkflowFiles(recipe.id);
+    return [
       {
         relativePath: `${T3TEAM_PROJECT_RECIPES_ROOT}/${recipe.id}/recipe.ts`,
         contents: renderBundledRecipeModule(
           recipe,
-          recipe.id === DESCRIPTION_REWRITE_RECIPE_ID ? "./workflow.ts" : undefined,
+          workflowFiles.length > 0 ? "./workflow.ts" : undefined,
         ),
         writeMode: "if-missing",
       },
@@ -34,10 +38,7 @@ export function renderBundledRecipeSetupFiles(): ReadonlyArray<T3TeamProjectSetu
         contents: renderBundledRecipePrompt(recipe),
         writeMode: "if-missing",
       },
+      ...workflowFiles,
     ];
-
-    files.push(...descriptionRewriteSetupFiles(recipe.id));
-
-    return files;
   });
 }

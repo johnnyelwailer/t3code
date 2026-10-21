@@ -6,7 +6,10 @@ import {
   type OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as TestClock from "effect/testing/TestClock";
 
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 import * as VcsStatusBroadcaster from "../vcs/VcsStatusBroadcaster.ts";
@@ -44,7 +47,7 @@ it.effect("refreshes workspace after checkpoint capture without reading history"
   );
   return Effect.gen(function* () {
     const service = yield* RunFinalization.RunFinalizationService;
-    yield* service.finalize({ threadId, runId, scopeId });
+    yield* service.finalize({ threadId, runId, scopeId, willRetry: false });
     assert.equal(capture.mock.calls.length, 1);
     assert.deepEqual(refresh.mock.calls[0], [{ cwd: "/repo", threadId, runId }]);
   }).pipe(Effect.provide(layer));
@@ -160,6 +163,43 @@ it.effect("preserves checkpoint context read failures without refreshing the wor
     assert.equal(refresh.mock.calls.length, 0);
   }).pipe(Effect.provide(layer));
 });
+
+it.effect(
+  "retries completing a run whose capture failed for good, so it is not left waiting",
+  () => {
+    const threadId = ThreadId.make("thread_finalize_settle");
+    const runId = RunId.make("run_finalize_settle");
+    const scopeId = CheckpointScopeId.make("scope_finalize_settle");
+    let settleAttempts = 0;
+    const layer = RunFinalization.layer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          Layer.mock(CheckpointCapture.CheckpointCaptureServiceV2)({
+            execute: (input) =>
+              Effect.fail(new CheckpointCapture.CheckpointCaptureExecutionError(input)),
+            completeWithoutCheckpoint: (input) =>
+              Effect.suspend(() => {
+                settleAttempts += 1;
+                return settleAttempts < 3
+                  ? Effect.fail(new CheckpointCapture.CheckpointCaptureExecutionError(input))
+                  : Effect.void;
+              }),
+          }),
+          Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
+        ),
+      ),
+    );
+    return Effect.gen(function* () {
+      const service = yield* RunFinalization.RunFinalizationService;
+      const finalized = yield* service
+        .finalize({ threadId, runId, scopeId, willRetry: false })
+        .pipe(Effect.exit, Effect.forkChild);
+      yield* TestClock.adjust("10 seconds");
+      assert.isTrue(Exit.isFailure(yield* Fiber.join(finalized)));
+      assert.equal(settleAttempts, 3);
+    }).pipe(Effect.provide(layer));
+  },
+);
 
 it.effect.each(
   (

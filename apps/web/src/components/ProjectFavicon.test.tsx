@@ -2,6 +2,7 @@ import type { ComponentType, Dispatch, ReactElement, SetStateAction } from "reac
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { PROJECT_FAVICON_FALLBACK_MARKER } from "@t3tools/shared/projectFavicon";
+import { ProjectIconGlyph } from "./t3team-ProjectIconGlyph";
 
 const testState = vi.hoisted(() => ({
   faviconUrl: "https://environment.test/api/assets/token-a/v1-20-favicon.svg",
@@ -142,37 +143,34 @@ describe("ProjectFavicon", () => {
     expect(element.props.projectName).toBe("agent-runtime");
   });
 
-  it("renders a saved Lucide icon and color ahead of an uploaded favicon", () => {
+  it("renders a saved Lucide icon ahead of an uploaded favicon", () => {
+    const icon = { kind: "lucide", name: "alarm-clock", color: "violet" } as const;
     const element = ProjectFavicon({
       project: makeProject({
         workspaceRoot: "/workspace/test",
         title: "test",
         faviconPath: "brand/icon.svg",
-        projectIcon: { kind: "lucide", name: "alarm-clock", color: "violet" },
+        projectIcon: icon,
       }),
-    }) as ReactElement<{
-      readonly children: ReactElement<{
-        readonly children: ReactElement<{ readonly name: string; readonly className: string }>;
-      }>;
-      readonly className: string;
-    }>;
+    }) as ReactElement<{ readonly icon: unknown }>;
 
-    expect(element.props.children.props.children.props.name).toBe("alarm-clock");
-    expect(element.props.className).toContain("text-violet-600");
-    expect(element.props.children.props.children.props.className).toContain("text-violet-600");
+    expect(element.type).toBe(ProjectIconGlyph);
+    expect(element.props.icon).toEqual(icon);
   });
 
   it("renders a saved emoji ahead of an uploaded favicon", () => {
+    const icon = { kind: "emoji", emoji: "🦄" } as const;
     const element = ProjectFavicon({
       project: makeProject({
         workspaceRoot: "/workspace/test",
         title: "test",
         faviconPath: "brand/icon.svg",
-        projectIcon: { kind: "emoji", emoji: "🦄" },
+        projectIcon: icon,
       }),
-    }) as ReactElement<{ readonly emoji: string }>;
+    }) as ReactElement<{ readonly icon: unknown }>;
 
-    expect(element.props.emoji).toBe("🦄");
+    expect(element.type).toBe(ProjectIconGlyph);
+    expect(element.props.icon).toEqual(icon);
   });
 
   it("falls back when the displayed favicon fails without discarding a valid older image early", () => {

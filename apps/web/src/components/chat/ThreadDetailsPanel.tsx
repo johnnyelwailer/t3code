@@ -49,6 +49,8 @@ export interface ThreadDetailsPanelProps extends Pick<
   autoEnvironmentLabel?: string | undefined;
   onAutoEnvironment?: (() => void) | undefined;
   onEnvironmentChange: (environmentId: EnvironmentId) => void;
+  /** t3team: continue this started thread on another machine (panel "Move to"). */
+  onHandoffToEnvironment?: ((environmentId: EnvironmentId) => void) | undefined;
   onEnvModeChange: (mode: EnvMode) => void;
   envMode: EnvMode;
   activeThreadBranchOverride?: string | null;
@@ -125,6 +127,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                   panelSection="workspace"
                   availableEnvironments={props.availableEnvironments}
                   onEnvironmentChange={props.onEnvironmentChange}
+                  onHandoffToEnvironment={props.onHandoffToEnvironment}
                   autoEnvironmentLabel={props.autoEnvironmentLabel}
                   onAutoEnvironment={props.onAutoEnvironment}
                   {...branchToolbarProps}

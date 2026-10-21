@@ -88,6 +88,7 @@ function baseInput(
     initialToolContext: undefined,
     onInitialUserMessageSent: undefined,
     serverThread: null,
+    updateBootstrapProgress: () => {},
     ...overrides,
   };
 }

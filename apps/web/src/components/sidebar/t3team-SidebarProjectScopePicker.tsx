@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import type { SidebarProjectSnapshot } from "~/sidebarProjectGrouping";
+import type { JiraCatalogProject } from "~/t3team/hooks/t3team-jiraProjectCatalog.logic";
 
 import {
   filterSidebarProjectScopeItems,
@@ -26,11 +27,11 @@ import {
 } from "../ui/combobox";
 import { T3TeamSidebarProjectScopePickerItem } from "./t3team-SidebarProjectScopePickerItem";
 import { addJiraProject } from "./t3team-sidebarProjectScopePills.actions";
-import type { ScopePillItem } from "./t3team-sidebarProjectScopePills.items";
 import { SCOPE_DISC_OVERLAP } from "./t3team-sidebarProjectScopePills.logic";
 import {
   buildScopePickerEntries,
   scopePickerLabel,
+  visibleScopePickerEntries,
   type ScopePickerEntry,
 } from "./t3team-sidebarProjectScopePicker.logic";
 
@@ -46,14 +47,16 @@ type ProjectContextMenu = (
 export function T3TeamSidebarProjectScopePicker({
   shown,
   overflow,
+  addable,
   activeScopeKey,
   onSelectScope,
   onProjectContextMenu,
   anchor,
   zIndex,
 }: {
-  shown: ReadonlyArray<ScopePillItem>;
-  overflow: ReadonlyArray<ScopePillItem>;
+  shown: ReadonlyArray<SidebarProjectSnapshot>;
+  overflow: ReadonlyArray<SidebarProjectSnapshot>;
+  addable: ReadonlyArray<JiraCatalogProject>;
   activeScopeKey: string | null;
   onSelectScope: (scopeKey: string | null) => void;
   onProjectContextMenu?: ProjectContextMenu | undefined;
@@ -66,15 +69,22 @@ export function T3TeamSidebarProjectScopePicker({
     query: "",
   });
   const filter = useComboboxFilter();
-  const entries = useMemo(() => buildScopePickerEntries(shown, overflow), [shown, overflow]);
+  const entries = useMemo(
+    () => buildScopePickerEntries(shown, overflow, addable),
+    [shown, overflow, addable],
+  );
+  const visible = useMemo(
+    () => visibleScopePickerEntries(entries, menu.query),
+    [entries, menu.query],
+  );
   const filtered = useMemo(
     () =>
       filterSidebarProjectScopeItems({
-        items: entries,
+        items: visible,
         query: menu.query,
         matches: (entry, query) => filter.contains(entry, query, (candidate) => candidate.label),
       }),
-    [entries, filter, menu.query],
+    [visible, filter, menu.query],
   );
   const selected: ScopePickerEntry =
     entries.find((entry) => entry.value === (activeScopeKey ?? "all")) ?? entries.at(-1)!;
@@ -85,8 +95,8 @@ export function T3TeamSidebarProjectScopePicker({
     event: ReactMouseEvent<HTMLElement> | ReactKeyboardEvent<HTMLInputElement>,
     entry: ScopePickerEntry | null,
   ) => {
-    if (!onProjectContextMenu || entry?.kind !== "item" || entry.item.kind !== "app") return;
-    onProjectContextMenu(event, entry.item.group);
+    if (!onProjectContextMenu || entry?.kind !== "app") return;
+    onProjectContextMenu(event, entry.group);
     dispatch({ type: "project-settings-opened" });
   };
 
@@ -106,8 +116,8 @@ export function T3TeamSidebarProjectScopePicker({
       onValueChange={(entry) => {
         if (!entry) return;
         if (entry.kind === "all") onSelectScope(null);
-        else if (entry.item.kind === "app") onSelectScope(entry.item.projectKey);
-        else addJiraProject(entry.item.entry);
+        else if (entry.kind === "app") onSelectScope(entry.value);
+        else addJiraProject(entry.entry);
       }}
     >
       <ComboboxTrigger

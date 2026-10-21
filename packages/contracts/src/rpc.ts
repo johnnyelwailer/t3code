@@ -414,6 +414,13 @@ import {
   T3TeamStopThreadCascadeResult,
 } from "./t3team-threadStopCascade.ts";
 import {
+  T3TeamThreadHandoffCapture,
+  T3TeamThreadHandoffError,
+  T3TeamThreadHandoffPrepareInput,
+  T3TeamThreadHandoffRecordInput,
+  T3TeamThreadHandoffRecordResult,
+} from "./t3team-threadHandoff.ts";
+import {
   T3TeamSubscribeThreadArtifactsInput,
   T3TeamThreadArtifactsStreamEvent,
 } from "./t3team-threadArtifacts.ts";
@@ -653,6 +660,9 @@ export const WS_METHODS = {
   t3teamPackStorePut: "t3team.packStore.put",
   // t3team: "stop including sub-runs" (capability-gated by `capabilities.t3team.stopCascade`).
   t3teamStopThreadCascade: "t3team.stopThreadCascade",
+  // t3team: "Move to" another machine (capability-gated by `capabilities.t3team.threadHandoff`).
+  t3teamThreadHandoffPrepare: "t3team.threadHandoff.prepare",
+  t3teamThreadHandoffRecord: "t3team.threadHandoff.record",
 } as const;
 
 const WsServerUpsertKeybindingRpc = Rpc.make(WS_METHODS.serverUpsertKeybinding, {
@@ -1856,6 +1866,18 @@ const WsT3TeamStopThreadCascadeRpc = Rpc.make(WS_METHODS.t3teamStopThreadCascade
   error: EnvironmentAuthorizationError,
 });
 
+// t3team: thread handoff — read-only capture on the source, link fact on either side.
+const WsT3TeamThreadHandoffPrepareRpc = Rpc.make(WS_METHODS.t3teamThreadHandoffPrepare, {
+  payload: T3TeamThreadHandoffPrepareInput,
+  success: T3TeamThreadHandoffCapture,
+  error: Schema.Union([T3TeamThreadHandoffError, EnvironmentAuthorizationError]),
+});
+const WsT3TeamThreadHandoffRecordRpc = Rpc.make(WS_METHODS.t3teamThreadHandoffRecord, {
+  payload: T3TeamThreadHandoffRecordInput,
+  success: T3TeamThreadHandoffRecordResult,
+  error: Schema.Union([T3TeamThreadHandoffError, EnvironmentAuthorizationError]),
+});
+
 // t3team: fork thread facts side stream (snapshot, then per-thread changes).
 const WsT3TeamSubscribeThreadFactsRpc = Rpc.make(WS_METHODS.t3teamSubscribeThreadFacts, {
   payload: T3TeamSubscribeThreadFactsInput,
@@ -2296,4 +2318,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsT3TeamPackStorePutRpc,
   WsT3TeamStopThreadCascadeRpc,
   WsOrchestrationV2SubscribeCommandOutputRpc,
+  WsT3TeamThreadHandoffPrepareRpc,
+  WsT3TeamThreadHandoffRecordRpc,
 ).middleware(RpcScopeAuthorization);

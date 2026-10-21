@@ -82,6 +82,7 @@ export default defineConfig({
         "src/snapShot/GlobalShiftShortcutWorker.ts",
         "src/snapShot/RegionSnapShotWorker.ts",
         "src/snapShot/SnapShotAccessibilityWorker.ts",
+        "src/voice/t3team-whisperWorker.ts",
       ],
       clean: false,
       deps: {

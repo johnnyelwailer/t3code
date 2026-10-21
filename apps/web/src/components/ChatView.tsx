@@ -133,11 +133,6 @@ import {
   resolveProjectScripts,
 } from "@t3tools/shared/projectScripts";
 import { CHAT_LIST_ANCHOR_OFFSET } from "@t3tools/shared/chatList";
-import { derivePendingBackgroundWork } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
-import {
-  latestUnheldRun,
-  usageLimitRunPresentedAsLatest,
-} from "@t3tools/shared/orchestrationV2ThreadError";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { sourceControlRepositorySelector } from "@t3tools/shared/sourceControl";
 import { truncate } from "@t3tools/shared/String";
@@ -187,6 +182,7 @@ import {
   deriveActivePlanState,
   deriveActiveWorkStartedAt,
   deriveCanInterruptRunningThread,
+  deriveThreadPendingBackgroundWork,
   findLatestProposedPlan,
   hasActionableProposedPlan,
   isLatestRunSettled,
@@ -410,6 +406,8 @@ import {
 import { useT3TeamTimelineArtifacts } from "~/t3team/chat/t3team-useTimelineArtifacts";
 import { useResourcePressureBannerItem } from "./chat/t3team-ResourcePressureThreadBanner";
 import { useProviderRetryBannerItem } from "./chat/t3team-ProviderRetryBanner";
+import { useT3TeamThreadHandoff } from "../t3team/chat/t3team-useThreadHandoff";
+import { useThreadHandoffBannerItem } from "./chat/t3team-ThreadHandoffBanner";
 import { useT3TeamChatTimelineProps } from "~/t3team/chat/t3team-useChatTimelineProps";
 import { useT3TeamStopCascade } from "~/t3team/chat/t3team-useStopCascade";
 import { useT3TeamActiveAgents } from "~/t3team/chat/t3team-useActiveAgents";
@@ -2327,6 +2325,11 @@ export default function ChatView(props: ChatViewProps) {
     environmentId,
     threadId: activeThreadId,
   });
+  // t3team: "Moved to …" / "Moved here from …" (thread handoff link fact).
+  const threadHandoffBanner = useThreadHandoffBannerItem({
+    environmentId,
+    threadId: activeThreadId,
+  });
   const systemComposerBannerItems = (() => {
     const items: ComposerBannerStackItem[] = [];
     const updateRunning = serverUpdateState.status === "running";
@@ -2460,6 +2463,7 @@ export default function ChatView(props: ChatViewProps) {
     }
     if (autoBalanceUpdateBanner) items.push(autoBalanceUpdateBanner);
     if (resourcePressureBanner) items.push(resourcePressureBanner);
+    if (threadHandoffBanner) items.push(threadHandoffBanner);
     return items;
   })() as ComposerBannerStackItem[];
   const providerInstanceEntries = sortProviderInstanceEntries(
@@ -2632,31 +2636,10 @@ export default function ChatView(props: ChatViewProps) {
       (thread) => thread.id === serverProjection.thread.activeProviderThreadId,
     ),
   );
-  const pendingBackgroundTasks = (() => {
-    if (serverProjection === null || serverProjection === undefined) {
-      return [];
-    }
-    const sessionError =
-      serverProjection.providerSessions.findLast(
-        (session) => session.providerInstanceId === serverProjection.thread.providerInstanceId,
-      )?.lastError ?? null;
-    const latestRun =
-      usageLimitRunPresentedAsLatest(
-        serverProjection.runs,
-        serverProjection.turnItems,
-        sessionError,
-      ) ?? latestUnheldRun(serverProjection.runs);
-    return [
-      ...derivePendingBackgroundWork({
-        latestRun,
-        providerThreads: serverProjection.providerThreads,
-        turnItems: serverProjection.turnItems,
-        activeProviderThreadId: serverProjection.thread.activeProviderThreadId,
-        runs: serverProjection.runs,
-        pullRequests: serverProjection.thread.pullRequests,
-      }),
-    ];
-  })();
+  const pendingBackgroundTasks =
+    serverProjection === null || serverProjection === undefined
+      ? []
+      : [...deriveThreadPendingBackgroundWork(serverProjection)];
   const activeWorkStartedAt =
     deriveActiveWorkStartedAt(activeActivityRun, activeRuntime, localDispatchStartedAt) ??
     runlessWorkStartedAt;
@@ -3452,7 +3435,11 @@ export default function ChatView(props: ChatViewProps) {
   const focusComposerStable = useStableCallback(focusComposer);
   const canInterruptRunningThread =
     (canOperateThread &&
-      deriveCanInterruptRunningThread(activeThread !== undefined, activeRuntime)) ||
+      deriveCanInterruptRunningThread(
+        activeThread !== undefined,
+        activeRuntime,
+        pendingBackgroundTasks.length > 0,
+      )) ||
     cloudSessionComposerGate.hasQueuedBind;
   const onInterrupt = async () => {
     if (cloudSessionComposerGate.hasQueuedBind) {
@@ -3482,6 +3469,13 @@ export default function ChatView(props: ChatViewProps) {
     environmentId,
     threadId: activeThread?.id ?? null,
     supported: serverConfig?.environment.capabilities.t3team?.stopCascade === true,
+  });
+  // t3team: panel "Move to" another machine for a started thread (capability-gated fork RPC).
+  const onHandoffToEnvironment = useT3TeamThreadHandoff({
+    environmentId,
+    threadId: activeThread?.id ?? null,
+    enabled: isServerThread && envLocked,
+    availableEnvironments: logicalProjectEnvironments,
   });
   useEffect(() => subscribeSnapShotComposerFocus(focusComposerStable), [focusComposerStable]);
   const scheduleComposerFocus = () => {
@@ -8311,7 +8305,9 @@ export default function ChatView(props: ChatViewProps) {
                 }}
               />
             </div>
-            <div className="relative flex min-h-0 flex-1 flex-col bg-background">
+            {/* overflow-hidden clips the hover-zoomed timeline so it magnifies in place
+                instead of pushing the composer down. */}
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
               <MessagesTimeline
                 citationRequest={paintOnlyDisplayedTimeline ? null : citationRequest}
                 citationHistoryLoading={threadDetailLoading}
@@ -8848,6 +8844,7 @@ export default function ChatView(props: ChatViewProps) {
                   : undefined
               }
               onEnvironmentChange={onEnvironmentChangeStable}
+              onHandoffToEnvironment={onHandoffToEnvironment}
               onEnvModeChange={onEnvModeChangeStable}
               envMode={envMode}
               {...(canOverrideServerThreadEnvMode

@@ -372,6 +372,7 @@ export const resolveServerConfig = (
     const desktopTelemetryControlFd = bootstrap?.desktopTelemetryControlFd;
     const desktopBrowserFd = bootstrap?.desktopBrowserFd;
     const desktopBrowserControlFd = bootstrap?.desktopBrowserControlFd;
+    const desktopLivenessFd = bootstrap?.desktopLivenessFd;
     const resourceMonitorPath = bootstrap?.resourceMonitorPath;
     // An explicit request (CLI flag or env var) must win over the headless
     // startup's implicit "don't auto-bootstrap" default — otherwise
@@ -484,6 +485,7 @@ export const resolveServerConfig = (
       desktopTelemetryControlFd,
       desktopBrowserFd,
       desktopBrowserControlFd,
+      ...(desktopLivenessFd === undefined ? {} : { desktopLivenessFd }),
       resourceMonitorPath,
       autoBootstrapProjectFromCwd,
       logWebSocketEvents,

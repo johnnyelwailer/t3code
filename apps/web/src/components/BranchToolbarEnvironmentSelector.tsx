@@ -1,3 +1,4 @@
+import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { ComposerSelectControl } from "./chat/ComposerControl";
 import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
@@ -5,7 +6,13 @@ import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import { useAtomValue } from "@effect/atom-react";
 import { shortcutLabelForCommand } from "../keybindings";
 import { primaryServerKeybindingsAtom } from "../state/server";
-import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
+import {
+  type CloudSession,
+  type EnvironmentId,
+  type ProjectId,
+  T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE,
+} from "@t3tools/contracts";
+import type { CloudSessionCreateOptions } from "~/cloud/t3team-cloudSessionTargetStore";
 import { ScaleIcon, SettingsIcon } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 
@@ -40,7 +47,7 @@ import {
  */
 const SETUP_CLOUD_SESSIONS_SELECT_VALUE = "__setup-cloud-sessions__";
 
-export interface BranchToolbarEnvironmentSelectorProps {
+export interface BranchToolbarEnvironmentSelectorBaseProps {
   autoEnvironmentLabel?: string | undefined;
   onAutoEnvironment?: (() => void) | undefined;
   envLocked: boolean;
@@ -64,14 +71,15 @@ export interface BranchToolbarEnvironmentSelectorProps {
   cloudEnvironmentIds?: ReadonlySet<string>;
   /**
    * Present when the server has a cloud provider configured: the menu offers a
-   * one-click "New cloud session". Absent hides the action item entirely.
+   * one-click "New cloud session". Absent hides the action item entirely. In "Move to" mode it
+   * is called with `selectAsTarget: false`: the started thread's composer keeps its machine.
    */
-  onCreateCloudSession?: () => void;
+  onCreateCloudSession?: (options?: CloudSessionCreateOptions) => void;
   /**
    * New cloud session for a project with no machine: starts a session that sets one up on its own
    * thread. Absent when the flag is off, and then such a project starts a plain session.
    */
-  onSetupProjectMachine?: () => void;
+  onSetupProjectMachine?: (options?: CloudSessionCreateOptions) => void;
   /**
    * t3team: a create is on its way to the server (resolving the machine, dispatching), which takes
    * seconds before the session's own row exists; the create row shows it at once and stops a
@@ -107,7 +115,30 @@ export interface BranchToolbarEnvironmentSelectorProps {
    * the menu closed: no polling.
    */
   onCloudMenuOpenChange?: (open: boolean) => void;
+  /** t3team: connects a ready, not-yet-connected cloud session from the "Move to" menu. */
+  onConnectCloudSession?: (session: CloudSession) => void;
 }
+
+/** t3team: a caller that offers "Move to" must also say whether the cloud can get the files. */
+type BranchToolbarEnvironmentSelectorHandoffProps =
+  | { onHandoffToEnvironment?: undefined; projectHasRemote?: undefined }
+  | {
+      /**
+       * Present for a started thread in the details panel. The locked row becomes a "Move to"
+       * menu; picking another machine continues the thread there (cloud handoff). Never routed
+       * through `onEnvironmentChange`, which only re-targets a draft.
+       */
+      onHandoffToEnvironment: (environmentId: EnvironmentId) => void;
+      /**
+       * False when the thread's project has no `origin` remote. A cloud machine then has no way
+       * to get its files, so "Move to" shows its cloud rows disabled with the reason the server
+       * gives and offers no new cloud session.
+       */
+      projectHasRemote: boolean;
+    };
+
+export type BranchToolbarEnvironmentSelectorProps = BranchToolbarEnvironmentSelectorBaseProps &
+  BranchToolbarEnvironmentSelectorHandoffProps;
 
 export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvironmentSelector({
   autoEnvironmentLabel,
@@ -130,8 +161,18 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   onSelectCloudSession,
   onDismissCloudSession,
   onCloudMenuOpenChange,
+  onHandoffToEnvironment,
+  onConnectCloudSession,
+  projectHasRemote,
 }: BranchToolbarEnvironmentSelectorProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
+  // A started thread cannot switch machines; in the panel it can move to one instead.
+  const moveMode = envLocked && displayMode === "panel" && onHandoffToEnvironment !== undefined;
+  const pickable = onEnvironmentChange !== undefined || moveMode;
+  const cloudMoveBlockedReason =
+    moveMode && projectHasRemote !== true ? T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE : null;
+  // The optimistic cloud pick belongs to a draft; a moving thread still shows where it runs.
+  const optimisticCloudSession = moveMode ? null : selectedCloudSession;
   const hasCloudAffordance =
     onCreateCloudSession !== undefined || onSetupCloudSessions !== undefined;
   const { machines: runOnEnvironments, cloud: cloudRows } = useMemo(
@@ -153,10 +194,10 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
     [cloudRows],
   );
   const activeEnvironment = useMemo(() => {
-    if (selectedCloudSession !== null) {
+    if (optimisticCloudSession !== null) {
       return {
-        environmentId: cloudSessionSelectValue(selectedCloudSession.sessionId) as EnvironmentId,
-        label: selectedCloudSession.label,
+        environmentId: cloudSessionSelectValue(optimisticCloudSession.sessionId) as EnvironmentId,
+        label: optimisticCloudSession.label,
         machine: "cloud" as const,
         isPrimary: false,
         projectId: null,
@@ -167,32 +208,33 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
         (env) => env.environmentId === environmentId,
       ) ?? null
     );
-  }, [connectedCloudEnvironments, environmentId, runOnEnvironments, selectedCloudSession]);
+  }, [connectedCloudEnvironments, environmentId, runOnEnvironments, optimisticCloudSession]);
 
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const selectValue = autoEnvironmentLabel
+  const showAutoLabel = Boolean(autoEnvironmentLabel) && !moveMode;
+  const selectValue = showAutoLabel
     ? "auto"
-    : selectedCloudSession !== null
-      ? cloudSessionSelectValue(selectedCloudSession.sessionId)
+    : optimisticCloudSession !== null
+      ? cloudSessionSelectValue(optimisticCloudSession.sessionId)
       : environmentId;
 
   const environmentItems = useMemo(
     () => [
-      ...(onAutoEnvironment
+      ...(onAutoEnvironment && !moveMode
         ? [{ value: "auto", label: autoEnvironmentLabel ?? "Auto balance" }]
         : []),
-      ...(onEnvironmentChange !== undefined
+      ...(pickable
         ? [...runOnEnvironments, ...connectedCloudEnvironments].map((env) => ({
             value: env.environmentId,
             label: env.label,
           }))
         : []),
-      ...(selectedCloudSession !== null
+      ...(optimisticCloudSession !== null
         ? [
             {
-              value: cloudSessionSelectValue(selectedCloudSession.sessionId),
-              label: selectedCloudSession.label,
+              value: cloudSessionSelectValue(optimisticCloudSession.sessionId),
+              label: optimisticCloudSession.label,
             },
           ]
         : []),
@@ -205,9 +247,10 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       connectedCloudEnvironments,
       autoEnvironmentLabel,
       onAutoEnvironment,
-      onEnvironmentChange,
+      moveMode,
+      pickable,
       onSetupCloudSessions,
-      selectedCloudSession,
+      optimisticCloudSession,
     ],
   );
   const shortcutLabel = shortcutLabelForCommand(
@@ -226,6 +269,13 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       return;
     }
     if (parseCloudSessionSelectValue(value) !== null) return;
+    if (moveMode) {
+      const blocked =
+        cloudMoveBlockedReason !== null &&
+        connectedCloudEnvironments.some((env) => env.environmentId === value);
+      if (value !== environmentId && !blocked) onHandoffToEnvironment?.(value as EnvironmentId);
+      return;
+    }
     onEnvironmentChange?.(value as EnvironmentId);
   };
 
@@ -235,18 +285,19 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   };
 
   const selectCloudSession = (session: CloudSession) => {
-    onSelectCloudSession?.(session);
+    if (moveMode) onConnectCloudSession?.(session);
+    else onSelectCloudSession?.(session);
     setMenuOpen(false);
     onCloudMenuOpenChange?.(false);
   };
 
   const createCloudSession = () => {
-    onCreateCloudSession?.();
+    onCreateCloudSession?.({ selectAsTarget: !moveMode });
     setMenuOpen(false);
     onCloudMenuOpenChange?.(false);
   };
 
-  if (envLocked || (onEnvironmentChange === undefined && !hasCloudAffordance)) {
+  if (!moveMode && (envLocked || (onEnvironmentChange === undefined && !hasCloudAffordance))) {
     const lockedRow = (
       <span
         className={cn(
@@ -285,8 +336,10 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
         <TooltipTrigger
           render={
             displayMode === "panel" ? (
-              <ThreadDetailsControl
-                part="select"
+              // The row must be the Select's own trigger: a bare row button neither opens the
+              // menu nor anchors it, so the popup would render unpositioned at (0, 0).
+              <SelectPrimitive.Trigger
+                render={<ThreadDetailsControl part="select" />}
                 className="min-w-0 max-w-full"
                 aria-label="Run on"
                 data-composer-shortcut="composer.host"
@@ -303,7 +356,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             )
           }
         >
-          {autoEnvironmentLabel ? (
+          {showAutoLabel ? (
             <ScaleIcon
               className={
                 displayMode === "panel" ? THREAD_DETAILS_PANEL_ICON_CLASS : "size-3 shrink-0"
@@ -319,7 +372,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             />
           )}
           <ComposerContextLabel displayMode={displayMode}>
-            {onEnvironmentChange !== undefined || selectedCloudSession !== null ? (
+            {pickable || optimisticCloudSession !== null ? (
               <SelectValue />
             ) : (
               (activeEnvironment?.label ?? "Run on")
@@ -327,7 +380,9 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
           </ComposerContextLabel>
         </TooltipTrigger>
         <TooltipPopup>
-          {autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on"}
+          {(showAutoLabel ? autoEnvironmentLabel : undefined) ??
+            activeEnvironment?.label ??
+            "Run on"}
           {shortcutLabel ? ` · ${shortcutLabel}` : null}
         </TooltipPopup>
       </Tooltip>
@@ -337,8 +392,8 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
         {...(displayMode === "panel" ? { className: "w-(--anchor-width)" } : {})}
       >
         <SelectGroup>
-          <SelectGroupLabel>Run on</SelectGroupLabel>
-          {onAutoEnvironment && (
+          <SelectGroupLabel>{moveMode ? "Move to" : "Run on"}</SelectGroupLabel>
+          {onAutoEnvironment && !moveMode && (
             <SelectItem
               value="auto"
               onClick={() => {
@@ -351,7 +406,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
               </span>
             </SelectItem>
           )}
-          {onEnvironmentChange !== undefined
+          {pickable
             ? runOnEnvironments.map((env) => (
                 <SelectItem key={env.environmentId} value={env.environmentId}>
                   <span className="inline-flex items-center gap-1.5">
@@ -375,27 +430,31 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                 <RunOnCloudRow
                   key={row.session.sessionId}
                   row={row}
-                  selectable={onEnvironmentChange !== undefined}
-                  selected={selectedCloudSession?.sessionId === row.session.sessionId}
+                  selectable={pickable}
+                  selected={optimisticCloudSession?.sessionId === row.session.sessionId}
+                  blockedReason={cloudMoveBlockedReason}
                   onSelect={selectCloudSession}
                   onDismiss={onDismissCloudSession}
                 />
               ))}
-              <NewCloudSessionItem
-                project={cloudSessionProject}
-                pending={cloudSessionCreatePending}
-                setupPending={cloudSessionSetupPending}
-                onCreate={createCloudSession}
-                onSetup={
-                  onSetupProjectMachine
-                    ? () => {
-                        onSetupProjectMachine();
-                        setMenuOpen(false);
-                        onCloudMenuOpenChange?.(false);
-                      }
-                    : undefined
-                }
-              />
+              {/* A paid machine this thread could not move to anyway: not offered. */}
+              {cloudMoveBlockedReason === null && (
+                <NewCloudSessionItem
+                  project={cloudSessionProject}
+                  pending={cloudSessionCreatePending}
+                  setupPending={cloudSessionSetupPending}
+                  onCreate={createCloudSession}
+                  onSetup={
+                    onSetupProjectMachine
+                      ? () => {
+                          onSetupProjectMachine({ selectAsTarget: !moveMode });
+                          setMenuOpen(false);
+                          onCloudMenuOpenChange?.(false);
+                        }
+                      : undefined
+                  }
+                />
+              )}
             </>
           )}
           {onSetupCloudSessions && (

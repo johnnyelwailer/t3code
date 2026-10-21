@@ -26,6 +26,7 @@ import {
 } from "@t3tools/contracts";
 import { waitForHttpReady as waitForHttpReadyShared } from "@t3tools/shared/httpReadiness";
 import * as BackendHealthWatchdog from "./t3team-backendHealthWatchdog.ts";
+import * as BackendLiveness from "./t3team-backendLiveness.ts";
 
 import * as DesktopObservability from "../app/DesktopObservability.ts";
 import * as DesktopTelemetryPublisher from "../telemetry/DesktopTelemetryPublisher.ts";
@@ -432,6 +433,9 @@ export const runBackendProcess = Effect.fn("runBackendProcess")(function* (
     if (options.bootstrap.desktopBrowserControlFd !== undefined) {
       additionalFds[`fd${options.bootstrap.desktopBrowserControlFd}`] = { type: "output" };
     }
+    if (options.bootstrap.desktopLivenessFd !== undefined) {
+      additionalFds[`fd${options.bootstrap.desktopLivenessFd}`] = { type: "output" };
+    }
   }
   const command = ChildProcess.make(options.executablePath, options.args, {
     cwd: options.cwd,
@@ -571,10 +575,17 @@ export const runBackendProcess = Effect.fn("runBackendProcess")(function* (
     ),
   );
 
+  const livenessFd = options.bootstrap.desktopLivenessFd;
+  const liveness = yield* BackendLiveness.forkBackendLivenessReader(
+    options.bootstrapDelivery === "fd3" && livenessFd !== undefined
+      ? handle.getOutputFd(livenessFd)
+      : undefined,
+  );
   const healthWatchdog = options.healthWatchdog;
   const watchHealth = healthWatchdog
     ? BackendHealthWatchdog.runBackendHealthWatchdog({
         ...healthWatchdog,
+        liveness,
         probe: BackendHealthWatchdog.makeBackendHttpHealthProbe(
           options.httpBaseUrl,
           BACKEND_READINESS_PATH,

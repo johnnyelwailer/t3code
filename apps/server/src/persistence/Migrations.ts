@@ -155,11 +155,13 @@ import Migration0108 from "./Migrations/060_ThreadSnapshotWindowIndexes.ts";
 import Migration0109 from "./Migrations/061_PullRequestReviewGuides.ts";
 // New from the 2026-10-14 upstream sync (upstream 062). Appended above the fork's maximum id (109).
 import Migration0110 from "./Migrations/062_ThreadFailureLookupIndex.ts";
-// New from the 2026-10-19 upstream sync (upstream 064). Appended above the fork's maximum id (110).
+// Trigger-maintained per-thread item counts and a user-authored message index for shell reads.
+import Migration0111 from "./Migrations/t3team-081_ShellItemCounts.ts";
+// New from the 2026-10-19 upstream sync (upstream 064). Appended above the fork's maximum id (111).
 // Upstream 063 (DropUnusedV1Projections) is held: it drops projection_thread_activities, which the
 // fork's one-time V1 lineage cutover still reads. Register it above the maximum once the cutover
 // is confirmed done everywhere.
-import Migration0111 from "./Migrations/064_CanonicalizeThreadPullRequestLinks.ts";
+import Migration0112 from "./Migrations/064_CanonicalizeThreadPullRequestLinks.ts";
 
 export const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -276,8 +278,9 @@ export const migrationEntries = [
   [109, "PullRequestReviewGuides", Migration0109],
   // Upstream 062 lives at 110 in this fork's ledger; see the import comment.
   [110, "ThreadFailureLookupIndex", Migration0110],
-  // Upstream 064 lives at 111 in this fork's ledger; upstream 063 is held. See the import comment.
-  [111, "CanonicalizeThreadPullRequestLinks", Migration0111],
+  [111, "ShellItemCounts", Migration0111],
+  // Upstream 064 lives at 112 in this fork's ledger; upstream 063 is held. See the import comment.
+  [112, "CanonicalizeThreadPullRequestLinks", Migration0112],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

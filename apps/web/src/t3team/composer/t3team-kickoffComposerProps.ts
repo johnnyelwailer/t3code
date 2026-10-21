@@ -16,6 +16,8 @@ export type T3TeamKickoffComposerProps = {
   onClearSelectedRecipe?: () => void;
   providers: ReadonlyArray<ServerProvider>;
   isConnected: boolean;
+  /** Project whose default model and provider enablement apply; absent for project-less surfaces. */
+  projectId?: string;
   /** Workspace root used as the `@` path-search cwd. */
   workspaceRoot?: string;
   /** Surface-applicable recipes offered as `/<slashAlias>` launchers. */

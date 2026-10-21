@@ -22,7 +22,6 @@ import { useJiraProjectCatalog } from "~/t3team/hooks/t3team-useJiraProjectCatal
 import { TooltipProvider } from "../ui/tooltip";
 import { T3TeamSidebarProjectScopePillStack } from "./t3team-SidebarProjectScopePillStack";
 import { T3TeamSidebarProjectScopeSiteFailure } from "./t3team-SidebarProjectScopeSiteFailure";
-import { buildScopePillItems, type ScopePillItem } from "./t3team-sidebarProjectScopePills.items";
 import {
   projectScopeDiscCapacity,
   splitProjectScopePills,
@@ -80,9 +79,9 @@ function useMeasuredWidth(): [RefObject<HTMLDivElement | null>, number | null] {
 /**
  * One-click project scope: an "All" disc plus a stack of discs, as many as the row's width
  * fits; the rest sit behind a "+N" disc that searches every project (a search disc when
- * nothing overflows). App projects come first in the sidebar's own sort
- * order, then dashed "add" discs for Jira projects the app does not have yet. A site whose
- * project list failed stays visible beside the stack, with a retry.
+ * nothing overflows). The discs are the app's own projects in the sidebar's sort order; the
+ * Jira projects the app does not have yet surface as add candidates once you search. A site
+ * whose project list failed stays visible beside the stack, with a retry.
  */
 export function T3TeamSidebarProjectScopePillsView({
   groups,
@@ -99,12 +98,11 @@ export function T3TeamSidebarProjectScopePillsView({
 }) {
   const [ref, width] = useMeasuredWidth();
   const rowRef = useRef<HTMLDivElement | null>(null);
-  const items = useMemo(() => buildScopePillItems(groups, addable), [groups, addable]);
-  const empty: ReadonlyArray<ScopePillItem> = [];
+  const empty: ReadonlyArray<SidebarProjectSnapshot> = [];
   const { shown, overflow } =
     width === null
       ? { shown: empty, overflow: empty }
-      : splitProjectScopePills(items, activeScopeKey, projectScopeDiscCapacity(width));
+      : splitProjectScopePills(groups, activeScopeKey, projectScopeDiscCapacity(width));
 
   return (
     <TooltipProvider delay={300} closeDelay={0}>
@@ -120,6 +118,7 @@ export function T3TeamSidebarProjectScopePillsView({
           <T3TeamSidebarProjectScopePillStack
             shown={shown}
             overflow={overflow}
+            addable={addable}
             activeScopeKey={activeScopeKey}
             onSelectScope={onSelectScope}
             onProjectContextMenu={onProjectContextMenu}

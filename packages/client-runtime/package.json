@@ -291,6 +291,10 @@
       "types": "./src/state/t3team-messageFraming.ts",
       "default": "./src/state/t3team-messageFraming.ts"
     },
+    "./state/thread-handoff": {
+      "types": "./src/state/t3team-threadHandoff.ts",
+      "default": "./src/state/t3team-threadHandoff.ts"
+    },
     "./state/thread-stop-cascade": {
       "types": "./src/state/t3team-threadStopCascade.ts",
       "default": "./src/state/t3team-threadStopCascade.ts"

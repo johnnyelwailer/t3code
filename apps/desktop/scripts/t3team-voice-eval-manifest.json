@@ -1,0 +1,51 @@
+{
+  "thresholds": { "en": 0.35, "de": 0.4 },
+  "notUnderTest": "gsw (Swiss German): no open-licensed clip is wired yet, so the 0.55 gate from the spec is not exercised here.",
+  "clips": [
+    {
+      "id": "jfk-1961",
+      "language": "en",
+      "license": "public domain (whisper.cpp samples/jfk.wav)",
+      "source": {
+        "kind": "url",
+        "url": "https://raw.githubusercontent.com/ggml-org/whisper.cpp/master/samples/jfk.wav"
+      },
+      "reference": "and so my fellow americans ask not what your country can do for you ask what you can do for your country"
+    },
+    {
+      "id": "minds14-en-us-0",
+      "language": "en",
+      "license": "CC-BY-4.0 (PolyAI/minds14)",
+      "source": { "kind": "minds14", "config": "en-US", "row": 0 },
+      "reference": "I would like to set up a joint account with my partner"
+    },
+    {
+      "id": "minds14-en-us-3",
+      "language": "en",
+      "license": "CC-BY-4.0 (PolyAI/minds14)",
+      "source": { "kind": "minds14", "config": "en-US", "row": 3 },
+      "reference": "how do I start a joint account"
+    },
+    {
+      "id": "minds14-de-de-0",
+      "language": "de",
+      "license": "CC-BY-4.0 (PolyAI/minds14)",
+      "source": { "kind": "minds14", "config": "de-DE", "row": 0 },
+      "reference": "ich möchte gerne Geld auf mein Konto einzahlen"
+    },
+    {
+      "id": "minds14-de-de-2",
+      "language": "de",
+      "license": "CC-BY-4.0 (PolyAI/minds14)",
+      "source": { "kind": "minds14", "config": "de-DE", "row": 2 },
+      "reference": "Hallo ich möchte gerne Geld einbezahlen auf mein Konto wie kann ich das tun"
+    },
+    {
+      "id": "minds14-de-de-3",
+      "language": "de",
+      "license": "CC-BY-4.0 (PolyAI/minds14)",
+      "source": { "kind": "minds14", "config": "de-DE", "row": 3 },
+      "reference": "was muss ich tun um Geld auf mein Konto einzuzahlen"
+    }
+  ]
+}

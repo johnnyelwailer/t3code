@@ -19,6 +19,7 @@ import {
   TrimmedString,
 } from "./baseSchemas.ts";
 import { UsageLimitSourceId } from "./usageLimitSourceId.ts";
+import { VoiceSettings, VoiceSettingsPatch } from "./t3team-voiceSettings.ts";
 import { EnvironmentMachineKind, ThreadEnvMode, WorktreeSubmodules } from "./environment.ts";
 import { KeybindingShortcut } from "./keybindings.ts";
 import {
@@ -1314,6 +1315,7 @@ export const ServerSettings = Schema.Struct({
   t3teamStoredSidebarPinsJson: Schema.optionalKey(TrimmedString),
   t3teamStoredSidecarCompositionJson: Schema.optionalKey(TrimmedString),
   observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  voice: VoiceSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   sourceControlHosts: Schema.Record(Schema.String, SourceControlHostSettings).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
@@ -1574,6 +1576,7 @@ export const ServerSettingsPatch = Schema.Struct({
       otlpLogsUrl: Schema.optionalKey(TrimmedString),
     }),
   ),
+  voice: Schema.optionalKey(VoiceSettingsPatch),
   /**
    * Merges per host: a patched field replaces the saved one, so a client sends a per-server-host
    * map whole, with the redaction marker for each saved secret it keeps. An empty or omitted

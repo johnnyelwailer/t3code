@@ -22,6 +22,7 @@ type ProjectDashboardKickoffComposerProps = {
   onClearSelectedRecipe?: () => void;
   providers: ReadonlyArray<ServerProvider>;
   isConnected: boolean;
+  projectId?: string;
   workspaceRoot?: string;
   slashRecipes?: ReadonlyArray<T3TeamSidecarRecipeQuickStart>;
   onSelectSlashRecipe?: (recipe: T3TeamSidecarRecipeQuickStart) => void;
@@ -62,6 +63,7 @@ export const ProjectDashboardKickoffComposer = forwardRef<
           : {})}
         providers={input.providers}
         isConnected={input.isConnected}
+        {...(input.projectId ? { projectId: input.projectId } : {})}
         {...(input.workspaceRoot ? { workspaceRoot: input.workspaceRoot } : {})}
         {...(input.slashRecipes ? { slashRecipes: input.slashRecipes } : {})}
         {...(input.onSelectSlashRecipe ? { onSelectSlashRecipe: input.onSelectSlashRecipe } : {})}

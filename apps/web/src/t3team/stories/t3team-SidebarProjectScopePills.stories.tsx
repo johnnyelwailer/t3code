@@ -53,7 +53,7 @@ const GROUPS: ReadonlyArray<SidebarProjectSnapshot> = [
   group("djangal", "djangal", { kind: "lucide", name: "database", color: "emerald" }),
 ];
 
-/** Jira projects the user can see but the app does not have yet → dashed "add" discs / +N menu. */
+/** Jira projects the user can see but the app does not have yet → add candidates in the picker's search. */
 const ADDABLE: ReadonlyArray<JiraCatalogProject> = ["Apollo", "Borealis", "Cascade"].map(
   (title, i) => ({
     entryKey: `acc-a::${i + 1}`,

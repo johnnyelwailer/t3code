@@ -11,6 +11,10 @@ import { useClosedViewStore } from "./closedViewStore";
 import { resolveStorage } from "./lib/storage";
 import type { ThreadPanelPresentation } from "./rightPanelLayout";
 import type { ChatFileAttachment } from "./types";
+import {
+  pullRequestDetailTabFromSearch,
+  type PullRequestDetailTab,
+} from "./components/pullRequest/t3team-prDetailViewState.logic";
 
 const RIGHT_PANEL_KINDS = [
   "diff",
@@ -77,6 +81,12 @@ export type RightPanelSurface =
       repository: string;
       number: number;
       url?: string;
+      /**
+       * The detail view the reader last left this surface on: its open tab and, on the Code
+       * tab, the focused file and commit. Restored when the panel remounts (a thread switch
+       * drops it) so it lands where the reader was rather than on the first tab.
+       */
+      view?: PullRequestSurfaceView;
     }
   | { id: "pull-requests"; kind: "pull-requests" }
   | {
@@ -181,6 +191,16 @@ interface RightPanelStoreState {
       number: number;
       url?: string;
     },
+  ) => void;
+  /**
+   * Records the detail view a pull-request surface was last seen on. A view change is not a panel
+   * choice, so it goes through the automatic path and does not advance the user-action revision
+   * that gates proactive opens.
+   */
+  updatePullRequestView: (
+    ref: ScopedThreadRef,
+    surfaceId: string,
+    view: PullRequestSurfaceView,
   ) => void;
   openThreadSurface: (ref: ScopedThreadRef, threadId: string) => void;
   openTerminal: (ref: ScopedThreadRef, terminalId: string) => void;
@@ -290,6 +310,31 @@ const threadSurface = (threadId: string, environmentId: string): RightPanelSurfa
 
 export type PullRequestSurface = Extract<RightPanelSurface, { kind: "pull-request" }>;
 
+/**
+ * The detail panel view a pull-request surface remembers: the open tab, and on the Code tab the
+ * focused file and the commit whose diff is open (null keeps the whole-change diff selected).
+ */
+export interface PullRequestSurfaceView {
+  readonly tab: PullRequestDetailTab;
+  readonly file: string | null;
+  readonly commit: string | null;
+}
+
+/**
+ * Coerces a persisted view back into shape: a value is only written by the panel, but the stored
+ * JSON is still user-reachable, so a torn or hostile entry must not reach the panel as a tab it
+ * does not know. An absent view stays absent rather than becoming a default.
+ */
+export function normalizePullRequestView(raw: unknown): PullRequestSurfaceView | undefined {
+  if (raw === null || typeof raw !== "object") return undefined;
+  const candidate = raw as Record<string, unknown>;
+  return {
+    tab: pullRequestDetailTabFromSearch(candidate.tab) ?? "summary",
+    file: typeof candidate.file === "string" ? candidate.file : null,
+    commit: typeof candidate.commit === "string" ? candidate.commit : null,
+  };
+}
+
 export function pullRequestSurfaceId(target: {
   environmentId?: string;
   projectId: string;
@@ -310,6 +355,7 @@ export function pullRequestSurface(target: {
   repository: string;
   number: number;
   url?: string;
+  view?: PullRequestSurfaceView;
 }): PullRequestSurface {
   return {
     id: pullRequestSurfaceId(target),
@@ -320,6 +366,7 @@ export function pullRequestSurface(target: {
     repository: target.repository,
     number: target.number,
     ...(typeof target.url === "string" ? { url: target.url } : {}),
+    ...(target.view === undefined ? {} : { view: target.view }),
   };
 }
 
@@ -518,11 +565,13 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                       ) {
                         return [];
                       }
-                      const { environmentId, ...rest } = surface;
+                      const { environmentId, view: rawView, ...rest } = surface;
+                      const view = normalizePullRequestView(rawView);
                       return [
                         pullRequestSurface({
                           ...rest,
                           ...(typeof environmentId === "string" ? { environmentId } : {}),
+                          ...(view === undefined ? {} : { view }),
                         }),
                       ];
                     }
@@ -728,6 +777,34 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
                   ),
                 }
               : next;
+          }),
+        ),
+      updatePullRequestView: (ref, surfaceId, view) =>
+        set((state) =>
+          automaticUpdate(state, scopedThreadKey(ref), (current) => {
+            const index = current.surfaces.findIndex(
+              (surface) => surface.id === surfaceId && surface.kind === "pull-request",
+            );
+            if (index < 0) return current;
+            const surface = current.surfaces[index];
+            // findIndex already matched the pull-request kind, but the array index still widens to
+            // the whole union (and undefined): narrow it here so the view write types against the
+            // pull-request surface.
+            if (!surface || surface.kind !== "pull-request") return current;
+            // A view the panel reports on every mount is the one already stored: writing it back
+            // would only churn the surfaces array for no change.
+            const previous = surface.view;
+            if (
+              previous !== undefined &&
+              previous.tab === view.tab &&
+              previous.file === view.file &&
+              previous.commit === view.commit
+            ) {
+              return current;
+            }
+            const surfaces = [...current.surfaces];
+            surfaces[index] = { ...surface, view };
+            return { ...current, surfaces };
           }),
         ),
       // A thread is never its own side chat: rendering it twice gives one conversation two
@@ -1201,6 +1278,24 @@ export function selectActiveRightPanelSurface(
   const state = selectThreadRightPanelState(byThreadKey, ref);
   if (!state.isOpen) return null;
   return selectSelectedRightPanelSurface(byThreadKey, ref);
+}
+
+/**
+ * The remembered detail view for one pull-request surface, read at mount to seed the panel. Returns
+ * null when there is no ref, no surface under that id, or the surface has no view yet.
+ */
+export function selectPullRequestSurfaceView(
+  byThreadKey: Record<string, ThreadRightPanelState>,
+  ref: ScopedThreadRef | null | undefined,
+  surfaceId: string | null | undefined,
+): PullRequestSurfaceView | null {
+  if (ref === null || ref === undefined || surfaceId === null || surfaceId === undefined) {
+    return null;
+  }
+  const threadState = byThreadKey[scopedThreadKey(ref)];
+  if (threadState === undefined) return null;
+  const surface = threadState.surfaces.find((entry) => entry.id === surfaceId);
+  return surface?.kind === "pull-request" ? (surface.view ?? null) : null;
 }
 
 export function selectSelectedRightPanelSurface(

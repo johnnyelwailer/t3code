@@ -117,6 +117,21 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
 
 ## Allowed Modified Upstream Files
 
+### Client-only thread icon (voice V1 item 8, PR #606)
+
+- `apps/web/src/uiStateStore.ts`
+  - Adds the persisted `threadIconByThreadId` record and its `setThreadIcon` action beside the other per-thread UI state.
+- `apps/web/src/uiStateStore.test.ts`
+  - Expects the new `threadIconByThreadId` field in the hydrate and persist round-trips.
+- `apps/web/src/components/ProjectFavicon.tsx`
+  - Delegates the monogram, emoji, and Lucide branches to the extracted `t3team-ProjectIconGlyph` so thread and project icons share one render path.
+- `apps/web/src/components/ProjectFavicon.test.tsx`
+  - Asserts the delegation to `ProjectIconGlyph`; the glyph markup is covered in `t3team-ProjectIconGlyph.test.tsx`.
+- `apps/web/src/components/threadActionMenu.logic.ts`
+  - Adds the local, non-operate-gated `set-icon` item to the shared thread action menu.
+- `apps/web/src/components/threadActionMenu.logic.test.ts`
+  - Expects the `set-icon` item in the local and capability-gated menu lists.
+
 ### Upstream sync 2026-10-12
 
 - `apps/server/src/mcp/toolkits/worktree/registration.test.ts`
@@ -448,3 +463,11 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
 
 - `apps/server/src/orchestration-v2/EffectOutbox.ts` — `renewLease`: a worker extends the lease of an effect it still runs.
 - `apps/server/src/orchestration-v2/EffectWorker.ts` — heartbeat that renews the lease while an effect executes, so a slow checkpoint capture is not reclaimed and run twice.
+- `apps/server/src/orchestration-v2/RunFinalizationService.ts` — on the last capture attempt, a failed checkpoint capture completes the run without a checkpoint (retrying that settle), so a `waiting` run cannot hold the queue until restart.
+- `apps/server/src/orchestration-v2/CheckpointCaptureService.ts` — exposes `completeWithoutCheckpoint`; the logic lives in `t3team-checkpointCaptureFallback.ts`.
+- `apps/server/src/orchestration-v2/RunFinalizationService.test.ts`, `EffectWorker.test.ts`, `packages/client-runtime/src/operations/commands.test.ts` — cover the last-attempt settle, its wiring, and that Stop never targets a finished `waiting` run.
+
+## Voice slice nightly-CI fixes (2026-10-20)
+
+- `apps/desktop/scripts/main-process-bundle.test.mjs` — fixture writes the `src/voice/t3team-whisperWorker.ts` worker entry that the desktop `pack` config now builds.
+- `third-party-licenses.config.json` — notice overrides for the `@fugood/node-whisper-*` platform binaries pulled in by `@fugood/whisper.node`.

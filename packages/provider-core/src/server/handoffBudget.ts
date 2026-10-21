@@ -6,6 +6,7 @@ import type {
   OrchestrationV2ContextHandoff,
   OrchestrationV2HistoricalMessage,
   OrchestrationV2ProviderThread,
+  OrchestrationV2Run,
   OrchestrationV2TurnItem,
 } from "@t3tools/contracts";
 
@@ -176,6 +177,25 @@ export function historicalMessage(
     status: item.status,
     kind: item.type,
   };
+}
+
+/** Turn items as handoff history, each tagged with its run's status when the runs are known. */
+export function historicalMessagesWithRunStatus(
+  items: ReadonlyArray<OrchestrationV2TurnItem>,
+  runs?: ReadonlyArray<Pick<OrchestrationV2Run, "id" | "status">>,
+): ReadonlyArray<OrchestrationV2HistoricalMessage> {
+  const runStatuses = new Map(runs?.map((run) => [run.id, run.status]));
+  return items.flatMap((item) => {
+    const message = historicalMessage(item);
+    return message === null
+      ? []
+      : [
+          {
+            ...message,
+            ...(item.runId === null ? {} : { runStatus: runStatuses.get(item.runId) }),
+          },
+        ];
+  });
 }
 
 function renderHistoricalMessage(message: OrchestrationV2HistoricalMessage): string {

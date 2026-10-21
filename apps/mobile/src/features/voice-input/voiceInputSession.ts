@@ -9,7 +9,7 @@ export type VoiceInputTarget = {
   readonly ownerKey: string;
   readonly label?: string;
   readonly readDraft: () => VoiceDraftSnapshot | null;
-  readonly commitDraft: VoiceInputControllerDependencies["commitDraft"];
+  readonly commitDraft: NonNullable<VoiceInputControllerDependencies["commitDraft"]>;
   readonly subscribe: () => () => void;
 };
 
