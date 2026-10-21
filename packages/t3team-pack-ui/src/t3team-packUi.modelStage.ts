@@ -16,6 +16,7 @@
  *
  * Optional flight lifts the model with a bob (and a light procedural wing flap on the shoulder
  * bones when present); a soft elliptical ground shadow sits under the feet and fades while airborne.
+ * Optional look-at turns the head toward the pointer; optional interaction pokes and drags it.
  */
 
 /** A tier the host can render, richest first. */
@@ -58,6 +59,35 @@ export interface ModelStageFlight {
   readonly wingFlap?: boolean;
 }
 
+/**
+ * Head (and neck) turn toward the pointer, layered over whatever clip plays. Angles are clamped
+ * and eased; the host skips it under reduced motion and at the non-WebGL tiers.
+ */
+export interface ModelStageLookAt {
+  /** Bones that turn, root-most first, each with its share of the turn. Default neck + Head. */
+  readonly bones?: ReadonlyArray<{ readonly name: string; readonly weight: number }>;
+  /** Largest turn left/right and up/down, in degrees. Defaults 50 and 25. */
+  readonly maxYawDeg?: number;
+  readonly maxPitchDeg?: number;
+  /** Pointer distance (CSS px) at which the turn is nearly full. Default 320. */
+  readonly reachPx?: number;
+}
+
+/**
+ * Makes the stage a control: focusable, named, poked by click/tap/Enter/Space, and optionally
+ * picked up and dropped within its surroundings (it stays inside the nearest ancestor that is
+ * comfortably larger than the stage). A drop lets it fall back to its resting height.
+ */
+export interface ModelStageInteraction {
+  readonly label: string;
+  readonly onPoke?: () => void;
+  readonly draggable?: boolean;
+  /** Fired when the stage is picked up (`true`) and once it has landed again (`false`). */
+  readonly onHeldChange?: (held: boolean) => void;
+  /** Any other key while focused (e.g. a pack's own shortcut). */
+  readonly onKey?: (key: string) => void;
+}
+
 export interface PackModelStageProps {
   /** The glTF binary (`.glb`). KTX2 textures and meshopt geometry are supported. */
   readonly src: string;
@@ -84,6 +114,10 @@ export interface PackModelStageProps {
    * hidden under reduced motion's still when the pack also opts out of flight.
    */
   readonly groundShadow?: boolean;
+  /** Pointer tracking for the head. Absent: the model ignores the pointer. */
+  readonly lookAt?: ModelStageLookAt | null;
+  /** Click, keyboard and drag. Absent: a decorative, `aria-hidden` stage. */
+  readonly interaction?: ModelStageInteraction | null;
   /** Fired with the tier actually rendered, for a pack that adapts its own chrome. */
   readonly onTierChange?: (tier: ModelStageTier) => void;
 }

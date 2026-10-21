@@ -13,6 +13,8 @@ import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 
 import { StageLoop } from "./t3team-ModelStageLoop";
+import { useStageInteraction } from "./t3team-modelStageInteraction";
+import { useStagePointer } from "./t3team-modelStagePointer";
 import { groundShadowCssOpacity } from "./t3team-modelStageShadow";
 import { selectModelStageTier } from "./t3team-modelStageTier";
 import {
@@ -60,6 +62,8 @@ export function ModelStage(props: PackModelStageProps) {
     yaw,
     flight = null,
     groundShadow = true,
+    lookAt = null,
+    interaction = null,
     onTierChange,
   } = props;
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
@@ -73,12 +77,16 @@ export function ModelStage(props: PackModelStageProps) {
   const [element, setElement] = useState<HTMLDivElement | null>(null);
   const visible = useStageVisible(element);
   const [readyTier, setReadyTier] = useState<ModelStageTier | null>(null);
+  const control = useStageInteraction(element, interaction, size, reducedMotion);
 
   useEffect(() => {
     onTierChange?.(tier);
   }, [onTierChange, tier]);
 
   const webglTier = tier === "full" || tier === "low" ? tier : null;
+  // Look-at only where it can render: a WebGL tier, on screen, motion allowed.
+  const tracking = lookAt !== null && webglTier !== null && visible && !reducedMotion;
+  const pointer = useStagePointer(element, tracking);
   const showPoster = webglTier === null ? tier === "still" : readyTier !== webglTier;
   // CSS shadow covers minimal/still and the loading poster; WebGL draws its own once ready.
   const cssShadow = groundShadow && (webglTier === null || showPoster);
@@ -96,11 +104,17 @@ export function ModelStage(props: PackModelStageProps) {
   return (
     <div
       ref={setElement}
-      className="relative shrink-0"
-      style={box}
+      className={
+        interaction
+          ? "relative shrink-0 rounded-xl outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+          : "relative shrink-0"
+      }
+      style={{ ...box, ...control.style }}
       role={label ? "img" : undefined}
       aria-label={label}
-      aria-hidden={label ? undefined : true}
+      aria-hidden={label || interaction ? undefined : true}
+      {...control.props}
+      data-model-stage-held={control.held ? "1" : undefined}
       data-model-stage-tier={tier}
       data-model-stage-reasons={reasons.join("; ") || undefined}
       data-model-stage-flight={airborne ? "1" : undefined}
@@ -144,6 +158,8 @@ export function ModelStage(props: PackModelStageProps) {
               yaw={yaw ?? 0}
               flight={flight}
               groundShadow={groundShadow}
+              lookAt={tracking ? lookAt : null}
+              pointer={pointer}
               visible={visible}
               onReady={() => setReadyTier(webglTier)}
             />

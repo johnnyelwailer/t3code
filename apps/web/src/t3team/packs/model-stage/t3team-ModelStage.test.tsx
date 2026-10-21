@@ -115,4 +115,69 @@ describe("ModelStage without WebGL", () => {
     expect(shadow).not.toBeNull();
     expect(Number.parseFloat(shadow!.style.opacity)).toBeLessThan(0.55);
   });
+
+  it("becomes a named control that pokes on Enter and on a click", () => {
+    const onPoke = vi.fn();
+    act(() =>
+      root.render(
+        <ModelStage
+          src="/m.glb"
+          still="/s.png"
+          loop={sprite}
+          size={120}
+          interaction={{ label: "Mascot, press Enter to poke", onPoke }}
+        />,
+      ),
+    );
+    const el = stage();
+    expect(el.getAttribute("role")).toBe("button");
+    expect(el.tabIndex).toBe(0);
+    expect(el.getAttribute("aria-hidden")).toBeNull();
+    expect(el.getAttribute("aria-label")).toBe("Mascot, press Enter to poke");
+    act(() => {
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    act(() => {
+      el.dispatchEvent(
+        new MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 10, clientY: 10 }),
+      );
+      el.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, clientX: 11, clientY: 10 }));
+    });
+    expect(onPoke).toHaveBeenCalledTimes(2);
+  });
+
+  it("picks up on a drag instead of poking, and lands after the drop", () => {
+    vi.useFakeTimers();
+    const onPoke = vi.fn();
+    const onHeldChange = vi.fn();
+    act(() =>
+      root.render(
+        <ModelStage
+          src="/m.glb"
+          still="/s.png"
+          loop={sprite}
+          size={120}
+          interaction={{ label: "Mascot", onPoke, draggable: true, onHeldChange }}
+        />,
+      ),
+    );
+    const el = stage();
+    act(() => {
+      el.dispatchEvent(
+        new MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 10, clientY: 10 }),
+      );
+      el.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 60, clientY: 50 }));
+    });
+    expect(el.dataset.modelStageHeld).toBe("1");
+    expect(onHeldChange).toHaveBeenLastCalledWith(true);
+    expect(el.style.transform).toBe("translate(50px, 40px)");
+    act(() => {
+      el.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, clientX: 60, clientY: 50 }));
+    });
+    expect(onPoke).not.toHaveBeenCalled();
+    expect(el.style.transform).toBe("translate(50px, 0px)");
+    act(() => vi.advanceTimersByTime(500));
+    expect(onHeldChange).toHaveBeenLastCalledWith(false);
+    vi.useRealTimers();
+  });
 });

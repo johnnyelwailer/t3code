@@ -3,9 +3,10 @@
  * `ModelStageScene` for the life of a tier. A tier change remounts it (the parent keys it by tier),
  * so a renderer is never reconfigured in place.
  */
-import type { ModelStageClips, ModelStageFlight } from "@t3team/pack-ui/contract";
+import type { ModelStageClips, ModelStageFlight, ModelStageLookAt } from "@t3team/pack-ui/contract";
 import { useEffect, useEffectEvent, useState } from "react";
 
+import type { StagePointer } from "./t3team-modelStagePointer";
 import { ModelStageScene, loadModel, type WebGLTier } from "./t3team-modelStageScene";
 
 export interface ModelStageCanvasProps {
@@ -17,6 +18,8 @@ export interface ModelStageCanvasProps {
   readonly yaw: number;
   readonly flight: ModelStageFlight | null;
   readonly groundShadow: boolean;
+  readonly lookAt: ModelStageLookAt | null;
+  readonly pointer: StagePointer;
   readonly visible: boolean;
   readonly onReady: () => void;
 }
@@ -25,7 +28,8 @@ const clipsKey = (clips: ModelStageClips | undefined) =>
   clips === undefined ? "" : [clips].flat().join("\u0000");
 
 export default function ModelStageCanvas(props: ModelStageCanvasProps) {
-  const { tier, src, size, clips, oneShot, yaw, flight, groundShadow, visible } = props;
+  const { tier, src, size, clips, oneShot, yaw, flight, groundShadow, lookAt, pointer, visible } =
+    props;
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [scene, setScene] = useState<ModelStageScene | null>(null);
   const [initialSize] = useState(size);
@@ -68,6 +72,7 @@ export default function ModelStageCanvas(props: ModelStageCanvasProps) {
 
   useEffect(() => scene?.setFlight(flight), [scene, flight]);
   useEffect(() => scene?.setGroundShadow(groundShadow), [scene, groundShadow]);
+  useEffect(() => scene?.setLookAt(lookAt, pointer), [scene, lookAt, pointer]);
   useEffect(() => scene?.setRunning(visible), [scene, visible]);
 
   return (
