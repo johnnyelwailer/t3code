@@ -15,6 +15,7 @@ import { type ClientSettings, type QuitConfirmationMode, SnapShotShortcut } from
 import type { EditorId } from "./editor.ts";
 import type { PreviewForwardedShortcut } from "./keybindings.ts";
 import type {
+  DesktopVoiceModelProgress,
   DesktopVoicePrepareRequest,
   DesktopVoicePrepareResult,
   DesktopVoiceTranscribeRequest,
@@ -1186,6 +1187,8 @@ export interface DesktopBridge {
   transcribeVoice?: (
     request: DesktopVoiceTranscribeRequest,
   ) => Promise<DesktopVoiceTranscribeResult>;
+  /** Progress of the first-use model download behind `prepareVoiceTranscriber`. */
+  onVoiceModelProgress?: (listener: (progress: DesktopVoiceModelProgress) => void) => () => void;
   ensureSshEnvironment: (
     target: DesktopSshEnvironmentTarget,
     options?: { issuePairingToken?: boolean },

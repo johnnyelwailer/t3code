@@ -24,7 +24,11 @@ function sandbox() {
 
 function makeService(
   root: string,
-  options: { download?: typeof downloadWhisperModel; runtime?: boolean } = {},
+  options: {
+    download?: typeof downloadWhisperModel;
+    runtime?: boolean;
+    onDownloadProgress?: () => void;
+  } = {},
 ) {
   const host: WhisperHost = {
     transcribe: vi.fn(async () => ({ text: "hello", acceleration: "gpu" as const })),
@@ -40,6 +44,7 @@ function makeService(
       host,
       isRuntimeAvailable: () => options.runtime ?? true,
       download,
+      ...(options.onDownloadProgress ? { onDownloadProgress: options.onDownloadProgress } : {}),
       environment: {
         env: { ACTIVITY_TRACKER_DATA_DIR: NodePath.join(root, "tracker") },
         platform: "win32",
@@ -102,6 +107,18 @@ describe("desktop voice service", () => {
       model: "large-v3-turbo",
       targetDir: NodePath.join(root, "own"),
     });
+  });
+
+  it("hands the download a progress listener only when one is configured", async () => {
+    const { root } = sandbox();
+    const onDownloadProgress = vi.fn();
+    const { service, download } = makeService(root, { onDownloadProgress });
+
+    await service.prepare({ config, allowDownload: true });
+
+    expect(download).toHaveBeenCalledWith(
+      expect.objectContaining({ onProgress: onDownloadProgress }),
+    );
   });
 
   it("turns a failed download into a clear model-unavailable error", async () => {

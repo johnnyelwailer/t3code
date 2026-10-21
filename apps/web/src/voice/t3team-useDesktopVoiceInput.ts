@@ -10,6 +10,7 @@ import type { DesktopVoiceConfig } from "@t3tools/contracts";
 import { usePrimarySettings } from "~/hooks/useSettings";
 import { MediaVoiceRecorder, requestMicrophonePermission } from "./t3team-mediaVoiceRecorder";
 import { decodeRecordingToPcm16Base64 } from "./t3team-recordingToPcm";
+import { useVoiceModelProgressPercent } from "./t3team-useVoiceModelProgress";
 
 const IDLE_STATE: VoiceInputState = { phase: "idle", error: null, errorAction: null };
 const VIRTUAL_DRAFT = { ownerKey: "desktop-composer", text: "", selection: { start: 0, end: 0 } };
@@ -83,6 +84,7 @@ export function useDesktopVoiceInput(onTranscript: (text: string) => void) {
   const [state, setState] = useState(IDLE_STATE);
   const controllerRef = useRef<VoiceInputController | null>(null);
   const available = useNativeTranscriberAvailable(bridge, config);
+  const downloadPercent = useVoiceModelProgressPercent(state.phase === "preparing");
 
   useEffect(() => {
     if (!bridge) return;
@@ -107,5 +109,5 @@ export function useDesktopVoiceInput(onTranscript: (text: string) => void) {
   }, []);
   const cancel = useCallback(() => controllerRef.current?.cancel(), []);
 
-  return { available, state, toggle, cancel };
+  return { available, state, downloadPercent, toggle, cancel };
 }

@@ -4,6 +4,7 @@ import * as NodeFS from "node:fs";
 
 import type {
   DesktopVoiceConfig,
+  DesktopVoiceModelProgress,
   DesktopVoicePrepareResult,
   DesktopVoiceTranscribeResult,
 } from "@t3tools/contracts";
@@ -37,6 +38,7 @@ export function makeDesktopVoiceService(deps: {
   readonly host: WhisperHost;
   readonly isRuntimeAvailable: () => boolean;
   readonly download?: typeof downloadWhisperModel;
+  readonly onDownloadProgress?: (progress: DesktopVoiceModelProgress) => void;
   readonly log?: (message: string) => void;
 }): DesktopVoiceService {
   const log = deps.log ?? (() => undefined);
@@ -72,6 +74,7 @@ export function makeDesktopVoiceService(deps: {
       const modelPath = await download({
         model: config.model,
         targetDir: deps.environment.appModelsDir,
+        ...(deps.onDownloadProgress ? { onProgress: deps.onDownloadProgress } : {}),
       });
       return { ok: true, modelPath, modelSource: "download" };
     } catch (error) {

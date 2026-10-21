@@ -6,6 +6,7 @@ import type {
   DesktopPreviewRecordingFrame,
   DesktopPreviewTabState,
   DesktopSnapShotEvent,
+  DesktopVoiceModelProgress,
 } from "@t3tools/contracts";
 import { exposeClerkBridge } from "@clerk/electron/preload";
 import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
@@ -27,6 +28,14 @@ function isSnapShotEvent(value: unknown): value is DesktopSnapShotEvent {
     typeof type === "string" &&
     SNAP_SHOT_EVENT_TYPES.has(type) &&
     (id === undefined || typeof id === "string")
+  );
+}
+
+function isVoiceModelProgress(value: unknown): value is DesktopVoiceModelProgress {
+  if (typeof value !== "object" || value === null) return false;
+  const { receivedBytes, totalBytes } = value as { receivedBytes?: unknown; totalBytes?: unknown };
+  return (
+    typeof receivedBytes === "number" && (totalBytes === null || typeof totalBytes === "number")
   );
 }
 
@@ -140,6 +149,17 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   prepareVoiceTranscriber: (request) =>
     ipcRenderer.invoke(IpcChannels.PREPARE_VOICE_TRANSCRIBER_CHANNEL, request),
   transcribeVoice: (request) => ipcRenderer.invoke(IpcChannels.TRANSCRIBE_VOICE_CHANNEL, request),
+  onVoiceModelProgress: (listener) => {
+    const wrappedListener = (_event: Electron.IpcRendererEvent, progress: unknown) => {
+      if (!isVoiceModelProgress(progress)) return;
+      listener(progress);
+    };
+
+    ipcRenderer.on(IpcChannels.VOICE_MODEL_PROGRESS_CHANNEL, wrappedListener);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.VOICE_MODEL_PROGRESS_CHANNEL, wrappedListener);
+    };
+  },
   getConnectionCatalog: () => ipcRenderer.invoke(IpcChannels.GET_CONNECTION_CATALOG_CHANNEL),
   setConnectionCatalog: (catalog) =>
     ipcRenderer.invoke(IpcChannels.SET_CONNECTION_CATALOG_CHANNEL, catalog),
