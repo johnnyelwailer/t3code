@@ -55,6 +55,9 @@ async function start(allowModifierPairs = false) {
   await suppress.mock.results.at(-1)!.value;
   return render(allowModifierPairs);
 }
+function unmount() {
+  for (const effect of effects) effect()();
+}
 beforeEach(() => {
   hooks.reset();
   effects.length = 0;
@@ -109,7 +112,7 @@ it.each(["Escape", "blur", "unmount"])("cancels on %s without selecting keys", a
     expect(escape.preventDefault).toHaveBeenCalled();
     expect(escape.stopPropagation).toHaveBeenCalled();
   } else if (cancel === "blur") recorder.input.props.onBlur();
-  else effects[0]!()();
+  else unmount();
   expect(suppress).toHaveBeenLastCalledWith(false);
   expect(recorded).not.toHaveBeenCalled();
   if (cancel !== "unmount") expect(render().recording).toBe(false);
