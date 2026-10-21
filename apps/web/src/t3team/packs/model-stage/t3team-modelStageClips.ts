@@ -4,6 +4,23 @@
  */
 import * as THREE from "three";
 
+/**
+ * A track with one keyframe has hung the page inside three's interpolant (seen with cross-faded
+ * one-shots); pad it to two equal keys spanning the clip, so a trimmed asset can never do that.
+ */
+export function padSingleKeyTracks(clip: THREE.AnimationClip) {
+  for (const track of clip.tracks) {
+    if (track.times.length !== 1) continue;
+    const t0 = track.times[0] ?? 0;
+    const width = track.values.length;
+    const values = new (track.values.constructor as Float32ArrayConstructor)(width * 2);
+    values.set(track.values, 0);
+    values.set(track.values, width);
+    track.times = new Float32Array([t0, Math.max(t0 + 1e-3, clip.duration)]);
+    track.values = values;
+  }
+}
+
 export class ModelStageClips {
   private readonly mixer: THREE.AnimationMixer;
   private sequence: ReadonlyArray<string> = [];
@@ -16,6 +33,7 @@ export class ModelStageClips {
     private readonly clips: ReadonlyArray<THREE.AnimationClip>,
     private readonly wake: () => void,
   ) {
+    for (const clip of clips) padSingleKeyTracks(clip);
     this.mixer = new THREE.AnimationMixer(root);
     this.mixer.addEventListener("finished", (event) => this.finished(event.action));
   }
