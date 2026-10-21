@@ -463,3 +463,8 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
 ## Pre-existing Test Web nightly fixes (2026-10-21)
 
 - `apps/web/src/components/BranchToolbar.panel.test.tsx` — the mocked draft store gains `draftsByThreadKey`, which the cloud queued-send hook now reads.
+
+## Pre-existing server test failures (nightly CI, 2026-10-21)
+
+- `apps/server/src/orchestration-v2/testkit/fixtures/*/muse_transcript.ndjson` (8 scenarios) — re-recorded against the current `link_pull_request` runtime instruction in `packages/provider-core/src/server/runtimeInstructions.ts`, which the Muse replay compares byte-for-byte.
+- `apps/server/src/testkit/RpcInitialMemory.fixture.mjs` — the mocked event store gains `readAgentEventId`, which the thread-resume cursor identity check (#538) now calls.
