@@ -238,6 +238,7 @@ describe("deriveComposerTasksProgress", () => {
     // run ownership are not inputs, so the list survives the run finishing.
     const badge = deriveComposerTasksProgress({
       activeLatestRunId: RunId.make("run-2"),
+      live: false,
       activePlan: {
         createdAt: "2026-09-10T10:00:00.000Z",
         runId: RunId.make("run-1"),
@@ -256,6 +257,7 @@ describe("deriveComposerTasksProgress", () => {
   it("reports live progress (current step, completed/total, durations) for an active run", () => {
     const badge = deriveComposerTasksProgress({
       activeLatestRunId: RunId.make("run-1"),
+      live: false,
       activePlan: {
         createdAt: "2026-09-10T10:00:30.000Z",
         runId: RunId.make("run-1"),
@@ -277,6 +279,7 @@ describe("deriveComposerTasksProgress", () => {
     expect(
       deriveComposerTasksProgress({
         activeLatestRunId: null,
+        live: false,
         activePlan: { createdAt: "2026-09-10T10:00:00.000Z", runId: null, steps: [] },
       }),
     ).toEqual({ progress: null, steps: null, planUpdatedAt: null });

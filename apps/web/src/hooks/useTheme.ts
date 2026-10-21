@@ -209,7 +209,7 @@ export function readThemePreference(): Theme {
   return DEFAULT_THEME_SNAPSHOT.theme;
 }
 
-function writeThemePreference(theme: Theme): void {
+export function writeThemePreference(theme: Theme): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STORAGE_KEY, theme);

@@ -6,7 +6,7 @@ import * as Predicate from "effect/Predicate";
 
 import { readHtmlRenderReference, type HtmlRenderReference } from "./htmlRender.ts";
 import { MCP_APP_OUTPUT_KEY, readMcpAppReference, type McpAppReference } from "./mcpApp.ts";
-import { resolveT3McpToolSummaryAction } from "./t3McpToolPresentation.ts";
+import { resolveT3McpToolDefinition } from "./t3McpToolPresentation.ts";
 
 const MAX_PARSED_BYTES = 16_384;
 const MAX_METADATA_BYTES = 8_192;
@@ -182,7 +182,7 @@ export function htmlRenderFromToolItem(item: {
   readonly toolName: string | null | undefined;
   readonly output?: unknown;
 }): HtmlRenderReference | undefined {
-  if (resolveT3McpToolSummaryAction(item.toolName) !== "html-render") return undefined;
+  if (resolveT3McpToolDefinition(item.toolName)?.summaryAction !== "html-render") return undefined;
   const output = compactDynamicToolOutput(item.output);
   return output?.isError ? undefined : output?.htmlRender;
 }

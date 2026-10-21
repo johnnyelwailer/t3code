@@ -309,7 +309,7 @@ describe("composerDraftStore copied attachments", () => {
     store.addImages(target, [{ ...image, file: copiedImage!, previewUrl: "blob:target" }]);
     store.addFiles(target, [{ ...file, file: copiedFile! }]);
     const draft = store.getComposerDraft(target)!;
-    expect([...new Uint8Array(await draft.images[0]!.file.arrayBuffer())]).toEqual([1, 1, 1, 1]);
+    expect([...new Uint8Array(await draft.images[0]!.file!.arrayBuffer())]).toEqual([1, 1, 1, 1]);
     expect(await draft.files[0]!.file!.text()).toBe("report");
   });
 

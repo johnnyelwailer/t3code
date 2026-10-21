@@ -1,6 +1,8 @@
 import "vite-plus/test/config";
 import { defineConfig } from "vite-plus";
 import * as NodeURL from "node:url";
+// Config files load before Effect runtimes exist, so a synchronous read is the only option here.
+// @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 
 // t3team: TEMPORARY exemption pending owner decision H; see apps/web/t3team-react-compiler-pending.txt.

@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createDelayedStatus, STATUS_SHOW_DELAY_MS, type ShownStatus } from "./delayedStatus.ts";
+import { createDelayedStatus, type ShownStatus } from "./delayedStatus.ts";
+
+// The default show delay of `createDelayedStatus`.
+const STATUS_SHOW_DELAY_MS = 400;
 
 describe("createDelayedStatus caller timing", () => {
   beforeEach(() => {

@@ -1,9 +1,4 @@
-import {
-  EnvironmentId,
-  MessageId,
-  RunId,
-  ThreadId,
-} from "@t3tools/contracts";
+import { EnvironmentId, MessageId, RunId, ThreadId } from "@t3tools/contracts";
 import type { LegendListRef } from "@legendapp/list/react";
 import { act, createRef, type ComponentProps, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -50,6 +45,7 @@ function baseProps() {
     onAnchorReady: () => {},
     onAnchorSizeChanged: () => {},
     contentInsetEndAdjustment: 0,
+    emptyPlaceholderInset: 0,
     liveFollowEnabled: true,
     onIsAtEndChange: () => {},
     onManualNavigation: () => {},

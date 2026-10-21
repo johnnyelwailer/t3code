@@ -28,7 +28,7 @@ import { useClientSettings } from "./useSettings";
 export function useLogicalProjectEnvironments(
   activeProject: EnvironmentProject | null,
   scratchDraft: boolean,
-  cloudSessionScopeKey: string | null,
+  cloudSessionScopeKey: string | null = null,
 ): readonly EnvironmentOption[] {
   const { environments } = useEnvironments();
   const allProjects = useProjects();

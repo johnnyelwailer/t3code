@@ -115,12 +115,13 @@ it("keeps an unsaved description when collapsed and reopened", async () => {
 });
 
 it("keeps the panel when a registered Summary view throws", async () => {
-  await render();
-  expect(visibleText()).not.toContain("could not be shown");
+  await using before = await render();
+  expect(before.visibleText()).not.toContain("could not be shown");
 
   const logged = vi.spyOn(console, "error").mockImplementation(() => {});
   activateAppViewPacks([ciInsightsPackWebModule, brokenPackWebModule]);
-  await render();
+  await using screen = await render();
+  const { container } = screen;
 
   // The panel and the healthy card survive; the throwing view shows a one-line notice.
   expect(container.querySelector('section[aria-label="Description"]')).not.toBeNull();

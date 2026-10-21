@@ -33,6 +33,7 @@ function sources(overrides: Partial<T3TeamComposerMenuSources> = {}): T3TeamComp
       { path: "apps/web/src/main.tsx", kind: "file" as const },
       { path: "apps/web/src", kind: "directory" as const },
     ],
+    pathSearchTarget: { environmentId: null, cwd: "/repo", query: "main" },
     ...overrides,
   };
 }

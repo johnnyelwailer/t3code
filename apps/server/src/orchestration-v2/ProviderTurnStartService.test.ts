@@ -1086,7 +1086,7 @@ effectIt.effect(
     Effect.gen(function* () {
       const taskIds = [NodeId.make("task-merged-a"), NodeId.make("task-merged-b")];
       const harness = makeLocalCommandHarness({
-        text: delegatedCompletionWakeDetail(taskIds),
+        text: delegatedCompletionWakeDetail(taskIds, []),
         delegatedCompletion: { parentRunId: RunId.make("run-parent"), generation: 1, taskIds },
         openFailure: new Error("provider session rejected"),
       });

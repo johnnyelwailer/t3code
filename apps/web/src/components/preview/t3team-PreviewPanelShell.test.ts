@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { getPreviewPanelMaxWidth } from "./PreviewPanelShell";
+import { getPreviewPanelMaxWidth } from "~/hooks/usePreviewPanelInlineSize";
 
 describe("getPreviewPanelMaxWidth (t3team row-based cap)", () => {
   it("falls back to 70% of the window only while the row is unmeasured", () => {

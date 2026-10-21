@@ -4029,9 +4029,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
             },
             // A stop with no known reset reads the account before settling; on
             // Business the read is the only place the member credit cap appears.
-            ...(scenario.expectedClass === "usage_limit" &&
-            scenario.name !== "known-reset" &&
-            scenario.name !== "deferred-reset"
+            ...(scenario.expectedClass === "usage_limit" && scenario.name !== "deferred-reset"
               ? [
                   {
                     type: "expect_outbound" as const,

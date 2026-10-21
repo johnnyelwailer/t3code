@@ -3404,7 +3404,7 @@ export const make = Effect.gen(function* () {
       provider,
       cwd,
       operation: "openChangeRequest",
-      baseBranch: input.baseBranch ?? (yield* resolveDefaultBaseBranch(cwd)),
+      baseBranch: input.baseBranch ?? (yield* resolveDefaultBaseBranch(cwd)).baseBranch,
       headSelector: headContext.preferredHeadSelector,
       title: input.title,
       body: input.body,

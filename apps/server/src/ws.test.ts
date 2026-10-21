@@ -23,6 +23,10 @@ import { RpcGroup, RpcMessage, RpcServer } from "effect/rpc";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
+import { CloudSessionService } from "./cloud/t3team-CloudSessionService.ts";
+import { ProjectMachineDiscovery } from "./project/t3team-ProjectMachineDiscovery.ts";
+import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
+import * as ToolAuthService from "./toolauth/t3team-ToolAuthService.ts";
 import * as ServerBrowser from "./preview/ServerBrowser.ts";
 import * as AcpRegistryRuntimeCoordinator from "@t3tools/provider-acp-registry/server/AcpRegistryRuntimeCoordinator";
 import * as AcpRegistrySupport from "@t3tools/provider-acp-registry/server/AcpRegistrySupport";
@@ -355,6 +359,11 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(WorkspaceEntries.WorkspaceEntries)({}),
   Layer.mock(WorkspaceFileSystem.WorkspaceFileSystem)({}),
   Layer.mock(WorktreeSetupTracker.WorktreeSetupTracker)({}),
+  // t3team: services the fork's handlers read.
+  Layer.mock(CloudSessionService)({}),
+  Layer.mock(ProjectMachineDiscovery)({}),
+  Layer.mock(ResourcePressureMonitor)({}),
+  Layer.mock(ToolAuthService.ToolAuthService)({}),
 );
 
 const layerConfigSources = Layer.mergeAll(
