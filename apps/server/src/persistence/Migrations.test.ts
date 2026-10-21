@@ -147,7 +147,7 @@ describe("runMigrations", () => {
     Effect.sync(() => {
       assert.deepStrictEqual(
         [...UPSTREAM_V2_MIGRATION_IDS].toSorted((a, b) => a - b),
-        [84, 85, 103, 104, 107, 108, 109],
+        [84, 85, 103, 104, 107, 108, 109, 110, 112, 113, 114, 115],
       );
     }),
   );

@@ -312,12 +312,13 @@ const makeMigrationLoader = (throughId?: number) =>
 export const FIRST_V2_MIGRATION_ID = 84;
 
 // The ledger ids that carry upstream-owned V2 migrations in this fork's ledger (upstream 055/056
-// at 84/85, 057/058 at 103/104, 059/060 at 107/108, 061 at 109). Only these are checked for being
+// at 84/85, 057/058 at 103/104, 059/060 at 107/108, 061 at 109, 062 at 110, 064-067 at
+// 112-115; 063 is held). Only these are checked for being
 // skipped: fork migrations (and the repair migrations for fork DBs that have gaps, e.g. 99, which
 // re-ensures 86-92 and 98) must keep starting on databases whose history has holes. Add each id a
 // sync appends from upstream.
 export const UPSTREAM_V2_MIGRATION_IDS: ReadonlySet<number> = new Set([
-  84, 85, 103, 104, 107, 108, 109,
+  84, 85, 103, 104, 107, 108, 109, 110, 112, 113, 114, 115,
 ]);
 
 /**
