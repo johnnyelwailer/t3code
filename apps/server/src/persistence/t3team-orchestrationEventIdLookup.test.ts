@@ -95,7 +95,7 @@ it.effect("reads a cursor event id by index without touching its payload", () =>
     );
     assert.match(
       plan.map((row) => row.detail).join("\n"),
-      /SEARCH orchestration_events USING INDEX idx_orchestration_events_agent_stream_sequence \(stream_id=\? AND sequence=\?\)/,
+      /SEARCH orchestration_events USING INDEX idx_orchestration_events_agent_stream_sequence \(stream_id=\? AND sequence=\?(?: AND rowid=\?)?\)/,
     );
   }).pipe(Effect.provide(layerEventStore)),
 );
