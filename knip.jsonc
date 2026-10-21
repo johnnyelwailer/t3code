@@ -151,6 +151,9 @@
         "__fixtures__/t3team-parallelAgentsAfterResume.workflow.ts",
         // graphqlgen reads its config.
         "graphql.config.ts",
+        // Upstream 063 is held, so Migrations.ts does not import it until the fork's V1 lineage
+        // cutover is confirmed done everywhere (see Migrations.ts).
+        "src/persistence/Migrations/063_DropUnusedV1Projections.ts",
       ],
       // The generated operations export every selection's class.
       "ignoreIssues": { "**/*.graphql.ts": ["exports", "types", "namespaceMembers"] },
