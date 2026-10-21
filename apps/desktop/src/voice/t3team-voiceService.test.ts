@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { makeDesktopVoiceService } from "./t3team-voiceService.ts";
 import type { downloadWhisperModel } from "./t3team-whisperModelDownload.ts";
 import type { WhisperHost } from "./t3team-whisperHost.ts";
+import type { WhisperDeviceReport } from "./t3team-whisperVulkanDevices.ts";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -28,11 +29,17 @@ function makeService(
     download?: typeof downloadWhisperModel;
     runtime?: boolean;
     onDownloadProgress?: () => void;
+    device?: WhisperDeviceReport;
   } = {},
 ) {
   const host: WhisperHost = {
-    transcribe: vi.fn(async () => ({ text: "hello", acceleration: "gpu" as const })),
+    transcribe: vi.fn(async () => ({
+      text: "hello",
+      acceleration: "gpu" as const,
+      device: "vulkan: test",
+    })),
     warm: vi.fn(async () => undefined),
+    probeDevice: vi.fn(async () => options.device ?? { kind: "cpu" as const, label: "cpu" }),
     dispose: vi.fn(),
   };
   const download = vi.fn<typeof downloadWhisperModel>(
@@ -182,5 +189,96 @@ describe("desktop voice service", () => {
     const { service, host } = makeService(root);
     await service.warm(config);
     expect(host.warm).toHaveBeenCalledWith(NodePath.join(trackerDir, "ggml-largev3.bin"));
+  });
+});
+
+describe("desktop voice service with no configured model", () => {
+  const unset = { ...config, model: "" };
+  const discrete: WhisperDeviceReport = {
+    kind: "discrete",
+    label: "vulkan: NVIDIA GeForce RTX 5070",
+  };
+  const integrated: WhisperDeviceReport = {
+    kind: "integrated",
+    label: "vulkan: Intel(R) Graphics",
+  };
+  const downloadedModels = (download: { mock: { calls: Array<[{ model: string }]> } }) =>
+    download.mock.calls.map(([request]) => request.model);
+
+  it("downloads base on an iGPU, probing with it", async () => {
+    const { root } = sandbox();
+    const { service, download, host } = makeService(root, { device: integrated });
+
+    expect(await service.prepare({ config: unset, allowDownload: true })).toMatchObject({
+      ok: true,
+      modelSource: "download",
+    });
+    expect(downloadedModels(download)).toEqual(["base"]);
+    expect(host.probeDevice).toHaveBeenCalledTimes(1);
+  });
+
+  it("downloads base when there is no GPU at all", async () => {
+    const { root } = sandbox();
+    const { service, download } = makeService(root);
+
+    await service.prepare({ config: unset, allowDownload: true });
+
+    expect(downloadedModels(download)).toEqual(["base"]);
+  });
+
+  it("steps up to the large tier on a discrete GPU", async () => {
+    const { root } = sandbox();
+    const { service, download } = makeService(root, { device: discrete });
+
+    await service.prepare({ config: unset, allowDownload: true });
+
+    expect(downloadedModels(download)).toEqual(["base", "large-v3-turbo"]);
+  });
+
+  it("uses a large model already on disk without probing or downloading", async () => {
+    const { root, trackerDir } = sandbox();
+    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-large-v3.bin"), modelBytes());
+    const { service, download, host } = makeService(root, { device: integrated });
+
+    expect(await service.prepare({ config: unset, allowDownload: true })).toMatchObject({
+      ok: true,
+      modelSource: "activity-tracker",
+    });
+    expect(download).not.toHaveBeenCalled();
+    expect(host.probeDevice).not.toHaveBeenCalled();
+  });
+
+  it("reuses a base model on disk on an iGPU instead of downloading", async () => {
+    const { root, trackerDir } = sandbox();
+    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-base.bin"), modelBytes());
+    const { service, download } = makeService(root, { device: integrated });
+
+    expect(await service.prepare({ config: unset, allowDownload: true })).toMatchObject({
+      ok: true,
+      modelPath: NodePath.join(trackerDir, "ggml-base.bin"),
+    });
+    expect(download).not.toHaveBeenCalled();
+  });
+
+  it("reports the large model as missing on a discrete GPU when downloads are not allowed", async () => {
+    const { root, trackerDir } = sandbox();
+    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-base.bin"), modelBytes());
+    const { service, download } = makeService(root, { device: discrete });
+
+    expect(await service.prepare({ config: unset, allowDownload: false })).toMatchObject({
+      ok: false,
+      code: "model-unavailable",
+    });
+    expect(download).not.toHaveBeenCalled();
+  });
+
+  it("never swaps a configured model for the machine default", async () => {
+    const { root } = sandbox();
+    const { service, download, host } = makeService(root, { device: integrated });
+
+    await service.prepare({ config, allowDownload: true });
+
+    expect(downloadedModels(download)).toEqual(["large-v3-turbo"]);
+    expect(host.probeDevice).not.toHaveBeenCalled();
   });
 });

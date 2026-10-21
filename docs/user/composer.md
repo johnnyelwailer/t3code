@@ -207,16 +207,16 @@ claimed it; choose a different one below.
 
 Open **Settings → Voice** to change:
 
-| Setting                 | What it does                                                                                                         |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| **Voice shortcut**      | The global shortcut that starts and stops talking to the voice agent.                                                |
-| **Voice model**         | The Whisper model to use. Default `large-v3-turbo`.                                                                  |
-| **Voice model file**    | A ggml `.bin` file to use instead. Leave empty to detect a model on this computer, else download **Voice model**.    |
-| **Voice language**      | **Auto** detects each recording's language from its first seconds of speech; a language is used for every recording. |
-| **Voice language list** | The languages the picker offers after Auto, as codes such as `de,en,fr`. Default `de,en`.                            |
-| **Voice silence**       | Milliseconds of silence after speech before the recording ends itself. `0` turns this off. Default 1500.             |
+| Setting                 | What it does                                                                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Voice shortcut**      | The global shortcut that starts and stops talking to the voice agent.                                                          |
+| **Voice model**         | The Whisper model to use. Empty (the default) picks one for your hardware: `large-v3-turbo` with a dedicated GPU, else `base`. |
+| **Voice model file**    | A ggml `.bin` file to use instead. Leave empty to detect a model on this computer, else download **Voice model**.              |
+| **Voice language**      | **Auto** detects each recording's language from its first seconds of speech; a language is used for every recording.           |
+| **Voice language list** | The languages the picker offers after Auto, as codes such as `de,en,fr`. Default `de,en`.                                      |
+| **Voice silence**       | Milliseconds of silence after speech before the recording ends itself. `0` turns this off. Default 1500.                       |
 
-The first recording downloads the model when none is found (roughly 1.6 GB for the default). The
+The first recording downloads the model when none is found (roughly 1.6 GB for `large-v3-turbo`, 150 MB for `base`). The
 microphone button and the voice row show the download progress, and the download happens once.
 
 Audio never leaves your computer: it is transcribed locally and not stored, and only the resulting

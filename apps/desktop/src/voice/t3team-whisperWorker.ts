@@ -5,6 +5,7 @@ import * as NodeModule from "node:module";
 import {
   BACKEND_DECISION_LOG,
   GPU_BACKEND_LOG,
+  VULKAN_DEVICE_LISTING_LOG,
   WHISPER_WORKER_READY,
   type WhisperWorkerRequest,
   type WhisperWorkerResponse,
@@ -45,11 +46,13 @@ const BACKEND_LOG_GRACE_MS = 1_000;
 
 async function load(request: Extract<WhisperWorkerRequest, { type: "load" }>) {
   usingGpu = false;
+  const vulkanLog: string[] = [];
   let backendReported: () => void = () => undefined;
   const backendLogged = new Promise<void>((resolve) => {
     backendReported = resolve;
   });
   addNativeLogListener((_level, text) => {
+    if (VULKAN_DEVICE_LISTING_LOG.test(text)) vulkanLog.push(text);
     if (GPU_BACKEND_LOG.test(text)) usingGpu = true;
     if (BACKEND_DECISION_LOG.test(text)) backendReported();
   });
@@ -63,7 +66,7 @@ async function load(request: Extract<WhisperWorkerRequest, { type: "load" }>) {
     backendLogged,
     new Promise((resolve) => setTimeout(resolve, BACKEND_LOG_GRACE_MS)),
   ]);
-  reply({ id: request.id, ok: true, acceleration: usingGpu ? "gpu" : "cpu" });
+  reply({ id: request.id, ok: true, acceleration: usingGpu ? "gpu" : "cpu", vulkanLog });
 }
 
 async function transcribe(request: Extract<WhisperWorkerRequest, { type: "transcribe" }>) {
