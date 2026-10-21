@@ -88,4 +88,31 @@ describe("ModelStage without WebGL", () => {
     );
     expect(onTierChange).toHaveBeenCalledWith("still");
   });
+
+  it("draws a CSS ground shadow when grounded, and marks flight", () => {
+    act(() =>
+      root.render(
+        <ModelStage src="/m.glb" still="/still.png" loop={sprite} size={120} groundShadow />,
+      ),
+    );
+    expect(container.querySelector("[data-model-stage-shadow]")).not.toBeNull();
+    expect(stage().dataset.modelStageFlight).toBeUndefined();
+
+    act(() =>
+      root.render(
+        <ModelStage
+          src="/m.glb"
+          still="/still.png"
+          loop={sprite}
+          size={120}
+          groundShadow
+          flight={{ lift: 0.28 }}
+        />,
+      ),
+    );
+    expect(stage().dataset.modelStageFlight).toBe("1");
+    const shadow = container.querySelector<HTMLElement>("[data-model-stage-shadow]");
+    expect(shadow).not.toBeNull();
+    expect(Number.parseFloat(shadow!.style.opacity)).toBeLessThan(0.45);
+  });
 });

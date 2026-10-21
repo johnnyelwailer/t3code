@@ -3,7 +3,7 @@
  * `ModelStageScene` for the life of a tier. A tier change remounts it (the parent keys it by tier),
  * so a renderer is never reconfigured in place.
  */
-import type { ModelStageClips } from "@t3team/pack-ui/contract";
+import type { ModelStageClips, ModelStageFlight } from "@t3team/pack-ui/contract";
 import { useEffect, useEffectEvent, useState } from "react";
 
 import { ModelStageScene, loadModel, type WebGLTier } from "./t3team-modelStageScene";
@@ -15,6 +15,8 @@ export interface ModelStageCanvasProps {
   readonly clips: ModelStageClips | undefined;
   readonly oneShot: { readonly clip: string; readonly key: number } | null;
   readonly yaw: number;
+  readonly flight: ModelStageFlight | null;
+  readonly groundShadow: boolean;
   readonly visible: boolean;
   readonly onReady: () => void;
 }
@@ -23,7 +25,7 @@ const clipsKey = (clips: ModelStageClips | undefined) =>
   clips === undefined ? "" : [clips].flat().join("\u0000");
 
 export default function ModelStageCanvas(props: ModelStageCanvasProps) {
-  const { tier, src, size, clips, oneShot, yaw, visible } = props;
+  const { tier, src, size, clips, oneShot, yaw, flight, groundShadow, visible } = props;
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [scene, setScene] = useState<ModelStageScene | null>(null);
   const [initialSize] = useState(size);
@@ -64,6 +66,18 @@ export default function ModelStageCanvas(props: ModelStageCanvasProps) {
     if (oneShotKey !== undefined && oneShotClip !== undefined) scene?.playOnce(oneShotClip);
   }, [scene, oneShotKey, oneShotClip]);
 
+  const flightKey = flight
+    ? `${flight.lift}\0${flight.bobAmp ?? ""}\0${flight.bobHz ?? ""}\0${flight.wingFlap ?? ""}`
+    : "";
+  useEffect(() => {
+    if (!scene) return;
+    if (!flight) {
+      scene.setFlight(null);
+      return;
+    }
+    scene.setFlight(flight);
+  }, [scene, flightKey, flight]);
+  useEffect(() => scene?.setGroundShadow(groundShadow), [scene, groundShadow]);
   useEffect(() => scene?.setRunning(visible), [scene, visible]);
 
   return (

@@ -1,20 +1,15 @@
 /**
- * The imperative half of `ModelStage`: one WebGL renderer per stage, the shared glTF/KTX2/meshopt
- * loaders, lighting per tier, the clip sequencer and the frame loop. Loaded only through the lazy
- * `t3team-ModelStageCanvas.tsx`, so three.js stays out of every other chunk.
- *
- *   • full — the asset's own materials; room environment, key and rim light; DPR up to 2; 60 fps.
- *   • low  — diffuse-only (Lambert) copies of the materials, hemisphere + key light; DPR 1; 30 fps.
- *   • Neither tier uses shadows. The loop runs only while the stage is visible AND something is
- *     playing; a finished, clamped clip (or a model with no animation) is drawn once and left.
- *   • The first frames of each tier are timed once per session (`recordModelStageProbe`).
+ * Imperative half of `ModelStage`: one WebGL renderer, lighting, clip sequencer, frame loop.
+ * Loaded only through the lazy canvas, so three.js stays out of every other chunk.
+ * Soft ground shadow + flight bob live in `t3team-modelStageMotion.ts` (no real-time shadows).
  */
 import * as THREE from "three";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkinned } from "three/addons/utils/SkeletonUtils.js";
+import type { ModelStageFlight } from "@t3team/pack-ui/contract";
 
 import { lightStage, toLambert } from "./t3team-modelStageAssets";
-
+import { ModelStageMotion } from "./t3team-modelStageMotion";
 import { modelStageProbed, recordModelStageProbe } from "./t3team-modelStageSignals";
 import { frameIntervalMs, probeMeanMs } from "./t3team-modelStageTier";
 
@@ -26,6 +21,7 @@ export class ModelStageScene {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(32, 1, 0.01, 100);
   private readonly environment: THREE.Texture | null;
+  private readonly motion: ModelStageMotion;
   private mixer: THREE.AnimationMixer | null = null;
   private clips: ReadonlyArray<THREE.AnimationClip> = [];
   private sequence: ReadonlyArray<string> = [];
@@ -46,7 +42,6 @@ export class ModelStageScene {
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       alpha: true,
-      // MSAA at a 120 px stage is cheap; without it the low tier's silhouette shimmers.
       antialias: true,
       powerPreference: "low-power",
       premultipliedAlpha: true,
@@ -58,6 +53,7 @@ export class ModelStageScene {
     this.renderer.toneMapping = THREE.NeutralToneMapping;
     this.renderer.shadowMap.enabled = false;
     this.environment = lightStage(this.scene, this.renderer, tier);
+    this.motion = new ModelStageMotion(this.scene);
     this.probe = modelStageProbed(tier) ? null : [];
   }
 
@@ -77,15 +73,14 @@ export class ModelStageScene {
       });
     }
     model.rotation.y = THREE.MathUtils.degToRad(yawDegrees);
-    this.scene.add(model);
-    // Frame the rest pose: the camera does not follow the animation. A skinned mesh's bounds
-    // come from its bone matrices, which are zero until the skeleton is updated once.
-    model.updateMatrixWorld(true);
-    model.traverse((object) => (object as THREE.SkinnedMesh).skeleton?.update());
-    const sphere = new THREE.Box3().setFromObject(model).getBoundingSphere(new THREE.Sphere());
-    const { center, radius } = sphere;
-    this.camera.position.set(center.x, center.y + radius * 0.12, center.z + radius * 2.3);
-    this.camera.lookAt(center);
+    const { center, radius } = this.motion.attach(model);
+    const pad = radius * 0.22; // headroom so a ~0.3-height lift stays in view
+    this.camera.position.set(
+      center.x,
+      center.y + radius * 0.12 + pad * 0.5,
+      center.z + radius * 2.35,
+    );
+    this.camera.lookAt(center.x, center.y + pad * 0.35, center.z);
     this.clips = gltf.animations;
     if (this.clips.length > 0) {
       this.mixer = new THREE.AnimationMixer(model);
@@ -99,6 +94,17 @@ export class ModelStageScene {
     this.renderFrame(0);
   }
 
+  setFlight(flight: ModelStageFlight | null | undefined) {
+    this.motion.setFlight(flight);
+    if (this.motion.active()) this.wake();
+    else this.renderFrame(0);
+  }
+
+  setGroundShadow(enabled: boolean) {
+    this.motion.setGroundShadow(enabled);
+    this.renderFrame(0);
+  }
+
   /** A list plays in order, each once, and loops the last. Absent: the first clip, looped. */
   setClips(clips: string | ReadonlyArray<string> | undefined) {
     const names =
@@ -109,7 +115,6 @@ export class ModelStageScene {
     this.playStep();
   }
 
-  /** Plays one clip over the sequence, then returns to the step it interrupted. */
   playOnce(name: string) {
     const action = this.play(name, true);
     if (action) this.oneShot = action;
@@ -129,6 +134,7 @@ export class ModelStageScene {
     this.disposed = true;
     this.setRunning(false);
     this.mixer?.stopAllAction();
+    this.motion.dispose();
     this.environment?.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();
@@ -167,7 +173,7 @@ export class ModelStageScene {
   }
 
   private animating(): boolean {
-    return this.current?.isRunning() ?? false;
+    return (this.current?.isRunning() ?? false) || this.motion.active();
   }
 
   private wake() {
@@ -179,8 +185,6 @@ export class ModelStageScene {
   private readonly tick = (now: number) => {
     this.frame = 0;
     if (!this.running || this.disposed) return;
-    // rAF runs at the display rate; skip frames to hold the tier's cap. The 1 ms slack keeps a
-    // 60 Hz display from dropping every other frame of a 60 fps cap.
     if (this.last === 0 || now - this.last >= frameIntervalMs(this.tier) - 1) {
       const delta = this.last === 0 ? 0 : Math.min((now - this.last) / 1000, 0.1);
       this.last = now;
@@ -194,9 +198,9 @@ export class ModelStageScene {
     if (this.disposed) return;
     const start = performance.now();
     this.mixer?.update(delta);
+    this.motion.apply(delta);
     this.renderer.render(this.scene, this.camera);
     if (this.probe === null) return;
-    // Wait for the GPU, or the probe would time only the CPU's half of the frame.
     this.renderer.getContext().finish();
     this.probe.push(performance.now() - start);
     const mean = probeMeanMs(this.probe);

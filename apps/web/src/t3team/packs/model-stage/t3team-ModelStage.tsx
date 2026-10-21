@@ -4,7 +4,8 @@
  * no three.js, so a surface that only ever shows a still or a loop never downloads it.
  *
  * The still is the poster at every tier: it shows while the renderer loads and the model decodes,
- * and the canvas fades in over it once its first frame is drawn.
+ * and the canvas fades in over it once its first frame is drawn. A CSS ellipse under the stage
+ * stands in for the ground shadow at the `minimal`/`still` tiers (and while the canvas loads).
  */
 import type { ModelStageTier, PackModelStageProps } from "@t3team/pack-ui/contract";
 import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react";
@@ -12,6 +13,7 @@ import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 
 import { StageLoop } from "./t3team-ModelStageLoop";
+import { groundShadowCssOpacity } from "./t3team-modelStageShadow";
 import { selectModelStageTier } from "./t3team-modelStageTier";
 import {
   hasWebGL,
@@ -42,7 +44,6 @@ function useStageVisible(element: HTMLElement | null): boolean {
     observer.observe(element);
     return () => observer.disconnect();
   }, [element]);
-  // Without IntersectionObserver (old engines, tests) a mounted stage counts as on screen.
   return (intersecting || typeof IntersectionObserver === "undefined") && documentVisible;
 }
 
@@ -57,6 +58,8 @@ export function ModelStage(props: PackModelStageProps) {
     quality = "auto",
     label,
     yaw,
+    flight = null,
+    groundShadow = true,
     onTierChange,
   } = props;
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
@@ -69,7 +72,6 @@ export function ModelStage(props: PackModelStageProps) {
   );
   const [element, setElement] = useState<HTMLDivElement | null>(null);
   const visible = useStageVisible(element);
-  // The canvas reports its first frame; until then (and after a tier change) the still shows.
   const [readyTier, setReadyTier] = useState<ModelStageTier | null>(null);
 
   useEffect(() => {
@@ -78,7 +80,19 @@ export function ModelStage(props: PackModelStageProps) {
 
   const webglTier = tier === "full" || tier === "low" ? tier : null;
   const showPoster = webglTier === null ? tier === "still" : readyTier !== webglTier;
+  // CSS shadow covers minimal/still and the loading poster; WebGL draws its own once ready.
+  const cssShadow = groundShadow && (webglTier === null || showPoster);
+  const shadowOpacity = groundShadowCssOpacity(flight, cssShadow);
+  const airborne = (flight?.lift ?? 0) > 0.02;
   const box: CSSProperties = { width: size, height: size };
+  const contentLift: CSSProperties | undefined =
+    !webglTier && airborne
+      ? {
+          transform: `translateY(-${Math.round((flight?.lift ?? 0) * size * 0.35)}px)`,
+          transition: reducedMotion ? undefined : "transform 400ms ease-out",
+        }
+      : undefined;
+
   return (
     <div
       ref={setElement}
@@ -89,31 +103,53 @@ export function ModelStage(props: PackModelStageProps) {
       aria-hidden={label ? undefined : true}
       data-model-stage-tier={tier}
       data-model-stage-reasons={reasons.join("; ") || undefined}
+      data-model-stage-flight={airborne ? "1" : undefined}
     >
-      {showPoster ? (
-        <img
-          src={still}
-          alt=""
-          draggable={false}
-          className="pointer-events-none absolute inset-0 size-full object-contain select-none"
+      {shadowOpacity > 0 ? (
+        <div
+          aria-hidden
+          data-model-stage-shadow
+          className="pointer-events-none absolute left-1/2 rounded-[50%]"
+          style={{
+            width: size * 0.62,
+            height: size * 0.16,
+            bottom: size * 0.06,
+            transform: "translateX(-50%)",
+            opacity: shadowOpacity,
+            background:
+              "radial-gradient(ellipse at center, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.12) 45%, transparent 72%)",
+            transition: "opacity 300ms ease",
+          }}
         />
       ) : null}
-      {tier === "minimal" && loop ? <StageLoop loop={loop} playing={visible} /> : null}
-      {webglTier ? (
-        <Suspense fallback={null}>
-          <ModelStageCanvas
-            key={webglTier}
-            tier={webglTier}
-            src={src}
-            size={size}
-            clips={clips}
-            oneShot={oneShot ?? null}
-            yaw={yaw ?? 0}
-            visible={visible}
-            onReady={() => setReadyTier(webglTier)}
+      <div className="absolute inset-0" style={contentLift}>
+        {showPoster ? (
+          <img
+            src={still}
+            alt=""
+            draggable={false}
+            className="pointer-events-none absolute inset-0 size-full object-contain select-none"
           />
-        </Suspense>
-      ) : null}
+        ) : null}
+        {tier === "minimal" && loop ? <StageLoop loop={loop} playing={visible} /> : null}
+        {webglTier ? (
+          <Suspense fallback={null}>
+            <ModelStageCanvas
+              key={webglTier}
+              tier={webglTier}
+              src={src}
+              size={size}
+              clips={clips}
+              oneShot={oneShot ?? null}
+              yaw={yaw ?? 0}
+              flight={flight}
+              groundShadow={groundShadow}
+              visible={visible}
+              onReady={() => setReadyTier(webglTier)}
+            />
+          </Suspense>
+        ) : null}
+      </div>
     </div>
   );
 }

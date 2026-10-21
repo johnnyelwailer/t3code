@@ -138,12 +138,13 @@ export type SurfaceCompanionPlacement = "myWork.loading" | "myWork.empty" | "thr
 
 /**
  * What the surface is going through, in host terms; a companion maps it to its own behaviour.
- *   • `loading`   — a first result is outstanding;
+ *   • `loading`   — a first result is outstanding (a pack may render this as flight);
  *   • `empty`     — there is nothing here (and was not a moment ago, or never was);
  *   • `cleared`   — the viewer just emptied it (the last item went away while it was on screen);
- *   • `newThread` — a conversation that has not started.
+ *   • `newThread` — a conversation that has not started;
+ *   • `flying`    — dedicated airborne beat (arriving / in transit); optional, pack-driven.
  */
-export type SurfaceCompanionMood = "loading" | "empty" | "cleared" | "newThread";
+export type SurfaceCompanionMood = "loading" | "empty" | "cleared" | "newThread" | "flying";
 
 /** `sm` sits beside a line of text (~48px), `md` above a heading (~120px), `lg` alone (~200px). */
 export type SurfaceCompanionSize = "sm" | "md" | "lg";
