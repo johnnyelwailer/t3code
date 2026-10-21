@@ -487,6 +487,34 @@ export default defineConfig({
         },
       },
       {
+        // t3team: upstream files that carry fork additions and keep upstream's own oxlint-disable
+        // directives for these rules. "off" would turn those directives into unused-directive
+        // errors, so they stay "warn": the directive still suppresses, the fork additions only warn.
+        files: [
+          "apps/web/src/components/BranchToolbar.tsx",
+          "apps/web/src/components/chat/MessagesTimeline.tsx",
+          "apps/web/src/components/chat/ModelPickerContent.tsx",
+          "apps/web/src/components/pullRequest/PullRequestCodeTab.tsx",
+          "apps/web/src/routes/_chat.pull-requests.tsx",
+        ],
+        rules: {
+          "react/exhaustive-effect-dependencies": "warn",
+          "react/globals": "warn",
+          "react/hooks": "warn",
+          "react/immutability": "warn",
+          "react/memo-dependencies": "warn",
+          "react/preserve-manual-memoization": "warn",
+          "react/purity": "warn",
+          "react/refs": "warn",
+          "react/set-state-in-effect": "warn",
+          "react/set-state-in-render": "warn",
+          "react/static-components": "warn",
+          "react/unsupported-syntax": "warn",
+          "t3code/no-manual-memo": "warn",
+          "t3code/no-hookless-use-function": "warn",
+        },
+      },
+      {
         // t3team: TEMPORARY exemption pending owner decision (see t3team-lint-pending.txt).
         files: [...T3TEAM_LINT_PENDING_FILES],
         rules: {

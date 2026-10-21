@@ -7,6 +7,8 @@
 # list, convert every file now, or convert the busiest files and list the rest.
 # Do not add entries (the 2026-10-21 sync added two new fork files from main that do not compile:
 # t3team-useKickoffWorkItemRef.ts, t3team-useThreadHandoff.ts).
+# The main merge then brought the voice surface files (t3team/voice/*, VoiceHotkeySettingRow) the
+# same way; their tests are listed in t3team-lint-pending.txt.
 apps/web/src/account/t3team-useAccounts.ts
 apps/web/src/cloud/t3team-CloudSessionSignInDialogHost.tsx
 apps/web/src/cloud/t3team-useCloudSessionComposerGate.ts
@@ -338,4 +340,13 @@ apps/web/src/t3team/workitem/t3team-useWorkItemFieldDraftAccept.test.tsx
 apps/web/src/t3team/workitem/t3team-useWorkItemFieldMutation.test.tsx
 apps/web/src/t3team/workitem/t3team-useWorkItemFieldMutation.ts
 apps/web/src/t3team/workitem/t3team-useWorkItemLayoutMode.ts
-apps/web/src/t3team/workitem/t3team-useWorkItemLayoutMode.tsapps/web/src/cloud/t3team-CloudSessionSignInDialogHost.tsx
+apps/web/src/components/settings/t3team-VoiceHotkeySettingRow.tsx
+apps/web/src/t3team/voice/surface/t3team-VoiceClock.tsx
+apps/web/src/t3team/voice/surface/t3team-VoiceTranscript.tsx
+apps/web/src/t3team/voice/surface/t3team-useExpandPresence.ts
+apps/web/src/t3team/voice/surface/t3team-useVoiceUiPublisher.ts
+apps/web/src/t3team/voice/t3team-DesktopVoiceSession.tsx
+apps/web/src/t3team/voice/t3team-VoiceComposerDock.tsx
+apps/web/src/t3team/voice/t3team-VoiceWidgetStage.tsx
+apps/web/src/t3team/voice/t3team-WebVoiceSession.tsx
+apps/web/src/t3team/voice/t3team-useVoiceCommit.ts

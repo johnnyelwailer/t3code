@@ -408,3 +408,11 @@ packages/t3team-sdk/src/t3team-sdk.staticAudit.test.ts
 packages/t3team-sdk/src/t3team-sdk.time.test.ts
 packages/t3team-sdk/src/t3team-sdk.typeCheck.test.ts
 packages/t3team-sdk/src/t3team-sdk.workflowReference.test.ts
+apps/web/src/components/settings/t3team-VoiceHotkeySettingRow.test.tsx
+apps/web/src/components/settings/t3team-VoiceLanguageSettingRows.test.tsx
+apps/web/src/components/settings/t3team-VoiceTranscriberSettingRows.test.tsx
+apps/web/src/t3team/voice/surface/t3team-VoiceSurfaces.test.tsx
+apps/web/src/t3team/voice/t3team-VoiceWidgetStage.test.tsx
+apps/web/src/t3team/voice/t3team-WebVoiceSession.test.tsx
+apps/web/src/voice/t3team-useVoiceModelProgress.test.tsx
+apps/web/src/voice/t3team-useVoiceStream.test.tsx
