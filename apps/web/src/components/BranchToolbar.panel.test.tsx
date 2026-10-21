@@ -20,7 +20,11 @@ vi.mock("../hooks/useCopyToClipboard", () => ({
 vi.mock("./BranchToolbarBranchSelector", () => ({ BranchToolbarBranchSelector: () => null }));
 vi.mock("../composerDraftStore", () => ({
   useComposerDraftStore: (select: (store: unknown) => unknown) =>
-    select({ getDraftThreadByRef: () => null, setDraftThreadContext: vi.fn() }),
+    select({
+      draftsByThreadKey: {},
+      getDraftThreadByRef: () => null,
+      setDraftThreadContext: vi.fn(),
+    }),
 }));
 vi.mock("../state/entities", () => ({
   useThreadShell: () => ({

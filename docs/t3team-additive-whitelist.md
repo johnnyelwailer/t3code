@@ -459,3 +459,7 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
 
 - `apps/desktop/src/ipc/methods/clientSettings.ts` — `setClientSettings` also calls `DesktopVoiceHotkey.configure`, next to the existing `DesktopSnapShot.configure`, so a changed `voiceHotkeyChord` re-registers the global shortcut (logic in `t3team-voiceHotkeyController.ts`).
 - `apps/web/src/components/settings/useSnapShotShortcutRecorder.tsx` — optional `label` so the voice shortcut row reuses the recorder instead of a second one; the default label keeps the snapshot wording.
+
+## Pre-existing Test Web nightly fixes (2026-10-21)
+
+- `apps/web/src/components/BranchToolbar.panel.test.tsx` — the mocked draft store gains `draftsByThreadKey`, which the cloud queued-send hook now reads.
