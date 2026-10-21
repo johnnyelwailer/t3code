@@ -122,6 +122,25 @@ describe("desktop voice service", () => {
     );
   });
 
+  it("joins a download already running instead of starting a second writer, then retries after it ends", async () => {
+    const { root } = sandbox();
+    let finish: (path: string) => void = () => undefined;
+    const { service, download } = makeService(root, {
+      download: () => new Promise<string>((resolve) => (finish = resolve)),
+    });
+
+    const first = service.prepare({ config, allowDownload: true });
+    const second = service.prepare({ config, allowDownload: true });
+    finish(NodePath.join(root, "downloaded.bin"));
+
+    expect(await first).toMatchObject({ ok: true, modelSource: "download" });
+    expect(await second).toMatchObject({ ok: true, modelSource: "download" });
+    expect(download).toHaveBeenCalledTimes(1);
+
+    void service.prepare({ config, allowDownload: true });
+    expect(download).toHaveBeenCalledTimes(2);
+  });
+
   it("turns a failed download into a clear model-unavailable error", async () => {
     const { root } = sandbox();
     const { service } = makeService(root, {

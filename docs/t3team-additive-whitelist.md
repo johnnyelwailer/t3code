@@ -490,3 +490,7 @@ All already listed in `allowedModifiedFiles`; each gains only the voice-surface 
 - `apps/web/src/routes/__root.tsx` — the floating widget route renders bare; the voice session host replaces the old pill.
 - `apps/web/src/routeTree.gen.ts` — generated entry for `/t3team-voice-widget`.
 - `apps/web/src/components/chat/QueuedRunsControl.tsx` — the queued-message preview drops the `voice-state` reference label too, so the model-only live-state entry never shows in the queue.
+
+## Voice V1 readiness (2026-10-21)
+
+- `docs/user/composer.md` — gains the "Voice input on desktop" section (shortcut, composer mic, Settings → Voice, privacy); the closest existing user doc, so no new docs page.
