@@ -664,7 +664,9 @@
     "apps/desktop/src/app/DesktopApp.ts",
     "apps/desktop/src/main.ts",
     "apps/desktop/src/snapShot/DesktopSnapShot.ts",
-    "apps/desktop/src/snapShot/PortalCaptureShortcut.ts"
+    "apps/desktop/src/snapShot/PortalCaptureShortcut.ts",
+    "apps/desktop/src/ipc/methods/clientSettings.ts",
+    "apps/web/src/components/settings/useSnapShotShortcutRecorder.tsx"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",

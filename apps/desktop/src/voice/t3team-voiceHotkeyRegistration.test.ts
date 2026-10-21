@@ -1,3 +1,4 @@
+import { DEFAULT_VOICE_HOTKEY_CHORD } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("electron", () => ({
@@ -12,6 +13,7 @@ import {
 const baseInput = (
   overrides: Partial<VoiceHotkeyRegistrationInput>,
 ): VoiceHotkeyRegistrationInput => ({
+  chord: DEFAULT_VOICE_HOTKEY_CHORD,
   platform: "win32",
   env: {},
   linuxAppId: "t3code",
@@ -34,6 +36,21 @@ describe("registerVoiceHotkey", () => {
     expect(shortcuts.register).toHaveBeenCalledWith("Control+Alt+Space", onPress);
     registration.close();
     expect(shortcuts.unregister).toHaveBeenCalledWith("Control+Alt+Space");
+  });
+
+  it("registers the configured chord instead of the default", async () => {
+    const shortcuts = { register: vi.fn(() => true), unregister: vi.fn() };
+    const registration = await registerVoiceHotkey(
+      baseInput({
+        shortcuts,
+        chord: { ...DEFAULT_VOICE_HOTKEY_CHORD, key: "v", altKey: false, shiftKey: true },
+        probe: () => ({ available: true, message: null }),
+      }),
+    );
+    expect(registration.state().accelerator).toBe("Control+Shift+V");
+    expect(shortcuts.register).toHaveBeenCalledWith("Control+Shift+V", expect.any(Function));
+    registration.close();
+    expect(shortcuts.unregister).toHaveBeenCalledWith("Control+Shift+V");
   });
 
   it("reports a clash found by the probe without registering", async () => {

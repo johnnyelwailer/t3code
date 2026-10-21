@@ -4,21 +4,11 @@
  * only, never releases, so press-to-start / press-again-to-stop is the one semantic they can all
  * deliver. Mirrors the snap-shot registration path; works while the app is unfocused.
  */
-import type { DesktopVoiceHotkeyState, SnapShotKeyChord } from "@t3tools/contracts";
+import type { DesktopVoiceHotkeyState, VoiceHotkeyChord } from "@t3tools/contracts";
 import * as Electron from "electron";
 
 import { probeGlobalShortcut } from "../snapShot/t3team-globalShortcutProbe.ts";
 import { isWaylandSession, toElectronAccelerator } from "../snapShot/snapShot.ts";
-
-/** Ctrl+Alt+Space: unclaimed by the OS on Windows, macOS and the common Linux desktops. */
-export const VOICE_HOTKEY_CHORD: SnapShotKeyChord = {
-  key: " ",
-  ctrlKey: true,
-  altKey: true,
-  shiftKey: false,
-  metaKey: false,
-  modKey: false,
-};
 
 const PORTAL_BINDING = { idPrefix: "t3-voice", description: "Talk to the voice agent" } as const;
 
@@ -28,6 +18,7 @@ export interface VoiceHotkeyRegistration {
 }
 
 export interface VoiceHotkeyRegistrationInput {
+  readonly chord: VoiceHotkeyChord;
   readonly platform: NodeJS.Platform;
   readonly env: NodeJS.ProcessEnv;
   readonly linuxAppId: string;
@@ -65,7 +56,7 @@ async function registerPortalShortcut(
     const { PortalCaptureShortcut } = await import("../snapShot/PortalCaptureShortcut.ts");
     const portal = new PortalCaptureShortcut(
       input.linuxAppId,
-      VOICE_HOTKEY_CHORD,
+      input.chord,
       input.onPress,
       () => undefined,
       undefined,
@@ -94,7 +85,7 @@ async function registerPortalShortcut(
 export async function registerVoiceHotkey(
   input: VoiceHotkeyRegistrationInput,
 ): Promise<VoiceHotkeyRegistration> {
-  const accelerator = toElectronAccelerator(VOICE_HOTKEY_CHORD);
+  const accelerator = toElectronAccelerator(input.chord);
   if (input.platform === "linux" && isWaylandSession(input.platform, input.env)) {
     return registerPortalShortcut(input, accelerator);
   }

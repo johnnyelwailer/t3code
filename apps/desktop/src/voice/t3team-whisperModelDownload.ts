@@ -4,6 +4,10 @@ import * as NodePath from "node:path";
 import * as NodeStream from "node:stream";
 import * as NodeStreamPromises from "node:stream/promises";
 
+import {
+  makeProgressTap,
+  type DownloadProgressListener,
+} from "./t3team-whisperDownloadProgress.ts";
 import { isValidWhisperModelId, whisperModelFileNames } from "./t3team-whisperModelLocator.ts";
 
 const MODEL_BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
@@ -26,6 +30,7 @@ export async function downloadWhisperModel(input: {
   readonly targetDir: string;
   readonly fetchImpl?: typeof fetch;
   readonly signal?: AbortSignal;
+  readonly onProgress?: DownloadProgressListener;
 }): Promise<string> {
   if (!isValidWhisperModelId(input.model)) {
     throw new WhisperModelDownloadError(`"${input.model}" is not a valid whisper model id.`);
@@ -47,6 +52,7 @@ export async function downloadWhisperModel(input: {
     const expected = Number(response.headers.get("content-length") ?? 0);
     await NodeStreamPromises.pipeline(
       NodeStream.Readable.from(response.body),
+      makeProgressTap(expected > 0 ? expected : null, input.onProgress ?? (() => undefined)),
       NodeFS.createWriteStream(partial),
     );
     const received = NodeFS.statSync(partial).size;

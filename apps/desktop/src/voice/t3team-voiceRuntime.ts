@@ -5,8 +5,10 @@ import * as NodeFS from "node:fs";
 import * as NodeModule from "node:module";
 import * as NodePath from "node:path";
 
+import type { DesktopVoiceModelProgress } from "@t3tools/contracts";
 import * as Electron from "electron";
 
+import * as IpcChannels from "../ipc/channels.ts";
 import { makeDesktopVoiceService, type DesktopVoiceService } from "./t3team-voiceService.ts";
 import { makeWhisperHost, type WhisperWorkerHandle } from "./t3team-whisperHost.ts";
 import { makeFileSentinel } from "./t3team-whisperSentinel.ts";
@@ -41,6 +43,13 @@ function isWhisperRuntimeAvailable(workerPath: string): boolean {
   }
 }
 
+function broadcastModelProgress(progress: DesktopVoiceModelProgress): void {
+  for (const window of Electron.BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed())
+      window.webContents.send(IpcChannels.VOICE_MODEL_PROGRESS_CHANNEL, progress);
+  }
+}
+
 let service: DesktopVoiceService | null = null;
 
 export function getDesktopVoiceService(): DesktopVoiceService {
@@ -57,6 +66,7 @@ export function getDesktopVoiceService(): DesktopVoiceService {
   service = makeDesktopVoiceService({
     host,
     log,
+    onDownloadProgress: broadcastModelProgress,
     isRuntimeAvailable: () => isWhisperRuntimeAvailable(workerPath),
     environment: {
       env: process.env,
