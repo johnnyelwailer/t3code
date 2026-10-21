@@ -181,46 +181,46 @@ export const make = Effect.gen(function* () {
       );
       return yield* retryTransientRead(
         policy.request(
-        { host, operation: input.operation, resource: "graphql", allowReserve },
-        (headers) =>
-          Effect.gen(function* () {
-            const response: HttpClientResponse.HttpClientResponse = yield* httpClient
-              .execute(request.pipe(HttpClientRequest.setHeaders(headers)))
-              .pipe(Effect.provideService(HttpClient.TracerDisabledWhen, () => true));
-            const collected = yield* collectUint8StreamText({
-              stream: response.stream,
-              maxBytes,
-            }).pipe(
-              Effect.catchIf(
-                (error) => error.reason._tag === "EmptyBodyError",
-                () => Effect.succeed({ text: "", truncated: false, invalidUtf8: false }),
-              ),
-            );
-            // A body cut at the byte cap hides any `errors` past the cut and cannot be decoded.
-            if (collected.truncated) {
-              return {
-                _tag: "Failed" as const,
+          { host, operation: input.operation, resource: "graphql", allowReserve },
+          (headers) =>
+            Effect.gen(function* () {
+              const response: HttpClientResponse.HttpClientResponse = yield* httpClient
+                .execute(request.pipe(HttpClientRequest.setHeaders(headers)))
+                .pipe(Effect.provideService(HttpClient.TracerDisabledWhen, () => true));
+              const collected = yield* collectUint8StreamText({
+                stream: response.stream,
+                maxBytes,
+              }).pipe(
+                Effect.catchIf(
+                  (error) => error.reason._tag === "EmptyBodyError",
+                  () => Effect.succeed({ text: "", truncated: false, invalidUtf8: false }),
+                ),
+              );
+              // A body cut at the byte cap hides any `errors` past the cut and cannot be decoded.
+              if (collected.truncated) {
+                return {
+                  _tag: "Failed" as const,
+                  status: response.status,
+                  headers: response.headers,
+                };
+              }
+              return classifyGraphQl({
                 status: response.status,
                 headers: response.headers,
-              };
-            }
-            return classifyGraphQl({
-              status: response.status,
-              headers: response.headers,
-              body: collected.text,
-              allowPartialNotFound: input.allowPartialNotFound === true,
-              allowPartialResourceLimits: input.allowPartialResourceLimits === true,
-            });
-          }).pipe(
-            Effect.mapError(
-              (cause) =>
-                new GitHubRequestPolicy.GitHubApiRequestError({
-                  host,
-                  operation: input.operation,
-                  cause,
-                }),
+                body: collected.text,
+                allowPartialNotFound: input.allowPartialNotFound === true,
+                allowPartialResourceLimits: input.allowPartialResourceLimits === true,
+              });
+            }).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new GitHubRequestPolicy.GitHubApiRequestError({
+                    host,
+                    operation: input.operation,
+                    cause,
+                  }),
+              ),
             ),
-          ),
         ),
         isGraphQlQuery(input.query),
       );
@@ -229,7 +229,8 @@ export const make = Effect.gen(function* () {
 
   return GitHubApi.of({
     graphql,
-    rest: (input) => retryTransientRead(restTransport.rest(input), isIdempotentRestMethod(input.method)),
+    rest: (input) =>
+      retryTransientRead(restTransport.rest(input), isIdempotentRestMethod(input.method)),
     credential: restTransport.credential,
   });
 });

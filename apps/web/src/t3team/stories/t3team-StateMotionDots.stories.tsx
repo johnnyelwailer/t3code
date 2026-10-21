@@ -155,7 +155,6 @@ function AgentSidePanel({
   );
 }
 
-
 type StateMotionDotsProps = {
   /** Pins the thread-level state. "auto" lets it drift with the agents. */
   threadState: "auto" | DotState;

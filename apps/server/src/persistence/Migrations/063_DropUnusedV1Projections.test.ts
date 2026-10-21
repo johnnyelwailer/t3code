@@ -8,7 +8,7 @@ import { runMigrations } from "../Migrations.ts";
 const layer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
 
 layer("063_DropUnusedV1Projections", (it) => {
-  // t3team: upstream 063 is held (not registered) until the fork's one-time V1 lineage cutover,
+  // quarantine: #587 t3team: upstream 063 is held (not registered) until the fork's one-time V1 lineage cutover,
   // which reads projection_thread_activities, is confirmed done everywhere. See Migrations.ts.
   it.effect.skip("drops V1 projections nothing reads and keeps the transcript import sources", () =>
     Effect.gen(function* () {

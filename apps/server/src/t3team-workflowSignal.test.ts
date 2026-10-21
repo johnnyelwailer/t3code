@@ -35,7 +35,6 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 
-
 const detail = (over: Partial<PullRequestDetail>): PullRequestDetail =>
   ({
     provider: "github",
@@ -148,7 +147,6 @@ describe("diffScmEvents", () => {
   });
 });
 
-
 describe("work item diff", () => {
   it("is silent on the first observation", () => {
     expect(diffWorkItemFields(null, { status: "To Do" })).toEqual([]);
@@ -190,7 +188,6 @@ describe("work item diff", () => {
     expect(workItemCursorFromFields({})).toEqual({});
   });
 });
-
 
 const fakePrs = {
   detail: (_ref: unknown) => Effect.succeed(detail({})),
@@ -251,7 +248,6 @@ describe("makeWorkflowSignalSourceCatalog", () => {
     void WorkItemUpdated;
   });
 });
-
 
 interface FakeRegistration {
   readonly runId: string;
@@ -477,7 +473,6 @@ describe("makeMintedEmit", () => {
     void ScmChangeRequestChecksConcluded;
   });
 });
-
 
 describe("startScmSignalInstance durable cursor", () => {
   it("holds the cursor when delivery fails, and advances only after redelivery succeeds", async () => {

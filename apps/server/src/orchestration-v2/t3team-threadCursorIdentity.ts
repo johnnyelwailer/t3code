@@ -32,7 +32,8 @@ const threadEventIdAtSequence = (
 const sequenceOccupied = (sequence: number): Effect.Effect<boolean, never, SqlClient.SqlClient> =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const rows = yield* sql`SELECT 1 AS present FROM orchestration_events WHERE sequence = ${sequence}`;
+    const rows =
+      yield* sql`SELECT 1 AS present FROM orchestration_events WHERE sequence = ${sequence}`;
     return rows.length > 0;
   }).pipe(Effect.catch(() => Effect.succeed(true)));
 

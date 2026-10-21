@@ -76,7 +76,6 @@ type TempoPage<T> = {
   readonly metadata?: { readonly next?: string };
 };
 
-
 async function tempoGetAllPages<T>(token: string, firstUrl: string): Promise<T[]> {
   const collected: T[] = [];
   let url: string | undefined = firstUrl;
@@ -107,7 +106,6 @@ function fetchUserPlans(token: string, accountId: string, from: string, to: stri
   const url = `${TEMPO_BASE_URL}/plans/user/${encodeURIComponent(accountId)}?from=${from}&to=${to}&limit=${TEMPO_PAGE_LIMIT}`;
   return tempoGetAllPages<TempoPlan>(token, url);
 }
-
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 

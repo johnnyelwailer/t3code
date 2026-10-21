@@ -37,10 +37,8 @@ export const STOP_MODES: readonly { mode: StopMode; label: string }[] = [
   { mode: "auto", label: "Automatisch senden" },
 ];
 
-
 /** Number of waveform bars rendered inside the recording pill. */
 export const BAR_COUNT = 6;
-
 
 /** Average level below which the stream counts as silence. */
 export const SILENCE_ENERGY_THRESHOLD = 0.2;
@@ -48,7 +46,6 @@ export const SILENCE_ENERGY_THRESHOLD = 0.2;
 export const AUTO_SEND_PAUSE_MS: Record<Extract<StopMode, "auto">, number> = {
   auto: 3000,
 };
-
 
 /** Delay between aborting and restarting recognition on a language switch. */
 export const LANGUAGE_SWITCH_DELAY_MS = 150;

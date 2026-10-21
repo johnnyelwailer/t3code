@@ -79,9 +79,7 @@ describe("ComposerPendingUserInputPanel markdown", () => {
           id: "question-md",
           header: "CR header",
           question: "## Context\n\nThe **header** is too long; *drop* it?",
-          options: [
-            { label: "Drop it", description: "Removes the chip; keeps the *panel*" },
-          ],
+          options: [{ label: "Drop it", description: "Removes the chip; keeps the *panel*" }],
           multiSelect: false,
         },
       ],
@@ -110,7 +108,9 @@ describe("ComposerPendingUserInputPanel markdown", () => {
       ],
     });
 
-    expect(markup).toMatch(/Two options are ready\.<br>\s*A ships this week\.<br>\s*B needs review\./);
+    expect(markup).toMatch(
+      /Two options are ready\.<br>\s*A ships this week\.<br>\s*B needs review\./,
+    );
     expect(markup).toContain("<p>Which first?</p>");
     expect(markup).toMatch(/Smallest change<br>\s*No migration/);
   });

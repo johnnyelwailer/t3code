@@ -13,6 +13,14 @@ const T3TEAM_REACT_COMPILER_PENDING_FILES = NodeFS.readFileSync(
   .split("\n")
   .filter((line) => line.length > 0 && !line.startsWith("#"));
 
+// t3team: TEMPORARY exemption pending owner decision; see t3team-lint-pending.txt.
+const T3TEAM_LINT_PENDING_FILES = NodeFS.readFileSync(
+  NodeURL.fileURLToPath(new URL("./t3team-lint-pending.txt", import.meta.url)),
+  "utf8",
+)
+  .split("\n")
+  .filter((line) => line.length > 0 && !line.startsWith("#"));
+
 const DOM_TEST_ENVIRONMENT_ALLOWLIST: Array<string> = [];
 
 const RESTRICTED_IMPORT_PATHS = [
@@ -476,6 +484,20 @@ export default defineConfig({
           "react/unsupported-syntax": "off",
           "t3code/no-manual-memo": "off",
           "t3code/no-hookless-use-function": "off",
+        },
+      },
+      {
+        // t3team: TEMPORARY exemption pending owner decision (see t3team-lint-pending.txt).
+        files: [...T3TEAM_LINT_PENDING_FILES],
+        rules: {
+          "t3code/no-dom-test-environment": "off",
+          "t3code/no-manual-memo": "off",
+          "t3code/no-real-time-wait-in-tests": "off",
+          "t3code/no-test-timeout-or-unreasoned-skip": "off",
+          "t3code/no-wall-clock-in-tests": "off",
+          "t3code/prefer-effect-fn": "off",
+          "t3code/require-disposable-render": "off",
+          "react/memo-dependencies": "off",
         },
       },
       {

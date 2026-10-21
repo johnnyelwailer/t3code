@@ -79,7 +79,6 @@ const stamp = Date.now();
 return { stamp };
 `;
 
-
 const fakeRow = (overrides: Partial<WorkflowRun> = {}): WorkflowRun => ({
   ...buildRunningWorkflowRunRow({
     runId: "run-guard",

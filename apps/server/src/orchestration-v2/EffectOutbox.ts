@@ -576,8 +576,8 @@ export const layer: Layer.Layer<EffectOutboxV2, never, SqlClient.SqlClient> = La
         },
         Effect.mapError((cause) => new EffectOutboxError({ operation: "claim", cause })),
       ),
-      renewLease: ({ effectId, workerId, leaseDurationMs }) =>
-        Effect.gen(function* () {
+      renewLease: Effect.fn("EffectOutbox.renewLease")(
+        function* ({ effectId, workerId, leaseDurationMs }) {
           const now = yield* DateTime.now;
           const leaseExpiresAt = DateTime.formatIso(
             DateTime.add(now, { milliseconds: Math.max(1, leaseDurationMs) }),
@@ -591,9 +591,9 @@ export const layer: Layer.Layer<EffectOutboxV2, never, SqlClient.SqlClient> = La
             RETURNING effect_id
           `.pipe(Effect.withTracerEnabled(false));
           return rows.length === 1;
-        }).pipe(
-          Effect.mapError((cause) => new EffectOutboxError({ operation: "renew-lease", cause })),
-        ),
+        },
+        Effect.mapError((cause) => new EffectOutboxError({ operation: "renew-lease", cause })),
+      ),
       nextClaimableAt: Effect.gen(function* () {
         const rows = yield* sql<{ readonly available_at: string | null }>`
           SELECT MIN(candidate.available_at) AS available_at

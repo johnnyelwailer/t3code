@@ -441,8 +441,12 @@ export const layer: Layer.Layer<
       },
     );
 
-    const planUpdatedEvent = (input: ProviderEventIngestInput, plan: OrchestrationV2PlanArtifact) =>
-      Effect.gen(function* () {
+    const planUpdatedEvent =
+      /* This helper runs for individual orchestration events; the enclosing operation owns the span. */
+      Effect.fnUntraced(function* (
+        input: ProviderEventIngestInput,
+        plan: OrchestrationV2PlanArtifact,
+      ) {
         const occurredAt = yield* DateTime.now;
         const previous =
           plan.kind === "todo_list"
@@ -469,11 +473,12 @@ export const layer: Layer.Layer<
     // Some drivers (the Nexplore pack) report a todo list only as a turn item.
     // The composer reads plan artifacts, so mirror the item into its plan unless
     // the provider already reported that plan with the same steps.
-    const planFromTodoListItem = (
-      input: ProviderEventIngestInput,
-      item: Extract<OrchestrationV2TurnItem, { readonly type: "todo_list" }>,
-    ) =>
-      Effect.gen(function* () {
+    const planFromTodoListItem =
+      /* This helper runs for individual orchestration events; the enclosing operation owns the span. */
+      Effect.fnUntraced(function* (
+        input: ProviderEventIngestInput,
+        item: Extract<OrchestrationV2TurnItem, { readonly type: "todo_list" }>,
+      ) {
         if (item.nodeId === null) return [];
         const previous = yield* projections.getPlan(item.threadId, item.planId);
         if (

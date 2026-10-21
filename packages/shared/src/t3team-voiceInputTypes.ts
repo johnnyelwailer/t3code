@@ -27,7 +27,6 @@ export interface VoiceInputOptions {
   singleUtterance?: boolean;
 }
 
-
 export interface SpeechRecognitionAlternative {
   transcript: string;
   confidence: number;

@@ -249,16 +249,15 @@ export const make = Effect.gen(function* () {
   };
 
   /** t3team: shares one read per key across callers within the request's `coalesce.ttl`. */
-  const coalescedRead = (
+  const coalescedRead = Effect.fn("GitHubRest.coalescedRead")(function* (
     input: GitHubRestInput & { readonly coalesce: NonNullable<GitHubRestInput["coalesce"]> },
     sendRequest: Effect.Effect<GitHubRestResponse, GitHubApiError>,
-  ) =>
-    Effect.gen(function* () {
-      const host = normalizeHost(input.host);
-      const { fingerprint } = yield* policy.credential(host);
-      const scope = (yield* SourceControlRateLimit.CredentialScope) || fingerprint;
-      return yield* reads.share(readKey(host, scope, input), input.coalesce.ttl, sendRequest);
-    });
+  ) {
+    const host = normalizeHost(input.host);
+    const { fingerprint } = yield* policy.credential(host);
+    const scope = (yield* SourceControlRateLimit.CredentialScope) || fingerprint;
+    return yield* reads.share(readKey(host, scope, input), input.coalesce.ttl, sendRequest);
+  });
 
   return GitHubRest.of({ rest, credential: policy.credential });
 });

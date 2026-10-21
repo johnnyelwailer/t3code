@@ -33,7 +33,6 @@ import { deriveDotState, type ActiveAgentEntry } from "~/t3team/chat/t3team-acti
  *   panel under the row).
  */
 
-
 type SeedAgent = {
   readonly title: string;
   readonly statusLabel: string;
@@ -85,7 +84,6 @@ function buildEntries(
   }));
   return [...children, ...subagents];
 }
-
 
 type ActiveAgentsIndicatorStoryProps = {
   activeChildren: number;
