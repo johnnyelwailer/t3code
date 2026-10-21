@@ -137,6 +137,42 @@ it.layer(TestLayer)("project main repository", (it) => {
     }),
   );
 
+  it.effect("switches instantly: records the manifest and copies no state inline", () =>
+    Effect.gen(function* () {
+      const { home, alpha } = makeProject();
+      // A real project (Windows, Oct 21) had 70k files / 5.5 GB of state; copying it inline made
+      // every switch outlast the client's request timeout and left it unrecorded. State now
+      // moves in the background (t3team-projectStateMigration.test.ts).
+      for (let index = 0; index < 4000; index += 1) {
+        const sha = index.toString(16).padStart(64, "0");
+        write(state(home, "context", "_blobs", sha.slice(0, 2), sha), `blob ${index}\n`);
+      }
+      write(state(home, "context", "jira", "IES-1.json"), "{}\n");
+      const startedAt = performance.now();
+      const result = yield* switchProjectMainRepository({
+        project: { workspaceRoot: home },
+        url: "https://github.com/acme/alpha",
+        selection: "user",
+      });
+      const elapsedMs = performance.now() - startedAt;
+
+      expect(result.changed).toBe(true);
+      expect(result.workspaceRoot).toBe(alpha);
+      expect(result.migratedPaths).toEqual([]);
+      expect(NodeFS.existsSync(state(alpha, "context"))).toBe(false);
+      const manifest = JSON.parse(
+        NodeFS.readFileSync(state(alpha, "references", "reference-repositories.json"), "utf8"),
+      );
+      expect(manifest.mainRepository).toMatchObject({
+        url: "https://github.com/acme/alpha",
+        localPath: alpha,
+      });
+      expect(elapsedMs).toBeLessThan(500);
+      const gitignore = NodeFS.readFileSync(NodePath.join(alpha, ".gitignore"), "utf8");
+      expect(gitignore).toContain(`${HIDDEN_T3TEAM_DIR}/context/_blobs/`);
+    }),
+  );
+
   it.effect("switches to a linked clone, records it in the manifest, and can switch back", () =>
     Effect.gen(function* () {
       const { home, alpha } = makeProject();

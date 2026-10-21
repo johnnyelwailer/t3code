@@ -250,7 +250,10 @@ import {
 } from "./t3team-github-routes.ts";
 import { t3teamProjectWorkspaceBootstrapRouteLayer } from "./t3team-project-repository-routes.ts";
 import { T3TeamLinkedRepositorySyncLive } from "./t3team-linkedRepositorySync.ts";
-import { t3teamProjectMainRepositoryRouteLayer } from "./t3team-projectMainRepositoryRoute.ts";
+import {
+  t3teamProjectMainRepositoryRouteLayer,
+  t3teamStateMigrationResumeLayer,
+} from "./t3team-projectMainRepositoryRoute.ts";
 import { t3teamThreadToolContextRouteLayer } from "./t3team-thread-tool-context-routes.ts";
 import { t3teamThreadPlacementRouteLayer } from "./t3team-thread-placement-routes.ts";
 import { t3teamVoiceRouteLayer } from "./t3team-voice-routes.ts";
@@ -1088,6 +1091,7 @@ const layerMakeRoutes = Layer.mergeAll(
     t3teamGitHubPullRequestContextRouteLayer,
     t3teamProjectWorkspaceBootstrapRouteLayer,
     t3teamProjectMainRepositoryRouteLayer,
+    t3teamStateMigrationResumeLayer,
     t3teamProjectWorkspaceDiscoverRecipesRouteLayer,
     t3teamProjectWorkspaceWriteContextFilesRouteLayer,
     t3teamProjectWorkspaceRefreshProjectContextRouteLayer,

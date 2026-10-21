@@ -15,6 +15,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
+import { T3TEAM_CONTEXT_BLOB_DIR_SEGMENTS } from "./t3team-context-blob-store-utils.ts";
 import { normalizeProjectContextStateFile } from "./t3team-projectContextStatePaths.ts";
 
 import {
@@ -50,10 +51,14 @@ export const detectMainRepositoryCandidates = Effect.fn("detectMainRepositoryCan
 
 /** Entries never copied by a migration: reference clones and child worktrees stay where they
  * are (the copied reference manifest keeps pointing at them by absolute path), and copying a
- * git worktree would orphan it. */
+ * git worktree would orphan it. The context blob cache is skipped too: it is re-creatable,
+ * purgeable cache that can hold tens of thousands of files and gigabytes (a real project had
+ * 70k blobs / 5.5 GB), and copying it inline made every switch outlast the request. */
 const isMigrationExcluded = (relativeSegments: ReadonlyArray<string>): boolean => {
   const [top, second] = relativeSegments;
   if (top === CHILD_WORKTREES_DIR_NAME) return true;
+  if (top === T3TEAM_CONTEXT_BLOB_DIR_SEGMENTS[0] && second === T3TEAM_CONTEXT_BLOB_DIR_SEGMENTS[1])
+    return true;
   return top === REFERENCES_DIR_NAME && second !== undefined && second !== MANIFEST_FILE_NAME;
 };
 
