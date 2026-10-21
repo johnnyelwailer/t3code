@@ -131,10 +131,15 @@ export interface SidecarSectionRegistration {
 // ── surface.companion ────────────────────────────────────────────────────────────────────────
 
 /**
- * Where the host mounts a companion: My Work's first-load state, My Work with nothing in it, and a
- * new thread (the draft hero above the composer, or an empty timeline).
+ * Where the host mounts a companion: My Work's first-load state, My Work with nothing in it, a
+ * new thread (the draft hero above the composer, or an empty timeline), and the floating voice
+ * overlay (beside its card, while a recording is live; the host caps it at the `low` tier).
  */
-export type SurfaceCompanionPlacement = "myWork.loading" | "myWork.empty" | "thread.new";
+export type SurfaceCompanionPlacement =
+  | "myWork.loading"
+  | "myWork.empty"
+  | "thread.new"
+  | "voice.overlay";
 
 /**
  * What the surface is going through, in host terms; a companion maps it to its own behaviour.
@@ -142,9 +147,21 @@ export type SurfaceCompanionPlacement = "myWork.loading" | "myWork.empty" | "thr
  *   • `empty`     — there is nothing here (and was not a moment ago, or never was);
  *   • `cleared`   — the viewer just emptied it (the last item went away while it was on screen);
  *   • `newThread` — a conversation that has not started;
- *   • `flying`    — dedicated airborne beat (arriving / in transit); optional, pack-driven.
+ *   • `flying`    — dedicated airborne beat (arriving / in transit); optional, pack-driven;
+ *   • voice (`voice.overlay`): `preparing` (the recognizer warms up), `listening` (recording),
+ *     `transcribing`, `heard` (the text was committed), `failed` (an error, or no microphone).
  */
-export type SurfaceCompanionMood = "loading" | "empty" | "cleared" | "newThread" | "flying";
+export type SurfaceCompanionMood =
+  | "loading"
+  | "empty"
+  | "cleared"
+  | "newThread"
+  | "flying"
+  | "preparing"
+  | "listening"
+  | "transcribing"
+  | "heard"
+  | "failed";
 
 /** `sm` sits beside a line of text (~48px), `md` above a heading (~120px), `lg` alone (~200px). */
 export type SurfaceCompanionSize = "sm" | "md" | "lg";
