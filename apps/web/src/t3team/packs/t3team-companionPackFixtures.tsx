@@ -1,7 +1,7 @@
 /**
  * Fixture `surface.companion` packs, written as a distribution pack's `web/index.ts` would be:
  * only `@t3team/pack-ui` and `react`. A neutral "blob" companion fills My Work's empty and
- * loading placements; a "grumpy" one claims a new thread and throws, to show a crashing companion
+ * loading placements and the voice overlay; a "grumpy" one claims a new thread and throws, to show a crashing companion
  * leaves the surface's own default in its place.
  *
  * Used by the companion tests and stories; not part of the app.
@@ -44,7 +44,7 @@ export const blobCompanionPackWebModule: PackWebActivation = {
     context.registerView({
       slot: "surface.companion",
       id: "blob.companion",
-      placements: ["myWork.empty", "myWork.loading"],
+      placements: ["myWork.empty", "myWork.loading", "voice.overlay"],
       component: BlobCompanion,
     });
   }),
