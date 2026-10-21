@@ -32,6 +32,7 @@ export declare const TooltipPopup: PackUiHostKit["TooltipPopup"];
 export declare const Markdown: PackUiHostKit["Markdown"];
 export declare const WidgetFrame: PackUiHostKit["WidgetFrame"];
 export declare const Icon: PackUiHostKit["Icon"];
+export declare const ModelStage: PackUiHostKit["ModelStage"];
 export declare const useMediaQuery: PackUiHostKit["useMediaQuery"];
 export declare const useReducedMotion: PackUiHostKit["useReducedMotion"];
 export declare const observeVisibleAnimation: PackUiHostKit["observeVisibleAnimation"];

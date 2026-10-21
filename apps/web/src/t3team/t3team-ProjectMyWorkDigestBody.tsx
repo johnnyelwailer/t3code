@@ -10,6 +10,7 @@ import { DashboardWidget } from "~/t3team/t3team-dashboardWidgetRegistry";
 import { MyWorkLoadingLanesPlaceholder } from "~/t3team/t3team-MyWorkLoadingAnimation";
 import { DigestArrangementBar } from "~/t3team/t3team-ProjectMyWorkDigestArrangementBar";
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
+import { T3TeamCompanionSlot, useJustCleared } from "~/t3team/packs/t3team-CompanionSlot";
 import {
   ProjectMyWorkDigestHeader,
   type DigestBurndownVariant,
@@ -20,6 +21,18 @@ import type { DigestGraph, ResolvedDigestPlan } from "~/t3team/t3team-projectMyW
  * A lone footer section spans the row; the 2/3-column split only applies once there is more than
  * one, so a single "Parked" card never gets squeezed into a third of the width.
  */
+/** A pack's companion above "Nothing needs you"; nothing at all without one. */
+function DigestEmptyCompanion({ cleared }: { cleared: boolean }) {
+  return (
+    <T3TeamCompanionSlot
+      placement="myWork.empty"
+      mood={cleared ? "cleared" : "empty"}
+      size="md"
+      className="mx-auto mb-3 flex justify-center"
+    />
+  );
+}
+
 function footerGridColumns(count: number): string {
   if (count >= 3) return "@3xl/digest:grid-cols-2 @6xl/digest:grid-cols-3";
   return count === 2 ? "@3xl/digest:grid-cols-2" : "";
@@ -69,6 +82,9 @@ export function ProjectMyWorkDigestBody({
     jiraNoticeShown: jiraNotice !== null,
     jiraSyncPending: graph.jiraSyncPending === true,
   });
+  // The companion says `cleared` for a while when the lanes' last item went away on screen (not
+  // when they were empty from the first answer).
+  const justCleared = useJustCleared(plan.sections.every((s) => s.placement === "footer"));
   const arranged = graph.arrangement ? (
     <DigestArrangementBar
       arrangement={graph.arrangement}
@@ -87,6 +103,7 @@ export function ProjectMyWorkDigestBody({
             tone="dashed"
             className="px-6 py-10 text-center text-sm text-muted-foreground"
           >
+            <DigestEmptyCompanion cleared={justCleared} />
             Nothing needs you
           </T3SurfacePanel>
         ) : emptyLanes === "loading" ? (
@@ -114,6 +131,7 @@ export function ProjectMyWorkDigestBody({
             tone="dashed"
             className="px-6 py-6 text-center text-sm text-muted-foreground"
           >
+            <DigestEmptyCompanion cleared={justCleared} />
             Nothing needs you right now
           </T3SurfacePanel>
         ) : emptyLanes === "loading" ? (

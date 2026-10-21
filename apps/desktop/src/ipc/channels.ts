@@ -43,6 +43,8 @@ export const APPLY_SNAP_SHOT_CONFIG_CHANNEL = "desktop:apply-snap-shot-config";
 export const REQUEST_SNAP_SHOT_PERMISSIONS_CHANNEL = "desktop:request-snap-shot-permissions";
 export const GET_SNAP_SHOT_STATE_CHANNEL = "desktop:get-snap-shot-state";
 export const GET_VOICE_HOTKEY_STATE_CHANNEL = "desktop:get-voice-hotkey-state";
+export const GET_POWER_STATE_CHANNEL = "desktop:t3team-get-power-state";
+export const POWER_STATE_CHANGED_CHANNEL = "desktop:t3team-power-state-changed";
 export const CHECK_SNAP_SHOT_SHORTCUT_CHANNEL = "desktop:check-snap-shot-shortcut";
 export const SET_SNAP_SHOT_SHORTCUT_SUPPRESSED_CHANNEL =
   "desktop:set-snap-shot-shortcut-suppressed";

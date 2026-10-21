@@ -348,6 +348,7 @@ import { useNowMinute } from "../hooks/useNowMinute";
 import { usePanelAnimationSettings, usePanelPresence } from "../panelAnimations";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionComposerGate";
+import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
 import { useCloudSessionOwnProject } from "~/cloud/t3team-useCloudSessionOwnProject";
 import { logicalProjectPerEnvironment } from "~/cloud/t3team-cloudSessionOwnProject";
 import { useCloudQueuedSendOptimisticMessage } from "~/cloud/t3team-useCloudQueuedSendOptimisticMessage";
@@ -12125,6 +12126,12 @@ export default function ChatView(props: ChatViewProps) {
                             : undefined
                         }
                       >
+                        <T3TeamCompanionSlot
+                          placement="thread.new"
+                          mood="newThread"
+                          size="md"
+                          className="mb-2 flex justify-center"
+                        />
                         <DraftHeroHeadline
                           draftId={draftId}
                           activeProjectRef={activeProjectRef}
