@@ -392,6 +392,7 @@
     "apps/web/src/components/settings/ConnectionsSettings.tsx",
     "apps/web/src/components/settings/DiagnosticsSettings.tsx",
     "apps/web/src/components/settings/EnvironmentRow.tsx",
+    "apps/web/src/components/settings/GitHubAccountSettings.tsx",
     "apps/web/src/components/settings/KeybindingsSettings.tsx",
     "apps/web/src/components/settings/ProjectSettingsPanel.tsx",
     "apps/web/src/components/settings/ProviderSettingsPanel.tsx",

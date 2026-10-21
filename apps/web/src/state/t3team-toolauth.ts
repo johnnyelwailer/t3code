@@ -20,12 +20,24 @@ import { useAtomCommand } from "./use-atom-command";
 
 export const toolAuthEnvironment = createToolAuthEnvironmentAtoms(connectionAtomRuntime);
 
-/** Live per-tool sign-in status for the given environment (snapshot + live updates). */
-export function useToolAuthStates(environmentId: EnvironmentId | null): ToolAuthStatesByTool {
+/**
+ * Live per-tool sign-in status (snapshot + live updates). `recheck` resubscribes, so the server
+ * asks each CLI again: a sign-in done outside the app (`gh auth login` in a terminal) reaches no
+ * live update on its own.
+ */
+export function useToolAuthStatesQuery(environmentId: EnvironmentId | null): {
+  readonly states: ToolAuthStatesByTool;
+  readonly recheck: () => void;
+} {
   const query = useEnvironmentQuery(
     environmentId === null ? null : toolAuthEnvironment.stream({ environmentId, input: null }),
   );
-  return query.data ?? new Map();
+  return { states: query.data ?? new Map(), recheck: query.refresh };
+}
+
+/** Live per-tool sign-in status for the given environment (snapshot + live updates). */
+export function useToolAuthStates(environmentId: EnvironmentId | null): ToolAuthStatesByTool {
+  return useToolAuthStatesQuery(environmentId).states;
 }
 
 function reportToolAuthFailure(

@@ -14,6 +14,7 @@ import {
   makeService,
   makeTempHome,
   removeTempHome,
+  stubProbeRunner,
   waitFor,
 } from "./t3team-toolauthTestHarness.ts";
 
@@ -404,10 +405,11 @@ describe("ToolAuthService", () => {
           const homeDir = makeTempHome();
           try {
             const binaryCheck = makeControllableBinaryCheck(false);
-            const { service, ptyAdapter } = yield* makeService(homeDir, {
-              tools: ["gh"],
-              checkBinaryAvailable: binaryCheck.check,
-            });
+            const { service, ptyAdapter } = yield* makeService(
+              homeDir,
+              { tools: ["gh"], checkBinaryAvailable: binaryCheck.check },
+              stubProbeRunner("You are not logged into any GitHub hosts."),
+            );
             const state = yield* service.start("gh");
             expect(state.phase).toBe("failed");
             expect(state.message).toContain("gh is not installed on this machine");
