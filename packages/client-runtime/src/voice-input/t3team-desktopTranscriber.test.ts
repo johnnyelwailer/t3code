@@ -5,7 +5,7 @@ import {
   type DesktopVoiceBridge,
 } from "./t3team-desktopTranscriber.ts";
 
-const config = { model: "large-v3-turbo", modelPath: "", language: "de" };
+const config = { model: "large-v3-turbo", modelPath: "", language: "de", silenceMs: 1500 };
 
 function makeBridge(overrides: Partial<DesktopVoiceBridge> = {}): DesktopVoiceBridge {
   return {
@@ -44,6 +44,24 @@ describe("createDesktopVoiceTranscriber", () => {
     expect(bridge.transcribeVoice).toHaveBeenCalledWith({ config, pcm16Base64: "UENN" });
     expect(prepared.locale).toBe("de");
     expect(text).toBe("hallo welt");
+  });
+
+  it("reads the settings again at transcription time, so a language locked while recording applies", async () => {
+    const bridge = makeBridge();
+    let language = "auto";
+    const prepared = await createDesktopVoiceTranscriber({
+      bridge,
+      getConfig: () => ({ ...config, language }),
+      decodeRecording: async () => "UENN",
+    }).prepare({ signal: signal() });
+
+    language = "en";
+    await prepared.transcribe("blob:recording", { signal: signal() });
+
+    expect(bridge.transcribeVoice).toHaveBeenCalledWith({
+      config: { ...config, language: "en" },
+      pcm16Base64: "UENN",
+    });
   });
 
   it("returns an empty transcript for a silence hallucination", async () => {

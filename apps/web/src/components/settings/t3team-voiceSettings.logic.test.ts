@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { nonEmptyVoiceField, voiceHotkeyStatus } from "./t3team-voiceSettings.logic";
+import {
+  nonEmptyVoiceField,
+  voiceSilenceMsField,
+  voiceHotkeyStatus,
+} from "./t3team-voiceSettings.logic";
 
 describe("voiceHotkeyStatus", () => {
   it("says nothing before the main process has answered", () => {
@@ -48,5 +52,19 @@ describe("nonEmptyVoiceField", () => {
   it("trims, and refuses a cleared field", () => {
     expect(nonEmptyVoiceField("  large-v3  ")).toBe("large-v3");
     expect(nonEmptyVoiceField("   ")).toBeNull();
+  });
+});
+
+describe("voiceSilenceMsField", () => {
+  it("reads whole milliseconds and clamps to what the setting accepts", () => {
+    expect(voiceSilenceMsField(" 1200 ")).toBe(1200);
+    expect(voiceSilenceMsField("0")).toBe(0);
+    expect(voiceSilenceMsField("-5")).toBe(0);
+    expect(voiceSilenceMsField("999999")).toBe(10_000);
+  });
+
+  it("refuses text that is not a number", () => {
+    expect(voiceSilenceMsField("soon")).toBeNull();
+    expect(voiceSilenceMsField("")).toBeNull();
   });
 });

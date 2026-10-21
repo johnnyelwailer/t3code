@@ -21,6 +21,13 @@ import type {
   DesktopVoiceTranscribeRequest,
   DesktopVoiceTranscribeResult,
 } from "./t3team-desktopVoice.ts";
+import type {
+  DesktopVoiceStreamEvent,
+  DesktopVoiceStreamPushRequest,
+  DesktopVoiceStreamStartRequest,
+  DesktopVoiceStreamStartResult,
+  DesktopVoiceStreamStopRequest,
+} from "./t3team-desktopVoiceStream.ts";
 import type { DesktopVoiceHotkeyState } from "./t3team-voiceHotkey.ts";
 
 import type {
@@ -1189,6 +1196,13 @@ export interface DesktopBridge {
   ) => Promise<DesktopVoiceTranscribeResult>;
   /** Progress of the first-use model download behind `prepareVoiceTranscriber`. */
   onVoiceModelProgress?: (listener: (progress: DesktopVoiceModelProgress) => void) => () => void;
+  /** Live transcription of a recording: audio goes in as chunks, levels and partials come back. */
+  startVoiceStream?: (
+    request: DesktopVoiceStreamStartRequest,
+  ) => Promise<DesktopVoiceStreamStartResult>;
+  pushVoiceStream?: (request: DesktopVoiceStreamPushRequest) => Promise<void>;
+  stopVoiceStream?: (request: DesktopVoiceStreamStopRequest) => Promise<void>;
+  onVoiceStream?: (listener: (event: DesktopVoiceStreamEvent) => void) => () => void;
   ensureSshEnvironment: (
     target: DesktopSshEnvironmentTarget,
     options?: { issuePairingToken?: boolean },

@@ -9,6 +9,7 @@ describe("voice transcriber settings", () => {
       model: "large-v3-turbo",
       modelPath: "",
       language: "auto",
+      silenceMs: 1500,
     });
   });
 
@@ -20,6 +21,7 @@ describe("voice transcriber settings", () => {
       model: "large-v3-turbo",
       modelPath: "E:/models/ggml-largev3.bin",
       language: "de",
+      silenceMs: 1500,
     });
 
     const cleared = applyServerSettingsPatch(withPath, {

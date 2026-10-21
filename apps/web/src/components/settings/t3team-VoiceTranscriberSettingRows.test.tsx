@@ -14,7 +14,12 @@ import { VoiceTranscriberSettingRows } from "./t3team-VoiceTranscriberSettingRow
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
-const DEFAULT_TRANSCRIBER = { model: "large-v3-turbo", modelPath: "", language: "auto" };
+const DEFAULT_TRANSCRIBER = {
+  model: "large-v3-turbo",
+  modelPath: "",
+  language: "auto",
+  silenceMs: 1500,
+};
 
 function render(transcriber = DEFAULT_TRANSCRIBER, onChange = vi.fn()) {
   container = document.createElement("div");
@@ -55,7 +60,12 @@ function edit(el: HTMLInputElement, value: string) {
 
 describe("VoiceTranscriberSettingRows", () => {
   it("shows model, model file and language with the saved values", () => {
-    const { node } = render({ model: "small", modelPath: "C:/m/ggml-small.bin", language: "de" });
+    const { node } = render({
+      model: "small",
+      modelPath: "C:/m/ggml-small.bin",
+      language: "de",
+      silenceMs: 1500,
+    });
     expect(input(node, "Voice model").value).toBe("small");
     expect(input(node, "Voice model file").value).toBe("C:/m/ggml-small.bin");
     expect(input(node, "Voice language").value).toBe("de");

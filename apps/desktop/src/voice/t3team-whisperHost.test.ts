@@ -64,6 +64,21 @@ function makeSentinel(blocked = false) {
 
 const input = { modelPath: "m.bin", pcm16Base64: "AAAA", language: "en" };
 
+describe("whisper host warm-up", () => {
+  it("loads the model and settles the sentinel like a first transcription would", async () => {
+    const { state, sentinel } = makeSentinel();
+    const workers = makeFakeWorkers();
+    const host = makeWhisperHost({ ...workers, sentinel });
+
+    await host.warm("m.bin");
+    expect(state).toMatchObject({ armed: 1, cleared: 1 });
+    expect(workers.spawned).toHaveLength(1);
+
+    await host.transcribe(input);
+    expect(workers.spawned).toHaveLength(1);
+  });
+});
+
 describe("whisper host policies", () => {
   it("arms the sentinel before a GPU load and clears it after the first success", async () => {
     const { state, sentinel } = makeSentinel();

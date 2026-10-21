@@ -29,7 +29,8 @@ export type DesktopVoiceRecordingDecoder = (uri: string) => Promise<string>;
 /**
  * Batch transcriber for the Electron desktop app: one recording becomes one `transcribe` call on the
  * native whisper host in the main process. The model and language come from `getConfig` (server
- * settings), never from constants here.
+ * settings), never from constants here; the transcribe call reads it again, so a language the
+ * live stream locked while recording applies to the final pass.
  */
 export function createDesktopVoiceTranscriber(input: {
   readonly bridge: DesktopVoiceBridge;
@@ -54,7 +55,10 @@ export function createDesktopVoiceTranscriber(input: {
           throwIfVoiceTranscriptionAborted(transcribeOptions.signal);
           const pcm16Base64 = await input.decodeRecording(uri);
           throwIfVoiceTranscriptionAborted(transcribeOptions.signal);
-          const result = await input.bridge.transcribeVoice({ config, pcm16Base64 });
+          const result = await input.bridge.transcribeVoice({
+            config: input.getConfig(),
+            pcm16Base64,
+          });
           throwIfVoiceTranscriptionAborted(transcribeOptions.signal);
           if (!result.ok) throw new VoiceTranscriptionError("transcription-failed", result.message);
           return sanitizeTranscript(result.text);

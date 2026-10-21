@@ -18,6 +18,8 @@ import {
 import type { WhisperHost } from "./t3team-whisperHost.ts";
 
 export type DesktopVoiceService = {
+  /** Best-effort model load; a failure surfaces on the first transcription instead. */
+  readonly warm: (config: DesktopVoiceConfig) => Promise<void>;
   readonly prepare: (input: {
     readonly config: DesktopVoiceConfig;
     readonly allowDownload: boolean;
@@ -29,6 +31,9 @@ export type DesktopVoiceService = {
 };
 
 type ModelResolution = Extract<DesktopVoicePrepareResult, { ok: true }>;
+
+/** Whisper input is 16 kHz mono 16-bit PCM, so base64 length maps straight to seconds. */
+const pcmSeconds = (pcm16Base64: string) => Math.round((pcm16Base64.length * 0.75) / 32_000);
 
 const failure = (code: "runtime-unavailable" | "model-unavailable", message: string) =>
   ({ ok: false, code, message }) as const;
@@ -83,6 +88,13 @@ export function makeDesktopVoiceService(deps: {
   };
 
   return {
+    warm: async (config) => {
+      const resolved = await resolveModel(config, false);
+      if (!resolved.ok) return;
+      await deps.host.warm(resolved.modelPath).catch((error: unknown) => {
+        log(`whisper warm-up failed: ${String(error)}`);
+      });
+    },
     prepare: async ({ config, allowDownload }) => {
       const resolved = await resolveModel(config, allowDownload);
       if (resolved.ok) log(`whisper model: ${resolved.modelPath} (${resolved.modelSource})`);
@@ -98,7 +110,11 @@ export function makeDesktopVoiceService(deps: {
           pcm16Base64,
           language: config.language,
         });
-        return { ok: true, ...result, elapsedMs: Date.now() - startedAt };
+        const elapsedMs = Date.now() - startedAt;
+        log(
+          `whisper transcribed ${pcmSeconds(pcm16Base64)} s of audio in ${elapsedMs} ms (${result.acceleration}, language ${result.language ?? "unknown"}, ${result.text.length} chars)`,
+        );
+        return { ok: true, ...result, elapsedMs };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         log(`whisper transcription failed: ${message}`);
