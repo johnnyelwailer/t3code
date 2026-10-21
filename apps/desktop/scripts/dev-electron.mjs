@@ -89,7 +89,7 @@ function listOtherDevElectronSupervisorPids() {
     ["-f", `${desktopDir}/scripts/dev-electron.mjs`],
     { encoding: "utf8" },
   );
-  if (result.status !== 0) {
+  if (result?.status !== 0) {
     return [];
   }
 
@@ -155,7 +155,12 @@ NodeChildProcess.execFileSync(
   { stdio: "inherit" },
 );
 
-await acquireSupervisorLock();
+// Best effort: a lock that cannot be taken must not stop the dev app from starting.
+try {
+  await acquireSupervisorLock();
+} catch {
+  // Upstream's targeted `pkill` cleanup below still retires this checkout's stale processes.
+}
 await waitForDevServer();
 
 const devProtocolClient = resolveDevProtocolClient();
