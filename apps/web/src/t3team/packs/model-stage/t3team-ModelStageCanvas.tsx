@@ -32,6 +32,7 @@ export default function ModelStageCanvas(props: ModelStageCanvasProps) {
     props;
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [scene, setScene] = useState<ModelStageScene | null>(null);
+  const [headroom, setHeadroom] = useState(0);
   const [initialSize] = useState(size);
   const [initialYaw] = useState(yaw);
   const ready = useEffectEvent(() => props.onReady());
@@ -40,6 +41,7 @@ export default function ModelStageCanvas(props: ModelStageCanvasProps) {
     if (canvas === null) return;
     let cancelled = false;
     const stage = new ModelStageScene(canvas, tier, initialSize);
+    stage.onHeadroom = setHeadroom;
     loadModel(src, stage.webgl)
       .then((gltf) => {
         if (cancelled) return;
@@ -78,8 +80,8 @@ export default function ModelStageCanvas(props: ModelStageCanvasProps) {
   return (
     <canvas
       ref={setCanvas}
-      className="pointer-events-none absolute inset-0 transition-opacity duration-300"
-      style={{ width: size, height: size, opacity: scene ? 1 : 0 }}
+      className="pointer-events-none absolute inset-x-0 bottom-0 transition-opacity duration-300"
+      style={{ width: size, height: size + headroom, opacity: scene ? 1 : 0 }}
     />
   );
 }

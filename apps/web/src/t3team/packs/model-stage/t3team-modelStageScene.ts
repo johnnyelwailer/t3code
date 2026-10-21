@@ -10,7 +10,7 @@ import { clone as cloneSkinned } from "three/addons/utils/SkeletonUtils.js";
 import type { ModelStageFlight, ModelStageLookAt as LookAtOptions } from "@t3team/pack-ui/contract";
 
 import { lightStage, toLambert } from "./t3team-modelStageAssets";
-import { ModelStageClips } from "./t3team-modelStageClips";
+import { ModelStageClips, clipRise } from "./t3team-modelStageClips";
 import { ModelStageLookAt } from "./t3team-modelStageLookAt";
 import { ModelStageMotion } from "./t3team-modelStageMotion";
 import type { StagePointer } from "./t3team-modelStagePointer";
@@ -35,11 +35,15 @@ export class ModelStageScene {
   private last = 0;
   private probe: number[] | null;
   private disposed = false;
+  private rise = 0;
+  /** Extra canvas pixels above the stage box (clip root motion); the canvas grows upward. */
+  headroomPx = 0;
+  onHeadroom: ((px: number) => void) | null = null;
 
   constructor(
     canvas: HTMLCanvasElement,
     private readonly tier: WebGLTier,
-    size: number,
+    private size: number,
   ) {
     this.renderer = new THREE.WebGLRenderer({
       canvas,
@@ -77,15 +81,17 @@ export class ModelStageScene {
     model.rotation.y = THREE.MathUtils.degToRad(yawDegrees);
     this.bounds = this.motion.attach(model);
     this.lookAt.setModel(model);
-    this.frameCamera();
     if (gltf.animations.length > 0) {
       this.clips = new ModelStageClips(model, gltf.animations, () => this.wake());
+      this.rise = clipRise(model, gltf.animations);
     }
+    this.frameCamera();
     this.renderFrame(0);
   }
 
   setSize(size: number) {
-    this.renderer.setSize(size, size, false);
+    this.size = size;
+    this.frameCamera();
     this.renderFrame(0);
   }
 
@@ -138,16 +144,25 @@ export class ModelStageScene {
     this.renderer.forceContextLoss();
   }
 
-  /** Frames the rest pose plus the hover's reach, with a little floor for the ground shadow. */
+  /**
+   * Frames the rest pose plus the hover's reach (a `size` square), with a little floor for the
+   * ground shadow; clip root motion widens the view upward and the canvas grows to match.
+   */
   private frameCamera() {
     if (!this.bounds) return;
     const { center, radius } = this.bounds;
     const up = this.motion.reach();
     const half = radius * 0.78 + up / 2;
+    const extra = Math.ceil((this.size * this.rise) / (2 * half));
     const distance = half / Math.tan(THREE.MathUtils.degToRad(16));
-    const y = center.y - radius * 0.08 + up / 2;
+    const y = center.y - radius * 0.08 + up / 2 + this.rise / 2;
+    this.camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan((half + this.rise / 2) / distance));
+    this.camera.aspect = this.size / (this.size + extra);
+    this.camera.updateProjectionMatrix();
     this.camera.position.set(center.x, y + radius * 0.06, center.z + distance);
     this.camera.lookAt(center.x, y, center.z);
+    this.renderer.setSize(this.size, this.size + extra, false);
+    if (extra !== this.headroomPx) this.onHeadroom?.((this.headroomPx = extra));
   }
 
   private animating(): boolean {

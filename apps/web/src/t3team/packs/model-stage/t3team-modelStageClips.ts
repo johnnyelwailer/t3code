@@ -21,6 +21,28 @@ export function padSingleKeyTracks(clip: THREE.AnimationClip) {
   }
 }
 
+/**
+ * How far (world units) any clip lifts the root bone above its rest pose: a jump's root motion.
+ * The stage grows its canvas upward by this much so a hop is not cropped by the framing.
+ */
+export function clipRise(root: THREE.Object3D, clips: ReadonlyArray<THREE.AnimationClip>): number {
+  root.updateMatrixWorld(true);
+  const point = new THREE.Vector3();
+  let rise = 0;
+  for (const track of clips.flatMap((clip) => clip.tracks)) {
+    const { nodeName, propertyName } = THREE.PropertyBinding.parseTrackName(track.name);
+    const node = THREE.PropertyBinding.findNode(root, nodeName) as THREE.Object3D | null;
+    if (propertyName !== "position" || !node?.parent || (node.parent as THREE.Bone).isBone)
+      continue;
+    const restY = node.getWorldPosition(point).y;
+    for (let i = 0; i + 2 < track.values.length; i += 3) {
+      point.fromArray(track.values, i);
+      rise = Math.max(rise, node.parent.localToWorld(point).y - restY);
+    }
+  }
+  return rise;
+}
+
 export class ModelStageClips {
   private readonly mixer: THREE.AnimationMixer;
   private sequence: ReadonlyArray<string> = [];
