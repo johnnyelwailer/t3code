@@ -47,7 +47,7 @@ export class ModelStageMotion {
       map: this.texture,
       transparent: true,
       depthWrite: false,
-      opacity: 0.7,
+      opacity: 0.85,
     });
     this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.shadowMat);
     this.shadow.rotation.x = -Math.PI / 2;
@@ -68,7 +68,7 @@ export class ModelStageMotion {
     this.groundY = sphere.center.y - sphere.radius;
     const span = sphere.radius * 1.35;
     this.shadow.scale.set(span, span * 0.55, 1);
-    this.shadow.position.set(sphere.center.x, this.groundY + 0.002, sphere.center.z);
+    this.shadow.position.set(sphere.center.x, this.groundY + sphere.radius * 0.05, sphere.center.z);
     this.shoulders = [];
     model.traverse((object) => {
       if (!(object as THREE.Bone).isBone) return;
@@ -114,14 +114,14 @@ export class ModelStageMotion {
     const shadowOpacity = !this.showShadow
       ? 0
       : airborne
-        ? Math.max(0, 0.7 * (1 - Math.min(1, liftFrac / 0.28)))
-        : 0.7;
+        ? Math.max(0, 0.85 * (1 - Math.min(1, liftFrac / 0.28)))
+        : 0.85;
     this.shadowMat.opacity = shadowOpacity;
     this.shadow.visible = this.showShadow && shadowOpacity > 0.02;
     // Soften the blob a little more while rising (reads as distance).
     const shrink = airborne ? 1 - Math.min(0.35, liftFrac * 0.6) : 1;
-    this.shadow.scale.x = this.height * 0.78 * shrink;
-    this.shadow.scale.y = this.height * 0.42 * shrink;
+    this.shadow.scale.x = this.height * 0.9 * shrink;
+    this.shadow.scale.y = this.height * 0.48 * shrink;
 
     const flapOn = Boolean(flight && (flight.wingFlap ?? true) && airborne);
     if (flapOn) {

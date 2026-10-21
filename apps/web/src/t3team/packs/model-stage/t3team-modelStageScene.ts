@@ -74,13 +74,15 @@ export class ModelStageScene {
     }
     model.rotation.y = THREE.MathUtils.degToRad(yawDegrees);
     const { center, radius } = this.motion.attach(model);
-    const pad = radius * 0.45; // headroom so a ~0.2-height lift + bob stays in view
+    // Headroom for hover + a little floor under the feet so the ground shadow is not clipped.
+    const pad = radius * 0.45;
+    const floor = radius * 0.2;
     this.camera.position.set(
       center.x,
-      center.y + radius * 0.12 + pad * 0.5,
-      center.z + radius * 2.35,
+      center.y + radius * 0.05 + pad * 0.45 - floor * 0.2,
+      center.z + radius * 2.75,
     );
-    this.camera.lookAt(center.x, center.y + pad * 0.35, center.z);
+    this.camera.lookAt(center.x, center.y + pad * 0.2 - floor * 0.55, center.z);
     this.clips = gltf.animations;
     if (this.clips.length > 0) {
       this.mixer = new THREE.AnimationMixer(model);
