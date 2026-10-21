@@ -80,7 +80,7 @@ export class ModelStageMotion {
       }
     });
     // Prefer shoulders over arms when both exist.
-    const shouldersOnly = this.shoulders.filter((s) => /Shoulder$/.test(s.bone.name));
+    const shouldersOnly = this.shoulders.filter((s) => s.bone.name.endsWith("Shoulder"));
     if (shouldersOnly.length >= 2) this.shoulders = shouldersOnly;
     this.apply(0);
     return sphere;

@@ -109,7 +109,7 @@ export function ModelStage(props: PackModelStageProps) {
         <div
           aria-hidden
           data-model-stage-shadow
-          className="pointer-events-none absolute left-1/2 rounded-[50%]"
+          className="pointer-events-none absolute left-1/2 rounded-full"
           style={{
             width: size * 0.7,
             height: size * 0.2,

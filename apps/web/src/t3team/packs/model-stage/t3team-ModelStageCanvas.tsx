@@ -66,17 +66,7 @@ export default function ModelStageCanvas(props: ModelStageCanvasProps) {
     if (oneShotKey !== undefined && oneShotClip !== undefined) scene?.playOnce(oneShotClip);
   }, [scene, oneShotKey, oneShotClip]);
 
-  const flightKey = flight
-    ? `${flight.lift}\0${flight.bobAmp ?? ""}\0${flight.bobHz ?? ""}\0${flight.wingFlap ?? ""}`
-    : "";
-  useEffect(() => {
-    if (!scene) return;
-    if (!flight) {
-      scene.setFlight(null);
-      return;
-    }
-    scene.setFlight(flight);
-  }, [scene, flightKey, flight]);
+  useEffect(() => scene?.setFlight(flight), [scene, flight]);
   useEffect(() => scene?.setGroundShadow(groundShadow), [scene, groundShadow]);
   useEffect(() => scene?.setRunning(visible), [scene, visible]);
 
