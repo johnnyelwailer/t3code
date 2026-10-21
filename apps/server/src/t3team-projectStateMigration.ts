@@ -42,7 +42,7 @@ export class StateMigrationIoError extends Data.TaggedError("StateMigrationIoErr
 export const io = <A>(run: () => Promise<A>): Effect.Effect<A, StateMigrationIoError> =>
   Effect.tryPromise({ try: run, catch: (cause) => new StateMigrationIoError({ cause }) });
 
-export const STATE_MIGRATION_JOURNAL_FILE = "main-repository-migration.json";
+const STATE_MIGRATION_JOURNAL_FILE = "main-repository-migration.json";
 /** Suffixes of the job's working names next to an entry (see the swap in the run module). */
 export const MIGRATING_SUFFIX = ".nexi-migrating";
 export const LINK_OLD_SUFFIX = ".nexi-link-old";
@@ -105,7 +105,7 @@ export const isStateMigrationExcluded = (segments: ReadonlyArray<string>): boole
   );
 };
 
-export const stateMigrationJournalPath = (toRoot: string) =>
+const stateMigrationJournalPath = (toRoot: string) =>
   NodePath.join(toRoot, HIDDEN_T3TEAM_DIR, REFERENCES_DIR_NAME, STATE_MIGRATION_JOURNAL_FILE);
 
 export const readStateMigrationJournal = (toRoot: string) =>

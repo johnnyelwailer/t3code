@@ -85,7 +85,7 @@ export const createDirectoryLink = (input: {
 
 /** Upper bound on the filesystem probes the instant phase makes; anything past it is merged by
  * the background job, so a switch stays well under a second on any state size. */
-export const LINK_PHASE_PROBE_BUDGET = 400;
+const LINK_PHASE_PROBE_BUDGET = 400;
 
 /**
  * The instant phase of a switch: plans the migration of `fromRoot`'s state dir into `toRoot`,
