@@ -13,11 +13,11 @@ import {
   withVoiceLiveState,
   type VoiceThreadShell,
 } from "./t3team-voiceLiveState";
-import { VOICE_TIER_MODEL } from "./t3team-voiceRouting";
+import { VOICE_TIER_MODEL, type VoiceTier } from "./t3team-voiceRouting";
 import type { VoiceThreadHome } from "./t3team-voiceThreadStore";
 
 export type VoiceSubmitResult =
-  | { readonly status: "sent" }
+  | { readonly status: "sent"; readonly tier: VoiceTier }
   | {
       readonly status: "error";
       readonly code: "no-project" | "send-failed";
@@ -88,7 +88,14 @@ async function ensureVoiceThread(deps: VoiceSessionDeps): Promise<ThreadId | nul
   return projectId === null ? null : createVoiceThread(deps, projectId);
 }
 
-async function sendVoiceUtterance(deps: VoiceSessionDeps, threadId: ThreadId, text: string) {
+const tierOf = (selection: ModelSelection): VoiceTier =>
+  selection.model === VOICE_TIER_MODEL.control.model ? "control" : "synthesis";
+
+async function sendVoiceUtterance(
+  deps: VoiceSessionDeps,
+  threadId: ThreadId,
+  text: string,
+): Promise<VoiceTier> {
   const modelSelection = await deps.route(text);
   const live = withVoiceLiveState(text, voiceLiveThreads(deps.threads(), threadId));
   await deps.startTurn({
@@ -104,6 +111,7 @@ async function sendVoiceUtterance(deps: VoiceSessionDeps, threadId: ThreadId, te
     ...RUNTIME,
     dispatchMode: "queue",
   });
+  return tierOf(modelSelection);
 }
 
 async function submit(deps: VoiceSessionDeps, text: string): Promise<VoiceSubmitResult> {
@@ -112,8 +120,8 @@ async function submit(deps: VoiceSessionDeps, text: string): Promise<VoiceSubmit
     if (threadId === null) {
       return { status: "error", code: "no-project", detail: "Open a project to start voice." };
     }
-    await sendVoiceUtterance(deps, threadId, text);
-    return { status: "sent" };
+    const tier = await sendVoiceUtterance(deps, threadId, text);
+    return { status: "sent", tier };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     return { status: "error", code: "send-failed", detail };

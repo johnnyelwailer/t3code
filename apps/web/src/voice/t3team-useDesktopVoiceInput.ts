@@ -148,6 +148,7 @@ export function useDesktopVoiceInput(onTranscript: (text: string) => void) {
     else void controller.start();
   }, []);
   const cancel = useCallback(() => controllerRef.current?.cancel(), []);
+  const sessionId = useCallback(() => sessionIdRef.current, []);
 
-  return { available, state, downloadPercent, stream, toggle, cancel };
+  return { available, state, downloadPercent, stream, toggle, cancel, sessionId };
 }

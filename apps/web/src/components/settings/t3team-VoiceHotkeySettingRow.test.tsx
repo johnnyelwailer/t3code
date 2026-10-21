@@ -22,6 +22,10 @@ vi.mock("../../lib/desktopSnapShot", () => ({
   getDesktopSnapShotBridge: () => ({ setSnapShotShortcutSuppressed: () => Promise.resolve() }),
 }));
 
+import {
+  isShortcutRecorderOpen,
+  setShortcutRecorderOpen,
+} from "../../t3team/voice/t3team-shortcutRecorderGate";
 import { VoiceHotkeySettingRow } from "./t3team-VoiceHotkeySettingRow";
 
 const REGISTERED: DesktopVoiceHotkeyState = {
@@ -65,6 +69,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  setShortcutRecorderOpen(false);
   act(() => root?.unmount());
   container?.remove();
   container = null;
@@ -103,6 +108,25 @@ describe("VoiceHotkeySettingRow", () => {
     expect(settings.update).toHaveBeenCalledExactlyOnceWith({
       voiceHotkeyChord: DEFAULT_VOICE_HOTKEY_CHORD,
     });
+  });
+
+  it("keeps the voice chord from toggling voice while the recorder waits for a chord", async () => {
+    installBridge([REGISTERED]);
+    const node = await render();
+    const button = node.querySelector(
+      'button[aria-label^="Record voice shortcut"]',
+    ) as HTMLButtonElement;
+    expect(isShortcutRecorderOpen()).toBe(false);
+
+    await act(async () => button.click());
+    expect(isShortcutRecorderOpen()).toBe(true);
+
+    await act(async () => {
+      button.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+      );
+    });
+    expect(isShortcutRecorderOpen()).toBe(false);
   });
 
   it("saves a recorded chord, then re-reads the registration state", async () => {

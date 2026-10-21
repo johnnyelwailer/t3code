@@ -6,6 +6,7 @@ import {
 import { parseKeybindingShortcut } from "@t3tools/shared/keybindings";
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { getDesktopSnapShotBridge } from "../../lib/desktopSnapShot";
+import { setShortcutRecorderOpen } from "../../t3team/voice/t3team-shortcutRecorderGate";
 import {
   formatSnapShotShortcutLabel,
   parseDesktopSnapShotShortcut,
@@ -77,6 +78,10 @@ export function useSnapShotShortcutRecorder({
       onError(error instanceof Error ? error.message : "Could not start shortcut recording.");
     }
   };
+  useEffect(() => {
+    setShortcutRecorderOpen(recording);
+    return () => setShortcutRecorderOpen(false);
+  }, [recording]);
   useEffect(
     () => () => {
       requests.clear();

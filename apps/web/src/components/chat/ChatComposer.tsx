@@ -284,6 +284,7 @@ import { useEnvironmentQuery } from "~/state/query";
 import { useDebouncedValue } from "~/state/queries";
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { ComposerMicInput } from "./t3team-ComposerMicInput";
+import { VoiceComposerDock } from "../../t3team/voice/t3team-VoiceComposerDock";
 import { resolveModelPickerSelectedModel } from "./ModelPickerContent";
 import {
   type ComposerCommandItem,
@@ -7139,6 +7140,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               />
             </ComposerBanner.Attachment>
           ) : null}
+          {/* t3team: the voice thread's composer grows into the live recording. */}
+          <VoiceComposerDock environmentId={environmentId} threadId={activeThreadId} />
         </ComposerBanner.Column>
         {!isComposerApprovalState ? (
           <ComposerStashBadge
@@ -7875,6 +7878,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                         <TooltipPopup>Attach files</TooltipPopup>
                       </Tooltip>
                       <ComposerMicInput
+                        environmentId={environmentId}
+                        threadId={activeThreadId}
                         onTranscript={(text) => insertComposerTextAtEnd(text)}
                         disabled={
                           isConnecting || isComposerApprovalState || projectSelectionRequired

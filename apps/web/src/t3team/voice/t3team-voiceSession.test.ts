@@ -68,7 +68,10 @@ describe("submitVoiceUtterance", () => {
     const { deps, turns, calls, state } = harness({
       threads: [shell("other", { title: "Fix login" })],
     });
-    expect(await submitVoiceUtterance(deps, "what is blocked")).toEqual({ status: "sent" });
+    expect(await submitVoiceUtterance(deps, "what is blocked")).toEqual({
+      status: "sent",
+      tier: "synthesis",
+    });
     expect(calls).toEqual(["turn:create", "pin", "remember", "turn:send"]);
     expect(turns[0]?.message.text).toBe(VOICE_ROLE_PROMPT);
     expect(turns[0]?.bootstrap?.createThread?.projectId).toBe(PROJECT);
@@ -76,6 +79,18 @@ describe("submitVoiceUtterance", () => {
     expect(state.home?.projectId).toBe(PROJECT);
     expect(turns[1]?.threadId).toBe(state.home?.threadId);
     expect(turns[1]?.dispatchMode).toBe("queue");
+  });
+
+  it("reports the tier each utterance was routed to", async () => {
+    const { deps } = harness({ threads: [shell("other")] });
+    expect(await submitVoiceUtterance(deps, "stop the docs thread")).toEqual({
+      status: "sent",
+      tier: "control",
+    });
+    expect(await submitVoiceUtterance(deps, "summarize it")).toEqual({
+      status: "sent",
+      tier: "synthesis",
+    });
   });
 
   it("sends each utterance with its routed per-message model and the live state", async () => {
@@ -130,7 +145,7 @@ describe("submitVoiceUtterance", () => {
       code: "send-failed",
       detail: "offline",
     });
-    expect(await submitVoiceUtterance(deps, "two")).toEqual({ status: "sent" });
+    expect(await submitVoiceUtterance(deps, "two")).toEqual({ status: "sent", tier: "synthesis" });
     expect(turns).toHaveLength(1);
   });
 

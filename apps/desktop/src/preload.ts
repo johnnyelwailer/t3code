@@ -8,6 +8,7 @@ import type {
   DesktopSnapShotEvent,
   DesktopVoiceModelProgress,
   DesktopVoiceStreamEvent,
+  DesktopVoiceWidgetSnapshot,
 } from "@t3tools/contracts";
 import { exposeClerkBridge } from "@clerk/electron/preload";
 import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
@@ -44,6 +45,12 @@ function isVoiceStreamEvent(value: unknown): value is DesktopVoiceStreamEvent {
   if (typeof value !== "object" || value === null) return false;
   const { sessionId, type } = value as { sessionId?: unknown; type?: unknown };
   return typeof sessionId === "string" && typeof type === "string";
+}
+
+function isVoiceWidgetSnapshot(value: unknown): value is DesktopVoiceWidgetSnapshot {
+  if (typeof value !== "object" || value === null) return false;
+  const { state } = value as { state?: unknown };
+  return typeof state === "string";
 }
 
 exposeClerkBridge({ passkeys: true });
@@ -181,6 +188,31 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       ipcRenderer.removeListener(IpcChannels.VOICE_STREAM_CHANNEL, wrappedListener);
     };
   },
+  publishVoiceWidget: (snapshot) =>
+    ipcRenderer.invoke(IpcChannels.PUBLISH_VOICE_WIDGET_CHANNEL, snapshot),
+  onVoiceWidgetSnapshot: (listener) => {
+    const wrappedListener = (_event: Electron.IpcRendererEvent, snapshot: unknown) => {
+      if (isVoiceWidgetSnapshot(snapshot)) listener(snapshot);
+    };
+
+    ipcRenderer.on(IpcChannels.VOICE_WIDGET_SNAPSHOT_CHANNEL, wrappedListener);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.VOICE_WIDGET_SNAPSHOT_CHANNEL, wrappedListener);
+    };
+  },
+  sendVoiceWidgetCommand: (command) =>
+    ipcRenderer.invoke(IpcChannels.SEND_VOICE_WIDGET_COMMAND_CHANNEL, command),
+  onVoiceWidgetCommand: (listener) => {
+    const wrappedListener = (_event: Electron.IpcRendererEvent, command: unknown) => {
+      if (command === "stop" || command === "ready") listener(command);
+    };
+
+    ipcRenderer.on(IpcChannels.VOICE_WIDGET_COMMAND_CHANNEL, wrappedListener);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.VOICE_WIDGET_COMMAND_CHANNEL, wrappedListener);
+    };
+  },
+  openMicrophoneSettings: () => ipcRenderer.invoke(IpcChannels.OPEN_MICROPHONE_SETTINGS_CHANNEL),
   getConnectionCatalog: () => ipcRenderer.invoke(IpcChannels.GET_CONNECTION_CATALOG_CHANNEL),
   setConnectionCatalog: (catalog) =>
     ipcRenderer.invoke(IpcChannels.SET_CONNECTION_CATALOG_CHANNEL, catalog),
