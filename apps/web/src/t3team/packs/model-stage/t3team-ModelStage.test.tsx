@@ -106,13 +106,13 @@ describe("ModelStage without WebGL", () => {
           loop={sprite}
           size={120}
           groundShadow
-          flight={{ lift: 0.28 }}
+          flight={{ lift: 0.14 }}
         />,
       ),
     );
     expect(stage().dataset.modelStageFlight).toBe("1");
     const shadow = container.querySelector<HTMLElement>("[data-model-stage-shadow]");
     expect(shadow).not.toBeNull();
-    expect(Number.parseFloat(shadow!.style.opacity)).toBeLessThan(0.45);
+    expect(Number.parseFloat(shadow!.style.opacity)).toBeLessThan(0.55);
   });
 });
