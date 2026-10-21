@@ -6,28 +6,41 @@ over `desktop:push-voice-stream`. The pipeline lives in the main process
 ([stream session](../../apps/desktop/src/voice/t3team-voiceStreamSession.ts)) so every client
 reads the same truth: it measures level, detects speech and silence from the audio itself
 ([activity gate](../../apps/desktop/src/voice/t3team-voiceActivityGate.ts)), re-transcribes the
-utterance so far as partials, and settles the recording's language (see Language). Results come
+utterance so far as partials, and settles the session's language (see Language). Results come
 back on `desktop:voice-stream`. The pipeline ports the behavior of nx-activity-tracker's whisper
 transcriber (energy floor, language vote, partial cadence), not its code.
 
-Silence beyond `voice.transcriber.silenceMs` after real speech sends `auto-commit`. The renderer
-answers by stopping the recording, which runs the existing batch transcription of the whole
-recording as the final pass, so the committed text never depends on the partials. The language the
-stream locked is passed to that final pass. Partials never queue: one runs at a time and the gap
-after it grows with its duration, so the final pass is not stuck behind a backlog on a slow machine. A partial that exceeds its
-latency budget ends partials for that recording.
+A hotkey press opens a recording session and the next press closes it; the session, not the
+utterance, is the unit. Silence beyond `voice.transcriber.silenceMs` after real speech commits
+that utterance: the stream session cuts its audio, writes it down with a final pass in the main
+process, and emits `utterance` with the text, while the recorder and the stream stay open and the
+gate listens for the next one. The final never depends on the partials. The next press asks the
+stream to `finish` (the stop request with `finish: true`): speech said after the last commit is
+written down and returned in the reply, and every utterance still being written is awaited first,
+so their events precede it. The renderer's recording of the microphone is not decoded for any of
+this. `no-speech` (nothing said in 8 s) and `idle` (a minute of quiet after an utterance) are
+`auto-commit` reasons that end the session; the 5-minute recording cap ends it too.
+
+All passes share one serial chain, because the worker does one at a time. A partial never queues:
+one starts only when the chain is idle, the gap after it grows with its duration, none starts once
+the speaker has been quiet for 400 ms, and a partial over its latency budget ends partials for the
+session. An utterance's final queues behind a running pass, which is why a slow machine shows
+**Transcribing… N s**: the renderer counts from the `auto-commit` event until the `utterance`
+(or `utterance-failed`) event for it, and the voice row, composer dock and floating widget all
+derive that from the same events.
 
 ## Language
 
 `voice.transcriber.language` is `auto` by default, and the Settings picker (Auto, then the codes in
 `voice.transcriber.languages`) writes it. A concrete language is a hard pin: every partial and the
-final pass use it and nothing votes. `auto` votes, once per recording, in
+final pass use it and nothing votes. `auto` votes, once per session, in
 [the language lock](../../apps/desktop/src/voice/t3team-voiceLanguageLock.ts). Whisper's language
 detection on the first second or two of speech confuses close languages (German as Dutch), and a
 wrong lock makes the final pass decode in the wrong language. So partials run with auto-detection,
 only a partial that covered 3 s of speech votes, the first language to gather two votes and lead
 locks, and a recording that has not agreed by 8 s locks the majority or, on a tie or a single vote,
-stays on auto-detection. The lock lives in the stream session, so the next recording votes again.
+stays on auto-detection. The lock lives in the stream session: every utterance of a session reuses it
+(finals vote too, so a session of short utterances can still lock), and the next session votes again.
 
 The main window restricts only the `media` permission, to audio from the app origin
 ([handler](../../apps/desktop/src/window/t3team-MainSessionPermissions.ts)). Electron grants every

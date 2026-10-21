@@ -15,11 +15,12 @@ const openMicrophoneSettings = (): (() => void) | null => {
  */
 export function DesktopVoiceSession(props: {
   readonly onTranscript: (text: string) => void;
+  readonly onUtteranceFailed: (message: string) => void;
   readonly toggleRef: RefObject<(() => void) | null>;
 }) {
-  const { onTranscript, toggleRef } = props;
+  const { onTranscript, onUtteranceFailed, toggleRef } = props;
   const { available, state, downloadPercent, stream, toggle, cancel, sessionId } =
-    useDesktopVoiceInput(onTranscript);
+    useDesktopVoiceInput(onTranscript, onUtteranceFailed);
 
   const controls = useMemo(
     () =>

@@ -131,7 +131,7 @@ describe("createVoiceStreamSession", () => {
       await harness.settle(ok("hallo", "nl"));
       harness.feed(ROOM, 1500);
       expect(languageEvents(harness.events)).toEqual([]);
-      expect(harness.calls.map((call) => call.language)).toEqual(["auto"]);
+      expect(harness.calls.map((call) => call.language)).toEqual(["auto", "auto"]);
     });
 
     it("lets a pinned language win every pass whatever the detection says", async () => {
@@ -151,19 +151,6 @@ describe("createVoiceStreamSession", () => {
       expect(second.calls.map((call) => call.language)).toEqual(["auto", "auto", "auto", "en"]);
       expect(languageEvents(second.events)).toEqual([{ type: "language", language: "en" }]);
     });
-  });
-
-  it("signals auto-commit once on silence and stops starting partials", () => {
-    const { events, calls, feed } = setup();
-    feed(ROOM, 600);
-    feed(SPEECH, 1000);
-    feed(ROOM, 1500);
-    expect(events.filter((event) => event.type === "auto-commit")).toEqual([
-      { type: "auto-commit", reason: "silence" },
-    ]);
-    const before = calls.length;
-    feed(SPEECH, 3000);
-    expect(calls).toHaveLength(before);
   });
 
   it("drops results that finish after stop", async () => {

@@ -3,6 +3,7 @@ import type {
   DesktopVoiceStreamStartRequest,
   DesktopVoiceStreamStartResult,
   DesktopVoiceStreamStopRequest,
+  DesktopVoiceStreamStopResult,
   DesktopVoiceStreamEvent,
 } from "@t3tools/contracts";
 
@@ -15,13 +16,15 @@ export type DesktopVoiceStreamService = {
     request: DesktopVoiceStreamStartRequest,
   ) => Promise<DesktopVoiceStreamStartResult>;
   readonly push: (request: DesktopVoiceStreamPushRequest) => void;
-  readonly stop: (request: DesktopVoiceStreamStopRequest) => void;
+  readonly stop: (request: DesktopVoiceStreamStopRequest) => Promise<DesktopVoiceStreamStopResult>;
 };
 
 type ActiveSession = {
   readonly id: string;
   readonly session: ReturnType<typeof createVoiceStreamSession>;
 };
+
+const NOTHING_SAID: DesktopVoiceStreamStopResult = { text: "", committed: 0 };
 
 /**
  * Owns the one live recording stream. Starting a new stream ends the previous one, so a renderer
@@ -64,8 +67,16 @@ export function makeDesktopVoiceStreamService(deps: {
     push: ({ sessionId, pcm16Base64 }) => {
       if (active?.id === sessionId) active.session.push(pcm16FromBase64(pcm16Base64));
     },
-    stop: ({ sessionId }) => {
-      if (active?.id === sessionId) stopActive();
+    stop: async ({ sessionId, finish }) => {
+      const current = active;
+      if (current?.id !== sessionId) return NOTHING_SAID;
+      if (finish !== true) {
+        stopActive();
+        return NOTHING_SAID;
+      }
+      const result = await current.session.finish();
+      if (active === current) active = null;
+      return result;
     },
   };
 }

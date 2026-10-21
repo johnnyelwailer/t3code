@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   createActivityGate,
   NO_SPEECH_TIMEOUT_MS,
+  SESSION_IDLE_TIMEOUT_MS,
   type GateCommit,
 } from "./t3team-voiceActivityGate.ts";
 import { FRAME_MS, ROOM, SPEECH, tone } from "./t3team-voiceTestAudio.ts";
@@ -19,13 +20,41 @@ function feed(gate: ReturnType<typeof createActivityGate>, amplitude: number, ms
 }
 
 describe("createActivityGate", () => {
-  it("commits once after the silence window that follows real speech", () => {
+  it("commits an utterance after the silence window that follows real speech", () => {
     const gate = createActivityGate({ silenceMs: 1000 });
     feed(gate, ROOM, 600);
     expect(feed(gate, SPEECH, 1000).commits).toEqual([]);
     expect(feed(gate, ROOM, 900).commits).toEqual([]);
     expect(feed(gate, ROOM, 200).commits).toEqual(["silence"]);
     expect(feed(gate, ROOM, 2000).commits).toEqual([]);
+  });
+
+  it("keeps listening after a commit and commits the next utterance too", () => {
+    const gate = createActivityGate({ silenceMs: 1000 });
+    feed(gate, ROOM, 600);
+    feed(gate, SPEECH, 1000);
+    expect(feed(gate, ROOM, 1100).commits).toEqual(["silence"]);
+    expect(feed(gate, SPEECH, 1500).commits).toEqual([]);
+    expect(feed(gate, ROOM, 1100).commits).toEqual(["silence"]);
+  });
+
+  it("reports how long it has been quiet", () => {
+    const gate = createActivityGate({ silenceMs: 5000 });
+    feed(gate, ROOM, 600);
+    feed(gate, SPEECH, 500);
+    let silentMs = 0;
+    for (let at = 0; at < 700; at += FRAME_MS) silentMs = gate.push(tone(FRAME_MS, ROOM)).silentMs;
+    expect(silentMs).toBeCloseTo(700, -1);
+  });
+
+  it("ends the session as idle when it goes quiet for long after an utterance", () => {
+    const gate = createActivityGate({ silenceMs: 1000 });
+    feed(gate, ROOM, 600);
+    feed(gate, SPEECH, 1000);
+    feed(gate, ROOM, 1100);
+    expect(feed(gate, ROOM, NO_SPEECH_TIMEOUT_MS + 1000).commits).toEqual([]);
+    expect(feed(gate, ROOM, SESSION_IDLE_TIMEOUT_MS).commits).toEqual(["idle"]);
+    expect(feed(gate, ROOM, 5000).commits).toEqual([]);
   });
 
   it("treats steady room tone above the floor as silence, not speech", () => {

@@ -5,6 +5,7 @@ import { Button } from "~/components/ui/button";
 import { useComposerHandleContext } from "~/composerHandleContext";
 import { cn } from "~/lib/utils";
 import { voicePreparingLabel } from "~/voice/t3team-voiceModelProgress";
+import { VoiceElapsedLabel } from "./t3team-VoiceElapsedLabel";
 import { VoiceProgress } from "./t3team-VoiceRowParts";
 import { VoiceOrb } from "./t3team-VoiceOrb";
 import { failedTitle } from "./t3team-voiceFailureCopy";
@@ -48,7 +49,12 @@ function PreparingNote({ docked }: { readonly docked: boolean }) {
       docked={docked}
       title="Preparing voice model"
       aside={
-        percent === null ? null : (
+        percent === null ? (
+          <VoiceElapsedLabel
+            label="Loading"
+            className="font-mono text-xs leading-6.5 tabular-nums text-muted-foreground"
+          />
+        ) : (
           <span className="font-mono text-xs leading-6.5 tabular-nums text-foreground">
             {percent}%
           </span>

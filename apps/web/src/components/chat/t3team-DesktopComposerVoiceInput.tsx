@@ -25,7 +25,10 @@ export function DesktopComposerVoiceInput({
   readonly className?: string;
   readonly ref?: Ref<DesktopVoiceInputHandle>;
 }) {
-  const { available, state, downloadPercent, stream, toggle } = useDesktopVoiceInput(onTranscript);
+  const { available, state, downloadPercent, stream, toggle } = useDesktopVoiceInput(
+    onTranscript,
+    (message) => toastManager.add({ type: "error", title: "Voice input", description: message }),
+  );
   useImperativeHandle(ref, () => ({ toggle }), [toggle]);
   const { phase, error } = state;
 

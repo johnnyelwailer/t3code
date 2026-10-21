@@ -21,6 +21,12 @@ export interface VoiceUiLive {
   readonly level: number;
   /** Transcript of the utterance so far. */
   readonly partial: string;
+  /** Committed utterances still being written down while the recording stays open. */
+  readonly writing: number;
+  /** Epoch ms the oldest of them was committed. */
+  readonly writingSinceMs: number | null;
+  /** The latest utterance that came back with words in it. */
+  readonly heard: { readonly text: string; readonly atMs: number } | null;
 }
 
 export interface VoiceUiStore {
@@ -33,7 +39,13 @@ export interface VoiceUiStore {
   readonly setControls: (controls: VoiceUiControls | null) => void;
 }
 
-export const IDLE_VOICE_LIVE: VoiceUiLive = { level: 0, partial: "" };
+export const IDLE_VOICE_LIVE: VoiceUiLive = {
+  level: 0,
+  partial: "",
+  writing: 0,
+  writingSinceMs: null,
+  heard: null,
+};
 
 /**
  * The voice session's shared view: the main window's recorder publishes into it, and the thread

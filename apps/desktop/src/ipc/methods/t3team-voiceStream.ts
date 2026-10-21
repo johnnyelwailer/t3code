@@ -3,6 +3,7 @@ import {
   DesktopVoiceStreamStartRequest,
   DesktopVoiceStreamStartResult,
   DesktopVoiceStreamStopRequest,
+  DesktopVoiceStreamStopResult,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -32,8 +33,8 @@ export const pushVoiceStream = DesktopIpc.makeIpcMethod({
 export const stopVoiceStream = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.STOP_VOICE_STREAM_CHANNEL,
   payload: DesktopVoiceStreamStopRequest,
-  result: Schema.Void,
+  result: DesktopVoiceStreamStopResult,
   handler: Effect.fn("desktop.ipc.voice.stream.stop")(function* (request) {
-    yield* Effect.sync(() => getDesktopVoiceStreamService().stop(request));
+    return yield* Effect.promise(() => getDesktopVoiceStreamService().stop(request));
   }),
 });

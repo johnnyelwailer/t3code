@@ -2,9 +2,19 @@ import type { VoiceInputPhase } from "@t3tools/client-runtime/voice-input";
 
 import type { VoiceStreamView } from "~/voice/t3team-useVoiceStream";
 
-/** What the dictation pill says while a recording runs: input level, the latest partial, then finalizing. */
-export function voiceStreamStatusText(phase: VoiceInputPhase, partial: string): string | null {
-  if (phase === "recording") return partial === "" ? "Listening…" : partial;
+/**
+ * What the dictation pill says while a recording runs: input level, the latest partial, a note
+ * while committed utterances are written down (the recording stays open), then finalizing.
+ */
+export function voiceStreamStatusText(
+  phase: VoiceInputPhase,
+  partial: string,
+  writing = 0,
+): string | null {
+  if (phase === "recording") {
+    if (partial !== "") return partial;
+    return writing > 0 ? "Transcribing…" : "Listening…";
+  }
   if (phase === "transcribing") return "Finalizing…";
   return null;
 }
@@ -16,7 +26,7 @@ export function VoiceStreamStatus({
   readonly phase: VoiceInputPhase;
   readonly stream: VoiceStreamView;
 }) {
-  const text = voiceStreamStatusText(phase, stream.partial);
+  const text = voiceStreamStatusText(phase, stream.partial, stream.writing);
   if (text === null) return null;
   return (
     <>

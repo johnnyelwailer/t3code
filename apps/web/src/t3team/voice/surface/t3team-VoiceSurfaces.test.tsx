@@ -9,7 +9,7 @@ import { VoiceComposerMic } from "../t3team-VoiceComposerMic";
 import { useVoiceThreadStore } from "../t3team-voiceThreadStore";
 import { VoiceThreadRow } from "./t3team-VoiceThreadRow";
 import { IDLE_VOICE_UI, type VoiceUiSnapshot, type VoiceUiState } from "./t3team-voiceUiModel";
-import { IDLE_VOICE_LIVE, useVoiceUiStore } from "./t3team-voiceUiStore";
+import { IDLE_VOICE_LIVE, useVoiceUiStore, type VoiceUiLive } from "./t3team-voiceUiStore";
 
 const controls = {
   toggle: vi.fn(),
@@ -26,9 +26,14 @@ let root: Root | null = null;
 function show(
   state: VoiceUiState,
   extra: Partial<VoiceUiSnapshot> = {},
-  live: { level: number; partial: string } = IDLE_VOICE_LIVE,
+  live: Partial<VoiceUiLive> = {},
 ) {
-  act(() => useVoiceUiStore.setState({ snapshot: { ...IDLE_VOICE_UI, state, ...extra }, live }));
+  act(() =>
+    useVoiceUiStore.setState({
+      snapshot: { ...IDLE_VOICE_UI, state, ...extra },
+      live: { ...IDLE_VOICE_LIVE, ...live },
+    }),
+  );
 }
 
 function mount(node: React.ReactNode) {
@@ -93,9 +98,13 @@ describe("VoiceComposerDock", () => {
   });
 
   it("holds Stop while the recording is being written down", () => {
-    show("transcribing", { startedAtMs: 0, endedAtMs: 2_000 }, { level: 0, partial: "open" });
+    show(
+      "transcribing",
+      { startedAtMs: 0, endedAtMs: Date.now() - 3_000 },
+      { level: 0, partial: "open" },
+    );
     mount(dock());
-    expect(container!.textContent).toContain("Writing it down");
+    expect(container!.textContent).toContain("Transcribing… 3 s");
     expect((button("Stop") as HTMLButtonElement).disabled).toBe(true);
   });
 
