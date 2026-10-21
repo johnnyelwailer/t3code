@@ -1,16 +1,22 @@
-import { DEFAULT_VOICE_TRANSCRIBER_MODEL, type VoiceTranscriberSettings } from "@t3tools/contracts";
+import {
+  DEFAULT_VOICE_SILENCE_MS,
+  DEFAULT_VOICE_TRANSCRIBER_MODEL,
+  type VoiceTranscriberSettings,
+} from "@t3tools/contracts";
 
 import { DraftInput } from "../ui/draft-input";
 import { SettingResetButton, SettingsRow } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
-import { nonEmptyVoiceField } from "./t3team-voiceSettings.logic";
+import { nonEmptyVoiceField, voiceSilenceMsField } from "./t3team-voiceSettings.logic";
 
 type TranscriberField = keyof VoiceTranscriberSettings;
+type TextField = Exclude<TranscriberField, "silenceMs">;
 
 const DEFAULTS: VoiceTranscriberSettings = {
   model: DEFAULT_VOICE_TRANSCRIBER_MODEL,
   modelPath: "",
   language: "auto",
+  silenceMs: DEFAULT_VOICE_SILENCE_MS,
 };
 
 /** Model, model file and language of on-device transcription; saved on blur or Enter, never per keystroke. */
@@ -21,9 +27,13 @@ export function VoiceTranscriberSettingRows({
   transcriber: VoiceTranscriberSettings;
   onChange: (patch: Partial<VoiceTranscriberSettings>) => void;
 }) {
-  const commit = (field: TranscriberField, raw: string, allowEmpty: boolean) => {
+  const commit = (field: TextField, raw: string, allowEmpty: boolean) => {
     const next = allowEmpty ? raw.trim() : nonEmptyVoiceField(raw);
     if (next !== null && next !== transcriber[field]) onChange({ [field]: next });
+  };
+  const commitSilence = (raw: string) => {
+    const next = voiceSilenceMsField(raw);
+    if (next !== null && next !== transcriber.silenceMs) onChange({ silenceMs: next });
   };
   const reset = (field: TranscriberField, label: string) =>
     transcriber[field] === DEFAULTS[field] ? null : (
@@ -82,6 +92,24 @@ export function VoiceTranscriberSettingRows({
             aria-label="Voice language"
             value={transcriber.language}
             onCommit={(next) => commit("language", next, false)}
+          />
+        }
+      />
+      <SettingsRow
+        serverScoped
+        settingKeys={["voice"]}
+        {...searchableSetting("voice-silence")}
+        description="Milliseconds of silence after you stop speaking before the recording commits itself. 0 turns auto-commit off."
+        resetAction={reset("silenceMs", "voice silence")}
+        control={
+          <DraftInput
+            nativeInput
+            size="sm"
+            inputMode="numeric"
+            className="w-full sm:w-28"
+            aria-label="Voice silence"
+            value={String(transcriber.silenceMs)}
+            onCommit={commitSilence}
           />
         }
       />

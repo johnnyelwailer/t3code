@@ -32,6 +32,7 @@ function makeService(
 ) {
   const host: WhisperHost = {
     transcribe: vi.fn(async () => ({ text: "hello", acceleration: "gpu" as const })),
+    warm: vi.fn(async () => undefined),
     dispose: vi.fn(),
   };
   const download = vi.fn<typeof downloadWhisperModel>(
@@ -56,7 +57,7 @@ function makeService(
   };
 }
 
-const config = { model: "large-v3-turbo", modelPath: "", language: "auto" };
+const config = { model: "large-v3-turbo", modelPath: "", language: "auto", silenceMs: 1500 };
 const modelBytes = () => Buffer.alloc(1_100_000);
 
 describe("desktop voice service", () => {
@@ -150,5 +151,17 @@ describe("desktop voice service", () => {
     expect(host.transcribe).toHaveBeenCalledWith(
       expect.objectContaining({ pcm16Base64: "AAAA", language: "auto" }),
     );
+  });
+
+  it("warms the resolved model and stays silent when none is available", async () => {
+    const { root, trackerDir } = sandbox();
+    const missing = makeService(root);
+    await missing.service.warm(config);
+    expect(missing.host.warm).not.toHaveBeenCalled();
+
+    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-largev3.bin"), modelBytes());
+    const { service, host } = makeService(root);
+    await service.warm(config);
+    expect(host.warm).toHaveBeenCalledWith(NodePath.join(trackerDir, "ggml-largev3.bin"));
   });
 });

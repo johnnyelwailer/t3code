@@ -1,4 +1,4 @@
-import type { DesktopVoiceHotkeyState } from "@t3tools/contracts";
+import { MAX_VOICE_SILENCE_MS, type DesktopVoiceHotkeyState } from "@t3tools/contracts";
 
 /** What the shortcut row says under its description; a refused chord is a failure, not a silent no-op. */
 export function voiceHotkeyStatus(
@@ -17,4 +17,10 @@ export function voiceHotkeyStatus(
 export function nonEmptyVoiceField(raw: string): string | null {
   const trimmed = raw.trim();
   return trimmed === "" ? null : trimmed;
+}
+
+/** Whole milliseconds clamped to what the setting accepts; null when the text is not a number. */
+export function voiceSilenceMsField(raw: string): number | null {
+  const parsed = Number.parseInt(raw.trim(), 10);
+  return Number.isNaN(parsed) ? null : Math.min(MAX_VOICE_SILENCE_MS, Math.max(0, parsed));
 }

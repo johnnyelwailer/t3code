@@ -665,6 +665,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["whisper transcription dictation speech locale auto detect"],
   },
   {
+    id: "voice-silence",
+    title: "Voice silence",
+    to: "/settings/general",
+    desktopOnly: true,
+    searchTerms: ["dictation auto commit stop pause silence seconds end recording"],
+  },
+  {
     id: "snap-shot-enabled",
     title: "SnapShots",
     searchTerms: ["window capture screenshot"],

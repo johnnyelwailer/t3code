@@ -7,6 +7,7 @@ import type {
   DesktopPreviewTabState,
   DesktopSnapShotEvent,
   DesktopVoiceModelProgress,
+  DesktopVoiceStreamEvent,
 } from "@t3tools/contracts";
 import { exposeClerkBridge } from "@clerk/electron/preload";
 import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
@@ -37,6 +38,12 @@ function isVoiceModelProgress(value: unknown): value is DesktopVoiceModelProgres
   return (
     typeof receivedBytes === "number" && (totalBytes === null || typeof totalBytes === "number")
   );
+}
+
+function isVoiceStreamEvent(value: unknown): value is DesktopVoiceStreamEvent {
+  if (typeof value !== "object" || value === null) return false;
+  const { sessionId, type } = value as { sessionId?: unknown; type?: unknown };
+  return typeof sessionId === "string" && typeof type === "string";
 }
 
 exposeClerkBridge({ passkeys: true });
@@ -158,6 +165,20 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.on(IpcChannels.VOICE_MODEL_PROGRESS_CHANNEL, wrappedListener);
     return () => {
       ipcRenderer.removeListener(IpcChannels.VOICE_MODEL_PROGRESS_CHANNEL, wrappedListener);
+    };
+  },
+  startVoiceStream: (request) =>
+    ipcRenderer.invoke(IpcChannels.START_VOICE_STREAM_CHANNEL, request),
+  pushVoiceStream: (request) => ipcRenderer.invoke(IpcChannels.PUSH_VOICE_STREAM_CHANNEL, request),
+  stopVoiceStream: (request) => ipcRenderer.invoke(IpcChannels.STOP_VOICE_STREAM_CHANNEL, request),
+  onVoiceStream: (listener) => {
+    const wrappedListener = (_event: Electron.IpcRendererEvent, event: unknown) => {
+      if (isVoiceStreamEvent(event)) listener(event);
+    };
+
+    ipcRenderer.on(IpcChannels.VOICE_STREAM_CHANNEL, wrappedListener);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.VOICE_STREAM_CHANNEL, wrappedListener);
     };
   },
   getConnectionCatalog: () => ipcRenderer.invoke(IpcChannels.GET_CONNECTION_CATALOG_CHANNEL),
