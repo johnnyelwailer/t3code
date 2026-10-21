@@ -1,7 +1,7 @@
 /**
  * `pack-ui:1` host-rendered slots other than `message.view`: the Summary tab of a change request,
- * the change-request affordance in a My Work row, a My Work dashboard widget, and a sidecar
- * section.
+ * the change-request affordance in a My Work row, a My Work dashboard widget, a sidecar
+ * section, and the surface companion.
  *
  * Unlike `message.view`, none of these takes data from a thread artifact: the host renders the
  * slot and supplies the props, so a registration carries no props schema. A slot that renders
@@ -11,6 +11,7 @@
 import type { ChangeRequestState } from "@t3tools/contracts";
 import type { ComponentType } from "react";
 
+import type { ModelStageQuality } from "./t3team-packUi.modelStage.ts";
 import type { ChangeRequestRef } from "./t3team-packUi.navigation.ts";
 
 /** What a `changeRequest.summary` component receives: the change request the panel shows. */
@@ -125,4 +126,51 @@ export interface SidecarSectionRegistration {
   readonly id: string;
   readonly definition: SidecarSectionViewDefinition;
   readonly component: ComponentType<SidecarSectionViewProps>;
+}
+
+// ── surface.companion ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Where the host mounts a companion: My Work's first-load state, My Work with nothing in it, and a
+ * new thread (the draft hero above the composer, or an empty timeline).
+ */
+export type SurfaceCompanionPlacement = "myWork.loading" | "myWork.empty" | "thread.new";
+
+/**
+ * What the surface is going through, in host terms; a companion maps it to its own behaviour.
+ *   • `loading`   — a first result is outstanding;
+ *   • `empty`     — there is nothing here (and was not a moment ago, or never was);
+ *   • `cleared`   — the viewer just emptied it (the last item went away while it was on screen);
+ *   • `newThread` — a conversation that has not started.
+ */
+export type SurfaceCompanionMood = "loading" | "empty" | "cleared" | "newThread";
+
+/** `sm` sits beside a line of text (~48px), `md` above a heading (~120px), `lg` alone (~200px). */
+export type SurfaceCompanionSize = "sm" | "md" | "lg";
+
+/** What a `surface.companion` component receives. */
+export interface SurfaceCompanionProps {
+  readonly placement: SurfaceCompanionPlacement;
+  readonly mood: SurfaceCompanionMood;
+  readonly size: SurfaceCompanionSize;
+  /**
+   * The viewer's ceiling on rendering cost (a setting, or a story control). Pass it on to
+   * `ModelStage`; the host lowers it further on its own when power or frame time call for it.
+   */
+  readonly quality: ModelStageQuality;
+}
+
+/**
+ * A small, decorative character that keeps a surface company while it loads or is empty. The
+ * host renders ONE companion per placement (the first registration that lists it); with none it
+ * renders its own default (a neutral mark, or nothing). It must be decorative: never the only
+ * place a state is said, never a control the surface needs. A companion that throws is replaced
+ * by the host default.
+ */
+export interface SurfaceCompanionRegistration {
+  readonly slot: "surface.companion";
+  readonly id: string;
+  /** The placements it fills; absent: all of them. */
+  readonly placements?: ReadonlyArray<SurfaceCompanionPlacement>;
+  readonly component: ComponentType<SurfaceCompanionProps>;
 }
