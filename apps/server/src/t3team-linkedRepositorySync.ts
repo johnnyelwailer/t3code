@@ -31,6 +31,13 @@ import type {
 } from "./t3team-project-repository-utils.ts";
 import { VcsProcess } from "./vcs/VcsProcess.ts";
 import { LINKED_REPOSITORY_SYNC_CONCURRENCY } from "./t3team-linkedRepositorySyncConcurrency.ts";
+import {
+  planAndLinkStateMigration,
+  readStateMigrationJournal,
+  summarizeStateMigration,
+  type StateMigrationSummary,
+} from "./t3team-projectStateMigration.ts";
+import { runStateMigration } from "./t3team-projectStateMigrationRun.ts";
 
 export type LinkedRepositorySyncRequest = {
   readonly referencesRoot: string;
@@ -61,6 +68,19 @@ export class T3TeamLinkedRepositorySync extends Context.Service<
     readonly awaitSettled: (localPath: string) => Effect.Effect<void>;
     /** Serializes reference-manifest read-modify-write cycles with job outcomes. */
     readonly withManifestLock: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
+    /** A main-repository switch's state: links it into `toRoot` now (no copying) and queues the
+     * durable background copy. Takes its own lock, never the manifest lock, so linked-repository
+     * requests are not held up. */
+    readonly startStateMigration: (input: {
+      readonly fromRoot: string;
+      readonly toRoot: string;
+    }) => Effect.Effect<StateMigrationSummary | undefined>;
+    /** Re-queues an unfinished migration recorded in `toRoot`'s journal (after a restart). */
+    readonly resumeStateMigration: (toRoot: string) => Effect.Effect<void>;
+    /** The live progress of `toRoot`'s migration, or its journal's last record; `undefined` if none. */
+    readonly stateMigrationStatus: (
+      toRoot: string,
+    ) => Effect.Effect<StateMigrationSummary | undefined>;
   }
 >()("t3/t3team-linkedRepositorySync/T3TeamLinkedRepositorySync") {}
 
@@ -73,6 +93,70 @@ const make = Effect.gen(function* () {
   const manifestLock = yield* Semaphore.make(1);
   const withManifestLock = manifestLock.withPermits(1);
   const jobs = new Map<string, Job>();
+  // Main-repository state migrations: one job per target, one copying at a time (disk throttle).
+  const migrationLock = yield* Semaphore.make(1);
+  const withMigrationLock = migrationLock.withPermits(1);
+  const migrationPermits = yield* Semaphore.make(1);
+  const migrations = new Map<string, { again: boolean; summary?: StateMigrationSummary }>();
+
+  const runMigration = (toRoot: string): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      const state = migrations.get(toRoot);
+      if (!state) return;
+      state.again = false;
+      yield* migrationPermits.withPermits(1)(
+        runStateMigration(toRoot, {
+          withJournalLock: withMigrationLock,
+          onProgress: (journal) => (state.summary = summarizeStateMigration(journal)),
+        }),
+      );
+      if (state.again) return yield* runMigration(toRoot);
+    }).pipe(
+      Effect.catchCause((cause) => Effect.logError("Project state migration crashed.", cause)),
+      Effect.ensuring(Effect.sync(() => migrations.delete(toRoot))),
+    );
+
+  const ensureMigrationJob = (toRoot: string) =>
+    Effect.uninterruptible(
+      Effect.suspend(() => {
+        const running = migrations.get(toRoot);
+        if (running) {
+          running.again = true;
+          return Effect.void;
+        }
+        migrations.set(toRoot, { again: false });
+        return Effect.forkIn(runMigration(toRoot), scope).pipe(Effect.asVoid);
+      }),
+    );
+
+  const startStateMigration = (input: { readonly fromRoot: string; readonly toRoot: string }) =>
+    withMigrationLock(planAndLinkStateMigration(input)).pipe(
+      Effect.tap((journal) =>
+        journal.status === "running" ? ensureMigrationJob(input.toRoot) : Effect.void,
+      ),
+      Effect.map(summarizeStateMigration),
+      Effect.catchCause((cause) =>
+        Effect.logWarning("Could not start the project state migration.", cause).pipe(
+          Effect.as(undefined),
+        ),
+      ),
+    );
+
+  const resumeStateMigration = (toRoot: string) =>
+    readStateMigrationJournal(toRoot).pipe(
+      Effect.flatMap((journal) =>
+        journal && journal.status !== "done" ? ensureMigrationJob(toRoot) : Effect.void,
+      ),
+    );
+
+  const stateMigrationStatus = (toRoot: string) =>
+    Effect.suspend(() => {
+      const live = migrations.get(toRoot)?.summary;
+      if (live) return Effect.succeed<StateMigrationSummary | undefined>(live);
+      return readStateMigrationJournal(toRoot).pipe(
+        Effect.map((journal) => (journal ? summarizeStateMigration(journal) : undefined)),
+      );
+    });
 
   const sync = (job: Job, localPath: string) =>
     syncLinkedCheckout({
@@ -159,6 +243,9 @@ const make = Effect.gen(function* () {
         return job ? Deferred.await(job.settled) : Effect.void;
       }),
     withManifestLock,
+    startStateMigration,
+    resumeStateMigration,
+    stateMigrationStatus,
   });
 });
 
