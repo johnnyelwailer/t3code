@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLiveRefresh } from "~/hooks/useLiveRefresh";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import { readIntegrationCache } from "./t3team-integrationCache";
 import { useGitHubAuthProbe } from "./t3team-useGitHubAuthProbe";
@@ -147,6 +148,8 @@ export function useGitHubRepositoryDiscovery({
   // `gh auth status` reports "unauthenticated" when ANY host holds a refused token, even while
   // another (the Enterprise one) is signed in; a signed-in login is what the picker can use.
   const signedIn = authStatus === "authenticated" || authenticatedHosts.length > 0;
+  const recheckAuth = useCallback(() => setProbeNonce((nonce) => nonce + 1), []);
+  useLiveRefresh(recheckAuth, { enabled: enabled && !signedIn });
 
   return {
     backendAvailable: Boolean(backend),

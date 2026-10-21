@@ -1,27 +1,27 @@
 import { ShieldAlert } from "lucide-react";
 
-import { PullRequestCopyableCode } from "~/components/pullRequest/PullRequestCopyableCode";
+import { GitHubSignInAction } from "~/t3team/components/t3team-GitHubSignInAction";
 import type { GitHubDiscoveryState } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
+import { useGitHubSignInHosts } from "~/t3team/hooks/t3team-useGitHubSignIn";
 import { CalmNotice } from "~/t3team/t3team-CalmNotice";
 
-/** Shown when no GitHub account is signed in: how to sign in, and a Recheck that re-asks `gh`. */
+/** Shown when no GitHub account is signed in: a sign-in per likely host, and a Recheck. */
 export function RepositoryPickerSignInNotice({ discovery }: { discovery: GitHubDiscoveryState }) {
+  const hosts = useGitHubSignInHosts([discovery.githubHost]);
   return (
     <CalmNotice
       compact
       icon={ShieldAlert}
       headline="Not signed in to GitHub"
-      detail="Add --hostname your.ghe.host for Enterprise. You can still paste a URL above."
+      detail="Sign in here, or paste a repository URL above."
       primaryAction={{ label: "Recheck", onClick: () => discovery.refresh() }}
       className="m-3"
     >
-      <PullRequestCopyableCode
-        value="gh auth login"
-        target="the GitHub sign-in command"
-        copyLabel="Copy command"
-        copiedLabel="Command copied"
-        className="font-mono text-2xs"
-      />
+      <div className="flex flex-col gap-2">
+        {hosts.map((host) => (
+          <GitHubSignInAction key={host} host={host} onSignedIn={discovery.refresh} />
+        ))}
+      </div>
     </CalmNotice>
   );
 }

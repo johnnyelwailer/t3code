@@ -78,9 +78,12 @@ export function AwaitingOpenPhase({ label, url, displayCode, onCancel }: Awaitin
           variant="default"
           className="w-full sm:w-auto"
           render={<a href={url} target="_blank" rel="noopener noreferrer" />}
+          onClick={() => {
+            if (displayCode) copyToClipboard(displayCode, undefined);
+          }}
         >
           <ExternalLinkIcon className="size-3.5" />
-          Open sign-in page
+          {displayCode ? "Copy code and open sign-in page" : "Open sign-in page"}
         </Button>
       ) : null}
       {/* Codex device flow: display the code — the human types it into

@@ -28,6 +28,7 @@ import * as SynchronizedRef from "effect/SynchronizedRef";
 import * as ProcessRunner from "../processRunner.ts";
 import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 import { getAdapter, PRODUCTION_TOOLS, withAdapterHostname } from "./t3team-adapters.ts";
+import { isTerminalPhase } from "./t3team-installFlow.ts";
 import { makeToolAuthInstallFlow } from "./t3team-installService.ts";
 import { makeToolAuthLoginFlow, type ToolAuthStartOptions } from "./t3team-loginService.ts";
 import { makeToolSingleFlight } from "./t3team-singleFlight.ts";
@@ -136,10 +137,28 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
       { discard: true },
     );
 
+  /**
+   * A running flow answers for itself. A finished one is only history: the CLI may have been
+   * signed in or out since (`gh auth login` in a terminal), so the probe decides, and the session
+   * is kept only to show why a sign-in failed while the CLI is still signed out. A tool with no
+   * probe has nothing better than the flow's own outcome.
+   */
   const stateForTool = Effect.fn("toolauth.stateForTool")(function* (tool: string) {
     const active = (yield* SynchronizedRef.get(sessionsRef)).get(tool);
-    if (active) return active.state;
-    return yield* runProbe(getAdapter(tool));
+    if (active === undefined) return yield* runProbe(getAdapter(tool));
+    if (!isTerminalPhase(active.state.phase) || !active.adapter.status.probe?.length) {
+      return active.state;
+    }
+    const probed = yield* runProbe(active.adapter, true);
+    if (active.state.phase === "failed" && probed.phase !== "connected") return active.state;
+    yield* SynchronizedRef.update(sessionsRef, (sessions) => {
+      if (sessions.get(tool) !== active) return sessions;
+      const next = new Map(sessions);
+      if (probed.phase === "connected") next.set(tool, { ...active, state: probed });
+      else next.delete(tool);
+      return next;
+    });
+    return probed;
   });
 
   const list: Effect.Effect<ReadonlyArray<AuthState>> = Effect.forEach(tools, stateForTool);
