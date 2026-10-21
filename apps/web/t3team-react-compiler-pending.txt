@@ -5,7 +5,8 @@
 # and upstream files carrying fork additions, do not compile yet. They are exempt
 # only so CI stays green until the owner picks one of: keep this as a shrink-only
 # list, convert every file now, or convert the busiest files and list the rest.
-# Do not add entries.
+# Do not add entries (the 2026-10-21 sync added two new fork files from main that do not compile:
+# t3team-useKickoffWorkItemRef.ts, t3team-useThreadHandoff.ts).
 apps/web/src/account/t3team-useAccounts.ts
 apps/web/src/cloud/t3team-CloudSessionSignInDialogHost.tsx
 apps/web/src/cloud/t3team-useCloudSessionComposerGate.ts
@@ -72,6 +73,7 @@ apps/web/src/t3team/chat/t3team-useThreadBootstrapStall.ts
 apps/web/src/t3team/chat/t3team-useThreadChatComposerState.ts
 apps/web/src/t3team/chat/t3team-useThreadChatServerState.ts
 apps/web/src/t3team/chat/t3team-useThreadChatTurnToolContext.ts
+apps/web/src/t3team/chat/t3team-useThreadHandoff.ts
 apps/web/src/t3team/chat/t3team-useThreadOutboxDock.tsx
 apps/web/src/t3team/chat/t3team-useThreadStagedComposerAction.ts
 apps/web/src/t3team/chat/t3team-useThreadSubRuns.tsx
@@ -296,6 +298,7 @@ apps/web/src/t3team/t3team-useInboxWorkItems.ts
 apps/web/src/t3team/t3team-useKanbanSemanticZoomFlag.storyMock.ts
 apps/web/src/t3team/t3team-useKanbanZoomGesture.test.tsx
 apps/web/src/t3team/t3team-useKanbanZoomGesture.ts
+apps/web/src/t3team/t3team-useKickoffWorkItemRef.ts
 apps/web/src/t3team/t3team-useProjectBacklogEstimateCell.ts
 apps/web/src/t3team/t3team-useProjectBacklogTableRowDraft.ts
 apps/web/src/t3team/t3team-useProjectDashboardKanbanDnd.ts

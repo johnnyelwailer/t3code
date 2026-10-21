@@ -249,6 +249,7 @@ describe("deriveComposerTasksProgress", () => {
       step: "Variant B: PR #476 open, waiting on #468 for full green gate",
       completedSteps: 2,
       totalSteps: 12,
+      live: false,
     });
     expect(badge.steps).toHaveLength(12);
     expect(badge.planUpdatedAt).toBe("2026-09-10T10:00:00.000Z");
@@ -267,7 +268,12 @@ describe("deriveComposerTasksProgress", () => {
         ],
       },
     });
-    expect(badge.progress).toEqual({ step: "Second", completedSteps: 1, totalSteps: 2 });
+    expect(badge.progress).toEqual({
+      step: "Second",
+      completedSteps: 1,
+      totalSteps: 2,
+      live: false,
+    });
     // Duration of the completed step (30s) flows through unchanged.
     expect(badge.steps).toEqual([
       { step: "First", status: "completed", durationMs: 30_000 },

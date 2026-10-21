@@ -115,7 +115,7 @@ function renderSurface(element: ReactElement) {
       createNodeMock: (node) =>
         node.type === "webview"
           ? Object.assign(new EventTarget(), { getWebContentsId: () => 41 })
-          : { scrollLeft: 0, scrollTop: 0, scrollTo: noop },
+          : { scrollLeft: 0, scrollTop: 0, scrollTo: noop, toggleAttribute: noop },
     });
   });
 }
@@ -147,6 +147,8 @@ beforeEach(async () => {
   });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("window", globalThis);
+  vi.stubGlobal("addEventListener", noop);
+  vi.stubGlobal("removeEventListener", noop);
   vi.stubGlobal("navigator", { platform: "Linux" });
   vi.stubGlobal(
     "requestAnimationFrame",

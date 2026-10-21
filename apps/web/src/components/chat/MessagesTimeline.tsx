@@ -55,11 +55,11 @@ import { workflowCompletionDisplayText } from "~/t3team/chat/t3team-workflowComp
 import type { T3TeamTimelineRowProps } from "~/t3team/chat/t3team-timelineRowProps";
 import {
   isT3TeamFullBleedTimelineRow,
-  isT3TeamTimelineRowVisible,
   T3TeamSystemMessageRow,
   T3TeamTimelineRowsProvider,
   useT3TeamTimelineRowsState,
 } from "~/t3team/chat/t3team-timelineRows";
+import { useVisibleTimelineRows } from "~/t3team/chat/t3team-useVisibleTimelineRows";
 import { useT3TeamWorkflowCardNavigation } from "~/t3team/chat/t3team-useWorkflowCardNavigation";
 import { useT3TeamOutboundSendLabel } from "~/t3team/chat/t3team-useOutboundSendLabel";
 import { t3teamDisplayedUserMessage } from "~/t3team/chat/t3team-messageFraming";
@@ -1066,10 +1066,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   });
   // t3team: rich system rows (workflow / decision / widget cards) and their hidden replies.
   const t3teamRows = useT3TeamTimelineRowsState(t3team, timelineEntries);
-  const visibleRawRows = useMemo(
-    () => rawRows.filter((row) => isT3TeamTimelineRowVisible(row, t3teamRows)),
-    [rawRows, t3teamRows],
-  );
+  const visibleRawRows = useVisibleTimelineRows(rawRows, t3teamRows);
   const rows = useStableRows(visibleRawRows, listIdentityKey);
   useT3TeamWorkflowCardNavigation({
     request: t3team.workflowCardNavigationRequest,
