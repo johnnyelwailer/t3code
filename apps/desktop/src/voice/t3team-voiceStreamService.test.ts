@@ -80,4 +80,16 @@ describe("makeDesktopVoiceStreamService", () => {
       expect.objectContaining({ config: { ...config, language: "auto" } }),
     );
   });
+
+  it("tells every partial a pinned language whatever the detection said", async () => {
+    const { service, voice, push } = setup(READY);
+    await service.start({ config: { ...config, language: "de" } });
+    push("s1", ROOM, 600);
+    for (let round = 0; round < 3; round += 1) push("s1", SPEECH, 2500);
+    const languages = vi
+      .mocked(voice.transcribe)
+      .mock.calls.map(([input]) => input.config.language);
+    expect(languages.length).toBeGreaterThan(0);
+    expect(new Set(languages)).toEqual(new Set(["de"]));
+  });
 });

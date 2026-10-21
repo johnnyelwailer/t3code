@@ -70,6 +70,7 @@ export function createVoiceStreamSession(deps: {
     if (pcm16Rms(window) < SPEECH_FLOOR_RMS) return;
     inFlight = true;
     lastPartialAtMs = samplesToMs(end);
+    const windowMs = samplesToMs(end - start);
     void deps
       .transcribe({ pcm16Base64: pcm16ToBase64(window), language: language.current() })
       .then((result) => {
@@ -90,10 +91,15 @@ export function createVoiceStreamSession(deps: {
         }
         if (result.text.trim() !== "") {
           deps.emit({ type: "partial", text: result.text, elapsedMs: result.elapsedMs });
-          const locked = language.vote(result.language);
-          if (locked !== null) {
-            deps.log(`stream language locked: ${locked}`);
-            deps.emit({ type: "language", language: locked });
+          const outcome = language.vote(result.language, windowMs);
+          if (!language.pinned) {
+            deps.log(
+              `stream language vote: ${result.language ?? "none"} from ${Math.round(windowMs)} ms of speech -> ${outcome.kind}`,
+            );
+          }
+          if (outcome.kind === "locked") {
+            deps.log(`stream language locked: ${outcome.language}`);
+            deps.emit({ type: "language", language: outcome.language });
           }
         }
       })

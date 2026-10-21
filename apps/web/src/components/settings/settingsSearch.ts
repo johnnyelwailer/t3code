@@ -645,6 +645,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["whisper transcription dictation speech locale auto detect"],
   },
   {
+    id: "voice-languages",
+    title: "Voice language list",
+    to: "/settings/general",
+    desktopOnly: true,
+    searchTerms: ["whisper dictation speech language picker options german english"],
+  },
+  {
     id: "voice-silence",
     title: "Voice silence",
     to: "/settings/general",
