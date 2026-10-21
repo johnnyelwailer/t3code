@@ -392,6 +392,23 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }),
   );
 
+  it.effect("sets payload compression only when T3CODE_DESKTOP_COMPRESSION asks for it", () =>
+    Effect.gen(function* () {
+      const base = {
+        platform: "win",
+        target: "nsis",
+        version: "0.0.45",
+        signed: false,
+        mockUpdates: false,
+      } as const;
+      const fallback = yield* createBuildConfig(base);
+      const store = yield* createBuildConfig({ ...base, compression: "store" });
+
+      assert.notProperty(fallback, "compression");
+      assert.equal(store.compression, "store");
+    }),
+  );
+
   it.effect("omits update feeds for pull request preview builds", () =>
     Effect.gen(function* () {
       const preview = yield* createBuildConfig({
@@ -2895,6 +2912,36 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(resolved.platform, "win");
       assert.equal(resolved.target, "nsis");
       assert.equal(resolved.arch, "arm64");
+    }),
+  );
+
+  it.effect("reads T3CODE_DESKTOP_COMPRESSION and leaves it unset by default", () =>
+    Effect.gen(function* () {
+      const input = {
+        platform: Option.some("win" as const),
+        packsDir: Option.none(),
+        productName: Option.none(),
+        iconPng: Option.none(),
+        target: Option.none(),
+        arch: Option.some("x64" as const),
+        buildVersion: Option.none(),
+        outputDir: Option.none(),
+        skipBuild: Option.none(),
+        keepStage: Option.none(),
+        signed: Option.none(),
+        verbose: Option.none(),
+        mockUpdates: Option.none(),
+        mockUpdateServerPort: Option.none(),
+        wslRuntime: Option.none(),
+      };
+      const withEnv = (env: Record<string, string>) =>
+        resolveBuildOptions(input).pipe(
+          Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env }))),
+        );
+
+      assert.equal((yield* withEnv({})).compression, undefined);
+      assert.equal((yield* withEnv({ T3CODE_DESKTOP_COMPRESSION: "store" })).compression, "store");
+      yield* Effect.flip(withEnv({ T3CODE_DESKTOP_COMPRESSION: "fastest" }));
     }),
   );
 

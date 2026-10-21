@@ -77,6 +77,9 @@ const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 export const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
 export const BuildArch = Schema.Literals(["arm64", "x64", "universal"]);
+// electron-builder's payload compression. "store" skips the 7z/zlib pass for local dev
+// installers (much faster to build and install, several times larger); releases keep the default.
+export const BuildCompression = Schema.Literals(["store", "normal", "maximum"]);
 
 const WorkspaceConfig = Schema.Struct({
   catalog: Schema.optional(Schema.Record(Schema.String, Schema.String)),
@@ -1106,6 +1109,7 @@ interface ResolvedBuildOptions {
   readonly productName: string | undefined;
   readonly iconPng: string | undefined;
   readonly skipBuild: boolean;
+  readonly compression: typeof BuildCompression.Type | undefined;
   readonly keepStage: boolean;
   readonly signed: boolean;
   readonly verbose: boolean;
@@ -1915,6 +1919,7 @@ const BuildEnvConfig = Config.all({
   productName: Config.String("T3CODE_DESKTOP_PRODUCT_NAME").pipe(Config.option),
   iconPng: Config.String("T3CODE_DESKTOP_ICON_PNG").pipe(Config.option),
   skipBuild: Config.Boolean("T3CODE_DESKTOP_SKIP_BUILD").pipe(Config.withDefault(false)),
+  compression: Config.schema(BuildCompression, "T3CODE_DESKTOP_COMPRESSION").pipe(Config.option),
   keepStage: Config.Boolean("T3CODE_DESKTOP_KEEP_STAGE").pipe(Config.withDefault(false)),
   signed: Config.Boolean("T3CODE_DESKTOP_SIGNED").pipe(Config.withDefault(false)),
   verbose: Config.Boolean("T3CODE_DESKTOP_VERBOSE").pipe(Config.withDefault(false)),
@@ -2008,6 +2013,7 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
     Option.getOrUndefined(env.iconPng);
 
   const skipBuild = resolveBooleanFlag(input.skipBuild, env.skipBuild);
+  const compression = Option.getOrUndefined(env.compression);
   const keepStage = resolveBooleanFlag(input.keepStage, env.keepStage);
   const signed = resolveBooleanFlag(input.signed, env.signed);
   const verbose = resolveBooleanFlag(input.verbose, env.verbose);
@@ -2037,6 +2043,7 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
     productName,
     iconPng,
     skipBuild,
+    compression,
     keepStage,
     signed,
     verbose,
@@ -3214,6 +3221,8 @@ interface BuildConfigOptions {
   readonly wslRuntimeBundled?: boolean | undefined;
   // mac pty prebuild exclusions are arch-gated (#9240); omitted/`universal` keeps the plain set.
   readonly arch?: typeof BuildArch.Type | undefined;
+  // Omitted keeps electron-builder's default ("normal").
+  readonly compression?: typeof BuildCompression.Type | undefined;
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -3234,6 +3243,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     artifactTimestamp,
     wslRuntimeBundled = false,
     arch,
+    compression,
   } = options;
   const resolvedProductName = resolveDesktopProductName(version, productNameOverride);
   // Artifact file names are derived from the resolved product name, not hardcoded:
@@ -3268,6 +3278,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       "." +
       "${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
+    ...(compression ? { compression } : {}),
     files: [
       ...DESKTOP_FILE_EXCLUSIONS,
       ...(platform === "mac"
@@ -4634,6 +4645,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
           : undefined,
       packsDir: options.packsDir,
       productNameOverride: options.productName,
+      compression: options.compression,
       includePackagedIconPng: options.iconPng !== undefined,
       includePackagedEnvFiles,
       artifactTimestamp,
