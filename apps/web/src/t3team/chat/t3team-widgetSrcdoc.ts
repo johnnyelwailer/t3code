@@ -8,6 +8,8 @@
  */
 
 import { buildT3TeamWidgetIconSprite, T3TEAM_WIDGET_ICON_CSS } from "./t3team-widgetIconSprite.ts";
+import { normalizeT3TeamWidgetHtml, T3TEAM_WIDGET_HOST_CSS } from "./t3team-widgetHtmlStyle.ts";
+import { T3TEAM_WIDGET_MAX_HEIGHT } from "./t3team-widgetBridgeClient.ts";
 import { DEFAULT_SANS_FONT_STACK } from "~/appearanceFonts";
 
 /**
@@ -88,6 +90,7 @@ const BRIDGE_SCRIPT = `
     }
     post({ type: "t3team-widget:send-prompt", nonce: nonce, text: String(text) });
   };
+  var maxWidgetHeight = ${T3TEAM_WIDGET_MAX_HEIGHT};
   window.host = {
     callTool: function (name, args) {
       callSeq += 1;
@@ -111,7 +114,13 @@ const BRIDGE_SCRIPT = `
     else entry.reject(new Error(typeof data.error === "string" ? data.error : "Tool call failed."));
   });
   function reportHeight() {
-    var height = Math.ceil(document.documentElement.scrollHeight);
+    var root = document.documentElement;
+    var height = Math.ceil(root.scrollHeight);
+    var hasHorizontalOverflow = root.clientWidth > 0 && root.scrollWidth > root.clientWidth;
+    if (document.body) {
+      document.body.dataset.t3teamWidgetOverflow =
+        height > maxWidgetHeight || hasHorizontalOverflow ? "true" : "false";
+    }
     post({ type: "t3team-widget:resize", nonce: nonce, height: height });
   }
   if (typeof ResizeObserver === "function") {
@@ -142,10 +151,6 @@ export function buildT3TeamWidgetSrcdoc(input: {
     // metric-compatible with the host app if the theme snapshot is ever unavailable.
     `body { color: var(--foreground, inherit); font-family: var(--font-sans, ${DEFAULT_SANS_FONT_STACK}); }`,
     "img, svg, video, canvas { max-width: 100%; height: auto; }",
-    // Widget-authored content can be wider than the card (wide tables, long paths). The host
-    // wrapper clips (`overflow-hidden` rounded card), so without this the overflowing part is
-    // simply unreachable — let the widget body scroll horizontally instead.
-    "body { overflow-x: auto; }",
     T3TEAM_WIDGET_ICON_CSS,
   ].join(" ");
   // CSP first: no external network at all (postMessage is unaffected by connect-src);
@@ -159,6 +164,9 @@ export function buildT3TeamWidgetSrcdoc(input: {
     `<script data-nonce="${input.nonce}">${BRIDGE_SCRIPT}</script>`,
     // Host-injected so referencing an icon costs the author nothing against the widget_code cap.
     buildT3TeamWidgetIconSprite(),
-    input.html,
+    normalizeT3TeamWidgetHtml(input.html),
+    // Keep this after the persisted fragment: it is the host's narrow last line of defence for
+    // stale author CSS, while the normalizer above also covers inline declarations.
+    `<style data-t3team-widget-host>${T3TEAM_WIDGET_HOST_CSS}</style>`,
   ].join("\n");
 }
