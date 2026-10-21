@@ -90,6 +90,7 @@ html[data-t3team-voice-widget] body {
 }
 
 .t3team-voice-widget {
+  position: relative;
   opacity: 0;
   transform: translateY(12px) scale(0.96);
   transform-origin: bottom right;
@@ -105,6 +106,14 @@ html[data-t3team-voice-widget] body {
   transition:
     opacity 360ms var(--vz-ease-out),
     transform 360ms var(--vz-ease-out);
+}
+/* A pack's companion stands on the card's top edge, at its left (the card eases from bottom right). */
+.t3team-voice-companion {
+  position: absolute;
+  bottom: calc(100% - 1.85rem);
+  z-index: 1;
+  left: 0.25rem;
+  pointer-events: none;
 }
 .t3team-voice-size {
   transition: height 420ms var(--vz-ease-out);
