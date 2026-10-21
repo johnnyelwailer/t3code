@@ -108,8 +108,17 @@
     },
     "scripts": {
       // Knip loads its preprocessor through a CLI option; native verification and
-      // worktree setup (from t3.json) run directly.
-      "entry": ["knip-schemas.ts", "mobile-native-client.ts", "setup-worktree.ts"],
+      // worktree setup (from t3.json) run directly. release-desktop.yml bundles the
+      // Windows verify script with esbuild through a path knip does not trace, and
+      // electron-builder loads the macOS signer by path.
+      "entry": [
+        "knip-schemas.ts",
+        "mobile-native-client.ts",
+        "setup-worktree.ts",
+        "sign-macos.ts",
+        "verify-windows-desktop-artifact.ts",
+      ],
+      "ignoreDependencies": ["esbuild"],
       // The `t3` npm package's files: copied into the package, never imported.
       "ignore": ["npm-launcher/**"],
     },
@@ -128,6 +137,7 @@
         "src/t3team-livenessBeacon.fixture.mjs",
         "scripts/cli.ts",
         "scripts/evaluate-thread-titles.ts",
+        "scripts/fetch-expo-schema.ts",
         "scripts/measure-pr-preview.ts",
         "scripts/probe-claude-fork-local-rollback-replay.ts",
         "scripts/update-test-shard-weights.ts",
@@ -139,7 +149,11 @@
         // the t3team-workflowEngine{DecisionCard,Reactor} integration tests, not imported.
         "__fixtures__/t3team-decisionChoice.workflow.ts",
         "__fixtures__/t3team-parallelAgentsAfterResume.workflow.ts",
+        // graphqlgen reads its config.
+        "graphql.config.ts",
       ],
+      // The generated operations export every selection's class.
+      "ignoreIssues": { "**/*.graphql.ts": ["exports", "types", "namespaceMembers"] },
       // Keep the transitive Effect runtime pinned for standalone npm installs.
       // The Vite+ web build prerequisite.
       // undici: a bundle external (Cursor's closure) that inlined pi-coding-agent imports at
@@ -188,7 +202,7 @@
       // src/t3team/storybook, which knip cannot read `stories` from, so every story file (and
       // everything only stories import) reads as unused. Keep the stories as explicit entries
       // so the gate measures real reachability again.
-      "entry": ["scripts/warm-dep-cache.ts", "src/**/*.stories.tsx"],
+      "entry": ["scripts/warm-dep-cache.ts", "src/**/*.stories.tsx", "test/fixtures/**/*.mjs"],
       // UI component modules are copied and adapted as cohesive sets. Keep their
       // named subcomponents even before they have callers; the file audit still
       // reports an entire component module when nothing imports it.

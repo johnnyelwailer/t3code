@@ -61,9 +61,9 @@ export interface McpSessionRegistryOptions {
 }
 
 /**
- * The bound matters because `/mcp` is mounted outside the environment auth
- * stack and is reachable on whatever host the server binds to, so this token is
- * the only thing guarding the `t3-code` toolkits on a remote-reachable server.
+ * `/mcp` is outside environment auth, so idle tokens stop authenticating.
+ * Keep expired records until explicit revocation: a trusted provider turn can
+ * refresh the token its subprocess still holds; MCP requests cannot.
  */
 const DEFAULT_LIVENESS_WINDOW_MS = 24 * 60 * 60 * 1_000;
 
@@ -96,15 +96,6 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
       .digest("SHA-256", new TextEncoder().encode(token))
       .pipe(Effect.map(bytesToHex), Effect.orDie);
 
-  const pruneDead = (records: ReadonlyMap<string, CredentialRecord>, timestamp: number) => {
-    const next = new Map(
-      Array.from(records).filter(
-        ([, record]) => timestamp - record.lastAliveAt <= livenessWindowMs,
-      ),
-    );
-    return next.size === records.size ? records : next;
-  };
-
   const issue: McpSessionRegistryShape["issue"] = Effect.fn("McpSessionRegistry.issue")(
     function* (request) {
       const issuedAt = yield* currentTimeMillis;
@@ -130,7 +121,7 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
         issuedAt,
       };
       yield* SynchronizedRef.update(state, ({ records }) => {
-        const next = new Map(pruneDead(records, issuedAt));
+        const next = new Map(records);
         // Re-issuing for a thread that already holds credentials is a provider
         // session RESTART (model tier / cwd / access change), not a stop. The
         // agent process that received the earlier token may well survive that
@@ -138,7 +129,7 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
         // the new bearer — so killing the old token here stranded a running
         // thread on 401s until the whole app was restarted. Instead every live
         // token of the thread adopts the new scope; they all die together on
-        // `revokeThread` or when the thread stops showing signs of life.
+        // `revokeThread` or stop authenticating once the thread goes idle.
         for (const [existingHash, record] of next) {
           if (record.scope.thread.threadId === scope.thread.threadId) {
             next.set(existingHash, { ...record, scope, lastAliveAt: issuedAt });
@@ -168,10 +159,11 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
       const tokenHash = yield* hashToken(rawToken);
       const timestamp = yield* currentTimeMillis;
       return yield* SynchronizedRef.modify(state, ({ records }) => {
-        const current = pruneDead(records, timestamp);
-        const record = current.get(tokenHash);
-        if (!record) return [undefined, { records: current }] as const;
-        const next = new Map(current);
+        const record = records.get(tokenHash);
+        if (!record || timestamp - record.lastAliveAt > livenessWindowMs) {
+          return [undefined, { records }] as const;
+        }
+        const next = new Map(records);
         next.set(tokenHash, { ...record, lastAliveAt: timestamp });
         // t3team: the hidden orchestration author resolves with no capabilities.
         return [workflowAuthorMcpScope(record.scope), { records: next }] as const;
@@ -183,9 +175,8 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
     function* (threadId) {
       const timestamp = yield* currentTimeMillis;
       yield* SynchronizedRef.update(state, ({ records }) => {
-        const current = pruneDead(records, timestamp);
-        const next = new Map(current);
-        for (const [tokenHash, record] of current) {
+        const next = new Map(records);
+        for (const [tokenHash, record] of records) {
           if (record.scope.thread.threadId === threadId) {
             next.set(tokenHash, { ...record, lastAliveAt: timestamp });
           }

@@ -162,8 +162,13 @@ import Migration0111 from "./Migrations/t3team-081_ShellItemCounts.ts";
 // fork's one-time V1 lineage cutover still reads. Register it above the maximum once the cutover
 // is confirmed done everywhere.
 import Migration0112 from "./Migrations/064_CanonicalizeThreadPullRequestLinks.ts";
+// New from the 2026-10-21 upstream sync (upstream 065/066/067). Appended above the fork's maximum id
+// (112), as for every earlier sync; upstream 063 stays held (see above).
+import Migration0113 from "./Migrations/065_CodexUsageNativeTurnIndex.ts";
+import Migration0114 from "./Migrations/066_RepairClientSettlementTimestamps.ts";
+import Migration0115 from "./Migrations/067_WebhookDedupe.ts";
 
-export const migrationEntries = [
+const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
   [2, "OrchestrationCommandReceipts", Migration0002],
   [3, "CheckpointDiffBlobs", Migration0003],
@@ -249,7 +254,7 @@ export const migrationEntries = [
   [83, "OrchestrationEventsTypeSequenceIndex", Migration0083],
   // Upstream 055/056 (orchestration V2) live at 84/85 in this fork's ledger; see the import comment.
   // Preserve this migration's schema. Future V2 schema changes need new migrations. A new
-  // migration must take an id ABOVE the highest id registered here (currently 111) — never one of
+  // migration must take an id ABOVE the highest id registered here (currently 115) — never one of
   // the gaps (88-89, 93-96): upgraded databases have recorded the maximum, and the Migrator skips
   // every id at or below it. Upstream's reconcileV2PreviewMigration stays a no-op on fork ledgers
   // (fork ids 53/54 are never named OrchestrationV2).
@@ -281,6 +286,10 @@ export const migrationEntries = [
   [111, "ShellItemCounts", Migration0111],
   // Upstream 064 lives at 112 in this fork's ledger; upstream 063 is held. See the import comment.
   [112, "CanonicalizeThreadPullRequestLinks", Migration0112],
+  // Upstream 065-067 live at 113-115 in this fork's ledger; see the import comment.
+  [113, "CodexUsageNativeTurnIndex", Migration0113],
+  [114, "RepairClientSettlementTimestamps", Migration0114],
+  [115, "WebhookDedupe", Migration0115],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

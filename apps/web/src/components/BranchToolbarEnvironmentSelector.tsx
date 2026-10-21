@@ -13,10 +13,10 @@ import {
   T3TEAM_THREAD_HANDOFF_NO_GIT_REMOTE_MESSAGE,
 } from "@t3tools/contracts";
 import type { CloudSessionCreateOptions } from "~/cloud/t3team-cloudSessionTargetStore";
-import { ScaleIcon, SettingsIcon } from "lucide-react";
+import { PlusIcon, ScaleIcon, SettingsIcon } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 
-import type { EnvironmentOption } from "./BranchToolbar.logic";
+import { ADD_TO_MACHINE_LABEL_CLASS, type EnvironmentOption } from "./BranchToolbar.logic";
 import { cn } from "../lib/utils";
 import {
   THREAD_DETAILS_PANEL_ICON_CLASS,
@@ -47,6 +47,10 @@ import {
  */
 const SETUP_CLOUD_SESSIONS_SELECT_VALUE = "__setup-cloud-sessions__";
 
+// Action values cannot collide with server-minted environment IDs.
+const AUTO_VALUE = "action:auto";
+const ADD_MACHINE_VALUE = "action:add-machine";
+
 export interface BranchToolbarEnvironmentSelectorBaseProps {
   autoEnvironmentLabel?: string | undefined;
   onAutoEnvironment?: (() => void) | undefined;
@@ -54,6 +58,8 @@ export interface BranchToolbarEnvironmentSelectorBaseProps {
   environmentId: EnvironmentId;
   availableEnvironments: readonly EnvironmentOption[];
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
+  /** Opens "add this project to another machine"; offered as the last item of the menu. */
+  onAddToMachine?: (() => void) | undefined;
   displayMode?: "toolbar" | "panel";
   /**
    * Cloud sessions worth showing under "Cloud" while they are not ready: the
@@ -164,6 +170,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   onHandoffToEnvironment,
   onConnectCloudSession,
   projectHasRemote,
+  onAddToMachine,
 }: BranchToolbarEnvironmentSelectorProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
   // A started thread cannot switch machines; in the panel it can move to one instead.
@@ -214,7 +221,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
 
   const showAutoLabel = Boolean(autoEnvironmentLabel) && !moveMode;
   const selectValue = showAutoLabel
-    ? "auto"
+    ? AUTO_VALUE
     : optimisticCloudSession !== null
       ? cloudSessionSelectValue(optimisticCloudSession.sessionId)
       : environmentId;
@@ -222,7 +229,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   const environmentItems = useMemo(
     () => [
       ...(onAutoEnvironment && !moveMode
-        ? [{ value: "auto", label: autoEnvironmentLabel ?? "Auto balance" }]
+        ? [{ value: AUTO_VALUE, label: autoEnvironmentLabel ?? "Auto balance" }]
         : []),
       ...(pickable
         ? [...runOnEnvironments, ...connectedCloudEnvironments].map((env) => ({
@@ -241,6 +248,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       ...(onSetupCloudSessions
         ? [{ value: SETUP_CLOUD_SESSIONS_SELECT_VALUE, label: "Set up cloud sessions" }]
         : []),
+      ...(onAddToMachine ? [{ value: ADD_MACHINE_VALUE, label: "Add to another machine" }] : []),
     ],
     [
       runOnEnvironments,
@@ -250,6 +258,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       moveMode,
       pickable,
       onSetupCloudSessions,
+      onAddToMachine,
       optimisticCloudSession,
     ],
   );
@@ -264,7 +273,11 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       onSetupCloudSessions?.();
       return;
     }
-    if (value === "auto") {
+    if (value === ADD_MACHINE_VALUE) {
+      onAddToMachine?.();
+      return;
+    }
+    if (value === AUTO_VALUE) {
       onAutoEnvironment?.();
       return;
     }
@@ -297,7 +310,14 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
     onCloudMenuOpenChange?.(false);
   };
 
-  if (!moveMode && (envLocked || (onEnvironmentChange === undefined && !hasCloudAffordance))) {
+  // The static label carries the xs control's height (h-7 sm:h-6) as well as its padding: the
+  // composer context strip has no min-height of its own, and the glass seam joining it to the
+  // composer assumes a fixed strip height.
+  if (
+    !moveMode &&
+    (envLocked ||
+      (onEnvironmentChange === undefined && !hasCloudAffordance && onAddToMachine === undefined))
+  ) {
     const lockedRow = (
       <span
         className={cn(
@@ -395,7 +415,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
           <SelectGroupLabel>{moveMode ? "Move to" : "Run on"}</SelectGroupLabel>
           {onAutoEnvironment && !moveMode && (
             <SelectItem
-              value="auto"
+              value={AUTO_VALUE}
               onClick={() => {
                 if (autoEnvironmentLabel) onAutoEnvironment?.();
               }}
@@ -465,6 +485,14 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
               </span>
             </SelectItem>
           )}
+          {onAddToMachine ? (
+            <SelectItem value={ADD_MACHINE_VALUE}>
+              <span className={ADD_TO_MACHINE_LABEL_CLASS}>
+                <PlusIcon aria-hidden="true" className="size-3" />
+                Add to another machine
+              </span>
+            </SelectItem>
+          ) : null}
         </SelectGroup>
       </SelectPopup>
     </Select>

@@ -22,14 +22,13 @@ export function shellPendingRuntimeRequest(
   request: OrchestrationV2PendingRuntimeRequestSummary | null,
   thread: Pick<OrchestrationV2AppThread, "pendingWorkflowAsk">,
 ): OrchestrationV2PendingRuntimeRequestSummary | null {
-  if (request !== null) {
-    return { id: request.id, kind: request.kind, createdAt: request.createdAt };
-  }
+  if (request !== null) return request;
   const ask = thread.pendingWorkflowAsk;
   if (ask == null) return null;
   return {
     id: RuntimeRequestId.make(`${WORKFLOW_ASK_REQUEST_ID_PREFIX}${ask.correlationId}`),
     kind: "user_input",
     createdAt: DateTime.makeUnsafe(ask.createdAt),
+    blocking: true,
   };
 }

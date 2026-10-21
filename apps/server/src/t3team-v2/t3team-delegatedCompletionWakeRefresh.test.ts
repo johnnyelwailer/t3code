@@ -116,6 +116,7 @@ const harness = (input: {
     },
     ids: { event: () => Effect.sync(() => EventId.make(`event:wake-refresh:${(nextEvent += 1)}`)) },
     turnItems: [userTurnItem(input.message?.text ?? "")],
+    subagents: [],
     run,
     message: input.message,
   };
@@ -130,7 +131,7 @@ const harness = (input: {
 it.effect("renders a merged wake for its final task set and stores the text it delivers", () =>
   Effect.gen(function* () {
     const test = harness({
-      message: wakeMessage(delegatedCompletionWakeDetail(taskIds)),
+      message: wakeMessage(delegatedCompletionWakeDetail(taskIds, [])),
       renderer: richRenderer,
     });
     const delivered = yield* test.refresh;
@@ -169,7 +170,7 @@ it.effect("leaves a wake already rendered for its cohort untouched", () =>
 
 it.effect("writes nothing without a renderer override", () =>
   Effect.gen(function* () {
-    const message = wakeMessage(delegatedCompletionWakeDetail(taskIds));
+    const message = wakeMessage(delegatedCompletionWakeDetail(taskIds, []));
     const test = harness({ message });
 
     assert.strictEqual(yield* test.refresh, message);
@@ -180,7 +181,7 @@ it.effect("writes nothing without a renderer override", () =>
 
 it.effect("delivers the stored text when the run moved on before the write", () =>
   Effect.gen(function* () {
-    const message = wakeMessage(delegatedCompletionWakeDetail(taskIds));
+    const message = wakeMessage(delegatedCompletionWakeDetail(taskIds, []));
     const test = harness({ message, renderer: richRenderer, committed: false });
 
     assert.strictEqual(yield* test.refresh, message);

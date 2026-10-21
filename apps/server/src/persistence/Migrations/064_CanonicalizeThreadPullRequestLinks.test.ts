@@ -66,9 +66,9 @@ layer("064_CanonicalizeThreadPullRequestLinks", (it) => {
   it.effect("migrates single links once, preserves arrays, and keeps links after a rebuild", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      // t3team: upstream 064 is fork ledger id 111 (see Migrations.ts); 110 is the last fork id
+      // t3team: upstream 064 is fork ledger id 112 (see Migrations.ts); 111 is the last fork id
       // before it. Upstream 063 is held in the fork.
-      yield* runMigrations({ toMigrationInclusive: 110 });
+      yield* runMigrations({ toMigrationInclusive: 111 });
       const fixtures = [
         { ...thread("github"), linkedPullRequest: linked },
         {
@@ -125,8 +125,10 @@ layer("064_CanonicalizeThreadPullRequestLinks", (it) => {
           'user', ${v1Payload}, '{}', 1)
       `;
 
-      assert.deepEqual(yield* runMigrations(), [[111, "CanonicalizeThreadPullRequestLinks"]]);
-      assert.deepEqual(yield* runMigrations(), []);
+      assert.deepEqual(yield* runMigrations({ toMigrationInclusive: 112 }), [
+        [112, "CanonicalizeThreadPullRequestLinks"],
+      ]);
+      assert.deepEqual(yield* runMigrations({ toMigrationInclusive: 112 }), []);
       const rows = yield* sql<{ readonly thread_id: string; readonly payload_json: string }>`
         SELECT thread_id, payload_json FROM orchestration_v2_projection_threads
       `;

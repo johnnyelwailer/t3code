@@ -88,58 +88,60 @@ export const makeChecksRevalidator = Effect.gen(function* () {
               status,
             });
           /** What the endpoint answered, or null where the host cannot say. */
-          const get = (endpoint: string, head = false) =>
-            Effect.gen(function* () {
-              const previous = entry.validators.get(endpoint);
-              const response = yield* api
-                .rest({
-                  host: input.host,
-                  operation: "revalidateChecks",
-                  path: endpoint,
-                  ...(previous?.etag ? { ifNoneMatch: previous.etag } : {}),
-                })
-                .pipe(
-                  Effect.catchTags({
-                    GitHubApiNotFoundError: () =>
-                      Effect.sync(() => {
-                        entry.supported = false;
-                        return null;
-                      }),
-                    GitHubApiResponseError: (error) =>
-                      Effect.sync(() => {
-                        entry.supported = !UNSUPPORTED_STATUSES.has(error.status);
-                        return null;
-                      }),
-                  }),
-                );
-              if (response === null) {
-                entry.value = null;
-                return null;
-              }
-              if (response.status === 304 && previous) return previous;
-              if (response.status !== 200 || response.truncated) {
-                return yield* fail(response.status);
-              }
-              entry.value = null;
-              if (head) {
-                const decoded = yield* decodeHead(response.body).pipe(
-                  Effect.mapError(() => fail(response.status)),
-                );
-                if (entry.head?.head.sha !== decoded.head.sha) entry.validators.clear();
-                entry.head = decoded;
-              }
-              const validator = {
-                etag: response.headers["etag"]?.trim(),
-                next: yield* nextPagePath({
-                  host: input.host,
-                  operation: "revalidateChecks",
-                  link: response.headers["link"],
+          const get = Effect.fn("gitHubConditionalChecks.get")(function* (
+            endpoint: string,
+            head = false,
+          ) {
+            const previous = entry.validators.get(endpoint);
+            const response = yield* api
+              .rest({
+                host: input.host,
+                operation: "revalidateChecks",
+                path: endpoint,
+                ...(previous?.etag ? { ifNoneMatch: previous.etag } : {}),
+              })
+              .pipe(
+                Effect.catchTags({
+                  GitHubApiNotFoundError: () =>
+                    Effect.sync(() => {
+                      entry.supported = false;
+                      return null;
+                    }),
+                  GitHubApiResponseError: (error) =>
+                    Effect.sync(() => {
+                      entry.supported = !UNSUPPORTED_STATUSES.has(error.status);
+                      return null;
+                    }),
                 }),
-                body: response.body,
-              };
-              entry.validators.set(endpoint, validator);
-              return validator;
-            });
+              );
+            if (response === null) {
+              entry.value = null;
+              return null;
+            }
+            if (response.status === 304 && previous) return previous;
+            if (response.status !== 200 || response.truncated) {
+              return yield* fail(response.status);
+            }
+            entry.value = null;
+            if (head) {
+              const decoded = yield* decodeHead(response.body).pipe(
+                Effect.mapError(() => fail(response.status)),
+              );
+              if (entry.head?.head.sha !== decoded.head.sha) entry.validators.clear();
+              entry.head = decoded;
+            }
+            const validator = {
+              etag: response.headers["etag"]?.trim(),
+              next: yield* nextPagePath({
+                host: input.host,
+                operation: "revalidateChecks",
+                link: response.headers["link"],
+              }),
+              body: response.body,
+            };
+            entry.validators.set(endpoint, validator);
+            return validator;
+          });
           const root = `repos/${input.repository}`;
           if ((yield* get(`${root}/pulls/${input.number}`, true)) === null) return yield* read;
           const head = entry.head;

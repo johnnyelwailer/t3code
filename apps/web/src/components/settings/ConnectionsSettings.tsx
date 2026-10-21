@@ -16,6 +16,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useEffectEvent,
   useId,
   useRef,
   useState,
@@ -43,12 +44,15 @@ import {
   type DesktopServerExposureState,
   type DesktopWslState,
   type EnvironmentId,
+  connectReachabilityHelpUrl,
+  formatConnectReachable,
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
 import {
   RelayConnectionRegistration,
   RelayConnectionTarget,
   connectionRoutes,
+  hasSavedBearerRoute,
   connectionStatusText,
   environmentMcpUrl,
 } from "@t3tools/client-runtime/connection";
@@ -72,6 +76,7 @@ import {
   isQrShareableEndpoint,
   isWslSettingsRowVisible,
   missingTailscaleEndpointDescription,
+  resolveLocalVersionStatusLabel,
   selectQrEndpointOption,
   togglePairingScopeSelection,
 } from "./ConnectionsSettings.logic";
@@ -85,6 +90,11 @@ import { LocalEnvironmentSetting } from "./LocalEnvironmentSetting";
 import { searchableSetting } from "./settingsSearch";
 import { EnvironmentIconMenu } from "./EnvironmentIconPicker";
 import { EnvironmentRoutesList } from "./EnvironmentRoutesList";
+import {
+  ConnectionDiagnosisPanel,
+  ConnectionDiagnosisSummary,
+  useConnectionDiagnosis,
+} from "./ConnectionDiagnosisDetails";
 import { usePreparedConnection } from "~/state/session";
 import {
   EnvironmentRow,
@@ -184,6 +194,7 @@ import {
 } from "~/state/desktopNetworkAccess";
 import { desktopSshHostsStateAtom, filterDiscoveredSshHosts } from "~/state/desktopSshHosts";
 import { desktopWslStateAtom, refreshDesktopWslState } from "~/state/desktopWslState";
+import { useDesktopUpdateState } from "~/state/desktopUpdate";
 import {
   type EnvironmentPresentation,
   useEnvironments,
@@ -1483,8 +1494,10 @@ function SavedBackendListRow({
 }: SavedBackendListRowProps) {
   const [routesOpen, setRoutesOpen] = useState(false);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
+  const [diagnosisOpen, setDiagnosisOpen] = useState(false);
   const environmentId = environment.environmentId;
   const unsupported = environment.connection.phase === "unsupported";
+  const blocked = unsupported && !hasSavedBearerRoute(environment.entry);
   const enabled = environment.entry.enabled && !unsupported;
   const isConnected = environment.connection.phase === "connected";
   const isRemoving = removingEnvironmentId === environmentId;
@@ -1563,6 +1576,13 @@ function SavedBackendListRow({
   ) {
     setLastRelayHttpBaseUrl(discoveredRelayHttpBaseUrl);
   }
+  const retryNow = useAtomCommand(environmentCatalog.retryNow);
+  const {
+    diagnosis: currentDiagnosis,
+    state: connectionState,
+    relayOnly,
+  } = useConnectionDiagnosis(environment);
+  const diagnosis = resumingServerUpdate ? null : currentDiagnosis;
   const prepared = usePreparedConnection(environmentId);
   const connectedTarget = isConnected && prepared._tag === "Some" ? prepared.value.target : null;
   const mcpUrl = environmentMcpUrl({
@@ -1577,7 +1597,8 @@ function SavedBackendListRow({
   const routeCount = connectionRoutes(environment.entry).length;
   const subtitleText = [
     environmentTransportLabel(environment, connectedTarget),
-    resumingServerUpdate ? "Restarting" : status.text,
+    // The headline below names the failure in full.
+    diagnosis ? null : resumingServerUpdate ? "Restarting" : status.text,
     enabled && versionMismatch ? serverVersion : null,
   ]
     .filter((value): value is string => value !== null)
@@ -1620,6 +1641,7 @@ function SavedBackendListRow({
                     enabled &&
                       status.tone === "error" &&
                       !resumingServerUpdate &&
+                      !diagnosis &&
                       "text-destructive",
                   )}
                 />
@@ -1671,14 +1693,33 @@ function SavedBackendListRow({
         </span>
       }
       below={
-        serverUpdateState.status !== "idle" ? (
-          <div className="mt-1 max-w-md">
-            <ServerUpdateProgress state={serverUpdateState} />
-          </div>
-        ) : null
+        <>
+          {diagnosis ? (
+            <ConnectionDiagnosisSummary
+              diagnosis={diagnosis}
+              retryAt={connectionState.phase === "backoff" ? connectionState.retryAt : null}
+              attempt={connectionState.attempt}
+              expanded={diagnosisOpen}
+              onToggle={() => setDiagnosisOpen((open) => !open)}
+            />
+          ) : null}
+          {serverUpdateState.status !== "idle" ? (
+            <div className="mt-1 max-w-md">
+              <ServerUpdateProgress state={serverUpdateState} />
+            </div>
+          ) : null}
+        </>
       }
       detail={
         <>
+          {diagnosis && diagnosisOpen ? (
+            <ConnectionDiagnosisPanel
+              hostLabel={environment.label}
+              diagnosis={diagnosis}
+              onRetry={() => void retryNow(environmentId)}
+              onAddRoute={relayOnly ? () => onAddRoute(environment) : null}
+            />
+          ) : null}
           {routesOpen && (
             <EnvironmentRoutesList
               environment={environment}
@@ -1743,14 +1784,14 @@ function SavedBackendListRow({
                 <Switch
                   size="sm"
                   checked={enabled}
-                  disabled={isRemoving || unsupported}
+                  disabled={isRemoving || blocked}
                   aria-label={`${enabled ? "Switch off" : "Switch on"} ${environment.label}`}
                   onCheckedChange={(checked) => onSetEnabled(environmentId, checked)}
                 />
               }
             />
             <TooltipPopup side="top">
-              {unsupported ? "Client not supported" : enabled ? "Switch off" : "Switch on"}
+              {blocked ? "Client not supported" : enabled ? "Switch off" : "Switch on"}
             </TooltipPopup>
           </Tooltip>
           <Menu>
@@ -1849,6 +1890,32 @@ function ConfiguredCloudLinkRow({ canManageRelay }: { readonly canManageRelay: b
       ? "Your session does not have permission to manage T3 Connect access."
       : null;
   const isBusy = isUpdating || isUpdatingPreference;
+  const refreshLinkState = useEffectEvent(primaryCloudLinkState.refresh);
+  // The server rechecks reachability when the tunnel's 30 s readiness poll changes.
+  // Poll while mounted, so a failed read does not stop later ones.
+  useEffect(() => {
+    const interval = window.setInterval(() => refreshLinkState(), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
+  const reachability = managedTunnelActive ? primaryCloudLinkState.data?.reachability : undefined;
+  const reachabilityStatus =
+    reachability?.status === "reachable" ? (
+      formatConnectReachable(reachability)
+    ) : reachability?.status === "unreachable" ? (
+      <span className="block text-destructive">
+        {[reachability.reason, reachability.hint, `Fix: ${reachability.fix}`]
+          .filter(Boolean)
+          .join(" ")}{" "}
+        <a
+          href={connectReachabilityHelpUrl(reachability.cause)}
+          target="_blank"
+          rel="noreferrer"
+          className="underline underline-offset-2"
+        >
+          More info
+        </a>
+      </span>
+    ) : null;
 
   const updateManagedTunnel = async (enabled: boolean) => {
     if (
@@ -1924,12 +1991,16 @@ function ConfiguredCloudLinkRow({ canManageRelay }: { readonly canManageRelay: b
             linkRevoked
               ? "This environment was removed from T3 Connect. Turn it on to link it again."
               : managedTunnelActive
-                ? "This environment is available to your other devices through T3 Connect."
+                ? reachability?.status === "unreachable"
+                  ? "T3 Connect is on, but other devices cannot reach this environment."
+                  : reachability?.status === "reachable"
+                    ? "This environment is available to your other devices through T3 Connect."
+                    : "T3 Connect is on. Reachability has not been checked yet."
                 : managedTunnelOutOfSync
                   ? "T3 Connect is out of sync. This environment is linked only to publish agent activity, so other devices cannot connect. Turn T3 Connect on to repair it."
                   : "Make this environment available to your other devices through T3 Connect."
           }
-          status={operationError ?? primaryCloudLinkState.error}
+          status={operationError ?? primaryCloudLinkState.error ?? reachabilityStatus}
           control={
             <CloudLinkSwitch
               checked={managedTunnelActive}
@@ -2044,6 +2115,16 @@ function CloudRemoteEnvironmentRows({
   ) : null;
 }
 
+// Subscribes on its own so desktop download progress does not re-render the page.
+function LocalVersionStatusLabel() {
+  const updateState = useDesktopUpdateState();
+  return (
+    <span className="text-xs text-muted-foreground">
+      {resolveLocalVersionStatusLabel(updateState)}
+    </span>
+  );
+}
+
 export function ConnectionsSettings() {
   const desktopBridge = window.desktopBridge;
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -2131,7 +2212,7 @@ export function ConnectionsSettings() {
   const loadBalancingEnvironments = [
     ...(primaryEnvironment ? [primaryEnvironment] : []),
     ...savedEnvironments.filter((environment) => environment.entry.enabled),
-  ];
+  ].filter((environment) => environment.connection.phase !== "unsupported");
   const savedDesktopSshEnvironmentKeys = (() => {
     const keys = new Set<string>();
     for (const environment of savedEnvironments) {
@@ -2183,7 +2264,6 @@ export function ConnectionsSettings() {
   const [removingSavedEnvironmentId, setRemovingSavedEnvironmentId] =
     useState<EnvironmentId | null>(null);
   const [isUpdatingDesktopServerExposure, setIsUpdatingDesktopServerExposure] = useState(false);
-  const [isDesktopServerExposureDialogOpen, setIsDesktopServerExposureDialogOpen] = useState(false);
   const [isUpdatingTailscaleServe, setIsUpdatingTailscaleServe] = useState(false);
   const [isUpdatingWslBackend, setIsUpdatingWslBackend] = useState(false);
   const [desktopWslMutationError, setDesktopWslMutationError] = useState<string | null>(null);
@@ -2254,7 +2334,7 @@ export function ConnectionsSettings() {
     const address = formatDesktopSshTarget(target);
     return (
       !savedDesktopSshEnvironmentKeys.has(target.alias) &&
-      !savedDesktopSshEnvironmentKeys.has(address)
+      (target.source === "ssh-config" || !savedDesktopSshEnvironmentKeys.has(address))
     );
   });
   const filteredDiscoveredSshHosts = filterDiscoveredSshHosts(
@@ -2331,11 +2411,11 @@ export function ConnectionsSettings() {
     try {
       await desktopBridge.setServerExposureMode(checked ? "network-accessible" : "local-only");
       refreshDesktopNetworkAccessState();
-      setIsDesktopServerExposureDialogOpen(false);
+      setPendingDesktopServerExposureMode(null);
       setIsUpdatingDesktopServerExposure(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to update network exposure.";
-      setIsDesktopServerExposureDialogOpen(false);
+      setPendingDesktopServerExposureMode(null);
       setDesktopServerExposureMutationError(message);
       toastManager.add(
         stackedThreadToast({
@@ -3065,7 +3145,6 @@ export function ConnectionsSettings() {
       disabled={!desktopServerExposureState || isUpdatingDesktopServerExposure}
       onCheckedChange={(checked) => {
         setPendingDesktopServerExposureMode(checked ? "network-accessible" : "local-only");
-        setIsDesktopServerExposureDialogOpen(true);
       }}
       aria-label="Enable network access"
     />
@@ -3545,7 +3624,7 @@ export function ConnectionsSettings() {
                       }
                     />
                   ) : primaryServerUpdateState.status === "idle" && primaryServerConfig ? (
-                    <span className="text-xs text-muted-foreground">Up to date</span>
+                    <LocalVersionStatusLabel />
                   ) : undefined
                 }
               />
@@ -3628,13 +3707,10 @@ export function ConnectionsSettings() {
             </FoldedSettingsSection>
           ) : null}
           <AlertDialog
-            open={isDesktopServerExposureDialogOpen && canManageLocalBackend}
+            open={pendingDesktopServerExposureMode !== null && canManageLocalBackend}
             onOpenChange={(open) => {
-              if (isUpdatingDesktopServerExposure) return;
-              setIsDesktopServerExposureDialogOpen(open);
-            }}
-            onOpenChangeComplete={(open) => {
-              if (!open) setPendingDesktopServerExposureMode(null);
+              if (!open && !isUpdatingDesktopServerExposure)
+                setPendingDesktopServerExposureMode(null);
             }}
           >
             <AlertDialogPopup>

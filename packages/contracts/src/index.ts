@@ -79,6 +79,7 @@ export * from "./browserProfile.ts";
 export * from "./device.ts";
 export * from "./preview.ts";
 export * from "./previewAutomation.ts";
+export * from "./previewCapture.ts";
 export * from "./resourceTelemetry.ts";
 export * from "./t3team-resourcePressure.ts";
 export * from "./t3team-resourcePressureCleanup.ts";

@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import {
+  ForwardCompatibleOptional,
   NonNegativeInt,
   PositiveInt,
   ProjectId,
@@ -83,6 +84,8 @@ export const VcsRef = Schema.Struct({
   name: TrimmedNonEmptyStringSchema,
   isRemote: Schema.optional(Schema.Boolean),
   remoteName: Schema.optional(TrimmedNonEmptyStringSchema),
+  // Full Git ref, for example refs/remotes/origin/feature.
+  upstreamRef: Schema.optional(TrimmedNonEmptyStringSchema),
   current: Schema.Boolean,
   isDefault: Schema.Boolean,
   worktreePath: TrimmedNonEmptyStringSchema.pipe(Schema.NullOr),
@@ -218,6 +221,9 @@ const VcsStatusLocalShape = {
   refName: Schema.NullOr(TrimmedNonEmptyStringSchema),
   hasWorkingTreeChanges: Schema.Boolean,
   workingTree: Schema.Struct({
+    // Absolute worktree root on the environment that every files[].path is
+    // relative to. Absent when the server could not resolve it.
+    rootPath: Schema.optional(GitFilePath),
     files: Schema.Array(
       Schema.Struct({
         path: GitFilePath,
@@ -272,6 +278,7 @@ export const VcsStatusStreamEvent = Schema.Union([
 export type VcsStatusStreamEvent = typeof VcsStatusStreamEvent.Type;
 
 export const VcsListRefsResult = Schema.Struct({
+  isAtRepositoryRoot: Schema.optional(Schema.Boolean),
   refs: Schema.Array(VcsRef),
   isRepo: Schema.Boolean,
   hasPrimaryRemote: Schema.Boolean,
@@ -344,15 +351,11 @@ export const VcsPullResult = Schema.Struct({
 });
 export type VcsPullResult = typeof VcsPullResult.Type;
 
-// RPC / domain errors
-
-// Well-known git failures, recognized from stderr at the driver and carried as
-// a closed set of diagnostic tags. The tag names the cause for logs and
-// callers; it does not select a message. When a tag is found, raw stderr
-// stays off the error (it echoes argv and remote URLs, which can hold
-// credentials, and the tag already explains the cause). When nothing
-// matches, the driver falls back to attaching (argument-redacted) stderr
-// so an unclassified failure is still diagnosable — see `stderr` below.
+// Git stderr can echo credentials from argv and remote URLs. A recognized
+// failure reaches the error as a fixed reason only; newer, unknown reasons
+// decode as absent through GitCommandError. When no reason matches, the driver
+// attaches argument-redacted, truncated stderr (see `stderr`) so an
+// unclassified failure stays diagnosable.
 export const GitCommandFailureReason = Schema.Literals([
   "authentication_failed",
   "branch_already_exists",
@@ -360,6 +363,7 @@ export const GitCommandFailureReason = Schema.Literals([
   "host_key_unverified",
   "not_a_repository",
   "path_already_exists",
+  "ref_not_found",
   "remote_unreachable",
   "tag_would_be_clobbered",
 ]);
@@ -376,7 +380,7 @@ export class GitCommandError extends Schema.TaggedError<GitCommandError>()("GitC
   /** Truncated (< 4KB) stderr — the diagnostics that make a non-zero exit actionable. */
   stderr: Schema.optional(Schema.String),
   outputLength: Schema.optional(Schema.Number),
-  reason: Schema.optional(GitCommandFailureReason),
+  reason: ForwardCompatibleOptional(GitCommandFailureReason),
   detail: Schema.String,
   cause: Schema.optional(Schema.Defect()),
 }) {
