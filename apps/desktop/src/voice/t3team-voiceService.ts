@@ -11,6 +11,11 @@ import type {
 
 import { downloadWhisperModel } from "./t3team-whisperModelDownload.ts";
 import {
+  defaultWhisperModelFor,
+  LARGE_TIER_WHISPER_MODEL,
+  SMALL_TIER_WHISPER_MODEL,
+} from "./t3team-whisperDefaultModel.ts";
+import {
   isValidWhisperModelId,
   locateWhisperModel,
   type WhisperModelLocatorEnvironment,
@@ -49,6 +54,51 @@ export function makeDesktopVoiceService(deps: {
   const log = deps.log ?? (() => undefined);
   const download = deps.download ?? downloadWhisperModel;
 
+  const resolveNamedModel = async (
+    model: string,
+    allowDownload: boolean,
+  ): Promise<ModelResolution | ReturnType<typeof failure>> => {
+    const found = locateWhisperModel({ model }, deps.environment);
+    if (found) return { ok: true, ...found };
+    if (!isValidWhisperModelId(model)) {
+      return failure("model-unavailable", `"${model}" is not a valid whisper model id.`);
+    }
+    if (!allowDownload) {
+      return failure(
+        "model-unavailable",
+        `No whisper model "${model}" found; it is downloaded on first use.`,
+      );
+    }
+    try {
+      const modelPath = await download({
+        model,
+        targetDir: deps.environment.appModelsDir,
+        ...(deps.onDownloadProgress ? { onProgress: deps.onDownloadProgress } : {}),
+      });
+      return { ok: true, modelPath, modelSource: "download" };
+    } catch (error) {
+      return failure("model-unavailable", error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  /**
+   * No model configured: a large model already on disk wins; otherwise the GPU decides the tier.
+   * Reading the GPU needs a loaded model, so `base` (small, and the right answer for most
+   * machines without a discrete GPU) is fetched first and doubles as the probe model.
+   */
+  const resolveAutomaticModel = async (
+    allowDownload: boolean,
+  ): Promise<ModelResolution | ReturnType<typeof failure>> => {
+    const large = locateWhisperModel({ model: LARGE_TIER_WHISPER_MODEL }, deps.environment);
+    if (large) return { ok: true, ...large };
+    const small = await resolveNamedModel(SMALL_TIER_WHISPER_MODEL, allowDownload);
+    if (!small.ok) return small;
+    const device = await deps.host.probeDevice(small.modelPath).catch(() => null);
+    return device && defaultWhisperModelFor(device.kind) === LARGE_TIER_WHISPER_MODEL
+      ? resolveNamedModel(LARGE_TIER_WHISPER_MODEL, allowDownload)
+      : small;
+  };
+
   const resolveModel = async (
     config: DesktopVoiceConfig,
     allowDownload: boolean,
@@ -64,27 +114,9 @@ export function makeDesktopVoiceService(deps: {
             `voice.transcriber.modelPath points to a file that does not exist: ${config.modelPath}`,
           );
     }
-    const found = locateWhisperModel(config, deps.environment);
-    if (found) return { ok: true, ...found };
-    if (!isValidWhisperModelId(config.model)) {
-      return failure("model-unavailable", `"${config.model}" is not a valid whisper model id.`);
-    }
-    if (!allowDownload) {
-      return failure(
-        "model-unavailable",
-        `No whisper model "${config.model}" found; it is downloaded on first use.`,
-      );
-    }
-    try {
-      const modelPath = await download({
-        model: config.model,
-        targetDir: deps.environment.appModelsDir,
-        ...(deps.onDownloadProgress ? { onProgress: deps.onDownloadProgress } : {}),
-      });
-      return { ok: true, modelPath, modelSource: "download" };
-    } catch (error) {
-      return failure("model-unavailable", error instanceof Error ? error.message : String(error));
-    }
+    return config.model === ""
+      ? resolveAutomaticModel(allowDownload)
+      : resolveNamedModel(config.model, allowDownload);
   };
 
   return {
@@ -112,7 +144,7 @@ export function makeDesktopVoiceService(deps: {
         });
         const elapsedMs = Date.now() - startedAt;
         log(
-          `whisper transcribed ${pcmSeconds(pcm16Base64)} s of audio in ${elapsedMs} ms (${result.acceleration}, language ${result.language ?? "unknown"}, ${result.text.length} chars)`,
+          `whisper transcribed ${pcmSeconds(pcm16Base64)} s of audio in ${elapsedMs} ms (${result.device}, language ${result.language ?? "unknown"}, ${result.text.length} chars)`,
         );
         return { ok: true, ...result, elapsedMs };
       } catch (error) {

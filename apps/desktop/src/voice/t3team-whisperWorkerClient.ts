@@ -2,11 +2,15 @@ import {
   WHISPER_WORKER_CRASH_ID,
   WHISPER_WORKER_READY,
   isWhisperWorkerResponse,
+  type WhisperAcceleration,
   type WhisperLibVariant,
   type WhisperWorkerCall,
   type WhisperWorkerRequest,
   type WhisperWorkerResponse,
 } from "./t3team-whisperProtocol.ts";
+
+/** Extra environment for one worker process, layered over the host's own. */
+export type WhisperWorkerEnv = Readonly<Record<string, string>>;
 
 export type WhisperWorkerHandle = {
   readonly send: (request: WhisperWorkerRequest) => void;
@@ -18,7 +22,8 @@ export type WhisperWorkerHandle = {
 export type LiveWhisperWorker = {
   readonly handle: WhisperWorkerHandle;
   readonly modelPath: string;
-  readonly acceleration: "gpu" | "cpu";
+  readonly acceleration: WhisperAcceleration;
+  readonly vulkanLog: readonly string[];
   readonly call: (request: WhisperWorkerCall) => Promise<WhisperWorkerResponse>;
 };
 
@@ -27,13 +32,14 @@ export type LiveWhisperWorker = {
  * worker fails to load or dies first. `onExit` fires for any later exit (crash or kill).
  */
 export function startWhisperWorker(input: {
-  readonly spawnWorker: () => WhisperWorkerHandle;
+  readonly spawnWorker: (env?: WhisperWorkerEnv) => WhisperWorkerHandle;
   readonly modelPath: string;
   readonly variant: WhisperLibVariant;
+  readonly env?: WhisperWorkerEnv;
   readonly onExit: (handle: WhisperWorkerHandle) => void;
 }): Promise<LiveWhisperWorker> {
   return new Promise((resolve, reject) => {
-    const handle = input.spawnWorker();
+    const handle = input.spawnWorker(input.env);
     const pending = new Map<number, (response: WhisperWorkerResponse) => void>();
     let nextId = 0;
     let ready = false;
@@ -56,6 +62,7 @@ export function startWhisperWorker(input: {
               call,
               modelPath: input.modelPath,
               acceleration: "acceleration" in response ? response.acceleration : "cpu",
+              vulkanLog: "vulkanLog" in response ? response.vulkanLog : [],
             });
           },
         );

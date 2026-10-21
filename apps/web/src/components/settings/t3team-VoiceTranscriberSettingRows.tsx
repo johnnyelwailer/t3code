@@ -1,7 +1,6 @@
 import {
   DEFAULT_VOICE_LANGUAGES,
   DEFAULT_VOICE_SILENCE_MS,
-  DEFAULT_VOICE_TRANSCRIBER_MODEL,
   type VoiceTranscriberSettings,
 } from "@t3tools/contracts";
 
@@ -15,7 +14,7 @@ type TranscriberField = keyof VoiceTranscriberSettings;
 type TextField = Exclude<TranscriberField, "silenceMs" | "language" | "languages">;
 
 const DEFAULTS: VoiceTranscriberSettings = {
-  model: DEFAULT_VOICE_TRANSCRIBER_MODEL,
+  model: "",
   modelPath: "",
   language: "auto",
   languages: DEFAULT_VOICE_LANGUAGES,
@@ -49,7 +48,7 @@ export function VoiceTranscriberSettingRows({
         serverScoped
         settingKeys={["voice"]}
         {...searchableSetting("voice-model")}
-        description="Whisper model used for dictation. It is downloaded on first use if no copy is found on this computer."
+        description="Whisper model used for dictation, downloaded on first use if no copy is found on this computer. Leave empty to match your hardware: a large model with a dedicated GPU, base otherwise."
         resetAction={reset("model", "voice model")}
         control={
           <DraftInput
@@ -57,8 +56,9 @@ export function VoiceTranscriberSettingRows({
             size="sm"
             className="w-full sm:w-56"
             aria-label="Voice model"
+            placeholder="Automatic"
             value={transcriber.model}
-            onCommit={(next) => commit("model", next, false)}
+            onCommit={(next) => commit("model", next, true)}
           />
         }
       />

@@ -72,6 +72,8 @@ export const DesktopVoiceTranscribeResult = Schema.Union([
     text: Schema.String,
     language: Schema.optionalKey(Schema.String),
     acceleration: Schema.Literals(["gpu", "cpu"]),
+    /** Name of the device that ran the pass, e.g. `vulkan: NVIDIA GeForce RTX 5070`. */
+    device: Schema.optionalKey(Schema.String),
     elapsedMs: Schema.Number,
   }),
   DesktopVoiceFailure,

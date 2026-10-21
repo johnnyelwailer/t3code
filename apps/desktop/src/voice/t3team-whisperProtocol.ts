@@ -1,5 +1,7 @@
 export type WhisperLibVariant = "default" | "vulkan";
 
+export type WhisperAcceleration = "gpu" | "cpu";
+
 /** What the host asks of a worker; `id` pairs a request with its response. */
 export type WhisperWorkerCall =
   | {
@@ -16,7 +18,13 @@ export type WhisperWorkerCall =
 export type WhisperWorkerRequest = WhisperWorkerCall & { readonly id: number };
 
 export type WhisperWorkerResponse =
-  | { readonly id: number; readonly ok: true; readonly acceleration: "gpu" | "cpu" }
+  | {
+      readonly id: number;
+      readonly ok: true;
+      readonly acceleration: WhisperAcceleration;
+      /** ggml's `ggml_vulkan:` init lines, which name the devices this worker could see. */
+      readonly vulkanLog: readonly string[];
+    }
   | {
       readonly id: number;
       readonly ok: true;
@@ -40,6 +48,9 @@ export function isWhisperWorkerResponse(message: unknown): message is WhisperWor
 export const WHISPER_WORKER_CRASH_ID = -1;
 
 export const WHISPER_WORKER_READY = "ready";
+
+/** Every line of ggml's Vulkan device listing, including the `Found N Vulkan devices` header. */
+export const VULKAN_DEVICE_LISTING_LOG = /^\s*ggml_vulkan: /;
 
 /** Matches ggml's "using Vulkan0 backend"; the CPU backend never logs this line. */
 export const GPU_BACKEND_LOG = /whisper_backend_init_gpu: using \S+ backend/;

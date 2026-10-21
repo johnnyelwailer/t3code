@@ -21,10 +21,13 @@ import { makeFileSentinel } from "./t3team-whisperSentinel.ts";
 
 const WHISPER_PACKAGE = "@fugood/whisper.node";
 
-function forkWhisperWorker(workerPath: string): WhisperWorkerHandle {
+function forkWhisperWorker(
+  workerPath: string,
+  extraEnv: Readonly<Record<string, string>> = {},
+): WhisperWorkerHandle {
   const child = NodeChildProcess.fork(workerPath, [], {
     execPath: process.execPath,
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+    env: { ...process.env, ...extraEnv, ELECTRON_RUN_AS_NODE: "1" },
     execArgv: [],
     stdio: ["ignore", "ignore", "inherit", "ipc"],
   });
@@ -73,7 +76,7 @@ export function getDesktopVoiceService(): DesktopVoiceService {
   const voiceDir = NodePath.join(Electron.app.getPath("userData"), "voice");
   const workerPath = NodePath.join(__dirname, "voice", "t3team-whisperWorker.cjs");
   const host = makeWhisperHost({
-    spawnWorker: () => forkWhisperWorker(workerPath),
+    spawnWorker: (env) => forkWhisperWorker(workerPath, env),
     sentinel: makeFileSentinel(NodePath.join(voiceDir, "gpu-attempts.sentinel")),
     log: voiceLog,
   });
