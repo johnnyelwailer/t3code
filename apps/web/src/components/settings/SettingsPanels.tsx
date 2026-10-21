@@ -155,6 +155,7 @@ import {
 import { AgentInstructionsSettingRow } from "./t3team-AgentInstructionsSetting";
 import { T3TeamBetaSettings } from "./t3team-BetaSettings";
 import { T3TeamProjectSetupSetting } from "./t3team-ProjectSetupSetting";
+import { T3TeamVoiceSettings } from "./t3team-VoiceSettings";
 import { T3TeamAboutLicensesDescription } from "../../t3team/t3team-AboutLicensesDescription";
 import {
   buildProviderInstanceUpdatePatch,
@@ -2451,6 +2452,11 @@ export function GeneralSettingsPanel() {
           </>
         ) : null}
       </SettingsSection>
+
+      <T3TeamVoiceSettings
+        transcriber={settings.voice.transcriber}
+        onTranscriberChange={(transcriber) => updateSettings({ voice: { transcriber } })}
+      />
 
       <SettingsSection id="behavior" title="Behavior">
         <NotificationSettings />

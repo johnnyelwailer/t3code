@@ -10,6 +10,8 @@ import {
 export type { WhisperWorkerHandle } from "./t3team-whisperWorkerClient.ts";
 
 const WHISPER_IDLE_UNLOAD_MS = 2 * 60 * 1000;
+/** One second of silence; a real pass settles the GPU crash sentinel, which a bare model load would leave armed. */
+const WARMUP_PCM_BASE64 = Buffer.alloc(16_000 * 2).toString("base64");
 
 export type WhisperTranscription = {
   readonly text: string;
@@ -23,6 +25,8 @@ export type WhisperHost = {
     readonly pcm16Base64: string;
     readonly language: string;
   }) => Promise<WhisperTranscription>;
+  /** Loads the model with a throwaway transcription, so a recording's first partial is not a cold start. */
+  readonly warm: (modelPath: string) => Promise<void>;
   readonly dispose: () => void;
 };
 
@@ -127,6 +131,13 @@ export function makeWhisperHost(options: {
       const next = queue.then(() => run(input));
       queue = next.catch(() => undefined);
       return next;
+    },
+    warm: (modelPath) => {
+      const next = queue.then(() =>
+        run({ modelPath, pcm16Base64: WARMUP_PCM_BASE64, language: "en" }),
+      );
+      queue = next.catch(() => undefined);
+      return next.then(() => undefined);
     },
     dispose: stopWorker,
   };

@@ -1,0 +1,83 @@
+import type { DesktopVoiceStreamEvent } from "@t3tools/contracts";
+import { describe, expect, it, vi } from "vite-plus/test";
+
+import { pcm16ToBase64 } from "./t3team-voicePcm.ts";
+import type { DesktopVoiceService } from "./t3team-voiceService.ts";
+import { makeDesktopVoiceStreamService } from "./t3team-voiceStreamService.ts";
+import { FRAME_MS, ROOM, SPEECH, tone } from "./t3team-voiceTestAudio.ts";
+
+const config = { model: "m", modelPath: "", language: "auto", silenceMs: 1000 };
+
+function setup(prepared: Awaited<ReturnType<DesktopVoiceService["prepare"]>>) {
+  const events: DesktopVoiceStreamEvent[] = [];
+  const voice: DesktopVoiceService = {
+    prepare: vi.fn(async () => prepared),
+    warm: vi.fn(async () => undefined),
+    transcribe: vi.fn(async () => ({
+      ok: true as const,
+      text: "hi",
+      language: "en",
+      acceleration: "cpu" as const,
+      elapsedMs: 10,
+    })),
+  };
+  let next = 0;
+  const service = makeDesktopVoiceStreamService({
+    voice,
+    emit: (event) => events.push(event),
+    newSessionId: () => `s${++next}`,
+    log: vi.fn(),
+  });
+  const push = (sessionId: string, amplitude: number, ms: number) => {
+    for (let at = 0; at < ms; at += FRAME_MS) {
+      service.push({ sessionId, pcm16Base64: pcm16ToBase64(tone(FRAME_MS, amplitude)) });
+    }
+  };
+  return { service, voice, events, push };
+}
+
+const READY = { ok: true as const, modelPath: "/m.bin", modelSource: "setting" as const };
+
+describe("makeDesktopVoiceStreamService", () => {
+  it("refuses to start when no model is available and does not warm anything", async () => {
+    const failure = { ok: false as const, code: "model-unavailable" as const, message: "no model" };
+    const { service, voice } = setup(failure);
+    expect(await service.start({ config })).toEqual(failure);
+    expect(voice.warm).not.toHaveBeenCalled();
+  });
+
+  it("tags events with the session id, warms the model, and ends on stop", async () => {
+    const { service, voice, events, push } = setup(READY);
+    const started = await service.start({ config });
+    expect(started).toEqual({ ok: true, sessionId: "s1" });
+    expect(voice.warm).toHaveBeenCalledWith(config);
+
+    push("s1", ROOM, 300);
+    expect(events.every((event) => event.sessionId === "s1" && event.type === "level")).toBe(true);
+
+    service.stop({ sessionId: "s1" });
+    const seen = events.length;
+    push("s1", ROOM, 300);
+    expect(events).toHaveLength(seen);
+  });
+
+  it("ignores chunks for a session that is not the active one", async () => {
+    const { service, events, push } = setup(READY);
+    await service.start({ config });
+    await service.start({ config });
+    push("s1", SPEECH, 300);
+    expect(events).toEqual([]);
+    push("s2", SPEECH, 300);
+    expect(events.length).toBeGreaterThan(0);
+  });
+
+  it("transcribes partials with the session's config and the language it was told", async () => {
+    const { service, voice, push } = setup(READY);
+    await service.start({ config });
+    push("s1", ROOM, 600);
+    push("s1", SPEECH, 2500);
+    expect(voice.transcribe).toHaveBeenCalledWith(
+      expect.objectContaining({ config: { ...config, language: "auto" } }),
+    );
+  });
+});

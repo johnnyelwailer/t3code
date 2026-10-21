@@ -310,6 +310,9 @@ import { useT3TeamScopeRouteSync } from "~/t3team/hooks/t3team-useScopeRouteSync
 import { useT3TeamSidebarRowFacts } from "~/t3team/hooks/t3team-useSidebarRowFacts";
 import { withT3TeamWorkflowRunStatus } from "~/t3team/t3team-workflowRunLiveness";
 import { T3TeamSidebarProjectScopePills } from "./sidebar/t3team-SidebarProjectScopePills";
+import { VoiceSidebarRow } from "~/t3team/voice/t3team-VoiceSidebarRow";
+import { VOICE_THREAD_TITLE } from "~/t3team/voice/t3team-voiceRolePrompt";
+import { useVoiceThreadStore } from "~/t3team/voice/t3team-voiceThreadStore";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuShortcut, MenuTrigger } from "./ui/menu";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { MiddleTruncate } from "./ui/middle-truncate";
@@ -2878,6 +2881,8 @@ export default function Sidebar() {
   const autoSettleAfterDays = usePrimarySettings((s) => s.sidebarAutoSettleAfterDays);
   const autoSettleOnMerge = usePrimarySettings((s) => s.sidebarAutoSettleOnMerge);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
+  // t3team: the voice thread renders as its own row, the record control included.
+  const voiceHomes = useVoiceThreadStore((store) => store.homeByEnvironmentId);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const {
     settleThread,
@@ -5116,6 +5121,18 @@ export default function Sidebar() {
                         const threadKey = scopedThreadKey(
                           scopeThreadRef(thread.environmentId, thread.id),
                         );
+                        if (voiceHomes[thread.environmentId]?.threadId === thread.id) {
+                          return (
+                            <VoiceSidebarRow
+                              key={`${threadKey}:voice`}
+                              title={thread.title}
+                              isActive={routeThreadKey === threadKey}
+                              onOpen={() =>
+                                navigateToThread(scopeThreadRef(thread.environmentId, thread.id))
+                              }
+                            />
+                          );
+                        }
                         const isCard =
                           section === "active" || section === "pinned" || section === "working";
                         const rowVariant = isCard ? "card" : "slim";
@@ -5233,6 +5250,16 @@ export default function Sidebar() {
                           onNavigateToDraft={navigateToDraft}
                           onDraftContextMenu={handleDraftContextMenu}
                         />,
+                        ...(primaryEnvironmentId !== null &&
+                        voiceHomes[primaryEnvironmentId] === undefined
+                          ? [
+                              <VoiceSidebarRow
+                                key="t3team-voice-start"
+                                title={VOICE_THREAD_TITLE}
+                                isActive={false}
+                              />,
+                            ]
+                          : []),
                         // t3team: with no thread rows there is no active marker to anchor
                         // the work-item section, so it follows the drafts directly.
                         ...(sidebarListItems.length === 0

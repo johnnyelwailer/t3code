@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - cleanup uses Node's retrying rm, which the FileSystem service does not expose.
 /**
  * Selection-logic tests for the My Work endpoint (Epic 33, Wave 3/4):
  * which of the two data paths — SQLite mirror projection vs live
@@ -16,7 +17,10 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { ResourcePage } from "@t3tools/project-context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { afterEach, vi } from "vite-plus/test";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import { afterAll, afterEach, vi } from "vite-plus/test";
 
 import * as ServerConfig from "./config.ts";
 import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
@@ -28,13 +32,19 @@ import {
   loadT3TeamAtlassianMyWorkPage,
 } from "./t3team-atlassian-myWork.ts";
 
+const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-atlassian-my-work-test"));
+
+// The scoped temp-dir removal intermittently failed with ENOTEMPTY on Linux CI while the
+// fire-and-forget mirror sync was still unwinding; remove with retries instead.
+afterAll(() => {
+  NodeFS.rmSync(baseDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+});
+
 const myWorkLayer = it.layer(
   Layer.mergeAll(
     SqlitePersistenceMemory,
     NodeServices.layer,
-    ServerConfig.layerTest(process.cwd(), { prefix: "t3team-atlassian-my-work-test" }).pipe(
-      Layer.provide(NodeServices.layer),
-    ),
+    ServerConfig.layerTest(process.cwd(), baseDir).pipe(Layer.provide(NodeServices.layer)),
   ),
 );
 

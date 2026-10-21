@@ -91,6 +91,7 @@ function makeFakeBrowserWindow() {
     reloadIgnoringCache: vi.fn(),
     replaceMisspelling: vi.fn(),
     send: vi.fn(),
+    session: { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn() },
     setBackgroundThrottling: vi.fn(),
     setWindowOpenHandler: vi.fn(),
     toggleDevTools: vi.fn(),
@@ -497,6 +498,11 @@ describe("DesktopWindow", () => {
           const desktopWindow = yield* DesktopWindow.DesktopWindow;
           yield* desktopWindow.createMainIfBackendReady;
           assert.equal(yield* Ref.get(createCount), 1);
+          assert.equal(
+            vi.mocked(fakeWindow.window.webContents.session.setPermissionRequestHandler).mock.calls
+              .length,
+            1,
+          );
           yield* Ref.set(mainWindow, Option.none());
           yield* desktopWindow.activate;
           assert.equal(yield* Ref.get(createCount), 2);

@@ -30,6 +30,13 @@ const DesktopVoiceFailure = Schema.Struct({
 export const DesktopVoiceConfig = Schema.Struct(VoiceTranscriberSettings.fields);
 export type DesktopVoiceConfig = typeof DesktopVoiceConfig.Type;
 
+/** Main to renderer while the first-use model download runs; `totalBytes` is null when the server sent no length. */
+export const DesktopVoiceModelProgress = Schema.Struct({
+  receivedBytes: Schema.Number,
+  totalBytes: Schema.NullOr(Schema.Number),
+});
+export type DesktopVoiceModelProgress = typeof DesktopVoiceModelProgress.Type;
+
 export const DesktopVoicePrepareRequest = Schema.Struct({
   config: DesktopVoiceConfig,
   /** Without this, a missing model is reported instead of fetched (status probe). */

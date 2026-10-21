@@ -5,6 +5,8 @@ import { toastManager } from "~/components/ui/toast";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { useDesktopVoiceInput } from "~/voice/t3team-useDesktopVoiceInput";
+import { voicePreparingLabel } from "~/voice/t3team-voiceModelProgress";
+import { VoiceStreamStatus } from "./t3team-VoiceStreamStatus";
 
 export interface DesktopVoiceInputHandle {
   /** Start recording when idle, stop and transcribe when recording (the global-hotkey toggle). */
@@ -23,7 +25,7 @@ export function DesktopComposerVoiceInput({
   readonly className?: string;
   readonly ref?: Ref<DesktopVoiceInputHandle>;
 }) {
-  const { available, state, toggle } = useDesktopVoiceInput(onTranscript);
+  const { available, state, downloadPercent, stream, toggle } = useDesktopVoiceInput(onTranscript);
   useImperativeHandle(ref, () => ({ toggle }), [toggle]);
   const { phase, error } = state;
 
@@ -39,36 +41,44 @@ export function DesktopComposerVoiceInput({
     phase === "recording"
       ? "Stop recording"
       : phase === "preparing"
-        ? "Preparing voice input"
+        ? voicePreparingLabel(downloadPercent)
         : phase === "transcribing"
           ? "Transcribing"
           : "Dictate";
 
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className={className}
-            disabled={disabled || busy}
-            onPointerDown={(event) => event.preventDefault()}
-            onClick={toggle}
-            aria-label={label}
-          />
-        }
-      >
-        {busy ? (
-          <LoaderCircleIcon className="animate-spin" />
-        ) : phase === "recording" ? (
-          <SquareIcon className="fill-current text-destructive" />
-        ) : (
-          <MicIcon />
-        )}
-      </TooltipTrigger>
-      <TooltipPopup>{label}</TooltipPopup>
-    </Tooltip>
+    <>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className={className}
+              disabled={disabled || busy}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={toggle}
+              aria-label={label}
+            />
+          }
+        >
+          {busy ? (
+            <LoaderCircleIcon className="animate-spin" />
+          ) : phase === "recording" ? (
+            <SquareIcon className="fill-current text-destructive" />
+          ) : (
+            <MicIcon />
+          )}
+        </TooltipTrigger>
+        <TooltipPopup>{label}</TooltipPopup>
+      </Tooltip>
+      <VoiceStreamStatus phase={phase} stream={stream} />
+      {downloadPercent !== null && (
+        <span role="status" className="text-xs tabular-nums text-muted-foreground">
+          {label}
+        </span>
+      )}
+    </>
   );
 }

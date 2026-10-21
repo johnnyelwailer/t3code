@@ -1,5 +1,5 @@
 import { PermissionUpdateNotice } from "../components/PermissionUpdateNotice";
-import { type ServerLifecycleWelcomePayload } from "@t3tools/contracts";
+import { type ServerLifecycleWelcomePayload, VOICE_WIDGET_ROUTE_PATH } from "@t3tools/contracts";
 import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
   Outlet,
@@ -78,7 +78,7 @@ import { T3TeamPackAppearanceSync } from "../t3team/t3team-PackAppearanceSync";
 import { withT3TeamWindowDragStrip } from "../t3team/t3team-WindowDragStrip";
 import { CloudSessionSignInDialogHost } from "../cloud/t3team-CloudSessionSignInDialogHost";
 import { CloudQueuedSendFlusher } from "../cloud/t3team-CloudQueuedSendFlusher";
-import { T3TeamVoiceAgentPill } from "../t3team/voice/t3team-VoiceAgentPill";
+import { T3TeamVoiceSessionHost } from "../t3team/voice/t3team-VoiceSessionHost";
 import { t3teamPackProductName, useT3TeamAppDisplayName } from "../t3team/t3team-appBrandName";
 import { useT3TeamPackAppearance } from "../t3team/t3team-packAppearance";
 import { startRegionZoom } from "../t3team-regionZoom";
@@ -188,6 +188,23 @@ function RootRouteView() {
   // onto the equivalent Team route (and falls back to the dashboard) so upstream's
   // components need no fork-side navigation patches.
   useUpstreamRouteBridge(pathname, !isT3TeamRoute && !isAtlassianOAuthCallbackPath(pathname));
+
+  // t3team: the floating voice widget is a window of its own that shows only the voice card,
+  // fed over the desktop bridge. It gets the appearance and nothing else, no app-wide
+  // coordinators: the main window runs those.
+  if (pathname === VOICE_WIDGET_ROUTE_PATH) {
+    return (
+      <>
+        <ContrastAppearanceSync />
+        <EnvironmentThemeSync />
+        <GlassAppearanceSync />
+        <FontAppearanceSync />
+        <T3TeamPackAppearanceSync />
+        <T3TeamPackAppearanceDefaultsSync />
+        <Outlet />
+      </>
+    );
+  }
 
   if (
     pathname === "/pair" ||
@@ -322,8 +339,8 @@ function RootRouteView() {
           {isElectron ? <RunningThreadKeepAlive /> : null}
           {/* t3team: delivers drafts' first messages queued for a cloud session, app-wide. */}
           {primaryEnvironmentAuthenticated ? <CloudQueuedSendFlusher /> : null}
-          {/* t3team: the voice agent pill + global-hotkey session, app-wide. */}
-          {primaryEnvironmentAuthenticated ? <T3TeamVoiceAgentPill /> : null}
+          {/* t3team: the voice session (recorder, global hotkey, floating widget), app-wide. */}
+          {primaryEnvironmentAuthenticated ? <T3TeamVoiceSessionHost /> : null}
           <RelayClientInstallDialog />
           <CloudSessionSignInDialogHost />
           <ConnectOnboardingDialog />

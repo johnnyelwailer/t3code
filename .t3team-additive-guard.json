@@ -5,6 +5,7 @@
     "apps/desktop/src/preload.ts",
     "apps/web/src/components/ProjectFavicon.test.tsx",
     "apps/web/src/components/ProjectFavicon.tsx",
+    "apps/web/src/components/chat/QueuedRunsControl.tsx",
     "apps/web/src/components/threadActionMenu.logic.test.ts",
     "apps/web/src/components/threadActionMenu.logic.ts",
     "apps/web/src/uiStateStore.test.ts",
@@ -676,7 +677,17 @@
     "apps/web/src/composerDraftStore.test.ts",
     "apps/web/src/hooks/useHandleNewThread.scopeDefault.test.tsx",
     "apps/web/src/hooks/useLogicalProjectEnvironments.ts",
-    "packages/source-control-github/src/server/GitHubRest.ts"
+    "packages/source-control-github/src/server/GitHubRest.ts",
+    "apps/desktop/src/ipc/methods/clientSettings.ts",
+    "apps/web/src/components/settings/useSnapShotShortcutRecorder.tsx",
+    "apps/server/src/orchestration-v2/testkit/fixtures/multi_turn/muse_transcript.ndjson",
+    "apps/server/src/orchestration-v2/testkit/fixtures/muse_permission/muse_transcript.ndjson",
+    "apps/server/src/orchestration-v2/testkit/fixtures/muse_subagent_approval/muse_transcript.ndjson",
+    "apps/server/src/orchestration-v2/testkit/fixtures/muse_subagent_interrupt/muse_transcript.ndjson",
+    "apps/server/src/orchestration-v2/testkit/fixtures/muse_workflow/muse_transcript.ndjson",
+    "apps/server/src/orchestration-v2/testkit/fixtures/simple/muse_transcript.ndjson",
+    "apps/server/src/orchestration-v2/testkit/fixtures/subagent_v2/muse_transcript.ndjson",
+    "apps/server/src/orchestration-v2/testkit/fixtures/turn_interrupt/muse_transcript.ndjson"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",

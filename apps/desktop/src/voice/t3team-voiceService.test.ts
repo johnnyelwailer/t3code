@@ -24,10 +24,15 @@ function sandbox() {
 
 function makeService(
   root: string,
-  options: { download?: typeof downloadWhisperModel; runtime?: boolean } = {},
+  options: {
+    download?: typeof downloadWhisperModel;
+    runtime?: boolean;
+    onDownloadProgress?: () => void;
+  } = {},
 ) {
   const host: WhisperHost = {
     transcribe: vi.fn(async () => ({ text: "hello", acceleration: "gpu" as const })),
+    warm: vi.fn(async () => undefined),
     dispose: vi.fn(),
   };
   const download = vi.fn<typeof downloadWhisperModel>(
@@ -40,6 +45,7 @@ function makeService(
       host,
       isRuntimeAvailable: () => options.runtime ?? true,
       download,
+      ...(options.onDownloadProgress ? { onDownloadProgress: options.onDownloadProgress } : {}),
       environment: {
         env: { ACTIVITY_TRACKER_DATA_DIR: NodePath.join(root, "tracker") },
         platform: "win32",
@@ -51,7 +57,7 @@ function makeService(
   };
 }
 
-const config = { model: "large-v3-turbo", modelPath: "", language: "auto" };
+const config = { model: "large-v3-turbo", modelPath: "", language: "auto", silenceMs: 1500 };
 const modelBytes = () => Buffer.alloc(1_100_000);
 
 describe("desktop voice service", () => {
@@ -104,6 +110,18 @@ describe("desktop voice service", () => {
     });
   });
 
+  it("hands the download a progress listener only when one is configured", async () => {
+    const { root } = sandbox();
+    const onDownloadProgress = vi.fn();
+    const { service, download } = makeService(root, { onDownloadProgress });
+
+    await service.prepare({ config, allowDownload: true });
+
+    expect(download).toHaveBeenCalledWith(
+      expect.objectContaining({ onProgress: onDownloadProgress }),
+    );
+  });
+
   it("turns a failed download into a clear model-unavailable error", async () => {
     const { root } = sandbox();
     const { service } = makeService(root, {
@@ -133,5 +151,17 @@ describe("desktop voice service", () => {
     expect(host.transcribe).toHaveBeenCalledWith(
       expect.objectContaining({ pcm16Base64: "AAAA", language: "auto" }),
     );
+  });
+
+  it("warms the resolved model and stays silent when none is available", async () => {
+    const { root, trackerDir } = sandbox();
+    const missing = makeService(root);
+    await missing.service.warm(config);
+    expect(missing.host.warm).not.toHaveBeenCalled();
+
+    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-largev3.bin"), modelBytes());
+    const { service, host } = makeService(root);
+    await service.warm(config);
+    expect(host.warm).toHaveBeenCalledWith(NodePath.join(trackerDir, "ggml-largev3.bin"));
   });
 });
