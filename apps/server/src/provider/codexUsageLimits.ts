@@ -194,7 +194,9 @@ export function mergeCodexRateLimits(
     ...(update.individualLimit != null
       ? {
           individualLimit: update.individualLimit,
-          spendControlReached: update.spendControlReached ?? null,
+          ...(update.spendControlReached !== undefined || previous.spendControlReached != null
+            ? { spendControlReached: update.spendControlReached ?? null }
+            : {}),
         }
       : update.spendControlReached != null
         ? { spendControlReached: update.spendControlReached }

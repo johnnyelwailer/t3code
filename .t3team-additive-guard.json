@@ -673,6 +673,7 @@
     "apps/server/src/ws.test.ts",
     "apps/web/src/components/pullRequest/PullRequestSummaryTab.browser.test.tsx",
     "apps/web/src/composerDraftStore.test.ts",
+    "apps/web/src/hooks/useHandleNewThread.scopeDefault.test.tsx",
     "apps/web/src/hooks/useLogicalProjectEnvironments.ts",
     "packages/source-control-github/src/server/GitHubRest.ts"
   ],

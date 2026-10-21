@@ -131,7 +131,11 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
         // token of the thread adopts the new scope; they all die together on
         // `revokeThread` or stop authenticating once the thread goes idle.
         for (const [existingHash, record] of next) {
-          if (record.scope.thread.threadId === scope.thread.threadId) {
+          // A token already past the liveness window stays dead: a restart must not revive it.
+          if (
+            record.scope.thread.threadId === scope.thread.threadId &&
+            issuedAt - record.lastAliveAt <= livenessWindowMs
+          ) {
             next.set(existingHash, { ...record, scope, lastAliveAt: issuedAt });
           }
         }

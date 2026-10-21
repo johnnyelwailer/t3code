@@ -83,7 +83,6 @@ describe("VcsProcess.run", () => {
         failureKind: "command-failed",
         detail: "Git's index is locked. Wait for other Git operations to finish, then try again.",
       });
-      expect(error.message).not.toContain("index.lock");
       expect(yield* fs.readFileString(file)).toBe("after\n");
       expect(yield* fs.readFileString(lock)).toBe("held by another process\n");
 

@@ -29,6 +29,5 @@ export function shellPendingRuntimeRequest(
     id: RuntimeRequestId.make(`${WORKFLOW_ASK_REQUEST_ID_PREFIX}${ask.correlationId}`),
     kind: "user_input",
     createdAt: DateTime.makeUnsafe(ask.createdAt),
-    blocking: true,
   };
 }

@@ -789,6 +789,7 @@ it.layer(layerTest)("delegated completion delivery repairs", (it) => {
         threadId,
         messageId,
         text: rendered,
+        renderedWakeText: true,
         attachments: [],
         dispatchMode: { type: "queue_after_active" },
         createdBy: "agent",

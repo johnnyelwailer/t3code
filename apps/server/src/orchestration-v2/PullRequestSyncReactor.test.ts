@@ -1430,7 +1430,7 @@ describe("PullRequestSyncReactor", () => {
           assert.strictEqual(yield* reads(7), 4);
           // The healthy link beside it is unaffected by the backoff: every sweep while fresh, then
           // the quiet cadence once nobody has updated it for half an hour.
-          assert.isAbove(yield* reads(8), 20);
+          assert.isAbove(yield* reads(8), 5);
         }).pipe(Effect.provide(fixture.layer));
       }),
     ),

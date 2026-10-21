@@ -233,7 +233,7 @@ describe("codexUsageLimitMessage", () => {
 });
 
 describe("mergeCodexRateLimits", () => {
-  it("updates monthly credit usage, retains it when omitted, and clears an explicit null", () => {
+  it("updates monthly credit usage and retains it when omitted or reported as null", () => {
     const snapshot = {
       limitId: "codex",
       primary: { usedPercent: 12 },
@@ -263,9 +263,9 @@ describe("mergeCodexRateLimits", () => {
 
     const retained = mergeCodexRateLimits(changed, { primary: null });
     expect(retained).toEqual({ ...snapshot, primary: null, individualLimit });
-    const cleared = mergeCodexRateLimits(retained, { individualLimit: null });
-    expect(cleared).toEqual({ ...snapshot, primary: null, individualLimit: null });
-    expect(codexRateLimitsToLimits({ checkedAt, snapshot: cleared! }).windows).toEqual([]);
+    // t3team: Business accounts send `individualLimit: null` after every turn while the cap is
+    // still set, so null keeps the last known cap instead of clearing it.
+    expect(mergeCodexRateLimits(retained, { individualLimit: null })).toEqual(retained);
   });
 
   it("ignores a model-specific snapshot so it cannot replace the main allowance", () => {

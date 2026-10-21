@@ -2831,6 +2831,8 @@ export const OrchestrationV2Command = Schema.Union([
         taskIds: Schema.Array(NodeId),
       }),
     ),
+    // t3team: `text` was rewritten by the delegated-completion wake renderer and is kept as sent.
+    renderedWakeText: Schema.optional(Schema.Boolean),
     dispatchMode: Schema.Union([
       Schema.Struct({
         type: Schema.Literal("defer_start"),

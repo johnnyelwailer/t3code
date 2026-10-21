@@ -60,14 +60,26 @@ export const renderDelegatedCompletionWake = (
   );
 
 /**
- * True when a delegated-completion dispatch carries non-empty text rendered for
- * exactly the live task set, so `Orchestrator.dispatchMessage` keeps it instead
- * of upstream's default. A text rendered for a set that changed since the worker
- * read it is replaced by the default and re-rendered when the wake starts.
+ * The text the continuation worker hands the renderer when no override rewrites it. It only names
+ * the tasks, so the orchestrator replaces it with its own default (which inlines their results).
+ */
+export const delegatedCompletionPlaceholderText = (taskIds: ReadonlyArray<string>): string => {
+  const taskList = taskIds.join(", ");
+  return taskIds.length === 1
+    ? `Delegated task ${taskList} reached a terminal state. Use task_status with taskId ${taskList} to read the result.`
+    : `Delegated tasks ${taskList} reached terminal states. Use task_status with each taskId to read the results.`;
+};
+
+/**
+ * True when a delegated-completion dispatch carries text the renderer rewrote for exactly the
+ * live task set, so `Orchestrator.dispatchMessage` keeps it instead of upstream's default. A text
+ * rendered for a set that changed since the worker read it is replaced by the default and
+ * re-rendered when the wake starts.
  */
 export const keepsRenderedWakeText = (
   command: {
     readonly text: string;
+    readonly renderedWakeText?: boolean | undefined;
     readonly delegatedCompletion?: { readonly taskIds: ReadonlyArray<string> } | undefined;
   },
   liveTaskIds: ReadonlyArray<string>,
@@ -75,6 +87,7 @@ export const keepsRenderedWakeText = (
   const renderedFor = new Set(command.delegatedCompletion?.taskIds ?? []);
   const live = new Set(liveTaskIds);
   return (
+    command.renderedWakeText === true &&
     command.text.trim().length > 0 &&
     renderedFor.size === live.size &&
     [...live].every((taskId) => renderedFor.has(taskId))

@@ -9,17 +9,11 @@ import * as ThreadManagementService from "./ThreadManagementService.ts";
 import { isUndeliveredMailboxSteer } from "./NotificationMailbox.ts";
 import {
   DelegatedCompletionWakeRenderer,
+  delegatedCompletionPlaceholderText as delegatedCompletionText,
   renderDelegatedCompletionWake,
 } from "../t3team-v2/t3team-delegatedCompletionWakeRenderer.ts";
 
 const CONTINUATION_MESSAGE_TEXT = "Background task completed.";
-
-function delegatedCompletionText(taskIds: ReadonlyArray<string>): string {
-  const taskList = taskIds.join(", ");
-  return taskIds.length === 1
-    ? `Delegated task ${taskList} reached a terminal state. Use task_status with taskId ${taskList} to read the result.`
-    : `Delegated tasks ${taskList} reached terminal states. Use task_status with each taskId to read the results.`;
-}
 
 function currentDelegatedCompletionDelivery(
   projection: Pick<OrchestrationV2ThreadProjection, "messages" | "runs" | "providerTurns">,
@@ -122,18 +116,21 @@ export const layer = Layer.effectDiscard(
             fixtureName: "delegated-completion",
             commandName: "dispatch",
           });
+          const placeholderText = delegatedCompletionText(delivery.taskIds);
+          const wakeText = yield* renderDelegatedCompletionWake(wakeRenderer, {
+            threadId: request.threadId,
+            parentRunId: request.delegatedCompletion.parentRunId,
+            taskIds: delivery.taskIds,
+            defaultText: placeholderText,
+          });
           yield* threads
             .dispatch({
               type: "message.dispatch",
               commandId,
               threadId: request.threadId,
               messageId: delivery.messageId,
-              text: yield* renderDelegatedCompletionWake(wakeRenderer, {
-                threadId: request.threadId,
-                parentRunId: request.delegatedCompletion.parentRunId,
-                taskIds: delivery.taskIds,
-                defaultText: delegatedCompletionText(delivery.taskIds),
-              }),
+              text: wakeText,
+              ...(wakeText === placeholderText ? {} : { renderedWakeText: true }),
               attachments: [],
               dispatchMode: { type: "queue_after_active" },
               createdBy: "agent",

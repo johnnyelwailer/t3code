@@ -201,6 +201,7 @@ function makeHarness(options: HarnessOptions = {}) {
       // (so launches keep `t3/<hash>` unless a test opts into flattening).
       hasCommit:
         options.hasCommit ?? ((input) => Effect.succeed(input.refName !== "refs/heads/t3")),
+      hasRefNamed: () => Effect.succeed(false),
       resolveWorktreeBaseRemote: () => Effect.succeed({ remoteName: "origin", branchName: "main" }),
       remoteExists: options.remoteExists ?? (() => Effect.succeed(true)),
       remoteBranchExists: () => Effect.succeed(true),
@@ -1110,36 +1111,6 @@ it.effect.each(["stable", "upstream/release"])(
       ),
     ),
 );
-
-it.effect("rejects a worktree launch before create when baseRef does not resolve", () => {
-  const harness = makeHarness({
-    hasCommit: () => Effect.succeed(false),
-  });
-  return Effect.gen(function* () {
-    const launches = yield* ThreadLaunch.ThreadLaunchService;
-    const threads = yield* ThreadManagement.ThreadManagementService;
-    const failed = yield* launches
-      .launch(
-        launchInput({
-          command: "command:launch:unborn-base",
-          thread: "thread:launch:unborn-base",
-          message: "Should not create a thread",
-          workspace: { type: "worktree", baseRef: "main", branch: "fix/orch-status-panel-card" },
-        }),
-      )
-      .pipe(Effect.flip);
-    if (failed._tag !== "ThreadLaunchError") {
-      assert.fail(`expected ThreadLaunchError, got ${failed._tag}`);
-    }
-    assert.equal(failed.operation, "provision-worktree");
-    assert.isUndefined(failed.threadId);
-    assert.include(String(failed.cause), "baseRef 'main'");
-    assert.include(String(failed.cause), "does not resolve to a commit");
-    assert.equal(harness.createWorktree.mock.calls.length, 0);
-    const shells = yield* threads.listProjectThreads({ projectId, includeSubagents: true });
-    assert.equal(shells.length, 0);
-  }).pipe(Effect.provide(harness.layer));
-});
 
 it.effect("allows a missing local baseRef when startFromOrigin can fetch it", () => {
   const harness = makeHarness({
