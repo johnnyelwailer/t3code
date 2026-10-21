@@ -82,18 +82,75 @@ describe("createVoiceStreamSession", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("locks the language after two transcripts and uses it for later passes", async () => {
-    const { events, calls, feed, settle } = setup();
-    feed(ROOM, 600);
-    feed(SPEECH, 2500);
-    await settle(ok("one", "de"));
-    feed(SPEECH, 2500);
-    await settle(ok("one two", "de"));
-    expect(events.filter((event) => event.type === "language")).toEqual([
-      { type: "language", language: "de" },
-    ]);
-    feed(SPEECH, 2500);
-    expect(calls.map((call) => call.language)).toEqual(["auto", "auto", "de"]);
+  describe("language lock", () => {
+    const languageEvents = (events: Array<{ type: string }>) =>
+      events.filter((event) => event.type === "language");
+
+    async function dictate(
+      harness: ReturnType<typeof setup>,
+      detected: readonly string[],
+      text = "words",
+    ) {
+      harness.feed(ROOM, 600);
+      for (const language of detected) {
+        harness.feed(SPEECH, 2500);
+        await harness.settle(ok(text, language));
+      }
+      harness.feed(SPEECH, 2500);
+    }
+
+    it("ignores the vote of a first partial that heard under three seconds of speech", async () => {
+      const harness = setup();
+      await dictate(harness, ["nl", "de", "de"]);
+      expect(languageEvents(harness.events)).toEqual([{ type: "language", language: "de" }]);
+    });
+
+    it("runs every partial on auto-detection until the lock, then on the locked language", async () => {
+      const harness = setup();
+      await dictate(harness, ["de", "de", "de"]);
+      expect(harness.calls.map((call) => call.language)).toEqual(["auto", "auto", "auto", "de"]);
+    });
+
+    it("keeps detecting while votes disagree and settles on auto when they tie", async () => {
+      const harness = setup();
+      await dictate(harness, ["nl", "nl", "de", "en"]);
+      expect(languageEvents(harness.events)).toEqual([]);
+      expect(harness.calls.map((call) => call.language)).toEqual([
+        "auto",
+        "auto",
+        "auto",
+        "auto",
+        "auto",
+      ]);
+    });
+
+    it("never locks a recording that is too short to vote", async () => {
+      const harness = setup();
+      harness.feed(ROOM, 600);
+      harness.feed(SPEECH, 2500);
+      await harness.settle(ok("hallo", "nl"));
+      harness.feed(ROOM, 1500);
+      expect(languageEvents(harness.events)).toEqual([]);
+      expect(harness.calls.map((call) => call.language)).toEqual(["auto"]);
+    });
+
+    it("lets a pinned language win every pass whatever the detection says", async () => {
+      const harness = setup({ language: "de" });
+      await dictate(harness, ["nl", "nl", "nl"]);
+      expect(languageEvents(harness.events)).toEqual([]);
+      expect(harness.calls.map((call) => call.language)).toEqual(["de", "de", "de", "de"]);
+    });
+
+    it("votes again for the next recording instead of keeping the last lock", async () => {
+      const first = setup();
+      await dictate(first, ["nl", "nl", "nl"]);
+      expect(first.calls.at(-1)?.language).toBe("nl");
+
+      const second = setup();
+      await dictate(second, ["en", "en", "en"]);
+      expect(second.calls.map((call) => call.language)).toEqual(["auto", "auto", "auto", "en"]);
+      expect(languageEvents(second.events)).toEqual([{ type: "language", language: "en" }]);
+    });
   });
 
   it("signals auto-commit once on silence and stops starting partials", () => {

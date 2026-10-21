@@ -1,4 +1,5 @@
 import {
+  DEFAULT_VOICE_LANGUAGES,
   DEFAULT_VOICE_SILENCE_MS,
   DEFAULT_VOICE_TRANSCRIBER_MODEL,
   type VoiceTranscriberSettings,
@@ -8,18 +9,20 @@ import { DraftInput } from "../ui/draft-input";
 import { SettingResetButton, SettingsRow } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { nonEmptyVoiceField, voiceSilenceMsField } from "./t3team-voiceSettings.logic";
+import { VoiceLanguageSettingRows } from "./t3team-VoiceLanguageSettingRows";
 
 type TranscriberField = keyof VoiceTranscriberSettings;
-type TextField = Exclude<TranscriberField, "silenceMs">;
+type TextField = Exclude<TranscriberField, "silenceMs" | "language" | "languages">;
 
 const DEFAULTS: VoiceTranscriberSettings = {
   model: DEFAULT_VOICE_TRANSCRIBER_MODEL,
   modelPath: "",
   language: "auto",
+  languages: DEFAULT_VOICE_LANGUAGES,
   silenceMs: DEFAULT_VOICE_SILENCE_MS,
 };
 
-/** Model, model file and language of on-device transcription; saved on blur or Enter, never per keystroke. */
+/** Model, model file, language and silence of on-device transcription; saved on blur or Enter, never per keystroke. */
 export function VoiceTranscriberSettingRows({
   transcriber,
   onChange,
@@ -78,23 +81,7 @@ export function VoiceTranscriberSettingRows({
           />
         }
       />
-      <SettingsRow
-        serverScoped
-        settingKeys={["voice"]}
-        {...searchableSetting("voice-language")}
-        description="ISO 639-1 code such as en or de, or auto to detect the language of each recording."
-        resetAction={reset("language", "voice language")}
-        control={
-          <DraftInput
-            nativeInput
-            size="sm"
-            className="w-full sm:w-28"
-            aria-label="Voice language"
-            value={transcriber.language}
-            onCommit={(next) => commit("language", next, false)}
-          />
-        }
-      />
+      <VoiceLanguageSettingRows transcriber={transcriber} onChange={onChange} />
       <SettingsRow
         serverScoped
         settingKeys={["voice"]}
