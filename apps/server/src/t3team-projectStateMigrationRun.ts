@@ -22,19 +22,21 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 
 import * as Cause from "effect/Cause";
-import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 
 import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 import {
+  lstatOrUndefined as lstat,
+  makeStateMigrationCopier,
+  StateMigrationCrash,
+  statOrUndefined as stat,
+} from "./t3team-projectStateMigrationCopy.ts";
+import {
   io,
-  isStateMigrationExcluded,
   LINK_OLD_SUFFIX,
   MIGRATING_SUFFIX,
-  PART_SUFFIX,
   readStateMigrationJournal,
   type StateMigrationEntry,
-  type StateMigrationIoError,
   type StateMigrationJournal,
   writeStateMigrationJournal,
 } from "./t3team-projectStateMigration.ts";
@@ -50,14 +52,6 @@ export type StateMigrationRunOptions = {
   readonly crashAfterFiles?: number;
 };
 
-/** Test seam failure: stands in for the process dying mid-copy. */
-export class StateMigrationCrash extends Data.TaggedError("StateMigrationCrash")<{}> {}
-
-const lstat = (target: string) =>
-  io(() => NodeFSP.lstat(target)).pipe(Effect.orElseSucceed(() => undefined));
-const stat = (target: string) =>
-  io(() => NodeFSP.stat(target)).pipe(Effect.orElseSucceed(() => undefined));
-
 export const runStateMigration = Effect.fn("runStateMigration")(function* (
   toRoot: string,
   options: StateMigrationRunOptions = {},
@@ -66,7 +60,6 @@ export const runStateMigration = Effect.fn("runStateMigration")(function* (
   const throttleEvery = options.throttleEvery ?? 200;
   const throttleMs = options.throttleMs ?? 25;
   const targetRoot = NodePath.join(toRoot, HIDDEN_T3TEAM_DIR);
-  let copiedThisRun = 0;
   let journal = yield* readStateMigrationJournal(toRoot);
   if (!journal) return undefined;
 
@@ -98,62 +91,16 @@ export const runStateMigration = Effect.fn("runStateMigration")(function* (
     }),
   );
 
-  const copyFile = (source: string, target: string, overwrite: boolean) =>
-    Effect.gen(function* () {
-      const sourceInfo = yield* stat(source);
-      if (!sourceInfo?.isFile()) return;
-      const targetInfo = yield* lstat(target);
-      if (targetInfo && (!overwrite || targetInfo.size === sourceInfo.size)) return;
-      if (options.crashAfterFiles !== undefined && copiedThisRun >= options.crashAfterFiles) {
-        return yield* Effect.fail(new StateMigrationCrash());
-      }
-      yield* io(async () => {
-        await NodeFSP.mkdir(NodePath.dirname(target), { recursive: true });
-        await NodeFSP.copyFile(source, `${target}${PART_SUFFIX}`);
-        await NodeFSP.rename(`${target}${PART_SUFFIX}`, target);
-      });
-      copiedThisRun += 1;
-      if (journal) journal.copiedFiles += 1;
-      if (copiedThisRun % throttleEvery === 0) {
+  const { copyFile, copyTree } = makeStateMigrationCopier({
+    crashAfterFiles: options.crashAfterFiles,
+    afterCopy: (copiedThisRun) =>
+      Effect.gen(function* () {
+        if (journal) journal.copiedFiles += 1;
+        if (copiedThisRun % throttleEvery !== 0) return;
         yield* persist;
         if (throttleMs > 0) yield* Effect.sleep(throttleMs);
-      }
-    });
-
-  /** Copies `source` (followed through links) into `target`. `overwrite`: replace files whose
-   * size differs (the job's own folder); otherwise existing target files win. `newerOnly`: the
-   * catch-up pass, copying only files changed after the target copy was made. */
-  const copyTree = (
-    source: string,
-    target: string,
-    segments: ReadonlyArray<string>,
-    mode: { readonly overwrite: boolean; readonly newerOnly?: boolean },
-  ): Effect.Effect<void, StateMigrationIoError | StateMigrationCrash> =>
-    Effect.gen(function* () {
-      const names = yield* io(() => NodeFSP.readdir(source));
-      for (const name of names) {
-        const childSegments = [...segments, name];
-        if (isStateMigrationExcluded(childSegments)) continue;
-        const from = NodePath.join(source, name);
-        const to = NodePath.join(target, name);
-        const info = yield* stat(from);
-        if (!info) continue;
-        if (info.isDirectory()) {
-          yield* copyTree(from, to, childSegments, mode);
-        } else if (mode.newerOnly) {
-          const existing = yield* stat(to);
-          if (!existing || info.mtimeMs > existing.mtimeMs) {
-            yield* io(async () => {
-              await NodeFSP.mkdir(NodePath.dirname(to), { recursive: true });
-              await NodeFSP.copyFile(from, `${to}${PART_SUFFIX}`);
-              await NodeFSP.rename(`${to}${PART_SUFFIX}`, to);
-            });
-          }
-        } else {
-          yield* copyFile(from, to, mode.overwrite);
-        }
-      }
-    });
+      }),
+  });
 
   const processEntry = (entry: StateMigrationEntry) =>
     Effect.gen(function* () {

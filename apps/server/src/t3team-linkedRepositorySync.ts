@@ -31,8 +31,8 @@ import type {
 } from "./t3team-project-repository-utils.ts";
 import { VcsProcess } from "./vcs/VcsProcess.ts";
 import { LINKED_REPOSITORY_SYNC_CONCURRENCY } from "./t3team-linkedRepositorySyncConcurrency.ts";
+import { planAndLinkStateMigration } from "./t3team-projectStateMigrationLink.ts";
 import {
-  planAndLinkStateMigration,
   readStateMigrationJournal,
   summarizeStateMigration,
   type StateMigrationSummary,

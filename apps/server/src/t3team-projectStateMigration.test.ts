@@ -21,12 +21,15 @@ import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 import {
   LINK_OLD_SUFFIX,
   MIGRATING_SUFFIX,
-  planAndLinkStateMigration,
-  planDirectoryLink,
   readStateMigrationJournal,
   StateMigrationIoError,
 } from "./t3team-projectStateMigration.ts";
-import { runStateMigration, StateMigrationCrash } from "./t3team-projectStateMigrationRun.ts";
+import {
+  planAndLinkStateMigration,
+  planDirectoryLink,
+} from "./t3team-projectStateMigrationLink.ts";
+import { StateMigrationCrash } from "./t3team-projectStateMigrationCopy.ts";
+import { runStateMigration } from "./t3team-projectStateMigrationRun.ts";
 import { VcsProcess } from "./vcs/VcsProcess.ts";
 
 const tempRoots: string[] = [];
