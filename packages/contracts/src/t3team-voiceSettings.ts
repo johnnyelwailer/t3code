@@ -5,6 +5,7 @@ import { TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
 
 export const DEFAULT_VOICE_TRANSCRIBER_MODEL = "large-v3-turbo";
 export const DEFAULT_VOICE_SILENCE_MS = 1_500;
+export const DEFAULT_VOICE_LANGUAGES = "de,en";
 export const MAX_VOICE_SILENCE_MS = 10_000;
 
 /** How long the speaker stays silent before the recording commits itself; 0 turns auto-commit off. */
@@ -21,8 +22,15 @@ export const VoiceTranscriberSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_VOICE_TRANSCRIBER_MODEL)),
   ),
   modelPath: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  /** ISO 639-1 code, or `auto` to let whisper detect the language per recording. */
+  /**
+   * ISO 639-1 code that pins every recording to that language, or `auto` (the default) to let
+   * whisper detect the language per recording.
+   */
   language: TrimmedNonEmptyString.pipe(Schema.withDecodingDefault(Effect.succeed("auto"))),
+  /** Comma-separated ISO 639-1 codes the settings language picker offers after Auto. */
+  languages: TrimmedString.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_VOICE_LANGUAGES)),
+  ),
   silenceMs: VoiceSilenceMs.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_VOICE_SILENCE_MS)),
   ),
@@ -40,6 +48,7 @@ export const VoiceSettingsPatch = Schema.Struct({
       model: Schema.optionalKey(TrimmedNonEmptyString),
       modelPath: Schema.optionalKey(TrimmedString),
       language: Schema.optionalKey(TrimmedNonEmptyString),
+      languages: Schema.optionalKey(TrimmedString),
       silenceMs: Schema.optionalKey(VoiceSilenceMs),
     }),
   ),

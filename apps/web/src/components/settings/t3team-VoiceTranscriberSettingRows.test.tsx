@@ -18,6 +18,7 @@ const DEFAULT_TRANSCRIBER = {
   model: "large-v3-turbo",
   modelPath: "",
   language: "auto",
+  languages: "de,en",
   silenceMs: 1500,
 };
 
@@ -59,16 +60,17 @@ function edit(el: HTMLInputElement, value: string) {
 }
 
 describe("VoiceTranscriberSettingRows", () => {
-  it("shows model, model file and language with the saved values", () => {
+  it("shows model, model file and language list with the saved values", () => {
     const { node } = render({
       model: "small",
       modelPath: "C:/m/ggml-small.bin",
       language: "de",
+      languages: "de,en",
       silenceMs: 1500,
     });
     expect(input(node, "Voice model").value).toBe("small");
     expect(input(node, "Voice model file").value).toBe("C:/m/ggml-small.bin");
-    expect(input(node, "Voice language").value).toBe("de");
+    expect(input(node, "Voice language list").value).toBe("de,en");
     expect(node.textContent).toContain("Voice model file");
   });
 
@@ -84,10 +86,9 @@ describe("VoiceTranscriberSettingRows", () => {
     expect(onChange).toHaveBeenCalledExactlyOnceWith({ modelPath: "" });
   });
 
-  it("keeps the saved model and language when the field is cleared", () => {
+  it("keeps the saved model when the field is cleared", () => {
     const { node, onChange } = render();
     edit(input(node, "Voice model"), "");
-    edit(input(node, "Voice language"), "  ");
     expect(onChange).not.toHaveBeenCalled();
     expect(input(node, "Voice model").value).toBe("large-v3-turbo");
   });

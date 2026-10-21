@@ -4,11 +4,12 @@ import { describe, expect, it } from "vite-plus/test";
 import { applyServerSettingsPatch } from "./serverSettings.ts";
 
 describe("voice transcriber settings", () => {
-  it("defaults to large-v3-turbo with detection and automatic language", () => {
+  it("defaults to large-v3-turbo with detection and automatic language and the de,en picker list", () => {
     expect(DEFAULT_SERVER_SETTINGS.voice.transcriber).toEqual({
       model: "large-v3-turbo",
       modelPath: "",
       language: "auto",
+      languages: "de,en",
       silenceMs: 1500,
     });
   });
@@ -21,6 +22,7 @@ describe("voice transcriber settings", () => {
       model: "large-v3-turbo",
       modelPath: "E:/models/ggml-largev3.bin",
       language: "de",
+      languages: "de,en",
       silenceMs: 1500,
     });
 
@@ -28,5 +30,16 @@ describe("voice transcriber settings", () => {
       voice: { transcriber: { modelPath: "" } },
     });
     expect(cleared.voice.transcriber).toMatchObject({ modelPath: "", language: "de" });
+  });
+
+  it("patches the picker list on its own, and an empty list is allowed", () => {
+    const extended = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      voice: { transcriber: { languages: "de,en,fr" } },
+    });
+    expect(extended.voice.transcriber).toMatchObject({ language: "auto", languages: "de,en,fr" });
+    const emptied = applyServerSettingsPatch(extended, {
+      voice: { transcriber: { languages: "" } },
+    });
+    expect(emptied.voice.transcriber.languages).toBe("");
   });
 });
