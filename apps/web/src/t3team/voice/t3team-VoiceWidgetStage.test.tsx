@@ -9,7 +9,12 @@ import {
   type VoiceUiState,
 } from "./surface/t3team-voiceUiModel";
 import { IDLE_VOICE_LIVE, useVoiceUiStore } from "./surface/t3team-voiceUiStore";
+import { activateAppViewPacks } from "~/t3team/packs/t3team-appViewRegistry";
+import { blobCompanionPackWebModule } from "~/t3team/packs/t3team-companionPackFixtures";
+
 import { VoiceWidgetStage } from "./t3team-VoiceWidgetStage";
+
+activateAppViewPacks([blobCompanionPackWebModule]);
 
 class StubResizeObserver {
   observe() {}
@@ -90,5 +95,23 @@ describe("VoiceWidgetStage", () => {
     expect(container!.textContent).toContain("open the board");
     advance(300);
     expect(widget()).toBeNull();
+  });
+
+  it("seats the pack's voice companion, at the low tier, following the voice state", () => {
+    const companion = () => container!.querySelector('[data-fixture="blob-companion"]');
+    show("recording", { startedAtMs: 0 });
+    advance(50);
+    expect(companion()?.getAttribute("data-placement")).toBe("voice.overlay");
+    expect(companion()?.getAttribute("data-mood")).toBe("listening");
+    expect(companion()?.getAttribute("data-quality")).toBe("low");
+    show("transcribing", { startedAtMs: 0, endedAtMs: 1_000 });
+    advance(50);
+    expect(companion()?.getAttribute("data-mood")).toBe("transcribing");
+    show("committed", { heardText: "ok", startedAtMs: 0, endedAtMs: 1_000 });
+    advance(300);
+    expect(companion()?.getAttribute("data-mood")).toBe("heard");
+    show("idle");
+    advance(300);
+    expect(companion()).toBeNull();
   });
 });
