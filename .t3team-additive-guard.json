@@ -332,6 +332,7 @@
     "apps/web/src/components/RightPanelTabs.tsx",
     "apps/web/src/components/Sidebar.logic.test.ts",
     "apps/web/src/components/Sidebar.logic.ts",
+    "apps/web/src/components/Sidebar.snooze.test.ts",
     "apps/web/src/components/Sidebar.tsx",
     "apps/web/src/components/SidebarStageBackdrop.tsx",
     "apps/web/src/components/ThreadRouteView.tsx",

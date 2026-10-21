@@ -78,8 +78,13 @@ describe("ServerSettings voice transcriber patch", () => {
     });
   });
 
-  it("refuses an empty model or language", () => {
-    expect(() => decodeServerSettingsPatch({ voice: { transcriber: { model: "  " } } })).toThrow();
+  it("accepts an empty model as Automatic but refuses an empty language", () => {
+    expect(decodeServerSettingsPatch({ voice: { transcriber: { model: "" } } })).toEqual({
+      voice: { transcriber: { model: "" } },
+    });
+    expect(decodeServerSettingsPatch({ voice: { transcriber: { model: "  " } } })).toEqual({
+      voice: { transcriber: { model: "" } },
+    });
     expect(() => decodeServerSettingsPatch({ voice: { transcriber: { language: "" } } })).toThrow();
   });
 });
