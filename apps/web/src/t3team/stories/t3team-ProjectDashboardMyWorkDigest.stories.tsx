@@ -24,6 +24,7 @@ import {
   staleJiraSyncScenario,
 } from "~/t3team/t3team-projectMyWorkDigestFixtureScenariosJira";
 import { storyCardAttentionScenario } from "~/t3team/t3team-projectMyWorkDigestFixtureScenariosStoryCards";
+import { handoffEpicScenario } from "~/t3team/t3team-projectMyWorkDigestFixtureScenariosHandoff";
 import {
   digestFixtureOffsetToLocalHour,
   yesterdayRecapScenario,
@@ -87,6 +88,10 @@ export const ProjectWorkflowFailed: Story = createStory(
 export const StoryCardAttention: Story = createStory(
   storyCardAttentionScenario,
   "Story cards in three tiers: the viewer's rows and PRs, adjacent active work and blocks as pills, done and others' to-do folded into one count.",
+);
+export const HandoffAndEpicCard: Story = createStory(
+  handoffEpicScenario,
+  "A merged PR still listing the viewer as reviewer stays out of To review; a story in test leaves the epic card (one compact line while its draft PR is open); the epic card keeps live blocks only and folds the epic's other stories into one count.",
 );
 export const StoryCardAttentionNarrow: Story = {
   ...StoryCardAttention,

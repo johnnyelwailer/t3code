@@ -2,6 +2,7 @@ import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
 
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
+import { DigestCompactRow } from "~/t3team/t3team-ProjectMyWorkDigestCompactRow";
 import { DigestItemRow, DigestKicker } from "~/t3team/t3team-ProjectMyWorkDigestRows";
 import { DigestStoryGroup } from "~/t3team/t3team-ProjectMyWorkDigestStoryGroup";
 import type { DigestGraph, DigestSection } from "~/t3team/t3team-projectMyWorkDigestPlan";
@@ -37,6 +38,18 @@ function ParentGroupedRows({
   const names = useDigestTransitionNames();
   const row = (item: DigestSection["items"][number], nested = false) => {
     const ticket = ticketsById.get(item.ticketId);
+    if (ticket && item.compact) {
+      const name = names.row(section.id, ticket.id);
+      return (
+        <DigestCompactRow
+          key={ticket.id}
+          transitionName={name}
+          ticket={ticket}
+          why={item.why}
+          onOpenTicket={onOpenTicket}
+        />
+      );
+    }
     return ticket ? (
       <DigestItemRow
         key={ticket.id}
