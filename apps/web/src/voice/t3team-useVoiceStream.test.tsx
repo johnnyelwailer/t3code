@@ -101,12 +101,30 @@ describe("useVoiceStream", () => {
     expect(view.onSessionEnd).not.toHaveBeenCalled();
 
     bridge.emit({ sessionId: "s1", type: "utterance", text: " open the board ", elapsedMs: 900 });
-    expect(view.onUtterance).toHaveBeenCalledWith("open the board");
+    expect(view.onUtterance).toHaveBeenCalledWith("open the board", undefined);
     expect(view.view()).toMatchObject({
       writing: 0,
       writingSinceMs: null,
       heard: { text: "open the board" },
     });
+  });
+
+  it("hands whisper's metadata over with the utterance", () => {
+    const bridge = installBridge();
+    const view = mount("s1");
+    const metadata = { language: "de", audioMs: 900, words: [{ w: "auf", t0: 0, t1: 300 }] };
+    bridge.emit({ sessionId: "s1", type: "auto-commit", reason: "silence" });
+    bridge.emit({ sessionId: "s1", type: "utterance", text: "auf", elapsedMs: 900, metadata });
+    expect(view.onUtterance).toHaveBeenCalledWith("auf", metadata);
+  });
+
+  it("shows the warm-up until the worker is ready, then clears it", () => {
+    const bridge = installBridge();
+    const view = mount("s1");
+    bridge.emit({ sessionId: "s1", type: "warmup", stage: "preparing-gpu", percent: 65 });
+    expect(view.view().warmup).toEqual({ stage: "preparing-gpu", percent: 65 });
+    bridge.emit({ sessionId: "s1", type: "warmup", stage: "ready", percent: 100 });
+    expect(view.view().warmup).toBeNull();
   });
 
   it("keeps counting while several utterances are in flight", () => {

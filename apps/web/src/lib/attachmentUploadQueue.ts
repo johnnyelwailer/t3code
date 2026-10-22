@@ -673,3 +673,39 @@ export function releaseDraftAttachments(
     releaseDraftAttachment(attachment);
   }
 }
+
+/**
+ * Uploads one generated file (no draft, no composer row) and returns it as a message attachment,
+ * or null when this connection cannot upload or the upload failed. For small machine-made files
+ * such as a voice transcript's metadata, which ride along with a message the app sends itself.
+ */
+export async function uploadStandaloneFileAttachment(input: {
+  readonly environmentId: EnvironmentId;
+  readonly file: File;
+}): Promise<ChatAttachment | null> {
+  if (!readEnvironmentScope(input.environmentId, AuthOrchestrationOperateScope)) return null;
+  const mimeType = input.file.type.toLowerCase() || "application/octet-stream";
+  const result = await runAttachmentUploadCycle({
+    registry: appAtomRegistry,
+    createUploadUrl: attachmentEnvironment.createUploadUrl,
+    remove: attachmentEnvironment.remove,
+    environmentId: input.environmentId,
+    upload: { type: "file" as const, name: input.file.name, mimeType, sizeBytes: input.file.size },
+    resolveUploadUrl: (relativeUrl) => {
+      const connection = readPreparedConnection(input.environmentId);
+      return connection ? resolveAssetUrl(connection.httpBaseUrl, relativeUrl) : null;
+    },
+    transport: (url) =>
+      uploadBytes({ url, file: input.file, mimeType, onProgress: () => undefined }),
+    onMinted: () => "continue",
+    onTransferStart: () => undefined,
+  });
+  if (result.status !== "uploaded") return null;
+  return {
+    type: "file",
+    id: result.attachmentId,
+    name: input.file.name,
+    mimeType,
+    sizeBytes: input.file.size,
+  };
+}

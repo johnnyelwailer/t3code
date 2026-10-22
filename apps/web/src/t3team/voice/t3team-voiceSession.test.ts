@@ -190,3 +190,73 @@ describe("submitVoiceUtterance", () => {
     expect(calls.filter((call) => call === "turn:send")).toHaveLength(2);
   });
 });
+
+describe("submitVoiceUtterance transcript metadata", () => {
+  const metadata = {
+    language: "de",
+    audioMs: 2_400,
+    speechMs: 1_900,
+    words: [
+      { w: "Öffne", t0: 0, t1: 380 },
+      { w: "das", t0: 400, t1: 600 },
+      { w: "Board", t0: 620, t1: 900, p: 0.4213 },
+    ],
+  };
+
+  it("attaches whisper's metadata as a small JSON file and keeps the text as said", async () => {
+    const { deps, turns } = harness({
+      home: { threadId: ThreadId.make("voice-home"), projectId: PROJECT },
+      threads: [shell("voice-home")],
+    });
+    const uploaded: File[] = [];
+    const withUpload: VoiceSessionDeps = {
+      ...deps,
+      uploadFile: async (file) => {
+        uploaded.push(file);
+        return {
+          type: "file",
+          id: "meta-1",
+          name: file.name,
+          mimeType: file.type,
+          sizeBytes: file.size,
+        };
+      },
+    };
+    await submitVoiceUtterance(withUpload, "Öffne das Board", metadata);
+    const sent = turns.at(-1)!.message;
+    expect(sent.text.startsWith("Öffne das Board")).toBe(true);
+    expect(sent.text).not.toContain("0.42");
+    expect(sent.attachments).toEqual([
+      expect.objectContaining({ type: "file", id: "meta-1", name: "transcript-meta.json" }),
+    ]);
+    expect(JSON.parse(await uploaded[0]!.text())).toEqual({
+      kind: "voice-transcript-meta",
+      version: 1,
+      language: "de",
+      audioMs: 2_400,
+      speechMs: 1_900,
+      words: [
+        { w: "Öffne", t0: 0, t1: 380 },
+        { w: "das", t0: 400, t1: 600 },
+        { w: "Board", t0: 620, t1: 900, p: 0.42 },
+      ],
+    });
+  });
+
+  it("still sends the message when the metadata upload fails", async () => {
+    const { deps, turns } = harness({
+      home: { threadId: ThreadId.make("voice-home"), projectId: PROJECT },
+      threads: [shell("voice-home")],
+    });
+    const failing: VoiceSessionDeps = {
+      ...deps,
+      uploadFile: async () => {
+        throw new Error("offline");
+      },
+    };
+    expect(await submitVoiceUtterance(failing, "Öffne das Board", metadata)).toMatchObject({
+      status: "sent",
+    });
+    expect(turns.at(-1)!.message.attachments).toEqual([]);
+  });
+});

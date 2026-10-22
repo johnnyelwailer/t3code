@@ -5,7 +5,7 @@ import {
   type DesktopVoiceBridge,
   type VoiceInputState,
 } from "@t3tools/client-runtime/voice-input";
-import type { DesktopVoiceConfig } from "@t3tools/contracts";
+import type { DesktopVoiceConfig, VoiceTranscriptMetadata } from "@t3tools/contracts";
 
 import { usePrimarySettings } from "~/hooks/useSettings";
 import { MediaVoiceRecorder, requestMicrophonePermission } from "./t3team-mediaVoiceRecorder";
@@ -92,7 +92,7 @@ function useNativeTranscriberAvailable(
  * which whatever was said since the last utterance is written down and committed too.
  */
 export function useDesktopVoiceInput(
-  onTranscript: (text: string) => void,
+  onTranscript: (text: string, metadata?: VoiceTranscriptMetadata) => void,
   onUtteranceFailed: (message: string) => void,
 ) {
   const bridge = getDesktopVoiceBridge();
@@ -155,9 +155,9 @@ export function useDesktopVoiceInput(
         void controllerRef.current.stop();
       }
     },
-    onUtterance: (text) => {
+    onUtterance: (text, metadata) => {
       committedSpeechRef.current += 1;
-      onTranscriptRef.current(text);
+      onTranscriptRef.current(text, metadata);
     },
     onUtteranceFailed: (message) => onUtteranceFailedRef.current(message),
   });

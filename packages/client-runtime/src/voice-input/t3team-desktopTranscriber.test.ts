@@ -5,7 +5,13 @@ import {
   type DesktopVoiceBridge,
 } from "./t3team-desktopTranscriber.ts";
 
-const config = { model: "large-v3-turbo", modelPath: "", language: "de", silenceMs: 1500 };
+const config = {
+  model: "large-v3-turbo",
+  modelPath: "",
+  language: "de",
+  languages: "de,en",
+  silenceMs: 1500,
+};
 
 function makeBridge(overrides: Partial<DesktopVoiceBridge> = {}): DesktopVoiceBridge {
   return {

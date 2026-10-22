@@ -6,12 +6,13 @@ import { VoiceClock } from "./t3team-VoiceClock";
 import { VoiceElapsedLabel } from "./t3team-VoiceElapsedLabel";
 import { VOICE_CLASS } from "./t3team-voiceClasses";
 import { failedTitle } from "./t3team-voiceFailureCopy";
-import type { VoiceSessionNote } from "./t3team-voiceSessionNote";
+import { VOICE_WARMING_LABEL, type VoiceSessionNote } from "./t3team-voiceSessionNote";
 import type { VoiceUiState } from "./t3team-voiceUiModel";
 import { useVoiceUiStore, type VoiceUiControls } from "./t3team-voiceUiStore";
 
-export function VoiceProgress(props: { readonly label: string }) {
-  const percent = useVoiceUiStore((store) => store.snapshot.downloadPercent);
+export function VoiceProgress(props: { readonly label: string; readonly percent?: number }) {
+  const downloadPercent = useVoiceUiStore((store) => store.snapshot.downloadPercent);
+  const percent = props.percent ?? downloadPercent;
   return (
     <span
       role="progressbar"
@@ -49,7 +50,14 @@ export function VoiceRowMid(props: {
   const recording = state === "recording";
   return (
     <span key={state} className={cn(VOICE_CLASS.enter, "flex h-7 min-w-0 flex-1 items-center")}>
-      {recording && note.kind === "listening" ? (
+      {recording && note.kind === "warming" ? (
+        <span className="flex w-full min-w-0 items-center gap-2">
+          {quiet(VOICE_WARMING_LABEL.toLowerCase())}
+          <span className="min-w-6 flex-1">
+            <VoiceProgress label="Warming up the speech model" percent={note.percent} />
+          </span>
+        </span>
+      ) : recording && note.kind === "listening" ? (
         <canvas ref={canvasRef} aria-hidden className="block h-4 w-full" />
       ) : writingLabel !== null ? (
         quiet(writingLabel)

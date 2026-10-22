@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { createVoicePcmTap, type VoiceStreamBridge } from "./t3team-voicePcmTap";
 
-const config = { model: "", modelPath: "", language: "auto", silenceMs: 1500 };
+const config = { model: "", modelPath: "", language: "auto", languages: "de,en", silenceMs: 1500 };
 
 class FakeAudioContext {
   static instances: FakeAudioContext[] = [];

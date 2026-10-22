@@ -11,18 +11,22 @@ export const VOICE_HEARD_FLASH_MS = 1800;
  */
 export type VoiceSessionNote =
   | { readonly kind: "listening" }
+  /** The speech model is still warming up; the microphone is already recording. */
+  | { readonly kind: "warming"; readonly percent: number }
   | { readonly kind: "writing"; readonly sinceMs: number }
   | { readonly kind: "heard" };
 
 export function voiceSessionNote(input: {
   readonly state: VoiceUiState;
   readonly endedAtMs: number | null;
-  readonly live: Pick<VoiceUiLive, "writing" | "writingSinceMs" | "heard">;
+  readonly live: Pick<VoiceUiLive, "writing" | "writingSinceMs" | "heard"> &
+    Partial<Pick<VoiceUiLive, "warmup">>;
   readonly now: number;
 }): VoiceSessionNote {
   const { state, endedAtMs, live, now } = input;
   if (state === "transcribing") return { kind: "writing", sinceMs: endedAtMs ?? now };
   if (state !== "recording") return { kind: "listening" };
+  if (live.warmup != null) return { kind: "warming", percent: live.warmup.percent };
   if (live.writing > 0) return { kind: "writing", sinceMs: live.writingSinceMs ?? now };
   if (live.heard !== null && now - live.heard.atMs < VOICE_HEARD_FLASH_MS) return { kind: "heard" };
   return { kind: "listening" };
@@ -33,6 +37,9 @@ export function voiceWritingLabel(sinceMs: number, now: number): string {
   const seconds = Math.floor(Math.max(0, now - sinceMs) / 1000);
   return seconds < 1 ? "Transcribing…" : `Transcribing… ${seconds} s`;
 }
+
+/** What a warming session says: plain words; the bar next to it carries the progress. */
+export const VOICE_WARMING_LABEL = "Warming up…";
 
 /** When a note next changes by itself: the next whole second of a count, or the end of the heard flash. */
 export function voiceSessionNoteExpiresAt(

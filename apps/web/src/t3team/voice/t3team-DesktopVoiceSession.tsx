@@ -1,3 +1,4 @@
+import type { VoiceTranscriptMetadata } from "@t3tools/contracts";
 import { useEffect, useMemo, type RefObject } from "react";
 
 import { useDesktopVoiceInput } from "~/voice/t3team-useDesktopVoiceInput";
@@ -14,7 +15,7 @@ const openMicrophoneSettings = (): (() => void) | null => {
  * voice surfaces. `toggleRef` is how the global hotkey and the widget's Stop reach it.
  */
 export function DesktopVoiceSession(props: {
-  readonly onTranscript: (text: string) => void;
+  readonly onTranscript: (text: string, metadata?: VoiceTranscriptMetadata) => void;
   readonly onUtteranceFailed: (message: string) => void;
   readonly toggleRef: RefObject<(() => void) | null>;
 }) {

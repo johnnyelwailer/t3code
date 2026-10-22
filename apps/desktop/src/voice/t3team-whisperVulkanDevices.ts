@@ -38,8 +38,9 @@ export function parseVulkanDevices(logLines: readonly string[]): readonly Vulkan
   });
 }
 
-const isDiscrete = (device: VulkanDevice) =>
+export const isDiscreteVulkanDevice = (device: VulkanDevice) =>
   !device.integrated && DISCRETE_VENDOR.test(device.name);
+const isDiscrete = isDiscreteVulkanDevice;
 
 /**
  * whisper.node always opens Vulkan device 0, so on a dual-GPU machine that is whatever the loader

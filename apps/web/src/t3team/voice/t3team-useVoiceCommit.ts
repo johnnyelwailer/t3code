@@ -1,3 +1,4 @@
+import type { VoiceTranscriptMetadata } from "@t3tools/contracts";
 import { useCallback } from "react";
 
 import { toastManager } from "~/components/ui/toast";
@@ -18,8 +19,8 @@ export function notifyVoiceFailure(code: VoiceFailureCode, detail?: string): voi
  * Where a committed transcript goes: the surfaces learn it was heard, and the utterance is routed
  * to the voice thread. A failure to send is a toast, since what was heard is not the problem.
  */
-export function useVoiceCommit(): (text: string) => void {
-  return useCallback((text) => {
+export function useVoiceCommit(): (text: string, metadata?: VoiceTranscriptMetadata) => void {
+  return useCallback((text, metadata) => {
     const utterance = text.trim();
     if (utterance === "") {
       dispatchVoiceUi({ type: "fail", detail: "No speech was detected." });
@@ -31,7 +32,7 @@ export function useVoiceCommit(): (text: string) => void {
       notifyVoiceFailure("send-failed", "No server connection.");
       return;
     }
-    void submitVoiceUtterance(deps, utterance).then((result) => {
+    void submitVoiceUtterance(deps, utterance, metadata).then((result) => {
       if (result.status === "sent") dispatchVoiceUi({ type: "tier", tier: result.tier });
       else notifyVoiceFailure(result.code, result.detail);
     });

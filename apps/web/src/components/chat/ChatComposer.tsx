@@ -285,6 +285,7 @@ import { useDebouncedValue } from "~/state/queries";
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { ComposerMicInput } from "./t3team-ComposerMicInput";
 import { VoiceComposerDock } from "../../t3team/voice/t3team-VoiceComposerDock";
+import { VoiceComposerInline } from "../../t3team/voice/t3team-VoiceComposerInline";
 import { resolveModelPickerSelectedModel } from "./ModelPickerContent";
 import {
   type ComposerCommandItem,
@@ -7696,6 +7697,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     </DialogPopup>
                   </Dialog>
                 ) : null}
+                {/* t3team: the voice thread's live recording streams inline, above the editor. */}
+                <VoiceComposerInline environmentId={environmentId} threadId={activeThreadId} />
                 <ComposerContextActionsContext value={composerContextActions}>
                   <ComposerPromptEditor
                     ariaLabel="Message"

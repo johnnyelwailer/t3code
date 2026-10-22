@@ -1,4 +1,8 @@
-import type { DesktopVoiceStreamEvent, DesktopVoiceStreamStopResult } from "@t3tools/contracts";
+import type {
+  DesktopVoiceStreamEvent,
+  DesktopVoiceStreamStopResult,
+  VoiceTranscriptMetadata,
+} from "@t3tools/contracts";
 
 import { createActivityGate, SPEECH_FLOOR_RMS } from "./t3team-voiceActivityGate.ts";
 import { createLanguageLock } from "./t3team-voiceLanguageLock.ts";
@@ -16,8 +20,13 @@ const PRE_ROLL_MS = 300;
 const TRAILING_PAD_MS = 400;
 /** No partial starts once the speaker has been quiet this long: the utterance is about to commit and its final must not queue behind it. */
 const PARTIAL_PAUSE_MS = 400;
-/** A partial slower than this ends partials for the session: stale text is worthless and a busy worker delays the final pass. */
+/**
+ * A partial whose pass (worker time only, never time spent waiting for a cold model) took longer
+ * than this is slow: stale text is worthless and a busy worker delays the final pass. One slow pass
+ * backs partials off; only this many in a row end them for the session.
+ */
 const PARTIAL_BUDGET_MS = 8_000;
+const SLOW_PARTIALS_BEFORE_OFF = 3;
 
 export type VoiceStreamTranscription =
   | {
@@ -25,6 +34,9 @@ export type VoiceStreamTranscription =
       readonly text: string;
       readonly language?: string;
       readonly elapsedMs: number;
+      /** The worker's own time for the pass; `elapsedMs` also counts queueing and model loading. */
+      readonly passMs?: number;
+      readonly metadata?: VoiceTranscriptMetadata;
     }
   | { readonly ok: false; readonly message: string };
 
@@ -51,7 +63,13 @@ export function createVoiceStreamSession(deps: {
   readonly transcribe: VoiceStreamTranscribe;
   readonly emit: VoiceStreamEmit;
   readonly log: (message: string) => void;
+  /**
+   * False while the model is still loading or warming up. Partials wait for it (nothing is lost:
+   * the next partial re-transcribes the whole utterance so far) instead of queueing behind the load.
+   */
+  readonly isWorkerReady?: () => boolean;
 }) {
+  const workerReady = deps.isWorkerReady ?? (() => true);
   const gate = createActivityGate({ silenceMs: deps.silenceMs });
   const language = createLanguageLock(deps.configuredLanguage);
   const audio = createPcmBuffer();
@@ -70,10 +88,14 @@ export function createVoiceStreamSession(deps: {
   let lastPartialElapsedMs = 0;
   let stopped = false;
   let partialsEnabled = true;
+  let slowPartialsInARow = 0;
+  let waitedForWorker = false;
   let partialCount = 0;
   let chunkCount = 0;
 
-  const nextPartialGapMs = () => Math.max(PARTIAL_INTERVAL_MS, lastPartialElapsedMs);
+  /** A slow pass doubles the gap, so a struggling worker gets room for the final pass. */
+  const nextPartialGapMs = () =>
+    Math.max(PARTIAL_INTERVAL_MS, lastPartialElapsedMs * (slowPartialsInARow > 0 ? 2 : 1));
 
   function runPartial() {
     const end = audio.end;
@@ -90,17 +112,23 @@ export function createVoiceStreamSession(deps: {
       .then((result) => {
         if (stopped) return;
         if (!result.ok) return deps.log(`stream partial failed: ${result.message}`);
-        lastPartialElapsedMs = result.elapsedMs;
-        if (result.elapsedMs > PARTIAL_BUDGET_MS) {
-          partialsEnabled = false;
+        const passMs = result.passMs ?? result.elapsedMs;
+        lastPartialElapsedMs = passMs;
+        if (passMs > PARTIAL_BUDGET_MS) {
+          slowPartialsInARow += 1;
+          if (slowPartialsInARow >= SLOW_PARTIALS_BEFORE_OFF) partialsEnabled = false;
           deps.log(
-            `stream partials off: a pass took ${result.elapsedMs} ms (budget ${PARTIAL_BUDGET_MS} ms)`,
+            partialsEnabled
+              ? `stream partial slow: pass took ${passMs} ms (budget ${PARTIAL_BUDGET_MS} ms); backing off`
+              : `stream partials off: ${slowPartialsInARow} passes in a row over ${PARTIAL_BUDGET_MS} ms`,
           );
+        } else {
+          slowPartialsInARow = 0;
         }
         partialCount += 1;
-        if (partialCount === 1) {
+        if (partialCount === 1 || partialCount % 10 === 0) {
           deps.log(
-            `stream first partial: ${result.elapsedMs} ms to transcribe, ${Math.round(samplesToMs(end))} ms of audio`,
+            `stream partial ${partialCount}: pass ${passMs} ms, ${result.elapsedMs} ms end to end, window ${Math.round(windowMs)} ms at ${Math.round(samplesToMs(end))} ms of audio`,
           );
         }
         if (result.text.trim() === "") return;
@@ -158,7 +186,16 @@ export function createVoiceStreamSession(deps: {
       const due = samplesToMs(audio.end) - lastPartialAtMs >= nextPartialGapMs();
       const paused = frame.silentMs >= PARTIAL_PAUSE_MS;
       if (partialsEnabled && utteranceStart !== null && !passes.busy && due && !paused) {
-        runPartial();
+        if (workerReady()) {
+          if (waitedForWorker) {
+            waitedForWorker = false;
+            deps.log(`stream worker ready at ${Math.round(samplesToMs(audio.end))} ms of audio`);
+          }
+          runPartial();
+        } else if (!waitedForWorker) {
+          waitedForWorker = true;
+          deps.log(`stream partials waiting for the whisper worker to warm up`);
+        }
       }
     },
     /**

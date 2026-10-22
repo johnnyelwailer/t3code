@@ -32,6 +32,17 @@ const HALLUCINATED_PHRASES = new Set([
   "merci d'avoir regardé cette vidéo",
   "sous-titres réalisés par la communauté d'amara.org",
   "gracias por ver el video",
+  // Seen on room noise when auto-detection drifts to Portuguese, Spanish, Japanese or Russian.
+  "e aí",
+  "e ai",
+  "obrigado",
+  "obrigada",
+  "tchau",
+  "legendas pela comunidade amara.org",
+  "ご視聴ありがとうございました",
+  "продолжение следует",
+  "субтитры сделал dimatorzok",
+  "untertitel von stephanie geiges",
 ]);
 
 const HALLUCINATED_FRAGMENTS = [
@@ -50,12 +61,38 @@ function normalize(text: string): string {
     .trim();
 }
 
+/** A phrase of 2-4 words said this many times in a row is a decoder loop, not speech. */
+const MAX_REPEATED_PHRASE_RUN = 3;
+const MAX_LOOP_PHRASE_WORDS = 4;
+
 function isRepeatedTokenLoop(normalized: string): boolean {
   const tokens = normalized.split(" ");
   let run = 1;
   for (let index = 1; index < tokens.length; index += 1) {
     run = tokens[index] === tokens[index - 1] ? run + 1 : 1;
     if (run >= MAX_REPEATED_TOKEN_RUN) return true;
+  }
+  return isRepeatedPhraseLoop(tokens);
+}
+
+/** `e aí e aí e aí …`: the same short phrase back to back, the classic whisper loop on noise. */
+function isRepeatedPhraseLoop(tokens: readonly string[]): boolean {
+  for (let size = 2; size <= MAX_LOOP_PHRASE_WORDS; size += 1) {
+    for (let start = 0; start + size * MAX_REPEATED_PHRASE_RUN <= tokens.length; start += 1) {
+      let runs = 1;
+      for (let next = start + size; next + size <= tokens.length; next += size) {
+        let same = true;
+        for (let offset = 0; offset < size; offset += 1) {
+          if (tokens[next + offset] !== tokens[start + offset]) {
+            same = false;
+            break;
+          }
+        }
+        if (!same) break;
+        runs += 1;
+      }
+      if (runs >= MAX_REPEATED_PHRASE_RUN) return true;
+    }
   }
   return false;
 }

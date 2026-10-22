@@ -48,6 +48,32 @@ export const DesktopVoiceStreamStopResult = Schema.Struct({
 });
 export type DesktopVoiceStreamStopResult = typeof DesktopVoiceStreamStopResult.Type;
 
+/**
+ * What whisper knew about one transcript beyond its text, kept small: word timings in ms from the
+ * start of the utterance, the detected language and how much of the audio VAD heard as speech.
+ * `p` (word probability) and `noSpeechProb` stay absent while the native runtime does not report
+ * them, so a consumer must never read a missing `p` as "certain".
+ */
+export const VoiceTranscriptWord = Schema.Struct({
+  w: Schema.String,
+  t0: Schema.Number,
+  t1: Schema.Number,
+  p: Schema.optionalKey(Schema.Number),
+});
+export type VoiceTranscriptWord = typeof VoiceTranscriptWord.Type;
+
+export const VoiceTranscriptMetadata = Schema.Struct({
+  language: Schema.optionalKey(Schema.String),
+  audioMs: Schema.Number,
+  speechMs: Schema.optionalKey(Schema.Number),
+  noSpeechProb: Schema.optionalKey(Schema.Number),
+  words: Schema.Array(VoiceTranscriptWord),
+});
+export type VoiceTranscriptMetadata = typeof VoiceTranscriptMetadata.Type;
+
+export const DesktopVoiceWarmupStage = Schema.Literals(["loading", "preparing-gpu", "ready"]);
+export type DesktopVoiceWarmupStage = typeof DesktopVoiceWarmupStage.Type;
+
 /** `silence` ends an utterance and the recording goes on; `no-speech` and `idle` end the recording. */
 export const DesktopVoiceStreamAutoCommitReason = Schema.Literals(["silence", "no-speech", "idle"]);
 export type DesktopVoiceStreamAutoCommitReason = typeof DesktopVoiceStreamAutoCommitReason.Type;
@@ -58,7 +84,8 @@ export type DesktopVoiceStreamAutoCommitReason = typeof DesktopVoiceStreamAutoCo
  * `auto-commit` says the speaker paused: for `silence` the utterance is now being written and the
  * recording stays open, for `no-speech` and `idle` the renderer ends it. `utterance` is the
  * written text of one committed utterance (empty when it held no words) and `utterance-failed`
- * says writing it down failed.
+ * says writing it down failed. `warmup` repeats while the model loads and runs its first
+ * (shader-compiling) pass; audio keeps being captured and is transcribed once it is `ready`.
  */
 export const DesktopVoiceStreamEvent = Schema.Union([
   Schema.Struct({ sessionId: Schema.String, type: Schema.Literal("level"), level: Schema.Number }),
@@ -83,11 +110,19 @@ export const DesktopVoiceStreamEvent = Schema.Union([
     type: Schema.Literal("utterance"),
     text: Schema.String,
     elapsedMs: Schema.Number,
+    metadata: Schema.optionalKey(VoiceTranscriptMetadata),
   }),
   Schema.Struct({
     sessionId: Schema.String,
     type: Schema.Literal("utterance-failed"),
     message: Schema.String,
+  }),
+  Schema.Struct({
+    sessionId: Schema.String,
+    type: Schema.Literal("warmup"),
+    stage: DesktopVoiceWarmupStage,
+    /** 0-100, coarse: it moves per stage, never pretends to know more. */
+    percent: Schema.Number,
   }),
 ]);
 export type DesktopVoiceStreamEvent = typeof DesktopVoiceStreamEvent.Type;

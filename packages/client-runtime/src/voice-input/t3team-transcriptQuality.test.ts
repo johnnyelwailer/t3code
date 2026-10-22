@@ -17,6 +17,10 @@ describe("sanitizeTranscript", () => {
     ".",
     "a",
     "the the the the the the",
+    "E aí",
+    "E aí E aí E aí E aí E aí E aí E aí E aí E aí E aí",
+    "ja genau ja genau ja genau",
+    "Obrigado.",
   ])("drops %j", (hallucination) => {
     expect(sanitizeTranscript(hallucination)).toBe("");
   });
@@ -25,6 +29,8 @@ describe("sanitizeTranscript", () => {
     "Open the voice thread and watch pull request 42.",
     "Thank you, now spawn a thread for the login bug.",
     "Starte einen neuen Thread für den Release.",
+    "Nein, nein, das ist falsch.",
+    "Mach das Board auf und dann das Board zu.",
   ])("keeps real speech %j", (speech) => {
     expect(sanitizeTranscript(speech)).toBe(speech);
   });

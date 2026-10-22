@@ -2,6 +2,7 @@ import type { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { runAtomCommand, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 
+import { uploadStandaloneFileAttachment } from "~/lib/attachmentUploadQueue";
 import { newMessageId, newThreadId } from "~/lib/utils";
 import { primaryEnvironmentIdAtom } from "~/state/primaryEnvironment";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
@@ -50,6 +51,7 @@ export function makeVoiceSessionDeps(): VoiceSessionDeps | null {
     projectlessProject: () => resolveProjectlessProject(environmentId),
     route: routeVoiceUtterance,
     startTurn: orchestration.startThreadTurn,
+    uploadFile: (file) => uploadStandaloneFileAttachment({ environmentId, file }),
     pinAndKeep: async (threadId: ThreadId) => {
       await runOnPrimaryEnvironment(threadEnvironment.pin, { threadId }, "voice-thread-pin");
       await runOnPrimaryEnvironment(

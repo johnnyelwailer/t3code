@@ -90,3 +90,6 @@ export const PreparingDownload: Story = {
 export const PreparingNoProgress: Story = { args: { state: "preparing" } };
 export const Failed: Story = { args: { state: "failed", snapshot: { failureDetail: null } } };
 export const Denied: Story = { args: { state: "denied" } };
+export const WarmingUp: Story = {
+  args: { state: "recording", live: { warmup: { stage: "preparing-gpu", percent: 65 } } },
+};

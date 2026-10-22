@@ -35,6 +35,7 @@ import * as DesktopRemoteUpdates from "../updates/DesktopRemoteUpdates.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
 import * as DesktopSnapShot from "../snapShot/DesktopSnapShot.ts";
 import * as DesktopVoiceHotkey from "../voice/t3team-DesktopVoiceHotkey.ts";
+import { configureDesktopVoiceLog } from "../voice/t3team-voiceRuntime.ts";
 import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
 import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -157,6 +158,7 @@ const bootstrap = Effect.gen(function* () {
 
   yield* snapShot.initialize;
   yield* voiceHotkey.initialize;
+  yield* Effect.sync(() => configureDesktopVoiceLog(environment.logDir));
 
   if (!settings.localEnvironmentEnabled) {
     yield* logBootstrapInfo("bootstrap skipping local environment (disabled in settings)");
