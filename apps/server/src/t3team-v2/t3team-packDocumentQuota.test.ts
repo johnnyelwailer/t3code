@@ -1,6 +1,9 @@
 import { assert, it } from "@effect/vitest";
 import { defineCollections } from "@t3team/pack-api";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Option from "effect/Option";
 import type * as Schema from "effect/Schema";
 import * as Store from "./t3team-packDocumentStore.ts";
 import { keysOf, packStoreTestLayer } from "./t3team-packDocumentStore.testkit.ts";
@@ -9,6 +12,14 @@ const TestLayer = packStoreTestLayer(
   new Map([
     [
       "pack-a",
+      defineCollections({
+        notes: { maxDocBytes: 64_000, retention: "keep", viewWritable: true },
+        quotaBytes: 100_000,
+      }),
+    ],
+    // Its own pack, so the nesting check never meets pack-a's (by then nearly full) quota.
+    [
+      "pack-deep",
       defineCollections({
         notes: { maxDocBytes: 64_000, retention: "keep", viewWritable: true },
         quotaBytes: 100_000,
@@ -42,16 +53,25 @@ it.layer(TestLayer)("Pack view write limits", (it) => {
     }),
   );
 
-  it.effect("a deeply nested document under the byte cap is refused as invalid input", () =>
+  it.effect("a deeply nested document under the byte cap never fails with a defect", () =>
     Effect.gen(function* () {
       const service = yield* Store.T3TeamPackDocumentStore;
-      // 40_000 bytes, under the cap. Nesting this deep must fail typed: a defect would fail the flip.
+      // 40_000 bytes, under the cap. Whether the runtime's stack takes this depth depends on the
+      // Node version (24 overflows, 26 does not): it is stored, or it fails typed as invalid input,
+      // never as a defect.
       let doc: Schema.Json = [];
       for (let depth = 1; depth < 20_000; depth++) doc = [doc];
-      const error = yield* Effect.flip(
-        service.putFromView({ packId: "pack-a", collection: "notes", key: "deep", doc }),
+      const exit = yield* Effect.exit(
+        service.putFromView({ packId: "pack-deep", collection: "notes", key: "deep", doc }),
       );
-      assert.strictEqual(error.message, "The pack document request is invalid.");
+      if (Exit.isFailure(exit)) {
+        const error = Cause.findErrorOption(exit.cause);
+        assert.isTrue(Option.isSome(error), "a deep document must not fail with a defect");
+        assert.strictEqual(
+          Option.getOrThrow(error).message,
+          "The pack document request is invalid.",
+        );
+      }
     }),
   );
 });

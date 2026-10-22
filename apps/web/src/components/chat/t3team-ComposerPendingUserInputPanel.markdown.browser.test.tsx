@@ -111,7 +111,8 @@ describe("ComposerPendingUserInputPanel markdown", () => {
     expect(markup).toMatch(
       /Two options are ready\.<br>\s*A ships this week\.<br>\s*B needs review\./,
     );
-    expect(markup).toContain("<p>Which first?</p>");
+    // Markdown paragraphs may carry a text-direction attribute.
+    expect(markup).toMatch(/<p[^>]*>Which first\?<\/p>/);
     expect(markup).toMatch(/Smallest change<br>\s*No migration/);
   });
 

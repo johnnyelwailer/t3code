@@ -103,13 +103,15 @@ describe("MessagesTimeline t3team copy control", () => {
     };
 
     expect(await markupFor({})).toContain('aria-label="Copy message"');
+    // Upstream folds another agent's message to one line; its footer (and copy) shows once the
+    // fold is expanded, so the folded row renders no copy control.
     expect(
       await markupFor({
         createdBy: "agent",
         creationSource: "mcp",
         senderThreadId: ThreadId.make("thread-parent"),
       }),
-    ).toContain('aria-label="Copy message"');
+    ).not.toContain('aria-label="Copy message"');
     expect(await markupFor({ createdBy: "agent", creationSource: "provider" })).not.toContain(
       'aria-label="Copy message"',
     );
