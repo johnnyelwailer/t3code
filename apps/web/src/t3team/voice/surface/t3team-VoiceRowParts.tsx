@@ -1,4 +1,4 @@
-import { CheckIcon, ExternalLinkIcon, RotateCcwIcon } from "lucide-react";
+import { ExternalLinkIcon, RotateCcwIcon } from "lucide-react";
 import type { MouseEvent, RefObject } from "react";
 
 import { cn } from "~/lib/utils";
@@ -28,12 +28,8 @@ const quiet = (text: string) => (
   <span className="truncate text-2xs text-muted-foreground">{text}</span>
 );
 
-const heard = (
-  <span className="inline-flex items-center gap-1 font-medium text-2xs text-success-foreground">
-    <CheckIcon className="size-3" aria-hidden />
-    heard
-  </span>
-);
+// The check lives in the orb (the row's icon slot); the label is the plain word, never a second ✓.
+const heard = quiet("heard");
 
 /**
  * The middle of the row, one thing per state, and the row's hit target: the title at rest, the
@@ -81,8 +77,9 @@ export function VoiceRowMid(props: {
   );
 }
 
+// Plain like a thread row's own quick actions: no fill, no tint, the shared focus ring only.
 const roundAction =
-  "pointer-events-auto grid size-5 cursor-pointer place-items-center rounded-full bg-primary/10 text-primary outline-hidden hover:bg-primary/16 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring";
+  "pointer-events-auto grid size-5 cursor-pointer place-items-center rounded-md text-muted-foreground outline-hidden hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
 
 /** The end of the row: the shortcut at rest, the timer while recording, the retry or settings after a failure. */
 export function VoiceRowAux(props: {

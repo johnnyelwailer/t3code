@@ -206,3 +206,53 @@ describe("the voice row looks like a thread row", () => {
     expect(event.defaultPrevented).toBe(false);
   });
 });
+
+describe("the voice row never doubles its icon or adds chrome", () => {
+  const middle = () => container!.querySelector<HTMLButtonElement>("button:not([aria-label])")!;
+
+  it("says heard once: the check is the orb's, the label is the plain word", () => {
+    show("committed", { heardText: "hi" });
+    mount(row());
+    expect(middle().textContent).toBe("heard");
+    expect(middle().querySelector("svg")).toBeNull();
+    expect(orb("Talk").getAttribute("data-state")).toBe("committed");
+  });
+
+  it("keeps every state's label free of icons and glyphs", () => {
+    for (const state of [
+      "idle",
+      "transcribing",
+      "committed",
+      "preparing",
+      "failed",
+      "denied",
+    ] as const) {
+      show(state, { startedAtMs: Date.now(), endedAtMs: Date.now() });
+      mount(row());
+      expect(middle().querySelector("svg")).toBeNull();
+      expect(middle().textContent).not.toMatch(/[✓✔✗✕❌⚠]/u);
+      act(() => root?.unmount());
+      container?.remove();
+    }
+  });
+
+  it("adds no border, ring, outline or tint in any state, open or not", () => {
+    for (const isActive of [false, true]) {
+      for (const state of ["idle", "transcribing", "committed", "failed", "denied"] as const) {
+        show(state, { startedAtMs: Date.now() });
+        mount(row({ isActive }));
+        const classes = [...container!.querySelectorAll<HTMLElement>("*")]
+          .flatMap((element) => (element.getAttribute("class") ?? "").split(/\s+/))
+          // Keyboard focus rings are the same ones a thread row and its quick actions use.
+          .filter((name) => name !== "" && !name.startsWith("focus-visible:"));
+        expect(
+          classes.filter((name) =>
+            /^(border|ring|outline-(?!hidden)|shadow|bg-primary|bg-card)/.test(name),
+          ),
+        ).toEqual([]);
+        act(() => root?.unmount());
+        container?.remove();
+      }
+    }
+  });
+});
