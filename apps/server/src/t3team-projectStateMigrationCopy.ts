@@ -57,6 +57,22 @@ export const makeStateMigrationCopier = <E>(options: {
       yield* options.afterCopy(copiedThisRun);
     });
 
+  /** Copies `source` over `target` when the target is missing or older than the source (a
+   * replaced file gets a fresh mtime, so a rerun skips it; a target written since wins). */
+  const copyFileIfNewer = (source: string, target: string) =>
+    Effect.gen(function* () {
+      const sourceInfo = yield* stat(source);
+      if (!sourceInfo?.isFile()) return;
+      const targetInfo = yield* stat(target);
+      if (targetInfo && targetInfo.mtimeMs >= sourceInfo.mtimeMs) return;
+      if (options.crashAfterFiles !== undefined && copiedThisRun >= options.crashAfterFiles) {
+        return yield* Effect.fail(new StateMigrationCrash());
+      }
+      yield* copyThroughPart(source, target);
+      copiedThisRun += 1;
+      yield* options.afterCopy(copiedThisRun);
+    });
+
   /** Copies `source` (followed through links) into `target`. `overwrite`: replace files whose
    * size differs (the job's own folder); otherwise existing target files win. `newerOnly`: the
    * catch-up pass, copying only files changed after the target copy was made. */
@@ -88,5 +104,5 @@ export const makeStateMigrationCopier = <E>(options: {
       }
     });
 
-  return { copyFile, copyTree };
+  return { copyFile, copyFileIfNewer, copyTree };
 };

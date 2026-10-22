@@ -59,6 +59,10 @@ export type StateMigrationEntry = {
   readonly mode: StateMigrationEntryMode;
   /** The real (link-resolved) source path at planning time. */
   readonly source: string;
+  /** `copy` only: the target already has this file, but an older, untracked one (a leftover of an
+   * earlier switch attempt): the source replaces it unless the target has changed since. Builds
+   * that predate the field skip the entry, as before. */
+  readonly replaceOlder?: true;
   status: StateMigrationEntryStatus;
   error?: string;
 };

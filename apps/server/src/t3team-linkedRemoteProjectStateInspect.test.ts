@@ -69,6 +69,44 @@ describe("inspectRemoteProjectStateOnDefaultBranch", () => {
     }).pipe(Effect.provide(Layer.mergeAll(vcs, sourceControl, NodeServices.layer)));
   });
 
+  it.effect("a committed reference manifest alone is not project state", () => {
+    const ok = (stdout: string) => ({
+      exitCode: 0 as never,
+      stdout,
+      stderr: "",
+      stdoutTruncated: false,
+      stderrTruncated: false,
+    });
+    const vcs = Layer.succeed(VcsProcess, {
+      run: (input) =>
+        Effect.sync(() => {
+          const op = input.args.join(" ");
+          if (op.includes("fetch")) return ok("");
+          // Every state dir name answers with machine-local bookkeeping only.
+          if (op.includes("ls-tree")) {
+            return ok("references/reference-repositories.json\nchild-session-worktrees/x/.keep\n");
+          }
+          return ok("main");
+        }),
+    });
+    const sourceControl = Layer.succeed(SourceControlRepositoryService, {
+      prepareClone: () =>
+        Effect.succeed({
+          cloneUrl: "https://example.test/acme/shared.git",
+          remoteUrl: "https://example.test/acme/shared.git",
+          destinationPath: "/tmp/unused",
+          repository: null,
+        }),
+    } as never);
+    return Effect.gen(function* () {
+      const result = yield* inspectRemoteProjectStateOnDefaultBranch(
+        "https://example.test/acme/shared.git",
+      );
+      expect(result.hasProjectStateDir).toBe(false);
+      expect(result.entryCount).toBe(0);
+    }).pipe(Effect.provide(Layer.mergeAll(vcs, sourceControl, NodeServices.layer)));
+  });
+
   /** A git stand-in: `failOn` exits 128, `hangOn` never returns; every call is recorded. */
   const scriptedGit = (options: { readonly failOn?: string; readonly hangOn?: string }) => {
     const calls: Array<{

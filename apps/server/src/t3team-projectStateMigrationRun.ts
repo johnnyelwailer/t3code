@@ -91,7 +91,7 @@ export const runStateMigration = Effect.fn("runStateMigration")(function* (
     }),
   );
 
-  const { copyFile, copyTree } = makeStateMigrationCopier({
+  const { copyFile, copyFileIfNewer, copyTree } = makeStateMigrationCopier({
     crashAfterFiles: options.crashAfterFiles,
     afterCopy: (copiedThisRun) =>
       Effect.gen(function* () {
@@ -126,7 +126,8 @@ export const runStateMigration = Effect.fn("runStateMigration")(function* (
       }
 
       if (entry.mode === "copy") {
-        yield* copyFile(entry.source, target, false);
+        if (entry.replaceOlder) yield* copyFileIfNewer(entry.source, target);
+        else yield* copyFile(entry.source, target, false);
         entry.status = "done";
         return;
       }
