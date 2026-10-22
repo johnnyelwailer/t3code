@@ -7,7 +7,17 @@ import type { VoiceUiState } from "./surface/t3team-voiceUiModel";
 import { useVoiceUiStore } from "./surface/t3team-voiceUiStore";
 
 function MicGlyph({ state }: { readonly state: VoiceUiState }) {
-  if (state === "recording") return <SquareIcon className="fill-current text-primary" />;
+  const level = useVoiceUiStore((store) => store.live.level);
+  if (state === "recording") {
+    // The one level indicator: the stop square breathes with the microphone.
+    return (
+      <SquareIcon
+        data-testid="voice-composer-level"
+        className="fill-current text-destructive transition-opacity duration-100"
+        style={{ opacity: 0.45 + 0.55 * level }}
+      />
+    );
+  }
   if (state === "preparing" || state === "transcribing") {
     return <LoaderCircleIcon className="animate-spin" />;
   }
@@ -15,9 +25,9 @@ function MicGlyph({ state }: { readonly state: VoiceUiState }) {
 }
 
 /**
- * The mic of the voice thread's composer. Where other threads dictate into the draft, this one
- * talks to the voice agent: it starts and stops the same recording the sidebar row controls, and
- * the composer's dock shows it.
+ * The mic of the voice thread's composer, and the only recording control there: it starts and
+ * stops the same recording the sidebar row and the hotkey control. What is said lands in the
+ * draft (`VoiceComposerInline`); stopping writes down the last words and leaves them to send.
  */
 export function VoiceComposerMic() {
   const state = useVoiceUiStore((store) => store.snapshot.state);

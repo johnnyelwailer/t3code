@@ -5,7 +5,7 @@ import { pcm16Rms, samplesToMs } from "./t3team-voicePcm.ts";
  * silence, never speech. The tracker found near-silent chunks to be the trigger for whisper
  * hallucination loops and language drift.
  */
-export const SPEECH_FLOOR_RMS = 0.0025;
+const SPEECH_FLOOR_RMS = 0.0025;
 /** A frame is speech when it is this many times louder than the measured room tone. */
 const SPEECH_OVER_NOISE = 3;
 /** Room tone is measured from the quietest frame of this opening window. */

@@ -1,7 +1,11 @@
 // @effect-diagnostics globalTimers:off -- Idle unload runs at a child-process boundary outside Effect fibers.
 // @effect-diagnostics globalDate:off -- Load and pass timings are measured around child-process calls.
 import type { VulkanDeviceMemory } from "./t3team-whisperDeviceMemory.ts";
-import { WHISPER_WORKER_CRASH_ID, type WhisperWord } from "./t3team-whisperProtocol.ts";
+import {
+  type SpeechSpan,
+  WHISPER_WORKER_CRASH_ID,
+  type WhisperWord,
+} from "./t3team-whisperProtocol.ts";
 import type { WhisperSentinel } from "./t3team-whisperSentinel.ts";
 import {
   describeWhisperDevice,
@@ -35,8 +39,6 @@ export type WhisperTranscription = {
   readonly device: string;
   /** Time the worker spent on this pass alone: no queueing behind other passes, no model load. */
   readonly passMs: number;
-  /** Speech VAD heard in the audio; absent when VAD did not run. 0 means whisper was skipped. */
-  readonly speechMs?: number;
   readonly words?: readonly WhisperWord[];
 };
 
@@ -45,9 +47,9 @@ export type WhisperHost = {
     readonly modelPath: string;
     readonly pcm16Base64: string;
     readonly language: string;
-    /** Gate the pass with VAD (when the worker has it): no speech means no whisper call. */
-    readonly vad?: boolean;
   }) => Promise<WhisperTranscription>;
+  /** Silero on the loaded worker, beside any running pass; null (no VAD, no answer) is "unknown". */
+  readonly detectSpeech: (pcm16Base64: string) => Promise<readonly SpeechSpan[] | null>;
   /**
    * Loads the model and runs one throwaway pass on it, so the GPU's shader compile and the first
    * allocation happen now rather than on the first words. `onLoaded` fires between the two steps.
@@ -62,9 +64,8 @@ export type WhisperHost = {
 };
 
 /**
- * Owns at most one whisper worker process. Policies: GPU first behind a crash sentinel with CPU
- * fallback, one CPU retry when a GPU worker dies mid-transcription, and unload (kill the process,
- * freeing GPU memory) after an idle window.
+ * Owns at most one whisper worker. GPU first behind a crash sentinel with CPU fallback, one CPU
+ * retry when a GPU worker dies mid-pass, and unload (freeing GPU memory) after an idle window.
  */
 export function makeWhisperHost(options: {
   readonly spawnWorker: (env?: WhisperWorkerEnv) => WhisperWorkerHandle;
@@ -109,7 +110,10 @@ export function makeWhisperHost(options: {
   });
 
   const ensureWorker = async (modelPath: string): Promise<LiveWhisperWorker> => {
-    if (live && live.modelPath !== modelPath) stopWorker();
+    // Probe -> chosen model is no crash: settle its GPU attempt, or the next start goes CPU.
+    const switching = live !== null && live.modelPath !== modelPath;
+    if (switching && live?.acceleration === "gpu") options.sentinel.clear();
+    if (switching) stopWorker();
     if (live) return live;
     const startedAt = now();
     starting ??= startWithPolicy(modelPath).finally(() => (starting = null));
@@ -150,7 +154,6 @@ export function makeWhisperHost(options: {
       type: "transcribe",
       pcm16Base64: input.pcm16Base64,
       language: input.language,
-      ...(input.vad === true && worker.vad ? { vad: true } : {}),
     });
     if (!response.ok) {
       stopWorker();
@@ -171,7 +174,6 @@ export function makeWhisperHost(options: {
       acceleration: worker.acceleration,
       device: deviceOf(worker).label,
       passMs,
-      ...(response.speechMs === undefined ? {} : { speechMs: response.speechMs }),
       ...(response.words === undefined ? {} : { words: response.words }),
     };
   };
@@ -181,6 +183,12 @@ export function makeWhisperHost(options: {
       const next = queue.then(() => run(input));
       queue = next.catch(() => undefined);
       return next;
+    },
+    detectSpeech: async (pcm16Base64) => {
+      const worker = live;
+      if (worker === null || !worker.vad) return null;
+      const response = await worker.call({ type: "vad", pcm16Base64 }).catch(() => null);
+      return response?.ok === true && "speech" in response ? response.speech : null;
     },
     warm: (modelPath, onLoaded) => {
       if (live?.modelPath === modelPath && passedOn === live) return Promise.resolve();
