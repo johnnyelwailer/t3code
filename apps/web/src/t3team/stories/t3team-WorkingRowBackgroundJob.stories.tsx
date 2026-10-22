@@ -3,7 +3,8 @@ import { useEffect } from "react";
 
 import type { BackgroundJobState } from "@t3tools/client-runtime/work-log/background-jobs";
 import type { RunId } from "@t3tools/contracts";
-import { TimelineRowActivityCtx, WorkingTimelineRow } from "~/components/chat/MessagesTimeline";
+import { TimelineRowActivityCtx } from "~/components/chat/timelineRowContext";
+import { WorkingTimelineRow } from "~/components/chat/TimelineWorkGroupRows";
 
 /**
  * The working row when a backgrounded bash job outlives its turn — on the

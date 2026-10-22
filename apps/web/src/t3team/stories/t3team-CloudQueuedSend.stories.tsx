@@ -11,7 +11,7 @@ import type { CSSProperties } from "react";
 import { CloudQueuedSendCard } from "~/cloud/t3team-CloudQueuedSendCard";
 import { decodeCloudQueuedSend, type CloudQueuedSend } from "~/cloud/t3team-cloudQueuedSendModel";
 import type { CloudQueuedSendStepFacts } from "~/cloud/t3team-cloudQueuedSendSteps";
-import { SidebarDraftRow } from "~/components/Sidebar";
+import { SidebarDraftRow } from "~/components/sidebar/SidebarDraftBlock";
 import { DraftId, type ComposerThreadDraftState } from "~/composerDraftStore";
 
 const NOW = Date.now();

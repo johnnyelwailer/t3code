@@ -8,7 +8,7 @@ import {
   type PullRequestListPreferencePatch,
 } from "./components/pullRequest/pullRequestListPreferences";
 import { openPreviewSession } from "./components/preview/openPreviewSession";
-import type { PullRequestsSearch } from "./routes/_chat.pull-requests";
+import type { PullRequestsSearch } from "./components/pullRequest/usePullRequestListView";
 import {
   type RightPanelSurface,
   type ThreadRightPanelState,
