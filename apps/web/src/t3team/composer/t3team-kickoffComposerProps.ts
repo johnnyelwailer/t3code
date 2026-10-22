@@ -18,6 +18,12 @@ export type T3TeamKickoffComposerProps = {
   isConnected: boolean;
   /** Project whose default model and provider enablement apply; absent for project-less surfaces. */
   projectId?: string;
+  /**
+   * Stable key the unsent text is persisted under (survives reload/restart).
+   * Defaults to `project:<projectId>` (or `project:all`); surfaces scoped to a
+   * single work item pass their own, e.g. `ticket:<projectId>:<ticketId>`.
+   */
+  draftKey?: string;
   /** Workspace root used as the `@` path-search cwd. */
   workspaceRoot?: string;
   /** Surface-applicable recipes offered as `/<slashAlias>` launchers. */

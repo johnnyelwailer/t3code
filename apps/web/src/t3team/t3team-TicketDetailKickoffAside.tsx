@@ -170,6 +170,7 @@ export function TicketDetailKickoffAside({
             providers={providers}
             isConnected={isConnected}
             projectId={projectId}
+            draftKey={`ticket:${projectId}:${ticketId}`}
             {...(project.workspace?.rootPath ? { workspaceRoot: project.workspace.rootPath } : {})}
             onSubmit={onSubmit}
           />
