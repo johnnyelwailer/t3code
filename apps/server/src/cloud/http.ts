@@ -17,6 +17,7 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { requireEnvironmentScope } from "../auth/http.ts";
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as CloudLink from "./CloudLink.ts";
+import * as ConnectSignInPrompt from "./t3team-ConnectSignInPrompt.ts";
 import type { RelayRequestError } from "./relayResponse.ts";
 import { traceRelayRequest } from "./traceRelayRequest.ts";
 
@@ -110,52 +111,62 @@ export const layer = HttpApiBuilder.group(
   "connect",
   Effect.fnUntraced(function* (handlers) {
     const cloudLink = yield* CloudLink.CloudLink;
-    return handlers
-      .handle("linkProof", ({ payload }) =>
-        Effect.gen(function* () {
-          yield* requireEnvironmentScope(AuthRelayWriteScope);
-          const request = yield* HttpServerRequest.HttpServerRequest;
-          const proof = yield* toHttpError(cloudLink.linkProof(payload, request));
-          yield* appendCloudCredentialResponseHeaders;
-          return proof;
-        }),
-      )
-      .handle("relayConfig", ({ payload }) =>
-        requireEnvironmentScope(AuthRelayWriteScope).pipe(
-          Effect.andThen(toHttpErrorOrUnavailable(cloudLink.applyRelayConfig(payload))),
-        ),
-      )
-      .handle("linkState", () =>
-        requireEnvironmentScope(AuthRelayReadScope).pipe(
-          Effect.andThen(toHttpError(cloudLink.linkState())),
-        ),
-      )
-      .handle("unlink", () =>
-        requireEnvironmentScope(AuthRelayWriteScope).pipe(
-          Effect.andThen(toHttpError(cloudLink.unlink())),
-        ),
-      )
-      .handle("preferences", ({ payload }) =>
-        requireEnvironmentScope(AuthRelayWriteScope).pipe(
-          Effect.andThen(toHttpError(cloudLink.updatePreferences(payload))),
-        ),
-      )
-      .handle("health", ({ payload }) =>
-        toHttpError(cloudLink.answerHealthRequest(payload)).pipe(
-          Effect.tap(() => appendCloudCredentialResponseHeaders),
-        ),
-      )
-      .handle("mintCredential", ({ payload }) =>
-        toHttpError(cloudLink.mintCredential(payload)).pipe(
-          Effect.tap(() => appendCloudCredentialResponseHeaders),
-        ),
-      )
-      .handle("t3MintCredential", ({ payload }) =>
-        traceRelayRequest(
+    const signInPrompt = yield* ConnectSignInPrompt.ConnectSignInPrompt;
+    return (
+      handlers
+        .handle("linkProof", ({ payload }) =>
+          Effect.gen(function* () {
+            yield* requireEnvironmentScope(AuthRelayWriteScope);
+            const request = yield* HttpServerRequest.HttpServerRequest;
+            const proof = yield* toHttpError(cloudLink.linkProof(payload, request));
+            yield* appendCloudCredentialResponseHeaders;
+            return proof;
+          }),
+        )
+        .handle("relayConfig", ({ payload }) =>
+          requireEnvironmentScope(AuthRelayWriteScope).pipe(
+            Effect.andThen(toHttpErrorOrUnavailable(cloudLink.applyRelayConfig(payload))),
+          ),
+        )
+        .handle("linkState", () =>
+          requireEnvironmentScope(AuthRelayReadScope).pipe(
+            Effect.andThen(toHttpError(cloudLink.linkState())),
+          ),
+        )
+        .handle("unlink", () =>
+          requireEnvironmentScope(AuthRelayWriteScope).pipe(
+            Effect.andThen(toHttpError(cloudLink.unlink())),
+          ),
+        )
+        // Report-only; the browser sign-in starts solely from the user's click (signIn).
+        .handle("signInStatus", () =>
+          requireEnvironmentScope(AuthRelayReadScope).pipe(Effect.andThen(signInPrompt.status)),
+        )
+        .handle("signIn", () =>
+          requireEnvironmentScope(AuthRelayWriteScope).pipe(Effect.andThen(signInPrompt.start)),
+        )
+        .handle("preferences", ({ payload }) =>
+          requireEnvironmentScope(AuthRelayWriteScope).pipe(
+            Effect.andThen(toHttpError(cloudLink.updatePreferences(payload))),
+          ),
+        )
+        .handle("health", ({ payload }) =>
+          toHttpError(cloudLink.answerHealthRequest(payload)).pipe(
+            Effect.tap(() => appendCloudCredentialResponseHeaders),
+          ),
+        )
+        .handle("mintCredential", ({ payload }) =>
           toHttpError(cloudLink.mintCredential(payload)).pipe(
             Effect.tap(() => appendCloudCredentialResponseHeaders),
           ),
-        ),
-      );
+        )
+        .handle("t3MintCredential", ({ payload }) =>
+          traceRelayRequest(
+            toHttpError(cloudLink.mintCredential(payload)).pipe(
+              Effect.tap(() => appendCloudCredentialResponseHeaders),
+            ),
+          ),
+        )
+    );
   }),
 );
