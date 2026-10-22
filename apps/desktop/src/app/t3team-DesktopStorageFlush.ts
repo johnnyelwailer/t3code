@@ -21,7 +21,7 @@ import * as ElectronPowerMonitor from "../electron/ElectronPowerMonitor.ts";
  */
 const { logWarning } = makeComponentLogger("desktop-storage-flush");
 
-export const DESKTOP_STORAGE_FLUSH_INTERVAL = Duration.seconds(2);
+const DESKTOP_STORAGE_FLUSH_INTERVAL = Duration.seconds(2);
 
 export interface DesktopStorageFlushTarget {
   readonly flushStorageData: () => void;
