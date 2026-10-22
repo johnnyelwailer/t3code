@@ -1,7 +1,8 @@
 /**
  * One voice utterance from transcript to the voice thread: route it to a tier, make sure the
- * thread exists (created on first use, in the project the hotkey fired in, with the role prompt
- * as its first message), then send it with the tier's model and the fresh live state. While a
+ * thread exists (created on first use with the role prompt as its first message, always under
+ * "No project", never in whichever project happens to be open or listed first), then send it
+ * with the tier's model and the fresh live state. While a
  * voice turn is running, utterances queue behind it (existing queue semantics, no interrupt).
  */
 import type { StartThreadTurnInput } from "@t3tools/client-runtime/operations";
@@ -29,8 +30,11 @@ export interface VoiceSessionDeps {
   readonly home: () => VoiceThreadHome | undefined;
   readonly remember: (home: VoiceThreadHome) => void;
   readonly forget: () => void;
-  /** The project the hotkey fired in, or null when no project is available. */
-  readonly homeProject: () => ProjectId | null;
+  /**
+   * The environment's "No project" (scratch) project, created on first use, or null when the
+   * machine offers none. Voice threads only ever live here.
+   */
+  readonly projectlessProject: () => Promise<ProjectId | null>;
   readonly route: (text: string) => Promise<ModelSelection>;
   readonly startTurn: (input: StartThreadTurnInput) => Promise<void>;
   readonly pinAndKeep: (threadId: ThreadId) => Promise<void>;
@@ -76,15 +80,18 @@ async function createVoiceThread(deps: VoiceSessionDeps, projectId: ProjectId) {
 }
 
 async function ensureVoiceThread(deps: VoiceSessionDeps): Promise<ThreadId | null> {
+  const projectId = await deps.projectlessProject();
   const home = deps.home();
+  // A voice thread remembered from before voice was projectless (it lives in a real project)
+  // is left alone and replaced by a fresh one under "No project".
   if (
     home !== undefined &&
+    home.projectId === projectId &&
     deps.threads().some((thread) => thread.id === home.threadId && isLive(thread))
   ) {
     return home.threadId;
   }
   if (home !== undefined) deps.forget();
-  const projectId = deps.homeProject();
   return projectId === null ? null : createVoiceThread(deps, projectId);
 }
 
@@ -118,7 +125,11 @@ async function submit(deps: VoiceSessionDeps, text: string): Promise<VoiceSubmit
   try {
     const threadId = await ensureVoiceThread(deps);
     if (threadId === null) {
-      return { status: "error", code: "no-project", detail: "Open a project to start voice." };
+      return {
+        status: "error",
+        code: "no-project",
+        detail: 'This machine has no "No project" folder for the voice thread.',
+      };
     }
     const tier = await sendVoiceUtterance(deps, threadId, text);
     return { status: "sent", tier };

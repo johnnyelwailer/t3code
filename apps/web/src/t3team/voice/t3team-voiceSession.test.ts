@@ -8,7 +8,8 @@ import { VOICE_TIER_MODEL } from "./t3team-voiceRouting";
 import { submitVoiceUtterance, type VoiceSessionDeps } from "./t3team-voiceSession";
 import type { VoiceThreadHome } from "./t3team-voiceThreadStore";
 
-const PROJECT = ProjectId.make("project-1");
+const PROJECT = ProjectId.make("project-no-project");
+const REAL_PROJECT = ProjectId.make("project-nexi-ai");
 
 const shell = (id: string, overrides: Partial<VoiceThreadShell> = {}): VoiceThreadShell => ({
   id: ThreadId.make(id),
@@ -45,7 +46,7 @@ function harness(
       state.home = undefined;
       calls.push("forget");
     },
-    homeProject: () => (initial.project === undefined ? PROJECT : initial.project),
+    projectlessProject: async () => (initial.project === undefined ? PROJECT : initial.project),
     route: async (text) => VOICE_TIER_MODEL[text.startsWith("stop") ? "control" : "synthesis"],
     startTurn: async (input) => {
       turns.push(input);
@@ -127,7 +128,37 @@ describe("submitVoiceUtterance", () => {
     expect(state.home?.threadId).not.toBe(home.threadId);
   });
 
-  it("asks for a project when there is nowhere to create the thread", async () => {
+  it("replaces a voice thread remembered in a real project with one under No project", async () => {
+    const home = { threadId: ThreadId.make("voice-in-project"), projectId: REAL_PROJECT };
+    const { deps, turns, calls, state } = harness({ home, threads: [shell("voice-in-project")] });
+    await submitVoiceUtterance(deps, "hello");
+    expect(calls).toEqual(["forget", "turn:create", "pin", "remember", "turn:send"]);
+    expect(turns[0]?.bootstrap?.createThread?.projectId).toBe(PROJECT);
+    expect(state.home?.projectId).toBe(PROJECT);
+    expect(state.home?.threadId).not.toBe(home.threadId);
+  });
+
+  it("reports a failed No project lookup as a send failure and retries on the next utterance", async () => {
+    const { deps, turns } = harness();
+    let attempts = 0;
+    const flaky = {
+      ...deps,
+      projectlessProject: async () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("scratch unavailable");
+        return PROJECT;
+      },
+    };
+    expect(await submitVoiceUtterance(flaky, "one")).toEqual({
+      status: "error",
+      code: "send-failed",
+      detail: "scratch unavailable",
+    });
+    expect(await submitVoiceUtterance(flaky, "two")).toEqual({ status: "sent", tier: "synthesis" });
+    expect(turns[0]?.bootstrap?.createThread?.projectId).toBe(PROJECT);
+  });
+
+  it("reports no-project when the machine offers no No project folder", async () => {
     const { deps, turns } = harness({ project: null });
     expect(await submitVoiceUtterance(deps, "hello")).toMatchObject({
       status: "error",
