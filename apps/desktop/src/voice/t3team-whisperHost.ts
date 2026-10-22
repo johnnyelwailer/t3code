@@ -22,8 +22,8 @@ export type { WhisperWorkerHandle } from "./t3team-whisperWorkerClient.ts";
  * its own VRAM, and every reload costs a spawn plus a model load right when someone starts talking.
  * An iGPU or the CPU shares system memory with everything else, so the model goes after a while.
  */
-export const WHISPER_IDLE_UNLOAD_MS = 10 * 60 * 1000;
-export const WHISPER_DISCRETE_IDLE_UNLOAD_MS: number | null = null;
+const WHISPER_IDLE_UNLOAD_MS = 10 * 60 * 1000;
+const WHISPER_DISCRETE_IDLE_UNLOAD_MS: number | null = null;
 /** One second of silence; a real pass settles the GPU crash sentinel, which a bare model load would leave armed. */
 const WARMUP_PCM_BASE64 = Buffer.alloc(16_000 * 2).toString("base64");
 

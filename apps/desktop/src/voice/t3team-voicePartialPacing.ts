@@ -5,7 +5,7 @@ const PARTIAL_INTERVAL_MS = 2_000;
  * than this is slow: stale text is worthless and a busy worker delays the final pass. One slow pass
  * backs partials off; only this many in a row end them for the session.
  */
-export const PARTIAL_BUDGET_MS = 8_000;
+const PARTIAL_BUDGET_MS = 8_000;
 const SLOW_PARTIALS_BEFORE_OFF = 3;
 
 /**

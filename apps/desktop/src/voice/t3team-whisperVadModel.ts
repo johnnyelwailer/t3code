@@ -6,7 +6,7 @@ import * as NodeStream from "node:stream";
 import * as NodeStreamPromises from "node:stream/promises";
 
 /** Silero VAD for whisper.cpp, ~0.9 MB: small enough to fetch the first time a recording starts. */
-export const SILERO_VAD_FILE_NAME = "ggml-silero-v5.1.2.bin";
+const SILERO_VAD_FILE_NAME = "ggml-silero-v5.1.2.bin";
 const SILERO_VAD_URL = `https://huggingface.co/ggml-org/whisper-vad/resolve/main/${SILERO_VAD_FILE_NAME}`;
 const MIN_VAD_MODEL_BYTES = 200_000;
 
