@@ -15,7 +15,7 @@ import { setAccountNeedsReconnect } from "./t3team-atlassian-auth-staleToken.ts"
  * So a refresh is applied to the whole grant: every OAuth account still holding the redeemed token
  * takes the new access token, refresh token and expiry, and keeps its own site.
  */
-export function accountIdsSharingRefreshToken(
+function accountIdsSharingRefreshToken(
   auths: ReadonlyMap<string, JiraApiAuth>,
   refreshToken: string,
 ): string[] {
