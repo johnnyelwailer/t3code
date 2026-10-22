@@ -2,19 +2,29 @@
 import { WHISPER_WORKER_CRASH_ID } from "./t3team-whisperProtocol.ts";
 import type { WhisperSentinel } from "./t3team-whisperSentinel.ts";
 import {
-  startWhisperWorker,
+  describeWhisperDevice,
+  parseVulkanDevices,
+  type WhisperDeviceReport,
+} from "./t3team-whisperVulkanDevices.ts";
+import { makeWhisperWorkerStarter } from "./t3team-whisperWorkerStarter.ts";
+import {
   type LiveWhisperWorker,
+  type WhisperWorkerEnv,
   type WhisperWorkerHandle,
 } from "./t3team-whisperWorkerClient.ts";
 
 export type { WhisperWorkerHandle } from "./t3team-whisperWorkerClient.ts";
 
 const WHISPER_IDLE_UNLOAD_MS = 2 * 60 * 1000;
+/** One second of silence; a real pass settles the GPU crash sentinel, which a bare model load would leave armed. */
+const WARMUP_PCM_BASE64 = Buffer.alloc(16_000 * 2).toString("base64");
 
 export type WhisperTranscription = {
   readonly text: string;
   readonly language?: string;
   readonly acceleration: "gpu" | "cpu";
+  /** The device that actually ran the pass, e.g. `vulkan: NVIDIA GeForce RTX 5070` or `cpu`. */
+  readonly device: string;
 };
 
 export type WhisperHost = {
@@ -23,6 +33,10 @@ export type WhisperHost = {
     readonly pcm16Base64: string;
     readonly language: string;
   }) => Promise<WhisperTranscription>;
+  /** Loads the model with a throwaway transcription, so a recording's first partial is not a cold start. */
+  readonly warm: (modelPath: string) => Promise<void>;
+  /** Loads `modelPath` if needed and reports the device it runs on; GPU verdicts are remembered. */
+  readonly probeDevice: (modelPath: string) => Promise<WhisperDeviceReport>;
   readonly dispose: () => void;
 };
 
@@ -32,7 +46,7 @@ export type WhisperHost = {
  * freeing GPU memory) after an idle window.
  */
 export function makeWhisperHost(options: {
-  readonly spawnWorker: () => WhisperWorkerHandle;
+  readonly spawnWorker: (env?: WhisperWorkerEnv) => WhisperWorkerHandle;
   readonly sentinel: WhisperSentinel;
   readonly idleUnloadMs?: number;
   readonly log?: (message: string) => void;
@@ -42,6 +56,10 @@ export function makeWhisperHost(options: {
   let starting: Promise<LiveWhisperWorker> | null = null;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
   let queue: Promise<unknown> = Promise.resolve();
+  let knownGpu: WhisperDeviceReport | undefined;
+
+  const deviceOf = (worker: LiveWhisperWorker) =>
+    describeWhisperDevice(worker.acceleration, parseVulkanDevices(worker.vulkanLog));
 
   const stopWorker = () => {
     clearTimeout(idleTimer);
@@ -49,39 +67,23 @@ export function makeWhisperHost(options: {
     live = null;
   };
 
-  const startWorker = (modelPath: string, variant: "vulkan" | "default") =>
-    startWhisperWorker({
-      spawnWorker: options.spawnWorker,
-      modelPath,
-      variant,
-      onExit: (handle) => {
-        if (live?.handle === handle) live = null;
-      },
-    });
-
-  const startWithPolicy = async (modelPath: string): Promise<LiveWhisperWorker> => {
-    const decision = options.sentinel.evaluate();
-    if (decision.blocked) {
-      log(
-        `GPU skipped: ${decision.crashCount} unfinished GPU attempt(s) recorded; CPU until retry`,
-      );
-    } else {
-      options.sentinel.arm();
-      try {
-        return await startWorker(modelPath, "vulkan");
-      } catch (error) {
-        log(`GPU load failed, falling back to CPU: ${String(error)}`);
-      }
-    }
-    return startWorker(modelPath, "default");
-  };
+  const startWithPolicy = makeWhisperWorkerStarter({
+    spawnWorker: options.spawnWorker,
+    sentinel: options.sentinel,
+    log,
+    onExit: (handle) => {
+      if (live?.handle === handle) live = null;
+    },
+  });
 
   const ensureWorker = async (modelPath: string): Promise<LiveWhisperWorker> => {
     if (live && live.modelPath !== modelPath) stopWorker();
     if (live) return live;
     starting ??= startWithPolicy(modelPath).finally(() => (starting = null));
     live = await starting;
-    log(`whisper loaded (${live.acceleration}): ${modelPath}`);
+    const device = deviceOf(live);
+    if (live.acceleration === "gpu") knownGpu = device;
+    log(`whisper loaded (${device.label}): ${modelPath}`);
     return live;
   };
 
@@ -119,12 +121,26 @@ export function makeWhisperHost(options: {
       text: response.text,
       ...(response.language ? { language: response.language } : {}),
       acceleration: worker.acceleration,
+      device: deviceOf(worker).label,
     };
   };
 
   return {
     transcribe: (input) => {
       const next = queue.then(() => run(input));
+      queue = next.catch(() => undefined);
+      return next;
+    },
+    warm: (modelPath) => {
+      const next = queue.then(() =>
+        run({ modelPath, pcm16Base64: WARMUP_PCM_BASE64, language: "en" }),
+      );
+      queue = next.catch(() => undefined);
+      return next.then(() => undefined);
+    },
+    probeDevice: (modelPath) => {
+      if (knownGpu) return Promise.resolve(knownGpu);
+      const next = queue.then(async () => deviceOf(await ensureWorker(modelPath)));
       queue = next.catch(() => undefined);
       return next;
     },

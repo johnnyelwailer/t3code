@@ -1,0 +1,6 @@
+/* The voice surfaces' motion and paint, in three parts. Colors are the host theme's own role
+   tokens, so every theme and custom pack recolors them. */
+@import "./t3team-voice-motion.css";
+@import "./t3team-voice-indicators.css";
+@import "./t3team-voice-orb.css";
+@import "./t3team-voice-surfaces.css";

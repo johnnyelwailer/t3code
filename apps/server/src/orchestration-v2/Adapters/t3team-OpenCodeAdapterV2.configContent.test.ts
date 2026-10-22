@@ -33,7 +33,7 @@ const openWith = (configContent: string) => {
       settings,
       environment: {},
     });
-    return adapter.openSession({
+    return yield* adapter.openSession({
       threadId: ThreadId.make("thread-opencode-config"),
       providerSessionId: ProviderSessionId.make("session-opencode-config"),
       modelSelection: { instanceId, model: "example/model" },

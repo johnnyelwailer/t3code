@@ -105,7 +105,7 @@ describe("ToolAuthCard", () => {
     );
     expect(markup).toContain('href="https://nexplore.ghe.com/login/device"');
     expect(markup).toContain("B4A0-AA8E");
-    expect(markup).toContain("Open sign-in page");
+    expect(markup).toContain("Copy code and open sign-in page");
     expect(markup).not.toContain("<input");
   });
 

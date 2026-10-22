@@ -35,6 +35,7 @@ import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts"
 import { makeQuitShortcutHandler } from "./QuitHold.ts";
 import { resolveDesktopWindowTitle } from "../app/t3team-desktopDistributionBrand.ts";
 import { makeDetachedSurfaceWindows } from "./t3team-DetachedSurfaceWindows.ts";
+import { installMainSessionPermissions } from "./t3team-MainSessionPermissions.ts";
 
 import {
   ATLASSIAN_OAUTH_POPUP_HEIGHT,
@@ -514,6 +515,7 @@ export const make = Effect.gen(function* () {
     });
 
     yield* rendererHistory.register(window.webContents, { surface: "main" });
+    installMainSessionPermissions(window.webContents.session, applicationUrl);
     if (environment.platform === "darwin") {
       window.setAutoHideCursor(false);
     }

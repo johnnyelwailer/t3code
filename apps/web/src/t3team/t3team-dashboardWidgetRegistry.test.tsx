@@ -1,3 +1,4 @@
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -37,15 +38,19 @@ describe("dashboard widget registry", () => {
 
   it("renders nothing for a widget it does not know or a placement the widget does not allow", () => {
     expect(
-      DashboardWidget({ section: section({ widget: "nope" }), placement: "main", ...lane }),
-    ).toBeNull();
+      renderToStaticMarkup(
+        <DashboardWidget section={section({ widget: "nope" })} placement="main" {...lane} />,
+      ),
+    ).toBe("");
     expect(
-      DashboardWidget({
-        section: section({ widget: "my-work.reviews" }),
-        placement: "footer",
-        ...lane,
-      }),
-    ).toBeNull();
+      renderToStaticMarkup(
+        <DashboardWidget
+          section={section({ widget: "my-work.reviews" })}
+          placement="footer"
+          {...lane}
+        />,
+      ),
+    ).toBe("");
   });
 });
 

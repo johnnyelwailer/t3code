@@ -89,8 +89,14 @@ const processEvents = (
   overrides: Partial<typeof baseInput> = {},
 ) => engine.processEvents({ ...baseInput, ...overrides } as never);
 
-/** Yield so launch-promise resolution can drop the in-flight slot before the next processEvents. */
-const settle = () => Promise.resolve();
+/**
+ * Flush the microtask queue so launch-promise resolution (launch -> catch -> finally takes
+ * several microtask hops, more than a single `await`) can drop the in-flight slot before the
+ * next processEvents.
+ */
+const settle = async () => {
+  for (let hop = 0; hop < 10; hop += 1) await Promise.resolve();
+};
 
 describe("recipe trigger launch policy", () => {
   it("collapses a burst of events for one key into ONE launch with the newest payload (trailing debounce)", async () => {

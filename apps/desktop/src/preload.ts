@@ -6,6 +6,9 @@ import type {
   DesktopPreviewRecordingFrame,
   DesktopPreviewTabState,
   DesktopSnapShotEvent,
+  DesktopVoiceModelProgress,
+  DesktopVoiceStreamEvent,
+  DesktopVoiceWidgetSnapshot,
 } from "@t3tools/contracts";
 import { exposeClerkBridge } from "@clerk/electron/preload";
 import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
@@ -28,6 +31,26 @@ function isSnapShotEvent(value: unknown): value is DesktopSnapShotEvent {
     SNAP_SHOT_EVENT_TYPES.has(type) &&
     (id === undefined || typeof id === "string")
   );
+}
+
+function isVoiceModelProgress(value: unknown): value is DesktopVoiceModelProgress {
+  if (typeof value !== "object" || value === null) return false;
+  const { receivedBytes, totalBytes } = value as { receivedBytes?: unknown; totalBytes?: unknown };
+  return (
+    typeof receivedBytes === "number" && (totalBytes === null || typeof totalBytes === "number")
+  );
+}
+
+function isVoiceStreamEvent(value: unknown): value is DesktopVoiceStreamEvent {
+  if (typeof value !== "object" || value === null) return false;
+  const { sessionId, type } = value as { sessionId?: unknown; type?: unknown };
+  return typeof sessionId === "string" && typeof type === "string";
+}
+
+function isVoiceWidgetSnapshot(value: unknown): value is DesktopVoiceWidgetSnapshot {
+  if (typeof value !== "object" || value === null) return false;
+  const { state } = value as { state?: unknown };
+  return typeof state === "string";
 }
 
 exposeClerkBridge({ passkeys: true });
@@ -122,6 +145,16 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(IpcChannels.REQUEST_SNAP_SHOT_PERMISSIONS_CHANNEL, includeAccessibility),
   getSnapShotState: () => ipcRenderer.invoke(IpcChannels.GET_SNAP_SHOT_STATE_CHANNEL),
   getVoiceHotkeyState: () => ipcRenderer.invoke(IpcChannels.GET_VOICE_HOTKEY_STATE_CHANNEL),
+  getPowerState: () => ipcRenderer.invoke(IpcChannels.GET_POWER_STATE_CHANNEL),
+  onPowerStateChange: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: unknown) => {
+      if (typeof state === "object" && state !== null) {
+        listener(state as Parameters<typeof listener>[0]);
+      }
+    };
+    ipcRenderer.on(IpcChannels.POWER_STATE_CHANGED_CHANNEL, handler);
+    return () => ipcRenderer.removeListener(IpcChannels.POWER_STATE_CHANGED_CHANNEL, handler);
+  },
   setupSnapShot: (action) => ipcRenderer.invoke(IpcChannels.SETUP_SNAP_SHOT_CHANNEL, action),
   previewSnapShotConfig: (request) =>
     ipcRenderer.invoke(IpcChannels.PREVIEW_SNAP_SHOT_CONFIG_CHANNEL, request),
@@ -140,6 +173,56 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   prepareVoiceTranscriber: (request) =>
     ipcRenderer.invoke(IpcChannels.PREPARE_VOICE_TRANSCRIBER_CHANNEL, request),
   transcribeVoice: (request) => ipcRenderer.invoke(IpcChannels.TRANSCRIBE_VOICE_CHANNEL, request),
+  onVoiceModelProgress: (listener) => {
+    const wrappedListener = (_event: Electron.IpcRendererEvent, progress: unknown) => {
+      if (!isVoiceModelProgress(progress)) return;
+      listener(progress);
+    };
+
+    ipcRenderer.on(IpcChannels.VOICE_MODEL_PROGRESS_CHANNEL, wrappedListener);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.VOICE_MODEL_PROGRESS_CHANNEL, wrappedListener);
+    };
+  },
+  startVoiceStream: (request) =>
+    ipcRenderer.invoke(IpcChannels.START_VOICE_STREAM_CHANNEL, request),
+  pushVoiceStream: (request) => ipcRenderer.invoke(IpcChannels.PUSH_VOICE_STREAM_CHANNEL, request),
+  stopVoiceStream: (request) => ipcRenderer.invoke(IpcChannels.STOP_VOICE_STREAM_CHANNEL, request),
+  onVoiceStream: (listener) => {
+    const wrappedListener = (_event: Electron.IpcRendererEvent, event: unknown) => {
+      if (isVoiceStreamEvent(event)) listener(event);
+    };
+
+    ipcRenderer.on(IpcChannels.VOICE_STREAM_CHANNEL, wrappedListener);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.VOICE_STREAM_CHANNEL, wrappedListener);
+    };
+  },
+  publishVoiceWidget: (snapshot) =>
+    ipcRenderer.invoke(IpcChannels.PUBLISH_VOICE_WIDGET_CHANNEL, snapshot),
+  onVoiceWidgetSnapshot: (listener) => {
+    const wrappedListener = (_event: Electron.IpcRendererEvent, snapshot: unknown) => {
+      if (isVoiceWidgetSnapshot(snapshot)) listener(snapshot);
+    };
+
+    ipcRenderer.on(IpcChannels.VOICE_WIDGET_SNAPSHOT_CHANNEL, wrappedListener);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.VOICE_WIDGET_SNAPSHOT_CHANNEL, wrappedListener);
+    };
+  },
+  sendVoiceWidgetCommand: (command) =>
+    ipcRenderer.invoke(IpcChannels.SEND_VOICE_WIDGET_COMMAND_CHANNEL, command),
+  onVoiceWidgetCommand: (listener) => {
+    const wrappedListener = (_event: Electron.IpcRendererEvent, command: unknown) => {
+      if (command === "stop" || command === "ready") listener(command);
+    };
+
+    ipcRenderer.on(IpcChannels.VOICE_WIDGET_COMMAND_CHANNEL, wrappedListener);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.VOICE_WIDGET_COMMAND_CHANNEL, wrappedListener);
+    };
+  },
+  openMicrophoneSettings: () => ipcRenderer.invoke(IpcChannels.OPEN_MICROPHONE_SETTINGS_CHANNEL),
   getConnectionCatalog: () => ipcRenderer.invoke(IpcChannels.GET_CONNECTION_CATALOG_CHANNEL),
   setConnectionCatalog: (catalog) =>
     ipcRenderer.invoke(IpcChannels.SET_CONNECTION_CATALOG_CHANNEL, catalog),

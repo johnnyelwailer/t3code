@@ -1,0 +1,131 @@
+/* The voice surfaces' motion and paint. Colors are the host theme's own role tokens
+   (--primary, --success, --destructive, --foreground, --card, --border), so every theme and
+   custom pack recolors them. Durations: state 240ms, enter 360ms, exit 220ms, settle 1s. */
+
+.t3team-voice {
+  --vz-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --vz-ease-std: cubic-bezier(0.4, 0, 0.2, 1);
+  --vz-live-10: color-mix(in srgb, var(--primary) 10%, transparent);
+  --vz-live-18: color-mix(in srgb, var(--primary) 18%, transparent);
+  --vz-live-35: color-mix(in srgb, var(--primary) 35%, transparent);
+  --vz-ok-10: color-mix(in srgb, var(--success) 10%, transparent);
+  --vz-ok-35: color-mix(in srgb, var(--success) 35%, transparent);
+  --vz-bad-10: color-mix(in srgb, var(--destructive) 10%, transparent);
+  --vz-ink-8: color-mix(in srgb, var(--foreground) 8%, transparent);
+  --vz-settled: color-mix(in srgb, var(--foreground) 84%, var(--muted-foreground));
+  --voice-level: 0;
+}
+
+@keyframes t3team-voice-wordin {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+@keyframes t3team-voice-revise {
+  from {
+    color: var(--primary);
+  }
+  to {
+    color: inherit;
+  }
+}
+@keyframes t3team-voice-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes t3team-voice-sweep {
+  from {
+    background-position: -45% 0;
+  }
+  to {
+    background-position: 145% 0;
+  }
+}
+@keyframes t3team-voice-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.14);
+  }
+}
+@keyframes t3team-voice-dot {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--vz-live-35);
+  }
+  50% {
+    box-shadow: 0 0 0 4px transparent;
+  }
+}
+@keyframes t3team-voice-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes t3team-voice-settle-border {
+  from {
+    border-color: var(--vz-ok-35);
+  }
+  to {
+    border-color: var(--border);
+  }
+}
+
+.t3team-voice-enter {
+  animation: t3team-voice-enter 360ms var(--vz-ease-out);
+}
+.t3team-voice-heard-fresh {
+  animation: t3team-voice-settle-border 2.2s var(--vz-ease-std) forwards;
+}
+
+.t3team-voice-word {
+  display: inline-block;
+  color: var(--vz-settled);
+  font-weight: 400;
+  animation: t3team-voice-wordin 260ms var(--vz-ease-out);
+  transition:
+    color 1s var(--vz-ease-std),
+    font-weight 1s var(--vz-ease-std),
+    opacity 1s var(--vz-ease-std);
+}
+.t3team-voice-word[data-fresh] {
+  color: var(--foreground);
+  font-weight: 500;
+  transition-duration: 0ms;
+}
+.t3team-voice-word[data-tentative] {
+  opacity: 0.55;
+}
+.t3team-voice-word[data-revised] {
+  animation: t3team-voice-revise 500ms var(--vz-ease-std);
+}
+.t3team-voice-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 3px;
+  vertical-align: -0.18em;
+  border-radius: 1px;
+  background: var(--primary);
+  animation: t3team-voice-blink 1.1s steps(1) infinite;
+}

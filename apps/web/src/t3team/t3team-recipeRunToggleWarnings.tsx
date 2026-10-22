@@ -1,18 +1,14 @@
 /**
  * The card's warning lines (doc 07 §2.2): the icon carries the tone, the text stays neutral.
- * A config warning offers *Open config*; a sign-in warning shows the copyable `gh auth login`
- * command the server's inbox loader already names.
+ * A config warning offers *Open config*; a sign-in warning signs in to the host it names, in the
+ * app.
  */
 import { PR_WATCH_WARNING_KIND } from "@t3tools/contracts";
 import { ShieldAlertIcon, TriangleAlertIcon } from "lucide-react";
 
-import { PullRequestCopyableCode } from "~/components/pullRequest/PullRequestCopyableCode";
 import { Button } from "~/components/ui/button";
+import { GitHubSignInAction } from "~/t3team/components/t3team-GitHubSignInAction";
 import type { RunToggleWarning } from "~/t3team/t3team-recipeRunToggleState";
-
-export function signInCommand(host: string): string {
-  return `gh auth login --hostname ${host}`;
-}
 
 /** The host a sign-in warning names: its `key` by contract, else the hostname in its text. */
 export function signInHostOf(warning: RunToggleWarning): string | null {
@@ -59,13 +55,9 @@ function WarningLine({
         </Button>
       ) : null}
       {signInHost ? (
-        <PullRequestCopyableCode
-          value={signInCommand(signInHost)}
-          target="sign-in command"
-          copyLabel="Copy sign-in command"
-          copiedLabel="Sign-in command copied"
-          className="basis-full font-mono text-2xs text-muted-foreground"
-        />
+        <div className="basis-full">
+          <GitHubSignInAction host={signInHost} />
+        </div>
       ) : null}
     </li>
   );

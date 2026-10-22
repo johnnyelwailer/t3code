@@ -1,14 +1,18 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as TestClock from "effect/testing/TestClock";
 
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
+import * as ExternalLauncher from "../process/externalLauncher.ts";
 import * as CliTokenManager from "./CliTokenManager.ts";
-import * as ConnectCredentialMinter from "./t3team-ConnectCredentialMinter.ts";
-import { ConnectCredentialMintError } from "./t3team-ConnectCredentialMintError.ts";
-import { topUpConnectCredentialOnce } from "./t3team-ConnectCredentialTopUp.ts";
+import {
+  runConnectCredentialTopUp,
+  topUpConnectCredentialOnce,
+} from "./t3team-ConnectCredentialTopUp.ts";
 
 const LINKED_USER_ID = "cloud-linked-user-id";
 
@@ -22,76 +26,66 @@ const secretsLayer = (linkedUserId: string | null) =>
       ),
   } as never);
 
-const cliLayer = (existing: Option.Option<CliTokenManager.PersistedToken>) =>
+const cliLayer = (existing: Option.Option<CliTokenManager.PersistedToken>, reads: Array<1>) =>
   Layer.mock(CliTokenManager.CloudCliTokenManager)({
-    getExisting: Effect.succeed(existing),
+    getExisting: Effect.sync(() => reads.push(1)).pipe(Effect.as(existing)),
   } as never);
-
-const minterLayer = (calls: Array<unknown>) =>
-  Layer.mock(ConnectCredentialMinter.ConnectCredentialMinter)({
-    mint: (input) => Effect.sync(() => calls.push(input)).pipe(Effect.asVoid),
-  });
 
 const run = (
   linkedUserId: string | null,
   existing: Option.Option<CliTokenManager.PersistedToken>,
-  calls: Array<unknown>,
 ) =>
   topUpConnectCredentialOnce().pipe(
-    Effect.provide(
-      Layer.mergeAll(secretsLayer(linkedUserId), cliLayer(existing), minterLayer(calls)),
-    ),
+    Effect.provide(Layer.mergeAll(secretsLayer(linkedUserId), cliLayer(existing, []))),
   );
 
 describe("topUpConnectCredentialOnce", () => {
-  it.effect("never mints for an install that is not linked", () =>
+  it.effect("does nothing for an install that is not linked", () =>
     Effect.gen(function* () {
-      const calls: Array<unknown> = [];
-      yield* run(null, Option.none(), calls);
-      assert.lengthOf(calls, 0);
+      assert.strictEqual(yield* run(null, Option.none()), "not_linked");
     }),
   );
 
-  it.effect("does nothing when a usable credential is already present", () =>
+  it.effect("keeps a present credential fresh without any browser", () =>
     Effect.gen(function* () {
-      const calls: Array<unknown> = [];
       const nowEpochMs = yield* Clock.currentTimeMillis;
-      yield* run(
+      const outcome = yield* run(
         "user-1",
-        Option.some({
-          accessToken: "at",
-          refreshToken: "rt",
-          expiresAtEpochMs: nowEpochMs + 3_600_000,
-        }),
-        calls,
+        Option.some({ accessToken: "at", refreshToken: "rt", expiresAtEpochMs: nowEpochMs + 1 }),
       );
-      assert.lengthOf(calls, 0);
+      assert.strictEqual(outcome, "fresh");
     }),
   );
 
-  it.effect("starts the in-app mint when linked but the credential is missing", () =>
+  it.effect("only reports a missing credential; it never starts a sign-in", () =>
     Effect.gen(function* () {
-      const calls: Array<unknown> = [];
-      yield* run("user-1", Option.none(), calls);
-      // Exactly one mint; the top-up uses the mint's default wait, not the
-      // short create-side one.
-      assert.lengthOf(calls, 1);
-      assert.deepEqual(calls[0], undefined);
+      assert.strictEqual(yield* run("user-1", Option.none()), "sign_in_required");
     }),
   );
+});
 
-  it.effect("absorbs a failed mint so one bad cycle cannot stop the loop", () =>
+describe("runConnectCredentialTopUp", () => {
+  it.effect("never opens a browser on start or on later passes while signed out", () =>
     Effect.gen(function* () {
-      const mintError = new ConnectCredentialMintError({
-        reason: "browser_callback_timeout",
-      });
-      const layer = Layer.mock(ConnectCredentialMinter.ConnectCredentialMinter)({
-        mint: () => Effect.fail(mintError),
-      });
-      yield* topUpConnectCredentialOnce().pipe(
-        Effect.provide(Layer.mergeAll(secretsLayer("user-1"), cliLayer(Option.none()), layer)),
+      const launches: Array<string> = [];
+      const reads: Array<1> = [];
+      const launcher = Layer.mock(ExternalLauncher.ExternalLauncher)({
+        launchBrowser: (url: string) => Effect.sync(() => launches.push(url)).pipe(Effect.asVoid),
+      } as never);
+      const fiber = yield* Effect.forkChild(
+        runConnectCredentialTopUp().pipe(
+          Effect.provide(
+            Layer.mergeAll(secretsLayer("user-1"), cliLayer(Option.none(), reads), launcher),
+          ),
+        ),
+        { startImmediately: true },
       );
-      // Success: the failure was logged and swallowed by design.
+      // Initial delay plus three intervals: the loop keeps checking quietly.
+      yield* TestClock.adjust("20 seconds");
+      yield* TestClock.adjust("15 minutes");
+      yield* Fiber.interrupt(fiber);
+      assert.isAtLeast(reads.length, 2);
+      assert.lengthOf(launches, 0);
     }),
   );
 });

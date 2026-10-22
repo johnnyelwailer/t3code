@@ -13,6 +13,7 @@ import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as AuthHttp from "../auth/http.ts";
 import * as CloudLink from "./CloudLink.ts";
 import * as ConnectHttp from "./http.ts";
+import * as ConnectSignInPrompt from "./t3team-ConnectSignInPrompt.ts";
 
 class ConnectTestApi extends HttpApi.make("environment").add(EnvironmentHttpApi.groups.connect) {}
 
@@ -31,6 +32,7 @@ const answerHealthWith = async (failure: HealthFailure) => {
       }),
     ),
     // The session-gated routes are declared too; this request never reaches them.
+    Layer.provide(Layer.mock(ConnectSignInPrompt.ConnectSignInPrompt)({})),
     Layer.provide(AuthHttp.layerAuthenticatedAuth),
     Layer.provide(Layer.mock(EnvironmentAuth.EnvironmentAuth)({})),
     Layer.provideMerge(

@@ -1,0 +1,23 @@
+/** Class names of t3team-voice.css. They are not Tailwind utilities, so they are held as values. */
+export const VOICE_CLASS = {
+  scope: "t3team-voice",
+  enter: "t3team-voice-enter",
+  card: "t3team-voice-card",
+  heardFresh: "t3team-voice-heard-fresh",
+  row: "t3team-voice-row",
+  orb: "t3team-voice-orb",
+  wave: "t3team-voice-wave",
+  shimmer: "t3team-voice-shimmer",
+  dot: "t3team-voice-dot",
+  glow: "t3team-voice-glow",
+  dock: "t3team-voice-dock",
+  widget: "t3team-voice-widget",
+  companion: "t3team-voice-companion",
+  face: "t3team-voice-face",
+  size: "t3team-voice-size",
+  progress: "t3team-voice-progress",
+  hotkey: "t3team-voice-hotkey",
+  transcript: "t3team-voice-transcript",
+  word: "t3team-voice-word",
+  caret: "t3team-voice-caret",
+} as const;

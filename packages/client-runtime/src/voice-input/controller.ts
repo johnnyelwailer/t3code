@@ -65,6 +65,12 @@ export type VoiceInputControllerDependencies = {
    * two commit dependencies is required.
    */
   readonly commitTranscript?: (text: string) => void;
+  /**
+   * Whether an empty final transcript is fine because the sink already received the recording's
+   * speech piece by piece (live sessions commit utterances while recording). Then the recording
+   * just ends instead of failing with "No speech was detected."
+   */
+  readonly hasCommittedSpeech?: () => boolean;
   readonly onStateChange: (state: VoiceInputState) => void;
 };
 
@@ -426,11 +432,11 @@ export class VoiceInputController {
 
       if (this.dependencies.commitTranscript) {
         const spoken = transcript.trim();
-        if (spoken.length === 0) {
+        if (spoken.length === 0 && this.dependencies.hasCommittedSpeech?.() !== true) {
           this.setError("No speech was detected.", "retry");
           return;
         }
-        this.dependencies.commitTranscript(spoken);
+        if (spoken.length > 0) this.dependencies.commitTranscript(spoken);
         this.setState(IDLE_STATE);
         return;
       }

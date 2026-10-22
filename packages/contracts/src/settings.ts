@@ -19,6 +19,7 @@ import {
   TrimmedString,
 } from "./baseSchemas.ts";
 import { UsageLimitSourceId } from "./usageLimitSourceId.ts";
+import { DEFAULT_VOICE_HOTKEY_CHORD, VoiceHotkeyChord } from "./t3team-voiceHotkey.ts";
 import { VoiceSettings, VoiceSettingsPatch } from "./t3team-voiceSettings.ts";
 import { EnvironmentMachineKind, ThreadEnvMode, WorktreeSubmodules } from "./environment.ts";
 import { KeybindingShortcut } from "./keybindings.ts";
@@ -373,6 +374,14 @@ export const ClientSettingsSchema = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_BROWSER_AUTO_SHOW_FLOATING_PREVIEW)),
   ),
   /**
+   * Whether a linked environment that lacks a T3 Connect sign-in shows a small, dismissible
+   * "Sign in to T3 Connect" notice. The browser sign-in never opens on its own either way;
+   * turning this off only hides the notice.
+   */
+  t3ConnectSignInNoticeEnabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
+  /**
    * User-created browser profiles. The built-in Default and Incognito profiles
    * are synthesized by `resolveBrowserProfiles`, not stored here, so they
    * cannot be renamed away or deleted.
@@ -513,6 +522,9 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   snapShotFlash: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   snapShotAnimations: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  voiceHotkeyChord: VoiceHotkeyChord.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_VOICE_HOTKEY_CHORD)),
+  ),
   wordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
 });
 export type ClientSettings = typeof ClientSettingsSchema.Type;
@@ -1809,6 +1821,7 @@ export const ClientSettingsPatch = Schema.Struct({
   browserRecordingShowMousePresses: Schema.optionalKey(Schema.Boolean),
   browserLinkTarget: Schema.optionalKey(BrowserLinkTarget),
   browserAutoShowFloatingPreview: Schema.optionalKey(Schema.Boolean),
+  t3ConnectSignInNoticeEnabled: Schema.optionalKey(Schema.Boolean),
   browserProfiles: Schema.optionalKey(Schema.Array(BrowserProfile)),
   browserDefaultProfileId: Schema.optionalKey(BrowserProfileId),
   confirmQuit: Schema.optionalKey(QuitConfirmationMode),
@@ -1864,6 +1877,7 @@ export const ClientSettingsPatch = Schema.Struct({
   snapShotSound: Schema.optionalKey(SnapShotSound),
   snapShotFlash: Schema.optionalKey(Schema.Boolean),
   snapShotAnimations: Schema.optionalKey(Schema.Boolean),
+  voiceHotkeyChord: Schema.optionalKey(VoiceHotkeyChord),
   wordWrap: Schema.optionalKey(Schema.Boolean),
 });
 export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;

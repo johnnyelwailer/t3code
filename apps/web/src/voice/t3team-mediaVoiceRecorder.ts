@@ -1,6 +1,8 @@
 // @effect-diagnostics globalTimers:off -- Recording limit runs at a MediaRecorder callback boundary.
 import type { VoiceRecorder } from "@t3tools/client-runtime/voice-input";
 
+import type { VoicePcmTap } from "./t3team-voicePcmTap";
+
 /** Browser recorder behind the client-runtime `VoiceRecorder` seam; `uri` is a blob URL after stop. */
 export class MediaVoiceRecorder implements VoiceRecorder {
   uri: string | null = null;
@@ -9,8 +11,14 @@ export class MediaVoiceRecorder implements VoiceRecorder {
   private chunks: Blob[] = [];
   private limitTimer: ReturnType<typeof setTimeout> | undefined;
 
-  /** `onLimitReached` receives the finished recording when `forDuration` elapses on its own. */
-  constructor(private readonly onLimitReached: (uri: string) => void) {}
+  /**
+   * `onLimitReached` receives the finished recording when `forDuration` elapses on its own. The
+   * optional `tap` streams the same microphone to live transcription while it records.
+   */
+  constructor(
+    private readonly onLimitReached: (uri: string) => void,
+    private readonly tap?: VoicePcmTap,
+  ) {}
 
   async prepareToRecordAsync(): Promise<void> {
     this.uri = null;
@@ -18,6 +26,12 @@ export class MediaVoiceRecorder implements VoiceRecorder {
     this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.recorder = new MediaRecorder(this.stream);
     this.recorder.ondataavailable = (event) => this.chunks.push(event.data);
+    try {
+      await this.tap?.start(this.stream);
+    } catch (error) {
+      this.releaseStream();
+      throw error;
+    }
   }
 
   record(options: { readonly forDuration: number }): void {
@@ -47,6 +61,7 @@ export class MediaVoiceRecorder implements VoiceRecorder {
   }
 
   private releaseStream(): void {
+    this.tap?.stop();
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = null;
   }

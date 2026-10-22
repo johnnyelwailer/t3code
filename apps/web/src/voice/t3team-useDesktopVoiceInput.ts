@@ -10,6 +10,9 @@ import type { DesktopVoiceConfig } from "@t3tools/contracts";
 import { usePrimarySettings } from "~/hooks/useSettings";
 import { MediaVoiceRecorder, requestMicrophonePermission } from "./t3team-mediaVoiceRecorder";
 import { decodeRecordingToPcm16Base64 } from "./t3team-recordingToPcm";
+import { createVoicePcmTap, type VoicePcmTap, type VoiceStreamBridge } from "./t3team-voicePcmTap";
+import { useVoiceModelProgressPercent } from "./t3team-useVoiceModelProgress";
+import { useVoiceStream } from "./t3team-useVoiceStream";
 
 const IDLE_STATE: VoiceInputState = { phase: "idle", error: null, errorAction: null };
 const VIRTUAL_DRAFT = { ownerKey: "desktop-composer", text: "", selection: { start: 0, end: 0 } };
@@ -22,20 +25,31 @@ function getDesktopVoiceBridge(): DesktopVoiceBridge | undefined {
     : undefined;
 }
 
+function getVoiceStreamBridge(): VoiceStreamBridge | undefined {
+  const bridge = typeof window === "undefined" ? undefined : window.desktopBridge;
+  const { startVoiceStream, pushVoiceStream, stopVoiceStream } = bridge ?? {};
+  return startVoiceStream && pushVoiceStream && stopVoiceStream
+    ? { startVoiceStream, pushVoiceStream, stopVoiceStream }
+    : undefined;
+}
+
 function createController(input: {
   readonly bridge: DesktopVoiceBridge;
   readonly getConfig: () => DesktopVoiceConfig;
+  readonly tap: VoicePcmTap | undefined;
   readonly onTranscript: (text: string) => void;
+  readonly hasCommittedSpeech: () => boolean;
   readonly onStateChange: (state: VoiceInputState) => void;
 }): VoiceInputController {
   const transcriber = createDesktopVoiceTranscriber({
     bridge: input.bridge,
     getConfig: input.getConfig,
     decodeRecording: decodeRecordingToPcm16Base64,
+    finishLiveSession: () => input.tap?.finish() ?? Promise.resolve(null),
   });
   const recorder: MediaVoiceRecorder = new MediaVoiceRecorder((url) => {
     void controller.handleRecorderStatus({ isFinished: true, hasError: false, error: null, url });
-  });
+  }, input.tap);
   const controller: VoiceInputController = new VoiceInputController({
     recorder,
     getTranscriber: () => transcriber,
@@ -45,6 +59,7 @@ function createController(input: {
     deleteRecording: (uri) => URL.revokeObjectURL(uri),
     readDraft: () => ({ ...VIRTUAL_DRAFT, revision: 0 }),
     commitTranscript: input.onTranscript,
+    hasCommittedSpeech: input.hasCommittedSpeech,
     onStateChange: input.onStateChange,
   });
   return controller;
@@ -71,33 +86,81 @@ function useNativeTranscriberAvailable(
   return available;
 }
 
-export function useDesktopVoiceInput(onTranscript: (text: string) => void) {
+/**
+ * The desktop recorder as a session: the hotkey opens it, the speaker's pauses commit utterances
+ * through `onTranscript` while it stays open, and the next press (or a long quiet) ends it, after
+ * which whatever was said since the last utterance is written down and committed too.
+ */
+export function useDesktopVoiceInput(
+  onTranscript: (text: string) => void,
+  onUtteranceFailed: (message: string) => void,
+) {
   const bridge = getDesktopVoiceBridge();
   const config = usePrimarySettings((settings) => settings.voice.transcriber);
   const configRef = useRef(config);
   const onTranscriptRef = useRef(onTranscript);
+  const onUtteranceFailedRef = useRef(onUtteranceFailed);
   useEffect(() => {
     configRef.current = config;
     onTranscriptRef.current = onTranscript;
-  }, [config, onTranscript]);
+    onUtteranceFailedRef.current = onUtteranceFailed;
+  }, [config, onTranscript, onUtteranceFailed]);
   const [state, setState] = useState(IDLE_STATE);
   const controllerRef = useRef<VoiceInputController | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  const committedSpeechRef = useRef(0);
   const available = useNativeTranscriberAvailable(bridge, config);
+  const downloadPercent = useVoiceModelProgressPercent(state.phase === "preparing");
 
   useEffect(() => {
     if (!bridge) return;
+    const streamBridge = getVoiceStreamBridge();
+    const tap =
+      streamBridge &&
+      createVoicePcmTap({
+        bridge: streamBridge,
+        getConfig: () => configRef.current,
+        onSession: (id) => {
+          sessionIdRef.current = id;
+          if (id !== null) committedSpeechRef.current = 0;
+        },
+      });
     const controller = createController({
       bridge,
       getConfig: () => configRef.current,
-      onTranscript: (text) => onTranscriptRef.current(text),
-      onStateChange: setState,
+      tap,
+      onTranscript: (text) => {
+        committedSpeechRef.current += 1;
+        onTranscriptRef.current(text);
+      },
+      hasCommittedSpeech: () => committedSpeechRef.current > 0,
+      onStateChange: (next) => {
+        if (next.phase === "idle" || next.phase === "error") tap?.discard();
+        setState(next);
+      },
     });
     controllerRef.current = controller;
     return () => {
       controller.dispose();
+      tap?.discard();
       controllerRef.current = null;
     };
   }, [bridge]);
+
+  const stream = useVoiceStream({
+    active: state.phase !== "idle" && state.phase !== "error",
+    sessionIdRef,
+    onSessionEnd: () => {
+      if (controllerRef.current?.currentState.phase === "recording") {
+        void controllerRef.current.stop();
+      }
+    },
+    onUtterance: (text) => {
+      committedSpeechRef.current += 1;
+      onTranscriptRef.current(text);
+    },
+    onUtteranceFailed: (message) => onUtteranceFailedRef.current(message),
+  });
 
   const toggle = useCallback(() => {
     const controller = controllerRef.current;
@@ -106,6 +169,7 @@ export function useDesktopVoiceInput(onTranscript: (text: string) => void) {
     else void controller.start();
   }, []);
   const cancel = useCallback(() => controllerRef.current?.cancel(), []);
+  const sessionId = useCallback(() => sessionIdRef.current, []);
 
-  return { available, state, toggle, cancel };
+  return { available, state, downloadPercent, stream, toggle, cancel, sessionId };
 }

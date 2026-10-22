@@ -455,6 +455,46 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
 - `apps/desktop/scripts/main-process-bundle.test.mjs` — fixture writes the `src/voice/t3team-whisperWorker.ts` worker entry that the desktop `pack` config now builds.
 - `third-party-licenses.config.json` — notice overrides for the `@fugood/node-whisper-*` platform binaries pulled in by `@fugood/whisper.node`.
 
+## Voice hotkey chord, model download progress, model settings UI (2026-10-21)
+
+- `apps/desktop/src/ipc/methods/clientSettings.ts` — `setClientSettings` also calls `DesktopVoiceHotkey.configure`, next to the existing `DesktopSnapShot.configure`, so a changed `voiceHotkeyChord` re-registers the global shortcut (logic in `t3team-voiceHotkeyController.ts`).
+- `apps/web/src/components/settings/useSnapShotShortcutRecorder.tsx` — optional `label` so the voice shortcut row reuses the recorder instead of a second one; the default label keeps the snapshot wording.
+
+## Pre-existing Test Web nightly fixes (2026-10-21)
+
+- `apps/web/src/components/BranchToolbar.panel.test.tsx` — the mocked draft store gains `draftsByThreadKey`, which the cloud queued-send hook now reads.
+
+## Pre-existing server test failures (nightly CI, 2026-10-21)
+
+- `apps/server/src/orchestration-v2/testkit/fixtures/*/muse_transcript.ndjson` (8 scenarios) — re-recorded against the current `link_pull_request` runtime instruction in `packages/provider-core/src/server/runtimeInstructions.ts`, which the Muse replay compares byte-for-byte.
+- `apps/server/src/testkit/RpcInitialMemory.fixture.mjs` — the mocked event store gains `readAgentEventId`, which the thread-resume cursor identity check (#538) now calls.
+
+## Voice floating widget (desktop main, 2026-10-21)
+
+All already listed in `allowedModifiedFiles`; each gains only the voice-widget seam.
+
+- `apps/desktop/src/ipc/channels.ts` — five channel names for the widget snapshot/command pair and the microphone settings opener.
+- `apps/desktop/src/ipc/DesktopIpcHandlers.ts` — registers `publishVoiceWidget`, `sendVoiceWidgetCommand`, `openMicrophoneSettings`.
+- `apps/desktop/src/preload.ts` — exposes the five new bridge methods, with the same shape guards as the voice-stream listener.
+- `packages/contracts/src/ipc.ts` — types the five new `DesktopBridge` members.
+- `packages/contracts/src/index.ts` — exports the widget snapshot/command schemas.
+
+## Voice surfaces (web, 2026-10-21)
+
+All already listed in `allowedModifiedFiles`; each gains only the voice-surface seam.
+
+- `apps/web/src/components/Sidebar.tsx` — the voice thread renders as its own row (`VoiceSidebarRow`), plus the first-recording row while no voice thread exists.
+- `apps/web/src/components/chat/ChatComposer.tsx` — the voice thread's composer hosts `VoiceComposerDock` (the recording grows out of it) and its mic is the voice agent's (`ComposerMicInput` gets the thread to decide).
+- `apps/web/src/components/chat/MessagesTimeline.tsx` — the `voice-state` context reference renders nothing (it is the model's input, never the user's).
+- `apps/web/src/components/settings/useSnapShotShortcutRecorder.tsx` — an open shortcut recorder tells the voice session to ignore the voice chord.
+- `apps/web/src/routes/__root.tsx` — the floating widget route renders bare; the voice session host replaces the old pill.
+- `apps/web/src/routeTree.gen.ts` — generated entry for `/t3team-voice-widget`.
+- `apps/web/src/components/chat/QueuedRunsControl.tsx` — the queued-message preview drops the `voice-state` reference label too, so the model-only live-state entry never shows in the queue.
+
+## Voice V1 readiness (2026-10-21)
+
+- `docs/user/composer.md` — gains the "Voice input on desktop" section (shortcut, composer mic, Settings → Voice, privacy); the closest existing user doc, so no new docs page.
+
 ## Cross-environment project identity by work source (2026-10-21)
 
 - `packages/client-runtime/src/state/projectGrouping.ts` — one import and one `deriveWorkSourceProjectKey(project) ??` line ahead of the repository key in `deriveLogicalProjectKey`, plus `"source"` in its three `Pick`s. A project bound to an external work source (Jira, …) groups by that binding, so the same t3team project on two T3 Connect machines is one sidebar entry, and a bound project no longer merges into a plain project that shares its repository. The logic lives in `t3team-workSourceProjectKey.ts`; unbound projects group exactly as before.

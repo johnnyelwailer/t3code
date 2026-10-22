@@ -13,6 +13,7 @@ import {
 } from "~/components/ui/dialog";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useToolAuthActions, useToolAuthStates } from "~/state/t3team-toolauth";
+import { isGitHubSignInRunning } from "~/t3team/hooks/t3team-useGitHubSignIn";
 
 import {
   clearCloudSessionSignIn,
@@ -21,13 +22,6 @@ import {
 } from "./t3team-cloudSessionSignIn";
 
 const GH = toolAuthMetaForTool("gh");
-const IN_PROGRESS = new Set([
-  "installing",
-  "starting",
-  "awaiting-open",
-  "awaiting-code",
-  "verifying",
-]);
 
 /**
  * Signs the GitHub CLI in to the host a session action needed (the session host, or the project's
@@ -66,7 +60,7 @@ export function CloudSessionSignInDialogHost() {
     sawSignInRef.current = false;
     if (request === null || phase === "connected") return;
     // A sign-in already running (another surface started it) is watched, not started twice.
-    if (IN_PROGRESS.has(phase)) startedRef.current = true;
+    if (isGitHubSignInRunning(phase)) startedRef.current = true;
     else startSignIn();
     // Once per request; phase changes are handled below.
   }, [request]);
