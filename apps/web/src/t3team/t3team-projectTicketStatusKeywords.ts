@@ -8,15 +8,11 @@ export const doneStatusKeywords = [
   "completed",
 ];
 
-export const reviewStatusKeywords = [
-  "review",
-  "qa",
-  "uat",
-  "verification",
-  "verify",
-  "testing",
-  "test",
-];
+/** Past code review: someone checks the built thing (QA, acceptance, test). */
+export const testStatusKeywords = ["qa", "uat", "verification", "verify", "testing", "test"];
+
+/** The kanban's review lane: code review and test both (the digest tells them apart). */
+export const reviewStatusKeywords = ["review", ...testStatusKeywords];
 
 export const todoStatusKeywords = [
   "to do",

@@ -8,6 +8,7 @@ function ticket(id: string, status: string, sprintState?: string): ProjectTicket
     id,
     projectId: "p1",
     title: id,
+    ref: { displayId: id, title: id, url: "" },
     status,
     assignee: "Philip",
     updatedAt: "2026-09-20T08:00:00.000Z",
@@ -48,11 +49,13 @@ describe("heuristic digest plan", () => {
         section.items.map((item) => item.ticketId),
       ]),
     ).toEqual([
-      ["in-progress", "main", ["doing", "reviewing"]],
+      ["in-progress", "main", ["doing"]],
       ["up-next", "main", ["next"]],
       // Intentional: only work planned into a future sprint is "Parked" now. Before "Your
       // tickets" existed, a sprint-less "To Do" ticket landed here too (see the next test).
       ["rest", "footer", ["later"]],
+      // In review with nothing of the viewer's open on it: handed on, folded into the footer.
+      ["handed-off", "footer", ["reviewing"]],
     ]);
   });
 
@@ -118,15 +121,11 @@ describe("heuristic digest plan, anchored on now", () => {
         section.items.map((item) => [item.ticketId, item.why ?? ""]),
       ]),
     ).toEqual([
-      [
-        "in-progress",
-        [
-          ["fresh", ""],
-          ["sprint-old", ""],
-        ],
-      ],
+      ["in-progress", [["sprint-old", ""]]],
       ["quiet", [["stale", "In Progress · untouched 54 d"]]],
       ["rest", [["backlog", ""]]],
+      // Code Review without an open PR of the viewer's is handed on, not in progress.
+      ["handed-off", [["fresh", ""]]],
     ]);
   });
 });

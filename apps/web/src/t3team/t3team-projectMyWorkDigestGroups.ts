@@ -2,6 +2,7 @@ import {
   digestStoryAdjacency,
   type DigestStoryAdjacency,
 } from "~/t3team/t3team-projectMyWorkDigestAdjacency";
+import { isDigestBlockLive } from "~/t3team/t3team-projectMyWorkDigestBlocks";
 import type { DigestGraph, DigestSection } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import { buildProjectTicketHierarchy } from "~/t3team/t3team-ticketHierarchy";
 import type { ProjectTicket } from "~/t3team/t3team-types";
@@ -15,6 +16,11 @@ type DigestStoryGroupModel = {
   /** The work around the group's rows, in attention tiers; empty for parentless groups. */
   adjacency: DigestStoryAdjacency;
 };
+
+/** An epic heads a card of stories, not of one story's subtasks. */
+export function isDigestEpicTicket(ticket: ProjectTicket): boolean {
+  return /\bepic\b/i.test(ticket.issueType ?? ticket.ref.type ?? "");
+}
 
 const NO_ADJACENCY: DigestStoryAdjacency = { active: [], quiet: [] };
 
@@ -106,6 +112,8 @@ export function groupByParent(
       hiddenKeys,
       ticketsById,
       viewerName: graph.viewer.name,
+      storyIsEpic: isDigestEpicTicket(group.parent),
+      isBlockLive: (dependency) => isDigestBlockLive(graph, dependency),
     });
   }
   return [...groups.values()];

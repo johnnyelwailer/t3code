@@ -40,18 +40,6 @@ export function isDigestTicketDone(ticket: ProjectTicket): boolean {
   return getProjectTicketKanbanLane(ticket.status) === "done";
 }
 
-function isMine(ticket: ProjectTicket, graph: DigestGraph): boolean {
-  const assignee = ticket.assignee?.trim().toLowerCase();
-  const viewer = graph.viewer.name?.trim().toLowerCase();
-  return (
-    assignee !== undefined &&
-    assignee !== "" &&
-    viewer !== undefined &&
-    viewer !== "" &&
-    assignee === viewer
-  );
-}
-
 function latestClaimActivity(graph: DigestGraph, ticketId: string): number | null {
   const times = graph.claims
     .filter((claim) => claim.ticketId === ticketId)
@@ -80,6 +68,13 @@ export function digestFacetsFor(
 }
 
 import { DIGEST_BUCKETS } from "./t3team-projectMyWorkDigestBuckets";
+import {
+  digestHandedOffIds,
+  digestHandoffSections,
+  isDigestTicketHandedOff,
+  isDigestTicketMine as isMine,
+  withoutHandedOnItems,
+} from "./t3team-projectMyWorkDigestHandoff";
 import {
   DIGEST_YESTERDAY_WIDGET_ID,
   digestYesterdayPlacement,
@@ -114,12 +109,14 @@ export function buildHeuristicDigestPlan(
   nowMs: number,
   onlyTicketIds?: ReadonlySet<string>,
 ): DigestPlan {
-  const candidates = graph.tickets
+  const mine = graph.tickets
     .filter((ticket) => isMine(ticket, graph) && !isDigestTicketDone(ticket))
     .filter((ticket) => onlyTicketIds === undefined || onlyTicketIds.has(ticket.id))
     .toSorted(byRecency);
+  const handedOn = mine.filter((ticket) => isDigestTicketHandedOff(graph, ticket));
+  const candidates = mine.filter((ticket) => !handedOn.includes(ticket));
   const placed = new Set<string>();
-  const sections = DIGEST_BUCKETS.map((bucket) => ({
+  const sections: DigestSection[] = DIGEST_BUCKETS.map((bucket) => ({
     id: bucket.id,
     kind: "items" as const,
     widget: "my-work.tickets",
@@ -136,6 +133,7 @@ export function buildHeuristicDigestPlan(
           : { ticketId: ticket.id };
       }),
   })).filter((section) => section.items.length > 0);
+  sections.push(...digestHandoffSections(graph, handedOn));
   const yesterday = digestYesterdaySection(graph, digestYesterdayPlacement(nowMs), nowMs);
   const leads = yesterday.some((section) => section.placement === "side");
   return {
@@ -168,7 +166,8 @@ export function resolveDigestPlan(
   const referenced = new Set(plan.sections.flatMap((s) => s.items.map((i) => i.ticketId)));
   const droppedTicketIds = [...referenced].filter((id) => !live.has(id));
   const reviewIds = new Set((graph.reviewRequests ?? []).map((review) => review.id));
-  const sections = plan.sections
+  const settled = withoutHandedOnItems(plan.sections, digestHandedOffIds(graph));
+  const sections = settled.sections
     .map((section) => ({
       ...section,
       items: section.items.filter((item) => live.has(item.ticketId)),
@@ -195,10 +194,12 @@ export function resolveDigestPlan(
     id: `new-${section.id}`,
     heading: `New · ${section.heading}`,
   }));
+  const movedOn = buildHeuristicDigestPlan(graph, nowMs, settled.moved).sections;
   return {
     ...plan,
     sections: [
       ...sections,
+      ...movedOn,
       ...trailing,
       ...(hasYesterdayWidget ? [] : digestYesterdaySection(graph, "footer", nowMs)),
     ],

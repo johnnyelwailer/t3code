@@ -1,7 +1,7 @@
 /**
  * Who the viewer's work hangs together with, off the Jira mirror: the people waiting on one of
  * their tickets (it `blocks` theirs), the people they wait on (theirs `blocks` the viewer's), and
- * the colleagues on the same story (the backend half of a frontend task). Each comes with the
+ * the colleagues on the same story (the backend half of a frontend subtask). Each comes with the
  * other ticket's assignee and status, so the digest can say WHO, not just which key.
  *
  * The mirror stores only outward links (`{ outward: "blocks", key }`), so "waits on" is the
@@ -40,10 +40,13 @@ type MirrorIssue = BacklogResourceRef & {
   readonly assigneeAvatarUrl?: string;
   readonly url?: string;
   readonly links?: ReadonlyArray<{ readonly outward: string; readonly key: string }>;
+  readonly issueTypeIsSubtask?: boolean;
 };
 
 const SIBLING_LIMIT = 60;
 const isBlocks = (outward: string) => /\bblocks\b/i.test(outward);
+const isSubtaskIssue = (issue: MirrorIssue) =>
+  issue.issueTypeIsSubtask === true || /sub-?task/i.test(issue.type ?? "");
 
 function toOther(issue: MirrorIssue): T3TeamDigestDependency["other"] {
   return {
@@ -125,8 +128,10 @@ function readDependenciesFromMirror(input: {
         AND json_extract(link.value, '$.key') IN ${sql.in(myKeys)}
         AND lower(json_extract(link.value, '$.outward')) LIKE '%blocks%'`,
     );
+    // Only a subtask's parent is a story; a story's parent is an epic, whose other stories are
+    // neighbours rather than the same piece of work (an epic easily holds dozens).
     const parentIds = [
-      ...new Set(mine.flatMap((issue) => (issue.parentId ? [issue.parentId] : []))),
+      ...new Set(mine.flatMap((i) => (i.parentId && isSubtaskIssue(i) ? [i.parentId] : []))),
     ];
     const siblings =
       parentIds.length === 0
