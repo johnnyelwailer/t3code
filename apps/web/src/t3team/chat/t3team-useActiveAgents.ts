@@ -14,7 +14,7 @@ import type { ProjectThread } from "~/t3team/t3team-types";
 
 const NO_CHILDREN: ReadonlyArray<ProjectThread> = [];
 
-function findProvider(
+export function findProvider(
   providersByEnvironment: ReturnType<typeof useEnvironmentProviders>,
   instanceId: string | undefined,
 ): ServerProvider | undefined {
@@ -26,7 +26,7 @@ function findProvider(
   return undefined;
 }
 
-function providerMark(
+export function providerMark(
   provider: ServerProvider | undefined,
   fallbackDriver?: ServerProvider["driver"],
 ): ActiveAgentEntry["provider"] {

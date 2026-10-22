@@ -38,6 +38,7 @@ export function digestPrThreadClaims(
         threadTitle: shell.title,
         ticketId: pr.ticketId,
         agent: String(shell.providerInstanceId),
+        providerInstanceId: String(shell.providerInstanceId),
         lastActivityAt: shell.updatedAt,
         threadUrl: `/t3team/projects/${shell.projectId}/threads/${shell.id}`,
         ...(running ? { running: true } : { finished: true }),
@@ -47,11 +48,29 @@ export function digestPrThreadClaims(
   return claims;
 }
 
+/**
+ * Server claims carry only an agent label ("Codex · model"); the thread shell has the real
+ * provider instance, which the badge style needs to pick the provider's icon.
+ */
+export function withClaimProviderInstances(
+  claims: ReadonlyArray<DigestClaim>,
+  shells: ReadonlyArray<Shell>,
+): ReadonlyArray<DigestClaim> {
+  const instanceByThread = new Map(
+    shells.map((shell) => [String(shell.id), String(shell.providerInstanceId)]),
+  );
+  return claims.map((claim) => {
+    const providerInstanceId = claim.providerInstanceId ?? instanceByThread.get(claim.threadId);
+    return providerInstanceId === undefined ? claim : { ...claim, providerInstanceId };
+  });
+}
+
 /** The graph with PR-linked agent threads added to its claims (dots only; the plan is unchanged). */
 export function useDigestPrThreadClaims(graph: DigestGraph, nowMs: number): DigestGraph {
   const shells = useThreadShells();
   return useMemo(() => {
     const extra = digestPrThreadClaims(graph, shells, nowMs);
-    return extra.length > 0 ? { ...graph, claims: [...graph.claims, ...extra] } : graph;
+    const claims = withClaimProviderInstances([...graph.claims, ...extra], shells);
+    return claims.length > 0 ? { ...graph, claims } : graph;
   }, [graph, shells, nowMs]);
 }
