@@ -1,6 +1,6 @@
 /**
  * Collapse affordance for long workflow-authored system notifications — the plain-text
- * `thread.notifyUser(...)` path (see `t3team-workflowEngineBrokerNotify.ts`, the `p.recipient ===
+ * `thread.notifyUser(...)` path (see `t3team-workflowEngineBrokerNotify.ts`, the `p.recipient is
  * "user"` non-HTML branch). Mirrors `CollapsibleUserMessageBody` in `MessagesTimeline.tsx`: same
  * thresholds, same fade mask, same expand-button copy, reused via `t3team-collapsibleMessage.ts`
  * rather than re-derived.

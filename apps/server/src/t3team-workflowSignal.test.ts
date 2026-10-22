@@ -35,10 +35,6 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 
-// ---------------------------------------------------------------------------
-// Tier A diff logic
-// ---------------------------------------------------------------------------
-
 const detail = (over: Partial<PullRequestDetail>): PullRequestDetail =>
   ({
     provider: "github",
@@ -151,10 +147,6 @@ describe("diffScmEvents", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Tier B diff logic
-// ---------------------------------------------------------------------------
-
 describe("work item diff", () => {
   it("is silent on the first observation", () => {
     expect(diffWorkItemFields(null, { status: "To Do" })).toEqual([]);
@@ -196,10 +188,6 @@ describe("work item diff", () => {
     expect(workItemCursorFromFields({})).toEqual({});
   });
 });
-
-// ---------------------------------------------------------------------------
-// Catalog
-// ---------------------------------------------------------------------------
 
 const fakePrs = {
   detail: (_ref: unknown) => Effect.succeed(detail({})),
@@ -260,10 +248,6 @@ describe("makeWorkflowSignalSourceCatalog", () => {
     void WorkItemUpdated;
   });
 });
-
-// ---------------------------------------------------------------------------
-// Reconciler core (fakes: no DB, no timers)
-// ---------------------------------------------------------------------------
 
 interface FakeRegistration {
   readonly runId: string;
@@ -489,10 +473,6 @@ describe("makeMintedEmit", () => {
     void ScmChangeRequestChecksConcluded;
   });
 });
-
-// ---------------------------------------------------------------------------
-// Poller cursor semantics (GHE #332 review): at-least-once delivery
-// ---------------------------------------------------------------------------
 
 describe("startScmSignalInstance durable cursor", () => {
   it("holds the cursor when delivery fails, and advances only after redelivery succeeds", async () => {

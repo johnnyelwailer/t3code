@@ -9,7 +9,6 @@
  *   out.poses[i] -> transform, out.scales[i] -> the `scale` property value
  *
  * MODEL
- * -----
  * The cursor is a THREAT the dots avoid, mainly on the Y axis:
  *
  *   BEND   — while the cursor is near the row, the row parts around the
@@ -110,7 +109,7 @@ export function createSBendPhysics(config: SBendConfig = defaultSBendConfig): SB
     head.x += (target.x - head.x) * hk;
     head.y += (target.y - head.y) * hk;
 
-    // --- snap selection: exactly one grower, ever.
+    // Snap selection: exactly one grower, ever.
     let snapIdx = -1;
     if (cursor.active) {
       for (let i = 0; i < homes.length; i++) {

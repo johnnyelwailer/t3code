@@ -33,6 +33,7 @@ function sources(overrides: Partial<T3TeamComposerMenuSources> = {}): T3TeamComp
       { path: "apps/web/src/main.tsx", kind: "file" as const },
       { path: "apps/web/src", kind: "directory" as const },
     ],
+    pathSearchTarget: { environmentId: null, cwd: "/repo", query: "main" },
     ...overrides,
   };
 }
@@ -56,6 +57,7 @@ describe("buildT3TeamComposerMenuItems", () => {
         type: "path",
         path: "apps/web/src/main.tsx",
         pathKind: "file",
+        searchTarget: { environmentId: null, cwd: "/repo", query: "main" },
         label: "main.tsx",
         description: "apps/web/src",
       },
@@ -64,6 +66,7 @@ describe("buildT3TeamComposerMenuItems", () => {
         type: "path",
         path: "apps/web/src",
         pathKind: "directory",
+        searchTarget: { environmentId: null, cwd: "/repo", query: "main" },
         label: "src",
         description: "apps/web",
       },

@@ -33,7 +33,7 @@ import {
 } from "./t3team-workflowSignalCatalog.ts";
 import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
-import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as VcsProcess from "./vcs/VcsProcess.ts";
 import { loadViewerPrRead } from "./t3team-myworkViewerPrLoader.ts";
 import { makeReconcilerCore } from "./t3team-workflowSignalReconcilerCore.ts";

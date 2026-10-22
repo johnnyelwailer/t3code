@@ -1,20 +1,9 @@
-/**
- * Migration runner with an inline loader.
- *
- * Uses Migrator.make with fromRecord to define migrations inline.
- * All migrations are statically imported - no dynamic file system loading.
- *
- * `runMigrations` is called by the SQLite persistence layer at startup, so the
- * schema is always up to date before the application starts.
- */
-
 import * as Migrator from "effect/sql/Migrator";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { reconcileV2PreviewMigration } from "./reconcileV2PreviewMigration.ts";
 import { reconcileForkSprintLedger } from "./t3team-reconcileForkSprintLedger.ts";
 
-// Import all migrations statically
 import Migration0001 from "./Migrations/001_OrchestrationEvents.ts";
 import Migration0002 from "./Migrations/002_OrchestrationCommandReceipts.ts";
 import Migration0003 from "./Migrations/003_CheckpointDiffBlobs.ts";
@@ -168,17 +157,17 @@ import Migration0109 from "./Migrations/061_PullRequestReviewGuides.ts";
 import Migration0110 from "./Migrations/062_ThreadFailureLookupIndex.ts";
 // Trigger-maintained per-thread item counts and a user-authored message index for shell reads.
 import Migration0111 from "./Migrations/t3team-081_ShellItemCounts.ts";
+// New from the 2026-10-19 upstream sync (upstream 064). Appended above the fork's maximum id (111).
+// Upstream 063 (DropUnusedV1Projections) is held: it drops projection_thread_activities, which the
+// fork's one-time V1 lineage cutover still reads. Register it above the maximum once the cutover
+// is confirmed done everywhere.
+import Migration0112 from "./Migrations/064_CanonicalizeThreadPullRequestLinks.ts";
+// New from the 2026-10-21 upstream sync (upstream 065/066/067). Appended above the fork's maximum id
+// (112), as for every earlier sync; upstream 063 stays held (see above).
+import Migration0113 from "./Migrations/065_CodexUsageNativeTurnIndex.ts";
+import Migration0114 from "./Migrations/066_RepairClientSettlementTimestamps.ts";
+import Migration0115 from "./Migrations/067_WebhookDedupe.ts";
 
-/**
- * Migration loader with all migrations defined inline.
- *
- * Key format: "{id}_{name}" where:
- * - id: numeric migration ID (determines execution order)
- * - name: descriptive name for the migration
- *
- * Uses Migrator.fromRecord which parses the key format and
- * returns migrations sorted by ID.
- */
 export const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
   [2, "OrchestrationCommandReceipts", Migration0002],
@@ -265,7 +254,7 @@ export const migrationEntries = [
   [83, "OrchestrationEventsTypeSequenceIndex", Migration0083],
   // Upstream 055/056 (orchestration V2) live at 84/85 in this fork's ledger; see the import comment.
   // Preserve this migration's schema. Future V2 schema changes need new migrations. A new
-  // migration must take an id ABOVE the highest id registered here (currently 110) — never one of
+  // migration must take an id ABOVE the highest id registered here (currently 115) — never one of
   // the gaps (88-89, 93-96): upgraded databases have recorded the maximum, and the Migrator skips
   // every id at or below it. Upstream's reconcileV2PreviewMigration stays a no-op on fork ledgers
   // (fork ids 53/54 are never named OrchestrationV2).
@@ -295,6 +284,12 @@ export const migrationEntries = [
   // Upstream 062 lives at 110 in this fork's ledger; see the import comment.
   [110, "ThreadFailureLookupIndex", Migration0110],
   [111, "ShellItemCounts", Migration0111],
+  // Upstream 064 lives at 112 in this fork's ledger; upstream 063 is held. See the import comment.
+  [112, "CanonicalizeThreadPullRequestLinks", Migration0112],
+  // Upstream 065-067 live at 113-115 in this fork's ledger; see the import comment.
+  [113, "CodexUsageNativeTurnIndex", Migration0113],
+  [114, "RepairClientSettlementTimestamps", Migration0114],
+  [115, "WebhookDedupe", Migration0115],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
@@ -316,17 +311,21 @@ const makeMigrationLoader = (throughId?: number) =>
 // registered ABOVE the fork's current maximum id, so this constant is the fork id of upstream 055.
 export const FIRST_V2_MIGRATION_ID = 84;
 
-// Fork migrations whose schema a later fork migration re-ensures idempotently, so a ledger that
-// skipped them still upgrades: 86-92 and 98 are re-run by 99 (RepairForkPortTables). The guard
-// only refuses skips that nothing repairs.
-export const REPAIRED_BY_LATER_MIGRATION = new Set([86, 87, 90, 91, 92, 98]);
+// The ledger ids that carry upstream-owned V2 migrations in this fork's ledger (upstream 055/056
+// at 84/85, 057/058 at 103/104, 059/060 at 107/108, 061 at 109, 062 at 110, 064-067 at
+// 112-115; 063 is held). Only these are checked for being
+// skipped: fork migrations (and the repair migrations for fork DBs that have gaps, e.g. 99, which
+// re-ensures 86-92 and 98) must keep starting on databases whose history has holes. Add each id a
+// sync appends from upstream.
+export const UPSTREAM_V2_MIGRATION_IDS: ReadonlySet<number> = new Set([
+  84, 85, 103, 104, 107, 108, 109, 110, 112, 113, 114, 115,
+]);
 
 /**
  * Fail before migrating when the migrator would skip one of V2's own
  * migrations. It skips every id up to the highest recorded one, whatever name
  * was recorded, so a database that took a V2 id for another migration would
- * start without V2's schema and fail on first use. Earlier ids keep the
- * warning below: databases with a site-local migration there still work.
+ * start without V2's schema and fail on first use.
  */
 const assertV2MigrationsCanRun = Effect.fn("assertV2MigrationsCanRun")(function* (
   throughId?: number,
@@ -344,9 +343,8 @@ const assertV2MigrationsCanRun = Effect.fn("assertV2MigrationsCanRun")(function*
   const recordedNames = new Map(recorded.map((row) => [row.migration_id, row.name]));
   const skipped = migrationEntries.flatMap(([id, name]) => {
     if (
-      id < FIRST_V2_MIGRATION_ID ||
+      !UPSTREAM_V2_MIGRATION_IDS.has(id) ||
       id > latestRecordedId ||
-      REPAIRED_BY_LATER_MIGRATION.has(id) ||
       (throughId !== undefined && id > throughId)
     )
       return [];
@@ -361,26 +359,12 @@ const assertV2MigrationsCanRun = Effect.fn("assertV2MigrationsCanRun")(function*
   });
 });
 
-/**
- * Migrator run function - no schema dumping needed
- * Uses the base Migrator.make without platform dependencies
- */
 const run = Migrator.make({});
 
 export interface RunMigrationsOptions {
   readonly toMigrationInclusive?: number | undefined;
 }
 
-/**
- * Run all pending migrations.
- *
- * Creates the migrations tracking table (effect_sql_migrations) if it doesn't exist,
- * then runs any migrations with ID greater than the latest recorded migration.
- *
- * Returns array of [id, name] tuples for migrations that were run.
- *
- * @returns Effect containing array of executed migrations
- */
 export const runMigrations = Effect.fn("runMigrations")(function* ({
   toMigrationInclusive,
 }: RunMigrationsOptions = {}) {
@@ -406,10 +390,6 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
     ? Effect.logDebug("Database schema is current")
     : Effect.log("Migrations ran successfully").pipe(Effect.annotateLogs({ migrations }));
 
-  // The migrator keys on migration_id: a database that recorded a different
-  // migration under a shared id (local or fork builds) keeps that id and
-  // silently skips this build's migration at it. Surface the divergence so the
-  // skipped schema change is diagnosable.
   const sql = yield* SqlClient.SqlClient;
   const recorded = yield* sql<{
     readonly migration_id: number;

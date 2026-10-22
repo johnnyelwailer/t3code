@@ -130,6 +130,10 @@ const DriverLayer = Layer.mergeAll(GitVcsDriver.layerVcs, GitVcsDriver.layer).pi
               ? failed(128, "fatal: unable to index 'nul'\n")
               : ok();
           }
+          // The capture asks git which paths are ignored; nothing is.
+          if (args[0] === "check-ignore") {
+            return ok();
+          }
           if (args[0] === "read-tree") {
             return ok();
           }
@@ -224,6 +228,10 @@ const DriverLayerAllUnindexable = Layer.mergeAll(GitVcsDriver.layerVcs, GitVcsDr
           }
           if (args[0] === "ls-files" && args.includes("--others")) {
             return ok("nul\0");
+          }
+          // The capture asks git which paths are ignored; nothing is.
+          if (args[0] === "check-ignore") {
+            return ok();
           }
           if (args[0] === "read-tree") {
             return ok();
@@ -359,6 +367,9 @@ const DriverLayerAddTimeout = Layer.mergeAll(GitVcsDriver.layerVcs, GitVcsDriver
           }
           // Default ("timeout-once"): first attempt times out; the retry succeeds.
           return attempt === 1 ? Effect.fail(makeAddTimeout(input)) : Effect.succeed(ok());
+        }
+        if (args[0] === "check-ignore") {
+          return Effect.succeed(ok());
         }
         if (args[0] === "read-tree") {
           return Effect.succeed(ok());

@@ -16,6 +16,7 @@ import type {
   OrchestrationV2ConversationMessage,
   OrchestrationV2DomainEvent,
   OrchestrationV2Run,
+  OrchestrationV2Subagent,
   OrchestrationV2TurnItem,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -35,6 +36,8 @@ export interface DelegatedCompletionWakeRefreshInput {
   readonly ids: Pick<IdAllocatorV2Allocate, "event">;
   /** The starting run's own turn items (`getTurnStartContext`). */
   readonly turnItems: ReadonlyArray<OrchestrationV2TurnItem>;
+  /** The starting run's live subagents (`getTurnStartContext`), which upstream's default text inlines. */
+  readonly subagents: ReadonlyArray<OrchestrationV2Subagent>;
   readonly run: OrchestrationV2Run;
   readonly message: OrchestrationV2ConversationMessage | undefined;
 }
@@ -49,7 +52,7 @@ export const refreshStartingDelegatedCompletionWake = (
     if (message === undefined || completion === undefined || run.activeAttemptId === null) {
       return message;
     }
-    const defaultText = delegatedCompletionWakeDetail(completion.taskIds);
+    const defaultText = delegatedCompletionWakeDetail(completion.taskIds, input.subagents);
     if (message.text !== defaultText) return message;
     const text = yield* renderDelegatedCompletionWake(input.renderer, {
       threadId: message.threadId,

@@ -37,8 +37,8 @@ import type { ProjectThread, ViewState } from "~/t3team/t3team-types";
 // dependencies so the test stays focused on the real wiring under test.
 vi.mock("~/localApi", () => ({ readLocalApi: () => null }));
 vi.mock("~/state/environments", () => ({
-  usePrimaryEnvironmentId: () => null,
   usePrimaryEnvironment: () => null,
+  usePrimaryEnvironmentId: () => null,
 }));
 vi.mock("~/state/entities", () => ({
   useProjects: () => emptyArray,

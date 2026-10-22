@@ -10,7 +10,7 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
-import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as CliTokenManager from "./CliTokenManager.ts";
 import { cancelRunRequest } from "./t3team-githubActionsSessionClient.ts";
 import { isSessionCredentialIssueEnabled } from "./t3team-CloudSessionCredential.ts";

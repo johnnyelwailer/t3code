@@ -34,6 +34,7 @@ import type * as ProviderSessionManager from "./orchestration-v2/ProviderSession
 import type * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
 import type * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
 import type * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
+import type * as CommandOutputHub from "./orchestration-v2/CommandOutputHub.ts";
 import type * as ThreadSearch from "./orchestration-v2/ThreadSearch.ts";
 import type * as OrchestrationEventStore from "./persistence/OrchestrationEventStore.ts";
 import type * as PreviewManager from "./preview/Manager.ts";
@@ -71,6 +72,7 @@ import type * as SourceControlRepositoryService from "./sourceControl/SourceCont
 import type * as StorageCleanup from "./storageCleanup.ts";
 import type * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import type * as TerminalManager from "./terminal/Manager.ts";
+import type * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
 import type * as ToolAuthService from "./toolauth/t3team-ToolAuthService.ts";
 import type * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 import type * as UsageService from "./usage/UsageService.ts";
@@ -104,7 +106,9 @@ export type WsRpcHandlerServices =
   | ChildProcessSpawner.ChildProcessSpawner
   | CloudSessionService
   | CodexInstallation.CodexInstallation
+  | CommandOutputHub.CommandOutputHub
   | Crypto.Crypto
+  | DatabaseStorage.DatabaseStorage
   | DeviceService.DeviceService
   | DirectEndpoints.DirectEndpoints
   | EnvironmentAuth.EnvironmentAuth

@@ -20,8 +20,8 @@ const serverConfigsState = vi.hoisted(() => ({
   configs: new Map<string, unknown>(),
 }));
 
-vi.mock("~/state/entities", () => ({
-  useServerConfigs: () => serverConfigsState.configs,
+vi.mock("~/state/environments", () => ({
+  useEnvironmentProviders: () => serverConfigsState.configs,
 }));
 
 vi.mock("~/hooks/useSettings", () => ({
@@ -81,7 +81,7 @@ function setProviders(
     iconDataUrl?: string;
   }>,
 ) {
-  serverConfigsState.configs = new Map([["env-1", { providers }]]);
+  serverConfigsState.configs = new Map([["env-1", providers]]);
 }
 
 /** The folded row for one sub-run title (the fold's own toggle button is not a row). */

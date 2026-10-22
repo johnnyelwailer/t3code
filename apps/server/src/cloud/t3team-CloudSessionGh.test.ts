@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as TestClock from "effect/testing/TestClock";
 
-import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import { makeSessionGh } from "./t3team-CloudSessionGh.ts";
 import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
 import { makeFailureReasonCache } from "./t3team-cloudSessionFailureReason.ts";

@@ -29,6 +29,7 @@ vi.mock("../state/entities", () => ({
   readProjects: () => harness.projects,
   readThreadShell: () => null,
   useProjects: () => harness.projects,
+  useQuietThreadShell: () => undefined,
   useThreadShell: () => undefined,
 }));
 vi.mock("../state/environments", () => ({

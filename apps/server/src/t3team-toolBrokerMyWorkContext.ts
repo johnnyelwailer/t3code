@@ -14,7 +14,7 @@ import { ServerConfig } from "./config.ts";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
-import { GitHubApi } from "@t3tools/source-control-github/server/GitHubApi";
+import { GitHubApi } from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import { T3TeamChildThreadMetadata } from "./t3team-childThreadMetadata.ts";
 import type { loadT3TeamMyWorkDigestGraph } from "./t3team-myworkDigest.ts";
 import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts";

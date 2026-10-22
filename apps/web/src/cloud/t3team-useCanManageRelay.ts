@@ -1,4 +1,4 @@
-import { AuthAdministrativeScopes, AuthRelayWriteScope } from "@t3tools/contracts";
+import { AuthStandardClientScopes, AuthRelayWriteScope } from "@t3tools/contracts";
 
 import { usePrimarySessionState } from "~/environments/primary";
 
@@ -10,7 +10,7 @@ import { usePrimarySessionState } from "~/environments/primary";
 export function useCanManageRelay(): boolean {
   const primarySessionState = usePrimarySessionState();
   if (typeof window !== "undefined" && window.desktopBridge)
-    return AuthAdministrativeScopes.includes(AuthRelayWriteScope);
+    return AuthStandardClientScopes.includes(AuthRelayWriteScope);
   const data = primarySessionState.data;
   return data?.authenticated ? (data.scopes?.includes(AuthRelayWriteScope) ?? false) : false;
 }

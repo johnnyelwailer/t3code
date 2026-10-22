@@ -38,7 +38,13 @@ describe("gh sign-in", () => {
     Effect.gen(function* () {
       const homeDir = makeTempHome();
       try {
-        const { service, ptyAdapter } = yield* makeService(homeDir, { tools: ["gh"] });
+        // A finished sign-in defers to `gh auth status`; stub it so the machine's own gh
+        // login never decides the outcome.
+        const { service, ptyAdapter } = yield* makeService(
+          homeDir,
+          { tools: ["gh"] },
+          stubProbeRunner(LOGGED_IN(GH.hostname!)),
+        );
         yield* service.start("gh");
         const process = ptyAdapter.processes[0]!;
 
@@ -73,7 +79,11 @@ describe("gh sign-in", () => {
     Effect.gen(function* () {
       const homeDir = makeTempHome();
       try {
-        const { service, ptyAdapter } = yield* makeService(homeDir, { tools: ["gh"] });
+        const { service, ptyAdapter } = yield* makeService(
+          homeDir,
+          { tools: ["gh"] },
+          stubProbeRunner(LOGGED_IN("github.com")),
+        );
         const started = yield* service.start("gh", { hostname: "github.com" });
         expect(started.hostname).toBe("github.com");
         expect(ptyAdapter.spawnInputs[0]?.args).toEqual([

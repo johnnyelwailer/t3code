@@ -14,7 +14,7 @@ import * as Redacted from "effect/Redacted";
 
 import { ProjectService } from "../project/ProjectService.ts";
 import * as ProjectMachineDiscovery from "../project/t3team-ProjectMachineDiscovery.ts";
-import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import { CloudSessionMachines, layer } from "./t3team-CloudSessionMachine.ts";
 

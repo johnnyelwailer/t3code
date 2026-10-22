@@ -79,10 +79,6 @@ const stamp = Date.now();
 return { stamp };
 `;
 
-// ---------------------------------------------------------------------------
-// Guard tests — pure fakes, no layers.
-// ---------------------------------------------------------------------------
-
 const fakeRow = (overrides: Partial<WorkflowRun> = {}): WorkflowRun => ({
   ...buildRunningWorkflowRunRow({
     runId: "run-guard",
@@ -311,10 +307,8 @@ it.effect(
     }),
 );
 
-// ---------------------------------------------------------------------------
 // Integration tests — real engine + real SQLite journal (mirrors
 // t3team-toolBrokerWorkflowResumeTool.test.ts).
-// ---------------------------------------------------------------------------
 
 const hostFake = makeFakeWorkflowHostLayer();
 
