@@ -32,6 +32,7 @@ import type {
 import { VcsProcess } from "./vcs/VcsProcess.ts";
 import { LINKED_REPOSITORY_SYNC_CONCURRENCY } from "./t3team-linkedRepositorySyncConcurrency.ts";
 import { planAndLinkStateMigration } from "./t3team-projectStateMigrationLink.ts";
+import { readTrackedStateFiles } from "./t3team-projectStateMigrationTracked.ts";
 import {
   readStateMigrationJournal,
   summarizeStateMigration,
@@ -130,7 +131,18 @@ const make = Effect.gen(function* () {
     );
 
   const startStateMigration = (input: { readonly fromRoot: string; readonly toRoot: string }) =>
-    withMigrationLock(planAndLinkStateMigration(input)).pipe(
+    readTrackedStateFiles(input.toRoot).pipe(
+      Effect.provide(context),
+      // Unknown (git unavailable): every existing target file wins, as before.
+      Effect.catchCause(() => Effect.succeed(undefined)),
+      Effect.flatMap((trackedTargetFiles) =>
+        withMigrationLock(
+          planAndLinkStateMigration({
+            ...input,
+            ...(trackedTargetFiles ? { trackedTargetFiles } : {}),
+          }),
+        ),
+      ),
       Effect.tap((journal) =>
         journal.status === "running" ? ensureMigrationJob(input.toRoot) : Effect.void,
       ),

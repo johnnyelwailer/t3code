@@ -121,6 +121,23 @@ it.layer(TestLayer)("project main repository", (it) => {
     }),
   );
 
+  it.effect("does not count a clone whose state dir holds only machine-local entries", () =>
+    Effect.gen(function* () {
+      const { alpha, beta, linkedRepositories } = makeProject();
+      // A shared repository that committed its reference manifest (and a child worktree dir):
+      // no project lives there, so it must not be offered or auto-detected as a main repository.
+      write(state(beta, "references", "reference-repositories.json"), "{}\n");
+      NodeFS.mkdirSync(state(beta, "child-session-worktrees"), { recursive: true });
+      const candidates = yield* detectMainRepositoryCandidates(linkedRepositories);
+      expect(candidates).toEqual([{ url: "https://github.com/acme/alpha", checkoutPath: alpha }]);
+
+      // Real project state in the same clone makes it a candidate again.
+      write(state(beta, "context", "entrypoint.json"), "{}\n");
+      const withState = yield* detectMainRepositoryCandidates(linkedRepositories);
+      expect(withState.map((candidate) => candidate.checkoutPath)).toEqual([alpha, beta]);
+    }),
+  );
+
   it.effect("migrates state without clones, worktrees, or overwriting target files", () =>
     Effect.gen(function* () {
       const { home, alpha } = makeProject();

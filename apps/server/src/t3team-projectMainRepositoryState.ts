@@ -23,11 +23,16 @@ import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
   REFERENCES_DIR_NAME,
+  hasProjectStateEntries,
   isLinkedRepositoryReady,
   type LinkedRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
 
-/** Linked clones (ready, real git checkouts) whose working tree already holds a state dir. */
+/** Linked clones (ready, real git checkouts) whose working tree already holds project state. A
+ * state dir with only machine-local entries (`references/`, `child-session-worktrees/`) does not
+ * count: a shared repository that committed its reference manifest (or a clone a past switch
+ * left a manifest in) is not a project's home, and as the only candidate it would be
+ * auto-detected as the main repository of every project that links it. */
 export const detectMainRepositoryCandidates = Effect.fn("detectMainRepositoryCandidates")(
   function* (linkedRepositories: ReadonlyArray<LinkedRepositoryBootstrapResult>) {
     const fileSystem = yield* FileSystem.FileSystem;
@@ -41,7 +46,11 @@ export const detectMainRepositoryCandidates = Effect.fn("detectMainRepositoryCan
       if (candidates.some((candidate) => candidate.checkoutPath === checkoutPath)) continue;
       yield* ensureNexiProjectStateDir(checkoutPath);
       const isClone = yield* exists(path.join(checkoutPath, ".git"));
-      if (isClone && (yield* exists(path.join(checkoutPath, HIDDEN_T3TEAM_DIR)))) {
+      if (!isClone) continue;
+      const stateEntries = yield* fileSystem
+        .readDirectory(path.join(checkoutPath, HIDDEN_T3TEAM_DIR))
+        .pipe(Effect.orElseSucceed((): ReadonlyArray<string> => []));
+      if (hasProjectStateEntries(stateEntries)) {
         candidates.push({ url: entry.url, checkoutPath });
       }
     }

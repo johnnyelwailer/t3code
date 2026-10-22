@@ -98,6 +98,10 @@ export const planAndLinkStateMigration = Effect.fn("planAndLinkStateMigration")(
   readonly toRoot: string;
   readonly probeBudget?: number;
   readonly createLink?: typeof createDirectoryLink;
+  /** State-dir-relative paths of files git tracks in the target checkout (committed team state,
+   * which always wins). When known, an untracked target file older than its source is a leftover
+   * of an earlier switch attempt and is replaced; when unknown, every existing target file wins. */
+  readonly trackedTargetFiles?: ReadonlySet<string>;
 }) {
   const createLink = input.createLink ?? createDirectoryLink;
   const sourceRoot = NodePath.join(input.fromRoot, HIDDEN_T3TEAM_DIR);
@@ -165,7 +169,21 @@ export const planAndLinkStateMigration = Effect.fn("planAndLinkStateMigration")(
         for (const child of children) yield* visit([...segments, child]);
         return;
       }
-      if (sourceInfo.isFile() && !targetInfo) add({ relativePath, mode: "copy", source: real });
+      if (!sourceInfo.isFile()) return;
+      if (!targetInfo) {
+        add({ relativePath, mode: "copy", source: real });
+        return;
+      }
+      // A stale leftover (e.g. a partial copy an earlier, timed-out switch left in the checkout)
+      // must not shadow the project's newer state; committed (tracked) files always win.
+      if (
+        input.trackedTargetFiles &&
+        !input.trackedTargetFiles.has(relativePath) &&
+        targetInfo.isFile() &&
+        sourceInfo.mtimeMs > targetInfo.mtimeMs
+      ) {
+        add({ relativePath, mode: "copy", source: real, replaceOlder: true });
+      }
     }).pipe(Effect.orElseSucceed(() => undefined));
 
   const topLevel = yield* io(() => NodeFSP.readdir(sourceRoot)).pipe(

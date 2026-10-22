@@ -293,6 +293,86 @@ it.layer(NodeServices.layer)("project state migration", (it) => {
   );
 });
 
+/** Sets a file's mtime `secondsAgo` in the past. */
+const age = (file: string, secondsAgo: number) => {
+  const when = NodeFS.statSync(file).mtimeMs / 1000 - secondsAgo;
+  NodeFS.utimesSync(file, when, when);
+};
+
+it.layer(NodeServices.layer)("stale leftovers in the target", (it) => {
+  /** A project home whose `context` changed after an earlier, timed-out switch left a partial
+   * copy of it in the target checkout. */
+  const makeStale = () => {
+    const from = makeRoot("t3-stale-from-");
+    const to = makeRoot("t3-stale-to-");
+    write(state(from, "context", "threads", "index.json"), "fresh threads\n");
+    write(state(from, "context", "github", "activity.json"), "fresh activity\n");
+    write(state(from, "context", "only-home.json"), "home\n");
+    write(state(from, "recipes", "team", "recipe.md"), "home edit\n");
+    write(state(to, "context", "threads", "index.json"), "stale threads\n");
+    write(state(to, "context", "github", "activity.json"), "edited in target\n");
+    write(state(to, "recipes", "team", "recipe.md"), "committed\n");
+    // The leftover copy and the committed recipe are older than the home's files...
+    age(state(to, "context", "threads", "index.json"), 7 * 24 * 3600);
+    age(state(to, "recipes", "team", "recipe.md"), 7 * 24 * 3600);
+    // ...but this target file was written after the home's copy.
+    age(state(from, "context", "github", "activity.json"), 3600);
+    return { from, to };
+  };
+  const read = (root: string, ...segments: ReadonlyArray<string>) =>
+    NodeFS.readFileSync(state(root, ...segments), "utf8");
+
+  it.effect("replaces an older untracked leftover; tracked and newer target files win", () =>
+    Effect.gen(function* () {
+      const { from, to } = makeStale();
+      yield* planAndLinkStateMigration({
+        fromRoot: from,
+        toRoot: to,
+        trackedTargetFiles: new Set(["recipes/team/recipe.md"]),
+      });
+      const done = yield* runStateMigration(to, fastRun);
+      expect(done?.status).toBe("done");
+      expect(read(to, "context", "threads", "index.json")).toBe("fresh threads\n");
+      expect(read(to, "context", "github", "activity.json")).toBe("edited in target\n");
+      expect(read(to, "context", "only-home.json")).toBe("home\n");
+      expect(read(to, "recipes", "team", "recipe.md")).toBe("committed\n");
+      expect(leftovers(state(to))).toEqual([]);
+      // Idempotent: a rerun of the finished plan copies nothing more.
+      const again = yield* planAndLinkStateMigration({
+        fromRoot: from,
+        toRoot: to,
+        trackedTargetFiles: new Set(["recipes/team/recipe.md"]),
+      });
+      expect(again.entries.filter((entry) => entry.status === "pending")).toEqual([]);
+    }),
+  );
+
+  it.effect("a file written in the target after planning is never overwritten", () =>
+    Effect.gen(function* () {
+      const { from, to } = makeStale();
+      yield* planAndLinkStateMigration({
+        fromRoot: from,
+        toRoot: to,
+        trackedTargetFiles: new Set(),
+      });
+      write(state(to, "context", "threads", "index.json"), "written meanwhile\n");
+      yield* runStateMigration(to, fastRun);
+      expect(read(to, "context", "threads", "index.json")).toBe("written meanwhile\n");
+    }),
+  );
+
+  it.effect("keeps every existing target file when git could not say what is tracked", () =>
+    Effect.gen(function* () {
+      const { from, to } = makeStale();
+      yield* planAndLinkStateMigration({ fromRoot: from, toRoot: to });
+      yield* runStateMigration(to, fastRun);
+      expect(read(to, "context", "threads", "index.json")).toBe("stale threads\n");
+      expect(read(to, "recipes", "team", "recipe.md")).toBe("committed\n");
+      expect(read(to, "context", "only-home.json")).toBe("home\n");
+    }),
+  );
+});
+
 it.layer(fakeSyncLayer)("state migration service", (it) => {
   it.effect("starts at once, reports progress, and never takes the manifest lock", () =>
     Effect.gen(function* () {

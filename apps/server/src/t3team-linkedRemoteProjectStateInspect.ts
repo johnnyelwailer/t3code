@@ -23,6 +23,7 @@ import {
   SourceControlRepositoryService,
 } from "./sourceControl/SourceControlRepositoryService.ts";
 import { INSPECT_TIMEOUT_MS, linkedCheckoutGit as git } from "./t3team-linkedCheckoutGit.ts";
+import { hasProjectStateEntries } from "./t3team-project-repository-utils.ts";
 
 export type RemoteProjectStateInspectResult = {
   /** Whether the default branch tree contains the active project state dir name. */
@@ -43,11 +44,16 @@ const STATE_DIR_CANDIDATES: ReadonlyArray<string> = [
   NEXI_PROJECT_STATE_DIR,
 ];
 
-const countTreeEntries = (stdout: string): number =>
+/** Committed project-state paths under `stateDirName`; machine-local bookkeeping that a repository
+ * committed by accident (its `references/` manifest, child worktrees) is not project state. */
+const projectStatePaths = (stdout: string, stateDirName: string): string[] =>
   stdout
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line.length > 0).length;
+    .map((line) =>
+      line.startsWith(`${stateDirName}/`) ? line.slice(stateDirName.length + 1) : line,
+    )
+    .filter((line) => line.length > 0 && hasProjectStateEntries([line]));
 
 const notFound: RemoteProjectStateInspectResult = {
   hasProjectStateDir: false,
@@ -126,10 +132,11 @@ export const inspectRemoteProjectStateOnDefaultBranch = Effect.fn(
           ["ls-tree", "-r", "--name-only", `${ref}:${stateDirName}`],
           INSPECT_TIMEOUT_MS,
         );
-        if (tree.exitCode === 0 && tree.stdout.trim().length > 0) {
+        const paths = tree.exitCode === 0 ? projectStatePaths(tree.stdout, stateDirName) : [];
+        if (paths.length > 0) {
           return {
             hasProjectStateDir: true,
-            entryCount: countTreeEntries(tree.stdout),
+            entryCount: paths.length,
             stateDirName,
             committedOnly: true,
             source: "remote",
