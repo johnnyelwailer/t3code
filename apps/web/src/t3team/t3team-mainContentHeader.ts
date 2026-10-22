@@ -3,7 +3,7 @@ import { cn } from "~/lib/utils";
 /**
  * While the right aside of a `ResizableRightSidebarLayout` is collapsed (desktop layout, `lg`+),
  * its floating `.workspace-titlebar-controls` toggle sits over the main column's header. Reserve
- * the toggle's footprint (`--right-sidebar-toggle-inset`, set on the layout root) so the header's right-edge content (e.g. the My Work / Backlog tab row)
+ * the toggle's footprint (`--right-sidebar-toggle-inset`, set on the layout root) so the header's right-edge content (e.g. the project actions menu)
  * is never covered. Expanded, the toggle sits over the aside's own topbar band instead, so no
  * reservation applies. The `wco:` copy outranks the base `wco:pr-(--workspace-native-controls-inset)`
  * (in WCO, `--workspace-controls-right` already includes the native controls inset).

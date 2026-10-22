@@ -30,7 +30,7 @@ export function ProjectDashboard({
   onManageRepositories: (projectId: string) => void;
   onProjectUpdated: (project: ProjectShellProject) => void;
 }) {
-  // One hook feeds the header control and the body below, so the URL (`?projectView=`,
+  // One hook feeds the view switch and the body below, so the URL (`?projectView=`,
   // `?myWorkLens=`), the segments and the rendered view cannot disagree.
   const {
     mode: dashboardMode,
@@ -43,11 +43,12 @@ export function ProjectDashboard({
   } = useProjectDashboardViewTab(project.id);
   // Every lens shares the scope column, so switching lenses never jumps the width. The digest
   // grows with its content (min-h-full) so the bottom padding survives a tall digest instead of
-  // being cut by a fixed h-full box; the list and board scroll inside a full-height box.
+  // being cut by a fixed h-full box; the list and board scroll inside a full-height box. The
+  // view switch leads the column, above the view content, like the all-projects view.
   const myWorkContentClassName =
     lens === "digest"
-      ? `mx-auto flex min-h-full w-full ${t3teamScopeContentWidthClass} flex-col p-4 pb-6 sm:p-6`
-      : `mx-auto flex h-full min-h-0 w-full ${t3teamScopeContentWidthClass} flex-col p-4 sm:p-6`;
+      ? `mx-auto flex min-h-full w-full ${t3teamScopeContentWidthClass} flex-col gap-8 p-4 pb-6 sm:p-6`
+      : `mx-auto flex h-full min-h-0 w-full ${t3teamScopeContentWidthClass} flex-col gap-8 p-4 sm:p-6`;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -77,12 +78,6 @@ export function ProjectDashboard({
             </MenuPopup>
           </Menu>
         </div>
-        <ProjectMyWorkViewSwitch
-          lens={lens}
-          onLensChange={selectLens}
-          backlog={{ kind: "select", active: backlogActive, onSelect: selectBacklog }}
-          planning={{ kind: "select", active: planningActive, onSelect: selectPlanning }}
-        />
       </header>
 
       <ProjectBindingRepairBanner project={project} onProjectUpdated={onProjectUpdated} />
@@ -95,6 +90,14 @@ export function ProjectDashboard({
         ) : (
           <ScrollArea className="h-full min-h-0 flex-1">
             <div className={myWorkContentClassName}>
+              <div>
+                <ProjectMyWorkViewSwitch
+                  lens={lens}
+                  onLensChange={selectLens}
+                  backlog={{ kind: "select", active: backlogActive, onSelect: selectBacklog }}
+                  planning={{ kind: "select", active: planningActive, onSelect: selectPlanning }}
+                />
+              </div>
               <ProjectDashboardMyWorkView
                 project={project}
                 fallbackTickets={fallbackTickets}

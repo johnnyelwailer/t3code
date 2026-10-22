@@ -3,7 +3,7 @@
  *
  * It follows the sidebar's project scope: scoped → that project's board, otherwise the
  * cross-project view. The Backlog is not here: it is a segment of the My work view switch (in the
- * project's dashboard header, and in the all-projects view where it asks which project).
+ * project's dashboard content column, and in the all-projects view where it asks which project).
  */
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { InboxIcon } from "lucide-react";

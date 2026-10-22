@@ -7,10 +7,11 @@ import { useProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboard
 import type { ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 
 /**
- * The dashboard header's one segmented control (Digest | List | Board | Backlog | Planning) over
- * the states it spans: the dashboard mode (`?projectView=`), the My Work lens (`?myWorkLens=`) and
- * the backlog's view mode (`?view=`). Each keeps its own persistence and URL contract; this only
- * decides which of them a click writes, so picking a lens from the Backlog also leaves the Backlog.
+ * The dashboard's one segmented control (Digest | List | Board | Backlog | Planning), leading the
+ * content column, over the states it spans: the dashboard mode (`?projectView=`), the My Work lens
+ * (`?myWorkLens=`) and the backlog's view mode (`?view=`). Each keeps its own persistence and URL
+ * contract; this only decides which of them a click writes, so picking a lens from the Backlog
+ * also leaves the Backlog.
  *
  * Planning is the Backlog in its planning-space view mode, not a route of its own: it is active
  * when the dashboard is on the Backlog AND that view mode is `planning-space`, and Backlog is then

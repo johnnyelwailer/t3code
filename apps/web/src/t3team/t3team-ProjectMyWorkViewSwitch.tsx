@@ -134,8 +134,9 @@ function BacklogSegment({
 
 /**
  * The My Work lens switch and, when `backlog` / `planning` are given, the two views of the Backlog
- * as one segmented control: Digest | List | Board | Backlog | Planning. Lives in the dashboard
- * header. Planning is the backlog's planning-space view.
+ * as one segmented control: Digest | List | Board | Backlog | Planning. Leads the content column
+ * of the project dashboard and the all-projects view, above the view content. Planning is the
+ * backlog's planning-space view.
  */
 export function ProjectMyWorkViewSwitch({
   lens,
