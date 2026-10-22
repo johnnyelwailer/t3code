@@ -12,6 +12,9 @@
  * a reduced-motion opt-out in t3team-index-myWorkLoading.css; under `prefers-reduced-motion` it is
  * a static, still-pleasant layout.
  */
+import type { CSSProperties } from "react";
+
+import { cn } from "~/lib/utils";
 import { MyWorkLoadingHeader, MyWorkLoadingLanes } from "~/t3team/t3team-MyWorkLoadingSkeletons";
 import { greetingForHour, MyWorkLoadingMark } from "~/t3team/t3team-MyWorkLoadingMark";
 import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
@@ -19,8 +22,18 @@ import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
 export function MyWorkLoadingAnimation({
   /** The line under the greeting; the gate and the digest say the same thing. */
   message = "Gathering your work…",
+  continuedMs = 0,
+  hidden = false,
 }: {
   message?: string;
+  /**
+   * How long this greeting has already been on screen in another mount (the startup gate before
+   * the hand-off to My Work). A continued greeting skips its entrance and picks its loops up where
+   * they were, so the hand-off is invisible.
+   */
+  continuedMs?: number;
+  /** Laid out but not shown: the reveal delay of t3team-myWorkFirstLoadReveal.ts. */
+  hidden?: boolean;
 }) {
   const greeting = greetingForHour(new Date().getHours());
   return (
@@ -28,7 +41,18 @@ export function MyWorkLoadingAnimation({
       role="status"
       aria-live="polite"
       aria-busy="true"
-      className="@container/digest relative space-y-8"
+      aria-hidden={hidden || undefined}
+      data-first-load-greeting={hidden ? "pending" : "shown"}
+      className={cn(
+        "@container/digest relative space-y-8",
+        hidden && "invisible",
+        continuedMs > 0 && "t3team-mywork-loading-continued",
+      )}
+      style={
+        continuedMs > 0
+          ? ({ "--t3team-loading-phase": `-${Math.round(continuedMs)}ms` } as CSSProperties)
+          : undefined
+      }
     >
       <span className="sr-only">Loading My Work</span>
       {/*

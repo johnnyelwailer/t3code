@@ -93,11 +93,13 @@
 .t3team-mywork-loading-orbit {
   transform-origin: 48px 48px;
   animation: t3team-mywork-loading-orbit 9s linear infinite;
+  animation-delay: var(--t3team-loading-phase, 0ms);
 }
 
 /* The three cards share one 3.6s cycle: drift in, hold as a list, fade, repeat. */
 .t3team-mywork-loading-card {
   animation: t3team-mywork-loading-settle 3.6s cubic-bezier(0.22, 1, 0.36, 1) infinite both;
+  animation-delay: calc(var(--t3team-loading-phase, 0ms) + var(--t3team-card-delay, 0ms));
 }
 .t3team-mywork-loading-card-1 {
   --t3team-card-dx: -28px;
@@ -106,15 +108,56 @@
 .t3team-mywork-loading-card-2 {
   --t3team-card-dx: 30px;
   --t3team-card-dy: -4px;
-  animation-delay: 160ms;
+  --t3team-card-delay: 160ms;
 }
 .t3team-mywork-loading-card-3 {
   --t3team-card-dx: -24px;
   --t3team-card-dy: 14px;
-  animation-delay: 320ms;
+  --t3team-card-delay: 320ms;
+}
+
+/*
+ * A greeting continued from another mount (startup gate -> My Work) is already on screen: no
+ * entrance, and the loops resume at --t3team-loading-phase instead of restarting.
+ */
+.t3team-mywork-loading-continued .t3team-mywork-loading-rise,
+.t3team-mywork-loading-continued .t3team-mywork-loading-mark {
+  animation: none;
+}
+.t3team-mywork-loading-continued .t3team-mywork-loading-glow {
+  animation-delay: var(--t3team-loading-phase, 0ms);
+}
+
+/* The hand-off to content (t3team-MyWorkFirstLoadSwap.tsx): opacity only, in one box. */
+@keyframes t3team-mywork-first-load-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes t3team-mywork-first-load-in {
+  from {
+    opacity: 0;
+  }
+}
+.t3team-mywork-first-load-greeting-out {
+  animation: t3team-mywork-first-load-out 220ms ease-out both;
+}
+.t3team-mywork-first-load-content-in {
+  animation: t3team-mywork-first-load-in 220ms ease-out both;
+}
+.t3team-mywork-first-load-content-quick-in {
+  animation: t3team-mywork-first-load-in 140ms ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .t3team-mywork-first-load-greeting-out {
+    animation: none;
+    opacity: 0;
+  }
+  .t3team-mywork-first-load-content-in,
+  .t3team-mywork-first-load-content-quick-in {
+    animation: none;
+  }
   .t3team-mywork-loading-orbit,
   .t3team-mywork-loading-card {
     animation: none;

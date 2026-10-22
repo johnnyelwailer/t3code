@@ -6,7 +6,7 @@
  * smaller scope that can come back legitimately empty, which is the cold start showing "Nothing
  * needs you". Here the remaining rule is the round's own freshness.
  */
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { useNowMinute } from "~/hooks/useNowMinute";
@@ -15,7 +15,7 @@ import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionE
 import { JiraSignInPanel } from "~/t3team/components/t3team-JiraSignInPanel";
 import { closeDigestPullRequest, openDigestTicket } from "~/t3team/t3team-digestPrAsideStore";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
-import { MyWorkLoadingAnimation } from "~/t3team/t3team-MyWorkLoadingAnimation";
+import { MyWorkFirstLoadSwap } from "~/t3team/t3team-MyWorkFirstLoadSwap";
 import { resolveMyWorkDigestRenderState } from "~/t3team/t3team-myWorkDigestRenderState";
 import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
 import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
@@ -46,59 +46,69 @@ export function AllProjectsMyWorkDigestLens({
     hasGraph: graph !== null,
     ticketCount: graph?.tickets.length ?? 0,
   });
-  // A failed fetch (backend still starting, timeout) is not terminal: the poller retries with
-  // backoff and this recovers on its own, so it renders as "retrying" — never a raw error.
-  if (renderState === "retrying") return <ProjectMyWorkDigestRetryState />;
-  if (renderState === "loading") return <MyWorkLoadingAnimation />;
-  if (renderState === "session-expired") {
-    return <JiraSessionExpiredPanel onSignedIn={digest.reload} />;
-  }
-  if (renderState === "error") {
-    return <ProjectMyWorkDigestErrorState error={digest.error} onRetry={digest.reload} centered />;
-  }
-  if (renderState === "sign-in") {
+  // The greeting is timed by the swap (no flash for a quick answer, a minimum dwell once shown,
+  // a cross-fade into the content); everything past "loading" is the body below.
+  const renderBody = (): ReactNode => {
+    // A failed fetch (backend still starting, timeout) is not terminal: the poller retries with
+    // backoff and this recovers on its own, so it renders as "retrying" — never a raw error.
+    if (renderState === "retrying") return <ProjectMyWorkDigestRetryState />;
+    if (renderState === "session-expired") {
+      return <JiraSessionExpiredPanel onSignedIn={digest.reload} />;
+    }
+    if (renderState === "error") {
+      return (
+        <ProjectMyWorkDigestErrorState error={digest.error} onRetry={digest.reload} centered />
+      );
+    }
+    if (renderState === "sign-in") {
+      return (
+        <JiraSignInPanel heading="Sign in to Jira to load your work." onSignedIn={digest.reload} />
+      );
+    }
+    if (renderState === "empty" || !graph || !plan) {
+      return (
+        <T3SurfacePanel
+          tone="dashed"
+          className="px-6 py-10 text-center text-sm text-muted-foreground"
+        >
+          Nothing needs you
+        </T3SurfacePanel>
+      );
+    }
     return (
-      <JiraSignInPanel heading="Sign in to Jira to load your work." onSignedIn={digest.reload} />
+      <ProjectMyWorkDigestView
+        plan={plan}
+        graph={graph}
+        nowMs={nowMs}
+        burndownVariant={flags.digestBurndownVariant}
+        refreshing={digest.refreshing}
+        emptyStateAllowed={digest.freshness === "fresh"}
+        onReload={digest.reload}
+        {...(digest.updatedAt !== undefined ? { updatedAtMs: digest.updatedAt } : {})}
+        onOpenTicket={
+          // Beta flag: rows open the ticket in-app, beside the digest (each ticket knows its
+          // project); the full page is one click from there.
+          flags.digestRowNavigation === "in-app"
+            ? (ticketId: string) => {
+                const ticket = graph.tickets.find((entry) => entry.id === ticketId);
+                if (!ticket) return;
+                openDigestTicket({
+                  projectId: ticket.projectId,
+                  ticketId,
+                  openFullPage: (shownTicketId) => {
+                    closeDigestPullRequest();
+                    onOpenTicket(ticket.projectId, shownTicketId);
+                  },
+                });
+              }
+            : undefined
+        }
+      />
     );
-  }
-  if (renderState === "empty" || !graph || !plan) {
-    return (
-      <T3SurfacePanel
-        tone="dashed"
-        className="px-6 py-10 text-center text-sm text-muted-foreground"
-      >
-        Nothing needs you
-      </T3SurfacePanel>
-    );
-  }
+  };
   return (
-    <ProjectMyWorkDigestView
-      plan={plan}
-      graph={graph}
-      nowMs={nowMs}
-      burndownVariant={flags.digestBurndownVariant}
-      refreshing={digest.refreshing}
-      emptyStateAllowed={digest.freshness === "fresh"}
-      onReload={digest.reload}
-      {...(digest.updatedAt !== undefined ? { updatedAtMs: digest.updatedAt } : {})}
-      onOpenTicket={
-        // Beta flag: rows open the ticket in-app, beside the digest (each ticket knows its
-        // project); the full page is one click from there.
-        flags.digestRowNavigation === "in-app"
-          ? (ticketId: string) => {
-              const ticket = graph.tickets.find((entry) => entry.id === ticketId);
-              if (!ticket) return;
-              openDigestTicket({
-                projectId: ticket.projectId,
-                ticketId,
-                openFullPage: (shownTicketId) => {
-                  closeDigestPullRequest();
-                  onOpenTicket(ticket.projectId, shownTicketId);
-                },
-              });
-            }
-          : undefined
-      }
-    />
+    <MyWorkFirstLoadSwap loading={renderState === "loading"}>
+      {renderState === "loading" ? null : renderBody()}
+    </MyWorkFirstLoadSwap>
   );
 }
