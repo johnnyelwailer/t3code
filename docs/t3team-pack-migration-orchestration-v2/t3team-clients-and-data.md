@@ -8,7 +8,7 @@ that ships a client, a web extension, scripts or automation calling the server.
 - Speak orchestration protocol 2 (`?orchestrationProtocol=2` on `/ws`; otherwise HTTP 426).
 - Every `/api/t3team/*` route needs an environment session, checked like upstream's raw routes
   (`authenticateRawRouteWithScope`): session cookie (same origin) or `Authorization: Bearer
-<token>`; GET/HEAD need `orchestration:read`, other methods `orchestration:operate`; refusals
+  <token>`; GET/HEAD need `orchestration:read`, other methods `orchestration:operate`; refusals
   are upstream's 401 `EnvironmentAuthInvalidError` / 403 `EnvironmentScopeRequiredError` bodies
   (`apps/server/src/t3team-routeAuth.ts`). Exempt: `/api/t3team/cloud-broker/*`, the Atlassian
   sign-in callbacks (`GET …/atlassian/oauth/begin/:state`, `POST …/oauth/complete`,

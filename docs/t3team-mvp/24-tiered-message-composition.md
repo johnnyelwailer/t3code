@@ -895,7 +895,7 @@ table records why the higher tiers will be allowed to do more.
 - **Modified upstream files (T2b composer, Phase D):**
   - `packages/contracts/src/settings.ts` — already in the whitelist for
     t3team-prefixed client settings; this addition (`composerModelSelection:
-ModelSelection`) is an upstream-style sibling to the existing
+    ModelSelection`) is an upstream-style sibling to the existing
     `textGenerationModelSelection`, following the same shape. One new whitelist
     entry with the rationale: "Add upstreamable `composerModelSelection` next to
     `textGenerationModelSelection` for the view-composer subagent; same shape,

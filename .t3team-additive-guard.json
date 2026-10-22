@@ -1,6 +1,9 @@
 {
   "allowedModifiedFiles": [
     "apps/server/src/cli/thread.ts",
+    "docs/t3team-mvp/12-profiles-and-skill-packs.md",
+    "docs/t3team-mvp/40-code-and-team-modes.md",
+    "packages/agent-runner/README.md",
     "apps/desktop/src/ipc/DesktopIpcHandlers.ts",
     "apps/desktop/src/ipc/channels.ts",
     "apps/desktop/src/preload.ts",

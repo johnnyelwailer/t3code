@@ -146,7 +146,7 @@ What's **injected** vs **imported** in that file (Epic 25 §Globals):
   thread — for a routine, the thread you watch it in; `undefined` only for a truly headless
   run with no chat surface). `askAgent` / `askUser` / `notifyUser` / `notifyAgent` are
   methods on a thread (`thread.*`, or the handle from `spawnThread()`). `askAgent(prompt,
-opts)` / `askUser(question, opts)` take `{ schema?, model?, attachments? }` —
+  opts)` / `askUser(question, opts)` take `{ schema?, model?, attachments? }` —
   `attachments` is how context is passed: typed references (`ExternalResourceRef`s for
   issues / PRs / pages — exactly what the search/read tools return — plus file/url kinds),
   which the context layer resolves to live snapshots, **never inlined into the prompt**.

@@ -128,6 +128,8 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
 
 - `apps/server/src/cli/thread.ts`
   - Upstream's new `t3 thread send --wait` reads `runId`, which the fork's mailbox delivery leaves absent (no run starts yet); `--wait` is skipped when there is no run to wait on.
+- `docs/t3team-mvp/12-profiles-and-skill-packs.md`, `docs/t3team-mvp/40-code-and-team-modes.md`, `packages/agent-runner/README.md`
+  - Fork-owned docs without the prefix; reformatted only, by upstream's newer `vp fmt` (CI `vp check`).
 
 ### Client-only thread icon (voice V1 item 8, PR #606)
 
