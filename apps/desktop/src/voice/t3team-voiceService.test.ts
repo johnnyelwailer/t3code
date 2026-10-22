@@ -39,6 +39,7 @@ function makeService(
       device: "vulkan: test",
       passMs: 5,
     })),
+    detectSpeech: vi.fn(async () => null),
     warm: vi.fn(async () => undefined),
     probeDevice: vi.fn(async () => options.device ?? { kind: "cpu" as const, label: "cpu" }),
     isReady: vi.fn(() => false),
@@ -78,7 +79,7 @@ const modelBytes = () => Buffer.alloc(1_100_000);
 describe("desktop voice service", () => {
   it("uses a model found on disk and never downloads", async () => {
     const { root, trackerDir } = sandbox();
-    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-largev3.bin"), modelBytes());
+    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-largev3turbo.bin"), modelBytes());
     const { service, download } = makeService(root);
 
     const prepared = await service.prepare({ config, allowDownload: true });
@@ -177,7 +178,7 @@ describe("desktop voice service", () => {
       await makeService(root, { runtime: false }).service.prepare({ config, allowDownload: true }),
     ).toMatchObject({ ok: false, code: "runtime-unavailable" });
 
-    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-largev3.bin"), modelBytes());
+    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-largev3turbo.bin"), modelBytes());
     const { service, host } = makeService(root);
     const result = await service.transcribe({ config, pcm16Base64: "AAAA" });
 
@@ -193,13 +194,25 @@ describe("desktop voice service", () => {
     await missing.service.warm(config);
     expect(missing.host.warm).not.toHaveBeenCalled();
 
-    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-largev3.bin"), modelBytes());
+    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-largev3turbo.bin"), modelBytes());
     const { service, host } = makeService(root);
     await service.warm(config);
     expect(host.warm).toHaveBeenCalledWith(
-      NodePath.join(trackerDir, "ggml-largev3.bin"),
+      NodePath.join(trackerDir, "ggml-largev3turbo.bin"),
       expect.any(Function),
     );
+  });
+
+  it("starts loading on the composer's probe when the model is on disk, so a press finds it warm", async () => {
+    const { root, trackerDir } = sandbox();
+    const missing = makeService(root);
+    await missing.service.prepare({ config, allowDownload: false });
+    expect(missing.host.warm).not.toHaveBeenCalled();
+
+    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-largev3turbo.bin"), modelBytes());
+    const { service, host } = makeService(root);
+    await service.prepare({ config, allowDownload: false });
+    await vi.waitFor(() => expect(host.warm).toHaveBeenCalledTimes(1));
   });
 });
 
@@ -246,17 +259,44 @@ describe("desktop voice service with no configured model", () => {
     expect(downloadedModels(download)).toEqual(["base", "large-v3-turbo"]);
   });
 
-  it("uses a large model already on disk without probing or downloading", async () => {
+  it("never picks the full large-v3 off a discrete GPU, even when it is the only model on disk", async () => {
     const { root, trackerDir } = sandbox();
-    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-large-v3.bin"), modelBytes());
-    const { service, download, host } = makeService(root, { device: integrated });
+    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-largev3.bin"), modelBytes());
+    const { service, download } = makeService(root, { device: integrated });
 
+    const prepared = await service.prepare({ config: unset, allowDownload: true });
+    expect(prepared.ok && prepared.modelPath).not.toContain("largev3");
+    expect(downloadedModels(download)).toEqual(["base"]);
+  });
+
+  it("prefers large-v3-turbo on disk, then the full large-v3 on a discrete GPU, over small", async () => {
+    const { root, trackerDir } = sandbox();
+    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-largev3.bin"), modelBytes());
+    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-base.bin"), modelBytes());
+    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-small.bin"), modelBytes());
+    const { service, download } = makeService(root, { device: discrete });
     expect(await service.prepare({ config: unset, allowDownload: true })).toMatchObject({
       ok: true,
-      modelSource: "activity-tracker",
+      modelPath: NodePath.join(trackerDir, "ggml-largev3.bin"),
+    });
+    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-largev3turbo.bin"), modelBytes());
+    expect(await service.prepare({ config: unset, allowDownload: true })).toMatchObject({
+      ok: true,
+      modelPath: NodePath.join(trackerDir, "ggml-largev3turbo.bin"),
     });
     expect(download).not.toHaveBeenCalled();
-    expect(host.probeDevice).not.toHaveBeenCalled();
+  });
+
+  it("takes small on disk over base when the device is not a discrete GPU", async () => {
+    const { root, trackerDir } = sandbox();
+    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-largev3.bin"), modelBytes());
+    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-base.bin"), modelBytes());
+    NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-small.bin"), modelBytes());
+    const { service } = makeService(root, { device: integrated });
+    expect(await service.prepare({ config: unset, allowDownload: true })).toMatchObject({
+      ok: true,
+      modelPath: NodePath.join(trackerDir, "ggml-small.bin"),
+    });
   });
 
   it("reuses a base model on disk on an iGPU instead of downloading", async () => {
@@ -271,14 +311,14 @@ describe("desktop voice service with no configured model", () => {
     expect(download).not.toHaveBeenCalled();
   });
 
-  it("reports the large model as missing on a discrete GPU when downloads are not allowed", async () => {
+  it("keeps base on a discrete GPU when no large model is on disk and downloads are off", async () => {
     const { root, trackerDir } = sandbox();
     NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-base.bin"), modelBytes());
     const { service, download } = makeService(root, { device: discrete });
 
     expect(await service.prepare({ config: unset, allowDownload: false })).toMatchObject({
-      ok: false,
-      code: "model-unavailable",
+      ok: true,
+      modelPath: NodePath.join(trackerDir, "ggml-base.bin"),
     });
     expect(download).not.toHaveBeenCalled();
   });
@@ -294,7 +334,7 @@ describe("desktop voice service with no configured model", () => {
   });
 });
 
-describe("desktop voice service transcript gate", () => {
+describe("desktop voice service transcription languages", () => {
   function withModel() {
     const { root } = sandbox();
     const modelPath = NodePath.join(root, "m.bin");
@@ -311,31 +351,20 @@ describe("desktop voice service transcript gate", () => {
     ...over,
   });
 
-  it("asks for a VAD-gated pass and never sends what VAD heard as silence", async () => {
+  it("keeps a short pass in an allowed language: no drop for length or a lone word", async () => {
     const { service, host, gated } = withModel();
-    vi.mocked(host.transcribe).mockResolvedValueOnce(pass({ text: "E aí E aí", speechMs: 0 }));
-    const result = await service.transcribe({ config: gated, pcm16Base64: pcm });
-    expect(result).toMatchObject({ ok: true, text: "" });
-    expect(result.ok && result.metadata).toBeFalsy();
-    expect(vi.mocked(host.transcribe).mock.calls[0]?.[0]).toMatchObject({ vad: true });
-  });
-
-  it("drops a short pass that noise steered into a language outside the list", async () => {
-    const { service, host, gated } = withModel();
-    vi.mocked(host.transcribe).mockResolvedValueOnce(
-      pass({ text: "E aí", language: "pt", speechMs: 800 }),
-    );
+    vi.mocked(host.transcribe).mockResolvedValueOnce(pass({ text: "Ja", language: "de" }));
     expect(await service.transcribe({ config: gated, pcm16Base64: pcm })).toMatchObject({
       ok: true,
-      text: "",
+      text: "Ja",
     });
     expect(host.transcribe).toHaveBeenCalledTimes(1);
   });
 
-  it("re-runs long speech detected outside the list in the first allowed language", async () => {
+  it("re-runs a pass detected outside the list in each allowed language and keeps the fullest", async () => {
     const { service, host, gated } = withModel();
     vi.mocked(host.transcribe)
-      .mockResolvedValueOnce(pass({ text: "?", language: "nl", speechMs: 2_500, passMs: 40 }))
+      .mockResolvedValueOnce(pass({ text: "E aí", language: "pt", passMs: 40 }))
       .mockResolvedValueOnce(
         pass({
           text: "Öffne das Board",
@@ -347,18 +376,19 @@ describe("desktop voice service transcript gate", () => {
             { text: "Board", t0: 620, t1: 900 },
           ],
         }),
-      );
+      )
+      .mockResolvedValueOnce(pass({ text: "Ofne", language: "en", passMs: 20 }));
     const result = await service.transcribe({ config: gated, pcm16Base64: pcm });
-    expect(vi.mocked(host.transcribe).mock.calls[1]?.[0]).toMatchObject({ language: "de" });
+    const languages = vi.mocked(host.transcribe).mock.calls.map((call) => call[0].language);
+    expect(languages).toEqual(["auto", "de", "en"]);
     expect(result).toMatchObject({
       ok: true,
       text: "Öffne das Board",
       language: "de",
-      passMs: 70,
+      passMs: 90,
       metadata: {
         language: "de",
         audioMs: 3_000,
-        speechMs: 2_500,
         words: [
           { w: "Öffne", t0: 0, t1: 380 },
           { w: "das", t0: 400, t1: 600 },

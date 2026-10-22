@@ -17,6 +17,8 @@ import { downloadWhisperModel } from "./t3team-whisperModelDownload.ts";
 import {
   defaultWhisperModelFor,
   LARGE_TIER_WHISPER_MODEL,
+  FULL_LARGE_WHISPER_MODEL,
+  MID_TIER_WHISPER_MODEL,
   SMALL_TIER_WHISPER_MODEL,
 } from "./t3team-whisperDefaultModel.ts";
 import {
@@ -38,10 +40,7 @@ export type DesktopVoiceTranscription =
 export type { VoiceWarmupStage } from "./t3team-voiceWarmup.ts";
 
 export type DesktopVoiceService = {
-  /**
-   * Best-effort model load plus one throwaway pass; a failure surfaces on the first transcription
-   * instead. Concurrent calls share one warm-up.
-   */
+  /** Best-effort model load plus one throwaway pass; concurrent calls share one warm-up. */
   readonly warm: (config: DesktopVoiceConfig) => Promise<void>;
   /** The running warm-up's stage, or null when none runs. */
   readonly warmupStage: () => VoiceWarmupStage | null;
@@ -79,10 +78,7 @@ export function makeDesktopVoiceService(deps: {
   const download = deps.download ?? downloadWhisperModel;
   const downloadsInFlight = new Map<string, Promise<string>>();
 
-  /**
-   * Cancelling and restarting while a multi-GB download runs would start a second writer on the
-   * same `.part` file and corrupt the model, so a second request joins the running download.
-   */
+  /** A second request joins a running download: two writers on one `.part` file corrupt it. */
   const downloadOnce = (model: string): Promise<string> => {
     const running = downloadsInFlight.get(model);
     if (running !== undefined) return running;
@@ -98,8 +94,9 @@ export function makeDesktopVoiceService(deps: {
   const resolveNamedModel = async (
     model: string,
     allowDownload: boolean,
+    exact = false,
   ): Promise<ModelResolution | ReturnType<typeof failure>> => {
-    const found = locateWhisperModel({ model }, deps.environment);
+    const found = locateWhisperModel({ model }, deps.environment, { exact });
     if (found) return { ok: true, ...found };
     if (!isValidWhisperModelId(model)) {
       return failure("model-unavailable", `"${model}" is not a valid whisper model id.`);
@@ -118,22 +115,41 @@ export function makeDesktopVoiceService(deps: {
     }
   };
 
+  let lastChoice = "";
+  const chose = (resolution: ModelResolution, reason: string): ModelResolution => {
+    const choice = `${resolution.modelPath} (${resolution.modelSource}): ${reason}`;
+    if (choice !== lastChoice) log(`whisper model for dictation: ${choice}`);
+    lastChoice = choice;
+    return resolution;
+  };
+
   /**
-   * No model configured: a large model already on disk wins; otherwise the GPU decides the tier.
-   * Reading the GPU needs a loaded model, so `base` (small, and the right answer for most
-   * machines without a discrete GPU) is fetched first and doubles as the probe model.
+   * No model configured: `large-v3-turbo` on disk first. Otherwise `base` (fetched if missing)
+   * probes the device: a discrete GPU gets the full `large-v3` already on disk (the tracker's; with
+   * 2 threads its passes stay under realtime there) or a downloaded turbo; others get `small` on
+   * disk, else `base`. Every choice is logged with its reason.
    */
   const resolveAutomaticModel = async (
     allowDownload: boolean,
   ): Promise<ModelResolution | ReturnType<typeof failure>> => {
-    const large = locateWhisperModel({ model: LARGE_TIER_WHISPER_MODEL }, deps.environment);
-    if (large) return { ok: true, ...large };
-    const small = await resolveNamedModel(SMALL_TIER_WHISPER_MODEL, allowDownload);
+    const env = deps.environment;
+    const onDisk = (model: string) => locateWhisperModel({ model }, env, { exact: true });
+    const turbo = onDisk(LARGE_TIER_WHISPER_MODEL);
+    if (turbo) return chose({ ok: true, ...turbo }, "large-v3-turbo on disk");
+    const small = await resolveNamedModel(SMALL_TIER_WHISPER_MODEL, allowDownload, true);
     if (!small.ok) return small;
     const device = await deps.host.probeDevice(small.modelPath).catch(() => null);
-    return device && defaultWhisperModelFor(device.kind) === LARGE_TIER_WHISPER_MODEL
-      ? resolveNamedModel(LARGE_TIER_WHISPER_MODEL, allowDownload)
-      : small;
+    if (device && defaultWhisperModelFor(device.kind) === LARGE_TIER_WHISPER_MODEL) {
+      // Measured on an RTX 5070: large-v3 passes stay under realtime (short ones ~0.2 s), so a
+      // discrete GPU may stream it; an iGPU or the CPU never gets it.
+      const full = onDisk(FULL_LARGE_WHISPER_MODEL);
+      if (full) return chose({ ok: true, ...full }, "large-v3 on disk, discrete GPU");
+      const large = await resolveNamedModel(LARGE_TIER_WHISPER_MODEL, allowDownload, true);
+      if (large.ok) return chose(large, "large-v3-turbo for the discrete GPU");
+    }
+    const mid = onDisk(MID_TIER_WHISPER_MODEL);
+    if (mid) return chose({ ok: true, ...mid }, "small on disk (no discrete GPU for large)");
+    return chose(small, "base (no faster good model on disk)");
   };
 
   const resolveModel = async (
@@ -173,10 +189,9 @@ export function makeDesktopVoiceService(deps: {
     isReady: () => deps.host.isReady(),
     prepare: async ({ config, allowDownload }) => {
       const resolved = await resolveModel(config, allowDownload);
-      if (resolved.ok) log(`whisper model: ${resolved.modelPath} (${resolved.modelSource})`);
-      // `allowDownload` is the recorder starting (the hotkey or the mic button), not a status
-      // probe: start warming now, in the background, while the microphone opens.
-      if (resolved.ok && allowDownload) void warm(config);
+      // Warm as soon as a model resolves, even on the composer's mount probe (which never
+      // downloads), so the load is done before the first press, as the tracker loads at start.
+      if (resolved.ok) void warm(config);
       return resolved;
     },
     transcribe: async ({ config, pcm16Base64 }) => {
