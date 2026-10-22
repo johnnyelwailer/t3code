@@ -633,7 +633,8 @@ const threadSendCommand = Command.make("send", {
             { threadId, message, mode: "queue" },
             OrchestratorMcpThreadSendResult,
           );
-          if (flags.wait) {
+          // A "mailbox" delivery starts no run yet, so there is nothing to wait on.
+          if (flags.wait && sent.runId !== undefined) {
             return yield* finishRun(tools, { threadId, runId: sent.runId, json: flags.json });
           }
           yield* flags.json

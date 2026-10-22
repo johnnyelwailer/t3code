@@ -1,5 +1,6 @@
 {
   "allowedModifiedFiles": [
+    "apps/server/src/cli/thread.ts",
     "apps/desktop/src/ipc/DesktopIpcHandlers.ts",
     "apps/desktop/src/ipc/channels.ts",
     "apps/desktop/src/preload.ts",

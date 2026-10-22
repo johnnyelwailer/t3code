@@ -124,6 +124,11 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
 
 ## Allowed Modified Upstream Files
 
+### Upstream sync 2026-10-22
+
+- `apps/server/src/cli/thread.ts`
+  - Upstream's new `t3 thread send --wait` reads `runId`, which the fork's mailbox delivery leaves absent (no run starts yet); `--wait` is skipped when there is no run to wait on.
+
 ### Client-only thread icon (voice V1 item 8, PR #606)
 
 - `apps/web/src/uiStateStore.ts`
