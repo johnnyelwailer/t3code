@@ -39,6 +39,12 @@ export const FEATURE_FLAG_DEFINITIONS = {
     description:
       "A run that failed on a transient gateway error (timeout, queue full) keeps retrying on a durable backoff, with a live composer banner and an auto-resume toggle. Off: the run stays failed after the retry budget, as before.",
   },
+  GHE_REPOSITORY_CATALOG: {
+    defaultEnabled: true,
+    requiresRestart: false,
+    description:
+      "The repository picker lists every repository the account can reach on a GitHub Enterprise host, like github.com. Off: GHE hosts only search names matching the project title.",
+  },
 } as const;
 
 export type FeatureFlagKey = keyof typeof FEATURE_FLAG_DEFINITIONS;

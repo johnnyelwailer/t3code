@@ -100,6 +100,11 @@ describe("feature flag layering", () => {
         requiresRestart: false,
         defaultEnabled: true,
       }),
+      expect.objectContaining({
+        key: "GHE_REPOSITORY_CATALOG",
+        requiresRestart: false,
+        defaultEnabled: true,
+      }),
     ]);
   });
 });
