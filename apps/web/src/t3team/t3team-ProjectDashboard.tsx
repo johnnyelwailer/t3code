@@ -12,7 +12,6 @@ import { ProjectBindingRepairBanner } from "~/t3team/t3team-ProjectBindingRepair
 import { ProjectDashboardBacklogView } from "~/t3team/t3team-ProjectDashboardBacklogView";
 import { ProjectDashboardMyWorkView } from "~/t3team/t3team-ProjectDashboardMyWorkView";
 import { ProjectMyWorkViewSwitch } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
-import { t3teamScopeContentWidthClass } from "~/t3team/t3team-scopeContentWidth";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
 export function ProjectDashboard({
@@ -47,8 +46,8 @@ export function ProjectDashboard({
   // view switch leads the column, above the view content, like the all-projects view.
   const myWorkContentClassName =
     lens === "digest"
-      ? `mx-auto flex min-h-full w-full ${t3teamScopeContentWidthClass} flex-col gap-8 p-4 pb-6 sm:p-6`
-      : `mx-auto flex h-full min-h-0 w-full ${t3teamScopeContentWidthClass} flex-col gap-8 p-4 sm:p-6`;
+      ? "mx-auto flex min-h-full w-full flex-col gap-8 p-4 pb-6 sm:p-6"
+      : "mx-auto flex h-full min-h-0 w-full flex-col gap-8 p-4 sm:p-6";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
