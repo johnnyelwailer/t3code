@@ -1,14 +1,17 @@
-import type { DesktopVoiceStreamEvent, DesktopVoiceStreamStopResult } from "@t3tools/contracts";
+import type {
+  DesktopVoiceStreamEvent,
+  DesktopVoiceStreamStopResult,
+  VoiceTranscriptMetadata,
+} from "@t3tools/contracts";
 
 import { createActivityGate, SPEECH_FLOOR_RMS } from "./t3team-voiceActivityGate.ts";
 import { createLanguageLock } from "./t3team-voiceLanguageLock.ts";
+import { createPartialPacing } from "./t3team-voicePartialPacing.ts";
 import { createPassChain } from "./t3team-voicePassChain.ts";
 import { createStreamFinals } from "./t3team-voiceStreamFinals.ts";
 import { createPcmBuffer } from "./t3team-voicePcmBuffer.ts";
 import { msToSamples, pcm16Rms, pcm16ToBase64, samplesToMs } from "./t3team-voicePcm.ts";
 
-/** Partials come at most this often; a slow transcription stretches the gap (see `nextPartialGapMs`). */
-const PARTIAL_INTERVAL_MS = 2_000;
 /** A partial re-transcribes the utterance so far, capped to its most recent stretch. */
 const PARTIAL_WINDOW_MS = 15_000;
 const PRE_ROLL_MS = 300;
@@ -16,8 +19,6 @@ const PRE_ROLL_MS = 300;
 const TRAILING_PAD_MS = 400;
 /** No partial starts once the speaker has been quiet this long: the utterance is about to commit and its final must not queue behind it. */
 const PARTIAL_PAUSE_MS = 400;
-/** A partial slower than this ends partials for the session: stale text is worthless and a busy worker delays the final pass. */
-const PARTIAL_BUDGET_MS = 8_000;
 
 export type VoiceStreamTranscription =
   | {
@@ -25,6 +26,9 @@ export type VoiceStreamTranscription =
       readonly text: string;
       readonly language?: string;
       readonly elapsedMs: number;
+      /** The worker's own time for the pass; `elapsedMs` also counts queueing and model loading. */
+      readonly passMs?: number;
+      readonly metadata?: VoiceTranscriptMetadata;
     }
   | { readonly ok: false; readonly message: string };
 
@@ -51,7 +55,16 @@ export function createVoiceStreamSession(deps: {
   readonly transcribe: VoiceStreamTranscribe;
   readonly emit: VoiceStreamEmit;
   readonly log: (message: string) => void;
+  /**
+   * False while the model is still loading or warming up. Partials wait for it (nothing is lost:
+   * the next partial re-transcribes the whole utterance so far) instead of queueing behind the load.
+   */
+  readonly isWorkerReady?: () => boolean;
 }) {
+  const pacing = createPartialPacing({
+    log: deps.log,
+    isWorkerReady: deps.isWorkerReady ?? (() => true),
+  });
   const gate = createActivityGate({ silenceMs: deps.silenceMs });
   const language = createLanguageLock(deps.configuredLanguage);
   const audio = createPcmBuffer();
@@ -67,13 +80,9 @@ export function createVoiceStreamSession(deps: {
   let utteranceStart: number | null = null;
   let utteranceNo = 0;
   let lastPartialAtMs = Number.NEGATIVE_INFINITY;
-  let lastPartialElapsedMs = 0;
   let stopped = false;
-  let partialsEnabled = true;
   let partialCount = 0;
   let chunkCount = 0;
-
-  const nextPartialGapMs = () => Math.max(PARTIAL_INTERVAL_MS, lastPartialElapsedMs);
 
   function runPartial() {
     const end = audio.end;
@@ -90,17 +99,12 @@ export function createVoiceStreamSession(deps: {
       .then((result) => {
         if (stopped) return;
         if (!result.ok) return deps.log(`stream partial failed: ${result.message}`);
-        lastPartialElapsedMs = result.elapsedMs;
-        if (result.elapsedMs > PARTIAL_BUDGET_MS) {
-          partialsEnabled = false;
-          deps.log(
-            `stream partials off: a pass took ${result.elapsedMs} ms (budget ${PARTIAL_BUDGET_MS} ms)`,
-          );
-        }
+        const passMs = result.passMs ?? result.elapsedMs;
+        pacing.record(passMs);
         partialCount += 1;
-        if (partialCount === 1) {
+        if (partialCount === 1 || partialCount % 10 === 0) {
           deps.log(
-            `stream first partial: ${result.elapsedMs} ms to transcribe, ${Math.round(samplesToMs(end))} ms of audio`,
+            `stream partial ${partialCount}: pass ${passMs} ms, ${result.elapsedMs} ms end to end, window ${Math.round(windowMs)} ms at ${Math.round(samplesToMs(end))} ms of audio`,
           );
         }
         if (result.text.trim() === "") return;
@@ -116,7 +120,7 @@ export function createVoiceStreamSession(deps: {
     const start = utteranceStart;
     utteranceStart = null;
     utteranceNo += 1;
-    lastPartialElapsedMs = 0;
+    pacing.resetGap();
     if (start === null) return;
     const speechEnd = audio.end - msToSamples(Math.max(0, silentMs - TRAILING_PAD_MS));
     deps.log(
@@ -155,11 +159,10 @@ export function createVoiceStreamSession(deps: {
         );
         deps.emit({ type: "auto-commit", reason: frame.commit });
       }
-      const due = samplesToMs(audio.end) - lastPartialAtMs >= nextPartialGapMs();
+      const due = samplesToMs(audio.end) - lastPartialAtMs >= pacing.nextGapMs();
       const paused = frame.silentMs >= PARTIAL_PAUSE_MS;
-      if (partialsEnabled && utteranceStart !== null && !passes.busy && due && !paused) {
-        runPartial();
-      }
+      const wanted = pacing.enabled && utteranceStart !== null && !passes.busy && due && !paused;
+      if (wanted && pacing.workerReady(samplesToMs(audio.end))) runPartial();
     },
     /**
      * Ends the session without losing speech: what was said after the last committed utterance is

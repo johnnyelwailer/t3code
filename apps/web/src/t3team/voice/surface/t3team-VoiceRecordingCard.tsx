@@ -10,6 +10,7 @@ import { VoiceTranscript } from "./t3team-VoiceTranscript";
 import { VOICE_CLASS } from "./t3team-voiceClasses";
 import { useVoiceCanvas } from "./t3team-useVoiceCanvas";
 import { useVoiceSessionNote } from "./t3team-useVoiceSessionNote";
+import { VOICE_WARMING_LABEL } from "./t3team-voiceSessionNote";
 import { useVoiceUiStore } from "./t3team-voiceUiStore";
 import { useVoiceView } from "./t3team-voiceView";
 import "~/t3team/voice/surface/t3team-voice.css";
@@ -58,6 +59,8 @@ export function VoiceRecordingCard(props: {
                 {note.kind === "heard" ? "Heard, still listening" : "Listening"}
                 {note.kind === "writing" ? (
                   <span className="font-normal text-muted-foreground">· {writingLabel}</span>
+                ) : note.kind === "warming" ? (
+                  <span className="font-normal text-muted-foreground">· {VOICE_WARMING_LABEL}</span>
                 ) : null}
               </>
             )}

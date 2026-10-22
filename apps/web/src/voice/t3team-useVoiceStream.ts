@@ -1,4 +1,5 @@
 import { sanitizeTranscript } from "@t3tools/client-runtime/voice-input";
+import type { DesktopVoiceWarmupStage, VoiceTranscriptMetadata } from "@t3tools/contracts";
 import { useEffect, useRef, useState, type RefObject } from "react";
 
 export type VoiceStreamHeard = {
@@ -18,6 +19,13 @@ export type VoiceStreamView = {
   readonly writingSinceMs: number | null;
   /** The latest utterance that came back with words in it. */
   readonly heard: VoiceStreamHeard | null;
+  /** The speech model is loading or warming up; speech said meanwhile is kept and written down once it is ready. */
+  readonly warmup: VoiceStreamWarmup | null;
+};
+
+export type VoiceStreamWarmup = {
+  readonly stage: Exclude<DesktopVoiceWarmupStage, "ready">;
+  readonly percent: number;
 };
 
 const IDLE_VIEW: VoiceStreamView = {
@@ -26,6 +34,7 @@ const IDLE_VIEW: VoiceStreamView = {
   writing: 0,
   writingSinceMs: null,
   heard: null,
+  warmup: null,
 };
 
 function writingDone(view: VoiceStreamView): Pick<VoiceStreamView, "writing" | "writingSinceMs"> {
@@ -38,8 +47,8 @@ type VoiceStreamHandlers = {
   /** The speaker paused for good (said nothing, or went quiet after the last utterance): end the recording. */
   readonly onSessionEnd: () => void;
   readonly onLanguage: (language: string) => void;
-  /** One utterance came back written down, with words in it. */
-  readonly onUtterance: (text: string) => void;
+  /** One utterance came back written down, with words in it, and whisper's metadata for it. */
+  readonly onUtterance: (text: string, metadata?: VoiceTranscriptMetadata) => void;
   readonly onUtteranceFailed: (message: string) => void;
 };
 
@@ -87,11 +96,23 @@ export function useVoiceStream(
             ...writingDone(current),
             heard: text === "" ? current.heard : { text, atMs: Date.now() },
           }));
-          return text === "" ? undefined : handlers.onUtterance?.(text);
+          return text === "" ? undefined : handlers.onUtterance?.(text, event.metadata);
         }
         case "utterance-failed":
           setView((current) => ({ ...current, ...writingDone(current) }));
           return handlers.onUtteranceFailed?.(event.message);
+        case "warmup": {
+          const { stage, percent } = event;
+          return setView((current) =>
+            stage === "ready"
+              ? current.warmup === null
+                ? current
+                : { ...current, warmup: null }
+              : current.warmup?.stage === stage
+                ? current
+                : { ...current, warmup: { stage, percent } },
+          );
+        }
       }
     });
     return () => {

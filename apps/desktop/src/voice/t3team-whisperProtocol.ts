@@ -1,3 +1,11 @@
+/** One word as whisper timed it. `p` is its probability, when the runtime reports one. */
+export type WhisperWord = {
+  readonly text: string;
+  readonly t0: number;
+  readonly t1: number;
+  readonly p?: number;
+};
+
 export type WhisperLibVariant = "default" | "vulkan";
 
 export type WhisperAcceleration = "gpu" | "cpu";
@@ -8,11 +16,15 @@ export type WhisperWorkerCall =
       readonly type: "load";
       readonly modelPath: string;
       readonly variant: WhisperLibVariant;
+      /** Silero VAD model (ggml); without one every pass goes straight to whisper. */
+      readonly vadModelPath?: string;
     }
   | {
       readonly type: "transcribe";
       readonly pcm16Base64: string;
       readonly language: string;
+      /** Run VAD first and skip whisper when it hears no speech (warm-up passes do not). */
+      readonly vad?: boolean;
     };
 
 export type WhisperWorkerRequest = WhisperWorkerCall & { readonly id: number };
@@ -24,12 +36,18 @@ export type WhisperWorkerResponse =
       readonly acceleration: WhisperAcceleration;
       /** ggml's `ggml_vulkan:` init lines, which name the devices this worker could see. */
       readonly vulkanLog: readonly string[];
+      /** Whether the VAD model loaded; absent when none was asked for. */
+      readonly vad?: boolean;
     }
   | {
       readonly id: number;
       readonly ok: true;
       readonly text: string;
       readonly language?: string;
+      /** Speech VAD found in the audio, when it ran; 0 means whisper was skipped. */
+      readonly speechMs?: number;
+      /** Word timings in ms from the start of the pass's audio. */
+      readonly words?: readonly WhisperWord[];
     }
   | { readonly id: number; readonly ok: false; readonly message: string };
 

@@ -86,3 +86,20 @@ describe("voiceSessionNoteExpiresAt", () => {
     expect(voiceSessionNoteExpiresAt({ kind: "listening" }, quiet, NOW)).toBeNull();
   });
 });
+
+describe("voiceSessionNote warm-up", () => {
+  it("says warming with its progress while the model loads and the microphone already records", () => {
+    const live = { ...quiet, warmup: { stage: "loading" as const, percent: 15 } };
+    expect(voiceSessionNote({ state: "recording", endedAtMs: null, live, now: NOW })).toEqual({
+      kind: "warming",
+      percent: 15,
+    });
+  });
+
+  it("gives way to writing once the recording ended", () => {
+    const live = { ...quiet, warmup: { stage: "loading" as const, percent: 15 } };
+    expect(
+      voiceSessionNote({ state: "transcribing", endedAtMs: NOW - 1_000, live, now: NOW }),
+    ).toEqual({ kind: "writing", sinceMs: NOW - 1_000 });
+  });
+});

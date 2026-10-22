@@ -37,9 +37,11 @@ function makeService(
       text: "hello",
       acceleration: "gpu" as const,
       device: "vulkan: test",
+      passMs: 5,
     })),
     warm: vi.fn(async () => undefined),
     probeDevice: vi.fn(async () => options.device ?? { kind: "cpu" as const, label: "cpu" }),
+    isReady: vi.fn(() => false),
     dispose: vi.fn(),
   };
   const download = vi.fn<typeof downloadWhisperModel>(
@@ -64,7 +66,13 @@ function makeService(
   };
 }
 
-const config = { model: "large-v3-turbo", modelPath: "", language: "auto", silenceMs: 1500 };
+const config = {
+  model: "large-v3-turbo",
+  modelPath: "",
+  language: "auto",
+  languages: "de,en",
+  silenceMs: 1500,
+};
 const modelBytes = () => Buffer.alloc(1_100_000);
 
 describe("desktop voice service", () => {
@@ -188,7 +196,10 @@ describe("desktop voice service", () => {
     NodeFS.writeFileSync(NodePath.join(trackerDir, "ggml-largev3.bin"), modelBytes());
     const { service, host } = makeService(root);
     await service.warm(config);
-    expect(host.warm).toHaveBeenCalledWith(NodePath.join(trackerDir, "ggml-largev3.bin"));
+    expect(host.warm).toHaveBeenCalledWith(
+      NodePath.join(trackerDir, "ggml-largev3.bin"),
+      expect.any(Function),
+    );
   });
 });
 
@@ -280,5 +291,99 @@ describe("desktop voice service with no configured model", () => {
 
     expect(downloadedModels(download)).toEqual(["large-v3-turbo"]);
     expect(host.probeDevice).not.toHaveBeenCalled();
+  });
+});
+
+describe("desktop voice service transcript gate", () => {
+  function withModel() {
+    const { root } = sandbox();
+    const modelPath = NodePath.join(root, "m.bin");
+    NodeFS.writeFileSync(modelPath, modelBytes());
+    const made = makeService(root);
+    return { ...made, gated: { ...config, modelPath } };
+  }
+  const pcm = Buffer.alloc(16_000 * 2 * 3).toString("base64");
+  const pass = (over: Partial<Awaited<ReturnType<WhisperHost["transcribe"]>>>) => ({
+    text: "hello",
+    acceleration: "gpu" as const,
+    device: "vulkan: test",
+    passMs: 5,
+    ...over,
+  });
+
+  it("asks for a VAD-gated pass and never sends what VAD heard as silence", async () => {
+    const { service, host, gated } = withModel();
+    vi.mocked(host.transcribe).mockResolvedValueOnce(pass({ text: "E aí E aí", speechMs: 0 }));
+    const result = await service.transcribe({ config: gated, pcm16Base64: pcm });
+    expect(result).toMatchObject({ ok: true, text: "" });
+    expect(result.ok && result.metadata).toBeFalsy();
+    expect(vi.mocked(host.transcribe).mock.calls[0]?.[0]).toMatchObject({ vad: true });
+  });
+
+  it("drops a short pass that noise steered into a language outside the list", async () => {
+    const { service, host, gated } = withModel();
+    vi.mocked(host.transcribe).mockResolvedValueOnce(
+      pass({ text: "E aí", language: "pt", speechMs: 800 }),
+    );
+    expect(await service.transcribe({ config: gated, pcm16Base64: pcm })).toMatchObject({
+      ok: true,
+      text: "",
+    });
+    expect(host.transcribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-runs long speech detected outside the list in the first allowed language", async () => {
+    const { service, host, gated } = withModel();
+    vi.mocked(host.transcribe)
+      .mockResolvedValueOnce(pass({ text: "?", language: "nl", speechMs: 2_500, passMs: 40 }))
+      .mockResolvedValueOnce(
+        pass({
+          text: "Öffne das Board",
+          language: "de",
+          passMs: 30,
+          words: [
+            { text: "Öffne", t0: 0, t1: 380 },
+            { text: "das", t0: 400, t1: 600 },
+            { text: "Board", t0: 620, t1: 900 },
+          ],
+        }),
+      );
+    const result = await service.transcribe({ config: gated, pcm16Base64: pcm });
+    expect(vi.mocked(host.transcribe).mock.calls[1]?.[0]).toMatchObject({ language: "de" });
+    expect(result).toMatchObject({
+      ok: true,
+      text: "Öffne das Board",
+      language: "de",
+      passMs: 70,
+      metadata: {
+        language: "de",
+        audioMs: 3_000,
+        speechMs: 2_500,
+        words: [
+          { w: "Öffne", t0: 0, t1: 380 },
+          { w: "das", t0: 400, t1: 600 },
+          { w: "Board", t0: 620, t1: 900 },
+        ],
+      },
+    });
+  });
+
+  it("shares one warm-up between callers and reports its stage while it runs", async () => {
+    const { service, host, gated } = withModel();
+    let finish: () => void = () => undefined;
+    vi.mocked(host.warm).mockImplementation(
+      (_path, onLoaded) =>
+        new Promise<void>((resolve) => {
+          onLoaded?.();
+          finish = resolve;
+        }),
+    );
+    const first = service.warm(gated);
+    const second = service.warm(gated);
+    await vi.waitFor(() => expect(service.warmupStage()).toBe("preparing-gpu"));
+    finish();
+    await Promise.all([first, second]);
+    expect(host.warm).toHaveBeenCalledTimes(1);
+    expect(service.warmupStage()).toBeNull();
   });
 });

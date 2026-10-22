@@ -27,6 +27,8 @@ export interface VoiceUiLive {
   readonly writingSinceMs: number | null;
   /** The latest utterance that came back with words in it. */
   readonly heard: { readonly text: string; readonly atMs: number } | null;
+  /** The speech model is still loading or warming up; what is said meanwhile is kept. */
+  readonly warmup: { readonly stage: "loading" | "preparing-gpu"; readonly percent: number } | null;
 }
 
 export interface VoiceUiStore {
@@ -45,6 +47,7 @@ export const IDLE_VOICE_LIVE: VoiceUiLive = {
   writing: 0,
   writingSinceMs: null,
   heard: null,
+  warmup: null,
 };
 
 /**

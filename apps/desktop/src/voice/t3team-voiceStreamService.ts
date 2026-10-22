@@ -1,3 +1,4 @@
+// @effect-diagnostics globalDate:off -- Stop-to-text latency is measured for the voice log.
 import type {
   DesktopVoiceStreamPushRequest,
   DesktopVoiceStreamStartRequest,
@@ -22,7 +23,11 @@ export type DesktopVoiceStreamService = {
 type ActiveSession = {
   readonly id: string;
   readonly session: ReturnType<typeof createVoiceStreamSession>;
+  /** Whether this session saw a warm-up, so it gets exactly one `ready` when it ends. */
+  warming: boolean;
 };
+
+const WARMUP_PERCENT = { loading: 15, "preparing-gpu": 65 } as const;
 
 const NOTHING_SAID: DesktopVoiceStreamStopResult = { text: "", committed: 0 };
 
@@ -35,7 +40,9 @@ export function makeDesktopVoiceStreamService(deps: {
   readonly emit: (event: DesktopVoiceStreamEvent) => void;
   readonly newSessionId: () => string;
   readonly log: (message: string) => void;
+  readonly now?: () => number;
 }): DesktopVoiceStreamService {
+  const now = deps.now ?? Date.now;
   let active: ActiveSession | null = null;
 
   const stopActive = () => {
@@ -54,18 +61,32 @@ export function makeDesktopVoiceStreamService(deps: {
         silenceMs: config.silenceMs,
         transcribe: ({ pcm16Base64, language }) =>
           deps.voice.transcribe({ config: { ...config, language }, pcm16Base64 }),
+        isWorkerReady: deps.voice.isReady,
         emit: (event) => deps.emit({ ...event, sessionId: id }),
         log: (message) => deps.log(`[${id}] ${message}`),
       });
-      active = { id, session };
+      const current: ActiveSession = { id, session, warming: false };
+      active = current;
       deps.log(
         `[${id}] stream started (language ${config.language}, silence ${config.silenceMs} ms)`,
       );
-      void deps.voice.warm(config);
+      void deps.voice.warm(config).finally(() => {
+        if (!current.warming) return;
+        current.warming = false;
+        deps.emit({ sessionId: id, type: "warmup", stage: "ready", percent: 100 });
+      });
       return { ok: true, sessionId: id };
     },
     push: ({ sessionId, pcm16Base64 }) => {
-      if (active?.id === sessionId) active.session.push(pcm16FromBase64(pcm16Base64));
+      if (active?.id !== sessionId) return;
+      // Repeated on every chunk while it lasts: the renderer only learns the session id once
+      // `start` has answered, so a one-off event sent from `start` could arrive unclaimed.
+      const stage = deps.voice.warmupStage();
+      if (stage !== null) {
+        active.warming = true;
+        deps.emit({ sessionId, type: "warmup", stage, percent: WARMUP_PERCENT[stage] });
+      }
+      active.session.push(pcm16FromBase64(pcm16Base64));
     },
     stop: async ({ sessionId, finish }) => {
       const current = active;
@@ -74,8 +95,12 @@ export function makeDesktopVoiceStreamService(deps: {
         stopActive();
         return NOTHING_SAID;
       }
+      const stoppedAt = now();
       const result = await current.session.finish();
       if (active === current) active = null;
+      deps.log(
+        `[${current.id}] stream stop: final text ${now() - stoppedAt} ms after stop (${result.committed} utterance(s) committed, ${result.text.length} chars in the tail${result.error === undefined ? "" : ", tail failed"})`,
+      );
       return result;
     },
   };

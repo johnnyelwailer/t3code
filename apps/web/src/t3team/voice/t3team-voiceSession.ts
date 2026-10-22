@@ -6,7 +6,14 @@
  * voice turn is running, utterances queue behind it (existing queue semantics, no interrupt).
  */
 import type { StartThreadTurnInput } from "@t3tools/client-runtime/operations";
-import type { MessageId, ModelSelection, ProjectId, ThreadId } from "@t3tools/contracts";
+import type {
+  ChatAttachment,
+  MessageId,
+  ModelSelection,
+  ProjectId,
+  ThreadId,
+  VoiceTranscriptMetadata,
+} from "@t3tools/contracts";
 
 import { VOICE_ROLE_PROMPT, VOICE_THREAD_TITLE } from "./t3team-voiceRolePrompt";
 import {
@@ -15,6 +22,7 @@ import {
   type VoiceThreadShell,
 } from "./t3team-voiceLiveState";
 import { VOICE_TIER_MODEL, type VoiceTier } from "./t3team-voiceRouting";
+import { voiceTranscriptMetaFile } from "./t3team-voiceTranscriptMeta";
 import type { VoiceThreadHome } from "./t3team-voiceThreadStore";
 
 export type VoiceSubmitResult =
@@ -37,6 +45,8 @@ export interface VoiceSessionDeps {
   readonly projectlessProject: () => Promise<ProjectId | null>;
   readonly route: (text: string) => Promise<ModelSelection>;
   readonly startTurn: (input: StartThreadTurnInput) => Promise<void>;
+  /** Uploads a generated file for the next message; null when it could not be uploaded. */
+  readonly uploadFile?: (file: File) => Promise<ChatAttachment | null>;
   readonly pinAndKeep: (threadId: ThreadId) => Promise<void>;
   /** Undoes `pinAndKeep` for a voice thread that was replaced: it goes back to being a normal thread. */
   readonly release: (threadId: ThreadId) => Promise<void>;
@@ -100,12 +110,26 @@ async function ensureVoiceThread(deps: VoiceSessionDeps): Promise<ThreadId | nul
 const tierOf = (selection: ModelSelection): VoiceTier =>
   selection.model === VOICE_TIER_MODEL.control.model ? "control" : "synthesis";
 
+/** The transcript's whisper metadata as a file attachment; a failed upload never blocks the message. */
+async function transcriptAttachments(
+  deps: VoiceSessionDeps,
+  metadata: VoiceTranscriptMetadata | undefined,
+): Promise<ChatAttachment[]> {
+  if (metadata === undefined || deps.uploadFile === undefined) return [];
+  const attachment = await deps.uploadFile(voiceTranscriptMetaFile(metadata)).catch(() => null);
+  return attachment === null ? [] : [attachment];
+}
+
 async function sendVoiceUtterance(
   deps: VoiceSessionDeps,
   threadId: ThreadId,
   text: string,
+  metadata?: VoiceTranscriptMetadata,
 ): Promise<VoiceTier> {
-  const modelSelection = await deps.route(text);
+  const [modelSelection, attachments] = await Promise.all([
+    deps.route(text),
+    transcriptAttachments(deps, metadata),
+  ]);
   const live = withVoiceLiveState(text, voiceLiveThreads(deps.threads(), threadId));
   await deps.startTurn({
     threadId,
@@ -113,7 +137,7 @@ async function sendVoiceUtterance(
       messageId: deps.newMessageId(),
       role: "user",
       text: live.text,
-      attachments: [],
+      attachments,
       context: { version: 1, records: live.records },
     },
     modelSelection,
@@ -123,7 +147,11 @@ async function sendVoiceUtterance(
   return tierOf(modelSelection);
 }
 
-async function submit(deps: VoiceSessionDeps, text: string): Promise<VoiceSubmitResult> {
+async function submit(
+  deps: VoiceSessionDeps,
+  text: string,
+  metadata?: VoiceTranscriptMetadata,
+): Promise<VoiceSubmitResult> {
   try {
     const threadId = await ensureVoiceThread(deps);
     if (threadId === null) {
@@ -133,7 +161,7 @@ async function submit(deps: VoiceSessionDeps, text: string): Promise<VoiceSubmit
         detail: 'This machine has no "No project" folder for the voice thread.',
       };
     }
-    const tier = await sendVoiceUtterance(deps, threadId, text);
+    const tier = await sendVoiceUtterance(deps, threadId, text, metadata);
     return { status: "sent", tier };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -153,6 +181,7 @@ export function enqueueVoiceWork<T>(work: () => Promise<T>): Promise<T> {
 export function submitVoiceUtterance(
   deps: VoiceSessionDeps,
   text: string,
+  metadata?: VoiceTranscriptMetadata,
 ): Promise<VoiceSubmitResult> {
-  return enqueueVoiceWork(() => submit(deps, text.trim()));
+  return enqueueVoiceWork(() => submit(deps, text.trim(), metadata));
 }

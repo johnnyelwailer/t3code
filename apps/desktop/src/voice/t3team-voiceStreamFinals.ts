@@ -67,7 +67,12 @@ export function createStreamFinals(input: {
         .then((result) => {
           if (input.isStopped()) return;
           if (result.ok)
-            emit({ type: "utterance", text: result.text, elapsedMs: result.elapsedMs });
+            emit({
+              type: "utterance",
+              text: result.text,
+              elapsedMs: result.elapsedMs,
+              ...(result.metadata === undefined ? {} : { metadata: result.metadata }),
+            });
           else emit({ type: "utterance-failed", message: result.message });
         })
         .catch((error: unknown) => {

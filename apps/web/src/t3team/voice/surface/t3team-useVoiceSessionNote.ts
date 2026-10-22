@@ -22,9 +22,10 @@ export function useVoiceSessionNote(): {
   const writing = useVoiceView((view) => view.live.writing);
   const writingSinceMs = useVoiceView((view) => view.live.writingSinceMs);
   const heard = useVoiceView((view) => view.live.heard);
+  const warmup = useVoiceView((view) => view.live.warmup);
   const [now, setNow] = useState(() => Date.now());
 
-  const live = { writing, writingSinceMs, heard };
+  const live = { writing, writingSinceMs, heard, warmup };
   const note = voiceSessionNote({ state, endedAtMs, live, now });
   const expiresAt = voiceSessionNoteExpiresAt(note, live, now);
 

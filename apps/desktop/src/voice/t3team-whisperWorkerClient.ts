@@ -24,6 +24,8 @@ export type LiveWhisperWorker = {
   readonly modelPath: string;
   readonly acceleration: WhisperAcceleration;
   readonly vulkanLog: readonly string[];
+  /** Whether this worker gates passes with Silero VAD. */
+  readonly vad: boolean;
   readonly call: (request: WhisperWorkerCall) => Promise<WhisperWorkerResponse>;
 };
 
@@ -35,6 +37,7 @@ export function startWhisperWorker(input: {
   readonly spawnWorker: (env?: WhisperWorkerEnv) => WhisperWorkerHandle;
   readonly modelPath: string;
   readonly variant: WhisperLibVariant;
+  readonly vadModelPath?: string;
   readonly env?: WhisperWorkerEnv;
   readonly onExit: (handle: WhisperWorkerHandle) => void;
 }): Promise<LiveWhisperWorker> {
@@ -54,18 +57,22 @@ export function startWhisperWorker(input: {
     handle.onMessage((message) => {
       if (message === WHISPER_WORKER_READY) {
         ready = true;
-        void call({ type: "load", modelPath: input.modelPath, variant: input.variant }).then(
-          (response) => {
-            if (!response.ok) return reject(new Error(response.message));
-            resolve({
-              handle,
-              call,
-              modelPath: input.modelPath,
-              acceleration: "acceleration" in response ? response.acceleration : "cpu",
-              vulkanLog: "vulkanLog" in response ? response.vulkanLog : [],
-            });
-          },
-        );
+        void call({
+          type: "load",
+          modelPath: input.modelPath,
+          variant: input.variant,
+          ...(input.vadModelPath === undefined ? {} : { vadModelPath: input.vadModelPath }),
+        }).then((response) => {
+          if (!response.ok) return reject(new Error(response.message));
+          resolve({
+            handle,
+            call,
+            modelPath: input.modelPath,
+            acceleration: "acceleration" in response ? response.acceleration : "cpu",
+            vulkanLog: "vulkanLog" in response ? response.vulkanLog : [],
+            vad: "vad" in response && response.vad === true,
+          });
+        });
         return;
       }
       if (!isWhisperWorkerResponse(message)) return;

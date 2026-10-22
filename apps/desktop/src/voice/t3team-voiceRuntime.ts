@@ -16,8 +16,11 @@ import {
   makeDesktopVoiceStreamService,
   type DesktopVoiceStreamService,
 } from "./t3team-voiceStreamService.ts";
+import { makeVoiceLogFile, type VoiceLogFile } from "./t3team-voiceLogFile.ts";
+import { makeFileVulkanDeviceMemory } from "./t3team-whisperDeviceMemory.ts";
 import { makeWhisperHost, type WhisperWorkerHandle } from "./t3team-whisperHost.ts";
 import { makeFileSentinel } from "./t3team-whisperSentinel.ts";
+import { downloadSileroVadModel, locateSileroVadModel } from "./t3team-whisperVadModel.ts";
 
 const WHISPER_PACKAGE = "@fugood/whisper.node";
 
@@ -52,8 +55,22 @@ function isWhisperRuntimeAvailable(workerPath: string): boolean {
   }
 }
 
-const voiceLog = (message: string) =>
-  console.info(`[voice] ${new Date().toISOString()} ${message}`);
+let voiceLogFile: VoiceLogFile | null = null;
+
+/**
+ * Where the voice timing lines also go: `<logDir>/voice.log`, next to the app's other logs.
+ * Called once at startup; lines before it only reach the console.
+ */
+export function configureDesktopVoiceLog(logDir: string): void {
+  voiceLogFile ??= makeVoiceLogFile({ filePath: NodePath.join(logDir, "voice.log") });
+}
+
+/** Timings, devices, model paths and counts only: never audio, never transcript text. */
+const voiceLog = (message: string) => {
+  const line = `[voice] ${new Date().toISOString()} ${message}`;
+  console.info(line);
+  voiceLogFile?.write(line);
+};
 
 function broadcastModelProgress(progress: DesktopVoiceModelProgress): void {
   for (const window of Electron.BrowserWindow.getAllWindows()) {
@@ -75,9 +92,16 @@ export function getDesktopVoiceService(): DesktopVoiceService {
   if (service) return service;
   const voiceDir = NodePath.join(Electron.app.getPath("userData"), "voice");
   const workerPath = NodePath.join(__dirname, "voice", "t3team-whisperWorker.cjs");
+  const appModelsDir = NodePath.join(voiceDir, "models");
+  const vadSearchDirs = [
+    appModelsDir,
+    NodePath.join(Electron.app.getPath("appData"), "ActivityTracker", "models", "whisper"),
+  ];
   const host = makeWhisperHost({
     spawnWorker: (env) => forkWhisperWorker(workerPath, env),
     sentinel: makeFileSentinel(NodePath.join(voiceDir, "gpu-attempts.sentinel")),
+    deviceMemory: makeFileVulkanDeviceMemory(NodePath.join(voiceDir, "vulkan-device.json")),
+    vadModelPath: () => locateSileroVadModel(vadSearchDirs),
     log: voiceLog,
   });
   Electron.app.once("will-quit", host.dispose);
@@ -85,6 +109,10 @@ export function getDesktopVoiceService(): DesktopVoiceService {
     host,
     log: voiceLog,
     onDownloadProgress: broadcastModelProgress,
+    vadModel: {
+      locate: () => locateSileroVadModel(vadSearchDirs),
+      download: () => downloadSileroVadModel({ targetDir: appModelsDir }),
+    },
     isRuntimeAvailable: () => isWhisperRuntimeAvailable(workerPath),
     environment: {
       env: process.env,
@@ -92,7 +120,7 @@ export function getDesktopVoiceService(): DesktopVoiceService {
       platform: process.platform,
       homeDir: Electron.app.getPath("home"),
       appDataDir: Electron.app.getPath("appData"),
-      appModelsDir: NodePath.join(voiceDir, "models"),
+      appModelsDir,
     },
   });
   return service;

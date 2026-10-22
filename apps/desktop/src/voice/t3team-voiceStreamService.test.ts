@@ -6,19 +6,22 @@ import type { DesktopVoiceService } from "./t3team-voiceService.ts";
 import { makeDesktopVoiceStreamService } from "./t3team-voiceStreamService.ts";
 import { FRAME_MS, ROOM, SPEECH, tone } from "./t3team-voiceTestAudio.ts";
 
-const config = { model: "m", modelPath: "", language: "auto", silenceMs: 1000 };
+const config = { model: "m", modelPath: "", language: "auto", languages: "de,en", silenceMs: 1000 };
 
 function setup(prepared: Awaited<ReturnType<DesktopVoiceService["prepare"]>>) {
   const events: DesktopVoiceStreamEvent[] = [];
   const voice: DesktopVoiceService = {
     prepare: vi.fn(async () => prepared),
     warm: vi.fn(async () => undefined),
+    warmupStage: vi.fn(() => null),
+    isReady: vi.fn(() => true),
     transcribe: vi.fn(async () => ({
       ok: true as const,
       text: "hi",
       language: "en",
       acceleration: "cpu" as const,
       elapsedMs: 10,
+      passMs: 8,
     })),
   };
   let next = 0;
@@ -119,5 +122,44 @@ describe("makeDesktopVoiceStreamService", () => {
       .mock.calls.map(([input]) => input.config.language);
     expect(languages.length).toBeGreaterThan(0);
     expect(new Set(languages)).toEqual(new Set(["de"]));
+  });
+});
+
+describe("makeDesktopVoiceStreamService warm-up", () => {
+  it("tells the session it is warming on every chunk, then ready exactly once", async () => {
+    const { service, voice, events, push } = setup(READY);
+    let stage: "loading" | "preparing-gpu" | null = "loading";
+    let finishWarm: () => void = () => undefined;
+    vi.mocked(voice.warmupStage).mockImplementation(() => stage);
+    vi.mocked(voice.warm).mockImplementation(
+      () => new Promise<void>((resolve) => (finishWarm = resolve)),
+    );
+    await service.start({ config });
+    push("s1", ROOM, 200);
+    stage = "preparing-gpu";
+    push("s1", ROOM, 100);
+    const warmups = () => events.filter((event) => event.type === "warmup");
+    expect(warmups().map((event) => event.type === "warmup" && event.stage)).toEqual([
+      "loading",
+      "loading",
+      "preparing-gpu",
+    ]);
+    stage = null;
+    finishWarm();
+    await Promise.resolve();
+    await Promise.resolve();
+    push("s1", ROOM, 100);
+    expect(warmups().at(-1)).toMatchObject({ stage: "ready", percent: 100, sessionId: "s1" });
+    expect(
+      warmups().filter((event) => event.type === "warmup" && event.stage === "ready"),
+    ).toHaveLength(1);
+  });
+
+  it("sends no warm-up at all when the model is already warm", async () => {
+    const { service, events, push } = setup(READY);
+    await service.start({ config });
+    push("s1", ROOM, 300);
+    await Promise.resolve();
+    expect(events.some((event) => event.type === "warmup")).toBe(false);
   });
 });
