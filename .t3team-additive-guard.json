@@ -12,6 +12,7 @@
     "apps/web/src/uiStateStore.ts",
     "apps/server/src/orchestration-v2/ThreadManagementService.ts",
     "apps/server/src/config.ts",
+    "packages/client-runtime/src/state/projectGrouping.ts",
     "apps/server/src/cloud/http.ts",
     "apps/server/src/cloud/http.test.ts",
     "apps/web/src/components/settings/settingsSearch.test.ts",

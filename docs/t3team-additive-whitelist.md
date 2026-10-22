@@ -494,3 +494,7 @@ All already listed in `allowedModifiedFiles`; each gains only the voice-surface 
 ## Voice V1 readiness (2026-10-21)
 
 - `docs/user/composer.md` — gains the "Voice input on desktop" section (shortcut, composer mic, Settings → Voice, privacy); the closest existing user doc, so no new docs page.
+
+## Cross-environment project identity by work source (2026-10-21)
+
+- `packages/client-runtime/src/state/projectGrouping.ts` — one import and one `deriveWorkSourceProjectKey(project) ??` line ahead of the repository key in `deriveLogicalProjectKey`, plus `"source"` in its three `Pick`s. A project bound to an external work source (Jira, …) groups by that binding, so the same t3team project on two T3 Connect machines is one sidebar entry, and a bound project no longer merges into a plain project that shares its repository. The logic lives in `t3team-workSourceProjectKey.ts`; unbound projects group exactly as before.
