@@ -312,6 +312,7 @@ import {
   GitBranchIcon,
   ShieldQuestionIcon,
   TargetIcon,
+  LoaderCircleIcon,
   WifiOffIcon,
 } from "lucide-react";
 import { cn, randomUUID } from "~/lib/utils";
@@ -413,6 +414,10 @@ import {
 import { type ReviewCommentContext } from "../reviewCommentContext";
 import { environmentCatalog } from "../connection/catalog";
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
+import {
+  environmentReconnectGraceMs,
+  resolveEnvironmentUnavailableBannerCopy,
+} from "./t3team-environmentReconnectBanner";
 import { primaryEnvironmentLabel } from "../connection/t3team-localEnvironmentLabel";
 import { useEnvironmentDisconnectDelay } from "../hooks/useEnvironmentDisconnectDelay";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
@@ -2767,6 +2772,12 @@ export default function ChatView(props: ChatViewProps) {
     activeEnvironmentConnectionPhase === "reconnecting"
       ? (activeEnvironment?.environmentId ?? null)
       : null;
+  // t3team: the desktop's own backend (primary or desktop-local) restarting is
+  // not a network problem; wait longer and use quiet copy (see helper).
+  const activeEnvironmentIsLocal =
+    activeEnvironment !== null &&
+    (activeEnvironment.entry.target._tag === "PrimaryConnectionTarget" ||
+      isDesktopLocalConnectionTarget(activeEnvironment.entry.target));
   const [reconnectWarningGraceElapsedEnvironmentId, setReconnectWarningGraceElapsedEnvironmentId] =
     useState<EnvironmentId | null>(null);
   const reconnectWarningGraceElapsed = hasEnvironmentReconnectWarningGraceElapsed(
@@ -2776,10 +2787,11 @@ export default function ChatView(props: ChatViewProps) {
   useEffect(() => {
     setReconnectWarningGraceElapsedEnvironmentId(null);
     if (activeReconnectingEnvironmentId === null) return;
-    return scheduleEnvironmentReconnectWarning(() =>
-      setReconnectWarningGraceElapsedEnvironmentId(activeReconnectingEnvironmentId),
+    return scheduleEnvironmentReconnectWarning(
+      () => setReconnectWarningGraceElapsedEnvironmentId(activeReconnectingEnvironmentId),
+      environmentReconnectGraceMs(activeEnvironmentIsLocal),
     );
-  }, [activeReconnectingEnvironmentId]);
+  }, [activeEnvironmentIsLocal, activeReconnectingEnvironmentId]);
   const activeEnvironmentUnavailableLabel = activeEnvironment?.label ?? null;
   const activeEnvironmentUnavailableState = useMemo<EnvironmentUnavailableState | null>(() => {
     if (!activeEnvironmentUnavailable || !activeEnvironmentUnavailableLabel || !activeEnvironment) {
@@ -3240,14 +3252,23 @@ export default function ChatView(props: ChatViewProps) {
     const suppressUnavailableBanner =
       environmentReconnecting && (updateRunning || !reconnectWarningGraceElapsed);
     if (activeEnvironmentUnavailableState && unavailableConnection && !suppressUnavailableBanner) {
+      const unavailableCopy = resolveEnvironmentUnavailableBannerCopy({
+        label: activeEnvironmentUnavailableState.label,
+        phase: unavailableConnection.phase,
+        isLocal: activeEnvironmentIsLocal,
+      });
       items.push({
         id: `environment-unavailable:${activeEnvironmentUnavailableState.environmentId}`,
-        variant: unavailableConnection.phase === "error" ? "error" : "warning",
-        icon: <WifiOffIcon />,
-        title: `${activeEnvironmentUnavailableState.label} is ${environmentReconnecting ? "reconnecting" : "offline"}`,
+        variant: unavailableCopy.variant,
+        icon: unavailableCopy.quiet ? (
+          <LoaderCircleIcon className="animate-spin" />
+        ) : (
+          <WifiOffIcon />
+        ),
+        title: unavailableCopy.title,
         actions: (
           <>
-            {!environmentReconnecting ? (
+            {unavailableCopy.showReconnect ? (
               <Button
                 size="xs"
                 variant="ghost"
@@ -3354,6 +3375,7 @@ export default function ChatView(props: ChatViewProps) {
     autoBalanceUpdateBanner,
     resourcePressureBanner,
     threadHandoffBanner,
+    activeEnvironmentIsLocal,
     activeEnvironmentUnavailableState,
     handleReconnectActiveEnvironment,
     canDisconnectActiveEnvironment,
