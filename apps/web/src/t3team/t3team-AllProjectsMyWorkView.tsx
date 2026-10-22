@@ -19,7 +19,6 @@
 import { useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
-import { ScrollArea } from "~/components/ui/scroll-area";
 import { useMyWorkBoundProjects } from "~/t3team/t3team-myWorkBoundProjects";
 import { useProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboardMyWorkState";
 import { projectBacklogViewModes } from "~/t3team/t3team-projectBacklogPresentation";
@@ -30,8 +29,8 @@ import {
   ProjectMyWorkViewSwitch,
   type ProjectMyWorkLens,
 } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
-import { MyWorkLoadingAnimation } from "~/t3team/t3team-MyWorkLoadingAnimation";
-import { t3teamScopeContentWidthClass } from "~/t3team/t3team-scopeContentWidth";
+import { MyWorkFirstLoadPlaceholder } from "~/t3team/t3team-MyWorkFirstLoadSwap";
+import { MyWorkScopeColumn, MyWorkViewSwitchStandIn } from "~/t3team/t3team-MyWorkScopeColumn";
 
 export function AllProjectsMyWorkView({
   onOpenTicket,
@@ -74,10 +73,14 @@ export function AllProjectsMyWorkView({
 
   if (boundProjects === null) {
     // The project list is still being assembled: "no projects" would be a guess, not an answer.
+    // Same column, same switch row, same greeting session as the loaded screen below.
     return (
-      <div className="flex w-full flex-col p-4 sm:p-6">
-        <MyWorkLoadingAnimation />
-      </div>
+      <MyWorkScopeColumn>
+        <div>
+          <MyWorkViewSwitchStandIn lens={lens} />
+        </div>
+        <MyWorkFirstLoadPlaceholder />
+      </MyWorkScopeColumn>
     );
   }
 
@@ -93,31 +96,27 @@ export function AllProjectsMyWorkView({
   }
 
   return (
-    <ScrollArea className="h-full min-h-0 flex-1">
-      <div
-        className={`mx-auto flex w-full ${t3teamScopeContentWidthClass} flex-col gap-8 p-4 sm:p-6`}
-      >
-        <div>
-          <ProjectMyWorkViewSwitch
-            lens={lens}
-            onLensChange={setLens}
-            backlog={{ kind: "pick-project", projects: boundProjects, onPick: openBacklog }}
-            planning={{ kind: "pick-project", projects: boundProjects, onPick: openPlanning }}
-          />
-        </div>
-        {lens === "digest" ? (
-          <AllProjectsMyWorkDigestLens boundProjects={boundProjects} onOpenTicket={onOpenTicket} />
-        ) : (
-          boundProjects.map((project) => (
-            <AllProjectsMyWorkSection
-              key={project.id}
-              project={project}
-              lens={lens}
-              onOpenTicket={onOpenTicket}
-            />
-          ))
-        )}
+    <MyWorkScopeColumn>
+      <div>
+        <ProjectMyWorkViewSwitch
+          lens={lens}
+          onLensChange={setLens}
+          backlog={{ kind: "pick-project", projects: boundProjects, onPick: openBacklog }}
+          planning={{ kind: "pick-project", projects: boundProjects, onPick: openPlanning }}
+        />
       </div>
-    </ScrollArea>
+      {lens === "digest" ? (
+        <AllProjectsMyWorkDigestLens boundProjects={boundProjects} onOpenTicket={onOpenTicket} />
+      ) : (
+        boundProjects.map((project) => (
+          <AllProjectsMyWorkSection
+            key={project.id}
+            project={project}
+            lens={lens}
+            onOpenTicket={onOpenTicket}
+          />
+        ))
+      )}
+    </MyWorkScopeColumn>
   );
 }

@@ -4,7 +4,7 @@
  * `ProjectMyWorkDigestView`. Extracted from `ProjectMyWorkContent` so that file stays inside
  * the t3team additive line cap.
  */
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import { useNowMinute } from "~/hooks/useNowMinute";
 
@@ -19,7 +19,7 @@ import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDige
 import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
 import { useT3TeamBetaFlags } from "~/t3team/t3team-betaFlags";
-import { MyWorkLoadingAnimation } from "~/t3team/t3team-MyWorkLoadingAnimation";
+import { MyWorkFirstLoadSwap } from "~/t3team/t3team-MyWorkFirstLoadSwap";
 import { resolveMyWorkDigestRenderState } from "~/t3team/t3team-myWorkDigestRenderState";
 import { buildDigestPlan } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import { hasActiveDigestFilters } from "~/t3team/t3team-projectMyWork";
@@ -85,66 +85,72 @@ export function ProjectMyWorkDigestContent({
     hasGraph: effectiveGraph !== null,
     ticketCount: graph?.tickets.length ?? 0,
   });
-  // A failed fetch (backend still starting, timeout) is not terminal: the poller retries with
-  // backoff and this recovers on its own, so it renders as "retrying" — never a raw error.
-  if (renderState === "retrying") {
-    return <ProjectMyWorkDigestRetryState />;
-  }
-  if (renderState === "loading") {
-    return <MyWorkLoadingAnimation />;
-  }
-  if (renderState === "session-expired") {
-    return <JiraSessionExpiredPanel onSignedIn={reload} />;
-  }
-  if (renderState === "error") {
-    return <ProjectMyWorkDigestErrorState error={error} onRetry={reload} />;
-  }
-  if (renderState === "sign-in") {
-    return <JiraSignInPanel heading="Sign in to Jira to load your work." onSignedIn={reload} />;
-  }
-  if (renderState === "empty" || !effectiveGraph || !plan) {
+  // The greeting is timed by the swap (no flash for a quick answer, a minimum dwell once shown,
+  // a cross-fade into the content); everything past "loading" is the body below.
+  const renderBody = (): ReactNode => {
+    // A failed fetch (backend still starting, timeout) is not terminal: the poller retries with
+    // backoff and this recovers on its own, so it renders as "retrying" — never a raw error.
+    if (renderState === "retrying") {
+      return <ProjectMyWorkDigestRetryState />;
+    }
+    if (renderState === "session-expired") {
+      return <JiraSessionExpiredPanel onSignedIn={reload} />;
+    }
+    if (renderState === "error") {
+      return <ProjectMyWorkDigestErrorState error={error} onRetry={reload} />;
+    }
+    if (renderState === "sign-in") {
+      return <JiraSignInPanel heading="Sign in to Jira to load your work." onSignedIn={reload} />;
+    }
+    if (renderState === "empty" || !effectiveGraph || !plan) {
+      return (
+        <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
+          Nothing needs you
+        </T3SurfacePanel>
+      );
+    }
+    if (effectiveGraph.tickets.length === 0 && graph !== null && effectiveGraph !== graph) {
+      // The graph has tickets, but the active filters hid every one of them: say so, instead of
+      // implying there is nothing on the board at all.
+      return (
+        <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
+          No items match the active filters.
+        </T3SurfacePanel>
+      );
+    }
+    if (
+      digestFilters &&
+      hasActiveDigestFilters(digestFilters) &&
+      plan.sections.length === 0 &&
+      effectiveGraph.tickets.length > 0
+    ) {
+      // The filters kept tickets the digest lens cannot place in a lane (e.g. status "done": the
+      // digest shows active work, not finished items): attribute the empty state to the filters,
+      // not to the board.
+      return (
+        <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
+          No items match the active filters.
+        </T3SurfacePanel>
+      );
+    }
     return (
-      <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
-        Nothing needs you
-      </T3SurfacePanel>
+      <ProjectMyWorkDigestView
+        plan={plan}
+        graph={effectiveGraph}
+        nowMs={nowMs}
+        burndownVariant={flags.digestBurndownVariant}
+        onOpenTicket={openTicketInApp}
+        onResetArrangement={resetArrangement}
+        refreshing={refreshing}
+        emptyStateAllowed={freshness === "fresh"}
+        onReload={reload}
+        {...(updatedAt !== undefined ? { updatedAtMs: updatedAt } : {})}
+      />
     );
-  }
-  if (effectiveGraph.tickets.length === 0 && graph !== null && effectiveGraph !== graph) {
-    // The graph has tickets, but the active filters hid every one of them: say so, instead of
-    // implying there is nothing on the board at all.
-    return (
-      <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
-        No items match the active filters.
-      </T3SurfacePanel>
-    );
-  }
-  if (
-    digestFilters &&
-    hasActiveDigestFilters(digestFilters) &&
-    plan.sections.length === 0 &&
-    effectiveGraph.tickets.length > 0
-  ) {
-    // The filters kept tickets the digest lens cannot place in a lane (e.g. status "done": the
-    // digest shows active work, not finished items): attribute the empty state to the filters,
-    // not to the board.
-    return (
-      <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
-        No items match the active filters.
-      </T3SurfacePanel>
-    );
-  }
+  };
   return (
-    <ProjectMyWorkDigestView
-      plan={plan}
-      graph={effectiveGraph}
-      nowMs={nowMs}
-      burndownVariant={flags.digestBurndownVariant}
-      onOpenTicket={openTicketInApp}
-      onResetArrangement={resetArrangement}
-      refreshing={refreshing}
-      emptyStateAllowed={freshness === "fresh"}
-      onReload={reload}
-      {...(updatedAt !== undefined ? { updatedAtMs: updatedAt } : {})}
-    />
+    <MyWorkFirstLoadSwap loading={renderState === "loading"}>
+      {renderState === "loading" ? null : renderBody()}
+    </MyWorkFirstLoadSwap>
   );
 }

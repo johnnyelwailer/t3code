@@ -4,8 +4,10 @@
  * home) unchanged. The home never flashes before a redirect; the wait is bounded so a slow Jira
  * never blocks startup.
  *
- * While it decides it renders My Work's own loading animation — the same art My Work then shows
- * for its first load, so the hand-off has nothing to jump between.
+ * While it decides it renders My Work's own greeting, in My Work's own column with its view switch
+ * above it (t3team-MyWorkScopeColumn.tsx), so the hand-off has nothing to jump between. The
+ * greeting's timing — no flash for a fast decision, a minimum dwell once shown, a cross-fade out —
+ * is t3team-MyWorkFirstLoadSwap.tsx's, and it carries over into My Work's own first load.
  *
  * The probe reads the same inputs `AllProjectsMyWorkView` does, through the SAME hook
  * (`useMyWorkBoundProjects`) and the shell's own backend: one hydration, one project list,
@@ -20,7 +22,9 @@ import { WorkspacePageHeader } from "~/components/WorkspacePageHeader";
 import { isElectron } from "~/env";
 import { useNowMinute } from "~/hooks/useNowMinute";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
-import { MyWorkLoadingAnimation } from "~/t3team/t3team-MyWorkLoadingAnimation";
+import { MyWorkFirstLoadSwap } from "~/t3team/t3team-MyWorkFirstLoadSwap";
+import { MyWorkScopeColumn, MyWorkViewSwitchStandIn } from "~/t3team/t3team-MyWorkScopeColumn";
+import type { ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 import { useMyWorkBoundProjects } from "~/t3team/t3team-myWorkBoundProjects";
 import {
   getProjectDashboardMyWorkStorageKey,
@@ -70,16 +74,6 @@ export function T3TeamStartupMyWorkGate({
   const [active] = useState(() => eligible && isStartupGateUnclaimed());
   const [fellBack, setFellBack] = useState(false);
   const fallBack = useCallback(() => setFellBack(true), []);
-  useEffect(() => {
-    if (active) claimStartupGate();
-  }, [active]);
-  if (!active || fellBack) return children;
-  return <StartupMyWorkProbe onFallback={fallBack} />;
-}
-
-function StartupMyWorkProbe({ onFallback }: { readonly onFallback: () => void }) {
-  const navigate = useNavigate();
-  const boundProjects = useMyWorkBoundProjects();
   const [lens] = useState(
     () =>
       resolveProjectDashboardMyWorkState({
@@ -88,6 +82,64 @@ function StartupMyWorkProbe({ onFallback }: { readonly onFallback: () => void })
         ),
       }).lens,
   );
+  useEffect(() => {
+    if (active) claimStartupGate();
+  }, [active]);
+  if (!active) return children;
+  return (
+    <>
+      {fellBack ? null : <StartupMyWorkProbe lens={lens} onFallback={fallBack} />}
+      <MyWorkFirstLoadSwap
+        loading={!fellBack}
+        className="flex h-full min-h-0 w-full flex-col"
+        contentClassName="flex h-full min-h-0 w-full flex-col"
+        renderPlaceholder={(greeting) => (
+          <StartupMyWorkFrame lens={lens}>{greeting}</StartupMyWorkFrame>
+        )}
+      >
+        {fellBack ? children : null}
+      </MyWorkFirstLoadSwap>
+    </>
+  );
+}
+
+/**
+ * The gap the greeting fills: whichever way the probe lands, the next paint is My Work's first
+ * load or the draft landing, and neither should be preceded by a blank window. Laid out exactly
+ * like `AllProjectsMyWorkPane` (header, then the scope column with the view switch on top).
+ */
+export function StartupMyWorkFrame({
+  lens,
+  children,
+}: {
+  readonly lens: ProjectMyWorkLens;
+  readonly children: ReactNode;
+}) {
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+      {isElectron ? <WorkspacePageHeader electron /> : null}
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        <MyWorkScopeColumn>
+          <div>
+            <MyWorkViewSwitchStandIn lens={lens} />
+          </div>
+          {children}
+        </MyWorkScopeColumn>
+      </div>
+    </div>
+  );
+}
+
+/** The decision itself; renders nothing (the gate draws the greeting). */
+function StartupMyWorkProbe({
+  lens,
+  onFallback,
+}: {
+  readonly lens: ProjectMyWorkLens;
+  readonly onFallback: () => void;
+}) {
+  const navigate = useNavigate();
+  const boundProjects = useMyWorkBoundProjects();
   const digest = useMyWorkDigestGraph({
     projects: boundProjects ?? EMPTY_PROJECTS,
     scope: "all",
@@ -118,16 +170,7 @@ function StartupMyWorkProbe({ onFallback }: { readonly onFallback: () => void })
     }
   }, [decision, navigate, onFallback]);
 
-  // The gap the animation fills: whichever way this lands, the next paint is My Work's first load
-  // or the draft landing, and neither should be preceded by a blank window.
-  return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
-      {isElectron ? <WorkspacePageHeader electron /> : null}
-      <div className="min-h-0 flex-1 p-4 sm:p-6">
-        <MyWorkLoadingAnimation />
-      </div>
-    </div>
-  );
+  return null;
 }
 
 const EMPTY_PROJECTS: ReadonlyArray<ProjectShellProject> = [];
