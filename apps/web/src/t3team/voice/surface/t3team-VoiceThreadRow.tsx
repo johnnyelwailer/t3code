@@ -15,14 +15,20 @@ import "~/t3team/voice/surface/t3team-voice.css";
  * moment, a failure with its retry). The whole row is one click target: it opens the thread, or,
  * when the thread is already open (or there is none yet), starts and stops the recording, so a
  * click never lands on nothing. The orb and the end button keep their own actions.
+ *
+ * It wears the regular thread row's surface (t3team-voice-surfaces.css only adds motion): no
+ * border, card fill, tint or glow — transparent at rest, the shared hover and active fills — and
+ * it is a size more compact than a thread row. Only its content says it is the voice thread.
+ * Right-click opens its lean menu ("Start fresh") when the host passes `onContextMenu`.
  */
 export function VoiceThreadRow(props: {
   readonly title: string;
   readonly isActive: boolean;
   readonly keys: readonly string[];
   readonly onOpen?: () => void;
+  readonly onContextMenu?: (position: { readonly x: number; readonly y: number }) => void;
 }) {
-  const { title, isActive, keys, onOpen } = props;
+  const { title, isActive, keys, onOpen, onContextMenu } = props;
   const state = useVoiceUiStore((store) => store.snapshot.state);
   const controls = useVoiceUiStore((store) => store.controls);
   const { note, writingLabel } = useVoiceSessionNote();
@@ -44,10 +50,21 @@ export function VoiceThreadRow(props: {
       data-testid="voice-thread-row"
       data-state={state}
       data-active={isActive}
+      onContextMenu={
+        onContextMenu === undefined
+          ? undefined
+          : (event) => {
+              event.preventDefault();
+              onContextMenu({ x: event.clientX, y: event.clientY });
+            }
+      }
       className={cn(
         VOICE_CLASS.scope,
         VOICE_CLASS.row,
-        "relative flex h-8 min-w-0 select-none items-center gap-2 rounded-lg border border-border bg-card px-1.25 pr-2 text-xs",
+        "relative flex h-7 min-w-0 select-none items-center gap-2 rounded-md px-2.5 text-xs",
+        isActive
+          ? "bg-sidebar-row-active text-sidebar-foreground"
+          : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
       )}
     >
       <span className="relative z-10 grid shrink-0">
@@ -57,7 +74,7 @@ export function VoiceThreadRow(props: {
         type="button"
         aria-current={isActive ? "page" : undefined}
         onClick={activate}
-        className="flex min-w-0 flex-1 cursor-pointer items-center bg-transparent p-0 text-left outline-hidden after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:after:ring-1 focus-visible:after:ring-inset focus-visible:after:ring-ring"
+        className="flex min-w-0 flex-1 cursor-pointer items-center bg-transparent p-0 text-left outline-hidden after:absolute after:inset-0 after:rounded-md after:content-[''] focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring"
       >
         <VoiceRowMid
           state={state}
