@@ -40,6 +40,9 @@ function ThreadRowLike({ title, active = false }: { title: string; active?: bool
   );
 }
 
+const openMenu = (position: { x: number; y: number }) =>
+  void showContextMenuFallback(VOICE_ROW_MENU, position);
+
 function InSidebar(props: {
   readonly state: VoiceUiState;
   readonly snapshot?: Partial<VoiceUiSnapshot>;
@@ -64,8 +67,6 @@ function InSidebar(props: {
       },
     });
   });
-  const openMenu = (position: { x: number; y: number }) =>
-    void showContextMenuFallback(VOICE_ROW_MENU, position);
   useEffect(() => {
     if (props.openMenu) setTimeout(() => openMenu({ x: 150, y: 70 }), 300);
   }, [props.openMenu]);
