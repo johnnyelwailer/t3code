@@ -284,6 +284,9 @@ it.effect.each(
                   generation: 1,
                   taskIds: [taskId],
                 },
+                // t3team: ProviderContinuationService marks a renderer-rewritten wake, so the
+                // orchestrator keeps its text instead of re-rendering the default detail.
+                renderedWakeText: true,
               }
             : {}),
         });
