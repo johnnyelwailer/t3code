@@ -461,8 +461,11 @@ export function resolveDraftPromotionNavigationTarget(input: {
   return runStarted || startupStopped || messagePersisted ? input.serverThreadRef : null;
 }
 
-export function scheduleEnvironmentReconnectWarning(showWarning: () => void): () => void {
-  const timeoutId = globalThis.setTimeout(showWarning, ENVIRONMENT_RECONNECT_WARNING_GRACE_MS);
+export function scheduleEnvironmentReconnectWarning(
+  showWarning: () => void,
+  graceMs: number = ENVIRONMENT_RECONNECT_WARNING_GRACE_MS,
+): () => void {
+  const timeoutId = globalThis.setTimeout(showWarning, graceMs);
   return () => globalThis.clearTimeout(timeoutId);
 }
 

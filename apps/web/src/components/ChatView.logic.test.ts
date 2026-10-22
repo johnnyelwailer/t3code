@@ -1336,6 +1336,18 @@ describe("environment reconnect warning grace", () => {
     expect(showWarning).not.toHaveBeenCalled();
   });
 
+  it("honours a longer grace for the local backend", () => {
+    vi.useFakeTimers();
+    const showWarning = vi.fn();
+
+    scheduleEnvironmentReconnectWarning(showWarning, 30_000);
+    vi.advanceTimersByTime(ENVIRONMENT_RECONNECT_WARNING_GRACE_MS);
+    expect(showWarning).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(30_000 - ENVIRONMENT_RECONNECT_WARNING_GRACE_MS);
+    expect(showWarning).toHaveBeenCalledOnce();
+  });
+
   it("does not reuse elapsed grace from another environment", () => {
     const anotherEnvironmentId = EnvironmentId.make("environment-remote");
 
