@@ -251,6 +251,25 @@ describe("whisper host discrete GPU selection", () => {
     host.dispose();
   });
 
+  it("keeps the GPU when it switches from the probe model to the chosen one", async () => {
+    // A sentinel like the file one: an attempt armed and never cleared blocks the next.
+    let pending = 0;
+    const sentinel: WhisperSentinel = {
+      evaluate: () => ({ blocked: pending > 0, retryAtMs: null, crashCount: pending }),
+      arm: () => void (pending += 1),
+      clear: () => void (pending = 0),
+    };
+    const workers = makeFakeWorkers();
+    const host = makeWhisperHost({ ...workers, sentinel });
+
+    await host.probeDevice("base.bin");
+    expect(await host.transcribe({ ...input, modelPath: "large.bin" })).toMatchObject({
+      acceleration: "gpu",
+    });
+    expect(workers.spawned.map((worker) => worker.variant)).toEqual(["vulkan", "vulkan"]);
+    host.dispose();
+  });
+
   it("reports cpu when no GPU is available", async () => {
     const { sentinel } = makeSentinel(true);
     const workers = makeFakeWorkers({ onLoad: () => "cpu" });

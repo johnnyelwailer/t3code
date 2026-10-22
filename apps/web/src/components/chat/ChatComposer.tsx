@@ -7119,8 +7119,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     </DialogPopup>
                   </Dialog>
                 ) : null}
-                {/* t3team: the voice thread's live recording streams inline, above the editor. */}
-                <VoiceComposerInline environmentId={environmentId} threadId={activeThreadId} />
                 <ComposerContextActionsContext value={composerContextActions}>
                   <ComposerPromptEditor
                     draftKey={composerDraftTargetKey}
@@ -7190,6 +7188,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     }
                   />
                 </ComposerContextActionsContext>
+                {/* t3team: voice-thread dictation lands in the draft; the partial trails it. */}
+                <VoiceComposerInline
+                  environmentId={environmentId}
+                  threadId={activeThreadId}
+                  onDictated={(text) =>
+                    insertComposerTextAtEnd(text, { ensureLeadingBoundary: true })
+                  }
+                />
                 {isComposerResting ? collapsedComposerImagePreviews : null}
                 {showMobilePendingAnswerActions ? (
                   <div
