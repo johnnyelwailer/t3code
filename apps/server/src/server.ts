@@ -155,6 +155,7 @@ import {
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
 import * as CloudCliState from "./cloud/CliState.ts";
 import * as ConnectCredentialMinter from "./cloud/t3team-ConnectCredentialMinter.ts";
+import * as ConnectSignInPrompt from "./cloud/t3team-ConnectSignInPrompt.ts";
 import * as Accounts from "./account/t3team-Accounts.ts";
 import * as NexiBrokerService from "./cloud/t3team-NexiBrokerService.ts";
 import { runConnectCredentialTopUp } from "./cloud/t3team-ConnectCredentialTopUp.ts";
@@ -986,6 +987,9 @@ const layerRuntimeCoreDependencies = layerRuntimeCoreDependenciesBase.pipe(
   Layer.provideMerge(layerRepositoryIdentityResolver),
   Layer.provideMerge(layerServerEnvironment),
   Layer.provideMerge(layerAuth),
+  // Report-only sign-in state plus the user-started browser sign-in; it shares the minter
+  // below, so a cloud-session create and a notice click never open two sign-ins.
+  Layer.provideMerge(ConnectSignInPrompt.layer),
   Layer.provideMerge(ServerSecretStore.layer),
   Layer.provideMerge(
     Layer.mergeAll(
@@ -1486,11 +1490,9 @@ const layerMakeServer = Layer.unwrap(
             }
           }),
         );
-        // Top up the per-user T3 Connect credential in the background: a
-        // linked environment (linked from the app or a phone) can outlive a
-        // missing or unrefreshable credential, and the cloud-session handoff
-        // needs one. The top-up may open the user's browser; it never blocks
-        // activation, and not-linked installs never attempt a mint.
+        // Keep the per-user T3 Connect credential refreshed in the background.
+        // It never opens a browser: a missing credential is only reported to the
+        // UI (ConnectSignInPrompt), which offers a dismissible sign-in notice.
         yield* ServerActivation.forkParked(
           runConnectCredentialTopUp().pipe(
             Effect.catchCause((cause) =>
