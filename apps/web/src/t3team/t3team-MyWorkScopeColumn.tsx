@@ -12,9 +12,8 @@ import {
   ProjectMyWorkViewSwitch,
   type ProjectMyWorkLens,
 } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
-import { t3teamScopeContentWidthClass } from "~/t3team/t3team-scopeContentWidth";
 
-export const myWorkScopeColumnClassName = `mx-auto flex w-full ${t3teamScopeContentWidthClass} flex-col gap-8 p-4 sm:p-6`;
+export const myWorkScopeColumnClassName = "mx-auto flex w-full flex-col gap-8 p-4 sm:p-6";
 
 export function MyWorkScopeColumn({ children }: { readonly children: ReactNode }) {
   return (
