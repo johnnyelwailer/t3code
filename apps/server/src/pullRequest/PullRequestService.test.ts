@@ -2441,6 +2441,43 @@ it.effect("flags a review request for the viewer but not on their own change req
   }),
 );
 
+it.effect("does not flag a merged change request that still lists the viewer as reviewer", () =>
+  Effect.gen(function* () {
+    const service = yield* makeService({
+      projects: [
+        project({ id: "p1", title: "t3code", workspaceRoot: "/a", repository: "pingdotgg/t3code" }),
+      ],
+      providers: [
+        fakeProvider(SourceControlProviderKind.make("github"), {
+          listChangeRequests: () =>
+            Effect.succeed({
+              items: [
+                { ...changeRequest(1, "2026-07-02T00:00:00Z"), reviewRequestLogins: ["bilal"] },
+                {
+                  ...changeRequest(2, "2026-07-02T00:00:00Z"),
+                  state: "merged" as const,
+                  reviewRequestLogins: ["bilal"],
+                },
+              ],
+              truncated: false,
+              continues: true,
+            }),
+        }),
+      ],
+    });
+
+    const result = yield* service.list({ state: "all" });
+
+    assert.deepStrictEqual(
+      result.entries.map((entry) => [entry.number, entry.viewerReviewRequested]),
+      [
+        [1, true],
+        [2, false],
+      ],
+    );
+  }),
+);
+
 it.effect("refuses a repository that does not belong to the requested project", () =>
   Effect.gen(function* () {
     const service = yield* makeService({

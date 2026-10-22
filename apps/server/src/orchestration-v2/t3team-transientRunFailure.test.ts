@@ -55,10 +55,13 @@ describe("classifyTransientRunFailure", () => {
     ).toMatchObject({ outage: false });
   });
 
-  it("does not treat a stopped proxy or a hung-up MCP server as an outage", () => {
-    for (const message of ["connect ECONNREFUSED 127.0.0.1:8080", "MCP server connection closed"]) {
-      expect(classifyTransientRunFailure(failure({ message }))).toBeNull();
-    }
+  it("treats a refused connection as an unreachable-provider outage, but not a hung-up MCP server", () => {
+    expect(
+      classifyTransientRunFailure(failure({ message: "connect ECONNREFUSED 127.0.0.1:8080" })),
+    ).toMatchObject({ outage: true, unreachable: true });
+    expect(
+      classifyTransientRunFailure(failure({ message: "MCP server connection closed" })),
+    ).toBeNull();
   });
 
   it("does not retry a Cursor usage limit even when the text mentions the network", () => {

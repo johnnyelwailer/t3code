@@ -22,6 +22,7 @@ import type {
   DashboardWidgetRegistration,
   MyWorkChangeRequestRegistration,
   SidecarSectionRegistration,
+  SurfaceCompanionRegistration,
 } from "./t3team-packUi.slots.ts";
 
 /** Bumped on a breaking change to anything in this file. */
@@ -36,7 +37,8 @@ export type ViewSlot =
   | "changeRequest.summary"
   | "myWork.changeRequest"
   | "dashboard.widget"
-  | "sidecar.section";
+  | "sidecar.section"
+  | "surface.companion";
 
 /** What a `message.view` component receives. `props` were decoded with the registration's schema. */
 export interface MessageViewProps<P> {
@@ -70,7 +72,8 @@ export type ViewRegistration<P> =
   | ChangeRequestSummaryRegistration
   | MyWorkChangeRequestRegistration
   | DashboardWidgetRegistration
-  | SidecarSectionRegistration;
+  | SidecarSectionRegistration
+  | SurfaceCompanionRegistration;
 
 export interface WebActivateContext {
   readonly packId: string;
@@ -105,6 +108,7 @@ export * from "./t3team-packUi.primitives.ts";
 export * from "./t3team-packUi.overlays.ts";
 export * from "./t3team-packUi.icons.ts";
 export * from "./t3team-packUi.navigation.ts";
+export * from "./t3team-packUi.modelStage.ts";
 export type {
   PackClassValue,
   PackRecipeLaunchInput,

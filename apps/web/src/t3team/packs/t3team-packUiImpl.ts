@@ -38,6 +38,7 @@ export const {
   Markdown,
   WidgetFrame,
   Icon,
+  ModelStage,
   useMediaQuery,
   useReducedMotion,
   observeVisibleAnimation,

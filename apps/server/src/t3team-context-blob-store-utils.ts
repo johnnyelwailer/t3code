@@ -2,7 +2,13 @@
 import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as NodeCrypto from "node:crypto";
 
-export const T3TEAM_CONTEXT_BLOB_ROOT = `${PROJECT_STATE_DIR}/context/_blobs`;
+/** The content-addressed context blob cache, relative to the project state dir. Every file in it
+ * is re-creatable from its source (a blob missing on disk is rewritten by the next write) and
+ * tracked as purgeable in `t3team_context_blobs`, so it is machine-local cache, never project
+ * state to migrate or commit. */
+export const T3TEAM_CONTEXT_BLOB_DIR_SEGMENTS = ["context", "_blobs"] as const;
+
+export const T3TEAM_CONTEXT_BLOB_ROOT = `${PROJECT_STATE_DIR}/${T3TEAM_CONTEXT_BLOB_DIR_SEGMENTS.join("/")}`;
 
 export function hashT3TeamContextBytes(bytes: Uint8Array): string {
   return NodeCrypto.createHash("sha256").update(bytes).digest("hex");

@@ -1,8 +1,10 @@
 /**
  * Switching a project's main repository (flag `NEXI_FF_MAIN_REPOSITORY`): resolves the linked
- * clone that becomes the shared workspace, migrates the state dir into it (best-effort; the old
- * location is kept) and records the selection in its reference manifest. The caller persists the
- * result on the project record.
+ * clone that becomes the shared workspace and records the selection in its reference manifest.
+ * Nothing is copied here: the caller persists the result on the project record, then starts the
+ * state migration (`T3TeamLinkedRepositorySync.startStateMigration`), which links the old state
+ * into the new checkout at once and copies the real files in the background. A switch therefore
+ * completes in milliseconds whatever the state size.
  *
  * `url: null` chooses the project's own workspace — the way back from a linked main repository,
  * and an explicit opt-out that auto-detection must respect.
@@ -32,14 +34,17 @@ import {
   isLinkedRepositoryReady,
   REFERENCES_DIR_NAME,
 } from "./t3team-project-repository-utils.ts";
-import { migrateProjectStateDir } from "./t3team-projectMainRepositoryState.ts";
+import type { StateMigrationSummary } from "./t3team-projectStateMigration.ts";
 import { findLinkedRepository } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 
 export type ProjectMainRepositorySwitchResult = {
   readonly changed: boolean;
   readonly workspaceRoot: string;
   readonly mainRepository?: ProjectMainRepository;
+  /** Kept for older clients: always empty now that state moves in the background. */
   readonly migratedPaths: ReadonlyArray<string>;
+  /** The background state migration's progress, when one was started. */
+  readonly stateMigration?: StateMigrationSummary;
 };
 
 const fail = (message: string) => Effect.fail(new T3TeamAtlassianError({ message }));
@@ -93,10 +98,6 @@ export const switchProjectMainRepository = Effect.fn("switchProjectMainRepositor
       projectRoot,
       selection: input.selection,
     };
-    const migratedPaths = yield* migrateProjectStateDir({
-      fromRoot: current.workspaceRoot,
-      toRoot: checkoutPath,
-    });
     // A linked checkout is a real repository: like an adopted one, only the machine-local state
     // subpaths are ignored, so committed team state stays committable.
     if (input.url !== null) {
@@ -128,7 +129,7 @@ export const switchProjectMainRepository = Effect.fn("switchProjectMainRepositor
       changed: true,
       workspaceRoot: checkoutPath,
       mainRepository,
-      migratedPaths,
+      migratedPaths: [],
     } satisfies ProjectMainRepositorySwitchResult;
   },
 );

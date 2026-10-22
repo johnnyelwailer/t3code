@@ -222,7 +222,12 @@ export type DigestYesterday = {
 
 export type DigestFacet = "decision" | "claim" | "changeRequest" | "moved" | "stalled";
 
-export type DigestItemRef = { readonly ticketId: string; readonly why?: string };
+/** `compact`: one line, key + title + `why`, for a ticket that is no longer the viewer's to move. */
+export type DigestItemRef = {
+  readonly ticketId: string;
+  readonly why?: string;
+  readonly compact?: boolean;
+};
 
 export type DigestPlacement = "side" | "main" | "footer";
 

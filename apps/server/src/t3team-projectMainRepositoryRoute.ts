@@ -4,6 +4,9 @@
  * state dir is migrated, then `project.meta.update` moves `workspaceRoot` to the main
  * repository's checkout and records the selection.
  *
+ * Answers at once: the state dir is linked into the new checkout and copied by a durable
+ * background job (progress: `stateMigration` here and in the linked-repository status route).
+ *
  * Body: `{ projectId, url: string | null, selection?: "user" | "detected" }` (`url: null` = the
  * project's own workspace). Responds with the switch result.
  *
@@ -11,6 +14,7 @@
  */
 import { CommandId, ProjectId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import { HttpRouter } from "effect/http";
 
@@ -54,10 +58,10 @@ export const t3teamProjectMainRepositoryRouteLayer = HttpRouter.add(
       return yield* new T3TeamAtlassianError({ message: `Project '${projectId}' was not found.` });
     }
 
-    // The switch rewrites reference manifests; serialize it with bootstraps and sync outcomes.
+    // The switch only rewrites reference manifests (milliseconds); serialize it with bootstraps
+    // and sync outcomes. Uninterruptible: a client that gives up must not cut the manifest write
+    // and the project update apart.
     const sync = yield* T3TeamLinkedRepositorySync;
-    // Uninterruptible: a client that gives up (timeout, closed window) must not cut the state-dir
-    // copy and the project update apart, which left the switch half-done and unrecorded.
     const switched = Effect.gen(function* () {
       const result = yield* sync.withManifestLock(
         switchProjectMainRepository({
@@ -66,21 +70,42 @@ export const t3teamProjectMainRepositoryRouteLayer = HttpRouter.add(
           selection: input.selection === "detected" ? "detected" : "user",
         }),
       );
-      if (result.changed && result.mainRepository) {
-        yield* projects.update({
-          commandId: CommandId.make(`server:t3team:main-repository:${t3teamRandomUUID()}`),
-          projectId: project.id,
-          ...(result.workspaceRoot !== project.workspaceRoot
-            ? { workspaceRoot: result.workspaceRoot }
-            : {}),
-          mainRepository: result.mainRepository,
-        });
-      }
-      return result;
+      if (!result.changed || !result.mainRepository) return result;
+      // 1. The record first: the switch is committed before any state moves.
+      yield* projects.update({
+        commandId: CommandId.make(`server:t3team:main-repository:${t3teamRandomUUID()}`),
+        projectId: project.id,
+        ...(result.workspaceRoot !== project.workspaceRoot
+          ? { workspaceRoot: result.workspaceRoot }
+          : {}),
+        mainRepository: result.mainRepository,
+      });
+      // 2. Then the state: linked into the new checkout now, copied in the background.
+      const stateMigration = yield* sync.startStateMigration({
+        fromRoot: project.workspaceRoot,
+        toRoot: result.workspaceRoot,
+      });
+      return stateMigration ? { ...result, stateMigration } : result;
     });
     return okJson(yield* Effect.uninterruptible(switched));
   }).pipe(
     Effect.mapError((cause) => toT3TeamError(cause, "Failed to set the project main repository.")),
     Effect.catch(errorResponse),
+  ),
+);
+
+/** Startup: resumes every project's unfinished main-repository state migration (a restart cut
+ * the background copy). Forked, so it never delays the server becoming ready. */
+export const t3teamStateMigrationResumeLayer = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const projects = yield* ProjectService.ProjectService;
+    const sync = yield* T3TeamLinkedRepositorySync;
+    const shells = yield* projects.listShells();
+    for (const shell of shells) yield* sync.resumeStateMigration(shell.workspaceRoot);
+  }).pipe(
+    Effect.catchCause((cause) =>
+      Effect.logWarning("Could not resume project state migrations.", cause),
+    ),
+    Effect.forkScoped,
   ),
 );

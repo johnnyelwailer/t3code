@@ -115,16 +115,17 @@ const testLayer = Layer.mergeAll(
 /**
  * A `ProcessRunner` that answers every command with `stdout` (exit 0) — a status probe
  * (`gh auth status`) without ever running the real CLI against the machine's own login.
+ * A function is read on every run, so a test can sign in "outside the app" midway.
  */
 export function stubProbeRunner(
-  stdout: string,
+  stdout: string | (() => string),
   calls?: Array<{ readonly command: string; readonly args: ReadonlyArray<string> }>,
 ): ProcessRunner.ProcessRunner["Service"] {
   return ProcessRunner.ProcessRunner.of({
     run: (input) => {
       calls?.push({ command: input.command, args: input.args });
       return Effect.succeed({
-        stdout,
+        stdout: typeof stdout === "function" ? stdout() : stdout,
         stderr: "",
         code: 0,
         timedOut: false,

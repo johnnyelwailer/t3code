@@ -1,5 +1,4 @@
-import { getProjectTicketKanbanLane } from "~/t3team/t3team-projectTicketStatus";
-import { normalizeProjectTicketStatus } from "~/t3team/t3team-projectTicketStatusKeywords";
+import { getDigestTicketStage } from "~/t3team/t3team-projectMyWorkDigestStage";
 import { digestTitleWithoutKey } from "~/t3team/t3team-projectMyWorkDigestFacts";
 import type {
   DigestYesterday,
@@ -47,14 +46,6 @@ type Draft = {
 };
 
 const atMs = (iso: string) => Date.parse(iso) || 0;
-
-// The kanban's review lane holds both "Code Review" and "In Test"; the recap tells them apart,
-// because a ticket in test is past review.
-function outcomeLane(status: string) {
-  const lane = getProjectTicketKanbanLane(status);
-  if (lane !== "review") return lane;
-  return normalizeProjectTicketStatus(status).includes("review") ? "review" : "test";
-}
 
 /**
  * Yesterday, grouped by work item instead of by event: one entry per ticket with its last status
@@ -116,7 +107,9 @@ export function digestYesterdayRecap(
       lastAtMs: Math.max(...times),
     };
   });
-  const lanes = items.flatMap((item) => (item.outcome ? [outcomeLane(item.outcome.to)] : []));
+  const lanes = items.flatMap((item) =>
+    item.outcome ? [getDigestTicketStage(item.outcome.to)] : [],
+  );
   return {
     items: items.toSorted((a, b) => b.lastAtMs - a.lastAtMs),
     loosePrs: loosePrs.toSorted((a, b) => atMs(b.mergedAt) - atMs(a.mergedAt)),
@@ -155,7 +148,7 @@ export function isDigestMorning(nowMs: number): boolean {
 export function digestYesterdayGroupProgress(items: readonly DigestYesterdayWorkItem[]): string {
   if (items.length === 0) return "";
   const done = items.filter(
-    (item) => item.outcome && outcomeLane(item.outcome.to) === "done",
+    (item) => item.outcome && getDigestTicketStage(item.outcome.to) === "done",
   ).length;
   return `${done}/${items.length} done`;
 }

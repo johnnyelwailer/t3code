@@ -189,6 +189,11 @@ describe("createT3TeamTurnToolContext", () => {
           label: "Refresh work item context bundle",
           capabilities: ["write"],
         },
+        {
+          id: "t3team.project.sync_linked_repository",
+          label: "Sync linked repository",
+          capabilities: ["write"],
+        },
       ],
       state: {
         view: {

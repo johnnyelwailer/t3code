@@ -14,6 +14,7 @@
  */
 import { MyWorkLoadingHeader, MyWorkLoadingLanes } from "~/t3team/t3team-MyWorkLoadingSkeletons";
 import { greetingForHour, MyWorkLoadingMark } from "~/t3team/t3team-MyWorkLoadingMark";
+import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
 
 export function MyWorkLoadingAnimation({
   /** The line under the greeting; the gate and the digest say the same thing. */
@@ -41,7 +42,12 @@ export function MyWorkLoadingAnimation({
         />
         <div className="relative space-y-4">
           <div className="t3team-mywork-loading-mark flex items-center gap-4">
-            <MyWorkLoadingMark />
+            <T3TeamCompanionSlot
+              placement="myWork.loading"
+              mood="loading"
+              size="sm"
+              fallback={<MyWorkLoadingMark />}
+            />
             <div>
               <p className="text-xl font-semibold tracking-tight">{greeting}</p>
               <p className="text-sm text-muted-foreground">{message}</p>

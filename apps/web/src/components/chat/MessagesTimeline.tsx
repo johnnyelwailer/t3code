@@ -40,6 +40,7 @@ import {
 } from "~/t3team/backend/t3team-thread-jobsBackend";
 import { resolveHttpBaseUrl } from "~/t3team/backend/t3team-t3BackendHttp";
 import { resolveWsBaseUrl } from "~/t3team/t3team-route-surface-wsUrl";
+import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
 import { EMPTY_ACTIVE_AGENTS, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
 import { T3TeamActiveAgentsIndicator } from "~/t3team/chat/t3team-activeAgentsIndicator";
 import { WorkingLeadText } from "~/t3team/chat/t3team-workingLeadText";
@@ -313,7 +314,6 @@ import { useOpenPrLink } from "~/lib/openPullRequestLink";
 import { useClientSettings } from "~/hooks/useSettings";
 import type { ChatMarkdownContextReference } from "../ChatMarkdown";
 import { VOICE_STATE_KIND } from "../../t3team/voice/t3team-voiceLiveState";
-import { VoiceStateChip } from "../../t3team/voice/t3team-VoiceStateChip";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 import { cn } from "~/lib/utils";
 import { useUiStateStore } from "~/uiStateStore";
@@ -1875,9 +1875,12 @@ const ConversationTimeline = memo(function ConversationTimeline({
         className="flex h-full items-center justify-center ps-(--chat-lane-inset-start) pe-(--chat-lane-inset-end)"
         style={{ paddingBottom: contentInsetEndAdjustment }}
       >
-        <p className="text-sm text-muted-foreground/30">
-          Send a message to start the conversation.
-        </p>
+        <div className="flex flex-col items-center gap-3">
+          <T3TeamCompanionSlot placement="thread.new" mood="newThread" size="md" />
+          <p className="text-sm text-muted-foreground/30">
+            Send a message to start the conversation.
+          </p>
+        </div>
       </div>
     );
   }
@@ -5214,12 +5217,9 @@ const userMessageContextPresentationRegistry = createContextPresentationRegistry
         ),
     },
   ],
+  // The voice thread's per-utterance live-state snapshot is the model's input, never the user's.
   fallback: (kind, _record, context) =>
-    kind === VOICE_STATE_KIND ? (
-      <VoiceStateChip label={context.reference.label} copyMarkdown={context.copyMarkdown} />
-    ) : (
-      <UnavailableUserMessageContextChip {...context} />
-    ),
+    kind === VOICE_STATE_KIND ? null : <UnavailableUserMessageContextChip {...context} />,
 });
 
 /** One inline context chip in a sent message, dispatched by the shared presentation registry. */

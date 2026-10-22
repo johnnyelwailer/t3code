@@ -89,6 +89,9 @@ export function digestChangeRequestStateFromPr(entry: {
   return "open";
 }
 
+// Only an open PR waits on a review; a merged one keeps its unanswered requests on the host.
+const WAITS_ON_VIEWER = { viewerReviewRequested: true } as const;
+
 export function assembleMyWorkDigestChangeRequests(
   source: Pick<T3TeamDigestProjectSource, "tickets" | "prEntries">,
 ): T3TeamDigestChangeRequest[] {
@@ -112,7 +115,7 @@ export function assembleMyWorkDigestChangeRequests(
       ...(workItemKey !== undefined ? { workItemKey } : {}),
       title: entry.title,
       ...(entry.viewerAuthored !== undefined ? { viewerAuthored: entry.viewerAuthored } : {}),
-      ...(entry.viewerReviewRequested ? { viewerReviewRequested: true } : {}),
+      ...(entry.viewerReviewRequested && entry.state === "open" ? WAITS_ON_VIEWER : {}),
       ...(entry.authorLogin !== undefined ? { authorLogin: entry.authorLogin } : {}),
       ...(entry.author !== undefined ? { author: entry.author } : {}),
       ...(entry.engaged !== undefined ? { engaged: entry.engaged } : {}),

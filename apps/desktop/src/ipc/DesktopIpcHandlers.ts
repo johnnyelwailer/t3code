@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import { receiveProviderAuthCallback, cancelProviderAuthCallback } from "./methods/providerAuth.ts";
 import * as DesktopIpc from "./DesktopIpc.ts";
 import { installNotificationBadge } from "./methods/notificationBadge.ts";
+import { installPowerState } from "./methods/t3team-powerState.ts";
 import { getClientSettings, setClientSettings } from "./methods/clientSettings.ts";
 import {
   clearConnectionCatalog,
@@ -70,6 +71,16 @@ import {
 } from "./methods/snapShot.ts";
 import { prepareVoiceTranscriber, transcribeVoice } from "./methods/t3team-voice.ts";
 import { getVoiceHotkeyState } from "./methods/t3team-voiceHotkey.ts";
+import {
+  pushVoiceStream,
+  startVoiceStream,
+  stopVoiceStream,
+} from "./methods/t3team-voiceStream.ts";
+import {
+  openMicrophoneSettings,
+  publishVoiceWidget,
+  sendVoiceWidgetCommand,
+} from "./methods/t3team-voiceWidget.ts";
 import * as PreviewIpc from "./methods/preview.ts";
 import * as AppActivationIpc from "./methods/appActivation.ts";
 import * as WebLinksIpc from "./methods/webLinks.ts";
@@ -87,6 +98,7 @@ import {
 export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers")(function* () {
   const ipc = yield* DesktopIpc.DesktopIpc;
   yield* installNotificationBadge();
+  yield* installPowerState();
   yield* PreviewIpc.installPreviewEventForwarding();
 
   yield* ipc.handle(AppActivationIpc.setReady);
@@ -121,6 +133,12 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(acknowledgeSnapShot);
   yield* ipc.handle(prepareVoiceTranscriber);
   yield* ipc.handle(transcribeVoice);
+  yield* ipc.handle(startVoiceStream);
+  yield* ipc.handle(pushVoiceStream);
+  yield* ipc.handle(stopVoiceStream);
+  yield* ipc.handle(publishVoiceWidget);
+  yield* ipc.handle(sendVoiceWidgetCommand);
+  yield* ipc.handle(openMicrophoneSettings);
   yield* ipc.handle(setConnectionCatalog);
   yield* ipc.handle(clearConnectionCatalog);
 

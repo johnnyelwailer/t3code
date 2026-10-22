@@ -144,7 +144,12 @@ effectIt.effect("hydrates PATH when the desktop handoff is absent", () =>
     ),
     (probe) =>
       Effect.gen(function* () {
-        const env: NodeJS.ProcessEnv = { SHELL: "/bin/bash", PATH: "/usr/bin" };
+        // A HOME with no tool dirs keeps the host's own ~/.cargo/bin etc. out of the merged PATH.
+        const env: NodeJS.ProcessEnv = {
+          SHELL: "/bin/bash",
+          PATH: "/usr/bin",
+          HOME: "/nonexistent-home",
+        };
 
         yield* fixPath().pipe(
           Effect.provideService(HostProcess.Platform, "linux"),

@@ -27,10 +27,14 @@ export type DigestAdjacentItem = {
   readonly viewerTicketKey?: string;
 };
 
-/** Attention tiers under the viewer's own rows: compact pills, then one collapsed count. */
+/**
+ * Attention tiers under the viewer's own rows: compact pills, then one collapsed count. `epic`:
+ * the other stories of an epic card — neighbours, not this story's work — only ever a count.
+ */
 export type DigestStoryAdjacency = {
   readonly active: readonly DigestAdjacentItem[];
   readonly quiet: readonly DigestAdjacentItem[];
+  readonly epic?: readonly DigestAdjacentItem[];
 };
 
 const RELATION_RANK: Record<DigestAdjacentItem["relation"], number> = {
@@ -68,6 +72,10 @@ export function digestStoryAdjacency(input: {
   readonly hiddenKeys: ReadonlySet<string>;
   readonly ticketsById: ReadonlyMap<string, ProjectTicket>;
   readonly viewerName: string;
+  /** The card's parent is an epic: its other children are neighbours, folded into a count. */
+  readonly storyIsEpic?: boolean;
+  /** Whether a block still holds anyone up (`isDigestBlockLive`); every block counts without it. */
+  readonly isBlockLive?: (dependency: DigestDependency) => boolean;
 }): DigestStoryAdjacency {
   const idByKey = new Map([...input.ticketsById.values()].map((t) => [t.ref.displayId, t.id]));
   const byKey = new Map<string, DigestAdjacentItem>();
@@ -94,6 +102,7 @@ export function digestStoryAdjacency(input: {
     const isBlock = dependency.relation !== "same-story";
     const onStory = isBlock && dependency.ticketId === input.storyId;
     if (!input.rowIds.has(dependency.ticketId) && !onStory) continue;
+    if (isBlock && input.isBlockLive && !input.isBlockLive(dependency)) continue;
     if (!isBlock && input.hiddenKeys.has(other.key)) continue;
     const ticketId = idByKey.get(other.key);
     const viewerTicketKey = input.ticketsById.get(dependency.ticketId)?.ref.displayId;
@@ -114,7 +123,9 @@ export function digestStoryAdjacency(input: {
       ...(isBlock && viewerTicketKey ? { viewerTicketKey } : {}),
     });
   }
-  const items = [...byKey.values()];
+  const all = [...byKey.values()];
+  const items = input.storyIsEpic ? all.filter((item) => item.relation !== "sibling") : all;
+  const epic = input.storyIsEpic ? all.filter((item) => item.relation === "sibling") : [];
   const active = items
     .filter((item) => isDigestAdjacentActive(item, input.viewerName))
     .toSorted(
@@ -128,7 +139,21 @@ export function digestStoryAdjacency(input: {
     .toSorted(
       (a, b) => Number(a.lane === "done") - Number(b.lane === "done") || a.key.localeCompare(b.key),
     );
-  return { active, quiet };
+  return epic.length > 0 ? { active, quiet, epic } : { active, quiet };
+}
+
+/** Pills a card shows before the rest folds into its count. */
+export const DIGEST_ADJACENT_PILL_LIMIT = 4;
+
+/** Everything a card folds away, as one line: "2 more · 3 done · 2 to do · 8 in epic". */
+export function digestFoldedSummary(adjacency: DigestStoryAdjacency): string {
+  const hidden = Math.max(0, adjacency.active.length - DIGEST_ADJACENT_PILL_LIMIT);
+  const epic = adjacency.epic?.length ?? 0;
+  return [
+    ...(hidden > 0 ? [`${hidden} more`] : []),
+    ...(adjacency.quiet.length > 0 ? [digestQuietSummary(adjacency.quiet)] : []),
+    ...(epic > 0 ? [`${epic} in epic`] : []),
+  ].join(" · ");
 }
 
 /** The collapsed tier as one line: "3 done · 2 to do". */

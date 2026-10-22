@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  DIGEST_ADJACENT_PILL_LIMIT,
+  digestFoldedSummary,
   digestQuietSummary,
   digestStoryAdjacency,
 } from "~/t3team/t3team-projectMyWorkDigestAdjacency";
@@ -154,5 +156,73 @@ describe("digestStoryAdjacency", () => {
       ["IES-850", "blocks-you", "STORY"],
       ["IES-950", "waits-on-you", "STORY"],
     ]);
+  });
+});
+
+describe("digestStoryAdjacency on an epic card, with live blocks only", () => {
+  const row = createTicket({
+    id: "id-ACME-1",
+    status: "In Progress",
+    ref: { displayId: "ACME-1" },
+  });
+  const neighbours = ["ACME-20", "ACME-21", "ACME-22"].map((key) =>
+    createTicket({ id: `id-${key}`, status: "In Progress", ref: { displayId: key } }),
+  );
+  const block = (key: string): DigestDependency => ({
+    ticketId: row.id,
+    relation: "waits-on-you",
+    other: { key, title: key, status: "To Do" },
+  });
+  const epicAdjacency = (dependencies: readonly DigestDependency[], live = () => true) =>
+    digestStoryAdjacency({
+      rowIds: new Set([row.id]),
+      storyId: "id-EPIC",
+      siblings: neighbours,
+      dependencies: [
+        ...dependencies,
+        {
+          ticketId: row.id,
+          relation: "same-story",
+          other: { key: "ACME-23", title: "Older server link", status: "In Review" },
+        },
+      ],
+      hiddenKeys: new Set(["ACME-1"]),
+      ticketsById: new Map([row, ...neighbours].map((t) => [t.id, t])),
+      viewerName: "Viewer",
+      storyIsEpic: true,
+      isBlockLive: live,
+    });
+
+  it("folds an epic's other stories into one count instead of pills", () => {
+    const adjacency = epicAdjacency([block("ACME-30")]);
+    expect(keys(adjacency.active)).toEqual(["ACME-30"]);
+    expect(keys(adjacency.epic ?? [])).toEqual(["ACME-20", "ACME-21", "ACME-22", "ACME-23"]);
+    expect(digestFoldedSummary(adjacency)).toBe("4 in epic");
+  });
+
+  it("leaves out a block that no longer holds anyone up", () => {
+    const adjacency = epicAdjacency([block("ACME-30"), block("ACME-31")], () => false);
+    expect(adjacency.active).toEqual([]);
+  });
+
+  it("shows at most the pill limit, the rest as '+N more'", () => {
+    const many = ["ACME-30", "ACME-31", "ACME-32", "ACME-33", "ACME-34", "ACME-35"].map(block);
+    const adjacency = epicAdjacency(many);
+    expect(adjacency.active).toHaveLength(6);
+    expect(DIGEST_ADJACENT_PILL_LIMIT).toBe(4);
+    expect(digestFoldedSummary(adjacency)).toBe("2 more · 4 in epic");
+  });
+
+  it("keeps a story card's siblings as pills", () => {
+    const { active, epic } = digestStoryAdjacency({
+      rowIds: new Set([row.id]),
+      siblings: neighbours,
+      dependencies: [],
+      hiddenKeys: new Set(),
+      ticketsById: new Map([row, ...neighbours].map((t) => [t.id, t])),
+      viewerName: "Viewer",
+    });
+    expect(keys(active)).toEqual(["ACME-20", "ACME-21", "ACME-22"]);
+    expect(epic).toBeUndefined();
   });
 });

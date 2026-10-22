@@ -36,10 +36,15 @@ export const readLinkedRepositoryStatus = Effect.fn("readLinkedRepositoryStatus"
   const manifest = yield* readPreservedReferenceManifest(
     path.join(referencesRoot, MANIFEST_FILE_NAME),
   );
+  // An unfinished main-repository state migration (e.g. cut by a restart) resumes on the next
+  // status read; the read itself stays file-only and returns at once.
+  yield* sync.resumeStateMigration(workspaceRoot);
+  const stateMigration = yield* sync.stateMigrationStatus(workspaceRoot);
   return {
     linkedRepositories: manifest.linkedRepositories.map((entry) =>
       withSyncState(entry, sync.phase(entry.localPath)),
     ),
+    ...(stateMigration ? { stateMigration } : {}),
   };
 });
 

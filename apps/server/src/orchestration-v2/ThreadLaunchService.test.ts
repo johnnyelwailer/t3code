@@ -188,6 +188,7 @@ function makeHarness(options: HarnessOptions = {}) {
         options.hasCommit ?? ((input) => Effect.succeed(input.refName !== "refs/heads/t3")),
       remoteExists: options.remoteExists ?? (() => Effect.succeed(true)),
       remoteBranchExists: () => Effect.succeed(true),
+      hasRefNamed: () => Effect.succeed(false),
       removeWorktree,
       resolveRemoteTrackingCommit: () =>
         Effect.succeed({ commitSha: "remote-main-sha", remoteRefName: "origin/main" }),
@@ -1326,7 +1327,7 @@ it.effect("renames a temporary branch on an existing worktree to a generated nam
 
 it.effect("rejects a worktree launch before create when baseRef does not resolve", () => {
   const harness = makeHarness({
-    hasCommit: () => Effect.succeed(false),
+    hasCommit: ({ refName }) => Effect.succeed(refName === "HEAD"),
     remoteExists: () => Effect.succeed(false),
   });
   return Effect.gen(function* () {
@@ -1347,7 +1348,7 @@ it.effect("rejects a worktree launch before create when baseRef does not resolve
     }
     assert.equal(failed.operation, "provision-worktree");
     assert.isUndefined(failed.threadId);
-    assert.include(String(failed.cause), "baseRef 'main'");
+    assert.include(String(failed.cause), 'Base ref "main"');
     assert.include(String(failed.cause), "does not resolve to a commit");
     assert.equal(harness.createWorktree.mock.calls.length, 0);
     const shells = yield* threads.listProjectThreads({ projectId, includeSubagents: true });

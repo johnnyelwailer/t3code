@@ -642,7 +642,7 @@ describe("VoiceInputController", () => {
     expect(harness.controller.currentState.error).toContain("background");
   });
   describe("transcript sink", () => {
-    function createSinkHarness(transcript: string) {
+    function createSinkHarness(transcript: string, hasCommittedSpeech?: () => boolean) {
       const harness = createHarness();
       const sent: string[] = [];
       const controller = new VoiceInputController({
@@ -656,6 +656,7 @@ describe("VoiceInputController", () => {
         deleteRecording: () => undefined,
         readDraft: () => draft(),
         commitTranscript: (text) => sent.push(text),
+        ...(hasCommittedSpeech ? { hasCommittedSpeech } : {}),
         onStateChange: vi.fn(),
       });
       return { controller, sent };
@@ -679,6 +680,34 @@ describe("VoiceInputController", () => {
       expect(controller.currentState).toMatchObject({
         phase: "error",
         error: "No speech was detected.",
+      });
+    });
+
+    describe("a live session that already committed utterances", () => {
+      it("ends quietly when the last part is empty, without a no-speech error or a commit", async () => {
+        const { controller, sent } = createSinkHarness("  ", () => true);
+        await controller.start();
+        await controller.stop();
+
+        expect(sent).toEqual([]);
+        expect(controller.currentState.phase).toBe("idle");
+      });
+
+      it("still commits the last part when there is one", async () => {
+        const { controller, sent } = createSinkHarness("and the list", () => true);
+        await controller.start();
+        await controller.stop();
+
+        expect(sent).toEqual(["and the list"]);
+        expect(controller.currentState.phase).toBe("idle");
+      });
+
+      it("keeps the no-speech error for a session that committed nothing", async () => {
+        const { controller } = createSinkHarness("", () => false);
+        await controller.start();
+        await controller.stop();
+
+        expect(controller.currentState).toMatchObject({ phase: "error" });
       });
     });
   });
