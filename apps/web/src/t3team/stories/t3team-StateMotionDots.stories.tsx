@@ -2,7 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { useEffect, useRef, useState } from "react";
 
 import type { RunId } from "@t3tools/contracts";
-import { TimelineRowActivityCtx, WorkingTimelineRow } from "~/components/chat/MessagesTimeline";
+import { TimelineRowActivityCtx } from "~/components/chat/timelineRowContext";
+import { WorkingTimelineRow } from "~/components/chat/TimelineWorkGroupRows";
 import type { ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
 import {
   buildEntries,

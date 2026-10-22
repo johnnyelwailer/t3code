@@ -101,7 +101,7 @@ import {
 import { detachedSurfaceRequestForRightPanelSurface } from "~/t3team/detached/t3team-rightPanelSurfaceDetach";
 import { observeResize } from "~/lib/observeResize";
 
-interface RightPanelTabsProps {
+export interface RightPanelTabsProps {
   mode: PreviewPanelMode;
   maximized?: boolean;
   open?: boolean;

@@ -83,7 +83,7 @@ record of kind `t3team-message-ext`; it is never sent to the provider and is dro
 
 - V1 engine settle preconditions (`requireSettledParentThreadId`, live-child, workflow and
   parent-wait guards) → one `Context.Reference` `T3TeamSettleGuard {check({threadId, commandId,
-origin: "user" | "server"}) → reason | null}` (`apps/server/src/t3team-v2/t3team-settleGuard.ts`),
+  origin: "user" | "server"}) → reason | null}` (`apps/server/src/t3team-v2/t3team-settleGuard.ts`),
   consulted for every user `thread.settle`, every auto-settle, and by the settlement sweep before
   it dispatches (a refused thread is skipped, no rejected receipt).
 - The host provides ONE override, `T3TeamSettleGuardsLive`

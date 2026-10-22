@@ -22,7 +22,14 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20261019` → the 2026-10-19 upstream sync merge commit
+- Current: `t3team/fork-baseline-20261022` → the 2026-10-22 upstream sync merge commit
+  `08997b085a` (203 upstream commits absorbed, `4f651cb10d..60b35a1ee0`, on top of
+  `t3team/fork-baseline-20261021`). Grandfathered: upstream's tree (ChatView/ChatComposer/
+  MessagesTimeline/Sidebar split into hooks and row files, pnpm 12) plus the conflict resolutions
+  that port the fork features into those files. Post-merge fixes stay measured.
+- Before that: `t3team/fork-baseline-20261021` → the 2026-10-21 upstream sync merge commit
+  `634351795a` (upstream `4f651cb10d`).
+- Before that: `t3team/fork-baseline-20261019` → the 2026-10-19 upstream sync merge commit
   `d583ffcede` (642 upstream commits absorbed, `79ad856b4e..1451e7cb23`, on top of
   `t3team/fork-baseline-20261017`). Grandfathered: upstream's tree (React Compiler rules on every
   web file #20791, tests moved to `.browser.test.tsx`, migrations 063/064) plus the conflict
@@ -116,6 +123,13 @@ git push origin t3team/fork-baseline-YYYYMMDD
 Until the new tag is pushed, the guard fails loudly on CI (missing tag), never silently.
 
 ## Allowed Modified Upstream Files
+
+### Upstream sync 2026-10-22
+
+- `apps/server/src/cli/thread.ts`
+  - Upstream's new `t3 thread send --wait` reads `runId`, which the fork's mailbox delivery leaves absent (no run starts yet); `--wait` is skipped when there is no run to wait on.
+- `docs/t3team-mvp/12-profiles-and-skill-packs.md`, `docs/t3team-mvp/40-code-and-team-modes.md`, `packages/agent-runner/README.md`
+  - Fork-owned docs without the prefix; reformatted only, by upstream's newer `vp fmt` (CI `vp check`).
 
 ### Client-only thread icon (voice V1 item 8, PR #606)
 

@@ -1,10 +1,5 @@
-import type {
-  EnvironmentId,
-  OrchestrationV2TurnItem,
-  RunId,
-  T3TeamThreadFacts,
-  ThreadId,
-} from "@t3tools/contracts";
+import type { EnvironmentId, RunId, T3TeamThreadFacts, ThreadId } from "@t3tools/contracts";
+import type { ThreadStructureTurnItem } from "@t3tools/client-runtime/state/models";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 
 import type { MessagesTimelineT3TeamProps } from "~/components/chat/MessagesTimeline";
@@ -48,7 +43,7 @@ export function useT3TeamChatTimelineProps(input: {
     readonly isWorking: boolean;
     readonly waitingOnUser: boolean;
     readonly activeRunId: RunId | null;
-    readonly turnItems: ReadonlyArray<OrchestrationV2TurnItem> | undefined;
+    readonly turnItems: ReadonlyArray<ThreadStructureTurnItem> | undefined;
   };
 }): {
   readonly timelineProps: MessagesTimelineT3TeamProps;

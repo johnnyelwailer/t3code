@@ -23,7 +23,8 @@ function sourceOf(file: string): string {
 
 /** The surfaces doc 07 §4 lists, relative to apps/web/src. */
 const REQUIRED_MOUNTS = [
-  "components/Sidebar.tsx",
+  // Upstream split the sidebar row out of Sidebar.tsx.
+  "components/sidebar/SidebarThreadRow.tsx",
   "components/pullRequest/ThreadPullRequestsPanel.tsx",
   "components/chat/ThreadDetailsPrRow.tsx",
   "components/pullRequest/PullRequestRow.tsx",

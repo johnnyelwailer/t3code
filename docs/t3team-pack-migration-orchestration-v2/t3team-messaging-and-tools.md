@@ -21,8 +21,8 @@ Part of the [pack migration guide](../t3team-pack-migration-orchestration-v2.md)
 - Digest message: id `t3team-mailbox-digest:<firstMessageId>:<attempt>`, `createdBy: "agent"`,
   `creationSource: "server"`, `senderThreadId` = first sender, `dispatchMode: queue_after_active`,
   `notification {source: {kind: "background_task"}, outcome: "updated", summary: "N messages from
-«…»"}`. Text starts `[Inter-agent digest: N message(s)]` with one `[from «title» · thread … · id
-… · urgency …]` block per message (`apps/server/src/t3team-actorReactionFraming.ts`); long
+  «…»"}`. Text starts `[Inter-agent digest: N message(s)]` with one `[from «title» · thread … · id
+  … · urgency …]` block per message (`apps/server/src/t3team-actorReactionFraming.ts`); long
   bodies arrive as subject plus a `t3_read_message` pointer.
 - Injected guidance changed: the standing protocol (first digest per process,
   `ACTOR_STANDING_INSTRUCTION` in `apps/server/src/t3team-actorReactionInput.ts`) and the child
@@ -42,7 +42,7 @@ Part of the [pack migration guide](../t3team-pack-migration-orchestration-v2.md)
   archived recipient wait until it is unarchived. `queued` is not a delivery guarantee.
 - `t3_read_message {message_id}` reads only messages delivered to the calling thread, from
   the mailbox: `{ok, messageId, fromThreadId, createdAt, charCount, text}`. `t3_task_ops
-op: "drain"` delivers the caller's pending mail now when idle, else reports `queued` / `held`.
+  op: "drain"` delivers the caller's pending mail now when idle, else reports `queued` / `held`.
 - Silence watches (`t3_task_ops op: "watch"`) live in `t3team_thread_silence_watches` and
   notify through the mailbox (ids `t3team-silence:…`). "Stopped" = run ended `failed` /
   `interrupted` / `cancelled`, or the thread was deleted or settled; a run that `completed` closes
@@ -117,16 +117,16 @@ entries one release after this lands. In-repo prompts, docs and recipes ship onl
 Behaviour changes:
 
 - Every `t3team_*` tool requires the `orchestration` MCP capability: `This MCP
-credential does not grant orchestration capabilities.`
+  credential does not grant orchestration capabilities.`
   (`apps/server/src/mcp/toolkits/t3team/handlers.ts`). The hidden orchestration author's
   credential resolves with NO capabilities and reaches only `t3_recipe_validate` and
   `t3_orchestration_run` (`apps/server/src/t3team-workflowAuthorMcpScope.ts`).
 - `t3_ask_user` (parameters unchanged) is a pending V2 runtime request `t3team-ask:<uuid>`
   (`kind: "user_input"`, `responseCapability: {type: "message"}`) on the calling thread's active
   run, plus a `user_input_request` turn item. Outside an active turn it fails (`t3_ask_user can
-only be called during an active turn.`). `context` is prepended to `question`. Answers come
+  only be called during an active turn.`). `context` is prepended to `question`. Answers come
   through upstream `runtime-request.respond {requestId, answers: {[questionId]: string |
-string[]}}` (multi-select joined with `•`), dismissal through `thread.user-input.dismiss`;
+  string[]}}` (multi-select joined with `•`), dismissal through `thread.user-input.dismiss`;
   Resume is refused while it is open (`apps/server/src/mcp/toolkits/t3team/t3team-askUserWriter.ts`).
 - `t3_search_thread`, `t3_read_message`, `t3_search_source` scan V2 messages (roles
   `user` / `assistant` / `system`, no `actor`) and tool turn items (activity `kind` = V2 turn-item

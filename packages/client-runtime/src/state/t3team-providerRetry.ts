@@ -19,6 +19,10 @@ import {
 } from "@t3tools/shared/orchestrationV2ThreadError";
 import * as DateTime from "effect/DateTime";
 
+// The quiet structure: a full projection is assignable, and only error items (which never
+// stream) and thread/run fields are read here.
+import type { ThreadStructure } from "./models.ts";
+
 import { resolveProviderInstanceDisplayName } from "./providerInstanceDisplay.ts";
 
 const LIVE_RUN_STATUSES = new Set(["preparing", "starting", "running", "waiting"]);
@@ -36,7 +40,7 @@ export interface ActiveProviderRetry {
   readonly providerLabel: string;
 }
 
-function providerLabel(projection: OrchestrationV2ThreadProjection): string {
+function providerLabel(projection: ThreadStructure): string {
   const instanceId = projection.thread.providerInstanceId;
   const driver = projection.providerSessions.findLast(
     (session) => session.providerInstanceId === instanceId,
@@ -48,9 +52,7 @@ function providerLabel(projection: OrchestrationV2ThreadProjection): string {
 }
 
 /** The newest still-running provider retry of a live run; null once it recovered or failed. */
-export function deriveActiveProviderRetry(
-  projection: OrchestrationV2ThreadProjection,
-): ActiveProviderRetry | null {
+export function deriveActiveProviderRetry(projection: ThreadStructure): ActiveProviderRetry | null {
   const liveRunIds = new Set(
     projection.runs.filter((run) => LIVE_RUN_STATUSES.has(run.status)).map((run) => run.id),
   );
@@ -91,7 +93,7 @@ export interface TransientFailureRecovery {
  * the host armed a recovery for it (the host's classifier also accepts `retryable` failures).
  */
 export function deriveTransientFailureRecovery(
-  projection: OrchestrationV2ThreadProjection,
+  projection: ThreadStructure,
 ): TransientFailureRecovery | null {
   const run = latestUnheldRun(projection.runs);
   const failure = latestRootProviderFailure(run, projection.turnItems);
