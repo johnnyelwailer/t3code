@@ -96,14 +96,18 @@ export function reduceVoiceUi(snapshot: VoiceUiSnapshot, action: VoiceUiAction):
     case "download":
       return { ...snapshot, downloadPercent: action.percent };
     case "commit":
-      return {
-        ...snapshot,
-        state: "committed",
-        heardText: action.text,
-        endedAtMs: snapshot.endedAtMs ?? action.now,
-      };
+      return snapshot.state === "recording"
+        ? { ...snapshot, heardText: action.text }
+        : {
+            ...snapshot,
+            state: "committed",
+            heardText: action.text,
+            endedAtMs: snapshot.endedAtMs ?? action.now,
+          };
     case "tier":
-      return snapshot.state === "committed" ? { ...snapshot, tier: action.tier } : snapshot;
+      return snapshot.state === "committed" || snapshot.state === "recording"
+        ? { ...snapshot, tier: action.tier }
+        : snapshot;
     case "fail":
       return { ...snapshot, state: "failed", failureDetail: action.detail };
     case "settle":

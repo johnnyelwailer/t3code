@@ -8,6 +8,7 @@ import type {
   T3TeamKickoffComposerProps,
 } from "~/t3team/composer/t3team-kickoffComposerProps";
 import { useT3TeamKickoffComposerMenu } from "~/t3team/composer/t3team-useKickoffComposerMenu";
+import { resolveKickoffComposerDraftKey } from "~/t3team/composer/t3team-kickoffComposerDraft";
 import { useT3TeamKickoffComposerText } from "~/t3team/composer/t3team-useKickoffComposerText";
 import { useAddToChatComposerDropTarget } from "~/t3team/hooks/t3team-useAddToChatComposerDropTarget";
 import {
@@ -38,6 +39,7 @@ export const TicketKickoffComposer = forwardRef<
       // Prop kept for API compatibility; live connection comes from useBackendState below.
       isConnected: _ignoredIsConnectedProp,
       projectId,
+      draftKey,
       workspaceRoot,
       slashRecipes,
       onSelectSlashRecipe,
@@ -73,6 +75,7 @@ export const TicketKickoffComposer = forwardRef<
     const { text, cursor, editorRef, setText, setCursor } = useT3TeamKickoffComposerText({
       prefillText,
       hasSelectedRecipe: Boolean(selectedRecipe),
+      draftKey: resolveKickoffComposerDraftKey({ draftKey, projectId }),
     });
 
     const commandMenu = useT3TeamKickoffComposerMenu({

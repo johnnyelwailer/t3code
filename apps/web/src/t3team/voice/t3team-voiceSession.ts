@@ -1,11 +1,19 @@
 /**
  * One voice utterance from transcript to the voice thread: route it to a tier, make sure the
- * thread exists (created on first use, in the project the hotkey fired in, with the role prompt
- * as its first message), then send it with the tier's model and the fresh live state. While a
+ * thread exists (created on first use with the role prompt as its first message, always under
+ * "No project", never in whichever project happens to be open or listed first), then send it
+ * with the tier's model and the fresh live state. While a
  * voice turn is running, utterances queue behind it (existing queue semantics, no interrupt).
  */
 import type { StartThreadTurnInput } from "@t3tools/client-runtime/operations";
-import type { MessageId, ModelSelection, ProjectId, ThreadId } from "@t3tools/contracts";
+import type {
+  ChatAttachment,
+  MessageId,
+  ModelSelection,
+  ProjectId,
+  ThreadId,
+  VoiceTranscriptMetadata,
+} from "@t3tools/contracts";
 
 import { VOICE_ROLE_PROMPT, VOICE_THREAD_TITLE } from "./t3team-voiceRolePrompt";
 import {
@@ -14,6 +22,7 @@ import {
   type VoiceThreadShell,
 } from "./t3team-voiceLiveState";
 import { VOICE_TIER_MODEL, type VoiceTier } from "./t3team-voiceRouting";
+import { voiceTranscriptMetaFile } from "./t3team-voiceTranscriptMeta";
 import type { VoiceThreadHome } from "./t3team-voiceThreadStore";
 
 export type VoiceSubmitResult =
@@ -29,11 +38,18 @@ export interface VoiceSessionDeps {
   readonly home: () => VoiceThreadHome | undefined;
   readonly remember: (home: VoiceThreadHome) => void;
   readonly forget: () => void;
-  /** The project the hotkey fired in, or null when no project is available. */
-  readonly homeProject: () => ProjectId | null;
+  /**
+   * The environment's "No project" (scratch) project, created on first use, or null when the
+   * machine offers none. Voice threads only ever live here.
+   */
+  readonly projectlessProject: () => Promise<ProjectId | null>;
   readonly route: (text: string) => Promise<ModelSelection>;
   readonly startTurn: (input: StartThreadTurnInput) => Promise<void>;
+  /** Uploads a generated file for the next message; null when it could not be uploaded. */
+  readonly uploadFile?: (file: File) => Promise<ChatAttachment | null>;
   readonly pinAndKeep: (threadId: ThreadId) => Promise<void>;
+  /** Undoes `pinAndKeep` for a voice thread that was replaced: it goes back to being a normal thread. */
+  readonly release: (threadId: ThreadId) => Promise<void>;
   readonly waitForThread: (threadId: ThreadId) => Promise<void>;
   readonly newThreadId: () => ThreadId;
   readonly newMessageId: () => MessageId;
@@ -45,7 +61,7 @@ const RUNTIME = { runtimeMode: "auto", interactionMode: "default" } as const;
 const isLive = (thread: VoiceThreadShell) =>
   thread.archivedAt === null && thread.deletedAt === null;
 
-async function createVoiceThread(deps: VoiceSessionDeps, projectId: ProjectId) {
+export async function createVoiceThread(deps: VoiceSessionDeps, projectId: ProjectId) {
   const threadId = deps.newThreadId();
   await deps.startTurn({
     threadId,
@@ -76,27 +92,44 @@ async function createVoiceThread(deps: VoiceSessionDeps, projectId: ProjectId) {
 }
 
 async function ensureVoiceThread(deps: VoiceSessionDeps): Promise<ThreadId | null> {
+  const projectId = await deps.projectlessProject();
   const home = deps.home();
+  // A voice thread remembered from before voice was projectless (it lives in a real project)
+  // is left alone and replaced by a fresh one under "No project".
   if (
     home !== undefined &&
+    home.projectId === projectId &&
     deps.threads().some((thread) => thread.id === home.threadId && isLive(thread))
   ) {
     return home.threadId;
   }
   if (home !== undefined) deps.forget();
-  const projectId = deps.homeProject();
   return projectId === null ? null : createVoiceThread(deps, projectId);
 }
 
 const tierOf = (selection: ModelSelection): VoiceTier =>
   selection.model === VOICE_TIER_MODEL.control.model ? "control" : "synthesis";
 
+/** The transcript's whisper metadata as a file attachment; a failed upload never blocks the message. */
+async function transcriptAttachments(
+  deps: VoiceSessionDeps,
+  metadata: VoiceTranscriptMetadata | undefined,
+): Promise<ChatAttachment[]> {
+  if (metadata === undefined || deps.uploadFile === undefined) return [];
+  const attachment = await deps.uploadFile(voiceTranscriptMetaFile(metadata)).catch(() => null);
+  return attachment === null ? [] : [attachment];
+}
+
 async function sendVoiceUtterance(
   deps: VoiceSessionDeps,
   threadId: ThreadId,
   text: string,
+  metadata?: VoiceTranscriptMetadata,
 ): Promise<VoiceTier> {
-  const modelSelection = await deps.route(text);
+  const [modelSelection, attachments] = await Promise.all([
+    deps.route(text),
+    transcriptAttachments(deps, metadata),
+  ]);
   const live = withVoiceLiveState(text, voiceLiveThreads(deps.threads(), threadId));
   await deps.startTurn({
     threadId,
@@ -104,7 +137,7 @@ async function sendVoiceUtterance(
       messageId: deps.newMessageId(),
       role: "user",
       text: live.text,
-      attachments: [],
+      attachments,
       context: { version: 1, records: live.records },
     },
     modelSelection,
@@ -114,13 +147,21 @@ async function sendVoiceUtterance(
   return tierOf(modelSelection);
 }
 
-async function submit(deps: VoiceSessionDeps, text: string): Promise<VoiceSubmitResult> {
+async function submit(
+  deps: VoiceSessionDeps,
+  text: string,
+  metadata?: VoiceTranscriptMetadata,
+): Promise<VoiceSubmitResult> {
   try {
     const threadId = await ensureVoiceThread(deps);
     if (threadId === null) {
-      return { status: "error", code: "no-project", detail: "Open a project to start voice." };
+      return {
+        status: "error",
+        code: "no-project",
+        detail: 'This machine has no "No project" folder for the voice thread.',
+      };
     }
-    const tier = await sendVoiceUtterance(deps, threadId, text);
+    const tier = await sendVoiceUtterance(deps, threadId, text, metadata);
     return { status: "sent", tier };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -130,12 +171,17 @@ async function submit(deps: VoiceSessionDeps, text: string): Promise<VoiceSubmit
 
 let tail: Promise<unknown> = Promise.resolve();
 
-/** Utterances are processed strictly in order, so first-use creation never races itself. */
+/** Voice work runs strictly in order, so creating or replacing the thread never races itself. */
+export function enqueueVoiceWork<T>(work: () => Promise<T>): Promise<T> {
+  const next = tail.then(work);
+  tail = next.catch(() => undefined);
+  return next;
+}
+
 export function submitVoiceUtterance(
   deps: VoiceSessionDeps,
   text: string,
+  metadata?: VoiceTranscriptMetadata,
 ): Promise<VoiceSubmitResult> {
-  const next = tail.then(() => submit(deps, text.trim()));
-  tail = next.catch(() => undefined);
-  return next;
+  return enqueueVoiceWork(() => submit(deps, text.trim(), metadata));
 }

@@ -1006,6 +1006,15 @@ export const SETTINGS_SEARCH_ITEMS = [
     cloudOnly: true,
   },
   {
+    id: "t3-connect-sign-in-notice",
+    localEnvironmentOnly: true,
+    title: "T3 Connect sign-in reminder",
+    to: "/settings/connections",
+    targetId: "connections-environment",
+    searchTerms: ["t3 connect sign in notice reminder prompt browser cloud sessions"],
+    cloudOnly: true,
+  },
+  {
     id: "hold-webhooks-while-offline",
     localEnvironmentOnly: true,
     title: "Hold webhooks while offline",

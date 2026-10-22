@@ -15,7 +15,7 @@ const MESSAGES: Readonly<Record<VoiceFailureCode, string>> = {
   "transcription-failed": "Couldn't understand that recording. Please say it again.",
   "mic-denied": "The microphone is unavailable or in use by another app.",
   "hotkey-unavailable": "The voice shortcut is taken by another app, so it can't be used.",
-  "no-project": "Open a project first so voice has a place to live.",
+  "no-project": 'This machine has no "No project" folder, so voice has nowhere to live.',
   "send-failed": "The voice message couldn't be sent.",
 };
 

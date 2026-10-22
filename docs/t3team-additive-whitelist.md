@@ -520,3 +520,11 @@ All already listed in `allowedModifiedFiles`; each gains only the voice-surface 
 - `apps/web/src/routes/__root.tsx` — the floating widget route renders bare; the voice session host replaces the old pill.
 - `apps/web/src/routeTree.gen.ts` — generated entry for `/t3team-voice-widget`.
 - `apps/web/src/components/chat/QueuedRunsControl.tsx` — the queued-message preview drops the `voice-state` reference label too, so the model-only live-state entry never shows in the queue.
+
+## Voice V1 readiness (2026-10-21)
+
+- `docs/user/composer.md` — gains the "Voice input on desktop" section (shortcut, composer mic, Settings → Voice, privacy); the closest existing user doc, so no new docs page.
+
+## Cross-environment project identity by work source (2026-10-21)
+
+- `packages/client-runtime/src/state/projectGrouping.ts` — one import and one `deriveWorkSourceProjectKey(project) ??` line ahead of the repository key in `deriveLogicalProjectKey`, plus `"source"` in its three `Pick`s. A project bound to an external work source (Jira, …) groups by that binding, so the same t3team project on two T3 Connect machines is one sidebar entry, and a bound project no longer merges into a plain project that shares its repository. The logic lives in `t3team-workSourceProjectKey.ts`; unbound projects group exactly as before.

@@ -41,29 +41,60 @@ const rows = [
   issue("IES-22745", { assignee: "Mia", status: "In Progress", parentId: "IES-21795" }),
 ];
 
+const insertRows = (target: typeof identity, list: readonly BacklogResourceRef[]) =>
+  Effect.gen(function* () {
+    yield* ensureBacklogCacheTables();
+    const sql = yield* SqlClient.SqlClient;
+    for (const [index, row] of list.entries()) {
+      yield* sql`
+        INSERT INTO t3team_atlassian_backlog_issues (
+          provider, account_id, external_project_id, issue_id, issue_key, resource_json, updated_at
+        ) VALUES (
+          ${target.provider}, ${target.accountId}, ${target.externalProjectId},
+          ${String(index)}, ${(row as { displayId: string }).displayId},
+          ${serializeBacklogCacheJson(row)}, ${index}
+        )`;
+    }
+  });
+
 it.layer(SqlitePersistenceMemory)("readDigestDependencies", (it) => {
-  it.effect("names who waits on the viewer, whom they wait on, and who shares the story", () =>
+  it.effect("names who waits on the viewer and whom they wait on; an epic is no shared story", () =>
     Effect.gen(function* () {
-      yield* ensureBacklogCacheTables();
-      const sql = yield* SqlClient.SqlClient;
-      for (const [index, row] of rows.entries()) {
-        yield* sql`
-          INSERT INTO t3team_atlassian_backlog_issues (
-            provider, account_id, external_project_id, issue_id, issue_key, resource_json, updated_at
-          ) VALUES (
-            ${identity.provider}, ${identity.accountId}, ${identity.externalProjectId},
-            ${String(index)}, ${(row as { displayId: string }).displayId},
-            ${serializeBacklogCacheJson(row)}, ${index}
-          )`;
-      }
+      yield* insertRows(identity, rows);
       const dependencies = yield* readDigestDependencies({ identity, assigned: [mine] });
+      // IES-20767 is a story: its parent is an epic, whose other stories are no "same story".
       assert.deepStrictEqual(
         dependencies.map((d) => `${d.ticketKey} ${d.relation} ${d.other.key} ${d.other.assignee}`),
-        [
-          "IES-20767 waits-on-you IES-22428 Anna",
-          "IES-20767 you-wait-on IES-19000 Kai",
-          "IES-20767 same-story IES-22745 Mia",
-        ],
+        ["IES-20767 waits-on-you IES-22428 Anna", "IES-20767 you-wait-on IES-19000 Kai"],
+      );
+    }),
+  );
+
+  it.effect("names who shares the story with the viewer's subtask", () =>
+    Effect.gen(function* () {
+      const project = { ...identity, externalProjectId: "20001" };
+      const subtask = issue("ACME-11", {
+        parentId: "ACME-10",
+        assignee: "Viewer",
+        issueTypeIsSubtask: true,
+      });
+      yield* insertRows(project, [
+        subtask,
+        issue("ACME-12", {
+          assignee: "Bo",
+          status: "In Progress",
+          parentId: "ACME-10",
+          type: "Sub-task",
+        }),
+        issue("ACME-10", { assignee: "Viewer", status: "In Progress", type: "Story" }),
+      ]);
+      const dependencies = yield* readDigestDependencies({
+        identity: project,
+        assigned: [subtask],
+      });
+      assert.deepStrictEqual(
+        dependencies.map((d) => `${d.ticketKey} ${d.relation} ${d.other.key}`),
+        ["ACME-11 same-story ACME-12"],
       );
     }),
   );

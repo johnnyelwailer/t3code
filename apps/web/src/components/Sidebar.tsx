@@ -5130,6 +5130,9 @@ export default function Sidebar() {
                               onOpen={() =>
                                 navigateToThread(scopeThreadRef(thread.environmentId, thread.id))
                               }
+                              onOpenThread={(threadId) =>
+                                navigateToThread(scopeThreadRef(thread.environmentId, threadId))
+                              }
                             />
                           );
                         }

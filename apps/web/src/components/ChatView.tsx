@@ -278,6 +278,7 @@ import {
   GitBranchIcon,
   ShieldQuestionIcon,
   TargetIcon,
+  LoaderCircleIcon,
   WifiOffIcon,
 } from "lucide-react";
 import { cn, randomUUID } from "~/lib/utils";
@@ -303,6 +304,7 @@ import { useNowMinute } from "../hooks/useNowMinute";
 import { usePanelAnimationSettings, usePanelPresence } from "../panelAnimations";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionComposerGate";
+import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
 import { useCloudQueuedSendOptimisticMessage } from "~/cloud/t3team-useCloudQueuedSendOptimisticMessage";
 import { CloudQueuedSendCard } from "~/cloud/t3team-CloudQueuedSendCard";
 import { useRemoveClonedProject } from "../hooks/useRemoveClonedProject";
@@ -363,6 +365,10 @@ import { type ReviewCommentContext } from "../reviewCommentContext";
 import { environmentCatalog } from "../connection/catalog";
 import { ConnectionDiagnosisHeadline } from "./settings/ConnectionDiagnosisDetails";
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
+import {
+  environmentReconnectGraceMs,
+  resolveEnvironmentUnavailableBannerCopy,
+} from "./t3team-environmentReconnectBanner";
 import { useEnvironmentDisconnectDelay } from "../hooks/useEnvironmentDisconnectDelay";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { useKnownTerminalSessions, useThreadRunningTerminalIds } from "../state/terminalSessions";
@@ -408,6 +414,7 @@ import { environmentShell, useEnvironmentShellHasSnapshot } from "../state/shell
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import type { ChatViewT3TeamExtensionProps } from "~/t3team/t3team-chatViewExtensions";
 import { appendContextAttachmentsToPrompt } from "~/t3team/chat/t3team-prepareThreadContextAttachments";
+import { planRuntimeModeSwitch } from "~/t3team/chat/t3team-runtimeModeSwitch";
 import {
   buildContextAttachmentMessageExt,
   withT3TeamContextAttachmentExt,
@@ -2120,6 +2127,12 @@ export default function ChatView(props: ChatViewProps) {
     activeEnvironmentConnectionPhase === "reconnecting"
       ? (activeEnvironment?.environmentId ?? null)
       : null;
+  // t3team: the desktop's own backend (primary or desktop-local) restarting is
+  // not a network problem; wait longer and use quiet copy (see helper).
+  const activeEnvironmentIsLocal =
+    activeEnvironment !== null &&
+    (activeEnvironment.entry.target._tag === "PrimaryConnectionTarget" ||
+      isDesktopLocalConnectionTarget(activeEnvironment.entry.target));
   const [reconnectWarningGraceElapsedEnvironmentId, setReconnectWarningGraceElapsedEnvironmentId] =
     useState<EnvironmentId | null>(null);
   // Each reconnect attempt gets its own grace period, including a later one to
@@ -2137,10 +2150,11 @@ export default function ChatView(props: ChatViewProps) {
   );
   useEffect(() => {
     if (activeReconnectingEnvironmentId === null) return;
-    return scheduleEnvironmentReconnectWarning(() =>
-      setReconnectWarningGraceElapsedEnvironmentId(activeReconnectingEnvironmentId),
+    return scheduleEnvironmentReconnectWarning(
+      () => setReconnectWarningGraceElapsedEnvironmentId(activeReconnectingEnvironmentId),
+      environmentReconnectGraceMs(activeEnvironmentIsLocal),
     );
-  }, [activeReconnectingEnvironmentId]);
+  }, [activeEnvironmentIsLocal, activeReconnectingEnvironmentId]);
   const activeEnvironmentUnavailableLabel = activeEnvironment?.label ?? null;
   const activeEnvironmentUnavailableState = (() => {
     if (!activeEnvironmentUnavailable || !activeEnvironmentUnavailableLabel || !activeEnvironment) {
@@ -2450,17 +2464,27 @@ export default function ChatView(props: ChatViewProps) {
     const suppressUnavailableBanner =
       environmentReconnecting && (updateRunning || !reconnectWarningGraceElapsed);
     if (activeEnvironmentUnavailableState && unavailableConnection && !suppressUnavailableBanner) {
+      const unavailableCopy = resolveEnvironmentUnavailableBannerCopy({
+        label: activeEnvironmentUnavailableState.label,
+        phase: unavailableConnection.phase,
+        isLocal: activeEnvironmentIsLocal,
+      });
       items.push({
         id: `environment-unavailable:${activeEnvironmentUnavailableState.environmentId}`,
-        variant: unavailableConnection.phase === "error" ? "error" : "warning",
-        icon: <WifiOffIcon />,
-        title: `${activeEnvironmentUnavailableState.label} is ${environmentReconnecting ? "reconnecting" : "offline"}`,
-        description: activeEnvironment ? (
-          <ConnectionDiagnosisHeadline environment={activeEnvironment} />
-        ) : undefined,
+        variant: unavailableCopy.variant,
+        icon: unavailableCopy.quiet ? (
+          <LoaderCircleIcon className="animate-spin" />
+        ) : (
+          <WifiOffIcon />
+        ),
+        title: unavailableCopy.title,
+        description:
+          activeEnvironment && !unavailableCopy.quiet ? (
+            <ConnectionDiagnosisHeadline environment={activeEnvironment} />
+          ) : undefined,
         actions: (
           <>
-            {!environmentReconnecting ? (
+            {unavailableCopy.showReconnect ? (
               <Button
                 size="xs"
                 variant="ghost"
@@ -3875,10 +3899,28 @@ export default function ChatView(props: ChatViewProps) {
   });
 
   const handleRuntimeModeChange = (mode: RuntimeMode) => {
-    if (mode === runtimeMode) return;
+    const plan = planRuntimeModeSwitch({
+      mode,
+      currentMode: runtimeMode,
+      isServerThread: isServerThread && serverThread !== undefined && serverThread !== null,
+      serverRuntimeMode: serverThread?.runtimeMode,
+    });
+    if (plan === "none") return;
     setComposerDraftRuntimeMode(composerDraftTarget, mode);
     if (isLocalDraftThread) {
       setDraftThreadContext(composerDraftTarget, { runtimeMode: mode });
+    }
+    if (plan === "persist" && serverThread) {
+      // Applied now, not on the next typed send: voice threads and running turns never send
+      // from this composer, so they would otherwise keep the old mode (t3team).
+      void setThreadRuntimeMode({
+        environmentId,
+        input: {
+          threadId: serverThread.id,
+          runtimeMode: mode,
+          createdAt: new Date().toISOString(),
+        },
+      });
     }
     scheduleComposerFocus();
   };
@@ -8751,6 +8793,12 @@ export default function ChatView(props: ChatViewProps) {
                             : undefined
                         }
                       >
+                        <T3TeamCompanionSlot
+                          placement="thread.new"
+                          mood="newThread"
+                          size="md"
+                          className="mb-2 flex justify-center"
+                        />
                         <DraftHeroHeadline
                           draftId={draftId}
                           activeProjectRef={activeProjectRef}

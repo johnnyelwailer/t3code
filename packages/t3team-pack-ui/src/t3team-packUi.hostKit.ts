@@ -7,6 +7,7 @@ import type { ComponentType } from "react";
 
 import type { PackDoc, PackDocumentState } from "./t3team-packUi.contract.ts";
 import type { PackIconProps } from "./t3team-packUi.icons.ts";
+import type { PackModelStageProps } from "./t3team-packUi.modelStage.ts";
 import type { PackNavigation } from "./t3team-packUi.navigation.ts";
 import type {
   PackOverlayTriggerProps,
@@ -94,6 +95,11 @@ export interface PackUiHostKit {
   readonly Markdown: ComponentType<PackMarkdownProps>;
   readonly WidgetFrame: ComponentType<PackWidgetFrameProps>;
   readonly Icon: ComponentType<PackIconProps>;
+  /**
+   * A real-time 3D model with a power-aware fallback ladder (`t3team-packUi.modelStage.ts`). The
+   * renderer loads lazily, and only when a tier needs WebGL.
+   */
+  readonly ModelStage: ComponentType<PackModelStageProps>;
 
   // Motion and media
   /** A CSS media query, live. */

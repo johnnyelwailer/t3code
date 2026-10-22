@@ -1177,7 +1177,9 @@ export const make = Effect.gen(function* () {
       ...(input.item.checksState === undefined || input.item.checksState === null
         ? {}
         : { checksState: input.item.checksState }),
+      // A merged or closed PR keeps any review request nobody answered; it waits on no one.
       viewerReviewRequested:
+        input.item.state === "open" &&
         input.item.author?.login.toLowerCase() !== viewer &&
         input.item.reviewRequestLogins.some((login) => login.toLowerCase() === viewer),
       labels: input.item.labels,

@@ -42,7 +42,7 @@ let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
 const TRANSCRIBER = {
-  model: "large-v3-turbo",
+  model: "",
   modelPath: "",
   language: "auto",
   languages: "de,en",

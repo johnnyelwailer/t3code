@@ -5,11 +5,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { VoiceComposerDock } from "../t3team-VoiceComposerDock";
+import { VoiceComposerInline } from "../t3team-VoiceComposerInline";
 import { VoiceComposerMic } from "../t3team-VoiceComposerMic";
 import { useVoiceThreadStore } from "../t3team-voiceThreadStore";
 import { VoiceThreadRow } from "./t3team-VoiceThreadRow";
 import { IDLE_VOICE_UI, type VoiceUiSnapshot, type VoiceUiState } from "./t3team-voiceUiModel";
-import { IDLE_VOICE_LIVE, useVoiceUiStore } from "./t3team-voiceUiStore";
+import { IDLE_VOICE_LIVE, useVoiceUiStore, type VoiceUiLive } from "./t3team-voiceUiStore";
 
 const controls = {
   toggle: vi.fn(),
@@ -26,9 +27,14 @@ let root: Root | null = null;
 function show(
   state: VoiceUiState,
   extra: Partial<VoiceUiSnapshot> = {},
-  live: { level: number; partial: string } = IDLE_VOICE_LIVE,
+  live: Partial<VoiceUiLive> = {},
 ) {
-  act(() => useVoiceUiStore.setState({ snapshot: { ...IDLE_VOICE_UI, state, ...extra }, live }));
+  act(() =>
+    useVoiceUiStore.setState({
+      snapshot: { ...IDLE_VOICE_UI, state, ...extra },
+      live: { ...IDLE_VOICE_LIVE, ...live },
+    }),
+  );
 }
 
 function mount(node: React.ReactNode) {
@@ -81,33 +87,11 @@ describe("VoiceComposerDock", () => {
     expect(container!.textContent).toBe("");
   });
 
-  it("grows out of the composer when recording and stops from its Stop button", () => {
+  it("shows no card above the composer while recording; that lives inline now", () => {
     show("recording", { startedAtMs: Date.now() }, { level: 0.3, partial: "open the board" });
     mount(dock());
-    const surface = container!.querySelector('[data-testid="voice-composer-dock"]')!;
-    expect(surface.getAttribute("data-state")).toBe("recording");
-    expect(container!.textContent).toContain("Listening");
-    expect(container!.textContent).toContain("open the board");
-    act(() => button("Stop")!.click());
-    expect(controls.toggle).toHaveBeenCalledOnce();
-  });
-
-  it("holds Stop while the recording is being written down", () => {
-    show("transcribing", { startedAtMs: 0, endedAtMs: 2_000 }, { level: 0, partial: "open" });
-    mount(dock());
-    expect(container!.textContent).toContain("Writing it down");
-    expect((button("Stop") as HTMLButtonElement).disabled).toBe(true);
-  });
-
-  it("collapses on commit but keeps its face until the collapse is over", () => {
-    show("recording", { startedAtMs: Date.now() }, { level: 0, partial: "open the board" });
-    mount(dock());
-    show("committed", { heardText: "open the board", startedAtMs: 0, endedAtMs: 1_000 });
-    const surface = container!.querySelector('[data-testid="voice-composer-dock"]');
-    expect(surface).not.toBeNull();
-    expect(surface!.hasAttribute("data-expanded")).toBe(false);
-    expect(surface!.getAttribute("data-state")).toBe("recording");
-    expect(container!.textContent).toContain("open the board");
+    expect(container!.querySelector('[data-testid="voice-composer-dock"]')).toBeNull();
+    expect(container!.textContent).toBe("");
   });
 
   it("is only the voice thread's", () => {
@@ -146,6 +130,53 @@ describe("VoiceComposerDock", () => {
     show("recording", { startedAtMs: Date.now() });
     useVoiceUiStore.setState({ controls: null });
     mount(dock());
+    expect(container!.textContent).toBe("");
+  });
+});
+
+describe("VoiceComposerInline", () => {
+  const inline = (threadId = VOICE_THREAD) => (
+    <VoiceComposerInline environmentId={ENV} threadId={threadId} />
+  );
+
+  it("streams the words into the composer with a level dot, a timer and a small stop", () => {
+    show("recording", { startedAtMs: Date.now() }, { level: 0.3, partial: "open the board" });
+    mount(inline());
+    const row = container!.querySelector('[data-testid="voice-composer-inline"]')!;
+    expect(row.getAttribute("data-state")).toBe("recording");
+    expect(container!.textContent).toContain("open the board");
+    expect(container!.querySelector('[data-testid="voice-inline-level"]')).not.toBeNull();
+    act(() => button("Stop recording")!.click());
+    expect(controls.toggle).toHaveBeenCalledOnce();
+  });
+
+  it("says listening before any words, and warming up with its progress while the model loads", () => {
+    show("recording", { startedAtMs: Date.now() });
+    mount(inline());
+    expect(container!.textContent).toContain("Listening…");
+    show(
+      "recording",
+      { startedAtMs: Date.now() },
+      { warmup: { stage: "preparing-gpu", percent: 65 } },
+    );
+    expect(container!.textContent).toContain("Warming up…");
+    const bar = container!.querySelector('[role="progressbar"]') as HTMLElement;
+    expect(bar.getAttribute("aria-valuenow")).toBe("65");
+  });
+
+  it("counts the final pass after stop and drops the stop button", () => {
+    show("transcribing", { startedAtMs: 0, endedAtMs: Date.now() - 3_000 }, { partial: "" });
+    mount(inline());
+    expect(container!.textContent).toContain("Transcribing… 3 s");
+    expect(button("Stop recording")).toBeUndefined();
+  });
+
+  it("is only the voice thread's and absent at rest", () => {
+    show("recording", { startedAtMs: Date.now() });
+    mount(inline("another-thread"));
+    expect(container!.textContent).toBe("");
+    show("idle");
+    act(() => root!.render(inline()));
     expect(container!.textContent).toBe("");
   });
 });
@@ -211,5 +242,16 @@ describe("VoiceThreadRow", () => {
     show("committed", { heardText: "hi", startedAtMs: 0, endedAtMs: 1_000 });
     mount(<VoiceThreadRow title="Voice" isActive={false} keys={[]} />);
     expect(container!.textContent).toContain("heard");
+  });
+});
+
+describe("VoiceThreadRow warm-up", () => {
+  it("says warming up with a thin bar while the model loads, then goes back to the level", () => {
+    show("recording", { startedAtMs: Date.now() }, { warmup: { stage: "loading", percent: 15 } });
+    mount(<VoiceThreadRow title="Voice" isActive={false} keys={[]} />);
+    expect(container!.textContent).toContain("warming up…");
+    expect(container!.querySelector('[role="progressbar"]')).not.toBeNull();
+    show("recording", { startedAtMs: Date.now() }, { warmup: null });
+    expect(container!.textContent).not.toContain("warming up");
   });
 });

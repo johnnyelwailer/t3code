@@ -84,6 +84,10 @@ import { persist, type PersistStorage, type StorageValue } from "zustand/middlew
 import { useShallow } from "zustand/react/shallow";
 import { createDeferredStorage, createMemoryStorage } from "./lib/storage";
 import { notifyThreadComposing } from "./t3team/chat/t3team-threadComposingSink";
+import {
+  installComposerDraftFlushTriggers,
+  shouldWriteThroughComposerDraft,
+} from "./t3team/composer/t3team-composerDraftFlushTriggers";
 import { getDefaultServerModel } from "./providerModels";
 import {
   replaceComposerContextReferences,
@@ -151,11 +155,11 @@ export function flushComposerDraftStorage(): void {
   composerDebouncedStorage.flush();
 }
 
-if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-  window.addEventListener("beforeunload", () => {
-    composerDebouncedStorage.flush();
-  });
-}
+// Flush pending composer draft writes before the page can go away (unload, hide, blur).
+installComposerDraftFlushTriggers(() => composerDebouncedStorage.flush(), {
+  window: typeof window !== "undefined" ? window : undefined,
+  document: typeof document !== "undefined" ? document : undefined,
+});
 
 export const PersistedComposerImageAttachment = Schema.Struct({
   id: Schema.String,
@@ -2963,6 +2967,9 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             }
             return { draftsByThreadKey: nextDraftsByThreadKey };
           });
+          if (shouldWriteThroughComposerDraft(threadRef)) {
+            composerDebouncedStorage.flush();
+          }
         },
         setTerminalContexts: (threadRef, contexts) => {
           const threadKey = resolveComposerDraftKey(get(), threadRef);

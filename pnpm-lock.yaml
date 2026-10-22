@@ -1088,6 +1088,9 @@ importers:
       tailwind-merge:
         specifier: ^3.4.0
         version: 3.6.0
+      three:
+        specifier: 0.180.0
+        version: 0.180.0
       unbash:
         specifier: ^5.0.0
         version: 5.0.0
@@ -1140,6 +1143,9 @@ importers:
       '@types/react-test-renderer':
         specifier: 19.1.0
         version: 19.1.0
+      '@types/three':
+        specifier: 0.180.0
+        version: 0.180.0
       '@types/use-sync-external-store':
         specifier: ^0.0.6
         version: 0.0.6

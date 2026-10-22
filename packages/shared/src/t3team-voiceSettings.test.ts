@@ -4,9 +4,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { applyServerSettingsPatch } from "./serverSettings.ts";
 
 describe("voice transcriber settings", () => {
-  it("defaults to large-v3-turbo with detection and automatic language and the de,en picker list", () => {
+  it("defaults to an automatic model with detection and automatic language and the de,en picker list", () => {
     expect(DEFAULT_SERVER_SETTINGS.voice.transcriber).toEqual({
-      model: "large-v3-turbo",
+      model: "",
       modelPath: "",
       language: "auto",
       languages: "de,en",
@@ -19,7 +19,7 @@ describe("voice transcriber settings", () => {
       voice: { transcriber: { modelPath: "E:/models/ggml-largev3.bin", language: "de" } },
     });
     expect(withPath.voice.transcriber).toEqual({
-      model: "large-v3-turbo",
+      model: "",
       modelPath: "E:/models/ggml-largev3.bin",
       language: "de",
       languages: "de,en",
@@ -30,6 +30,19 @@ describe("voice transcriber settings", () => {
       voice: { transcriber: { modelPath: "" } },
     });
     expect(cleared.voice.transcriber).toMatchObject({ modelPath: "", language: "de" });
+  });
+
+  it("round-trips the model and the auto-commit silence like every other field", () => {
+    const patched = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      voice: { transcriber: { model: "small", silenceMs: 0 } },
+    });
+    expect(patched.voice.transcriber).toEqual({
+      model: "small",
+      modelPath: "",
+      language: "auto",
+      languages: "de,en",
+      silenceMs: 0,
+    });
   });
 
   it("patches the picker list on its own, and an empty list is allowed", () => {

@@ -38,8 +38,6 @@ export function useVoiceWidgetBridge(): readonly string[] {
   const live = useVoiceStream({
     active: state === "recording" || state === "transcribing",
     sessionIdRef,
-    onAutoCommit: noop,
-    onLanguage: noop,
   });
   useEffect(() => useVoiceUiStore.getState().setLive(live), [live]);
 

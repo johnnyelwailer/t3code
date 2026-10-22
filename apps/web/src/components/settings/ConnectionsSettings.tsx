@@ -88,6 +88,7 @@ import {
 } from "./settingsLayout";
 import { LocalEnvironmentSetting } from "./LocalEnvironmentSetting";
 import { searchableSetting } from "./settingsSearch";
+import { ConnectSignInNoticeSetting } from "./t3team-ConnectSignInNoticeSetting";
 import { EnvironmentIconMenu } from "./EnvironmentIconPicker";
 import { EnvironmentRoutesList } from "./EnvironmentRoutesList";
 import {
@@ -2022,6 +2023,7 @@ function ConfiguredCloudLinkRow({ canManageRelay }: { readonly canManageRelay: b
           description="This environment was removed from T3 Connect. Run `t3 connect link` on the host to link it again."
         />
       ) : null}
+      <ConnectSignInNoticeSetting />
       <SettingsRow
         title={searchableSetting("publish-agent-activity").title}
         description="Send activity to mobile notifications and Live Activities without T3 Connect."

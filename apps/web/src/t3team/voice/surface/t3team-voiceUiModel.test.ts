@@ -64,6 +64,37 @@ describe("reduceVoiceUi", () => {
     expect(reduceVoiceUi(committed, { type: "settle" })).toEqual(IDLE_VOICE_UI);
   });
 
+  it("keeps recording when an utterance is committed mid-session", () => {
+    const heard = run([
+      phase("recording", 1_000),
+      { type: "commit", text: "open the board", now: 3_400 },
+      { type: "tier", tier: "control" },
+    ]);
+    expect(heard).toMatchObject({
+      state: "recording",
+      heardText: "open the board",
+      tier: "control",
+      startedAtMs: 1_000,
+      endedAtMs: null,
+    });
+    const second = reduceVoiceUi(heard, { type: "commit", text: "and the list", now: 6_000 });
+    expect(second).toMatchObject({ state: "recording", heardText: "and the list" });
+    expect(reduceVoiceUi(second, phase("transcribing", 8_000))).toMatchObject({
+      state: "transcribing",
+      endedAtMs: 8_000,
+    });
+  });
+
+  it("commits the tail of a session that was ended while it was still being written", () => {
+    expect(
+      run([
+        phase("recording", 1_000),
+        phase("transcribing", 5_000),
+        { type: "commit", text: "the rest", now: 7_000 },
+      ]),
+    ).toMatchObject({ state: "committed", heardText: "the rest", endedAtMs: 5_000 });
+  });
+
   it("ignores a tier that arrives after the heard moment settled", () => {
     expect(reduceVoiceUi(IDLE_VOICE_UI, { type: "tier", tier: "control" })).toEqual(IDLE_VOICE_UI);
   });

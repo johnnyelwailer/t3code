@@ -146,6 +146,16 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(IpcChannels.REQUEST_SNAP_SHOT_PERMISSIONS_CHANNEL, includeAccessibility),
   getSnapShotState: () => ipcRenderer.invoke(IpcChannels.GET_SNAP_SHOT_STATE_CHANNEL),
   getVoiceHotkeyState: () => ipcRenderer.invoke(IpcChannels.GET_VOICE_HOTKEY_STATE_CHANNEL),
+  getPowerState: () => ipcRenderer.invoke(IpcChannels.GET_POWER_STATE_CHANNEL),
+  onPowerStateChange: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: unknown) => {
+      if (typeof state === "object" && state !== null) {
+        listener(state as Parameters<typeof listener>[0]);
+      }
+    };
+    ipcRenderer.on(IpcChannels.POWER_STATE_CHANGED_CHANNEL, handler);
+    return () => ipcRenderer.removeListener(IpcChannels.POWER_STATE_CHANGED_CHANNEL, handler);
+  },
   setupSnapShot: (action) => ipcRenderer.invoke(IpcChannels.SETUP_SNAP_SHOT_CHANNEL, action),
   previewSnapShotConfig: (request) =>
     ipcRenderer.invoke(IpcChannels.PREVIEW_SNAP_SHOT_CONFIG_CHANNEL, request),

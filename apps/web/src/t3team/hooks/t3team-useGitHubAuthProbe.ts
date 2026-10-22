@@ -47,8 +47,11 @@ export function useGitHubAuthProbe(params: {
   }, [onAuthenticated]);
 
   const environmentId = usePrimaryEnvironmentId();
+  // A probe runs on mount and on Recheck, both asking because gh may have changed since: the
+  // shared discovery atom's cached answer (kept alive by any other reader) is not one.
   const discoverSourceControl = useAtomQueryRunner(sourceControlEnvironment.discovery, {
     reportFailure: false,
+    refresh: true,
   });
 
   useEffect(() => {

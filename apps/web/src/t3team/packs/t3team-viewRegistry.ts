@@ -10,6 +10,8 @@
 import type {
   ChangeRequestSummaryProps,
   MyWorkChangeRequestProps,
+  SurfaceCompanionPlacement,
+  SurfaceCompanionProps,
   ViewSlot,
 } from "@t3team/pack-ui/contract";
 import type { DashboardWidgetDefinition } from "@t3team/sdk/placements";
@@ -61,12 +63,21 @@ export interface SidecarSectionEntry {
   readonly component: T3TeamSidecarSectionComponent;
 }
 
+/** A companion keeps the placements it fills; absent, it fills all of them. */
+export type SurfaceCompanionEntry = ComponentViewEntry<
+  "surface.companion",
+  SurfaceCompanionProps
+> & {
+  readonly placements?: ReadonlyArray<SurfaceCompanionPlacement>;
+};
+
 export type ViewEntry<Ctx> =
   | MessageViewEntry<Ctx>
   | ComponentViewEntry<"changeRequest.summary", ChangeRequestSummaryProps>
   | ComponentViewEntry<"myWork.changeRequest", MyWorkChangeRequestProps>
   | DashboardWidgetEntry
-  | SidecarSectionEntry;
+  | SidecarSectionEntry
+  | SurfaceCompanionEntry;
 
 export type ViewEntryFor<S extends ViewSlot, Ctx> = Extract<ViewEntry<Ctx>, { readonly slot: S }>;
 

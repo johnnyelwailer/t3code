@@ -245,6 +245,22 @@ describe("my work digest aggregation", () => {
     expect(changeRequests[0]?.id.startsWith("ghe.example.com:")).toBe(true);
   });
 
+  it("keeps a merged PR off the viewer's reviews though the host still lists them", () => {
+    const source = fixtureSources();
+    const [first] = source.prEntries;
+    if (first === undefined) throw new Error("fixture has no PRs");
+    // GitHub keeps an unanswered review request on a PR after it merges.
+    const merged = { ...first, number: 900, state: "merged", viewerReviewRequested: true };
+    const open = { ...first, number: 901, state: "open", viewerReviewRequested: true };
+    const [mergedRow, openRow] = assembleMyWorkDigestChangeRequests({
+      ...source,
+      prEntries: [merged, open],
+    });
+    expect(mergedRow?.state).toBe("merged");
+    expect(mergedRow?.viewerReviewRequested).toBeUndefined();
+    expect(openRow?.viewerReviewRequested).toBe(true);
+  });
+
   it("matches PRs to tickets by key and maps the chip states", () => {
     const source = fixtureSources();
     const changeRequests = assembleMyWorkDigestChangeRequests(source);

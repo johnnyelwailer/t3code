@@ -15,7 +15,7 @@ let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
 const DEFAULT_TRANSCRIBER = {
-  model: "large-v3-turbo",
+  model: "",
   modelPath: "",
   language: "auto",
   languages: "de,en",
@@ -86,11 +86,10 @@ describe("VoiceTranscriberSettingRows", () => {
     expect(onChange).toHaveBeenCalledExactlyOnceWith({ modelPath: "" });
   });
 
-  it("keeps the saved model when the field is cleared", () => {
-    const { node, onChange } = render();
-    edit(input(node, "Voice model"), "");
-    expect(onChange).not.toHaveBeenCalled();
-    expect(input(node, "Voice model").value).toBe("large-v3-turbo");
+  it("clears a chosen model back to automatic", () => {
+    const { node, onChange } = render({ ...DEFAULT_TRANSCRIBER, model: "small" });
+    edit(input(node, "Voice model"), "  ");
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({ model: "" });
   });
 
   it("offers a reset only for fields that moved off their default, and restores it", () => {

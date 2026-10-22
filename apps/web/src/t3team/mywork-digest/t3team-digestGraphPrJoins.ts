@@ -65,6 +65,8 @@ export function digestReviewRequests(
   projects.forEach((data, position) => {
     for (const pr of data.changeRequests) {
       if (pr.viewerReviewRequested !== true || pr.viewerAuthored === true) continue;
+      // A merged PR waits on nobody, whatever reviewers the host still lists (older servers).
+      if (pr.state === "merged") continue;
       const ticketId =
         pr.workItemKey !== undefined ? resolveTicketId(position, { issueKey: pr.workItemKey }) : "";
       // One PR reaches every project whose key it names; keep the copy that found its ticket.

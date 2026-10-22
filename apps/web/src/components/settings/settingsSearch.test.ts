@@ -107,6 +107,7 @@ describe("searchSettings", () => {
       "review-guide-instructions",
       "source-control-writing-style",
       "t3-connect",
+      "t3-connect-sign-in-notice",
       "hold-webhooks-while-offline",
       "tailscale-https",
       "wsl-backend",

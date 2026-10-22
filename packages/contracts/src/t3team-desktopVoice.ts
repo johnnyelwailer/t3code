@@ -1,5 +1,4 @@
 import * as Schema from "effect/Schema";
-import * as Struct from "effect/Struct";
 
 import { VoiceTranscriberSettings } from "./t3team-voiceSettings.ts";
 
@@ -28,8 +27,11 @@ const DesktopVoiceFailure = Schema.Struct({
   message: Schema.String,
 });
 
-/** What the transcriber needs; `languages` only feeds the settings picker, so it never crosses IPC. */
-export const DesktopVoiceConfig = VoiceTranscriberSettings.mapFields(Struct.omit(["languages"]));
+/**
+ * What the transcriber needs. `languages` (the settings picker's list) also bounds auto-detection:
+ * a pass that detects anything else is noise or a misdetection, never a new language.
+ */
+export const DesktopVoiceConfig = VoiceTranscriberSettings;
 export type DesktopVoiceConfig = typeof DesktopVoiceConfig.Type;
 
 /** Main to renderer while the first-use model download runs; `totalBytes` is null when the server sent no length. */
@@ -72,6 +74,8 @@ export const DesktopVoiceTranscribeResult = Schema.Union([
     text: Schema.String,
     language: Schema.optionalKey(Schema.String),
     acceleration: Schema.Literals(["gpu", "cpu"]),
+    /** Name of the device that ran the pass, e.g. `vulkan: NVIDIA GeForce RTX 5070`. */
+    device: Schema.optionalKey(Schema.String),
     elapsedMs: Schema.Number,
   }),
   DesktopVoiceFailure,

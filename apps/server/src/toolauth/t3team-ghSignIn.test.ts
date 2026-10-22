@@ -212,6 +212,84 @@ describe("gh sign-in", () => {
       }),
   );
 
+  describe("a finished in-app sign-in does not outlive gh's own status", () => {
+    const SIGNED_OUT = "You are not logged into any GitHub hosts. To log in, run: gh auth login\n";
+    const TIMEOUT_LINE = (host: string) => `✗ Timeout trying to log in to ${host} using token\r\n`;
+
+    it.live.each([GH.hostname!, "github.com"])(
+      "a failed sign-in to %s reads connected once gh is signed in outside",
+      (host) =>
+        Effect.gen(function* () {
+          const homeDir = makeTempHome();
+          try {
+            let status = SIGNED_OUT;
+            const { service, ptyAdapter } = yield* makeService(
+              homeDir,
+              { tools: ["gh"] },
+              stubProbeRunner(() => status),
+            );
+            yield* service.start("gh", { hostname: host });
+            const process = ptyAdapter.processes[0]!;
+            process.emitData(TIMEOUT_LINE(host));
+            process.emitExit({ exitCode: 1, signal: null });
+            yield* waitFor(phaseIs(service, "failed"));
+
+            status = LOGGED_IN(host);
+            const [state] = yield* service.list;
+            expect(state).toMatchObject({ phase: "connected", hostname: host, account: "octocat" });
+            expect((yield* service.list)[0]?.hostname).toBe(host);
+          } finally {
+            removeTempHome(homeDir);
+          }
+        }),
+    );
+
+    it.live("a failed sign-in keeps its reason while gh is still signed out", () =>
+      Effect.gen(function* () {
+        const homeDir = makeTempHome();
+        try {
+          const { service, ptyAdapter } = yield* makeService(
+            homeDir,
+            { tools: ["gh"] },
+            stubProbeRunner(SIGNED_OUT),
+          );
+          yield* service.start("gh");
+          ptyAdapter.processes[0]!.emitData(TIMEOUT_LINE(GH.hostname!));
+          ptyAdapter.processes[0]!.emitExit({ exitCode: 1, signal: null });
+          yield* waitFor(phaseIs(service, "failed"));
+          const [state] = yield* service.list;
+          expect(state?.phase).toBe("failed");
+          expect(state?.message).toMatch(/timeout trying to log in/i);
+        } finally {
+          removeTempHome(homeDir);
+        }
+      }),
+    );
+
+    it.live("a connected sign-in reads signed out once gh logs out outside", () =>
+      Effect.gen(function* () {
+        const homeDir = makeTempHome();
+        try {
+          let status = LOGGED_IN(GH.hostname!);
+          const { service, ptyAdapter } = yield* makeService(
+            homeDir,
+            { tools: ["gh"] },
+            stubProbeRunner(() => status),
+          );
+          yield* service.start("gh");
+          ptyAdapter.processes[0]!.emitData(COMPLETE_LINE);
+          ptyAdapter.processes[0]!.emitExit({ exitCode: 0, signal: null });
+          yield* waitFor(phaseIs(service, "connected"));
+
+          status = SIGNED_OUT;
+          expect((yield* service.list)[0]?.phase).toBe("idle");
+        } finally {
+          removeTempHome(homeDir);
+        }
+      }),
+    );
+  });
+
   it.live("a status read names the host it is about", () =>
     Effect.gen(function* () {
       const homeDir = makeTempHome();

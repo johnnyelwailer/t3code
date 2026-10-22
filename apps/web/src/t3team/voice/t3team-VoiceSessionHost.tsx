@@ -27,7 +27,11 @@ export function T3TeamVoiceSessionHost() {
   useVoiceWidgetPublisher(toggleRef);
 
   return isElectron ? (
-    <DesktopVoiceSession onTranscript={onTranscript} toggleRef={toggleRef} />
+    <DesktopVoiceSession
+      onTranscript={onTranscript}
+      onUtteranceFailed={(detail) => notifyVoiceFailure("transcription-failed", detail)}
+      toggleRef={toggleRef}
+    />
   ) : (
     <>
       <WebVoiceSession onTranscript={onTranscript} toggleRef={toggleRef} />

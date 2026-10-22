@@ -195,6 +195,49 @@ microphone.
 Transcription runs on your device. T3 Code deletes the temporary audio after
 transcription or cancellation; only the message text is sent when you submit.
 
+## Voice input on desktop
+
+In the desktop app, voice input transcribes with a Whisper model that runs on your computer.
+There are two ways to use it:
+
+- **Composer microphone.** In a normal thread, the microphone button dictates into the draft.
+  The text of each thing you say is inserted for you to review before sending. In the voice thread,
+  the same button talks to the voice agent instead, and the heard text is sent as a message.
+- **Voice shortcut.** Press `Ctrl+Alt+Space` from any app to start talking to the voice agent, and
+  press it again to stop. The sidebar's voice row shows the live recording; clicking the row opens
+  the voice thread, or starts and stops the recording when the thread is already open. While T3
+  Code is minimized, hidden or in the background, a small floating widget shows it and has a stop
+  button.
+
+One press opens a session that you can keep talking in. When you pause, what you said is written
+down and sent while the session stays open, so you can go on with the next sentence right away; the
+row and widget show **Transcribing… 3 s** while that happens, then a short **heard**. The next press
+ends the session and sends anything you said after your last pause. A session also ends on its own
+after eight seconds when you said nothing at all, after a minute of quiet following your last
+sentence, and after five minutes. If the shortcut does not work, another app has claimed it;
+choose a different one below.
+
+Open **Settings → Voice** to change:
+
+| Setting                 | What it does                                                                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Voice shortcut**      | The global shortcut that starts and stops talking to the voice agent.                                                          |
+| **Voice model**         | The Whisper model to use. Empty (the default) picks one for your hardware: `large-v3-turbo` with a dedicated GPU, else `base`. |
+| **Voice model file**    | A ggml `.bin` file to use instead. Leave empty to detect a model on this computer, else download **Voice model**.              |
+| **Voice language**      | **Auto** detects the language from the first seconds of speech and keeps it for the whole session; a language is used always.  |
+| **Voice language list** | The languages the picker offers after Auto, as codes such as `de,en,fr`. Default `de,en`.                                      |
+| **Voice silence**       | Milliseconds of silence after speech before what you said is written down and sent. `0` turns this off. Default 1500.          |
+
+The first recording downloads the model when none is found (roughly 1.6 GB for `large-v3-turbo`, 150 MB for `base`). The
+microphone button and the voice row show the download progress, and the download happens once. A
+large model on a computer without a dedicated GPU is slow; the row counts the seconds a pass takes
+so you can tell it is working.
+
+Audio never leaves your computer: it is transcribed locally and not stored, and only the resulting
+text is sent when you submit a message. The browser app has no on-device model and uses the
+browser's own speech recognition for the microphone button, which follows the browser's privacy
+rules.
+
 ## Queued messages
 
 On web and desktop, the composer shows **Interrupt** while the agent is working and the draft is

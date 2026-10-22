@@ -8,7 +8,8 @@ import { VOICE_TIER_MODEL } from "./t3team-voiceRouting";
 import { submitVoiceUtterance, type VoiceSessionDeps } from "./t3team-voiceSession";
 import type { VoiceThreadHome } from "./t3team-voiceThreadStore";
 
-const PROJECT = ProjectId.make("project-1");
+const PROJECT = ProjectId.make("project-no-project");
+const REAL_PROJECT = ProjectId.make("project-nexi-ai");
 
 const shell = (id: string, overrides: Partial<VoiceThreadShell> = {}): VoiceThreadShell => ({
   id: ThreadId.make(id),
@@ -45,7 +46,7 @@ function harness(
       state.home = undefined;
       calls.push("forget");
     },
-    homeProject: () => (initial.project === undefined ? PROJECT : initial.project),
+    projectlessProject: async () => (initial.project === undefined ? PROJECT : initial.project),
     route: async (text) => VOICE_TIER_MODEL[text.startsWith("stop") ? "control" : "synthesis"],
     startTurn: async (input) => {
       turns.push(input);
@@ -54,6 +55,9 @@ function harness(
     },
     pinAndKeep: async () => {
       calls.push("pin");
+    },
+    release: async () => {
+      calls.push("release");
     },
     waitForThread: async () => undefined,
     newThreadId: () => ThreadId.make(`voice-${++ids}`),
@@ -127,7 +131,37 @@ describe("submitVoiceUtterance", () => {
     expect(state.home?.threadId).not.toBe(home.threadId);
   });
 
-  it("asks for a project when there is nowhere to create the thread", async () => {
+  it("replaces a voice thread remembered in a real project with one under No project", async () => {
+    const home = { threadId: ThreadId.make("voice-in-project"), projectId: REAL_PROJECT };
+    const { deps, turns, calls, state } = harness({ home, threads: [shell("voice-in-project")] });
+    await submitVoiceUtterance(deps, "hello");
+    expect(calls).toEqual(["forget", "turn:create", "pin", "remember", "turn:send"]);
+    expect(turns[0]?.bootstrap?.createThread?.projectId).toBe(PROJECT);
+    expect(state.home?.projectId).toBe(PROJECT);
+    expect(state.home?.threadId).not.toBe(home.threadId);
+  });
+
+  it("reports a failed No project lookup as a send failure and retries on the next utterance", async () => {
+    const { deps, turns } = harness();
+    let attempts = 0;
+    const flaky = {
+      ...deps,
+      projectlessProject: async () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("scratch unavailable");
+        return PROJECT;
+      },
+    };
+    expect(await submitVoiceUtterance(flaky, "one")).toEqual({
+      status: "error",
+      code: "send-failed",
+      detail: "scratch unavailable",
+    });
+    expect(await submitVoiceUtterance(flaky, "two")).toEqual({ status: "sent", tier: "synthesis" });
+    expect(turns[0]?.bootstrap?.createThread?.projectId).toBe(PROJECT);
+  });
+
+  it("reports no-project when the machine offers no No project folder", async () => {
     const { deps, turns } = harness({ project: null });
     expect(await submitVoiceUtterance(deps, "hello")).toMatchObject({
       status: "error",
@@ -154,5 +188,75 @@ describe("submitVoiceUtterance", () => {
     await Promise.all([submitVoiceUtterance(deps, "one"), submitVoiceUtterance(deps, "two")]);
     expect(calls.filter((call) => call === "turn:create")).toHaveLength(1);
     expect(calls.filter((call) => call === "turn:send")).toHaveLength(2);
+  });
+});
+
+describe("submitVoiceUtterance transcript metadata", () => {
+  const metadata = {
+    language: "de",
+    audioMs: 2_400,
+    speechMs: 1_900,
+    words: [
+      { w: "Öffne", t0: 0, t1: 380 },
+      { w: "das", t0: 400, t1: 600 },
+      { w: "Board", t0: 620, t1: 900, p: 0.4213 },
+    ],
+  };
+
+  it("attaches whisper's metadata as a small JSON file and keeps the text as said", async () => {
+    const { deps, turns } = harness({
+      home: { threadId: ThreadId.make("voice-home"), projectId: PROJECT },
+      threads: [shell("voice-home")],
+    });
+    const uploaded: File[] = [];
+    const withUpload: VoiceSessionDeps = {
+      ...deps,
+      uploadFile: async (file) => {
+        uploaded.push(file);
+        return {
+          type: "file",
+          id: "meta-1",
+          name: file.name,
+          mimeType: file.type,
+          sizeBytes: file.size,
+        };
+      },
+    };
+    await submitVoiceUtterance(withUpload, "Öffne das Board", metadata);
+    const sent = turns.at(-1)!.message;
+    expect(sent.text.startsWith("Öffne das Board")).toBe(true);
+    expect(sent.text).not.toContain("0.42");
+    expect(sent.attachments).toEqual([
+      expect.objectContaining({ type: "file", id: "meta-1", name: "transcript-meta.json" }),
+    ]);
+    expect(JSON.parse(await uploaded[0]!.text())).toEqual({
+      kind: "voice-transcript-meta",
+      version: 1,
+      language: "de",
+      audioMs: 2_400,
+      speechMs: 1_900,
+      words: [
+        { w: "Öffne", t0: 0, t1: 380 },
+        { w: "das", t0: 400, t1: 600 },
+        { w: "Board", t0: 620, t1: 900, p: 0.42 },
+      ],
+    });
+  });
+
+  it("still sends the message when the metadata upload fails", async () => {
+    const { deps, turns } = harness({
+      home: { threadId: ThreadId.make("voice-home"), projectId: PROJECT },
+      threads: [shell("voice-home")],
+    });
+    const failing: VoiceSessionDeps = {
+      ...deps,
+      uploadFile: async () => {
+        throw new Error("offline");
+      },
+    };
+    expect(await submitVoiceUtterance(failing, "Öffne das Board", metadata)).toMatchObject({
+      status: "sent",
+    });
+    expect(turns.at(-1)!.message.attachments).toEqual([]);
   });
 });

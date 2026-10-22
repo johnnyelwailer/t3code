@@ -72,6 +72,7 @@ import {
   RelayEnvironmentMintResponse,
   RelayLinkProofRequest,
 } from "./relay.ts";
+import { EnvironmentConnectSignInStatus } from "./t3team-connectSignIn.ts";
 
 const OptionalBearerHeaders = Schema.Struct({
   authorization: Schema.optionalKey(Schema.String),
@@ -793,6 +794,20 @@ class EnvironmentConnectHttpApi extends HttpApiGroup.make("connect")
       headers: OptionalBearerHeaders,
       payload: EnvironmentCloudPreferencesRequest,
       success: EnvironmentCloudLinkStateResult,
+      error: EnvironmentHttpCloudErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.get("signInStatus", "/api/connect/sign-in-status", {
+      headers: OptionalBearerHeaders,
+      success: EnvironmentConnectSignInStatus,
+      error: EnvironmentHttpCloudErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("signIn", "/api/connect/sign-in", {
+      headers: OptionalBearerHeaders,
+      success: EnvironmentConnectSignInStatus,
       error: EnvironmentHttpCloudErrors,
     }).middleware(EnvironmentAuthenticatedAuth),
   )

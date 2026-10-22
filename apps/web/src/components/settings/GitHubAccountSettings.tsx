@@ -11,6 +11,8 @@ import { Switch } from "../ui/switch";
 import { groupGitHubAccounts, nextGitHubHosts } from "./GitHubAccountSettings.logic";
 import { readGitHubSettings } from "@t3tools/client-runtime/source-control-clients";
 import { redactedPlaceholder } from "./RedactedSensitiveText";
+import { GitHubSignInAction } from "~/t3team/components/t3team-GitHubSignInAction";
+import { useGitHubSignInHosts } from "~/t3team/hooks/t3team-useGitHubSignIn";
 
 /** Sentinel select value for "follow gh's active login"; logins never contain spaces. */
 const ACTIVE_ACCOUNT = "active gh account";
@@ -49,6 +51,7 @@ export function GitHubAccountSettings({
   const [saving, setSaving] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const groups = groupGitHubAccounts(auth.accounts ?? []);
+  const signInHosts = useGitHubSignInHosts([]);
 
   const save = async (
     host: string,
@@ -69,10 +72,14 @@ export function GitHubAccountSettings({
 
   if (groups.length === 0) {
     return (
-      <p className="text-xs text-muted-foreground">
-        Sign in with <code className="rounded bg-muted px-1 py-px text-2xs">gh auth login</code> on
-        the server host, then rescan to choose accounts here.
-      </p>
+      <div className="grid gap-2">
+        <p className="text-xs text-muted-foreground">
+          Sign in to a GitHub host to choose its accounts here.
+        </p>
+        {signInHosts.map((host) => (
+          <GitHubSignInAction key={host} host={host} onSignedIn={onSaved} />
+        ))}
+      </div>
     );
   }
 
@@ -204,6 +211,9 @@ export function GitHubAccountSettings({
                 <span>can't be used: {entry.error ?? "gh reports this login as invalid."}</span>
               </p>
             ))}
+            {group.selectable.length === 0 && group.environmentVariable === null ? (
+              <GitHubSignInAction host={group.host} onSignedIn={onSaved} />
+            ) : null}
             {group.environmentVariable ? (
               <p className="text-xs text-warning">
                 {group.environmentVariable} is set on the server, so it overrides the account chosen

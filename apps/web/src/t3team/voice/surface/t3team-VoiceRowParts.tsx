@@ -1,15 +1,18 @@
-import { CheckIcon, ExternalLinkIcon, RotateCcwIcon } from "lucide-react";
+import { ExternalLinkIcon, RotateCcwIcon } from "lucide-react";
 import type { MouseEvent, RefObject } from "react";
 
 import { cn } from "~/lib/utils";
 import { VoiceClock } from "./t3team-VoiceClock";
+import { VoiceElapsedLabel } from "./t3team-VoiceElapsedLabel";
 import { VOICE_CLASS } from "./t3team-voiceClasses";
 import { failedTitle } from "./t3team-voiceFailureCopy";
+import { VOICE_WARMING_LABEL, type VoiceSessionNote } from "./t3team-voiceSessionNote";
 import type { VoiceUiState } from "./t3team-voiceUiModel";
 import { useVoiceUiStore, type VoiceUiControls } from "./t3team-voiceUiStore";
 
-export function VoiceProgress(props: { readonly label: string }) {
-  const percent = useVoiceUiStore((store) => store.snapshot.downloadPercent);
+export function VoiceProgress(props: { readonly label: string; readonly percent?: number }) {
+  const downloadPercent = useVoiceUiStore((store) => store.snapshot.downloadPercent);
+  const percent = props.percent ?? downloadPercent;
   return (
     <span
       role="progressbar"
@@ -26,39 +29,65 @@ const quiet = (text: string) => (
   <span className="truncate text-2xs text-muted-foreground">{text}</span>
 );
 
-/** The middle of the row: exactly one thing per state, entering as the state changes. */
+// The check lives in the orb (the row's icon slot); the label is the plain word, never a second ✓.
+const heard = quiet("heard");
+
+/**
+ * The middle of the row, one thing per state, and the row's hit target: the title at rest, the
+ * level while listening, a running count while a pass writes, a download's progress. It always
+ * truncates, so it fits whatever width the sidebar has.
+ */
 export function VoiceRowMid(props: {
   readonly state: VoiceUiState;
+  readonly title: string;
+  readonly note: VoiceSessionNote;
+  readonly writingLabel: string | null;
   readonly canvasRef: RefObject<HTMLCanvasElement | null>;
 }) {
-  const { state, canvasRef } = props;
+  const { state, title, note, writingLabel, canvasRef } = props;
   const failureDetail = useVoiceUiStore((store) => store.snapshot.failureDetail);
+  const percent = useVoiceUiStore((store) => store.snapshot.downloadPercent);
+  const recording = state === "recording";
   return (
-    <span key={state} className={cn(VOICE_CLASS.enter, "flex h-8 min-w-0 items-center")}>
-      {state === "recording" ? (
+    <span key={state} className={cn(VOICE_CLASS.enter, "flex h-7 min-w-0 flex-1 items-center")}>
+      {recording && note.kind === "warming" ? (
+        <span className="flex w-full min-w-0 items-center gap-2">
+          {quiet(VOICE_WARMING_LABEL.toLowerCase())}
+          <span className="min-w-6 flex-1">
+            <VoiceProgress label="Warming up the speech model" percent={note.percent} />
+          </span>
+        </span>
+      ) : recording && note.kind === "listening" ? (
         <canvas ref={canvasRef} aria-hidden className="block h-4 w-full" />
-      ) : state === "transcribing" ? (
-        <span className={cn(VOICE_CLASS.shimmer, "w-full")} aria-label="Writing it down" />
-      ) : state === "committed" ? (
-        <span className="inline-flex items-center gap-1 font-medium text-2xs text-success-foreground">
-          <CheckIcon className="size-3" aria-hidden />
-          heard
-        </span>
+      ) : writingLabel !== null ? (
+        quiet(writingLabel)
+      ) : (recording && note.kind === "heard") || state === "committed" ? (
+        heard
       ) : state === "preparing" ? (
-        <span className="w-full">
-          <VoiceProgress label="Preparing voice model" />
-        </span>
+        percent === null ? (
+          <VoiceElapsedLabel
+            label="Preparing"
+            className="truncate text-2xs text-muted-foreground"
+          />
+        ) : (
+          <span className="w-full">
+            <VoiceProgress label="Preparing voice model" />
+          </span>
+        )
       ) : state === "denied" ? (
         quiet("microphone blocked")
       ) : state === "failed" ? (
         quiet(failedTitle(failureDetail).toLowerCase())
-      ) : null}
+      ) : (
+        <span className="truncate text-sidebar-foreground">{title}</span>
+      )}
     </span>
   );
 }
 
+// Plain like a thread row's own quick actions: no fill, no tint, the shared focus ring only.
 const roundAction =
-  "grid size-5 cursor-pointer place-items-center rounded-full bg-primary/10 text-primary outline-hidden hover:bg-primary/16 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring";
+  "pointer-events-auto grid size-5 cursor-pointer place-items-center rounded-md text-muted-foreground outline-hidden hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
 
 /** The end of the row: the shortcut at rest, the timer while recording, the retry or settings after a failure. */
 export function VoiceRowAux(props: {

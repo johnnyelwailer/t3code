@@ -28,12 +28,14 @@ import type {
   DesktopVoiceStreamStartRequest,
   DesktopVoiceStreamStartResult,
   DesktopVoiceStreamStopRequest,
+  DesktopVoiceStreamStopResult,
 } from "./t3team-desktopVoiceStream.ts";
 import type {
   DesktopVoiceWidgetCommand,
   DesktopVoiceWidgetSnapshot,
 } from "./t3team-desktopVoiceWidget.ts";
 import type { DesktopVoiceHotkeyState } from "./t3team-voiceHotkey.ts";
+import type { DesktopPowerState } from "./t3team-powerState.ts";
 
 import type {
   DesktopAppActivationRequest,
@@ -1079,6 +1081,9 @@ export interface DesktopBridge {
   requestSnapShotPermissions?: (includeAccessibility: boolean) => Promise<void>;
   getSnapShotState?: () => Promise<DesktopSnapShotState>;
   getVoiceHotkeyState?: () => Promise<DesktopVoiceHotkeyState>;
+  /** t3team: battery / low-power state, for decorative rendering that scales with it. */
+  getPowerState?: () => Promise<DesktopPowerState>;
+  onPowerStateChange?: (listener: (state: DesktopPowerState) => void) => () => void;
   setupSnapShot?: (action: DesktopSnapShotSetupAction) => Promise<void>;
   previewSnapShotConfig?: (
     request: DesktopCaptureConfigRequest,
@@ -1109,7 +1114,9 @@ export interface DesktopBridge {
     request: DesktopVoiceStreamStartRequest,
   ) => Promise<DesktopVoiceStreamStartResult>;
   pushVoiceStream?: (request: DesktopVoiceStreamPushRequest) => Promise<void>;
-  stopVoiceStream?: (request: DesktopVoiceStreamStopRequest) => Promise<void>;
+  stopVoiceStream?: (
+    request: DesktopVoiceStreamStopRequest,
+  ) => Promise<DesktopVoiceStreamStopResult>;
   onVoiceStream?: (listener: (event: DesktopVoiceStreamEvent) => void) => () => void;
   /** The voice session tells the floating widget what to show; main shows it only while the app is in the background. */
   publishVoiceWidget?: (snapshot: DesktopVoiceWidgetSnapshot) => Promise<void>;

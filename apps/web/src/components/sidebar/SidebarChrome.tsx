@@ -29,6 +29,7 @@ import { readPullRequestListPreferences } from "../pullRequest/pullRequestListPr
 import { isSidebarUtilityPage, useNavigateToMainApp } from "./mainAppLocation";
 import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
+import { SidebarConnectSignInPill } from "./t3team-SidebarConnectSignInPill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { T3TeamSidebarWorkNavItems } from "~/t3team/components/t3team-SidebarWorkNav";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
@@ -285,6 +286,7 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
     <SidebarFooter>
       <SidebarThreadUndoNotice />
       <SidebarProviderUpdatePill />
+      <SidebarConnectSignInPill />
       <SidebarUpdateArchitectureWarning />
       {/* The fork's t3team work-nav items (My work, Backlog) sit inline in
           SidebarUtilityMenu's icon row so they stay visible on every route. */}

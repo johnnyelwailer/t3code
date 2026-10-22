@@ -3,7 +3,8 @@ import { useId, useState, type MouseEvent, type ReactNode } from "react";
 import { cn } from "~/t3team/lib/t3team-utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import {
-  digestQuietSummary,
+  DIGEST_ADJACENT_PILL_LIMIT,
+  digestFoldedSummary,
   type DigestAdjacentItem,
   type DigestStoryAdjacency,
 } from "~/t3team/t3team-projectMyWorkDigestAdjacency";
@@ -102,7 +103,8 @@ function DigestAdjacentPill({
 
 /**
  * The work around the viewer's rows, below them and quieter: open blocks and active siblings as
- * pills, the rest folded into one count that unfolds in place. The pills carry the people, so
+ * pills (at most `DIGEST_ADJACENT_PILL_LIMIT`), the rest — more of them, finished or untouched
+ * work, an epic's other stories — folded into one count that unfolds in place. The pills carry the people, so
  * there is no separate "same story" line of faces.
  */
 export function DigestAdjacentWork({
@@ -115,8 +117,12 @@ export function DigestAdjacentWork({
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
   const { active, quiet } = adjacency;
-  if (active.length === 0 && quiet.length === 0) return null;
-  const shown = expanded ? [...active, ...quiet] : active;
+  const epic = adjacency.epic ?? [];
+  if (active.length === 0 && quiet.length === 0 && epic.length === 0) return null;
+  const shown = expanded
+    ? [...active, ...quiet, ...epic]
+    : active.slice(0, DIGEST_ADJACENT_PILL_LIMIT);
+  const folded = digestFoldedSummary(adjacency);
   return (
     <div
       id={listId}
@@ -125,7 +131,7 @@ export function DigestAdjacentWork({
       {shown.map((item) => (
         <DigestAdjacentPill key={item.key} item={item} onOpenTicket={onOpenTicket} />
       ))}
-      {quiet.length > 0 ? (
+      {folded !== "" ? (
         <button
           type="button"
           aria-expanded={expanded}
@@ -139,7 +145,7 @@ export function DigestAdjacentWork({
             setExpanded((value) => !value);
           }}
         >
-          {expanded ? "show less" : `+ ${digestQuietSummary(quiet)}`}
+          {expanded ? "show less" : `+ ${folded}`}
         </button>
       ) : null}
     </div>

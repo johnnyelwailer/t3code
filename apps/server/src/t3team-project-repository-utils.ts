@@ -10,6 +10,7 @@ import * as Path from "effect/Path";
 import { T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
 import { ensureNexiProjectStateDir } from "./t3team-projectMainRepositoryState.ts";
 import type { MainRepositoryInspection } from "./t3team-mainRepositoryInspection.ts";
+import { T3TEAM_CONTEXT_BLOB_ROOT } from "./t3team-context-blob-store-utils.ts";
 
 export type BootstrapWorkspaceRequest = {
   readonly workspaceRoot: string;
@@ -101,12 +102,31 @@ export const REFERENCES_DIR_NAME = "references";
 export const MANIFEST_FILE_NAME = "reference-repositories.json";
 export const CHILD_WORKTREES_DIR_NAME = "child-session-worktrees";
 export const GITIGNORE_ENTRY = `${HIDDEN_T3TEAM_DIR}/`;
+/** Top-level state-dir entries that are machine-local bookkeeping, not project state: the
+ * reference clones and their manifest, and child worktrees. A checkout whose state dir holds only
+ * these (e.g. a shared repository that committed its `references/` manifest) carries no project. */
+const MACHINE_LOCAL_STATE_ENTRIES: ReadonlySet<string> = new Set([
+  REFERENCES_DIR_NAME,
+  CHILD_WORKTREES_DIR_NAME,
+]);
+/** Whether any of these state-dir entries (top-level names or state-dir-relative paths) is real
+ * project state rather than machine-local bookkeeping. */
+export const hasProjectStateEntries = (entries: ReadonlyArray<string>): boolean =>
+  entries.some((entry) => {
+    const top = entry
+      .replaceAll("\\", "/")
+      .split("/")
+      .find((segment) => segment.length > 0);
+    return top !== undefined && !MACHINE_LOCAL_STATE_ENTRIES.has(top);
+  });
 /** Gitignore entries for a MAIN repository (the workspace root is a real git repository):
- * only the machine-local subpaths stay ignored so committed team state (skills, recipes,
- * conventions) can live in the state dir and be shared through the repository (GHE #42). */
+ * only the machine-local subpaths (reference clones, child worktrees, the context blob cache) stay
+ * ignored so committed team state (skills, recipes, conventions) can live in the state dir and be
+ * shared through the repository (GHE #42). */
 export const MAIN_REPOSITORY_GITIGNORE_ENTRIES = [
   `${HIDDEN_T3TEAM_DIR}/${REFERENCES_DIR_NAME}/`,
   `${HIDDEN_T3TEAM_DIR}/${CHILD_WORKTREES_DIR_NAME}/`,
+  `${T3TEAM_CONTEXT_BLOB_ROOT}/`,
 ] as const;
 
 export type ReferenceManifestFile = {

@@ -7,7 +7,9 @@ import {
 } from "./t3team-voiceStreamSession.ts";
 import { FRAME_MS, ROOM, SPEECH, tone } from "./t3team-voiceTestAudio.ts";
 
-function setup(options: { language?: string; silenceMs?: number } = {}) {
+function setup(
+  options: { language?: string; silenceMs?: number; isWorkerReady?: () => boolean } = {},
+) {
   const events: Array<{ type: string; [key: string]: unknown }> = [];
   const pending: Array<(result: VoiceStreamTranscription) => void> = [];
   const calls: Array<{ language: string; samples: number }> = [];
@@ -20,6 +22,7 @@ function setup(options: { language?: string; silenceMs?: number } = {}) {
     },
     emit: (event) => events.push(event),
     log: vi.fn(),
+    ...(options.isWorkerReady ? { isWorkerReady: options.isWorkerReady } : {}),
   });
   const feed = (amplitude: number, ms: number) => {
     for (let at = 0; at < ms; at += FRAME_MS) session.push(tone(FRAME_MS, amplitude));
@@ -72,14 +75,48 @@ describe("createVoiceStreamSession", () => {
     expect(calls).toHaveLength(2);
   });
 
-  it("stops partials for the session after one that blew the latency budget", async () => {
-    const { events, calls, feed, settle } = setup();
+  it("backs off after one slow partial but keeps streaming", async () => {
+    const { calls, feed, settle } = setup();
     feed(ROOM, 600);
     feed(SPEECH, 2500);
-    await settle(ok("far too late", "en", 20_000));
-    expect(events.filter((event) => event.type === "partial")).toHaveLength(1);
-    feed(SPEECH, 30_000);
+    await settle(ok("slow once", "en", 9_000));
+    feed(SPEECH, 17_000);
     expect(calls).toHaveLength(1);
+    feed(SPEECH, 1_500);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("stops partials only after three slow passes in a row", async () => {
+    const { calls, feed, settle } = setup();
+    feed(ROOM, 600);
+    for (let pass = 1; pass <= 3; pass += 1) {
+      feed(SPEECH, 2500);
+      while (calls.length < pass) feed(SPEECH, 500);
+      await settle(ok("slow", "en", 9_000));
+    }
+    feed(SPEECH, 60_000);
+    expect(calls).toHaveLength(3);
+  });
+
+  it("judges a partial by its pass time, not the time it waited for a cold model", async () => {
+    const { calls, feed, settle } = setup();
+    feed(ROOM, 600);
+    feed(SPEECH, 2500);
+    await settle({ ok: true, text: "cold", language: "en", elapsedMs: 12_000, passMs: 300 });
+    feed(SPEECH, 2000);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("holds partials while the worker warms up, then streams the speech said meanwhile", async () => {
+    let ready = false;
+    const harness = setup({ isWorkerReady: () => ready });
+    harness.feed(ROOM, 600);
+    harness.feed(SPEECH, 4000);
+    expect(harness.calls).toHaveLength(0);
+    ready = true;
+    harness.feed(SPEECH, 100);
+    expect(harness.calls).toHaveLength(1);
+    expect(harness.calls[0]!.samples).toBeGreaterThan(16 * 4000);
   });
 
   describe("language lock", () => {
@@ -131,7 +168,7 @@ describe("createVoiceStreamSession", () => {
       await harness.settle(ok("hallo", "nl"));
       harness.feed(ROOM, 1500);
       expect(languageEvents(harness.events)).toEqual([]);
-      expect(harness.calls.map((call) => call.language)).toEqual(["auto"]);
+      expect(harness.calls.map((call) => call.language)).toEqual(["auto", "auto"]);
     });
 
     it("lets a pinned language win every pass whatever the detection says", async () => {
@@ -151,19 +188,6 @@ describe("createVoiceStreamSession", () => {
       expect(second.calls.map((call) => call.language)).toEqual(["auto", "auto", "auto", "en"]);
       expect(languageEvents(second.events)).toEqual([{ type: "language", language: "en" }]);
     });
-  });
-
-  it("signals auto-commit once on silence and stops starting partials", () => {
-    const { events, calls, feed } = setup();
-    feed(ROOM, 600);
-    feed(SPEECH, 1000);
-    feed(ROOM, 1500);
-    expect(events.filter((event) => event.type === "auto-commit")).toEqual([
-      { type: "auto-commit", reason: "silence" },
-    ]);
-    const before = calls.length;
-    feed(SPEECH, 3000);
-    expect(calls).toHaveLength(before);
   });
 
   it("drops results that finish after stop", async () => {

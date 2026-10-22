@@ -1,5 +1,5 @@
 import type { DigestDependency, DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
-import { getProjectTicketKanbanLane } from "~/t3team/t3team-projectTicketStatus";
+import { isDigestBlockLive } from "~/t3team/t3team-projectMyWorkDigestBlocks";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { WorkItemPersonAvatar } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
 
@@ -57,7 +57,7 @@ function DependencyPerson({ dependency }: { dependency: DigestDependency }) {
 
 /**
  * The people a ticket hangs together with, one line: who waits on it and whom it waits on.
- * Finished work drops out — it no longer holds anyone up.
+ * A block whose blocker is past development drops out — it no longer holds anyone up.
  */
 export function DigestDependencyLine({
   graph,
@@ -69,10 +69,7 @@ export function DigestDependencyLine({
   // Blocking links only. "Same story" named a person without saying on what, which read as noise;
   // story cards show their siblings as pills (key, status, owner) instead.
   const live = (graph.dependencies ?? []).filter(
-    (dependency) =>
-      dependency.ticketId === ticketId &&
-      dependency.relation !== "same-story" &&
-      getProjectTicketKanbanLane(dependency.other.status) !== "done",
+    (dependency) => dependency.ticketId === ticketId && isDigestBlockLive(graph, dependency),
   );
   if (live.length === 0) return null;
   // One chip per person per relation, and never the viewer.

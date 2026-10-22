@@ -30,10 +30,12 @@ import * as DesktopServerExposure from "../backend/DesktopServerExposure.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopShellEnvironment from "../shell/DesktopShellEnvironment.ts";
 import * as DesktopState from "./DesktopState.ts";
+import { registerDesktopStorageFlush } from "./t3team-DesktopStorageFlush.ts";
 import * as DesktopRemoteUpdates from "../updates/DesktopRemoteUpdates.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
 import * as DesktopSnapShot from "../snapShot/DesktopSnapShot.ts";
 import * as DesktopVoiceHotkey from "../voice/t3team-DesktopVoiceHotkey.ts";
+import { configureDesktopVoiceLog } from "../voice/t3team-voiceRuntime.ts";
 import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
 import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -152,6 +154,7 @@ const bootstrap = Effect.gen(function* () {
 
   yield* snapShot.initialize;
   yield* voiceHotkey.initialize;
+  yield* Effect.sync(() => configureDesktopVoiceLog(environment.logDir));
 
   if (!settings.localEnvironmentEnabled) {
     yield* logBootstrapInfo("bootstrap skipping local environment (disabled in settings)");
@@ -288,6 +291,8 @@ const startup = Effect.gen(function* () {
     Effect.catchCause((cause) => fatalStartupCause("whenReady", cause)),
   );
   yield* logStartupInfo("app ready");
+  // t3team: commit renderer localStorage (composer drafts) to disk regularly and before quit.
+  yield* registerDesktopStorageFlush();
   if (environment.platform === "linux") {
     const selectedBackend = yield* safeStorage.selectedStorageBackend;
     yield* logStartupInfo("safe storage ready", {
