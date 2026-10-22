@@ -15,6 +15,10 @@ import {
 } from "./t3team-atlassian-auth-homeGuard.ts";
 import { findAuthForAccountId } from "./t3team-atlassian-auth-lookup.ts";
 import {
+  applyRefreshToGrant,
+  flagGrantNeedsReconnect,
+} from "./t3team-atlassian-auth-sharedGrant.ts";
+import {
   atlassianAuths,
   persistAuthsToDisk,
   reloadAuthsFromDisk,
@@ -85,8 +89,10 @@ function atlassianOAuthClientConfig(): { clientId: string; clientSecret?: string
 }
 
 /** Callers hold the store lock, so no reload or second refresh can interleave with this one. */
-function refreshOAuthAuthIfNeeded(accountId: string, auth: JiraApiAuth) {
+function refreshOAuthAuthIfNeeded(accountId: string, listedAuth: JiraApiAuth) {
   return Effect.gen(function* () {
+    // A sibling account's refresh earlier in this pass may already have renewed this grant.
+    const auth = atlassianAuths.get(accountId) ?? listedAuth;
     // A dead refresh token never comes back; fail with the sign-in error instead of re-hitting Atlassian.
     if (accountNeedsReconnect(accountId)) {
       return yield* reconnectRequiredError();
@@ -178,6 +184,7 @@ function refreshOAuthAuthIfNeeded(accountId: string, auth: JiraApiAuth) {
                 clientSecretPresent,
                 details,
               });
+              flagGrantNeedsReconnect(atlassianAuths, refreshToken);
               return yield* markNeedsReconnect(
                 accountId,
                 persistAuthsToDisk,
@@ -204,7 +211,11 @@ function refreshOAuthAuthIfNeeded(accountId: string, auth: JiraApiAuth) {
     );
     if (outcome._tag === "unchanged") return outcome.auth;
     yield* logRefreshAttempt({ accountId, outcome: "refreshed", clientSecretPresent });
-    atlassianAuths.set(accountId, outcome.auth);
+    applyRefreshToGrant(atlassianAuths, {
+      accountId,
+      redeemedRefreshToken: refreshToken,
+      refreshed: outcome.auth,
+    });
     yield* persistAuthsToDisk;
     return outcome.auth;
   });
