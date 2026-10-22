@@ -457,6 +457,7 @@ import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import type { ChatViewT3TeamExtensionProps } from "~/t3team/t3team-chatViewExtensions";
 import { appendContextAttachmentsToPrompt } from "~/t3team/chat/t3team-prepareThreadContextAttachments";
+import { planRuntimeModeSwitch } from "~/t3team/chat/t3team-runtimeModeSwitch";
 import {
   buildContextAttachmentMessageExt,
   withT3TeamContextAttachmentExt,
@@ -5591,20 +5592,42 @@ export default function ChatView(props: ChatViewProps) {
 
   const handleRuntimeModeChange = useCallback(
     (mode: RuntimeMode) => {
-      if (mode === runtimeMode) return;
+      const plan = planRuntimeModeSwitch({
+        mode,
+        currentMode: runtimeMode,
+        isServerThread: isServerThread && serverThread !== undefined && serverThread !== null,
+        serverRuntimeMode: serverThread?.runtimeMode,
+      });
+      if (plan === "none") return;
       setComposerDraftRuntimeMode(composerDraftTarget, mode);
       if (isLocalDraftThread) {
         setDraftThreadContext(composerDraftTarget, { runtimeMode: mode });
       }
+      if (plan === "persist" && serverThread) {
+        // Applied now, not on the next typed send: voice threads and running turns never send
+        // from this composer, so they would otherwise keep the old mode (t3team).
+        void setThreadRuntimeMode({
+          environmentId,
+          input: {
+            threadId: serverThread.id,
+            runtimeMode: mode,
+            createdAt: new Date().toISOString(),
+          },
+        });
+      }
       scheduleComposerFocus();
     },
     [
+      environmentId,
       isLocalDraftThread,
+      isServerThread,
       runtimeMode,
       scheduleComposerFocus,
       composerDraftTarget,
+      serverThread,
       setComposerDraftRuntimeMode,
       setDraftThreadContext,
+      setThreadRuntimeMode,
     ],
   );
 
