@@ -10,7 +10,17 @@ import { jsonResponse, makeGitHubApiHarness } from "./t3team-githubApiTestHarnes
 
 const HOST = "nexplore.ghe.com";
 
+// Every field upstream's listing row decoder requires; a row missing one is skipped as malformed.
 const row = (number: number, rollup: { state: string } | null) => ({
+  author: null,
+  state: "OPEN",
+  isDraft: false,
+  mergeable: "UNKNOWN",
+  reviewDecision: null,
+  latestReviews: { nodes: [] },
+  mergedAt: null,
+  reviewRequests: { nodes: [] },
+  labels: { nodes: [] },
   number,
   title: `Pull request ${number}`,
   url: `https://${HOST}/hive/ops/pull/${number}`,
