@@ -28,6 +28,7 @@ import {
   type WorkflowEphemeralConcurrencyPolicyDefinition,
   type WorkflowRepairPolicyDefinition,
 } from "@t3team/pack-api";
+import { registerPackFeatureFlagDefinitions } from "./t3team-pack-featureFlags.ts";
 import {
   decodeSetupProfileDefinition,
   decodeThemeDefinition,
@@ -147,6 +148,7 @@ export const activateCompiledInDistribution = async (): Promise<void> => {
       defineAccount: (definition) => {
         accounts.push(defineAccount(definition));
       },
+      defineFeatureFlags: registerPackFeatureFlagDefinitions,
       resolveAssetDataUrl: async (relativePath) => {
         const inlined = distributionAssets[relativePath];
         if (inlined) return inlined;

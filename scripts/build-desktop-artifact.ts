@@ -41,6 +41,13 @@ import { applyWebBrandAssets } from "./apply-web-brand-assets.ts";
 import { applyDistributionWebIcons } from "./lib/t3team-distributionWebIcons.ts";
 import { resolveDmgBackgroundOverride } from "./lib/t3team-dmgBackground.ts";
 import {
+  FLAG_PRESET_RESOURCE,
+  T3TeamFlagPresetError,
+  flagPresetExtraResources,
+  readFlagPresetForStaging,
+  resolveDesktopAppId,
+} from "./lib/t3team-releaseFlavor.ts";
+import {
   BRAND_ASSET_PATHS,
   resolveWebAssetBrandForChannel,
   type WebAssetBrand,
@@ -3287,6 +3294,9 @@ interface BuildConfigOptions {
   readonly wslRuntimeBundled?: boolean | undefined;
   // mac pty prebuild exclusions are arch-gated (#9240); omitted/`universal` keeps the plain set.
   readonly arch?: typeof BuildArch.Type | undefined;
+  // t3team: release flavor (lib/t3team-releaseFlavor.ts).
+  readonly flagPresetStaged?: boolean | undefined;
+  readonly appId?: string | undefined;
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -3307,6 +3317,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     artifactTimestamp,
     wslRuntimeBundled = false,
     arch,
+    flagPresetStaged = false,
+    appId = DESKTOP_APP_ID,
   } = options;
   const resolvedProductName = resolveDesktopProductName(version, productNameOverride);
   // Artifact file names are derived from the resolved product name, not hardcoded:
@@ -3323,7 +3335,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   // other (e.g. 20 mounted "Nexi Work 0.0.33 Installer" volumes).
   const artifactTimestampSuffix = artifactTimestamp ? `-${artifactTimestamp}` : "";
   const buildConfig: Record<string, unknown> = {
-    appId: DESKTOP_APP_ID,
+    appId,
     productName: resolvedProductName,
     // Built by concatenation, not a template literal: the ${version}/${arch}/
     // ${ext} tokens are electron-builder placeholders that must reach the
@@ -3406,6 +3418,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
             },
           ]
         : []),
+      ...flagPresetExtraResources(flagPresetStaged),
       ...(platform === "win" ? WINDOWS_SERVER_EXTRA_RESOURCES : []),
       ...(platform === "win" && wslRuntimeBundled ? WSL_RUNTIME_EXTRA_RESOURCES : []),
     ],
@@ -4579,6 +4592,17 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     );
   }
 
+  const flagPresetText = yield* Effect.try({
+    try: () => readFlagPresetForStaging(process.env),
+    catch: (cause) => new T3TeamFlagPresetError({ message: String(cause) }),
+  });
+  if (flagPresetText !== undefined) {
+    yield* fs.writeFileString(
+      path.join(stageProdResourcesDir, FLAG_PRESET_RESOURCE),
+      flagPresetText,
+    );
+  }
+
   const configuredMacPasskeySigning =
     options.platform === "mac" && options.signed
       ? yield* Effect.try({
@@ -4704,6 +4728,8 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
         runtimeArchivePath: options.wslRuntime,
       }),
       arch: options.arch,
+      flagPresetStaged: flagPresetText !== undefined,
+      appId: resolveDesktopAppId(process.env),
     }),
     dependencies: stageDependencies,
     devDependencies: {

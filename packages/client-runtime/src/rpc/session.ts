@@ -169,6 +169,8 @@ export const make = Effect.fn("RpcSessionFactory.make")(function* (
     ...(options.environmentThemes === true ? { environmentThemes: true } : {}),
     ...(options.usageLimitSources === true ? { usageLimitSources: true } : {}),
     ...(options.usageLimitsCommand === true ? { usageLimitsCommand: true } : {}),
+    // t3team: this client's projection handles `featureFlagsUpdated`.
+    featureFlags: true,
   };
 
   const connect = Effect.fnUntraced(function* (connection: PreparedConnection) {

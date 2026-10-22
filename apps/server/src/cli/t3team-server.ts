@@ -36,6 +36,7 @@ import {
   setPackCompletionWakeRenderer,
 } from "../t3team-pack-completionWakeRenderer.ts";
 import { loadPackPersistence } from "../t3team-packPersistence.ts";
+import { loadPackFeatureFlags } from "../t3team-pack-featureFlags.ts";
 import { registerPackCollections } from "../t3team-packDocumentConfig.ts";
 import { setPackAppearanceOverlay } from "../t3team-pack-appearanceOverlay.ts";
 import {
@@ -209,6 +210,14 @@ export const runT3TeamServerCommand = (
           Effect.logWarning("Workspace pack completion wake renderer loading failed", {
             cause,
           }).pipe(Effect.as(undefined)),
+        ),
+      );
+      yield* Effect.tryPromise({
+        try: () => loadPackFeatureFlags(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack feature flag loading failed", { cause }),
         ),
       );
       yield* Effect.tryPromise({

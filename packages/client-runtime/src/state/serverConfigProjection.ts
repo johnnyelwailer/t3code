@@ -129,6 +129,15 @@ export function applyServerConfigProjection(
         latestEvent: event,
         source: "live",
       }));
+    case "featureFlagsUpdated":
+      return Option.map(current, (projection) => ({
+        config: {
+          ...projection.config,
+          featureFlags: reuseUnchanged(projection.config.featureFlags, event.payload.featureFlags),
+        },
+        latestEvent: event,
+        source: "live",
+      }));
     case "usageLimitSourcesUpdated":
       return Option.map(current, (projection) => ({
         config: {

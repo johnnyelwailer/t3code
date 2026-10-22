@@ -28,6 +28,7 @@ import { RuntimeMode } from "./providerPolicy.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 import { ServerProviderUsageLimits, UsageLimitSourceSnapshots } from "./providerUsageLimits.ts";
 import { ServerSettings } from "./settings.ts";
+import { FeatureFlagValues } from "./t3team-featureFlags.ts";
 
 const KeybindingsMalformedConfigIssue = Schema.Struct({
   kind: Schema.Literal("keybindings.malformed-config"),
@@ -685,6 +686,11 @@ export const ServerConfig = Schema.Struct({
    */
   nexiStateDir: Schema.optionalKey(Schema.Boolean),
   /**
+   * Effective value of every registered feature flag (host and pack), keyed by flag. Clients gate
+   * surfaces on it; live changes arrive as `featureFlagsUpdated`. Absent on older servers.
+   */
+  featureFlags: Schema.optionalKey(FeatureFlagValues),
+  /**
    * Clients must not send window fields to servers that don't advertise this.
    */
   threadSnapshotPagination: Schema.optionalKey(Schema.Boolean),
@@ -836,6 +842,14 @@ export const ServerConfigStreamUsageLimitSourcesUpdatedEvent = Schema.Struct({
 export type ServerConfigStreamUsageLimitSourcesUpdatedEvent =
   typeof ServerConfigStreamUsageLimitSourcesUpdatedEvent.Type;
 
+export const ServerConfigStreamFeatureFlagsUpdatedEvent = Schema.Struct({
+  version: Schema.Literal(1),
+  type: Schema.Literal("featureFlagsUpdated"),
+  payload: Schema.Struct({ featureFlags: FeatureFlagValues }),
+});
+export type ServerConfigStreamFeatureFlagsUpdatedEvent =
+  typeof ServerConfigStreamFeatureFlagsUpdatedEvent.Type;
+
 export const ServerConfigStreamEvent = Schema.Union([
   ServerConfigStreamSnapshotEvent,
   ServerConfigStreamKeybindingsUpdatedEvent,
@@ -843,6 +857,7 @@ export const ServerConfigStreamEvent = Schema.Union([
   ServerConfigStreamSettingsUpdatedEvent,
   ServerConfigStreamEnvironmentThemesUpdatedEvent,
   ServerConfigStreamUsageLimitSourcesUpdatedEvent,
+  ServerConfigStreamFeatureFlagsUpdatedEvent,
 ]);
 export type ServerConfigStreamEvent = typeof ServerConfigStreamEvent.Type;
 

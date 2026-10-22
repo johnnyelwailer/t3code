@@ -256,6 +256,7 @@ import { t3teamThreadDraftMutationStatusRouteLayer } from "./t3team-thread-draft
 import { t3teamThreadJobsRouteLayer } from "./t3team-thread-jobs-route.ts";
 import { t3teamThreadWorkflowControlRouteLayer } from "./t3team-thread-workflow-control-route.ts";
 import { ResourcePressureMonitorLive } from "./t3team-resourcePressureMonitor.ts";
+import * as FeatureFlags from "./t3team-FeatureFlags.ts";
 import {
   t3teamGitHubAssetRouteLayer,
   t3teamGitHubInboxRouteLayer,
@@ -1023,6 +1024,9 @@ const layerRuntimeDependencies = layerRuntimeCoreDependencies.pipe(
   Layer.provideMerge(RemoteOpenTargets.layer),
   Layer.provideMerge(DirectEndpoints.layer),
   Layer.provideMerge(ServerLifecycleEvents.layer),
+  // Last provided = built first: user flag values are loaded before any flag-gated service
+  // (resource pressure, reactors, routes) reads its startup-only flag.
+  Layer.provideMerge(FeatureFlags.layer.pipe(Layer.provide(layerPersistence))),
   Layer.provide(NetService.layer),
 );
 

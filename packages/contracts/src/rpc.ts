@@ -339,6 +339,11 @@ import {
 } from "./resourceTelemetry.ts";
 import { ResourcePressureReport, ResourcePressureSweepResult } from "./t3team-resourcePressure.ts";
 import {
+  FeatureFlagSetError,
+  FeatureFlagSetInput,
+  FeatureFlagsView,
+} from "./t3team-featureFlags.ts";
+import {
   ResourcePressureCleanupExecuteInput,
   ResourcePressureCleanupInput,
   ResourcePressureCleanupPlan,
@@ -567,6 +572,9 @@ export const WS_METHODS = {
   serverCheckOtlpEndpoint: "server.checkOtlpEndpoint",
   serverSignalProcess: "server.signalProcess",
   serverGetResourcePressure: "server.getResourcePressure",
+  // t3team: Settings → Features (registry view; set or clear a user value).
+  serverGetFeatureFlags: "server.getFeatureFlags",
+  serverSetFeatureFlag: "server.setFeatureFlag",
   serverSweepStorageNow: "server.sweepStorageNow",
   serverPreviewThreadResourceCleanup: "server.previewThreadResourceCleanup",
   serverCleanupThreadResources: "server.cleanupThreadResources",
@@ -1003,6 +1011,19 @@ const WsServerGetResourcePressureRpc = Rpc.make(WS_METHODS.serverGetResourcePres
   payload: Schema.Struct({}),
   success: ResourcePressureReport,
   error: EnvironmentAuthorizationError,
+});
+
+// Settings → Features: the registry view and a per-user override.
+const WsServerGetFeatureFlagsRpc = Rpc.make(WS_METHODS.serverGetFeatureFlags, {
+  payload: Schema.Struct({}),
+  success: FeatureFlagsView,
+  error: EnvironmentAuthorizationError,
+});
+
+const WsServerSetFeatureFlagRpc = Rpc.make(WS_METHODS.serverSetFeatureFlag, {
+  payload: FeatureFlagSetInput,
+  success: FeatureFlagsView,
+  error: Schema.Union([FeatureFlagSetError, EnvironmentAuthorizationError]),
 });
 
 // Runs the existing policy-driven storage sweep (worktree cleanup rules) now.
@@ -2015,6 +2036,8 @@ export const WsSubscribeServerConfigRpc = Rpc.make(WS_METHODS.subscribeServerCon
      */
     environmentThemes: Schema.optional(Schema.Boolean),
     usageLimitSources: Schema.optional(Schema.Boolean),
+    /** Same capability gate for `featureFlagsUpdated` events. */
+    featureFlags: Schema.optional(Schema.Boolean),
     /**
      * Whether this client answers `/usage-limits` itself. The server injects
      * that command into provider catalogs only for such clients; an older
@@ -2182,6 +2205,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerRefreshUsageRatesRpc,
   WsServerSignalProcessRpc,
   WsServerGetResourcePressureRpc,
+  WsServerGetFeatureFlagsRpc,
+  WsServerSetFeatureFlagRpc,
   WsServerSweepStorageNowRpc,
   WsServerPreviewThreadResourceCleanupRpc,
   WsServerCleanupThreadResourcesRpc,

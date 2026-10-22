@@ -19,6 +19,7 @@ import * as DesktopConfig from "./DesktopConfig.ts";
 import { resolveLinuxDesktopEntryName } from "./DesktopEarlyElectronStartup.ts";
 import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePaths.ts";
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
+import { installPackagedFlagPreset } from "./t3team-desktopFlagPreset.ts";
 import {
   applyDistributionProductName,
   readDistributionProductNameFromEnv,
@@ -214,6 +215,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const packagedBranding = input.isPackaged
     ? readPackagedDesktopBranding(input.resourcesPath)
     : undefined;
+  if (input.isPackaged) installPackagedFlagPreset(input.resourcesPath);
   const displayName = packagedBranding?.displayName?.trim() || branding.displayName;
   const stateDir = resolveDesktopStateDir({
     baseDir,

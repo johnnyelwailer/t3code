@@ -71,6 +71,18 @@ export type ColdLocalCompactionRouteRegistration = {
   readonly enabled: boolean;
 };
 
+/** A pack feature flag; mirrors `@t3team/pack-api` `PackFeatureFlagDefinition`. */
+export type PackFeatureFlagRegistration = {
+  readonly key: string;
+  readonly group: string;
+  readonly subgroup?: string;
+  readonly label: string;
+  readonly description: string;
+  readonly defaultEnabled: boolean;
+  readonly requiresRestart: boolean;
+  readonly envAliases?: readonly string[];
+};
+
 export type WorkflowEphemeralConcurrencyPolicyDefinition = {
   readonly maxActiveSteps: number | "unlimited";
 };
@@ -109,6 +121,7 @@ export type PackActivationContext = {
   ) => void;
   /** Requires the `account:<id>` capability. */
   readonly defineAccount: (definition: AccountRegistration) => void;
+  readonly defineFeatureFlags: (definitions: ReadonlyArray<PackFeatureFlagRegistration>) => void;
   readonly resolveAssetDataUrl: (relativePath: string, mimeType: string) => Promise<string>;
 };
 export type PackActivate = (context: PackActivationContext) => void | Promise<void>;

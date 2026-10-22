@@ -411,6 +411,9 @@ importers:
       '@t3tools/integrations-atlassian':
         specifier: workspace:*
         version: link:../../packages/integrations-atlassian
+      '@t3tools/project-context':
+        specifier: workspace:*
+        version: link:../../packages/project-context
       '@t3tools/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -2497,6 +2500,9 @@ importers:
       '@electron/osx-sign':
         specifier: 2.7.0
         version: 2.7.0
+      '@t3tools/project-context':
+        specifier: workspace:*
+        version: link:../packages/project-context
       '@t3tools/shared':
         specifier: workspace:*
         version: link:../packages/shared

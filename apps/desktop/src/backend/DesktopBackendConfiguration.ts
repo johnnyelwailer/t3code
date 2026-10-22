@@ -87,6 +87,8 @@ const DESKTOP_BACKEND_ENV_NAMES = [
 // Env vars that the WSL backend needs but Windows process.env won't forward
 // across the wsl.exe boundary without WSLENV.
 const WSL_FORWARDED_ENV_NAMES = [
+  // t3team: the release flavor's feature-flag preset (JSON text, see t3team-desktopFlagPreset).
+  "T3TEAM_FLAG_PRESET",
   "OPENAI_API_KEY",
   "ANTHROPIC_API_KEY",
   "T3CODE_TELEMETRY_ENABLED",

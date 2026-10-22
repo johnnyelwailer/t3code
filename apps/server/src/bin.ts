@@ -25,6 +25,7 @@ if (
     // the CLI without one. Never for the fast paths, whose stdin is a pipe.
     const { attachConsoleStdin } = await import("./cli/consoleStdin.ts");
     attachConsoleStdin();
+    await import("./t3team-featureFlagBoot.ts");
     const { runCli } = await import("./binCli.ts");
     runCli();
   }

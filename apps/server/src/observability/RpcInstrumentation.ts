@@ -86,6 +86,8 @@ const RPC_AGGREGATES = {
   [WS_METHODS.serverGetProcessDiagnostics]: "server",
   [WS_METHODS.serverGetHostResources]: "server",
   [WS_METHODS.serverGetResourcePressure]: "server",
+  [WS_METHODS.serverGetFeatureFlags]: "server",
+  [WS_METHODS.serverSetFeatureFlag]: "server",
   [WS_METHODS.serverSweepStorageNow]: "server",
   [WS_METHODS.serverPreviewThreadResourceCleanup]: "server",
   [WS_METHODS.serverCleanupThreadResources]: "server",
