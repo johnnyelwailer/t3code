@@ -32,7 +32,7 @@ export class ConnectSignInPrompt extends Context.Service<
   }
 >()("t3/cloud/t3team-ConnectSignInPrompt/ConnectSignInPrompt") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const secrets = yield* ServerSecretStore.ServerSecretStore;
   const cloudCli = yield* CliTokenManager.CloudCliTokenManager;
   const minter = yield* ConnectCredentialMinter.ConnectCredentialMinter;
