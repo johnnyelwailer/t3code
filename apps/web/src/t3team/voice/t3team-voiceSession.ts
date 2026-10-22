@@ -38,6 +38,8 @@ export interface VoiceSessionDeps {
   readonly route: (text: string) => Promise<ModelSelection>;
   readonly startTurn: (input: StartThreadTurnInput) => Promise<void>;
   readonly pinAndKeep: (threadId: ThreadId) => Promise<void>;
+  /** Undoes `pinAndKeep` for a voice thread that was replaced: it goes back to being a normal thread. */
+  readonly release: (threadId: ThreadId) => Promise<void>;
   readonly waitForThread: (threadId: ThreadId) => Promise<void>;
   readonly newThreadId: () => ThreadId;
   readonly newMessageId: () => MessageId;
@@ -49,7 +51,7 @@ const RUNTIME = { runtimeMode: "auto", interactionMode: "default" } as const;
 const isLive = (thread: VoiceThreadShell) =>
   thread.archivedAt === null && thread.deletedAt === null;
 
-async function createVoiceThread(deps: VoiceSessionDeps, projectId: ProjectId) {
+export async function createVoiceThread(deps: VoiceSessionDeps, projectId: ProjectId) {
   const threadId = deps.newThreadId();
   await deps.startTurn({
     threadId,
@@ -141,12 +143,16 @@ async function submit(deps: VoiceSessionDeps, text: string): Promise<VoiceSubmit
 
 let tail: Promise<unknown> = Promise.resolve();
 
-/** Utterances are processed strictly in order, so first-use creation never races itself. */
+/** Voice work runs strictly in order, so creating or replacing the thread never races itself. */
+export function enqueueVoiceWork<T>(work: () => Promise<T>): Promise<T> {
+  const next = tail.then(work);
+  tail = next.catch(() => undefined);
+  return next;
+}
+
 export function submitVoiceUtterance(
   deps: VoiceSessionDeps,
   text: string,
 ): Promise<VoiceSubmitResult> {
-  const next = tail.then(() => submit(deps, text.trim()));
-  tail = next.catch(() => undefined);
-  return next;
+  return enqueueVoiceWork(() => submit(deps, text.trim()));
 }

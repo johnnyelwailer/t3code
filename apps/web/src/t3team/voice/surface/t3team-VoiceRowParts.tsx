@@ -52,7 +52,7 @@ export function VoiceRowMid(props: {
   const percent = useVoiceUiStore((store) => store.snapshot.downloadPercent);
   const recording = state === "recording";
   return (
-    <span key={state} className={cn(VOICE_CLASS.enter, "flex h-8 min-w-0 flex-1 items-center")}>
+    <span key={state} className={cn(VOICE_CLASS.enter, "flex h-7 min-w-0 flex-1 items-center")}>
       {recording && note.kind === "listening" ? (
         <canvas ref={canvasRef} aria-hidden className="block h-4 w-full" />
       ) : writingLabel !== null ? (
@@ -75,7 +75,7 @@ export function VoiceRowMid(props: {
       ) : state === "failed" ? (
         quiet(failedTitle(failureDetail).toLowerCase())
       ) : (
-        <span className="truncate font-medium text-foreground">{title}</span>
+        <span className="truncate text-sidebar-foreground">{title}</span>
       )}
     </span>
   );

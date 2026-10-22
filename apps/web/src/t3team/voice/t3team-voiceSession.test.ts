@@ -56,6 +56,9 @@ function harness(
     pinAndKeep: async () => {
       calls.push("pin");
     },
+    release: async () => {
+      calls.push("release");
+    },
     waitForThread: async () => undefined,
     newThreadId: () => ThreadId.make(`voice-${++ids}`),
     newMessageId: () => MessageId.make(`message-${++ids}`),

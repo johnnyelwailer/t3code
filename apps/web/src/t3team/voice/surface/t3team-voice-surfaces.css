@@ -22,24 +22,35 @@
   }
 }
 
+/*
+ * The sidebar row wears the regular thread row's surface (fills come from its Tailwind classes):
+ * no border, shadow, tint or glow here, whatever the state. The orb is the row's only voice cue,
+ * and in the row it is plain — a muted glyph, filled only while the microphone is live.
+ */
 .t3team-voice-row {
-  box-shadow: 0 1px 0 var(--vz-ink-8);
-  transition:
-    background 240ms var(--vz-ease-std),
-    border-color 240ms var(--vz-ease-std),
-    box-shadow 360ms var(--vz-ease-out);
+  transition: background 160ms var(--vz-ease-std);
 }
-.t3team-voice-row[data-state="recording"] {
-  border-color: var(--vz-live-35);
-  box-shadow:
-    0 1px 0 var(--vz-ink-8),
-    0 0 0 3px var(--vz-live-10);
+.t3team-voice-row .t3team-voice-orb {
+  width: 1rem;
+  height: 1rem;
 }
-.t3team-voice-row[data-state="committed"] {
-  border-color: var(--vz-ok-35);
+.t3team-voice-row .t3team-voice-orb:not([data-state="recording"]) {
+  background: transparent;
 }
-.t3team-voice-row[data-active="true"]:not([data-state="recording"]) {
-  background: var(--sidebar-row-selected, var(--accent));
+.t3team-voice-row .t3team-voice-orb[data-state="idle"] {
+  color: var(--muted-foreground);
+}
+.t3team-voice-row .t3team-voice-orb[data-state="idle"]:hover {
+  color: var(--foreground);
+  transform: none;
+}
+.t3team-voice-row .t3team-voice-orb > svg {
+  width: 70%;
+  height: 70%;
+}
+.t3team-voice-row .t3team-voice-orb::before,
+.t3team-voice-row .t3team-voice-orb::after {
+  display: none;
 }
 .t3team-voice-row .t3team-voice-hotkey {
   opacity: 0;

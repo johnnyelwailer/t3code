@@ -35,7 +35,13 @@ function mount(node: React.ReactNode) {
   });
 }
 
-const row = (props: { isActive?: boolean; onOpen?: () => void } = {}) => (
+const row = (
+  props: {
+    isActive?: boolean;
+    onOpen?: () => void;
+    onContextMenu?: (position: { x: number; y: number }) => void;
+  } = {},
+) => (
   <VoiceThreadRow
     title="Voice thread #592"
     isActive={props.isActive ?? false}
@@ -156,5 +162,47 @@ describe("the voice row is honest about what it is doing", () => {
     expect(container!.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe(
       "37",
     );
+  });
+});
+
+describe("the voice row looks like a thread row", () => {
+  const surface = () => container!.querySelector<HTMLElement>('[data-testid="voice-thread-row"]')!;
+
+  it("wears the regular row surface, a size more compact, with no card, border or tint", () => {
+    for (const state of ["idle", "transcribing", "committed", "failed"] as const) {
+      show(state, { startedAtMs: Date.now() });
+      mount(row());
+      const classes = surface().className.split(/\s+/);
+      expect(classes).toEqual(expect.arrayContaining(["h-7", "rounded-md", "bg-transparent"]));
+      expect(classes).toContain("hover:bg-sidebar-row-hover");
+      for (const special of ["border", "border-border", "bg-card", "rounded-lg", "h-8"]) {
+        expect(classes).not.toContain(special);
+      }
+      act(() => root?.unmount());
+      container?.remove();
+    }
+  });
+
+  it("uses the shared active fill when its thread is open", () => {
+    mount(row({ isActive: true }));
+    expect(surface().className).toContain("bg-sidebar-row-active");
+    expect(surface().className).not.toContain("bg-transparent");
+  });
+
+  it("opens its menu at the pointer on right-click, only when the host offers one", () => {
+    const onContextMenu = vi.fn();
+    mount(row({ onContextMenu }));
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    Object.defineProperties(event, { clientX: { value: 40 }, clientY: { value: 12 } });
+    act(() => surface().dispatchEvent(event));
+    expect(onContextMenu).toHaveBeenCalledWith({ x: 40, y: 12 });
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("leaves the browser menu alone without a host menu (the start row)", () => {
+    mount(row());
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    act(() => surface().dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(false);
   });
 });

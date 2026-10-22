@@ -58,6 +58,14 @@ export function makeVoiceSessionDeps(): VoiceSessionDeps | null {
         "voice-thread-keep",
       );
     },
+    release: async (threadId: ThreadId) => {
+      await runOnPrimaryEnvironment(threadEnvironment.unpin, { threadId }, "voice-thread-unpin");
+      await runOnPrimaryEnvironment(
+        threadEnvironment.setAutoSettle,
+        { threadId, enabled: true },
+        "voice-thread-release",
+      );
+    },
     waitForThread: async (threadId) => {
       await waitForThreadShell(scopeThreadRef(environmentId, threadId));
     },
