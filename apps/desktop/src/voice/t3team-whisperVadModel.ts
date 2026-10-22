@@ -1,4 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off -- Plain-Node helper owned by the whisper host.
+// @effect-diagnostics globalTimers:off -- A bounded wait for the VAD model download.
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeStream from "node:stream";
@@ -47,4 +48,35 @@ export async function downloadSileroVadModel(input: {
     NodeFS.rmSync(partial, { force: true });
     throw error;
   }
+}
+
+/** The VAD model is tiny; a slow network must not hold the warm-up longer than this. */
+const VAD_DOWNLOAD_WAIT_MS = 5_000;
+
+/**
+ * Makes sure the VAD model is on disk before a worker loads, so that worker gates with it. One
+ * download at a time; a warm-up waits for it at most `VAD_DOWNLOAD_WAIT_MS`, after which the
+ * download continues and a later worker picks the model up.
+ */
+export function makeVadModelEnsurer(
+  vadModel:
+    | { readonly locate: () => string | null; readonly download: () => Promise<string> }
+    | undefined,
+  log: (message: string) => void,
+): () => Promise<void> {
+  let inFlight: Promise<unknown> | null = null;
+  return async () => {
+    if (vadModel === undefined || vadModel.locate() !== null) return;
+    inFlight ??= vadModel
+      .download()
+      .then((path) => log(`silero vad model downloaded: ${path}`))
+      .catch((error: unknown) => {
+        log(`silero vad download failed, passes stay ungated by vad: ${String(error)}`);
+        inFlight = null;
+      });
+    await Promise.race([
+      inFlight,
+      new Promise((resolve) => setTimeout(resolve, VAD_DOWNLOAD_WAIT_MS).unref?.()),
+    ]);
+  };
 }
