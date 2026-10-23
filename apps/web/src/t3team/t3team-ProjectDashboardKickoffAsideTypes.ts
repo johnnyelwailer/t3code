@@ -31,5 +31,6 @@ export type ProjectDashboardKickoffAsideProps = {
     selectedToolIds: ReadonlyArray<T3TeamThreadToolId>,
     kickoffContextAttachments: ReadonlyArray<T3TeamContextAttachment>,
     kickoffWorkflow?: T3TeamKickoffWorkflow,
+    sendAtClick?: boolean,
   ) => string;
 };

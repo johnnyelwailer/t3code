@@ -20,6 +20,7 @@ export function bindProjectKickoffThread(
     selectedToolIds,
     kickoffContextAttachments,
     kickoffWorkflow,
+    sendAtClick,
   ) =>
     createThread({
       projectId,
@@ -32,5 +33,6 @@ export function bindProjectKickoffThread(
       selectedToolIds,
       kickoffContextAttachments,
       ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
+      ...(sendAtClick ? { sendAtClick } : {}),
     });
 }

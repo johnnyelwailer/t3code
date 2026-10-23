@@ -16,6 +16,8 @@ export type ProjectKickoffThreadInput = {
   selectedToolIds: ReadonlyArray<T3TeamThreadToolId>;
   kickoffContextAttachments: ReadonlyArray<T3TeamContextAttachment>;
   kickoffWorkflow?: T3TeamKickoffWorkflow;
+  /** Plain-text My Work kickoff: send the first message when Send is pressed, not when the chat mounts. */
+  sendAtClick?: boolean;
 };
 
 export type TicketKickoffThreadInput = ProjectKickoffThreadInput & {
