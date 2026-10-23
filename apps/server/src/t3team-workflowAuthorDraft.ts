@@ -7,7 +7,7 @@ import * as Path from "effect/Path";
 import type { WorkflowRun } from "./persistence/WorkflowRuns.ts";
 
 export const AUTHORING_EXHAUSTED_STEP = "authoring.exhausted";
-export const workflowAuthorDraftPath = (workflowPath: string) => `${workflowPath}.draft.json`;
+const workflowAuthorDraftPath = (workflowPath: string) => `${workflowPath}.draft.json`;
 
 /** A source candidate is never the executable workflow.ts until submission passes validation. */
 export function makeWorkflowAuthorDraft(input: {
