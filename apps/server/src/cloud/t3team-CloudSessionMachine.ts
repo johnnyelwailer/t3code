@@ -7,6 +7,8 @@
  * A pinned commit must hold exactly the definition the user sees: HEAD when it is on a remote
  * branch, else the upstream tip — and the definition's files must be committed and unchanged from
  * that commit. Anything else fails with the step that fixes it, never a silent plain session.
+ * The one exception is the `CLOUD_PROJECT_MACHINE` flag: while it is off no project has a machine
+ * here (`resolve` and `poolKeyOf` answer null), so every session starts on a plain machine.
  *
  * @module t3team-CloudSessionMachine
  */
@@ -23,6 +25,7 @@ import * as Schema from "effect/Schema";
 
 import { ProjectMachineDiscovery } from "../project/t3team-ProjectMachineDiscovery.ts";
 import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
+import { readFeatureFlagFromConfig } from "../t3team-featureFlagConfig.ts";
 import { VcsProcess } from "../vcs/VcsProcess.ts";
 import {
   type MachineGitAuthor,
@@ -141,6 +144,7 @@ const make = Effect.gen(function* () {
   });
 
   const resolve = Effect.fn("cloud.session_machine.resolve")(function* (projectId: ProjectId) {
+    if (!(yield* readFeatureFlagFromConfig("CLOUD_PROJECT_MACHINE"))) return null;
     const { discovery: found, source } = yield* discovery
       .resolveDefault(projectId)
       .pipe(Effect.mapError((error) => unavailable(error.message)));
@@ -270,6 +274,7 @@ const make = Effect.gen(function* () {
 
   const poolKeyOf = (projectId: ProjectId) =>
     Effect.gen(function* () {
+      if (!(yield* readFeatureFlagFromConfig("CLOUD_PROJECT_MACHINE"))) return null;
       const { source } = yield* discovery.resolveDefault(projectId);
       if (source === null) return null;
       const origin = yield* git(source.root, "machine.origin", ["remote", "get-url", "origin"]);

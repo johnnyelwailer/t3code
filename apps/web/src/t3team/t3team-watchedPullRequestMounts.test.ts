@@ -48,7 +48,8 @@ const PR_RENDERING_MARKERS = [
   "<ThreadPullRequestMiniListItem",
   "<PullRequestRowGlyph",
 ];
-const MOUNT = /<WatchedPullRequestIndicator\b/;
+/** My Work rows mount it through `MyWorkWatchedPullRequestIndicator` (behind its feature flag). */
+const MOUNT = /<(MyWork)?WatchedPullRequestIndicator\b/;
 
 /** Files that render a marker without mounting the indicator, and why that is right. */
 const EXEMPT = new Map<string, string>([

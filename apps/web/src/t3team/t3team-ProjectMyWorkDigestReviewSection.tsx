@@ -1,7 +1,7 @@
 import { ProjectId } from "@t3tools/contracts";
 import type { MouseEvent } from "react";
 
-import { WatchedPullRequestIndicator } from "~/components/pullRequest/t3team-WatchedPullRequestIndicator";
+import { MyWorkWatchedPullRequestIndicator } from "~/t3team/t3team-MyWorkWatchedPullRequestIndicator";
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { MyWorkChangeRequestSlot } from "~/t3team/packs/t3team-changeRequestSlots";
 import { DigestKicker, formatDigestAgo } from "~/t3team/t3team-ProjectMyWorkDigestChips";
@@ -151,7 +151,7 @@ export function DigestReviewSection({
                     <span className="truncate font-mono">
                       {review.repo}#{review.number}
                     </span>
-                    <WatchedPullRequestIndicator
+                    <MyWorkWatchedPullRequestIndicator
                       host={review.host}
                       repository={review.repo}
                       number={review.number}

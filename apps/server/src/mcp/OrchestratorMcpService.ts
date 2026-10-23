@@ -115,7 +115,7 @@ import {
 import * as Metrics from "../observability/Metrics.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import { DelegatedTaskPreparation } from "./t3team-delegatedTaskPreparation.ts";
-import { ThreadMailboxDelivery } from "./t3team-threadMailboxDelivery.ts";
+import { resolveThreadSendMode, ThreadMailboxDelivery } from "./t3team-threadMailboxDelivery.ts";
 
 const DEFAULT_WAIT_TIMEOUT_MS = 10 * 60 * 1_000;
 const MAX_WAIT_TIMEOUT_MS = 60 * 60 * 1_000;
@@ -2900,7 +2900,7 @@ const make = Effect.gen(function* () {
       yield* resolveRuntimeMode(limits.runtimeMode, target.thread.runtimeMode);
       yield* resolveInteractionMode(limits.interactionMode, target.thread.interactionMode);
 
-      const mode = input.mode ?? "auto";
+      const mode = resolveThreadSendMode(input.mode ?? "auto");
       const key = yield* requestKey(input.clientRequestId);
       const messageId = stableOperationMessageId({
         scope,

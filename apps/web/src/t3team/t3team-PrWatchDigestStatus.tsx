@@ -1,8 +1,8 @@
 /**
  * The digest header's one-line PR-watch count (doc 07 §2.6, decision 2): the kickoff aside that
  * holds the card is collapsed by default, so the header says `👁 12 watched · 2 need you` next
- * to *Jira synced*. Renders nothing while the recipe is off. "Need you" is live from the watch
- * threads, like the card.
+ * to *Jira synced*. Renders nothing while the recipe or `MYWORK_PR_WATCH_SURFACES` is off. "Need
+ * you" is live from the watch threads, like the card.
  */
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useRecipeRun } from "~/state/t3team-recipeRun";
@@ -13,16 +13,23 @@ import {
 } from "~/components/pullRequest/t3team-watchedPullRequestEye";
 import { cn } from "~/lib/utils";
 import { resolveRunCounts } from "~/t3team/t3team-recipeRunToggleState";
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 
 export const PR_WATCH_RECIPE_ID = "pr-watch";
 
-export function PrWatchDigestStatus({
-  projectId,
-  recipeId = PR_WATCH_RECIPE_ID,
-}: {
+interface PrWatchDigestStatusProps {
   projectId: string | undefined;
   recipeId?: string;
-}) {
+}
+
+export function PrWatchDigestStatus(props: PrWatchDigestStatusProps) {
+  return useFeatureFlag("MYWORK_PR_WATCH_SURFACES") ? <PrWatchDigestStatusLine {...props} /> : null;
+}
+
+function PrWatchDigestStatusLine({
+  projectId,
+  recipeId = PR_WATCH_RECIPE_ID,
+}: PrWatchDigestStatusProps) {
   const environmentId = usePrimaryEnvironmentId();
   const run = useRecipeRun({ environmentId, projectId, recipeId });
   const status = run.home?.workflowRunStatus;

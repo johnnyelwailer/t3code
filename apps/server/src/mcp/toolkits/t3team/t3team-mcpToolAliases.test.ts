@@ -1,5 +1,6 @@
 import { NodeHttpServer } from "@effect/platform-node";
-import { expect, it } from "@effect/vitest";
+import { afterEach, beforeEach, expect, it } from "@effect/vitest";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -22,6 +23,14 @@ const t3TeamRegistrationServices = Layer.mergeAll(
 );
 
 const aliases = Object.entries(T3TEAM_DEPRECATED_MCP_TOOL_ALIASES);
+
+const GATED_TOOL_FLAGS_ON = new Map([
+  ["AGENTS_THREAD_TOOLS", true],
+  ["ORCHESTRATION_CHILD_THREADS", true],
+  ["AGENTS_WIDGETS", true],
+]);
+beforeEach(() => replaceFeatureFlagPresetValues(GATED_TOOL_FLAGS_ON));
+afterEach(() => replaceFeatureFlagPresetValues(new Map()));
 
 it("maps each deprecated name to a current name, with the canonical tools keyed by current names", () => {
   expect(aliases).toHaveLength(14);
@@ -228,6 +237,26 @@ it.effect(
           arguments: { question: "?" },
         });
         expect(askOld).toEqual(askNew);
+
+        // (c) a flag switched off at runtime drops its tools from the next list, and a call
+        // from an older list is refused with the flag named, never dispatched.
+        replaceFeatureFlagPresetValues(
+          new Map([...GATED_TOOL_FLAGS_ON, ["AGENTS_THREAD_TOOLS", false]]),
+        );
+        const relisted = (yield* rpc(id++, "tools/list", {})).tools.map(
+          (tool: { readonly name: string }) => tool.name,
+        ) as ReadonlyArray<string>;
+        expect(relisted).not.toContain("t3_search_thread");
+        expect(relisted).not.toContain("t3_ask_user");
+        expect(relisted).toContain("t3_orchestration_run");
+        calls.length = 0;
+        const refused = yield* rpc(id++, "tools/call", {
+          name: "t3_search_thread",
+          arguments: sampleArguments.t3_search_thread,
+        });
+        expect(refused.isError).toBe(true);
+        expect(JSON.stringify(refused.content)).toContain("Thread and usage tools");
+        expect(calls).toEqual([]);
       }),
     ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );

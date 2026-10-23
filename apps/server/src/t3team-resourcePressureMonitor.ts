@@ -40,6 +40,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { ResourcePressureEventRepositoryLive } from "./persistence/t3team-ResourcePressureEvents.ts";
 import { ResourcePressureEventRepository } from "./persistence/t3team-ResourcePressureEvents.ts";
 import * as HostResources from "./resourceTelemetry/HostResources.ts";
+import * as FeatureFlags from "./t3team-FeatureFlags.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import {
   isResourcePressureEnabled,
@@ -153,13 +154,15 @@ export const makeResourcePressureMonitor = (options: {
     ? makeEnabled(options.sampleIntervalMs)
     : Effect.succeed(ResourcePressureMonitor.of({ report: Effect.succeed(DISABLED_REPORT) }));
 
-/** The flag is read once when the layer is built (process start), not at import. */
+/** The flag is read once when the layer is built (process start), after the feature flag service
+ * has loaded the user values it layers over the release preset. */
 export const ResourcePressureMonitorLive = Layer.effect(
   ResourcePressureMonitor,
-  Effect.suspend(() =>
-    makeResourcePressureMonitor({
+  Effect.gen(function* () {
+    yield* FeatureFlags.FeatureFlags;
+    return yield* makeResourcePressureMonitor({
       enabled: isResourcePressureEnabled(),
       sampleIntervalMs: resolveResourcePressureIntervalMs(),
-    }),
-  ),
+    });
+  }),
 ).pipe(Layer.provide(ResourcePressureEventRepositoryLive));

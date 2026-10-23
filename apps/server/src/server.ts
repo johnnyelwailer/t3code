@@ -292,6 +292,7 @@ import { T3TeamThreadEngagementLive } from "./t3team-threadEngagement.ts";
 import { T3TeamChildStatusReactorLive } from "./t3team-childStatusReactor.ts";
 import { T3TeamActivityLabelReactorLive } from "./t3team-activityLabelReactor.ts";
 import { T3TeamChildSettleSweeperLive } from "./t3team-childSettleSweeper.ts";
+import { T3TeamStallProfilerLive } from "./t3team-stallProfilerLive.ts";
 import { StandbyInterestLive } from "./cloud/t3team-StandbyInterest.ts";
 import { layer as CloudSessionMachinesLayer } from "./cloud/t3team-CloudSessionMachine.ts";
 import { layer as ProjectMachineDiscoveryLayer } from "./project/t3team-ProjectMachineDiscovery.ts";
@@ -1514,6 +1515,8 @@ const layerMakeServer = Layer.unwrap(
       T3TeamKickoffRecipeLive,
       layerCloudDesiredLinkReconcile,
       HeapSnapshot.layer,
+      // t3team: CPU profiles of event-loop stalls, behind OPS_STALL_PROFILER (startup-only).
+      T3TeamStallProfilerLive,
     );
 
     return layerServerApplication.pipe(

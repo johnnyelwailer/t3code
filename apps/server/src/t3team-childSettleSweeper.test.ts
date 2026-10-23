@@ -1,5 +1,6 @@
-import { assert, describe, it } from "@effect/vitest";
+import { afterEach, assert, describe, it } from "@effect/vitest";
 import { ThreadId } from "@t3tools/contracts";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
@@ -172,6 +173,20 @@ describe("child settle sweeper — dispatch pass", () => {
       assert.strictEqual(dispatched.length, 1);
       yield* sweeper.tick(NOW + CHILD_SETTLE_SWEEP_INTERVAL_MS);
       assert.strictEqual(dispatched.length, 2);
+    }),
+  );
+
+  afterEach(() => replaceFeatureFlagPresetValues(new Map()));
+
+  it.effect("settles nothing on the tick while child-thread management is off", () =>
+    Effect.gen(function* () {
+      const { sweeper, dispatched } = makeHarness(() => [shell("child")]);
+      replaceFeatureFlagPresetValues(new Map([["ORCHESTRATION_CHILD_THREADS", false]]));
+      yield* sweeper.tick(NOW);
+      assert.strictEqual(dispatched.length, 0);
+      replaceFeatureFlagPresetValues(new Map([["ORCHESTRATION_CHILD_THREADS", true]]));
+      yield* sweeper.tick(NOW + 5_000);
+      assert.strictEqual(dispatched.length, 1);
     }),
   );
 

@@ -54,6 +54,7 @@ import {
   type ServerConfigProjection,
   withoutEnvironmentThemes,
 } from "./serverConfigProjection.ts";
+import { createFeatureFlagAtoms } from "./t3team-featureFlags.ts";
 
 export type { ServerConfigProjection } from "./serverConfigProjection.ts";
 
@@ -1157,6 +1158,7 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.serverGetResourcePressure,
       staleTimeMs: 5_000,
     }),
+    ...createFeatureFlagAtoms(runtime, { configValueAtom }),
     searchAcpRegistry: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:acp-registry:search",
       tag: WS_METHODS.serverSearchAcpRegistry,

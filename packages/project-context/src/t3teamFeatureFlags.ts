@@ -96,16 +96,16 @@ export function findFeatureFlag(key: string): RegisteredFeatureFlag | undefined 
   return vendorFlagsByKey.get(key) ?? packFlags.get(key);
 }
 
-const EXPLICIT_FLAG_OFF = ["0", "false", "off"];
-const EXPLICIT_FLAG_ON = ["1", "true", "on"];
+const EXPLICIT_FLAG_OFF = new Set(["0", "false", "off"]);
+const EXPLICIT_FLAG_ON = new Set(["1", "true", "on"]);
 
 /** Explicit `0`/`false`/`off` and `1`/`true`/`on` (trimmed, case-insensitive) decide; unset,
  * blank and unrecognized values are not an override. */
 export function parseFeatureFlagOverride(raw: string | undefined): boolean | undefined {
   const normalized = raw?.trim().toLowerCase();
   if (normalized === undefined) return undefined;
-  if (EXPLICIT_FLAG_OFF.includes(normalized)) return false;
-  if (EXPLICIT_FLAG_ON.includes(normalized)) return true;
+  if (EXPLICIT_FLAG_OFF.has(normalized)) return false;
+  if (EXPLICIT_FLAG_ON.has(normalized)) return true;
   return undefined;
 }
 

@@ -11,8 +11,6 @@ import { ServerConfig, type StartupPresentation } from "../config.ts";
 // silently drifted on every upstream sync (it lost BackgroundPolicy/ResourceTelemetry/Usage in
 // the 2026-08 sync); it is gone, and with it the "register the route in BOTH registries" trap.
 import { runServer } from "../server.ts";
-import { activeResourceSummary } from "../t3team-processResilience.ts";
-import { startStallProfiler } from "../t3team-stallProfiler.ts";
 import { startLivenessBeacon } from "../t3team-livenessBeacon.ts";
 import { activateCompiledInDistribution } from "../t3team-distribution-bootstrap.ts";
 import {
@@ -298,20 +296,6 @@ export const runT3TeamServerCommand = (
         setupProfiles: setupProfileOverlay?.map((profile) => profile.id) ?? [],
       });
     }
-    // A stalled event loop drops every client with "stopped responding" and leaves no trace of
-    // why; this writes a CPU profile of each stall next to the logs (see the module).
-    const stallProfiler = startStallProfiler({
-      directory: `${config.logsDir}/stalls`,
-      onStall: (event) =>
-        Effect.runFork(
-          Effect.logWarning("The server's event loop stalled", {
-            ...event,
-            activeResources: activeResourceSummary(),
-          }),
-        ),
-      onUnavailable: (reason) =>
-        Effect.runFork(Effect.logDebug("Stall profiler unavailable", { reason })),
-    });
     // Lets the desktop watchdog tell a busy event loop from a dead backend (see the module).
     const livenessBeacon = startLivenessBeacon({
       fd: config.desktopLivenessFd,
@@ -320,7 +304,6 @@ export const runT3TeamServerCommand = (
     });
     return yield* runServer.pipe(
       Effect.provideService(ServerConfig, config),
-      Effect.ensuring(Effect.sync(stallProfiler.stop)),
       Effect.ensuring(Effect.sync(livenessBeacon.stop)),
     );
   });

@@ -40,6 +40,7 @@ import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { TelemetryExportSettings } from "./TelemetryExportSettings";
+import { readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
 
 const NUMBER_FORMAT = new Intl.NumberFormat();
 
@@ -942,7 +943,12 @@ export function DiagnosticsSettingsPanel() {
   return (
     <SettingsPageContainer width="expanded" className="gap-10">
       {/* Flag NEXI_FF_RESOURCE_PRESSURE (server-advertised); absent/false = no panel. */}
-      {environmentId !== null && environment?.serverConfig?.resourcePressure === true ? (
+      {environmentId !== null &&
+      readServerFeatureFlagOr(
+        environment?.serverConfig,
+        "RESOURCE_PRESSURE",
+        environment?.serverConfig?.resourcePressure === true,
+      ) ? (
         <ResourcePressurePanel environmentId={environmentId} />
       ) : null}
       <ResourceTelemetryDiagnostics environmentId={environmentId} />

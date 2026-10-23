@@ -17,6 +17,7 @@ import {
   tryAtlassianPromise,
 } from "./t3team-atlassian-http.ts";
 import { persistAtlassianOAuthAccounts } from "./t3team-atlassian-oauth-accountPersist.ts";
+import { whenRouteFeatureEnabled } from "./t3team-featureFlagRoute.ts";
 export {
   t3teamAtlassianAccountsRouteLayer,
   t3teamAtlassianDisconnectRouteLayer,
@@ -42,44 +43,50 @@ const mockProvider = new MockIntegrationProvider();
 export const t3teamAtlassianConnectBasicRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3team/atlassian/connect/basic",
-  Effect.gen(function* () {
-    yield* loadPersistedAuths;
-    const input = yield* readJsonBody<BasicConnectInput>();
+  whenRouteFeatureEnabled(
+    "INTEGRATIONS_ATLASSIAN",
+    Effect.gen(function* () {
+      yield* loadPersistedAuths;
+      const input = yield* readJsonBody<BasicConnectInput>();
 
-    if (!input.auth.apiToken.trim()) {
-      return okJson({
-        accounts: yield* tryAtlassianPromise(
-          () => mockProvider.listAccounts(),
-          "Failed to load preview Atlassian accounts.",
-        ),
-      });
-    }
+      if (!input.auth.apiToken.trim()) {
+        return okJson({
+          accounts: yield* tryAtlassianPromise(
+            () => mockProvider.listAccounts(),
+            "Failed to load preview Atlassian accounts.",
+          ),
+        });
+      }
 
-    const provider = new AtlassianIntegrationProvider(input.auth);
-    const accounts = yield* tryAtlassianPromise(
-      () => provider.listAccounts(),
-      "Failed to connect to Atlassian.",
-    );
-    yield* commitAtlassianAuths(
-      accounts.map((account) => ({ accountId: account.id, auth: input.auth })),
-    );
-    return okJson({ accounts });
-  }).pipe(Effect.catch(errorResponse)),
+      const provider = new AtlassianIntegrationProvider(input.auth);
+      const accounts = yield* tryAtlassianPromise(
+        () => provider.listAccounts(),
+        "Failed to connect to Atlassian.",
+      );
+      yield* commitAtlassianAuths(
+        accounts.map((account) => ({ accountId: account.id, auth: input.auth })),
+      );
+      return okJson({ accounts });
+    }).pipe(Effect.catch(errorResponse)),
+  ),
 );
 
 export const t3teamAtlassianConnectOAuthRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3team/atlassian/connect/oauth",
-  Effect.gen(function* () {
-    const input = yield* readJsonBody<OAuthConnectInput>();
-    // Same persistence path the server-owned flow (`oauth/complete`) uses; see
-    // t3team-atlassian-oauth-accountPersist.ts.
-    const accounts = yield* persistAtlassianOAuthAccounts({
-      sites: input.auth.sites,
-      token: input.auth.token,
-    });
-    return okJson({ accounts });
-  }).pipe(Effect.catch(errorResponse)),
+  whenRouteFeatureEnabled(
+    "INTEGRATIONS_ATLASSIAN",
+    Effect.gen(function* () {
+      const input = yield* readJsonBody<OAuthConnectInput>();
+      // Same persistence path the server-owned flow (`oauth/complete`) uses; see
+      // t3team-atlassian-oauth-accountPersist.ts.
+      const accounts = yield* persistAtlassianOAuthAccounts({
+        sites: input.auth.sites,
+        token: input.auth.token,
+      });
+      return okJson({ accounts });
+    }).pipe(Effect.catch(errorResponse)),
+  ),
 );
 
 export const t3teamAtlassianProjectsRouteLayer = HttpRouter.add(

@@ -50,8 +50,8 @@ import { useClientSettings, updateClientSettings } from "~/hooks/useSettings";
 import { useRenderedAppearance } from "~/hooks/useTheme";
 import {
   DETACH_SURFACE_LABEL,
-  isDetachedSurfaceWindow,
   openDetachedSurface,
+  useCanDetachSurface,
 } from "~/t3team/detached/t3team-openDetachedSurface";
 import { pullRequestDetachedSurfaceRequest } from "./t3team-pullRequestDetachedSurface.logic";
 import { pullRequestFindingKey, type PullRequestFinding } from "./pullRequestDetail.logic";
@@ -312,6 +312,7 @@ function PullRequestCodeTab({
   revealRequest?: { readonly path: string; readonly nonce: number } | null;
 }) {
   const resolvedTheme = useRenderedAppearance();
+  const canDetachSurface = useCanDetachSurface();
   const settings = useClientSettings((settings) => ({
     diffFilesCollapsed: settings.diffFilesCollapsed,
     diffIgnoreWhitespace: settings.diffIgnoreWhitespace,
@@ -1590,14 +1591,14 @@ function PullRequestCodeTab({
                   <span className="min-w-0 flex-1">Copy link</span>
                 </span>
               </DropdownMenuItem>
-              {isDetachedSurfaceWindow() ? null : (
+              {canDetachSurface ? (
                 <DropdownMenuItem onClick={openInNewWindow}>
                   <span className="flex min-w-0 items-center gap-2">
                     <PictureInPicture2Icon aria-hidden className="size-3.5 shrink-0" />
                     <span className="min-w-0 flex-1">{DETACH_SURFACE_LABEL}</span>
                   </span>
                 </DropdownMenuItem>
-              )}
+              ) : null}
             </MenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>

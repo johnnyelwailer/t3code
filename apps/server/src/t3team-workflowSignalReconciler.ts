@@ -13,6 +13,9 @@
  * binding and calls `reconcile`), survive restarts (the boot reconcile recomputes desired from
  * the journal), self-clean (a terminal run drops out of desired and its source stops), and
  * catch up after crashes (each source's durable cursor bridges the host-down window).
+ *
+ * With `ORCHESTRATION_SIGNAL_SOURCES` off at start the reconciler is inert: no instance starts,
+ * no sweep runs, and the durable registrations wait for a start with the flag on.
  */
 
 import * as Clock from "effect/Clock";
@@ -44,6 +47,8 @@ import {
 import * as Scheduler from "./scheduling/Scheduler.ts";
 import { providerForAccount, providerForPersistedAuths } from "./t3team-atlassian-auth-store.ts";
 import * as ServerConfig from "./config.ts";
+import * as FeatureFlags from "./t3team-FeatureFlags.ts";
+import { isWorkflowSignalSourcesEnabled } from "./t3team-workflowSignalSourcesFlag.ts";
 
 /** The periodic sweep cadence: catch orphaned instances + GC without hammering the DB. */
 const WORKFLOW_SIGNAL_SWEEP_MS = 60_000;
@@ -67,6 +72,12 @@ export interface WorkflowSignalReconcilerShape {
   readonly stopAll: () => Promise<void>;
 }
 
+const INERT_RECONCILER: WorkflowSignalReconcilerShape = {
+  reconcile: () => Promise.resolve(),
+  sweep: () => Promise.resolve(),
+  stopAll: () => Promise.resolve(),
+};
+
 /** T3TeamWorkflowSignalReconciler - service tag for the signal-source reconciler. */
 export class T3TeamWorkflowSignalReconciler extends Context.Service<
   T3TeamWorkflowSignalReconciler,
@@ -76,6 +87,9 @@ export class T3TeamWorkflowSignalReconciler extends Context.Service<
 export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
   T3TeamWorkflowSignalReconciler,
   Effect.gen(function* () {
+    // A startup-only flag: read after FeatureFlags has loaded the user's value.
+    yield* FeatureFlags.FeatureFlags;
+    if (!isWorkflowSignalSourcesEnabled()) return INERT_RECONCILER;
     const store = yield* WorkflowSignalStore;
     const delivery = yield* T3TeamWorkflowSignalDelivery;
     const pullRequestService = yield* PullRequestService;

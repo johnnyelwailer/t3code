@@ -1,6 +1,6 @@
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 
-import { usePrimarySettings } from "~/hooks/useSettings";
+import { useActivityLabelsEnabled } from "~/t3team/t3team-useActivityLabelsEnabled";
 import { useT3TeamListedThreadFacts } from "~/state/t3team-threadSideStreams";
 import {
   resolveT3TeamWorkflowRunLiveness,
@@ -20,7 +20,7 @@ export function useT3TeamSidebarRowFacts(
   readonly activityLabel: string | null;
 } {
   const facts = useT3TeamListedThreadFacts(environmentId, threadId);
-  const labelsEnabled = usePrimarySettings((settings) => settings.t3teamActivityLabelsEnabled);
+  const labelsEnabled = useActivityLabelsEnabled();
   return {
     liveness: resolveT3TeamWorkflowRunLiveness(facts),
     activityLabel: labelsEnabled ? (facts?.activityLabel ?? null) : null,

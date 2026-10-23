@@ -4,6 +4,7 @@ import {
   ProjectId,
 } from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -12,6 +13,7 @@ import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
+import { afterEach, beforeEach } from "vite-plus/test";
 
 import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as CliTokenManager from "./CliTokenManager.ts";
@@ -181,6 +183,9 @@ const makeGithubMock = (
   };
   return { calls, rest, graphql };
 };
+
+beforeEach(() => replaceFeatureFlagPresetValues(new Map([["CLOUD_SESSIONS", true]])));
+afterEach(() => replaceFeatureFlagPresetValues(new Map()));
 
 describe("CloudSessionService.create credential handoff", () => {
   it.effect("writes the payload issue, then dispatches, then resolves the session", () =>
@@ -811,6 +816,24 @@ describe("CloudSessionService.create over the Nexi broker", () => {
         calls.some((call) => joinedOf(call).includes("/dispatches")),
         "no dispatch",
       );
+    }),
+  );
+
+  it.effect("turned off: refuses a create before writing or dispatching anything", () =>
+    Effect.gen(function* () {
+      replaceFeatureFlagPresetValues(new Map([["CLOUD_SESSIONS", false]]));
+      const { calls, rest, graphql } = makeGithubMock();
+      const failure = yield* Effect.flip(
+        create(
+          providersWith(
+            rest,
+            graphql,
+            brokerMock(() => Effect.die("a refused create never asks for a grant")),
+          ),
+        ),
+      );
+      assert.isTrue(isCloudSessionFailed(failure) && failure.reason === "not_configured");
+      assert.isFalse(calls.some((call) => call.method !== "GET"));
     }),
   );
 

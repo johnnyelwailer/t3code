@@ -73,35 +73,46 @@ const runTerminal: OrchestrationV2DomainEvent = {
   payload: { id: RunId.make("run:1"), threadId, status: "completed" },
 } as never;
 
+const labelFlagEnv =
+  (value: "on" | "off", onRead: () => void = () => undefined) =>
+  (key: string) => {
+    if (key !== "NEXI_FF_UI_ACTIVITY_LABELS") return undefined;
+    onRead();
+    return value;
+  };
+
+const makeMocks = (events: PubSub.PubSub<OrchestrationV2DomainEvent>, contexts: string[]) =>
+  Layer.mergeAll(
+    Layer.mock(ThreadManagementService)({
+      streamDomainEvents: Stream.fromPubSub(events),
+      getThreadShell: () =>
+        Effect.succeed({
+          id: threadId,
+          projectId: "project-1",
+          modelSelection: testModelSelection,
+        } as unknown as OrchestrationV2ThreadShell),
+    }),
+    Layer.mock(TextGeneration)({
+      generateActivityLabel: (input) =>
+        Effect.sync(() => {
+          contexts.push(input.context);
+          return { label: "Running the test suite" };
+        }),
+    }),
+    Layer.succeed(ServerSettings.ServerSettingsService, {
+      getSettings: Effect.succeed({
+        ...DEFAULT_SERVER_SETTINGS,
+        t3teamActivityLabelsEnabled: true,
+      }),
+      streamChanges: Stream.never,
+    } as never),
+  );
+
 it.live("labels a thread from finished turn items and clears it when the run ends", () =>
   Effect.gen(function* () {
     const events = yield* PubSub.unbounded<OrchestrationV2DomainEvent>();
     const contexts: string[] = [];
-    const Mocks = Layer.mergeAll(
-      Layer.mock(ThreadManagementService)({
-        streamDomainEvents: Stream.fromPubSub(events),
-        getThreadShell: () =>
-          Effect.succeed({
-            id: threadId,
-            projectId: "project-1",
-            modelSelection: testModelSelection,
-          } as unknown as OrchestrationV2ThreadShell),
-      }),
-      Layer.mock(TextGeneration)({
-        generateActivityLabel: (input) =>
-          Effect.sync(() => {
-            contexts.push(input.context);
-            return { label: "Running the test suite" };
-          }),
-      }),
-      Layer.succeed(ServerSettings.ServerSettingsService, {
-        getSettings: Effect.succeed({
-          ...DEFAULT_SERVER_SETTINGS,
-          t3teamActivityLabelsEnabled: true,
-        }),
-        streamChanges: Stream.never,
-      } as never),
-    );
+    const Mocks = makeMocks(events, contexts);
     const facts = yield* ThreadFactsStore.T3TeamThreadFactsStore;
     const labelIs = (label: string | null) =>
       facts.get(threadId).pipe(Effect.map((record) => record?.activityLabel === label));
@@ -109,6 +120,7 @@ it.live("labels a thread from finished turn items and clears it when the run end
       debounceMs: 0,
       minRegenerateMs: 0,
       activityLabelTtlMs: 0,
+      readFeatureFlagEnv: labelFlagEnv("on"),
     }).pipe(Effect.provide(Mocks));
     // Let the forked stream subscribe before publishing (a PubSub drops earlier events).
     yield* Effect.sleep("20 millis");
@@ -121,6 +133,32 @@ it.live("labels a thread from finished turn items and clears it when the run end
 
     yield* PubSub.publish(events, runTerminal);
     yield* waitFor(labelIs(null));
+  }).pipe(
+    Effect.provide(ThreadFactsStore.layer.pipe(Layer.provideMerge(SqlitePersistenceMemory))),
+    Effect.scoped,
+  ),
+);
+
+it.live("does no work while UI_ACTIVITY_LABELS is off", () =>
+  Effect.gen(function* () {
+    const events = yield* PubSub.unbounded<OrchestrationV2DomainEvent>();
+    const contexts: string[] = [];
+    let flagReads = 0;
+    const facts = yield* ThreadFactsStore.T3TeamThreadFactsStore;
+    yield* makeT3TeamActivityLabelReactor({
+      debounceMs: 0,
+      minRegenerateMs: 0,
+      activityLabelTtlMs: 0,
+      readFeatureFlagEnv: labelFlagEnv("off", () => (flagReads += 1)),
+    }).pipe(Effect.provide(makeMocks(events, contexts)));
+    yield* Effect.sleep("20 millis");
+
+    yield* PubSub.publish(events, userMessage("Please fix the flaky test"));
+    yield* PubSub.publish(events, commandItem("pnpm test"));
+    // The gate reads the flag once per event, so two reads mean both events were handled.
+    yield* waitFor(Effect.sync(() => flagReads >= 2));
+    assert.deepStrictEqual(contexts, []);
+    assert.isUndefined((yield* facts.get(threadId))?.activityLabel);
   }).pipe(
     Effect.provide(ThreadFactsStore.layer.pipe(Layer.provideMerge(SqlitePersistenceMemory))),
     Effect.scoped,

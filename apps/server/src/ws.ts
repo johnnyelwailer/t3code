@@ -193,6 +193,7 @@ import * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
 import * as StorageCleanup from "./storageCleanup.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import * as ToolAuthService from "./toolauth/t3team-ToolAuthService.ts";
+import { whenToolAuthFlowEnabled } from "./toolauth/t3team-toolAuthFeatureGate.ts";
 import type { AuthState as ToolAuthInternalState } from "./toolauth/t3team-types.ts";
 import { terminalOutputStream, withTerminalOutputWindow } from "./terminal/OutputProtocol.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
@@ -3157,16 +3158,19 @@ export const layerWsRpc = (
         [WS_METHODS.toolAuthList]: (_input) =>
           toolAuth.list.pipe(Effect.map((tools) => ({ tools: tools.map(toToolAuthWireState) }))),
         [WS_METHODS.toolAuthStart]: (input) =>
-          toolAuth
-            .start(input.tool, { hostname: input.hostname })
-            .pipe(Effect.map(toToolAuthWireState)),
+          whenToolAuthFlowEnabled(
+            input.tool,
+            toolAuth.start(input.tool, { hostname: input.hostname }),
+          ).pipe(Effect.map(toToolAuthWireState)),
         // One-click "install this CLI", chained into the real sign-in flow
         // server-side (see `ToolAuthService.install`). The immediate
         // response is just the `installing` snapshot; every later beat
         // arrives over the client's existing `subscribeToolAuth`
         // subscription — there is no separate progress stream to wire up.
         [WS_METHODS.toolAuthInstall]: (input) =>
-          toolAuth.install(input.tool).pipe(Effect.map(toToolAuthWireState)),
+          whenToolAuthFlowEnabled(input.tool, toolAuth.install(input.tool)).pipe(
+            Effect.map(toToolAuthWireState),
+          ),
         [WS_METHODS.toolAuthSubmitCode]: (input) =>
           toolAuth.submitCode(input.tool, input.code).pipe(Effect.map(toToolAuthWireState)),
         [WS_METHODS.toolAuthCancel]: (input) =>

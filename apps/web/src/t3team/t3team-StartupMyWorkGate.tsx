@@ -26,6 +26,7 @@ import { MyWorkFirstLoadSwap } from "~/t3team/t3team-MyWorkFirstLoadSwap";
 import { MyWorkScopeColumn, MyWorkViewSwitchStandIn } from "~/t3team/t3team-MyWorkScopeColumn";
 import type { ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 import { useMyWorkBoundProjects } from "~/t3team/t3team-myWorkBoundProjects";
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import {
   getProjectDashboardMyWorkStorageKey,
   readPersistedProjectDashboardMyWorkState,
@@ -40,6 +41,7 @@ import {
   isStartupLandingPending,
   markStartupLandingDecided,
   readBootUrl,
+  type StartupMyWorkProbe as StartupProbeResult,
 } from "~/t3team/t3team-startupLanding.logic";
 
 /** Longest the cold start waits on My Work before showing the regular landing. */
@@ -140,10 +142,13 @@ function StartupMyWorkProbe({
 }) {
   const navigate = useNavigate();
   const boundProjects = useMyWorkBoundProjects();
+  // The probe counts My Work through the digest: with the digest off there is nothing to count,
+  // and the cold start keeps the regular landing.
+  const digestEnabled = useFeatureFlag("MYWORK_DIGEST");
   const digest = useMyWorkDigestGraph({
     projects: boundProjects ?? EMPTY_PROJECTS,
     scope: "all",
-    enabled: (boundProjects?.length ?? 0) > 0,
+    enabled: digestEnabled && (boundProjects?.length ?? 0) > 0,
   });
   const nowMs = Date.parse(`${useNowMinute()}Z`);
   const [timedOut, setTimedOut] = useState(false);
@@ -156,7 +161,9 @@ function StartupMyWorkProbe({
 
   const decision = decideStartupLanding({
     eligible: true,
-    probe: deriveStartupMyWorkProbe({ boundProjects, digest, lens, nowMs }),
+    probe: digestEnabled
+      ? deriveStartupMyWorkProbe({ boundProjects, digest, lens, nowMs })
+      : DIGEST_OFF_PROBE,
     timedOut,
   });
 
@@ -174,3 +181,8 @@ function StartupMyWorkProbe({
 }
 
 const EMPTY_PROJECTS: ReadonlyArray<ProjectShellProject> = [];
+const DIGEST_OFF_PROBE: StartupProbeResult = {
+  status: "settled",
+  boundProjectCount: 0,
+  itemCount: 0,
+};

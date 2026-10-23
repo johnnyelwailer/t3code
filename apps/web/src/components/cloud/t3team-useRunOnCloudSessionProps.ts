@@ -6,6 +6,7 @@ import { type ComponentProps, useCallback, useEffect, useMemo } from "react";
 import { useCloudSessionController } from "~/cloud/t3team-useCloudSessionController";
 import { cloudSessionDisplayName } from "~/components/cloud/t3team-cloudSessionDisplayName";
 import { useServerConfig } from "~/t3team/t3team-serverState";
+import { readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
 import type { BranchToolbarEnvironmentSelector } from "~/components/BranchToolbarEnvironmentSelector";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useEnvironments } from "~/state/environments";
@@ -114,7 +115,12 @@ export function useT3TeamRunOnCloudSessionProps(
     [cloudSessionProject, onCreate, projectKey, scopeKey],
   );
 
-  const machineSetupEnabled = useServerConfig()?.machineSetup === true;
+  const serverConfig = useServerConfig();
+  const machineSetupEnabled = readServerFeatureFlagOr(
+    serverConfig,
+    "MACHINE_SETUP",
+    serverConfig?.machineSetup === true,
+  );
   const onSetupProjectMachine = useCallback(
     (options?: CloudSessionCreateOptions) =>
       beginCloudSessionCreate({ scopeKey, projectKey }, options, () =>

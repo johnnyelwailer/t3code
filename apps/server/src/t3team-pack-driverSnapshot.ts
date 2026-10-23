@@ -9,12 +9,14 @@
  * @module t3team-pack-driverSnapshot
  */
 import {
+  RuntimeMode,
   type ProviderDriverKind,
   type ProviderInstanceId,
   type ServerProvider,
   type ServerProviderModel,
 } from "@t3tools/contracts";
 import type { PackProviderInstance, PackProviderSnapshot } from "@t3team/pack-api";
+import * as Schema from "effect/Schema";
 
 import { buildServerProvider } from "@t3tools/provider-core/server/snapshotProbe";
 
@@ -65,8 +67,13 @@ export const packSnapshotToServerProvider = (input: {
     ...(input.iconDataUrl ? { iconDataUrl: input.iconDataUrl } : {}),
     // Only forwarded when the pack opts out; absent means the host default (true).
     ...(snapshot.showInteractionModeToggle === false ? { showInteractionModeToggle: false } : {}),
+    ...(snapshot.supportedRuntimeModes === undefined
+      ? {}
+      : { supportedRuntimeModes: snapshot.supportedRuntimeModes.filter(isRuntimeMode) }),
   };
 };
+
+const isRuntimeMode = Schema.is(RuntimeMode);
 
 export type SnapshotInput = {
   readonly packInstance: PackProviderInstance;

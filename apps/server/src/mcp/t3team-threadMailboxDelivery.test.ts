@@ -10,7 +10,8 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { expect, it } from "vite-plus/test";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
+import { afterEach, beforeEach, expect, it } from "vite-plus/test";
 
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
@@ -81,7 +82,11 @@ const projection = (threadId: ThreadId) =>
     updatedAt: now,
   }) as unknown as OrchestrationV2ThreadProjection;
 
-const makeLayer = (mailbox: Layer.Layer<never>) =>
+type SendToThread = ThreadManagementService.ThreadManagementService["Service"]["sendToThread"];
+const mailboxModeMustNotSend: SendToThread = () =>
+  Effect.die("mailbox mode must not start, queue or steer a run");
+
+const makeLayer = (mailbox: Layer.Layer<never>, sendToThread = mailboxModeMustNotSend) =>
   OrchestratorMcpService.layer.pipe(
     Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
     Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
@@ -94,7 +99,7 @@ const makeLayer = (mailbox: Layer.Layer<never>) =>
             Effect.succeed(projection(threadId).thread as unknown as OrchestrationV2ThreadShell),
           getThreadRecords: (threadId) => Effect.succeed(projection(threadId)),
           getProjectThreadRecords: (input) => Effect.succeed(projection(input.threadId)),
-          sendToThread: () => Effect.die("mailbox mode must not start, queue or steer a run"),
+          sendToThread,
         } satisfies Partial<ThreadManagementService.ThreadManagementService["Service"]>),
         Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),
         Layer.mock(ScheduledTaskService.ScheduledTaskService)({
@@ -110,6 +115,9 @@ const makeLayer = (mailbox: Layer.Layer<never>) =>
       ),
     ),
   );
+
+beforeEach(() => replaceFeatureFlagPresetValues(new Map([["AGENTS_MAILBOX", true]])));
+afterEach(() => replaceFeatureFlagPresetValues(new Map()));
 
 it("t3_thread_send mode 'mailbox' hands the message to the registered mailbox", async () => {
   const received: ThreadMailboxSendInput[] = [];
@@ -157,4 +165,23 @@ it("t3_thread_send mode 'mailbox' is rejected when no mailbox is registered", as
       .pipe(Effect.flip);
     expect(error.code).toBe("invalid_request");
   }).pipe(Effect.provide(makeLayer(Layer.empty)), Effect.runPromise);
+});
+
+it("with AGENTS_MAILBOX off, mode 'mailbox' takes the plain queued-turn path", async () => {
+  replaceFeatureFlagPresetValues(new Map([["AGENTS_MAILBOX", false]]));
+  const mailboxSends: ThreadMailboxSendInput[] = [];
+  const mailbox = Layer.succeed(ThreadMailboxDelivery, {
+    send: (input) => Effect.sync(() => (mailboxSends.push(input), { state: "queued" as const })),
+  });
+  const plainModes: string[] = [];
+  const recordPlainSend: SendToThread = (input) =>
+    Effect.sync(() => plainModes.push(input.mode)).pipe(Effect.andThen(Effect.die("recorded")));
+  await Effect.gen(function* () {
+    const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+    yield* service
+      .sendToThread(scope, { threadId: targetId, message: "hi", mode: "mailbox" })
+      .pipe(Effect.exit);
+  }).pipe(Effect.provide(makeLayer(mailbox, recordPlainSend)), Effect.runPromise);
+  expect(plainModes).toEqual(["queue"]);
+  expect(mailboxSends).toEqual([]);
 });

@@ -5,6 +5,10 @@ import {
 import { CalmError } from "~/t3team/t3team-CalmError";
 import { ConnectAtlassianStep } from "~/t3team/t3team-ConnectAtlassianStep";
 import { CreateProjectDialogOAuthNotice } from "~/t3team/t3team-CreateProjectDialogOAuthNotice";
+import {
+  JIRA_CONNECTIONS_OFF_TEXT,
+  useJiraConnectionsEnabled,
+} from "~/t3team/t3team-jiraConnectionsFlag";
 
 /** What the choose screen shows while no Jira site is connected: sign in, then the list appears. */
 export function CreateProjectConnectView({
@@ -43,5 +47,12 @@ export function CreateProjectConnectPanel({
 }: {
   refreshCatalog: () => Promise<void>;
 }) {
+  if (!useJiraConnectionsEnabled()) {
+    return <p className="px-5 pb-5 text-sm text-muted-foreground">{JIRA_CONNECTIONS_OFF_TEXT}</p>;
+  }
+  return <CreateProjectConnectFlow refreshCatalog={refreshCatalog} />;
+}
+
+function CreateProjectConnectFlow({ refreshCatalog }: { refreshCatalog: () => Promise<void> }) {
   return <CreateProjectConnectView connect={useCreateProjectConnect(refreshCatalog)} />;
 }

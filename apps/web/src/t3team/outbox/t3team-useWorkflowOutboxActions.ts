@@ -1,7 +1,7 @@
 /**
  * Workflow answers and recipe-card actions for one thread: sent straight to the thread's server
  * while its environment is connected, queued in the durable outbox otherwise (the drain delivers
- * them on reconnect). Split from the composer's send paths so a thread view with no Team composer
+ * them on reconnect). With `UI_OUTBOX` off they are always sent straight, as before the outbox. Split from the composer's send paths so a thread view with no Team composer
  * (a cloud session's thread on `/$environmentId/$threadId`) can offer the same decision cards.
  */
 import { useCallback, useRef } from "react";
@@ -11,6 +11,7 @@ import { useEnvironment } from "~/state/environments";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { makeT3TeamOutboxEntry } from "~/t3team/outbox/t3team-outboxModel";
 import { enqueueT3TeamOutboxEntry } from "~/t3team/outbox/t3team-outboxStore";
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 
 /** What the outbox's workflow sends and its drain need from a backend. */
 export type T3TeamOutboxBackend = Pick<
@@ -40,8 +41,13 @@ export function useT3TeamWorkflowOutboxActions(input: {
 }) {
   const { canSendDirect } = input;
   const environment = useEnvironment(input.environmentId as never);
+  const outboxEnabled = useFeatureFlag("UI_OUTBOX");
   const availableRef = useRef(false);
   availableRef.current = environment?.connection.phase === "connected";
+  const shouldQueue = useCallback(
+    () => outboxEnabled && !(availableRef.current && (canSendDirect?.() ?? true)),
+    [outboxEnabled, canSendDirect],
+  );
 
   const resolveWorkflowDecision = useCallback(
     async (decision: {
@@ -52,7 +58,7 @@ export function useT3TeamWorkflowOutboxActions(input: {
       correlationId: string;
     }) => {
       if (!input.backend) return;
-      if (!(availableRef.current && (canSendDirect?.() ?? true)) && input.environmentId) {
+      if (shouldQueue() && input.environmentId) {
         const queued = enqueueT3TeamOutboxEntry(
           makeT3TeamOutboxEntry(
             "workflow-answer",
@@ -77,13 +83,13 @@ export function useT3TeamWorkflowOutboxActions(input: {
         correlationId: decision.correlationId,
       });
     },
-    [input.backend, input.environmentId, canSendDirect],
+    [input.backend, input.environmentId, shouldQueue],
   );
 
   const submitRecipeCardAction = useCallback(
     async (action: { cardId: string; actionId: string; submit?: Record<string, unknown> }) => {
       if (!input.backend) return;
-      if (!(availableRef.current && (canSendDirect?.() ?? true)) && input.environmentId) {
+      if (shouldQueue() && input.environmentId) {
         const queued = enqueueT3TeamOutboxEntry(
           makeT3TeamOutboxEntry(
             "recipe-card-action",
@@ -106,7 +112,7 @@ export function useT3TeamWorkflowOutboxActions(input: {
         ...(action.submit ? { submit: action.submit } : {}),
       });
     },
-    [input.backend, input.threadId, input.environmentId, canSendDirect],
+    [input.backend, input.threadId, input.environmentId, shouldQueue],
   );
 
   return { resolveWorkflowDecision, submitRecipeCardAction };

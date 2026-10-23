@@ -2,7 +2,7 @@ import type { OrchestrationV2Subagent, ServerProvider, ThreadId } from "@t3tools
 import { projectedSubagentsToRuntime } from "@t3tools/client-runtime/state/subagentRuntime";
 import { useMemo } from "react";
 
-import { usePrimarySettings } from "~/hooks/useSettings";
+import { useActivityLabelsEnabled } from "~/t3team/t3team-useActivityLabelsEnabled";
 import { useEnvironmentProviders } from "~/state/environments";
 import {
   type ActiveAgentEntry,
@@ -50,9 +50,7 @@ export function useT3TeamActiveAgents(input: {
   readonly subagents: ReadonlyArray<OrchestrationV2Subagent> | undefined;
 }): readonly ActiveAgentEntry[] {
   const { threadId, subagents } = input;
-  const activityLabelsEnabled = usePrimarySettings(
-    (settings) => settings.t3teamActivityLabelsEnabled,
-  );
+  const activityLabelsEnabled = useActivityLabelsEnabled();
   const providersByEnvironment = useEnvironmentProviders();
   const children = useT3TeamChildThreadRelationsStore((state) =>
     threadId === null ? undefined : state.childThreadsByParentId.get(threadId),
