@@ -114,7 +114,7 @@ function BetaSettingsSection() {
             key: "digestAgentDots",
             label: "Agent dots on digest rows",
             description:
-              "How agents that touched a ticket appear on digest rows. The badge style is not built yet; stacked dots are shown either way.",
+              "How agents that touched a ticket appear on digest rows: status dots, or badges with each agent's provider icon.",
             options: [
               { value: "stacked", label: "Stacked" },
               { value: "badges", label: "Badges" },
