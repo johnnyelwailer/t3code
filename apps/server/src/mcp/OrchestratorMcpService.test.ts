@@ -1377,6 +1377,12 @@ describe("OrchestratorMcpService provider resolution", () => {
             (yield* capabilitiesWith()).providers[0]!.models.map((entry) => entry.id),
             ["gpt-6", "gpt-4", "gpt-3", "my-alpha"],
           );
+          assert.deepEqual(
+            (yield* capabilitiesWith()).providers[0]!.models.filter((entry) =>
+              ["gpt-4", "gpt-3"].includes(entry.id),
+            ),
+            [{ id: "gpt-4" }, { id: "gpt-3" }],
+          );
           replaceFeatureFlagDatabaseValues(new Map([["ORCHESTRATOR_LATEST_ONLY", true]]));
           assert.deepEqual(
             (yield* capabilitiesWith()).providers[0]!.models.map((entry) => entry.id),
@@ -1384,7 +1390,7 @@ describe("OrchestratorMcpService provider resolution", () => {
           );
           vi.stubEnv("NEXI_FF_ORCHESTRATOR_LATEST_ONLY", "false");
           assert.deepEqual((yield* capabilitiesWith("gpt 5")).providers[0]!.models, [
-            { id: "gpt-5", legacy: true },
+            { id: "gpt-5" },
           ]);
         }),
     );
@@ -1444,8 +1450,8 @@ describe("OrchestratorMcpService provider resolution", () => {
               { id: "agent", values: ["build"], default: "build" },
             ],
           },
-          { id: "gpt-4", legacy: true },
-          { id: "gpt-3", legacy: true },
+          { id: "gpt-4" },
+          { id: "gpt-3" },
           { id: "my-alpha" },
         ]);
       }),

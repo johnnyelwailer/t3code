@@ -2056,6 +2056,7 @@ const make = Effect.gen(function* () {
       );
       const inherited = parent?.thread.modelSelection;
       const searchTerms = input.search?.toLowerCase().split(/\s+/) ?? [];
+      const latestOnly = readFeatureFlag("ORCHESTRATOR_LATEST_ONLY");
       return {
         parentThreadId: parent?.thread.id ?? null,
         inheritedProviderInstanceId: inherited?.instanceId ?? null,
@@ -2070,7 +2071,7 @@ const make = Effect.gen(function* () {
           );
           const { listed, omitted } = listCapabilityModels({
             provider,
-            latestOnly: readFeatureFlag("ORCHESTRATOR_LATEST_ONLY"),
+            latestOnly,
             includeLegacy: input.includeLegacy,
             preferences: settings.providerModelPreferences?.[provider.instanceId],
             searchTerms,
@@ -2090,7 +2091,9 @@ const make = Effect.gen(function* () {
               const options = model.capabilities?.optionDescriptors ?? [];
               return {
                 id: model.slug,
-                ...(!model.isCustom && model.isLegacy === true ? { legacy: true } : {}),
+                ...(latestOnly && !model.isCustom && model.isLegacy === true
+                  ? { legacy: true }
+                  : {}),
                 ...(model.name.toLowerCase() === model.slug.toLowerCase()
                   ? {}
                   : { label: model.name }),
