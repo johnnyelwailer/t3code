@@ -5,8 +5,10 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as SqlClient from "effect/sql/SqlClient";
+import { readFeatureFlag } from "@t3tools/project-context/t3teamFeatureFlags";
 
 import { ServerConfig } from "./config.ts";
+import * as FeatureFlags from "./t3team-FeatureFlags.ts";
 import { runT3TeamContextRefreshForeground } from "./t3team-contextRefreshForegroundRun.ts";
 import { runT3TeamContextRefreshSlice } from "./t3team-contextRefreshSliceRun.ts";
 import { runT3TeamContextProjectRefreshForeground } from "./t3team-contextProjectRefreshRun.ts";
@@ -84,7 +86,11 @@ export const NoopT3TeamContextRefreshService: T3TeamContextRefreshServiceShape =
     ),
 };
 
+/** Background refresh is startup-only: with `PLATFORM_CONTEXT_REFRESH` off no interrupted job
+ * resumes and no refresh queues related items; explicit refreshes still run in the foreground. */
 const make = Effect.gen(function* () {
+  yield* FeatureFlags.FeatureFlags;
+  const runOptions = { backgroundRefresh: readFeatureFlag("PLATFORM_CONTEXT_REFRESH") };
   const refreshContext = yield* Effect.context<T3TeamContextRefreshRequirements>();
   const active = new Map<
     string,
@@ -93,7 +99,7 @@ const make = Effect.gen(function* () {
   const supersessions = new Map<string, T3TeamContextRefreshSupersession>();
   const refreshWorkItem: T3TeamContextRefreshServiceShape["refreshWorkItem"] = (input) =>
     dedupRefreshWorkItem(active, supersessions, input, (supersession) =>
-      runT3TeamContextRefreshForeground(input, supersession).pipe(
+      runT3TeamContextRefreshForeground(input, supersession, runOptions).pipe(
         Effect.provide(refreshContext),
         Effect.mapError(toRefreshError),
       ),
@@ -104,13 +110,15 @@ const make = Effect.gen(function* () {
       Effect.mapError(toRefreshError),
     );
   const refreshWorkItemSlice: T3TeamContextRefreshServiceShape["refreshWorkItemSlice"] = (input) =>
-    runT3TeamContextRefreshSlice(input).pipe(
+    runT3TeamContextRefreshSlice(input, runOptions).pipe(
       Effect.provide(refreshContext),
       Effect.mapError(toRefreshError),
     );
-  yield* Effect.forkDetach(
-    resumeIncompleteT3TeamContextBackgroundJobs().pipe(Effect.provide(refreshContext)),
-  );
+  if (runOptions.backgroundRefresh) {
+    yield* Effect.forkDetach(
+      resumeIncompleteT3TeamContextBackgroundJobs().pipe(Effect.provide(refreshContext)),
+    );
+  }
   return { refreshWorkItem, refreshWorkItemSlice, refreshProject };
 });
 

@@ -87,6 +87,7 @@ export * from "./previewCapture.ts";
 export * from "./resourceTelemetry.ts";
 export * from "./t3team-resourcePressure.ts";
 export * from "./t3team-resourcePressureCleanup.ts";
+export * from "./t3team-featureFlags.ts";
 export * from "./t3team-toolauth.ts";
 export * from "./usage.ts";
 export * from "./t3team-providerUsage.ts";

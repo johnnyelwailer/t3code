@@ -18,9 +18,15 @@ import { loadT3TeamContextRefreshScope } from "./t3team-contextRefreshScope.ts";
 import { logRefreshFinished, logRefreshStarted } from "./t3team-contextRefreshTelemetry.ts";
 import { writeT3TeamWorkspaceContextFiles } from "./t3team-project-workspace-context-files.ts";
 
+export interface T3TeamContextRefreshRunOptions {
+  /** Queue the related items for background expansion after the root is written (default). */
+  readonly backgroundRefresh?: boolean;
+}
+
 export function runT3TeamContextRefreshForeground(
   input: T3TeamContextRefreshInput,
   supersession?: T3TeamContextRefreshSupersession,
+  options: T3TeamContextRefreshRunOptions = {},
 ) {
   return Effect.gen(function* () {
     yield* logRefreshStarted({
@@ -96,13 +102,16 @@ export function runT3TeamContextRefreshForeground(
       workspaceRoot: input.workspaceRoot,
       files: bundle.files,
     });
-    const background = yield* kickT3TeamContextBackgroundExpansion({
-      project: scope.project,
-      provider,
-      workspaceRoot: input.workspaceRoot,
-      rootKey: graph.nodes[0]?.key ?? scope.canonicalKey,
-      seeds: graph.backgroundSeeds,
-    });
+    const background =
+      options.backgroundRefresh === false
+        ? undefined
+        : yield* kickT3TeamContextBackgroundExpansion({
+            project: scope.project,
+            provider,
+            workspaceRoot: input.workspaceRoot,
+            rootKey: graph.nodes[0]?.key ?? scope.canonicalKey,
+            seeds: graph.backgroundSeeds,
+          });
 
     const result = {
       ok: true,
@@ -114,9 +123,13 @@ export function runT3TeamContextRefreshForeground(
       manifestRelativePath: bundle.rootManifestRelativePath,
       includedCount: bundle.includedCount,
       skippedCount: bundle.skippedCount,
-      backgroundJobId: background.jobId,
-      backgroundTargetDepth: background.targetDepth,
-      backgroundQueued: background.queued,
+      ...(background === undefined
+        ? {}
+        : {
+            backgroundJobId: background.jobId,
+            backgroundTargetDepth: background.targetDepth,
+            backgroundQueued: background.queued,
+          }),
     };
     yield* logRefreshFinished({
       ticketKey: result.ticketKey,
@@ -124,8 +137,9 @@ export function runT3TeamContextRefreshForeground(
       status: result.status,
       includedCount: result.includedCount,
       skippedCount: result.skippedCount,
-      backgroundJobId: result.backgroundJobId,
-      backgroundQueued: result.backgroundQueued,
+      ...(background === undefined
+        ? {}
+        : { backgroundJobId: background.jobId, backgroundQueued: background.queued }),
     });
     return result;
   });

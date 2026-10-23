@@ -1,5 +1,11 @@
 {
   "allowedModifiedFiles": [
+    "apps/web/src/components/settings/FoldedSettingsSection.tsx",
+    "scripts/package.json",
+    "packages/contracts/src/clientRpcPermissions.ts",
+    "packages/client-runtime/src/state/serverConfigProjection.ts",
+    "packages/client-runtime/src/rpc/session.ts",
+    "apps/server/src/bin.ts",
     "apps/server/src/cli/thread.ts",
     "docs/t3team-mvp/12-profiles-and-skill-packs.md",
     "docs/t3team-mvp/40-code-and-team-modes.md",
@@ -750,6 +756,7 @@
     "apps/web/src/routes/connect-agent.tsx",
     "apps/web/src/routes/oauth.callback.tsx",
     "apps/web/src/routes/settings.connected-tools.tsx",
+    "apps/web/src/routes/settings.features.tsx",
     "apps/web/src/routes/t3team.tsx",
     "apps/web/src/types/*.d.ts",
     "docs/operations/upstream-sync.md",

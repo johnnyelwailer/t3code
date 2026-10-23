@@ -93,6 +93,7 @@ import type * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import type { CloudSessionService } from "./cloud/t3team-CloudSessionService.ts";
 import type { ProjectMachineDiscovery } from "./project/t3team-ProjectMachineDiscovery.ts";
 import type { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
+import type { FeatureFlags } from "./t3team-FeatureFlags.ts";
 
 export type WsRpcHandlerServices =
   | AcpRegistrySupport.AcpRegistryCatalog
@@ -150,6 +151,7 @@ export type WsRpcHandlerServices =
   | RemoteOpenTargets.RemoteOpenTargets
   | RepositoryIdentityResolver.RepositoryIdentityResolver
   | ResourcePressureMonitor
+  | FeatureFlags
   | ResourceTelemetry.ResourceTelemetry
   | ReviewService.ReviewService
   | ScheduledTasks.ScheduledTaskService

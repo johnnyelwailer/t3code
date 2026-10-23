@@ -97,6 +97,7 @@ import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import {
   DETACH_SURFACE_LABEL,
   openDetachedSurface,
+  useCanDetachSurface,
 } from "~/t3team/detached/t3team-openDetachedSurface";
 import { detachedSurfaceRequestForRightPanelSurface } from "~/t3team/detached/t3team-rightPanelSurfaceDetach";
 import { observeResize } from "~/lib/observeResize";
@@ -978,6 +979,7 @@ function RightPanelTab(
 
 export function RightPanelTabs(props: RightPanelTabsProps) {
   const appName = useT3TeamAppBaseName();
+  const canDetachSurface = useCanDetachSurface();
   const ownsDesktopTitleBar = isElectron && props.mode === "inline";
   const browserProfiles = useBrowserDefaults().profiles;
   const { resolvedTheme } = useTheme();
@@ -1151,7 +1153,9 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       });
     }
     // t3team: a tab whose surface can stand alone moves into a window (or tab) of its own.
-    const detachRequest = detachedSurfaceRequestForRightPanelSurface(surface, props.environmentId);
+    const detachRequest = canDetachSurface
+      ? detachedSurfaceRequestForRightPanelSurface(surface, props.environmentId)
+      : null;
     if (detachRequest !== null) items.push({ id: "detach", label: DETACH_SURFACE_LABEL });
     items.push(
       { id: "close", label: "Close" },

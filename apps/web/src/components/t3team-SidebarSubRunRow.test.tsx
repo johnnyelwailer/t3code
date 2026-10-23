@@ -15,11 +15,15 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 const settingsState = vi.hoisted(() => ({
   activityLabelsEnabled: true,
+  activityLabelsFlag: true,
 }));
 
 vi.mock("~/hooks/useSettings", () => ({
   usePrimarySettings: (selector?: (settings: Record<string, unknown>) => unknown) =>
     selector ? selector({ t3teamActivityLabelsEnabled: settingsState.activityLabelsEnabled }) : {},
+}));
+vi.mock("~/t3team/t3team-useFeatureFlag", () => ({
+  useFeatureFlag: (key: string) => key !== "UI_ACTIVITY_LABELS" || settingsState.activityLabelsFlag,
 }));
 
 import type { ProjectThread } from "~/t3team/t3team-types";
@@ -83,6 +87,7 @@ function allStatusSvgs(): SVGSVGElement[] {
 
 afterEach(() => {
   settingsState.activityLabelsEnabled = true;
+  settingsState.activityLabelsFlag = true;
   if (root) {
     act(() => root!.unmount());
     root = null;
@@ -130,6 +135,14 @@ describe("SidebarSubRunRow status treatment", () => {
         activityLabel: "Reading contracts",
       }),
     );
+    const text = button().textContent ?? "";
+    expect(text).toContain("Working");
+    expect(text).not.toContain("Reading contracts");
+  });
+
+  it("hides the LLM detail while the UI_ACTIVITY_LABELS flag is off, whatever the setting", () => {
+    settingsState.activityLabelsFlag = false;
+    render(createThread({ status: "running", activityLabel: "Reading contracts" }));
     const text = button().textContent ?? "";
     expect(text).toContain("Working");
     expect(text).not.toContain("Reading contracts");

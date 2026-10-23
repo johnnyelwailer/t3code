@@ -121,6 +121,9 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.serverGetHostResources]: AuthOrchestrationReadScope,
   // t3team: storage/resource pressure is host telemetry like the histories below.
   [WS_METHODS.serverGetResourcePressure]: AuthDiagnosticsReadScope,
+  // t3team: Settings → Features reads like settings and writes like a settings change.
+  [WS_METHODS.serverGetFeatureFlags]: AuthOrchestrationReadScope,
+  [WS_METHODS.serverSetFeatureFlag]: AuthSettingsWriteScope,
   // t3team: sweeping storage and reclaiming thread resources are host maintenance,
   // mirroring upstream's serverSignalProcess.
   [WS_METHODS.serverSweepStorageNow]: AuthEnvironmentMaintainScope,

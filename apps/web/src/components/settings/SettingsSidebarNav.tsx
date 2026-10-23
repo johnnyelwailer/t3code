@@ -13,6 +13,7 @@ import {
   BotIcon,
   createLucideIcon,
   CalendarClockIcon,
+  FlagIcon,
   GitBranchIcon,
   HardDriveIcon,
   PanelsTopLeftIcon,
@@ -50,6 +51,8 @@ import {
 import { useAvailableSettingsSearchItems } from "./useAvailableSettingsSearchItems";
 import { validateSettingsScopeSearch } from "./settingsScope";
 import { AccountSidebarEntry } from "../account/t3team-AccountSidebarEntry";
+import { useConnectedToolsSettingsVisible } from "./t3team-connectedToolsSettingsVisible";
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 
 const SnapShotIcon = createLucideIcon("snap-shot", [
   [
@@ -65,19 +68,21 @@ const SnapShotIcon = createLucideIcon("snap-shot", [
 
 /**
  * Sections this fork adds on top of upstream's. `settingsSearch.ts` is upstream's single source of
- * truth for sections, and it is NOT modified here — the fork's extra section is declared alongside
- * it and spliced into the derived nav list at the position it used to occupy. Upstream's
+ * truth for sections, and it is NOT modified here — the fork's extra sections are declared alongside
+ * it and spliced into the derived nav list after the upstream section they follow. Upstream's
  * `/settings/beta` is gone (folded into Legacy features, #5664), so the fork drops it too.
  */
-export type T3TeamSettingsSectionPath = "/settings/connected-tools";
+export type T3TeamSettingsSectionPath = "/settings/connected-tools" | "/settings/features";
 export type SettingsSectionPath = SettingsPath | T3TeamSettingsSectionPath;
 
 const T3TEAM_SECTION_LABELS: Readonly<Record<T3TeamSettingsSectionPath, string>> = {
   "/settings/connected-tools": "Connected Tools",
+  "/settings/features": "Features",
 };
 
 /** Keyed by the upstream section each fork section follows, so upstream's order stays intact. */
 const T3TEAM_SECTIONS_AFTER: Readonly<Partial<Record<SettingsPath, T3TeamSettingsSectionPath>>> = {
+  "/settings/appearance": "/settings/features",
   "/settings/providers": "/settings/connected-tools",
 };
 
@@ -103,6 +108,7 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/snap-shot": SnapShotIcon,
   "/settings/providers": BotIcon,
   "/settings/connected-tools": KeyRoundIcon,
+  "/settings/features": FlagIcon,
   "/settings/integrations": BlocksIcon,
   "/settings/scheduled-tasks": CalendarClockIcon,
   "/settings/source-control": GitBranchIcon,
@@ -146,8 +152,13 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const currentHash = useLocation({ select: (location) => location.hash });
   const currentSearch = useLocation({ select: (location) => location.search });
   const scopeSearch = validateSettingsScopeSearch(currentSearch);
+  const featuresPageEnabled = useFeatureFlag("SETTINGS_FEATURES_PAGE");
+  const connectedToolsVisible = useConnectedToolsSettingsVisible();
   const navItems = SETTINGS_NAV_ITEMS.filter(
-    (item) => item.to !== "/settings/projects" || isSettingsOverviewVisible(scopeSearch),
+    (item) =>
+      (item.to !== "/settings/projects" || isSettingsOverviewVisible(scopeSearch)) &&
+      (item.to !== "/settings/features" || featuresPageEnabled) &&
+      (item.to !== "/settings/connected-tools" || connectedToolsVisible),
   );
   const { isMobile, setOpenMobile, open, setOpen } = useSidebar();
   const searchInputRef = useRef<HTMLInputElement>(null);

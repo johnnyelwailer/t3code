@@ -17,6 +17,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Semaphore from "effect/Semaphore";
 
+import { whenFeatureEnabled } from "./t3team-featureGate.ts";
 import { THREAD_SILENCE_DEFAULT_TIMEOUT_MS } from "./t3team-threadSilenceWatch.ts";
 import { makeSilenceActivityTracker } from "./t3team-threadSilenceWatchActivity.ts";
 import {
@@ -135,7 +136,16 @@ export const makeThreadSilenceWatchCore = (deps: ThreadSilenceWatchCoreDeps) =>
         return { cancelled };
       }).pipe(Effect.mapError(storeFailure), permit.withPermits(1));
 
-    return { register, cancel, handleEvent, sweep };
+    return {
+      register,
+      cancel,
+      handleEvent: (event: OrchestrationV2DomainEvent) =>
+        whenFeatureEnabled(
+          "ORCHESTRATION_CHILD_THREADS",
+          Effect.suspend(() => handleEvent(event)),
+        ),
+      sweep: whenFeatureEnabled("ORCHESTRATION_CHILD_THREADS", sweep),
+    };
   });
 
 export type ThreadSilenceWatchCore = Effect.Success<ReturnType<typeof makeThreadSilenceWatchCore>>;

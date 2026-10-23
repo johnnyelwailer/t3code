@@ -28,6 +28,7 @@ vi.mock("~/hooks/useSettings", () => ({
   usePrimarySettings: (selector?: (settings: Record<string, unknown>) => unknown) =>
     selector ? selector({ t3teamActivityLabelsEnabled: settingsState.activityLabelsEnabled }) : {},
 }));
+vi.mock("~/t3team/t3team-useFeatureFlag", () => ({ useFeatureFlag: () => true }));
 
 import type { ProjectThread } from "~/t3team/t3team-types";
 import type { SubRunNode } from "./t3team-AgentsPanelForkSection.logic";

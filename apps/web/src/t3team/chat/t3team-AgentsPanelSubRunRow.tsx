@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { ProviderInstanceIcon } from "~/components/chat/ProviderInstanceIcon";
 import { cn } from "~/lib/utils";
 import { RollLabel } from "~/components/t3team-ThreadActivityStatus-rollLabel";
-import { usePrimarySettings } from "~/hooks/useSettings";
+import { useActivityLabelsEnabled } from "~/t3team/t3team-useActivityLabelsEnabled";
 import { formatRelativeTime } from "~/t3team/components/t3team-projectSidebarTimeLabels";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { useEnvironmentProviders } from "~/state/environments";
@@ -79,9 +79,7 @@ export function SubRunRow({
   openThreadId?: string | undefined;
   onOpen: SubRunOpenCallback;
 }) {
-  const activityLabelsEnabled = usePrimarySettings(
-    (settings) => settings.t3teamActivityLabelsEnabled,
-  );
+  const activityLabelsEnabled = useActivityLabelsEnabled();
   const label = resolveSubRunStatusLabel(thread, { activityLabelsEnabled });
   const live = !STATIC_LABELS.has(label);
   const spinTick = useLivePhraseSpin(label, live);

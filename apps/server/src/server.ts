@@ -256,6 +256,7 @@ import { t3teamThreadDraftMutationStatusRouteLayer } from "./t3team-thread-draft
 import { t3teamThreadJobsRouteLayer } from "./t3team-thread-jobs-route.ts";
 import { t3teamThreadWorkflowControlRouteLayer } from "./t3team-thread-workflow-control-route.ts";
 import { ResourcePressureMonitorLive } from "./t3team-resourcePressureMonitor.ts";
+import * as FeatureFlags from "./t3team-FeatureFlags.ts";
 import {
   t3teamGitHubAssetRouteLayer,
   t3teamGitHubInboxRouteLayer,
@@ -291,6 +292,7 @@ import { T3TeamThreadEngagementLive } from "./t3team-threadEngagement.ts";
 import { T3TeamChildStatusReactorLive } from "./t3team-childStatusReactor.ts";
 import { T3TeamActivityLabelReactorLive } from "./t3team-activityLabelReactor.ts";
 import { T3TeamChildSettleSweeperLive } from "./t3team-childSettleSweeper.ts";
+import { T3TeamStallProfilerLive } from "./t3team-stallProfilerLive.ts";
 import { StandbyInterestLive } from "./cloud/t3team-StandbyInterest.ts";
 import { layer as CloudSessionMachinesLayer } from "./cloud/t3team-CloudSessionMachine.ts";
 import { layer as ProjectMachineDiscoveryLayer } from "./project/t3team-ProjectMachineDiscovery.ts";
@@ -1023,6 +1025,9 @@ const layerRuntimeDependencies = layerRuntimeCoreDependencies.pipe(
   Layer.provideMerge(RemoteOpenTargets.layer),
   Layer.provideMerge(DirectEndpoints.layer),
   Layer.provideMerge(ServerLifecycleEvents.layer),
+  // Last provided = built first: user flag values are loaded before any flag-gated service
+  // (resource pressure, reactors, routes) reads its startup-only flag.
+  Layer.provideMerge(FeatureFlags.layer.pipe(Layer.provide(layerPersistence))),
   Layer.provide(NetService.layer),
 );
 
@@ -1510,6 +1515,8 @@ const layerMakeServer = Layer.unwrap(
       T3TeamKickoffRecipeLive,
       layerCloudDesiredLinkReconcile,
       HeapSnapshot.layer,
+      // t3team: CPU profiles of event-loop stalls, behind OPS_STALL_PROFILER (startup-only).
+      T3TeamStallProfilerLive,
     );
 
     return layerServerApplication.pipe(

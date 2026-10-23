@@ -3,6 +3,7 @@ import * as Layer from "effect/Layer";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 
 import { badRequestJson, errorResponse, okJson, readJsonBody } from "./t3team-atlassian-http.ts";
+import { whenRouteFeatureEnabled } from "./t3team-featureFlagRoute.ts";
 import {
   ATLASSIAN_OAUTH_BEGIN_ROUTE,
   beginAtlassianOAuthFlow,
@@ -35,12 +36,15 @@ function absoluteBeginUrl(request: HttpServerRequest.HttpServerRequest, beginPat
 export const t3teamAtlassianOAuthBeginRouteLayer = HttpRouter.add(
   "POST",
   ATLASSIAN_OAUTH_BEGIN_ROUTE,
-  Effect.gen(function* () {
-    const request = yield* HttpServerRequest.HttpServerRequest;
-    const input = yield* readJsonBody<BeginInput>();
-    const begun = yield* beginAtlassianOAuthFlow({ redirectUri: input.redirectUri ?? "" });
-    return okJson({ ...begun, beginUrl: absoluteBeginUrl(request, begun.beginPath) });
-  }).pipe(Effect.catch(errorResponse)),
+  whenRouteFeatureEnabled(
+    "INTEGRATIONS_ATLASSIAN",
+    Effect.gen(function* () {
+      const request = yield* HttpServerRequest.HttpServerRequest;
+      const input = yield* readJsonBody<BeginInput>();
+      const begun = yield* beginAtlassianOAuthFlow({ redirectUri: input.redirectUri ?? "" });
+      return okJson({ ...begun, beginUrl: absoluteBeginUrl(request, begun.beginPath) });
+    }).pipe(Effect.catch(errorResponse)),
+  ),
 );
 
 /**
@@ -78,15 +82,18 @@ const t3teamAtlassianOAuthBeginRedirectRouteLayer = HttpRouter.add(
 const t3teamAtlassianOAuthCompleteRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3team/atlassian/oauth/complete",
-  Effect.gen(function* () {
-    const input = yield* readJsonBody<CompleteInput>();
-    const state = input.state?.trim() ?? "";
-    const code = input.code?.trim() ?? "";
-    if (!state || !code) {
-      return badRequestJson("Atlassian sign-in callback is missing its state or code.");
-    }
-    return okJson(yield* completeAtlassianOAuthFlow({ state, code }));
-  }).pipe(Effect.catch(errorResponse)),
+  whenRouteFeatureEnabled(
+    "INTEGRATIONS_ATLASSIAN",
+    Effect.gen(function* () {
+      const input = yield* readJsonBody<CompleteInput>();
+      const state = input.state?.trim() ?? "";
+      const code = input.code?.trim() ?? "";
+      if (!state || !code) {
+        return badRequestJson("Atlassian sign-in callback is missing its state or code.");
+      }
+      return okJson(yield* completeAtlassianOAuthFlow({ state, code }));
+    }).pipe(Effect.catch(errorResponse)),
+  ),
 );
 
 /**

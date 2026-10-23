@@ -542,3 +542,14 @@ All already listed in `allowedModifiedFiles`; each gains only the voice-surface 
 ## Cross-environment project identity by work source (2026-10-21)
 
 - `packages/client-runtime/src/state/projectGrouping.ts` — one import and one `deriveWorkSourceProjectKey(project) ??` line ahead of the repository key in `deriveLogicalProjectKey`, plus `"source"` in its three `Pick`s. A project bound to an external work source (Jira, …) groups by that binding, so the same t3team project on two T3 Connect machines is one sidebar entry, and a bound project no longer merges into a plain project that shares its repository. The logic lives in `t3team-workSourceProjectKey.ts`; unbound projects group exactly as before.
+
+## Settings → Features page (2026-10-22)
+
+- `apps/web/src/components/settings/FoldedSettingsSection.tsx` — optional `defaultOpen`, so the Features page's group sections start open; the default keeps every existing fold closed.
+- `apps/web/src/routes/settings.features.tsx` (unprefixed new file) — TanStack's file router derives the URL from the file name, like `settings.connected-tools.tsx`.
+- Already listed, each gains only the Features seam: `SettingsSidebarNav.tsx` (the nav entry, hidden while `SETTINGS_FEATURES_PAGE` is off), `routeTree.gen.ts` (generated entry), `packages/client-runtime/src/state/server.ts` (spreads `createFeatureFlagAtoms` from `t3team-featureFlags.ts`).
+- `apps/server/src/bin.ts` — one `await import("./t3team-featureFlagBoot.ts")` ahead of the CLI graph, so the release preset is installed before any module reads a startup-only flag or resolves the state directory.
+- `packages/client-runtime/src/rpc/session.ts` — advertises the `featureFlags` capability so the server streams `featureFlagsUpdated`.
+- `packages/client-runtime/src/state/serverConfigProjection.ts` — one `featureFlagsUpdated` case that replaces `config.featureFlags`.
+- `packages/contracts/src/clientRpcPermissions.ts` — `serverSetFeatureFlag` requires the settings-write scope, like the other host settings writes.
+- `scripts/package.json` — `@t3tools/project-context` dependency for the release-flavor preset writer in `build-desktop-artifact.ts`.

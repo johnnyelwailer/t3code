@@ -3,7 +3,7 @@ import type { ThreadStructureTurnItem } from "@t3tools/client-runtime/state/mode
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 
 import type { MessagesTimelineT3TeamProps } from "~/components/chat/MessagesTimeline";
-import { usePrimarySettings } from "~/hooks/useSettings";
+import { useActivityLabelsEnabled } from "~/t3team/t3team-useActivityLabelsEnabled";
 import { useT3TeamThreadFacts } from "~/state/t3team-threadSideStreams";
 import { deriveT3TeamActivityState } from "~/t3team/t3team-activityStateDerive";
 import type { ChatMessage } from "~/types";
@@ -77,7 +77,7 @@ export function useT3TeamChatTimelineProps(input: {
       }),
     [activeRunId, isWorking, turnItems, waitingOnUser],
   );
-  const labelsEnabled = usePrimarySettings((settings) => settings.t3teamActivityLabelsEnabled);
+  const labelsEnabled = useActivityLabelsEnabled();
   const threadActivityLabel = labelsEnabled ? (facts?.activityLabel ?? null) : null;
 
   const [navigationRequest, setNavigationRequest] = useState<NonNullable<

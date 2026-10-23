@@ -1,4 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - bootstrap env loading runs at module load, before any Effect runtime exists.
+// First import: the release preset must be installed before the CLI graph below evaluates.
+import "./t3team-featureFlagBoot.ts";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";

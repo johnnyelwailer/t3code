@@ -3,12 +3,14 @@ import type { EnvironmentSetupProfile, ServerConfig } from "@t3tools/contracts";
 import { resolveT3TeamPackDefaultSetupProfileId } from "~/t3team/t3team-packSetupProfiles";
 import { resolveT3TeamProjectSetupProfileId } from "~/t3team/t3team-projectSetup";
 import { readPrimaryServerConfig, useServerConfig } from "~/t3team/t3team-serverState";
+import { readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
 
 /**
  * Client gate for the work profile chooser (first-run setup surface, add-project wizard profile
  * step, Settings default-profile picker). Server-authoritative runtime feature flag
- * (`NEXI_FF_WORK_PROFILE_CHOOSER`, default OFF) advertised as `ServerConfig.workProfileChooser`;
- * absent on older servers, which must be treated as OFF — hence the explicit `=== true`.
+ * (`WORK_PROFILE_CHOOSER`, default OFF) read from the live `ServerConfig.featureFlags`; a server
+ * that predates the map advertises `ServerConfig.workProfileChooser`, absent on even older ones,
+ * which must be treated as OFF — hence the explicit `=== true`.
  *
  * While the chooser is off everyone works with the developer profile and any stored
  * `t3team:project-setup-profile` choice is IGNORED — never deleted or overwritten — so turning
@@ -19,7 +21,11 @@ import { readPrimaryServerConfig, useServerConfig } from "~/t3team/t3team-server
 export const T3TEAM_FALLBACK_DEVELOPER_SETUP_PROFILE_ID = "engineering-copilot";
 
 export function isT3TeamWorkProfileChooserEnabled(config: ServerConfig | null): boolean {
-  return config?.workProfileChooser === true;
+  return readServerFeatureFlagOr(
+    config,
+    "WORK_PROFILE_CHOOSER",
+    config?.workProfileChooser === true,
+  );
 }
 
 export function useT3TeamWorkProfileChooserEnabled(): boolean {

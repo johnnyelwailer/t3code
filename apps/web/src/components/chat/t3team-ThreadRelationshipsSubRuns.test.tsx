@@ -27,6 +27,7 @@ vi.mock("~/hooks/useSettings", () => ({
   usePrimarySettings: (selector: (settings: Record<string, unknown>) => unknown) =>
     selector({ t3teamActivityLabelsEnabled: true }),
 }));
+vi.mock("~/t3team/t3team-useFeatureFlag", () => ({ useFeatureFlag: () => true }));
 vi.mock("../ui/tooltip", () => ({
   Tooltip: ({ children }: { children: ReactNode }) => children,
   TooltipTrigger: ({ render, children }: { render: ReactElement; children: ReactNode }) =>

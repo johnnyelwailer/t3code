@@ -15,6 +15,7 @@ import {
 } from "@t3tools/shared/t3team-detachedSurface";
 
 import { isElectron } from "~/env";
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 
 export type { DetachedSurfaceRequest } from "@t3tools/shared/t3team-detachedSurface";
 
@@ -38,4 +39,10 @@ export function isDetachedSurfaceWindow(): boolean {
   // A page without a location (a test renderer, say) is not a detached surface.
   const href = typeof window === "undefined" ? undefined : window.location?.href;
   return typeof href === "string" && isDetachedSurfacePath(appRoutePathname(new URL(href)));
+}
+
+/** Whether a surface may offer its "detach" control: `DESKTOP_DETACHED_SURFACES` is on and this
+ * page is not itself a detached surface. */
+export function useCanDetachSurface(): boolean {
+  return useFeatureFlag("DESKTOP_DETACHED_SURFACES") && !isDetachedSurfaceWindow();
 }

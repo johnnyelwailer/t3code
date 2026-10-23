@@ -817,9 +817,14 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
           Effect.orElseSucceed(() => false),
         );
         // Staggered resubscribes are advertised by the server (behind its
-        // runtime feature flag) rather than assumed client-side.
+        // runtime feature flag) rather than assumed client-side. Each session
+        // brings a fresh config, and a resubscribe only happens on a new
+        // session, so the map read here is the value in effect for it.
         const supportsResubscribeStagger = yield* session.initialConfig.pipe(
-          Effect.map((config) => config.threadResubscribeStagger === true),
+          Effect.map(
+            (config) =>
+              config.featureFlags?.THREAD_RESUB_STAGGER ?? config.threadResubscribeStagger === true,
+          ),
           Effect.orElseSucceed(() => false),
         );
         yield* Ref.set(resubscribeStaggerEnabled, supportsResubscribeStagger);

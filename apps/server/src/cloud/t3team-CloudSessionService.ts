@@ -28,6 +28,7 @@ import { makeSessionTag } from "./t3team-cloudSessionName.ts";
 import { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
 import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
 import { isMachineSetupEnabled } from "./t3team-machineSetupFlag.ts";
+import { readFeatureFlagFromConfig } from "../t3team-featureFlagConfig.ts";
 import {
   claimStandby,
   claimedSessions,
@@ -80,7 +81,6 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
   const minter = yield* ConnectCredentialMinter;
   const broker = yield* NexiBrokerService;
   const machines = yield* CloudSessionMachines;
-  const handoffEnabled = yield* isSessionCredentialIssueEnabled();
   const { repoRef, machineLabel } = yield* resolveFleetConfig();
 
   // The GitHub-request half (run / listRunsFor / resolveLogin) lives in
@@ -152,6 +152,13 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
 
   const create: CloudSessionService["Service"]["create"] = (input) =>
     Effect.gen(function* () {
+      // Listing, cancelling and claiming stay available, so sessions started earlier can be ended.
+      if (!(yield* readFeatureFlagFromConfig("CLOUD_SESSIONS"))) {
+        return yield* new CloudSessionFailedError({
+          reason: "not_configured",
+          message: "Cloud sessions are turned off on this server (Settings → Features).",
+        });
+      }
       // Resolve the creator's login up front, before any side effect: every run
       // we read afterwards is scoped to it, and if it cannot be resolved we
       // fail before writing the credential payload or dispatching.
@@ -284,7 +291,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
               repoRef,
               sessionTag,
               run: gh.runInteractive,
-              enabled: handoffEnabled,
+              enabled: yield* isSessionCredentialIssueEnabled(),
               readCredential: cloudCli.getExisting,
               mint: minter.mint,
               mintTimeout: CREATE_MINT_WAIT,

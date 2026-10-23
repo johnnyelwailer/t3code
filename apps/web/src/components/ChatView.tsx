@@ -375,6 +375,7 @@ import {
 import { useDraftHeroLayoutTransition } from "./chat/useDraftHeroLayoutTransition";
 import { useLocalDispatchState } from "./chat/useLocalDispatchState";
 import { draftFanoutSelectionsAtom, draftSendState } from "./chat/chatViewSend";
+import { readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
 import {
   isCompactCommandMessage,
   type LocalThreadErrorEntry,
@@ -1281,7 +1282,11 @@ export default function ChatView(props: ChatViewProps) {
   });
   // t3team: memory-pressure notice and pause (fact `resourcePressurePaused`).
   const resourcePressureBanner = useResourcePressureBannerItem({
-    enabled: serverConfig?.resourcePressure === true,
+    enabled: readServerFeatureFlagOr(
+      serverConfig,
+      "RESOURCE_PRESSURE",
+      serverConfig?.resourcePressure === true,
+    ),
     environmentId,
     threadId: activeThreadId,
   });
@@ -2738,7 +2743,11 @@ export default function ChatView(props: ChatViewProps) {
       : null;
   // t3team: live provider retry + transient-failure auto-resume (flag TRANSIENT_AUTO_RESUME).
   const providerRetryBanner = useProviderRetryBannerItem({
-    enabled: serverConfig?.transientAutoResume === true,
+    enabled: readServerFeatureFlagOr(
+      serverConfig,
+      "TRANSIENT_AUTO_RESUME",
+      serverConfig?.transientAutoResume === true,
+    ),
     environmentId,
     threadId: activeThreadId,
     projection: serverProjection,

@@ -26,6 +26,7 @@ import {
 import { ensureT3TeamContextCacheTables } from "./t3team-context-cache-tables.ts";
 import { t3teamContextBackgroundOpportunisticMaxDepth } from "./t3team-contextRefreshBackgroundQueue.ts";
 import { T3TeamContextRefreshServiceLive } from "./t3team-contextRefreshService.ts";
+import * as FeatureFlags from "./t3team-FeatureFlags.ts";
 import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 
 const tempRoots: string[] = [];
@@ -94,6 +95,7 @@ function makeContextRefreshServiceTestLayer(prefix: string) {
       Layer.mergeAll(
         nodeLayer,
         SqlitePersistenceMemory,
+        FeatureFlags.layer.pipe(Layer.provide(SqlitePersistenceMemory)),
         WorkspacePaths.layer.pipe(Layer.provide(nodeLayer)),
         ServerConfig.layerTest(process.cwd(), { prefix }).pipe(Layer.provide(nodeLayer)),
       ),

@@ -28,7 +28,8 @@ import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import { afterAll } from "vite-plus/test";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
+import { afterAll, afterEach, beforeEach } from "vite-plus/test";
 
 import { ServerConfig } from "./config.ts";
 import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
@@ -67,6 +68,9 @@ const workflowPath = NodeURL.fileURLToPath(
     import.meta.url,
   ),
 );
+beforeEach(() => replaceFeatureFlagPresetValues(new Map([["ORCHESTRATION_SIGNAL_SOURCES", true]])));
+afterEach(() => replaceFeatureFlagPresetValues(new Map()));
+
 const cwd = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-wait-any-"));
 afterAll(() => NodeFS.rmSync(cwd, { recursive: true, force: true }));
 
@@ -103,8 +107,12 @@ const TestLayer = T3TeamWorkflowSchedulerSweepLive.pipe(
   Layer.provideMerge(NodeServices.layer),
 );
 
-/** Launch the loop to its first park through `registry`; returns the parked row. */
-const launchParked = (runId: string, registry: T3TeamWorkflowEngineRegistryShape) =>
+/** Launch the loop through `registry` on `host`; returns the launch result. */
+const launchLoop = (
+  runId: string,
+  registry: T3TeamWorkflowEngineRegistryShape,
+  host = makeFakeWorkflowHost().host,
+) =>
   Effect.gen(function* () {
     const repo = yield* WorkflowRunRepository;
     const store = yield* WorkflowJournalStore;
@@ -126,7 +134,7 @@ const launchParked = (runId: string, registry: T3TeamWorkflowEngineRegistryShape
         ...shape,
         runsRoot: NodePath.join(config.cwd, ".t3team-runs"),
         registry,
-        host: makeFakeWorkflowHost().host,
+        host,
         newId: () => `id-${(seq += 1)}`,
         nowIso,
         store,
@@ -138,6 +146,14 @@ const launchParked = (runId: string, registry: T3TeamWorkflowEngineRegistryShape
         }),
       }),
     );
+    return launched;
+  });
+
+/** Launch the loop to its first park through `registry`; returns the parked row. */
+const launchParked = (runId: string, registry: T3TeamWorkflowEngineRegistryShape) =>
+  Effect.gen(function* () {
+    const repo = yield* WorkflowRunRepository;
+    const launched = yield* launchLoop(runId, registry);
     assert.strictEqual(launched.status, "suspended");
     return Option.getOrThrow(yield* repo.getById({ runId }));
   });
@@ -280,4 +296,26 @@ it.effect("boot rehydration drains the boot-gap inbox across branches by arrival
       }),
     );
   }).pipe(Effect.provide(TestLayer)),
+);
+
+it.effect(
+  "with signal sources off, the wait fails the run with the reason instead of parking",
+  () =>
+    Effect.gen(function* () {
+      replaceFeatureFlagPresetValues(new Map([["ORCHESTRATION_SIGNAL_SOURCES", false]]));
+      const repo = yield* WorkflowRunRepository;
+      const signalStore = yield* WorkflowSignalStore;
+      const registry = yield* T3TeamWorkflowEngineRegistry;
+      const fake = makeFakeWorkflowHost();
+      const runId = "wait-any-sources-off";
+
+      const launched = yield* launchLoop(runId, registry, fake.host);
+
+      assert.strictEqual(launched.status, "failed");
+      const row = Option.getOrThrow(yield* repo.getById({ runId }));
+      assert.notStrictEqual(row.status, "watching");
+      assert.isTrue(JSON.stringify(fake.calls).includes("Signal sources are turned off"));
+      const registered = yield* signalStore.listLiveRegistrations();
+      assert.isFalse(registered.some((registration) => registration.runId === runId));
+    }).pipe(Effect.provide(TestLayer)),
 );

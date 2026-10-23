@@ -193,6 +193,7 @@ import * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
 import * as StorageCleanup from "./storageCleanup.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import * as ToolAuthService from "./toolauth/t3team-ToolAuthService.ts";
+import { whenToolAuthFlowEnabled } from "./toolauth/t3team-toolAuthFeatureGate.ts";
 import type { AuthState as ToolAuthInternalState } from "./toolauth/t3team-types.ts";
 import { terminalOutputStream, withTerminalOutputWindow } from "./terminal/OutputProtocol.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
@@ -256,6 +257,7 @@ import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsSt
 import { isThreadResubscribeStaggerEnabled } from "./t3team-threadResubscribeStaggerFlag.ts";
 import { isResourcePressureEnabled } from "./t3team-resourcePressureFlag.ts";
 import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
+import * as FeatureFlags from "./t3team-FeatureFlags.ts";
 import { sweepStorageNow } from "./t3team-resourcePressureSweep.ts";
 import {
   executeThreadCleanup,
@@ -400,6 +402,8 @@ export const withLateEditorConfig = <E, R>(
             return [{ ...current, providers: event.payload.providers }, [event]];
           case "settingsUpdated":
             return [{ ...current, settings: event.payload.settings }, [event]];
+          case "featureFlagsUpdated":
+            return [{ ...current, featureFlags: event.payload.featureFlags }, [event]];
           // Themes and usage-limit sources never ride in a snapshot; clients
           // carry their projected values across one.
           default:
@@ -1434,6 +1438,7 @@ export const layerWsRpc = (
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
       const hostResources = yield* HostResources.HostResources;
       const resourcePressure = yield* ResourcePressureMonitor;
+      const featureFlags = yield* FeatureFlags.FeatureFlags;
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const threadCleanupDeps = yield* makeThreadCleanupDeps({
@@ -1875,6 +1880,7 @@ export const layerWsRpc = (
           // failure auto-resume and its composer banner.
           transientAutoResume: isTransientAutoResumeEnabled(),
           nexiStateDir: isNexiStateDirSelectedAtStartup(),
+          featureFlags: yield* featureFlags.values,
           ...(lastEventLoopStall === undefined ? {} : { lastEventLoopStall }),
         };
       });
@@ -2649,6 +2655,8 @@ export const layerWsRpc = (
         [WS_METHODS.serverRefreshUsageRates]: (_input) => usage.refreshRates,
         [WS_METHODS.serverRetryResourceTelemetry]: (_input) => resourceTelemetry.retry,
         [WS_METHODS.serverGetResourcePressure]: (_input) => resourcePressure.report,
+        [WS_METHODS.serverGetFeatureFlags]: (_input) => featureFlags.view,
+        [WS_METHODS.serverSetFeatureFlag]: (input) => featureFlags.set(input),
         [WS_METHODS.serverSweepStorageNow]: (_input) =>
           sweepStorageNow(Option.some(storageCleanup)),
         [WS_METHODS.serverPreviewThreadResourceCleanup]: (input) =>
@@ -3150,16 +3158,19 @@ export const layerWsRpc = (
         [WS_METHODS.toolAuthList]: (_input) =>
           toolAuth.list.pipe(Effect.map((tools) => ({ tools: tools.map(toToolAuthWireState) }))),
         [WS_METHODS.toolAuthStart]: (input) =>
-          toolAuth
-            .start(input.tool, { hostname: input.hostname })
-            .pipe(Effect.map(toToolAuthWireState)),
+          whenToolAuthFlowEnabled(
+            input.tool,
+            toolAuth.start(input.tool, { hostname: input.hostname }),
+          ).pipe(Effect.map(toToolAuthWireState)),
         // One-click "install this CLI", chained into the real sign-in flow
         // server-side (see `ToolAuthService.install`). The immediate
         // response is just the `installing` snapshot; every later beat
         // arrives over the client's existing `subscribeToolAuth`
         // subscription — there is no separate progress stream to wire up.
         [WS_METHODS.toolAuthInstall]: (input) =>
-          toolAuth.install(input.tool).pipe(Effect.map(toToolAuthWireState)),
+          whenToolAuthFlowEnabled(input.tool, toolAuth.install(input.tool)).pipe(
+            Effect.map(toToolAuthWireState),
+          ),
         [WS_METHODS.toolAuthSubmitCode]: (input) =>
           toolAuth.submitCode(input.tool, input.code).pipe(Effect.map(toToolAuthWireState)),
         [WS_METHODS.toolAuthCancel]: (input) =>
@@ -3240,6 +3251,7 @@ export const layerWsRpc = (
               // Buffer changes through discovery and the initial snapshot's RPC ACK wait.
               const keybindingsChanges = yield* keybindings.subscribeChanges;
               const settingsChanges = yield* serverSettings.subscribeChanges;
+              const featureFlagChanges = yield* featureFlags.subscribeChanges;
               const config = yield* loadServerConfig({ usageLimitsCommand });
               const keybindingsUpdates = keybindingsChanges.pipe(
                 Stream.map((event) => ({
@@ -3316,8 +3328,20 @@ export const layerWsRpc = (
                 })),
               );
 
+              // Same capability gate as themes: older clients die on an unknown event.
+              const featureFlagUpdates =
+                input.featureFlags === true
+                  ? featureFlagChanges.pipe(
+                      Stream.map((values) => ({
+                        version: 1 as const,
+                        type: "featureFlagsUpdated" as const,
+                        payload: { featureFlags: values },
+                      })),
+                    )
+                  : Stream.empty;
+
               const liveUpdates = Stream.merge(
-                keybindingsUpdates,
+                Stream.merge(keybindingsUpdates, featureFlagUpdates),
                 Stream.merge(
                   providerStatuses,
                   Stream.merge(

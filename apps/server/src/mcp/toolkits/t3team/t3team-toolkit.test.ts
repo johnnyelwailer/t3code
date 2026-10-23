@@ -1,5 +1,6 @@
-import { expect, it } from "@effect/vitest";
+import { afterEach, beforeEach, expect, it } from "@effect/vitest";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import { listImplementedT3TeamToolCatalogEntries } from "@t3tools/project-context/t3teamToolCatalog";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -24,6 +25,9 @@ const t3TeamRegistrationServices = Layer.mergeAll(
   Layer.mock(ThreadManagementService.ThreadManagementService)({}),
   Layer.mock(T3TeamAskUserWriter)({}),
 );
+
+beforeEach(() => replaceFeatureFlagPresetValues(new Map([["AGENTS_THREAD_TOOLS", true]])));
+afterEach(() => replaceFeatureFlagPresetValues(new Map()));
 
 it("maps or explicitly policy-excludes every canonical implemented tool", () => {
   const exposed: ReadonlySet<string> = new Set(Object.values(T3TEAM_MCP_CANONICAL_TOOL_MAP));
@@ -113,6 +117,48 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
         },
       },
     ]);
+  }).pipe(
+    Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+    Effect.provideService(McpSchema.McpServerClient, client),
+    Effect.provide(TestLayer),
+  );
+});
+
+it.effect("refuses a flag-switched tool while its flag is off, without dispatching it", () => {
+  replaceFeatureFlagPresetValues(new Map([["AGENTS_WIDGETS", false]]));
+  const dispatched: string[] = [];
+  const binding: T3TeamToolBinding = {
+    threadId,
+    listServers: () => [],
+    readResource: ({ uri }) => Effect.succeed({ contents: [{ uri, text: "{}" }] }),
+    callTool: ({ tool }) => {
+      dispatched.push(tool);
+      return Effect.succeed({ content: [{ type: "text" as const, text: "ok" }] });
+    },
+  };
+  const TestLayer = T3TeamToolkitRegistrationLive.pipe(
+    Layer.provide(t3TeamRegistrationServices),
+    Layer.provideMerge(McpServer.McpServer.layer),
+    Layer.provideMerge(
+      Layer.succeed(
+        T3TeamToolBroker,
+        T3TeamToolBroker.of({
+          bindSession: () => Effect.succeed(binding),
+          bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
+        }),
+      ),
+    ),
+  );
+
+  return Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const result = yield* server.callTool({
+      name: "t3_show_widget",
+      arguments: { title: "w", widget_code: "<b>x</b>" },
+    });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("Chat widgets");
+    expect(dispatched).toEqual([]);
   }).pipe(
     Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
     Effect.provideService(McpSchema.McpServerClient, client),
