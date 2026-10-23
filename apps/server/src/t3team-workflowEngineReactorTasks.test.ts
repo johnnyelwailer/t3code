@@ -300,3 +300,28 @@ it.effect("a widget action, server text, or a reply pinned to another ask never 
     assert.deepStrictEqual(calls, ['resume:"approve"']);
   }),
 );
+
+it.effect.each(["completed", "failed"] as const)(
+  "retains author draft output when a token-limited turn is %s",
+  (status) =>
+    Effect.gen(function* () {
+      const live: unknown[] = [];
+      const { handle, calls } = setup(
+        {
+          promptMessageId: PROMPT,
+          retainTurnDraft: true,
+          resolveLive: async (reply) => {
+            live.push(reply);
+          },
+        },
+        records({
+          run: v2Run(status),
+          messages: [message({ role: "assistant", text: "partial workflow" })],
+          turnItems: status === "failed" ? [failureItem("token limit reached")] : [],
+        }),
+      );
+      yield* handle({ kind: "check", threadId: THREAD });
+      assert.deepStrictEqual(live, ["partial workflow"]);
+      assert.deepStrictEqual(calls, []);
+    }),
+);

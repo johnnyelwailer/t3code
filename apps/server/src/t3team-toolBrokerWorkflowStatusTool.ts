@@ -9,6 +9,13 @@ import type { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
+import type { JournalStore } from "@t3team/sdk";
+import type * as FileSystem from "effect/FileSystem";
+import {
+  AUTHORING_RECOVERY_HINT,
+  workflowAuthoringRecovery,
+} from "./t3team-workflowAuthorDraft.ts";
+import { workflowResumeRejection } from "./t3team-workflowResumeReadiness.ts";
 import type { WorkflowRun, WorkflowRunRepositoryShape } from "./persistence/WorkflowRuns.ts";
 
 const RECENT_RUNS_LIMIT = 10;
@@ -26,6 +33,7 @@ export interface WorkflowStatusToolResult {
   readonly failureReason?: string | undefined;
   /** WHERE it failed — settle phase plus the primitive in flight (migration 044). */
   readonly failureStep?: string | undefined;
+  readonly authoring?: ReturnType<typeof workflowAuthoringRecovery>;
   readonly hint: string;
 }
 
@@ -50,6 +58,12 @@ const errorMessage = (error: unknown) => (error instanceof Error ? error.message
 /** One-sentence, per-status explanation of what the run is doing and what (if anything) to do
  * about it. Kept in one place so `runId` and list-mode summaries read consistently. */
 const hintForStatus = (row: WorkflowRun): string => {
+  if (
+    workflowAuthoringRecovery(row) !== undefined ||
+    row.failureStep === "authoring" ||
+    row.failureStep?.startsWith("launch: workflow.author")
+  )
+    return AUTHORING_RECOVERY_HINT;
   switch (row.status) {
     case "failed":
       // Agent-facing: keep the raw `failureStep` (settle phase included) — an agent reasoning
@@ -97,6 +111,9 @@ const toStatusResult = (row: WorkflowRun): WorkflowStatusToolResult => ({
   // failed, so an existing result shape is unchanged.
   ...(row.failureReason ? { failureReason: row.failureReason } : {}),
   ...(row.failureStep ? { failureStep: row.failureStep } : {}),
+  ...(workflowAuthoringRecovery(row) === undefined
+    ? {}
+    : { authoring: workflowAuthoringRecovery(row) }),
   hint: hintForStatus(row),
 });
 
@@ -112,6 +129,8 @@ const RECENT_RUNS_SCAN_LIMIT = 50;
  * launched, never other threads'/projects' run metadata. */
 export function makeWorkflowStatusToolHandlers(deps: {
   readonly runRepository: WorkflowRunRepositoryShape;
+  readonly journalStore?: JournalStore | undefined;
+  readonly fileSystem?: FileSystem.FileSystem | undefined;
 }): (threadId: ThreadId) => T3TeamWorkflowStatusToolHandlers {
   const { runRepository } = deps;
   return (threadId) => ({
@@ -124,7 +143,21 @@ export function makeWorkflowStatusToolHandlers(deps: {
             // An unknown id and another thread's run answer identically, so run
             // ids can't be probed across threads.
             Option.isSome(row) && row.value.launchThreadId === String(threadId)
-              ? Effect.succeed(toStatusResult(row.value))
+              ? Effect.gen(function* () {
+                  const result = toStatusResult(row.value);
+                  if (
+                    deps.journalStore === undefined ||
+                    (row.value.status !== "failed" && row.value.status !== "paused")
+                  )
+                    return result;
+                  const rejection = yield* workflowResumeRejection(
+                    { ...deps, journalStore: deps.journalStore },
+                    row.value,
+                  );
+                  return rejection === undefined
+                    ? result
+                    : { ...result, state: rejection.state, hint: rejection.hint };
+                })
               : Effect.fail(notFoundHint(runId)),
           ),
         );

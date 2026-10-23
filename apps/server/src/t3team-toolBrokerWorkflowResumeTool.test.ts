@@ -122,6 +122,22 @@ const baseRow = (
     ...overrides,
   });
 
+/** Stubbed controllers still represent an already-started execution with source and run meta. */
+const seedStartedRun = (runId: string, workflowPath = baseRow(runId).workflowPath) =>
+  Effect.gen(function* () {
+    const store = yield* WorkflowJournalStore;
+    NodeFS.mkdirSync(NodePath.dirname(workflowPath), { recursive: true });
+    if (!NodeFS.existsSync(workflowPath))
+      NodeFS.writeFileSync(workflowPath, 'export const meta = { name: "fixture" };\nreturn {};');
+    yield* Effect.promise(() =>
+      store.writeRunMeta(runId, {
+        workflowPath,
+        argsHash: baseRow(runId).argsHash,
+        createdAt: nowIso(),
+      }),
+    );
+  });
+
 it.effect("rejects a missing runId, an unknown runId, and another thread's run identically", () =>
   Effect.gen(function* () {
     const repo = yield* WorkflowRunRepository;
@@ -166,6 +182,10 @@ it.effect("rejects corrected source for a run whose source is not ephemeral", ()
       }),
       status: "failed",
     });
+    yield* seedStartedRun(
+      "recipe-run",
+      NodePath.join(cwd, ".t3team", "recipes", "r1", "r1.workflow.ts"),
+    );
     const error = yield* handlers
       .resumeWorkflowRun({
         runId: "recipe-run",
@@ -182,6 +202,7 @@ it.effect("paused: restores the parked pending ask into the registry", () =>
     const registry = yield* T3TeamWorkflowEngineRegistry;
     const handlers = yield* makeHandlers;
     const runId = "paused-run";
+    yield* seedStartedRun(runId);
     yield* repo.upsert({
       ...baseRow(runId),
       status: "paused",
@@ -211,6 +232,7 @@ it.effect(
       const signalStore = yield* WorkflowSignalStore;
       const handlers = yield* makeHandlers;
       const runId = "paused-signal-run";
+      yield* seedStartedRun(runId);
       yield* repo.upsert(baseRow(runId));
       // Park the row on a signal event (design 42): clears the thread + timer columns, records
       // the awaited (signal, key) tuple and the park's correlation.
@@ -359,6 +381,7 @@ it.effect("refuses corrected source that fails the full check (unbound @t3team/s
     const repo = yield* WorkflowRunRepository;
     const handlers = yield* makeHandlers;
     const runId = "failed-bad-fix";
+    yield* seedStartedRun(runId);
     const runDir = NodePath.join(cwd, ".t3team-runs", runId);
     NodeFS.mkdirSync(runDir, { recursive: true });
     NodeFS.writeFileSync(NodePath.join(runDir, "workflow.ts"), failingSource);
@@ -455,6 +478,7 @@ it.live("failed on invalid inputs + corrected args: the SAME run re-drives and c
 
     // A PAUSED run keeps the inputs it is already running with.
     const pausedId = "paused-no-args";
+    yield* seedStartedRun(pausedId);
     yield* repo.upsert({ ...baseRow(pausedId), status: "paused" });
     const refused = yield* handlers
       .resumeWorkflowRun({ runId: pausedId, args: { a: 1, b: 1 } })
