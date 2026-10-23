@@ -125,6 +125,7 @@ export function AppDashboardPane({
         selectedToolIds,
         kickoffContextAttachments,
         kickoffWorkflow,
+        sendAtClick,
       ) => {
         onKickoffProjectThread({
           projectId: project.id,
@@ -137,6 +138,7 @@ export function AppDashboardPane({
           selectedToolIds,
           kickoffContextAttachments,
           ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
+          ...(sendAtClick ? { sendAtClick } : {}),
         });
       }}
     />

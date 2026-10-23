@@ -17,6 +17,7 @@
  */
 
 import { releaseRecipeWorkflowLaunchClaim } from "~/t3team/chat/t3team-recipeLaunchDedup";
+import { clearExternalThreadBootstrapRun } from "~/t3team/chat/t3team-threadBootstrapExternalRun";
 import {
   resolveThreadBootstrapDispatchState,
   type ThreadBootstrapDispatchState,
@@ -64,6 +65,7 @@ export function readThreadBootstrapDispatchState(threadId: string): ThreadBootst
 export function resetThreadBootstrapDispatchState(threadId: string): void {
   const kickoffFailed = dispatchStatesByThreadId.get(threadId)?.kickoffFailed === true;
   dispatchStatesByThreadId.delete(threadId);
+  clearExternalThreadBootstrapRun(threadId);
   releaseRecipeWorkflowLaunchClaim(threadId);
   if (kickoffFailed) {
     // The failed kickoff may have left a server shell, which otherwise plans `none` forever.

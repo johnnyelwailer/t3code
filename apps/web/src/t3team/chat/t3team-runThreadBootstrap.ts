@@ -15,7 +15,7 @@ import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 
 type ThreadBootstrapBackend = BackendApi;
 
-type RunThreadBootstrapInput = {
+export type RunThreadBootstrapInput = {
   backend: ThreadBootstrapBackend;
   environmentId: string;
   threadId: string;

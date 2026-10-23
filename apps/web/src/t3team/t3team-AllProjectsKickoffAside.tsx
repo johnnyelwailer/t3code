@@ -68,6 +68,7 @@ export function AllProjectsKickoffAside({
         selectedToolIds,
         kickoffContextAttachments,
         kickoffWorkflow,
+        sendAtClick,
       ) => {
         onKickoffProjectThread({
           projectId: scratchProject.id,
@@ -80,6 +81,7 @@ export function AllProjectsKickoffAside({
           selectedToolIds,
           kickoffContextAttachments,
           ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
+          ...(sendAtClick ? { sendAtClick } : {}),
         });
       }}
     />

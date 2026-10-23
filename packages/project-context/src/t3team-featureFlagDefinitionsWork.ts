@@ -11,6 +11,14 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: true,
     requiresRestart: false,
   },
+  MYWORK_KICKOFF_SEND_NOW: {
+    group: "My Work",
+    label: "Kickoff sends on click",
+    description:
+      "A plain-text My Work kickoff creates the thread and sends the first message in one request when you press Send. Off: the thread opens first and its chat sends the message when it mounts.",
+    defaultEnabled: true,
+    requiresRestart: false,
+  },
   MYWORK_KANBAN: {
     group: "My Work",
     subgroup: "Kanban",

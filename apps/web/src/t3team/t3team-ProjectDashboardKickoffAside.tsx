@@ -193,6 +193,7 @@ export function ProjectDashboardKickoffAside({
               selectedToolIds,
               injectedContextAttachments,
               selectedRecipe?.recipe.workflow,
+              !selectedRecipe,
             );
             resetKickoffState();
           });
