@@ -33,6 +33,7 @@ import {
   type ProviderInstance,
 } from "@t3tools/provider-core/server/driver";
 import { makePackOrchestrationAdapter } from "./t3team-pack-driverAdapter.ts";
+import { packMcpAppSnapshotFrom } from "./t3team-pack-driverMcpApps.ts";
 import { makeOpenCodeHarnessCapability } from "./t3team-pack-driverHarness.ts";
 import { makePackProviderSnapshot } from "./t3team-pack-driverSnapshotShape.ts";
 import { bridgePackTextGeneration } from "./t3team-pack-textGenerationBridge.ts";
@@ -166,12 +167,14 @@ export const bridgePackProviderDriver = (
           driverKind,
           instanceId,
         });
+        const mcpAppSnapshot = packMcpAppSnapshotFrom(ambient);
         const orchestrationAdapter = makePackOrchestrationAdapter({
           adapter: packInstance.orchestration,
           driver: driverKind,
           instanceId,
           offerContinuation: continuationRequests.offer,
           mcpSessions,
+          ...(mcpAppSnapshot === undefined ? {} : { mcpAppSnapshot }),
         });
         const snapshot = yield* makePackProviderSnapshot({
           packInstance,

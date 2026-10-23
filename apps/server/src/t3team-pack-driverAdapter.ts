@@ -40,6 +40,7 @@ import { turnScopedSelectionTransition } from "@t3tools/provider-core/server/sel
 import { packCall, packRoundTrip } from "./t3team-pack-driverCall.ts";
 import { asPack, PackCodec } from "./t3team-pack-driverCodec.ts";
 import { type PackMcpSessions, readPackMcpSession } from "./t3team-pack-driverMcp.ts";
+import { PACK_MCP_APPS_HOST, type PackMcpAppSnapshot } from "./t3team-pack-driverMcpApps.ts";
 import { makePackSessionRuntime } from "./t3team-pack-driverSession.ts";
 
 /** Upper bound on a pack session `close()` so a hung teardown cannot stall session release. */
@@ -71,8 +72,10 @@ export const makePackOrchestrationAdapter = (input: {
   readonly offerContinuation: (request: ProviderContinuationRequest) => Effect.Effect<void>;
   /** Host MCP credential registry (`McpProviderSessions`), read per session and per turn. */
   readonly mcpSessions: PackMcpSessions;
+  /** Absent: the host offers no MCP Apps to the pack. */
+  readonly mcpAppSnapshot?: PackMcpAppSnapshot;
 }): ProviderAdapterV2["Service"] => {
-  const { adapter, driver, instanceId, mcpSessions } = input;
+  const { adapter, driver, instanceId, mcpSessions, mcpAppSnapshot } = input;
   const plan = adapter.planSelectionTransition;
   return {
     instanceId,
@@ -138,6 +141,7 @@ export const makePackOrchestrationAdapter = (input: {
                     // The host queue is unbounded and needs no services: a plain fork is enough.
                     Effect.runFork(input.offerContinuation(toContinuationRequest(driver, request)));
                   },
+                  ...(mcpAppSnapshot === undefined ? {} : { mcpApps: PACK_MCP_APPS_HOST }),
                 },
               });
               return opening;
@@ -170,6 +174,7 @@ export const makePackOrchestrationAdapter = (input: {
           driver,
           instanceId,
           mcpSessions,
+          ...(mcpAppSnapshot === undefined ? {} : { mcpAppSnapshot }),
           providerSessionId: value.providerSessionId,
           providerSession,
           closed: Deferred.await(closed),
