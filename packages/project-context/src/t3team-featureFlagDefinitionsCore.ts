@@ -3,6 +3,14 @@ import type { FeatureFlagDefinition } from "./t3team-featureFlagTypes.ts";
 /** Flags that existed before the registry carried metadata, plus the switches that used to be
  * read straight from env. Their code defaults are unchanged; release presets decide the rest. */
 export const CORE_FEATURE_FLAG_DEFINITIONS = {
+  NEXI_MOBILE_BROKER: {
+    group: "Cloud & machines",
+    label: "Nexi Work mobile broker",
+    description:
+      "Allow Nexi Work Android clients to sign in with Entra and attach enrolled desktop hosts. Enable from an existing paired environment before mobile broker onboarding.",
+    defaultEnabled: false,
+    requiresRestart: false,
+  },
   MAIN_REPOSITORY: {
     group: "Orchestration",
     subgroup: "Projects",

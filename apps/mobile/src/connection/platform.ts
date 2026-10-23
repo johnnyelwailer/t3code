@@ -30,6 +30,8 @@ import { clearComposerDraftsEnvironment } from "../state/use-composer-drafts";
 import { clearThreadComposerErrorsForEnvironment } from "../state/thread-composer-error";
 import { mobileApplicationActiveWakeup } from "./app-state-wakeups";
 import * as ConnectionStorage from "./storage";
+import { mobileBrokerGateway } from "./t3team-nexiBroker";
+import { nexiAccountChanges } from "./t3team-nexiWakeups";
 
 function networkStatus(state: Network.NetworkState): "unknown" | "offline" | "online" {
   if (state.isConnected === false) {
@@ -150,6 +152,7 @@ const layerWakeups = Wakeups.layer({
         Stream.map(() => "credentials-changed" as const),
       ),
       networkPathChanges,
+      nexiAccountChanges,
     ],
     { concurrency: "unbounded" },
   ),
@@ -242,22 +245,7 @@ const layerCapabilities = Layer.effectContext(
           disconnect: () => Effect.void,
         }),
       ),
-      Context.add(
-        BrokerEnvironmentGateway,
-        BrokerEnvironmentGateway.of(
-          (() => {
-            // The loopback forwarder lives in the desktop app's local server.
-            const unsupported = () =>
-              Effect.fail(
-                new ConnectionBlockedError({
-                  reason: "unsupported",
-                  detail: "Nexi broker cloud sessions connect from the desktop app.",
-                }),
-              );
-            return { attach: unsupported, pair: unsupported };
-          })(),
-        ),
-      ),
+      Context.add(BrokerEnvironmentGateway, BrokerEnvironmentGateway.of(mobileBrokerGateway)),
     );
   }),
 );
