@@ -16,14 +16,24 @@ export function ComposerMicInput(props: {
   readonly disabled: boolean;
   readonly environmentId: string | null;
   readonly threadId: string | null;
+  /** The draft the transcript lands in; switching it cancels any recording in progress. */
+  readonly sessionKey: string;
 }) {
   const isVoiceThread = useIsVoiceThread(props.environmentId, props.threadId);
   const dictationEnabled = useFeatureFlag("UI_VOICE_INPUT");
   if (isVoiceThread) return <VoiceComposerMic />;
   if (!dictationEnabled) return null;
   return isElectron ? (
-    <DesktopComposerVoiceInput onTranscript={props.onTranscript} disabled={props.disabled} />
+    <DesktopComposerVoiceInput
+      onTranscript={props.onTranscript}
+      disabled={props.disabled}
+      sessionKey={props.sessionKey}
+    />
   ) : (
-    <ComposerVoiceInput onTranscript={props.onTranscript} disabled={props.disabled} />
+    <ComposerVoiceInput
+      onTranscript={props.onTranscript}
+      disabled={props.disabled}
+      sessionKey={props.sessionKey}
+    />
   );
 }

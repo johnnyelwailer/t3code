@@ -65,6 +65,11 @@ export interface VoiceInputOptions {
    */
   onLevel?: (level: number) => void;
   initialLanguage: string;
+  /**
+   * Identity of the draft/thread this composer currently feeds. When it
+   * changes, any active recording is cancelled and the microphone released.
+   */
+  sessionKey?: string | undefined;
 }
 
 export interface VoiceInput {
