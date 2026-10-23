@@ -11,7 +11,7 @@ import {
 import * as Effect from "effect/Effect";
 import { HttpServerResponse } from "effect/http";
 
-export const FEATURE_DISABLED_CODE = "feature_disabled";
+const FEATURE_DISABLED_CODE = "feature_disabled";
 
 export function featureDisabledMessage(key: FeatureFlagKey): string {
   return `${findFeatureFlag(key)?.label ?? key} is turned off on this host (Settings → Features).`;

@@ -15,7 +15,7 @@ import type { AuthState } from "./t3team-types.ts";
 
 const SHARED_SIGN_IN_TOOLS: ReadonlySet<string> = new Set(["gh"]);
 
-export function isToolAuthFlowEnabled(tool: string, readEnv?: ReadFeatureFlagEnv): boolean {
+function isToolAuthFlowEnabled(tool: string, readEnv?: ReadFeatureFlagEnv): boolean {
   return SHARED_SIGN_IN_TOOLS.has(tool) || readFeatureFlag("INTEGRATIONS_TOOL_AUTH", readEnv);
 }
 

@@ -31,7 +31,7 @@ const MCP_TOOL_FEATURE_FLAGS: ReadonlyMap<string, FeatureFlagKey> = new Map([
 ]);
 
 /** The flag that switches `toolName`, if one does. */
-export function mcpToolFeatureFlag(toolName: string): FeatureFlagKey | undefined {
+function mcpToolFeatureFlag(toolName: string): FeatureFlagKey | undefined {
   return MCP_TOOL_FEATURE_FLAGS.get(toolName);
 }
 
@@ -40,7 +40,7 @@ export function isMcpToolEnabled(toolName: string, readEnv?: ReadFeatureFlagEnv)
   return key === undefined || readFeatureFlag(key, readEnv);
 }
 
-export function mcpToolDisabledMessage(toolName: string): string {
+function mcpToolDisabledMessage(toolName: string): string {
   const key = mcpToolFeatureFlag(toolName);
   const label = key === undefined ? undefined : findFeatureFlag(key)?.label;
   return `${toolName} is turned off on this host (Settings → Features → ${label ?? key}). Continue without it.`;
