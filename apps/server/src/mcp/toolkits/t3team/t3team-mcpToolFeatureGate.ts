@@ -28,6 +28,13 @@ const MCP_TOOL_FEATURE_FLAGS: ReadonlyMap<string, FeatureFlagKey> = new Map([
   ["t3_linked_repository_sync", "PROJECT_LINKED_REPOSITORIES"],
   ["t3_mywork_digest", "MYWORK_DIGEST"],
   ["t3_mywork_arrange", "MYWORK_DIGEST"],
+  ["t3_orchestration_run", "AGENTS_ORCHESTRATION_TOOLS"],
+  ["t3_orchestration_status", "AGENTS_ORCHESTRATION_TOOLS"],
+  ["t3_orchestration_resume", "AGENTS_ORCHESTRATION_TOOLS"],
+  ["t3_orchestration_pause", "AGENTS_ORCHESTRATION_TOOLS"],
+  ["t3_orchestration_stop", "AGENTS_ORCHESTRATION_TOOLS"],
+  ["t3_recipe_list", "ORCHESTRATION_RECIPES"],
+  ["t3_recipe_validate", "ORCHESTRATION_RECIPES"],
 ]);
 
 /** The flag that switches `toolName`, if one does. */

@@ -146,31 +146,45 @@ export const T3TeamToolkitHandlersLive = McpToolAccess.toLayer(
         callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_task_ops, input),
       ),
     ),
-    t3_orchestration_run: McpToolAccess.readsAsCaller((input) =>
-      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_run, input),
+    t3_orchestration_run: McpToolAccess.readsAsCaller(
+      whenMcpToolEnabled("t3_orchestration_run", (input) =>
+        callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_run, input),
+      ),
     ),
-    t3_orchestration_status: McpToolAccess.readsAsCaller((input) =>
-      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_status, input),
+    t3_orchestration_status: McpToolAccess.readsAsCaller(
+      whenMcpToolEnabled("t3_orchestration_status", (input) =>
+        callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_status, input),
+      ),
     ),
-    t3_orchestration_resume: McpToolAccess.readsAsCaller((input) =>
-      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_resume, input),
+    t3_orchestration_resume: McpToolAccess.readsAsCaller(
+      whenMcpToolEnabled("t3_orchestration_resume", (input) =>
+        callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_resume, input),
+      ),
     ),
-    t3_orchestration_pause: McpToolAccess.readsAsCaller((input) =>
-      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_pause, input),
+    t3_orchestration_pause: McpToolAccess.readsAsCaller(
+      whenMcpToolEnabled("t3_orchestration_pause", (input) =>
+        callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_pause, input),
+      ),
     ),
-    t3_orchestration_stop: McpToolAccess.readsAsCaller((input) =>
-      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_stop, input),
+    t3_orchestration_stop: McpToolAccess.readsAsCaller(
+      whenMcpToolEnabled("t3_orchestration_stop", (input) =>
+        callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_orchestration_stop, input),
+      ),
     ),
     t3_show_widget: McpToolAccess.readsAsCaller(
       whenMcpToolEnabled("t3_show_widget", (input) =>
         callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_show_widget, input),
       ),
     ),
-    t3_recipe_list: McpToolAccess.readsAsCaller((input) =>
-      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_list, input),
+    t3_recipe_list: McpToolAccess.readsAsCaller(
+      whenMcpToolEnabled("t3_recipe_list", (input) =>
+        callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_list, input),
+      ),
     ),
-    t3_recipe_validate: McpToolAccess.readsAsCaller((input) =>
-      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_validate, input),
+    t3_recipe_validate: McpToolAccess.readsAsCaller(
+      whenMcpToolEnabled("t3_recipe_validate", (input) =>
+        callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_recipe_validate, input),
+      ),
     ),
     t3_mywork_digest: McpToolAccess.readsAsCaller(
       whenMcpToolEnabled("t3_mywork_digest", (input) =>

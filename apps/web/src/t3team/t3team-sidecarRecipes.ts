@@ -11,6 +11,7 @@ import {
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { buildT3TeamActionRecipeLaunchContext } from "~/t3team/t3team-actionRecipeLaunchContext";
 import { WORKFLOW_BACKED_BUNDLED_RECIPE_IDS } from "~/t3team/t3team-bundledRecipeWorkflowIds";
+import { useOfferedRecipes } from "~/t3team/t3team-offeredRecipes";
 import { buildAvailableContextKeys } from "~/t3team/t3team-sidecarRecipeContextKeys";
 import {
   buildPinnedQuickStartSelection,
@@ -209,5 +210,5 @@ export function useT3TeamSidecarRecipeQuickStarts(
     };
   }, [backend, discoveryRequest, fallbackQuickStarts, limit]);
 
-  return quickStarts;
+  return useOfferedRecipes(quickStarts);
 }

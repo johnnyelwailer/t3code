@@ -5,6 +5,7 @@
  * the preset is installed once at process start, before modules that freeze startup-only flags. */
 import { AGENT_FEATURE_FLAG_DEFINITIONS } from "./t3team-featureFlagDefinitionsAgent.ts";
 import { CORE_FEATURE_FLAG_DEFINITIONS } from "./t3team-featureFlagDefinitionsCore.ts";
+import { RECIPE_FEATURE_FLAG_DEFINITIONS } from "./t3team-featureFlagDefinitionsRecipes.ts";
 import { WORK_FEATURE_FLAG_DEFINITIONS } from "./t3team-featureFlagDefinitionsWork.ts";
 import {
   featureFlagEnvName,
@@ -20,6 +21,7 @@ export const FEATURE_FLAG_DEFINITIONS = {
   ...CORE_FEATURE_FLAG_DEFINITIONS,
   ...WORK_FEATURE_FLAG_DEFINITIONS,
   ...AGENT_FEATURE_FLAG_DEFINITIONS,
+  ...RECIPE_FEATURE_FLAG_DEFINITIONS,
 };
 
 export type FeatureFlagKey = keyof typeof FEATURE_FLAG_DEFINITIONS;

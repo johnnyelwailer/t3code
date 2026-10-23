@@ -11,10 +11,11 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
-import { afterAll, describe, expect, it } from "vite-plus/test";
+import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { deriveWorkflowShape } from "@t3team/sdk";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 
 import { threadId } from "./t3team-toolBrokerTestUtils.ts";
@@ -291,6 +292,9 @@ describe("launch arguments", () => {
 });
 
 describe("work-item delivery scaffolding", () => {
+  beforeAll(() => replaceFeatureFlagPresetValues(new Map([["WORKITEM_DELIVERY_RECIPES", true]])));
+  afterAll(() => replaceFeatureFlagPresetValues(new Map()));
+
   it("embeds each body as source text under a real node process, the dev backend's loader", () => {
     const bodiesUrl = new URL("./t3team-workItemDeliveryBodies.ts", import.meta.url);
     const printed = NodeChildProcess.execFileSync(

@@ -10,6 +10,7 @@
  * daily-cap and launches headless runs through t3team-recipeHeadlessLaunch.ts.
  */
 import { ProjectId } from "@t3tools/contracts";
+import { readFeatureFlag } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -37,6 +38,10 @@ import { makeSignalPollTimer } from "./t3team-workflowSignalSweepTimer.ts";
 const DRAIN_TICK_MS = 10_000;
 const DRAIN_LIMIT = 50;
 const RECONCILE_EVERY_MS = 60_000;
+
+/** Read on every tick, so Settings → Features stops and resumes triggers without a restart. While
+ * off, a tick neither reconciles nor launches; events wait in the inbox for the next enabled tick. */
+const recipeTriggersEnabled = (): boolean => readFeatureFlag("ORCHESTRATION_RECIPE_TRIGGERS");
 
 export interface RecipeTriggerRunnerShape {
   readonly start: () => Effect.Effect<void, never, never>;
@@ -168,6 +173,7 @@ export const T3TeamRecipeTriggerRunnerLive = Layer.effect(
     const tick = (): void => {
       void (async () => {
         try {
+          if (!recipeTriggersEnabled()) return;
           if (
             DateTime.toEpochMillis(DateTime.nowUnsafe()) - lastReconcileAtMs >=
             RECONCILE_EVERY_MS
@@ -186,7 +192,9 @@ export const T3TeamRecipeTriggerRunnerLive = Layer.effect(
     return T3TeamRecipeTriggerRunner.of({
       start: () =>
         Effect.sync(() => {
-          void reconcile().catch((error) => log("initial reconcile failed", String(error)));
+          if (recipeTriggersEnabled()) {
+            void reconcile().catch((error) => log("initial reconcile failed", String(error)));
+          }
           timer.schedule(tick, DRAIN_TICK_MS);
         }),
       stop: () => Effect.sync(() => timer.stop()),
