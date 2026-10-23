@@ -16,6 +16,7 @@
  *
  * @module provider-orchestration
  */
+import type { PackMcpApps, PackMcpAppsHost } from "./mcp-apps.ts";
 import type { PackJobControlRequest, PackJobControlResult } from "./provider-driver.ts";
 
 /** Canonical JSON of a host contracts entity; the doc comment names its schema. */
@@ -110,6 +111,8 @@ export type PackContinuationRequest = {
 /** Host services handed to one open session. */
 export type PackSessionHost = {
   readonly requestContinuation: (request: PackContinuationRequest) => void;
+  /** Present when the host renders MCP Apps (`mcp-apps.ts`). */
+  readonly mcpApps?: PackMcpAppsHost;
 };
 
 /** Host `ProviderAdapterV2OpenSessionInput` plus the session's MCP access and host services. */
@@ -205,6 +208,8 @@ export type PackSessionRuntime = {
     readonly providerThread: PackJson;
     readonly request: PackJobControlRequest;
   }): Promise<PackJobControlResult>;
+  /** Requests of an MCP App view the session showed (`mcp-apps.ts`). */
+  readonly mcpApps?: PackMcpApps;
   /** Releases the session's process/resources. Called once when the host closes the session. */
   close(): Promise<void>;
 };

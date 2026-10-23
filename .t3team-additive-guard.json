@@ -651,6 +651,7 @@
     "packages/t3team-pack-api/src/index.ts",
     "packages/t3team-pack-api/src/provider-driver.test.ts",
     "packages/t3team-pack-api/src/provider-driver.ts",
+    "packages/t3team-pack-api/src/provider-orchestration.ts",
     "packages/t3team-packs/package.json",
     "packages/t3team-sdk/package.json",
     "packages/t3team-skill-packs/package.json",
