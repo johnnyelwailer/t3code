@@ -28,6 +28,12 @@ import * as EffectPath from "effect/Path";
 import * as EffectFileSystem from "effect/FileSystem";
 
 import { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
+import * as SqlClient from "effect/sql/SqlClient";
+
+import {
+  ProjectionProjectSourceBindingRepository,
+  ProjectionProjectSourceBindingRepositoryLive,
+} from "./persistence/t3team-ProjectionProjectSourceBindings.ts";
 
 import { T3TeamWorkflowSignalDelivery } from "./t3team-workflowSignalDelivery.ts";
 import {
@@ -105,6 +111,9 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
     const pullRequestService = yield* PullRequestService;
     const gitHubApi = yield* GitHubApi.GitHubApi;
     const vcsProcess = yield* VcsProcess.VcsProcess;
+    // Held here, not read ambiently: the app provides the binding repository only to its consumers.
+    const sourceBindings = yield* ProjectionProjectSourceBindingRepository;
+    const sql = yield* SqlClient.SqlClient;
     // Boot ordering (GHE #332 review): no source instance may start — and so DELIVER — before
     // boot rehydration has rebuilt the watching-run controllers, or a first tick would hit the
     // delivery port's orphan branch and fail a healthy parked run. Rehydration runs with the
@@ -134,7 +143,12 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
         pullRequestService,
         gitHubApi,
         runAmbient: (effect) =>
-          Effect.runPromiseWith(ambient as Context.Context<ProjectScopeServices>)(effect),
+          Effect.runPromiseWith(ambient as Context.Context<ProjectScopeServices>)(
+            effect.pipe(
+              Effect.provideService(ProjectionProjectSourceBindingRepository, sourceBindings),
+              Effect.provideService(SqlClient.SqlClient, sql),
+            ),
+          ),
         resolveJiraProvider: resolveWorkItemProvider,
       }),
     });
@@ -196,6 +210,7 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
   }),
 ).pipe(
   Layer.provide(Scheduler.layer),
+  Layer.provide(ProjectionProjectSourceBindingRepositoryLive),
   // The same gate reference the rehydrate layer and the delivery port use (memoized: one flag).
   Layer.provide(T3TeamWorkflowSignalRehydrateGateLive),
 );
