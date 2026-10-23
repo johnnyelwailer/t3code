@@ -108,6 +108,9 @@ export function createWorkflowReactorTaskHandler(
         if (!(yield* deps.turnRetry.releaseHeldRun(threadId, settlement.heldRunId))) return;
       }
       registry.takePending(threadId);
+      if (pending.retainTurnDraft && pending.resolveLive !== undefined) {
+        return yield* settle(pending, state.draftText ?? "");
+      }
       if (settlement.kind === "answer") {
         if (settlement.messageId !== null && deps.attributeAnswer !== undefined) {
           yield* deps.attributeAnswer({ threadId, messageId: settlement.messageId, pending });
