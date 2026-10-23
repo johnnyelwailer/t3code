@@ -1,6 +1,5 @@
 import { useCallback, useRef } from "react";
 import { usePrimaryEnvironmentId } from "~/state/environments";
-import { readProjects } from "~/state/entities";
 import { useThreadActions } from "~/hooks/useThreadActions";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
@@ -12,7 +11,7 @@ import type {
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
 import { settleBesideKickoffThread } from "~/t3team/t3team-besideKickoffThread";
 import { createProjectKickoffThread } from "~/t3team/t3team-useAppHandlers-kickoffThread";
-import { sendKickoffAtClick } from "~/t3team/t3team-sendKickoffAtClick";
+import { sendProjectKickoffAtClick } from "~/t3team/t3team-sendProjectKickoffAtClick";
 import { selectProjectDashboardMode } from "~/t3team/t3team-projectThreadViewState";
 import { useLocalWorkspaceCommands } from "~/t3team/hooks/t3team-useLocalWorkspaceCommands";
 import {
@@ -181,14 +180,7 @@ export function useAppHandlers({
         onOpenDashboard,
         store,
         sendKickoffAtClick: (thread) =>
-          sendKickoffAtClick({
-            backend,
-            environmentId,
-            project: store.allProjects.find((candidate) => candidate.id === thread.projectId),
-            thread,
-            liveProjects: readProjects(),
-            markKickoffConsumed: store.markThreadKickoffConsumed,
-          }),
+          sendProjectKickoffAtClick({ backend, environmentId, store, thread }),
       }),
     [backend, environmentId, onOpenDashboard, store],
   );

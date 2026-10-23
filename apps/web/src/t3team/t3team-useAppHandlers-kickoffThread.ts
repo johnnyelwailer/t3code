@@ -6,7 +6,8 @@ import type { ProjectThread } from "~/t3team/t3team-types";
 
 export function createProjectKickoffThread(
   input: ProjectKickoffThreadInput,
-  handlers: Pick<AppHandlersInput, "store" | "onOpenDashboard"> & {
+  handlers: Pick<AppHandlersInput, "onOpenDashboard"> & {
+    store: Pick<AppHandlersInput["store"], "resolveProjectId" | "createThread">;
     sendKickoffAtClick: (thread: ProjectThread) => boolean;
   },
 ): string {
