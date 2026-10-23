@@ -58,6 +58,10 @@ export interface HeadlessRecipeLaunchInput {
   /** The recipe's declared tool groups — the only grant a headless run holds. */
   readonly allowedToolGroups?: ReadonlyArray<string> | undefined;
   readonly origin: WorkflowRunOrigin;
+  /** A caller-owned run id (a trigger's durable launch id), so a retry can tell it already ran. */
+  readonly runId?: string;
+  /** Fires once the run row is durable, before the run starts executing. */
+  readonly onAdmitted?: () => Promise<void>;
 }
 
 export const launchHeadlessRecipeWorkflow = Effect.fn("launchHeadlessRecipeWorkflow")(function* (
@@ -76,7 +80,7 @@ export const launchHeadlessRecipeWorkflow = Effect.fn("launchHeadlessRecipeWorkf
   const signalReconciler = Option.getOrUndefined(
     yield* Effect.serviceOption(T3TeamWorkflowSignalReconciler),
   );
-  const runId = t3teamRandomUUID();
+  const runId = input.runId ?? t3teamRandomUUID();
 
   // The recipe's private scripts, re-resolved from its directory exactly like the thread-bound
   // launch — a headless run is still a recipe run.
@@ -126,6 +130,7 @@ export const launchHeadlessRecipeWorkflow = Effect.fn("launchHeadlessRecipeWorkf
       runtimeMode: input.runtimeMode ?? DEFAULT_RUNTIME_MODE,
       interactionMode: input.interactionMode ?? DEFAULT_PROVIDER_INTERACTION_MODE,
       origin: input.origin,
+      ...(input.onAdmitted === undefined ? {} : { onAdmitted: input.onAdmitted }),
     },
   );
 });

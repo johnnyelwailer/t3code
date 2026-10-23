@@ -5,7 +5,9 @@ import * as Layer from "effect/Layer";
 import { afterEach } from "vite-plus/test";
 
 import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
+import { WorkflowTriggerLaunchStore } from "./persistence/t3team-WorkflowTriggerLaunchStore.ts";
 import {
   T3TeamRecipeTriggerRunner,
   T3TeamRecipeTriggerRunnerLive,
@@ -24,6 +26,8 @@ const reconcileReadsOnStart = Effect.gen(function* () {
         }),
     }),
     Layer.mock(WorkflowSignalStore)({ listTriggerRegistrations: () => Effect.succeed([]) }),
+    Layer.mock(WorkflowTriggerLaunchStore)({ purgeSettledBefore: () => Effect.void }),
+    Layer.mock(WorkflowRunRepository)({}),
   );
   const runner = yield* T3TeamRecipeTriggerRunner.pipe(
     Effect.provide(T3TeamRecipeTriggerRunnerLive.pipe(Layer.provide(services))),

@@ -202,6 +202,7 @@ import * as OrchestrationHttp from "./orchestration-v2/http.ts";
 import * as ProjectHttp from "./project/http.ts";
 import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
 import { WorkflowSignalStoreLive } from "./persistence/WorkflowSignalStore.ts";
+import { WorkflowTriggerLaunchStoreLive } from "./persistence/t3team-WorkflowTriggerLaunchStore.ts";
 import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
 import * as ToolAuthService from "./toolauth/t3team-ToolAuthService.ts";
 import {
@@ -699,6 +700,7 @@ const T3TeamWorkflowHostLive = T3TeamWorkflowHost.layer.pipe(Layer.provide(T3Tea
 // thread-bound launch use (layer references memoize). Defined after T3TeamWorkflowHostLive so
 // it can share that const instead of rebuilding the host layer.
 const T3TeamRecipeTriggerRunnerLayer = T3TeamRecipeTriggerRunnerLive.pipe(
+  Layer.provideMerge(WorkflowTriggerLaunchStoreLive),
   Layer.provideMerge(WorkflowSignalSourcesLive),
   Layer.provide(T3TeamWorkflowHostLive),
   Layer.provide(T3TeamScriptHost.layer.pipe(Layer.provide(layerPullRequestService))),
