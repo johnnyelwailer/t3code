@@ -18,7 +18,7 @@ import { closeDigestPullRequest, openDigestTicket } from "~/t3team/t3team-digest
 import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
 import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
-import { useT3TeamBetaFlags } from "~/t3team/t3team-betaFlags";
+import { useDigestVariantFlags } from "~/t3team/t3team-digestVariantFlags";
 import { MyWorkFirstLoadSwap } from "~/t3team/t3team-MyWorkFirstLoadSwap";
 import { resolveMyWorkDigestRenderState } from "~/t3team/t3team-myWorkDigestRenderState";
 import { buildDigestPlan } from "~/t3team/t3team-projectMyWorkDigestPlan";
@@ -35,7 +35,7 @@ export function ProjectMyWorkDigestContent({
   onOpenTicket: (projectId: string, ticketId: string) => void;
   digestFilters?: DigestFilterState | undefined;
 }) {
-  const { flags } = useT3TeamBetaFlags();
+  const flags = useDigestVariantFlags();
   // A row opens its ticket beside the digest (the dashboard aside, a drawer on narrow screens);
   // the full ticket page is one click from there.
   const openTicketInApp = (ticketId: string) =>

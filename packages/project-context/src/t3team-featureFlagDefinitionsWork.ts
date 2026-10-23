@@ -35,6 +35,14 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: false,
     requiresRestart: false,
   },
+  MYWORK_DIGEST_VARIANTS: {
+    group: "My Work",
+    label: "Digest variants",
+    description:
+      "Beta choices in Settings → Appearance for the digest's burndown, default lens, row navigation and agent dots. Off: the defaults, whatever was chosen.",
+    defaultEnabled: true,
+    requiresRestart: false,
+  },
   WORKITEM_DETAIL_DRAFTS: {
     group: "Work items",
     label: "Work item detail and drafts",
@@ -79,6 +87,15 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
     label: "Cloud sessions",
     description:
       "Run a thread on a cloud machine: create, list, cancel and claim sessions, with queued sends.",
+    defaultEnabled: false,
+    requiresRestart: false,
+  },
+  CLOUD_THREAD_HANDOFF: {
+    group: "Cloud & machines",
+    subgroup: "Handoff",
+    label: "Move thread to another machine",
+    description:
+      "Continue a started thread on another connected machine from the thread's Move to menu. Off: threads stay where they started.",
     defaultEnabled: false,
     requiresRestart: false,
   },

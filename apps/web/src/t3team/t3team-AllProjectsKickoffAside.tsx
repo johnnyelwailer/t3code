@@ -4,7 +4,8 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { Button } from "~/components/ui/button";
 
-import type { ProjectKickoffThreadInput } from "~/t3team/t3team-kickoffTypes";
+import { bindProjectKickoffThread } from "~/t3team/t3team-bindProjectKickoffThread";
+import type { CreateProjectKickoffThread } from "~/t3team/t3team-kickoffTypes";
 import { ProjectDashboardKickoffAside } from "~/t3team/t3team-ProjectDashboardKickoffAside";
 
 /**
@@ -30,7 +31,7 @@ export function AllProjectsKickoffAside({
   onOpenThread: (projectId: string, threadId: string) => void;
   onOpenFullThread: (projectId: string, threadId: string) => void;
   onThreadKickoffConsumed: (threadId: string) => void;
-  onKickoffProjectThread: (input: ProjectKickoffThreadInput) => void;
+  onKickoffProjectThread: CreateProjectKickoffThread;
 }): ReactNode {
   if (!scratchProject) {
     return (
@@ -59,31 +60,11 @@ export function AllProjectsKickoffAside({
       onOpenThread={(threadId) => onOpenThread(scratchProject.id, threadId)}
       onOpenFullThread={(threadId) => onOpenFullThread(scratchProject.id, threadId)}
       onThreadKickoffConsumed={onThreadKickoffConsumed}
-      onKickoffThread={(
-        kickoffMessage,
-        kickoffPending,
-        kickoffModelSelection,
-        kickoffRuntimeMode,
-        kickoffInteractionMode,
-        selectedToolIds,
-        kickoffContextAttachments,
-        kickoffWorkflow,
-        sendAtClick,
-      ) => {
-        onKickoffProjectThread({
-          projectId: scratchProject.id,
-          dashboardMode: "my-work",
-          kickoffMessage,
-          ...(kickoffPending !== undefined ? { kickoffPending } : {}),
-          kickoffModelSelection,
-          kickoffRuntimeMode,
-          kickoffInteractionMode,
-          selectedToolIds,
-          kickoffContextAttachments,
-          ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
-          ...(sendAtClick ? { sendAtClick } : {}),
-        });
-      }}
+      onKickoffThread={bindProjectKickoffThread(
+        scratchProject.id,
+        "my-work",
+        onKickoffProjectThread,
+      )}
     />
   );
 }

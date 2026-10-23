@@ -5,6 +5,7 @@ import type { PackProviderDriverDefinition } from "./provider-driver.ts";
 
 export * from "./provider-driver.ts";
 export * from "./provider-orchestration.ts";
+export * from "./mcp-apps.ts";
 export * from "./cold-local-compaction.ts";
 export * from "./completion-wake.ts";
 export * from "./account.ts";

@@ -25,3 +25,6 @@ export type TicketKickoffThreadInput = ProjectKickoffThreadInput & {
   ticketDisplayId: string;
   githubActivityItems: ReadonlyArray<GitHubWorkActivityItem>;
 };
+
+/** Creates the kickoff thread and returns its id; a Quick Start launch starts its recipe on it. */
+export type CreateProjectKickoffThread = (input: ProjectKickoffThreadInput) => string;

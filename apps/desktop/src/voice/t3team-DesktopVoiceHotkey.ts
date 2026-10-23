@@ -14,6 +14,7 @@ import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
 import { makeVoiceHotkeyController } from "./t3team-voiceHotkeyController.ts";
+import { gateVoiceHotkeyRegistration } from "./t3team-voiceHotkeyFeatureGate.ts";
 import { registerVoiceHotkey } from "./t3team-voiceHotkeyRegistration.ts";
 
 /** A held key repeats its press; one physical press must toggle exactly once. */
@@ -43,14 +44,18 @@ const make = Effect.gen(function* () {
     yield* desktopWindow.dispatchMenuAction(VOICE_HOTKEY_TOGGLE_ACTION, { reveal: false });
   }).pipe(Effect.ignoreCause, Effect.withSpan("desktop.voiceHotkey.toggle"));
 
-  const controller = makeVoiceHotkeyController((chord) =>
-    registerVoiceHotkey({
-      chord,
-      platform: environment.platform,
-      env: process.env,
-      linuxAppId: environment.linuxDesktopEntryName.replace(/\.desktop$/, ""),
-      onPress: () => void runPromise(toggle),
-    }),
+  const controller = makeVoiceHotkeyController(
+    gateVoiceHotkeyRegistration(
+      (chord) =>
+        registerVoiceHotkey({
+          chord,
+          platform: environment.platform,
+          env: process.env,
+          linuxAppId: environment.linuxDesktopEntryName.replace(/\.desktop$/, ""),
+          onPress: () => void runPromise(toggle),
+        }),
+      process.env,
+    ),
   );
   yield* Effect.addFinalizer(() => Effect.sync(controller.close));
 

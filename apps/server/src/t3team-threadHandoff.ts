@@ -26,6 +26,7 @@ import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import { readFeatureFlag } from "@t3tools/project-context/t3teamFeatureFlags";
 
 import {
   DEFAULT_HANDOFF_TOKEN_CAP,
@@ -33,6 +34,7 @@ import {
 } from "@t3tools/provider-core/server/handoffBudget";
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
+import { featureDisabledMessage } from "./t3team-featureFlagRoute.ts";
 import {
   readHandoffBranchState,
   readHandoffHasOrigin,
@@ -62,6 +64,9 @@ export const prepareThreadHandoff = Effect.fn("t3team.threadHandoff.prepare")(fu
     readonly scheduledTasks?: Effect.Effect<ReadonlyArray<ScheduledTask>, ScheduledTaskError>;
   } = {},
 ) {
+  if (!readFeatureFlag("CLOUD_THREAD_HANDOFF")) {
+    return yield* fail(featureDisabledMessage("CLOUD_THREAD_HANDOFF"));
+  }
   const threads = yield* ThreadManagementService;
   const projects = yield* ProjectStore.ProjectStoreV2;
   const readShell = threads

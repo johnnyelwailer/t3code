@@ -1,7 +1,7 @@
 import type { ServerProvider } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
-import type { ProjectDashboardKickoffAsideProps } from "~/t3team/t3team-ProjectDashboardKickoffAsideTypes";
+import type { CreateProjectKickoffThread } from "~/t3team/t3team-kickoffTypes";
 import {
   T3TEAM_FIRST_PROJECT_SETUP_REASON,
   type T3TeamSetupSurfaceReason,
@@ -30,7 +30,7 @@ export function AppMainContentHomeEmptyState({
   providers: ReadonlyArray<ServerProvider>;
   isConnected: boolean;
   onOpenHomeThread: (threadId: string) => void;
-  onKickoffHomeThread: ProjectDashboardKickoffAsideProps["onKickoffThread"];
+  onKickoffHomeThread: CreateProjectKickoffThread;
 }) {
   return (
     <ProjectBrowserEmptyWithChat
@@ -43,7 +43,7 @@ export function AppMainContentHomeEmptyState({
       providers={providers}
       isConnected={isConnected}
       onOpenThread={onOpenHomeThread}
-      onKickoffThread={onKickoffHomeThread}
+      onKickoffProjectThread={onKickoffHomeThread}
     />
   );
 }

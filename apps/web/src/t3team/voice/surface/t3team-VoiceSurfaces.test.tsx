@@ -13,6 +13,8 @@ import { VoiceThreadRow } from "./t3team-VoiceThreadRow";
 import { IDLE_VOICE_UI, type VoiceUiSnapshot, type VoiceUiState } from "./t3team-voiceUiModel";
 import { IDLE_VOICE_LIVE, useVoiceUiStore, type VoiceUiLive } from "./t3team-voiceUiStore";
 
+vi.mock("~/t3team/t3team-useFeatureFlag", () => ({ useFeatureFlag: () => true }));
+
 const controls = {
   toggle: vi.fn(),
   dismiss: vi.fn(),

@@ -37,6 +37,15 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: false,
     requiresRestart: false,
   },
+  AGENTS_TURN_WATCHDOG: {
+    group: "Agent",
+    subgroup: "Reliability",
+    label: "Stalled-turn watchdog",
+    description:
+      "Interrupt a provider turn that stays silent past its budget and fail the run so it can be retried. Off: a silent turn waits until you stop it.",
+    defaultEnabled: true,
+    requiresRestart: false,
+  },
   ORCHESTRATION_SIGNAL_SOURCES: {
     group: "Orchestration",
     label: "Signal sources",
@@ -82,6 +91,25 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
     description: "Dictate into the composer with waveform, language chips and auto-send.",
     defaultEnabled: false,
     requiresRestart: false,
+  },
+  VOICE_SESSIONS: {
+    group: "UI & rendering",
+    subgroup: "Voice",
+    label: "Voice sessions",
+    description:
+      "The voice thread: record from the sidebar or the floating widget and route each utterance. Off: no voice thread or widget; dictation is its own switch.",
+    defaultEnabled: false,
+    requiresRestart: false,
+  },
+  DESKTOP_VOICE_HOTKEY: {
+    group: "UI & rendering",
+    subgroup: "Voice",
+    label: "Global voice hotkey",
+    description: "The desktop app registers a system-wide shortcut that starts a voice recording.",
+    defaultEnabled: false,
+    requiresRestart: true,
+    // Read by the desktop shell before the backend (and its database) exists.
+    userToggleable: false,
   },
   DESKTOP_DETACHED_SURFACES: {
     group: "UI & rendering",

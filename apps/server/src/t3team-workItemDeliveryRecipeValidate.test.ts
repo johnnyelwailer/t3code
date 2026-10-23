@@ -2,9 +2,11 @@ import * as NodeURL from "node:url";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import { afterAll, beforeAll } from "vite-plus/test";
 
 import { renderBundledRecipeSetupFiles } from "./t3team-projectSetupRecipes.ts";
 import { T3TEAM_PROJECT_RECIPES_ROOT } from "./t3team-projectSetupShared.ts";
@@ -28,6 +30,9 @@ const scaffoldWorkspace = Effect.fn("scaffoldWorkspace")(function* () {
   }
   return workspaceRoot;
 });
+
+beforeAll(() => replaceFeatureFlagPresetValues(new Map([["WORKITEM_DELIVERY_RECIPES", true]])));
+afterAll(() => replaceFeatureFlagPresetValues(new Map()));
 
 const SCAFFOLDED_PATHS = [
   "fix-this-bug",
