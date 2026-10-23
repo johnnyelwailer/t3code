@@ -63,6 +63,23 @@ describe("defineRecipe({ triggers }) validation", () => {
     expect(Object.isFrozen(recipe.triggers?.[0])).toBe(true);
   });
 
+  it("keeps an author scope and a gating feature flag, and rejects an empty flag key", () => {
+    const recipe = defineRecipe({
+      ...baseRecipe,
+      id: "recipe-trig-scope",
+      triggers: [{ ...validTrigger(), scope: { query: "is:issue" }, featureFlag: "recipes.x" }],
+    });
+    expect(recipe.triggers?.[0]?.scope).toEqual({ query: "is:issue" });
+    expect(recipe.triggers?.[0]?.featureFlag).toBe("recipes.x");
+    expect(() =>
+      defineRecipe({
+        ...baseRecipe,
+        id: "recipe-trig-flag",
+        triggers: [{ ...validTrigger(), featureFlag: " " }],
+      }),
+    ).toThrow("featureFlag must be a non-empty flag key");
+  });
+
   it("leaves triggers absent when none are declared (back-compat)", () => {
     const recipe = defineRecipe(baseRecipe);
     expect("triggers" in recipe).toBe(false);

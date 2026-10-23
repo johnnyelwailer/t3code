@@ -180,11 +180,25 @@ export {
   ScmChangeRequestReview,
   ScmChangeRequestReviewActivity,
   ScmChangeRequestWatch,
+} from "./t3team-sdk.builtinSignals.ts";
+export {
   WorkItemParams,
   WorkItemPayload,
+  WorkItemProjectUpdates,
   WorkItemUpdates,
   WorkItemUpdated,
-} from "./t3team-sdk.builtinSignals.ts";
+} from "./t3team-sdk.builtinSignalsWorkItem.ts";
+export {
+  ProjectScopeParams,
+  ScmProjectItemPayload,
+  ScmProjectItemReason,
+  ScmProjectItemUpdated,
+  ScmProjectItems,
+} from "./t3team-sdk.builtinSignalsProject.ts";
+export type {
+  ProjectScopeParamsType,
+  ScmProjectItemPayloadType,
+} from "./t3team-sdk.builtinSignalsProject.ts";
 export {
   ScmViewerChangeRequests,
   ScmViewerChangeRequestsParams,
@@ -203,9 +217,11 @@ export type {
   ChangeRequestPayloadType,
   ChangeRequestReviewPayloadType,
   ScmChangeRequestParamsType,
+} from "./t3team-sdk.builtinSignals.ts";
+export type {
   WorkItemParamsType,
   WorkItemPayloadType,
-} from "./t3team-sdk.builtinSignals.ts";
+} from "./t3team-sdk.builtinSignalsWorkItem.ts";
 export { deriveWorkflowShape } from "./t3team-sdk.workflowShape.ts";
 export { createWorkflowHostRegistry, createWorkflowRunHost } from "./t3team-sdk.workflowHost.ts";
 export type {

@@ -3,8 +3,10 @@
  * a fresh launcher over the same database, which is all a crashed process leaves behind.
  */
 import { assert, describe, it } from "@effect/vitest";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import * as SqlitePersistence from "./persistence/Sqlite.ts";
@@ -17,53 +19,37 @@ import {
   makeRecipeTriggerLauncher,
   retryDelayMs,
   TRIGGER_LAUNCH_MAX_ATTEMPTS,
+  type RecipeTriggerLauncherPorts,
 } from "./t3team-recipeTriggerLauncher.ts";
-import type { RecipeTriggerLaunchRequest } from "./t3team-recipeTriggerRunnerCore.ts";
+import { makeTriggerRunnerAmbient } from "./t3team-recipeTriggerRunnerAmbient.ts";
+import { makeTriggerLauncherPorts } from "./t3team-recipeTriggerRunnerPorts.ts";
 
 const layer = Layer.mergeAll(WorkflowSignalStoreLive, WorkflowTriggerLaunchStoreLive).pipe(
   Layer.provideMerge(SqlitePersistence.layerMemory),
 );
 
 const T0 = Date.parse("2026-10-23T10:00:00.000Z");
-const iso = (ms: number) => new Date(ms).toISOString();
+const iso = (ms: number) => DateTime.formatIso(DateTime.makeUnsafe(ms));
 const tuple = { sourceName: "scm.project.items", paramsHash: "h", signalName: "s" };
 
-const request = (launchId: string, key = "o/r#1"): RecipeTriggerLaunchRequest => ({
-  launchId,
-  projectId: "p1",
-  recipeId: "triage",
-  triggerId: "ghe",
-  key,
-  args: { key },
-});
-
-/** One process's launcher over the shared database, with a fake clock and a fake run table. */
+/** One process's launcher over the shared database: the production ledger adapter, with a fake
+ * clock, a fake run table, and a fake headless launch. */
 const makeProcess = Effect.fn(function* (input: {
   readonly clock: { now: number };
   readonly runs: Set<string>;
-  readonly start: (
-    request: RecipeTriggerLaunchRequest,
-    admit: () => Promise<void>,
-  ) => Promise<void>;
+  readonly start: RecipeTriggerLauncherPorts["start"];
 }) {
-  const ledger = yield* WorkflowTriggerLaunchStore;
-  const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect);
-  return makeRecipeTriggerLauncher({
+  const ports = makeTriggerLauncherPorts({
+    ledger: yield* WorkflowTriggerLaunchStore,
+    runs: {
+      getById: ({ runId }: { runId: string }) =>
+        Effect.succeed(input.runs.has(runId) ? Option.some(runId) : Option.none()),
+    } as never,
+    ambient: makeTriggerRunnerAmbient(yield* Effect.context<never>()),
+    liveTriggers: () => [],
     nowMs: () => input.clock.now,
-    log: () => {},
-    markLaunched: (launchId, at) => run(ledger.markLaunched({ launchId, launchedAt: iso(at) })),
-    markAttemptFailed: ({ launchId, error, nextAttemptAtMs, giveUp }) =>
-      run(
-        ledger.markAttemptFailed({ launchId, error, nextAttemptAt: iso(nextAttemptAtMs), giveUp }),
-      ),
-    listDue: async (at, limit) =>
-      (await run(ledger.listDue({ nowIso: iso(at), limit }))).map((row) => ({
-        attempts: row.attempts,
-        request: request(row.launchId, row.key),
-      })),
-    runExists: async (runId) => input.runs.has(runId),
-    start: input.start,
   });
+  return makeRecipeTriggerLauncher({ ...ports, start: input.start });
 });
 
 const seedAndClaim = Effect.fn(function* (launchId: string, at = T0) {

@@ -11,25 +11,19 @@
 import * as DateTime from "effect/DateTime";
 
 import type { ModelSelection } from "@t3tools/contracts";
-import type { AnyRecipeRef, RecipeListEntry, RecipeTriggerSpec } from "@t3team/sdk";
+import type { AnyRecipeRef, RecipeListEntry } from "@t3team/sdk";
 import { resolveSignalSourceParams } from "@t3team/sdk";
 
-import type {
-  LiveTrigger,
-  RecipeTriggerEffectiveSettings,
-  RecipeTriggerInstanceRef,
-} from "./t3team-recipeTriggerRunnerCore.ts";
+import type { LiveTrigger } from "./t3team-recipeTriggerRunnerCore.ts";
 import {
   effectiveRecipeTriggerSettings,
   type RecipeTriggerSetting,
 } from "./t3team-recipeTriggerSettings.ts";
-
-/** The host-side source adapters a trigger may listen on: source name → params(projectId). */
-const TRIGGER_SOURCE_PARAMS: Readonly<
-  Record<string, (projectId: string) => Record<string, unknown>>
-> = {
-  "scm.viewer.change-requests": (projectId) => ({ projectId }),
-};
+import {
+  recipeTriggerFlagAllows,
+  resolveRecipeTriggerActionWorkflowPath,
+  triggerSourceParams,
+} from "./t3team-recipeTriggerSources.ts";
 
 export interface RecipeTriggerReconcileInput {
   /** The active projects (the live layer lists them from the V2 project store). */
@@ -76,19 +70,8 @@ export interface RecipeTriggerReconcileInput {
   readonly log: (message: string, fields?: unknown) => void;
 }
 
-function resolveRecipeTriggerActionWorkflowPath(
-  entry: {
-    readonly workflowPath?: string | undefined;
-    readonly actions?:
-      | ReadonlyArray<{ readonly name: string; readonly workflowPath?: string | undefined }>
-      | undefined;
-  },
-  action: string | undefined,
-): string | undefined {
-  return action === undefined
-    ? entry.workflowPath
-    : entry.actions?.find((candidate) => candidate.name === action)?.workflowPath;
-}
+const registrationKey = (owner: string, sourceName: string, paramsHash: string) =>
+  `${owner}|${sourceName}|${paramsHash}`;
 
 export async function reconcileRecipeTriggerRegistrations(
   input: RecipeTriggerReconcileInput,
@@ -122,8 +105,9 @@ export async function reconcileRecipeTriggerRegistrations(
       if (ref.kind !== "recipe" || ref.triggers === undefined) continue;
       for (const trigger of ref.triggers) {
         const owner = `trigger:${entry.id}:${trigger.id}`;
-        const paramsFor = TRIGGER_SOURCE_PARAMS[trigger.source.name];
-        if (paramsFor === undefined) {
+        const stored = settings[`${entry.id}:${trigger.id}`];
+        const params = triggerSourceParams(trigger, project.projectId, stored);
+        if (params === undefined) {
           input.log("trigger listens to a source the host cannot start; skipped", {
             recipe: entry.id,
             trigger: trigger.id,
@@ -131,15 +115,9 @@ export async function reconcileRecipeTriggerRegistrations(
           });
           continue;
         }
-        const resolved = await resolveSignalSourceParams(
-          trigger.source,
-          paramsFor(project.projectId),
-        );
-        const effective = effectiveRecipeTriggerSettings(
-          trigger,
-          settings[`${entry.id}:${trigger.id}`],
-        );
-        if (!effective.enabled) continue;
+        const effective = effectiveRecipeTriggerSettings(trigger, stored);
+        if (!effective.enabled || !recipeTriggerFlagAllows(trigger)) continue;
+        const resolved = await resolveSignalSourceParams(trigger.source, params);
         const workflowPath = resolveRecipeTriggerActionWorkflowPath(entry, trigger.action);
         if (workflowPath === undefined) {
           input.log("trigger's action has no resolvable .workflow.ts; skipped", {
@@ -156,7 +134,7 @@ export async function reconcileRecipeTriggerRegistrations(
           params: resolved.params,
           registeredAt: DateTime.formatIso(DateTime.nowUnsafe()),
         });
-        desired.add(owner);
+        desired.add(registrationKey(owner, trigger.source.name, resolved.paramsHash));
         next.push({
           projectId: project.projectId,
           workspaceRoot: project.workspaceRoot,
@@ -173,7 +151,7 @@ export async function reconcileRecipeTriggerRegistrations(
           select: trigger.select,
           key: trigger.key,
           settings: effective,
-          storedSetting: settings[`${entry.id}:${trigger.id}`] ?? {},
+          storedSetting: stored ?? {},
           modelSelection: project.defaultModelSelection,
           allowedToolGroups: ref.allowedToolGroups,
         });
@@ -182,7 +160,8 @@ export async function reconcileRecipeTriggerRegistrations(
   }
 
   for (const row of current) {
-    if (desired.has(row.runId)) continue;
+    // Keyed on the instance too: a trigger whose scope changed must drop its old instance's row.
+    if (desired.has(registrationKey(row.runId, row.sourceName, row.paramsHash))) continue;
     const projectId =
       typeof row.params === "object" &&
       row.params !== null &&

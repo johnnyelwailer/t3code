@@ -81,10 +81,11 @@ export function makeTriggerLauncherPorts(input: {
   readonly runs: WorkflowRunRepositoryShape;
   readonly ambient: TriggerRunnerAmbient;
   readonly liveTriggers: () => ReadonlyArray<LiveTrigger>;
+  readonly nowMs?: () => number;
 }): RecipeTriggerLauncherPorts {
   const { ledger, runs, ambient } = input;
   return {
-    nowMs,
+    nowMs: input.nowMs ?? nowMs,
     log: ambient.log,
     markLaunched: (launchId, launchedAtMs) =>
       ambient.runLedger(ledger.markLaunched({ launchId, launchedAt: isoAt(launchedAtMs) })),

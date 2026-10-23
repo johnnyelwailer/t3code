@@ -41,6 +41,10 @@ import * as VcsProcess from "./vcs/VcsProcess.ts";
 import { loadViewerPrRead } from "./t3team-myworkViewerPrLoader.ts";
 import { makeReconcilerCore } from "./t3team-workflowSignalReconcilerCore.ts";
 import {
+  makeProjectScopePorts,
+  type ProjectScopeServices,
+} from "./t3team-workflowSignalProjectPorts.ts";
+import {
   T3TeamWorkflowSignalRehydrateGate,
   T3TeamWorkflowSignalRehydrateGateLive,
 } from "./t3team-workflowSignalRehydrateGate.ts";
@@ -120,6 +124,13 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
         Effect.provideService(VcsProcess.VcsProcess, vcsProcess),
       ),
       resolveWorkItemProvider,
+      projectScope: makeProjectScopePorts({
+        pullRequestService,
+        gitHubApi,
+        runAmbient: (effect) =>
+          Effect.runPromiseWith(ambient as Context.Context<ProjectScopeServices>)(effect),
+        resolveJiraProvider: resolveWorkItemProvider,
+      }),
     });
     // Loud boot cross-check: a renamed/missing catalog entry breaks boot, not a parked body.
     assertCatalogCoversDeclarations(catalog);

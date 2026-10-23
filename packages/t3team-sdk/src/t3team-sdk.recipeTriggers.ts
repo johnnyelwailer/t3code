@@ -94,6 +94,17 @@ export function assertRecipeTriggers(
         `${where}: trigger '${trigger.id}' dailyCap must be a positive integer or null.`,
       );
     }
+    if (trigger.scope?.query !== undefined && typeof trigger.scope.query !== "string") {
+      throw new Error(`${where}: trigger '${trigger.id}' scope.query must be a string.`);
+    }
+    if (
+      trigger.featureFlag !== undefined &&
+      (typeof trigger.featureFlag !== "string" || trigger.featureFlag.trim().length === 0)
+    ) {
+      throw new Error(
+        `${where}: trigger '${trigger.id}' featureFlag must be a non-empty flag key.`,
+      );
+    }
     if (typeof trigger.defaultEnabled !== "boolean") {
       throw new Error(
         `${where}: trigger '${trigger.id}' must say defaultEnabled: true or false (the host shows it; a per-project toggle overrides it).`,

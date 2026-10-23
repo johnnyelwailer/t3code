@@ -12,93 +12,16 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 
-import { toPersistenceSqlError, type ProjectionRepositoryError } from "./Errors.ts";
+import { toPersistenceSqlError } from "./Errors.ts";
 
-/** One awaited inbox tuple, consumed up to (and including) the newest slot the caller saw. */
-export interface TriggerInboxSlice {
-  readonly sourceName: string;
-  readonly paramsHash: string;
-  readonly signalName: string;
-  readonly key: string;
-  readonly upToId: number;
-}
+import type {
+  TriggerInboxSlice,
+  TriggerLaunchRow,
+  TriggerLaunchStatus,
+  WorkflowTriggerLaunchStoreShape,
+} from "./t3team-WorkflowTriggerLaunchStoreTypes.ts";
 
-export interface TriggerLaunchClaim extends TriggerInboxSlice {
-  /** Also the run id the launch uses: a retry finding that run already launched it. */
-  readonly launchId: string;
-  readonly projectId: string;
-  readonly recipeId: string;
-  readonly triggerId: string;
-  readonly args: Record<string, unknown>;
-  readonly claimedAt: string;
-}
-
-export type TriggerLaunchStatus = "pending" | "launched" | "failed";
-
-export interface TriggerLaunchRow {
-  readonly launchId: string;
-  readonly projectId: string;
-  readonly recipeId: string;
-  readonly triggerId: string;
-  readonly key: string;
-  readonly args: Record<string, unknown>;
-  readonly status: TriggerLaunchStatus;
-  readonly attempts: number;
-  readonly lastError: string | null;
-  readonly claimedAt: string;
-  readonly launchedAt: string | null;
-}
-
-/** What the limits need to know about a recipe's past launches. */
-export interface TriggerLaunchHistory {
-  /** Claimed-but-unlaunched rows plus launched runs still queued or running (recipe-wide). */
-  readonly inFlight: number;
-  /** Launches of the recipe claimed at or after `windowStartIso` (gave-up rows excluded). */
-  readonly launchesInWindow: number;
-  /** The newest claim per key of this trigger since `intervalStartIso`. */
-  readonly lastClaimAtByKey: ReadonlyMap<string, string>;
-}
-
-export interface WorkflowTriggerLaunchStoreShape {
-  /** Consume the slice and record a `pending` launch atomically; false when no slot was open. */
-  readonly claim: (input: TriggerLaunchClaim) => Effect.Effect<boolean, ProjectionRepositoryError>;
-  /** Consume the slice without a launch (a skipped or faulting event). */
-  readonly consume: (
-    input: TriggerInboxSlice & { readonly deliveredAt: string },
-  ) => Effect.Effect<void, ProjectionRepositoryError>;
-  readonly markLaunched: (input: {
-    readonly launchId: string;
-    readonly launchedAt: string;
-  }) => Effect.Effect<void, ProjectionRepositoryError>;
-  /** Count a failed attempt; `giveUp` settles the row as `failed`, otherwise it retries at `nextAttemptAt`. */
-  readonly markAttemptFailed: (input: {
-    readonly launchId: string;
-    readonly error: string;
-    readonly nextAttemptAt: string;
-    readonly giveUp: boolean;
-  }) => Effect.Effect<void, ProjectionRepositoryError>;
-  /** Pending launches whose retry is due, oldest claim first. */
-  readonly listDue: (input: {
-    readonly nowIso: string;
-    readonly limit: number;
-  }) => Effect.Effect<ReadonlyArray<TriggerLaunchRow>, ProjectionRepositoryError>;
-  readonly history: (input: {
-    readonly recipeId: string;
-    readonly triggerId: string;
-    readonly windowStartIso: string;
-    readonly intervalStartIso: string;
-  }) => Effect.Effect<TriggerLaunchHistory, ProjectionRepositoryError>;
-  /** The newest launches of one trigger (diagnostics). */
-  readonly listRecent: (input: {
-    readonly recipeId: string;
-    readonly triggerId: string;
-    readonly limit: number;
-  }) => Effect.Effect<ReadonlyArray<TriggerLaunchRow>, ProjectionRepositoryError>;
-  /** GC settled rows claimed before the cutoff; pending rows are never dropped. */
-  readonly purgeSettledBefore: (
-    cutoffIso: string,
-  ) => Effect.Effect<void, ProjectionRepositoryError>;
-}
+export type * from "./t3team-WorkflowTriggerLaunchStoreTypes.ts";
 
 export class WorkflowTriggerLaunchStore extends Context.Service<
   WorkflowTriggerLaunchStore,
@@ -143,6 +66,32 @@ const makeStore = Effect.gen(function* () {
       AND delivered = 0 AND id <= ${slice.upToId}
     RETURNING id`;
 
+  const history = Effect.fn("WorkflowTriggerLaunchStore.history")(function* ({
+    recipeId,
+    triggerId,
+    windowStartIso,
+    intervalStartIso,
+  }: Parameters<WorkflowTriggerLaunchStoreShape["history"]>[0]) {
+    const [inFlight] = yield* sql<{ n: number }>`
+          SELECT COUNT(*) AS n FROM workflow_signal_trigger_launches l
+          LEFT JOIN workflow_runs r ON r.run_id = l.launch_id
+          WHERE l.recipe_id = ${recipeId}
+            AND (l.status = 'pending' OR (l.status = 'launched' AND r.status IN ('queued', 'running')))`;
+    const [inWindow] = yield* sql<{ n: number }>`
+          SELECT COUNT(*) AS n FROM workflow_signal_trigger_launches
+          WHERE recipe_id = ${recipeId} AND status != 'failed' AND claimed_at >= ${windowStartIso}`;
+    const perKey = yield* sql<{ key: string; at: string }>`
+          SELECT trigger_key AS "key", MAX(claimed_at) AS "at" FROM workflow_signal_trigger_launches
+          WHERE recipe_id = ${recipeId} AND trigger_id = ${triggerId} AND status != 'failed'
+            AND claimed_at >= ${intervalStartIso}
+          GROUP BY trigger_key`;
+    return {
+      inFlight: inFlight?.n ?? 0,
+      launchesInWindow: inWindow?.n ?? 0,
+      lastClaimAtByKey: new Map(perKey.map((row) => [row.key, row.at])),
+    };
+  });
+
   return {
     claim: (input) =>
       sql
@@ -186,27 +135,7 @@ const makeStore = Effect.gen(function* () {
         Effect.map((rows) => rows.map(toLaunchRow)),
         fail("listDue"),
       ),
-    history: ({ recipeId, triggerId, windowStartIso, intervalStartIso }) =>
-      Effect.gen(function* () {
-        const [inFlight] = yield* sql<{ n: number }>`
-          SELECT COUNT(*) AS n FROM workflow_signal_trigger_launches l
-          LEFT JOIN workflow_runs r ON r.run_id = l.launch_id
-          WHERE l.recipe_id = ${recipeId}
-            AND (l.status = 'pending' OR (l.status = 'launched' AND r.status IN ('queued', 'running')))`;
-        const [inWindow] = yield* sql<{ n: number }>`
-          SELECT COUNT(*) AS n FROM workflow_signal_trigger_launches
-          WHERE recipe_id = ${recipeId} AND status != 'failed' AND claimed_at >= ${windowStartIso}`;
-        const perKey = yield* sql<{ key: string; at: string }>`
-          SELECT trigger_key AS "key", MAX(claimed_at) AS "at" FROM workflow_signal_trigger_launches
-          WHERE recipe_id = ${recipeId} AND trigger_id = ${triggerId} AND status != 'failed'
-            AND claimed_at >= ${intervalStartIso}
-          GROUP BY trigger_key`;
-        return {
-          inFlight: inFlight?.n ?? 0,
-          launchesInWindow: inWindow?.n ?? 0,
-          lastClaimAtByKey: new Map(perKey.map((row) => [row.key, row.at])),
-        };
-      }).pipe(fail("history")),
+    history: (input) => history(input).pipe(fail("history")),
     listRecent: ({ recipeId, triggerId, limit }) =>
       sql<LaunchDbRow>`
         SELECT ${columns} FROM workflow_signal_trigger_launches
