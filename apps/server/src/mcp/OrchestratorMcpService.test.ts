@@ -1,3 +1,11 @@
+import { afterEach, beforeEach, vi } from "vite-plus/test";
+import { applyPreferredCodexDefaultModel } from "../provider/CodexProvider.ts";
+import { applyCodexModelCatalog } from "../provider/codexModelCatalog.ts";
+import { BUNDLED_MODEL_MANIFEST, resolveProviderCatalog } from "../provider/ModelManifest.ts";
+import {
+  readFeatureFlag,
+  replaceFeatureFlagDatabaseValues,
+} from "@t3tools/project-context/t3teamFeatureFlags";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import {
@@ -917,6 +925,7 @@ describe("OrchestratorMcpService provider resolution", () => {
     readonly instanceId: ProviderInstanceId;
     readonly driver: ProviderDriverKind;
     readonly model?: string;
+    readonly isLegacy?: boolean;
     readonly enabled?: boolean;
   }): ServerProvider => ({
     instanceId: input.instanceId,
@@ -931,7 +940,15 @@ describe("OrchestratorMcpService provider resolution", () => {
     models:
       input.model === undefined
         ? []
-        : [{ slug: input.model, name: input.model, isCustom: false, capabilities: null }],
+        : [
+            {
+              slug: input.model,
+              name: input.model,
+              isCustom: false,
+              capabilities: null,
+              ...(input.isLegacy ? { isLegacy: true } : {}),
+            },
+          ],
     slashCommands: [],
     skills: [],
   });
@@ -1158,6 +1175,11 @@ describe("OrchestratorMcpService provider resolution", () => {
   );
 
   describe("listed models", () => {
+    beforeEach(() => vi.stubEnv("NEXI_FF_ORCHESTRATOR_LATEST_ONLY", "false"));
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      replaceFeatureFlagDatabaseValues(new Map());
+    });
     const opencodeInstanceId = ProviderInstanceId.make("opencode");
     const model = (slug: string, extra: Partial<ServerProvider["models"][number]> = {}) => ({
       slug,
@@ -1221,10 +1243,13 @@ describe("OrchestratorMcpService provider resolution", () => {
       },
     ];
 
-    const capabilitiesWith = (search?: string) =>
+    const capabilitiesWith = (search?: string, includeLegacy?: boolean, providers = catalog) =>
       Effect.gen(function* () {
         const service = yield* OrchestratorMcpService.OrchestratorMcpService;
-        return yield* service.capabilities(scope, search === undefined ? {} : { search });
+        return yield* service.capabilities(scope, {
+          ...(search === undefined ? {} : { search }),
+          ...(includeLegacy === undefined ? {} : { includeLegacy }),
+        });
       }).pipe(
         Effect.provide(
           layerOrchestratorService.pipe(
@@ -1246,7 +1271,7 @@ describe("OrchestratorMcpService provider resolution", () => {
                     [opencodeInstanceId]: { hiddenModels: ["oc/m02"], modelOrder: ["oc/m12"] },
                   },
                 }),
-                providerRegistryLayer(catalog),
+                providerRegistryLayer(providers),
                 adapterRegistryLayer([codexInstanceId, opencodeInstanceId]),
                 Layer.mock(ProjectService.ProjectService)({}),
                 Layer.mock(SecretRequests.SecretRequests)({}),
@@ -1263,6 +1288,106 @@ describe("OrchestratorMcpService provider resolution", () => {
         models: provider.models.map((entry) => entry.id),
         omitted: provider.omittedModels ?? 0,
       }));
+
+    const manifestCatalog = resolveProviderCatalog(
+      BUNDLED_MODEL_MANIFEST,
+      ProviderDriverKind.make("codex"),
+    )!;
+    const fixture = {
+      ...catalog[0]!,
+      ...applyCodexModelCatalog(
+        {
+          ...catalog[0]!,
+          models: manifestCatalog.models.slice(0, 7).map((entry) => model(entry.slug)),
+        },
+        manifestCatalog,
+      ),
+    };
+
+    it.effect(
+      "hides all manifest legacy models by default and includes marked legacy models on opt-in",
+      () =>
+        Effect.gen(function* () {
+          vi.stubEnv("NEXI_FF_ORCHESTRATOR_LATEST_ONLY", "true");
+          const current = (yield* capabilitiesWith(undefined, undefined, [fixture])).providers[0]!
+            .models;
+          assert.deepEqual(
+            current.map((entry) => entry.id),
+            ["gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"],
+          );
+          assert.isTrue(current.every((entry) => entry.legacy !== true));
+          const all = (yield* capabilitiesWith(undefined, true, [fixture])).providers[0]!.models;
+          assert.deepEqual(
+            all.map((entry) => entry.id),
+            fixture.models.map((entry) => entry.slug),
+          );
+          assert.deepEqual(
+            all.filter((entry) => entry.legacy).map((entry) => entry.id),
+            ["gpt-6-sol", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
+          );
+          const defaults = applyPreferredCodexDefaultModel(fixture.models);
+          assert.deepEqual(
+            defaults.filter((entry) => entry.isDefault).map((entry) => entry.slug),
+            ["gpt-6-astra"],
+          );
+        }),
+    );
+
+    it.effect("does not let pinned models or search bypass the flag", () =>
+      Effect.gen(function* () {
+        vi.stubEnv("NEXI_FF_ORCHESTRATOR_LATEST_ONLY", "true");
+        assert.deepEqual(
+          (yield* capabilitiesWith()).providers[0]!.models.map((entry) => entry.id),
+          ["gpt-6", "my-alpha"],
+        );
+        assert.deepEqual((yield* capabilitiesWith("gpt 5")).providers[0]!.models, []);
+        assert.deepEqual((yield* capabilitiesWith("gpt 5", true)).providers[0]!.models, [
+          { id: "gpt-5", legacy: true },
+        ]);
+      }),
+    );
+
+    it.effect("keeps custom and unclassified models visible and unmarked", () =>
+      Effect.gen(function* () {
+        vi.stubEnv("NEXI_FF_ORCHESTRATOR_LATEST_ONLY", "true");
+        const models = applyCodexModelCatalog(
+          {
+            ...fixture,
+            models: [
+              model("unclassified", { isLegacy: true }),
+              model("private-model", { isCustom: true }),
+            ],
+          },
+          manifestCatalog,
+        ).models;
+        const result = (yield* capabilitiesWith(undefined, undefined, [{ ...fixture, models }]))
+          .providers[0]!.models;
+        assert.deepEqual(result, [{ id: "unclassified" }, { id: "private-model" }]);
+      }),
+    );
+
+    it.effect(
+      "reads the runtime database flag on each request and gives env overrides priority",
+      () =>
+        Effect.gen(function* () {
+          vi.stubEnv("NEXI_FF_ORCHESTRATOR_LATEST_ONLY", undefined);
+          assert.isTrue(readFeatureFlag("ORCHESTRATOR_LATEST_ONLY"));
+          replaceFeatureFlagDatabaseValues(new Map([["ORCHESTRATOR_LATEST_ONLY", false]]));
+          assert.deepEqual(
+            (yield* capabilitiesWith()).providers[0]!.models.map((entry) => entry.id),
+            ["gpt-6", "gpt-4", "gpt-3", "my-alpha"],
+          );
+          replaceFeatureFlagDatabaseValues(new Map([["ORCHESTRATOR_LATEST_ONLY", true]]));
+          assert.deepEqual(
+            (yield* capabilitiesWith()).providers[0]!.models.map((entry) => entry.id),
+            ["gpt-6", "my-alpha"],
+          );
+          vi.stubEnv("NEXI_FF_ORCHESTRATOR_LATEST_ONLY", "false");
+          assert.deepEqual((yield* capabilitiesWith("gpt 5")).providers[0]!.models, [
+            { id: "gpt-5", legacy: true },
+          ]);
+        }),
+    );
 
     it.effect(
       "skips legacy models, lists the first 8 of large catalogs, and keeps pinned models",
@@ -1319,8 +1444,8 @@ describe("OrchestratorMcpService provider resolution", () => {
               { id: "agent", values: ["build"], default: "build" },
             ],
           },
-          { id: "gpt-4" },
-          { id: "gpt-3" },
+          { id: "gpt-4", legacy: true },
+          { id: "gpt-3", legacy: true },
           { id: "my-alpha" },
         ]);
       }),
@@ -1860,6 +1985,14 @@ describe("OrchestratorMcpService provider resolution", () => {
             candidateDriver: driver,
           },
           {
+            name: "explicit-legacy",
+            inheritedEnabled: true,
+            peerEnabled: true,
+            explicit: true,
+            selectedInstanceId: codexAltInstanceId,
+            candidateDriver: driver,
+          },
+          {
             name: "explicit-healthy",
             inheritedEnabled: true,
             peerEnabled: true,
@@ -1915,6 +2048,7 @@ describe("OrchestratorMcpService provider resolution", () => {
                 instanceId: codexAltInstanceId,
                 driver: testCase.candidateDriver,
                 model: "codex-alt-model",
+                isLegacy: testCase.name === "explicit-legacy",
                 enabled: testCase.peerEnabled,
               }),
             ]),
@@ -1939,6 +2073,7 @@ describe("OrchestratorMcpService provider resolution", () => {
                         testCase.selectedInstanceId === null
                           ? codexInstanceId
                           : testCase.selectedInstanceId,
+                      ...(testCase.name === "explicit-legacy" ? { model: "codex-alt-model" } : {}),
                     } as const)
                   : ({ driverKind: testCase.candidateDriver } as const);
             if (testCase.selectedInstanceId === null) {
@@ -1992,6 +2127,15 @@ describe("OrchestratorMcpService provider resolution", () => {
               }
               assert.deepEqual(yield* Ref.get(dispatched), [], testCase.name);
               return;
+            }
+            if (testCase.name === "explicit-legacy") {
+              const capabilities = yield* service.capabilities(scope);
+              assert.deepEqual(
+                capabilities.providers.find(
+                  (entry) => entry.providerInstanceId === codexAltInstanceId,
+                )?.models,
+                [],
+              );
             }
             const result = yield* service.delegateTask(scope, {
               task: "Summarize the diff.",

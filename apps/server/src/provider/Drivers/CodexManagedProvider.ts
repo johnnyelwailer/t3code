@@ -6,6 +6,8 @@ import * as Stream from "effect/Stream";
 import * as Option from "effect/Option";
 import { ChildProcessSpawner } from "effect/process";
 import { makeCodexTextGeneration } from "../../textGeneration/CodexTextGeneration.ts";
+import * as ModelCatalog from "@t3tools/provider-core/server/ModelCatalog";
+import { applyCodexModelCatalog } from "../codexModelCatalog.ts";
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import { chatGptModels } from "../CodexChatGptModels.ts";
 import { makeCodexManagedRuntime } from "../CodexManagedRuntime.ts";
@@ -36,6 +38,7 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const host = yield* ProviderHost.ProviderHost;
+  const modelCatalog = yield* ModelCatalog.ModelCatalog;
   const runtime = yield* makeCodexManagedRuntime({
     instanceId,
     enabled,
@@ -132,7 +135,7 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
             effective.environment.ACCESS_TOKEN!,
             draft.models,
           ).pipe(Effect.provideService(HttpClient.HttpClient, http));
-          return { ...draft, models };
+          return applyCodexModelCatalog({ ...draft, models }, yield* modelCatalog.current(DRIVER));
         }),
       ),
       Effect.map((draft) =>
