@@ -24,6 +24,7 @@ import {
   toNeutralWorkItem,
   workItemCursorFromFields,
 } from "./t3team-workflowSignalSourceWorkItem.ts";
+import type { SignalSourceHealth } from "./t3team-workflowSignalReconcilerCore.ts";
 import { makeSignalPollTimer } from "./t3team-workflowSignalSweepTimer.ts";
 
 const CHANGES_PER_POLL = 500;
@@ -46,6 +47,7 @@ export interface WorkItemProjectPorts {
     jql: string,
     issueKeys: ReadonlyArray<string>,
   ) => Promise<ReadonlySet<string>>;
+  readonly nowIso: () => string;
 }
 
 const Fields = Schema.Struct({
@@ -80,10 +82,16 @@ export function startWorkItemProjectSignalInstance(input: {
   readonly ports: WorkItemProjectPorts;
   readonly pollMs: number;
   readonly log: (message: string, fields?: unknown) => void;
-}): { readonly stop: () => void; readonly tick: () => Promise<void> } {
+}): {
+  readonly stop: () => void;
+  readonly tick: () => Promise<void>;
+  readonly health: () => SignalSourceHealth;
+} {
   const { ctx, ports, log } = input;
   const pollTimer = makeSignalPollTimer();
   let stopped = false;
+  let lastError: string | undefined;
+  let lastPollAt: string | undefined;
 
   const poll = async (binding: JiraMirrorBinding): Promise<Cursor | null> => {
     const raw = await ctx.getCursor();
@@ -136,19 +144,24 @@ export function startWorkItemProjectSignalInstance(input: {
     try {
       const binding = await ports.resolveBinding(ctx.params.projectId);
       if (binding === null) {
+        lastError = "the project is not bound to a Jira project";
         log("work-item project signal: the project is not bound to a Jira project", {
           projectId: ctx.params.projectId,
         });
         return;
       }
-      if (!(await ports.keepMirrorWalking(binding))) {
+      const walking = await ports.keepMirrorWalking(binding);
+      lastError = walking ? undefined : "no usable Jira session; the mirror is not refreshing";
+      if (!walking) {
         log("work-item project signal: no usable Jira session; the mirror is not refreshing", {
           projectId: ctx.params.projectId,
         });
       }
       const next = await poll(binding);
       if (next !== null) await ctx.setCursor(encodeCursor(next));
+      lastPollAt = ports.nowIso();
     } catch (error) {
+      lastError = String(error);
       log("work-item project signal poll failed", { error: String(error) });
     } finally {
       if (!stopped) pollTimer.schedule(() => void tick(), input.pollMs);
@@ -158,6 +171,7 @@ export function startWorkItemProjectSignalInstance(input: {
   pollTimer.schedule(() => void tick(), Math.min(input.pollMs, FIRST_POLL_MS));
   return {
     tick,
+    health: () => ({ lastPollAt, lastError }),
     stop: () => {
       stopped = true;
       pollTimer.stop();

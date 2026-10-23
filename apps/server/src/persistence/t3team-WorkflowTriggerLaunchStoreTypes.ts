@@ -79,12 +79,22 @@ export interface WorkflowTriggerLaunchStoreShape {
     readonly windowStartIso: string;
     readonly intervalStartIso: string;
   }) => Effect.Effect<TriggerLaunchHistory, ProjectionRepositoryError>;
-  /** The newest launches of one trigger (diagnostics). */
+  /** The newest launches of one trigger in one project (diagnostics). */
   readonly listRecent: (input: {
+    readonly projectId: string;
     readonly recipeId: string;
     readonly triggerId: string;
     readonly limit: number;
   }) => Effect.Effect<ReadonlyArray<TriggerLaunchRow>, ProjectionRepositoryError>;
+  /** One signal instance's newest event and its undelivered backlog (diagnostics). */
+  readonly inboxSummary: (input: {
+    readonly sourceName: string;
+    readonly paramsHash: string;
+    readonly signalName: string;
+  }) => Effect.Effect<
+    { readonly lastEventAt: string | null; readonly undelivered: number },
+    ProjectionRepositoryError
+  >;
   /** GC settled rows claimed before the cutoff; pending rows are never dropped. */
   readonly purgeSettledBefore: (
     cutoffIso: string,

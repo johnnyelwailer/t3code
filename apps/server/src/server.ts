@@ -249,6 +249,7 @@ import {
   t3teamThreadWorkflowResolveInputRouteLayer,
 } from "./t3team-thread-recipe-workflow-routes.ts";
 import { t3teamRecipeHeadlessLaunchRouteLayer } from "./t3team-recipeHeadlessLaunchRoutes.ts";
+import { t3teamRecipeTriggerStatusRouteLayer } from "./t3team-recipeTriggerStatusRoute.ts";
 import {
   T3TeamRecipeTriggerRunner,
   T3TeamRecipeTriggerRunnerLive,
@@ -1104,6 +1105,7 @@ const layerMakeRoutes = Layer.mergeAll(
     t3teamProjectWorkspaceRefreshWorkItemSliceContextRouteLayer,
     t3teamThreadRecipeWorkflowLaunchRouteLayer,
     t3teamRecipeHeadlessLaunchRouteLayer,
+    t3teamRecipeTriggerStatusRouteLayer,
     t3teamThreadWorkflowControlRouteLayer,
     t3teamThreadJobsRouteLayer,
     t3teamThreadDraftMutationStatusRouteLayer,

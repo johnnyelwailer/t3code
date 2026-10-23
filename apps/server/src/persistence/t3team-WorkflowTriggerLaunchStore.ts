@@ -136,13 +136,25 @@ const makeStore = Effect.gen(function* () {
         fail("listDue"),
       ),
     history: (input) => history(input).pipe(fail("history")),
-    listRecent: ({ recipeId, triggerId, limit }) =>
+    listRecent: ({ projectId, recipeId, triggerId, limit }) =>
       sql<LaunchDbRow>`
         SELECT ${columns} FROM workflow_signal_trigger_launches
-        WHERE recipe_id = ${recipeId} AND trigger_id = ${triggerId}
+        WHERE project_id = ${projectId} AND recipe_id = ${recipeId} AND trigger_id = ${triggerId}
         ORDER BY claimed_at DESC LIMIT ${limit}`.pipe(
         Effect.map((rows) => rows.map(toLaunchRow)),
         fail("listRecent"),
+      ),
+    inboxSummary: ({ sourceName, paramsHash, signalName }) =>
+      sql<{ lastEventAt: string | null; undelivered: number | null }>`
+        SELECT MAX(created_at) AS "lastEventAt", SUM(CASE WHEN delivered = 0 THEN 1 ELSE 0 END) AS "undelivered"
+        FROM workflow_signal_inbox
+        WHERE source_name = ${sourceName} AND params_hash = ${paramsHash}
+          AND signal_name = ${signalName}`.pipe(
+        Effect.map(([row]) => ({
+          lastEventAt: row?.lastEventAt ?? null,
+          undelivered: row?.undelivered ?? 0,
+        })),
+        fail("inboxSummary"),
       ),
     purgeSettledBefore: (cutoffIso) =>
       sql`

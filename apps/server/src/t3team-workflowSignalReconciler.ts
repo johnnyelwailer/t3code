@@ -39,7 +39,10 @@ import { PullRequestService } from "./pullRequest/PullRequestService.ts";
 import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as VcsProcess from "./vcs/VcsProcess.ts";
 import { loadViewerPrRead } from "./t3team-myworkViewerPrLoader.ts";
-import { makeReconcilerCore } from "./t3team-workflowSignalReconcilerCore.ts";
+import {
+  makeReconcilerCore,
+  type SignalInstanceStatus,
+} from "./t3team-workflowSignalReconcilerCore.ts";
 import {
   makeProjectScopePorts,
   type ProjectScopeServices,
@@ -74,12 +77,15 @@ export interface WorkflowSignalReconcilerShape {
   readonly sweep: () => Promise<void>;
   /** Stop every live instance (host shutdown finalizer). */
   readonly stopAll: () => Promise<void>;
+  /** The instances this process runs or fails to start (diagnostics). */
+  readonly status: () => ReadonlyArray<SignalInstanceStatus>;
 }
 
 const INERT_RECONCILER: WorkflowSignalReconcilerShape = {
   reconcile: () => Promise.resolve(),
   sweep: () => Promise.resolve(),
   stopAll: () => Promise.resolve(),
+  status: () => [],
 };
 
 /** T3TeamWorkflowSignalReconciler - service tag for the signal-source reconciler. */
@@ -185,6 +191,7 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
       reconcile: () => rehydrated.then(() => core.reconcile()),
       sweep: () => rehydrated.then(() => core.sweep()),
       stopAll: () => core.stopAll(),
+      status: () => core.status(),
     };
   }),
 ).pipe(

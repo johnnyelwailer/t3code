@@ -20,9 +20,10 @@ import {
   type RecipeTriggerSetting,
 } from "./t3team-recipeTriggerSettings.ts";
 import {
-  recipeTriggerFlagAllows,
+  inactiveReason,
   resolveRecipeTriggerActionWorkflowPath,
   triggerSourceParams,
+  type InactiveRecipeTriggerReason,
 } from "./t3team-recipeTriggerSources.ts";
 
 export interface RecipeTriggerReconcileInput {
@@ -68,6 +69,16 @@ export interface RecipeTriggerReconcileInput {
   /** The signal reconciler to poke once the registration set changed. */
   readonly reconciler?: { readonly reconcile: () => Promise<void> } | undefined;
   readonly log: (message: string, fields?: unknown) => void;
+  /** Told about every trigger that is declared but not running, and why (diagnostics). */
+  readonly onInactive?: (trigger: InactiveRecipeTrigger) => void;
+}
+
+export interface InactiveRecipeTrigger {
+  readonly projectId: string;
+  readonly recipeId: string;
+  readonly triggerId: string;
+  readonly sourceName: string;
+  readonly reason: InactiveRecipeTriggerReason;
 }
 
 const registrationKey = (owner: string, sourceName: string, paramsHash: string) =>
@@ -107,26 +118,20 @@ export async function reconcileRecipeTriggerRegistrations(
         const owner = `trigger:${entry.id}:${trigger.id}`;
         const stored = settings[`${entry.id}:${trigger.id}`];
         const params = triggerSourceParams(trigger, project.projectId, stored);
-        if (params === undefined) {
-          input.log("trigger listens to a source the host cannot start; skipped", {
-            recipe: entry.id,
-            trigger: trigger.id,
-            source: trigger.source.name,
-          });
-          continue;
-        }
         const effective = effectiveRecipeTriggerSettings(trigger, stored);
-        if (!effective.enabled || !recipeTriggerFlagAllows(trigger)) continue;
-        const resolved = await resolveSignalSourceParams(trigger.source, params);
         const workflowPath = resolveRecipeTriggerActionWorkflowPath(entry, trigger.action);
-        if (workflowPath === undefined) {
-          input.log("trigger's action has no resolvable .workflow.ts; skipped", {
-            recipe: entry.id,
-            trigger: trigger.id,
-            action: trigger.action,
+        const inactive = inactiveReason({ params, effective, trigger, workflowPath });
+        if (inactive !== null || params === undefined || workflowPath === undefined) {
+          input.onInactive?.({
+            projectId: project.projectId,
+            recipeId: entry.id,
+            triggerId: trigger.id,
+            sourceName: trigger.source.name,
+            reason: inactive ?? "no-workflow",
           });
           continue;
         }
+        const resolved = await resolveSignalSourceParams(trigger.source, params);
         await input.store.upsertRegistration({
           runId: owner,
           sourceName: trigger.source.name,
@@ -148,6 +153,7 @@ export async function reconcileRecipeTriggerRegistrations(
             paramsHash: resolved.paramsHash,
             signalName: trigger.signal.name,
           },
+          params: resolved.params,
           select: trigger.select,
           key: trigger.key,
           settings: effective,

@@ -23,6 +23,7 @@ import {
   settleProjectPoll,
   type ProjectHostRead,
 } from "./t3team-workflowSignalScmProjectDiff.ts";
+import type { SignalSourceHealth } from "./t3team-workflowSignalReconcilerCore.ts";
 import { makeSignalPollTimer } from "./t3team-workflowSignalSweepTimer.ts";
 
 /** GitHub caps a search query's length; this many `repo:` qualifiers stay well under it. */
@@ -86,10 +87,15 @@ export function startScmProjectSignalInstance(input: {
   readonly ports: ScmProjectPorts;
   readonly pollMs: number;
   readonly log: (message: string, fields?: unknown) => void;
-}): { readonly stop: () => void; readonly tick: () => Promise<void> } {
+}): {
+  readonly stop: () => void;
+  readonly tick: () => Promise<void>;
+  readonly health: () => SignalSourceHealth;
+} {
   const { ctx, ports, log } = input;
   const pollTimer = makeSignalPollTimer();
   let stopped = false;
+  let health: SignalSourceHealth = {};
 
   const tick = async (): Promise<void> => {
     if (stopped) return;
@@ -125,7 +131,15 @@ export function startScmProjectSignalInstance(input: {
         }
       }
       await ctx.setCursor(serializeProjectItemsCursor(cursor));
+      const blind = reads.filter((read) => !read.complete).map((read) => read.host);
+      health = {
+        lastPollAt: startedAt,
+        ...(blind.length === 0
+          ? {}
+          : { lastError: `search refused or cut off on ${blind.join(", ")}; window held` }),
+      };
     } catch (error) {
+      health = { ...health, lastError: String(error) };
       log("scm project signal poll failed", { error: String(error) });
     } finally {
       if (!stopped) pollTimer.schedule(() => void tick(), input.pollMs);
@@ -135,6 +149,7 @@ export function startScmProjectSignalInstance(input: {
   pollTimer.schedule(() => void tick(), Math.min(input.pollMs, FIRST_POLL_MS));
   return {
     tick,
+    health: () => health,
     stop: () => {
       stopped = true;
       pollTimer.stop();

@@ -100,6 +100,17 @@ describe("recipe trigger launch ledger", () => {
       assert.isFalse(again);
       assert.deepStrictEqual(yield* statusOf("L1"), { status: "pending", attempts: 0 });
       assert.isUndefined(yield* statusOf("L2"));
+      const inbox = yield* WorkflowSignalStore;
+      yield* inbox.insertInboxEntry({
+        ...tuple,
+        key: "o/r#2",
+        payload: {},
+        createdAt: iso(T0 + 5),
+      });
+      assert.deepStrictEqual(yield* ledger.inboxSummary(tuple), {
+        lastEventAt: iso(T0 + 5),
+        undelivered: 1,
+      });
     }).pipe(Effect.provide(layer)),
   );
 

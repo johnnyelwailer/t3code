@@ -149,6 +149,7 @@ describe("scm.project.items poller", () => {
       h.answer({ items: [hit(1)], failed: true, truncated: false });
       await h.instance.tick();
       expect(h.emitted.map((e) => e.key)).toEqual(["ghe.example:hive/app#1"]);
+      expect(h.instance.health().lastError).toMatch(/refused or cut off on ghe.example/);
 
       h.at("2026-10-23T10:10:00.000Z");
       h.answer(ok(hit(1), hit(2, { updated_at: "2026-10-23T10:05:00Z" })));

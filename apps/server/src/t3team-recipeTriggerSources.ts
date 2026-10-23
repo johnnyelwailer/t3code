@@ -37,6 +37,27 @@ export function recipeTriggerFlagAllows(trigger: RecipeTriggerSpec): boolean {
     : false;
 }
 
+/** Why a declared trigger is not running: the host cannot start its source, it is switched off,
+ * its feature flag is off, or its action has no workflow to launch. */
+export type InactiveRecipeTriggerReason =
+  | "unsupported-source"
+  | "disabled"
+  | "feature-flag-off"
+  | "no-workflow";
+
+export function inactiveReason(input: {
+  readonly params: Record<string, unknown> | undefined;
+  readonly effective: { readonly enabled: boolean };
+  readonly trigger: RecipeTriggerSpec;
+  readonly workflowPath: string | undefined;
+}): InactiveRecipeTriggerReason | null {
+  if (input.params === undefined) return "unsupported-source";
+  if (!input.effective.enabled) return "disabled";
+  if (!recipeTriggerFlagAllows(input.trigger)) return "feature-flag-off";
+  if (input.workflowPath === undefined) return "no-workflow";
+  return null;
+}
+
 export function resolveRecipeTriggerActionWorkflowPath(
   entry: {
     readonly workflowPath?: string | undefined;

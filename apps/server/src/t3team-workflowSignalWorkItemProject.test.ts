@@ -50,6 +50,7 @@ function harness(input: { query?: string } = {}) {
   const jqlCalls: Array<ReadonlyArray<string>> = [];
   const emitted: Emitted[] = [];
   const ports: WorkItemProjectPorts = {
+    nowIso: () => "2026-10-23T10:00:00.000Z",
     resolveBinding: async () => (bound ? binding : null),
     keepMirrorWalking: async () => true,
     baseline: async () => baseline,
@@ -166,6 +167,7 @@ describe("work-item.project-updates poller", () => {
       h.setBaseline(101);
       await h.instance.tick();
       expect(h.cursor()).toBeNull();
+      expect(h.instance.health().lastError).toBe("the project is not bound to a Jira project");
     } finally {
       h.instance.stop();
     }

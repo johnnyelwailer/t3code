@@ -19,6 +19,8 @@ export interface LiveTrigger {
   readonly recipePath: string;
   readonly workflowPath: string;
   readonly instance: RecipeTriggerInstanceRef;
+  /** The validated params the source instance is bound with (the project and its scope). */
+  readonly params: unknown;
   readonly select: RecipeTriggerSpec["select"];
   readonly key: RecipeTriggerSpec["key"];
   readonly settings: RecipeTriggerEffectiveSettings & { readonly enabled: boolean };

@@ -21,21 +21,14 @@
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import {
-  BUILTIN_SIGNALS,
-  decodeSignalPayload,
-  signalInstanceKey,
-  type Signal,
-  type SignalEmit,
-  type SignalSourceInstance,
-} from "@t3team/sdk";
+import { signalInstanceKey, type SignalSourceInstance } from "@t3team/sdk";
 import {
   BOUNDED_INBOX_SOURCES,
-  EMITS_BY_SOURCE,
+  makeMintedEmit,
   UNDRAINED_INBOX_CAP,
 } from "./t3team-workflowSignalEmits.ts";
 
-export { UNDRAINED_INBOX_CAP } from "./t3team-workflowSignalEmits.ts";
+export { makeMintedEmit, UNDRAINED_INBOX_CAP } from "./t3team-workflowSignalEmits.ts";
 
 import type { WorkflowSignalDeliveryShape } from "./t3team-workflowSignalDelivery.ts";
 import type { WorkflowSignalSourceCatalog } from "./t3team-workflowSignalCatalog.ts";
@@ -46,36 +39,27 @@ export type ReconcilerCore = {
   readonly reconcile: () => Promise<void>;
   readonly sweep: () => Promise<void>;
   readonly stopAll: () => Promise<void>;
+  /** Every desired instance this process knows about: running, or failing to start. */
+  readonly status: () => ReadonlyArray<SignalInstanceStatus>;
 };
 
-/** The minted `ctx.emit`: declared-signals gate + schema decode, then the delivery port. */
-export function makeMintedEmit(input: {
-  readonly sourceName: string;
-  readonly paramsHash: string;
-  readonly delivery: WorkflowSignalDeliveryShape;
-}): SignalEmit {
-  const declaredSignals = EMITS_BY_SOURCE[input.sourceName] ?? new Set<string>();
-  const signalByName = new Map(BUILTIN_SIGNALS.map((s) => [s.name, s]));
-  return async <Payload>(signal: Signal<Payload>, key: string, payload: Payload): Promise<void> => {
-    if (!declaredSignals.has(signal.name)) {
-      throw new Error(`Source '${input.sourceName}' emitted undeclared signal '${signal.name}'.`);
-    }
-    const declared = signalByName.get(signal.name);
-    if (declared === undefined) {
-      throw new Error(`Unknown built-in signal '${signal.name}'.`);
-    }
-    const validated = await decodeSignalPayload(declared, payload);
-    await Effect.runPromise(
-      input.delivery.emit({
-        sourceName: input.sourceName,
-        paramsHash: input.paramsHash,
-        signalName: signal.name,
-        key,
-        payload: validated,
-      }),
-    );
-  };
+/** What a source reports about its own polling (auth trouble, refused reads), if it does. */
+export interface SignalSourceHealth {
+  readonly lastPollAt?: string | undefined;
+  readonly lastError?: string | undefined;
 }
+
+export interface SignalInstanceStatus {
+  readonly instanceKey: string;
+  readonly state: "running" | "start-failed";
+  readonly startError?: string;
+  readonly health?: SignalSourceHealth;
+}
+
+const reportsHealth = (
+  handle: SignalSourceInstance,
+): handle is SignalSourceInstance & { readonly health: () => SignalSourceHealth } =>
+  "health" in handle && typeof handle.health === "function";
 
 /** The reconcile loop: desired = registrations of live runs; start missing, stop orphaned. */
 export function makeReconcilerCore(input: {
@@ -89,6 +73,7 @@ export function makeReconcilerCore(input: {
 }): ReconcilerCore {
   const live = new Map<string, SignalSourceInstance>();
   const starting = new Set<string>();
+  const startErrors = new Map<string, string>();
 
   const startInstance = async (
     instanceKey: string,
@@ -118,7 +103,9 @@ export function makeReconcilerCore(input: {
         },
       });
       live.set(instanceKey, handle);
+      startErrors.delete(instanceKey);
     } catch (error) {
+      startErrors.set(instanceKey, String(error));
       await Effect.runPromise(
         input.log("signal source start failed", { instanceKey, error: String(error) }),
       );
@@ -148,6 +135,7 @@ export function makeReconcilerCore(input: {
         void startInstance(key, instance);
       }
     }
+    for (const key of startErrors.keys()) if (!desired.has(key)) startErrors.delete(key);
     // Stop what is orphaned: no live run holds a registration on the instance anymore.
     for (const [key, handle] of live) {
       if (!desired.has(key)) {
@@ -189,5 +177,18 @@ export function makeReconcilerCore(input: {
     live.clear();
   };
 
-  return { reconcile, sweep, stopAll };
+  const status = (): ReadonlyArray<SignalInstanceStatus> => [
+    ...[...live].map(([instanceKey, handle]) => ({
+      instanceKey,
+      state: "running" as const,
+      ...(reportsHealth(handle) ? { health: handle.health() } : {}),
+    })),
+    ...[...startErrors].map(([instanceKey, startError]) => ({
+      instanceKey,
+      state: "start-failed" as const,
+      startError,
+    })),
+  ];
+
+  return { reconcile, sweep, stopAll, status };
 }

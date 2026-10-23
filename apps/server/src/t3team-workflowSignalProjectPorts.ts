@@ -60,6 +60,7 @@ export function makeProjectScopePorts(input: {
         ),
     },
     workItemProject: {
+      nowIso: () => DateTime.formatIso(DateTime.nowUnsafe()),
       resolveBinding: (projectId) => runAmbient(resolveProjectJiraBinding(projectId)),
       keepMirrorWalking: (binding) => runAmbient(keepMirrorWalking(binding)),
       baseline: (binding) => runAmbient(readMirrorBaseline(binding)),
