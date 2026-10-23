@@ -4,9 +4,10 @@
  * service headless (origin `"trigger"`).
  *
  * The request names a project + recipe id and, optionally, one of the recipe's named actions.
- * The server resolves the recipe through the unfiltered library enumeration (pack and
- * project-local, same precedence as `t3team.recipe.list`) — a caller cannot steer a launch at a
- * path it picked. The project's default model selection is the model: headless has no thread to
+ * The server resolves the recipe through the agent-facing library enumeration (pack and
+ * project-local, same precedence and the same `WORKITEM_DELIVERY_RECIPES` filter as
+ * `t3team.recipe.list`) — a caller cannot steer a launch at a path it picked, nor launch a recipe
+ * that list hides. The project's default model selection is the model: headless has no thread to
  * inherit one from.
  */
 import { ProjectId } from "@t3tools/contracts";
@@ -70,8 +71,9 @@ export const t3teamRecipeHeadlessLaunchRouteLayer = HttpRouter.add(
         });
       }
 
-      // Unfiltered library (pack + project-local, one precedence) — the same enumeration the
-      // agent-facing list uses, so a caller cannot address a path the recipe does not own.
+      // The agent-facing list (pack + project-local, one precedence), so a caller cannot address a
+      // path the recipe does not own. It leaves out `fix-this-bug` and `implement-this` while
+      // `WORKITEM_DELIVERY_RECIPES` is off, so launching either answers "not found" until it is on.
       const library = yield* listProjectRecipesForAgent({ workspaceRoot: row.workspaceRoot });
       const entry = library.recipes.find((candidate) => candidate.id === recipeId);
       if (entry === undefined) {
