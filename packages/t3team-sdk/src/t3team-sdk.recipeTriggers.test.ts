@@ -5,6 +5,7 @@ import {
   builtinSignalSource,
   defineSignal,
   defineRecipe,
+  recipeTrigger,
   type SignalSourceRef,
   type WorkflowRef,
 } from "./t3team-sdk.index.ts";
@@ -78,6 +79,20 @@ describe("defineRecipe({ triggers }) validation", () => {
         triggers: [{ ...validTrigger(), featureFlag: " " }],
       }),
     ).toThrow("featureFlag must be a non-empty flag key");
+  });
+
+  it("types select and key by the signal's payload and re-decodes what the host hands them", () => {
+    const trigger = recipeTrigger({
+      ...validTrigger(),
+      select: (payload) => ({ cr: payload.cr.toUpperCase() }),
+      key: (payload) => payload.cr,
+    });
+    const recipe = defineRecipe({ ...baseRecipe, id: "recipe-trig-typed", triggers: [trigger] });
+    expect(recipe.triggers?.[0]?.select({ cr: "repo#1" }, { settings: {} })).toEqual({
+      cr: "REPO#1",
+    });
+    expect(recipe.triggers?.[0]?.key({ cr: "repo#1" })).toBe("repo#1");
+    expect(() => recipe.triggers?.[0]?.key({ other: 1 })).toThrow();
   });
 
   it("leaves triggers absent when none are declared (back-compat)", () => {

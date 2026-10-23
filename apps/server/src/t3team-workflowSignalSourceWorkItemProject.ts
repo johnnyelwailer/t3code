@@ -6,7 +6,7 @@
  *
  * Cursor: the newest mirror `updated_at` read, plus the watched fields of recently seen items so a
  * change names what changed (`changedFields`, as `work-item.updates` does). An item the cursor does
- * not remember reports `updated`. No cursor is a baseline: it starts from the mirror's newest row
+ * not remember reports `first-seen`: new to the project, or changed for the first time since then. No cursor is a baseline: it starts from the mirror's newest row
  * (once the mirror has caught up at all) and emits nothing, so neither a lost cursor nor the
  * mirror's first walk replays the project's history.
  */
@@ -116,7 +116,8 @@ export function startWorkItemProjectSignalInstance(input: {
       if (item === null) continue;
       const fields = { ...item, updated: item.updatedAt };
       const before = items[row.issueKey];
-      const changedFields = before === undefined ? ["updated"] : diffWorkItemFields(before, fields);
+      const changedFields =
+        before === undefined ? ["first-seen"] : diffWorkItemFields(before, fields);
       delete items[row.issueKey];
       items[row.issueKey] = workItemCursorFromFields(fields);
       if (changedFields.length === 0 || (inScope !== null && !inScope.has(row.issueKey))) continue;

@@ -9,8 +9,31 @@
  * host-side as trusted pack code.
  */
 
+import * as Schema from "effect/Schema";
+
 import { declaresSignal } from "./t3team-sdk.signal.ts";
 import type { RecipeTriggerSpec } from "./t3team-sdk.recipeTypes.ts";
+
+/**
+ * Author one trigger with `select` and `key` typed by its signal's payload. The host hands both
+ * the raw inbox payload, decoded against the signal's schema when it was delivered; it is checked
+ * against that schema again here, so the typed callbacks never see a shape their signal does not
+ * declare (a mismatch throws, which the host counts as a faulting event).
+ */
+export function recipeTrigger<Payload>(spec: RecipeTriggerSpec<Payload>): RecipeTriggerSpec {
+  const isPayload = Schema.is(spec.signal.schema);
+  const checked = (payload: unknown): Payload => {
+    if (!isPayload(payload)) {
+      throw new Error(`Trigger '${spec.id}': payload does not match signal '${spec.signal.name}'.`);
+    }
+    return payload;
+  };
+  return {
+    ...spec,
+    select: (payload, ctx) => spec.select(checked(payload), ctx),
+    key: (payload) => spec.key(checked(payload)),
+  };
+}
 
 /** Action names are wire identifiers, same rule as `actions` map keys. */
 const TRIGGER_ACTION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;

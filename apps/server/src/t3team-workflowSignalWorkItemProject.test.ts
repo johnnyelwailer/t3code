@@ -136,7 +136,7 @@ describe("work-item.project-updates poller", () => {
       ]);
       await h.instance.tick();
       expect(h.emitted).toEqual([
-        { key: "IES-2", changedFields: ["updated"] },
+        { key: "IES-2", changedFields: ["first-seen"] },
         { key: "IES-2", changedFields: ["status", "assignee", "updated"] },
       ]);
     } finally {

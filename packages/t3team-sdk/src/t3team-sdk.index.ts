@@ -48,6 +48,7 @@ export {
   selectReplayWindow,
 } from "./t3team-sdk.journalStore.ts";
 export { buildJournalMaps, insertWireEntry } from "./t3team-sdk.journalReader.ts";
+export { recipeTrigger } from "./t3team-sdk.recipeTriggers.ts";
 export { toResolvedWire, toWire } from "./t3team-sdk.journalWriter.ts";
 export {
   buildScriptTree,
