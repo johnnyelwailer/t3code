@@ -12,15 +12,6 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: true,
     requiresRestart: false,
   },
-  GHE_REPOSITORY_CATALOG: {
-    group: "Orchestration",
-    subgroup: "Projects",
-    label: "GitHub Enterprise repository catalog",
-    description:
-      "The repository picker lists every repository the account can reach on a GitHub Enterprise host, like github.com. Off: GHE hosts only search names matching the project title.",
-    defaultEnabled: true,
-    requiresRestart: false,
-  },
   NEXI_STATE_DIR: {
     group: "Platform",
     label: "Project state in .nexi",
@@ -64,6 +55,15 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
     label: "Transient auto-resume",
     description:
       "A run that failed on a transient gateway error keeps retrying on a durable backoff, with a composer banner. Off: the run stays failed after the retry budget.",
+    defaultEnabled: true,
+    requiresRestart: false,
+  },
+  GHE_REPOSITORY_CATALOG: {
+    group: "Orchestration",
+    subgroup: "Projects",
+    label: "GitHub Enterprise repository catalog",
+    description:
+      "The repository picker lists every repository the account can reach on a GitHub Enterprise host, like github.com. Off: GHE hosts only search names matching the project title.",
     defaultEnabled: true,
     requiresRestart: false,
   },
