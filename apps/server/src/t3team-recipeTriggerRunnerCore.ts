@@ -29,7 +29,7 @@ export type {
   RecipeTriggerSlice,
 } from "./t3team-recipeTriggerRunnerCoreTypes.ts";
 
-export const RECIPE_TRIGGER_DAILY_WINDOW_MS = 24 * 60 * 60 * 1000;
+const RECIPE_TRIGGER_DAILY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function groupByKey(
   input: RecipeTriggerProcessInput,

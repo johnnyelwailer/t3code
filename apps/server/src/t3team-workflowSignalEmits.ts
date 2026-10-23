@@ -18,7 +18,7 @@ import * as Effect from "effect/Effect";
 import type { WorkflowSignalDeliveryShape } from "./t3team-workflowSignalDelivery.ts";
 
 /** The delivery trust boundary per source name: only the declared signals may be emitted. */
-export const EMITS_BY_SOURCE: Readonly<Record<string, ReadonlySet<string>>> = Object.fromEntries(
+const EMITS_BY_SOURCE: Readonly<Record<string, ReadonlySet<string>>> = Object.fromEntries(
   (
     [
       [

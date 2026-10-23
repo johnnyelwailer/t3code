@@ -20,7 +20,7 @@ import type { GitHubSearchItem } from "./t3team-githubViewerSearch.ts";
 import { searchHitMergedAt, searchHitRepository } from "./t3team-githubViewerSearch.ts";
 
 /** Re-read this much before the last poll, so an item updated during a poll is never missed. */
-export const PROJECT_POLL_OVERLAP_MS = 120_000;
+const PROJECT_POLL_OVERLAP_MS = 120_000;
 
 type ItemState = ScmProjectItemPayloadType["state"];
 type Reason = "opened" | "updated" | "closed" | "reopened" | "merged";
@@ -101,7 +101,7 @@ function reasonFor(
   return state === "open" ? "reopened" : state;
 }
 
-export function toProjectItem(host: string, hit: GitHubSearchItem): ScmProjectItemPayloadType {
+function toProjectItem(host: string, hit: GitHubSearchItem): ScmProjectItemPayloadType {
   const repository = searchHitRepository(hit.repository_url);
   const kind = hit.pull_request != null ? "change-request" : "issue";
   return {

@@ -18,8 +18,8 @@ import {
 import type { WorkflowSignalSourceHost } from "./t3team-workflowSignalCatalog.ts";
 
 /** Both ride their lanes' cadence: the viewer search's 2 min, and about the mirror loop's 90 s. */
-export const SCM_PROJECT_POLL_MS = 120_000;
-export const WORK_ITEM_PROJECT_POLL_MS = 60_000;
+const SCM_PROJECT_POLL_MS = 120_000;
+const WORK_ITEM_PROJECT_POLL_MS = 60_000;
 
 export interface ProjectScopeHostPorts {
   readonly scmProject?: ScmProjectPorts | undefined;
