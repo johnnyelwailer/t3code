@@ -1,35 +1,30 @@
 /**
  * A plain-text My Work kickoff used to leave its first message to the thread chat's mount effect, so
  * a chat that never mounted left an empty thread and no error. These cases pin the click-time send:
- * one atomic `thread.turn.start`, no second send from the chat that mounts later (the mount effect's
- * own `runThreadBootstrapEffect` is driven here), and no thread when the call fails.
+ * one atomic `thread.turn.start`, no second send from the chat that mounts later, and no thread when
+ * the call fails.
  */
 import { ProviderInstanceId } from "@t3tools/contracts";
 import type { StartThreadTurnInput } from "@t3tools/client-runtime/operations";
 import { ProjectShellProject } from "@t3tools/project-context";
 import * as Schema from "effect/Schema";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { useLayoutEffect } from "react";
+import { describe, expect, it, vi } from "vite-plus/test";
 
+import { act, render } from "../../test/render";
 import { createMockBackend } from "~/t3team/backend/t3team-mockBackend";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
-import { runThreadBootstrapEffect } from "~/t3team/chat/t3team-runThreadBootstrapEffect";
-import {
-  clearExternalThreadBootstrapRuns,
-  readExternalThreadBootstrapRun,
-} from "~/t3team/chat/t3team-threadBootstrapExternalRun";
-import {
-  clearThreadBootstrapDispatchStates,
-  resetThreadBootstrapDispatchState,
-} from "~/t3team/chat/t3team-threadBootstrapDispatchRegistry";
+import { clearExternalThreadBootstrapRuns } from "~/t3team/chat/t3team-threadBootstrapExternalRun";
+import { clearThreadBootstrapDispatchStates } from "~/t3team/chat/t3team-threadBootstrapDispatchRegistry";
+import { useThreadBootstrap } from "~/t3team/chat/t3team-useThreadBootstrap";
 import { sendKickoffAtClick } from "~/t3team/t3team-sendKickoffAtClick";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
 const THREAD_ID = "thread-kickoff-1";
 const MESSAGE = "Summarise what changed on my open PRs";
 const model = { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" };
-const decodeProject = Schema.decodeUnknownSync(ProjectShellProject);
 
-const project = decodeProject({
+const project = Schema.decodeUnknownSync(ProjectShellProject)({
   id: "project-1",
   title: "Scratch",
   source: { provider: "local" },
@@ -54,7 +49,11 @@ function kickoffThread(): ProjectThread {
   };
 }
 
+/** Also drops the per-thread state a previous case left in the module-level registries. */
 function createBackend(startThreadTurn: (input: StartThreadTurnInput) => Promise<void>) {
+  clearThreadBootstrapDispatchStates();
+  clearExternalThreadBootstrapRuns();
+  latest = null;
   const base = createMockBackend();
   const createThread = vi.fn(async () => undefined);
   const backend: BackendApi = {
@@ -65,8 +64,7 @@ function createBackend(startThreadTurn: (input: StartThreadTurnInput) => Promise
   return { backend, createThread };
 }
 
-function sendAtClick(backend: BackendApi | null) {
-  const markKickoffConsumed = vi.fn();
+function sendAtClick(backend: BackendApi | null, markKickoffConsumed = vi.fn()) {
   const sent = sendKickoffAtClick({
     backend,
     environmentId: "env-1",
@@ -78,10 +76,17 @@ function sendAtClick(backend: BackendApi | null) {
   return { sent, markKickoffConsumed };
 }
 
-/** One pass of the thread chat's mount effect, as it plans before any server shell exists. */
-function mountEffect(backend: BackendApi, initialUserMessage: string | undefined) {
-  const updateBootstrapStatus = vi.fn();
-  runThreadBootstrapEffect({
+type MountedBootstrap = ReturnType<typeof useThreadBootstrap>;
+let latest: MountedBootstrap | null = null;
+
+function Probe({
+  backend,
+  initialUserMessage,
+}: {
+  backend: BackendApi;
+  initialUserMessage: string | undefined;
+}) {
+  const bootstrap = useThreadBootstrap({
     backend,
     environmentId: "env-1",
     threadId: THREAD_ID,
@@ -99,16 +104,18 @@ function mountEffect(backend: BackendApi, initialUserMessage: string | undefined
     initialToolContext: undefined,
     onInitialUserMessageSent: undefined,
     serverThread: null,
-    updateBootstrapProgress: vi.fn(),
-    updateBootstrapStatus,
   });
-  return updateBootstrapStatus;
+  useLayoutEffect(() => {
+    latest = bootstrap;
+  });
+  return null;
 }
 
-beforeEach(() => {
-  clearThreadBootstrapDispatchStates();
-  clearExternalThreadBootstrapRuns();
-});
+function mountChat(backend: BackendApi, initialUserMessage: string | undefined) {
+  return render(<Probe backend={backend} initialUserMessage={initialUserMessage} />, {
+    router: false,
+  });
+}
 
 describe("sendKickoffAtClick", () => {
   it("creates the thread and sends the first message in one call before any chat mounts", async () => {
@@ -129,7 +136,7 @@ describe("sendKickoffAtClick", () => {
     expect(createThread).not.toHaveBeenCalled();
   });
 
-  it("sends nothing and leaves delivery to the chat when the dispatch is not ready", () => {
+  it("sends nothing and leaves delivery to the chat when the dispatch is not ready", async () => {
     const startThreadTurn = vi.fn(async (_input: StartThreadTurnInput) => undefined);
     createBackend(startThreadTurn);
 
@@ -148,16 +155,14 @@ describe("sendKickoffAtClick", () => {
 
     sendAtClick(backend);
     await vi.waitFor(() => expect(startThreadTurn).toHaveBeenCalledTimes(1));
-    const status = mountEffect(backend, MESSAGE);
+    await using _chat = await mountChat(backend, MESSAGE);
 
-    expect(status).toHaveBeenLastCalledWith("running");
-    expect(readExternalThreadBootstrapRun(THREAD_ID)?.status).toBe("running");
-    expect(
-      readExternalThreadBootstrapRun(THREAD_ID)?.progress?.steps.map((step) => step.status),
-    ).toContain("busy");
+    expect(startThreadTurn).toHaveBeenCalledTimes(1);
+    expect(latest?.bootstrapStatus).toBe("running");
+    expect(latest?.bootstrapProgress?.steps.map((step) => step.status)).toContain("busy");
 
-    finish();
-    await vi.waitFor(() => expect(readExternalThreadBootstrapRun(THREAD_ID)?.status).toBe("idle"));
+    await act(async () => finish());
+    await vi.waitFor(() => expect(latest?.bootstrapStatus).toBe("idle"));
     expect(startThreadTurn).toHaveBeenCalledTimes(1);
     expect(createThread).not.toHaveBeenCalled();
   });
@@ -168,13 +173,13 @@ describe("sendKickoffAtClick", () => {
 
     const { markKickoffConsumed } = sendAtClick(backend);
     await vi.waitFor(() => expect(markKickoffConsumed).toHaveBeenCalled());
-    mountEffect(backend, undefined);
+    await using _chat = await mountChat(backend, undefined);
 
     expect(startThreadTurn).toHaveBeenCalledTimes(1);
     expect(createThread).not.toHaveBeenCalled();
   });
 
-  it("creates no thread when the call fails, reports the failure, and retries once", async () => {
+  it("creates no thread when the call fails, shows the failure, and retries once", async () => {
     const startThreadTurn = vi
       .fn<(input: StartThreadTurnInput) => Promise<void>>()
       .mockRejectedValueOnce(new Error("Gateway unavailable"))
@@ -182,25 +187,19 @@ describe("sendKickoffAtClick", () => {
     const { backend, createThread } = createBackend(startThreadTurn);
 
     const { markKickoffConsumed } = sendAtClick(backend);
-    await vi.waitFor(() =>
-      expect(readExternalThreadBootstrapRun(THREAD_ID)?.status).toBe("failed"),
-    );
-    const status = mountEffect(backend, MESSAGE);
+    await using _chat = await mountChat(backend, MESSAGE);
+    await vi.waitFor(() => expect(latest?.bootstrapStatus).toBe("failed"));
 
-    expect(status).toHaveBeenLastCalledWith("failed");
     expect(createThread).not.toHaveBeenCalled();
     expect(markKickoffConsumed).not.toHaveBeenCalled();
     expect(startThreadTurn).toHaveBeenCalledTimes(1);
-    expect(
-      readExternalThreadBootstrapRun(THREAD_ID)?.progress?.steps.find(
-        (step) => step.status === "error",
-      )?.error,
-    ).toBe("Gateway unavailable");
+    expect(latest?.bootstrapProgress?.steps.find((step) => step.status === "error")?.error).toBe(
+      "Gateway unavailable",
+    );
 
-    resetThreadBootstrapDispatchState(THREAD_ID);
-    expect(readExternalThreadBootstrapRun(THREAD_ID)).toBeUndefined();
-    mountEffect(backend, MESSAGE);
+    await act(async () => latest?.retryThreadBootstrap());
     await vi.waitFor(() => expect(startThreadTurn).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(latest?.bootstrapStatus).toBe("idle"));
     expect(createThread).not.toHaveBeenCalled();
   });
 });
