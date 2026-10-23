@@ -553,3 +553,8 @@ All already listed in `allowedModifiedFiles`; each gains only the voice-surface 
 - `packages/client-runtime/src/state/serverConfigProjection.ts` — one `featureFlagsUpdated` case that replaces `config.featureFlags`.
 - `packages/contracts/src/clientRpcPermissions.ts` — `serverSetFeatureFlag` requires the settings-write scope, like the other host settings writes.
 - `scripts/package.json` — `@t3tools/project-context` dependency for the release-flavor preset writer in `build-desktop-artifact.ts`.
+
+## Full-text affordances for truncated rows (2026-10-23)
+
+- `apps/web/src/components/settings/ScheduledTasksSettings.tsx` — tooltip exposes the full scheduled-task prompt while preserving its two-line clamp.
+- `apps/web/src/components/settings/settingsLayout.tsx` — settings row titles wrap long unbroken text within the existing content grid.
