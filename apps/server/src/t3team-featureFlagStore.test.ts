@@ -75,7 +75,7 @@ describe("feature flag layering", () => {
     expect(resolveProjectStateDirName(() => "1")).toBe(".nexi");
     replaceFeatureFlagPresetValues(new Map());
     expect(PROJECT_STATE_DIR).toBe(startup);
-    expect(listFeatureFlags().slice(0, 6)).toEqual([
+    expect(listFeatureFlags().slice(0, 7)).toEqual([
       expect.objectContaining({ key: "MAIN_REPOSITORY", requiresRestart: false }),
       expect.objectContaining({
         key: "NEXI_STATE_DIR",
@@ -95,6 +95,11 @@ describe("feature flag layering", () => {
       }),
       expect.objectContaining({
         key: "TRANSIENT_AUTO_RESUME",
+        requiresRestart: false,
+        defaultEnabled: true,
+      }),
+      expect.objectContaining({
+        key: "GHE_REPOSITORY_CATALOG",
         requiresRestart: false,
         defaultEnabled: true,
       }),

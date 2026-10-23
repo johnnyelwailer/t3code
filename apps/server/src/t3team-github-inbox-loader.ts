@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import { loadAccount } from "./t3team-github-routes-account.ts";
+import { usesAuthenticatedRepositoryList } from "./t3team-gheRepositoryCatalogFlag.ts";
 import {
   loadFullRepositoryList,
   loadRepositoryListing,
@@ -89,7 +90,10 @@ export function loadGitHubInboxResponse(input: GitHubInboxDiscoverRequest) {
       return response;
     }
 
-    const useAuthenticatedRepositoryList = !repositoriesOnly || host.toLowerCase() === "github.com";
+    const useAuthenticatedRepositoryList = usesAuthenticatedRepositoryList({
+      host,
+      repositoriesOnly,
+    });
     const listing = yield* loadRepositoryListing({
       host,
       account,
@@ -101,10 +105,10 @@ export function loadGitHubInboxResponse(input: GitHubInboxDiscoverRequest) {
     });
     let repositoriesAttempt = listing.attempt;
 
-    // GHE search is the fast path, but it can omit private/organization-visible repos on some
-    // installations. Fall back to the authenticated repository list only when the fast search has
-    // no candidates, so a valid repo is not hidden behind a provider-specific search quirk. GitHub
-    // uses the authenticated list directly so public repositories outside the user's account or
+    // With the GHE catalog flag off, a non-github.com host searches repository names instead, which
+    // can omit private/organization-visible repos on some installations: it then falls back to the
+    // authenticated list when the search has no candidates. Otherwise every host uses the
+    // authenticated list directly, so public repositories outside the user's account or
     // organizations never become setup suggestions.
     if (
       repositoriesOnly &&

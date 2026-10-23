@@ -58,6 +58,15 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: true,
     requiresRestart: false,
   },
+  GHE_REPOSITORY_CATALOG: {
+    group: "Orchestration",
+    subgroup: "Projects",
+    label: "GitHub Enterprise repository catalog",
+    description:
+      "The repository picker lists every repository the account can reach on a GitHub Enterprise host, like github.com. Off: GHE hosts only search names matching the project title.",
+    defaultEnabled: true,
+    requiresRestart: false,
+  },
   RESOURCE_PRESSURE: {
     group: "Ops",
     label: "Resource pressure",
