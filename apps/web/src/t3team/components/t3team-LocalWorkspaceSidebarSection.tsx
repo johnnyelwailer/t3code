@@ -5,7 +5,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3
 import { useT3TeamAddLocalWorkspace } from "./t3team-addLocalWorkspaceContext";
 import type { ProjectThread, ThreadSortOrder, ViewState } from "~/t3team/t3team-types";
 import { LocalWorkspaceSidebarRow } from "./t3team-LocalWorkspaceSidebarRow";
-import { usePrimarySettings } from "~/hooks/useSettings";
+import { useActivityLabelsEnabled } from "~/t3team/t3team-useActivityLabelsEnabled";
 import { resolveProjectStatusIndicator } from "./t3team-projectSidebarShared";
 
 type LocalWorkspaceSidebarSectionProps = {
@@ -40,9 +40,7 @@ export function LocalWorkspaceSidebarSection({
   onDeleteProject,
 }: LocalWorkspaceSidebarSectionProps) {
   const openAddProject = useT3TeamAddLocalWorkspace();
-  const activityLabelsEnabled = usePrimarySettings(
-    (settings) => settings.t3teamActivityLabelsEnabled,
-  );
+  const activityLabelsEnabled = useActivityLabelsEnabled();
 
   return (
     <SidebarGroup>

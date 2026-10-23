@@ -16,13 +16,14 @@ import { connectionAtomRuntime } from "~/connection/runtime";
 import { randomUUID } from "~/lib/utils";
 import { environmentThreadShells } from "~/state/threads";
 import { useAtomCommand } from "~/state/use-atom-command";
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 
 /** The fork's "stop including sub-runs" command; also the indicator card's *Leave it*. */
 export const stopThreadCascade = createT3TeamStopCascadeCommand(connectionAtomRuntime);
 
 /**
  * ChatView's "Stop incl. sub-runs" (split stop button): offered while the server supports the
- * cascade RPC and the thread has a live app-owned subagent child. Each click mints a fresh
+ * cascade RPC, child-thread management is on and the thread has a live app-owned subagent child. Each click mints a fresh
  * command id, so a later stop still reaches a child an earlier one missed.
  */
 export function useT3TeamStopCascade(input: {
@@ -30,7 +31,8 @@ export function useT3TeamStopCascade(input: {
   readonly threadId: ThreadId | null;
   readonly supported: boolean;
 }): { readonly hasChildThreads: boolean; readonly onInterruptCascade?: () => void } {
-  const { environmentId, threadId, supported } = input;
+  const { environmentId, threadId } = input;
+  const supported = useFeatureFlag("ORCHESTRATION_CHILD_THREADS") && input.supported;
   // Selects one boolean, so shell churn elsewhere never re-renders the host.
   const selectHasLiveChild = useCallback(
     (shells: ReadonlyArray<EnvironmentThreadShell>) =>

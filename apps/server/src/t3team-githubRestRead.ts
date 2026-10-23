@@ -7,7 +7,7 @@
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
-import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import { nextPagePath } from "@t3tools/source-control-github/server/t3team-githubLinkPaging";
 import { parseJsonArray } from "./t3team-github-routes-shared.ts";
 

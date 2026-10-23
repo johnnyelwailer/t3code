@@ -4,7 +4,6 @@ function bootProductName(): string {
   return name || "T3 Code";
 }
 
-/** Shows startup failures before React can replace the boot splash. */
 export function showBootError(error: unknown) {
   const appName = bootProductName();
   console.error(`${appName} failed to start.`, error);

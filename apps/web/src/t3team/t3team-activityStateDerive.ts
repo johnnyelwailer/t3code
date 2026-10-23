@@ -9,7 +9,10 @@
  * - any other running item (command, file change, search, tool, subagent) → `working`
  * - nothing in flight while the run is live → `thinking` (the model is between items)
  */
-import type { OrchestrationV2TurnItem, RunId } from "@t3tools/contracts";
+import type { RunId } from "@t3tools/contracts";
+// The quiet structure item: a full projection item is assignable, and none of this reads the
+// fields that move while a reply streams.
+import type { ThreadStructureTurnItem as OrchestrationV2TurnItem } from "@t3tools/client-runtime/state/models";
 
 import type { ActivityState } from "~/t3team/t3team-activityStateDisplay";
 

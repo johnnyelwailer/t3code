@@ -21,7 +21,7 @@ import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDige
 import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
 import { buildDigestPlan } from "~/t3team/t3team-projectMyWorkDigestPlan";
-import { useT3TeamBetaFlags } from "~/t3team/t3team-betaFlags";
+import { useDigestVariantFlags } from "~/t3team/t3team-digestVariantFlags";
 
 export function AllProjectsMyWorkDigestLens({
   boundProjects,
@@ -30,7 +30,7 @@ export function AllProjectsMyWorkDigestLens({
   readonly boundProjects: ReadonlyArray<ProjectShellProject>;
   readonly onOpenTicket: (projectId: string, ticketId: string) => void;
 }) {
-  const { flags } = useT3TeamBetaFlags();
+  const flags = useDigestVariantFlags();
   const digest = useMyWorkDigestGraph({ projects: boundProjects, scope: "all" });
   // Minute-granular clock shared with the rest of the app: stable within a render, re-plans on tick.
   // useNowMinute yields UTC wall-clock text without a zone suffix; parse it as UTC.

@@ -2,7 +2,7 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 import type { ServerProvider } from "@t3tools/contracts";
 
 import { AppMainContentHomeEmptyState } from "~/t3team/t3team-AppMainContentHomeEmptyState";
-import type { ProjectKickoffThreadInput } from "~/t3team/t3team-kickoffTypes";
+import type { CreateProjectKickoffThread } from "~/t3team/t3team-kickoffTypes";
 import {
   T3TEAM_FIRST_PROJECT_SETUP_REASON,
   type T3TeamSetupSurfaceReason,
@@ -30,7 +30,7 @@ export function AppMainContentHomeBrowser({
   providers: ReadonlyArray<ServerProvider>;
   isConnected: boolean;
   onOpenHomeThread: (threadId: string) => void;
-  onKickoffProjectThread: (input: ProjectKickoffThreadInput) => void;
+  onKickoffProjectThread: CreateProjectKickoffThread;
 }) {
   return (
     <AppMainContentHomeEmptyState
@@ -43,29 +43,7 @@ export function AppMainContentHomeBrowser({
       providers={providers}
       isConnected={isConnected}
       onOpenHomeThread={onOpenHomeThread}
-      onKickoffHomeThread={(
-        kickoffMessage,
-        kickoffPending,
-        kickoffModelSelection,
-        kickoffRuntimeMode,
-        kickoffInteractionMode,
-        selectedToolIds,
-        kickoffContextAttachments,
-        kickoffWorkflow,
-      ) => {
-        if (!scratchProject) return;
-        onKickoffProjectThread({
-          projectId: scratchProject.id,
-          kickoffMessage,
-          ...(kickoffPending !== undefined ? { kickoffPending } : {}),
-          kickoffModelSelection,
-          kickoffRuntimeMode,
-          kickoffInteractionMode,
-          selectedToolIds,
-          kickoffContextAttachments,
-          ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
-        });
-      }}
+      onKickoffHomeThread={onKickoffProjectThread}
     />
   );
 }

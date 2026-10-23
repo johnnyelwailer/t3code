@@ -11,8 +11,6 @@ import { ServerConfig, type StartupPresentation } from "../config.ts";
 // silently drifted on every upstream sync (it lost BackgroundPolicy/ResourceTelemetry/Usage in
 // the 2026-08 sync); it is gone, and with it the "register the route in BOTH registries" trap.
 import { runServer } from "../server.ts";
-import { activeResourceSummary } from "../t3team-processResilience.ts";
-import { startStallProfiler } from "../t3team-stallProfiler.ts";
 import { startLivenessBeacon } from "../t3team-livenessBeacon.ts";
 import { activateCompiledInDistribution } from "../t3team-distribution-bootstrap.ts";
 import {
@@ -36,6 +34,7 @@ import {
   setPackCompletionWakeRenderer,
 } from "../t3team-pack-completionWakeRenderer.ts";
 import { loadPackPersistence } from "../t3team-packPersistence.ts";
+import { loadPackFeatureFlags } from "../t3team-pack-featureFlags.ts";
 import { registerPackCollections } from "../t3team-packDocumentConfig.ts";
 import { setPackAppearanceOverlay } from "../t3team-pack-appearanceOverlay.ts";
 import {
@@ -212,6 +211,14 @@ export const runT3TeamServerCommand = (
         ),
       );
       yield* Effect.tryPromise({
+        try: () => loadPackFeatureFlags(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack feature flag loading failed", { cause }),
+        ),
+      );
+      yield* Effect.tryPromise({
         try: () => loadPackColdLocalCompactionRoutes(packDiagnostic),
         catch: (cause) => new WorkspacePackLoadError({ cause }),
       }).pipe(
@@ -289,20 +296,6 @@ export const runT3TeamServerCommand = (
         setupProfiles: setupProfileOverlay?.map((profile) => profile.id) ?? [],
       });
     }
-    // A stalled event loop drops every client with "stopped responding" and leaves no trace of
-    // why; this writes a CPU profile of each stall next to the logs (see the module).
-    const stallProfiler = startStallProfiler({
-      directory: `${config.logsDir}/stalls`,
-      onStall: (event) =>
-        Effect.runFork(
-          Effect.logWarning("The server's event loop stalled", {
-            ...event,
-            activeResources: activeResourceSummary(),
-          }),
-        ),
-      onUnavailable: (reason) =>
-        Effect.runFork(Effect.logDebug("Stall profiler unavailable", { reason })),
-    });
     // Lets the desktop watchdog tell a busy event loop from a dead backend (see the module).
     const livenessBeacon = startLivenessBeacon({
       fd: config.desktopLivenessFd,
@@ -311,7 +304,6 @@ export const runT3TeamServerCommand = (
     });
     return yield* runServer.pipe(
       Effect.provideService(ServerConfig, config),
-      Effect.ensuring(Effect.sync(stallProfiler.stop)),
       Effect.ensuring(Effect.sync(livenessBeacon.stop)),
     );
   });

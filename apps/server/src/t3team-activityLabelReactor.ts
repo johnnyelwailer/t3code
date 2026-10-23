@@ -12,10 +12,15 @@
  * The label is written as the thread's `activityLabel` fact (side stream,
  * never chat). The 4-state word (thinking/writing/working/waiting) is no longer
  * computed here: clients derive it from V2 turn items. Gated live by the
- * `t3teamActivityLabelsEnabled` setting; fail-open everywhere.
+ * `UI_ACTIVITY_LABELS` feature flag and then the `t3teamActivityLabelsEnabled` setting;
+ * fail-open everywhere.
  * @module t3team-activityLabelReactor
  */
 import { type OrchestrationV2DomainEvent, ThreadId } from "@t3tools/contracts";
+import {
+  readFeatureFlag,
+  type ReadFeatureFlagEnv,
+} from "@t3tools/project-context/t3teamFeatureFlags";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -30,6 +35,7 @@ import { forkParked } from "./serverActivation.ts";
 import { ServerSettingsService } from "./serverSettings.ts";
 import { TextGeneration } from "./textGeneration/TextGeneration.ts";
 import { createActivityLabelEventReactor } from "./t3team-activityLabelSummarizer.ts";
+import { whenFeatureEnabled } from "./t3team-featureGate.ts";
 import { turnItemActivity } from "./t3team-childStatusSummarizer.ts";
 import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 
@@ -41,11 +47,12 @@ export function parseActivityLabelTtlMs(raw: string | undefined): number | undef
 
 const USER_GIST_MAX = 100;
 
-/** Summarizer timing overrides (tests); production uses the summarizer defaults. */
+/** Summarizer timing and flag-env overrides (tests); production uses the defaults. */
 export interface ActivityLabelTiming {
   readonly debounceMs?: number;
   readonly minRegenerateMs?: number;
   readonly activityLabelTtlMs?: number;
+  readonly readFeatureFlagEnv?: ReadFeatureFlagEnv;
 }
 
 export const makeT3TeamActivityLabelReactor = (timing: ActivityLabelTiming = {}) =>
@@ -96,7 +103,7 @@ export const makeT3TeamActivityLabelReactor = (timing: ActivityLabelTiming = {})
         Effect.runPromise(
           facts.upsert(ThreadId.make(threadId), { activityLabel: label }).pipe(Effect.ignore),
         ),
-      isActive: () => enabled,
+      isActive: () => enabled && readFeatureFlag("UI_ACTIVITY_LABELS", timing.readFeatureFlagEnv),
       onError: (cause) =>
         Effect.runFork(Effect.logWarning("activity label summarizer failed", { cause })),
       ...(activityLabelTtlMs !== undefined ? { activityLabelTtlMs } : {}),
@@ -134,7 +141,7 @@ export const makeT3TeamActivityLabelReactor = (timing: ActivityLabelTiming = {})
 
     yield* forkParked(
       Stream.runForEach(threads.streamDomainEvents, (event) =>
-        handle(event).pipe(
+        whenFeatureEnabled("UI_ACTIVITY_LABELS", handle(event), timing.readFeatureFlagEnv).pipe(
           Effect.catchCause((cause) =>
             Cause.hasInterruptsOnly(cause)
               ? Effect.interrupt

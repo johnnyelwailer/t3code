@@ -5,6 +5,7 @@ import type { PackProviderDriverDefinition } from "./provider-driver.ts";
 
 export * from "./provider-driver.ts";
 export * from "./provider-orchestration.ts";
+export * from "./mcp-apps.ts";
 export * from "./cold-local-compaction.ts";
 export * from "./completion-wake.ts";
 export * from "./account.ts";
@@ -167,6 +168,24 @@ export type PackSetupProfileDefinition = {
   readonly default?: boolean;
 };
 
+/**
+ * A runtime feature flag the pack reads. The host lists it in Settings → Features (`group` is one
+ * of the host's sections, e.g. "Agent") and hands the effective values back to the pack in
+ * `T3TEAM_PACK_FLAGS`; the pack's own `NEXI_FF_<KEY>` env read stays above that snapshot.
+ */
+export type PackFeatureFlagDefinition = {
+  /** Lowercase dotted key, e.g. `agent.machine_gate`; env override `NEXI_FF_AGENT_MACHINE_GATE`. */
+  readonly key: string;
+  readonly group: string;
+  readonly subgroup?: string;
+  readonly label: string;
+  readonly description: string;
+  readonly defaultEnabled: boolean;
+  readonly requiresRestart: boolean;
+  /** Older env names the pack still honors. */
+  readonly envAliases?: readonly string[];
+};
+
 export type PackActivationContext = {
   readonly pack: { readonly id: string; readonly directory: string };
   readonly defineAgentProvider: (definition: AgentProviderDefinition) => void;
@@ -184,6 +203,7 @@ export type PackActivationContext = {
   readonly defineColdLocalCompactionRoute: (definition: ColdLocalCompactionRouteDefinition) => void;
   /** An account the app signs the user in to; see `AccountDefinition`. */
   readonly defineAccount: (definition: AccountDefinition) => void;
+  readonly defineFeatureFlags: (definitions: readonly PackFeatureFlagDefinition[]) => void;
   readonly resolveAssetDataUrl: PackAssetResolver;
 };
 

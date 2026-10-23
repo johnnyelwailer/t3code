@@ -2,7 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { useEffect, useRef, useState } from "react";
 
 import type { RunId } from "@t3tools/contracts";
-import { TimelineRowActivityCtx, WorkingTimelineRow } from "~/components/chat/MessagesTimeline";
+import { TimelineRowActivityCtx } from "~/components/chat/timelineRowContext";
+import { WorkingTimelineRow } from "~/components/chat/TimelineWorkGroupRows";
 import type { ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
 import {
   buildEntries,
@@ -108,10 +109,8 @@ function Card({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Side panel — the clicked agent's thread card (the app opens the real
 // thread / Agents panel; this stand-in keeps the exploration self-contained)
-// ---------------------------------------------------------------------------
 
 function AgentSidePanel({
   entry,
@@ -156,10 +155,6 @@ function AgentSidePanel({
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Story
-// ---------------------------------------------------------------------------
 
 type StateMotionDotsProps = {
   /** Pins the thread-level state. "auto" lets it drift with the agents. */
@@ -295,10 +290,8 @@ function StateMotionDots({
     setSelectedAgent(index >= 0 ? index : null);
   };
 
-  // -------------------------------------------------------------------------
   // Debug overlay: crosshair on the raw pointer + one dashed ring per dot's
   // live home, so trigger vs pointer vs home can be compared pixel-by-pixel.
-  // -------------------------------------------------------------------------
   useEffect(() => {
     const scope = mixedScopeRef.current;
     if (!scope || !debug) return;
@@ -400,9 +393,6 @@ function StateMotionDots({
     return () => scope.removeEventListener("pointerdown", onDown);
   }, [debug]);
 
-  // -------------------------------------------------------------------------
-  // Render
-  // -------------------------------------------------------------------------
   const pinnedThread = threadState === "auto" ? null : threadState;
   const threadForMixed: DotState | null = pinnedThread ?? driftState.thread;
 

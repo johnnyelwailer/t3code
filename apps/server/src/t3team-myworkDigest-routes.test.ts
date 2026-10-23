@@ -15,6 +15,7 @@ import * as Layer from "effect/Layer";
 import { HttpBody, HttpClient, HttpRouter } from "effect/http";
 
 import type { OrchestrationProjectShell } from "@t3tools/contracts";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 
 import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
 import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
@@ -148,5 +149,28 @@ describe("My Work digest arrangement over HTTP", () => {
         expect(response.status).toBe(400);
       }),
     );
+  });
+
+  it("answers feature_disabled on every digest route while the digest is turned off", async () => {
+    replaceFeatureFlagPresetValues(new Map([["MYWORK_DIGEST", false]]));
+    try {
+      await runRouteTest(
+        Effect.gen(function* () {
+          yield* Layer.build(routeTestLayer);
+          const http = yield* HttpClient.HttpClient;
+          for (const path of [
+            "/api/t3team/mywork-digest/graph",
+            "/api/t3team/mywork-digest/graph/poll",
+            "/api/t3team/mywork-digest/arrangement/reset",
+          ]) {
+            const response = yield* http.post(path, { body: HttpBody.jsonUnsafe(input) });
+            expect(response.status, path).toBe(403);
+            expect(yield* response.json, path).toMatchObject({ code: "feature_disabled" });
+          }
+        }),
+      );
+    } finally {
+      replaceFeatureFlagPresetValues(new Map());
+    }
   });
 });

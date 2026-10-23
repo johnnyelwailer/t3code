@@ -5,7 +5,7 @@ import {
 } from "@t3tools/contracts";
 import { useCallback, useEffect, useState } from "react";
 
-import { useClientSettings, useUpdateClientSettings } from "../../hooks/useSettings";
+import { updateClientSettings, useClientSettings } from "../../hooks/useSettings";
 import { SettingResetButton, SettingsRow } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { voiceHotkeyStatus } from "./t3team-voiceSettings.logic";
@@ -13,7 +13,6 @@ import { useSnapShotShortcutRecorder } from "./useSnapShotShortcutRecorder";
 
 function VoiceHotkeyRow({ getState }: { getState: () => Promise<DesktopVoiceHotkeyState> }) {
   const chord = useClientSettings((settings) => settings.voiceHotkeyChord);
-  const updateClientSettings = useUpdateClientSettings();
   const [state, setState] = useState<DesktopVoiceHotkeyState | null>(null);
   const [error, setError] = useState<string | null>(null);
 

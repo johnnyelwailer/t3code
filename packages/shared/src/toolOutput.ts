@@ -4,13 +4,9 @@ import {
 } from "@t3tools/contracts";
 import * as Predicate from "effect/Predicate";
 
-import {
-  HTML_RENDER_TOOL_NAME,
-  readHtmlRenderReference,
-  type HtmlRenderReference,
-} from "./htmlRender.ts";
+import { readHtmlRenderReference, type HtmlRenderReference } from "./htmlRender.ts";
 import { MCP_APP_OUTPUT_KEY, readMcpAppReference, type McpAppReference } from "./mcpApp.ts";
-import { resolveT3McpToolId } from "./t3McpToolPresentation.ts";
+import { resolveT3McpToolDefinition } from "./t3McpToolPresentation.ts";
 
 const MAX_PARSED_BYTES = 16_384;
 const MAX_METADATA_BYTES = 8_192;
@@ -108,7 +104,6 @@ function boundedId(value: unknown): string | undefined {
   return Array.from(value).join("");
 }
 
-/** Keeps only IDs and failure metadata used by T3's grouped tool summaries. */
 export function compactDynamicToolOutput(value: unknown): CompactToolOutput | undefined {
   const budget: ResultReadBudget = {
     remainingBytes: MAX_PARSED_BYTES,
@@ -127,7 +122,6 @@ export function compactDynamicToolOutput(value: unknown): CompactToolOutput | un
     const htmlRender = readHtmlRenderReference(data.htmlRender);
     if (htmlRender !== undefined) output.htmlRender = htmlRender;
     const mcpApp = readMcpAppReference(data[MCP_APP_OUTPUT_KEY]);
-    // Kept under its stored key, so the compact wire output reads back the same way.
     if (mcpApp !== undefined) output[MCP_APP_OUTPUT_KEY] = mcpApp;
     const nestedThreadId = Predicate.isObject(data.thread)
       ? boundedId(data.thread.threadId)
@@ -170,9 +164,6 @@ export function compactDynamicToolOutput(value: unknown): CompactToolOutput | un
     delete output.threadId;
     delete output.status;
   }
-  // An app's declared origins are the only unbounded-ish part of its
-  // reference; hosting works without them (the stored document carries its
-  // own policy), so they go before the app does.
   const app = output[MCP_APP_OUTPUT_KEY];
   if (app?.csp !== undefined && oversized()) {
     const { csp: _csp, ...rest } = app;
@@ -182,12 +173,16 @@ export function compactDynamicToolOutput(value: unknown): CompactToolOutput | un
   return Object.keys(output).length === 0 ? undefined : output;
 }
 
-/** The page a completed `html_render` tool call published, if this item is one. */
+/**
+ * The page a completed `html_render` tool call published, if this item is one.
+ * Any T3 tool whose summary action is `html-render` publishes the same way
+ * (t3team: `t3_show_widget`).
+ */
 export function htmlRenderFromToolItem(item: {
   readonly toolName: string | null | undefined;
   readonly output?: unknown;
 }): HtmlRenderReference | undefined {
-  if (resolveT3McpToolId(item.toolName) !== HTML_RENDER_TOOL_NAME) return undefined;
+  if (resolveT3McpToolDefinition(item.toolName)?.summaryAction !== "html-render") return undefined;
   const output = compactDynamicToolOutput(item.output);
   return output?.isError ? undefined : output?.htmlRender;
 }
@@ -221,15 +216,12 @@ export function toolOutputIndicatesFailure(text: string): boolean {
   );
 }
 
-/** An image a tool returned inline. `data` is base64; a detail read omits it. */
 export interface ToolOutputImage {
   readonly mimeType: string;
   readonly data?: string;
 }
 
 /**
- * Reads one image block in the MCP `{ data, mimeType }` shape or the Anthropic
- * `{ source: { type: "base64", media_type, data } }` shape Claude stores.
  * Only raster types are recognized, so the server never serves an agent's SVG
  * or HTML inline.
  */
@@ -246,25 +238,17 @@ export function readToolOutputImage(block: unknown): ToolOutputImage | null {
   return typeof data === "string" ? { ...image, data } : image;
 }
 
-/** Tools return a block, a list of blocks, or an MCP result with a `content` list. */
 function outputBlocks(value: unknown): ReadonlyArray<unknown> {
   if (Array.isArray(value)) return value;
   if (Predicate.isObject(value) && Array.isArray(value.content)) return value.content;
   return [value];
 }
 
-/** A tool returns one screenshot or a few frames; more would only flood the timeline. */
 export const MAX_TOOL_OUTPUT_IMAGES = 8;
 
-/** The largest image a `tool-output-image` asset serves: a provider turn's limit, as base64. */
 export const MAX_TOOL_OUTPUT_IMAGE_BASE64_LENGTH =
   Math.ceil(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES / 3) * 4;
 
-/**
- * The blocks `toolOutputImages` reads, by reference. These hold the only image
- * bytes in a tool output that a `tool-output-image` asset can serve, up to
- * `MAX_TOOL_OUTPUT_IMAGE_BASE64_LENGTH`.
- */
 export function toolOutputImageBlocks(value: unknown): ReadonlyArray<unknown> {
   const blocks: unknown[] = [];
   for (const block of outputBlocks(value)) {
@@ -276,17 +260,13 @@ export function toolOutputImageBlocks(value: unknown): ReadonlyArray<unknown> {
 }
 
 /**
- * The first images in a tool output, in order. The order is the
- * `tool-output-image` asset index, so servers and clients agree on it.
+ * The order is the `tool-output-image` asset index, so servers and clients
+ * agree on it.
  */
 export function toolOutputImages(value: unknown): ReadonlyArray<ToolOutputImage> {
   return toolOutputImageBlocks(value).flatMap((block) => readToolOutputImage(block) ?? []);
 }
 
-/**
- * Replaces each image's bytes with `{ type: "image", mimeType }` and keeps its
- * position, so detail reads stay small and clients load the bytes as assets.
- */
 export function omitToolOutputImageData(value: unknown): unknown {
   const omit = (block: unknown) => {
     const image = readToolOutputImage(block);

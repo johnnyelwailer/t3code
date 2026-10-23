@@ -2,7 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { useEffect, useRef, useState } from "react";
 
 import type { RunId } from "@t3tools/contracts";
-import { TimelineRowActivityCtx, WorkingTimelineRow } from "~/components/chat/MessagesTimeline";
+import { TimelineRowActivityCtx } from "~/components/chat/timelineRowContext";
+import { WorkingTimelineRow } from "~/components/chat/TimelineWorkGroupRows";
 import { deriveDotState, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
 
 /**
@@ -32,10 +33,6 @@ import { deriveDotState, type ActiveAgentEntry } from "~/t3team/chat/t3team-acti
  * - Group click → Agents panel (real app: addAgentsSurface; here: the demo
  *   panel under the row).
  */
-
-// ---------------------------------------------------------------------------
-// Mock data + simulation
-// ---------------------------------------------------------------------------
 
 type SeedAgent = {
   readonly title: string;
@@ -88,10 +85,6 @@ function buildEntries(
   }));
   return [...children, ...subagents];
 }
-
-// ---------------------------------------------------------------------------
-// Story assembly
-// ---------------------------------------------------------------------------
 
 type ActiveAgentsIndicatorStoryProps = {
   activeChildren: number;

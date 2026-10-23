@@ -6,6 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { ProjectMyWorkViewSwitch } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 
+const viewFlags = vi.hoisted(() => ({ digest: true, board: true, planningSpace: true }));
+vi.mock("~/t3team/t3team-myWorkViewFlags", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/t3team/t3team-myWorkViewFlags")>()),
+  useMyWorkViewFlags: () => ({ ...viewFlags }),
+}));
+
 const project = (id: string, title: string) => ({ id, title }) as unknown as ProjectShellProject;
 
 let root: Root | null = null;
@@ -19,6 +25,7 @@ async function render(element: React.ReactElement) {
 }
 
 beforeEach(() => {
+  Object.assign(viewFlags, { digest: true, board: true, planningSpace: true });
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   container = document.createElement("div");
   document.body.append(container);
@@ -127,6 +134,26 @@ describe("My work view switch Backlog segment", () => {
     await render(<ProjectMyWorkViewSwitch lens="board" onLensChange={() => {}} />);
     expect(container.querySelector('[data-segment="backlog"]')).toBeNull();
     expect(container.querySelectorAll('[role="group"] button')).toHaveLength(3);
+  });
+
+  it("offers only the lenses and segments whose features are on, the List lens always", async () => {
+    Object.assign(viewFlags, { digest: false, board: false, planningSpace: false });
+    await render(
+      <ProjectMyWorkViewSwitch
+        lens="board"
+        onLensChange={() => {}}
+        backlog={{ kind: "select", active: false, onSelect: vi.fn() }}
+        planning={{ kind: "select", active: false, onSelect: vi.fn() }}
+      />,
+    );
+    expect([...container.querySelectorAll("[data-segment]")].map((el) => el.textContent)).toEqual([
+      "List",
+      "Backlog",
+    ]);
+    // A saved Board lens shows as the List it falls back to.
+    expect(container.querySelector('[aria-pressed="true"]')?.getAttribute("data-segment")).toBe(
+      "hierarchy",
+    );
   });
 
   it("offers the same lenses from one compact control", async () => {

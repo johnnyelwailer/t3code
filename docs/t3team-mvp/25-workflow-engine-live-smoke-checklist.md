@@ -75,15 +75,15 @@ Record the `runId` returned (also the `run_id` in `workflow_runs`).
       (The launching thread itself shows no agent turn yet — `agent()` runs in a spawned thread.)
 - [ ] **DB:** a `workflow_runs` row exists for the `runId`:
       `sql
-SELECT run_id, status, pending_thread_id, pending_kind, pending_correlation_id
-FROM workflow_runs WHERE run_id = '<runId>';
-`
+  SELECT run_id, status, pending_thread_id, pending_kind, pending_correlation_id
+  FROM workflow_runs WHERE run_id = '<runId>';
+  `
       Expect `status = 'suspended'`, `pending_kind = 'thread.turn'`, and `pending_thread_id`
       equal to the **spawned** thread's id (it looks like `<runId>:1`, **not** the launch thread).
 - [ ] **DB:** `workflow_journal` has the fired verbs:
       `sql
-SELECT seq, phase, kind FROM workflow_journal WHERE run_id = '<runId>' ORDER BY seq;
-`
+  SELECT seq, phase, kind FROM workflow_journal WHERE run_id = '<runId>' ORDER BY seq;
+  `
       Expect `sent` entries for `thread.create` and `thread.turn`, with **no** `resolved` entry yet.
 - [ ] **Logs / UI:** the spawned thread exists, linked under the launching thread as a `subagent`
       child, and its prompt started a real provider run.
@@ -95,8 +95,8 @@ SELECT seq, phase, kind FROM workflow_journal WHERE run_id = '<runId>' ORDER BY 
       (Any such warning is a real bug — capture the cause.)
 - [ ] **DB:** the run flipped its pending ask to the user escalation:
       `sql
-SELECT status, pending_thread_id, pending_kind FROM workflow_runs WHERE run_id = '<runId>';
-`
+  SELECT status, pending_thread_id, pending_kind FROM workflow_runs WHERE run_id = '<runId>';
+  `
       Expect `status = 'suspended'`, `pending_kind = 'user.input'`, and `pending_thread_id` equal
       to the **launching** thread's id.
 - [ ] **DB:** `workflow_journal` now has a `resolved` entry for the agent turn's correlation, and a
@@ -114,8 +114,8 @@ SELECT status, pending_thread_id, pending_kind FROM workflow_runs WHERE run_id =
 - [ ] **Logs:** no reactor warning; the run resumed and settled.
 - [ ] **DB:** the run completed:
       `sql
-SELECT status, pending_thread_id, pending_correlation_id FROM workflow_runs WHERE run_id = '<runId>';
-`
+  SELECT status, pending_thread_id, pending_correlation_id FROM workflow_runs WHERE run_id = '<runId>';
+  `
       Expect `status = 'completed'`, and the pending columns cleared (`NULL`).
 - [ ] **DB:** `workflow_journal` has a second `resolved` entry (for the `user.input` correlation).
 - [ ] **Result:** the validated output is `{ summary: <the agent's summary>, merged: <bool> }`.

@@ -12,6 +12,7 @@ import { MediaVoiceRecorder, requestMicrophonePermission } from "./t3team-mediaV
 import { decodeRecordingToPcm16Base64 } from "./t3team-recordingToPcm";
 import { createVoicePcmTap, type VoicePcmTap, type VoiceStreamBridge } from "./t3team-voicePcmTap";
 import { useVoiceModelProgressPercent } from "./t3team-useVoiceModelProgress";
+import { useVoiceSessionOwnership } from "./t3team-useVoiceSessionOwnership";
 import { useVoiceStream } from "./t3team-useVoiceStream";
 
 const IDLE_STATE: VoiceInputState = { phase: "idle", error: null, errorAction: null };
@@ -94,6 +95,7 @@ function useNativeTranscriberAvailable(
 export function useDesktopVoiceInput(
   onTranscript: (text: string, metadata?: VoiceTranscriptMetadata) => void,
   onUtteranceFailed: (message: string) => void,
+  sessionKey?: string,
 ) {
   const bridge = getDesktopVoiceBridge();
   const config = usePrimarySettings((settings) => settings.voice.transcriber);
@@ -109,6 +111,7 @@ export function useDesktopVoiceInput(
   const controllerRef = useRef<VoiceInputController | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const committedSpeechRef = useRef(0);
+  const syncRecordingSlot = useVoiceSessionOwnership(controllerRef, sessionKey);
   const available = useNativeTranscriberAvailable(bridge, config);
   const downloadPercent = useVoiceModelProgressPercent(state.phase === "preparing");
 
@@ -136,6 +139,7 @@ export function useDesktopVoiceInput(
       hasCommittedSpeech: () => committedSpeechRef.current > 0,
       onStateChange: (next) => {
         if (next.phase === "idle" || next.phase === "error") tap?.discard();
+        syncRecordingSlot(next.phase);
         setState(next);
       },
     });
@@ -145,7 +149,7 @@ export function useDesktopVoiceInput(
       tap?.discard();
       controllerRef.current = null;
     };
-  }, [bridge]);
+  }, [bridge, syncRecordingSlot]);
 
   const stream = useVoiceStream({
     active: state.phase !== "idle" && state.phase !== "error",

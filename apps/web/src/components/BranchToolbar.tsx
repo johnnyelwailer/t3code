@@ -1,4 +1,5 @@
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
+import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
 import { readLocalApi } from "../localApi";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { ComposerContextLabel } from "./ComposerContextLabel";
@@ -10,6 +11,7 @@ import {
 import {
   t3teamProjectHasOriginRemote,
   type EnvironmentId,
+  type ProjectId,
   type ThreadId,
 } from "@t3tools/contracts";
 import {
@@ -17,15 +19,17 @@ import {
   FolderGit2Icon,
   FolderGitIcon,
   FolderIcon,
+  PlusIcon,
   ScaleIcon,
 } from "lucide-react";
 import {
   type Ref,
   type MouseEvent as ReactMouseEvent,
   memo,
-  useImperativeHandle,
   useCallback,
+  useImperativeHandle,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -38,9 +42,10 @@ import {
   useT3TeamRunOnCloudSessionProps,
 } from "./cloud/t3team-useRunOnCloudSessionProps";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
-import { useProject, useThreadShell, useThreadShellsForProjectRefs } from "../state/entities";
+import { useProject, useThreadShellsForProjectRefs } from "../state/entities";
 import {
   dedupeRunOnEnvironments,
+  ADD_TO_MACHINE_LABEL_CLASS,
   type EnvMode,
   type EnvironmentOption,
   resolveContextStripLabelsCompact,
@@ -56,6 +61,8 @@ import {
   type BranchToolbarBranchSelectorHandle,
 } from "./BranchToolbarBranchSelector";
 import { BranchToolbarEnvironmentSelector } from "./BranchToolbarEnvironmentSelector";
+import { openAddProjectToMachine } from "./AddProjectToMachineDialog";
+import { type AddProjectTarget, useAddProjectTargets } from "../hooks/useAddProjectTargets";
 import { BranchToolbarEnvModeSelector } from "./BranchToolbarEnvModeSelector";
 import { PreviousWorktreeItemContent } from "./PreviousWorktreeItemContent";
 import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
@@ -68,10 +75,14 @@ import {
   Menu,
   MenuGroup,
   MenuGroupLabel,
+  MenuItem,
   MenuPopup,
   MenuRadioGroup,
   MenuRadioItem,
   MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
   MenuTrigger,
 } from "./ui/menu";
 import { Separator } from "./ui/separator";
@@ -96,10 +107,12 @@ interface BranchToolbarProps {
   ref?: Ref<BranchToolbarHandle>;
   environmentId: EnvironmentId;
   threadId: ThreadId;
+  projectId: ProjectId;
+  worktreePath: string | null;
+  isServerThread: boolean;
   showGitControls: boolean;
   draftId?: DraftId;
   onEnvModeChange: (mode: EnvMode) => void;
-  /** The thread's env mode as ChatView resolves it. */
   envMode: EnvMode;
   activeThreadBranchOverride?: string | null;
   onActiveThreadBranchOverrideChange?: (branch: string | null) => void;
@@ -130,13 +143,14 @@ function showWorkspaceContextMenu(event: ReactMouseEvent, workspacePath: string)
     })
     .then((action) => {
       if (action !== "copy-path") return;
-      void writeTextToClipboard(workspacePath, "workspace path").then(
+      const clipboardPath = formatFilePathForClipboard(workspacePath);
+      void writeTextToClipboard(clipboardPath, "workspace path").then(
         (didCopy) => {
           if (didCopy) {
             toastManager.add({
               type: "success",
               title: "Path copied",
-              description: workspacePath,
+              description: clipboardPath,
             });
           }
         },
@@ -172,6 +186,8 @@ interface RunContextSelectorProps {
   previousWorktreeLabel: string | null;
   previousWorktreeBranch: string | null;
   onUsePreviousWorktree: () => void;
+  addTargets: readonly AddProjectTarget[];
+  onAddToMachine: (environmentId: EnvironmentId) => void;
 }
 
 const RunContextSelector = memo(function RunContextSelector({
@@ -193,12 +209,12 @@ const RunContextSelector = memo(function RunContextSelector({
   previousWorktreeLabel,
   previousWorktreeBranch,
   onUsePreviousWorktree,
+  addTargets,
+  onAddToMachine,
 }: RunContextSelectorProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
-  const activeEnvironment = useMemo(
-    () => availableEnvironments?.find((env) => env.environmentId === environmentId) ?? null,
-    [availableEnvironments, environmentId],
-  );
+  const activeEnvironment =
+    availableEnvironments?.find((env) => env.environmentId === environmentId) ?? null;
   const WorkspaceIcon =
     effectiveEnvMode === "worktree"
       ? FolderGit2Icon
@@ -330,7 +346,8 @@ const RunContextSelector = memo(function RunContextSelector({
         }
         {...(!isPanel ? composerFloatingLayerProps : {})}
       >
-        {showEnvironmentPicker && availableEnvironments && onEnvironmentChange ? (
+        {availableEnvironments &&
+        ((showEnvironmentPicker && onEnvironmentChange) || addTargets.length > 0) ? (
           <>
             <MenuGroup>
               <MenuGroupLabel>Run on</MenuGroupLabel>
@@ -339,7 +356,7 @@ const RunContextSelector = memo(function RunContextSelector({
                 onValueChange={(value) =>
                   value === "auto"
                     ? onAutoEnvironment?.()
-                    : onEnvironmentChange(value as EnvironmentId)
+                    : onEnvironmentChange?.(value as EnvironmentId)
                 }
               >
                 {onAutoEnvironment && (
@@ -362,7 +379,9 @@ const RunContextSelector = memo(function RunContextSelector({
                 {availableEnvironments.map((env) => (
                   <MenuRadioItem
                     key={env.environmentId}
-                    disabled={envLocked}
+                    disabled={
+                      envLocked || (!onEnvironmentChange && env.environmentId !== environmentId)
+                    }
                     value={env.environmentId}
                     closeOnClick
                   >
@@ -373,6 +392,29 @@ const RunContextSelector = memo(function RunContextSelector({
                   </MenuRadioItem>
                 ))}
               </MenuRadioGroup>
+              {addTargets.length > 0 ? (
+                <MenuSub>
+                  <MenuSubTrigger>
+                    <span className={ADD_TO_MACHINE_LABEL_CLASS}>
+                      <PlusIcon className="size-3" />
+                      <span className="min-w-0 truncate">Add to another machine</span>
+                    </span>
+                  </MenuSubTrigger>
+                  <MenuSubPopup {...(!isPanel ? composerFloatingLayerProps : {})}>
+                    {addTargets.map((target) => (
+                      <MenuItem
+                        key={target.environmentId}
+                        onClick={() => onAddToMachine(target.environmentId)}
+                      >
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <EnvironmentMachineIcon kind={target.machine} className="size-3" />
+                          <span className="min-w-0 truncate">{target.label}</span>
+                        </span>
+                      </MenuItem>
+                    ))}
+                  </MenuSubPopup>
+                </MenuSub>
+              ) : null}
             </MenuGroup>
             <MenuSeparator />
           </>
@@ -422,16 +464,8 @@ const COMPOSER_CONTEXT_MOTION_EASING = "cubic-bezier(0.32, 0.72, 0, 1)";
 const COMPOSER_CONTEXT_LABEL_SELECTOR = "[data-composer-label]";
 
 /**
- * The width a label takes when shown, clipped parts included.
- *
- * Text keeps its full width when its box clips it, so each text run measures
- * whole. A label can hold more than one run (MiddleTruncate splits a branch
- * into a head and a tail), so the runs are added. Reading one element's
- * scrollWidth drops the tail when the label is hidden or squeezed, and the
- * strip then flips between labels and icons on every measure.
- *
- * A shown label never grows past its motion span's max width, so longer text
- * reserves only that much.
+ * Reading one element's scrollWidth drops the tail when the label is hidden or
+ * squeezed, and the strip then flips between labels and icons on every measure.
  */
 function labelTextWidth(label: HTMLElement, range: Range): number {
   const walker = document.createTreeWalker(label, NodeFilter.SHOW_TEXT);
@@ -445,32 +479,21 @@ function labelTextWidth(label: HTMLElement, range: Range): number {
   return Number.isFinite(maxWidth) ? Math.min(width, maxWidth) : width;
 }
 
-/**
- * Collapse the strip's labels to icons only when the text no longer fits.
- *
- * Hidden labels stay measurable because their inner text keeps its natural
- * width while the outer layout box collapses. This lets every pass recompute
- * the expanded width without remembered values that could go stale or latch
- * the strip compact. A small hysteresis keeps the boundary from flapping.
- */
 function useLabelsOverflow(element: HTMLDivElement | null): boolean {
   const [overflows, setOverflows] = useState(false);
   const pendingLabelRectsRef = useRef<Map<HTMLElement, DOMRect> | null>(null);
   const labelAnimationsRef = useRef(new Map<HTMLElement, Animation>());
-  // A render-synced mirror instead of useEffectEvent: the compiler memoizes
-  // the event callback, which left observers reading the first render's null
-  // element forever.
-  const stateRef = useRef({ element, overflows });
-  stateRef.current = { element, overflows };
-
-  const measure = useCallback(() => {
-    const { element: current, overflows: compact } = stateRef.current;
+  const measure = useEffectEvent(() => {
+    const current = element;
+    const compact = overflows;
     if (!current) return;
-    const available = current.clientWidth;
-    if (available === 0) return;
-    // flex-1 stretches the groups to fill the strip, so their own boxes always
-    // measure "full". Sum the laid-out content instead, skipping hidden form
-    // artifacts and other out-of-flow nodes.
+    const stripWidth = current.clientWidth;
+    if (stripWidth === 0) return;
+    const stripStyle = getComputedStyle(current);
+    const available =
+      stripWidth -
+      (Number.parseFloat(stripStyle.paddingInlineStart) || 0) -
+      (Number.parseFloat(stripStyle.paddingInlineEnd) || 0);
     const contentWidth = (parent: Element): number => {
       const gap = Number.parseFloat(getComputedStyle(parent).columnGap) || 0;
       let width = 0;
@@ -489,16 +512,16 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
       }
       return width + gap * Math.max(0, counted - 1);
     };
-    const stripGap = Number.parseFloat(getComputedStyle(current).columnGap) || 0;
+    const stripGap = Number.parseFloat(stripStyle.columnGap) || 0;
     let needed = 0;
     let groups = 0;
     for (const child of current.children) {
       if (!(child instanceof HTMLElement)) continue;
-      // The host itself flexes into all remaining room. Reserve the natural
-      // width of the controls inside it, blocks in overflow included, so Git
-      // labels compact before squeezing out the model picker. Reserving only
-      // the visible controls would let the labels expand into room the
-      // composer just freed, shrink the host, and hide the controls again.
+      // Reserve the natural width of the controls inside it, blocks in overflow
+      // included, so Git labels compact before squeezing out the model picker.
+      // Reserving only the visible controls would let the labels expand into
+      // room the composer just freed, shrink the host, and hide the controls
+      // again.
       const hostedControls = child.matches('[data-chat-resting-composer-controls-host="true"]')
         ? child.querySelector<HTMLElement>('[data-chat-composer-resting-controls="true"]')
         : null;
@@ -515,8 +538,6 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
     needed += stripGap * Math.max(0, groups - 1);
     const range = document.createRange();
     for (const label of current.querySelectorAll<HTMLElement>("[data-composer-label]")) {
-      // Subtract the visible width even during an animation. The content
-      // sum already includes it; only the hidden text needs reserving.
       needed += Math.max(0, labelTextWidth(label, range) - label.getBoundingClientRect().width);
     }
     const nextOverflows = resolveContextStripLabelsCompact({
@@ -532,7 +553,7 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
       );
     }
     setOverflows(nextOverflows);
-  }, []);
+  });
 
   useLayoutEffect(() => {
     const previousRects = pendingLabelRectsRef.current;
@@ -551,9 +572,6 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
       const nextWidth = label.getBoundingClientRect().width;
       if (Math.abs(previousRect.width - nextWidth) < 0.5) continue;
 
-      // Animate the space occupied by each label so flex layout keeps the
-      // trailing controls anchored. Translating the whole group after its
-      // width snaps sends expanded text beyond the strip's right edge.
       const animation = label.animate(
         [
           { width: `${previousRect.width}px`, maxWidth: `${previousRect.width}px` },
@@ -576,7 +594,7 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
         { once: true },
       );
     }
-  }, [overflows]);
+  });
 
   useEffect(
     () => () => {
@@ -587,10 +605,8 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
     [],
   );
 
-  // Label widths can change without the strip box moving (font family or
-  // size preferences), so re-measure on every render as well as on resize
-  // and font loads.
   useLayoutEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- The label mode comes from measuring the committed DOM, which render cannot read.
     measure();
   });
 
@@ -602,7 +618,7 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
       stopObserving();
       document.fonts.removeEventListener("loadingdone", measure);
     };
-  }, [element, measure]);
+  }, [element]);
 
   return overflows;
 }
@@ -614,6 +630,9 @@ export const BranchToolbar = memo(function BranchToolbar({
   ref,
   environmentId,
   threadId,
+  projectId,
+  worktreePath,
+  isServerThread,
   showGitControls,
   draftId,
   onEnvModeChange,
@@ -634,62 +653,36 @@ export const BranchToolbar = memo(function BranchToolbar({
   contextStripVisible = true,
 }: BranchToolbarProps) {
   const branchSelectorRef = useRef<BranchToolbarBranchSelectorHandle>(null);
-  const threadRef = useMemo(
-    () => scopeThreadRef(environmentId, threadId),
-    [environmentId, threadId],
-  );
-  const draftThread = useComposerDraftStore((store) =>
-    draftId ? store.getDraftSession(draftId) : store.getDraftThreadByRef(threadRef),
-  );
-  const serverThread = useThreadShell(threadRef);
+  const threadRef = scopeThreadRef(environmentId, threadId);
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
-  const activeProjectRef = serverThread
-    ? scopeProjectRef(serverThread.environmentId, serverThread.projectId)
-    : draftThread
-      ? scopeProjectRef(draftThread.environmentId, draftThread.projectId)
-      : null;
+  // The composer retains resolved thread details while bootstrap cleanup can remove its shell.
+  const activeProjectRef = scopeProjectRef(environmentId, projectId);
   const activeProject = useProject(activeProjectRef);
-  const hasActiveThread = serverThread !== null || draftThread !== null;
-  const activeWorktreePath = forceNewWorktree
-    ? null
-    : (serverThread?.worktreePath ?? draftThread?.worktreePath ?? null);
+  const activeWorktreePath = forceNewWorktree ? null : worktreePath;
   const effectiveEnvMode = forceNewWorktree ? "worktree" : envMode;
-  const envModeLocked = envLocked || (serverThread !== null && activeWorktreePath !== null);
+  const envModeLocked = envLocked || (isServerThread && activeWorktreePath !== null);
 
-  // "Previous worktree" hops a draft into the most recently active worktree
-  // of this project — the "keep going where I just was" follow-up flow. Only
-  // drafts can hop; started server threads have their workspace pinned.
-  const canUsePreviousWorktree =
-    draftThread !== null && serverThread === null && !envModeLocked && !forceNewWorktree;
-  const projectRefsForWorktreeLookup = useMemo(
-    () => (canUsePreviousWorktree && activeProjectRef ? [activeProjectRef] : []),
-    [canUsePreviousWorktree, activeProjectRef],
-  );
+  const canUsePreviousWorktree = !isServerThread && !envModeLocked && !forceNewWorktree;
+  const projectRefsForWorktreeLookup = canUsePreviousWorktree ? [activeProjectRef] : [];
   const projectThreads = useThreadShellsForProjectRefs(projectRefsForWorktreeLookup);
-  const previousWorktreeSeed = useMemo(
-    () =>
-      canUsePreviousWorktree
-        ? resolvePreviousWorktreeSeed({
-            threads: projectThreads,
-            currentWorktreePath: activeWorktreePath,
-          })
-        : null,
-    [activeWorktreePath, canUsePreviousWorktree, projectThreads],
-  );
+  const previousWorktreeSeed = canUsePreviousWorktree
+    ? resolvePreviousWorktreeSeed({
+        threads: projectThreads,
+        currentWorktreePath: activeWorktreePath,
+      })
+    : null;
   const previousWorktreeLabel = previousWorktreeSeed
     ? resolvePreviousWorktreeLabel(previousWorktreeSeed)
     : null;
-  const onUsePreviousWorktree = useCallback(() => {
-    if (!previousWorktreeSeed || !activeProjectRef) return;
-    // Same shape the branch selector writes when picking a branch that
-    // already lives in a worktree: point the draft at the existing tree.
+  const onUsePreviousWorktree = () => {
+    if (!previousWorktreeSeed) return;
     setDraftThreadContext(draftId ?? threadRef, {
       branch: previousWorktreeSeed.branch,
       worktreePath: previousWorktreeSeed.worktreePath,
       envMode: "worktree",
       projectRef: activeProjectRef,
     });
-  }, [activeProjectRef, draftId, previousWorktreeSeed, setDraftThreadContext, threadRef]);
+  };
 
   useImperativeHandle(
     ref,
@@ -710,14 +703,19 @@ export const BranchToolbar = memo(function BranchToolbar({
     ],
   );
 
-  const showEnvironmentPicker = Boolean(
-    availableEnvironments && availableEnvironments.length > 1 && onEnvironmentChange,
-  );
+  const addTargets = useAddProjectTargets(activeProject, availableEnvironments);
+  const onAddToMachine = (targetEnvironmentId: EnvironmentId | null) =>
+    openAddProjectToMachine({ projectRef: activeProjectRef, targetEnvironmentId });
+  // A project on one machine still gets the picker when it can be added to another.
+  const hasMultipleEnvironments = (availableEnvironments?.length ?? 0) > 1 || addTargets.length > 0;
+  const showEnvironmentPicker = hasMultipleEnvironments && onEnvironmentChange !== undefined;
   const activeEnvironmentOption =
     availableEnvironments?.find((env) => env.environmentId === environmentId) ?? null;
+  // Started threads get no handler but still show which machine they run on,
+  // matching the strip visibility ChatView computes from the same inputs.
   const showEnvironmentIndicator = shouldShowEnvironmentIndicator({
     activeEnvironment: activeEnvironmentOption,
-    canPickEnvironment: showEnvironmentPicker,
+    canPickEnvironment: hasMultipleEnvironments,
   });
   const [stripElement, setStripElement] = useState<HTMLDivElement | null>(null);
   const labelsOverflow = useLabelsOverflow(stripElement);
@@ -754,7 +752,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   const showRunOnSelector =
     runOnEnvironments !== null && (showEnvironmentIndicator || cloudSessions.available);
 
-  if (!hasActiveThread || !activeProject) return null;
+  if (!activeProject) return null;
 
   if (layout === "panel") {
     return (
@@ -773,7 +771,8 @@ export const BranchToolbar = memo(function BranchToolbar({
                 availableEnvironments={availableEnvironments}
                 {...(onEnvironmentChange ? { onEnvironmentChange: handleEnvironmentChange } : {})}
                 {...cloudSessions.selectorProps}
-                {...(onHandoffToEnvironment && serverThread !== null
+                {...(addTargets.length > 0 ? { onAddToMachine: () => onAddToMachine(null) } : {})}
+                {...(onHandoffToEnvironment && isServerThread
                   ? {
                       onHandoffToEnvironment,
                       // No `origin` remote: a cloud machine can't get the files.
@@ -805,6 +804,8 @@ export const BranchToolbar = memo(function BranchToolbar({
               previousWorktreeLabel={previousWorktreeLabel}
               previousWorktreeBranch={previousWorktreeSeed?.branch ?? null}
               onUsePreviousWorktree={onUsePreviousWorktree}
+              addTargets={cloudSessions.available ? [] : addTargets}
+              onAddToMachine={onAddToMachine}
             />
           </>
         ) : null}
@@ -854,6 +855,7 @@ export const BranchToolbar = memo(function BranchToolbar({
               availableEnvironments={availableEnvironments}
               {...(onEnvironmentChange ? { onEnvironmentChange: handleEnvironmentChange } : {})}
               {...cloudSessions.selectorProps}
+              {...(addTargets.length > 0 ? { onAddToMachine: () => onAddToMachine(null) } : {})}
             />
           ) : null}
           <RunContextSelector
@@ -873,6 +875,8 @@ export const BranchToolbar = memo(function BranchToolbar({
             previousWorktreeLabel={previousWorktreeLabel}
             previousWorktreeBranch={previousWorktreeSeed?.branch ?? null}
             onUsePreviousWorktree={onUsePreviousWorktree}
+            addTargets={cloudSessions.available ? [] : addTargets}
+            onAddToMachine={onAddToMachine}
           />
         </div>
       ) : null}
@@ -894,6 +898,7 @@ export const BranchToolbar = memo(function BranchToolbar({
                 availableEnvironments={availableEnvironments}
                 {...(onEnvironmentChange ? { onEnvironmentChange: handleEnvironmentChange } : {})}
                 {...cloudSessions.selectorProps}
+                {...(addTargets.length > 0 ? { onAddToMachine: () => onAddToMachine(null) } : {})}
               />
               {showGitControls ? (
                 <Separator
@@ -920,9 +925,6 @@ export const BranchToolbar = memo(function BranchToolbar({
       ) : null}
 
       {composerControlsHostRef ? (
-        // The host takes whatever the workspace and branch controls leave
-        // over, in both strip layouts, so a collapsed composer can show its
-        // model and mode controls wherever they fit.
         <div
           ref={composerControlsHostRef}
           data-composer-context-control

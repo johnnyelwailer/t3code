@@ -16,7 +16,7 @@ vi.mock("../../hooks/useSettings", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../hooks/useSettings")>()),
   useClientSettings: (select: (s: { voiceHotkeyChord: VoiceHotkeyChord }) => unknown) =>
     select({ voiceHotkeyChord: settings.chord }),
-  useUpdateClientSettings: () => settings.update,
+  updateClientSettings: settings.update,
 }));
 vi.mock("../../lib/desktopSnapShot", () => ({
   getDesktopSnapShotBridge: () => ({ setSnapShotShortcutSuppressed: () => Promise.resolve() }),

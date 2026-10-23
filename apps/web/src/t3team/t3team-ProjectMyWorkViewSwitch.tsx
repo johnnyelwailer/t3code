@@ -11,6 +11,11 @@ import {
   MenuTrigger,
 } from "~/t3team/components/ui/t3team-menu";
 import { ProjectMyWorkViewSwitchCompact } from "~/t3team/t3team-ProjectMyWorkViewSwitchCompact";
+import {
+  isMyWorkLensOffered,
+  offeredMyWorkLens,
+  useMyWorkViewFlags,
+} from "~/t3team/t3team-myWorkViewFlags";
 
 export type ProjectMyWorkLens = "digest" | "hierarchy" | "board";
 
@@ -139,16 +144,20 @@ function BacklogSegment({
  * backlog's planning-space view.
  */
 export function ProjectMyWorkViewSwitch({
-  lens,
+  lens: requestedLens,
   onLensChange,
   backlog,
-  planning,
+  planning: requestedPlanning,
 }: {
   lens: ProjectMyWorkLens;
   onLensChange: (value: ProjectMyWorkLens) => void;
   backlog?: ProjectMyWorkProjectSegment;
   planning?: ProjectMyWorkProjectSegment;
 }) {
+  const flags = useMyWorkViewFlags();
+  const lens = offeredMyWorkLens(requestedLens, flags);
+  const lenses = LENSES.filter(({ value }) => isMyWorkLensOffered(value, flags));
+  const planning = flags.planningSpace ? requestedPlanning : undefined;
   const backlogActive =
     (backlog?.kind === "select" && backlog.active) ||
     (planning?.kind === "select" && planning.active);
@@ -156,6 +165,7 @@ export function ProjectMyWorkViewSwitch({
     <>
       <ProjectMyWorkViewSwitchCompact
         lens={lens}
+        lenses={lenses}
         onLensChange={onLensChange}
         {...(backlog ? { backlog } : {})}
         {...(planning ? { planning } : {})}
@@ -165,7 +175,7 @@ export function ProjectMyWorkViewSwitch({
         role="group"
         aria-label="My Work view switch"
       >
-        {LENSES.map(({ value, label, Icon }) => {
+        {lenses.map(({ value, label, Icon }) => {
           const active = !backlogActive && lens === value;
           return (
             <button

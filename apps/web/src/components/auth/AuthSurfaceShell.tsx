@@ -5,9 +5,6 @@ import { useT3TeamAppDisplayName } from "../../t3team/t3team-appBrandName";
 import { resolveSidebarStageBackdropVariant, StageBackdropArt } from "../SidebarStageBackdrop";
 import { StandalonePage } from "../ui/standalone-page";
 
-/**
- * Branded masthead for the CLI-connect authorize and callback pages.
- */
 export function AuthSurfaceShell({ children }: { readonly children: ReactNode }) {
   const appName = useT3TeamAppDisplayName();
   const stageVariant = resolveSidebarStageBackdropVariant(APP_STAGE_LABEL);

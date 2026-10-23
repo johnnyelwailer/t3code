@@ -71,3 +71,66 @@ describe("startVoiceBars (CSS-first)", () => {
     stop();
   });
 });
+
+function stubMicrophone(): {
+  tracks: Array<{ stop: ReturnType<typeof vi.fn> }>;
+  grant: () => void;
+  audioContext: AudioContext;
+} {
+  const tracks = [{ stop: vi.fn() }, { stop: vi.fn() }];
+  let grant: () => void = () => {};
+  const pending = new Promise<{ getTracks: () => typeof tracks }>((resolve) => {
+    grant = () => resolve({ getTracks: () => tracks });
+  });
+  vi.stubGlobal("navigator", { mediaDevices: { getUserMedia: () => pending } });
+  const audioContext = {
+    state: "running",
+    createMediaStreamSource: () => ({ connect: () => {}, disconnect: () => {} }),
+    createAnalyser: () => ({ fftSize: 0, getByteTimeDomainData: () => {} }),
+  } as unknown as AudioContext;
+  return { tracks, grant, audioContext };
+}
+
+function startBarsWithMic(audioContext: AudioContext): {
+  stop: () => void;
+  analyserActive: Promise<void>;
+} {
+  stubRaf(0);
+  let markActive: () => void = () => {};
+  const analyserActive = new Promise<void>((resolve) => {
+    markActive = resolve;
+  });
+  const stop = startVoiceBars({
+    audioContext,
+    bars: () => ({}),
+    clock: () => 0,
+    cssFrame: () => frameFromClock(0, 6),
+    onAudioActive: markActive,
+  });
+  return { stop, analyserActive };
+}
+
+describe("startVoiceBars microphone release", () => {
+  it("stops every microphone track when the recording stops", async () => {
+    const mic = stubMicrophone();
+    const bars = startBarsWithMic(mic.audioContext);
+    mic.grant();
+    await bars.analyserActive;
+
+    bars.stop();
+
+    for (const track of mic.tracks) expect(track.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("frees a microphone that was granted after the recording already stopped", async () => {
+    const mic = stubMicrophone();
+    const bars = startBarsWithMic(mic.audioContext);
+
+    bars.stop();
+    mic.grant();
+
+    await vi.waitFor(() => {
+      for (const track of mic.tracks) expect(track.stop).toHaveBeenCalledTimes(1);
+    });
+  });
+});

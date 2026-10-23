@@ -4,6 +4,7 @@ import { assert, it } from "@effect/vitest";
 import { ThreadId } from "@t3tools/contracts";
 import { T3TEAM_CONTEXT_AVAILABILITY_FULL } from "@t3tools/project-context/t3teamContextAvailability";
 import { T3TEAM_PROJECT_CONTEXT_ROOT } from "@t3tools/project-context/t3teamContextPaths";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import type { IntegrationProvider } from "@t3tools/integrations-core";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -137,6 +138,31 @@ it.effect("persists background refresh jobs after a foreground sync", () =>
     assert.isDefined(job);
     assert.equal(job!.rootKey, refreshed.ticketKey.toUpperCase());
   }).pipe(Effect.provide(makeContextRefreshIntegrationTestLayer("t3team-context-refresh-bg-"))),
+);
+
+it.effect("with PLATFORM_CONTEXT_REFRESH off, a refresh syncs the item but queues no job", () =>
+  Effect.sync(() =>
+    replaceFeatureFlagPresetValues(new Map([["PLATFORM_CONTEXT_REFRESH", false]])),
+  ).pipe(
+    Effect.andThen(
+      Effect.gen(function* () {
+        const { root, project } = makeContextRefreshTestWorkspace();
+        const service = yield* T3TeamContextRefreshService;
+        const refreshed = yield* service.refreshWorkItem({
+          threadId: ThreadId.make("thread-bg-off"),
+          projectId: project.id,
+          workspaceRoot: root,
+          ticketKey: "AC-91",
+          force: false,
+        });
+        assert.strictEqual(refreshed.status, "synced");
+        assert.isUndefined(refreshed.backgroundJobId);
+      }).pipe(
+        Effect.provide(makeContextRefreshIntegrationTestLayer("t3team-context-refresh-off-")),
+      ),
+    ),
+    Effect.ensuring(Effect.sync(() => replaceFeatureFlagPresetValues(new Map()))),
+  ),
 );
 
 it.effect("completes background refresh jobs after a foreground sync", () =>

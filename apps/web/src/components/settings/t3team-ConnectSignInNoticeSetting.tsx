@@ -1,4 +1,4 @@
-import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
+import { updateClientSettings, useClientSettings } from "~/hooks/useSettings";
 
 import { Switch } from "../ui/switch";
 import { SettingsRow } from "./settingsLayout";
@@ -33,7 +33,6 @@ export function ConnectSignInNoticeSettingRow({
  */
 export function ConnectSignInNoticeSetting() {
   const enabled = useClientSettings((settings) => settings.t3ConnectSignInNoticeEnabled);
-  const updateClientSettings = useUpdateClientSettings();
   return (
     <ConnectSignInNoticeSettingRow
       enabled={enabled}

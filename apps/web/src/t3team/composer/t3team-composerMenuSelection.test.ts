@@ -40,6 +40,7 @@ describe("resolveT3TeamComposerMenuSelection", () => {
       type: "path",
       path: "apps/web/src/main.tsx",
       pathKind: "file",
+      searchTarget: { environmentId: null, cwd: "/repo", query: "mai" },
       label: "main.tsx",
       description: "apps/web/src",
     });

@@ -2,6 +2,8 @@ import { PROJECT_STATE_DIR } from "./t3teamProjectStateDir.ts";
 import { EMPTY_OBJECT_INPUT_SCHEMA, type T3TeamToolCatalogEntry } from "./t3teamToolCatalogCore.ts";
 import {
   T3TEAM_WIDGET_AUTHORING_GUIDANCE,
+  T3TEAM_WIDGET_FORMAT_DESCRIPTION,
+  T3TEAM_WIDGET_INTENT_DESCRIPTION,
   T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
 } from "./t3teamWidgetGuidance.ts";
 
@@ -30,8 +32,7 @@ const WIDGET_SHOW_INPUT_SCHEMA = {
     },
     intent: {
       type: "string",
-      description:
-        "Preferred default: describe what to show. A builder subagent authors the widget (theme/icon contract) and html output goes through the upstream HTML render shim. Omit when passing widget_code.",
+      description: T3TEAM_WIDGET_INTENT_DESCRIPTION,
     },
     widget_code: {
       type: "string",
@@ -40,8 +41,7 @@ const WIDGET_SHOW_INPUT_SCHEMA = {
     format: {
       type: "string",
       enum: ["html", "svg"],
-      description:
-        "html is shimmed onto upstream html_render storage/theme; svg stays on the widget tier.",
+      description: T3TEAM_WIDGET_FORMAT_DESCRIPTION,
     },
     loading_messages: {
       type: "array",

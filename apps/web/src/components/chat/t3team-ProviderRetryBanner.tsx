@@ -8,7 +8,8 @@
  *
  * The countdown ticks inside its own element, so the composer does not re-render with it.
  */
-import type { EnvironmentId, OrchestrationV2ThreadProjection, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import type { ThreadStructure } from "@t3tools/client-runtime/state/shell";
 import {
   deriveActiveProviderRetry,
   deriveTransientFailureRecovery,
@@ -93,7 +94,7 @@ export function useProviderRetryBannerItem(input: {
   readonly enabled: boolean;
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId | null;
-  readonly projection: OrchestrationV2ThreadProjection | null;
+  readonly projection: ThreadStructure | null;
 }): ComposerBannerStackItem | null {
   const { enabled, environmentId, threadId, projection } = input;
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {

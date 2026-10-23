@@ -1,10 +1,10 @@
 import type { DesktopVoiceStreamEvent } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { pcm16ToBase64 } from "./t3team-voicePcm.ts";
+import { pcm16FromBase64, pcm16ToBase64 } from "./t3team-voicePcm.ts";
 import type { DesktopVoiceService } from "./t3team-voiceService.ts";
 import { makeDesktopVoiceStreamService } from "./t3team-voiceStreamService.ts";
-import { FRAME_MS, ROOM, SPEECH, tone } from "./t3team-voiceTestAudio.ts";
+import { FRAME_MS, fakeSilero, ROOM, SPEECH, tone } from "./t3team-voiceTestAudio.ts";
 
 const config = { model: "m", modelPath: "", language: "auto", languages: "de,en", silenceMs: 1000 };
 
@@ -29,6 +29,7 @@ function setup(prepared: Awaited<ReturnType<DesktopVoiceService["prepare"]>>) {
     voice,
     emit: (event) => events.push(event),
     newSessionId: () => `s${++next}`,
+    detectSpeech: (pcm16Base64) => fakeSilero(pcm16FromBase64(pcm16Base64)),
     log: vi.fn(),
   });
   const push = (sessionId: string, amplitude: number, ms: number) => {

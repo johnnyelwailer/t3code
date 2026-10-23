@@ -15,6 +15,7 @@ const progress: ComposerTasksProgress = {
   step: "Run the failing test",
   completedSteps: 1,
   totalSteps: 2,
+  live: true,
 };
 const steps: readonly ComposerTaskStep[] = [
   { step: "Find the assertion", status: "completed" },

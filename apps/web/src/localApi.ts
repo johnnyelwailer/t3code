@@ -3,7 +3,6 @@ import type { ConfirmDialogOptions, ContextMenuItem, LocalApi } from "@t3tools/c
 import { requestConfirmDialog } from "./confirmDialog";
 import { dismissContextMenu, showContextMenuFallback } from "./contextMenuFallback";
 import { readBrowserClientSettings, writeBrowserClientSettings } from "./clientPersistenceStorage";
-import { resetRequestLatencyStateForTests } from "./rpc/requestLatencyState";
 
 let cachedApi: LocalApi | undefined;
 
@@ -30,8 +29,6 @@ function createBrowserLocalApi(): LocalApi {
 
         window.open(url, "_blank", "noopener,noreferrer");
       },
-      // Only the desktop shell can reach the OS; the web build (and older
-      // desktop shells that predate this method) have nothing to open.
       openSystemSettings: async (pane) => {
         if (!window.desktopBridge?.openSystemSettings) {
           throw new Error("Unable to open System Settings.");
@@ -100,5 +97,4 @@ export function ensureLocalApi(): LocalApi {
 
 export async function __resetLocalApiForTests() {
   cachedApi = undefined;
-  resetRequestLatencyStateForTests();
 }

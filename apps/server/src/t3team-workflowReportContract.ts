@@ -17,7 +17,6 @@
  * @module t3team-workflowReportContract
  */
 
-/** The reporting contract. */
 export const WORKFLOW_REPORTING_CONTRACT = `REPORTING — what the human actually reads.
 
 Your orchestration's report is read by a person who did not watch it run. Every step thread stays

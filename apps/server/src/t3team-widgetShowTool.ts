@@ -1,8 +1,11 @@
 /**
- * Effectful orchestration for `t3team.widget.show`: validate input, optionally run the
- * intent→builder seam, persist the widget body, and for `format: "html"` shim-publish through
- * upstream HtmlRender (one HTML renderer). Other formats stay on the widget tier.
- * V2 messages carry no rich payload, so the artifact — not a message — is the carrier.
+ * Effectful orchestration for `t3team.widget.show` (MCP `t3_show_widget`): validate input,
+ * optionally run the intent→builder seam, persist the widget body, then show it.
+ *
+ * A thin wrapper over upstream's `html_render` path: html and svg widgets are published with
+ * `HtmlRender.publish` and return the same `htmlRender` result, which every client renders inline
+ * from the tool call itself. Only widgets that drive the sendPrompt/callTool bridge (or whose
+ * publish failed) fall back to a fork `widget` thread artifact rendered by the web srcdoc block.
  */
 
 import { ThreadId } from "@t3tools/contracts";
@@ -24,11 +27,14 @@ import type { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifa
 import { authorWidgetFromIntent, shouldBypassBuilder } from "./t3team-widgetBuilder.ts";
 import type { T3TeamWidgetRegistryShape } from "./t3team-widgetRegistry.ts";
 import {
+  buildT3TeamWidgetHtmlDocument,
+  T3TEAM_WIDGET_HTML_RENDER_DEFAULT_HEIGHT,
+  t3teamWidgetNeedsBridge,
+} from "./t3team-widgetHtmlDocument.ts";
+import {
   buildT3TeamWidgetArtifactRelativePath,
   buildT3TeamWidgetAttachment,
   parseT3TeamWidgetShowInput,
-  T3TEAM_WIDGET_HTML_RENDER_DEFAULT_HEIGHT,
-  wrapWidgetHtmlFragmentForHtmlRender,
   type T3TeamWidgetShowInput,
 } from "./t3team-widgetShowCore.ts";
 
@@ -44,6 +50,10 @@ export const T3TEAM_WIDGET_ARTIFACT_KIND = "widget";
 /** Deterministic artifact id of a widget, so a retried write is idempotent. */
 export const t3teamWidgetArtifactId = (widgetId: string) => `widget:${widgetId}`;
 
+/** Same instruction upstream's `html_render` returns: the reader already sees the widget. */
+const WIDGET_SHOWN_MESSAGE =
+  "Shown to the reader above your reply. Don't mention or describe the widget; reply with only what it doesn't already say.";
+
 export interface T3TeamWidgetShowDeps {
   readonly threadId: string;
   readonly workspaceRoot: string | undefined;
@@ -54,8 +64,8 @@ export interface T3TeamWidgetShowDeps {
    * the broker layer at build time. Persistence is skipped when they are unavailable. */
   readonly persistenceContext: Context.Context<T3TeamWidgetPersistenceServices> | undefined;
   /**
-   * Upstream HtmlRender service for the html-format shim. Optional: when absent or publish
-   * fails, the widget degrades to the legacy inline/srcdoc path (still succeeds).
+   * Upstream HtmlRender service widgets publish through. Optional: when absent or publish
+   * fails, the widget degrades to the artifact/srcdoc path (still succeeds).
    */
   readonly htmlRender: HtmlRender["Service"] | undefined;
 }
@@ -82,17 +92,16 @@ const resolveWidgetCode = (
     } satisfies T3TeamWidgetShowInput;
   });
 
-const publishHtmlShim = (input: {
+const publishWidgetPage = (input: {
   readonly threadId: string;
   readonly parsed: T3TeamWidgetShowInput;
   readonly htmlRender: HtmlRender["Service"];
 }): Effect.Effect<HtmlRenderReference | undefined> =>
   Effect.gen(function* () {
-    const wrapped = wrapWidgetHtmlFragmentForHtmlRender(input.parsed.widgetCode);
     const published = yield* input.htmlRender
       .publish({
         threadId: ThreadId.make(input.threadId),
-        html: wrapped,
+        html: buildT3TeamWidgetHtmlDocument(input.parsed.widgetCode),
         title: input.parsed.title,
         height: T3TEAM_WIDGET_HTML_RENDER_DEFAULT_HEIGHT,
       })
@@ -100,13 +109,10 @@ const publishHtmlShim = (input: {
     if (published._tag === "Success") {
       return published.success;
     }
-    yield* Effect.logWarning(
-      "t3team.widget.show HtmlRender shim publish failed; using srcdoc path",
-      {
-        threadId: input.threadId,
-        cause: published.failure,
-      },
-    );
+    yield* Effect.logWarning("t3team.widget.show HtmlRender publish failed; using srcdoc path", {
+      threadId: input.threadId,
+      cause: published.failure,
+    });
     return undefined;
   });
 
@@ -159,22 +165,30 @@ export function callT3TeamWidgetShowTool(input: {
       }
     }
 
-    // html format → upstream HtmlRender publish (shim). svg and others stay on widget tier.
-    let htmlRenderRef: HtmlRenderReference | undefined;
-    if (parsed.format === "html" && deps.htmlRender) {
-      htmlRenderRef = yield* publishHtmlShim({
+    const shown = {
+      ok: true,
+      widgetId,
+      title: parsed.title,
+      format: parsed.format,
+      ...(artifactRelativePath ? { artifactPath: artifactRelativePath } : {}),
+      ...(parsed.intent !== undefined ? { intent: parsed.intent } : {}),
+      message: WIDGET_SHOWN_MESSAGE,
+    };
+
+    // Upstream html_render path: the tool call's `htmlRender` result is what clients render.
+    if (deps.htmlRender && !t3teamWidgetNeedsBridge(parsed)) {
+      const htmlRender = yield* publishWidgetPage({
         threadId: deps.threadId,
         parsed,
         htmlRender: deps.htmlRender,
       });
+      if (htmlRender !== undefined) {
+        return okResult({ ...shown, htmlRender });
+      }
     }
 
-    const attachment = buildT3TeamWidgetAttachment({
-      widgetId,
-      parsed,
-      artifactRelativePath,
-      htmlRender: htmlRenderRef,
-    });
+    // Bridge widgets (and failed publishes): a widget artifact the web srcdoc block renders.
+    const attachment = buildT3TeamWidgetAttachment({ widgetId, parsed, artifactRelativePath });
     const recorded = yield* deps
       .recordArtifact({
         id: t3teamWidgetArtifactId(widgetId),
@@ -196,16 +210,6 @@ export function callT3TeamWidgetShowTool(input: {
       tools: parsed.tools,
     });
 
-    return okResult({
-      ok: true,
-      widgetId,
-      title: parsed.title,
-      format: parsed.format,
-      ...(artifactRelativePath ? { artifactPath: artifactRelativePath } : {}),
-      ...(htmlRenderRef ? { htmlRender: htmlRenderRef } : {}),
-      ...(parsed.intent !== undefined ? { intent: parsed.intent } : {}),
-      allowedTools: parsed.tools,
-      htmlShimmed: parsed.format === "html" && htmlRenderRef !== undefined,
-    });
+    return okResult({ ...shown, allowedTools: parsed.tools });
   });
 }

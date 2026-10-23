@@ -33,6 +33,7 @@ import {
   subscribeCloudSessionTargets,
 } from "./t3team-cloudSessionTargetStore";
 import { useHasPendingCloudQueuedSends } from "./t3team-cloudQueuedSendStore";
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 
 /**
  * Drives the cloud session surfaces (settings panel + "Run on" menu): create,
@@ -42,6 +43,7 @@ import { useHasPendingCloudQueuedSends } from "./t3team-cloudQueuedSendStore";
 export function useCloudSessionController() {
   const environmentId = usePrimaryEnvironmentId();
   const canManageRelay = useCanManageRelay();
+  const cloudSessionsEnabled = useFeatureFlag("CLOUD_SESSIONS");
   const { environments: relayDiscovered } = useRelayEnvironmentDiscovery();
   const {
     sessions: serverSessions,
@@ -210,7 +212,8 @@ export function useCloudSessionController() {
     onCloudMenuOpenChange: useCallback((open: boolean) => setCloudMenuOpen(open), []),
     onPanelVisibilityChange: useCallback((open: boolean) => setPanelVisible(open), []),
     // Starting a cloud session spends relay compute: without `relay:write` no entry offers it.
-    available: environmentId !== null && canManageRelay,
+    // With `CLOUD_SESSIONS` off no entry offers one either; the server refuses a create then.
+    available: environmentId !== null && canManageRelay && cloudSessionsEnabled,
     /** Where sessions are created; a project must live here to run in its machine. */
     primaryEnvironmentId: environmentId,
   };

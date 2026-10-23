@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 
-import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import { loadAccount } from "./t3team-github-routes-account.ts";
 import { usesAuthenticatedRepositoryList } from "./t3team-gheRepositoryCatalogFlag.ts";

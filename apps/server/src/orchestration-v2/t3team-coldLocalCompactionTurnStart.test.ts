@@ -14,6 +14,8 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 
+import * as ServerConfig from "../config.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as GitWorkflow from "../git/GitWorkflowService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
@@ -168,6 +170,8 @@ function makeHarness(input: {
         FileSystem.layerNoop({}),
         Path.layer,
         Layer.mock(GitWorkflow.GitWorkflowService)({}),
+        Layer.mock(ServerConfig.ServerConfig)({} as never),
+        Layer.mock(ServerSettings.ServerSettingsService)({}),
         Layer.mock(ProjectService.ProjectService)({}),
         Layer.mock(ProjectionStore.ProjectionStoreV2)({
           getTurnStartContext: () => readProjection,

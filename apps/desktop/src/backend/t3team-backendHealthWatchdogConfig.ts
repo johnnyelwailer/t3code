@@ -3,6 +3,7 @@
  */
 import * as Duration from "effect/Duration";
 import * as Option from "effect/Option";
+import { readFeatureFlag } from "@t3tools/project-context/t3teamFeatureFlags";
 
 export interface BackendHealthWatchdogConfig {
   readonly enabled: boolean;
@@ -38,7 +39,8 @@ const readPositiveInt = (value: string | undefined): Option.Option<number> => {
 };
 
 /**
- * Env overrides: T3TEAM_BACKEND_WATCHDOG=0 disables it;
+ * Switch: feature flag BACKEND_WATCHDOG (`NEXI_FF_BACKEND_WATCHDOG`, older `T3TEAM_BACKEND_WATCHDOG`,
+ * then the release preset); the shell has no user value, it runs before the backend's database.
  * T3TEAM_BACKEND_WATCHDOG_INTERVAL_MS, _TIMEOUT_MS, _FAILURES, _BUSY_GRACE_MS tune it.
  */
 export function resolveBackendHealthWatchdogConfig(
@@ -52,7 +54,7 @@ export function resolveBackendHealthWatchdogConfig(
     });
   return {
     ...base,
-    enabled: env.T3TEAM_BACKEND_WATCHDOG !== "0" && base.enabled,
+    enabled: readFeatureFlag("BACKEND_WATCHDOG", (key) => env[key]) && base.enabled,
     interval: ms("T3TEAM_BACKEND_WATCHDOG_INTERVAL_MS", base.interval),
     probeTimeout: ms("T3TEAM_BACKEND_WATCHDOG_TIMEOUT_MS", base.probeTimeout),
     failureThreshold: Option.getOrElse(

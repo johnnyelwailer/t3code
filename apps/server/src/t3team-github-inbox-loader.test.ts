@@ -10,7 +10,7 @@ import * as TestClock from "effect/testing/TestClock";
 import { ServerConfig } from "./config.ts";
 import { writeStoredRepositoryList } from "./t3team-githubRepositoryListStore.ts";
 
-import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import { loadGitHubInboxResponse } from "./t3team-github-inbox-loader.ts";
 import {
   accountCache,

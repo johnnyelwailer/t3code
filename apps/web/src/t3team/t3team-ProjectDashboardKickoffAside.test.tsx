@@ -163,4 +163,34 @@ describe("ProjectDashboardKickoffAside", () => {
     expect(typeof capturedComposerProps.current?.onSelectSlashRecipe).toBe("function");
     expect(capturedComposerProps.current?.workspaceRoot).toBe("/tmp/project-1");
   });
+
+  it("marks a plain-text send to be sent at click time", () => {
+    const onKickoffThread = vi.fn();
+
+    renderToStaticMarkup(
+      <ProjectDashboardKickoffAside
+        project={project}
+        dashboardMode="my-work"
+        activeThread={null}
+        providers={[]}
+        isConnected
+        onOpenThread={() => {}}
+        onThreadKickoffConsumed={() => {}}
+        onKickoffThread={onKickoffThread}
+      />,
+    );
+    const onSubmit = capturedComposerProps.current?.onSubmit;
+    if (typeof onSubmit !== "function") throw new Error("composer did not receive onSubmit");
+    onSubmit(
+      "what is blocking me",
+      { model: "gpt-5.4", instanceId: "provider" },
+      "full-access",
+      "default",
+      [],
+    );
+
+    expect(onKickoffThread).toHaveBeenCalledTimes(1);
+    expect(onKickoffThread.mock.calls[0]?.[1]).toBe(true);
+    expect(onKickoffThread.mock.calls[0]?.[8]).toBe(true);
+  });
 });

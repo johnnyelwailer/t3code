@@ -7,7 +7,8 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import { PositiveInt, type PullRequestChecks } from "@t3tools/contracts";
 
-import * as GitHubApi from "./GitHubApi.ts";
+import * as GitHubRest from "./GitHubRest.ts";
+import * as GitHubRequestPolicy from "./GitHubRequestPolicy.ts";
 import { nextPagePath } from "./t3team-githubLinkPaging.ts";
 import type { GitHubPullRequestDetail } from "./gitHubPullRequestJson.ts";
 import type { GitHubPullRequestApiError } from "./GitHubPullRequestApi.ts";
@@ -37,10 +38,6 @@ const decodeWorkflowRuns = Schema.decodeUnknownOption(
 
 export type KnownWorkflowRun = typeof WorkflowRunSchema.Type;
 
-/**
- * Every `pull_request` workflow run of one head, as the revalidator just confirmed them against
- * GitHub. A read running under it filters these rather than asking for the runs again.
- */
 export const KnownWorkflowRuns = Context.Reference<{
   readonly headSha: string;
   readonly runs: ReadonlyArray<KnownWorkflowRun>;
@@ -51,11 +48,10 @@ export const KnownWorkflowRuns = Context.Reference<{
 /** `next` is the API path of the following page, from the `Link` header; null on the last. */
 type Validator = { etag: string | undefined; next: string | null; body: string };
 
-/** A host that answers these with one of them has no conditional REST for it at all. */
 const UNSUPPORTED_STATUSES = new Set([404, 405, 501]);
 
 export const makeChecksRevalidator = Effect.gen(function* () {
-  const api = yield* GitHubApi.GitHubApi;
+  const api = yield* GitHubRest.GitHubRest;
   const entries = yield* Cache.makeWith(
     (_key: string) =>
       Effect.sync(() => ({
@@ -78,7 +74,7 @@ export const makeChecksRevalidator = Effect.gen(function* () {
     >,
   ) =>
     Effect.gen(function* () {
-      const credential = yield* GitHubApi.PinnedGitHubCredential;
+      const credential = yield* GitHubRequestPolicy.PinnedGitHubCredential;
       if (credential === null) return yield* read;
       const key = `${credential.credentialFingerprint}\0${input.host}\0${input.repository}\0${input.number}`;
       const entry = yield* Cache.get(entries, key);
@@ -86,64 +82,66 @@ export const makeChecksRevalidator = Effect.gen(function* () {
         Effect.gen(function* () {
           if (!entry.supported) return yield* read;
           const fail = (status: number) =>
-            new GitHubApi.GitHubApiResponseError({
+            new GitHubRequestPolicy.GitHubApiResponseError({
               host: input.host,
               operation: "revalidateChecks",
               status,
             });
           /** What the endpoint answered, or null where the host cannot say. */
-          const get = (endpoint: string, head = false) =>
-            Effect.gen(function* () {
-              const previous = entry.validators.get(endpoint);
-              const response = yield* api
-                .rest({
-                  host: input.host,
-                  operation: "revalidateChecks",
-                  path: endpoint,
-                  ...(previous?.etag ? { ifNoneMatch: previous.etag } : {}),
-                })
-                .pipe(
-                  Effect.catchTags({
-                    GitHubApiNotFoundError: () =>
-                      Effect.sync(() => {
-                        entry.supported = false;
-                        return null;
-                      }),
-                    GitHubApiResponseError: (error) =>
-                      Effect.sync(() => {
-                        entry.supported = !UNSUPPORTED_STATUSES.has(error.status);
-                        return null;
-                      }),
-                  }),
-                );
-              if (response === null) {
-                entry.value = null;
-                return null;
-              }
-              if (response.status === 304 && previous) return previous;
-              if (response.status !== 200 || response.truncated) {
-                return yield* fail(response.status);
-              }
-              entry.value = null;
-              if (head) {
-                const decoded = yield* decodeHead(response.body).pipe(
-                  Effect.mapError(() => fail(response.status)),
-                );
-                if (entry.head?.head.sha !== decoded.head.sha) entry.validators.clear();
-                entry.head = decoded;
-              }
-              const validator = {
-                etag: response.headers["etag"]?.trim(),
-                next: yield* nextPagePath({
-                  host: input.host,
-                  operation: "revalidateChecks",
-                  link: response.headers["link"],
+          const get = Effect.fn("gitHubConditionalChecks.get")(function* (
+            endpoint: string,
+            head = false,
+          ) {
+            const previous = entry.validators.get(endpoint);
+            const response = yield* api
+              .rest({
+                host: input.host,
+                operation: "revalidateChecks",
+                path: endpoint,
+                ...(previous?.etag ? { ifNoneMatch: previous.etag } : {}),
+              })
+              .pipe(
+                Effect.catchTags({
+                  GitHubApiNotFoundError: () =>
+                    Effect.sync(() => {
+                      entry.supported = false;
+                      return null;
+                    }),
+                  GitHubApiResponseError: (error) =>
+                    Effect.sync(() => {
+                      entry.supported = !UNSUPPORTED_STATUSES.has(error.status);
+                      return null;
+                    }),
                 }),
-                body: response.body,
-              };
-              entry.validators.set(endpoint, validator);
-              return validator;
-            });
+              );
+            if (response === null) {
+              entry.value = null;
+              return null;
+            }
+            if (response.status === 304 && previous) return previous;
+            if (response.status !== 200 || response.truncated) {
+              return yield* fail(response.status);
+            }
+            entry.value = null;
+            if (head) {
+              const decoded = yield* decodeHead(response.body).pipe(
+                Effect.mapError(() => fail(response.status)),
+              );
+              if (entry.head?.head.sha !== decoded.head.sha) entry.validators.clear();
+              entry.head = decoded;
+            }
+            const validator = {
+              etag: response.headers["etag"]?.trim(),
+              next: yield* nextPagePath({
+                host: input.host,
+                operation: "revalidateChecks",
+                link: response.headers["link"],
+              }),
+              body: response.body,
+            };
+            entry.validators.set(endpoint, validator);
+            return validator;
+          });
           const root = `repos/${input.repository}`;
           if ((yield* get(`${root}/pulls/${input.number}`, true)) === null) return yield* read;
           const head = entry.head;
@@ -171,8 +169,6 @@ export const makeChecksRevalidator = Effect.gen(function* () {
           }
           const now = yield* Clock.currentTimeMillis;
           if (entry.value !== null && now - entry.readAt < 5 * 60_000) return entry.value;
-          // Every page of the head's runs was just confirmed current, so the read filters them
-          // rather than listing the runs a second time.
           const pages = runPages.map((endpoint) =>
             decodeWorkflowRuns(entry.validators.get(endpoint)?.body ?? ""),
           );

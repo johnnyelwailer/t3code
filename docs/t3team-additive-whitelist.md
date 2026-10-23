@@ -22,7 +22,31 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20261015` → the 2026-10-15 upstream sync merge commit
+- Current: `t3team/fork-baseline-20261022` → the 2026-10-22 upstream sync merge commit
+  `08997b085a` (203 upstream commits absorbed, `4f651cb10d..60b35a1ee0`, on top of
+  `t3team/fork-baseline-20261021`). Grandfathered: upstream's tree (ChatView/ChatComposer/
+  MessagesTimeline/Sidebar split into hooks and row files, pnpm 12) plus the conflict resolutions
+  that port the fork features into those files. Post-merge fixes stay measured.
+- Before that: `t3team/fork-baseline-20261021` → the 2026-10-21 upstream sync merge commit
+  `634351795a` (upstream `4f651cb10d`).
+- Before that: `t3team/fork-baseline-20261019` → the 2026-10-19 upstream sync merge commit
+  `d583ffcede` (642 upstream commits absorbed, `79ad856b4e..1451e7cb23`, on top of
+  `t3team/fork-baseline-20261017`). Grandfathered: upstream's tree (React Compiler rules on every
+  web file #20791, tests moved to `.browser.test.tsx`, migrations 063/064) plus the conflict
+  resolutions in that merge. Post-merge fixes stay measured.
+- Before that: `t3team/fork-baseline-20261017` → the 2026-10-17 upstream sync merge commit
+  `f794c02535` (133 upstream commits absorbed, `3962ae8586..79ad856b4e`, fork main `86c966fe1d`
+  already contained). Grandfathered: upstream's tree (React Compiler conversion, ChatView /
+  Sidebar / right-panel splits, comment prune #19559) plus the conflict resolutions in that merge,
+  which re-apply the fork's extension points onto upstream's new structure. Post-merge fixes stay
+  measured.
+- Before that: `t3team/fork-baseline-20261016` → the 2026-10-16 upstream sync merge commit
+  `4b11a68c8b` (95 upstream commits absorbed, `339179f50a..3962ae8586`, onto fork main
+  `86c966fe1d`). Grandfathered: upstream's tree plus the conflict resolutions in that merge
+  (including the `t3team-GitHubApi` facade over upstream's GitHubRest/GitHubRequestPolicy and the
+  fork coalesce/search-quota delta relocated into `GitHubRest.ts`). Post-merge fixes stay measured.
+- Before that: `t3team/fork-baseline-20261015b` → `0bfee31044` (second 2026-10-15 upstream merge).
+- Before that: `t3team/fork-baseline-20261015` → the 2026-10-15 upstream sync merge commit
   `9c38e942cd` (107 upstream commits absorbed, `11fd54fcbb..e536bfd33b`, after merging fork main
   `1d15b3ecfc`). Grandfathered: upstream's tree plus the conflict resolutions in that merge.
   Post-merge fixes on the sync branch stay measured.
@@ -99,6 +123,13 @@ git push origin t3team/fork-baseline-YYYYMMDD
 Until the new tag is pushed, the guard fails loudly on CI (missing tag), never silently.
 
 ## Allowed Modified Upstream Files
+
+### Upstream sync 2026-10-22
+
+- `apps/server/src/cli/thread.ts`
+  - Upstream's new `t3 thread send --wait` reads `runId`, which the fork's mailbox delivery leaves absent (no run starts yet); `--wait` is skipped when there is no run to wait on.
+- `docs/t3team-mvp/12-profiles-and-skill-packs.md`, `docs/t3team-mvp/40-code-and-team-modes.md`, `packages/agent-runner/README.md`
+  - Fork-owned docs without the prefix; reformatted only, by upstream's newer `vp fmt` (CI `vp check`).
 
 ### Client-only thread icon (voice V1 item 8, PR #606)
 
@@ -206,7 +237,7 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
 - `apps/server/src/persistence/Migrations.ts`
   - Register the additive t3team migration that adds `projection_thread_messages.t3team_ext_json`.
 - `apps/server/src/persistence/Migrations.test.ts`
-  - Upstream's V2 guard tests hard-code ids 54/55/56; this fork registers upstream 055 at 84 (`FIRST_V2_MIGRATION_ID`), so the same assertions are expressed relative to that constant. Unavoidable: with literal ids they assert the bug that refused pre-sync fork databases (2026-10-14).
+  - Upstream's V2 guard tests hard-code ids 54/55/56; this fork registers upstream 055 at 84 (`FIRST_V2_MIGRATION_ID`), so the same assertions are expressed relative to that constant. Unavoidable: with literal ids they assert the bug that refused pre-sync fork databases (2026-10-14). Refusal is asserted for upstream-owned ids only (`UPSTREAM_V2_MIGRATION_IDS`); fork-owned ledger gaps must still start.
 - `apps/server/src/persistence/Services/ProjectionThreadMessages.ts`
   - Extend the projection-thread message schema with optional `t3teamExt` so the persistence layer can carry the namespaced message extension.
 - `packages/contracts/src/settings.ts`
@@ -455,19 +486,32 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
 - `apps/desktop/scripts/main-process-bundle.test.mjs` — fixture writes the `src/voice/t3team-whisperWorker.ts` worker entry that the desktop `pack` config now builds.
 - `third-party-licenses.config.json` — notice overrides for the `@fugood/node-whisper-*` platform binaries pulled in by `@fugood/whisper.node`.
 
+## `t3_show_widget` maps to upstream HTML renders (2026-10-13)
+
+- `packages/shared/src/t3McpToolPresentation.ts` — one import and one spread of
+  `T3TEAM_MCP_TOOLS` (`t3team-mcpToolPresentation.ts`) into the T3 tool inventory, so fork tools
+  on the `t3-code` server get upstream's cards, summaries and ACP identity recovery.
+- `packages/shared/src/toolOutput.ts` — `htmlRenderFromToolItem` gates on the tool's
+  `html-render` summary action instead of the literal `html_render` name, so `t3_show_widget`
+  results render inline (and are cleaned up on thread deletion) through upstream's path.
+
+## 2026-10-21 upstream sync (upstream 4f651cb10d)
+
+- `apps/server/src/persistence/Migrations/063_DropUnusedV1Projections.test.ts` — the held upstream 063 test stays skipped, with the quarantine marker the new lint rule asks for.
+- `apps/server/src/ws.test.ts` — the RPC-boundary test mocks the fork's handler services (`CloudSessionService`, `ProjectMachineDiscovery`, `ResourcePressureMonitor`, `ToolAuthService`).
+- `apps/web/src/components/pullRequest/PullRequestSummaryTab.browser.test.tsx` — the fork's pack-view test moved onto upstream's disposable `render` screen.
+- `apps/web/src/composerDraftStore.test.ts` — non-null assertion for the fork's nullable draft image `file`.
+- `apps/web/src/hooks/useLogicalProjectEnvironments.ts` — `cloudSessionScopeKey` defaults to `null`, so upstream's new `AddProjectToMachineDialog` keeps calling it with two arguments.
+- `packages/source-control-github/src/server/GitHubRest.ts` — the fork's read coalescer wrapper is an `Effect.fn`.
+
 ## Voice hotkey chord, model download progress, model settings UI (2026-10-21)
 
 - `apps/desktop/src/ipc/methods/clientSettings.ts` — `setClientSettings` also calls `DesktopVoiceHotkey.configure`, next to the existing `DesktopSnapShot.configure`, so a changed `voiceHotkeyChord` re-registers the global shortcut (logic in `t3team-voiceHotkeyController.ts`).
 - `apps/web/src/components/settings/useSnapShotShortcutRecorder.tsx` — optional `label` so the voice shortcut row reuses the recorder instead of a second one; the default label keeps the snapshot wording.
 
-## Pre-existing Test Web nightly fixes (2026-10-21)
-
-- `apps/web/src/components/BranchToolbar.panel.test.tsx` — the mocked draft store gains `draftsByThreadKey`, which the cloud queued-send hook now reads.
-
 ## Pre-existing server test failures (nightly CI, 2026-10-21)
 
 - `apps/server/src/orchestration-v2/testkit/fixtures/*/muse_transcript.ndjson` (8 scenarios) — re-recorded against the current `link_pull_request` runtime instruction in `packages/provider-core/src/server/runtimeInstructions.ts`, which the Muse replay compares byte-for-byte.
-- `apps/server/src/testkit/RpcInitialMemory.fixture.mjs` — the mocked event store gains `readAgentEventId`, which the thread-resume cursor identity check (#538) now calls.
 
 ## Voice floating widget (desktop main, 2026-10-21)
 
@@ -498,3 +542,14 @@ All already listed in `allowedModifiedFiles`; each gains only the voice-surface 
 ## Cross-environment project identity by work source (2026-10-21)
 
 - `packages/client-runtime/src/state/projectGrouping.ts` — one import and one `deriveWorkSourceProjectKey(project) ??` line ahead of the repository key in `deriveLogicalProjectKey`, plus `"source"` in its three `Pick`s. A project bound to an external work source (Jira, …) groups by that binding, so the same t3team project on two T3 Connect machines is one sidebar entry, and a bound project no longer merges into a plain project that shares its repository. The logic lives in `t3team-workSourceProjectKey.ts`; unbound projects group exactly as before.
+
+## Settings → Features page (2026-10-22)
+
+- `apps/web/src/components/settings/FoldedSettingsSection.tsx` — optional `defaultOpen`, so the Features page's group sections start open; the default keeps every existing fold closed.
+- `apps/web/src/routes/settings.features.tsx` (unprefixed new file) — TanStack's file router derives the URL from the file name, like `settings.connected-tools.tsx`.
+- Already listed, each gains only the Features seam: `SettingsSidebarNav.tsx` (the nav entry, hidden while `SETTINGS_FEATURES_PAGE` is off), `routeTree.gen.ts` (generated entry), `packages/client-runtime/src/state/server.ts` (spreads `createFeatureFlagAtoms` from `t3team-featureFlags.ts`).
+- `apps/server/src/bin.ts` — one `await import("./t3team-featureFlagBoot.ts")` ahead of the CLI graph, so the release preset is installed before any module reads a startup-only flag or resolves the state directory.
+- `packages/client-runtime/src/rpc/session.ts` — advertises the `featureFlags` capability so the server streams `featureFlagsUpdated`.
+- `packages/client-runtime/src/state/serverConfigProjection.ts` — one `featureFlagsUpdated` case that replaces `config.featureFlags`.
+- `packages/contracts/src/clientRpcPermissions.ts` — `serverSetFeatureFlag` requires the settings-write scope, like the other host settings writes.
+- `scripts/package.json` — `@t3tools/project-context` dependency for the release-flavor preset writer in `build-desktop-artifact.ts`.

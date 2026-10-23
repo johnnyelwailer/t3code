@@ -10,6 +10,9 @@
  * Ingestion is one-way and once-only per draft id: a draft already in the store is skipped, so the
  * reviewer's local decision (accepted / dismissed / returned) is never overwritten by a replay when
  * the thread is re-opened.
+ *
+ * While `WORKITEM_DETAIL_DRAFTS` is off nothing is ingested, so the work item views offer no draft
+ * to review or approve; the artifacts stay on the thread and are read once the flag is back on.
  */
 
 import { useEffect } from "react";
@@ -22,6 +25,7 @@ import {
 import { normalizeT3TeamDraftMutation } from "~/t3team/t3team-draftMutationModel";
 import { useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore";
 import type { T3TeamDraftMutation } from "~/t3team/t3team-draftMutationTypes";
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 
 export const T3TEAM_DRAFT_MUTATION_ARTIFACT_KIND = "draft-mutation";
 
@@ -83,7 +87,9 @@ export function useT3TeamDraftMutationIngest(input: {
   readonly artifacts: ReadonlyArray<DraftArtifact>;
 }): void {
   const { artifacts, threadId } = input;
+  const enabled = useFeatureFlag("WORKITEM_DETAIL_DRAFTS");
   useEffect(() => {
+    if (!enabled) return;
     const { drafts, upsertDrafts } = useT3TeamDraftMutationStore.getState();
     const collected = collectT3TeamDraftMutations({
       artifacts,
@@ -91,5 +97,5 @@ export function useT3TeamDraftMutationIngest(input: {
       knownDraftIds: new Set(drafts.map((draft) => draft.id)),
     });
     if (collected.length > 0) upsertDrafts(collected);
-  }, [artifacts, threadId]);
+  }, [artifacts, enabled, threadId]);
 }

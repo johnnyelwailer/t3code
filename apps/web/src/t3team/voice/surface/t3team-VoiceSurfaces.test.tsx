@@ -6,11 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { VoiceComposerDock } from "../t3team-VoiceComposerDock";
 import { VoiceComposerInline } from "../t3team-VoiceComposerInline";
+import { deliverToVoiceDraft } from "../t3team-voiceDraftSink";
 import { VoiceComposerMic } from "../t3team-VoiceComposerMic";
 import { useVoiceThreadStore } from "../t3team-voiceThreadStore";
 import { VoiceThreadRow } from "./t3team-VoiceThreadRow";
 import { IDLE_VOICE_UI, type VoiceUiSnapshot, type VoiceUiState } from "./t3team-voiceUiModel";
 import { IDLE_VOICE_LIVE, useVoiceUiStore, type VoiceUiLive } from "./t3team-voiceUiStore";
+
+vi.mock("~/t3team/t3team-useFeatureFlag", () => ({ useFeatureFlag: () => true }));
 
 const controls = {
   toggle: vi.fn(),
@@ -135,25 +138,26 @@ describe("VoiceComposerDock", () => {
 });
 
 describe("VoiceComposerInline", () => {
+  const onDictated = vi.fn();
   const inline = (threadId = VOICE_THREAD) => (
-    <VoiceComposerInline environmentId={ENV} threadId={threadId} />
+    <VoiceComposerInline environmentId={ENV} threadId={threadId} onDictated={onDictated} />
   );
+  afterEach(() => onDictated.mockReset());
 
-  it("streams the words into the composer with a level dot, a timer and a small stop", () => {
+  it("trails the draft with the words being spoken, and has no stop, timer or level row", () => {
     show("recording", { startedAtMs: Date.now() }, { level: 0.3, partial: "open the board" });
     mount(inline());
     const row = container!.querySelector('[data-testid="voice-composer-inline"]')!;
     expect(row.getAttribute("data-state")).toBe("recording");
-    expect(container!.textContent).toContain("open the board");
-    expect(container!.querySelector('[data-testid="voice-inline-level"]')).not.toBeNull();
-    act(() => button("Stop recording")!.click());
-    expect(controls.toggle).toHaveBeenCalledOnce();
+    expect(row.textContent).toBe("open the board");
+    expect(container!.querySelector("button")).toBeNull();
+    expect(container!.querySelector('[data-testid="voice-clock"]')).toBeNull();
   });
 
-  it("says listening before any words, and warming up with its progress while the model loads", () => {
+  it("shows nothing before any words, and warming up with its progress while the model loads", () => {
     show("recording", { startedAtMs: Date.now() });
     mount(inline());
-    expect(container!.textContent).toContain("Listening…");
+    expect(container!.textContent).toBe("");
     show(
       "recording",
       { startedAtMs: Date.now() },
@@ -164,15 +168,24 @@ describe("VoiceComposerInline", () => {
     expect(bar.getAttribute("aria-valuenow")).toBe("65");
   });
 
-  it("counts the final pass after stop and drops the stop button", () => {
-    show("transcribing", { startedAtMs: 0, endedAtMs: Date.now() - 3_000 }, { partial: "" });
+  it("marks words being written down with a quiet ellipsis, never a Transcribing row", () => {
+    show("transcribing", { startedAtMs: 0, endedAtMs: Date.now() - 3_000 }, { writing: 1 });
     mount(inline());
-    expect(container!.textContent).toContain("Transcribing… 3 s");
-    expect(button("Stop recording")).toBeUndefined();
+    expect(container!.textContent).toBe("…");
+    expect(container!.textContent).not.toContain("Transcribing");
+  });
+
+  it("puts committed utterances into the draft while the voice thread's composer is mounted", () => {
+    mount(inline());
+    expect(deliverToVoiceDraft("open the board")).toBe(true);
+    expect(onDictated).toHaveBeenCalledWith("open the board");
+    act(() => root!.render(inline("another-thread")));
+    expect(deliverToVoiceDraft("not here")).toBe(false);
+    expect(onDictated).toHaveBeenCalledOnce();
   });
 
   it("is only the voice thread's and absent at rest", () => {
-    show("recording", { startedAtMs: Date.now() });
+    show("recording", { startedAtMs: Date.now() }, { partial: "words" });
     mount(inline("another-thread"));
     expect(container!.textContent).toBe("");
     show("idle");
@@ -188,9 +201,11 @@ describe("VoiceComposerMic", () => {
     expect(controls.toggle).toHaveBeenCalledOnce();
   });
 
-  it("stops it while recording and is disabled while writing it down", () => {
-    show("recording", { startedAtMs: Date.now() });
+  it("stops it while recording, breathing with the level, and is disabled while writing it down", () => {
+    show("recording", { startedAtMs: Date.now() }, { level: 1 });
     mount(<VoiceComposerMic />);
+    const level = container!.querySelector('[data-testid="voice-composer-level"]') as SVGElement;
+    expect(level.style.opacity).toBe("1");
     act(() => button("Stop recording")!.click());
     expect(controls.toggle).toHaveBeenCalledOnce();
     show("transcribing", { startedAtMs: 0, endedAtMs: 1 });

@@ -58,7 +58,6 @@ export function computeWatermarkLookbackMinutes(input: {
   return Math.max(minCatchUpLookbackMinutes, elapsedMinutes + watermarkOverlapMinutes);
 }
 
-/** Mirror page size. */
 export const mirrorPageSize = 100;
 
 /**

@@ -15,7 +15,7 @@
 
 import { useEffect, useRef } from "react";
 
-import { useUpdateClientSettings } from "../hooks/useSettings";
+import { updateClientSettings } from "../hooks/useSettings";
 import { useT3TeamPackAppearance } from "./t3team-packAppearance";
 import {
   resolveT3TeamAppearanceDefaults,
@@ -47,7 +47,6 @@ function writeMarker(key: string, marker: string): void {
 
 export function T3TeamPackAppearanceDefaultsSync() {
   const appearance = useT3TeamPackAppearance();
-  const updateClientSettings = useUpdateClientSettings();
   const defaults = appearance?.appearanceDefaults;
   const density = appearance?.density;
   const themeId = appearance?.themeId;
@@ -69,7 +68,7 @@ export function T3TeamPackAppearanceDefaultsSync() {
     handledRef.current = marker;
     if (decision.patch) updateClientSettings(decision.patch);
     writeMarker(T3TEAM_APPEARANCE_DEFAULTS_STORAGE_KEY, decision.appliedMarker);
-  }, [defaults, themeId, updateClientSettings]);
+  }, [defaults, themeId]);
 
   // Density is markered separately so that introducing it does not invalidate the lens/glass
   // marker every existing user already has stored.
@@ -86,7 +85,7 @@ export function T3TeamPackAppearanceDefaultsSync() {
     handledDensityRef.current = marker;
     if (decision.patch) updateClientSettings(decision.patch);
     writeMarker(T3TEAM_DENSITY_DEFAULT_STORAGE_KEY, decision.appliedMarker);
-  }, [density, themeId, updateClientSettings]);
+  }, [density, themeId]);
 
   return null;
 }

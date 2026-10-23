@@ -2,7 +2,7 @@ import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Schedule from "effect/Schedule";
 
-import type { GitHubApiError } from "./GitHubApi.ts";
+import type { GitHubApiError } from "./t3team-GitHubApi.ts";
 
 /** Two more tries after the first, so a flaky read costs a few seconds, never a minute. */
 const RETRIES = 2;

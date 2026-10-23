@@ -7,14 +7,16 @@ import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { type Project, ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
+import { afterEach, beforeEach } from "vite-plus/test";
 
 import { ProjectService } from "../project/ProjectService.ts";
 import * as ProjectMachineDiscovery from "../project/t3team-ProjectMachineDiscovery.ts";
-import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import { CloudSessionMachines, layer } from "./t3team-CloudSessionMachine.ts";
 
@@ -110,7 +112,17 @@ const setupIn = (root: string, token = "ghp_user-token") =>
 const plainIn = (root: string, token = "ghp_user-token") =>
   sessionIn(root, token, (machines) => machines.resolvePlain(projectId));
 
+beforeEach(() => replaceFeatureFlagPresetValues(new Map([["CLOUD_PROJECT_MACHINE", true]])));
+afterEach(() => replaceFeatureFlagPresetValues(new Map()));
+
 describe("CloudSessionMachines.resolve", () => {
+  it.effect("is a plain session while project machines are turned off", () =>
+    Effect.gen(function* () {
+      replaceFeatureFlagPresetValues(new Map([["CLOUD_PROJECT_MACHINE", false]]));
+      expect(yield* resolveIn(checkout(DEVCONTAINER))).toBeNull();
+    }),
+  );
+
   it.effect("pins a pushed definition and carries the user's token, never a credential URL", () =>
     Effect.gen(function* () {
       const root = checkout(DEVCONTAINER);

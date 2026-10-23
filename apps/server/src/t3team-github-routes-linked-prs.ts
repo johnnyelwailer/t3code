@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 import { resolveGitHubWorkItemKey } from "@t3tools/shared/t3team-githubActivity";
-import type * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import type * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import { rateLimitMessageOf, readRestBody } from "./t3team-githubRestRead.ts";
 import { parseLinkedRepositoryTarget } from "./t3team-github-routes-suggestions.ts";
 import type {

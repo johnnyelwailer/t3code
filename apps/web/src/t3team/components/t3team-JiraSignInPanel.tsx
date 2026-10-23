@@ -4,7 +4,8 @@
  *
  * On completion it persists the new account (the "done" branch, like the create-project dialog)
  * or simply reports the server-side completion ("connected" branch), then fires `onSignedIn` so
- * the view can reload.
+ * the view can reload. While Jira connections are turned off it keeps the heading and says so
+ * instead of offering a sign-in the server would refuse.
  */
 import { useEffect, useRef } from "react";
 
@@ -12,16 +13,32 @@ import { useBackend } from "~/t3team/backend/t3team-index";
 import { useAtlassianOAuth } from "~/t3team/hooks/t3team-useAtlassianOAuth";
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { Button } from "~/t3team/components/ui/t3team-button";
+import {
+  JIRA_CONNECTIONS_OFF_TEXT,
+  useJiraConnectionsEnabled,
+} from "~/t3team/t3team-jiraConnectionsFlag";
 
-export function JiraSignInPanel({
-  heading,
-  onSignedIn,
-}: {
+interface JiraSignInPanelProps {
   /** The state line above the button, e.g. "Sign in to Jira to load your work." */
   readonly heading: string;
   /** Fired once the sign-in has completed and the account is persisted. */
   readonly onSignedIn?: (() => void) | undefined;
-}) {
+}
+
+export function JiraSignInPanel(props: JiraSignInPanelProps) {
+  if (useJiraConnectionsEnabled()) return <JiraSignInFlowPanel {...props} />;
+  return (
+    <T3SurfacePanel
+      tone="dashed"
+      className="flex flex-col items-center gap-3 px-4 py-8 text-sm text-muted-foreground"
+    >
+      <p className="text-foreground">{props.heading}</p>
+      <p className="text-xs">{JIRA_CONNECTIONS_OFF_TEXT}</p>
+    </T3SurfacePanel>
+  );
+}
+
+function JiraSignInFlowPanel({ heading, onSignedIn }: JiraSignInPanelProps) {
   const oauth = useAtlassianOAuth();
   const backend = useBackend();
   const reportedRef = useRef(false);

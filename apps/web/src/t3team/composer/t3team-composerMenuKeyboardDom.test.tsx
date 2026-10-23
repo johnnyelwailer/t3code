@@ -25,8 +25,14 @@ globalThis.ResizeObserver ??= class ResizeObserver {
   disconnect() {}
 };
 
-vi.mock("~/lib/composerPathSearchState", () => ({
-  useComposerPathSearch: () => ({ entries: [], error: null, isPending: false }),
+vi.mock(import("~/state/queries"), async (original) => ({
+  ...(await original()),
+  useComposerPathSearch: (() => ({
+    entries: [],
+    error: null,
+    isPending: false,
+    searchedTarget: { environmentId: null, cwd: null, query: null },
+  })) as never,
 }));
 vi.mock("~/hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "light" }) }));
 

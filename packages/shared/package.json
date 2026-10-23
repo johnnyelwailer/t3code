@@ -3,6 +3,18 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./changedFileKind": {
+      "types": "./src/changedFileKind.ts",
+      "import": "./src/changedFileKind.ts"
+    },
+    "./githubMarkdownLinks": {
+      "types": "./src/githubMarkdownLinks.ts",
+      "import": "./src/githubMarkdownLinks.ts"
+    },
+    "./authScopeOptions": {
+      "types": "./src/authScopeOptions.ts",
+      "import": "./src/authScopeOptions.ts"
+    },
     "./orchestrationV2ThreadError": {
       "types": "./src/orchestrationV2ThreadError.ts",
       "import": "./src/orchestrationV2ThreadError.ts"
@@ -10,6 +22,10 @@
     "./t3team-manualContinuation": {
       "types": "./src/t3team-manualContinuation.ts",
       "import": "./src/t3team-manualContinuation.ts"
+    },
+    "./t3team-widgetIconSprite": {
+      "types": "./src/t3team-widgetIconSprite.ts",
+      "import": "./src/t3team-widgetIconSprite.ts"
     },
     "./t3team-githubActivity": {
       "types": "./src/t3team-githubActivity.ts",
@@ -38,10 +54,6 @@
     "./t3team-workflowOutputText": {
       "types": "./src/t3team-workflowOutputText.ts",
       "import": "./src/t3team-workflowOutputText.ts"
-    },
-    "./legacyCliLauncher": {
-      "types": "./src/legacyCliLauncher.ts",
-      "import": "./src/legacyCliLauncher.ts"
     },
     "./delimitedPreview": {
       "types": "./src/delimitedPreview.ts",
@@ -143,6 +155,10 @@
       "types": "./src/toolActivity.ts",
       "import": "./src/toolActivity.ts"
     },
+    "./terminalOutput": {
+      "types": "./src/terminalOutput.ts",
+      "import": "./src/terminalOutput.ts"
+    },
     "./toolOutput": {
       "types": "./src/toolOutput.ts",
       "import": "./src/toolOutput.ts"
@@ -206,6 +222,10 @@
     "./dpopCommon": {
       "types": "./src/dpopCommon.ts",
       "import": "./src/dpopCommon.ts"
+    },
+    "./telemetryId": {
+      "types": "./src/telemetryId.ts",
+      "import": "./src/telemetryId.ts"
     },
     "./relayAuth": {
       "types": "./src/relayAuth.ts",
@@ -375,6 +395,10 @@
       "types": "./src/t3team-voiceInput.ts",
       "import": "./src/t3team-voiceInput.ts"
     },
+    "./activeRecording": {
+      "types": "./src/t3team-activeRecording.ts",
+      "import": "./src/t3team-activeRecording.ts"
+    },
     "./voiceInputUi": {
       "types": "./src/t3team-voiceInputUi.tsx",
       "import": "./src/t3team-voiceInputUi.tsx"
@@ -446,14 +470,6 @@
     "./mcpApp": {
       "types": "./src/mcpApp.ts",
       "import": "./src/mcpApp.ts"
-    },
-    "./githubMarkdownLinks": {
-      "types": "./src/githubMarkdownLinks.ts",
-      "import": "./src/githubMarkdownLinks.ts"
-    },
-    "./authScopeOptions": {
-      "types": "./src/authScopeOptions.ts",
-      "import": "./src/authScopeOptions.ts"
     },
     "./promptLinks": {
       "types": "./src/promptLinks.ts",
@@ -530,10 +546,18 @@
     "./PtyAdapter": {
       "types": "./src/PtyAdapter.ts",
       "import": "./src/PtyAdapter.ts"
+    },
+    "./markdownMath": {
+      "types": "./src/markdownMath.ts",
+      "import": "./src/markdownMath.ts"
+    },
+    "./cloneUrl": {
+      "types": "./src/cloneUrl.ts",
+      "import": "./src/cloneUrl.ts"
     }
   },
   "scripts": {
-    "typecheck": "tsc-rs --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "vp test run --config ../../vite.config.ts --dir ."
   },
   "dependencies": {
@@ -543,6 +567,7 @@
     "effect": "catalog:",
     "jose": "catalog:",
     "mdast-util-directive": "catalog:",
+    "mdast-util-to-hast": "^13.2.1",
     "micromark-extension-directive": "catalog:",
     "micromark-util-character": "catalog:",
     "react": "19.2.6",
@@ -550,6 +575,7 @@
     "rehype-sanitize": "catalog:",
     "remark-breaks": "catalog:",
     "remark-gfm": "catalog:",
+    "remark-math": "6.0.0",
     "remark-parse": "catalog:",
     "remark-rehype": "catalog:",
     "unified": "catalog:",
@@ -558,6 +584,7 @@
   "devDependencies": {
     "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:",
+    "@types/mdast": "^4.0.4",
     "@types/node": "catalog:",
     "@types/react": "~19.2.14",
     "@types/react-dom": "~19.2.3",

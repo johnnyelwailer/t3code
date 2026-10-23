@@ -28,6 +28,7 @@ import {
   type T3TeamStopThreadCascadeResult,
   type ThreadId,
 } from "@t3tools/contracts";
+import { readFeatureFlag } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -125,7 +126,10 @@ export const stopThreadCascade = Effect.fn("t3team.stopThreadCascade")(function*
     );
 
   const root = yield* interrupt(input.threadId);
-  const descendants = collectSubagentDescendants(input.threadId, snapshot);
+  // With child-thread management off this is upstream's Stop: the thread alone.
+  const descendants = readFeatureFlag("ORCHESTRATION_CHILD_THREADS")
+    ? collectSubagentDescendants(input.threadId, snapshot)
+    : [];
   const outcomes = yield* Effect.forEach(descendants, interrupt, { concurrency: 4 });
   return {
     root,

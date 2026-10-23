@@ -35,4 +35,21 @@ describe("packSnapshotToServerProvider (GHE nexi-distribution#394)", () => {
       ["user-added", true],
     ]);
   });
+
+  it("forwards the access modes a pack offers and drops ids the host does not know", () => {
+    const snapshot = {
+      displayName: "Nexplore AI",
+      enabled: true,
+      installed: true,
+      status: "ready" as const,
+      models: [],
+    };
+    const withoutAuto = packSnapshotToServerProvider({
+      ...baseInput,
+      snapshot: { ...snapshot, supportedRuntimeModes: ["approval-required", "full-access", "x"] },
+    });
+    expect(withoutAuto.supportedRuntimeModes).toEqual(["approval-required", "full-access"]);
+    const unrestricted = packSnapshotToServerProvider({ ...baseInput, snapshot });
+    expect(unrestricted.supportedRuntimeModes).toBeUndefined();
+  });
 });

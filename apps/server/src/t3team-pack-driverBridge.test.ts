@@ -60,6 +60,8 @@ const mcpSessions = McpProviderSessions.of({
     Effect.sync(() => {
       mcpConfigs.delete(id);
     }),
+  recordHtmlRender: () => Effect.void,
+  takeHtmlRender: () => Effect.succeed(undefined),
 });
 
 const createInScope = (definition: PackProviderDriverDefinition) =>

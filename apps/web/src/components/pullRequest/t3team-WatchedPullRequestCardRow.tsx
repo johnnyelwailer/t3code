@@ -9,7 +9,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { runtimeModeConfig } from "~/components/chat/runtimeModeConfig";
-import { formatWorkingDurationLabel, type ThreadStatusPill } from "~/components/Sidebar.logic";
+import { formatWorkingDurationLabel } from "@t3tools/client-runtime/state/models";
+import type { ThreadStatusPill } from "~/components/Sidebar.logic";
 import { StopWatchingButton, ThreadStatusLabel } from "~/components/ThreadStatusIndicators";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";

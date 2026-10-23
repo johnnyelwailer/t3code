@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { type ComposerTrigger, detectComposerTrigger } from "~/composer-logic";
-import { useComposerPathSearch } from "~/lib/composerPathSearchState";
+import { useComposerPathSearch } from "~/state/queries";
 import {
   resolveT3TeamComposerPathSearchTarget,
   type T3TeamComposerPathSearchScope,
@@ -25,7 +25,7 @@ import { useT3TeamComposerMenuKeyboard } from "~/t3team/composer/t3team-useCompo
 export type { T3TeamComposerPathSearchScope };
 
 export type T3TeamComposerCommandMenuInput = {
-  readonly sources: Omit<T3TeamComposerMenuSources, "pathEntries">;
+  readonly sources: Omit<T3TeamComposerMenuSources, "pathEntries" | "pathSearchTarget">;
   readonly pathSearch: T3TeamComposerPathSearchScope | null;
   /** Reads the live editor text with the expanded (raw-text) cursor position. */
   readonly readSnapshot: () => { readonly value: string; readonly expandedCursor: number };
@@ -68,8 +68,9 @@ export function useT3TeamComposerCommandMenu(input: T3TeamComposerCommandMenuInp
       buildT3TeamComposerMenuItems(trigger, {
         ...input.sources,
         pathEntries: pathEntries.entries,
+        pathSearchTarget: pathEntries.searchedTarget,
       }),
-    [input.sources, pathEntries.entries, trigger],
+    [input.sources, pathEntries.entries, pathEntries.searchedTarget, trigger],
   );
   const buildExtraItems = input.buildExtraItems;
   const menuItems = useMemo<ReadonlyArray<T3TeamComposerMenuItem>>(() => {
