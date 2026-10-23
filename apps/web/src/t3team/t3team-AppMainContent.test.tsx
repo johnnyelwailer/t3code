@@ -117,7 +117,7 @@ describe("AppMainContent", () => {
         onOpenThread={() => {}}
         onOpenFullThread={() => {}}
         onOpenEmbeddedThread={() => {}}
-        onKickoffProjectThread={() => {}}
+        onKickoffProjectThread={() => "thread-1"}
         onKickoffTicketThread={() => {}}
         onThreadKickoffConsumed={() => {}}
         onThreadDisplayModeChange={() => {}}
@@ -156,7 +156,7 @@ describe("AppMainContent", () => {
         onOpenThread={() => {}}
         onOpenFullThread={() => {}}
         onOpenEmbeddedThread={() => {}}
-        onKickoffProjectThread={() => {}}
+        onKickoffProjectThread={() => "thread-1"}
         onKickoffTicketThread={() => {}}
         onThreadKickoffConsumed={() => {}}
         onThreadDisplayModeChange={() => {}}
@@ -197,7 +197,7 @@ describe("AppMainContent", () => {
         onOpenThread={() => {}}
         onOpenFullThread={() => {}}
         onOpenEmbeddedThread={() => {}}
-        onKickoffProjectThread={() => {}}
+        onKickoffProjectThread={() => "thread-1"}
         onKickoffTicketThread={() => {}}
         onThreadKickoffConsumed={() => {}}
         onThreadDisplayModeChange={() => {}}
@@ -232,7 +232,7 @@ describe("AppMainContent", () => {
         onOpenThread={() => {}}
         onOpenFullThread={() => {}}
         onOpenEmbeddedThread={() => {}}
-        onKickoffProjectThread={() => {}}
+        onKickoffProjectThread={() => "thread-1"}
         onKickoffTicketThread={() => {}}
         onThreadKickoffConsumed={() => {}}
         onThreadDisplayModeChange={() => {}}
@@ -266,7 +266,7 @@ describe("AppMainContent", () => {
         onOpenThread={() => {}}
         onOpenFullThread={() => {}}
         onOpenEmbeddedThread={() => {}}
-        onKickoffProjectThread={() => {}}
+        onKickoffProjectThread={() => "thread-1"}
         onKickoffTicketThread={() => {}}
         onThreadKickoffConsumed={() => {}}
         onThreadDisplayModeChange={() => {}}

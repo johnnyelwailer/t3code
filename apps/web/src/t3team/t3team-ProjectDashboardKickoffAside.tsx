@@ -109,7 +109,7 @@ export function ProjectDashboardKickoffAside({
           launchConfig.selectedToolIds,
           injectedContextAttachments,
           kickoffWorkflow,
-        ) as string | undefined,
+        ),
       onLaunched: clearInjectedContextAttachments,
     });
   // A digest recipe pill stages through the same `stageRecipeKickoff` as a quick-start click.

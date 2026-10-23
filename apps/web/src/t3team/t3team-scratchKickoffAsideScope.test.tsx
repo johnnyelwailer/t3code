@@ -59,7 +59,7 @@ describe("kickoff aside on the Scratch project", () => {
         onOpenThread={() => {}}
         onOpenFullThread={() => {}}
         onThreadKickoffConsumed={() => {}}
-        onKickoffProjectThread={() => {}}
+        onKickoffProjectThread={() => "thread-1"}
       />,
     );
     expect(markup).toContain("kickoff for No project");
@@ -73,7 +73,7 @@ describe("kickoff aside on the Scratch project", () => {
         providers={[]}
         isConnected
         onOpenThread={() => {}}
-        onKickoffThread={() => {}}
+        onKickoffProjectThread={() => "thread-1"}
       />,
     );
     expect(markup).toContain("kickoff for No project");
