@@ -1730,6 +1730,32 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     }));
   }
 
+  /**
+   * The subset of `issueKeys` a JQL query matches: one bounded search per 100 keys, so narrowing a
+   * set of already-known changes by JQL never walks the whole project. An invalid JQL rejects.
+   */
+  async filterIssueKeysByJql(input: {
+    readonly accountId: string;
+    readonly jql: string;
+    readonly issueKeys: ReadonlyArray<string>;
+  }): Promise<ReadonlySet<string>> {
+    const entry = this.getClientForAccount(input.accountId) ?? this.getDefaultClient();
+    if (!entry) throw new Error(`No Atlassian client available for account "${input.accountId}".`);
+    const matched = new Set<string>();
+    for (let at = 0; at < input.issueKeys.length; at += 100) {
+      const batch = input.issueKeys.slice(at, at + 100);
+      const keys = batch.map((key) => `"${key.replace(/"/g, '\\"')}"`).join(", ");
+      const response = await entry.client.searchIssues(
+        `(${input.jql}) AND key in (${keys})`,
+        batch.length,
+      );
+      for (const item of normalizeIssueSearch(response, entry.siteUrl)) {
+        if (item.displayId !== undefined) matched.add(item.displayId);
+      }
+    }
+    return matched;
+  }
+
   async getAvailableActions(_ref: unknown): Promise<ReadonlyArray<IntegrationAction>> {
     return [
       {

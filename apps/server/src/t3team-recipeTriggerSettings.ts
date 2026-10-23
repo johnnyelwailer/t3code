@@ -37,6 +37,8 @@ export type RecipeTriggerSetting = {
     readonly maxConcurrent?: number;
     readonly dailyCap?: number | null;
   };
+  /** Narrows a project-scope source: search qualifiers or JQL; overrides the recipe's `scope`. */
+  readonly scope?: { readonly query?: string };
 };
 
 export interface RecipeTriggerSettingsDoc {

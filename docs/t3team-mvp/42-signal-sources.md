@@ -314,8 +314,15 @@ where it is not.
 
 Phases 1 and 2 each deliver user-visible value alone, which is the reason for that order.
 
-**Implementation status (2026-09-20, GHE #332):** Phases 2–4 are built and on main — the Tier A/B
-sources, the reconciler, and the delivery port all exist. Phase 3 is deliberately partial:
+**Implementation status (2026-10-23, GHE #332/#343):** Phases 2–4 are built and on main — the Tier
+A/B sources, the reconciler, and the delivery port all exist. Two project-scope built-ins ride
+existing poll lanes instead of adding pollers: `work-item.project-updates` reads the project's Jira
+changes off the backlog mirror loop (a JQL `query` narrows them with one `key in (…)` search per
+poll that has changes), and `scm.project.items` watches every issue and change request in the
+project's repositories through the viewer source's `search/issues` transport. Recipe triggers
+claim through a launch ledger (`workflow_signal_trigger_launches`): the inbox slots and the pending
+launch commit together, the launch runs under the ledger id, and the limits are read back from it,
+so neither a crash nor a failed launch loses an event or launches twice. Phase 3 is deliberately partial:
 **only catalog (built-in) sources have a host-side `start` channel.** The host's reconciler knows
 how to start the catalog entries; a `defineSignalSource` ref has nowhere to run its `start` effect,
 so `getSignalSource` now fails loudly at bind time for non-built-in refs rather than parking a run

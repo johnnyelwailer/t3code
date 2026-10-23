@@ -28,6 +28,12 @@ import * as EffectPath from "effect/Path";
 import * as EffectFileSystem from "effect/FileSystem";
 
 import { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
+import * as SqlClient from "effect/sql/SqlClient";
+
+import {
+  ProjectionProjectSourceBindingRepository,
+  ProjectionProjectSourceBindingRepositoryLive,
+} from "./persistence/t3team-ProjectionProjectSourceBindings.ts";
 
 import { T3TeamWorkflowSignalDelivery } from "./t3team-workflowSignalDelivery.ts";
 import {
@@ -39,7 +45,14 @@ import { PullRequestService } from "./pullRequest/PullRequestService.ts";
 import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as VcsProcess from "./vcs/VcsProcess.ts";
 import { loadViewerPrRead } from "./t3team-myworkViewerPrLoader.ts";
-import { makeReconcilerCore } from "./t3team-workflowSignalReconcilerCore.ts";
+import {
+  makeReconcilerCore,
+  type SignalInstanceStatus,
+} from "./t3team-workflowSignalReconcilerCore.ts";
+import {
+  makeProjectScopePorts,
+  type ProjectScopeServices,
+} from "./t3team-workflowSignalProjectPorts.ts";
 import {
   T3TeamWorkflowSignalRehydrateGate,
   T3TeamWorkflowSignalRehydrateGateLive,
@@ -70,12 +83,15 @@ export interface WorkflowSignalReconcilerShape {
   readonly sweep: () => Promise<void>;
   /** Stop every live instance (host shutdown finalizer). */
   readonly stopAll: () => Promise<void>;
+  /** The instances this process runs or fails to start (diagnostics). */
+  readonly status: () => ReadonlyArray<SignalInstanceStatus>;
 }
 
 const INERT_RECONCILER: WorkflowSignalReconcilerShape = {
   reconcile: () => Promise.resolve(),
   sweep: () => Promise.resolve(),
   stopAll: () => Promise.resolve(),
+  status: () => [],
 };
 
 /** T3TeamWorkflowSignalReconciler - service tag for the signal-source reconciler. */
@@ -95,6 +111,9 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
     const pullRequestService = yield* PullRequestService;
     const gitHubApi = yield* GitHubApi.GitHubApi;
     const vcsProcess = yield* VcsProcess.VcsProcess;
+    // Held here, not read ambiently: the app provides the binding repository only to its consumers.
+    const sourceBindings = yield* ProjectionProjectSourceBindingRepository;
+    const sql = yield* SqlClient.SqlClient;
     // Boot ordering (GHE #332 review): no source instance may start — and so DELIVER — before
     // boot rehydration has rebuilt the watching-run controllers, or a first tick would hit the
     // delivery port's orphan branch and fail a healthy parked run. Rehydration runs with the
@@ -120,6 +139,18 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
         Effect.provideService(VcsProcess.VcsProcess, vcsProcess),
       ),
       resolveWorkItemProvider,
+      projectScope: makeProjectScopePorts({
+        pullRequestService,
+        gitHubApi,
+        runAmbient: (effect) =>
+          Effect.runPromiseWith(ambient as Context.Context<ProjectScopeServices>)(
+            effect.pipe(
+              Effect.provideService(ProjectionProjectSourceBindingRepository, sourceBindings),
+              Effect.provideService(SqlClient.SqlClient, sql),
+            ),
+          ),
+        resolveJiraProvider: resolveWorkItemProvider,
+      }),
     });
     // Loud boot cross-check: a renamed/missing catalog entry breaks boot, not a parked body.
     assertCatalogCoversDeclarations(catalog);
@@ -174,10 +205,12 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
       reconcile: () => rehydrated.then(() => core.reconcile()),
       sweep: () => rehydrated.then(() => core.sweep()),
       stopAll: () => core.stopAll(),
+      status: () => core.status(),
     };
   }),
 ).pipe(
   Layer.provide(Scheduler.layer),
+  Layer.provide(ProjectionProjectSourceBindingRepositoryLive),
   // The same gate reference the rehydrate layer and the delivery port use (memoized: one flag).
   Layer.provide(T3TeamWorkflowSignalRehydrateGateLive),
 );

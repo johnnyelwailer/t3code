@@ -5,6 +5,7 @@ import {
   builtinSignalSource,
   defineSignal,
   defineRecipe,
+  recipeTrigger,
   type SignalSourceRef,
   type WorkflowRef,
 } from "./t3team-sdk.index.ts";
@@ -61,6 +62,37 @@ describe("defineRecipe({ triggers }) validation", () => {
     expect(typeof recipe.triggers?.[0]?.select).toBe("function");
     expect(Object.isFrozen(recipe.triggers)).toBe(true);
     expect(Object.isFrozen(recipe.triggers?.[0])).toBe(true);
+  });
+
+  it("keeps an author scope and a gating feature flag, and rejects an empty flag key", () => {
+    const recipe = defineRecipe({
+      ...baseRecipe,
+      id: "recipe-trig-scope",
+      triggers: [{ ...validTrigger(), scope: { query: "is:issue" }, featureFlag: "recipes.x" }],
+    });
+    expect(recipe.triggers?.[0]?.scope).toEqual({ query: "is:issue" });
+    expect(recipe.triggers?.[0]?.featureFlag).toBe("recipes.x");
+    expect(() =>
+      defineRecipe({
+        ...baseRecipe,
+        id: "recipe-trig-flag",
+        triggers: [{ ...validTrigger(), featureFlag: " " }],
+      }),
+    ).toThrow("featureFlag must be a non-empty flag key");
+  });
+
+  it("types select and key by the signal's payload and re-decodes what the host hands them", () => {
+    const trigger = recipeTrigger({
+      ...validTrigger(),
+      select: (payload) => ({ cr: payload.cr.toUpperCase() }),
+      key: (payload) => payload.cr,
+    });
+    const recipe = defineRecipe({ ...baseRecipe, id: "recipe-trig-typed", triggers: [trigger] });
+    expect(recipe.triggers?.[0]?.select({ cr: "repo#1" }, { settings: {} })).toEqual({
+      cr: "REPO#1",
+    });
+    expect(recipe.triggers?.[0]?.key({ cr: "repo#1" })).toBe("repo#1");
+    expect(() => recipe.triggers?.[0]?.key({ other: 1 })).toThrow();
   });
 
   it("leaves triggers absent when none are declared (back-compat)", () => {
