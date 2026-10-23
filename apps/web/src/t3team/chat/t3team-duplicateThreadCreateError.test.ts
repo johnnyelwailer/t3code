@@ -40,6 +40,23 @@ describe("isDuplicateThreadCreateError", () => {
     ).toBe(true);
   });
 
+  it("matches the v2 orchestrator's rejection of an existing thread id", () => {
+    expect(
+      isDuplicateThreadCreateError({
+        _id: "Cause",
+        failures: [
+          {
+            _tag: "Fail",
+            error: {
+              _tag: "OrchestratorThreadAlreadyExistsError",
+              message: "Thread thread-1792751058156-1 already exists. Use a new thread id.",
+            },
+          },
+        ],
+      }),
+    ).toBe(true);
+  });
+
   it("does not match unrelated failures", () => {
     expect(isDuplicateThreadCreateError(new Error("Thread not found"))).toBe(false);
     expect(
