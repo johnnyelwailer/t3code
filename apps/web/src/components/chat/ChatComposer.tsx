@@ -3499,6 +3499,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       <ComposerMicInput
         environmentId={environmentId}
         threadId={activeThreadId}
+        sessionKey={composerDraftTargetKey}
         onTranscript={(text) => insertComposerTextAtEnd(text)}
         disabled={isConnecting || projectSelectionRequired}
       />

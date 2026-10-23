@@ -4,7 +4,7 @@
  * t3team-useVoiceInput.ts so each file stays under the additive guard's
  * 200 non-empty line ceiling.
  */
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import type { StopMode, VoiceState } from "./t3team-types.ts";
 
@@ -25,12 +25,12 @@ export interface VoiceInputControlsDeps {
   readonly stateRef: { readonly current: VoiceState };
   readonly sessionRef: { current: VoiceRecognitionSessionLike | null };
   readonly autoStopRef: { current: SilenceAutoStopLike | null };
-  readonly barsStopRef: { current: (() => void) | null };
-  readonly audioCtxRef: { current: AudioContext | null };
   readonly accumulatedRef: { current: string };
   readonly autoResumeRef: { current: boolean };
   readonly startRecording: () => void;
   readonly stopRecording: (cancelled: boolean, autoSubmit?: boolean) => void;
+  /** Identity of the draft the recording belongs to; a change cancels the recording. */
+  readonly sessionKey?: string | undefined;
 }
 
 export interface VoiceInputControls {
@@ -50,28 +50,25 @@ export function useVoiceInputControls(
     stateRef,
     sessionRef,
     autoStopRef,
-    barsStopRef,
-    audioCtxRef,
     accumulatedRef,
     autoResumeRef,
     startRecording,
     stopRecording,
+    sessionKey,
   } = deps;
 
-  // Support detection teardown on unmount.
+  // Cancel on unmount AND whenever the composer is re-pointed at another draft
+  // (switching threads reuses this component, so unmount alone never fires).
+  // The transcript is discarded: it was spoken for the previous draft and must
+  // not land in the new one.
+  const stopRecordingRef = useRef(stopRecording);
+  stopRecordingRef.current = stopRecording;
   useEffect(() => {
     return () => {
       autoResumeRef.current = false;
-      sessionRef.current?.stop();
-      sessionRef.current = null;
-      barsStopRef.current?.();
-      barsStopRef.current = null;
-      if (audioCtxRef.current) {
-        audioCtxRef.current.close().catch(() => {});
-        audioCtxRef.current = null;
-      }
+      stopRecordingRef.current(true);
     };
-  }, []);
+  }, [sessionKey]);
 
   // Language switch while recording (restarts the recognition stream).
   const switchLang = useCallback(
