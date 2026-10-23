@@ -16,7 +16,7 @@ import {
   type ProjectDashboardMyWorkRouteSearch,
   type ProjectDashboardMyWorkState,
 } from "./t3team-projectDashboardMyWorkStateShared";
-import { readT3TeamBetaFlags } from "./t3team-betaFlags";
+import { readDigestVariantFlags } from "./t3team-digestVariantFlags";
 import { resolveProjectMyWorkLensFromRouteSearch } from "./t3team-projectMyWorkLensRoute";
 
 export function readPersistedProjectDashboardMyWorkState(
@@ -121,7 +121,7 @@ export function resolveProjectDashboardMyWorkState(input: {
 
   // The beta flag's default lens only applies when the user has not persisted one.
   if (input.persisted?.lens === undefined) {
-    next.lens = readT3TeamBetaFlags().digestDefaultLens;
+    next.lens = readDigestVariantFlags().digestDefaultLens;
   }
 
   const search = input.search;

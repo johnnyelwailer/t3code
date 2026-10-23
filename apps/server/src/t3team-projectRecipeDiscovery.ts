@@ -13,6 +13,7 @@ import { discoverPackRecipes } from "./t3team-projectRecipeDiscoveryPack.ts";
 import { discoverProjectRecipeAtPath, sortRecipes } from "./t3team-projectRecipeDiscoveryRecipe.ts";
 import { mergeRecipesByPrecedence } from "./t3team-projectRecipeOrigin.ts";
 import { T3TEAM_PROJECT_RECIPES_ROOT } from "./t3team-projectSetupShared.ts";
+import { offeredRecipes } from "./t3team-workItemDeliveryRecipesFlag.ts";
 
 function normalizeRenderContext(context: ProjectRecipeRenderContext): ProjectRecipeRenderContext {
   return {
@@ -38,7 +39,7 @@ function finalize(input: {
   return {
     workspaceRoot: input.workspaceRoot,
     hasProjectLocalRecipes: input.hasProjectLocalRecipes,
-    recipes: merged.recipes.toSorted(sortRecipes),
+    recipes: offeredRecipes(merged.recipes).toSorted(sortRecipes),
     ...(diagnostics.length > 0 ? { diagnostics } : {}),
   };
 }

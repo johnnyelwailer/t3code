@@ -10,10 +10,15 @@
 
 export const T3TEAM_DESCRIPTION_REWRITE_RECIPE_ID = "describe-rewrite";
 
+/** Offered only while `WORKITEM_DELIVERY_RECIPES` is on (`apps/server/src/t3team-workItemDeliveryRecipesFlag.ts`). */
+export const WORK_ITEM_DELIVERY_RECIPE_IDS: ReadonlySet<string> = new Set([
+  "fix-this-bug",
+  "implement-this",
+]);
+
 /** Bundled recipes whose project-setup scaffolding writes a `workflow.ts` next to `recipe.ts`
  * (see `apps/server/src/t3team-projectSetupRecipes.ts`). */
 export const WORKFLOW_BACKED_BUNDLED_RECIPE_IDS: ReadonlySet<string> = new Set([
   T3TEAM_DESCRIPTION_REWRITE_RECIPE_ID,
-  "fix-this-bug",
-  "implement-this",
+  ...WORK_ITEM_DELIVERY_RECIPE_IDS,
 ]);

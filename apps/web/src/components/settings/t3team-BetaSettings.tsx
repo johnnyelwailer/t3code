@@ -9,6 +9,7 @@ import {
   useT3TeamBetaFlags,
   type T3TeamBetaFlags,
 } from "../../t3team/t3team-betaFlags";
+import { useFeatureFlag } from "../../t3team/t3team-useFeatureFlag";
 import { Button } from "../ui/button";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 
@@ -49,7 +50,12 @@ function BetaFlagSelect<K extends keyof T3TeamBetaFlags>({
   );
 }
 
+/** Hidden while `MYWORK_DIGEST_VARIANTS` is off: the digest then ignores these choices. */
 export function T3TeamBetaSettings() {
+  return useFeatureFlag("MYWORK_DIGEST_VARIANTS") ? <BetaSettingsSection /> : null;
+}
+
+function BetaSettingsSection() {
   const { flags, setFlag } = useT3TeamBetaFlags();
   const isDefault = JSON.stringify(flags) === JSON.stringify(DEFAULT_T3TEAM_BETA_FLAGS);
 

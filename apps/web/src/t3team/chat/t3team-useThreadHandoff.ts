@@ -54,7 +54,8 @@ export function useT3TeamThreadHandoff(input: {
   const supported =
     input.enabled &&
     shell !== null &&
-    serverConfig?.environment.capabilities.t3team?.threadHandoff === true;
+    serverConfig?.environment.capabilities.t3team?.threadHandoff === true &&
+    readServerFeatureFlagOr(serverConfig, "CLOUD_THREAD_HANDOFF", true);
   const reapSupported = readServerFeatureFlagOr(
     serverConfig,
     "RESOURCE_PRESSURE",
