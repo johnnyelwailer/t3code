@@ -4,6 +4,7 @@ import {
   type CloudSessionAttachInput,
   type CloudSessionAttachResult,
 } from "@t3tools/contracts";
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -16,6 +17,7 @@ import {
   makeNexiBrokerClient,
   type StandbyClaim,
 } from "./t3team-NexiBrokerClient.ts";
+import { SESSION_ABSENT_GRACE_MS, makeAbsenceTracker } from "./t3team-brokerAbsence.ts";
 import { type BrokerForwarder, startBrokerForwarder } from "./t3team-NexiBrokerForwarder.ts";
 
 /**
@@ -86,22 +88,31 @@ export function sessionToAttach<
 
 /**
  * Why no session can be attached. A session the broker lists without an environment id is still
- * starting (its machine has not registered yet): retrying can succeed. One the broker does not
- * list, and no live session serves its environment, is over — a client must stop retrying it.
+ * starting (its machine has not registered yet), and one it does not list may be reconnecting to
+ * the broker: both are retryable (`unknown_session`). A session missing for longer than
+ * `SESSION_ABSENT_GRACE_MS` — past every reconnect and broker restart — has ended, which a client
+ * must stop retrying (`session_ended`).
  */
 export function attachFailure(
   sessions: ReadonlyArray<{ readonly runId: string }>,
   input: CloudSessionAttachInput,
+  absentForMs: number,
 ): CloudSessionFailedError {
-  const starting = sessions.some((s) => s.runId === input.sessionId);
-  return starting
+  if (sessions.some((s) => s.runId === input.sessionId)) {
+    return new CloudSessionFailedError({
+      reason: "unknown_session",
+      message: "That cloud session is not running yet: it is still starting.",
+    });
+  }
+  return absentForMs >= SESSION_ABSENT_GRACE_MS
     ? new CloudSessionFailedError({
-        reason: "unknown_session",
-        message: "That cloud session is not running yet: it is still starting.",
-      })
-    : new CloudSessionFailedError({
         reason: "session_ended",
         message: "That cloud session has ended.",
+      })
+    : new CloudSessionFailedError({
+        reason: "unknown_session",
+        message:
+          "That cloud session is not listed by the broker right now. It may be reconnecting.",
       });
 }
 
@@ -138,6 +149,7 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
   );
   const client = yield* makeNexiBrokerClient(config, accessToken);
   const forwarders = new Map<string, BrokerForwarder>();
+  const absence = makeAbsenceTracker();
   yield* Effect.addFinalizer(() => Effect.sync(() => forwarders.forEach((f) => f.close())));
   const tokenPromise = () => Effect.runPromise(accessToken);
   const streamUrl = (runId: string) =>
@@ -158,8 +170,13 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
       }
       const session = sessionToAttach(sessions, input);
       if (session === undefined || !session.environmentId) {
-        return yield* attachFailure(sessions, input);
+        return yield* attachFailure(
+          sessions,
+          input,
+          absence.absent(input.sessionId, yield* Clock.currentTimeMillis),
+        );
       }
+      absence.present(input.sessionId);
       const sessionId = session.runId;
       let forwarder = forwarders.get(sessionId);
       if (forwarder === undefined) {

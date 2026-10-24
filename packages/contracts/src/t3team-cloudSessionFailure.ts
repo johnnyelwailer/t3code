@@ -13,9 +13,10 @@ export const CloudSessionFailureReasonSchema = Schema.Literals([
   /** The session id does not correspond to a known session. */
   "unknown_session",
   /**
-   * The session an attach asked for is not running any more: the broker's list holds neither it
-   * nor a live session serving the same environment. Terminal, unlike `unknown_session` (which
-   * also covers a session that is still starting): a client stops retrying and offers a new one.
+   * The session an attach asked for has ended: the broker has not listed it (nor a live session
+   * serving the same environment) for longer than any reconnect or broker restart takes. Terminal,
+   * unlike `unknown_session` (still starting, or the broker has lost sight of it for a moment): a
+   * client stops retrying and offers a new session.
    */
   "session_ended",
   /**
