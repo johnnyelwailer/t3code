@@ -43,6 +43,20 @@ type ComposerProject = CloudSessionLocalProject;
 const repositoryOf = (project: ProjectFacts) =>
   project.repositoryIdentity ? repositoryGroupingKeyOf(project.repositoryIdentity) : null;
 
+/** A Run-on target set up for this project: only then is its machine's working folder this project's. */
+export function targetFollowsProject(
+  target: { readonly projectKey: string | null } | null,
+  project: ComposerProject | null,
+  projectKey: string | null,
+): boolean {
+  return (
+    target !== null &&
+    project !== null &&
+    target.projectKey !== null &&
+    target.projectKey === projectKey
+  );
+}
+
 export function resolveCloudSessionOwnProject(input: {
   /** The composer's Run-on target (null when it targets no cloud session). */
   readonly target: { readonly sessionId: string; readonly projectKey: string | null } | null;
@@ -57,9 +71,13 @@ export function resolveCloudSessionOwnProject(input: {
   >;
 }): CloudSessionOwnProject | null {
   const { target, project } = input;
-  // A target set up for another project (or for none) is not this project's session.
-  if (target === null || project === null || target.projectKey === null) return null;
-  if (target.projectKey !== input.projectKey) return null;
+  if (
+    target === null ||
+    project === null ||
+    !targetFollowsProject(target, project, input.projectKey)
+  ) {
+    return null;
+  }
   const environmentId = input.sessions.find(
     (item) => item.sessionId === target.sessionId,
   )?.environmentId;

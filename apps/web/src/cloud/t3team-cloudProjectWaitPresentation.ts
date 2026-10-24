@@ -5,7 +5,6 @@
  * module (banner title, step detail) and the setup card.
  */
 import type { CloudProjectWait, CloudProjectWaitReason } from "./t3team-cloudProjectWait";
-import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 
 /** Seconds on the step before the card says what is expected. */
 export const CLOUD_PROJECT_WAIT_EXPECTED_SECONDS = 15;
@@ -38,6 +37,8 @@ export function cloudProjectWaitDetail(wait: CloudProjectWait): string {
   switch (wait.reason) {
     case "machine-settings-pending":
       return "Waiting for the cloud machine to report its settings";
+    case "scratch-folder-unknown":
+      return "The cloud machine reported no scratch folder";
     case "scratch-opening":
       return "Opening the cloud machine's scratch folder";
     case "project-list-pending":
@@ -59,6 +60,8 @@ function expectedText(wait: CloudProjectWait): string {
   switch (wait.reason) {
     case "machine-settings-pending":
       return "Your message is sent once the machine answers this app's first request.";
+    case "scratch-folder-unknown":
+      return "Your message is held: this app finds a machine's scratch folder through its settings, and they name none.";
     case "scratch-opening":
       return "This app opens the folder on the machine, then sends your message.";
     case "project-list-pending":
@@ -77,6 +80,8 @@ function unmetText(wait: CloudProjectWait): string {
   switch (wait.reason) {
     case "machine-settings-pending":
       return "the machine has not reported its settings to this app";
+    case "scratch-folder-unknown":
+      return "the machine's settings name no scratch folder";
     case "scratch-opening":
       return "the machine's scratch folder is not open";
     case "project-list-pending":
@@ -98,6 +103,7 @@ export function cloudProjectWaitDiagnostic(wait: CloudProjectWait): string {
 }
 
 const BLOCKING: ReadonlySet<CloudProjectWaitReason> = new Set([
+  "scratch-folder-unknown",
   "different-repository",
   "different-folder",
 ]);
@@ -127,18 +133,4 @@ export function presentCloudProjectWait(
           : `Taking longer than usual. Not yet true: ${unmet}. ${expectedText(wait)} You can cancel while you wait.`,
     diagnostic: level === "slow" ? cloudProjectWaitDiagnostic(wait) : null,
   };
-}
-
-/**
- * Seconds spent on the "project" step, from a clock that counts seconds since the send was
- * queued (the setup card's server-anchored one). Zero until the step has been stamped.
- */
-export function cloudProjectWaitSeconds(
-  queued: CloudQueuedSend | undefined,
-  secondsSinceQueued: number,
-): number {
-  const started = queued?.stepStartedAt?.project;
-  if (queued === undefined || started === undefined) return 0;
-  const offset = (Date.parse(started) - Date.parse(queued.createdAt)) / 1000;
-  return Math.max(0, secondsSinceQueued - (Number.isFinite(offset) ? offset : 0));
 }

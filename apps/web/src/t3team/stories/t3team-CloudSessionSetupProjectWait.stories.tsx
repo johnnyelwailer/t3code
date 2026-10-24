@@ -84,18 +84,21 @@ function projectWait(over: Partial<CloudProjectWaitInput>): CloudProjectWait {
   });
 }
 
+const STORY_PROJECT_STARTED_MS = Date.parse("2026-10-13T08:02:00.000Z");
+
+/** The project step `waitingSeconds` after its own stamp, on a session that has been up a while. */
 function projectStepStory(wait: CloudProjectWait, waitingSeconds: number): Story {
-  const sinceQueued = 120 + waitingSeconds;
   return {
     args: {
       facts: {
-        session: session({ phase: "ready", elapsedSeconds: sinceQueued }),
+        session: session({ phase: "ready", elapsedSeconds: 600 + waitingSeconds }),
         machineConnected: true,
         delivery: "queued",
         queued: STORY_QUEUED ?? undefined,
         projectWait: wait,
       },
-      frozenElapsedSeconds: sinceQueued,
+      frozenElapsedSeconds: 600 + waitingSeconds,
+      frozenNowMs: STORY_PROJECT_STARTED_MS + waitingSeconds * 1000,
       onCancel: () => {},
     },
   };

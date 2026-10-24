@@ -15,8 +15,8 @@ import type { CloudProjectWait } from "./t3team-cloudProjectWait";
 import {
   type CloudProjectWaitNotice,
   cloudProjectWaitDetail,
-  presentCloudProjectWait,
 } from "./t3team-cloudProjectWaitPresentation";
+import { presentCloudProjectWaitAt } from "./t3team-cloudProjectWaitClock";
 import { isCloudQueuedSendFailed, type CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 
 const CLOUD_QUEUED_SEND_STEP_IDS = [
@@ -159,10 +159,7 @@ export function presentCloudQueuedSendProgress(
           : null,
     };
   });
-  const notice =
-    projectWait === null
-      ? null
-      : presentCloudProjectWait(projectWait, steps[current]?.elapsedSeconds ?? 0);
+  const notice = presentCloudProjectWaitAt(projectWait, facts.queued, nowMs);
   const provisioning =
     facts.session !== null && isCloudSessionProvisionPending(facts.session.phase);
   return {
