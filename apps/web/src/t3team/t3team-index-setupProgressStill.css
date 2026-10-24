@@ -3,7 +3,8 @@
 /*
  * Reduced motion. The card reads `prefers-reduced-motion` itself (useMediaQuery) and stamps
  * data-motion="still", so one rule set serves the OS setting and the story that forces it.
- * What remains is a still, fully readable card: the bar just moves forward each second.
+ * What remains is a still, fully readable card: a determinate bar just moves forward each second,
+ * and an indeterminate one shows only its track (the words say what is happening).
  */
 .t3team-setup-card[data-motion="still"],
 .t3team-setup-card[data-motion="still"][data-state="ready"] {
@@ -21,6 +22,9 @@
   transform: scale(0.8);
 }
 .t3team-setup-card[data-motion="still"] .t3team-setup-fill::after {
+  display: none;
+}
+.t3team-setup-card[data-motion="still"] .t3team-setup-indeterminate {
   display: none;
 }
 .t3team-setup-card[data-motion="still"] .t3team-setup-shimmer {

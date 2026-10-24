@@ -18,6 +18,11 @@ import type { EnvironmentConnectionPhase } from "@t3tools/client-runtime/connect
  */
 export type EnvironmentLiveState = "live" | "offline" | "ended";
 
+/**
+ * A connecting or reconnecting environment stays `live` until `graceElapsed`: a brief blip (the
+ * local server restarting, a socket renewed) is not worth rewriting the row for, and the composer
+ * banner waits the same grace before it says anything.
+ */
 export function resolveEnvironmentLiveState(input: {
   readonly phase: EnvironmentConnectionPhase;
   /** The supervisor parked the connection on `session_ended` (`isSessionEndedFailure`). */

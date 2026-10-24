@@ -7,6 +7,9 @@ import { CLOUD_SETUP_READY_LINGER_MS, CloudSessionSetupHost } from "./t3team-Clo
 import { CLOUD_SETUP_LOST_MESSAGE } from "./t3team-cloudSessionSetupProgress";
 import { CLOUD_SETUP_LOST_AFTER_MS, useCloudSessionLost } from "./t3team-useCloudSessionSetupCard";
 
+/** The setup card renders no router links and reads no route, so it mounts without a router. */
+const noRouter: { readonly router: false } = { router: false };
+
 function session(overrides: Partial<CloudSession> = {}): CloudSession {
   return {
     sessionId: "session-1",
@@ -28,7 +31,7 @@ describe("CloudSessionSetupCard", () => {
         facts={{ session: session(), machineConnected: false }}
         frozenElapsedSeconds={40}
       />,
-      { router: false },
+      noRouter,
     );
     const card = screen.container.querySelector("[data-cloud-setup-card]")!;
     expect(card.getAttribute("data-state")).toBe("working");
@@ -39,6 +42,8 @@ describe("CloudSessionSetupCard", () => {
     const bar = card.querySelector("[role='progressbar']")!;
     expect(bar.getAttribute("aria-valuetext")).toMatch(/^Building workspace… About \d+ min left$/);
     expect(bar.hasAttribute("aria-valuenow")).toBe(false);
+    const fill = bar.querySelector<HTMLElement>("[data-cloud-setup-fill='determinate']");
+    expect(Number.parseFloat(fill?.style.width ?? "100")).toBeLessThan(95);
     expect(card.querySelector("[role='status']")?.closest("[aria-busy='true']")).toBeNull();
     expect(card.querySelector("[data-cloud-setup-estimate]")?.textContent).toMatch(
       /min left|minute/,
@@ -55,14 +60,18 @@ describe("CloudSessionSetupCard", () => {
         facts={{ session: session({ elapsedSeconds: 400 }), machineConnected: false }}
         frozenElapsedSeconds={400}
       />,
-      { router: false },
+      noRouter,
     );
     const card = screen.container.querySelector("[data-cloud-setup-card]")!;
     expect(card.getAttribute("data-slow")).toBe("true");
     expect(card.querySelector("[data-cloud-setup-estimate]")?.textContent).toBe(
       "Taking longer than the rough estimate",
     );
-    expect(card.querySelector("[role='progressbar']")?.hasAttribute("aria-valuenow")).toBe(false);
+    const bar = card.querySelector("[role='progressbar']")!;
+    expect(bar.hasAttribute("aria-valuenow")).toBe(false);
+    expect(bar.getAttribute("aria-valuetext")).toContain("Taking longer than the rough estimate");
+    expect(bar.querySelector("[data-cloud-setup-fill='determinate']")).toBeNull();
+    expect(bar.querySelector("[data-cloud-setup-fill='indeterminate']")).not.toBeNull();
   });
 
   it("explains repository setup for a project machine", async () => {
@@ -74,7 +83,7 @@ describe("CloudSessionSetupCard", () => {
         }}
         frozenElapsedSeconds={100}
       />,
-      { router: false },
+      noRouter,
     );
     expect(
       screen.container.querySelector("[data-cloud-setup-note='long-wait']")?.textContent,
@@ -83,6 +92,11 @@ describe("CloudSessionSetupCard", () => {
       "1m 40s so far",
     );
     expect(screen.container.textContent).not.toContain("Rough estimate");
+    const bar = screen.container.querySelector("[role='progressbar']")!;
+    expect(bar.hasAttribute("aria-valuenow")).toBe(false);
+    expect(bar.getAttribute("aria-valuetext")).toContain("1m 40s so far");
+    expect(bar.querySelector("[data-cloud-setup-fill='determinate']")).toBeNull();
+    expect(bar.querySelector("[data-cloud-setup-fill='indeterminate']")).not.toBeNull();
   });
 
   it("only says everything is in place once the machine is connected", async () => {
@@ -90,7 +104,7 @@ describe("CloudSessionSetupCard", () => {
       <CloudSessionSetupCard
         facts={{ session: session({ phase: "ready" }), machineConnected: false }}
       />,
-      { router: false },
+      noRouter,
     );
     expect(screen.container.textContent).not.toContain("Everything is in place");
     expect(screen.container.textContent).toContain("Send your first message to connect");
@@ -109,7 +123,7 @@ describe("CloudSessionSetupCard", () => {
         facts={{ session: null, machineConnected: false, lost: true }}
         onTryAgain={onTryAgain}
       />,
-      { router: false },
+      noRouter,
     );
     const card = screen.container.querySelector("[data-cloud-setup-card]")!;
     expect(card.getAttribute("data-state")).toBe("failed");
@@ -129,7 +143,7 @@ describe("CloudSessionSetupCard", () => {
         motion="still"
         frozenElapsedSeconds={40}
       />,
-      { router: false },
+      noRouter,
     );
     expect(
       still.container.querySelector("[data-cloud-setup-card]")?.getAttribute("data-motion"),
@@ -146,7 +160,7 @@ describe("CloudSessionSetupCard", () => {
         }}
         onTryAgain={onTryAgain}
       />,
-      { router: false },
+      noRouter,
     );
     expect(screen.container.textContent).toContain("Failed at “Checkout”.");
     expect(screen.container.querySelector("[role='progressbar']")).toBeNull();
@@ -162,7 +176,7 @@ describe("CloudSessionSetupCard", () => {
     const facts = { session: session(), machineConnected: false, delivery: "queued" as const };
     await using screen = await render(
       <CloudSessionSetupCard facts={facts} onCancel={onCancel} frozenElapsedSeconds={40} />,
-      { router: false },
+      noRouter,
     );
     const cancel = [...screen.container.querySelectorAll("button")].find((b) =>
       b.textContent?.includes("Cancel"),
@@ -191,7 +205,7 @@ describe("CloudSessionSetupHost", () => {
       <CloudSessionSetupHost
         facts={{ session: session({ phase: "ready" }), machineConnected: false }}
       />,
-      { router: false },
+      noRouter,
     );
     expect(screen.container.querySelector("[data-cloud-setup-card]")).toBeNull();
   });
@@ -199,7 +213,7 @@ describe("CloudSessionSetupHost", () => {
   it("shows nothing when the list arrives late with a session that is already ready", async () => {
     await using screen = await render(
       <CloudSessionSetupHost facts={{ session: null, machineConnected: false }} />,
-      { router: false },
+      noRouter,
     );
     await screen.rerender(
       <CloudSessionSetupHost
@@ -213,7 +227,7 @@ describe("CloudSessionSetupHost", () => {
     using _timers = fakeTimers();
     await using screen = await render(
       <CloudSessionSetupHost facts={{ session: session(), machineConnected: false }} />,
-      { router: false },
+      noRouter,
     );
     expect(screen.container.querySelector("[data-state='working']")).not.toBeNull();
     await screen.rerender(
@@ -234,9 +248,7 @@ function LostProbe({ sessionId, missing }: { sessionId: string; missing: boolean
 describe("useCloudSessionLost", () => {
   it("gives a missing session a bounded wait, and forgets it once the session shows up", async () => {
     using _timers = fakeTimers();
-    await using screen = await render(<LostProbe sessionId="session-1" missing />, {
-      router: false,
-    });
+    await using screen = await render(<LostProbe sessionId="session-1" missing />, noRouter);
     await act(() => vi.advanceTimersByTime(CLOUD_SETUP_LOST_AFTER_MS - 1_000));
     expect(screen.container.textContent).toBe("waiting");
     await act(() => vi.advanceTimersByTime(1_000));

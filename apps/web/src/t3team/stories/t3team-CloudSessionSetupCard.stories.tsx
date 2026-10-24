@@ -77,7 +77,7 @@ export const Queued: Story = {
 /** A plain session: a rough estimate from one measured start-up, and it says so. */
 export const PreparingPlain: Story = {};
 
-/** A project machine: cloning and installing; elapsed time only, no made-up estimate. */
+/** A project machine: cloning and installing; elapsed time only, an indeterminate bar, no estimate. */
 export const PreparingProjectMachine: Story = {
   args: {
     facts: {
@@ -134,7 +134,7 @@ export const Slow: Story = {
   },
 };
 
-/** A long project machine setup: still only the elapsed time, never "longer than usual". */
+/** A long project machine setup: elapsed time and a drifting bar, never parked near full. */
 export const SlowProjectMachine: Story = {
   args: {
     facts: {
@@ -181,6 +181,11 @@ export const MessageNotDelivered: Story = {
 
 /** `prefers-reduced-motion`: no loops, no shimmer, no ripples; the bar moves forward each second. */
 export const ReducedMotion: Story = {
+  args: { motion: "still" },
+};
+
+/** Reduced motion on a long setup: no drifting segment, just the track and the words. */
+export const ReducedMotionLongWait: Story = {
   args: {
     facts: {
       session: session({

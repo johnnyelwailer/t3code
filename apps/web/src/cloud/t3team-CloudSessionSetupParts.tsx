@@ -63,7 +63,13 @@ function SetupFill({ progress }: { readonly progress: number }) {
     "--t3team-setup-from": `${(progress * 100).toFixed(2)}%`,
     width: `${(progress * 100).toFixed(2)}%`,
   };
-  return <div className="t3team-setup-fill h-full rounded-full bg-primary" style={style} />;
+  return (
+    <div
+      data-cloud-setup-fill="determinate"
+      className="t3team-setup-fill h-full rounded-full bg-primary"
+      style={style}
+    />
+  );
 }
 
 /** The only part that follows the clock: the bar and the estimate. */
@@ -84,7 +90,16 @@ export function SetupLiveReadout({
         aria-valuetext={readout.valueText}
         className="h-1 w-full overflow-hidden rounded-full bg-muted"
       >
-        {working || model.stage === "ready" ? <SetupFill progress={readout.progress} /> : null}
+        {readout.progress === null ? (
+          working ? (
+            <div
+              data-cloud-setup-fill="indeterminate"
+              className="t3team-setup-indeterminate h-full"
+            />
+          ) : null
+        ) : working || model.stage === "ready" ? (
+          <SetupFill progress={readout.progress} />
+        ) : null}
       </div>
       {working ? (
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs">

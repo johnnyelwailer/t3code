@@ -7,6 +7,8 @@ import {
 /**
  * The listed session an attach reaches: the one asked for, else — a workspace's sessions share
  * their environment, since the snapshot keeps its id — the live one serving the same environment.
+ * Two live sessions in one workspace (started side by side) serve the same environment: the newest
+ * run wins, so reconnects stay on one machine instead of following list order.
  */
 export function sessionToAttach<
   S extends { readonly runId: string; readonly environmentId?: string | null | undefined },

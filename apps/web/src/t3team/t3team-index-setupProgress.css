@@ -92,9 +92,21 @@
   animation: t3team-setup-sheen 2.4s ease-in-out infinite;
 }
 
-/* Taking longer than usual: no more advance, a slower and wider sweep says "still working". */
-.t3team-setup-card[data-slow="true"] .t3team-setup-fill::after {
-  animation-duration: 3.8s;
+/* No fraction to claim (a long setup, or past the rough estimate): a calm segment drifts across. */
+@keyframes t3team-setup-drift {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+.t3team-setup-indeterminate {
+  width: 30%;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--primary) 55%, transparent);
+  animation: t3team-setup-drift 3.2s ease-in-out infinite;
 }
 
 /* The current step's words carry a quiet sweep of light. */
