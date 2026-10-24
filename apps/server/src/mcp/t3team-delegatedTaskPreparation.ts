@@ -8,8 +8,11 @@
  * child exists it calls `afterCreate(childThreadId)` (outside any thread lock,
  * so it may write side stores but must not wait on the child) and appends all
  * returned notes to the tool result. A retried request (same clientRequestId)
- * whose child already existed skips `afterCreate`; a request whose dispatch
- * created no child runs `release` instead, to undo what `prepare` created.
+ * whose child already existed skips `afterCreate` and runs `afterReplay`; a
+ * request whose dispatch created no child runs `release` instead, to undo what
+ * `prepare` created. When the request already has an accepted delegation before
+ * `prepare` runs, `acceptedChildThreadId` names the child it created, so
+ * `prepare` can answer from that child instead of creating anything again.
  *
  * The default rejects `workspace.isolation: "worktree"` and every extension
  * key with `invalid_request`, so a host without a registered implementation
@@ -39,6 +42,8 @@ export interface DelegatedTaskPreparationInput {
   readonly explicitTargetOptions: boolean;
   readonly workspace: OrchestratorMcpDelegateWorkspace | undefined;
   readonly extensions: Readonly<Record<string, unknown>> | undefined;
+  /** The child an earlier attempt of this request created; the dispatch will replay it. */
+  readonly acceptedChildThreadId: ThreadId | undefined;
 }
 
 export interface DelegatedTaskWorkspaceOverride {
@@ -55,6 +60,11 @@ export interface DelegatedTaskPrepared {
   readonly afterCreate: (childThreadId: ThreadId) => Effect.Effect<ReadonlyArray<string>>;
   /** Undoes what `prepare` created (e.g. a worktree) when no child was created. Never fails. */
   readonly release?: Effect.Effect<void>;
+  /**
+   * Runs instead of `afterCreate` when the dispatch replayed a child that already existed: frees
+   * what this attempt reserved, never what the existing child holds. Never fails.
+   */
+  readonly afterReplay?: Effect.Effect<void>;
 }
 
 export interface DelegatedTaskExtensionOption {

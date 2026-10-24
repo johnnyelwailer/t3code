@@ -105,6 +105,9 @@ export interface RemoteEnvironmentSessionDeps {
   ) => Effect.Effect<RemoteEnvironmentGrant, RemoteEnvironmentRejected>;
   /** Reconnects after a dropped connection before the turn fails. */
   readonly reconnectAttempts?: number;
+  /** Connections tried while the session is still starting, before the turn fails. */
+  readonly readinessAttempts?: number;
+  readonly readinessInterval?: Duration.Input;
   /** How long an interrupt waits for the remote run to end before ending the turn itself. */
   readonly interruptGrace?: Duration.Input;
 }

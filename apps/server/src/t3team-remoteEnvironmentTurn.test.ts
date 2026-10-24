@@ -1,5 +1,10 @@
 import { assert, describe, it } from "@effect/vitest";
-import { OrchestrationV2ConversationMessage, OrchestrationV2Run, RunId } from "@t3tools/contracts";
+import {
+  OrchestrationV2ConversationMessage,
+  OrchestrationV2Run,
+  OrchestrationV2TurnItem,
+  RunId,
+} from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -90,6 +95,46 @@ describe("remoteTurnProgress", () => {
     assert.deepStrictEqual(failed.terminal, {
       status: "failed",
       message: "The child's run on the cloud session failed: Model not available",
+    });
+  });
+});
+
+const decodeTurnItem = Schema.decodeUnknownSync(Schema.toCodecJson(OrchestrationV2TurnItem));
+
+const errorItem = decodeTurnItem({
+  id: "turn-item:error",
+  threadId: "remote-thread",
+  runId: "remote-run-1",
+  nodeId: null,
+  type: "error",
+  failure: {
+    class: "provider_error",
+    message: "Nexplore AI is unavailable: Request timed out.",
+    code: null,
+    retryable: null,
+  },
+  providerThreadId: null,
+  providerTurnId: null,
+  nativeItemRef: null,
+  parentItemId: null,
+  ordinal: 2,
+  status: "failed",
+  title: null,
+  startedAt: AT,
+  completedAt: AT,
+  updatedAt: AT,
+});
+
+describe("remoteTurnProgress failure reason", () => {
+  it("carries the remote run's own error into the failure", () => {
+    const failed = remoteTurnProgress(
+      { runs: [run("failed")], messages: [], turnItems: [errorItem] },
+      turn.message.messageId,
+    );
+    assert.deepStrictEqual(failed.terminal, {
+      status: "failed",
+      message:
+        "The child's run on the cloud session failed: Nexplore AI is unavailable: Request timed out.",
     });
   });
 });

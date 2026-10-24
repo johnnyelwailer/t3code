@@ -32,9 +32,8 @@ import {
   resolveEnvironmentBinding,
   T3TEAM_DELEGATION_EXTENSIONS,
 } from "./t3team-delegateTaskExtensions.ts";
-import { placeOnCloudSession } from "./t3team-delegateTaskCloudSession.ts";
+import { prepareCloudChild } from "./t3team-delegateTaskCloudPrepare.ts";
 import {
-  childRepositoryOf,
   parseCloudSessionExtension,
   withCloudSessionExtension,
 } from "./t3team-delegateTaskCloudSessionExtension.ts";
@@ -97,10 +96,17 @@ const make = Effect.gen(function* () {
       ),
     );
 
-  const projectRepositoryIdentity = (projectId: Parameters<typeof projects.getShell>[0]) =>
+  const projectShellOf = (projectId: Parameters<typeof projects.getShell>[0]) =>
     projects.getShell(projectId).pipe(
-      Effect.map((shell) => (Option.isSome(shell) ? shell.value.repositoryIdentity : null)),
-      Effect.orElseSucceed(() => null),
+      Effect.map(Option.getOrUndefined),
+      Effect.catchCause(() =>
+        Effect.fail(
+          failure(
+            "orchestration_error",
+            "Could not read the child's project to place it on a cloud session.",
+          ),
+        ),
+      ),
     );
 
   const preparation: DelegatedTaskPreparationShape = {
@@ -128,6 +134,19 @@ const make = Effect.gen(function* () {
         if (effort.note !== undefined) notes.push(effort.note);
 
         const { parentThread } = input;
+        const cloud =
+          cloudSessions === undefined || cloudSession.value === undefined
+            ? undefined
+            : yield* prepareCloudChild({
+                sessions: cloudSessions,
+                request: cloudSession.value,
+                project: yield* projectShellOf(parentThread.projectId),
+                workspace: input.workspace,
+                requestKey: input.requestKey,
+                modelSelection: effort.modelSelection,
+                acceptedChild: input.acceptedChildThreadId,
+              });
+        if (cloud !== undefined) notes.push(cloud.note);
         const isolated = input.workspace?.isolation === "worktree" ? input.workspace : undefined;
         const project =
           isolated === undefined ? undefined : yield* loadProjectShell(parentThread.projectId);
@@ -153,6 +172,7 @@ const make = Effect.gen(function* () {
 
         const afterCreate = (childThreadId: ThreadId) =>
           Effect.gen(function* () {
+            if (cloud !== undefined) yield* cloud.register(childThreadId);
             const childNotes = yield* recordChild({
               parentThread,
               childThreadId,
@@ -161,43 +181,29 @@ const make = Effect.gen(function* () {
               environment: environment.binding,
               skills: extensions.skills,
             });
-            const cloudRequest = cloudSession.value;
-            const cloudNotes =
-              cloudSessions === undefined || cloudRequest === undefined
-                ? []
-                : yield* placeOnCloudSession(
-                    cloudSessions,
-                    projectRepositoryIdentity(parentThread.projectId).pipe(
-                      Effect.map((identity) => ({
-                        request: cloudRequest,
-                        projectId: parentThread.projectId,
-                        ...childRepositoryOf(
-                          identity,
-                          workspace?.repository ?? isolated?.repository ?? null,
-                        ),
-                      })),
-                    ),
-                  );
-            if (workspace === undefined) return [...childNotes, ...cloudNotes];
+            if (workspace === undefined) return childNotes;
             const setup = yield* startChildSetupScript({
               runner: setupScripts,
               threadId: childThreadId,
               projectId: parentThread.projectId,
               worktreePath: workspace.worktreePath,
             });
-            return [...childNotes, ...cloudNotes, setup];
+            return [...childNotes, setup];
           });
 
         return {
-          modelSelection: effort.modelSelection,
+          modelSelection: cloud?.modelSelection ?? effort.modelSelection,
           ...(workspace === undefined
-            ? {}
+            ? cloud === undefined
+              ? {}
+              : { release: cloud.release }
             : {
                 workspace: { branch: workspace.branch, worktreePath: workspace.worktreePath },
                 release: releaseDelegatedWorkspace(services.gitWorkflow, workspace),
               }),
           notes,
           afterCreate,
+          ...(cloud === undefined ? {} : { afterReplay: cloud.afterReplay }),
         };
       }),
   };

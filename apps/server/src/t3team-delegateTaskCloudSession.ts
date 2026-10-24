@@ -1,149 +1,153 @@
 /**
- * The delegate_task `cloudSession` extension (flag `DELEGATE_CLOUD`): which cloud session the
- * child's work belongs on, for the repository the child works on.
+ * The delegate_task `cloudSession` extension (flag `DELEGATE_CLOUD`): the cloud session a child
+ * runs on, for the project's own repository.
  *
- * - `"auto"`: names a fitting session (`selectFittingCloudSession`): a ready one, else one still
- *   starting. When none fits it reports that a new one is needed.
- * - `"new"`: reports that a new one is needed.
- * - any other string: that session id, as listed.
+ * - `"auto"`: a fitting session (`selectFittingCloudSession`) with room for another child; a
+ *   ready one is probed first (its own project, the requested model), one still starting is
+ *   checked by the child's first turn. None fits: one is started for the project.
+ * - `"new"`: one is started for the project.
+ * - any other string: that listed session.
  *
- * Nothing is dispatched while `start` is absent: a session no child runs on would hold a fleet
- * machine for nothing. The child itself is still created and run on THIS server, no
- * `ThreadEnvironmentBinding` is recorded, and every note says both. Running the child on the
- * session is designed in docs/nexi-work/design/delegate-to-cloud-session.md (nx-nexi).
+ * At most one session is started per request, and one per project at a time (the start guard).
+ * A model the session does not offer, a signed-out broker, or no usable session at all make the
+ * placement `unplaced`, and delegate_task then fails with that reason: a cloud child never quietly
+ * runs here instead. Placement never fails or dies itself.
  */
-import type {
-  CloudSession,
-  CloudSessionFailedError,
-  CloudSessionListResult,
-  ProjectId,
-} from "@t3tools/contracts";
+import type { CloudSession } from "@t3tools/contracts";
 import { selectFittingCloudSession } from "@t3tools/shared/t3team-cloudSessionFit";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 
-import type { CloudSessionStartGuard } from "./t3team-delegateTaskCloudSessionStartGuard.ts";
-import type { CloudSessionRequest } from "./t3team-delegateTaskCloudSessionExtension.ts";
+import type {
+  CloudSessionPlacement,
+  CloudSessionPlacementInput,
+  DelegateCloudSessions,
+} from "./t3team-delegateTaskCloudTypes.ts";
 
-export interface DelegateCloudSessions {
-  readonly list: Effect.Effect<CloudSessionListResult, CloudSessionFailedError>;
-  /** Fails with the broker's reason when this server cannot reach it (signed out, no broker). */
-  readonly brokerReady: Effect.Effect<void, CloudSessionFailedError>;
-  /** Starts a session for a project. Absent until a delegated child can run on one. */
-  readonly start?: (projectId: ProjectId) => Effect.Effect<CloudSession, CloudSessionFailedError>;
-  readonly startGuard: CloudSessionStartGuard;
-}
+export type {
+  CloudSessionPlacement,
+  CloudSessionPlacementInput,
+  DelegateCloudSessions,
+} from "./t3team-delegateTaskCloudTypes.ts";
 
-export interface CloudSessionPlacementInput {
-  readonly request: CloudSessionRequest;
-  readonly projectId: ProjectId;
-  /** The repository the child works on (`owner/name` or a name); null when it has none. */
-  readonly repository: string | null;
-  /** False when that repository is not the project's own: a session starts only for the project. */
-  readonly projectRepository: boolean;
-}
+const unplaced = (reason: string): CloudSessionPlacement => ({ kind: "unplaced", reason });
 
-export const CHILD_RUNS_HERE_NOTE =
-  "The child runs on THIS server, not on a cloud session, and no environment binding is " +
-  "recorded: running a delegated child on a cloud session is not built yet (design: " +
-  "docs/nexi-work/design/delegate-to-cloud-session.md).";
-
-const repositoryNameOf = (repository: string | null) =>
-  repository === null ? null : (repository.split("/").pop() ?? null);
-
-/** Ready means usable now: the `ready` phase with its environment linked (the selector's rule). */
-const describeSession = (session: CloudSession) => {
-  const name = session.name ?? "Cloud session";
-  const ready = session.phase === "ready" && Boolean(session.environmentId);
-  const state = ready
-    ? `ready${session.endsAt === undefined ? "" : ` until ${session.endsAt}`}`
-    : session.phase === "ready"
-      ? "starting (its environment is not linked yet)"
-      : `${session.phase}, not ready yet`;
-  return `'${name}' (${session.sessionId}) is ${state}`;
-};
-
-const failedNote = (error: CloudSessionFailedError) =>
-  `No cloud session was named (${error.reason}): ${error.message}`;
-
-const startOrReport = Effect.fn("delegateTask.cloudSession.startOrReport")(function* (
+const startNew = Effect.fn("delegateTask.cloudSession.startNew")(function* (
   sessions: DelegateCloudSessions,
   input: CloudSessionPlacementInput,
 ) {
-  const { start } = sessions;
-  if (!input.projectRepository) {
-    return `No fitting cloud session for ${input.repository ?? "this repository"}, and none can be started for it: a session starts for the project's own repository.`;
-  }
-  if (start === undefined) {
-    return "No fitting cloud session for this project; a new one would be needed. None was started: starting one stays off until a delegated child can run on it.";
-  }
   const claim = yield* sessions.startGuard.claim(input.projectId);
   if (!claim.claimed) {
-    return `No fitting cloud session is listed yet, but a session for this project is already starting (requested ${claim.startedSecondsAgo}s ago); none was started.`;
+    return unplaced(
+      `A cloud session for this project is already starting (requested ${claim.startedSecondsAgo}s ago). Delegate again with cloudSession 'auto' once it is listed.`,
+    );
   }
-  yield* start(input.projectId).pipe(
-    Effect.tap((session) =>
-      Effect.logInfo("delegate_task started a cloud session", {
-        sessionId: session.sessionId,
-        projectId: input.projectId,
-      }),
-    ),
-    Effect.tapError((error) =>
-      Effect.logWarning("delegate_task could not start a cloud session", {
-        reason: error.reason,
-        message: error.message,
-        projectId: input.projectId,
-      }).pipe(Effect.andThen(sessions.startGuard.release(input.projectId))),
-    ),
-    Effect.ignore,
-    Effect.forkDetach,
+  const session = yield* sessions
+    .start(input.projectId)
+    .pipe(Effect.tapError(() => sessions.startGuard.release(input.projectId)));
+  if (session.sessionId.startsWith("pending:")) {
+    return unplaced(
+      "A cloud session was started for this project but is not listed yet. Delegate again with cloudSession 'auto' in a minute.",
+    );
+  }
+  yield* sessions.capacity.tryReserve(input.requestKey, session.sessionId);
+  return { kind: "placed", session, ready: false, started: true } satisfies CloudSessionPlacement;
+});
+
+const ENDED = new Set<CloudSession["phase"]>(["failed", "stopped", "cancelled"]);
+
+/**
+ * A listed session the child may use. A slot is reserved first (atomically, so concurrent
+ * delegations cannot all see room) and kept only when the session is starting or passes the probe
+ * of its own project and the requested model; any other verdict releases it.
+ */
+const usable = Effect.fn("delegateTask.cloudSession.usable")(function* (
+  sessions: DelegateCloudSessions,
+  input: CloudSessionPlacementInput,
+  session: CloudSession,
+) {
+  if (ENDED.has(session.phase)) return "ended" as const;
+  if (!(yield* sessions.capacity.tryReserve(input.requestKey, session.sessionId))) {
+    return "full" as const;
+  }
+  if (session.phase !== "ready" || !session.environmentId) return "starting" as const;
+  const probed = yield* Effect.result(
+    sessions
+      .probe(session.sessionId, input)
+      .pipe(
+        Effect.onExit((exit) =>
+          Exit.isSuccess(exit) ? Effect.void : sessions.capacity.release(input.requestKey),
+        ),
+      ),
   );
-  return "Starting a new cloud session for this project; it appears in the cloud session list once its machine is dispatched.";
+  if (probed._tag === "Success") return "ready" as const;
+  const error = probed.failure;
+  if (error._tag === "RemoteEnvironmentRejected" && error.reason === "model") return error;
+  return "unusable" as const;
 });
 
 const place = Effect.fn("delegateTask.cloudSession.place")(function* (
   sessions: DelegateCloudSessions,
-  resolveInput: Effect.Effect<CloudSessionPlacementInput>,
+  input: CloudSessionPlacementInput,
 ) {
-  const input = yield* resolveInput;
   const { request } = input;
   yield* sessions.brokerReady;
+  if (request.kind === "new") return yield* startNew(sessions, input);
   const listed = yield* sessions.list;
   if (!listed.configured) {
-    return "No cloud session was named: cloud sessions are not set up on this server (no `gh` login).";
+    return unplaced("Cloud sessions are not set up on this server (no `gh` login).");
+  }
+  const nowMs = yield* Clock.currentTimeMillis;
+  const excluded: Array<string> = [];
+  for (let round = 0; round <= listed.sessions.length; round += 1) {
+    const candidate =
+      request.kind === "session"
+        ? listed.sessions.find((session) => session.sessionId === request.sessionId)
+        : selectFittingCloudSession({
+            sessions: listed.sessions,
+            repositoryName: input.repositoryName,
+            nowMs,
+            excludeSessionIds: excluded,
+          })?.session;
+    if (candidate === undefined) break;
+    const verdict = yield* usable(sessions, input, candidate);
+    if (typeof verdict !== "string") return unplaced(verdict.message);
+    if (verdict === "ready" || verdict === "starting") {
+      return {
+        kind: "placed",
+        session: candidate,
+        ready: verdict === "ready",
+        started: false,
+      } satisfies CloudSessionPlacement;
+    }
+    if (request.kind === "session") {
+      return unplaced(
+        verdict === "ended"
+          ? `Cloud session ${candidate.sessionId} has ended (${candidate.phase}); name a running session or use 'auto'.`
+          : verdict === "full"
+            ? `Cloud session ${candidate.sessionId} already runs ${sessions.capacity.limit} delegated children.`
+            : `Cloud session ${candidate.sessionId} cannot take this child: its own project is not this repository, or it cannot be reached.`,
+      );
+    }
+    excluded.push(candidate.sessionId);
   }
   if (request.kind === "session") {
-    const named = listed.sessions.find((session) => session.sessionId === request.sessionId);
-    return named === undefined
-      ? `Cloud session ${request.sessionId} is not in your session list.`
-      : `Cloud session ${describeSession(named)}.`;
+    return unplaced(`Cloud session ${request.sessionId} is not in your session list.`);
   }
-  if (request.kind === "new") return yield* startOrReport(sessions, input);
-  const fit = selectFittingCloudSession({
-    sessions: listed.sessions,
-    repositoryName: repositoryNameOf(input.repository),
-    nowMs: yield* Clock.currentTimeMillis,
-  });
-  if (fit !== null) return `Fitting cloud session ${describeSession(fit.session)}.`;
-  return yield* startOrReport(sessions, input);
+  return yield* startNew(sessions, input);
 });
 
-/**
- * The notes for one delegation. Never fails and never dies: it runs after the child exists, so a
- * cloud-session problem, expected or not, becomes a note instead of failing delegate_task. The
- * input is resolved inside the guard too (its project lookup can fail like anything else).
- */
 export const placeOnCloudSession = (
   sessions: DelegateCloudSessions,
-  resolveInput: Effect.Effect<CloudSessionPlacementInput>,
-): Effect.Effect<ReadonlyArray<string>> =>
-  place(sessions, resolveInput).pipe(
-    Effect.catch((error) => Effect.succeed(failedNote(error))),
+  input: CloudSessionPlacementInput,
+): Effect.Effect<CloudSessionPlacement> =>
+  place(sessions, input).pipe(
+    Effect.catch((error) => Effect.succeed(unplaced(`${error.message} (${error.reason})`))),
     Effect.catchCause((cause) =>
       Effect.logWarning("delegate_task cloudSession placement failed unexpectedly", {
         cause: Cause.pretty(cause),
-      }).pipe(Effect.as("No cloud session was named: an unexpected error occurred while looking.")),
+      }).pipe(Effect.as(unplaced("An unexpected error occurred while choosing a cloud session."))),
     ),
-    Effect.map((note) => [note, CHILD_RUNS_HERE_NOTE]),
   );

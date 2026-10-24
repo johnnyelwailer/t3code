@@ -7,8 +7,11 @@
  * child's run is admitted); a user's own settings entry for the id still wins in both. Its
  * snapshot reports it disabled, which keeps it out of pickers and settings.
  *
- * Layering: `NEXI_FF_DELEGATE_CLOUD` > feature_flags row > code default (off), read when the
- * registry hydrates.
+ * Layering is `readFeatureFlag`'s: `NEXI_FF_DELEGATE_CLOUD` > the Settings value (the
+ * `feature_flags` row, loaded at startup before the registry hydrates) > release preset > code
+ * default (off). The driver list is read once when the registry hydrates and delegate_task's
+ * placement once at startup (`t3team-delegateTaskCloudSessionLayer.ts`), so a Settings toggle
+ * takes effect after a restart, as the flag's `requiresRestart` says.
  */
 import type { ProviderInstanceConfigMap } from "@t3tools/contracts";
 import type { AnyProviderDriver } from "@t3tools/provider-core/server/driver";
