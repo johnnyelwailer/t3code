@@ -46,9 +46,14 @@ import { useResourcePressureBannerItem } from "./chat/t3team-ResourcePressureThr
 import { useProviderRetryBannerItem } from "./chat/t3team-ProviderRetryBanner";
 import { useT3TeamThreadHandoff } from "../t3team/chat/t3team-useThreadHandoff";
 import { useThreadHandoffBannerItem } from "./chat/t3team-ThreadHandoffBanner";
+import {
+  useCloudSessionEndedBannerItem,
+  withCloudSessionEndedBanner,
+} from "./chat/t3team-CloudSessionEndedBanner";
 import { useT3TeamChatTimelineProps } from "~/t3team/chat/t3team-useChatTimelineProps";
 import { useT3TeamStopCascade } from "~/t3team/chat/t3team-useStopCascade";
 import { useT3TeamActiveAgents } from "~/t3team/chat/t3team-useActiveAgents";
+import { useCloudSessionRestartProjectId } from "~/cloud/t3team-useCloudSessionOwnProject";
 import { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionComposerGate";
 import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
 import { useCloudQueuedSendOptimisticMessage } from "~/cloud/t3team-useCloudQueuedSendOptimisticMessage";
@@ -1295,11 +1300,19 @@ export default function ChatView(props: ChatViewProps) {
     environmentId,
     threadId: activeThreadId,
   });
-  const systemComposerBannerItems: ComposerBannerStackItem[] = [
-    ...upstreamSystemComposerBannerItems,
-    ...(resourcePressureBanner ? [resourcePressureBanner] : []),
-    ...(threadHandoffBanner ? [threadHandoffBanner] : []),
-  ];
+  const endedSessionRestartProjectId = useCloudSessionRestartProjectId(environmentId);
+  const cloudSessionEndedBanner = useCloudSessionEndedBannerItem(
+    environmentId,
+    endedSessionRestartProjectId,
+  );
+  const systemComposerBannerItems: ComposerBannerStackItem[] = withCloudSessionEndedBanner(
+    [
+      ...upstreamSystemComposerBannerItems,
+      ...(resourcePressureBanner ? [resourcePressureBanner] : []),
+      ...(threadHandoffBanner ? [threadHandoffBanner] : []),
+    ],
+    cloudSessionEndedBanner,
+  );
   const providerInstanceEntries = sortProviderInstanceEntries(
     applyProviderInstanceSettings(
       deriveProviderInstanceEntries(providerStatuses),

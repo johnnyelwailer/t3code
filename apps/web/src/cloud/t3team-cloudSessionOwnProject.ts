@@ -15,7 +15,7 @@
  */
 import {
   type CloudSession,
-  type EnvironmentId,
+  EnvironmentId,
   plainProjectFolderName,
   type ProjectId,
   type RepositoryIdentity,
@@ -89,7 +89,7 @@ export function resolveCloudSessionOwnProject(input: {
     (item) => item.sessionId === target.sessionId,
   )?.environmentId;
   if (environmentId === undefined) return null;
-  const cwd = input.serverCwdOf(environmentId as EnvironmentId);
+  const cwd = input.serverCwdOf(EnvironmentId.make(environmentId));
   if (cwd === null) return null;
   const root = normalizeProjectPathForComparison(cwd);
   const own = input.projects.find(
@@ -97,7 +97,8 @@ export function resolveCloudSessionOwnProject(input: {
       String(item.environmentId) === environmentId &&
       normalizeProjectPathForComparison(item.workspaceRoot) === root,
   );
-  if (own === undefined) return { environmentId: environmentId as EnvironmentId, projectId: null };
+  if (own === undefined)
+    return { environmentId: EnvironmentId.make(environmentId), projectId: null };
   if (!isSameProject(project, own)) return null;
   return { environmentId: own.environmentId, projectId: own.id };
 }
@@ -130,4 +131,33 @@ export function logicalProjectPerEnvironment<
     picked.push({ environmentId: project.environmentId, projectId: project.id });
   }
   return picked;
+}
+
+export function resolveCloudSessionRestartProjectId(input: {
+  readonly environmentId: EnvironmentId | null;
+  readonly primaryEnvironmentId: EnvironmentId | null;
+  readonly serverCwd: string | null;
+  readonly projects: ReadonlyArray<ComposerProject & { readonly environmentId: EnvironmentId }>;
+}): ProjectId | null {
+  if (
+    input.environmentId === null ||
+    input.primaryEnvironmentId === null ||
+    input.serverCwd === null
+  )
+    return null;
+  const root = normalizeProjectPathForComparison(input.serverCwd);
+  const own = input.projects.find(
+    (project) =>
+      project.environmentId === input.environmentId &&
+      normalizeProjectPathForComparison(project.workspaceRoot) === root,
+  );
+  if (own === undefined) return null;
+  if (own.environmentId === input.primaryEnvironmentId) return own.id;
+  const candidates = input.projects.filter(
+    (project) =>
+      project.environmentId === input.primaryEnvironmentId &&
+      (repositoryOf(project) === null || repositoryOf(own) !== null) &&
+      isSameProject(project, own),
+  );
+  return candidates.length === 1 ? (candidates[0]?.id ?? null) : null;
 }

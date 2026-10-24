@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import {
   cloudSessionDurationSeconds,
   cloudSessionElapsedSeconds,
+  cloudSessionHoldEnd,
   deriveCloudSessionPhase,
   deriveMachineStage,
 } from "./t3team-cloudSessionPhase.ts";
@@ -106,6 +107,8 @@ export const projectCloudSession = (
       ? []
       : yield* readSteps;
     const phase = deriveCloudSessionPhase(sessionRun, steps);
+    const elapsedSeconds = cloudSessionElapsedSeconds(sessionRun, nowMs);
+    const holdEnd = cloudSessionHoldEnd(phase, sessionRun, steps, nowMs);
     const failureReason =
       phase === "failed"
         ? yield* settledFailureReason(sessionRun, readSteps, failureReasons)
@@ -125,12 +128,13 @@ export const projectCloudSession = (
       sessionId: String(sessionRun.id),
       providerKind: "github_actions",
       phase,
-      elapsedSeconds: cloudSessionElapsedSeconds(sessionRun, nowMs),
+      elapsedSeconds,
       ...(name !== undefined ? { name } : {}),
       ...(sessionRun.createdAt !== "" ? { startedAt: sessionRun.createdAt } : {}),
-      // The workflow owns the hold duration, so the server does not invent a
-      // remainder it cannot actually know.
-      remainingSeconds: null,
+      // The app always dispatches the fleet's hold ceiling, so a live session ends at its hold's
+      // start plus that ceiling; an upper bound (the idle check can release it sooner).
+      remainingSeconds: holdEnd?.remainingSeconds ?? null,
+      ...(holdEnd?.endsAt !== undefined ? { endsAt: holdEnd.endsAt } : {}),
       machineLabel,
       failureReason,
       detailsUrl: sessionRun.htmlUrl === "" ? null : sessionRun.htmlUrl,
