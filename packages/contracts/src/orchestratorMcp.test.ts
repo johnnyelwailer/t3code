@@ -2,14 +2,34 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 
 import {
+  OrchestratorMcpCapabilitiesInput,
+  OrchestratorMcpProviderCapability,
   OrchestratorMcpDelegateTaskInput,
   OrchestratorMcpDelegateTaskResult,
 } from "./orchestratorMcp.ts";
 
+const decodeCapabilitiesInput = Schema.decodeUnknownSync(OrchestratorMcpCapabilitiesInput);
+const decodeProviderCapability = Schema.decodeUnknownSync(OrchestratorMcpProviderCapability);
 const decodeDelegateTaskInput = Schema.decodeUnknownSync(OrchestratorMcpDelegateTaskInput);
 const decodeDelegateTaskResult = Schema.decodeUnknownSync(OrchestratorMcpDelegateTaskResult);
 
 describe("orchestrator MCP contracts", () => {
+  it("accepts the optional legacy opt-in and preserves the legacy marker", () => {
+    expect(decodeCapabilitiesInput({})).toEqual({});
+    expect(decodeCapabilitiesInput({ includeLegacy: false })).toEqual({ includeLegacy: false });
+    expect(decodeCapabilitiesInput({ includeLegacy: true })).toEqual({ includeLegacy: true });
+    expect(() => decodeCapabilitiesInput({ includeLegacy: "true" })).toThrow();
+    const provider = decodeProviderCapability({
+      providerInstanceId: "codex",
+      driverKind: "codex",
+      displayName: null,
+      models: [{ id: "old", legacy: true }, { id: "current" }],
+      canRunChildTask: true,
+      canRunCrossProviderChildTask: true,
+      constraints: [],
+    });
+    expect(provider.models).toEqual([{ id: "old", legacy: true }, { id: "current" }]);
+  });
   it("decodes cross-provider delegated task requests and durable results", () => {
     const request = decodeDelegateTaskInput({
       task: "Inspect the workspace and report the result.",
