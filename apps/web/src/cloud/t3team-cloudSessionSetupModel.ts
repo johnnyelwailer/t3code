@@ -1,12 +1,20 @@
-import type { CloudSession, CloudSessionTiming } from "@t3tools/contracts";
+import type { CloudSession } from "@t3tools/contracts";
 
-import { cloudSessionProvisionTiming } from "~/components/cloud/t3team-cloudSessionProvisionTiming";
 import { isTerminalCloudSessionPhase } from "~/components/cloud/t3team-cloudSessionSplit";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {
   presentCloudQueuedSendProgress,
+  type CloudQueuedSendStepFacts,
   type CloudQueuedSendStepId,
 } from "./t3team-cloudQueuedSendSteps";
+
+/** The thread card's controls for a draft's waiting first message, as the composer gate gives them. */
+export interface CloudQueuedSendCardInput {
+  readonly facts: CloudQueuedSendStepFacts;
+  readonly onCancel: () => void;
+  /** Null when retrying cannot help (the session ended). */
+  readonly onRetry: (() => void) | null;
+}
 
 export type CloudSetupStepStatus = "done" | "current" | "upcoming";
 export interface CloudSetupStepView {
@@ -22,6 +30,8 @@ export interface CloudSetupFacts {
   readonly projectReady?: boolean;
   readonly queued?: CloudQueuedSend | undefined;
   readonly delivery?: CloudSetupDelivery;
+  /** The session has stayed out of the session list for longer than a fresh create can explain. */
+  readonly lost?: boolean;
 }
 export type CloudSetupStage = "working" | "ready" | "failed";
 export interface CloudSetupModel {
@@ -30,18 +40,22 @@ export interface CloudSetupModel {
   readonly steps: readonly CloudSetupStepView[];
   readonly currentStep: CloudSetupStepView;
   readonly activity: string;
-  readonly timing: CloudSessionTiming;
-  readonly measured: boolean;
   readonly delivery: CloudSetupDelivery;
+  readonly machineConnected: boolean;
   readonly longWait: boolean;
   readonly failureReason: string | null;
   readonly detailsUrl: string | null;
   readonly title: string;
 }
 
+export const CLOUD_SETUP_LOST_MESSAGE =
+  "No status has arrived for this cloud session. It may not have started.";
+const CLOUD_SETUP_ENDED_MESSAGE = "Cloud session ended before it could connect.";
+
 export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel {
   const { session } = facts;
   const delivery = facts.delivery ?? "none";
+  const lost = session === null && facts.lost === true;
   const view = presentCloudQueuedSendProgress(
     {
       ...facts,
@@ -50,7 +64,7 @@ export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel 
     },
     0,
   );
-  const failed = view.failed || facts.sendFailure != null;
+  const failed = view.failed || facts.sendFailure != null || lost;
   const stage = failed
     ? "failed"
     : session?.phase === "ready" && delivery === "none"
@@ -72,22 +86,20 @@ export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel 
   const currentStep =
     steps.find((step) => step.id === view.currentStepId) ?? steps.at(-1) ?? fallback;
   const terminal = session !== null && isTerminalCloudSessionPhase(session.phase);
-  const timing = cloudSessionProvisionTiming(session);
   return {
     stage,
     session,
     steps,
     currentStep,
     activity: view.title,
-    timing,
-    measured: session?.timing !== undefined && timing.samples > 0,
     delivery,
+    machineConnected: facts.machineConnected,
     longWait: session?.projectMachine === true || session?.machineSetup === true,
     failureReason: failed
       ? (facts.sendFailure ??
         facts.queued?.failureMessage ??
         session?.failureReason ??
-        (terminal ? "Cloud session ended before it could connect." : null))
+        (terminal ? CLOUD_SETUP_ENDED_MESSAGE : lost ? CLOUD_SETUP_LOST_MESSAGE : null))
       : null,
     detailsUrl: failed ? (session?.detailsUrl ?? null) : null,
     title: failed
@@ -96,4 +108,20 @@ export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel 
         ? "Your cloud session is ready"
         : "Setting up your cloud session",
   };
+}
+
+/**
+ * Which ways out the card offers. A dead session (ended, or never seen in the list) cannot take a
+ * retry. A fresh session only helps a card with no waiting message: that message stays bound to
+ * the session it was queued for, so the card offers to cancel it instead.
+ */
+export function cloudSetupRecovery(input: {
+  readonly session: CloudSession | null;
+  readonly lost: boolean;
+  readonly hasQueued: boolean;
+  readonly canRetry: boolean;
+}): { readonly retry: boolean; readonly tryAgain: boolean } {
+  const dead =
+    input.lost || (input.session !== null && isTerminalCloudSessionPhase(input.session.phase));
+  return { retry: input.canRetry && !dead, tryAgain: !input.hasQueued && dead };
 }

@@ -3,12 +3,16 @@
  * ready. The production component and the production module (`t3team-cloudSessionSetupProgress`)
  * — nothing here forks the wording, the estimate or the motion. Each story freezes the clock
  * (`frozenElapsedSeconds`) so it reads the same every time; the bar still runs its own CSS
- * animation from that reading.
+ * animation from that reading. Also the sidebar draft row of a draft whose first message waits.
  */
 import type { Meta, StoryObj } from "@storybook/react";
-import type { CloudSession, CloudSessionTiming } from "@t3tools/contracts";
+import type { CloudSession } from "@t3tools/contracts";
+import type { CSSProperties } from "react";
 
 import { CloudSessionSetupCard } from "~/cloud/t3team-CloudSessionSetupCard";
+import { decodeCloudQueuedSend, type CloudQueuedSend } from "~/cloud/t3team-cloudQueuedSendModel";
+import { SidebarDraftRow } from "~/components/sidebar/SidebarDraftBlock";
+import { DraftId, type ComposerThreadDraftState } from "~/composerDraftStore";
 
 function session(overrides: Partial<CloudSession>): CloudSession {
   return {
@@ -24,14 +28,18 @@ function session(overrides: Partial<CloudSession>): CloudSession {
   };
 }
 
-const PROJECT_HISTORY: CloudSessionTiming = {
-  samples: 5,
-  scope: "project",
-  readyLowSeconds: 170,
-  readyTypicalSeconds: 240,
-  readyHighSeconds: 330,
-  startsAtSeconds: { preparing: 12, building: 50, checking: 170, installing: 190, starting: 215 },
-};
+const QUEUED: CloudQueuedSend | null = decodeCloudQueuedSend({
+  messageId: "msg-story",
+  messageText: "Run the migration against the staging schema and summarise what changed",
+  outgoingText: "Run the migration against the staging schema and summarise what changed",
+  titleSeed: "Run the migration against the staging schema",
+  modelSelection: { instanceId: "codex", model: "gpt-5" },
+  runtimeMode: "full-access",
+  interactionMode: "default",
+  sessionId: "session-story",
+  sessionLabel: "nexi-machine · 4:12 PM",
+  createdAt: "2026-10-24T16:12:00.000Z",
+});
 
 const meta = {
   title: "Cloud/CloudSessionSetupCard",
@@ -66,11 +74,11 @@ export const Queued: Story = {
   },
 };
 
-/** A plain session: about a minute and a half, no repository work. */
+/** A plain session: a rough estimate from one measured start-up, and it says so. */
 export const PreparingPlain: Story = {};
 
-/** A project machine with no history yet: cloning and installing; says so, with a wide range. */
-export const PreparingProjectMachineCold: Story = {
+/** A project machine: cloning and installing; elapsed time only, no made-up estimate. */
+export const PreparingProjectMachine: Story = {
   args: {
     facts: {
       session: session({
@@ -78,23 +86,6 @@ export const PreparingProjectMachineCold: Story = {
         projectMachine: true,
         machineStage: "building",
         name: "nx-nexi",
-      }),
-      machineConnected: false,
-    },
-    frozenElapsedSeconds: 118,
-  },
-};
-
-/** The same project once earlier sessions exist: a tighter range, from the user's own runs. */
-export const PreparingProjectMachineWithHistory: Story = {
-  args: {
-    facts: {
-      session: session({
-        elapsedSeconds: 118,
-        projectMachine: true,
-        machineStage: "building",
-        name: "nx-nexi",
-        timing: PROJECT_HISTORY,
       }),
       machineConnected: false,
     },
@@ -127,7 +118,7 @@ export const Connecting: Story = {
   },
 };
 
-/** Done: the card says so, lingers a moment, then fades out (watch it in the canvas). */
+/** Done, not connected yet: the first message connects. Lingers a moment, then fades out. */
 export const Ready: Story = {
   args: {
     facts: { session: session({ phase: "ready", elapsedSeconds: 88 }), machineConnected: false },
@@ -135,7 +126,7 @@ export const Ready: Story = {
   },
 };
 
-/** Past the slow end of the range: no countdown, no fake progress, the step still named. */
+/** Past the rough estimate: no countdown, no fake progress, the step still named. */
 export const Slow: Story = {
   args: {
     facts: { session: session({ elapsedSeconds: 210 }), machineConnected: false },
@@ -143,7 +134,7 @@ export const Slow: Story = {
   },
 };
 
-/** A project machine that is taking longer than even its wide range. */
+/** A long project machine setup: still only the elapsed time, never "longer than usual". */
 export const SlowProjectMachine: Story = {
   args: {
     facts: {
@@ -202,4 +193,82 @@ export const ReducedMotion: Story = {
     frozenElapsedSeconds: 118,
     motion: "still",
   },
+};
+
+/** A first message waits on a project machine; its live stage ("Installing Nexi") names the step. */
+export const FirstMessageMachineStage: Story = {
+  args: {
+    facts: {
+      session: session({ elapsedSeconds: 90, projectMachine: true, machineStage: "installing" }),
+      machineConnected: false,
+      delivery: "queued",
+      queued: QUEUED ?? undefined,
+    },
+    frozenElapsedSeconds: 90,
+    onCancel: () => {},
+  },
+};
+
+/** Up and connected; the project is still syncing onto the machine. */
+export const SyncingProject: Story = {
+  args: {
+    facts: {
+      session: session({ phase: "ready", elapsedSeconds: 150 }),
+      machineConnected: true,
+      projectReady: false,
+      delivery: "queued",
+      queued: QUEUED ?? undefined,
+    },
+    frozenElapsedSeconds: 150,
+    onCancel: () => {},
+  },
+};
+
+const SIDEBAR_INSETS: CSSProperties &
+  Record<"--sidebar-content-inset" | "--sidebar-row-content-inset", string> = {
+  "--sidebar-content-inset": "0.5rem",
+  "--sidebar-row-content-inset": "0.625rem",
+};
+
+function composer(queued: CloudQueuedSend): ComposerThreadDraftState {
+  return {
+    prompt: "",
+    images: [],
+    files: [],
+    nonPersistedImageIds: [],
+    persistedAttachments: [],
+    terminalContexts: [],
+    previewAnnotations: [],
+    reviewComments: [],
+    threadContexts: [],
+    modelSelectionByProvider: {},
+    activeProvider: null,
+    runtimeMode: null,
+    interactionMode: null,
+    cloudQueuedSend: queued,
+  };
+}
+
+/** The draft keeps its sidebar row while it waits, previewing the queued message. */
+export const SidebarQueuedRow: Story = {
+  render: () => (
+    <ul className="w-72 bg-sidebar p-1" style={SIDEBAR_INSETS}>
+      {(QUEUED === null
+        ? []
+        : [QUEUED, { ...QUEUED, messageId: "msg-failed", failureMessage: "relay denied" }]
+      ).map((queued) => (
+        <SidebarDraftRow
+          key={queued.messageId}
+          draftId={DraftId.make(`draft-${queued.messageId}`)}
+          composer={composer(queued)}
+          project={null}
+          projectDisplayName="nexi-work"
+          isActive={false}
+          onNavigate={() => {}}
+          onDiscard={() => {}}
+          onContextMenu={() => {}}
+        />
+      ))}
+    </ul>
+  ),
 };
