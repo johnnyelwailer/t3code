@@ -29,6 +29,11 @@ function Probe() {
       <b>{item.title}</b>
       <i>{item.description}</i>
       {item.actions}
+      {item.onDismiss && (
+        <button type="button" onClick={item.onDismiss}>
+          Dismiss
+        </button>
+      )}
     </div>
   );
 }
@@ -50,6 +55,18 @@ function ready(startedAgoSeconds: number, remaining: number): CloudSession {
 }
 
 describe("useCloudSessionEndedBannerItem", () => {
+  it("shows a replacement session's warning after dismissing the previous session", async () => {
+    using _timers = fakeTimers({ now: NOW });
+    ended = false;
+    sessions = [ready(600, 14 * 60)];
+    await using screen = await render(<Probe />);
+    await screen.getByRole("button", { name: "Dismiss" }).click();
+    await expect.element(screen.getByTestId("none")).toBeInTheDocument();
+    sessions = [{ ...ready(600, 14 * 60), sessionId: "2" }];
+    await screen.rerender(<Probe />);
+    await expect.element(screen.getByText("Session ends in 14 min")).toBeInTheDocument();
+  });
+
   it("shows nothing for a healthy session with hours left", async () => {
     using _timers = fakeTimers({ now: NOW });
     ended = false;

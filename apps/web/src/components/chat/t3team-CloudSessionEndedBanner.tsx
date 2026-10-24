@@ -41,7 +41,7 @@ export function endedSessionBannerItem(
  * Seconds left of the live cloud session serving `environmentId`, ticking locally: the session
  * list is polled conservatively, and a thread view does not poll it at all.
  */
-function useSessionSecondsLeft(environmentId: EnvironmentId | null): number | null {
+function useSessionEnding(environmentId: EnvironmentId | null) {
   const { sessions } = useCloudSessions();
   const live =
     environmentId === null ? null : liveCloudSessionForEnvironment(sessions, environmentId);
@@ -53,7 +53,10 @@ function useSessionSecondsLeft(environmentId: EnvironmentId | null): number | nu
     const timer = setInterval(() => setNowMs(Date.now()), 20_000);
     return () => clearInterval(timer);
   }, [counting]);
-  return endsAtMs === null ? null : secondsUntil(endsAtMs, nowMs);
+  return {
+    sessionId: live?.sessionId ?? null,
+    secondsLeft: endsAtMs === null ? null : secondsUntil(endsAtMs, nowMs),
+  };
 }
 
 /**
@@ -66,8 +69,9 @@ export function useCloudSessionEndedBannerItem(
   restartProjectId: ProjectId | null = null,
 ): ComposerBannerStackItem | null {
   const ended = useEnvironmentSessionEnded(environmentId);
-  const notice = resolveSessionEndingNotice(useSessionSecondsLeft(environmentId));
-  const [dismissedFor, setDismissedFor] = useState<EnvironmentId | null>(null);
+  const { sessionId, secondsLeft } = useSessionEnding(environmentId);
+  const notice = resolveSessionEndingNotice(secondsLeft);
+  const [dismissedFor, setDismissedFor] = useState<string | null>(null);
   if (environmentId === null) return null;
   if (ended) {
     return endedSessionBannerItem(
@@ -78,7 +82,7 @@ export function useCloudSessionEndedBannerItem(
       />,
     );
   }
-  if (notice === null || dismissedFor === environmentId) return null;
+  if (notice === null || dismissedFor === sessionId) return null;
   return {
     id: `cloud-session-ending:${environmentId}`,
     variant: "warning",
@@ -87,7 +91,7 @@ export function useCloudSessionEndedBannerItem(
     title: notice.title,
     description: notice.description,
     dismissLabel: "Dismiss session ending notice",
-    onDismiss: () => setDismissedFor(environmentId),
+    onDismiss: () => setDismissedFor(sessionId),
   };
 }
 
