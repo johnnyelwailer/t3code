@@ -5,6 +5,9 @@
     "podspecPath": "T3TerminalNative.podspec"
   },
   "android": {
-    "modules": ["expo.modules.t3terminal.T3TerminalModule"]
+    "modules": [
+      "expo.modules.t3terminal.T3TerminalModule",
+      "expo.modules.t3terminal.NexiBrokerModule"
+    ]
   }
 }

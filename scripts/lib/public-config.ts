@@ -3,8 +3,10 @@ import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import * as NodeUtil from "node:util";
+import { resolveNexiMobileEnv } from "./t3team-nexiMobileConfig.ts";
 
 export interface T3CodePublicConfig {
+  readonly nexi: Readonly<Record<string, string>>;
   readonly clerkPublishableKey: string | undefined;
   readonly clerkJwtTemplate: string | undefined;
   readonly clerkCliOAuthClientId: string | undefined;
@@ -38,6 +40,7 @@ export function loadRepoEnv({
     ...rootEnv,
     ...localEnv,
     ...baseEnv,
+    ...config.nexi,
     ...(config.clerkPublishableKey
       ? {
           T3CODE_CLERK_PUBLISHABLE_KEY: config.clerkPublishableKey,
@@ -105,6 +108,7 @@ export function loadRepoEnv({
 
 export function resolvePublicConfig(...sources: readonly Environment[]): T3CodePublicConfig {
   return {
+    nexi: resolveNexiMobileEnv(...sources),
     clerkPublishableKey: firstNonEmpty(
       sources,
       "T3CODE_CLERK_PUBLISHABLE_KEY",
