@@ -58,7 +58,7 @@ describe("remoteTurnProgress", () => {
   it("is empty until the remote server runs the turn's message", () => {
     assert.deepStrictEqual(
       remoteTurnProgress(
-        { runs: [run("running", "another-message")], messages: [] },
+        { runs: [run("running", "another-message")], messages: [], turnItems: [] },
         turn.message.messageId,
       ),
       { runId: null, assistant: [], terminal: null },
@@ -67,7 +67,7 @@ describe("remoteTurnProgress", () => {
 
   it("follows the run's assistant messages until it completes", () => {
     const running = remoteTurnProgress(
-      { runs: [run("running")], messages: [assistant("m1", "Working")] },
+      { runs: [run("running")], messages: [assistant("m1", "Working")], turnItems: [] },
       turn.message.messageId,
     );
     assert.deepStrictEqual(running, {
@@ -76,7 +76,7 @@ describe("remoteTurnProgress", () => {
       terminal: null,
     });
     const done = remoteTurnProgress(
-      { runs: [run("completed")], messages: [assistant("m1", "Done")] },
+      { runs: [run("completed")], messages: [assistant("m1", "Done")], turnItems: [] },
       turn.message.messageId,
     );
     assert.deepStrictEqual(done.terminal, { status: "completed" });
@@ -84,7 +84,7 @@ describe("remoteTurnProgress", () => {
 
   it("carries the last answer into a failure", () => {
     const failed = remoteTurnProgress(
-      { runs: [run("failed")], messages: [assistant("m1", "Model not available")] },
+      { runs: [run("failed")], messages: [assistant("m1", "Model not available")], turnItems: [] },
       turn.message.messageId,
     );
     assert.deepStrictEqual(failed.terminal, {

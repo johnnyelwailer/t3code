@@ -20,6 +20,7 @@ import * as Stream from "effect/Stream";
 import type {
   RemoteEnvironmentSessionDeps,
   RemoteThreadView,
+  RemoteEnvironmentGrant,
 } from "./t3team-remoteEnvironmentApiTypes.ts";
 import {
   pendingApproval,
@@ -27,10 +28,9 @@ import {
   retryable,
   terminalFor,
 } from "./t3team-remoteEnvironmentPrepare.ts";
-import type { RemoteEnvironmentTarget } from "./t3team-remoteEnvironmentTarget.ts";
 import { makeRemoteTurnEvents } from "./t3team-remoteEnvironmentTurnEvents.ts";
 import { remoteTurnProgress, type RemoteTurnTerminal } from "./t3team-remoteEnvironmentTurn.ts";
-import { remoteInterrupt, type TurnState } from "./t3team-remoteEnvironmentTurnState.ts";
+import type { TurnState } from "./t3team-remoteEnvironmentTurnState.ts";
 
 const RECONNECT_ATTEMPTS = 5;
 
@@ -41,10 +41,10 @@ export interface RemoteFollowEnv {
   readonly nowIso: () => string;
 }
 
-const followTurn = Effect.fn("remoteEnvironment.followTurn")(function* (
+export const followTurn = Effect.fn("remoteEnvironment.followTurn")(function* (
   { deps, emit, nowIso }: RemoteFollowEnv,
   turn: ProviderAdapterV2TurnInput,
-  target: RemoteEnvironmentTarget,
+  target: RemoteEnvironmentGrant,
   state: TurnState,
 ) {
   const events = makeRemoteTurnEvents(turn, nowIso);
@@ -108,7 +108,6 @@ const followTurn = Effect.fn("remoteEnvironment.followTurn")(function* (
       );
     }),
   );
-  yield* emit([yield* Effect.orDie(events.running())]);
   const terminal = yield* attempt.pipe(
     Effect.retry({
       times: deps.reconnectAttempts ?? RECONNECT_ATTEMPTS,
@@ -123,27 +122,3 @@ const followTurn = Effect.fn("remoteEnvironment.followTurn")(function* (
 });
 
 /** The follower the session forks: it never fails, and interrupting it interrupts the remote run. */
-export const followRemoteTurn = (
-  env: RemoteFollowEnv,
-  turn: ProviderAdapterV2TurnInput,
-  target: RemoteEnvironmentTarget,
-  state: TurnState,
-) =>
-  followTurn(env, turn, target, state).pipe(
-    Effect.catchCause((cause) =>
-      Effect.logWarning("remoteEnvironment turn follower failed", { cause }).pipe(
-        Effect.andThen(Deferred.succeed(state.ended, undefined)),
-        Effect.flatMap((first) =>
-          first
-            ? makeRemoteTurnEvents(turn, env.nowIso)
-                .terminal(
-                  { status: "failed", message: "The child's remote turn failed unexpectedly." },
-                  0,
-                )
-                .pipe(Effect.flatMap(env.emit), Effect.ignore)
-            : Effect.void,
-        ),
-      ),
-    ),
-    Effect.onInterrupt(() => remoteInterrupt(env.deps, target.sessionId, turn.threadId, state)),
-  );

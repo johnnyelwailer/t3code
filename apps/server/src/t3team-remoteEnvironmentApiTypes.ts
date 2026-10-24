@@ -14,11 +14,14 @@ import type {
   ServerProvider,
   ThreadId,
 } from "@t3tools/contracts";
+import type { ProviderAdapterV2TurnInput } from "@t3tools/provider-core/server/ProviderAdapter";
 import type * as Duration from "effect/Duration";
 import type * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
 import type * as Stream from "effect/Stream";
+
+import type { RemoteEnvironmentRejected } from "./t3team-remoteEnvironmentPrepare.ts";
 
 export class RemoteEnvironmentError extends Schema.TaggedError<RemoteEnvironmentError>()(
   "RemoteEnvironmentError",
@@ -42,8 +45,20 @@ export interface RemoteEnvironmentProvider {
 /** The parts of the remote thread's projection a turn follows. */
 export type RemoteThreadView = Pick<
   OrchestrationV2ThreadProjection,
-  "runs" | "messages" | "runtimeRequests"
+  "runs" | "messages" | "runtimeRequests" | "turnItems"
 >;
+
+/**
+ * What a turn may run with, decided on this server (`t3team-remoteEnvironmentAuthorize.ts`): the
+ * session delegate_task placed the thread on, the repository key derived from the local project,
+ * and the selection the remote server runs the turn with. Never taken from the thread's own model
+ * options alone.
+ */
+export interface RemoteEnvironmentGrant {
+  readonly sessionId: string;
+  readonly repositoryKey: string;
+  readonly modelSelection: ModelSelection;
+}
 
 export interface RemoteEnvironmentApi {
   readonly serverConfig: Effect.Effect<
@@ -84,6 +99,10 @@ export interface RemoteEnvironmentSessionDeps {
     RemoteEnvironmentError | CloudSessionFailedError,
     Scope.Scope
   >;
+  /** Whether this thread may run on a cloud session, and where; a refusal fails the turn. */
+  readonly authorize: (
+    turn: ProviderAdapterV2TurnInput,
+  ) => Effect.Effect<RemoteEnvironmentGrant, RemoteEnvironmentRejected>;
   /** Reconnects after a dropped connection before the turn fails. */
   readonly reconnectAttempts?: number;
   /** How long an interrupt waits for the remote run to end before ending the turn itself. */

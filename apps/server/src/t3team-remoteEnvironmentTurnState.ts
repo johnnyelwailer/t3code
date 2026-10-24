@@ -12,6 +12,8 @@ import * as Ref from "effect/Ref";
 import type { RemoteEnvironmentSessionDeps } from "./t3team-remoteEnvironmentApiTypes.ts";
 
 export interface TurnState {
+  /** Set once the turn is authorized: the session it runs on. */
+  readonly sessionId: Ref.Ref<string | null>;
   readonly runId: Ref.Ref<RunId | null>;
   readonly ended: Deferred.Deferred<void>;
   readonly fiber: Deferred.Deferred<Fiber.Fiber<void>>;
@@ -20,13 +22,12 @@ export interface TurnState {
 /** Interrupts the remote run if one has started; bounded and best effort. */
 export const remoteInterrupt = (
   deps: RemoteEnvironmentSessionDeps,
-  sessionId: string,
   threadId: ProviderAdapterV2TurnInput["threadId"],
   state: TurnState,
 ) =>
-  Ref.get(state.runId).pipe(
-    Effect.flatMap((runId) =>
-      runId === null
+  Effect.all([Ref.get(state.sessionId), Ref.get(state.runId)]).pipe(
+    Effect.flatMap(([sessionId, runId]) =>
+      sessionId === null || runId === null
         ? Effect.void
         : Effect.scoped(
             Effect.flatMap(deps.open(sessionId), (api) => api.interruptRun({ threadId, runId })),

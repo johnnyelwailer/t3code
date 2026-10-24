@@ -1,9 +1,11 @@
 /**
- * Where a `remoteEnvironment` thread runs, carried in its own model selection so it persists with
- * the thread and reaches the adapter on every turn (and after a restart): `model` is the model on
- * the remote server, and three reserved options name the cloud session, the provider instance
- * there and the repository the child works on. Every other option is the remote model's own and
- * passes through unchanged.
+ * The cloud session a `remoteEnvironment` thread names, carried in its own model selection: `model`
+ * is the model on the remote server, and two reserved options name the session and the provider
+ * instance there. Every other option is the remote model's own and passes through unchanged.
+ *
+ * This is a HINT, never an authorization: anything that can write a thread's model selection can
+ * write these options. Whether a thread may run, on which session and for which repository is
+ * decided on this server (`t3team-remoteEnvironmentAuthorize.ts`).
  */
 import {
   type ModelSelection,
@@ -17,13 +19,10 @@ export const REMOTE_ENVIRONMENT_INSTANCE_ID = ProviderInstanceId.make(REMOTE_ENV
 
 const SESSION = "remoteSession";
 const INSTANCE = "remoteInstance";
-const REPOSITORY = "remoteRepository";
-const RESERVED = new Set([SESSION, INSTANCE, REPOSITORY]);
+const RESERVED = new Set([SESSION, INSTANCE]);
 
 export interface RemoteEnvironmentTarget {
   readonly sessionId: string;
-  /** `repositoryGroupingKeyOf` of the repository the child works on. */
-  readonly repositoryKey: string;
   /** The selection the remote server runs the child's turns with. */
   readonly modelSelection: ModelSelection;
 }
@@ -35,7 +34,6 @@ export function remoteEnvironmentModelSelection(target: RemoteEnvironmentTarget)
     options: [
       { id: SESSION, value: target.sessionId },
       { id: INSTANCE, value: target.modelSelection.instanceId },
-      { id: REPOSITORY, value: target.repositoryKey },
       ...(target.modelSelection.options ?? []),
     ],
   };
@@ -53,14 +51,10 @@ export function remoteEnvironmentTargetOf(
   const options = selection.options ?? [];
   const sessionId = textOption(options, SESSION);
   const instance = textOption(options, INSTANCE);
-  const repositoryKey = textOption(options, REPOSITORY);
-  if (sessionId === undefined || instance === undefined || repositoryKey === undefined) {
-    return undefined;
-  }
+  if (sessionId === undefined || instance === undefined) return undefined;
   const own = options.filter((option) => !RESERVED.has(option.id));
   return {
     sessionId,
-    repositoryKey,
     modelSelection: {
       instanceId: ProviderInstanceId.make(instance),
       model: selection.model,

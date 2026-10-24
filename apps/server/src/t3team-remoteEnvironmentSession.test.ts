@@ -8,6 +8,7 @@ import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 
 import { RemoteEnvironmentError } from "./t3team-remoteEnvironmentApiTypes.ts";
+import { RemoteEnvironmentRejected } from "./t3team-remoteEnvironmentPrepare.ts";
 import {
   fakeRemote,
   open,
@@ -148,6 +149,69 @@ describe("makeRemoteEnvironmentSession", () => {
       assert.isTrue(terminal?.type === "turn.terminal" && terminal.status === "failed");
       if (terminal?.type === "turn.terminal" && terminal.status === "failed") {
         assert.match(terminal.failure.message, /approval/);
+      }
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("refuses a turn with attachments instead of dropping them", () =>
+    Effect.gen(function* () {
+      const remote = yield* fakeRemote({});
+      const session = yield* open(remote);
+      yield* session.startTurn({
+        ...turn,
+        message: {
+          ...turn.message,
+          attachments: [
+            {
+              type: "image",
+              id: "attachment-1",
+              name: "screen.png",
+              mimeType: "image/png",
+              sizeBytes: 10,
+            },
+          ],
+        },
+      });
+      const terminal = terminalOf(yield* runUntilTerminal(session.events));
+      assert.isTrue(terminal?.type === "turn.terminal" && terminal.status === "failed");
+      if (terminal?.type === "turn.terminal" && terminal.status === "failed") {
+        assert.match(terminal.failure.message, /Attachments cannot be sent to a cloud session/);
+      }
+      assert.deepStrictEqual(yield* Ref.get(remote.log), []);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("a refused authorization fails the turn with its reason and touches nothing remote", () =>
+    Effect.gen(function* () {
+      const remote = yield* fakeRemote({});
+      const session = yield* open(remote, null, () =>
+        Effect.fail(
+          new RemoteEnvironmentRejected({
+            reason: "placement",
+            message:
+              "This thread was not placed on a cloud session by delegate_task on this server.",
+          }),
+        ),
+      );
+      yield* session.startTurn(turn);
+      const terminal = terminalOf(yield* runUntilTerminal(session.events));
+      assert.isTrue(terminal?.type === "turn.terminal" && terminal.status === "failed");
+      if (terminal?.type === "turn.terminal" && terminal.status === "failed") {
+        assert.match(terminal.failure.message, /was not placed on a cloud session/);
+      }
+      assert.deepStrictEqual(yield* Ref.get(remote.log), []);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("refuses a session whose own project has no repository identity", () =>
+    Effect.gen(function* () {
+      const remote = yield* fakeRemote({ noIdentity: true });
+      const session = yield* open(remote);
+      yield* session.startTurn(turn);
+      const terminal = terminalOf(yield* runUntilTerminal(session.events));
+      assert.isTrue(terminal?.type === "turn.terminal" && terminal.status === "failed");
+      if (terminal?.type === "turn.terminal" && terminal.status === "failed") {
+        assert.match(terminal.failure.message, /has no repository identity/);
       }
     }).pipe(Effect.scoped),
   );

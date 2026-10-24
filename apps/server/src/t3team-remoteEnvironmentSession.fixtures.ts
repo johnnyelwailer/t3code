@@ -24,6 +24,7 @@ import { PackCodec } from "./t3team-pack-driverCodec.ts";
 import {
   RemoteEnvironmentError,
   type RemoteEnvironmentApi,
+  type RemoteEnvironmentSessionDeps,
   type RemoteThreadView,
 } from "./t3team-remoteEnvironmentApiTypes.ts";
 import { remoteEnvironmentProviderSession } from "./t3team-remoteEnvironmentCapabilities.ts";
@@ -38,21 +39,21 @@ const decodeRuntimeRequest = Schema.decodeUnknownSync(
   Schema.toCodecJson(OrchestrationV2RuntimeRequest),
 );
 const AT = "2026-10-24T22:00:00.000Z";
-const REPOSITORY = "nexplore.ghe.com/pj/nexi-machine-qa";
+export const REPOSITORY = "nexplore.ghe.com/pj/nexi-machine-qa";
+export const REMOTE_MODEL = { instanceId: ProviderInstanceId.make("nexplore"), model: "Standard" };
 
 export const turn = {
   ...Schema.decodeUnknownSync(PackCodec.turnInput)(turnInputJson("thread-child", "session-1")),
   modelSelection: remoteEnvironmentModelSelection({
     sessionId: "run-41",
-    repositoryKey: REPOSITORY,
-    modelSelection: { instanceId: ProviderInstanceId.make("nexplore"), model: "Standard" },
+    modelSelection: REMOTE_MODEL,
   }),
 };
 export const providerThread = Schema.decodeUnknownSync(PackCodec.providerThread)(
   providerThreadJson("thread-child", "session-1"),
 );
 
-const run = (status: string) =>
+const run = (status: string, userMessageId: string = turn.message.messageId) =>
   decodeRun({
     id: "remote-run-1",
     threadId: "thread-child",
@@ -60,7 +61,7 @@ const run = (status: string) =>
     providerInstanceId: "nexplore",
     modelSelection: { instanceId: "nexplore", model: "Standard" },
     providerThreadId: null,
-    userMessageId: turn.message.messageId,
+    userMessageId,
     rootNodeId: null,
     activeAttemptId: null,
     status,
@@ -103,10 +104,12 @@ export const view = (
   status: string | null,
   texts: ReadonlyArray<string> = [],
   pending = false,
+  messageId: string = turn.message.messageId,
 ): RemoteThreadView => ({
-  runs: status === null ? [] : [run(status)],
+  runs: status === null ? [] : [run(status, messageId)],
   messages: texts.map(answer),
   runtimeRequests: pending ? [approval] : [],
+  turnItems: [],
 });
 
 export interface FakeRemote {
@@ -124,9 +127,11 @@ export const fakeRemote = Effect.fn("fakeRemote")(function* (input: {
   readonly repository?: string;
   readonly models?: ReadonlyArray<string>;
   readonly afterDispatch?: RemoteThreadView;
+  readonly noIdentity?: boolean;
 }) {
   const log = yield* Ref.make<ReadonlyArray<string>>([]);
   const state = yield* Ref.make(view(null));
+  const launched = yield* Ref.make(false);
   const ticks = yield* Queue.unbounded<void, RemoteEnvironmentError>();
   const dispatched = yield* Deferred.make<void>();
   const observed = yield* Deferred.make<void>();
@@ -149,13 +154,22 @@ export const fakeRemote = Effect.fn("fakeRemote")(function* (input: {
         id: ProjectId.make("remote-project"),
         title: "nexi-machine-qa",
         workspaceRoot: "/work/nexi-machine-qa",
-        repositoryIdentity: {
-          canonicalKey: input.repository ?? REPOSITORY,
-          locator: { source: "git-remote", remoteName: "origin", remoteUrl: "https://x/qa" },
-        },
+        ...(input.noIdentity === true
+          ? {}
+          : {
+              repositoryIdentity: {
+                canonicalKey: input.repository ?? REPOSITORY,
+                locator: { source: "git-remote", remoteName: "origin", remoteUrl: "https://x/qa" },
+              },
+            }),
       },
     ]),
-    launchThread: (launch) => note(`launch:${launch.threadId}:${launch.projectId}`),
+    launchThread: (launch) =>
+      launch.reuseExistingThread === true
+        ? Effect.fail(new RemoteEnvironmentError({ message: "reuse needs an existing thread" }))
+        : note(`launch:${launch.threadId}:${launch.projectId}`).pipe(
+            Effect.andThen(Ref.set(launched, true)),
+          ),
     dispatchMessage: (message) =>
       note(`dispatch:${message.messageId}:${message.modelSelection.model}`).pipe(
         Effect.andThen(Ref.set(state, input.afterDispatch ?? view("running"))),
@@ -168,7 +182,14 @@ export const fakeRemote = Effect.fn("fakeRemote")(function* (input: {
         Effect.andThen(Deferred.succeed(remoteInterrupted, undefined)),
       ),
     projection: () =>
-      Ref.get(state).pipe(
+      Ref.get(launched).pipe(
+        Effect.flatMap((exists) =>
+          exists
+            ? Ref.get(state)
+            : Effect.fail(
+                new RemoteEnvironmentError({ message: "No orchestration projection exists." }),
+              ),
+        ),
         Effect.tap((current) =>
           current.runs.length > 0 ? Deferred.succeed(observed, undefined) : Effect.void,
         ),
@@ -185,9 +206,14 @@ const providerSession = remoteEnvironmentProviderSession({
   now: DateTime.makeUnsafe(AT),
 });
 
+/** The grant a placed child gets; tests of the authorization itself pass their own. */
+export const placedGrant: RemoteEnvironmentSessionDeps["authorize"] = () =>
+  Effect.succeed({ sessionId: "run-41", repositoryKey: REPOSITORY, modelSelection: REMOTE_MODEL });
+
 export const open = (
   remote: FakeRemote,
   failures: Ref.Ref<ReadonlyArray<CloudSessionFailedError | RemoteEnvironmentError>> | null = null,
+  authorize: RemoteEnvironmentSessionDeps["authorize"] = placedGrant,
 ) =>
   makeRemoteEnvironmentSession(
     {
@@ -201,6 +227,7 @@ export const open = (
               yield* Ref.set(failures, pending.slice(1));
               return yield* next;
             }),
+      authorize,
       reconnectAttempts: 2,
       interruptGrace: "50 millis",
     },
