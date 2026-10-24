@@ -1,5 +1,10 @@
-import { Project, ProjectId, SourceControlProviderKind } from "@t3tools/contracts";
-import type { PullRequestProviderApi } from "@t3tools/source-control-core/server/PullRequestProvider";
+import { Project, ProjectId, SourceControlProviderKind, type VcsError } from "@t3tools/contracts";
+import type {
+  PullRequestProviderApi,
+  PullRequestProviderError,
+} from "@t3tools/source-control-core/server/PullRequestProvider";
+import { detectSourceControlProviderFromRemoteUrl } from "@t3tools/shared/sourceControl";
+import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import * as Context from "effect/Context";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
@@ -21,7 +26,7 @@ import {
 } from "../t3team-project-repository-utils.ts";
 
 class TestProvider extends Context.Service<TestProvider, PullRequestProviderApi>()(
-  "t3/project/t3team-remoteMachineTestUtils/TestProvider",
+  "t3/project/t3team-remoteMachine.fixtures/TestProvider",
 ) {}
 
 const decodeProject = Schema.decodeUnknownEffect(Project);
@@ -36,8 +41,12 @@ export const remoteFixture = Effect.fn("remoteFixture")(function* (input: {
   readonly ownRemote?: boolean;
   readonly enabled?: boolean;
   readonly unsupported?: boolean;
-  readonly gitOutput?: string;
+  readonly gitOutput?: string | (() => string);
   readonly gitExitCode?: number;
+  readonly gitTruncated?: boolean;
+  readonly gitError?: VcsError;
+  readonly readError?: PullRequestProviderError;
+  readonly beforeRead?: Effect.Effect<void>;
   readonly manifest?: (root: string) => string;
 }) {
   const fs = yield* FileSystem.FileSystem;
@@ -78,21 +87,29 @@ export const remoteFixture = Effect.fn("remoteFixture")(function* (input: {
   const commands: Array<VcsProcessInput> = [];
   const read: NonNullable<PullRequestProviderApi["readFileAtRevision"]> = (request) => {
     reads.push(request);
+    if (input.readError !== undefined) return Effect.fail(input.readError);
     const content = input.files?.[request.path];
-    return Effect.succeed(
-      content === undefined
-        ? null
-        : {
-            blobSha: "blob",
-            size: new TextEncoder().encode(content).byteLength,
-            content: new TextEncoder().encode(content),
-          },
+    return Effect.andThen(
+      input.beforeRead ?? Effect.void,
+      Effect.succeed(
+        content === undefined
+          ? null
+          : {
+              blobSha: "blob",
+              size: new TextEncoder().encode(content).byteLength,
+              content: new TextEncoder().encode(content),
+            },
+      ),
     );
   };
+  const kind = SourceControlProviderKind.make(
+    detectSourceControlProviderFromRemoteUrl(input.url ?? "https://nexplore.ghe.com/acme/api.git")
+      ?.kind ?? "github",
+  );
   const mocked = yield* TestProvider.pipe(
     Effect.provide(
       Layer.mock(TestProvider)({
-        kind: SourceControlProviderKind.make("github"),
+        kind,
         capabilities: {
           diff: false,
           comment: false,
@@ -110,21 +127,32 @@ export const remoteFixture = Effect.fn("remoteFixture")(function* (input: {
     ? unsupported
     : { ...mocked, readFileAtRevision: read };
   const dependencies = Layer.mergeAll(
+    SourceControlRateLimit.layer,
     ConfigProvider.layer(
       ConfigProvider.fromEnv({
         env: { NEXI_FF_CLOUD_PROJECT_MACHINE: input.enabled === false ? "0" : "1" },
       }),
     ),
-    Layer.mock(ProjectService)({ getById: () => Effect.succeed(Option.some(project)) }),
-    Layer.succeed(PullRequestProviderRegistry, { get: () => provider, kinds: [provider.kind] }),
+    Layer.mock(ProjectService)({
+      getById: () => Effect.succeed(Option.some(project)),
+      listShells: () => Effect.succeed([project]),
+    }),
+    Layer.succeed(PullRequestProviderRegistry, {
+      get: (requested) => (requested === kind ? provider : null),
+      kinds: [provider.kind],
+    }),
     Layer.succeed(VcsProcess, {
       run: (command) => {
         commands.push(command);
+        if (input.gitError !== undefined) return Effect.fail(input.gitError);
         return Effect.succeed({
           exitCode: ChildProcessSpawner.ExitCode(input.gitExitCode ?? 0),
-          stdout: input.gitOutput ?? `ref: refs/heads/main\tHEAD\n${remoteCommit}\tHEAD\n`,
+          stdout:
+            typeof input.gitOutput === "function"
+              ? input.gitOutput()
+              : (input.gitOutput ?? `ref: refs/heads/main\tHEAD\n${remoteCommit}\tHEAD\n`),
           stderr: "",
-          stdoutTruncated: false,
+          stdoutTruncated: input.gitTruncated ?? false,
           stderrTruncated: false,
         });
       },

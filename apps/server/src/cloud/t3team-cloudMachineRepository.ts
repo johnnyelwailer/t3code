@@ -1,3 +1,9 @@
+/**
+ * Pins local machine definitions to pushed commits and preserves the revision of remote scans.
+ * Repository credentials and commit identity belong to the user starting the cloud session.
+ *
+ * @module t3team-cloudMachineRepository
+ */
 import { CloudSessionFailedError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";

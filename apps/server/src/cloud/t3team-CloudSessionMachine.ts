@@ -1,3 +1,12 @@
+/**
+ * Resolves a project's discovered machine at a fetchable commit with the user's credentials.
+ * Local definitions must be committed and pushed; remote definitions retain the exact scanned
+ * default-branch commit. Invalid definitions block launch, while unavailable remote discovery
+ * falls back to a plain session. Standby and plain resolution only consult the remote cache.
+ * CLOUD_PROJECT_MACHINE gates machine selection and remote work.
+ *
+ * @module t3team-CloudSessionMachine
+ */
 import {
   CloudSessionFailedError,
   plainProjectFolderName,
@@ -60,7 +69,7 @@ export class CloudSessionMachines extends Context.Service<
     ) => Effect.Effect<CloudSessionSetup, CloudSessionFailedError>;
     /**
      * The project's warm pool (`<owner>.<repo>`) when it has a usable machine definition and an
-     * https origin, else null. Needs no sign-in: it only reads the checkout.
+     * https origin, else null. Reads local checkouts and cached remote results only.
      */
     readonly poolKeyOf: (projectId: ProjectId) => Effect.Effect<string | null>;
     /**
@@ -142,7 +151,7 @@ const make = Effect.gen(function* () {
   const poolKeyOf = (projectId: ProjectId) =>
     Effect.gen(function* () {
       if (!(yield* readFeatureFlagFromConfig("CLOUD_PROJECT_MACHINE"))) return null;
-      const { source } = yield* discovery.resolveDefault(projectId);
+      const { source } = yield* discovery.resolveDefault(projectId, { remote: "cached-only" });
       if (source === null) return null;
       const origin =
         source.remote === undefined
@@ -156,7 +165,7 @@ const make = Effect.gen(function* () {
     projectId: ProjectId,
   ) {
     const found = yield* discovery
-      .resolveDefault(projectId)
+      .resolveDefault(projectId, { remote: "cached-only" })
       .pipe(Effect.mapError((error) => unavailable(error.message)));
     // Only the project's own checkout (its main repository); a linked repository is not the project.
     const own = found.checkouts.find((checkout) => checkout.repository === ".");

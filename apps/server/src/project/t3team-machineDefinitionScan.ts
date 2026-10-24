@@ -15,19 +15,15 @@ import {
   resolveBuildReference,
   resolveRepositoryPath,
 } from "./t3team-devcontainerSource.ts";
-
-export const MAX_DEFINITION_FILE_BYTES = 1024 * 1024;
-export class Rejected extends Schema.TaggedError<Rejected>()("Rejected", {
-  reason: Schema.String,
-}) {}
+import {
+  MAX_DEFINITION_FILE_BYTES,
+  Rejected,
+  type MachineDefinitionReader,
+} from "./t3team-machineDefinitionReader.ts";
 export type ScannedMachine = ProjectMachineDefinition & { readonly files: ReadonlyArray<string> };
 export interface ProjectMachineScan {
   readonly candidates: ReadonlyArray<ScannedMachine>;
   readonly rejected: ReadonlyArray<ProjectMachineRejectedCandidate>;
-}
-export interface MachineDefinitionReader {
-  readonly read: (path: string) => Effect.Effect<string | null, Rejected>;
-  readonly nestedPaths: Effect.Effect<ReadonlyArray<string>>;
 }
 const decodeMachineFile = Schema.decodeUnknownResult(fromLenientJson(ProjectMachineFile));
 const isRepositoryPath = Schema.is(RepositoryRelativePath);
@@ -84,8 +80,10 @@ export const scanDefinition = Effect.fn("projectMachine.scanDefinition")(functio
     } satisfies ProjectMachineScan);
 
   const pointerRead = yield* read(PROJECT_MACHINE_FILE_PATH).pipe(Effect.result);
-  if (pointerRead._tag === "Failure")
+  if (pointerRead._tag === "Failure") {
+    if (pointerRead.failure._tag === "RemoteUnavailable") return yield* pointerRead.failure;
     return yield* rejectedAt(PROJECT_MACHINE_FILE_PATH)(pointerRead.failure);
+  }
   const pointer = pointerRead.success;
   if (pointer !== null) {
     return yield* Effect.gen(function* () {

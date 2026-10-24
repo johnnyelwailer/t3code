@@ -1,9 +1,17 @@
+/**
+ * Finds the project's default machine in its own and linked repositories. Local checkouts are
+ * authoritative; repositories without a checkout use a cached, immutable default-branch scan
+ * behind CLOUD_PROJECT_MACHINE. Remote availability failures never reject a definition.
+ * Standby callers request cached remote results only, so the background loop cannot fetch.
+ *
+ * @module t3team-ProjectMachineDiscovery
+ */
 import {
   type ProjectId,
   type ProjectMachineDiscovery as Discovery,
   ProjectMachineDiscoveryError,
-  PROJECT_MACHINE_FILE_PATH,
 } from "@t3tools/contracts";
+import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import * as Context from "effect/Context";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
@@ -16,7 +24,7 @@ import { ProjectService } from "./ProjectService.ts";
 import { scanCheckout } from "./t3team-projectMachineScan.ts";
 import type { ScannedMachine } from "./t3team-machineDefinitionScan.ts";
 import { machineRepositories } from "./t3team-projectMachineRepositories.ts";
-import { scanRemote } from "./t3team-remoteMachineScan.ts";
+import { makeRemoteMachineCache } from "./t3team-remoteMachineCache.ts";
 import { PullRequestProviderRegistry } from "../pullRequest/PullRequestProviderRegistry.ts";
 import { VcsProcess } from "../vcs/VcsProcess.ts";
 import { readFeatureFlagFromConfig } from "../t3team-featureFlagConfig.ts";
@@ -35,7 +43,10 @@ export class ProjectMachineDiscovery extends Context.Service<
       projectId: ProjectId,
     ) => Effect.Effect<Discovery, ProjectMachineDiscoveryError>;
     /** Like `discover`, plus where the default definition lives (null when there is none). */
-    readonly resolveDefault: (projectId: ProjectId) => Effect.Effect<
+    readonly resolveDefault: (
+      projectId: ProjectId,
+      options?: { readonly remote: "cached-only" },
+    ) => Effect.Effect<
       {
         readonly discovery: Discovery;
         readonly source: ProjectMachineSource | null;
@@ -61,8 +72,12 @@ const make = Effect.gen(function* () {
   const providers = yield* PullRequestProviderRegistry;
   const vcs = yield* VcsProcess;
   const config = yield* ConfigProvider.ConfigProvider;
+  const scanRemote = yield* makeRemoteMachineCache;
 
-  const resolveDefault: ProjectMachineDiscovery["Service"]["resolveDefault"] = (projectId) =>
+  const resolveDefault: ProjectMachineDiscovery["Service"]["resolveDefault"] = (
+    projectId,
+    options,
+  ) =>
     Effect.gen(function* () {
       const project = yield* projects.getById(projectId).pipe(
         Effect.mapError(
@@ -96,18 +111,22 @@ const make = Effect.gen(function* () {
                   root: location.root,
                   machine,
                 })),
-                notFoundReason: undefined,
+                notFoundRepository: undefined,
+                hint: undefined,
               };
             }
             const scan =
               location.url === undefined || !remoteEnabled
                 ? null
-                : yield* scanRemote({
-                    repository: location.repository,
-                    url: location.url,
-                    cwd: project.value.workspaceRoot,
-                    provider: location.provider,
-                  });
+                : yield* scanRemote(
+                    {
+                      repository: location.repository,
+                      url: location.url,
+                      cwd: project.value.workspaceRoot,
+                      provider: location.provider,
+                    },
+                    options?.remote === "cached-only",
+                  );
             return {
               rejected: scan?.rejected ?? [],
               sources:
@@ -116,21 +135,17 @@ const make = Effect.gen(function* () {
                   machine,
                   remote: scan.remote,
                 })) ?? [],
-              notFoundReason: scan?.notFoundReason,
+              notFoundRepository: scan?.notFoundRepository,
+              hint: undefined,
             };
           }).pipe(
             Effect.catchTags({
-              ProjectMachineDiscoveryError: (error) =>
+              RemoteUnavailable: (error) =>
                 Effect.succeed({
-                  rejected: [
-                    {
-                      repository: location.repository,
-                      path: PROJECT_MACHINE_FILE_PATH,
-                      reason: error.message,
-                    },
-                  ],
+                  rejected: [],
                   sources: [],
-                  notFoundReason: undefined,
+                  notFoundRepository: undefined,
+                  hint: error.reason,
                 }),
             }),
           ),
@@ -141,21 +156,27 @@ const make = Effect.gen(function* () {
         .toSorted((a, b) => byIntent(a.machine, b.machine));
       const candidates = sources.map(({ machine: { files: _files, ...definition } }) => definition);
       const first = candidates[0];
+      const missing = [
+        ...new Set(
+          scans.flatMap((scan) =>
+            scan.notFoundRepository === undefined ? [] : [scan.notFoundRepository],
+          ),
+        ),
+      ];
+      const hints = [
+        ...new Set(scans.flatMap((scan) => (scan.hint === undefined ? [] : [scan.hint]))),
+      ];
+      if (missing.length > 0)
+        hints.unshift(
+          `No remote machine definition was found in ${missing.join(", ")} at the default branch. Checked .nexi/machine.json, .devcontainer/devcontainer.json and .devcontainer.json; subfolder discovery needs a local checkout or a .nexi/machine.json pointer.`,
+        );
       return {
         discovery: {
           status:
             first === undefined
               ? {
                   _tag: "None",
-                  ...(scans.some((scan) => scan.notFoundReason !== undefined)
-                    ? {
-                        reason: scans
-                          .flatMap((scan) =>
-                            scan.notFoundReason === undefined ? [] : [scan.notFoundReason],
-                          )
-                          .join(" "),
-                      }
-                    : {}),
+                  ...(hints.length > 0 ? { reason: hints.join(" ") } : {}),
                 }
               : { _tag: "Detected", definition: first },
           candidates,
@@ -179,4 +200,6 @@ const make = Effect.gen(function* () {
   return ProjectMachineDiscovery.of({ discover, resolveDefault });
 });
 
-export const layer = Layer.effect(ProjectMachineDiscovery, make);
+export const layer = Layer.effect(ProjectMachineDiscovery, make).pipe(
+  Layer.provide(SourceControlRateLimit.layer),
+);

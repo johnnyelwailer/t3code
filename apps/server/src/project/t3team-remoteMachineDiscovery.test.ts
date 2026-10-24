@@ -3,7 +3,7 @@ import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
 import * as Discovery from "./t3team-ProjectMachineDiscovery.ts";
-import { remoteFixture, remoteProjectId, remoteCommit } from "./t3team-remoteMachineTestUtils.ts";
+import { remoteFixture, remoteProjectId, remoteCommit } from "./t3team-remoteMachine.fixtures.ts";
 import { HIDDEN_T3TEAM_DIR, REFERENCES_DIR_NAME } from "../t3team-project-repository-utils.ts";
 
 it.layer(NodeServices.layer)("remote machine discovery", (it) => {
@@ -32,10 +32,7 @@ it.layer(NodeServices.layer)("remote machine discovery", (it) => {
       );
       expect(result.source?.machine.repository).toBe(".");
       expect(result.source?.remote).toBeUndefined();
-      expect(result.discovery.rejected[0]).toMatchObject({
-        repository: "acme/linked",
-        reason: expect.stringContaining("git credentials"),
-      });
+      expect(result.discovery.rejected).toEqual([]);
     }),
   );
   it.effect("does no remote work while project machines are disabled", () =>
@@ -202,14 +199,49 @@ it.layer(NodeServices.layer)("remote machine discovery", (it) => {
     }),
   );
 
-  it.effect("preserves the existing None result for unsupported providers", () =>
+  it.effect("lists missing repositories once with the own repository's display name", () =>
     Effect.gen(function* () {
-      const fixture = yield* remoteFixture({ unsupported: true });
+      const fixture = yield* remoteFixture({
+        manifest: (root) =>
+          JSON.stringify({
+            linkedRepositories: ["api", "web"].map((name) => ({
+              url: `https://github.com/acme/${name}`,
+              localPath: `${root}/${name}`,
+              status: "not-cloned",
+            })),
+          }),
+      });
       const result = yield* Discovery.ProjectMachineDiscovery.pipe(
         Effect.flatMap((service) => service.discover(remoteProjectId)),
         Effect.provide(fixture.layer),
       );
-      expect(result).toEqual({ status: { _tag: "None" }, candidates: [], rejected: [] });
+      expect(result.status).toEqual({
+        _tag: "None",
+        reason:
+          "No remote machine definition was found in acme/api, acme/web at the default branch. Checked .nexi/machine.json, .devcontainer/devcontainer.json and .devcontainer.json; subfolder discovery needs a local checkout or a .nexi/machine.json pointer.",
+      });
+    }),
+  );
+
+  it.effect("preserves the existing None result for unsupported providers", () =>
+    Effect.gen(function* () {
+      const fixture = yield* remoteFixture({
+        unsupported: true,
+        url: "https://dev.azure.com/acme/project/_git/api",
+      });
+      const result = yield* Discovery.ProjectMachineDiscovery.pipe(
+        Effect.flatMap((service) => service.discover(remoteProjectId)),
+        Effect.provide(fixture.layer),
+      );
+      expect(result).toEqual({
+        status: {
+          _tag: "None",
+          reason:
+            "Remote discovery isn't available for azure-devops; check the repository out locally.",
+        },
+        candidates: [],
+        rejected: [],
+      });
     }),
   );
 });
