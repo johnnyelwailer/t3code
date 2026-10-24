@@ -135,10 +135,21 @@ describe("submitVoiceUtterance", () => {
     const home = { threadId: ThreadId.make("voice-in-project"), projectId: REAL_PROJECT };
     const { deps, turns, calls, state } = harness({ home, threads: [shell("voice-in-project")] });
     await submitVoiceUtterance(deps, "hello");
-    expect(calls).toEqual(["forget", "turn:create", "pin", "remember", "turn:send"]);
+    expect(calls).toEqual(["forget", "release", "turn:create", "pin", "remember", "turn:send"]);
     expect(turns[0]?.bootstrap?.createThread?.projectId).toBe(PROJECT);
     expect(state.home?.projectId).toBe(PROJECT);
     expect(state.home?.threadId).not.toBe(home.threadId);
+  });
+
+  it("never archives or deletes the stale voice thread it leaves behind, and survives a failed unpin", async () => {
+    const home = { threadId: ThreadId.make("voice-in-project"), projectId: REAL_PROJECT };
+    const { deps, turns } = harness({ home, threads: [shell("voice-in-project")] });
+    const failingRelease = { ...deps, release: async () => Promise.reject(new Error("offline")) };
+    expect(await submitVoiceUtterance(failingRelease, "hello")).toEqual({
+      status: "sent",
+      tier: "synthesis",
+    });
+    expect(turns[0]?.bootstrap?.createThread?.projectId).toBe(PROJECT);
   });
 
   it("reports a failed No project lookup as a send failure and retries on the next utterance", async () => {
