@@ -23,6 +23,10 @@
       "types": "./src/t3team-manualContinuation.ts",
       "import": "./src/t3team-manualContinuation.ts"
     },
+    "./t3team-cloudSessionFit": {
+      "types": "./src/t3team-cloudSessionFit.ts",
+      "import": "./src/t3team-cloudSessionFit.ts"
+    },
     "./t3team-widgetIconSprite": {
       "types": "./src/t3team-widgetIconSprite.ts",
       "import": "./src/t3team-widgetIconSprite.ts"
