@@ -42,39 +42,45 @@ const holding = stepsBody([
 ]);
 
 const project = (r: WorkflowRunSummary, body: string, ageSeconds: number) =>
-  Effect.runPromise(
-    projectCloudSession(r, createdMs + ageSeconds * 1000, "ubuntu", repoRef, () =>
-      Effect.succeed({ body, truncated: false }),
-    ),
+  projectCloudSession(r, createdMs + ageSeconds * 1000, "ubuntu", repoRef, () =>
+    Effect.succeed({ body, truncated: false }),
   );
 
 describe("projectCloudSession remainingSeconds", () => {
-  it("counts what is left of the hold ceiling for a ready session", async () => {
-    const session = await project(run, holding, 60 * 60);
-    expect(session.phase).toBe("ready");
-    expect(session.remainingSeconds).toBe(CLOUD_SESSION_HOLD_CEILING_SECONDS - 3600);
-  });
+  it.effect("counts what is left of the hold ceiling for a ready session", () =>
+    Effect.gen(function* () {
+      const session = yield* project(run, holding, 60 * 60);
+      expect(session.phase).toBe("ready");
+      expect(session.remainingSeconds).toBe(CLOUD_SESSION_HOLD_CEILING_SECONDS - 3600);
+    }),
+  );
 
-  it("never goes negative past the ceiling", async () => {
-    const session = await project(run, holding, CLOUD_SESSION_HOLD_CEILING_SECONDS + 600);
-    expect(session.remainingSeconds).toBe(0);
-  });
+  it.effect("never goes negative past the ceiling", () =>
+    Effect.gen(function* () {
+      const session = yield* project(run, holding, CLOUD_SESSION_HOLD_CEILING_SECONDS + 600);
+      expect(session.remainingSeconds).toBe(0);
+    }),
+  );
 
-  it("says nothing before the session holds a machine", async () => {
-    const preparing = stepsBody([["Set up job", "in_progress", null]]);
-    const session = await project(run, preparing, 120);
-    expect(session.phase).toBe("preparing");
-    expect(session.remainingSeconds).toBeNull();
-  });
+  it.effect("says nothing before the session holds a machine", () =>
+    Effect.gen(function* () {
+      const preparing = stepsBody([["Set up job", "in_progress", null]]);
+      const session = yield* project(run, preparing, 120);
+      expect(session.phase).toBe("preparing");
+      expect(session.remainingSeconds).toBeNull();
+    }),
+  );
 
-  it("says nothing about a session released while the run still winds down", async () => {
-    const released = stepsBody([
-      ["Capture connect status", "completed", "success"],
-      ["Hold the session until release, then stop t3 serve", "completed", "success"],
-      ["Complete job", "in_progress", null],
-    ]);
-    const session = await project(run, released, 3600);
-    expect(session.phase).toBe("stopped");
-    expect(session.remainingSeconds).toBeNull();
-  });
+  it.effect("says nothing about a session released while the run still winds down", () =>
+    Effect.gen(function* () {
+      const released = stepsBody([
+        ["Capture connect status", "completed", "success"],
+        ["Hold the session until release, then stop t3 serve", "completed", "success"],
+        ["Complete job", "in_progress", null],
+      ]);
+      const session = yield* project(run, released, 3600);
+      expect(session.phase).toBe("stopped");
+      expect(session.remainingSeconds).toBeNull();
+    }),
+  );
 });

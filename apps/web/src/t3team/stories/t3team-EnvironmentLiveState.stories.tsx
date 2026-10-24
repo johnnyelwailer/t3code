@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { useState } from "react";
 import { CircleDashedIcon, ClockIcon, CloudOffIcon, WifiOffIcon } from "lucide-react";
 
 import { LiveStateLabel } from "~/cloud/t3team-LiveStateLabel";
@@ -41,15 +42,11 @@ function SidebarStatus({ liveState }: { readonly liveState: EnvironmentLiveState
 }
 
 function ThreadWorkingRow({ liveState }: { readonly liveState: EnvironmentLiveState }) {
+  const [startedAt] = useState(() => new Date(Date.now() - 15_000).toISOString());
   return (
     <div className="border-b border-border/60 px-1 pb-2 pt-1 text-sm text-muted-foreground tabular-nums">
       {liveState === "live" ? (
-        <WorkingLeadText
-          stateWord="Working"
-          createdAt={new Date(Date.now() - 15_000).toISOString()}
-          liveState
-          shimmer
-        />
+        <WorkingLeadText stateWord="Working" createdAt={startedAt} liveState shimmer />
       ) : (
         <OfflineWorkingLabel state={liveState} />
       )}
