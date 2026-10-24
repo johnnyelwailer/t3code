@@ -21,6 +21,7 @@ import type {
   RemoteEnvironmentSessionDeps,
   RemoteThreadView,
   RemoteEnvironmentGrant,
+  RemoteEnvironmentError,
 } from "./t3team-remoteEnvironmentApiTypes.ts";
 import {
   pendingApproval,
@@ -33,6 +34,18 @@ import { remoteTurnProgress, type RemoteTurnTerminal } from "./t3team-remoteEnvi
 import { awaitSessionReady, type TurnState } from "./t3team-remoteEnvironmentTurnState.ts";
 
 const RECONNECT_ATTEMPTS = 5;
+
+/**
+ * The readiness wait runs once, before and outside the reconnect retry, so a session that never
+ * becomes ready ends the turn after that one bounded wait (about 15 minutes), not one per retry.
+ */
+const notReady = (error: RemoteEnvironmentError | CloudSessionFailedError): RemoteTurnTerminal =>
+  error._tag === "CloudSessionFailedError" && error.reason === "unknown_session"
+    ? {
+        status: "failed",
+        message: `The cloud session did not become ready within about 15 minutes: ${error.message}`,
+      }
+    : terminalFor(error);
 
 /** What a follower needs from its session: the connection, where events go, and the clock. */
 export interface RemoteFollowEnv {
@@ -108,15 +121,18 @@ export const followTurn = Effect.fn("remoteEnvironment.followTurn")(function* (
       );
     }),
   );
-  const terminal = yield* awaitSessionReady(deps, target.sessionId).pipe(
-    Effect.andThen(attempt),
-    Effect.retry({
-      times: deps.reconnectAttempts ?? RECONNECT_ATTEMPTS,
-      schedule: Schedule.exponential("1 second"),
-      while: retryable,
-    }),
-    Effect.catch((error) => Effect.succeed(terminalFor(error))),
-  );
+  const ready = yield* Effect.result(awaitSessionReady(deps, target.sessionId));
+  const terminal =
+    ready._tag === "Failure"
+      ? notReady(ready.failure)
+      : yield* attempt.pipe(
+          Effect.retry({
+            times: deps.reconnectAttempts ?? RECONNECT_ATTEMPTS,
+            schedule: Schedule.exponential("1 second"),
+            while: retryable,
+          }),
+          Effect.catch((error) => Effect.succeed(terminalFor(error))),
+        );
   if (yield* Deferred.succeed(state.ended, undefined)) {
     yield* emit(yield* Effect.orDie(events.terminal(terminal, assistantCount)));
   }

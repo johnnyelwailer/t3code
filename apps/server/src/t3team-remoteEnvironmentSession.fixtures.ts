@@ -199,7 +199,7 @@ export const fakeRemote = Effect.fn("fakeRemote")(function* (input: {
   return { api, log, state, ticks, dispatched, observed, remoteInterrupted } satisfies FakeRemote;
 });
 
-const providerSession = remoteEnvironmentProviderSession({
+export const providerSession = remoteEnvironmentProviderSession({
   providerSessionId: ProviderSessionId.make("session-1"),
   instanceId: ProviderInstanceId.make("remoteEnvironment"),
   cwd: "/tmp",
