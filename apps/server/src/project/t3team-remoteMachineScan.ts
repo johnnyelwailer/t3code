@@ -2,7 +2,6 @@ import { SourceControlProviderKind } from "@t3tools/contracts";
 import { detectSourceControlProviderFromRemoteUrl } from "@t3tools/shared/sourceControl";
 import { repositoryPathFromRemoteUrl } from "@t3tools/source-control-core/server/SourceControlProvider";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
-import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -75,15 +74,7 @@ export const scanRemoteAtCommit = Effect.fn("projectMachine.scanRemoteAtCommit")
             Effect.tap(() => limits.recordSuccess({ ...key, lease })),
             Effect.tapError((error) =>
               error.reason === "rate-limited"
-                ? Clock.currentTimeMillis.pipe(
-                    Effect.flatMap((now) =>
-                      limits.recordRateLimit({
-                        ...key,
-                        lease,
-                        retryAt: Math.max(error.retryAt ?? 0, now + 300_000),
-                      }),
-                    ),
-                  )
+                ? limits.recordRateLimit({ ...key, lease, retryAt: error.retryAt })
                 : Effect.void,
             ),
             Effect.mapError(

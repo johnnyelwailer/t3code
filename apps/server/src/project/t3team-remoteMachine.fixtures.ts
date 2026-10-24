@@ -41,7 +41,7 @@ export const remoteFixture = Effect.fn("remoteFixture")(function* (input: {
   readonly ownRemote?: boolean;
   readonly enabled?: boolean;
   readonly unsupported?: boolean;
-  readonly gitOutput?: string | (() => string);
+  readonly gitOutput?: string | ((command: VcsProcessInput) => string);
   readonly gitExitCode?: number;
   readonly gitTruncated?: boolean;
   readonly gitError?: VcsError;
@@ -149,7 +149,7 @@ export const remoteFixture = Effect.fn("remoteFixture")(function* (input: {
           exitCode: ChildProcessSpawner.ExitCode(input.gitExitCode ?? 0),
           stdout:
             typeof input.gitOutput === "function"
-              ? input.gitOutput()
+              ? input.gitOutput(command)
               : (input.gitOutput ?? `ref: refs/heads/main\tHEAD\n${remoteCommit}\tHEAD\n`),
           stderr: "",
           stdoutTruncated: input.gitTruncated ?? false,

@@ -32,7 +32,7 @@ it.layer(NodeServices.layer)("remote cloud machines", (it) => {
         const reads = fixture.reads.length;
         expect(yield* projectPoolKeys).toEqual(["acme.api"]);
         yield* TestClock.adjust("10 minutes");
-        expect(yield* projectPoolKeys).toEqual([]);
+        expect(yield* projectPoolKeys).toEqual(["acme.api"]);
         expect(fixture.commands).toHaveLength(1);
         expect(fixture.reads).toHaveLength(reads);
       }).pipe(
@@ -44,6 +44,71 @@ it.layer(NodeServices.layer)("remote cloud machines", (it) => {
                   fixture.layer,
                   fixture.dependencies,
                   Layer.mock(GitHubApi.GitHubApi)({}),
+                ),
+              ),
+            ),
+            fixture.dependencies,
+          ),
+        ),
+      );
+    }),
+  );
+  it.effect("keeps the linked pointer pool after HEAD expiry over the local devcontainer", () =>
+    Effect.gen(function* () {
+      const fixture = yield* remoteFixture({
+        gitOutput: (command) =>
+          command.operation === "machine.origin"
+            ? "https://nexplore.ghe.com/acme/api.git"
+            : `${remoteCommit}\tHEAD\n`,
+        localFiles: {
+          ".git/HEAD": "ref: refs/heads/main",
+          ".devcontainer.json": '{"image":"local"}',
+        },
+        files: {
+          ".nexi/machine.json": '{"version":1,"devcontainer":".devcontainer.json"}',
+          ".devcontainer.json": '{"image":"remote"}',
+        },
+        manifest: (root) =>
+          JSON.stringify({
+            linkedRepositories: [
+              {
+                url: "https://nexplore.ghe.com/acme/linked.git",
+                localPath: `${root}/missing`,
+                status: "not-cloned",
+              },
+            ],
+          }),
+      });
+      yield* Effect.gen(function* () {
+        const machines = yield* Machines.CloudSessionMachines;
+        const machine = yield* machines.resolve(remoteProjectId);
+        expect(machine?.repository.name).toBe("linked");
+        const commands = fixture.commands.length;
+        const reads = fixture.reads.length;
+        yield* TestClock.adjust("10 minutes");
+        expect(yield* projectPoolKeys).toEqual(["acme.linked"]);
+        expect(fixture.commands).toHaveLength(commands);
+        expect(fixture.reads).toHaveLength(reads);
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            Machines.layer.pipe(
+              Layer.provide(
+                Layer.mergeAll(
+                  fixture.layer,
+                  fixture.dependencies,
+                  Layer.mock(GitHubApi.GitHubApi)({
+                    credential: () =>
+                      Effect.succeed({ token: Redacted.make("token"), fingerprint: "test" }),
+                    rest: () =>
+                      Effect.succeed({
+                        status: 200,
+                        headers: {},
+                        body: '{"login":"pj","id":7}',
+                        truncated: false,
+                        invalidUtf8: false,
+                      }),
+                  }),
                 ),
               ),
             ),
