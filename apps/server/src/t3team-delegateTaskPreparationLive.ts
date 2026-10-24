@@ -171,6 +171,7 @@ const make = Effect.gen(function* () {
 
         const afterCreate = (childThreadId: ThreadId) =>
           Effect.gen(function* () {
+            if (cloud !== undefined) yield* cloud.register(childThreadId);
             const childNotes = yield* recordChild({
               parentThread,
               childThreadId,
@@ -179,7 +180,6 @@ const make = Effect.gen(function* () {
               environment: environment.binding,
               skills: extensions.skills,
             });
-            if (cloud !== undefined) yield* cloud.register(childThreadId);
             if (workspace === undefined) return childNotes;
             const setup = yield* startChildSetupScript({
               runner: setupScripts,
