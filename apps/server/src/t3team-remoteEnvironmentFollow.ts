@@ -30,7 +30,11 @@ import {
 import type { RemoteEnvironmentTarget } from "./t3team-remoteEnvironmentTarget.ts";
 import { makeRemoteTurnEvents } from "./t3team-remoteEnvironmentTurnEvents.ts";
 import { remoteTurnProgress, type RemoteTurnTerminal } from "./t3team-remoteEnvironmentTurn.ts";
-import { remoteInterrupt, type TurnState } from "./t3team-remoteEnvironmentTurnState.ts";
+import {
+  awaitSessionReady,
+  remoteInterrupt,
+  type TurnState,
+} from "./t3team-remoteEnvironmentTurnState.ts";
 
 const RECONNECT_ATTEMPTS = 5;
 
@@ -109,7 +113,9 @@ const followTurn = Effect.fn("remoteEnvironment.followTurn")(function* (
     }),
   );
   yield* emit([yield* Effect.orDie(events.running())]);
-  const terminal = yield* attempt.pipe(
+  const ready = awaitSessionReady(deps, target.sessionId);
+  const terminal = yield* ready.pipe(
+    Effect.andThen(attempt),
     Effect.retry({
       times: deps.reconnectAttempts ?? RECONNECT_ATTEMPTS,
       schedule: Schedule.exponential("1 second"),

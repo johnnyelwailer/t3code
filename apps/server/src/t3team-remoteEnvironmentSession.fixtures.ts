@@ -38,7 +38,7 @@ const decodeRuntimeRequest = Schema.decodeUnknownSync(
   Schema.toCodecJson(OrchestrationV2RuntimeRequest),
 );
 const AT = "2026-10-24T22:00:00.000Z";
-const REPOSITORY = "nexplore.ghe.com/pj/nexi-machine-qa";
+export const REPOSITORY = "nexplore.ghe.com/pj/nexi-machine-qa";
 
 export const turn = {
   ...Schema.decodeUnknownSync(PackCodec.turnInput)(turnInputJson("thread-child", "session-1")),
@@ -52,7 +52,7 @@ export const providerThread = Schema.decodeUnknownSync(PackCodec.providerThread)
   providerThreadJson("thread-child", "session-1"),
 );
 
-const run = (status: string) =>
+const run = (status: string, userMessageId: string = turn.message.messageId) =>
   decodeRun({
     id: "remote-run-1",
     threadId: "thread-child",
@@ -60,7 +60,7 @@ const run = (status: string) =>
     providerInstanceId: "nexplore",
     modelSelection: { instanceId: "nexplore", model: "Standard" },
     providerThreadId: null,
-    userMessageId: turn.message.messageId,
+    userMessageId,
     rootNodeId: null,
     activeAttemptId: null,
     status,
@@ -103,8 +103,9 @@ export const view = (
   status: string | null,
   texts: ReadonlyArray<string> = [],
   pending = false,
+  messageId: string = turn.message.messageId,
 ): RemoteThreadView => ({
-  runs: status === null ? [] : [run(status)],
+  runs: status === null ? [] : [run(status, messageId)],
   messages: texts.map(answer),
   runtimeRequests: pending ? [approval] : [],
 });
@@ -202,6 +203,8 @@ export const open = (
               return yield* next;
             }),
       reconnectAttempts: 2,
+      readinessAttempts: 3,
+      readinessInterval: "10 millis",
       interruptGrace: "50 millis",
     },
     {

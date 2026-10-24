@@ -82,6 +82,26 @@ describe("makeRemoteEnvironmentSession", () => {
     }).pipe(Effect.scoped),
   );
 
+  it.live("waits for a session that is still starting, then runs the turn", () =>
+    Effect.gen(function* () {
+      const remote = yield* fakeRemote({});
+      const starting = new CloudSessionFailedError({
+        reason: "unknown_session",
+        message: "That cloud session is not running yet: it is still starting.",
+      });
+      const failures = yield* Ref.make<
+        ReadonlyArray<CloudSessionFailedError | RemoteEnvironmentError>
+      >([starting, starting]);
+      const session = yield* open(remote, failures);
+      yield* session.startTurn(turn);
+      yield* Deferred.await(remote.dispatched);
+      yield* Ref.set(remote.state, view("completed", ["Done after the wait."]));
+      yield* Queue.offer(remote.ticks, undefined);
+      const terminal = terminalOf(yield* runUntilTerminal(session.events));
+      assert.isTrue(terminal?.type === "turn.terminal" && terminal.status === "completed");
+    }).pipe(Effect.scoped),
+  );
+
   it.live("fails with a clear reason when the session ends mid-turn", () =>
     Effect.gen(function* () {
       const remote = yield* fakeRemote({});

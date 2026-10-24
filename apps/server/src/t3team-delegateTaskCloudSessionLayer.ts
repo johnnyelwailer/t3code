@@ -8,13 +8,16 @@
  * exists to share without moving that one out of ws.ts. Per instance, as for every connection
  * today: the standby claim ledger (only used by project machines), the payload-issue cleanup
  * tracker, the list single-flight, and a fresh `CloudCliTokenManager` with its own semaphore.
- * The connect-credential minter and the broker are the server's shared ones (server.ts). This
- * instance never dispatches: `start` stays absent until a delegated child runs on the session.
+ * The connect-credential minter and the broker are the server's shared ones (server.ts). The
+ * placement also has its own broker connector (one more pairing per session than the
+ * `remoteEnvironment` driver's), used only to probe a ready session before a child is placed.
  */
 import { CloudSessionFailedError } from "@t3tools/contracts";
+import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import { HttpClient } from "effect/http";
 
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
 import { layer as CloudSessionMachinesLayer } from "./cloud/t3team-CloudSessionMachine.ts";
@@ -27,6 +30,14 @@ import { layer as ProjectMachineDiscoveryLayer } from "./project/t3team-ProjectM
 import type { DelegateCloudSessions } from "./t3team-delegateTaskCloudSession.ts";
 import { makeCloudSessionStartGuard } from "./t3team-delegateTaskCloudSessionStartGuard.ts";
 import { readFeatureFlagFromConfig } from "./t3team-featureFlagConfig.ts";
+import { makeCloudSessionConnector } from "./cloud/t3team-cloudSessionConnector.ts";
+import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
+import {
+  DEFAULT_CHILDREN_PER_SESSION,
+  makeCloudSessionCapacity,
+} from "./t3team-delegateCloudCapacity.ts";
+import { openRemoteEnvironmentApi } from "./t3team-remoteEnvironmentApi.ts";
+import { checkRemoteTarget } from "./t3team-remoteEnvironmentPrepare.ts";
 
 export class DelegateCloudSessionPlacement extends Context.Service<
   DelegateCloudSessionPlacement,
@@ -39,13 +50,43 @@ const noBroker = new CloudSessionFailedError({
     "This build has no Nexi broker configured, and a server reaches a cloud session only through it.",
 });
 
+/** A delegated child's session holds its machine this long, not the 345-minute ceiling. */
+export const DELEGATED_SESSION_HOLD_SECONDS = 2 * 60 * 60;
+
 export const makeDelegateCloudSessionPlacement = Effect.gen(function* () {
   const sessions = yield* CloudSessionService;
   const broker = yield* NexiBrokerService;
+  const http = yield* HttpClient.HttpClient;
+  const threads = yield* ThreadManagementService;
+  const limit = yield* Config.Int("NEXI_DELEGATE_CLOUD_CHILDREN_PER_SESSION").pipe(
+    Config.withDefault(DEFAULT_CHILDREN_PER_SESSION),
+  );
+  const connector = yield* makeCloudSessionConnector(broker);
   return {
     list: sessions.list,
     brokerReady: broker.enabled ? Effect.asVoid(broker.sessions) : Effect.fail(noBroker),
+    start: (projectId) =>
+      sessions.create({ durationSeconds: DELEGATED_SESSION_HOLD_SECONDS, projectId }),
+    probe: (sessionId, target) =>
+      Effect.scoped(
+        connector.connect(sessionId).pipe(
+          Effect.flatMap(openRemoteEnvironmentApi),
+          Effect.flatMap((api) => checkRemoteTarget(api, target)),
+          Effect.asVoid,
+        ),
+      ).pipe(Effect.provideService(HttpClient.HttpClient, http)),
     startGuard: yield* makeCloudSessionStartGuard(),
+    capacity: yield* makeCloudSessionCapacity({
+      limit: Math.max(1, limit),
+      isActive: (threadId) =>
+        threads.getThreadShell(threadId).pipe(
+          Effect.map(
+            (shell) =>
+              shell !== null && (shell.activeRunId !== null || !shell.latestRunCompletedAt),
+          ),
+          Effect.orElseSucceed(() => false),
+        ),
+    }),
   } satisfies DelegateCloudSessions;
 });
 

@@ -24,7 +24,7 @@ import type { RemoteTurnTerminal } from "./t3team-remoteEnvironmentTurn.ts";
 
 export class RemoteEnvironmentRejected extends Schema.TaggedError<RemoteEnvironmentRejected>()(
   "RemoteEnvironmentRejected",
-  { message: Schema.String },
+  { reason: Schema.Literals(["project", "model"]), message: Schema.String },
 ) {}
 
 export const retryable = (
@@ -47,16 +47,20 @@ export const terminalFor = (
 });
 
 /** Checks the session's own project and the requested model, then creates the remote thread. */
-export const prepareRemoteThread = Effect.fn("remoteEnvironment.prepareThread")(function* (
+/**
+ * The session's own project, after checking it is the child's repository and that the requested
+ * provider and model exist there. Used when a delegation names a ready session and on a turn.
+ */
+export const checkRemoteTarget = Effect.fn("remoteEnvironment.checkTarget")(function* (
   api: RemoteEnvironmentApi,
-  turn: ProviderAdapterV2TurnInput,
-  target: RemoteEnvironmentTarget,
+  target: Pick<RemoteEnvironmentTarget, "repositoryKey" | "modelSelection">,
 ) {
   const config = yield* api.serverConfig;
   const cwd = projectCwdOf(config);
   const own = cwd === null ? undefined : ownProjectOnMachine(cwd, yield* api.projects);
   if (own === undefined || !isOwnProjectOfRepository(target.repositoryKey, own)) {
     return yield* new RemoteEnvironmentRejected({
+      reason: "project",
       message: `The cloud session's own project is not ${target.repositoryKey}, so the child cannot run there.`,
     });
   }
@@ -76,9 +80,19 @@ export const prepareRemoteThread = Effect.fn("remoteEnvironment.prepareThread")(
       )
       .join("; ");
     return yield* new RemoteEnvironmentRejected({
+      reason: "model",
       message: `Model '${model}' of provider '${instanceId}' is not available on the cloud session. It offers: ${available || "nothing"}.`,
     });
   }
+  return own;
+});
+
+export const prepareRemoteThread = Effect.fn("remoteEnvironment.prepareThread")(function* (
+  api: RemoteEnvironmentApi,
+  turn: ProviderAdapterV2TurnInput,
+  target: RemoteEnvironmentTarget,
+) {
+  const own = yield* checkRemoteTarget(api, target);
   yield* api.launchThread({
     threadId: turn.threadId,
     reuseExistingThread: true,

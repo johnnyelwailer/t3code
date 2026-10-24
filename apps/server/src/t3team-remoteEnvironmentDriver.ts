@@ -16,9 +16,6 @@ import {
   type ProviderDriverCreateInput,
   type ProviderInstance,
 } from "@t3tools/provider-core/server/driver";
-import type { ProviderAdapterV2OpenSessionInput } from "@t3tools/provider-core/server/ProviderAdapter";
-import { turnScopedSelectionTransition } from "@t3tools/provider-core/server/selectionTransition";
-import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -31,11 +28,7 @@ import {
   RemoteEnvironmentError,
   type RemoteEnvironmentSessionDeps,
 } from "./t3team-remoteEnvironmentApiTypes.ts";
-import {
-  REMOTE_ENVIRONMENT_CAPABILITIES,
-  remoteEnvironmentProviderSession,
-} from "./t3team-remoteEnvironmentCapabilities.ts";
-import { makeRemoteEnvironmentSession } from "./t3team-remoteEnvironmentSession.ts";
+import { makeRemoteEnvironmentAdapter } from "./t3team-remoteEnvironmentAdapter.ts";
 import {
   DISPLAY_NAME,
   makeSnapshot,
@@ -97,27 +90,7 @@ export const RemoteEnvironmentDriver: ProviderDriver<unknown> = {
       configurationSource,
       enabled,
       snapshot: makeSnapshot(instanceId, continuationIdentity.continuationKey),
-      orchestrationAdapter: {
-        instanceId,
-        driver: REMOTE_ENVIRONMENT_DRIVER,
-        getCapabilities: () => Effect.succeed(REMOTE_ENVIRONMENT_CAPABILITIES),
-        planSelectionTransition: () => Effect.succeed(turnScopedSelectionTransition()),
-        openSession: Effect.fn("RemoteEnvironmentDriver.openSession")(function* (
-          value: ProviderAdapterV2OpenSessionInput,
-        ) {
-          const providerSession = remoteEnvironmentProviderSession({
-            providerSessionId: value.providerSessionId,
-            instanceId,
-            cwd: value.runtimePolicy.cwd ?? "/",
-            now: yield* DateTime.now,
-          });
-          return yield* makeRemoteEnvironmentSession(deps, {
-            instanceId,
-            providerSessionId: value.providerSessionId,
-            providerSession,
-          });
-        }),
-      },
+      orchestrationAdapter: makeRemoteEnvironmentAdapter(instanceId, deps),
       textGeneration: unsupportedTextGeneration,
     } satisfies ProviderInstance;
   }),
