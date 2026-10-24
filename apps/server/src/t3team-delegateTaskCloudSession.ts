@@ -52,11 +52,14 @@ export const CHILD_RUNS_HERE_NOTE =
 const repositoryNameOf = (repository: string | null) =>
   repository === null ? null : (repository.split("/").pop() ?? null);
 
+/** Ready means usable now: the `ready` phase with its environment linked (the selector's rule). */
 const describeSession = (session: CloudSession) => {
   const name = session.name ?? "Cloud session";
-  const state =
-    session.phase === "ready"
-      ? `ready${session.endsAt === undefined ? "" : ` until ${session.endsAt}`}`
+  const ready = session.phase === "ready" && Boolean(session.environmentId);
+  const state = ready
+    ? `ready${session.endsAt === undefined ? "" : ` until ${session.endsAt}`}`
+    : session.phase === "ready"
+      ? "starting (its environment is not linked yet)"
       : `${session.phase}, not ready yet`;
   return `'${name}' (${session.sessionId}) is ${state}`;
 };
@@ -101,8 +104,9 @@ const startOrReport = Effect.fn("delegateTask.cloudSession.startOrReport")(funct
 
 const place = Effect.fn("delegateTask.cloudSession.place")(function* (
   sessions: DelegateCloudSessions,
-  input: CloudSessionPlacementInput,
+  resolveInput: Effect.Effect<CloudSessionPlacementInput>,
 ) {
+  const input = yield* resolveInput;
   const { request } = input;
   yield* sessions.brokerReady;
   const listed = yield* sessions.list;
@@ -127,13 +131,14 @@ const place = Effect.fn("delegateTask.cloudSession.place")(function* (
 
 /**
  * The notes for one delegation. Never fails and never dies: it runs after the child exists, so a
- * cloud-session problem, expected or not, becomes a note instead of failing delegate_task.
+ * cloud-session problem, expected or not, becomes a note instead of failing delegate_task. The
+ * input is resolved inside the guard too (its project lookup can fail like anything else).
  */
 export const placeOnCloudSession = (
   sessions: DelegateCloudSessions,
-  input: CloudSessionPlacementInput,
+  resolveInput: Effect.Effect<CloudSessionPlacementInput>,
 ): Effect.Effect<ReadonlyArray<string>> =>
-  place(sessions, input).pipe(
+  place(sessions, resolveInput).pipe(
     Effect.catch((error) => Effect.succeed(failedNote(error))),
     Effect.catchCause((cause) =>
       Effect.logWarning("delegate_task cloudSession placement failed unexpectedly", {

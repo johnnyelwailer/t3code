@@ -161,17 +161,23 @@ const make = Effect.gen(function* () {
               environment: environment.binding,
               skills: extensions.skills,
             });
+            const cloudRequest = cloudSession.value;
             const cloudNotes =
-              cloudSessions === undefined || cloudSession.value === undefined
+              cloudSessions === undefined || cloudRequest === undefined
                 ? []
-                : yield* placeOnCloudSession(cloudSessions, {
-                    request: cloudSession.value,
-                    projectId: parentThread.projectId,
-                    ...childRepositoryOf(
-                      yield* projectRepositoryIdentity(parentThread.projectId),
-                      workspace?.repository ?? isolated?.repository ?? null,
+                : yield* placeOnCloudSession(
+                    cloudSessions,
+                    projectRepositoryIdentity(parentThread.projectId).pipe(
+                      Effect.map((identity) => ({
+                        request: cloudRequest,
+                        projectId: parentThread.projectId,
+                        ...childRepositoryOf(
+                          identity,
+                          workspace?.repository ?? isolated?.repository ?? null,
+                        ),
+                      })),
                     ),
-                  });
+                  );
             if (workspace === undefined) return [...childNotes, ...cloudNotes];
             const setup = yield* startChildSetupScript({
               runner: setupScripts,
