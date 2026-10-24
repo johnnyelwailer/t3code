@@ -1,5 +1,10 @@
 import { assert, describe, it } from "@effect/vitest";
-import { OrchestrationV2ConversationMessage, OrchestrationV2Run, RunId } from "@t3tools/contracts";
+import {
+  OrchestrationV2ConversationMessage,
+  OrchestrationV2Run,
+  OrchestrationV2TurnItem,
+  RunId,
+} from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -58,7 +63,7 @@ describe("remoteTurnProgress", () => {
   it("is empty until the remote server runs the turn's message", () => {
     assert.deepStrictEqual(
       remoteTurnProgress(
-        { runs: [run("running", "another-message")], messages: [] },
+        { runs: [run("running", "another-message")], messages: [], turnItems: [] },
         turn.message.messageId,
       ),
       { runId: null, assistant: [], terminal: null },
@@ -67,7 +72,7 @@ describe("remoteTurnProgress", () => {
 
   it("follows the run's assistant messages until it completes", () => {
     const running = remoteTurnProgress(
-      { runs: [run("running")], messages: [assistant("m1", "Working")] },
+      { runs: [run("running")], messages: [assistant("m1", "Working")], turnItems: [] },
       turn.message.messageId,
     );
     assert.deepStrictEqual(running, {
@@ -76,7 +81,7 @@ describe("remoteTurnProgress", () => {
       terminal: null,
     });
     const done = remoteTurnProgress(
-      { runs: [run("completed")], messages: [assistant("m1", "Done")] },
+      { runs: [run("completed")], messages: [assistant("m1", "Done")], turnItems: [] },
       turn.message.messageId,
     );
     assert.deepStrictEqual(done.terminal, { status: "completed" });
@@ -84,12 +89,52 @@ describe("remoteTurnProgress", () => {
 
   it("carries the last answer into a failure", () => {
     const failed = remoteTurnProgress(
-      { runs: [run("failed")], messages: [assistant("m1", "Model not available")] },
+      { runs: [run("failed")], messages: [assistant("m1", "Model not available")], turnItems: [] },
       turn.message.messageId,
     );
     assert.deepStrictEqual(failed.terminal, {
       status: "failed",
       message: "The child's run on the cloud session failed: Model not available",
+    });
+  });
+});
+
+const decodeTurnItem = Schema.decodeUnknownSync(Schema.toCodecJson(OrchestrationV2TurnItem));
+
+const errorItem = decodeTurnItem({
+  id: "turn-item:error",
+  threadId: "remote-thread",
+  runId: "remote-run-1",
+  nodeId: null,
+  type: "error",
+  failure: {
+    class: "provider_error",
+    message: "Nexplore AI is unavailable: Request timed out.",
+    code: null,
+    retryable: null,
+  },
+  providerThreadId: null,
+  providerTurnId: null,
+  nativeItemRef: null,
+  parentItemId: null,
+  ordinal: 2,
+  status: "failed",
+  title: null,
+  startedAt: AT,
+  completedAt: AT,
+  updatedAt: AT,
+});
+
+describe("remoteTurnProgress failure reason", () => {
+  it("carries the remote run's own error into the failure", () => {
+    const failed = remoteTurnProgress(
+      { runs: [run("failed")], messages: [], turnItems: [errorItem] },
+      turn.message.messageId,
+    );
+    assert.deepStrictEqual(failed.terminal, {
+      status: "failed",
+      message:
+        "The child's run on the cloud session failed: Nexplore AI is unavailable: Request timed out.",
     });
   });
 });

@@ -108,6 +108,7 @@ export const view = (
   runs: status === null ? [] : [run(status, messageId)],
   messages: texts.map(answer),
   runtimeRequests: pending ? [approval] : [],
+  turnItems: [],
 });
 
 export interface FakeRemote {
@@ -128,6 +129,7 @@ export const fakeRemote = Effect.fn("fakeRemote")(function* (input: {
 }) {
   const log = yield* Ref.make<ReadonlyArray<string>>([]);
   const state = yield* Ref.make(view(null));
+  const launched = yield* Ref.make(false);
   const ticks = yield* Queue.unbounded<void, RemoteEnvironmentError>();
   const dispatched = yield* Deferred.make<void>();
   const observed = yield* Deferred.make<void>();
@@ -156,7 +158,12 @@ export const fakeRemote = Effect.fn("fakeRemote")(function* (input: {
         },
       },
     ]),
-    launchThread: (launch) => note(`launch:${launch.threadId}:${launch.projectId}`),
+    launchThread: (launch) =>
+      launch.reuseExistingThread === true
+        ? Effect.fail(new RemoteEnvironmentError({ message: "reuse needs an existing thread" }))
+        : note(`launch:${launch.threadId}:${launch.projectId}`).pipe(
+            Effect.andThen(Ref.set(launched, true)),
+          ),
     dispatchMessage: (message) =>
       note(`dispatch:${message.messageId}:${message.modelSelection.model}`).pipe(
         Effect.andThen(Ref.set(state, input.afterDispatch ?? view("running"))),
@@ -169,7 +176,14 @@ export const fakeRemote = Effect.fn("fakeRemote")(function* (input: {
         Effect.andThen(Deferred.succeed(remoteInterrupted, undefined)),
       ),
     projection: () =>
-      Ref.get(state).pipe(
+      Ref.get(launched).pipe(
+        Effect.flatMap((exists) =>
+          exists
+            ? Ref.get(state)
+            : Effect.fail(
+                new RemoteEnvironmentError({ message: "No orchestration projection exists." }),
+              ),
+        ),
         Effect.tap((current) =>
           current.runs.length > 0 ? Deferred.succeed(observed, undefined) : Effect.void,
         ),

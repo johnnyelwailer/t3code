@@ -42,7 +42,7 @@ export interface RemoteEnvironmentProvider {
 /** The parts of the remote thread's projection a turn follows. */
 export type RemoteThreadView = Pick<
   OrchestrationV2ThreadProjection,
-  "runs" | "messages" | "runtimeRequests"
+  "runs" | "messages" | "runtimeRequests" | "turnItems"
 >;
 
 export interface RemoteEnvironmentApi {

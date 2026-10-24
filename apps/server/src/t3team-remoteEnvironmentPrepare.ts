@@ -87,21 +87,42 @@ export const checkRemoteTarget = Effect.fn("remoteEnvironment.checkTarget")(func
   return own;
 });
 
+/**
+ * Creates the remote thread under the local thread's id unless it exists already (a later turn, a
+ * retry after a dropped connection, a restart). `launchThread` with `reuseExistingThread` requires
+ * the thread to exist, so the first launch goes without it.
+ */
+export const ensureRemoteThread = Effect.fn("remoteEnvironment.ensureThread")(function* (
+  api: RemoteEnvironmentApi,
+  input: Omit<
+    Parameters<RemoteEnvironmentApi["launchThread"]>[0],
+    "reuseExistingThread" | "workspaceStrategy"
+  >,
+) {
+  const threadId = input.threadId;
+  if (threadId === undefined)
+    return yield* api.launchThread({ ...input, workspaceStrategy: { type: "root" } });
+  const exists = yield* api.projection(threadId).pipe(
+    Effect.as(true),
+    Effect.orElseSucceed(() => false),
+  );
+  if (exists) return;
+  yield* api.launchThread({ ...input, workspaceStrategy: { type: "root" } });
+});
+
 export const prepareRemoteThread = Effect.fn("remoteEnvironment.prepareThread")(function* (
   api: RemoteEnvironmentApi,
   turn: ProviderAdapterV2TurnInput,
   target: RemoteEnvironmentTarget,
 ) {
   const own = yield* checkRemoteTarget(api, target);
-  yield* api.launchThread({
+  yield* ensureRemoteThread(api, {
     threadId: turn.threadId,
-    reuseExistingThread: true,
     projectId: own.id,
     title: turn.appThread.title,
     modelSelection: target.modelSelection,
     runtimeMode: turn.runtimePolicy.runtimeMode,
     interactionMode: turn.runtimePolicy.interactionMode,
-    workspaceStrategy: { type: "root" },
   });
 });
 

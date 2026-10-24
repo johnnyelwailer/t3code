@@ -37,7 +37,7 @@ const TERMINAL: Partial<Record<OrchestrationV2RunStatus, RemoteTurnTerminal["sta
 };
 
 export function remoteTurnProgress(
-  projection: Pick<OrchestrationV2ThreadProjection, "runs" | "messages">,
+  projection: Pick<OrchestrationV2ThreadProjection, "runs" | "messages" | "turnItems">,
   messageId: string,
 ): RemoteTurnProgress {
   const run = projection.runs.find((candidate) => candidate.userMessageId === messageId);
@@ -46,7 +46,12 @@ export function remoteTurnProgress(
     .filter((message) => message.runId === run.id && message.role === "assistant")
     .map((message) => ({ id: message.id, text: message.text }));
   const status = TERMINAL[run.status];
-  const last = assistant.at(-1)?.text.trim();
+  const failure = projection.turnItems
+    .flatMap((item) =>
+      item.runId === run.id && item.type === "error" ? [item.failure.message] : [],
+    )
+    .at(-1);
+  const last = failure ?? assistant.at(-1)?.text.trim();
   const terminal: RemoteTurnTerminal | null =
     status === undefined
       ? null
