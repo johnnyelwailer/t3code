@@ -27,6 +27,7 @@ export class Accounts extends Context.Service<
     readonly accessToken: (
       accountId: string,
       resource: string,
+      options?: { readonly forceRefresh?: boolean },
     ) => Effect.Effect<string, AccountError>;
   }
 >()("t3/account/t3team-Accounts/Accounts") {}
@@ -62,8 +63,8 @@ const make = Effect.fn("account.accounts.make")(function* (
     list: Effect.forEach([...sessions.values()], (s) => s.status),
     signIn: (accountId) => session(accountId).pipe(Effect.flatMap((s) => s.signIn)),
     signOut: (accountId) => session(accountId).pipe(Effect.flatMap((s) => s.signOut)),
-    accessToken: (accountId, resource) =>
-      session(accountId).pipe(Effect.flatMap((s) => s.accessToken(resource))),
+    accessToken: (accountId, resource, options) =>
+      session(accountId).pipe(Effect.flatMap((s) => s.accessToken(resource, options))),
   });
 });
 

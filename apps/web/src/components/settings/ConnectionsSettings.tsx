@@ -1,4 +1,5 @@
 import { SessionPermissions } from "./SessionPermissions";
+import { ConnectionsSettingsSlot } from "~/t3team/packs/t3team-ConnectionsSettingsSlot";
 import { ChevronRightIcon, EllipsisIcon } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useState } from "react";
@@ -1520,6 +1521,7 @@ export function ConnectionsSettings() {
   return (
     <SettingsPageContainer>
       {primarySettings}
+      <ConnectionsSettingsSlot />
       <SettingsSection
         {...searchableSetting("remote-environments")}
         title="Environments"

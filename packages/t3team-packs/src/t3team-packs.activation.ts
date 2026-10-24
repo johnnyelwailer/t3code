@@ -2,6 +2,7 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
+import type { HostServiceRegistration } from "@t3team/pack-api";
 
 import type { LoadedAiProviderDefinition } from "./t3team-packs.aiProvider.ts";
 import type { WorkspacePackManifest } from "./t3team-packs.manifest.ts";
@@ -102,7 +103,7 @@ export type AccountRegistration = {
   readonly signInResource: string;
 };
 
-export type PackActivationContext = {
+export type PackActivationContext = HostServiceRegistration & {
   readonly pack: { readonly directory: string; readonly manifest: WorkspacePackManifest };
   readonly defineAgentProvider: (definition: LoadedAiProviderDefinition) => void;
   readonly defineProviderDriver: (definition: PackProviderDriverRegistration) => void;
