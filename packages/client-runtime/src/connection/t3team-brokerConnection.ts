@@ -12,7 +12,7 @@ import * as ConnectionCredentialStore from "./credentialStore.ts";
 import { mapRemoteEnvironmentError } from "./errors.ts";
 import {
   ConnectionBlockedError,
-  BrokerConnectionTarget,
+  type BrokerConnectionTarget,
   type ConnectionAttemptError,
   type PreparedConnection,
 } from "./model.ts";
@@ -41,7 +41,6 @@ export class BrokerEnvironmentGateway extends Context.Service<
     readonly attach: (input: {
       readonly sessionId: string;
       readonly expectedEnvironmentId: EnvironmentId;
-      readonly endsAt?: string;
     }) => Effect.Effect<AttachedBrokerEnvironment, ConnectionAttemptError>;
     /** A fresh one-time pairing credential from the session's own server. */
     readonly pair: (input: {
@@ -88,16 +87,7 @@ export const makeBrokerResolver = Effect.fn("clientRuntime.connection.broker.mak
       const attached = yield* gateway.attach({
         sessionId: target.sessionId,
         expectedEnvironmentId: target.environmentId,
-        ...(target.endsAt === undefined ? {} : { endsAt: target.endsAt }),
       });
-      const resolvedTarget =
-        attached.sessionId === target.sessionId
-          ? target
-          : new BrokerConnectionTarget({
-              environmentId: target.environmentId,
-              label: target.label,
-              sessionId: target.sessionId,
-            });
       const key = brokerCredentialKey(attached.sessionId);
       const authorize = (bearerToken: string) =>
         remote.authorizeBearer({
@@ -119,8 +109,7 @@ export const makeBrokerResolver = Effect.fn("clientRuntime.connection.broker.mak
             () => credentials.remove(key).pipe(Effect.ignore, Effect.as(Option.none())),
           ),
         );
-        if (Option.isSome(reused))
-          return { ...reused.value, target: resolvedTarget } satisfies PreparedConnection;
+        if (Option.isSome(reused)) return { ...reused.value, target } satisfies PreparedConnection;
       }
 
       const pairingCredential = yield* gateway.pair({ sessionId: attached.sessionId });
@@ -139,7 +128,7 @@ export const makeBrokerResolver = Effect.fn("clientRuntime.connection.broker.mak
         .put(key, new BearerConnectionCredential({ token: access.access_token }))
         .pipe(Effect.ignore);
       const authorized = yield* authorize(access.access_token);
-      return { ...authorized, target: resolvedTarget } satisfies PreparedConnection;
+      return { ...authorized, target } satisfies PreparedConnection;
     });
   },
 );

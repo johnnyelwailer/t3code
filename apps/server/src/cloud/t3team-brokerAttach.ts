@@ -1,5 +1,8 @@
 import { CloudSessionFailedError, type CloudSessionAttachInput } from "@t3tools/contracts";
-import { SESSION_ABSENT_GRACE_MS } from "./t3team-brokerAbsence.ts";
+import {
+  SESSION_ABSENT_GRACE_MS,
+  SESSION_EXPIRED_ABSENT_GRACE_MS,
+} from "./t3team-brokerAbsence.ts";
 
 /**
  * The listed session an attach reaches: the one asked for, else — a workspace's sessions share
@@ -45,7 +48,8 @@ export function attachFailure(
     });
   }
   const deadline = input.endsAt === undefined ? NaN : Date.parse(input.endsAt);
-  return absentForMs >= SESSION_ABSENT_GRACE_MS || deadline <= nowMs
+  const grace = deadline <= nowMs ? SESSION_EXPIRED_ABSENT_GRACE_MS : SESSION_ABSENT_GRACE_MS;
+  return absentForMs >= grace
     ? new CloudSessionFailedError({
         reason: "session_ended",
         message: "That cloud session has ended.",

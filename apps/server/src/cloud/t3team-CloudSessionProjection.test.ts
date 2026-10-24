@@ -5,6 +5,7 @@ import * as Effect from "effect/Effect";
 
 import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
 import type { WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
+import { attachFailure } from "./t3team-brokerAttach.ts";
 
 const CREATED_AT = "2026-10-24T08:00:00Z";
 const createdMs = Date.parse(CREATED_AT);
@@ -44,7 +45,7 @@ const holding = stepsBody([
   ["Set up job", "completed", "success"],
   ["Start t3 serve and wait for pairing details", "completed", "success"],
   ["Capture connect status", "completed", "success"],
-  ["Hold the session until release, then stop t3 serve", "in_progress", null],
+  ["Hold the session until release, then stop t3 serve", "in_progress", null, CREATED_AT],
 ]);
 
 const project = (r: WorkflowRunSummary, body: string, ageSeconds: number) =>
@@ -74,13 +75,44 @@ describe("projectCloudSession remainingSeconds", () => {
     Effect.gen(function* () {
       const session = yield* project(run, holding, 60 * 60);
       expect(session.phase).toBe("ready");
-      // No step start in the reply: the run's creation stands in, so the end is early, never late.
       expect(session.remainingSeconds).toBe(CLOUD_SESSION_HOLD_CEILING_SECONDS - 3600);
       expect(session.endsAt).toBe(
         DateTime.formatIso(
           DateTime.makeUnsafe(createdMs + CLOUD_SESSION_HOLD_CEILING_SECONDS * 1000),
         ),
       );
+    }),
+  );
+
+  it.effect("keeps a ready session with a pending hold retryable through a broker blip", () =>
+    Effect.gen(function* () {
+      const pending = stepsBody([
+        ["Capture connect status", "completed", "success"],
+        ["Relay environment cloud-env", "completed", "success"],
+        ["Wait for a claim", "completed", "success"],
+        ["Hold the session until release, then stop t3 serve", "pending", null],
+      ]);
+      const age = CLOUD_SESSION_HOLD_CEILING_SECONDS + 600;
+      const session = yield* project(run, pending, age);
+      expect(session.phase).toBe("ready");
+      expect(session.environmentId).toBe("cloud-env");
+      expect(session.endsAt).toBeUndefined();
+      expect(attachFailure([], session, 0, createdMs + age * 1000).reason).toBe("unknown_session");
+      expect(attachFailure([], session, 60_000, createdMs + age * 1000).reason).toBe(
+        "unknown_session",
+      );
+    }),
+  );
+
+  it.effect("keeps an estimated warning remainder without claiming a real hold deadline", () =>
+    Effect.gen(function* () {
+      const body = stepsBody([
+        ["Capture connect status", "completed", "success"],
+        ["Hold the session until release, then stop t3 serve", "in_progress", null],
+      ]);
+      const session = yield* project(run, body, 3600);
+      expect(session.endsAt).toBeUndefined();
+      expect(session.remainingSeconds).toBe(CLOUD_SESSION_HOLD_CEILING_SECONDS - 3600);
     }),
   );
 

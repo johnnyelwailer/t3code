@@ -45,7 +45,6 @@ export class BrokerConnectionTarget extends Schema.TaggedClass<BrokerConnectionT
   {
     ...ConnectionTargetBase,
     sessionId: Schema.String,
-    endsAt: Schema.optional(Schema.String),
   },
 ) {}
 

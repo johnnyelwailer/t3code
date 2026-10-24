@@ -187,7 +187,7 @@ describe("broker list observations", () => {
   });
 
   it.effect(
-    "ends a known expired session on the first healthy missing list after a server restart",
+    "requires a minute of healthy absence even past a real hold deadline after a restart",
     () => {
       const f = fixture();
       f.time(0, 360_000);
@@ -195,6 +195,10 @@ describe("broker list observations", () => {
         Effect.gen(function* () {
           const broker = yield* NexiBrokerService;
           const expired = { ...input, endsAt: "1970-01-01T00:05:00.000Z" };
+          expect(yield* reason(broker, expired)).toBe("unknown_session");
+          f.time(59_999, 419_999);
+          expect(yield* reason(broker, expired)).toBe("unknown_session");
+          f.time(60_000, 420_000);
           expect(yield* reason(broker, expired)).toBe("session_ended");
           f.list(starting);
           expect(yield* reason(broker, expired)).toBe("unknown_session");

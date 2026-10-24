@@ -211,14 +211,6 @@ export function mergeLearnedRoutes(input: {
   const { entry } = input;
   const active = input.activeRoute.target;
   const saved = connectionRoutes(entry);
-  if (active._tag === "BrokerConnectionTarget") {
-    const previous = saved.find(
-      (route) => connectionRouteId(route.target) === active.sessionId,
-    )?.target;
-    return previous?._tag === "BrokerConnectionTarget" && previous.endsAt !== active.endsAt
-      ? upsertRoute(saved, input.activeRoute)
-      : null;
-  }
   if (active._tag !== "RelayConnectionTarget" && active._tag !== "BearerConnectionTarget") {
     return null;
   }

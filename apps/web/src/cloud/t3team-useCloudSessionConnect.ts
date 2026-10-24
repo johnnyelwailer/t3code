@@ -42,7 +42,6 @@ function brokerRegistration(session: CloudSession): BrokerConnectionRegistration
       environmentId: EnvironmentId.make(environmentId),
       label: cloudSessionDisplayName(session),
       sessionId: session.sessionId,
-      ...(session.endsAt === undefined ? {} : { endsAt: session.endsAt }),
     }),
   });
 }

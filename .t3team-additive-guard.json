@@ -513,7 +513,6 @@
     "packages/client-runtime/src/connection/resolver.test.ts",
     "packages/client-runtime/src/connection/resolver.ts",
     "packages/client-runtime/src/connection/routes.ts",
-    "packages/client-runtime/src/connection/supervisor.ts",
     "packages/client-runtime/src/delayedStatus.test.ts",
     "packages/client-runtime/src/delayedStatus.ts",
     "packages/client-runtime/src/operations/commands.test.ts",

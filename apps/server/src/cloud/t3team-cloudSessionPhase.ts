@@ -164,7 +164,7 @@ export function cloudSessionElapsedSeconds(run: WorkflowRunSummary, nowMs: numbe
  * When a ready session's hold ends. The workflow's `hold_minutes` clock starts at its first
  * "Hold the session…" step, so that step's `started_at` is the honest start (a re-run keeps the
  * run's `createdAt`, which would be wrong). When the steps carry no start the run's creation
- * stands in: it precedes the hold, so the end it gives is early, the safe side for a warning.
+ * stands in for the warning remainder only; `endsAt` requires the hold's real start.
  * Null when the session is not holding a machine. An upper bound all the same: the idle check can
  * release a session sooner.
  */
@@ -173,14 +173,16 @@ export function cloudSessionHoldEnd(
   run: WorkflowRunSummary,
   steps: readonly WorkflowJobStep[] | null,
   nowMs: number,
-): { readonly endsAt: string; readonly remainingSeconds: number } | null {
+): { readonly endsAt?: string; readonly remainingSeconds: number } | null {
   if (phase !== "ready") return null;
   const holdStep = steps?.find((step) => step.name.startsWith("Hold the session"));
   const startMs = Date.parse(holdStep?.startedAt ?? run.createdAt);
   if (Number.isNaN(startMs)) return null;
   const endsAtMs = startMs + CLOUD_SESSION_HOLD_CEILING_SECONDS * 1000;
   return {
-    endsAt: DateTime.formatIso(DateTime.makeUnsafe(endsAtMs)),
+    ...(holdStep?.startedAt === undefined
+      ? {}
+      : { endsAt: DateTime.formatIso(DateTime.makeUnsafe(endsAtMs)) }),
     remainingSeconds: Math.max(0, Math.floor((endsAtMs - nowMs) / 1000)),
   };
 }

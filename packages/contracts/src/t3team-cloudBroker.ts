@@ -20,7 +20,7 @@ export type CloudBrokerStatus = typeof CloudBrokerStatusSchema.Type;
 
 export const CloudSessionAttachInputSchema = Schema.Struct({
   sessionId: Schema.String,
-  /** Known session hold deadline, retained across desktop/server restarts. */
+  /** Hold deadline from the latest session list, only present after the hold actually starts. */
   endsAt: Schema.optional(Schema.String),
   /**
    * The environment the client knows the session by. Sessions in one workspace share it (the

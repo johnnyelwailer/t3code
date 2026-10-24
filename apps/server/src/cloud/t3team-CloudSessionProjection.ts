@@ -134,7 +134,7 @@ export const projectCloudSession = (
       // The app always dispatches the fleet's hold ceiling, so a live session ends at its hold's
       // start plus that ceiling; an upper bound (the idle check can release it sooner).
       remainingSeconds: holdEnd?.remainingSeconds ?? null,
-      ...(holdEnd !== null ? { endsAt: holdEnd.endsAt } : {}),
+      ...(holdEnd?.endsAt !== undefined ? { endsAt: holdEnd.endsAt } : {}),
       machineLabel,
       failureReason,
       detailsUrl: sessionRun.htmlUrl === "" ? null : sessionRun.htmlUrl,
