@@ -721,7 +721,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           // the bare state word when there is no live label.
           label: t3teamRow.activityLabel ?? (thread.goal?.status === "active" ? "Goal" : "Working"),
           icon: "working" as const,
-          className: "text-info",
+          className: t3teamRow.statusClassName ?? "text-info",
         }
       : status === "waiting"
         ? {
@@ -1419,7 +1419,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                             wrapper around the ticking duration would make
                             screen readers announce every second. */}
                           <span role="status">{topStatus.label}</span>
-                          {status === "working" ? (
+                          {status === "working" && !t3teamRow.frozen ? (
                             <span aria-hidden>
                               <WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />
                             </span>

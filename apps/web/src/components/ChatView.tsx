@@ -46,6 +46,10 @@ import { useResourcePressureBannerItem } from "./chat/t3team-ResourcePressureThr
 import { useProviderRetryBannerItem } from "./chat/t3team-ProviderRetryBanner";
 import { useT3TeamThreadHandoff } from "../t3team/chat/t3team-useThreadHandoff";
 import { useThreadHandoffBannerItem } from "./chat/t3team-ThreadHandoffBanner";
+import {
+  useCloudSessionEndedBannerItem,
+  withCloudSessionEndedBanner,
+} from "./chat/t3team-CloudSessionEndedBanner";
 import { useT3TeamChatTimelineProps } from "~/t3team/chat/t3team-useChatTimelineProps";
 import { useT3TeamStopCascade } from "~/t3team/chat/t3team-useStopCascade";
 import { useT3TeamActiveAgents } from "~/t3team/chat/t3team-useActiveAgents";
@@ -1295,11 +1299,16 @@ export default function ChatView(props: ChatViewProps) {
     environmentId,
     threadId: activeThreadId,
   });
-  const systemComposerBannerItems: ComposerBannerStackItem[] = [
-    ...upstreamSystemComposerBannerItems,
-    ...(resourcePressureBanner ? [resourcePressureBanner] : []),
-    ...(threadHandoffBanner ? [threadHandoffBanner] : []),
-  ];
+  // t3team: an ended cloud session replaces the generic "is offline" notice.
+  const cloudSessionEndedBanner = useCloudSessionEndedBannerItem(environmentId);
+  const systemComposerBannerItems: ComposerBannerStackItem[] = withCloudSessionEndedBanner(
+    [
+      ...upstreamSystemComposerBannerItems,
+      ...(resourcePressureBanner ? [resourcePressureBanner] : []),
+      ...(threadHandoffBanner ? [threadHandoffBanner] : []),
+    ],
+    cloudSessionEndedBanner,
+  );
   const providerInstanceEntries = sortProviderInstanceEntries(
     applyProviderInstanceSettings(
       deriveProviderInstanceEntries(providerStatuses),

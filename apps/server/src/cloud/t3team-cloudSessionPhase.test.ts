@@ -169,6 +169,43 @@ describe("deriveCloudSessionPhase", () => {
     }
   });
 
+  describe("after the hold step ends while the run is still cleaning up", () => {
+    const held = (name: string, status: string, conclusion: string | null): WorkflowJobStep => ({
+      name,
+      status,
+      conclusion,
+    });
+    const upToHold = GREEN_RUN_STEPS.slice(0, 10).map((name) => held(name, "completed", "success"));
+
+    it("keeps a session that is still holding ready", () => {
+      const steps = [...upToHold, held(GREEN_RUN_STEPS[10], "in_progress", null)];
+      expect(deriveCloudSessionPhase(run(), steps)).toBe("ready");
+    });
+
+    it("calls a released session stopped, not ready, while the run winds down", () => {
+      const steps = [
+        ...upToHold,
+        held("Hold the session until release, then stop t3 serve", "completed", "success"),
+        held("Complete job", "in_progress", null),
+      ];
+      expect(deriveCloudSessionPhase(run(), steps)).toBe("stopped");
+    });
+
+    it("calls a session whose hold was cancelled cancelled", () => {
+      const steps = [...upToHold, held(GREEN_RUN_STEPS[10], "completed", "cancelled")];
+      expect(deriveCloudSessionPhase(run(), steps)).toBe("cancelled");
+    });
+
+    it("does not read the finished handoff-window hold as a release: the release hold is still running", () => {
+      const steps = [
+        ...upToHold,
+        held("Hold the session until the handoff window", "completed", "success"),
+        held("Hold the session until release, then stop t3 serve", "in_progress", null),
+      ];
+      expect(deriveCloudSessionPhase(run(), steps)).toBe("ready");
+    });
+  });
+
   it("only calls a session ready once connect status actually succeeded", () => {
     // `Capture connect status` polls until the relay reports the environment
     // link. While it is still running the session is not reachable yet.

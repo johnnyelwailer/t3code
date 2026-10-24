@@ -1,4 +1,8 @@
-import type { CloudSessionMachineStage } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
+import {
+  CLOUD_SESSION_HOLD_CEILING_SECONDS,
+  type CloudSessionMachineStage,
+} from "@t3tools/contracts";
 
 import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
 
@@ -54,6 +58,19 @@ function findByPrefix(
 }
 
 /**
+ * The step that holds the machine until release: "Hold the session until release, …" (or the
+ * older "Hold the session, then stop t3 serve"). The workflow holds in two steps on one clock:
+ * "…until the handoff window" runs first and ends at the snapshot, then this one runs to release.
+ * A finished handoff-window step therefore does not mean the session is over; this one does.
+ */
+function releaseHoldStep(steps: readonly WorkflowJobStep[]): WorkflowJobStep | undefined {
+  return steps.find(
+    (step) =>
+      step.name.startsWith("Hold the session") && !step.name.includes("until the handoff window"),
+  );
+}
+
+/**
  * @param steps the job's steps, or `null` when they could not be read. `null`
  * and `[]` must stay distinct: `[]` is an authoritative "nothing has started",
  * while `null` means "we do not know", and reporting `requested` for the
@@ -82,6 +99,16 @@ export function deriveCloudSessionPhase(
   if (steps === null) return "preparing";
 
   // In progress. Walk backwards through the milestones, most advanced first.
+
+  // The hold step finishing means the session was released (or reached its hold cap) while the
+  // run is still in progress, doing its cleanup. The machine is gone from that moment: calling it
+  // `ready` for the minute or two the run lingers offers a Connect that fails in pairing.
+  const released = releaseHoldStep(steps);
+  if (released?.status === "completed") {
+    if (released.conclusion === "success") return "stopped";
+    if (released.conclusion === "cancelled") return "cancelled";
+  }
+
   if (reached(findByPrefix(steps, "Hold the session"))) return "ready";
 
   // `Capture connect status` only succeeds once the relay reported
@@ -131,6 +158,31 @@ export function cloudSessionElapsedSeconds(run: WorkflowRunSummary, nowMs: numbe
   const startedMs = Date.parse(run.createdAt);
   if (Number.isNaN(startedMs)) return 0;
   return Math.max(0, Math.floor((nowMs - startedMs) / 1000));
+}
+
+/**
+ * When a ready session's hold ends. The workflow's `hold_minutes` clock starts at its first
+ * "Hold the session…" step, so that step's `started_at` is the honest start (a re-run keeps the
+ * run's `createdAt`, which would be wrong). When the steps carry no start the run's creation
+ * stands in: it precedes the hold, so the end it gives is early, the safe side for a warning.
+ * Null when the session is not holding a machine. An upper bound all the same: the idle check can
+ * release a session sooner.
+ */
+export function cloudSessionHoldEnd(
+  phase: CloudSessionPhase,
+  run: WorkflowRunSummary,
+  steps: readonly WorkflowJobStep[] | null,
+  nowMs: number,
+): { readonly endsAt: string; readonly remainingSeconds: number } | null {
+  if (phase !== "ready") return null;
+  const holdStep = steps?.find((step) => step.name.startsWith("Hold the session"));
+  const startMs = Date.parse(holdStep?.startedAt ?? run.createdAt);
+  if (Number.isNaN(startMs)) return null;
+  const endsAtMs = startMs + CLOUD_SESSION_HOLD_CEILING_SECONDS * 1000;
+  return {
+    endsAt: DateTime.formatIso(DateTime.makeUnsafe(endsAtMs)),
+    remainingSeconds: Math.max(0, Math.floor((endsAtMs - nowMs) / 1000)),
+  };
 }
 
 /**
