@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import {
   ensureT3TeamContextBlobOnDisk,
@@ -43,15 +44,21 @@ export function writeT3TeamContextCasFile(input: {
       bytes,
       ...(input.encoding ? { encoding: input.encoding } : {}),
     });
-    yield* upsertT3TeamContextArtifact({
-      workspaceRoot: input.workspaceRoot,
-      relativePath: input.relativePath,
-      kind: t3teamContextArtifactKind(input.encoding),
-      sizeBytes: bytes.byteLength,
-      blobSha256: sha256,
-    });
-    // After the artifact row, so a concurrent sweep's purge mark cannot outlive this write.
-    yield* touchT3TeamContextBlob(sha256);
+    const sql = yield* SqlClient.SqlClient;
+    // One transaction: a sweep's purge mark can land between these two statements, so a crash or
+    // failed touch after a committed artifact row would leave a live blob out of the budget for good.
+    yield* sql.withTransaction(
+      Effect.gen(function* () {
+        yield* upsertT3TeamContextArtifact({
+          workspaceRoot: input.workspaceRoot,
+          relativePath: input.relativePath,
+          kind: t3teamContextArtifactKind(input.encoding),
+          sizeBytes: bytes.byteLength,
+          blobSha256: sha256,
+        });
+        yield* touchT3TeamContextBlob(sha256);
+      }),
+    );
     return input.relativePath;
   });
 }
