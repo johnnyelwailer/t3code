@@ -48,47 +48,31 @@ export function isReconnectingPhase(phase: EnvironmentConnectionPhase): boolean 
 export const ENVIRONMENT_LIVE_STATE_COPY = {
   offline: {
     sidebar: "Offline",
-    sidebarTitle: "Offline — last seen working. Resumes when the connection returns.",
     thread: "Offline — last seen working",
   },
   ended: {
     sidebar: "Ended",
-    sidebarTitle: "This cloud session has ended.",
     thread: "Cloud session ended",
   },
 } as const;
 
-/** The sidebar statuses whose truth depends on the thread's environment being reachable. */
-type ThreadRowStatus = "working" | "waiting" | "approval" | "input" | (string & {}) | null;
-
-export interface LiveStateTopStatus {
+export interface LiveStateSidebarOverride {
   readonly label: string;
-  readonly title: string;
-  readonly icon: "offline";
   readonly className: string;
 }
 
 /**
- * The sidebar status that replaces a row's live one when its environment is not live, or null to
- * keep the row's own. Offline only corrects "working" (the one status with a ticking counter);
- * an ended session also corrects everything that waits on the session: a waiting turn, an approval
- * or a question nobody can answer any more. Idle, done and failed rows are history and stay.
+ * What replaces a *working* sidebar row's word and colour while its environment is not live, or
+ * null to keep the row's own. The row's duration counter stops with it (`frozen`). Only "working"
+ * is corrected: it is the one status that claims something is running and ticks a counter; idle,
+ * done and failed rows are history.
  */
-export function resolveLiveStateTopStatus(
+export function resolveLiveStateSidebarOverride(
   liveState: EnvironmentLiveState,
-  status: ThreadRowStatus,
-): LiveStateTopStatus | null {
+): LiveStateSidebarOverride | null {
   if (liveState === "live") return null;
-  const overridden =
-    status === "working" ||
-    (liveState === "ended" &&
-      (status === "waiting" || status === "approval" || status === "input"));
-  if (!overridden) return null;
-  const copy = ENVIRONMENT_LIVE_STATE_COPY[liveState];
   return {
-    label: copy.sidebar,
-    title: copy.sidebarTitle,
-    icon: "offline",
+    label: ENVIRONMENT_LIVE_STATE_COPY[liveState].sidebar,
     className: liveState === "ended" ? "text-muted-foreground" : "text-warning",
   };
 }

@@ -1,14 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { useState } from "react";
-import { CircleDashedIcon, ClockIcon, CloudOffIcon, WifiOffIcon } from "lucide-react";
+import { CircleDashedIcon, ClockIcon, CloudOffIcon } from "lucide-react";
 
-import { LiveStateLabel } from "~/cloud/t3team-LiveStateLabel";
 import { resolveSessionEndingNotice } from "~/cloud/t3team-cloudSessionEnding";
 import { ENDED_SESSION_BANNER_COPY } from "~/cloud/t3team-endedSessionAction";
 import { ComposerBannerStack } from "~/components/chat/ComposerBannerStack";
 import { Button } from "~/components/ui/button";
 import {
-  resolveLiveStateTopStatus,
+  resolveLiveStateSidebarOverride,
   type EnvironmentLiveState,
 } from "~/cloud/t3team-environmentLiveState";
 import { OfflineWorkingLabel } from "~/t3team/chat/t3team-offlineWorkingLabel";
@@ -16,26 +15,19 @@ import { WorkingLeadText } from "~/t3team/chat/t3team-workingLeadText";
 
 /**
  * A thread whose environment is offline or whose cloud session ended must not keep claiming it is
- * working. These render the production pieces: `resolveLiveStateTopStatus` (the sidebar rule),
+ * working. These render the production pieces: `resolveLiveStateSidebarOverride` (the sidebar rule),
  * `OfflineWorkingLabel` and `WorkingLeadText` (the thread's working row).
  */
 
 function SidebarStatus({ liveState }: { readonly liveState: EnvironmentLiveState }) {
-  const override = resolveLiveStateTopStatus(liveState, "working");
+  // The row keeps its icon; the word, colour and counter come from the same override the row uses.
+  const override = resolveLiveStateSidebarOverride(liveState);
   return (
     <span
       className={`inline-flex items-center gap-1 font-medium tabular-nums ${override?.className ?? "text-info"}`}
     >
-      {override ? (
-        <WifiOffIcon aria-hidden className="size-4" />
-      ) : (
-        <CircleDashedIcon aria-hidden className="size-4" />
-      )}
-      <span>
-        <LiveStateLabel explanation={override?.title}>
-          {override?.label ?? "Working"}
-        </LiveStateLabel>
-      </span>
+      <CircleDashedIcon aria-hidden className="size-4" />
+      <span>{override?.label ?? "Working"}</span>
       {override ? null : <span aria-hidden>16s</span>}
     </span>
   );

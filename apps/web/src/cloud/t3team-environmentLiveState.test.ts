@@ -3,7 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   ENVIRONMENT_LIVE_STATE_COPY,
   resolveEnvironmentLiveState,
-  resolveLiveStateTopStatus,
+  resolveLiveStateSidebarOverride,
 } from "./t3team-environmentLiveState";
 
 describe("resolveEnvironmentLiveState", () => {
@@ -52,28 +52,21 @@ describe("resolveEnvironmentLiveState", () => {
   });
 });
 
-describe("resolveLiveStateTopStatus", () => {
+describe("resolveLiveStateSidebarOverride", () => {
   it("leaves a live row alone", () => {
-    expect(resolveLiveStateTopStatus("live", "working")).toBeNull();
+    expect(resolveLiveStateSidebarOverride("live")).toBeNull();
   });
 
-  it("freezes a working row offline: no counter, last-seen wording", () => {
-    const status = resolveLiveStateTopStatus("offline", "working");
-    expect(status?.label).toBe(ENVIRONMENT_LIVE_STATE_COPY.offline.sidebar);
-    expect(status?.title).toContain("last seen working");
+  it("replaces the working word offline with last-seen wording's short form", () => {
+    expect(resolveLiveStateSidebarOverride("offline")?.label).toBe(
+      ENVIRONMENT_LIVE_STATE_COPY.offline.sidebar,
+    );
   });
 
-  it("only corrects working while offline", () => {
-    for (const status of ["waiting", "approval", "input", "failed", null] as const) {
-      expect(resolveLiveStateTopStatus("offline", status)).toBeNull();
-    }
-  });
-
-  it("calls everything that waits on an ended session ended, and leaves history alone", () => {
-    for (const status of ["working", "waiting", "approval", "input"] as const) {
-      expect(resolveLiveStateTopStatus("ended", status)?.label).toBe("Ended");
-    }
-    expect(resolveLiveStateTopStatus("ended", "failed")).toBeNull();
-    expect(resolveLiveStateTopStatus("ended", null)).toBeNull();
+  it("calls an ended session ended, in a muted colour", () => {
+    expect(resolveLiveStateSidebarOverride("ended")).toEqual({
+      label: "Ended",
+      className: "text-muted-foreground",
+    });
   });
 });
