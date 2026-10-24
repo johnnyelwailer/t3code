@@ -1,17 +1,20 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { EnvironmentId, type CloudSession } from "@t3tools/contracts";
 import { useState } from "react";
-import { CircleDashedIcon, ClockIcon, CloudOffIcon } from "lucide-react";
+import { CircleDashedIcon, ClockIcon } from "lucide-react";
 
 import { resolveSessionEndingNotice } from "~/cloud/t3team-cloudSessionEnding";
-import { ENDED_SESSION_BANNER_COPY } from "~/cloud/t3team-endedSessionAction";
 import { ComposerBannerStack } from "~/components/chat/ComposerBannerStack";
-import { Button } from "~/components/ui/button";
+import { endedSessionBannerItem } from "~/components/chat/t3team-CloudSessionEndedBanner";
+import { CloudSessionEndedActionsView } from "~/components/cloud/t3team-CloudSessionEndedActions";
 import {
   resolveLiveStateSidebarOverride,
   type EnvironmentLiveState,
 } from "~/cloud/t3team-environmentLiveState";
 import { OfflineWorkingLabel } from "~/t3team/chat/t3team-offlineWorkingLabel";
 import { WorkingLeadText } from "~/t3team/chat/t3team-workingLeadText";
+
+const ENDED_ENVIRONMENT = EnvironmentId.make("env-ws");
 
 /**
  * A thread whose environment is offline or whose cloud session ended must not keep claiming it is
@@ -76,34 +79,70 @@ export const Offline: Story = { render: () => <Panel liveState="offline" /> };
 /** The cloud session no longer exists: nothing is coming back. */
 export const Ended: Story = { render: () => <Panel liveState="ended" /> };
 
-/**
- * The composer banner of an ended cloud session, with the copy the app uses
- * (`ENDED_SESSION_BANNER_COPY`) and the stack it renders in. The real action is
- * `CloudSessionEndedActions`, which needs the session controller; this shows the idle state.
- */
-export const EndedSessionBanner: Story = {
-  render: () => (
+/** The composer banner of an ended cloud session: the production item and the production
+ *  ended-session action, driven by fixture controller state (the data seam the app's controller
+ *  supplies). The action is `CloudSessionEndedActionsView` — the same module the app renders — so
+ *  the restart wording, the state it offers, and its click target cannot drift from the app. */
+function EndedBannerStory({
+  sessions,
+  createPending,
+}: {
+  readonly sessions: CloudSession[];
+  readonly createPending: boolean;
+}) {
+  return (
     <div className="mx-auto w-full max-w-3xl pt-16">
       <ComposerBannerStack
         items={[
-          {
-            id: "cloud-session-ended:story",
-            variant: "warning",
-            icon: <CloudOffIcon aria-hidden="true" />,
-            title: ENDED_SESSION_BANNER_COPY.title,
-            description: ENDED_SESSION_BANNER_COPY.description,
-            actions: (
-              <Button size="xs" variant="ghost">
-                {ENDED_SESSION_BANNER_COPY.start}
-              </Button>
-            ),
-          },
+          endedSessionBannerItem(
+            ENDED_ENVIRONMENT,
+            <CloudSessionEndedActionsView
+              available
+              sessions={sessions}
+              environmentId={ENDED_ENVIRONMENT}
+              createPending={createPending}
+              onStart={() => {}}
+              onConnect={() => {}}
+            />,
+          ),
         ]}
       />
       <div className="rounded-b-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
         Ask anything…
       </div>
     </div>
+  );
+}
+
+/** The session ended and nothing is on its way: one click starts another in the same project. */
+export const EndedSessionBanner: Story = {
+  render: () => <EndedBannerStory sessions={[]} createPending={false} />,
+};
+
+/** A create is in flight: the button reads "Starting…" and stays inert until the list catches up. */
+export const EndedSessionBannerStarting: Story = {
+  render: () => <EndedBannerStory sessions={[]} createPending />,
+};
+
+/** A live session already serves the same environment: connect to it instead of starting another. */
+export const EndedSessionBannerConnect: Story = {
+  render: () => (
+    <EndedBannerStory
+      sessions={[
+        {
+          sessionId: "9",
+          providerKind: "github_actions",
+          phase: "ready",
+          environmentId: "env-ws",
+          elapsedSeconds: 155,
+          remainingSeconds: 4 * 3600 - 155,
+          machineLabel: "ubuntu-slim · 12 GB · 4 cores",
+          failureReason: null,
+          detailsUrl: null,
+        },
+      ]}
+      createPending={false}
+    />
   ),
 };
 
