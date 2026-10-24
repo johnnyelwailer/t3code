@@ -48,11 +48,13 @@ export function useCloudSessionRestartProjectId(environmentId: EnvironmentId | n
   const { environments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const projects = useProjects();
-  const environment = environments.find((entry) => entry.environmentId === environmentId);
-  return resolveCloudSessionRestartProjectId({
-    environmentId,
-    primaryEnvironmentId,
-    projects,
-    serverCwd: projectCwdOf(environment?.serverConfig),
-  });
+  return useMemo(() => {
+    const environment = environments.find((entry) => entry.environmentId === environmentId);
+    return resolveCloudSessionRestartProjectId({
+      environmentId,
+      primaryEnvironmentId,
+      projects,
+      serverCwd: projectCwdOf(environment?.serverConfig),
+    });
+  }, [environmentId, environments, primaryEnvironmentId, projects]);
 }
