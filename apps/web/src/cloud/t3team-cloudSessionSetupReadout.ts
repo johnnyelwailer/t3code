@@ -24,6 +24,8 @@ export function cloudSetupElapsedSeconds(
 /**
  * The clock-driven part of the card. The only time figure is the rough one measured for a plain
  * session, so a project machine or setup session gets its elapsed time and no estimate at all.
+ * `progress` is null when the bar must not claim a fraction: a long-wait setup, or a plain one past
+ * the rough estimate. The bar is then indeterminate rather than parked near full.
  */
 export function readCloudSetup(model: CloudSetupModel, elapsedSeconds: number) {
   const working = model.stage === "working";
@@ -47,8 +49,13 @@ export function readCloudSetup(model: CloudSetupModel, elapsedSeconds: number) {
       ? 0
       : (presentCloudSession({ ...model.session, elapsedSeconds }).progress ??
         (model.session.phase === "ready" ? 1 : 0));
+  const indeterminate = working && provisioning && (model.longWait || slow);
   return {
-    progress: working ? Math.min(sessionProgress, WORKING_PROGRESS_CEILING) : sessionProgress,
+    progress: indeterminate
+      ? null
+      : working
+        ? Math.min(sessionProgress, WORKING_PROGRESS_CEILING)
+        : sessionProgress,
     slow,
     remaining,
     estimateText,

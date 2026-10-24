@@ -80,7 +80,9 @@ const MACHINE_RUN_NAME_MARKER = "· machine";
 const SETUP_RUN_NAME_MARKER = "· setup";
 
 /**
- * Project one provisioning run into the `CloudSession` the client renders.
+ * Project one provisioning run into the `CloudSession` the client renders. `remainingSeconds` is an
+ * upper bound: the app always dispatches the fleet's hold ceiling, so a live session ends at its
+ * hold's start plus that ceiling, and the idle check can release it sooner.
  */
 export const projectCloudSession = (
   sessionRun: WorkflowRunSummary,
