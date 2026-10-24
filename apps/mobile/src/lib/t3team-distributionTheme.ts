@@ -48,6 +48,18 @@ function defaultGroupedCard(colors: ThemeColors, appearance: MobileThemeAppearan
   return appearance === "light" ? colors.toolbarControlHover : colors.sidebarRowActive;
 }
 
+/**
+ * Upstream's grouped-card grey is tuned against T3's chrome; a pack chrome close to that grey
+ * would hide grouped rows, so a pack that sets its own card surface groups rows on it.
+ */
+function groupedCard(
+  themed: ThemeColors,
+  packColors: PackColors,
+  appearance: MobileThemeAppearance,
+) {
+  return packColors.card ? themed.surface : defaultGroupedCard(themed, appearance);
+}
+
 function changedVariables(before: MobileThemeVariables, after: MobileThemeVariables) {
   return Object.fromEntries(
     Object.entries(after).filter(([name, value]) => Reflect.get(before, name) !== value),
@@ -61,12 +73,12 @@ export function withDistributionTheme(
 ): MobileThemeVariables {
   if (!pack) return defaults;
   const base = standardColors(appearance);
-  const groupedCard = defaultGroupedCard(base, appearance);
-  const before = createMobileThemeVariables(base, appearance, groupedCard);
+  const themed = overlayPackThemeColors(base, pack[appearance]);
+  const before = createMobileThemeVariables(base, appearance, defaultGroupedCard(base, appearance));
   const after = createMobileThemeVariables(
-    overlayPackThemeColors(base, pack[appearance]),
+    themed,
     appearance,
-    groupedCard,
+    groupedCard(themed, pack[appearance], appearance),
   );
   return { ...defaults, ...changedVariables(before, after) };
 }

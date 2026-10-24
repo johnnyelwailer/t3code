@@ -5,8 +5,18 @@ import { readDistributionThemeColors, withDistributionTheme } from "./t3team-dis
 vi.mock("expo-constants", () => ({ default: { expoConfig: { extra: {} } } }));
 
 const pack = {
-  light: { primary: "#f05a0a", primaryForeground: "#ffffff", background: "#faf9fb" },
-  dark: { primary: "#f05a0a", primaryForeground: "#ffffff", background: "#17181c" },
+  light: {
+    primary: "#f05a0a",
+    primaryForeground: "#ffffff",
+    background: "#faf9fb",
+    card: "#ffffff",
+  },
+  dark: {
+    primary: "#f05a0a",
+    primaryForeground: "#ffffff",
+    background: "#17181c",
+    card: "#1e2024",
+  },
 };
 
 describe("distribution theme", () => {
@@ -35,6 +45,7 @@ describe("distribution theme", () => {
       const themed = withDistributionTheme(defaults, appearance, pack);
       expect(themed["--color-primary"]).toBe("#f05a0a");
       expect(themed["--color-screen"]).toBe(pack[appearance].background);
+      expect(themed["--color-grouped-card"]).toBe(pack[appearance].card);
       expect(themed["--color-foreground"]).toBe(defaults["--color-foreground"]);
       expect(Object.keys(themed)).toEqual(Object.keys(defaults));
     }

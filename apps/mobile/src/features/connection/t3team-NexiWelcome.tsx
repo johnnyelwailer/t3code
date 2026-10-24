@@ -36,9 +36,7 @@ export function NexiWelcome(props: { readonly onOtherWays: () => void }) {
           </Text>
         </View>
         <NexiSignInPanel state={state} />
-        <View className="items-center">
-          <Button tone="text" label="Other ways to connect" onPress={props.onOtherWays} />
-        </View>
+        <Button tone="text" fullWidth label="Other ways to connect" onPress={props.onOtherWays} />
       </View>
     </ScrollView>
   );
