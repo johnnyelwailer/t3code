@@ -2,6 +2,7 @@ import type { CloudSession, CloudSessionTiming } from "@t3tools/contracts";
 
 import { cloudSessionProvisionTiming } from "~/components/cloud/t3team-cloudSessionProvisionTiming";
 import { isTerminalCloudSessionPhase } from "~/components/cloud/t3team-cloudSessionSplit";
+import type { CloudProjectWait } from "./t3team-cloudProjectWait";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {
   presentCloudQueuedSendProgress,
@@ -20,6 +21,7 @@ export interface CloudSetupFacts {
   readonly session: CloudSession | null;
   readonly machineConnected: boolean;
   readonly projectReady?: boolean;
+  readonly projectWait?: CloudProjectWait | null | undefined;
   readonly queued?: CloudQueuedSend | undefined;
   readonly delivery?: CloudSetupDelivery;
 }
@@ -34,6 +36,8 @@ export interface CloudSetupModel {
   readonly measured: boolean;
   readonly delivery: CloudSetupDelivery;
   readonly longWait: boolean;
+  /** What the "Project ready" step waits on while it is the current step; the card words it. */
+  readonly projectWait: CloudProjectWait | null;
   readonly failureReason: string | null;
   readonly detailsUrl: string | null;
   readonly title: string;
@@ -82,6 +86,7 @@ export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel 
     timing,
     measured: session?.timing !== undefined && timing.samples > 0,
     delivery,
+    projectWait: view.projectWait === null ? null : (facts.projectWait ?? null),
     longWait: session?.projectMachine === true || session?.machineSetup === true,
     failureReason: failed
       ? (facts.sendFailure ??

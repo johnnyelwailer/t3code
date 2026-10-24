@@ -35,7 +35,7 @@ interface ProjectFacts {
   readonly repositoryIdentity?: RepositoryIdentity | null | undefined;
 }
 
-type ComposerProject = ProjectFacts & { readonly id: ProjectId; readonly title: string };
+export type ComposerProject = ProjectFacts & { readonly id: ProjectId; readonly title: string };
 
 const repositoryOf = (project: ProjectFacts) =>
   project.repositoryIdentity ? repositoryGroupingKeyOf(project.repositoryIdentity) : null;
@@ -43,19 +43,29 @@ const repositoryOf = (project: ProjectFacts) =>
 const folderOf = (workspaceRoot: string) =>
   normalizeProjectPathForComparison(workspaceRoot).split(/[\\/]/).pop() ?? "";
 
-/** Whether the machine's project can be the one this composer project's session was started for. */
-function isSameProject(composer: ComposerProject, own: ProjectFacts) {
+/**
+ * Why the machine's project cannot be the one this composer project's session was started for:
+ * `repository` (a different one), `folder` (a project without a remote only matches its own
+ * folder there); null when it can be.
+ */
+export function projectMismatchOf(
+  composer: ComposerProject,
+  own: ProjectFacts,
+): "repository" | "folder" | null {
   const composerRepository = repositoryOf(composer);
   const ownRepository = repositoryOf(own);
   if (composerRepository === null) {
-    return (
-      ownRepository === null &&
-      folderOf(own.workspaceRoot) === plainProjectFolderName(composer.title, composer.id)
-    );
+    if (ownRepository !== null) return "repository";
+    return folderOf(own.workspaceRoot) === plainProjectFolderName(composer.title, composer.id)
+      ? null
+      : "folder";
   }
   // The checkout may not have its identity yet; a different repository is never this project.
-  return ownRepository === null || ownRepository === composerRepository;
+  return ownRepository === null || ownRepository === composerRepository ? null : "repository";
 }
+
+const isSameProject = (composer: ComposerProject, own: ProjectFacts) =>
+  projectMismatchOf(composer, own) === null;
 
 /**
  * The working directory a server registers as its project, or null when it registers none there

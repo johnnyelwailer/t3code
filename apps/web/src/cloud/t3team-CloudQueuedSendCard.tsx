@@ -13,6 +13,7 @@ import { formatDuration } from "~/components/cloud/t3team-cloudSessionProvisionP
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { cn } from "~/lib/utils";
+import { CloudProjectWaitNote } from "./t3team-CloudProjectWaitNote";
 import {
   presentCloudQueuedSendProgress,
   type CloudQueuedSendStepFacts,
@@ -127,6 +128,9 @@ export function CloudQueuedSendCard({ facts, onCancel, onRetry }: CloudQueuedSen
           <StepRow key={step.id} step={step} />
         ))}
       </div>
+      {view.projectWait === null ? null : (
+        <CloudProjectWaitNote notice={view.projectWait} className="mt-1 ml-8" />
+      )}
       {facts.queued.failureMessage ? (
         <p className="mt-1 ml-8 text-xs text-muted-foreground">{facts.queued.failureMessage}</p>
       ) : null}

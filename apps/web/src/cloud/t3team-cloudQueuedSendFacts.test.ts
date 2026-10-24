@@ -101,6 +101,49 @@ function facts(input: {
   });
 }
 
+describe("resolveCloudQueuedSendFacts project wait", () => {
+  const draftProject = project(local, "app-local", "/Users/me/app", repo);
+
+  it("says nothing once the project is on the machine", () => {
+    const own = project(cloud, "app-own", "/workspace/app", repo);
+    expect(facts({ draftProject, projects: [own] }).projectWait).toBeNull();
+  });
+
+  it("tells an empty project list from a list without the project", () => {
+    const empty = facts({ draftProject, projects: [] }).projectWait;
+    expect(empty).toMatchObject({
+      reason: "project-list-pending",
+      environmentId: "env-cloud",
+      expectedCwd: "/workspace/app",
+      projectsSeen: 0,
+      projectTitle: "app-local",
+    });
+    const other = project(cloud, "elsewhere", "/srv/elsewhere");
+    expect(facts({ draftProject, projects: [other] }).projectWait).toMatchObject({
+      reason: "project-not-listed",
+      projectsSeen: 1,
+    });
+  });
+
+  it("names a machine project of another repository at the expected folder", () => {
+    const foreign = project(cloud, "foreign", "/workspace/app", {
+      ...repo,
+      canonicalKey: "github.com/acme/other",
+    });
+    expect(facts({ draftProject, projects: [foreign] }).projectWait).toMatchObject({
+      reason: "different-repository",
+      machineProjectTitle: "foreign",
+    });
+  });
+
+  it("waits on the scratch folder of a No-project draft", () => {
+    const scratchDraft = project(local, "scratch-local", "/Users/me/.t3/scratch");
+    expect(facts({ draftProject: scratchDraft, projects: [] }).projectWait?.reason).toBe(
+      "scratch-opening",
+    );
+  });
+});
+
 describe("resolveCloudQueuedSendFacts", () => {
   it("binds a No-project draft to the machine's scratch project, absent until opened", () => {
     const scratchDraft = project(local, "scratch-local", "/Users/me/.t3/scratch");
