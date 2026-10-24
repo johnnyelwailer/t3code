@@ -1,5 +1,6 @@
 import { CLOUD_SESSION_HOLD_CEILING_SECONDS } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
@@ -25,11 +26,16 @@ const run: WorkflowRunSummary = {
   actor: "pj",
 };
 
-const stepsBody = (steps: ReadonlyArray<readonly [string, string, string | null]>) =>
+const stepsBody = (steps: ReadonlyArray<readonly [string, string, string | null, string?]>) =>
   JSON.stringify({
     jobs: [
       {
-        steps: steps.map(([name, status, conclusion]) => ({ name, status, conclusion })),
+        steps: steps.map(([name, status, conclusion, started_at]) => ({
+          name,
+          status,
+          conclusion,
+          ...(started_at !== undefined ? { started_at } : {}),
+        })),
       },
     ],
   });
@@ -47,11 +53,34 @@ const project = (r: WorkflowRunSummary, body: string, ageSeconds: number) =>
   );
 
 describe("projectCloudSession remainingSeconds", () => {
+  it.effect("counts the hold from its own start step, not the run's creation or a re-run", () =>
+    Effect.gen(function* () {
+      // The run was created at 08:00 but this attempt's hold started an hour later.
+      const holdStart = "2026-10-24T09:00:00Z";
+      const reRun = stepsBody([
+        ["Capture connect status", "completed", "success", "2026-10-24T08:55:00Z"],
+        ["Hold the session until the handoff window", "in_progress", null, holdStart],
+      ]);
+      const session = yield* project(run, reRun, 2 * 3600);
+      const endsAtMs = Date.parse(holdStart) + CLOUD_SESSION_HOLD_CEILING_SECONDS * 1000;
+      expect(session.endsAt).toBe(DateTime.formatIso(DateTime.makeUnsafe(endsAtMs)));
+      expect(session.remainingSeconds).toBe(
+        Math.floor((endsAtMs - (createdMs + 2 * 3600 * 1000)) / 1000),
+      );
+    }),
+  );
+
   it.effect("counts what is left of the hold ceiling for a ready session", () =>
     Effect.gen(function* () {
       const session = yield* project(run, holding, 60 * 60);
       expect(session.phase).toBe("ready");
+      // No step start in the reply: the run's creation stands in, so the end is early, never late.
       expect(session.remainingSeconds).toBe(CLOUD_SESSION_HOLD_CEILING_SECONDS - 3600);
+      expect(session.endsAt).toBe(
+        DateTime.formatIso(
+          DateTime.makeUnsafe(createdMs + CLOUD_SESSION_HOLD_CEILING_SECONDS * 1000),
+        ),
+      );
     }),
   );
 

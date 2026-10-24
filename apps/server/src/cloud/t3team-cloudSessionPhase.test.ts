@@ -196,7 +196,7 @@ describe("deriveCloudSessionPhase", () => {
       expect(deriveCloudSessionPhase(run(), steps)).toBe("cancelled");
     });
 
-    it("does not read a standby's finished handoff window as a release", () => {
+    it("does not read the finished handoff-window hold as a release: the release hold is still running", () => {
       const steps = [
         ...upToHold,
         held("Hold the session until the handoff window", "completed", "success"),

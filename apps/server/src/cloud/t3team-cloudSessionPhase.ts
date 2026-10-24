@@ -1,3 +1,4 @@
+import * as DateTime from "effect/DateTime";
 import {
   CLOUD_SESSION_HOLD_CEILING_SECONDS,
   type CloudSessionMachineStage,
@@ -58,8 +59,9 @@ function findByPrefix(
 
 /**
  * The step that holds the machine until release: "Hold the session until release, …" (or the
- * older "Hold the session, then stop t3 serve"). A standby's "…until the handoff window" step is
- * a different hold, one that ends when the standby is claimed, so it is not this one.
+ * older "Hold the session, then stop t3 serve"). The workflow holds in two steps on one clock:
+ * "…until the handoff window" runs first and ends at the snapshot, then this one runs to release.
+ * A finished handoff-window step therefore does not mean the session is over; this one does.
  */
 function releaseHoldStep(steps: readonly WorkflowJobStep[]): WorkflowJobStep | undefined {
   return steps.find(
@@ -159,18 +161,28 @@ export function cloudSessionElapsedSeconds(run: WorkflowRunSummary, nowMs: numbe
 }
 
 /**
- * What is left of a session's hold, in seconds, or `null` when the server cannot say. Only a
- * `ready` session is holding a machine; every earlier phase has not started its clock and every
- * later one has no machine left. The hold starts shortly after the run is created, so counting
- * from `createdAt` (`elapsedSeconds`) understates the remainder by the provisioning time: the safe
- * side for a warning. An upper bound all the same: the idle check can release a session sooner.
+ * When a ready session's hold ends. The workflow's `hold_minutes` clock starts at its first
+ * "Hold the session…" step, so that step's `started_at` is the honest start (a re-run keeps the
+ * run's `createdAt`, which would be wrong). When the steps carry no start the run's creation
+ * stands in: it precedes the hold, so the end it gives is early, the safe side for a warning.
+ * Null when the session is not holding a machine. An upper bound all the same: the idle check can
+ * release a session sooner.
  */
-export function cloudSessionRemainingSeconds(
+export function cloudSessionHoldEnd(
   phase: CloudSessionPhase,
-  elapsedSeconds: number,
-): number | null {
+  run: WorkflowRunSummary,
+  steps: readonly WorkflowJobStep[] | null,
+  nowMs: number,
+): { readonly endsAt: string; readonly remainingSeconds: number } | null {
   if (phase !== "ready") return null;
-  return Math.max(0, CLOUD_SESSION_HOLD_CEILING_SECONDS - elapsedSeconds);
+  const holdStep = steps?.find((step) => step.name.startsWith("Hold the session"));
+  const startMs = Date.parse(holdStep?.startedAt ?? run.createdAt);
+  if (Number.isNaN(startMs)) return null;
+  const endsAtMs = startMs + CLOUD_SESSION_HOLD_CEILING_SECONDS * 1000;
+  return {
+    endsAt: DateTime.formatIso(DateTime.makeUnsafe(endsAtMs)),
+    remainingSeconds: Math.max(0, Math.floor((endsAtMs - nowMs) / 1000)),
+  };
 }
 
 /**

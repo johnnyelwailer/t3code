@@ -81,6 +81,11 @@ export const CloudSessionSchema = Schema.Struct({
   startedAt: Schema.optional(Schema.String),
   /** Remaining lifetime in seconds; null until the session is running. */
   remainingSeconds: Schema.NullOr(Schema.Int),
+  /**
+   * When a ready session's hold ends (ISO 8601): an upper bound, as the idle check can release it
+   * sooner. Clients count down to this instead of timing when they received `remainingSeconds`.
+   */
+  endsAt: Schema.optional(Schema.String),
   /** Human-readable compute shape, e.g. "ubuntu-slim · 12 GB · 4 cores". */
   machineLabel: Schema.String,
   /** Provider-supplied reason, present only when `phase` is `failed`. */
