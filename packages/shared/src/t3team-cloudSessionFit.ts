@@ -46,7 +46,16 @@ export function isSameCloudSessionProject(
       folderOf(own.workspaceRoot) === plainProjectFolderName(local.title, local.id)
     );
   }
-  return ownRepository === null || ownRepository === localRepository;
+  return isOwnProjectOfRepository(localRepository, own);
+}
+
+/** The machine's own project is this repository's: same grouping key, or none known yet. */
+export function isOwnProjectOfRepository(
+  repositoryKey: string,
+  own: CloudSessionProjectFacts,
+): boolean {
+  const ownRepository = repositoryOf(own);
+  return ownRepository === null || ownRepository === repositoryKey;
 }
 
 /**
@@ -70,17 +79,7 @@ export function ownProjectOnMachine<P extends { readonly workspaceRoot: string }
   );
 }
 
-type FitSession = Pick<
-  CloudSession,
-  | "sessionId"
-  | "phase"
-  | "name"
-  | "transport"
-  | "environmentId"
-  | "endsAt"
-  | "remainingSeconds"
-  | "startedAt"
->;
+type FitSession = CloudSession;
 
 const STARTING_PHASES = new Set<CloudSession["phase"]>([
   "requested",
