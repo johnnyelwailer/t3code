@@ -6,6 +6,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as TestClock from "effect/testing/TestClock";
 import { afterEach } from "vite-plus/test";
 
@@ -15,7 +16,11 @@ import {
   hashT3TeamContextBytes,
   writeT3TeamContextCasFile,
 } from "./t3team-context-blob-store.ts";
-import { sweepOrphanT3TeamContextBlobs } from "./t3team-context-blob-sweep.ts";
+import { markT3TeamContextBlobPurgedIfUnreferenced } from "./t3team-context-blob-store-tables.ts";
+import {
+  claimOrphanT3TeamContextBlobSweep,
+  sweepOrphanT3TeamContextBlobs,
+} from "./t3team-context-blob-sweep.ts";
 import { ensureT3TeamContextCacheTables } from "./t3team-context-cache-tables.ts";
 import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 
@@ -116,6 +121,74 @@ layer("t3team context blob sweep", (it) => {
       const result = yield* sweepOrphanT3TeamContextBlobs({ workspaceRoot: root, maxRemoved: 2 });
 
       assert.equal(result.removedBlobCount, 2);
+    }),
+  );
+
+  it.effect("bounds entries inspected per sweep and resumes from the cursor", () =>
+    Effect.gen(function* () {
+      const root = makeRoot();
+      const versions = ['{"scan":1}', '{"scan":2}', '{"scan":3}', '{"scan":4}'];
+      yield* rewriteContextFile(root, versions);
+      for (const contents of versions) {
+        setBlobMtime(blobPathFor(root, contents), 60 * 60 * 1000);
+      }
+
+      const first = yield* sweepOrphanT3TeamContextBlobs({ workspaceRoot: root, maxInspected: 2 });
+      assert.equal(first.inspected, 2);
+      assert.isDefined(first.nextCursor);
+      const second = yield* sweepOrphanT3TeamContextBlobs({
+        workspaceRoot: root,
+        maxInspected: 2,
+        after: first.nextCursor!,
+      });
+      assert.equal(second.inspected, 2);
+      assert.isUndefined(second.nextCursor);
+      // Three superseded blobs go; the live one is linked by the artifact.
+      assert.equal(first.removedBlobCount + second.removedBlobCount, 3);
+      assert.isTrue(NodeFS.existsSync(blobPathFor(root, '{"scan":4}')));
+    }),
+  );
+
+  it("throttles sweeps per root", () => {
+    const root = "/throttle-root";
+    const claimed = claimOrphanT3TeamContextBlobSweep(root, 1_000_000);
+    assert.isDefined(claimed);
+    assert.isUndefined(claimOrphanT3TeamContextBlobSweep(root, 1_000_000 + 60_000));
+    claimed!.running = false;
+    assert.isUndefined(claimOrphanT3TeamContextBlobSweep(root, 1_000_000 + 1_000));
+    assert.isDefined(claimOrphanT3TeamContextBlobSweep(root, 1_000_000 + 60_000));
+    assert.isDefined(claimOrphanT3TeamContextBlobSweep("/other-root", 1_000_000));
+  });
+
+  it.effect("does not mark a blob purged once an artifact references it", () =>
+    Effect.gen(function* () {
+      const root = makeRoot();
+      yield* rewriteContextFile(root, ['{"race":1}', '{"race":2}']);
+      const sql = yield* SqlClient.SqlClient;
+      const sha = (contents: string) => hashT3TeamContextBytes(new TextEncoder().encode(contents));
+      const purgedAt = (contents: string) =>
+        sql<{ readonly purged_at: number | null }>`
+          SELECT purged_at FROM t3team_context_blobs WHERE sha256 = ${sha(contents)}
+        `.pipe(Effect.map((rows) => rows[0]?.purged_at));
+
+      yield* markT3TeamContextBlobPurgedIfUnreferenced(sha('{"race":2}'));
+      assert.isNull(yield* purgedAt('{"race":2}'));
+      yield* markT3TeamContextBlobPurgedIfUnreferenced(sha('{"race":1}'));
+      assert.isNumber(yield* purgedAt('{"race":1}'));
+    }),
+  );
+
+  it.effect("looks artifacts up by blob through an index", () =>
+    Effect.gen(function* () {
+      yield* ensureT3TeamContextCacheTables();
+      const sql = yield* SqlClient.SqlClient;
+      const plan = yield* sql<{ readonly detail: string }>`
+        EXPLAIN QUERY PLAN
+        SELECT 1 FROM t3team_context_artifacts WHERE blob_sha256 = 'x'
+      `;
+      assert.isTrue(
+        plan.some((row) => row.detail.includes("idx_t3team_context_artifacts_blob_sha256")),
+      );
     }),
   );
 });

@@ -8,6 +8,12 @@ export function ensureT3TeamContextBlobColumns() {
     yield* sql`
       ALTER TABLE t3team_context_artifacts ADD COLUMN blob_sha256 TEXT
     `.pipe(Effect.catch(() => Effect.void));
+    // The purge candidate query and reference counts look artifacts up by blob; without this each
+    // blob costs a full artifact-table scan. Created after the ALTER so older databases have the column.
+    yield* sql`
+      CREATE INDEX IF NOT EXISTS idx_t3team_context_artifacts_blob_sha256
+      ON t3team_context_artifacts (blob_sha256)
+    `;
   });
 }
 
@@ -128,6 +134,28 @@ export function markT3TeamContextBlobPurged(sha256: string) {
       UPDATE t3team_context_blobs
       SET purged_at = ${now}, updated_at = ${now}
       WHERE sha256 = ${sha256}
+    `;
+  });
+}
+
+/**
+ * Marks a blob purged only if no artifact references it, in one statement so a writer that links an
+ * artifact between a separate count and mark cannot have its live blob excluded from the budget.
+ * Writers upsert the artifact row before `touchT3TeamContextBlob`, so a mark that lands before the
+ * row exists is cleared by that touch.
+ */
+export function markT3TeamContextBlobPurgedIfUnreferenced(sha256: string) {
+  return Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const now = yield* Clock.currentTimeMillis;
+    yield* sql`
+      UPDATE t3team_context_blobs
+      SET purged_at = ${now}, updated_at = ${now}
+      WHERE sha256 = ${sha256}
+        AND NOT EXISTS (
+          SELECT 1 FROM t3team_context_artifacts
+          WHERE t3team_context_artifacts.blob_sha256 = ${sha256}
+        )
     `;
   });
 }

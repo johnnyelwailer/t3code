@@ -43,7 +43,6 @@ export function writeT3TeamContextCasFile(input: {
       bytes,
       ...(input.encoding ? { encoding: input.encoding } : {}),
     });
-    yield* touchT3TeamContextBlob(sha256);
     yield* upsertT3TeamContextArtifact({
       workspaceRoot: input.workspaceRoot,
       relativePath: input.relativePath,
@@ -51,6 +50,8 @@ export function writeT3TeamContextCasFile(input: {
       sizeBytes: bytes.byteLength,
       blobSha256: sha256,
     });
+    // After the artifact row, so a concurrent sweep's purge mark cannot outlive this write.
+    yield* touchT3TeamContextBlob(sha256);
     return input.relativePath;
   });
 }
