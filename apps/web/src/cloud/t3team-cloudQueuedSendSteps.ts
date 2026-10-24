@@ -41,6 +41,10 @@ export interface CloudQueuedSendStepFacts {
   readonly flushing: boolean;
 }
 
+type CloudSessionStepFacts = Omit<CloudQueuedSendStepFacts, "queued"> & {
+  readonly queued?: CloudQueuedSend | undefined;
+};
+
 export interface CloudQueuedSendStepView {
   readonly id: CloudQueuedSendStepId;
   readonly label: string;
@@ -60,18 +64,16 @@ export interface CloudQueuedSendProgressView {
   readonly progress: number;
 }
 
-function lastStampedStep(queued: CloudQueuedSend): CloudQueuedSendStepId | null {
-  const stamps = queued.stepStartedAt ?? {};
+function lastStampedStep(queued: CloudQueuedSend | undefined): CloudQueuedSendStepId | null {
+  const stamps = queued?.stepStartedAt ?? {};
   return CLOUD_QUEUED_SEND_STEP_IDS.findLast((id) => stamps[id] !== undefined) ?? null;
 }
 
 /** Where the send is right now. A parked failure stays on the step it failed at. */
-export function resolveCloudQueuedSendStepId(
-  facts: CloudQueuedSendStepFacts,
-): CloudQueuedSendStepId {
+export function resolveCloudQueuedSendStepId(facts: CloudSessionStepFacts): CloudQueuedSendStepId {
   const { session } = facts;
   if (
-    isCloudQueuedSendFailed(facts.queued) ||
+    (facts.queued !== undefined && isCloudQueuedSendFailed(facts.queued)) ||
     (session && isTerminalCloudSessionPhase(session.phase))
   ) {
     return lastStampedStep(facts.queued) ?? "queued";
@@ -105,15 +107,15 @@ function stepTitle(id: CloudQueuedSendStepId, machineDetail: string | null): str
 }
 
 export function presentCloudQueuedSendProgress(
-  facts: CloudQueuedSendStepFacts,
+  facts: CloudSessionStepFacts,
   nowMs: number,
 ): CloudQueuedSendProgressView {
   const currentStepId = resolveCloudQueuedSendStepId(facts);
   const failed =
-    isCloudQueuedSendFailed(facts.queued) ||
+    (facts.queued !== undefined && isCloudQueuedSendFailed(facts.queued)) ||
     (facts.session !== null && isTerminalCloudSessionPhase(facts.session.phase));
   const current = CLOUD_QUEUED_SEND_STEP_IDS.indexOf(currentStepId);
-  const stamps = facts.queued.stepStartedAt ?? {};
+  const stamps = facts.queued?.stepStartedAt ?? {};
   const presentation = facts.session === null ? null : presentCloudSession(facts.session);
   const machineDetail = facts.session?.phase === "preparing" ? (presentation?.title ?? null) : null;
   const steps = CLOUD_QUEUED_SEND_STEP_IDS.map((id, index): CloudQueuedSendStepView => {
@@ -140,7 +142,11 @@ export function presentCloudQueuedSendProgress(
     steps,
     currentStepId,
     failed,
-    title: failed ? "Cloud session failed" : stepTitle(currentStepId, machineDetail),
+    title: failed
+      ? "Cloud session failed"
+      : facts.session === null
+        ? "Waiting for cloud session status…"
+        : stepTitle(currentStepId, machineDetail),
     progress: provisioning
       ? (presentation?.progress ?? 0)
       : current >= CLOUD_QUEUED_SEND_STEP_IDS.indexOf("connect")

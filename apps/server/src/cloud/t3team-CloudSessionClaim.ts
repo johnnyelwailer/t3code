@@ -83,7 +83,9 @@ export const claimStandby = (input: {
 /**
  * The user's claimed sessions, for the list: each claim this server made, as the broker reports
  * it (ready once it is there), still starting before that, failed if it never came up. Run ids the
- * user's own run list already has are left to it.
+ * user's own run list already has are left to it. `remainingSeconds` is always null: a claimed
+ * standby's clock started when the standby did, long before this claim, and the ledger does not
+ * know that moment, so there is no honest remainder to report.
  */
 export const claimedSessions = (input: {
   readonly ledger: ClaimLedger;
@@ -120,8 +122,6 @@ export const claimedSessions = (input: {
         providerKind: "github_actions",
         phase,
         elapsedSeconds: Math.max(0, Math.floor(age / 1000)),
-        // A claimed standby's clock started when the standby did, long before this claim, and the
-        // ledger does not know that moment: no honest remainder to report.
         remainingSeconds: null,
         machineLabel: input.machineLabel,
         failureReason: phase === "failed" ? "The warm machine did not come up." : null,

@@ -56,7 +56,6 @@ const project = (r: WorkflowRunSummary, body: string, ageSeconds: number) =>
 describe("projectCloudSession remainingSeconds", () => {
   it.effect("counts the hold from its own start step, not the run's creation or a re-run", () =>
     Effect.gen(function* () {
-      // The run was created at 08:00 but this attempt's hold started an hour later.
       const holdStart = "2026-10-24T09:00:00Z";
       const reRun = stepsBody([
         ["Capture connect status", "completed", "success", "2026-10-24T08:55:00Z"],
