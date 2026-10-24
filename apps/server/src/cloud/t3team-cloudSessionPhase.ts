@@ -54,6 +54,18 @@ function findByPrefix(
 }
 
 /**
+ * The step that holds the machine until release: "Hold the session until release, …" (or the
+ * older "Hold the session, then stop t3 serve"). A standby's "…until the handoff window" step is
+ * a different hold, one that ends when the standby is claimed, so it is not this one.
+ */
+function releaseHoldStep(steps: readonly WorkflowJobStep[]): WorkflowJobStep | undefined {
+  return steps.find(
+    (step) =>
+      step.name.startsWith("Hold the session") && !step.name.includes("until the handoff window"),
+  );
+}
+
+/**
  * @param steps the job's steps, or `null` when they could not be read. `null`
  * and `[]` must stay distinct: `[]` is an authoritative "nothing has started",
  * while `null` means "we do not know", and reporting `requested` for the
@@ -82,6 +94,16 @@ export function deriveCloudSessionPhase(
   if (steps === null) return "preparing";
 
   // In progress. Walk backwards through the milestones, most advanced first.
+
+  // The hold step finishing means the session was released (or reached its hold cap) while the
+  // run is still in progress, doing its cleanup. The machine is gone from that moment: calling it
+  // `ready` for the minute or two the run lingers offers a Connect that fails in pairing.
+  const released = releaseHoldStep(steps);
+  if (released?.status === "completed") {
+    if (released.conclusion === "success") return "stopped";
+    if (released.conclusion === "cancelled") return "cancelled";
+  }
+
   if (reached(findByPrefix(steps, "Hold the session"))) return "ready";
 
   // `Capture connect status` only succeeds once the relay reported
