@@ -22,7 +22,7 @@ export type { BindSessionDeps } from "./t3team-toolBrokerLiveSessionDeps.ts";
 
 export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["bindSession"] {
   const { contextStore, genericThreadToolIds, reads } = deps;
-  const scopeLabel = "for this thread.";
+  const scopeLabel = "for this thread";
 
   return ({ threadId, toolContext, allowedToolGroups, grantedToolIds }) =>
     Effect.gen(function* () {

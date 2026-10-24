@@ -88,7 +88,10 @@ it.effect("refuses when the thread does not offer the tool", () =>
     const { call, calls } = bind({ toolIds: ["t3team.thread.search"] });
     const result = yield* call(args);
     assert.strictEqual(result.isError, true);
-    assert.include(result.content[0]?.text, "is not enabled for this thread");
+    assert.strictEqual(
+      result.content[0]?.text,
+      "Tool 't3team.change_request.publish' is not enabled for this thread.",
+    );
     assert.deepStrictEqual(calls, []);
   }),
 );
