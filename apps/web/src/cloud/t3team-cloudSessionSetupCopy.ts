@@ -16,7 +16,7 @@ export function formatCloudSetupRemaining(lowSeconds: number, highSeconds: numbe
 }
 
 /** "1-2 min", for the basis line ("Usually 1-2 min"). */
-export function formatCloudSetupTypical(lowSeconds: number, highSeconds: number): string {
+function formatCloudSetupTypical(lowSeconds: number, highSeconds: number): string {
   if (highSeconds <= 90) return "about a minute";
   const high = Math.ceil(highSeconds / 60);
   const low = Math.min(Math.max(1, Math.round(lowSeconds / 60)), high);

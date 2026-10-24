@@ -21,7 +21,6 @@
  */
 export {
   CLOUD_SETUP_PROGRESS_CEILING,
-  cloudSetupShape,
   type CloudSetupShape,
   type CloudSetupStepId,
 } from "./t3team-cloudSessionSetupSteps";
@@ -43,5 +42,4 @@ export {
   cloudSetupLongWaitNote,
   cloudSetupMeanwhileNote,
   formatCloudSetupRemaining,
-  formatCloudSetupTypical,
 } from "./t3team-cloudSessionSetupCopy";
