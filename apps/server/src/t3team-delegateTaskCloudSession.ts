@@ -18,6 +18,7 @@ import { selectFittingCloudSession } from "@t3tools/shared/t3team-cloudSessionFi
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 
 import type {
   CloudSessionPlacement,
@@ -72,9 +73,16 @@ const usable = Effect.fn("delegateTask.cloudSession.usable")(function* (
     return "full" as const;
   }
   if (session.phase !== "ready" || !session.environmentId) return "starting" as const;
-  const probed = yield* Effect.result(sessions.probe(session.sessionId, input));
+  const probed = yield* Effect.result(
+    sessions
+      .probe(session.sessionId, input)
+      .pipe(
+        Effect.onExit((exit) =>
+          Exit.isSuccess(exit) ? Effect.void : sessions.capacity.release(input.requestKey),
+        ),
+      ),
+  );
   if (probed._tag === "Success") return "ready" as const;
-  yield* sessions.capacity.release(input.requestKey);
   const error = probed.failure;
   if (error._tag === "RemoteEnvironmentRejected" && error.reason === "model") return error;
   return "unusable" as const;

@@ -132,6 +132,7 @@ const makeDependencies = (
     /** The parent already holds the task: a retried request replays its receipt. */
     readonly alreadyDelegated?: boolean;
     readonly rejectDispatch?: boolean;
+    readonly dispatchEnds?: "defect" | "interrupt";
   } = {},
 ) => {
   let delegated = options.alreadyDelegated === true;
@@ -147,9 +148,13 @@ const makeDependencies = (
       dispatch: (command) =>
         Ref.update(dispatched, (commands) => [...commands, command]).pipe(
           Effect.andThen(
-            options.rejectDispatch === true
-              ? Effect.fail(new Error(`Parent run ${parentRunId} is not active.`) as never)
-              : Effect.sync(() => void (delegated = true)),
+            options.dispatchEnds === "defect"
+              ? Effect.die(new Error("dispatch died"))
+              : options.dispatchEnds === "interrupt"
+                ? Effect.interrupt
+                : options.rejectDispatch === true
+                  ? Effect.fail(new Error(`Parent run ${parentRunId} is not active.`) as never)
+                  : Effect.sync(() => void (delegated = true)),
           ),
           Effect.as({
             sequence: 1,
@@ -320,6 +325,36 @@ describe("OrchestratorMcpService delegateTask preparation hook", () => {
           ),
         ),
       );
+    }),
+  );
+
+  it.effect("releases what prepare created when the dispatch dies or is interrupted", () =>
+    Effect.gen(function* () {
+      for (const dispatchEnds of ["defect", "interrupt"] satisfies ReadonlyArray<
+        "defect" | "interrupt"
+      >) {
+        const dispatched = yield* Ref.make<ReadonlyArray<unknown>>([]);
+        const calls = yield* Ref.make<ReadonlyArray<string>>([]);
+        yield* Effect.gen(function* () {
+          const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+          yield* Effect.exit(
+            service.delegateTask(scope, {
+              task: "Fix the bug.",
+              workspace: { isolation: "worktree" },
+            }),
+          );
+          assert.deepEqual(yield* Ref.get(calls), ["release"]);
+        }).pipe(
+          Effect.provide(
+            OrchestratorMcpService.layer.pipe(
+              Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
+              Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
+              Layer.provide(makeDependencies(dispatched, { dispatchEnds })),
+              Layer.provide(trackingPreparation(calls)),
+            ),
+          ),
+        );
+      }
     }),
   );
 

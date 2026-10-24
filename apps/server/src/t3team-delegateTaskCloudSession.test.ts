@@ -111,6 +111,21 @@ describe("placeOnCloudSession", () => {
       }),
   );
 
+  it.effect("a probe that dies frees the slot it held", () =>
+    Effect.gen(function* () {
+      const { sessions } = yield* fakeCloudSessions({
+        sessions: [cloudSession({})],
+        limit: 1,
+        probe: () => Effect.die(new Error("probe died")),
+      });
+      assert.match(
+        reasonOf(yield* placeOnCloudSession(sessions, autoInput())),
+        /unexpected error occurred while choosing a cloud session/,
+      );
+      assert.isTrue(yield* sessions.capacity.tryReserve("next", "41"));
+    }),
+  );
+
   it.effect("refuses an explicitly named session that has ended, for each ended phase", () =>
     Effect.gen(function* () {
       for (const phase of ENDED_PHASES) {

@@ -2282,7 +2282,9 @@ const make = Effect.gen(function* () {
         })
         .pipe(
           // t3team: no child was created, so undo what prepare created (its worktree).
-          Effect.tapError(() => prepared.release ?? Effect.void),
+          Effect.onExit((exit) =>
+            Exit.isSuccess(exit) ? Effect.void : (prepared.release ?? Effect.void),
+          ),
           Effect.mapError((error) =>
             error._tag === "ThreadManagementProviderInstanceDisabledError"
               ? threadManagementFailure(error)

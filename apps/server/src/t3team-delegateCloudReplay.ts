@@ -3,7 +3,8 @@
  * runs preparation again, and a retry of an accepted delegation must not place, reserve or start
  * anything a second time: concurrent and later retries of one key get the first request's result
  * (the same session, model selection and note). A placement that failed is forgotten, so a later
- * retry places afresh; so is one whose delegation created no child (`forget`). Process memory.
+ * retry places afresh; so is one interrupted or dying while placing, and one whose delegation
+ * created no child (`forget`). Process memory.
  */
 import type { ModelSelection, OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as Deferred from "effect/Deferred";
@@ -57,10 +58,14 @@ export const makeCloudPlacementReplays = Effect.gen(function* () {
     if (existing !== undefined) {
       return { record: yield* Deferred.await(existing), fresh: false };
     }
-    const exit = yield* Effect.exit(place);
-    yield* Deferred.done(fresh, exit);
-    if (Exit.isFailure(exit)) yield* forget(requestKey);
-    return { record: yield* exit, fresh: true };
+    const record = yield* place.pipe(
+      Effect.onExit((exit) =>
+        Deferred.done(fresh, exit).pipe(
+          Effect.andThen(Exit.isFailure(exit) ? forget(requestKey) : Effect.void),
+        ),
+      ),
+    );
+    return { record, fresh: true };
   });
   return { once, forget } satisfies CloudPlacementReplays;
 });
