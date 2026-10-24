@@ -29,7 +29,8 @@ import {
   REFERENCES_DIR_NAME,
 } from "../t3team-project-repository-utils.ts";
 import { repositoryLookupCandidates } from "../t3team-toolBrokerStartChildLinkedRepository.ts";
-import { type ScannedMachine, scanCheckout } from "./t3team-projectMachineScan.ts";
+import { scanCheckout } from "./t3team-projectMachineScan.ts";
+import type { ScannedMachine } from "./t3team-machineDefinitionScan.ts";
 
 /** The project's default machine and the checkout it was found in, for starting a session. */
 export interface ProjectMachineSource {
