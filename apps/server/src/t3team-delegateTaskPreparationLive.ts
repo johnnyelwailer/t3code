@@ -12,7 +12,6 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
-import { CloudSessionService } from "./cloud/t3team-CloudSessionService.ts";
 import { GitWorkflowService } from "./git/GitWorkflowService.ts";
 import {
   DelegatedTaskPreparation,
@@ -33,11 +32,13 @@ import {
   resolveEnvironmentBinding,
   T3TEAM_DELEGATION_EXTENSIONS,
 } from "./t3team-delegateTaskExtensions.ts";
+import { placeOnCloudSession } from "./t3team-delegateTaskCloudSession.ts";
 import {
-  CLOUD_SESSION_EXTENSION,
+  childRepositoryOf,
   parseCloudSessionExtension,
-  placeOnCloudSession,
-} from "./t3team-delegateTaskCloudSession.ts";
+  withCloudSessionExtension,
+} from "./t3team-delegateTaskCloudSessionExtension.ts";
+import { DelegateCloudSessionPlacement } from "./t3team-delegateTaskCloudSessionLayer.ts";
 import { makeDelegatedChildRecorder } from "./t3team-delegateTaskRecordChild.ts";
 import {
   delegatedWorktreeKey,
@@ -68,7 +69,9 @@ const make = Effect.gen(function* () {
   const pressureNotes = delegationPressureNotes(
     Option.getOrUndefined(yield* Effect.serviceOption(ResourcePressureMonitor)),
   );
-  const cloudSessions = Option.getOrUndefined(yield* Effect.serviceOption(CloudSessionService));
+  const cloudSessions = Option.getOrUndefined(
+    yield* Effect.serviceOption(DelegateCloudSessionPlacement),
+  );
   const workflows = Option.getOrUndefined(
     yield* Effect.serviceOption(T3TeamWorkflowEngineRegistry),
   );
@@ -94,20 +97,18 @@ const make = Effect.gen(function* () {
       ),
     );
 
-  const projectRepositoryName = (projectId: Parameters<typeof projects.getShell>[0]) =>
+  const projectRepositoryIdentity = (projectId: Parameters<typeof projects.getShell>[0]) =>
     projects.getShell(projectId).pipe(
-      Effect.map((shell) =>
-        Option.isSome(shell) ? (shell.value.repositoryIdentity?.name ?? null) : null,
-      ),
+      Effect.map((shell) => (Option.isSome(shell) ? shell.value.repositoryIdentity : null)),
       Effect.orElseSucceed(() => null),
     );
 
   const preparation: DelegatedTaskPreparationShape = {
     workspaceIsolation: true,
-    extensions:
-      cloudSessions === undefined
-        ? T3TEAM_DELEGATION_EXTENSIONS
-        : [...T3TEAM_DELEGATION_EXTENSIONS, CLOUD_SESSION_EXTENSION],
+    extensions: withCloudSessionExtension(
+      T3TEAM_DELEGATION_EXTENSIONS,
+      cloudSessions !== undefined,
+    ),
     prepare: (input) =>
       Effect.gen(function* () {
         yield* rejectUnsupportedDelegationInput(input, preparation);
@@ -166,7 +167,10 @@ const make = Effect.gen(function* () {
                 : yield* placeOnCloudSession(cloudSessions, {
                     request: cloudSession.value,
                     projectId: parentThread.projectId,
-                    repositoryName: yield* projectRepositoryName(parentThread.projectId),
+                    ...childRepositoryOf(
+                      yield* projectRepositoryIdentity(parentThread.projectId),
+                      workspace?.repository ?? isolated?.repository ?? null,
+                    ),
                   });
             if (workspace === undefined) return [...childNotes, ...cloudNotes];
             const setup = yield* startChildSetupScript({
