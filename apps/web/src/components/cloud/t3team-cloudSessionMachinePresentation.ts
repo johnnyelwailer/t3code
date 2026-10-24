@@ -27,7 +27,11 @@ export function presentProjectMachine(
     };
   }
   const broken = discovery.rejected[0];
-  if (broken === undefined) return null;
+  if (broken === undefined) {
+    return discovery.status._tag === "None" && discovery.status.reason !== undefined
+      ? { label: "No remote machine found", detail: discovery.status.reason, tone: "info" }
+      : null;
+  }
   return {
     label: "Machine needs fixing",
     detail: `${broken.path}: ${broken.reason}`,
