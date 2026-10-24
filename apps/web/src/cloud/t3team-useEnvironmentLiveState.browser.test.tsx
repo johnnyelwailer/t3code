@@ -5,38 +5,43 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import { act, fakeTimers, render } from "../../test/render";
 
-// A fresh id per test: the derived atom is cached per environment, and fake timers stop it being
-// disposed between tests.
-let environment = EnvironmentId.make("env-cloud-0");
-let counter = 0;
-let phase = "connected";
-let supervisorState: unknown = { phase: "available", lastFailure: null };
+interface LiveStateMock {
+  environment: string;
+  phase: string;
+  supervisorState: unknown;
+}
+
+const state = vi.hoisted((): LiveStateMock => ({
+  environment: "",
+  phase: "connected",
+  supervisorState: { phase: "available", lastFailure: null },
+}));
 
 vi.mock("~/state/presentation", () => ({
   useEnvironmentPresentation: () => ({
     isReady: true,
     presentation: {
-      connection: { phase, error: null, traceId: null },
+      connection: { phase: state.phase, error: null, traceId: null },
       entry: { target: { _tag: "BrokerConnectionTarget" } },
     },
   }),
 }));
 vi.mock("~/connection/catalog", () => ({
   environmentCatalog: {
-    stateAtom: () => Atom.make(AsyncResult.success(supervisorState)),
+    stateAtom: () => Atom.make(AsyncResult.success(state.supervisorState)),
   },
 }));
 
 const { useEnvironmentLiveState } = await import("./t3team-useEnvironmentLiveState");
 
 function Probe() {
-  return <span>{useEnvironmentLiveState(environment)}</span>;
+  return <span>{useEnvironmentLiveState(EnvironmentId.make(state.environment))}</span>;
 }
 
 function setup(next: { readonly phase: string; readonly state?: unknown }) {
-  phase = next.phase;
-  supervisorState = next.state ?? { phase: "available", lastFailure: null };
-  environment = EnvironmentId.make(`env-cloud-${(counter += 1)}`);
+  state.phase = next.phase;
+  state.supervisorState = next.state ?? { phase: "available", lastFailure: null };
+  state.environment = `env-cloud-${expect.getState().currentTestName ?? ""}`;
 }
 
 describe("useEnvironmentLiveState", () => {
@@ -76,7 +81,7 @@ describe("useEnvironmentLiveState", () => {
     await using screen = await render(<Probe />, { router: false });
     await act(() => vi.advanceTimersByTime(2_500));
     expect(screen.container.textContent).toBe("offline");
-    phase = "connected";
+    state.phase = "connected";
     await screen.rerender(<Probe />);
     expect(screen.container.textContent).toBe("live");
   });

@@ -1,18 +1,23 @@
 import { EnvironmentId, type CloudSession } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { fakeTimers, render } from "../../../test/render";
+import { act, fakeTimers, render } from "../../../test/render";
 
 const environmentId = EnvironmentId.make("env-ws");
 const NOW = Date.parse("2026-10-24T12:00:00Z");
-let ended = false;
-let sessions: CloudSession[] = [];
+
+interface BannerMock {
+  ended: boolean;
+  sessions: CloudSession[];
+}
+
+const state = vi.hoisted((): BannerMock => ({ ended: false, sessions: [] }));
 
 vi.mock("~/cloud/t3team-useEnvironmentLiveState", () => ({
-  useEnvironmentSessionEnded: () => ended,
+  useEnvironmentSessionEnded: () => state.ended,
 }));
 vi.mock("~/state/t3team-cloudSessions", () => ({
-  useCloudSessions: () => ({ sessions }),
+  useCloudSessions: () => ({ sessions: state.sessions }),
 }));
 vi.mock("../cloud/t3team-CloudSessionEndedActions", () => ({
   CloudSessionEndedActions: () => <button type="button">Start another cloud session</button>,
@@ -54,31 +59,59 @@ function ready(startedAgoSeconds: number, remaining: number): CloudSession {
   };
 }
 
+function setup(next: { readonly ended?: boolean; readonly sessions: CloudSession[] }) {
+  state.ended = next.ended ?? false;
+  state.sessions = next.sessions;
+}
+
 describe("useCloudSessionEndedBannerItem", () => {
   it("shows a replacement session's warning after dismissing the previous session", async () => {
     using _timers = fakeTimers({ now: NOW });
-    ended = false;
-    sessions = [ready(600, 14 * 60)];
+    setup({ sessions: [ready(600, 14 * 60)] });
     await using screen = await render(<Probe />);
     await screen.getByRole("button", { name: "Dismiss" }).click();
     await expect.element(screen.getByTestId("none")).toBeInTheDocument();
-    sessions = [{ ...ready(600, 14 * 60), sessionId: "2" }];
+    state.sessions = [{ ...ready(600, 14 * 60), sessionId: "2" }];
     await screen.rerender(<Probe />);
     await expect.element(screen.getByText("Session ends in 14 min")).toBeInTheDocument();
   });
 
   it("shows nothing for a healthy session with hours left", async () => {
     using _timers = fakeTimers({ now: NOW });
-    ended = false;
-    sessions = [ready(600, 5 * 3600)];
+    setup({ sessions: [ready(600, 5 * 3600)] });
     await using screen = await render(<Probe />, { router: false });
     expect(screen.container.querySelector("[data-testid=none]")).not.toBeNull();
   });
 
+  it("does not re-render a session with hours left while it waits for the warning window", async () => {
+    using _timers = fakeTimers({ now: NOW });
+    setup({ sessions: [ready(600, 5 * 3600)] });
+    const renders = vi.fn();
+    function CountingProbe() {
+      renders();
+      useCloudSessionEndedBannerItem(environmentId);
+      return null;
+    }
+    await using _screen = await render(<CountingProbe />, { router: false });
+    const mounted = renders.mock.calls.length;
+    await act(() => vi.advanceTimersByTime(60 * 60 * 1000));
+    expect(renders.mock.calls.length).toBe(mounted);
+  });
+
+  it("stays quiet until the warning window opens, then counts down inside it", async () => {
+    using _timers = fakeTimers({ now: NOW });
+    setup({ sessions: [ready(600, 16 * 60)] });
+    await using screen = await render(<Probe />, { router: false });
+    expect(screen.container.querySelector("[data-testid=none]")).not.toBeNull();
+    await act(() => vi.advanceTimersByTime(61 * 1000));
+    expect(screen.container.querySelector("b")?.textContent).toBe("Session ends in 15 min");
+    await act(() => vi.advanceTimersByTime(5 * 60 * 1000));
+    expect(screen.container.querySelector("b")?.textContent).toBe("Session ends in 10 min");
+  });
+
   it("warns at 15 minutes or less, saying the work is saved", async () => {
     using _timers = fakeTimers({ now: NOW });
-    ended = false;
-    sessions = [ready(345 * 60 - 14 * 60, 14 * 60)];
+    setup({ sessions: [ready(345 * 60 - 14 * 60, 14 * 60)] });
     await using screen = await render(<Probe />, { router: false });
     expect(screen.container.querySelector("b")?.textContent).toBe("Session ends in 14 min");
     expect(screen.container.querySelector("i")?.textContent).toBe(
@@ -88,8 +121,7 @@ describe("useCloudSessionEndedBannerItem", () => {
 
   it("says the session ended, and offers Start another, once the connection was parked on it", async () => {
     using _timers = fakeTimers({ now: NOW });
-    ended = true;
-    sessions = [];
+    setup({ ended: true, sessions: [] });
     await using screen = await render(<Probe />, { router: false });
     expect(screen.container.querySelector("b")?.textContent).toBe("This cloud session has ended");
     expect(screen.container.textContent).toContain("Start another cloud session");

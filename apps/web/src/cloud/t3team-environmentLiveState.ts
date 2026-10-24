@@ -28,8 +28,6 @@ export function resolveEnvironmentLiveState(input: {
   const { phase } = input;
   if (phase === "connected" || phase === "available" || phase === "unsupported") return "live";
   if (phase === "error" && input.sessionEnded) return "ended";
-  // A brief blip (the local server restarting, a socket renewed) is not worth rewriting the row
-  // for; the composer banner waits the same grace before it says anything.
   if (phase === "connecting" || phase === "reconnecting") {
     return input.graceElapsed ? "offline" : "live";
   }

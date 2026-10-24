@@ -6,6 +6,7 @@ import { ENDED_SESSION_BANNER_COPY } from "~/cloud/t3team-endedSessionAction";
 import { liveCloudSessionForEnvironment } from "~/cloud/t3team-cloudSessionEnvironmentMatch";
 import {
   resolveSessionEndingNotice,
+  SESSION_ENDING_WARNING_SECONDS,
   secondsUntil,
   sessionEndsAtMs,
 } from "~/cloud/t3team-cloudSessionEnding";
@@ -17,6 +18,7 @@ import type { ComposerBannerStackItem } from "./ComposerBannerStack";
 
 const UNAVAILABLE_BANNER_PREFIX = "environment-unavailable:";
 const ENDED_BANNER_PREFIX = "cloud-session-ended:";
+const WARNING_TICK_MS = 20_000;
 
 /**
  * The ended-session banner item: its copy and stack identity in one place, so the app and the
@@ -38,8 +40,10 @@ export function endedSessionBannerItem(
 }
 
 /**
- * Seconds left of the live cloud session serving `environmentId`, ticking locally: the session
- * list is polled conservatively, and a thread view does not poll it at all.
+ * Seconds left of the live cloud session serving `environmentId`, kept locally: the session list
+ * is polled conservatively, and a thread view does not poll it at all. One timer sleeps until the
+ * warning window opens; only inside it does the count tick, so a session with hours left does not
+ * re-render its thread every few seconds.
  */
 function useSessionEnding(environmentId: EnvironmentId | null) {
   const { sessions } = useCloudSessions();
@@ -47,12 +51,21 @@ function useSessionEnding(environmentId: EnvironmentId | null) {
     environmentId === null ? null : liveCloudSessionForEnvironment(sessions, environmentId);
   const endsAtMs = live?.phase === "ready" ? sessionEndsAtMs(live) : null;
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const counting = endsAtMs !== null;
+  const warnAtMs = endsAtMs === null ? null : endsAtMs - SESSION_ENDING_WARNING_SECONDS * 1000;
+  const inWindow = warnAtMs !== null && nowMs >= warnAtMs;
+  const over = endsAtMs !== null && nowMs >= endsAtMs;
   useEffect(() => {
-    if (!counting) return;
-    const timer = setInterval(() => setNowMs(Date.now()), 20_000);
+    if (warnAtMs === null || over) return;
+    if (!inWindow) {
+      const timer = setTimeout(
+        () => setNowMs(Math.max(Date.now(), warnAtMs)),
+        warnAtMs - Date.now(),
+      );
+      return () => clearTimeout(timer);
+    }
+    const timer = setInterval(() => setNowMs(Date.now()), WARNING_TICK_MS);
     return () => clearInterval(timer);
-  }, [counting]);
+  }, [warnAtMs, inWindow, over]);
   return {
     sessionId: live?.sessionId ?? null,
     secondsLeft: endsAtMs === null ? null : secondsUntil(endsAtMs, nowMs),
@@ -106,5 +119,6 @@ export function withCloudSessionEndedBanner(
   if (ended === null || !ended.id.startsWith(ENDED_BANNER_PREFIX)) {
     return ended === null ? [...items] : [...items, ended];
   }
-  return [...items.filter((item) => !item.id.startsWith(UNAVAILABLE_BANNER_PREFIX)), ended];
+  const replaced = `${UNAVAILABLE_BANNER_PREFIX}${ended.id.slice(ENDED_BANNER_PREFIX.length)}`;
+  return [...items.filter((item) => item.id !== replaced), ended];
 }

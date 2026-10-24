@@ -18,8 +18,6 @@ export function sessionToAttach<
       (input.environmentId === undefined || s.environmentId === input.environmentId),
   );
   if (asked !== undefined || input.environmentId === undefined) return asked;
-  // Two live sessions in one workspace (started side by side) serve the same environment: the
-  // newest run wins, so reconnects stay on one machine instead of following list order.
   return sessions
     .filter((s) => s.environmentId === input.environmentId)
     .reduce<S | undefined>(
