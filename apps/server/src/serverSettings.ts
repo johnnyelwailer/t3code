@@ -126,26 +126,17 @@ const foldProviderInstanceEnabledFlags = (settings: ServerSettings): ServerSetti
   };
 };
 
-/**
- * Pack provider instances are host-owned and must not round-trip into user
- * settings: a persisted `{ driver, config: {} }` shadow would clobber the
- * pack's real config on the next boot. Strip any the client echoed back so the
- * "pack config never persists" invariant holds on every write.
- */
+// Pack config is never persisted; a client-echoed pack instance would clobber it on boot.
 const stripPackProviderInstances = (settings: ServerSettings): ServerSettings => {
   const overlay = getPackProviderOverlay();
-  const providerInstances: Record<string, ProviderInstanceConfig> = {
-    ...settings.providerInstances,
-  };
-  const toRemove = Object.keys(providerInstances).filter((instanceId) =>
-    Object.hasOwn(overlay, instanceId),
-  );
-  if (toRemove.length === 0) return settings;
-  for (const instanceId of toRemove) delete providerInstances[instanceId];
-  return {
-    ...settings,
-    providerInstances: providerInstances as ServerSettings["providerInstances"],
-  };
+  const providerInstances = { ...settings.providerInstances };
+  let changed = false;
+  for (const instanceId of Object.keys(providerInstances)) {
+    if (!Object.hasOwn(overlay, instanceId)) continue;
+    delete providerInstances[ProviderInstanceId.make(instanceId)];
+    changed = true;
+  }
+  return changed ? { ...settings, providerInstances } : settings;
 };
 
 const normalizeServerSettings = (
@@ -175,40 +166,25 @@ export function redactServerSettingsForClient(settings: ServerSettings): ServerS
   );
 }
 
-/**
- * A pack provider instance is registered at boot and never persisted as user
- * settings. A stock client that resolves instance enablement from
- * `providerInstances` alone (the contracts default-enabled set only covers
- * codex/claudeAgent) would treat it as disabled, dropping it from the model
- * picker and refusing to open or steer it. Inject a minimal enabled entry for
- * each pack instance so client-side enablement resolves it; the entry carries
- * no driver config, so pack internals never reach the client.
- */
 const projectPackProviderInstances = (settings: ServerSettings): ServerSettings => {
-  const entries = Object.entries(getPackProviderOverlay());
-  if (entries.length === 0) return settings;
-  const providerInstances: Record<string, ProviderInstanceConfig> = {
-    ...settings.providerInstances,
-  };
+  const overlay = getPackProviderOverlay();
+  const providerInstances = { ...settings.providerInstances };
   let changed = false;
-  for (const [instanceId, entry] of entries) {
+  for (const [instanceId, entry] of Object.entries(overlay)) {
     if (Object.hasOwn(providerInstances, instanceId)) continue;
-    providerInstances[instanceId] = {
+    providerInstances[ProviderInstanceId.make(instanceId)] = {
       driver: entry.driver,
       enabled: true,
       configurationSource: "pack",
     };
     changed = true;
   }
-  return changed
-    ? { ...settings, providerInstances: providerInstances as ServerSettings["providerInstances"] }
-    : settings;
+  return changed ? { ...settings, providerInstances } : settings;
 };
 
 export function projectServerSettingsForClient(settings: ServerSettings): ServerSettings {
   return projectPackProviderInstances(redactServerSettingsForClient(settings));
 }
-
 
 export function applyProviderInstanceMutation(
   settings: ServerSettings,

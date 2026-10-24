@@ -1180,47 +1180,38 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       }).pipe(Effect.provide(layerServerSettings())),
   );
 
-  it.effect(
-    "keeps pack provider instances enabled for stock clients without persisting them",
-    () =>
-      Effect.gen(function* () {
-        const nexploreId = ProviderInstanceId.make("nexplore");
-        setPackProviderOverlay({
-          configMap: {
-            [nexploreId]: {
-              driver: ProviderDriverKind.make("nexplore"),
-              configurationSource: "pack",
-              config: { enabled: true },
-            },
+  it.effect("keeps pack provider instances enabled for stock clients without persisting them", () =>
+    Effect.gen(function* () {
+      const nexploreId = ProviderInstanceId.make("nexplore");
+      setPackProviderOverlay({
+        configMap: {
+          [nexploreId]: {
+            driver: ProviderDriverKind.make("nexplore"),
+            configurationSource: "pack",
+            config: { enabled: true },
           },
+        },
+        driverDefinitions: new Map(),
+      });
+      try {
+        const service = yield* ServerSettingsModule.ServerSettingsService;
+        const base = yield* service.getSettings;
+        const unprojected = ServerSettingsModule.redactServerSettingsForClient(base);
+        assert.isFalse(resolveProjectProviderInstanceEnabled(unprojected, null, nexploreId));
+        const client = ServerSettingsModule.projectServerSettingsForClient(base);
+        assert.isTrue(resolveProjectProviderInstanceEnabled(client, null, nexploreId));
+        assert.isFalse("config" in (client.providerInstances[nexploreId] ?? {}));
+        const echoed = yield* service.updateSettings({
+          providerInstances: client.providerInstances,
+        });
+        assert.isFalse(Object.hasOwn(echoed.providerInstances, nexploreId));
+      } finally {
+        setPackProviderOverlay({
+          configMap: {},
           driverDefinitions: new Map(),
         });
-        try {
-          const service = yield* ServerSettingsModule.ServerSettingsService;
-          const base = yield* service.getSettings;
-          // Repro: the unprojected client view has no pack instance, so the
-          // stock-client enablement check (which falls back to the codex/claudeAgent
-          // default-enabled set) resolves nexplore as disabled.
-          const unprojected = ServerSettingsModule.redactServerSettingsForClient(base);
-          assert.isFalse(resolveProjectProviderInstanceEnabled(unprojected, null, "nexplore"));
-          // Fix: projecting the client view injects a minimal enabled pack entry so the
-          // same stock-client check resolves it as usable.
-          const client = ServerSettingsModule.projectServerSettingsForClient(base);
-          assert.isTrue(resolveProjectProviderInstanceEnabled(client, null, "nexplore"));
-          // The injected entry carries no driver config, so pack internals stay server-side.
-          assert.isFalse("config" in (client.providerInstances[nexploreId] ?? {}));
-          // A client echoing the projected map back must not persist the pack instance.
-          const echoed = yield* service.updateSettings({
-            providerInstances: client.providerInstances,
-          });
-          assert.isFalse(Object.hasOwn(echoed.providerInstances, nexploreId));
-        } finally {
-          setPackProviderOverlay({
-            configMap: {},
-            driverDefinitions: new Map(),
-          });
-        }
-      }).pipe(Effect.provide(layerServerSettings())),
+      }
+    }).pipe(Effect.provide(layerServerSettings())),
   );
 
   it.effect(
