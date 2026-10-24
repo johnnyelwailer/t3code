@@ -1,4 +1,7 @@
-import type { CloudSessionMachineStage } from "@t3tools/contracts";
+import {
+  CLOUD_SESSION_HOLD_CEILING_SECONDS,
+  type CloudSessionMachineStage,
+} from "@t3tools/contracts";
 
 import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
 
@@ -153,6 +156,21 @@ export function cloudSessionElapsedSeconds(run: WorkflowRunSummary, nowMs: numbe
   const startedMs = Date.parse(run.createdAt);
   if (Number.isNaN(startedMs)) return 0;
   return Math.max(0, Math.floor((nowMs - startedMs) / 1000));
+}
+
+/**
+ * What is left of a session's hold, in seconds, or `null` when the server cannot say. Only a
+ * `ready` session is holding a machine; every earlier phase has not started its clock and every
+ * later one has no machine left. The hold starts shortly after the run is created, so counting
+ * from `createdAt` (`elapsedSeconds`) understates the remainder by the provisioning time: the safe
+ * side for a warning. An upper bound all the same: the idle check can release a session sooner.
+ */
+export function cloudSessionRemainingSeconds(
+  phase: CloudSessionPhase,
+  elapsedSeconds: number,
+): number | null {
+  if (phase !== "ready") return null;
+  return Math.max(0, CLOUD_SESSION_HOLD_CEILING_SECONDS - elapsedSeconds);
 }
 
 /**

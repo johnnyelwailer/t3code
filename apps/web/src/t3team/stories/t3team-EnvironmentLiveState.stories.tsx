@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { CircleDashedIcon, CloudOffIcon, WifiOffIcon } from "lucide-react";
+import { CircleDashedIcon, ClockIcon, CloudOffIcon, WifiOffIcon } from "lucide-react";
 
 import { LiveStateLabel } from "~/cloud/t3team-LiveStateLabel";
+import { resolveSessionEndingNotice } from "~/cloud/t3team-cloudSessionEnding";
 import { ENDED_SESSION_BANNER_COPY } from "~/cloud/t3team-endedSessionAction";
 import { ComposerBannerStack } from "~/components/chat/ComposerBannerStack";
 import { Button } from "~/components/ui/button";
@@ -115,4 +116,32 @@ export const EndedSessionBanner: Story = {
       </div>
     </div>
   ),
+};
+
+/** Fifteen minutes or less of the session's hold left: the end is announced, not a surprise. */
+export const SessionEndingBanner: Story = {
+  render: () => {
+    const notice = resolveSessionEndingNotice(14 * 60);
+    return (
+      <div className="mx-auto w-full max-w-3xl pt-16">
+        <ComposerBannerStack
+          items={[
+            {
+              id: "cloud-session-ending:story",
+              variant: "warning",
+              priority: "notice",
+              icon: <ClockIcon aria-hidden="true" />,
+              title: notice?.title ?? "",
+              description: notice?.description,
+              dismissLabel: "Dismiss session ending notice",
+              onDismiss: () => {},
+            },
+          ]}
+        />
+        <div className="rounded-b-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          Ask anything…
+        </div>
+      </div>
+    );
+  },
 };

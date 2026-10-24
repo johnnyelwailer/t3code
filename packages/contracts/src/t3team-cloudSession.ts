@@ -61,6 +61,13 @@ export const CloudSessionMachineStageSchema = Schema.Literals([
 ]);
 export type CloudSessionMachineStage = typeof CloudSessionMachineStageSchema.Type;
 
+/**
+ * The longest a cloud session holds its machine: the `hold_minutes` the app always dispatches
+ * (345 minutes, under the workflow's 350-minute job timeout). An upper bound on what is left of a
+ * live session: the workflow's idle check can release it sooner.
+ */
+export const CLOUD_SESSION_HOLD_CEILING_SECONDS = 345 * 60;
+
 export const CloudSessionSchema = Schema.Struct({
   /** Stable per attempt. Opaque to the client — do not parse it. */
   sessionId: Schema.String,
