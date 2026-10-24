@@ -68,6 +68,34 @@ export type CloudSessionMachineStage = typeof CloudSessionMachineStageSchema.Typ
  */
 export const CLOUD_SESSION_HOLD_CEILING_SECONDS = 345 * 60;
 
+/**
+ * How long sessions of this shape typically take to become ready, measured from the step times of
+ * the user's own recent sessions (the server derives it; a client falls back to its own constants
+ * when absent). Seconds are counted from dispatch, so they compare directly with `elapsedSeconds`.
+ */
+export const CloudSessionTimingSchema = Schema.Struct({
+  /** How many finished sessions the figures come from. */
+  samples: Schema.Int,
+  /**
+   * `project`: sessions of this same project. `shape`: any session with the same kind of setup
+   * (plain, project machine, setup) — the project has no history of its own yet.
+   */
+  scope: Schema.Literals(["project", "shape"]),
+  /** Dispatch to ready: the faster quarter, the middle, and the slower quarter of the samples. */
+  readyLowSeconds: Schema.Int,
+  readyTypicalSeconds: Schema.Int,
+  readyHighSeconds: Schema.Int,
+  /** Typical seconds from dispatch at which each milestone began; absent when no sample had it. */
+  startsAtSeconds: Schema.Struct({
+    preparing: Schema.optional(Schema.Int),
+    building: Schema.optional(Schema.Int),
+    checking: Schema.optional(Schema.Int),
+    installing: Schema.optional(Schema.Int),
+    starting: Schema.optional(Schema.Int),
+  }),
+});
+export type CloudSessionTiming = typeof CloudSessionTimingSchema.Type;
+
 export const CloudSessionSchema = Schema.Struct({
   /** Stable per attempt. Opaque to the client — do not parse it. */
   sessionId: Schema.String,
@@ -121,6 +149,8 @@ export const CloudSessionSchema = Schema.Struct({
   machineSetup: Schema.optional(Schema.Boolean),
   /** A project-machine session's milestone, present only while `phase` is `preparing`. */
   machineStage: Schema.optional(CloudSessionMachineStageSchema),
+  /** Typical time to ready for sessions like this one; present only while it is provisioning. */
+  timing: Schema.optional(CloudSessionTimingSchema),
 });
 export type CloudSession = typeof CloudSessionSchema.Type;
 

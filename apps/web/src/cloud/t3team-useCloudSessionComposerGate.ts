@@ -52,6 +52,8 @@ export function useCloudSessionComposerGate(input: {
   readonly hasQueuedBind: boolean;
   /** The thread card's input while the draft's first message waits; null otherwise. */
   readonly card: CloudQueuedSendCardInput | null;
+  /** The shared session controller, so the setup card reads the same list and creates through it. */
+  readonly cloud: ReturnType<typeof useCloudSessionController>;
 } {
   const cloud = useCloudSessionController();
   const { draftId } = input;
@@ -133,6 +135,7 @@ export function useCloudSessionComposerGate(input: {
     cancelQueuedSend,
     bannerItem,
     hasQueuedBind: queued !== null,
+    cloud,
     card:
       stepFacts === null
         ? null

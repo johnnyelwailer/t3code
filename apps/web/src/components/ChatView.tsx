@@ -56,7 +56,8 @@ import { useT3TeamActiveAgents } from "~/t3team/chat/t3team-useActiveAgents";
 import { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionComposerGate";
 import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
 import { useCloudQueuedSendOptimisticMessage } from "~/cloud/t3team-useCloudQueuedSendOptimisticMessage";
-import { CloudQueuedSendCard } from "~/cloud/t3team-CloudQueuedSendCard";
+import { CloudSessionSetupHost } from "~/cloud/t3team-CloudSessionSetupHost";
+import { useCloudSessionSetupCard } from "~/cloud/t3team-useCloudSessionSetupCard";
 import type { UsageLimitSourceSnapshots } from "@t3tools/contracts";
 import { feedbackBannerItem } from "./chat/ComposerFeedback";
 import { useUsageLimitsPanel } from "./chat/useUsageLimitsPanel";
@@ -1902,6 +1903,13 @@ export default function ChatView(props: ChatViewProps) {
     scopeKey: draftId ?? routeThreadKey,
     projectRef: activeProjectRef,
   });
+  const cloudSetupCard = useCloudSessionSetupCard({
+    draftId: draftId ?? null,
+    scopeKey: draftId ?? routeThreadKey,
+    projectRef: activeProjectRef,
+    gate: cloudSessionComposerGate,
+  });
+  const cloudSetupElement = cloudSetupCard ? <CloudSessionSetupHost {...cloudSetupCard} /> : null;
   useCloudQueuedSendOptimisticMessage({ draftId: draftId ?? null, setOptimisticUserMessages });
   const canInterruptRunningThread =
     (canOperateThread &&
@@ -3520,8 +3528,8 @@ export default function ChatView(props: ChatViewProps) {
                 {...(onOpenWorktreeSetupTerminal ? { onOpenWorktreeSetupTerminal } : {})}
                 isPreparingWorktree={!paintOnlyDisplayedTimeline && isPreparingWorktree}
                 footer={
-                  paintOnlyDisplayedTimeline ? null : cloudSessionComposerGate.card ? (
-                    <CloudQueuedSendCard {...cloudSessionComposerGate.card} />
+                  paintOnlyDisplayedTimeline ? null : cloudSetupElement && !isDraftHeroState ? (
+                    cloudSetupElement
                   ) : pendingHandoff === null ? (
                     threadStatusLine
                   ) : (
@@ -3666,6 +3674,7 @@ export default function ChatView(props: ChatViewProps) {
                           activeProjectRef={activeProjectRef}
                           activeProjectTitle={activeProject?.title ?? null}
                         />
+                        {cloudSetupElement}
                       </div>
                     </div>
                   ) : null}
