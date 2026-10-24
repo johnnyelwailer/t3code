@@ -200,7 +200,7 @@ describe("callT3TeamWidgetShowTool", () => {
 
 describe("t3team.widget.show broker dispatch gating", () => {
   const baseInput = {
-    scopeLabel: "for this thread.",
+    scopeLabel: "for this thread",
     server: "t3team",
     tool: "t3team.widget.show",
     toolArgs: validArgs,
