@@ -36,7 +36,8 @@ describe("CloudSessionSetupCard", () => {
     expect(card.querySelector("[role='status']")?.textContent).toBe("Preparing your workspace.");
     const bar = card.querySelector("[role='progressbar']")!;
     expect(bar.getAttribute("aria-valuetext")).toMatch(/Preparing your workspace\. About/);
-    expect(Number(bar.getAttribute("aria-valuenow"))).toBeLessThan(100);
+    expect(bar.hasAttribute("aria-valuenow")).toBe(false);
+    expect(card.querySelector("[role='status']")?.closest("[aria-busy='true']")).toBeNull();
     expect(card.querySelector("[data-cloud-setup-estimate]")?.textContent).toMatch(
       /min left|minute/,
     );

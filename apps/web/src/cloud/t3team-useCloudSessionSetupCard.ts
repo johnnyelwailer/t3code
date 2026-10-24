@@ -46,6 +46,8 @@ export function useCloudSessionSetupCard(input: {
     facts: {
       session,
       machineConnected: queued?.facts.machineConnected ?? false,
+      projectReady: queued?.facts.projectReady ?? false,
+      queued: queued?.facts.queued,
       delivery: queued === null ? "none" : queued.facts.flushing ? "sending" : "queued",
       sendFailure: queued?.facts.queued.failureMessage ?? null,
     },

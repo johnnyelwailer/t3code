@@ -1,23 +1,4 @@
-/*
- * "Setting up your cloud session" (cloud/t3team-CloudSessionSetupCard.tsx). Loaded app-wide
- * through t3team-index-global.css, and by the Storybook canvas through t3team-index.css.
- *
- * Everything that moves here is CSS: the bar's fill is one animation whose start, end, duration and
- * easing the card computes ONCE per step (t3team-cloudSessionSetupProgress.ts), so React never
- * re-renders per frame and a poll that changes nothing restarts nothing. Colours are the theme's
- * own role tokens (--primary is the brand colour under the Nexplore pack), never hexes.
- * Every loop has a reduced-motion opt-out (data-motion="still") that leaves a still, readable card.
- */
-
-/* The bar: eases from where the clock says it is to where this step's curve flattens. */
-@keyframes t3team-setup-fill {
-  from {
-    width: var(--t3team-setup-from);
-  }
-  to {
-    width: var(--t3team-setup-to);
-  }
-}
+@import "./t3team-index-setupProgressOrb.css";
 
 @keyframes t3team-setup-sheen {
   from {
@@ -93,8 +74,7 @@
   position: relative;
   overflow: hidden;
   width: var(--t3team-setup-from);
-  animation: t3team-setup-fill var(--t3team-setup-duration, 0s) var(--t3team-setup-easing, linear) 1
-    forwards;
+  transition: width 1s linear;
 }
 
 /* A soft light passing over the filled part: "alive", not a percentage claim. */
@@ -130,51 +110,4 @@
   -webkit-background-clip: text;
   background-clip: text;
   animation: t3team-setup-text-shimmer 3.2s linear infinite;
-}
-
-/* The orb: a calm brand-coloured core with two slow ripples. */
-.t3team-setup-orb {
-  --t3team-setup-orb-color: var(--primary);
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  flex: none;
-  color: var(--t3team-setup-orb-color);
-}
-.t3team-setup-card[data-slow="true"] .t3team-setup-orb {
-  --t3team-setup-orb-color: var(--warning);
-}
-.t3team-setup-card[data-state="failed"] .t3team-setup-orb {
-  --t3team-setup-orb-color: var(--destructive);
-}
-.t3team-setup-card[data-state="ready"] .t3team-setup-orb {
-  --t3team-setup-orb-color: var(--success);
-}
-.t3team-setup-orb-core {
-  width: 0.65rem;
-  height: 0.65rem;
-  border-radius: 9999px;
-  background: var(--t3team-setup-orb-color);
-  box-shadow: 0 0 1rem color-mix(in srgb, var(--t3team-setup-orb-color) 55%, transparent);
-  animation: t3team-setup-breathe 3.2s ease-in-out infinite;
-}
-.t3team-setup-orb-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 9999px;
-  border: 1.5px solid color-mix(in srgb, var(--t3team-setup-orb-color) 50%, transparent);
-  animation: t3team-setup-ripple 3.2s ease-out infinite;
-}
-.t3team-setup-orb-ring[data-ring="2"] {
-  animation-delay: 1.6s;
-}
-.t3team-setup-card[data-slow="true"] :is(.t3team-setup-orb-core, .t3team-setup-orb-ring) {
-  animation-duration: 5s;
-}
-
-/* The current step's marker echoes the orb at row size. */
-.t3team-setup-step-dot {
-  animation: t3team-setup-breathe 2.6s ease-in-out infinite;
 }

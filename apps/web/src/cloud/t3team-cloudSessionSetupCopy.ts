@@ -3,7 +3,6 @@
  * honest long-wait explanation, what the user can do meanwhile, and what assistive tech hears. Pure.
  */
 import type { CloudSetupModel } from "./t3team-cloudSessionSetupModel";
-import { needsRepositorySetup } from "./t3team-cloudSessionSetupSteps";
 
 /** "About 1-2 min left". Rounds to friendly numbers; never says zero. */
 export function formatCloudSetupRemaining(lowSeconds: number, highSeconds: number): string {
@@ -32,10 +31,7 @@ export function basisTextOf(model: CloudSetupModel): string | null {
     const count = timing.samples;
     return `${typical}, from your last ${count === 1 ? `1 of ${noun}` : `${count} ${noun}`}`;
   }
-  // Nothing measured yet: say it is a rough guess rather than dress a constant up as history.
-  return needsRepositorySetup(model.shape)
-    ? `Rough guess: ${range}, not measured for this project yet`
-    : `Usually ${range}`;
+  return `Rough estimate: ${range}, based on fleet provisioning timing`;
 }
 
 /** What assistive tech hears: changes with the step, never with the clock. */
@@ -44,15 +40,12 @@ export function cloudSetupAnnouncement(model: CloudSetupModel): string {
     ? "Your cloud session is ready."
     : model.stage === "failed"
       ? "Cloud session setup failed."
-      : `${model.currentStep.label}.`;
+      : model.activity;
 }
 
 /** The honest long-wait explanation, or null when the setup is the quick kind. */
 export function cloudSetupLongWaitNote(model: CloudSetupModel): string | null {
   if (model.stage !== "working" || !model.longWait) return null;
-  if (model.shape === "plain") {
-    return "This is taking a few minutes. Setting up a workspace is usually quicker.";
-  }
   const history =
     model.measured && model.timing.scope === "project"
       ? "Earlier sessions of this project give the range above."

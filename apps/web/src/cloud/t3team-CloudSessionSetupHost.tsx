@@ -16,15 +16,9 @@ import { buildCloudSessionSetup } from "./t3team-cloudSessionSetupProgress";
 export const CLOUD_SETUP_READY_LINGER_MS = 2_800;
 
 export function CloudSessionSetupHost(props: CloudSessionSetupCardProps) {
-  const { session, machineConnected, delivery, sendFailure } = props.facts;
-  const stage = buildCloudSessionSetup({
-    session,
-    machineConnected,
-    delivery: delivery ?? "none",
-    sendFailure: sendFailure ?? null,
-  }).stage;
+  const { session } = props.facts;
+  const stage = buildCloudSessionSetup(props.facts).stage;
   const sessionId = session?.sessionId ?? null;
-  // The session this card has finished with: ready on first sight, or ready for long enough.
   const [retired, setRetired] = useState<string | null>(stage === "ready" ? sessionId : null);
   useEffect(() => {
     if (stage !== "ready" || sessionId === null) return;

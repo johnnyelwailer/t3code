@@ -3,7 +3,7 @@
  * the card so the part that follows the clock is a small leaf and the rest never re-renders on a tick.
  */
 import { CheckIcon } from "lucide-react";
-import { useState, type CSSProperties } from "react";
+import { type CSSProperties } from "react";
 
 import { cn } from "~/lib/utils";
 import {
@@ -58,28 +58,11 @@ export function StepList({ steps }: { readonly steps: CloudSetupModel["steps"] }
   );
 }
 
-/**
- * The fill. Its animation is set up once for a step (a different `key` re-runs it from the new
- * position); the inline `width` is the live position, which is all a reduced-motion reader gets.
- */
-function SetupFill({
-  motion,
-  progress,
-}: {
-  readonly motion: ReturnType<typeof readCloudSetup>["motion"];
-  readonly progress: number;
-}) {
-  const [initial] = useState(() => motion);
-  const style = {
-    "--t3team-setup-from": `${(initial.from * 100).toFixed(2)}%`,
-    "--t3team-setup-to": `${(initial.to * 100).toFixed(2)}%`,
-    "--t3team-setup-duration": `${initial.durationSeconds.toFixed(1)}s`,
-    "--t3team-setup-easing":
-      initial.easing.length > 1
-        ? `linear(${initial.easing.map((v) => v.toFixed(3)).join(", ")})`
-        : "linear",
+function SetupFill({ progress }: { readonly progress: number }) {
+  const style: CSSProperties & { "--t3team-setup-from": string } = {
+    "--t3team-setup-from": `${(progress * 100).toFixed(2)}%`,
     width: `${(progress * 100).toFixed(2)}%`,
-  } as CSSProperties;
+  };
   return <div className="t3team-setup-fill h-full rounded-full bg-primary" style={style} />;
 }
 
@@ -98,23 +81,10 @@ export function SetupLiveReadout({
       <div
         role="progressbar"
         aria-label="Cloud session setup"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={readout.slow ? undefined : Math.round(readout.progress * 100)}
         aria-valuetext={readout.valueText}
         className="h-1 w-full overflow-hidden rounded-full bg-muted"
       >
-        {working || model.stage === "ready" ? (
-          <SetupFill
-            key={`${model.currentStep.id}:${readout.slow ? "slow" : "run"}:${model.stage}`}
-            motion={
-              readout.slow
-                ? { ...readout.motion, to: readout.motion.from, durationSeconds: 0 }
-                : readout.motion
-            }
-            progress={readout.progress}
-          />
-        ) : null}
+        {working || model.stage === "ready" ? <SetupFill progress={readout.progress} /> : null}
       </div>
       {working ? (
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs">

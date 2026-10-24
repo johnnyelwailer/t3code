@@ -39,6 +39,25 @@ const MEASURED: CloudSessionTiming = {
 };
 
 describe("buildCloudSessionSetup steps", () => {
+  it("waits for project sync before claiming to send", () => {
+    const facts = {
+      session: session("ready"),
+      machineConnected: true,
+      projectReady: false,
+      delivery: "queued",
+    } satisfies CloudSetupFacts & { projectReady: boolean };
+    expect(model(facts).currentStep.id).toBe("project");
+  });
+
+  it("treats a stopped session with a waiting message as terminal", () => {
+    expect(model({ session: session("stopped"), delivery: "queued" }).stage).toBe("failed");
+  });
+
+  it("does not claim a missing session is reserving a machine", () => {
+    expect(model({ session: null, delivery: "queued" }).activity).toBe(
+      "Waiting for cloud session status…",
+    );
+  });
   it("walks a plain session through three steps in user words", () => {
     const m = model({ session: session("preparing") });
     expect(m.steps.map((s) => [s.label, s.status])).toEqual([

@@ -1,17 +1,6 @@
-/**
- * "Setting up your cloud session": the calm, honest progress card a thread shows while its cloud
- * session becomes ready — the step in plain words, a time range, and what the user can do
- * meanwhile. Everything it says comes from `t3team-cloudSessionSetupProgress`; this file only
- * paints it.
- *
- * Performance: the bar is ONE CSS animation computed once per step (`SetupFill` is keyed by step),
- * so a frame costs React nothing. A one-second tick re-renders only `SetupLiveReadout` (the bar
- * and the estimate line), never the thread, and a poll that changes no step restarts no animation.
- * Under `prefers-reduced-motion` every loop stops and the bar simply moves forward each second.
- */
-import { CheckIcon, CircleAlertIcon, RotateCcwIcon, XIcon } from "lucide-react";
+import { CheckIcon, CircleAlertIcon } from "lucide-react";
 
-import { Button } from "~/components/ui/button";
+import { SetupActions } from "./t3team-CloudSessionSetupActions";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 import {
   buildCloudSessionSetup,
@@ -54,13 +43,8 @@ export function CloudSessionSetupCard({
 }: CloudSessionSetupCardProps) {
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const motionMode = motion ?? (prefersReducedMotion ? "still" : "live");
-  const { session, machineConnected, delivery, sendFailure } = facts;
-  const model = buildCloudSessionSetup({
-    session,
-    machineConnected,
-    delivery: delivery ?? "none",
-    sendFailure: sendFailure ?? null,
-  });
+  const { session } = facts;
+  const model = buildCloudSessionSetup(facts);
   const elapsedSeconds = useCloudSetupElapsedSeconds(
     session?.elapsedSeconds ?? 0,
     model.stage === "working",
@@ -73,7 +57,6 @@ export function CloudSessionSetupCard({
   return (
     <section
       aria-label="Cloud session setup"
-      aria-busy={model.stage === "working"}
       data-cloud-setup-card=""
       data-state={model.stage}
       data-slow={slow ? "true" : "false"}
@@ -81,7 +64,6 @@ export function CloudSessionSetupCard({
       data-cloud-setup-step-current={model.currentStep.id}
       className="t3team-setup-card mt-1 mb-2 overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-4 text-card-foreground shadow-xs/5"
     >
-      {/* Heard, not seen: one polite line per step change, never per tick. */}
       <p role="status" aria-live="polite" className="sr-only">
         {cloudSetupAnnouncement(model)}
       </p>
@@ -142,44 +124,14 @@ export function CloudSessionSetupCard({
         </p>
       )}
 
-      {failed || onCancel || onRetry ? (
-        <div className="mt-3 flex flex-wrap items-center gap-1">
-          {failed && onTryAgain ? (
-            <Button type="button" size="xs" variant="outline" onClick={onTryAgain}>
-              <RotateCcwIcon aria-hidden />
-              Try again
-            </Button>
-          ) : null}
-          {onRetry ? (
-            <Button type="button" size="xs" variant="outline" onClick={onRetry}>
-              <RotateCcwIcon aria-hidden />
-              Retry sending
-            </Button>
-          ) : null}
-          {onCancel ? (
-            <Button
-              type="button"
-              size="xs"
-              variant="ghost-muted"
-              disabled={sending}
-              onClick={onCancel}
-            >
-              <XIcon aria-hidden />
-              {sending ? "Sending…" : "Cancel message"}
-            </Button>
-          ) : null}
-          {failed && model.detailsUrl !== null ? (
-            <a
-              href={model.detailsUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="ml-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-            >
-              See what happened
-            </a>
-          ) : null}
-        </div>
-      ) : null}
+      <SetupActions
+        failed={failed}
+        detailsUrl={model.detailsUrl}
+        onCancel={onCancel}
+        onRetry={onRetry}
+        onTryAgain={onTryAgain}
+        sending={sending}
+      />
     </section>
   );
 }
