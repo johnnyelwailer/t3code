@@ -51,10 +51,10 @@ const write = (root: string, files: Record<string, string>) => {
  */
 const checkout = (
   files: Record<string, string>,
-  { remote = "git@nexplore.ghe.com:acme/api.git", pushed = true } = {},
+  { remote = "git@nexplore.ghe.com:acme/api.git", pushed = true, objectFormat = "sha1" } = {},
 ) => {
   const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-machine-session-"));
-  git(root, "init", "-q", "-b", "main");
+  git(root, "init", "-q", "-b", "main", `--object-format=${objectFormat}`);
   write(root, files);
   git(root, "add", "-A");
   git(root, "commit", "-q", "--allow-empty", "-m", "base");
@@ -140,6 +140,15 @@ describe("CloudSessionMachines.resolve", () => {
     Effect.gen(function* () {
       replaceFeatureFlagPresetValues(new Map([["CLOUD_PROJECT_MACHINE", false]]));
       expect(yield* resolveIn(checkout(DEVCONTAINER))).toBeNull();
+    }),
+  );
+
+  it.effect("pins a local SHA-256 machine definition", () =>
+    Effect.gen(function* () {
+      const root = checkout(DEVCONTAINER, { objectFormat: "sha256" });
+      const machine = yield* resolveIn(root);
+      expect(machine?.commit).toBe(git(root, "rev-parse", "HEAD"));
+      expect(machine?.commit).toHaveLength(64);
     }),
   );
 
@@ -308,6 +317,18 @@ describe("CloudSessionMachines.resolvePlain", () => {
           author: { name: "Philip J", email: "7+pj@users.noreply.nexplore.ghe.com" },
         },
       });
+    }),
+  );
+
+  it.effect("uses a SHA-256 default branch for a plain session", () =>
+    Effect.gen(function* () {
+      const root = checkout({ "README.md": "hi" }, { objectFormat: "sha256" });
+      const pushed = git(root, "rev-parse", "HEAD");
+      git(root, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+      git(root, "checkout", "-q", "--orphan", "local-only");
+      git(root, "commit", "-q", "-m", "disconnected local branch");
+      const plain = yield* plainIn(root);
+      expect(plain.kind === "checkout" ? plain.checkout.commit : null).toBe(pushed);
     }),
   );
 

@@ -164,22 +164,24 @@ it.layer(NodeServices.layer)("remote machine scan", (it) => {
       }),
   );
 
-  it.effect("accepts a SHA-256 object ID and pins every read to it", () =>
-    Effect.gen(function* () {
-      const commit = "b".repeat(64);
-      const fixture = yield* remoteFixture({
-        gitOutput: `${commit}\tHEAD\n`,
-        files: trees[0] ?? {},
-      });
-      const result = yield* scanRemote({
-        repository: ".",
-        url: "https://github.com/acme/api",
-        cwd: fixture.root,
-      }).pipe(Effect.provide(fixture.dependencies));
-      expect(result?.remote.commit).toBe(commit);
-      expect(result?.candidates).toHaveLength(1);
-      expect(fixture.reads.every((read) => read.revision === commit)).toBe(true);
-    }),
+  it.effect.each(["b".repeat(64), "A".repeat(40), "B".repeat(64)])(
+    "normalizes a full object ID and pins every read to it: %s",
+    (advertised) =>
+      Effect.gen(function* () {
+        const commit = advertised.toLowerCase();
+        const fixture = yield* remoteFixture({
+          gitOutput: `${advertised}\tHEAD\n`,
+          files: trees[0] ?? {},
+        });
+        const result = yield* scanRemote({
+          repository: ".",
+          url: "https://github.com/acme/api",
+          cwd: fixture.root,
+        }).pipe(Effect.provide(fixture.dependencies));
+        expect(result?.remote.commit).toBe(commit);
+        expect(result?.candidates).toHaveLength(1);
+        expect(fixture.reads.every((read) => read.revision === commit)).toBe(true);
+      }),
   );
 
   it.effect("classifies truncated HEAD output without blaming credentials", () =>

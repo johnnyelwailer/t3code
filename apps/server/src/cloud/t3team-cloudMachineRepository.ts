@@ -4,6 +4,7 @@
  *
  * @module t3team-cloudMachineRepository
  */
+import { isRevisionSha } from "@t3tools/source-control-core/server/t3team-fileAtRevision";
 import { CloudSessionFailedError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
@@ -19,7 +20,6 @@ import {
 const unavailable = (message: string) =>
   new CloudSessionFailedError({ reason: "machine_unavailable", message });
 
-const SHA = /^[0-9a-f]{40}$/;
 const decodeProfile = Schema.decodeUnknownEffect(
   Schema.fromJsonString(
     Schema.Struct({
@@ -55,7 +55,7 @@ export const machineRepositoryAccess = Effect.fn("cloud.machineRepositoryAccess"
         "--quiet",
         `${rev}^{commit}`,
       ]);
-      if (!sha.ok || !SHA.test(sha.stdout)) continue;
+      if (!sha.ok || !isRevisionSha(sha.stdout)) continue;
       const onRemote = yield* git(root, "machine.remoteContains", [
         "branch",
         "-r",
@@ -64,7 +64,7 @@ export const machineRepositoryAccess = Effect.fn("cloud.machineRepositoryAccess"
         "--contains",
         sha.stdout,
       ]);
-      if (onRemote.ok && onRemote.stdout.length > 0) return sha.stdout;
+      if (onRemote.ok && onRemote.stdout.length > 0) return sha.stdout.toLowerCase();
     }
     return null;
   });

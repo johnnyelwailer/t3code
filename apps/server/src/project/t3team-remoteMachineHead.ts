@@ -46,5 +46,5 @@ export const remoteHead = Effect.fn("projectMachine.remoteDefaultBranch")(functi
     return yield* new RemoteUnavailable({
       reason: "The remote returned an unsupported HEAD object ID.",
     });
-  return commit;
+  return commit.toLowerCase();
 });

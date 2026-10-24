@@ -7,6 +7,7 @@
  *
  * @module t3team-CloudSessionMachine
  */
+import { isRevisionSha } from "@t3tools/source-control-core/server/t3team-fileAtRevision";
 import {
   CloudSessionFailedError,
   plainProjectFolderName,
@@ -51,7 +52,6 @@ export interface CloudSessionSetup {
 
 const unavailable = (message: string) =>
   new CloudSessionFailedError({ reason: "machine_unavailable", message });
-const SHA = /^[0-9a-f]{40}$/;
 
 export class CloudSessionMachines extends Context.Service<
   CloudSessionMachines,
@@ -193,7 +193,11 @@ const make = Effect.gen(function* () {
         "--verify",
         "--quiet",
         "refs/remotes/origin/HEAD^{commit}",
-      ]).pipe(Effect.map((out) => (out.ok && SHA.test(out.stdout) ? out.stdout : null))));
+      ]).pipe(
+        Effect.map((out) =>
+          out.ok && isRevisionSha(out.stdout) ? out.stdout.toLowerCase() : null,
+        ),
+      ));
     if (commit === null) {
       return yield* unavailable(
         "Push this project's branch so the cloud session can check it out.",
