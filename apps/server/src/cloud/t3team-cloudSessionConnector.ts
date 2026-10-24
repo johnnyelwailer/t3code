@@ -7,11 +7,16 @@
  * 1. `attach` makes the session reachable on a loopback forwarder (`NexiBrokerService.attach`).
  * 2. A bearer for the session is reused when held; otherwise `pair` mints a one-time pairing
  *    credential on the session's own server, exchanged at its `/oauth/token`. The broker allows
- *    one pairing request per session at a time, so a refused pairing is retried briefly.
+ *    one pairing request per session at a time, so a refused pairing is retried with jittered
+ *    backoff (back-to-back delegations to one session pair one after another).
  * 3. The bearer buys a one-time WebSocket ticket; the result is the `/ws` URL to open.
  *
  * Bearers live in memory for this server's lifetime: a session lasts hours at most, and a restart
- * costs one more pairing. A held bearer the session rejects is dropped and paired again once.
+ * costs one more pairing. The token's `expires_in` is ignored: a held bearer the session rejects
+ * (401/403 from the ticket endpoint) is dropped and paired again once, which is the expiry path.
+ * Any other ticket failure keeps the bearer and fails as a retryable connection error, so a retry
+ * loop never pairs again for a busy or unreachable server (pairing writes to the session's server
+ * and counts toward the broker's mint rate).
  */
 import {
   type CloudSessionAttachInput,
@@ -21,6 +26,7 @@ import {
 } from "@t3tools/contracts";
 import {
   bootstrapRemoteBearerSession,
+  type RemoteEnvironmentAuthError,
   resolveRemoteWebSocketConnectionUrl,
 } from "@t3tools/client-runtime/authorization";
 import * as Effect from "effect/Effect";
@@ -52,7 +58,15 @@ export interface CloudSessionConnector {
   readonly forget: (sessionId: string) => Effect.Effect<void>;
 }
 
-const PAIRING_RETRIES = 3;
+const PAIRING_RETRIES = 6;
+
+/** Only a rejected bearer means "pair again", as in the client's broker resolver. */
+const bearerRejected = (error: RemoteEnvironmentAuthError) =>
+  error._tag === "EnvironmentAuthInvalidError" ||
+  error._tag === "EnvironmentScopeRequiredError" ||
+  error._tag === "EnvironmentOperationForbiddenError" ||
+  (error._tag === "RemoteEnvironmentAuthUndeclaredStatusError" &&
+    (error.status === 401 || error.status === 403));
 
 const unreachable = (message: string) =>
   new CloudSessionFailedError({ reason: "unknown_session", message });
@@ -77,7 +91,7 @@ export const makeCloudSessionConnector = Effect.fn("cloud.sessionConnector.make"
     const credential = yield* broker.pair(sessionId).pipe(
       Effect.retry({
         times: PAIRING_RETRIES,
-        schedule: Schedule.exponential("500 millis"),
+        schedule: Schedule.exponential("500 millis").pipe(Schedule.jittered),
         while: (error) => error.reason === "broker_unavailable",
       }),
     );
@@ -114,7 +128,12 @@ export const makeCloudSessionConnector = Effect.fn("cloud.sessionConnector.make"
         ? undefined
         : yield* socketUrlFor(attached, held).pipe(
             Effect.map((socketUrl) => ({ bearerToken: held, socketUrl })),
-            Effect.catch(() => Effect.as(forget(attachedId), undefined)),
+            Effect.catchIf(bearerRejected, () => Effect.as(forget(attachedId), undefined)),
+            Effect.mapError((error) =>
+              unreachable(
+                `The cloud session's server could not issue a connection ticket: ${error.message}`,
+              ),
+            ),
           );
     const authorized =
       viaHeld ??

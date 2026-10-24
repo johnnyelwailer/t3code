@@ -127,7 +127,7 @@ describe("placeOnCloudSession", () => {
     Effect.gen(function* () {
       const notes = yield* placeOnCloudSession(
         yield* fakeSessions({ sessions: [session({})] }),
-        auto,
+        Effect.succeed(auto),
       );
       assert.deepStrictEqual(notes, [
         "Fitting cloud session 'nx-nexi' (41) is ready.",
@@ -140,7 +140,7 @@ describe("placeOnCloudSession", () => {
     Effect.gen(function* () {
       const notes = yield* placeOnCloudSession(
         yield* fakeSessions({ sessions: [session({ name: "other" })] }),
-        auto,
+        Effect.succeed(auto),
       );
       assert.match(notes[0] ?? "", /a new one would be needed\. None was started/);
     }),
@@ -150,7 +150,7 @@ describe("placeOnCloudSession", () => {
     Effect.gen(function* () {
       const notes = yield* placeOnCloudSession(
         yield* fakeSessions({ brokerReady: Effect.fail(signedOut) }),
-        { ...auto, request: { kind: "new" } },
+        Effect.succeed({ ...auto, request: { kind: "new" } }),
       );
       assert.deepStrictEqual(notes, [
         "No cloud session was named (broker_sign_in_required): Sign in to Nexplore.",
@@ -161,18 +161,20 @@ describe("placeOnCloudSession", () => {
 
   it.effect("auto without a gh login says cloud sessions are not set up", () =>
     Effect.gen(function* () {
-      const notes = yield* placeOnCloudSession(yield* fakeSessions({ configured: false }), auto);
+      const notes = yield* placeOnCloudSession(
+        yield* fakeSessions({ configured: false }),
+        Effect.succeed(auto),
+      );
       assert.match(notes[0] ?? "", /not set up on this server/);
     }),
   );
 
   it.effect("a linked repository never starts a session for the project", () =>
     Effect.gen(function* () {
-      const notes = yield* placeOnCloudSession(yield* fakeSessions({}), {
-        ...auto,
-        repository: "hive/linked-lib",
-        projectRepository: false,
-      });
+      const notes = yield* placeOnCloudSession(
+        yield* fakeSessions({}),
+        Effect.succeed({ ...auto, repository: "hive/linked-lib", projectRepository: false }),
+      );
       assert.match(notes[0] ?? "", /none can be started for it/);
     }),
   );
@@ -181,7 +183,7 @@ describe("placeOnCloudSession", () => {
     Effect.gen(function* () {
       const notes = yield* placeOnCloudSession(
         yield* fakeSessions({ list: Effect.die(new Error("boom")) }),
-        auto,
+        Effect.succeed(auto),
       );
       assert.deepStrictEqual(notes, [
         "No cloud session was named: an unexpected error occurred while looking.",
@@ -202,7 +204,7 @@ describe("placeOnCloudSession", () => {
           ),
       });
       const fibers = yield* Effect.forEach([1, 2, 3], () =>
-        Effect.forkChild(placeOnCloudSession(sessions, auto)),
+        Effect.forkChild(placeOnCloudSession(sessions, Effect.succeed(auto))),
       );
       const notes = yield* Effect.forEach(fibers, Fiber.join);
       yield* Deferred.await(started);
@@ -217,16 +219,48 @@ describe("placeOnCloudSession", () => {
 
   it.effect("a failed start frees the project for the next delegation", () =>
     Effect.gen(function* () {
-      const failed = yield* Deferred.make<void>();
-      const sessions = yield* fakeSessions({
-        start: () =>
-          Deferred.succeed(failed, undefined).pipe(Effect.andThen(Effect.fail(signedOut))),
-      });
-      yield* placeOnCloudSession(sessions, auto);
-      yield* Deferred.await(failed);
-      yield* Effect.yieldNow;
+      const released = yield* Deferred.make<void>();
+      const base = yield* fakeSessions({ start: () => Effect.fail(signedOut) });
+      const sessions: DelegateCloudSessions = {
+        ...base,
+        startGuard: {
+          claim: base.startGuard.claim,
+          release: (id) =>
+            base.startGuard.release(id).pipe(Effect.andThen(Deferred.succeed(released, undefined))),
+        },
+      };
+      yield* placeOnCloudSession(sessions, Effect.succeed(auto));
+      yield* Deferred.await(released);
       const claim = yield* sessions.startGuard.claim(projectId);
       assert.strictEqual(claim.claimed, true);
+    }),
+  );
+
+  it.effect("a ready session whose environment is not linked yet is named as starting", () =>
+    Effect.gen(function* () {
+      const notes = yield* placeOnCloudSession(
+        yield* fakeSessions({
+          sessions: [session({ environmentId: undefined, endsAt: "2026-10-25T03:00:00.000Z" })],
+        }),
+        Effect.succeed(auto),
+      );
+      assert.strictEqual(
+        notes[0],
+        "Fitting cloud session 'nx-nexi' (41) is starting (its environment is not linked yet).",
+      );
+    }),
+  );
+
+  it.effect("a defect while resolving the input still ends in a note", () =>
+    Effect.gen(function* () {
+      const notes = yield* placeOnCloudSession(
+        yield* fakeSessions({ sessions: [session({})] }),
+        Effect.die(new Error("project lookup died")),
+      );
+      assert.deepStrictEqual(notes, [
+        "No cloud session was named: an unexpected error occurred while looking.",
+        CHILD_RUNS_HERE_NOTE,
+      ]);
     }),
   );
 });

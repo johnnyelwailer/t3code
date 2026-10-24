@@ -16,6 +16,8 @@ import {
 interface FakeSessionServer {
   readonly baseUrl: string;
   readonly revoke: (bearer: string) => void;
+  readonly forbid: (bearer: string) => void;
+  readonly busy: (on: boolean) => void;
 }
 
 const readBody = (request: NodeHttp.IncomingMessage) =>
@@ -33,6 +35,8 @@ const json = (response: NodeHttp.ServerResponse, status: number, body: unknown) 
 const fakeSessionServer = Effect.acquireRelease(
   Effect.promise(async () => {
     const revoked = new Set<string>();
+    const forbidden = new Set<string>();
+    const state = { busy: false };
     let issued = 0;
     const server = NodeHttp.createServer((request, response) => {
       void readBody(request).then((body) => {
@@ -50,6 +54,10 @@ const fakeSessionServer = Effect.acquireRelease(
         }
         if (request.url === "/api/auth/websocket-ticket") {
           const bearer = (request.headers.authorization ?? "").replace(/^Bearer /, "");
+          if (state.busy) return json(response, 503, { error: "busy" });
+          if (forbidden.has(bearer)) {
+            return json(response, 403, { _tag: "EnvironmentOperationForbiddenError" });
+          }
           if (!bearer.startsWith("bearer-") || revoked.has(bearer)) {
             return json(response, 401, { _tag: "EnvironmentAuthInvalidError" });
           }
@@ -69,6 +77,10 @@ const fakeSessionServer = Effect.acquireRelease(
       fake: {
         baseUrl: `127.0.0.1:${port}`,
         revoke: (bearer: string) => revoked.add(bearer),
+        forbid: (bearer: string) => forbidden.add(bearer),
+        busy: (on: boolean) => {
+          state.busy = on;
+        },
       } satisfies FakeSessionServer,
     };
   }),
@@ -141,6 +153,37 @@ describe("makeCloudSessionConnector", () => {
       const again = yield* connector.connect("41");
       assert.strictEqual(yield* Ref.get(pairs), 2);
       assert.strictEqual(again.bearerToken, "bearer-2");
+    }).pipe(Effect.scoped, Effect.provide(FetchHttpClient.layer)),
+  );
+
+  it.live(
+    "a busy session server fails the connection but keeps the bearer: no second pairing",
+    () =>
+      Effect.gen(function* () {
+        const { fake, pairs, connector } = yield* setup();
+        yield* connector.connect("41");
+        fake.busy(true);
+        const exit = yield* Effect.exit(connector.connect("41"));
+        assert.isTrue(Exit.isFailure(exit));
+        const reason = Exit.isFailure(exit)
+          ? Option.getOrUndefined(Exit.findErrorOption(exit))?.reason
+          : undefined;
+        assert.strictEqual(reason, "unknown_session");
+        fake.busy(false);
+        const again = yield* connector.connect("41");
+        assert.strictEqual(again.bearerToken, "bearer-1");
+        assert.strictEqual(yield* Ref.get(pairs), 1);
+      }).pipe(Effect.scoped, Effect.provide(FetchHttpClient.layer)),
+  );
+
+  it.live("a forbidden bearer (403) is paired again", () =>
+    Effect.gen(function* () {
+      const { fake, pairs, connector } = yield* setup();
+      yield* connector.connect("41");
+      fake.forbid("bearer-1");
+      const again = yield* connector.connect("41");
+      assert.strictEqual(again.bearerToken, "bearer-2");
+      assert.strictEqual(yield* Ref.get(pairs), 2);
     }).pipe(Effect.scoped, Effect.provide(FetchHttpClient.layer)),
   );
 
