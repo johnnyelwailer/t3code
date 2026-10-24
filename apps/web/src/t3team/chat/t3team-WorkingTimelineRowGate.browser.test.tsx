@@ -6,10 +6,14 @@ import { TimelineRowCtx, type TimelineRowSharedState } from "~/components/chat/t
 
 import { render } from "../../../test/render";
 
-let liveState: EnvironmentLiveState = "live";
+interface GateMock {
+  liveState: EnvironmentLiveState;
+}
+
+const state = vi.hoisted((): GateMock => ({ liveState: "live" }));
 
 vi.mock("~/cloud/t3team-useEnvironmentLiveState", () => ({
-  useEnvironmentLiveState: () => liveState,
+  useEnvironmentLiveState: () => state.liveState,
 }));
 vi.mock("~/components/chat/TimelineWorkGroupRows", () => ({
   WorkingTimelineRow: () => <div data-testid="real-working-row">Working for 15s</div>,
@@ -63,30 +67,34 @@ const ui = () => (
   </TimelineRowCtx>
 );
 
+function setup(liveState: EnvironmentLiveState) {
+  state.liveState = liveState;
+}
+
 describe("T3TeamWorkingTimelineRow", () => {
   it("keeps the real working row while the environment is live", async () => {
-    liveState = "live";
+    setup("live");
     await using screen = await render(ui(), { router: false });
     expect(screen.container.textContent).toBe("Working for 15s");
   });
 
   it("replaces a counting working row with a frozen offline row", async () => {
-    liveState = "offline";
+    setup("offline");
     await using screen = await render(ui(), { router: false });
     expect(screen.container.querySelector("[data-testid=real-working-row]")).toBeNull();
     expect(screen.container.textContent).toBe("Offline — last seen working");
   });
 
   it("says the cloud session ended when it did", async () => {
-    liveState = "ended";
+    setup("ended");
     await using screen = await render(ui(), { router: false });
     expect(screen.container.textContent).toBe("Cloud session ended");
   });
 
   it("resumes the real row when the connection returns", async () => {
-    liveState = "offline";
+    setup("offline");
     await using screen = await render(ui(), { router: false });
-    liveState = "live";
+    state.liveState = "live";
     await screen.rerender(ui());
     expect(screen.container.textContent).toBe("Working for 15s");
   });

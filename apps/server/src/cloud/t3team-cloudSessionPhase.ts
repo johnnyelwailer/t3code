@@ -100,13 +100,11 @@ export function deriveCloudSessionPhase(
 
   // In progress. Walk backwards through the milestones, most advanced first.
 
-  // The hold step finishing means the session was released (or reached its hold cap) while the
-  // run is still in progress, doing its cleanup. The machine is gone from that moment: calling it
-  // `ready` for the minute or two the run lingers offers a Connect that fails in pairing.
   const released = releaseHoldStep(steps);
   if (released?.status === "completed") {
     if (released.conclusion === "success") return "stopped";
     if (released.conclusion === "cancelled") return "cancelled";
+    if (released.conclusion !== "skipped") return "failed";
   }
 
   if (reached(findByPrefix(steps, "Hold the session"))) return "ready";

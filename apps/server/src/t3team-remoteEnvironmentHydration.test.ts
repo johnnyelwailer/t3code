@@ -36,7 +36,7 @@ import * as ResetCreditCoordinator from "./provider/resetCreditCoordinator.ts";
 import * as ServerSettingsModule from "./serverSettings.ts";
 import {
   RemoteEnvironmentPlacements,
-  remoteEnvironmentPlacementsLayer,
+  remoteEnvironmentPlacementsMemoryLayer,
 } from "./t3team-remoteEnvironmentPlacements.ts";
 import { cloudSessionAccessLayer } from "./t3team-remoteEnvironmentServices.ts";
 import { REPOSITORY, turn } from "./t3team-remoteEnvironmentSession.fixtures.ts";
@@ -62,7 +62,7 @@ const backgroundPolicy = Layer.mock(BackgroundPolicy.BackgroundPolicy)({
 const registryDependencies = Layer.mergeAll(
   AntigravityInstallation.AntigravityInstallation.layer,
   OpenCodeRuntime.layer.pipe(Layer.provide(OpenCodeServerLedger.layerTest)),
-  remoteEnvironmentPlacementsLayer,
+  remoteEnvironmentPlacementsMemoryLayer,
   Layer.mock(RepositoryIdentityResolver)({ resolve: () => Effect.succeed(null) }),
 ).pipe(
   Layer.provideMerge(ServerSettingsModule.layerTest()),

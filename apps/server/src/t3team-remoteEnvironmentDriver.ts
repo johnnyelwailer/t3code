@@ -7,11 +7,11 @@
  * The instance is the host's own, not the user's: its snapshot reports it disabled with no
  * models, so pickers and settings never offer it, while the dispatch gate admits it through
  * `hostProviderInstances` (`t3team-hostProviderInstances.ts`). It uses the server's shared
- * `CloudSessionAccess` and placement registry (`t3team-remoteEnvironmentServices.ts`), the
- * repository identity resolver and the HTTP client, read from the registry's context when the
+ * `CloudSessionAccess` and placement registry (`t3team-remoteEnvironmentServices.ts`) and the
+ * HTTP client, read from the registry's context when the
  * instance is created; without them every turn fails with that reason.
  */
-import { ProviderDriverKind, repositoryGroupingKeyOf } from "@t3tools/contracts";
+import { ProviderDriverKind } from "@t3tools/contracts";
 import {
   defaultProviderContinuationIdentity,
   type ProviderDriver,
@@ -23,7 +23,6 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { HttpClient } from "effect/http";
 
-import { RepositoryIdentityResolver } from "./project/RepositoryIdentityResolver.ts";
 import { makeRemoteEnvironmentAuthorizer } from "./t3team-remoteEnvironmentAuthorize.ts";
 import { RemoteEnvironmentPlacements } from "./t3team-remoteEnvironmentPlacements.ts";
 import { RemoteEnvironmentRejected } from "./t3team-remoteEnvironmentPrepare.ts";
@@ -72,20 +71,13 @@ export const RemoteEnvironmentDriver: ProviderDriver<unknown> = {
     const placements = Option.getOrUndefined(
       yield* Effect.serviceOption(RemoteEnvironmentPlacements),
     );
-    const identities = Option.getOrUndefined(
-      yield* Effect.serviceOption(RepositoryIdentityResolver),
-    );
     const http = Option.getOrUndefined(yield* Effect.serviceOption(HttpClient.HttpClient));
     const authorize =
-      access === undefined || placements === undefined || identities === undefined
+      access === undefined || placements === undefined
         ? undefined
         : makeRemoteEnvironmentAuthorizer({
             placements,
             ownSessionIds: access.ownSessionIds,
-            repositoryKeyOf: (cwd) =>
-              Effect.map(identities.resolve(cwd), (identity) =>
-                identity === null ? null : repositoryGroupingKeyOf(identity),
-              ),
           });
     const deps: RemoteEnvironmentSessionDeps = {
       open: (sessionId) =>
