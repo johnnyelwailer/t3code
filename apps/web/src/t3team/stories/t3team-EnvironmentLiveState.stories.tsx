@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { CircleDashedIcon, CloudOffIcon, WifiOffIcon } from "lucide-react";
 
+import { LiveStateLabel } from "~/cloud/t3team-LiveStateLabel";
 import { ENDED_SESSION_BANNER_COPY } from "~/cloud/t3team-endedSessionAction";
 import { ComposerBannerStack } from "~/components/chat/ComposerBannerStack";
 import { Button } from "~/components/ui/button";
@@ -21,7 +22,6 @@ function SidebarStatus({ liveState }: { readonly liveState: EnvironmentLiveState
   const override = resolveLiveStateTopStatus(liveState, "working");
   return (
     <span
-      title={override?.title}
       className={`inline-flex items-center gap-1 font-medium tabular-nums ${override?.className ?? "text-info"}`}
     >
       {override ? (
@@ -29,7 +29,11 @@ function SidebarStatus({ liveState }: { readonly liveState: EnvironmentLiveState
       ) : (
         <CircleDashedIcon aria-hidden className="size-4" />
       )}
-      <span>{override?.label ?? "Working"}</span>
+      <span>
+        <LiveStateLabel explanation={override?.title}>
+          {override?.label ?? "Working"}
+        </LiveStateLabel>
+      </span>
       {override ? null : <span aria-hidden>16s</span>}
     </span>
   );

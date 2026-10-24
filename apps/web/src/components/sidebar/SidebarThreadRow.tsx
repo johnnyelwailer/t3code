@@ -7,6 +7,7 @@ import { useT3TeamSidebarRowFacts } from "~/t3team/hooks/t3team-useSidebarRowFac
 import { withT3TeamWorkflowRunStatus } from "~/t3team/t3team-workflowRunLiveness";
 import { resolveLiveStateTopStatus } from "~/cloud/t3team-environmentLiveState";
 import { useEnvironmentLiveState } from "~/cloud/t3team-useEnvironmentLiveState";
+import { LiveStateLabel } from "~/cloud/t3team-LiveStateLabel";
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
 import { requestCustomSnooze } from "../CustomSnoozeDialog";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
@@ -1407,7 +1408,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         </Tooltip>
                       ) : (
                         <span
-                          title={liveStateTopStatus?.title}
                           className={cn(
                             "inline-flex items-center gap-1 font-medium",
                             topStatus.className,
@@ -1431,7 +1431,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                           {/* The label alone is the live region: a role="status"
                             wrapper around the ticking duration would make
                             screen readers announce every second. */}
-                          <span role="status">{topStatus.label}</span>
+                          <span role="status">
+                            <LiveStateLabel explanation={liveStateTopStatus?.title}>
+                              {topStatus.label}
+                            </LiveStateLabel>
+                          </span>
                           {liveStateTopStatus !== null ? null : status === "working" ? (
                             <span aria-hidden>
                               <WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />
