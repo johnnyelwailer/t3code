@@ -5,6 +5,8 @@ import { ProjectIconGlyph } from "../t3team-ProjectIconGlyph";
 import { InboxThreadAttribution } from "~/t3team/components/t3team-InboxSlots";
 import { useT3TeamSidebarRowFacts } from "~/t3team/hooks/t3team-useSidebarRowFacts";
 import { withT3TeamWorkflowRunStatus } from "~/t3team/t3team-workflowRunLiveness";
+import { resolveLiveStateTopStatus } from "~/cloud/t3team-environmentLiveState";
+import { useEnvironmentLiveState } from "~/cloud/t3team-useEnvironmentLiveState";
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
 import { requestCustomSnooze } from "../CustomSnoozeDialog";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
@@ -49,6 +51,7 @@ import {
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
+  WifiOffIcon,
   XIcon,
 } from "lucide-react";
 import {
@@ -713,7 +716,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     isActive: props.isActive,
     isSelected,
   });
-  const topStatus =
+  const rowTopStatus =
     status === "working"
       ? {
           // The t3team live activity label is the most specific thing we know; a native
@@ -766,6 +769,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         className: "text-success",
                       }
                     : null;
+  // t3team: a thread of an environment that is not reachable (or whose cloud session ended) must
+  // not keep claiming it is working: the last pushed state is stale and its counter would tick on.
+  const liveStateTopStatus = resolveLiveStateTopStatus(
+    useEnvironmentLiveState(thread.environmentId),
+    status,
+  );
+  const topStatus = liveStateTopStatus ?? rowTopStatus;
   const isWokeStatus = topStatus?.icon === "woke";
 
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
@@ -1397,6 +1407,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         </Tooltip>
                       ) : (
                         <span
+                          title={liveStateTopStatus?.title}
                           className={cn(
                             "inline-flex items-center gap-1 font-medium",
                             topStatus.className,
@@ -1414,12 +1425,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                             <CircleAlertIcon aria-hidden className="size-4 shrink-0" />
                           ) : topStatus.icon === "done" ? (
                             <CircleCheckIcon aria-hidden className="size-4 shrink-0" />
+                          ) : topStatus.icon === "offline" ? (
+                            <WifiOffIcon aria-hidden className="size-4 shrink-0" />
                           ) : null}
                           {/* The label alone is the live region: a role="status"
                             wrapper around the ticking duration would make
                             screen readers announce every second. */}
                           <span role="status">{topStatus.label}</span>
-                          {status === "working" ? (
+                          {liveStateTopStatus !== null ? null : status === "working" ? (
                             <span aria-hidden>
                               <WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />
                             </span>
