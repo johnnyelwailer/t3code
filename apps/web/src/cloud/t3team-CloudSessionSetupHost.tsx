@@ -1,8 +1,9 @@
 /**
- * Mounts the setup card for a thread and retires it: a session that is already ready when the
- * thread opens shows nothing (an old draft must not flash "ready"), and one that becomes ready
- * while the card is on screen says so for a moment and then goes. The card dissolves with a CSS
- * animation timed to `CLOUD_SETUP_READY_LINGER_MS`; this unmounts it after, so it takes no space.
+ * Mounts the setup card for a thread and retires it. "Ready" is only said about a session this card
+ * watched being set up: a session that is ready the first time the card knows its phase (an old
+ * draft, however late its session list arrives) shows nothing. One that becomes ready on screen
+ * says so for a moment and then goes. The card dissolves with a CSS animation timed to
+ * `CLOUD_SETUP_READY_LINGER_MS`; this unmounts it after, so it takes no space.
  */
 import { useEffect, useState } from "react";
 
@@ -19,12 +20,15 @@ export function CloudSessionSetupHost(props: CloudSessionSetupCardProps) {
   const { session } = props.facts;
   const stage = buildCloudSessionSetup(props.facts).stage;
   const sessionId = session?.sessionId ?? null;
-  const [retired, setRetired] = useState<string | null>(stage === "ready" ? sessionId : null);
+  const [watched, setWatched] = useState<string | null>(null);
+  const [retired, setRetired] = useState<string | null>(null);
+  if (stage === "working" && sessionId !== null && watched !== sessionId) setWatched(sessionId);
+  const announcing = stage === "ready" && sessionId !== null && watched === sessionId;
   useEffect(() => {
-    if (stage !== "ready" || sessionId === null) return;
+    if (!announcing || sessionId === null) return;
     const id = setTimeout(() => setRetired(sessionId), CLOUD_SETUP_READY_LINGER_MS);
     return () => clearTimeout(id);
-  }, [stage, sessionId]);
-  if (sessionId !== null && retired === sessionId) return null;
+  }, [announcing, sessionId]);
+  if (stage === "ready" && (!announcing || retired === sessionId)) return null;
   return <CloudSessionSetupCard {...props} />;
 }

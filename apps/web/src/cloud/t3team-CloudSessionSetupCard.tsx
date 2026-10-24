@@ -7,6 +7,7 @@ import {
   cloudSetupAnnouncement,
   cloudSetupLongWaitNote,
   cloudSetupMeanwhileNote,
+  cloudSetupReadyNote,
   readCloudSetup,
   type CloudSetupFacts,
 } from "./t3team-cloudSessionSetupProgress";
@@ -99,9 +100,9 @@ export function CloudSessionSetupCard({
             {failed
               ? (model.failureReason ?? "Something went wrong while the machine was starting.")
               : model.stage === "ready"
-                ? "Everything is in place. Send your first message to start."
+                ? cloudSetupReadyNote(model)
                 : slow
-                  ? `Still working: ${model.currentStep.label.toLowerCase()}. This is taking longer than usual.`
+                  ? `Still working: ${model.currentStep.label.toLowerCase()}. This is taking longer than the rough estimate.`
                   : model.activity}
           </p>
         </div>

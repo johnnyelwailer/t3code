@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { act, fakeTimers, render } from "../../test/render";
 import { CloudSessionSetupCard } from "./t3team-CloudSessionSetupCard";
 import { CLOUD_SETUP_READY_LINGER_MS, CloudSessionSetupHost } from "./t3team-CloudSessionSetupHost";
+import { CLOUD_SETUP_LOST_MESSAGE } from "./t3team-cloudSessionSetupProgress";
+import { CLOUD_SETUP_LOST_AFTER_MS, useCloudSessionLost } from "./t3team-useCloudSessionSetupCard";
 
 function session(overrides: Partial<CloudSession> = {}): CloudSession {
   return {
@@ -20,7 +22,7 @@ function session(overrides: Partial<CloudSession> = {}): CloudSession {
 }
 
 describe("CloudSessionSetupCard", () => {
-  it("names the current step, gives a range and announces politely", async () => {
+  it("names the current step, gives a labelled rough estimate and announces politely", async () => {
     await using screen = await render(
       <CloudSessionSetupCard
         facts={{ session: session(), machineConnected: false }}
@@ -31,22 +33,23 @@ describe("CloudSessionSetupCard", () => {
     const card = screen.container.querySelector("[data-cloud-setup-card]")!;
     expect(card.getAttribute("data-state")).toBe("working");
     expect(card.querySelector("[aria-current='step']")?.textContent).toContain(
-      "Preparing your workspace",
+      "Building workspace",
     );
-    expect(card.querySelector("[role='status']")?.textContent).toBe("Preparing your workspace.");
+    expect(card.querySelector("[role='status']")?.textContent).toBe("Building workspace…");
     const bar = card.querySelector("[role='progressbar']")!;
-    expect(bar.getAttribute("aria-valuetext")).toMatch(/Preparing your workspace\. About/);
+    expect(bar.getAttribute("aria-valuetext")).toMatch(/^Building workspace… About \d+ min left$/);
     expect(bar.hasAttribute("aria-valuenow")).toBe(false);
     expect(card.querySelector("[role='status']")?.closest("[aria-busy='true']")).toBeNull();
     expect(card.querySelector("[data-cloud-setup-estimate]")?.textContent).toMatch(
       /min left|minute/,
     );
+    expect(card.textContent).toContain("Rough estimate, not measured for this session");
     expect(card.querySelector("[data-cloud-setup-note='meanwhile']")?.textContent).toContain(
       "type",
     );
   });
 
-  it("says it is taking longer than usual, without a percentage or a countdown", async () => {
+  it("says it is taking longer than the rough estimate, without a percentage or a countdown", async () => {
     await using screen = await render(
       <CloudSessionSetupCard
         facts={{ session: session({ elapsedSeconds: 400 }), machineConnected: false }}
@@ -57,7 +60,7 @@ describe("CloudSessionSetupCard", () => {
     const card = screen.container.querySelector("[data-cloud-setup-card]")!;
     expect(card.getAttribute("data-slow")).toBe("true");
     expect(card.querySelector("[data-cloud-setup-estimate]")?.textContent).toBe(
-      "Taking longer than usual",
+      "Taking longer than the rough estimate",
     );
     expect(card.querySelector("[role='progressbar']")?.hasAttribute("aria-valuenow")).toBe(false);
   });
@@ -76,6 +79,47 @@ describe("CloudSessionSetupCard", () => {
     expect(
       screen.container.querySelector("[data-cloud-setup-note='long-wait']")?.textContent,
     ).toContain("cloning");
+    expect(screen.container.querySelector("[data-cloud-setup-estimate]")?.textContent).toBe(
+      "1m 40s so far",
+    );
+    expect(screen.container.textContent).not.toContain("Rough estimate");
+  });
+
+  it("only says everything is in place once the machine is connected", async () => {
+    await using screen = await render(
+      <CloudSessionSetupCard
+        facts={{ session: session({ phase: "ready" }), machineConnected: false }}
+      />,
+      { router: false },
+    );
+    expect(screen.container.textContent).not.toContain("Everything is in place");
+    expect(screen.container.textContent).toContain("Send your first message to connect");
+    await screen.rerender(
+      <CloudSessionSetupCard
+        facts={{ session: session({ phase: "ready" }), machineConnected: true }}
+      />,
+    );
+    expect(screen.container.textContent).toContain("Everything is in place");
+  });
+
+  it("names the problem when the session never showed up, and offers a fresh one", async () => {
+    const onTryAgain = vi.fn();
+    await using screen = await render(
+      <CloudSessionSetupCard
+        facts={{ session: null, machineConnected: false, lost: true }}
+        onTryAgain={onTryAgain}
+      />,
+      { router: false },
+    );
+    const card = screen.container.querySelector("[data-cloud-setup-card]")!;
+    expect(card.getAttribute("data-state")).toBe("failed");
+    expect(card.textContent).toContain(CLOUD_SETUP_LOST_MESSAGE);
+    expect(card.textContent).not.toContain("Waiting for");
+    const button = [...card.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("Try again"),
+    )!;
+    await act(() => button.click());
+    expect(onTryAgain).toHaveBeenCalledOnce();
   });
 
   it("honours forced still motion and the OS setting", async () => {
@@ -152,6 +196,19 @@ describe("CloudSessionSetupHost", () => {
     expect(screen.container.querySelector("[data-cloud-setup-card]")).toBeNull();
   });
 
+  it("shows nothing when the list arrives late with a session that is already ready", async () => {
+    await using screen = await render(
+      <CloudSessionSetupHost facts={{ session: null, machineConnected: false }} />,
+      { router: false },
+    );
+    await screen.rerender(
+      <CloudSessionSetupHost
+        facts={{ session: session({ phase: "ready" }), machineConnected: false }}
+      />,
+    );
+    expect(screen.container.querySelector("[data-cloud-setup-card]")).toBeNull();
+  });
+
   it("says ready for a moment when the session becomes ready on screen, then goes", async () => {
     using _timers = fakeTimers();
     await using screen = await render(
@@ -167,5 +224,24 @@ describe("CloudSessionSetupHost", () => {
     expect(screen.container.querySelector("[data-state='ready']")).not.toBeNull();
     await act(() => vi.advanceTimersByTime(CLOUD_SETUP_READY_LINGER_MS + 50));
     expect(screen.container.querySelector("[data-cloud-setup-card]")).toBeNull();
+  });
+});
+
+function LostProbe({ sessionId, missing }: { sessionId: string; missing: boolean }) {
+  return <span>{useCloudSessionLost(sessionId, missing) ? "lost" : "waiting"}</span>;
+}
+
+describe("useCloudSessionLost", () => {
+  it("gives a missing session a bounded wait, and forgets it once the session shows up", async () => {
+    using _timers = fakeTimers();
+    await using screen = await render(<LostProbe sessionId="session-1" missing />, {
+      router: false,
+    });
+    await act(() => vi.advanceTimersByTime(CLOUD_SETUP_LOST_AFTER_MS - 1_000));
+    expect(screen.container.textContent).toBe("waiting");
+    await act(() => vi.advanceTimersByTime(1_000));
+    expect(screen.container.textContent).toBe("lost");
+    await screen.rerender(<LostProbe sessionId="session-1" missing={false} />);
+    expect(screen.container.textContent).toBe("waiting");
   });
 });

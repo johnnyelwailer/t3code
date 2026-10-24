@@ -120,8 +120,6 @@ export const claimedSessions = (input: {
         providerKind: "github_actions",
         phase,
         elapsedSeconds: Math.max(0, Math.floor(age / 1000)),
-        // A claimed standby's clock started when the standby did, long before this claim, and the
-        // ledger does not know that moment: no honest remainder to report.
         remainingSeconds: null,
         machineLabel: input.machineLabel,
         failureReason: phase === "failed" ? "The warm machine did not come up." : null,

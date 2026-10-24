@@ -23,7 +23,6 @@ const ENDED_ENVIRONMENT = EnvironmentId.make("env-ws");
  */
 
 function SidebarStatus({ liveState }: { readonly liveState: EnvironmentLiveState }) {
-  // The row keeps its icon; the word, colour and counter come from the same override the row uses.
   const override = resolveLiveStateSidebarOverride(liveState);
   return (
     <span

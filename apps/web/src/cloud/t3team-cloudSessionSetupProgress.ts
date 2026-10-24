@@ -1,6 +1,8 @@
 /** Setup card adapter for the canonical queued-send steps and provisioning estimate. */
 export {
   buildCloudSessionSetup,
+  CLOUD_SETUP_LOST_MESSAGE,
+  cloudSetupRecovery,
   type CloudSetupDelivery,
   type CloudSetupFacts,
   type CloudSetupModel,
@@ -12,5 +14,6 @@ export {
   cloudSetupAnnouncement,
   cloudSetupLongWaitNote,
   cloudSetupMeanwhileNote,
+  cloudSetupReadyNote,
   formatCloudSetupRemaining,
 } from "./t3team-cloudSessionSetupCopy";

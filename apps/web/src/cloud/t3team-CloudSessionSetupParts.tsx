@@ -89,7 +89,7 @@ export function SetupLiveReadout({
       {working ? (
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs">
           <span
-            data-cloud-setup-estimate={readout.slow ? "slow" : "range"}
+            data-cloud-setup-estimate={readout.slow ? "slow" : "estimate"}
             className={cn(
               "font-medium",
               readout.slow ? "text-warning-foreground" : "text-foreground/80",

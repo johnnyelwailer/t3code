@@ -31,8 +31,9 @@ import { useComposerDraftStore } from "~/composerDraftStore";
 import { useClientSettings } from "~/hooks/useSettings";
 import { selectProjectGroupingSettings } from "~/logicalProject";
 import { useProjects } from "~/state/entities";
-import type { CloudQueuedSendCardInput } from "./t3team-CloudQueuedSendCard";
 import { resolveCloudQueuedSendFacts } from "./t3team-cloudQueuedSendFacts";
+import type { CloudQueuedSendCardInput } from "./t3team-cloudSessionSetupModel";
+import type { CloudSetupSessionSource } from "./t3team-useCloudSessionSetupCard";
 import {
   presentCloudQueuedSendProgress,
   type CloudQueuedSendStepFacts,
@@ -52,8 +53,8 @@ export function useCloudSessionComposerGate(input: {
   readonly hasQueuedBind: boolean;
   /** The thread card's input while the draft's first message waits; null otherwise. */
   readonly card: CloudQueuedSendCardInput | null;
-  /** The shared session controller, so the setup card reads the same list and creates through it. */
-  readonly cloud: ReturnType<typeof useCloudSessionController>;
+  /** The shared session list, so the setup card reads the same list and creates through it. */
+  readonly cloud: CloudSetupSessionSource;
 } {
   const cloud = useCloudSessionController();
   const { draftId } = input;
@@ -136,7 +137,12 @@ export function useCloudSessionComposerGate(input: {
     cancelQueuedSend,
     bannerItem,
     hasQueuedBind: queued !== null,
-    cloud,
+    cloud: {
+      sessions: cloud.sessions,
+      loading: cloud.loading,
+      onCreate: cloud.onCreate,
+      primaryEnvironmentId: cloud.primaryEnvironmentId,
+    },
     card:
       stepFacts === null
         ? null

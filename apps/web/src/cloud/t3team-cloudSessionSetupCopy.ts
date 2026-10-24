@@ -1,37 +1,18 @@
 /**
- * The words of the setup card that are not step labels: the time range, what it is based on, the
- * honest long-wait explanation, what the user can do meanwhile, and what assistive tech hears. Pure.
+ * The words of the setup card that are not step labels: the rough time left and what it is based
+ * on, the honest long-wait explanation, what the user can do meanwhile, and what assistive tech
+ * hears. Pure.
  */
 import type { CloudSetupModel } from "./t3team-cloudSessionSetupModel";
 
-/** "About 1-2 min left". Rounds to friendly numbers; never says zero. */
-export function formatCloudSetupRemaining(lowSeconds: number, highSeconds: number): string {
-  if (highSeconds <= 45) return "Less than a minute left";
-  if (highSeconds <= 90) return "About a minute left";
-  const round = highSeconds > 600 ? 5 : 1;
-  const high = Math.ceil(highSeconds / 60 / round) * round;
-  const low = Math.min(Math.max(1, Math.round(lowSeconds / 60 / round) * round), high);
-  return low >= high ? `About ${high} min left` : `About ${low}–${high} min left`;
-}
+/** Says where the only time figure comes from, next to it. */
+export const CLOUD_SETUP_ROUGH_BASIS = "Rough estimate, not measured for this session";
 
-/** "1-2 min", for the basis line ("Usually 1-2 min"). */
-function formatCloudSetupTypical(lowSeconds: number, highSeconds: number): string {
-  if (highSeconds <= 90) return "about a minute";
-  const high = Math.ceil(highSeconds / 60);
-  const low = Math.min(Math.max(1, Math.round(lowSeconds / 60)), high);
-  return low >= high ? `about ${high} min` : `${low}–${high} min`;
-}
-
-export function basisTextOf(model: CloudSetupModel): string | null {
-  const { timing } = model;
-  const range = formatCloudSetupTypical(timing.readyLowSeconds, timing.readyHighSeconds);
-  if (model.measured) {
-    const typical = `Usually ${range}`;
-    const noun = timing.scope === "project" ? "sessions of this project" : "sessions like this";
-    const count = timing.samples;
-    return `${typical}, from your last ${count === 1 ? `1 of ${noun}` : `${count} ${noun}`}`;
-  }
-  return `Rough estimate: ${range}, based on fleet provisioning timing`;
+/** "About 2 min left". One rounded figure, never a range, never zero. */
+export function formatCloudSetupRemaining(seconds: number): string {
+  if (seconds <= 45) return "Less than a minute left";
+  if (seconds <= 90) return "About a minute left";
+  return `About ${Math.ceil(seconds / 60)} min left`;
 }
 
 /** What assistive tech hears: changes with the step, never with the clock. */
@@ -43,14 +24,17 @@ export function cloudSetupAnnouncement(model: CloudSetupModel): string {
       : model.activity;
 }
 
+/** The line under the title once the session is ready; only claims a connection that exists. */
+export function cloudSetupReadyNote(model: CloudSetupModel): string {
+  return model.machineConnected
+    ? "Everything is in place. Send your first message to start."
+    : "The machine is up. Send your first message to connect to it and start.";
+}
+
 /** The honest long-wait explanation, or null when the setup is the quick kind. */
 export function cloudSetupLongWaitNote(model: CloudSetupModel): string | null {
   if (model.stage !== "working" || !model.longWait) return null;
-  const history =
-    model.measured && model.timing.scope === "project"
-      ? "Earlier sessions of this project give the range above."
-      : "The first time for a project can take several minutes.";
-  return `Your repository is being prepared: cloning it and installing its dependencies. ${history}`;
+  return "Your repository is being prepared: cloning it and installing its dependencies. This can take several minutes, and there is no time estimate for it yet.";
 }
 
 /** The one line about typing meanwhile; true to what the composer does. */
