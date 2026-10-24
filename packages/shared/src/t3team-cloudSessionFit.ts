@@ -99,6 +99,22 @@ const STARTING_PHASES = new Set<CloudSession["phase"]>([
   "starting",
 ]);
 
+const SESSION_NAME_LIMIT = 40;
+
+/**
+ * The name segment a session's correlation tag carries (`[<segment>.s<random>]`): anything outside
+ * `[A-Za-z0-9_-]` becomes `-`, cut at 40 characters, no leading or trailing dashes. A listed
+ * session's `name` is this segment, so a repository name is compared through it too.
+ */
+export function cloudSessionNameSegment(value: string): string {
+  return value
+    .replace(/[^A-Za-z0-9_-]/g, "-")
+    .slice(0, SESSION_NAME_LIMIT)
+    .replace(/^-+|-+$/g, "");
+}
+
+const comparableName = (value: string) => cloudSessionNameSegment(value.trim()).toLowerCase();
+
 function remainingSecondsOf(session: FitSession, nowMs: number): number | null {
   const endsAtMs = session.endsAt === undefined ? Number.NaN : Date.parse(session.endsAt);
   if (Number.isFinite(endsAtMs)) return Math.floor((endsAtMs - nowMs) / 1000);
@@ -108,12 +124,22 @@ function remainingSecondsOf(session: FitSession, nowMs: number): number | null {
 const startedAtMs = (session: FitSession) =>
   session.startedAt === undefined ? 0 : Date.parse(session.startedAt) || 0;
 
+const bySessionId = (left: FitSession, right: FitSession) =>
+  left.sessionId < right.sessionId ? -1 : left.sessionId > right.sessionId ? 1 : 0;
+
 /**
- * The listed session a project's work should go to, before attaching: reachable through the
- * broker, started for the project's repository (`name`), not past `minRemainingSeconds` of its
- * hold. A ready session wins (the one with the most hold left), else one still starting (the
- * newest); null means none fits and a new one is needed. A project without a repository never
- * matches a listed session, since a plain session's name does not identify its project.
+ * The listed session a project's work should go to, before attaching. A listed session carries
+ * only its name segment, the project's repository NAME (no host or owner: the broker's own
+ * `repository` is the fleet repository the run executes in, not the project's), so `hive/app` and
+ * `foo/app` are both candidates here. The owner-qualified check is the one after attaching:
+ * `isSameCloudSessionProject` compares the session's own project by `repositoryGroupingKeyOf`,
+ * and a session that fails it is passed back in `excludeSessionIds`.
+ *
+ * A candidate is reachable through the broker and named for the repository. A ready one with its
+ * environment linked and at least `minRemainingSeconds` of hold left wins (most hold left, then
+ * session id); a hold of unknown length does not qualify. Otherwise the newest one still starting
+ * (including a ready one whose environment is not linked yet) is returned, so no duplicate is
+ * started. Null means none fits. A project without a repository never matches a listed session.
  */
 export function selectFittingCloudSession<S extends FitSession>(input: {
   readonly sessions: ReadonlyArray<S>;
@@ -122,7 +148,7 @@ export function selectFittingCloudSession<S extends FitSession>(input: {
   readonly minRemainingSeconds?: number;
   readonly excludeSessionIds?: ReadonlyArray<string>;
 }): { readonly kind: CloudSessionFit["kind"]; readonly session: S } | null {
-  const repositoryName = input.repositoryName?.trim().toLowerCase() ?? "";
+  const repositoryName = input.repositoryName === null ? "" : comparableName(input.repositoryName);
   if (repositoryName === "") return null;
   const minimum = input.minRemainingSeconds ?? CLOUD_SESSION_MIN_REMAINING_SECONDS;
   const excluded = new Set(input.excludeSessionIds ?? []);
@@ -130,19 +156,24 @@ export function selectFittingCloudSession<S extends FitSession>(input: {
     (session) =>
       !excluded.has(session.sessionId) &&
       session.transport === "nexi_broker" &&
-      session.name?.trim().toLowerCase() === repositoryName,
+      session.name !== undefined &&
+      comparableName(session.name) === repositoryName,
   );
   const ready = candidates
     .filter((session) => session.phase === "ready" && Boolean(session.environmentId))
-    .map((session) => ({ session, remaining: remainingSecondsOf(session, input.nowMs) }))
-    .filter((entry) => entry.remaining === null || entry.remaining >= minimum)
+    .flatMap((session) => {
+      const remaining = remainingSecondsOf(session, input.nowMs);
+      return remaining === null || remaining < minimum ? [] : [{ session, remaining }];
+    })
     .sort(
-      (left, right) =>
-        (right.remaining ?? Number.MAX_SAFE_INTEGER) - (left.remaining ?? Number.MAX_SAFE_INTEGER),
+      (left, right) => right.remaining - left.remaining || bySessionId(left.session, right.session),
     )[0];
   if (ready !== undefined) return { kind: "ready", session: ready.session };
   const starting = candidates
-    .filter((session) => STARTING_PHASES.has(session.phase))
-    .sort((left, right) => startedAtMs(right) - startedAtMs(left))[0];
+    .filter(
+      (session) =>
+        STARTING_PHASES.has(session.phase) || (session.phase === "ready" && !session.environmentId),
+    )
+    .sort((left, right) => startedAtMs(right) - startedAtMs(left) || bySessionId(left, right))[0];
   return starting === undefined ? null : { kind: "starting", session: starting };
 }
