@@ -110,6 +110,10 @@ export function listT3TeamContextPurgeCandidates(limit: number) {
       SELECT sha256, path, size_bytes
       FROM t3team_context_blobs
       WHERE purged_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM t3team_context_artifacts
+          WHERE t3team_context_artifacts.blob_sha256 = t3team_context_blobs.sha256
+        )
       ORDER BY last_accessed_at ASC
       LIMIT ${limit}
     `;
