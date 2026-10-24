@@ -100,7 +100,7 @@ export type ProjectMachineDefinition = typeof ProjectMachineDefinition.Type;
  * that cannot be resolved into a definition at all is a `ProjectMachineRejectedCandidate`.
  */
 export const ProjectMachineStatus = Schema.Union([
-  Schema.TaggedStruct("None", {}),
+  Schema.TaggedStruct("None", { reason: Schema.optional(TrimmedNonEmptyString) }),
   Schema.TaggedStruct("Detected", { definition: ProjectMachineDefinition }),
   Schema.TaggedStruct("Ready", {
     definition: ProjectMachineDefinition,

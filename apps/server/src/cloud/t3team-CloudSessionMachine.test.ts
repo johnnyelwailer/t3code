@@ -5,7 +5,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { type Project, ProjectId } from "@t3tools/contracts";
+import { ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Effect from "effect/Effect";
@@ -14,6 +14,7 @@ import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import { afterEach, beforeEach } from "vite-plus/test";
 
+import { PullRequestProviderRegistry } from "../pullRequest/PullRequestProviderRegistry.ts";
 import { ProjectService } from "../project/ProjectService.ts";
 import * as ProjectMachineDiscovery from "../project/t3team-ProjectMachineDiscovery.ts";
 import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
@@ -72,14 +73,25 @@ const sessionIn = <A, E>(
 ) => {
   const projects = Layer.mock(ProjectService)({
     getById: () =>
-      Effect.succeed(Option.some({ workspaceRoot: root, title: "IES NG" } as unknown as Project)),
+      Effect.succeed(
+        Option.some({
+          id: projectId,
+          workspaceRoot: root,
+          title: "IES NG",
+          defaultModelSelection: null,
+          scripts: [],
+          createdAt: "2026-10-24T00:00:00Z",
+          updatedAt: "2026-10-24T00:00:00Z",
+          deletedAt: null,
+        }),
+      ),
   });
   const unavailable = (host: string) =>
-    Effect.fail(new GitHubApi.GitHubApiAuthenticationError({ host, operation: "test" }) as never);
+    Effect.fail(new GitHubApi.GitHubApiAuthenticationError({ host, operation: "test" }));
   const gh = Layer.mock(GitHubApi.GitHubApi)({
     credential: (host) =>
       host === "nexplore.ghe.com" && token !== ""
-        ? Effect.succeed({ token: Redacted.make(token), fingerprint: "fp" } as never)
+        ? Effect.succeed({ token: Redacted.make(token), fingerprint: "fp" })
         : unavailable(host),
     rest: (input) =>
       input.host === "nexplore.ghe.com" && input.path === "user" && token !== ""
@@ -89,11 +101,19 @@ const sessionIn = <A, E>(
             body: JSON.stringify({ login: "pj", id: 7, name: "Philip J", email: null }),
             truncated: false,
             invalidUtf8: false,
-          } as never)
+          })
         : unavailable(input.host),
   });
   const dependencies = Layer.mergeAll(
-    ProjectMachineDiscovery.layer.pipe(Layer.provide(projects)),
+    ProjectMachineDiscovery.layer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          projects,
+          VcsProcess.layer,
+          Layer.mock(PullRequestProviderRegistry)({ get: () => null, kinds: [] }),
+        ),
+      ),
+    ),
     VcsProcess.layer,
     gh,
   ).pipe(Layer.provideMerge(NodeServices.layer));
