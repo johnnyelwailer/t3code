@@ -34,8 +34,7 @@ export function resolveEndedSessionAction(input: {
 
 export const ENDED_SESSION_BANNER_COPY = {
   title: "This cloud session has ended",
-  description:
-    "Your threads are saved here. Start another cloud session to keep working in the same workspace.",
+  description: "Your threads are saved. Start another session to keep working here.",
   start: "Start another cloud session",
   starting: "Starting a cloud session…",
   connect: "Connect to the new session",
