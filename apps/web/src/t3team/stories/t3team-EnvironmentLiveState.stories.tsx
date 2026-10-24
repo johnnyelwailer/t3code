@@ -1,6 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { CircleDashedIcon, WifiOffIcon } from "lucide-react";
+import { CircleDashedIcon, CloudOffIcon, WifiOffIcon } from "lucide-react";
 
+import { ENDED_SESSION_BANNER_COPY } from "~/cloud/t3team-endedSessionAction";
+import { ComposerBannerStack } from "~/components/chat/ComposerBannerStack";
+import { Button } from "~/components/ui/button";
 import {
   resolveLiveStateTopStatus,
   type EnvironmentLiveState,
@@ -78,3 +81,34 @@ export const Offline: Story = { render: () => <Panel liveState="offline" /> };
 
 /** The cloud session no longer exists: nothing is coming back. */
 export const Ended: Story = { render: () => <Panel liveState="ended" /> };
+
+/**
+ * The composer banner of an ended cloud session, with the copy the app uses
+ * (`ENDED_SESSION_BANNER_COPY`) and the stack it renders in. The real action is
+ * `CloudSessionEndedActions`, which needs the session controller; this shows the idle state.
+ */
+export const EndedSessionBanner: Story = {
+  render: () => (
+    <div className="mx-auto w-full max-w-3xl pt-16">
+      <ComposerBannerStack
+        items={[
+          {
+            id: "cloud-session-ended:story",
+            variant: "warning",
+            icon: <CloudOffIcon aria-hidden="true" />,
+            title: ENDED_SESSION_BANNER_COPY.title,
+            description: ENDED_SESSION_BANNER_COPY.description,
+            actions: (
+              <Button size="xs" variant="ghost">
+                {ENDED_SESSION_BANNER_COPY.start}
+              </Button>
+            ),
+          },
+        ]}
+      />
+      <div className="rounded-b-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+        Ask anything…
+      </div>
+    </div>
+  ),
+};
