@@ -71,7 +71,6 @@ export function CloudSessionEndedActions({
 }) {
   const cloud = useCloudSessionController();
   const { onPanelVisibilityChange } = cloud;
-  // Keep the session list fresh while the banner is showing: the new session's phase drives it.
   useEffect(() => {
     onPanelVisibilityChange(true);
     return () => onPanelVisibilityChange(false);

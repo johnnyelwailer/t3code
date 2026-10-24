@@ -43,4 +43,15 @@ describe("withCloudSessionEndedBanner", () => {
       "cloud-session-ended:env-1",
     ]);
   });
+
+  it("keeps another environment's 'is offline' notice", () => {
+    const result = withCloudSessionEndedBanner(
+      [item("environment-unavailable:env-2"), item("environment-unavailable:env-1")],
+      item("cloud-session-ended:env-1"),
+    );
+    expect(result.map((entry) => entry.id)).toEqual([
+      "environment-unavailable:env-2",
+      "cloud-session-ended:env-1",
+    ]);
+  });
 });

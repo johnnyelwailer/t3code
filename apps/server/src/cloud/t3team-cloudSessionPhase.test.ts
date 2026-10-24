@@ -196,6 +196,11 @@ describe("deriveCloudSessionPhase", () => {
       expect(deriveCloudSessionPhase(run(), steps)).toBe("cancelled");
     });
 
+    it("calls a session whose hold failed failed, not ready, while the run winds down", () => {
+      const steps = [...upToHold, held(GREEN_RUN_STEPS[10], "completed", "failure")];
+      expect(deriveCloudSessionPhase(run(), steps)).toBe("failed");
+    });
+
     it("does not read the finished handoff-window hold as a release: the release hold is still running", () => {
       const steps = [
         ...upToHold,

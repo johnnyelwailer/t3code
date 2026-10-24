@@ -1,31 +1,42 @@
 import { EnvironmentId, ProjectId, type CloudSession } from "@t3tools/contracts";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi, type Mock } from "vite-plus/test";
 
 import { render } from "../../../test/render";
 
 const environmentId = EnvironmentId.make("env-ws");
 const restartProjectId = ProjectId.make("project-restart");
-const onCreate = vi.fn();
-const onSessionAction = vi.fn();
-const onPanelVisibilityChange = vi.fn();
-let controller: Record<string, unknown> = {};
+
+interface ControllerMock {
+  controller: Record<string, unknown>;
+  onCreate: Mock;
+  onSessionAction: Mock;
+  onPanelVisibilityChange: Mock;
+}
+
+const state = vi.hoisted((): ControllerMock => ({
+  controller: {},
+  onCreate: vi.fn(),
+  onSessionAction: vi.fn(),
+  onPanelVisibilityChange: vi.fn(),
+}));
 
 vi.mock("~/cloud/t3team-useCloudSessionController", () => ({
-  useCloudSessionController: () => controller,
+  useCloudSessionController: () => state.controller,
 }));
 
 const { CloudSessionEndedActions } = await import("./t3team-CloudSessionEndedActions");
 
 function setController(overrides: Record<string, unknown>) {
-  onCreate.mockClear();
-  onSessionAction.mockClear();
-  controller = {
+  state.onCreate.mockReset();
+  state.onSessionAction.mockReset();
+  state.onPanelVisibilityChange.mockReset();
+  state.controller = {
     available: true,
     sessions: [],
     createPending: false,
-    onCreate,
-    onSessionAction,
-    onPanelVisibilityChange,
+    onCreate: state.onCreate,
+    onSessionAction: state.onSessionAction,
+    onPanelVisibilityChange: state.onPanelVisibilityChange,
     ...overrides,
   };
 }
@@ -41,7 +52,7 @@ describe("CloudSessionEndedActions", () => {
       { router: false },
     );
     await screen.getByRole("button", { name: "Start another cloud session" }).click();
-    expect(onCreate).toHaveBeenCalledWith(restartProjectId);
+    expect(state.onCreate).toHaveBeenCalledWith(restartProjectId);
   });
 
   it("starts a plain session when the ended one had no project", async () => {
@@ -51,7 +62,7 @@ describe("CloudSessionEndedActions", () => {
       { router: false },
     );
     await screen.getByRole("button", { name: "Start another cloud session" }).click();
-    expect(onCreate).toHaveBeenCalledWith(undefined);
+    expect(state.onCreate).toHaveBeenCalledWith(undefined);
   });
 
   it("shows a disabled progress button while the new session starts", async () => {
@@ -88,7 +99,7 @@ describe("CloudSessionEndedActions", () => {
       { router: false },
     );
     await screen.getByRole("button", { name: "Connect to the new session" }).click();
-    expect(onSessionAction).toHaveBeenCalledWith(ready);
+    expect(state.onSessionAction).toHaveBeenCalledWith(ready);
   });
 
   it("offers nothing where cloud sessions cannot be started", async () => {
