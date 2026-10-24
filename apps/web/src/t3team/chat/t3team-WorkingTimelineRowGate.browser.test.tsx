@@ -1,7 +1,8 @@
+import { EnvironmentId } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import type { EnvironmentLiveState } from "~/cloud/t3team-environmentLiveState";
-import { TimelineRowCtx } from "~/components/chat/timelineRowContext";
+import { TimelineRowCtx, type TimelineRowSharedState } from "~/components/chat/timelineRowContext";
 
 import { render } from "../../../test/render";
 
@@ -16,10 +17,49 @@ vi.mock("~/components/chat/TimelineWorkGroupRows", () => ({
 
 const { T3TeamWorkingTimelineRow } = await import("./t3team-WorkingTimelineRowGate");
 
-// The gate reads `threadRef` from context; the mocked hook ignores its value.
+const context: TimelineRowSharedState = {
+  citationRequest: null,
+  listRef: { current: null },
+  timestampFormat: "locale",
+  routeThreadKey: "thread",
+  threadRef: null,
+  markdownCwd: undefined,
+  resolvedTheme: "light",
+  workspaceRoot: undefined,
+  skills: [],
+  runs: [],
+  activeThreadEnvironmentId: EnvironmentId.make("cloud"),
+  onRevertToTurnCount: vi.fn(),
+  onUseArtifactTemplate: vi.fn(),
+  onSendAppMessage: undefined,
+  onAppFullscreenChange: vi.fn(),
+  onRunShellCommand: undefined,
+  findActive: false,
+  onImageExpand: vi.fn(),
+  onOpenTurnDiff: vi.fn(),
+  onOpenThread: vi.fn(),
+  workflowOpening: null,
+  onForkFromRun: async () => {},
+  onRollbackCheckpoint: vi.fn(),
+  onToggleTurnFold: vi.fn(),
+  onToggleAttemptFold: vi.fn(),
+  onFileOpen: vi.fn(),
+  onFileDownload: vi.fn(),
+  openPullRequest: vi.fn(),
+  onToggleWorkGroup: vi.fn(),
+  onToggleWorkEntry: vi.fn(),
+  onCancelWorktreeSetup: null,
+  retryableWorkspacePreparationRunIds: new Set(),
+  onRetryWorkspacePreparation: null,
+  onWorktreeSetupWorkLocally: null,
+  onOpenWorktreeSetupTerminal: null,
+  workGroupViewState: { scrollPositions: new Map(), expandedEntries: new Set() },
+  threadJobsController: undefined,
+  backgroundJobStarters: new Map(),
+};
 const ui = () => (
-  <TimelineRowCtx value={{ threadRef: null } as never}>
-    <T3TeamWorkingTimelineRow row={{ kind: "working" } as never} />
+  <TimelineRowCtx value={context}>
+    <T3TeamWorkingTimelineRow row={{ kind: "working", id: "working", createdAt: null }} />
   </TimelineRowCtx>
 );
 

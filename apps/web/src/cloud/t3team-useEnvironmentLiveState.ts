@@ -35,7 +35,6 @@ const NO_ENVIRONMENT_ATOM = Atom.make(false).pipe(Atom.withLabel("t3team-session
 /** True once `active` has held for `graceMs`; resets as soon as it stops holding. */
 function useGraceElapsed(active: boolean, graceMs: number): boolean {
   const [grace, setGrace] = useState({ active: false, elapsed: false });
-  // A change of `active` restarts the grace: adjusted while rendering, not from an effect.
   if (grace.active !== active) setGrace({ active, elapsed: false });
   useEffect(() => {
     if (!active) return;

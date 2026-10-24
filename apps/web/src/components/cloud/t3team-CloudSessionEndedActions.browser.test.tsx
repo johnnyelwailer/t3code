@@ -21,7 +21,7 @@ function setController(overrides: Record<string, unknown>) {
   onSessionAction.mockClear();
   controller = {
     available: true,
-    sessions: [] as CloudSession[],
+    sessions: [],
     createPending: false,
     onCreate,
     onSessionAction,
@@ -68,12 +68,17 @@ describe("CloudSessionEndedActions", () => {
   });
 
   it("offers to connect once the new session is ready for the same environment", async () => {
-    const ready = {
+    const ready: CloudSession = {
       sessionId: "9",
       phase: "ready",
       environmentId: "env-ws",
       providerKind: "github_actions",
-    } as CloudSession;
+      elapsedSeconds: 600,
+      remainingSeconds: 3600,
+      machineLabel: "ubuntu",
+      failureReason: null,
+      detailsUrl: null,
+    };
     setController({ sessions: [ready] });
     await using screen = await render(
       <CloudSessionEndedActions
