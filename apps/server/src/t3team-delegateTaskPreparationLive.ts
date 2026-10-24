@@ -12,6 +12,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
+import { CloudSessionService } from "./cloud/t3team-CloudSessionService.ts";
 import { GitWorkflowService } from "./git/GitWorkflowService.ts";
 import {
   DelegatedTaskPreparation,
@@ -32,6 +33,11 @@ import {
   resolveEnvironmentBinding,
   T3TEAM_DELEGATION_EXTENSIONS,
 } from "./t3team-delegateTaskExtensions.ts";
+import {
+  CLOUD_SESSION_EXTENSION,
+  parseCloudSessionExtension,
+  placeOnCloudSession,
+} from "./t3team-delegateTaskCloudSession.ts";
 import { makeDelegatedChildRecorder } from "./t3team-delegateTaskRecordChild.ts";
 import {
   delegatedWorktreeKey,
@@ -62,6 +68,7 @@ const make = Effect.gen(function* () {
   const pressureNotes = delegationPressureNotes(
     Option.getOrUndefined(yield* Effect.serviceOption(ResourcePressureMonitor)),
   );
+  const cloudSessions = Option.getOrUndefined(yield* Effect.serviceOption(CloudSessionService));
   const workflows = Option.getOrUndefined(
     yield* Effect.serviceOption(T3TeamWorkflowEngineRegistry),
   );
@@ -87,15 +94,28 @@ const make = Effect.gen(function* () {
       ),
     );
 
+  const projectRepositoryName = (projectId: Parameters<typeof projects.getShell>[0]) =>
+    projects.getShell(projectId).pipe(
+      Effect.map((shell) =>
+        Option.isSome(shell) ? (shell.value.repositoryIdentity?.name ?? null) : null,
+      ),
+      Effect.orElseSucceed(() => null),
+    );
+
   const preparation: DelegatedTaskPreparationShape = {
     workspaceIsolation: true,
-    extensions: T3TEAM_DELEGATION_EXTENSIONS,
+    extensions:
+      cloudSessions === undefined
+        ? T3TEAM_DELEGATION_EXTENSIONS
+        : [...T3TEAM_DELEGATION_EXTENSIONS, CLOUD_SESSION_EXTENSION],
     prepare: (input) =>
       Effect.gen(function* () {
         yield* rejectUnsupportedDelegationInput(input, preparation);
         const parsed = parseDelegationExtensions(input.extensions);
         if (!parsed.ok) return yield* failure("invalid_request", parsed.message);
         const extensions = parsed.value;
+        const cloudSession = parseCloudSessionExtension(input.extensions?.cloudSession);
+        if (!cloudSession.ok) return yield* failure("invalid_request", cloudSession.message);
         const notes: Array<string> = [];
 
         const effort = applyDelegationEffort({
@@ -140,14 +160,22 @@ const make = Effect.gen(function* () {
               environment: environment.binding,
               skills: extensions.skills,
             });
-            if (workspace === undefined) return childNotes;
+            const cloudNotes =
+              cloudSessions === undefined || cloudSession.value === undefined
+                ? []
+                : yield* placeOnCloudSession(cloudSessions, {
+                    request: cloudSession.value,
+                    projectId: parentThread.projectId,
+                    repositoryName: yield* projectRepositoryName(parentThread.projectId),
+                  });
+            if (workspace === undefined) return [...childNotes, ...cloudNotes];
             const setup = yield* startChildSetupScript({
               runner: setupScripts,
               threadId: childThreadId,
               projectId: parentThread.projectId,
               worktreePath: workspace.worktreePath,
             });
-            return [...childNotes, setup];
+            return [...childNotes, ...cloudNotes, setup];
           });
 
         return {
