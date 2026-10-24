@@ -136,13 +136,13 @@ export function selectFittingCloudSession<S extends FitSession>(input: {
     .filter((session) => session.phase === "ready" && Boolean(session.environmentId))
     .map((session) => ({ session, remaining: remainingSecondsOf(session, input.nowMs) }))
     .filter((entry) => entry.remaining === null || entry.remaining >= minimum)
-    .toSorted(
+    .sort(
       (left, right) =>
         (right.remaining ?? Number.MAX_SAFE_INTEGER) - (left.remaining ?? Number.MAX_SAFE_INTEGER),
     )[0];
   if (ready !== undefined) return { kind: "ready", session: ready.session };
   const starting = candidates
     .filter((session) => STARTING_PHASES.has(session.phase))
-    .toSorted((left, right) => startedAtMs(right) - startedAtMs(left))[0];
+    .sort((left, right) => startedAtMs(right) - startedAtMs(left))[0];
   return starting === undefined ? null : { kind: "starting", session: starting };
 }
