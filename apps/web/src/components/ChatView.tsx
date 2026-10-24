@@ -375,7 +375,7 @@ import {
 import { useDraftHeroLayoutTransition } from "./chat/useDraftHeroLayoutTransition";
 import { useLocalDispatchState } from "./chat/useLocalDispatchState";
 import { draftFanoutSelectionsAtom, draftSendState } from "./chat/chatViewSend";
-import { readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
+import { readServerFeatureFlag, readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
 import {
   isCompactCommandMessage,
   type LocalThreadErrorEntry,
@@ -1318,6 +1318,7 @@ export default function ChatView(props: ChatViewProps) {
     ],
     lockedProvider,
     lockedInstanceId: activeRuntime?.providerInstanceId ?? activeThreadModelInstanceId,
+    preferReadyProvider: readServerFeatureFlag(serverConfig, "AGENTS_PREFER_READY_PROVIDER"),
   });
   const selectedProvider = selectedProviderEntry?.driverKind ?? requestedDriverKind;
   const activeProviderInstanceId = selectedProviderEntry?.instanceId ?? null;

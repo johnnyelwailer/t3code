@@ -9,6 +9,7 @@ import type { UnifiedSettings } from "@t3tools/contracts/settings";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 
 import { resolveComposerProviderSelection } from "~/components/ChatView.logic";
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import {
   getAppModelOptionsForInstance,
   resolveAppModelSelectionForInstance,
@@ -70,6 +71,7 @@ export function useT3TeamKickoffProviderSelection(input: {
     () => resolveProjectSettings(settings, projectId).settings.defaultModelSelection ?? null,
     [projectId, settings],
   );
+  const preferReadyProvider = useFeatureFlag("AGENTS_PREFER_READY_PROVIDER");
   const [picked, setPicked] = useState<ModelSelection | null>(null);
   const selectedProviderEntry = useMemo(
     () =>
@@ -78,8 +80,9 @@ export function useT3TeamKickoffProviderSelection(input: {
         candidateInstanceIds: [picked?.instanceId, projectDefault?.instanceId],
         lockedProvider: null,
         lockedInstanceId: null,
+        preferReadyProvider,
       }).selectedProviderEntry,
-    [picked?.instanceId, projectDefault?.instanceId, providerInstanceEntries],
+    [picked?.instanceId, preferReadyProvider, projectDefault?.instanceId, providerInstanceEntries],
   );
   const selectedInstanceId =
     selectedProviderEntry?.instanceId ?? NO_PROVIDER_MODEL_SELECTION.instanceId;
