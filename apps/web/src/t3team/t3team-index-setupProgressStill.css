@@ -1,0 +1,32 @@
+/* The setup card's reduced-motion rules (t3team-index-setupProgress.css has the motion). */
+
+/*
+ * Reduced motion. The card reads `prefers-reduced-motion` itself (useMediaQuery) and stamps
+ * data-motion="still", so one rule set serves the OS setting and the story that forces it.
+ * What remains is a still, fully readable card: the bar just moves forward each second.
+ */
+.t3team-setup-card[data-motion="still"],
+.t3team-setup-card[data-motion="still"][data-state="ready"] {
+  animation: none;
+}
+.t3team-setup-card[data-motion="still"] :is(.t3team-setup-fill, .t3team-setup-fill::after) {
+  animation: none;
+}
+.t3team-setup-card[data-motion="still"]
+  :is(.t3team-setup-orb-ring, .t3team-setup-orb-core, .t3team-setup-step-dot) {
+  animation: none;
+}
+.t3team-setup-card[data-motion="still"] .t3team-setup-orb-ring {
+  opacity: 0.35;
+  transform: scale(0.8);
+}
+.t3team-setup-card[data-motion="still"] .t3team-setup-fill::after {
+  display: none;
+}
+.t3team-setup-card[data-motion="still"] .t3team-setup-shimmer {
+  animation: none;
+  color: var(--foreground);
+  background: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+}
