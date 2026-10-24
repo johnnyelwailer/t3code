@@ -34,6 +34,8 @@ import {
 } from "./t3team-pack-driver.fixtures.ts";
 import { makePackOrchestrationAdapter } from "./t3team-pack-driverAdapter.ts";
 import { makeRemoteEnvironmentAdapter } from "./t3team-remoteEnvironmentAdapter.ts";
+import { makeRemoteEnvironmentAuthorizer } from "./t3team-remoteEnvironmentAuthorize.ts";
+import { makeRemoteEnvironmentPlacements } from "./t3team-remoteEnvironmentPlacements.ts";
 import { fakeRemote, REPOSITORY, view } from "./t3team-remoteEnvironmentSession.fixtures.ts";
 import {
   REMOTE_ENVIRONMENT_INSTANCE_ID,
@@ -73,6 +75,7 @@ it.live("a delegated child runs its turn on the cloud session and completes here
         },
       },
     });
+    const placements = yield* makeRemoteEnvironmentPlacements;
     const registry = ProviderAdapterRegistry.layerFromAdaptersEffect(
       Effect.gen(function* () {
         const requests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
@@ -87,6 +90,11 @@ it.live("a delegated child runs its turn on the cloud session and completes here
           }),
           makeRemoteEnvironmentAdapter(REMOTE_ENVIRONMENT_INSTANCE_ID, {
             open: () => Effect.succeed(remote.api),
+            authorize: makeRemoteEnvironmentAuthorizer({
+              placements,
+              ownSessionIds: Effect.succeed(["run-41"]),
+              repositoryKeyOf: () => Effect.succeed(null),
+            }),
           }),
         ];
       }),
@@ -131,7 +139,6 @@ it.live("a delegated child runs its turn on the cloud session and completes here
         task: "Run the tests on the cloud session",
         modelSelection: remoteEnvironmentModelSelection({
           sessionId: "run-41",
-          repositoryKey: REPOSITORY,
           modelSelection: remoteModel,
         }),
         runtimeMode: "full-access",
@@ -144,6 +151,7 @@ it.live("a delegated child runs its turn on the cloud session and completes here
       const childId =
         task?.event.type === "subagent.updated" ? task.event.payload.childThreadId : null;
       assert.ok(childId);
+      yield* placements.register(childId, { sessionId: "run-41", repositoryKey: REPOSITORY });
       yield* Deferred.await(remote.dispatched);
       const dispatched = yield* orchestrator.getThreadProjection(childId);
       const childMessageId = dispatched.runs[0]?.userMessageId ?? "missing";

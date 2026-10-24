@@ -8,7 +8,7 @@ import type { ParseResult } from "./t3team-delegateTaskExtensions.ts";
 export const CLOUD_SESSION_EXTENSION: DelegatedTaskExtensionOption = {
   key: "cloudSession",
   description:
-    "'auto' | 'new' | <cloud session id>: run the child on a Nexi cloud session for this project's repository. 'auto' uses a ready or starting session with room (3 children each), else starts one; 'new' starts one; an id uses that session. The child's turns run there with the requested provider and model (the delegation fails if the session does not offer them); its messages and completion come back here. Not combinable with workspace isolation.",
+    "'auto' | 'new' | <cloud session id>: run the child on a Nexi cloud session for this project's repository. 'auto' uses a ready or starting session with room (3 children each), else starts one; 'new' starts one; an id uses that session. The child's turns run there with the requested provider and model (the delegation fails if the session does not offer them); its messages and completion come back here. Not combinable with workspace isolation; attachments are refused (send their content as text).",
 };
 
 /** The extension is offered only when the placement exists (flag on). */

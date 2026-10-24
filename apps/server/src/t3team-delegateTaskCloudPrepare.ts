@@ -5,8 +5,11 @@
  *
  * The child runs the project's own repository on the session's own checkout, so a project
  * without a repository and a delegated worktree are refused. A child that cannot be placed fails
- * the delegation with the reason; it never runs here instead. The capacity slot reserved here
- * is handed to the child once it exists (`register`) or freed when none was created (`release`).
+ * the delegation with the reason; it never runs here instead. Placement runs once per request key
+ * (`t3team-delegateCloudReplay.ts`): a retried delegation gets the same session and note and
+ * reserves nothing again. The capacity slot reserved while placing is handed to the child once it
+ * exists (`register`, which also records the child in the server's placement registry that the
+ * `remoteEnvironment` driver trusts) or freed when no child was created (`release`).
  * No `ThreadEnvironmentBinding` is recorded: its contract says messages and completion wakes do
  * not reach a bound child, which is false for this stand-in.
  */
@@ -27,6 +30,7 @@ import {
 import { placementNote } from "./t3team-delegateTaskCloudPlacementNote.ts";
 import type { CloudSessionRequest } from "./t3team-delegateTaskCloudSessionExtension.ts";
 import { remoteEnvironmentModelSelection } from "./t3team-remoteEnvironmentTarget.ts";
+import type { CloudChildPlacementRecord } from "./t3team-delegateCloudReplay.ts";
 
 const invalid = (message: string) =>
   new OrchestratorMcpFailure({ code: "invalid_request", message });
@@ -58,26 +62,50 @@ export const prepareCloudChild = Effect.fn("delegateTask.cloudSession.prepare")(
     );
   }
   const repositoryKey = repositoryGroupingKeyOf(identity);
-  const placement = yield* placeOnCloudSession(input.sessions, {
-    request: input.request,
-    projectId: input.project.id,
-    repositoryName: identity.name ?? repositoryKey.split("/").pop() ?? repositoryKey,
-    repositoryKey,
-    modelSelection: input.modelSelection,
-  });
-  if (placement.kind === "unplaced") {
-    return yield* invalid(`No cloud session can take this child: ${placement.reason}`);
-  }
-  const { capacity } = input.sessions;
-  yield* capacity.reserve(input.requestKey, placement.session.sessionId);
-  return {
-    modelSelection: remoteEnvironmentModelSelection({
-      sessionId: placement.session.sessionId,
-      repositoryKey,
-      modelSelection: input.modelSelection,
+  const { sessions, requestKey } = input;
+  const projectId = input.project.id;
+  const placed = yield* sessions.replays.once(
+    requestKey,
+    Effect.gen(function* () {
+      const placement = yield* placeOnCloudSession(sessions, {
+        request: input.request,
+        requestKey,
+        projectId,
+        repositoryName: identity.name ?? repositoryKey.split("/").pop() ?? repositoryKey,
+        repositoryKey,
+        modelSelection: input.modelSelection,
+      });
+      if (placement.kind === "unplaced") {
+        return yield* invalid(`No cloud session can take this child: ${placement.reason}`);
+      }
+      return {
+        sessionId: placement.session.sessionId,
+        repositoryKey,
+        modelSelection: remoteEnvironmentModelSelection({
+          sessionId: placement.session.sessionId,
+          modelSelection: input.modelSelection,
+        }),
+        note: placementNote(placement, input.modelSelection),
+      } satisfies CloudChildPlacementRecord;
     }),
-    note: placementNote(placement, input.modelSelection),
-    register: (childThreadId) => capacity.register(input.requestKey, childThreadId),
-    release: capacity.release(input.requestKey),
+  );
+  const { record } = placed;
+  return {
+    modelSelection: record.modelSelection,
+    note: record.note,
+    register: (childThreadId) =>
+      Effect.all([
+        sessions.capacity.register(requestKey, childThreadId),
+        sessions.placements.register(childThreadId, {
+          sessionId: record.sessionId,
+          repositoryKey: record.repositoryKey,
+        }),
+      ]).pipe(Effect.asVoid),
+    release: placed.fresh
+      ? Effect.all([
+          sessions.capacity.release(requestKey),
+          sessions.replays.forget(requestKey),
+        ]).pipe(Effect.asVoid)
+      : Effect.void,
   } satisfies CloudChildPrepared;
 });

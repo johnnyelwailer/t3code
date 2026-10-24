@@ -99,7 +99,14 @@ const make = Effect.gen(function* () {
   const projectShellOf = (projectId: Parameters<typeof projects.getShell>[0]) =>
     projects.getShell(projectId).pipe(
       Effect.map(Option.getOrUndefined),
-      Effect.orElseSucceed(() => undefined),
+      Effect.catchCause(() =>
+        Effect.fail(
+          failure(
+            "orchestration_error",
+            "Could not read the child's project to place it on a cloud session.",
+          ),
+        ),
+      ),
     );
 
   const preparation: DelegatedTaskPreparationShape = {

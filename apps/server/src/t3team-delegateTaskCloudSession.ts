@@ -51,19 +51,30 @@ const startNew = Effect.fn("delegateTask.cloudSession.startNew")(function* (
       "A cloud session was started for this project but is not listed yet. Delegate again with cloudSession 'auto' in a minute.",
     );
   }
+  yield* sessions.capacity.tryReserve(input.requestKey, session.sessionId);
   return { kind: "placed", session, ready: false, started: true } satisfies CloudSessionPlacement;
 });
 
-/** A listed session the child may use: room for it, and (when ready) the right project and model. */
+const ENDED = new Set<CloudSession["phase"]>(["failed", "stopped", "cancelled"]);
+
+/**
+ * A listed session the child may use. A slot is reserved first (atomically, so concurrent
+ * delegations cannot all see room) and kept only when the session is starting or passes the probe
+ * of its own project and the requested model; any other verdict releases it.
+ */
 const usable = Effect.fn("delegateTask.cloudSession.usable")(function* (
   sessions: DelegateCloudSessions,
   input: CloudSessionPlacementInput,
   session: CloudSession,
 ) {
-  if (!(yield* sessions.capacity.hasRoom(session.sessionId))) return "full" as const;
+  if (ENDED.has(session.phase)) return "ended" as const;
+  if (!(yield* sessions.capacity.tryReserve(input.requestKey, session.sessionId))) {
+    return "full" as const;
+  }
   if (session.phase !== "ready" || !session.environmentId) return "starting" as const;
   const probed = yield* Effect.result(sessions.probe(session.sessionId, input));
   if (probed._tag === "Success") return "ready" as const;
+  yield* sessions.capacity.release(input.requestKey);
   const error = probed.failure;
   if (error._tag === "RemoteEnvironmentRejected" && error.reason === "model") return error;
   return "unusable" as const;
@@ -105,9 +116,11 @@ const place = Effect.fn("delegateTask.cloudSession.place")(function* (
     }
     if (request.kind === "session") {
       return unplaced(
-        verdict === "full"
-          ? `Cloud session ${candidate.sessionId} already runs ${sessions.capacity.limit} delegated children.`
-          : `Cloud session ${candidate.sessionId} cannot take this child: its own project is not this repository, or it cannot be reached.`,
+        verdict === "ended"
+          ? `Cloud session ${candidate.sessionId} has ended (${candidate.phase}); name a running session or use 'auto'.`
+          : verdict === "full"
+            ? `Cloud session ${candidate.sessionId} already runs ${sessions.capacity.limit} delegated children.`
+            : `Cloud session ${candidate.sessionId} cannot take this child: its own project is not this repository, or it cannot be reached.`,
       );
     }
     excluded.push(candidate.sessionId);

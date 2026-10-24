@@ -15,6 +15,8 @@ import type { CloudSessionCapacity } from "./t3team-delegateCloudCapacity.ts";
 import type { CloudSessionStartGuard } from "./t3team-delegateTaskCloudSessionStartGuard.ts";
 import type { CloudSessionRequest } from "./t3team-delegateTaskCloudSessionExtension.ts";
 import type { RemoteEnvironmentError } from "./t3team-remoteEnvironmentApiTypes.ts";
+import type { CloudPlacementReplays } from "./t3team-delegateCloudReplay.ts";
+import type { RemoteEnvironmentPlacementsShape } from "./t3team-remoteEnvironmentPlacements.ts";
 import type { RemoteEnvironmentRejected } from "./t3team-remoteEnvironmentPrepare.ts";
 
 type ProbeError = RemoteEnvironmentRejected | RemoteEnvironmentError | CloudSessionFailedError;
@@ -32,10 +34,15 @@ export interface DelegateCloudSessions {
   ) => Effect.Effect<void, ProbeError>;
   readonly startGuard: CloudSessionStartGuard;
   readonly capacity: CloudSessionCapacity;
+  /** The server's registry of placed children, which the `remoteEnvironment` driver trusts. */
+  readonly placements: RemoteEnvironmentPlacementsShape;
+  readonly replays: CloudPlacementReplays;
 }
 
 export interface CloudSessionPlacementInput {
   readonly request: CloudSessionRequest;
+  /** The delegation's request key: the capacity slot is reserved under it. */
+  readonly requestKey: string;
   readonly projectId: ProjectId;
   readonly repositoryName: string;
   /** `repositoryGroupingKeyOf` of the project's repository. */

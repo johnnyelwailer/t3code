@@ -8,9 +8,10 @@
  * exists to share without moving that one out of ws.ts. Per instance, as for every connection
  * today: the standby claim ledger (only used by project machines), the payload-issue cleanup
  * tracker, the list single-flight, and a fresh `CloudCliTokenManager` with its own semaphore.
- * The connect-credential minter and the broker are the server's shared ones (server.ts). The
- * placement also has its own broker connector (one more pairing per session than the
- * `remoteEnvironment` driver's), used only to probe a ready session before a child is placed.
+ * The connect-credential minter and the broker are the server's shared ones (server.ts), and so
+ * are the cloud-session access (one broker connector, one held bearer per session, used here to
+ * probe a ready session) and the placement registry the `remoteEnvironment` driver trusts
+ * (`t3team-remoteEnvironmentServices.ts`).
  */
 import { CloudSessionFailedError } from "@t3tools/contracts";
 import * as Config from "effect/Config";
@@ -30,7 +31,9 @@ import { layer as ProjectMachineDiscoveryLayer } from "./project/t3team-ProjectM
 import type { DelegateCloudSessions } from "./t3team-delegateTaskCloudSession.ts";
 import { makeCloudSessionStartGuard } from "./t3team-delegateTaskCloudSessionStartGuard.ts";
 import { readFeatureFlagFromConfig } from "./t3team-featureFlagConfig.ts";
-import { makeCloudSessionConnector } from "./cloud/t3team-cloudSessionConnector.ts";
+import { makeCloudPlacementReplays } from "./t3team-delegateCloudReplay.ts";
+import { RemoteEnvironmentPlacements } from "./t3team-remoteEnvironmentPlacements.ts";
+import { CloudSessionAccess } from "./t3team-remoteEnvironmentServices.ts";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import {
   DEFAULT_CHILDREN_PER_SESSION,
@@ -61,7 +64,7 @@ export const makeDelegateCloudSessionPlacement = Effect.gen(function* () {
   const limit = yield* Config.Int("NEXI_DELEGATE_CLOUD_CHILDREN_PER_SESSION").pipe(
     Config.withDefault(DEFAULT_CHILDREN_PER_SESSION),
   );
-  const connector = yield* makeCloudSessionConnector(broker);
+  const access = yield* CloudSessionAccess;
   return {
     list: sessions.list,
     brokerReady: broker.enabled ? Effect.asVoid(broker.sessions) : Effect.fail(noBroker),
@@ -69,13 +72,15 @@ export const makeDelegateCloudSessionPlacement = Effect.gen(function* () {
       sessions.create({ durationSeconds: DELEGATED_SESSION_HOLD_SECONDS, projectId }),
     probe: (sessionId, target) =>
       Effect.scoped(
-        connector.connect(sessionId).pipe(
+        access.connect(sessionId).pipe(
           Effect.flatMap(openRemoteEnvironmentApi),
           Effect.flatMap((api) => checkRemoteTarget(api, target)),
           Effect.asVoid,
         ),
       ).pipe(Effect.provideService(HttpClient.HttpClient, http)),
     startGuard: yield* makeCloudSessionStartGuard(),
+    placements: yield* RemoteEnvironmentPlacements,
+    replays: yield* makeCloudPlacementReplays,
     capacity: yield* makeCloudSessionCapacity({
       limit: Math.max(1, limit),
       isActive: (threadId) =>
