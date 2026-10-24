@@ -1299,8 +1299,15 @@ export default function ChatView(props: ChatViewProps) {
     environmentId,
     threadId: activeThreadId,
   });
-  // t3team: an ended cloud session replaces the generic "is offline" notice.
-  const cloudSessionEndedBanner = useCloudSessionEndedBannerItem(environmentId);
+  // t3team: an ended cloud session replaces the generic "is offline" notice. Restarting it must
+  // keep the ended session's project: that project's primary-environment copy is what a new
+  // session is created for, so it restores the same machine and environment id.
+  const endedSessionRestartProjectId =
+    logicalProjectEnvironments.find((environment) => environment.isPrimary)?.projectId ?? null;
+  const cloudSessionEndedBanner = useCloudSessionEndedBannerItem(
+    environmentId,
+    endedSessionRestartProjectId,
+  );
   const systemComposerBannerItems: ComposerBannerStackItem[] = withCloudSessionEndedBanner(
     [
       ...upstreamSystemComposerBannerItems,

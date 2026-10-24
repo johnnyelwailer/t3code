@@ -1,6 +1,6 @@
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { CloudOffIcon, ClockIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { ENDED_SESSION_BANNER_COPY } from "~/cloud/t3team-endedSessionAction";
 import { liveCloudSessionForEnvironment } from "~/cloud/t3team-cloudSessionEnvironmentMatch";
@@ -17,6 +17,25 @@ import type { ComposerBannerStackItem } from "./ComposerBannerStack";
 
 const UNAVAILABLE_BANNER_PREFIX = "environment-unavailable:";
 const ENDED_BANNER_PREFIX = "cloud-session-ended:";
+
+/**
+ * The ended-session banner item: its copy and stack identity in one place, so the app and the
+ * story build the same item. `actions` is the caller's (the production
+ * `CloudSessionEndedActions` in the app, the fixture-driven view in the story).
+ */
+export function endedSessionBannerItem(
+  environmentId: EnvironmentId,
+  actions: ReactNode,
+): ComposerBannerStackItem {
+  return {
+    id: `${ENDED_BANNER_PREFIX}${environmentId}`,
+    variant: "warning",
+    icon: <CloudOffIcon aria-hidden="true" />,
+    title: ENDED_SESSION_BANNER_COPY.title,
+    description: ENDED_SESSION_BANNER_COPY.description,
+    actions,
+  };
+}
 
 /**
  * Seconds left of the live cloud session serving `environmentId`, ticking locally: the session
@@ -44,20 +63,20 @@ function useSessionSecondsLeft(environmentId: EnvironmentId | null): number | nu
  */
 export function useCloudSessionEndedBannerItem(
   environmentId: EnvironmentId | null,
+  restartProjectId: ProjectId | null = null,
 ): ComposerBannerStackItem | null {
   const ended = useEnvironmentSessionEnded(environmentId);
   const notice = resolveSessionEndingNotice(useSessionSecondsLeft(environmentId));
   const [dismissedFor, setDismissedFor] = useState<EnvironmentId | null>(null);
   if (environmentId === null) return null;
   if (ended) {
-    return {
-      id: `${ENDED_BANNER_PREFIX}${environmentId}`,
-      variant: "warning",
-      icon: <CloudOffIcon aria-hidden="true" />,
-      title: ENDED_SESSION_BANNER_COPY.title,
-      description: ENDED_SESSION_BANNER_COPY.description,
-      actions: <CloudSessionEndedActions environmentId={environmentId} />,
-    };
+    return endedSessionBannerItem(
+      environmentId,
+      <CloudSessionEndedActions
+        environmentId={environmentId}
+        restartProjectId={restartProjectId}
+      />,
+    );
   }
   if (notice === null || dismissedFor === environmentId) return null;
   return {
