@@ -6,6 +6,7 @@ import {
   ProjectScript,
   ProjectSettingsOverrides,
   type ProviderInstanceConfig,
+  type ProviderInstanceConfigMap,
   type ProviderInstanceMutation,
   defaultInstanceIdForDriver,
   isProviderDriverKind,
@@ -126,13 +127,34 @@ const foldProviderInstanceEnabledFlags = (settings: ServerSettings): ServerSetti
   };
 };
 
-const stripPackProviderInstances = (settings: ServerSettings): ServerSettings => {
-  const overlay = getPackProviderOverlay();
+const PROJECTED_PACK_ENTRY_KEYS: ReadonlySet<string> = new Set([
+  "driver",
+  "enabled",
+  "configurationSource",
+]);
+
+const isProjectedPackEcho = (
+  entry: ProviderInstanceConfig,
+  overlayEntry: ProviderInstanceConfig,
+): boolean =>
+  entry.configurationSource === "pack" &&
+  entry.driver === overlayEntry.driver &&
+  entry.enabled === resolveProviderInstanceEnabled(overlayEntry) &&
+  Object.entries(entry).every(
+    ([key, value]) => value === undefined || PROJECTED_PACK_ENTRY_KEYS.has(key),
+  );
+
+export const stripPackProviderInstances = (
+  settings: ServerSettings,
+  overlay: ProviderInstanceConfigMap = getPackProviderOverlay(),
+): ServerSettings => {
   const providerInstances = { ...settings.providerInstances };
   let changed = false;
-  for (const instanceId of Object.keys(providerInstances)) {
-    if (!Object.hasOwn(overlay, instanceId)) continue;
-    delete providerInstances[ProviderInstanceId.make(instanceId)];
+  for (const [instanceId, overlayEntry] of Object.entries(overlay)) {
+    const key = ProviderInstanceId.make(instanceId);
+    const entry = Object.hasOwn(providerInstances, key) ? providerInstances[key] : undefined;
+    if (entry === undefined || !isProjectedPackEcho(entry, overlayEntry)) continue;
+    delete providerInstances[key];
     changed = true;
   }
   return changed ? { ...settings, providerInstances } : settings;
@@ -165,15 +187,17 @@ export function redactServerSettingsForClient(settings: ServerSettings): ServerS
   );
 }
 
-const projectPackProviderInstances = (settings: ServerSettings): ServerSettings => {
-  const overlay = getPackProviderOverlay();
+export const projectPackProviderInstances = (
+  settings: ServerSettings,
+  overlay: ProviderInstanceConfigMap = getPackProviderOverlay(),
+): ServerSettings => {
   const providerInstances = { ...settings.providerInstances };
   let changed = false;
   for (const [instanceId, entry] of Object.entries(overlay)) {
     if (Object.hasOwn(providerInstances, instanceId)) continue;
     providerInstances[ProviderInstanceId.make(instanceId)] = {
       driver: entry.driver,
-      enabled: true,
+      enabled: resolveProviderInstanceEnabled(entry),
       configurationSource: "pack",
     };
     changed = true;
@@ -181,8 +205,11 @@ const projectPackProviderInstances = (settings: ServerSettings): ServerSettings 
   return changed ? { ...settings, providerInstances } : settings;
 };
 
-export function projectServerSettingsForClient(settings: ServerSettings): ServerSettings {
-  return projectPackProviderInstances(redactServerSettingsForClient(settings));
+export function projectServerSettingsForClient(
+  settings: ServerSettings,
+  overlay: ProviderInstanceConfigMap = getPackProviderOverlay(),
+): ServerSettings {
+  return projectPackProviderInstances(redactServerSettingsForClient(settings), overlay);
 }
 
 export function applyProviderInstanceMutation(

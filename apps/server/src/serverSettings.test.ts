@@ -5,6 +5,7 @@ import {
   ProjectId,
   ProjectScript,
   ProviderDriverKind,
+  type ProviderInstanceConfigMap,
   ProviderInstanceId,
   resolveProjectProviderInstanceEnabled,
   resolveProviderInstanceEnabled,
@@ -30,7 +31,7 @@ import * as ServerConfig from "./config.ts";
 import * as SqlitePersistence from "./persistence/Sqlite.ts";
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 import * as ServerSettingsModule from "./serverSettings.ts";
-import { setPackProviderOverlay } from "./t3team-pack-providerOverlay.ts";
+import { withPackProviderOverlay } from "./t3team-packProviderOverlayTestUtils.ts";
 import { resolveProviderInstanceTerminalEnvironment } from "./terminal/Manager.ts";
 
 const decodeServerSettings = Schema.decodeUnknownEffect(ServerSettings);
@@ -1180,38 +1181,145 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       }).pipe(Effect.provide(layerServerSettings())),
   );
 
-  it.effect("keeps pack provider instances enabled for stock clients without persisting them", () =>
-    Effect.gen(function* () {
-      const nexploreId = ProviderInstanceId.make("nexplore");
-      setPackProviderOverlay({
-        configMap: {
-          [nexploreId]: {
-            driver: ProviderDriverKind.make("nexplore"),
-            configurationSource: "pack",
-            config: { enabled: true },
-          },
+  it.effect("projects pack provider instances to stock clients with the overlay enablement", () =>
+    Effect.sync(() => {
+      const enabledId = ProviderInstanceId.make("nexplore");
+      const disabledId = ProviderInstanceId.make("nexplore-off");
+      const defaultId = ProviderInstanceId.make("nexplore-default");
+      const driver = ProviderDriverKind.make("nexplore");
+      const overlay: ProviderInstanceConfigMap = {
+        [enabledId]: {
+          driver,
+          configurationSource: "pack",
+          config: { enabled: true, secret: "x" },
         },
-        driverDefinitions: new Map(),
+        [disabledId]: { driver, configurationSource: "pack", config: { enabled: false } },
+        [defaultId]: { driver, configurationSource: "pack" },
+      };
+      const base = DEFAULT_SERVER_SETTINGS;
+      const unprojected = ServerSettingsModule.redactServerSettingsForClient(base);
+      assert.isFalse(resolveProjectProviderInstanceEnabled(unprojected, null, enabledId));
+      const client = ServerSettingsModule.projectServerSettingsForClient(base, overlay);
+      assert.isTrue(resolveProjectProviderInstanceEnabled(client, null, enabledId));
+      assert.isFalse(resolveProjectProviderInstanceEnabled(client, null, disabledId));
+      assert.isTrue(resolveProjectProviderInstanceEnabled(client, null, defaultId));
+      assert.deepEqual(client.providerInstances[enabledId], {
+        driver,
+        enabled: true,
+        configurationSource: "pack",
       });
-      try {
+      assert.isFalse("config" in (client.providerInstances[disabledId] ?? {}));
+    }),
+  );
+
+  it.effect("lets a persisted pack provider entry win over the overlay in the projection", () =>
+    Effect.sync(() => {
+      const nexploreId = ProviderInstanceId.make("nexplore");
+      const driver = ProviderDriverKind.make("nexplore");
+      const overlay: ProviderInstanceConfigMap = {
+        [nexploreId]: { driver, configurationSource: "pack" },
+      };
+      const persisted = {
+        ...DEFAULT_SERVER_SETTINGS,
+        providerInstances: { [nexploreId]: { driver, enabled: false } },
+      };
+      const client = ServerSettingsModule.projectServerSettingsForClient(persisted, overlay);
+      assert.deepEqual(client.providerInstances[nexploreId], { driver, enabled: false });
+      assert.isFalse(resolveProjectProviderInstanceEnabled(client, null, nexploreId));
+    }),
+  );
+
+  it.effect("strips only the exact projected echo of a pack provider instance", () =>
+    Effect.sync(() => {
+      const nexploreId = ProviderInstanceId.make("nexplore");
+      const driver = ProviderDriverKind.make("nexplore");
+      const overlay: ProviderInstanceConfigMap = {
+        [nexploreId]: { driver, configurationSource: "pack" },
+      };
+      const strip = (entry: object) =>
+        ServerSettingsModule.stripPackProviderInstances(
+          { ...DEFAULT_SERVER_SETTINGS, providerInstances: { [nexploreId]: { driver, ...entry } } },
+          overlay,
+        ).providerInstances[nexploreId];
+
+      assert.isUndefined(strip({ enabled: true, configurationSource: "pack" }));
+      assert.deepEqual(strip({ enabled: false }), { driver, enabled: false });
+      assert.deepEqual(strip({ enabled: false, configurationSource: "pack" }), {
+        driver,
+        enabled: false,
+        configurationSource: "pack",
+      });
+      assert.deepEqual(strip({ enabled: true }), { driver, enabled: true });
+      assert.deepEqual(
+        strip({ enabled: true, configurationSource: "pack", turnInactivityTimeoutSeconds: 30 }),
+        { driver, enabled: true, configurationSource: "pack", turnInactivityTimeoutSeconds: 30 },
+      );
+      assert.deepEqual(
+        strip({ enabled: true, configurationSource: "pack", accentColor: "#123456" }),
+        { driver, enabled: true, configurationSource: "pack", accentColor: "#123456" },
+      );
+      assert.deepEqual(strip({ enabled: true, configurationSource: "pack", config: { a: 1 } }), {
+        driver,
+        enabled: true,
+        configurationSource: "pack",
+        config: { a: 1 },
+      });
+    }),
+  );
+
+  it.effect("keeps user pack provider entries across load and write and strips the echo", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const nexploreId = ProviderInstanceId.make("nexplore");
+        const driver = ProviderDriverKind.make("nexplore");
+        yield* withPackProviderOverlay({
+          [nexploreId]: { driver, configurationSource: "pack", config: { enabled: true } },
+        });
+        const config = yield* ServerConfig.ServerConfig;
+        const fs = yield* FileSystem.FileSystem;
         const service = yield* ServerSettingsModule.ServerSettingsService;
-        const base = yield* service.getSettings;
-        const unprojected = ServerSettingsModule.redactServerSettingsForClient(base);
-        assert.isFalse(resolveProjectProviderInstanceEnabled(unprojected, null, nexploreId));
-        const client = ServerSettingsModule.projectServerSettingsForClient(base);
-        assert.isTrue(resolveProjectProviderInstanceEnabled(client, null, nexploreId));
-        assert.isFalse("config" in (client.providerInstances[nexploreId] ?? {}));
+        const persistedInstance = () =>
+          fs.readFileString(config.settingsPath).pipe(
+            Effect.flatMap(decodeServerSettingsJson),
+            Effect.map((settings) => settings.providerInstances[nexploreId]),
+          );
+
+        yield* fs.writeFileString(
+          config.settingsPath,
+          JSON.stringify({ providerInstances: { nexplore: { driver, enabled: false } } }),
+        );
+        assert.deepEqual((yield* service.getSettings).providerInstances[nexploreId], {
+          driver,
+          enabled: false,
+        });
+        yield* service.updateSettings({ defaultAutoPull: true });
+        assert.deepEqual(yield* persistedInstance(), { driver, enabled: false });
+        assert.isFalse(
+          resolveProjectProviderInstanceEnabled(
+            ServerSettingsModule.projectServerSettingsForClient(yield* service.getSettings),
+            null,
+            nexploreId,
+          ),
+        );
+
+        const customized = { driver, enabled: true, turnInactivityTimeoutSeconds: 45 };
+        yield* service.updateSettings({ providerInstances: { [nexploreId]: customized } });
+        yield* service.updateSettings({ defaultAutoPull: false });
+        assert.deepEqual(yield* persistedInstance(), customized);
+
+        const client = ServerSettingsModule.projectServerSettingsForClient(DEFAULT_SERVER_SETTINGS);
+        assert.deepEqual(client.providerInstances[nexploreId], {
+          driver,
+          enabled: true,
+          configurationSource: "pack",
+        });
         const echoed = yield* service.updateSettings({
           providerInstances: client.providerInstances,
         });
         assert.isFalse(Object.hasOwn(echoed.providerInstances, nexploreId));
-      } finally {
-        setPackProviderOverlay({
-          configMap: {},
-          driverDefinitions: new Map(),
-        });
-      }
-    }).pipe(Effect.provide(layerServerSettings())),
+        assert.isUndefined(yield* persistedInstance());
+      }),
+    ).pipe(Effect.provide(layerServerSettings())),
   );
 
   it.effect(
