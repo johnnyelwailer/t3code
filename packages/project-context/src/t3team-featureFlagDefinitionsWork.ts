@@ -108,4 +108,13 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: false,
     requiresRestart: false,
   },
+  DELEGATE_CLOUD: {
+    group: "Cloud & machines",
+    subgroup: "Cloud sessions",
+    label: "Delegate to a cloud session",
+    description:
+      "delegate_task accepts extensions.cloudSession: it names a fitting cloud session for the child's repository or reports that a new one is needed; nothing is started. The child still runs on this server. Off: the option is not offered.",
+    defaultEnabled: false,
+    requiresRestart: true,
+  },
 } as const satisfies Record<string, FeatureFlagDefinition>;

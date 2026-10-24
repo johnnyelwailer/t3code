@@ -322,6 +322,7 @@ import * as T3TeamWorkflowHost from "./t3team-workflowHost.ts";
 import { T3TeamChildThreadMetadataLive } from "./t3team-childThreadMetadata.ts";
 import { T3TeamAskUserWriterLive } from "./mcp/toolkits/t3team/t3team-askUserWriter.ts";
 import { T3TeamDelegatedTaskPreparationLive } from "./t3team-delegateTaskPreparationLive.ts";
+import { T3TeamDelegateCloudSessionsLayer } from "./t3team-delegateTaskCloudSessionLayer.ts";
 import * as NetService from "@t3tools/shared/Net";
 import * as RelayClient from "@t3tools/shared/relayClient";
 import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
@@ -1122,7 +1123,9 @@ const layerMakeRoutes = Layer.mergeAll(
   McpHttpServer.layer.pipe(
     Layer.provide(ProviderAdapterRegistry.layerFromProviderInstanceRegistry),
     // t3team: delegate_task workspace isolation + extensions (DelegatedTaskPreparation hook).
-    Layer.provide(T3TeamDelegatedTaskPreparationLive),
+    Layer.provide(
+      T3TeamDelegatedTaskPreparationLive.pipe(Layer.provide(T3TeamDelegateCloudSessionsLayer)),
+    ),
     // t3team: t3_thread_send mode "mailbox" (shared inter-agent mailbox instance).
     Layer.provide(T3TeamThreadMailboxDeliveryLive),
     Layer.provide(McpOAuth.layerMcpClientAuthenticator),
