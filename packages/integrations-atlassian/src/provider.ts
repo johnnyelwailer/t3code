@@ -1,3 +1,4 @@
+import { resolveCurrentSprint } from "./sprintResolver.ts";
 import type {
   CommitMutationInput,
   IntegrationAccount,
@@ -1249,10 +1250,20 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       boardSprints,
       filterBacklogSprintsByBoard(fallbackCatalog.sprints, selectedBoard.id),
     );
-    const selectedSprint = selectBacklogSprint(
-      sprints,
-      input.sprintId?.trim() ?? participationPreference?.sprintId,
-    );
+    // Explicit sprint wins; otherwise the shared resolver (calendar-current
+    // over a stale Jira "active", viewer's issue counts as tie-break) decides,
+    // so this agrees with the cache read and the My Work digest.
+    const selectedSprint =
+      (input.sprintId?.trim()
+        ? selectBacklogSprint(sprints, input.sprintId.trim())
+        : undefined) ??
+      resolveCurrentSprint({
+        sprints,
+        nowMs: Date.now(),
+        explicit: { boardId: selectedBoard.id },
+        viewerIssueCounts: participationPreference?.issueCounts,
+      }).sprint ??
+      selectBacklogSprint(sprints, undefined);
 
     return {
       boards,
@@ -2134,6 +2145,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
   ): Promise<{
     boardId?: string;
     sprintId?: string;
+    issueCounts?: ReadonlyMap<string, number>;
   }> {
     const sprintField = await this.resolveSprintField(client);
     if (!sprintField) {
@@ -2175,14 +2187,25 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       });
     }
 
-    const preferredSprint = selectPreferredParticipantSprint([...sprintCounts.values()]);
+    const issueCounts = new Map(
+      [...sprintCounts.entries()].map(([id, entry]) => [id, entry.issueCount] as const),
+    );
+    // Board = where the resolver's current sprint lives (calendar-current over
+    // a Jira-"active" sprint nobody completed), not just the biggest count.
+    const preferredSprint =
+      resolveCurrentSprint({
+        sprints: [...sprintCounts.values()].map((entry) => entry.sprint),
+        nowMs: Date.now(),
+        viewerIssueCounts: issueCounts,
+      }).sprint ?? selectPreferredParticipantSprint([...sprintCounts.values()]);
     if (!preferredSprint) {
-      return {};
+      return { issueCounts };
     }
 
     return {
       ...(preferredSprint.boardId ? { boardId: preferredSprint.boardId } : {}),
       sprintId: preferredSprint.id,
+      issueCounts,
     };
   }
 

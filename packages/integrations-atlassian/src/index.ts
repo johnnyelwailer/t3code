@@ -5,3 +5,4 @@ export * from "./normalize.ts";
 export * from "./oauth.ts";
 export * from "./oauthPopup.ts";
 export * from "./provider.ts";
+export * from "./sprintResolver.ts";
