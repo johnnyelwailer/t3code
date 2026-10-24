@@ -1,7 +1,8 @@
 /**
  * A fake of delegate_task's cloud placement dependencies (`DelegateCloudSessions`) for the
  * placement, preparation and hook tests: a listed session set, a counting `start`, a scriptable
- * probe, and the real start guard, capacity, placement registry and replay store.
+ * probe, and the real start guard, capacity, placement registry (over in-memory markers) and replay
+ * store.
  */
 import {
   type CloudSession,
@@ -19,7 +20,10 @@ import type {
   CloudSessionPlacementInput,
   DelegateCloudSessions,
 } from "./t3team-delegateTaskCloudTypes.ts";
-import { makeMemoryCloudChildPlacementMarkers } from "./t3team-cloudChildPlacementMarkers.ts";
+import {
+  type CloudChildPlacementMarkers,
+  makeMemoryCloudChildPlacementMarkers,
+} from "./t3team-cloudChildPlacementMarkers.ts";
 import { makeRemoteEnvironmentPlacements } from "./t3team-remoteEnvironmentPlacements.ts";
 
 export const PROJECT_ID = ProjectId.make("project:qa");
@@ -64,6 +68,8 @@ export const fakeCloudSessions = Effect.fn("fakeCloudSessions")(function* (input
   readonly started?: CloudSession;
   readonly limit?: number;
   readonly active?: ReadonlyArray<string>;
+  /** Shared across two fakes, they stand for one server before and after a restart. */
+  readonly markers?: CloudChildPlacementMarkers;
 }) {
   const starts = yield* Ref.make(0);
   const sessions: DelegateCloudSessions = {
@@ -81,7 +87,9 @@ export const fakeCloudSessions = Effect.fn("fakeCloudSessions")(function* (input
       limit: input.limit ?? 3,
       isActive: (threadId) => Effect.succeed((input.active ?? []).includes(threadId)),
     }),
-    placements: yield* makeRemoteEnvironmentPlacements(yield* makeMemoryCloudChildPlacementMarkers),
+    placements: yield* makeRemoteEnvironmentPlacements(
+      input.markers ?? (yield* makeMemoryCloudChildPlacementMarkers),
+    ),
     replays: yield* makeCloudPlacementReplays,
   };
   return { sessions, starts };

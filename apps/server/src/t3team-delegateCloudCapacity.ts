@@ -15,7 +15,15 @@ export interface CloudSessionCapacity {
   readonly limit: number;
   /** Reserves a slot for the request when the session has room; true when it holds one. */
   readonly tryReserve: (requestKey: string, sessionId: string) => Effect.Effect<boolean>;
-  readonly register: (requestKey: string, childThreadId: ThreadId) => Effect.Effect<void>;
+  /**
+   * The child holds a slot on its session from now on, in place of the request's reservation; it
+   * counts even when that reservation was already released (by a replayed attempt of the request).
+   */
+  readonly register: (
+    requestKey: string,
+    childThreadId: ThreadId,
+    sessionId: string,
+  ) => Effect.Effect<void>;
   readonly release: (requestKey: string) => Effect.Effect<void>;
 }
 
@@ -63,10 +71,8 @@ export const makeCloudSessionCapacity = Effect.fn("CloudSessionCapacity.make")(f
   return {
     limit: input.limit,
     tryReserve,
-    register: (requestKey, childThreadId) =>
+    register: (requestKey, childThreadId, sessionId) =>
       Ref.update(slots, (current) => {
-        const sessionId = current.reserved.get(requestKey);
-        if (sessionId === undefined) return current;
         const reserved = new Map(current.reserved);
         reserved.delete(requestKey);
         return { reserved, children: new Map(current.children).set(childThreadId, sessionId) };

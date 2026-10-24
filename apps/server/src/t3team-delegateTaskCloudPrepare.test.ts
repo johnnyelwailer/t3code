@@ -3,6 +3,7 @@ import { type OrchestrationProjectShell, ProjectId, ThreadId } from "@t3tools/co
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Ref from "effect/Ref";
+import * as TestClock from "effect/testing/TestClock";
 
 import {
   cloudSession,
@@ -10,7 +11,9 @@ import {
   MODEL,
   REPOSITORY_KEY,
 } from "./t3team-delegateCloud.fixtures.ts";
+import { makeMemoryCloudChildPlacementMarkers } from "./t3team-cloudChildPlacementMarkers.ts";
 import { prepareCloudChild } from "./t3team-delegateTaskCloudPrepare.ts";
+import type { CloudSessionRequest } from "./t3team-delegateTaskCloudSessionExtension.ts";
 import type { DelegateCloudSessions } from "./t3team-delegateTaskCloudTypes.ts";
 import { remoteEnvironmentTargetOf } from "./t3team-remoteEnvironmentTarget.ts";
 
@@ -49,6 +52,26 @@ const prepare = (input: {
     workspace: input.worktree ? { isolation: "worktree" } : undefined,
     requestKey: input.requestKey ?? "request-1",
     modelSelection: MODEL,
+    acceptedChild: undefined,
+  });
+
+const CHILD = ThreadId.make("thread:delegated-task:request-1");
+
+const RETRIED_REQUESTS: ReadonlyArray<CloudSessionRequest> = [
+  { kind: "new" },
+  { kind: "auto" },
+  { kind: "session", sessionId: "41" },
+];
+
+const retry = (sessions: DelegateCloudSessions, request: CloudSessionRequest) =>
+  prepareCloudChild({
+    sessions,
+    request,
+    project: project(true),
+    workspace: undefined,
+    requestKey: "request-1",
+    modelSelection: MODEL,
+    acceptedChild: CHILD,
   });
 
 describe("prepareCloudChild", () => {
@@ -112,6 +135,64 @@ describe("prepareCloudChild", () => {
       const prepared = yield* Effect.forEach(fibers, Fiber.join);
       assert.strictEqual(yield* Ref.get(starts), 1);
       assert.strictEqual(new Set(prepared.map((each) => each.note)).size, 1);
+    }),
+  );
+
+  it.effect(
+    "a retry after a restart answers with the child's session and reserves and starts nothing",
+    () =>
+      Effect.gen(function* () {
+        for (const request of RETRIED_REQUESTS) {
+          const markers = yield* makeMemoryCloudChildPlacementMarkers;
+          const before = yield* fakeCloudSessions({ markers });
+          const placed = yield* prepare({ sessions: before.sessions, request: "new" });
+          yield* placed.register(CHILD);
+          const after = yield* fakeCloudSessions({
+            markers,
+            sessions: [cloudSession({ sessionId: "99" }), cloudSession({ sessionId: "41" })],
+            limit: 1,
+          });
+          const retried = yield* retry(after.sessions, request);
+          assert.deepStrictEqual(remoteEnvironmentTargetOf(retried.modelSelection), {
+            sessionId: "99",
+            modelSelection: MODEL,
+          });
+          assert.match(retried.note, /already exists on cloud session 99; nothing was reserved/);
+          yield* retried.afterReplay;
+          assert.strictEqual(yield* Ref.get(after.starts), 0);
+          assert.isTrue(yield* after.sessions.capacity.tryReserve("next-99", "99"));
+          assert.isTrue(yield* after.sessions.capacity.tryReserve("next-41", "41"));
+        }
+      }),
+  );
+
+  it.effect("a retry whose child was never recorded as placed says so and places nothing", () =>
+    Effect.gen(function* () {
+      const { sessions, starts } = yield* fakeCloudSessions({ sessions: [cloudSession({})] });
+      const pending = yield* Effect.forkChild(retry(sessions, { kind: "auto" }));
+      yield* TestClock.adjust("5 seconds");
+      const retried = yield* Fiber.join(pending);
+      assert.deepStrictEqual(retried.modelSelection, MODEL);
+      assert.match(retried.note, /was not recorded as placed on a cloud session/);
+      assert.strictEqual(yield* Ref.get(starts), 0);
+    }),
+  );
+
+  it.effect("a replayed dispatch frees the reservation without uncounting the child", () =>
+    Effect.gen(function* () {
+      const { sessions } = yield* fakeCloudSessions({
+        sessions: [cloudSession({})],
+        limit: 1,
+        active: ["child-1"],
+      });
+      const replayed = yield* prepare({ sessions });
+      const created = yield* prepare({ sessions });
+      yield* replayed.afterReplay;
+      yield* created.register(ThreadId.make("child-1"));
+      assert.isFalse(yield* sessions.capacity.tryReserve("other", "41"));
+      const alone = yield* fakeCloudSessions({ sessions: [cloudSession({})], limit: 1 });
+      yield* (yield* prepare({ sessions: alone.sessions })).afterReplay;
+      assert.isTrue(yield* alone.sessions.capacity.tryReserve("other", "41"));
     }),
   );
 

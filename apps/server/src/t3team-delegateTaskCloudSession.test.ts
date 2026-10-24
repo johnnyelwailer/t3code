@@ -153,7 +153,7 @@ describe("placeOnCloudSession", () => {
         active: ["child-1"],
       });
       yield* sessions.capacity.tryReserve("earlier", "41");
-      yield* sessions.capacity.register("earlier", ThreadId.make("child-1"));
+      yield* sessions.capacity.register("earlier", ThreadId.make("child-1"), "41");
       const placement = yield* placeOnCloudSession(sessions, autoInput());
       assert.isTrue(placement.kind === "placed" && placement.started);
       assert.strictEqual(placedId(placement), "99");

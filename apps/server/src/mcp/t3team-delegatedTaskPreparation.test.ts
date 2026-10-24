@@ -1,6 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import {
+  CommandId,
   EnvironmentId,
   NodeId,
   ProjectId,
@@ -15,6 +16,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 
+import { derive } from "@t3tools/provider-core/server/IdAllocator";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
@@ -292,15 +294,22 @@ describe("OrchestratorMcpService delegateTask preparation hook", () => {
     Layer.succeed(DelegatedTaskPreparation, {
       workspaceIsolation: true,
       extensions: [],
-      prepare: () =>
-        Effect.succeed({
-          modelSelection,
-          workspace: { branch: "child-branch", worktreePath: "/tmp/child" },
-          notes: ["prepared"],
-          afterCreate: () =>
-            Ref.update(calls, (all) => [...all, "afterCreate"]).pipe(Effect.as(["after create"])),
-          release: Ref.update(calls, (all) => [...all, "release"]),
-        }),
+      prepare: (input) =>
+        Ref.update(calls, (all) =>
+          input.acceptedChildThreadId === undefined
+            ? all
+            : [...all, `accepted ${input.acceptedChildThreadId}`],
+        ).pipe(
+          Effect.as({
+            modelSelection,
+            workspace: { branch: "child-branch", worktreePath: "/tmp/child" },
+            notes: ["prepared"],
+            afterCreate: () =>
+              Ref.update(calls, (all) => [...all, "afterCreate"]).pipe(Effect.as(["after create"])),
+            release: Ref.update(calls, (all) => [...all, "release"]),
+            afterReplay: Ref.update(calls, (all) => [...all, "afterReplay"]),
+          }),
+        ),
     });
 
   it.effect("releases what prepare created when the dispatch creates no child", () =>
@@ -358,31 +367,41 @@ describe("OrchestratorMcpService delegateTask preparation hook", () => {
     }),
   );
 
-  it.effect("a retried request whose child exists does not run afterCreate again", () =>
-    Effect.gen(function* () {
-      const dispatched = yield* Ref.make<ReadonlyArray<unknown>>([]);
-      const calls = yield* Ref.make<ReadonlyArray<string>>([]);
-      yield* Effect.gen(function* () {
-        const service = yield* OrchestratorMcpService.OrchestratorMcpService;
-        const result = yield* service.delegateTask(scope, {
-          task: "Fix the bug.",
-          workspace: { isolation: "worktree" },
-          clientRequestId: "retry-1",
-        });
-        assert.deepEqual(result.notes, ["prepared"]);
-        assert.deepEqual(yield* Ref.get(calls), []);
-      }).pipe(
-        Effect.provide(
-          OrchestratorMcpService.layer.pipe(
-            Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
-            Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
+  it.effect(
+    "a retried request whose child exists names it to prepare and replays, not creates",
+    () =>
+      Effect.gen(function* () {
+        const dispatched = yield* Ref.make<ReadonlyArray<unknown>>([]);
+        const calls = yield* Ref.make<ReadonlyArray<string>>([]);
+        yield* Effect.gen(function* () {
+          const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+          const result = yield* service.delegateTask(scope, {
+            task: "Fix the bug.",
+            workspace: { isolation: "worktree" },
+            clientRequestId: "retry-1",
+          });
+          assert.deepEqual(result.notes, ["prepared"]);
+          const [request] = yield* Ref.get(dispatched);
+          const accepted =
+            typeof request === "object" &&
+            request !== null &&
+            "commandId" in request &&
+            typeof request.commandId === "string"
+              ? derive.delegatedTaskThread({ commandId: CommandId.make(request.commandId) })
+              : "none";
+          assert.deepEqual(yield* Ref.get(calls), [`accepted ${accepted}`, "afterReplay"]);
+        }).pipe(
+          Effect.provide(
+            OrchestratorMcpService.layer.pipe(
+              Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
+              Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
 
-            Layer.provide(makeDependencies(dispatched, { alreadyDelegated: true })),
-            Layer.provide(trackingPreparation(calls)),
+              Layer.provide(makeDependencies(dispatched, { alreadyDelegated: true })),
+              Layer.provide(trackingPreparation(calls)),
+            ),
           ),
-        ),
-      );
-    }),
+        );
+      }),
   );
 
   it("the default hook keeps the resolved model and adds nothing", () => {

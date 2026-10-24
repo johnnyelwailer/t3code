@@ -144,6 +144,7 @@ const make = Effect.gen(function* () {
                 workspace: input.workspace,
                 requestKey: input.requestKey,
                 modelSelection: effort.modelSelection,
+                acceptedChild: input.acceptedChildThreadId,
               });
         if (cloud !== undefined) notes.push(cloud.note);
         const isolated = input.workspace?.isolation === "worktree" ? input.workspace : undefined;
@@ -202,6 +203,7 @@ const make = Effect.gen(function* () {
               }),
           notes,
           afterCreate,
+          ...(cloud === undefined ? {} : { afterReplay: cloud.afterReplay }),
         };
       }),
   };
