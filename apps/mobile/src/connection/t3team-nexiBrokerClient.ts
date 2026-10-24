@@ -21,8 +21,12 @@ export type NexiHost = typeof Host.Type;
 
 export function mobileBrokerEnabled(
   configs: Iterable<{ featureFlags?: Readonly<Record<string, boolean>> }>,
+  preset: Readonly<Record<string, boolean>> = {},
 ) {
-  return [...configs].some((config) => config.featureFlags?.NEXI_MOBILE_BROKER === true);
+  return (
+    preset.NEXI_MOBILE_BROKER === true ||
+    [...configs].some((config) => config.featureFlags?.NEXI_MOBILE_BROKER === true)
+  );
 }
 
 export function createMobileBrokerClient(deps: {

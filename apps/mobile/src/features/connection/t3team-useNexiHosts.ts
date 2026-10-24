@@ -12,14 +12,19 @@ import { mobileBroker } from "../../connection/t3team-nexiBroker";
 import { mobileBrokerEnabled, type NexiHost } from "../../connection/t3team-nexiBrokerClient";
 import { closeNexiTunnels } from "../../connection/t3team-nexiNative";
 import { nexiAccount } from "./t3team-nexiAccount";
+import { nexiFeatureFlagPreset } from "./t3team-nexiConfig";
 import type { NexiDeviceCode } from "./t3team-nexiOAuth";
 
-export function useNexiHosts() {
-  const enabled = mobileBrokerEnabled(useServerConfigs().values());
+const flagPreset = nexiFeatureFlagPreset();
+
+/** `onConnected` defaults to leaving the add-environment screen the hook was opened from. */
+export function useNexiHosts(options: { readonly onConnected?: () => void } = {}) {
+  const enabled = mobileBrokerEnabled(useServerConfigs().values(), flagPreset);
   const [hosts, setHosts] = useState<readonly NexiHost[]>([]);
   const [code, setCode] = useState<NexiDeviceCode | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
   const operation = useRef<AbortController | null>(null);
   const navigation = useNavigation();
   const register = useAtomCommand(environmentCatalog.register, { reportFailure: false });
@@ -34,6 +39,13 @@ export function useNexiHosts() {
     },
     [],
   );
+  useEffect(() => {
+    if (!enabled || !nexiAccount) return;
+    void nexiAccount.accessToken().then(
+      () => setSignedIn(true),
+      () => setSignedIn(false),
+    );
+  }, [enabled]);
   useEffect(() => {
     if (!enabled) {
       operation.current?.abort();
@@ -60,10 +72,13 @@ export function useNexiHosts() {
   };
   const refresh = async (signal: AbortSignal) => {
     const mine = await mobileBroker.hosts();
-    if (!signal.aborted) setHosts(mine);
+    if (signal.aborted) return;
+    setHosts(mine);
+    setSignedIn(true);
   };
   return {
     enabled,
+    signedIn,
     hosts,
     code,
     error,
@@ -95,13 +110,16 @@ export function useNexiHosts() {
         );
         if (AsyncResult.isFailure(result))
           throw new Error("Could not attach the desktop. Check its connection and try again.");
-        if (!signal.aborted) navigation.goBack();
+        if (signal.aborted) return;
+        if (options.onConnected) options.onConnected();
+        else navigation.goBack();
       }),
     signOut: () =>
       run(async () => {
         closeNexiTunnels();
         await nexiAccount!.signOut();
         setHosts([]);
+        setSignedIn(false);
       }),
   };
 }

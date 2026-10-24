@@ -4,12 +4,13 @@ import {
 } from "@t3tools/client-runtime/connection";
 import * as Effect from "effect/Effect";
 import { appAtomRegistry } from "../state/atom-registry";
-import { resolveNexiConfig } from "../features/connection/t3team-nexiConfig";
+import { nexiFeatureFlagPreset, resolveNexiConfig } from "../features/connection/t3team-nexiConfig";
 import { nexiAccount } from "../features/connection/t3team-nexiAccount";
 import { createMobileBrokerClient, mobileBrokerEnabled } from "./t3team-nexiBrokerClient";
 import { nexiNative, closeNexiTunnels } from "./t3team-nexiNative";
 
 const config = resolveNexiConfig();
+const flagPreset = nexiFeatureFlagPreset();
 let watchingFlags = false;
 export const mobileBroker = createMobileBrokerClient({
   brokerUrl: config?.brokerUrl ?? "",
@@ -19,12 +20,12 @@ export const mobileBroker = createMobileBrokerClient({
     if (!watchingFlags) {
       watchingFlags = true;
       appAtomRegistry.subscribe(environmentServerConfigsAtom, (configs) => {
-        if (!mobileBrokerEnabled(configs.values())) closeNexiTunnels();
+        if (!mobileBrokerEnabled(configs.values(), flagPreset)) closeNexiTunnels();
       });
     }
     return (
       config !== null &&
-      mobileBrokerEnabled(appAtomRegistry.get(environmentServerConfigsAtom).values())
+      mobileBrokerEnabled(appAtomRegistry.get(environmentServerConfigsAtom).values(), flagPreset)
     );
   },
   accessToken: async () => {
