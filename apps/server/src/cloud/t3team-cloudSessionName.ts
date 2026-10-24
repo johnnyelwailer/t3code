@@ -5,8 +5,9 @@ import * as Random from "effect/Random";
 /**
  * A session's name rides in its correlation tag: `workflow_dispatch` reveals nothing else of a run
  * than its `run-name`, which echoes the tag as `[<tag>]`. A project-machine session's tag is
- * `<repository name>.s<random>`, a plain one's `s<random>`; the random part keeps every tag unique. The name segment rule is shared with the session
- * selector (`cloudSessionNameSegment`), so a listed name and a repository name compare alike.
+ * `<repository name>.s<random>`, a plain one's `s<random>`; the random part keeps every tag unique.
+ * The name segment rule is shared with the session selector (`cloudSessionNameSegment`), so a
+ * listed name and a repository name compare alike.
  *
  * A correlation tag for one dispatch. Random rather than time-based: two clients dispatching in
  * the same millisecond must not collide, which is the whole failure this exists to prevent.
