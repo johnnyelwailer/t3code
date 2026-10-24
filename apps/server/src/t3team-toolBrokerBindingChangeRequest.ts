@@ -41,7 +41,7 @@ export function callT3TeamChangeRequestPublishTool(input: {
   const tool = T3TEAM_CHANGE_REQUEST_PUBLISH_TOOL_ID;
   const handlers = input.changeRequestTools;
   if (handlers === undefined) {
-    return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}`));
+    return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
   }
   return decodeArgs(input.toolArgs).pipe(
     Effect.matchEffect({
