@@ -2,6 +2,7 @@ import {
   BrokerEnvironmentGateway,
   ConnectionBlockedError,
   ConnectionTransientError,
+  sessionEndedError,
 } from "@t3tools/client-runtime/connection";
 import * as Effect from "effect/Effect";
 
@@ -24,21 +25,32 @@ function clientSharesServerMachine(): boolean {
   }
 }
 
+/**
+ * How a failed broker call maps onto the connection supervisor. Sign-in problems and an ended
+ * session block (retrying cannot help); everything else is transient and retried with backoff.
+ */
+export function mapBrokerCallFailure(
+  cause: unknown,
+): ConnectionBlockedError | ConnectionTransientError {
+  if (cause instanceof CredentialRequestError && cause.reason === "session_ended") {
+    return sessionEndedError(cause.message);
+  }
+  if (
+    cause instanceof CredentialRequestError &&
+    (cause.reason === "broker_sign_in_required" || cause.reason === "unauthorized")
+  ) {
+    return new ConnectionBlockedError({ reason: "authentication", detail: cause.message });
+  }
+  return new ConnectionTransientError({
+    reason: "remote-unavailable",
+    detail: cause instanceof Error ? cause.message : String(cause),
+  });
+}
+
 const call = <A>(run: () => Promise<A>) =>
   Effect.tryPromise({
     try: run,
-    catch: (cause) => {
-      if (
-        cause instanceof CredentialRequestError &&
-        (cause.reason === "broker_sign_in_required" || cause.reason === "unauthorized")
-      ) {
-        return new ConnectionBlockedError({ reason: "authentication", detail: cause.message });
-      }
-      return new ConnectionTransientError({
-        reason: "remote-unavailable",
-        detail: cause instanceof Error ? cause.message : String(cause),
-      });
-    },
+    catch: mapBrokerCallFailure,
   });
 
 const requireSameMachine = Effect.suspend(() =>

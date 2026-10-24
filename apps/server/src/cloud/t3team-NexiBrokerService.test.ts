@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { sessionToAttach } from "./t3team-NexiBrokerService.ts";
+import { attachFailure, sessionToAttach } from "./t3team-NexiBrokerService.ts";
 
 const live = { runId: "300", environmentId: "env-ws" };
 const other = { runId: "301", environmentId: "env-other" };
@@ -38,5 +38,18 @@ describe("sessionToAttach", () => {
   it("does not take a session that has not reported its environment yet", () => {
     const starting = { runId: "302", environmentId: null };
     expect(sessionToAttach([starting], { sessionId: "302" })).toBeUndefined();
+  });
+});
+
+describe("attachFailure", () => {
+  it("calls a session the broker no longer lists ended: terminal, so clients stop retrying", () => {
+    const failure = attachFailure([live, other], { sessionId: "200", environmentId: "env-gone" });
+    expect(failure.reason).toBe("session_ended");
+  });
+
+  it("keeps a listed session without an environment retryable: its machine is still registering", () => {
+    const starting = { runId: "302" };
+    const failure = attachFailure([live, starting], { sessionId: "302" });
+    expect(failure.reason).toBe("unknown_session");
   });
 });

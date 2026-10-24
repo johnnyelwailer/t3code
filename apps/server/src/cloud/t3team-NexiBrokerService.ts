@@ -84,6 +84,27 @@ export function sessionToAttach<
     );
 }
 
+/**
+ * Why no session can be attached. A session the broker lists without an environment id is still
+ * starting (its machine has not registered yet): retrying can succeed. One the broker does not
+ * list, and no live session serves its environment, is over — a client must stop retrying it.
+ */
+export function attachFailure(
+  sessions: ReadonlyArray<{ readonly runId: string }>,
+  input: CloudSessionAttachInput,
+): CloudSessionFailedError {
+  const starting = sessions.some((s) => s.runId === input.sessionId);
+  return starting
+    ? new CloudSessionFailedError({
+        reason: "unknown_session",
+        message: "That cloud session is not running yet: it is still starting.",
+      })
+    : new CloudSessionFailedError({
+        reason: "session_ended",
+        message: "That cloud session has ended.",
+      });
+}
+
 const notEnabled = new CloudSessionFailedError({
   reason: "broker_unavailable",
   message: "This build has no Nexi broker configured.",
@@ -137,10 +158,7 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
       }
       const session = sessionToAttach(sessions, input);
       if (session === undefined || !session.environmentId) {
-        return yield* new CloudSessionFailedError({
-          reason: "unknown_session",
-          message: "That cloud session is not running: it is still starting, or it has ended.",
-        });
+        return yield* attachFailure(sessions, input);
       }
       const sessionId = session.runId;
       let forwarder = forwarders.get(sessionId);

@@ -13,6 +13,12 @@ export const CloudSessionFailureReasonSchema = Schema.Literals([
   /** The session id does not correspond to a known session. */
   "unknown_session",
   /**
+   * The session an attach asked for is not running any more: the broker's list holds neither it
+   * nor a live session serving the same environment. Terminal, unlike `unknown_session` (which
+   * also covers a session that is still starting): a client stops retrying and offers a new one.
+   */
+  "session_ended",
+  /**
    * No usable T3 Connect credential exists on the creator's machine, so a
    * per-session credential cannot be handed to the VM. The remediation is to
    * sign in to T3 Connect on this machine; the client should surface a link,
