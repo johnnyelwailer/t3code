@@ -1,14 +1,8 @@
 /**
- * Which cloud session fits a project: the one rule the web client (a composer bound to a session)
- * and the server (a delegated child started on a session) share, so the two cannot disagree about
- * which machine is "this project's".
- *
- * A session fits in two stages. Before attaching, only the listed record is known: a session the
- * broker reaches, for the project's repository, with enough of its hold left
- * (`selectFittingCloudSession`). After attaching, the session's server reports its own project —
- * the one whose workspace root is that server's `cwd` (`ownProjectOnMachine`) — and that project
- * must be the same project (`isSameCloudSessionProject`). Ownership is not checked here: every
- * session list a caller has is already scoped to the signed-in user.
+ * Which cloud session fits a project. The own-project rules (`projectCwdOf`,
+ * `ownProjectOnMachine`, `isSameCloudSessionProject`) and the tag name segment are shared by the
+ * web composer and the server; the pre-attach selector is the server's (delegate_task). Every
+ * session list is already scoped to the signed-in user, so ownership is not checked here.
  */
 import {
   type CloudSession,
@@ -76,10 +70,6 @@ export function ownProjectOnMachine<P extends { readonly workspaceRoot: string }
   );
 }
 
-export type CloudSessionFit =
-  | { readonly kind: "ready"; readonly session: CloudSession }
-  | { readonly kind: "starting"; readonly session: CloudSession };
-
 type FitSession = Pick<
   CloudSession,
   | "sessionId"
@@ -135,11 +125,9 @@ const bySessionId = (left: FitSession, right: FitSession) =>
  * `isSameCloudSessionProject` compares the session's own project by `repositoryGroupingKeyOf`,
  * and a session that fails it is passed back in `excludeSessionIds`.
  *
- * A candidate is reachable through the broker and named for the repository. A ready one with its
- * environment linked and at least `minRemainingSeconds` of hold left wins (most hold left, then
- * session id); a hold of unknown length does not qualify. Otherwise the newest one still starting
- * (including a ready one whose environment is not linked yet) is returned, so no duplicate is
- * started. Null means none fits. A project without a repository never matches a listed session.
+ * Ready with its environment linked and `minRemainingSeconds` of known hold left wins (most hold,
+ * then session id); else the newest still starting, a ready one without its environment included.
+ * Null: none fits. A project without a repository never matches a listed session.
  */
 export function selectFittingCloudSession<S extends FitSession>(input: {
   readonly sessions: ReadonlyArray<S>;
@@ -147,7 +135,7 @@ export function selectFittingCloudSession<S extends FitSession>(input: {
   readonly nowMs: number;
   readonly minRemainingSeconds?: number;
   readonly excludeSessionIds?: ReadonlyArray<string>;
-}): { readonly kind: CloudSessionFit["kind"]; readonly session: S } | null {
+}): { readonly kind: "ready" | "starting"; readonly session: S } | null {
   const repositoryName = input.repositoryName === null ? "" : comparableName(input.repositoryName);
   if (repositoryName === "") return null;
   const minimum = input.minRemainingSeconds ?? CLOUD_SESSION_MIN_REMAINING_SECONDS;
