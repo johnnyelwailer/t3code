@@ -53,6 +53,7 @@ import {
 import { useT3TeamChatTimelineProps } from "~/t3team/chat/t3team-useChatTimelineProps";
 import { useT3TeamStopCascade } from "~/t3team/chat/t3team-useStopCascade";
 import { useT3TeamActiveAgents } from "~/t3team/chat/t3team-useActiveAgents";
+import { useCloudSessionRestartProjectId } from "~/cloud/t3team-useCloudSessionOwnProject";
 import { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionComposerGate";
 import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
 import { useCloudQueuedSendOptimisticMessage } from "~/cloud/t3team-useCloudQueuedSendOptimisticMessage";
@@ -1299,11 +1300,7 @@ export default function ChatView(props: ChatViewProps) {
     environmentId,
     threadId: activeThreadId,
   });
-  // t3team: an ended cloud session replaces the generic "is offline" notice. Restarting it must
-  // keep the ended session's project: that project's primary-environment copy is what a new
-  // session is created for, so it restores the same machine and environment id.
-  const endedSessionRestartProjectId =
-    logicalProjectEnvironments.find((environment) => environment.isPrimary)?.projectId ?? null;
+  const endedSessionRestartProjectId = useCloudSessionRestartProjectId(environmentId);
   const cloudSessionEndedBanner = useCloudSessionEndedBannerItem(
     environmentId,
     endedSessionRestartProjectId,

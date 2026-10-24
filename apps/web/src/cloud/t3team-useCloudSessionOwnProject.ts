@@ -2,11 +2,12 @@ import type { EnvironmentId, ScopedProjectRef } from "@t3tools/contracts";
 import { useMemo } from "react";
 
 import { useProject, useProjects } from "~/state/entities";
-import { useEnvironments } from "~/state/environments";
+import { useEnvironments, usePrimaryEnvironmentId } from "~/state/environments";
 import { useCloudSessions } from "~/state/t3team-cloudSessions";
 import {
   type CloudSessionOwnProject,
   projectCwdOf,
+  resolveCloudSessionRestartProjectId,
   resolveCloudSessionOwnProject,
 } from "./t3team-cloudSessionOwnProject";
 import { useCloudSessionTarget } from "./t3team-cloudSessionTargetStore";
@@ -41,4 +42,17 @@ export function useCloudSessionOwnProject(
       projects,
     });
   }, [environments, project, projectKey, projects, sessions, target]);
+}
+
+export function useCloudSessionRestartProjectId(environmentId: EnvironmentId | null) {
+  const { environments } = useEnvironments();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const projects = useProjects();
+  const environment = environments.find((entry) => entry.environmentId === environmentId);
+  return resolveCloudSessionRestartProjectId({
+    environmentId,
+    primaryEnvironmentId,
+    projects,
+    serverCwd: projectCwdOf(environment?.serverConfig),
+  });
 }
