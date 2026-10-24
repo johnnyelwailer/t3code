@@ -37,9 +37,9 @@ function optInMcpTools(): ReadonlyMap<string, string> {
 }
 
 /** `tools` without the opt-in tools the calling thread cannot call. */
-export const filterToolsForCaller = Effect.fn("filterToolsForCaller")(function* <
-  T extends ListedTool,
->(tools: ReadonlyArray<T>) {
+const filterToolsForCaller = Effect.fn("filterToolsForCaller")(function* <T extends ListedTool>(
+  tools: ReadonlyArray<T>,
+) {
   const optIn = optInMcpTools();
   if (!tools.some((tool) => optIn.has(tool.name))) return tools;
   const broker = yield* Effect.serviceOption(T3TeamToolBroker);
