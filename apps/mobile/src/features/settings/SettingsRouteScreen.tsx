@@ -18,6 +18,7 @@ import {
   SettingsEnvironmentFilterHeader,
 } from "./components/SettingsEnvironmentFilterHeader";
 import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
+import { showsDistributionScrollIndicator } from "../../components/ui/t3team-scrollIndicators";
 
 export function SettingsRouteScreen() {
   const navigation = useNavigation();
@@ -72,7 +73,7 @@ function ConfiguredSettingsRouteScreen() {
     <View collapsable={false} className="flex-1 bg-sheet">
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={showsDistributionScrollIndicator}
         className="flex-1"
         contentContainerClassName="gap-4 px-5 pt-4"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
@@ -110,7 +111,7 @@ function LocalSettingsRouteScreen() {
     <View collapsable={false} className="flex-1 bg-sheet">
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={showsDistributionScrollIndicator}
         className="flex-1"
         contentContainerClassName="gap-4 px-5 pt-4"
         contentContainerStyle={{
