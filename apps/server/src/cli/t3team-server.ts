@@ -35,6 +35,7 @@ import {
 } from "../t3team-pack-completionWakeRenderer.ts";
 import { loadPackPersistence } from "../t3team-packPersistence.ts";
 import { loadPackFeatureFlags } from "../t3team-pack-featureFlags.ts";
+import { loadPackHostServices } from "../t3team-pack-hostServices.ts";
 import { registerPackCollections } from "../t3team-packDocumentConfig.ts";
 import { setPackAppearanceOverlay } from "../t3team-pack-appearanceOverlay.ts";
 import {
@@ -216,6 +217,14 @@ export const runT3TeamServerCommand = (
       }).pipe(
         Effect.catch((cause) =>
           Effect.logWarning("Workspace pack feature flag loading failed", { cause }),
+        ),
+      );
+      yield* Effect.tryPromise({
+        try: () => loadPackHostServices(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack host service loading failed", { cause }),
         ),
       );
       yield* Effect.tryPromise({

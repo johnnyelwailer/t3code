@@ -45,6 +45,7 @@ import {
 
 import { registerCompiledPackPersistence } from "./t3team-compiledPackPersistence.ts";
 import { setPackAccounts } from "./account/t3team-packAccounts.ts";
+import { registerHostService } from "./t3team-hostServiceRegistry.ts";
 import { setDistributionModelPolicy } from "./t3team-configuredDefaultModelSelection.ts";
 import { packAiProvidersToInstanceConfigMap } from "./t3team-pack-aiProvider.ts";
 import { setPackColdLocalCompactionRoutes } from "./t3team-pack-coldLocalCompactionRoute.ts";
@@ -149,6 +150,7 @@ export const activateCompiledInDistribution = async (): Promise<void> => {
         accounts.push(defineAccount(definition));
       },
       defineFeatureFlags: registerPackFeatureFlagDefinitions,
+      defineHostService: registerHostService,
       resolveAssetDataUrl: async (relativePath) => {
         const inlined = distributionAssets[relativePath];
         if (inlined) return inlined;
