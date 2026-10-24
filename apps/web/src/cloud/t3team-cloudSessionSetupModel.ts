@@ -86,7 +86,7 @@ function sessionPendingStepId(
     case "starting":
       return "start";
     default:
-      return "connect";
+      return "start";
   }
 }
 
@@ -124,20 +124,21 @@ export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel 
   const shape = cloudSetupShape(session);
   const measuredTiming = session?.timing;
   const timing = measuredTiming ?? FALLBACK_TIMING[shape];
+  // Connecting and sending only exist once a first message waits on the session: until then
+  // nothing in this app asks for the machine, so "ready" is the end of the list.
   const ids: readonly CloudSetupStepId[] =
     delivery === "none"
       ? STEP_IDS_BY_SHAPE[shape]
-      : ([...STEP_IDS_BY_SHAPE[shape], "deliver"] as const);
+      : ([...STEP_IDS_BY_SHAPE[shape], "connect", "deliver"] as const);
 
   const sendFailure = facts.sendFailure ?? null;
   const failed =
     sendFailure !== null ||
     (session !== null && (session.phase === "failed" || session.phase === "cancelled"));
   const pending = session === null || isCloudSessionProvisionPending(session.phase);
-  const ready = session !== null && session.phase === "ready" && facts.machineConnected;
   const stage: CloudSetupStage = failed
     ? "failed"
-    : ready && delivery === "none"
+    : session?.phase === "ready" && delivery === "none"
       ? "ready"
       : "working";
 
@@ -146,7 +147,7 @@ export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel 
   else if (session?.phase === "ready" && facts.machineConnected && delivery !== "none") {
     currentId = "deliver";
   } else currentId = "connect";
-  if (stage === "ready") currentId = "connect";
+  if (stage === "ready") currentId = ids.at(-1)!;
   const rawIndex = ids.indexOf(currentId);
   const currentIndex = stage === "ready" ? ids.length - 1 : Math.max(0, rawIndex);
   const steps = ids.map((id, index): CloudSetupStepView => ({

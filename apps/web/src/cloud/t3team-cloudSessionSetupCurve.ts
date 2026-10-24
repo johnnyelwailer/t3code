@@ -9,7 +9,7 @@ import {
   FINAL_STEP_CEILING,
   FINAL_STEP_SECONDS,
 } from "./t3team-cloudSessionSetupSteps";
-import type { CloudSetupModel } from "./t3team-cloudSessionSetupModel";
+import { isFinalStep, type CloudSetupModel } from "./t3team-cloudSessionSetupModel";
 
 /** How close to a step's end its curve flattens, so the bar eases in rather than stopping dead. */
 const STEP_CURVE_SPAN = 0.96;
@@ -26,9 +26,12 @@ export function cloudSetupElapsedSeconds(
 }
 
 export function stepEndSeconds(model: CloudSetupModel, index: number): number {
-  const next = model.stepStarts[index + 1];
-  if (next !== undefined && next > (model.stepStarts[index] ?? 0)) return next;
-  return (model.stepStarts[index] ?? 0) + FINAL_STEP_SECONDS;
+  const start = model.stepStarts[index] ?? 0;
+  // The last step before "ready" ends when the session is typically ready.
+  const next =
+    model.stepStarts[index + 1] ??
+    (isFinalStep(model.steps[index]?.id) ? undefined : model.timing.readyTypicalSeconds);
+  return next !== undefined && next > start ? next : start + FINAL_STEP_SECONDS;
 }
 
 export function stepDurationSeconds(model: CloudSetupModel, index: number): number {

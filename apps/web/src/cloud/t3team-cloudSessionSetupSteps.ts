@@ -87,10 +87,10 @@ export const STEP: Record<CloudSetupStepId, StepDefinition> = {
 };
 
 export const STEP_IDS_BY_SHAPE: Record<CloudSetupShape, readonly CloudSetupStepId[]> = {
-  plain: ["reserve", "workspace", "start", "connect"],
+  plain: ["reserve", "workspace", "start"],
   // A setup session checks the project out on the host so an agent can write its machine.
-  setup: ["reserve", "fetch", "start", "connect"],
-  machine: ["reserve", "fetch", "build", "check", "install", "start", "connect"],
+  setup: ["reserve", "fetch", "start"],
+  machine: ["reserve", "fetch", "build", "check", "install", "start"],
 };
 
 /** The progress bar's ceiling until the session is truly ready: never claim "done" early. */
