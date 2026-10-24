@@ -8,7 +8,7 @@ import * as FetchHttpClient from "effect/http/FetchHttpClient";
 
 import { CloudSessionService } from "./cloud/t3team-CloudSessionService.ts";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
-import { remoteEnvironmentPlacementsLayer } from "./t3team-remoteEnvironmentPlacements.ts";
+import { remoteEnvironmentPlacementsMemoryLayer } from "./t3team-remoteEnvironmentPlacements.ts";
 import { CloudSessionAccess } from "./t3team-remoteEnvironmentServices.ts";
 import * as NexiBrokerService from "./cloud/t3team-NexiBrokerService.ts";
 import {
@@ -26,7 +26,7 @@ const fakePlacement = delegateCloudSessionPlacementLayer.pipe(
   Layer.provide(NexiBrokerService.layerDisabled),
   Layer.provide(Layer.mock(ThreadManagementService)({})),
   Layer.provide(Layer.mock(CloudSessionAccess)({})),
-  Layer.provide(remoteEnvironmentPlacementsLayer),
+  Layer.provide(remoteEnvironmentPlacementsMemoryLayer),
   Layer.provide(FetchHttpClient.layer),
 );
 

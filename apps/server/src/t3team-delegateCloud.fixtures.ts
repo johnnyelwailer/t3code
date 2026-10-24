@@ -19,6 +19,7 @@ import type {
   CloudSessionPlacementInput,
   DelegateCloudSessions,
 } from "./t3team-delegateTaskCloudTypes.ts";
+import { makeMemoryCloudChildPlacementMarkers } from "./t3team-cloudChildPlacementMarkers.ts";
 import { makeRemoteEnvironmentPlacements } from "./t3team-remoteEnvironmentPlacements.ts";
 
 export const PROJECT_ID = ProjectId.make("project:qa");
@@ -80,7 +81,7 @@ export const fakeCloudSessions = Effect.fn("fakeCloudSessions")(function* (input
       limit: input.limit ?? 3,
       isActive: (threadId) => Effect.succeed((input.active ?? []).includes(threadId)),
     }),
-    placements: yield* makeRemoteEnvironmentPlacements,
+    placements: yield* makeRemoteEnvironmentPlacements(yield* makeMemoryCloudChildPlacementMarkers),
     replays: yield* makeCloudPlacementReplays,
   };
   return { sessions, starts };

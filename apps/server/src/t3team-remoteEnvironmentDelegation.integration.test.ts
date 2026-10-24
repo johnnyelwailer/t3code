@@ -35,6 +35,7 @@ import {
 import { makePackOrchestrationAdapter } from "./t3team-pack-driverAdapter.ts";
 import { makeRemoteEnvironmentAdapter } from "./t3team-remoteEnvironmentAdapter.ts";
 import { makeRemoteEnvironmentAuthorizer } from "./t3team-remoteEnvironmentAuthorize.ts";
+import { makeMemoryCloudChildPlacementMarkers } from "./t3team-cloudChildPlacementMarkers.ts";
 import { makeRemoteEnvironmentPlacements } from "./t3team-remoteEnvironmentPlacements.ts";
 import { fakeRemote, REPOSITORY, view } from "./t3team-remoteEnvironmentSession.fixtures.ts";
 import {
@@ -75,7 +76,9 @@ it.live("a delegated child runs its turn on the cloud session and completes here
         },
       },
     });
-    const placements = yield* makeRemoteEnvironmentPlacements;
+    const placements = yield* makeRemoteEnvironmentPlacements(
+      yield* makeMemoryCloudChildPlacementMarkers,
+    );
     const registry = ProviderAdapterRegistry.layerFromAdaptersEffect(
       Effect.gen(function* () {
         const requests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
@@ -93,7 +96,6 @@ it.live("a delegated child runs its turn on the cloud session and completes here
             authorize: makeRemoteEnvironmentAuthorizer({
               placements,
               ownSessionIds: Effect.succeed(["run-41"]),
-              repositoryKeyOf: () => Effect.succeed(null),
             }),
           }),
         ];
