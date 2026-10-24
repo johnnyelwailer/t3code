@@ -66,6 +66,7 @@ function facts(input: {
   readonly draftProject: EnvironmentProject;
   readonly projects: ReadonlyArray<EnvironmentProject>;
   readonly queuedProjectKey?: string | null;
+  readonly cloudScratchRoot?: string | null;
 }) {
   return resolveCloudQueuedSendFacts({
     queued: { ...queued, projectKey: input.queuedProjectKey ?? null },
@@ -86,7 +87,10 @@ function facts(input: {
         environmentId: cloud,
         connection: { phase: "connected" },
         serverConfig: {
-          scratchWorkspaceRoot: "/home/runner/.t3/scratch",
+          scratchWorkspaceRoot:
+            input.cloudScratchRoot === undefined
+              ? "/home/runner/.t3/scratch"
+              : input.cloudScratchRoot,
           cwd: "/workspace/app",
           projectFromCwd: true,
         },
@@ -162,6 +166,13 @@ describe("resolveCloudQueuedSendFacts project wait", () => {
     expect(facts({ draftProject: scratchDraft, projects: [] }).projectWait?.reason).toBe(
       "scratch-opening",
     );
+  });
+
+  it("says a No-project draft is held when the machine's settings name no scratch folder", () => {
+    const scratchDraft = project(local, "scratch-local", "/Users/me/.t3/scratch");
+    const result = facts({ draftProject: scratchDraft, projects: [], cloudScratchRoot: null });
+    expect(result).toMatchObject({ scratch: true, project: null, machineConnected: true });
+    expect(result.projectWait?.reason).toBe("scratch-folder-unknown");
   });
 });
 

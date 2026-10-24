@@ -121,6 +121,16 @@ function stepTitle(
   }
 }
 
+/** What the "Project ready" step waits on while it is the current, live step; null otherwise. */
+export function currentCloudProjectWait(facts: CloudSessionStepFacts): CloudProjectWait | null {
+  const failed =
+    (facts.queued !== undefined && isCloudQueuedSendFailed(facts.queued)) ||
+    (facts.session !== null && isTerminalCloudSessionPhase(facts.session.phase));
+  return !failed && resolveCloudQueuedSendStepId(facts) === "project"
+    ? (facts.projectWait ?? null)
+    : null;
+}
+
 export function presentCloudQueuedSendProgress(
   facts: CloudSessionStepFacts,
   nowMs: number,
@@ -133,7 +143,7 @@ export function presentCloudQueuedSendProgress(
   const stamps = facts.queued?.stepStartedAt ?? {};
   const presentation = facts.session === null ? null : presentCloudSession(facts.session);
   const machineDetail = facts.session?.phase === "preparing" ? (presentation?.title ?? null) : null;
-  const projectWait = currentStepId === "project" && !failed ? (facts.projectWait ?? null) : null;
+  const projectWait = currentCloudProjectWait(facts);
   const steps = CLOUD_QUEUED_SEND_STEP_IDS.map((id, index): CloudQueuedSendStepView => {
     const startedAt = stamps[id] === undefined ? Number.NaN : Date.parse(stamps[id]);
     const nextStamp = CLOUD_QUEUED_SEND_STEP_IDS.slice(index + 1)

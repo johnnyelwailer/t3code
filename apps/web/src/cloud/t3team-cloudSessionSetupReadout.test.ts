@@ -1,4 +1,4 @@
-import type { CloudSession } from "@t3tools/contracts";
+import { EnvironmentId, type CloudSession } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { CLOUD_SESSION_ROUGH_READY_SECONDS } from "~/components/cloud/t3team-cloudSessionProvisionTiming";
@@ -9,6 +9,12 @@ import {
   readCloudSetup,
   type CloudSetupFacts,
 } from "./t3team-cloudSessionSetupProgress";
+import { classifyCloudProjectWait, type CloudProjectWaitInput } from "./t3team-cloudProjectWait";
+import {
+  CLOUD_PROJECT_WAIT_EXPECTED_SECONDS,
+  CLOUD_PROJECT_WAIT_SLOW_SECONDS,
+  presentCloudProjectWait,
+} from "./t3team-cloudProjectWaitPresentation";
 
 function session(phase: CloudSession["phase"], extra: Partial<CloudSession> = {}): CloudSession {
   return {
@@ -146,7 +152,56 @@ describe("progress", () => {
       readCloudSetup(model({ session: session("ready", { projectMachine: true }) }), 900).progress,
     ).toBe(1);
     const pending = model({ session: session("ready"), delivery: "queued" });
-    expect(readCloudSetup(pending, 10_000).progress).toBeLessThan(1);
+    expect(readCloudSetup(pending, 200).progress).toBeLessThan(1);
     expect(readCloudSetup(model({ session: null }), 10_000).progress).toBe(0);
+  });
+});
+
+describe("progress while a message waits on the project", () => {
+  const waiting = model({
+    session: session("ready"),
+    machineConnected: true,
+    projectReady: false,
+    delivery: "queued",
+  });
+  const notice = (seconds: number, over: Partial<CloudProjectWaitInput> = {}) =>
+    presentCloudProjectWait(
+      classifyCloudProjectWait({
+        environmentId: EnvironmentId.make("env-cloud"),
+        scratch: false,
+        machineSettingsLoaded: true,
+        expectedCwd: "/workspace/app",
+        scratchRoot: null,
+        composer: null,
+        projects: [],
+        ...over,
+      }),
+      seconds,
+    );
+
+  it("stays determinate, below full, in the short hand-off", () => {
+    const { progress } = readCloudSetup(
+      waiting,
+      300,
+      notice(CLOUD_PROJECT_WAIT_EXPECTED_SECONDS - 1),
+    );
+    expect(progress).not.toBeNull();
+    expect(progress ?? 1).toBeLessThan(1);
+  });
+
+  it("claims no fraction once the project wait is past its expected point", () => {
+    for (const seconds of [
+      CLOUD_PROJECT_WAIT_EXPECTED_SECONDS,
+      CLOUD_PROJECT_WAIT_SLOW_SECONDS,
+      900,
+    ]) {
+      expect(readCloudSetup(waiting, 10_000, notice(seconds)).progress).toBeNull();
+    }
+  });
+
+  it("claims no fraction for a wait that cannot end by waiting", () => {
+    const blocking = notice(0, { scratch: true, scratchRoot: null });
+    expect(blocking.blocking).toBe(true);
+    expect(readCloudSetup(waiting, 300, blocking).progress).toBeNull();
   });
 });

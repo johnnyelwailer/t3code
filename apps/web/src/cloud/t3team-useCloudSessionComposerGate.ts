@@ -18,7 +18,7 @@ import {
   useDraftCloudQueuedSend,
 } from "./t3team-cloudQueuedSendStore";
 import { useCloudQueuedSendDispatching } from "./t3team-cloudQueuedSendDispatching";
-import { useCloudProjectWaitNow } from "./t3team-useCloudProjectWaitNow";
+import { useCloudQueuedSendProjectWaitNow } from "./t3team-useCloudProjectWaitNow";
 import { useCloudSessionController } from "./t3team-useCloudSessionController";
 import {
   useCloudSessionProjectFollow,
@@ -66,7 +66,6 @@ export function useCloudSessionComposerGate(input: {
 
   const queued = useDraftCloudQueuedSend(draftId);
   const flushing = useCloudQueuedSendDispatching(queued?.messageId ?? null);
-  const projectWaitNow = useCloudProjectWaitNow(queued ?? undefined);
 
   const tryQueueSend = useCallback(
     (turn: CloudQueuedTurn) =>
@@ -100,6 +99,7 @@ export function useCloudSessionComposerGate(input: {
     });
     return { ...facts, queued, projectReady: facts.project !== null, flushing };
   }, [cloud.sessions, draft, environments, flushing, projects, queued, settings]);
+  const projectWaitNow = useCloudQueuedSendProjectWaitNow(stepFacts);
   const canRetry = queued?.failureMessage !== undefined && queued.retryable !== false;
 
   const bannerItem = useMemo<ComposerBannerStackItem | null>(() => {

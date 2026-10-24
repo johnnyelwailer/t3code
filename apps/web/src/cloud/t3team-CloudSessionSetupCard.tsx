@@ -57,7 +57,11 @@ export function CloudSessionSetupCard({
     model.stage === "working",
     frozenElapsedSeconds,
   );
-  const projectWaitNow = useCloudProjectWaitNow(facts.queued, frozenNowMs);
+  const projectWaitNow = useCloudProjectWaitNow(
+    facts.queued,
+    model.projectWait !== null,
+    frozenNowMs,
+  );
   const slow = model.stage === "working" && readCloudSetup(model, elapsedSeconds).slow;
   const longWait = cloudSetupLongWaitNote(model);
   const meanwhile = cloudSetupMeanwhileNote(model);
@@ -106,7 +110,11 @@ export function CloudSessionSetupCard({
 
       {failed ? null : (
         <div className="mt-3.5">
-          <SetupLiveReadout model={model} elapsedSeconds={elapsedSeconds} />
+          <SetupLiveReadout
+            model={model}
+            elapsedSeconds={elapsedSeconds}
+            projectWait={projectWait}
+          />
         </div>
       )}
 
