@@ -25,6 +25,7 @@ import {
   logicalProjectPerEnvironment,
   projectCwdOf,
   resolveCloudSessionOwnProject,
+  targetFollowsProject,
 } from "./t3team-cloudSessionOwnProject";
 
 export interface CloudQueuedSendFacts {
@@ -134,7 +135,13 @@ export function resolveCloudQueuedSendFacts(input: {
             environmentId,
             scratch,
             machineSettingsLoaded: machine?.serverConfig != null,
-            expectedCwd: projectCwdOf(machine?.serverConfig),
+            expectedCwd: targetFollowsProject(
+              { projectKey: input.queued.projectKey ?? null },
+              composerProject,
+              projectKey,
+            )
+              ? projectCwdOf(machine?.serverConfig)
+              : null,
             scratchRoot: machine?.serverConfig?.scratchWorkspaceRoot ?? null,
             composer: composerProject,
             projects: projects.filter((p) => p.environmentId === environmentId),

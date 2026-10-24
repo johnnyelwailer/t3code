@@ -103,14 +103,15 @@ function facts(input: {
 
 describe("resolveCloudQueuedSendFacts project wait", () => {
   const draftProject = project(local, "app-local", "/Users/me/app", repo);
+  const KEY = "github.com/acme/app";
 
   it("says nothing once the project is on the machine", () => {
     const own = project(cloud, "app-own", "/workspace/app", repo);
-    expect(facts({ draftProject, projects: [own] }).projectWait).toBeNull();
+    expect(facts({ draftProject, projects: [own], queuedProjectKey: KEY }).projectWait).toBeNull();
   });
 
   it("tells an empty project list from a list without the project", () => {
-    const empty = facts({ draftProject, projects: [] }).projectWait;
+    const empty = facts({ draftProject, projects: [], queuedProjectKey: KEY }).projectWait;
     expect(empty).toMatchObject({
       reason: "project-list-pending",
       environmentId: "env-cloud",
@@ -119,7 +120,9 @@ describe("resolveCloudQueuedSendFacts project wait", () => {
       projectTitle: "app-local",
     });
     const other = project(cloud, "elsewhere", "/srv/elsewhere");
-    expect(facts({ draftProject, projects: [other] }).projectWait).toMatchObject({
+    expect(
+      facts({ draftProject, projects: [other], queuedProjectKey: KEY }).projectWait,
+    ).toMatchObject({
       reason: "project-not-listed",
       projectsSeen: 1,
     });
@@ -130,10 +133,28 @@ describe("resolveCloudQueuedSendFacts project wait", () => {
       ...repo,
       canonicalKey: "github.com/acme/other",
     });
-    expect(facts({ draftProject, projects: [foreign] }).projectWait).toMatchObject({
+    expect(
+      facts({ draftProject, projects: [foreign], queuedProjectKey: KEY }).projectWait,
+    ).toMatchObject({
       reason: "different-repository",
       machineProjectTitle: "foreign",
     });
+  });
+
+  it("names no machine folder when the send's target does not follow this project", () => {
+    const foreign = project(cloud, "foreign", "/workspace/app", {
+      ...repo,
+      canonicalKey: "github.com/acme/other",
+    });
+    for (const queuedProjectKey of [null, "github.com/acme/elsewhere"]) {
+      expect(
+        facts({ draftProject, projects: [foreign], queuedProjectKey }).projectWait,
+      ).toMatchObject({
+        reason: "no-matching-project",
+        expectedCwd: null,
+        machineProjectTitle: null,
+      });
+    }
   });
 
   it("waits on the scratch folder of a No-project draft", () => {

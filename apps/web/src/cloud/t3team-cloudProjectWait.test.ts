@@ -1,4 +1,4 @@
-import { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, type CloudSession } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { type CloudProjectWaitInput, classifyCloudProjectWait } from "./t3team-cloudProjectWait";
@@ -6,9 +6,14 @@ import {
   CLOUD_PROJECT_WAIT_EXPECTED_SECONDS,
   CLOUD_PROJECT_WAIT_SLOW_SECONDS,
   cloudProjectWaitDiagnostic,
-  cloudProjectWaitSeconds,
   presentCloudProjectWait,
 } from "./t3team-cloudProjectWaitPresentation";
+import {
+  cloudProjectWaitSeconds,
+  nextCloudProjectWaitChangeMs,
+  presentCloudProjectWaitAt,
+} from "./t3team-cloudProjectWaitClock";
+import { presentCloudQueuedSendProgress } from "./t3team-cloudQueuedSendSteps";
 import { decodeCloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import { buildCloudSessionSetup } from "./t3team-cloudSessionSetupModel";
 
@@ -45,7 +50,19 @@ describe("classifyCloudProjectWait", () => {
     const reason = (over: Partial<CloudProjectWaitInput>) =>
       classifyCloudProjectWait(input(over)).reason;
     expect(reason({ machineSettingsLoaded: false })).toBe("machine-settings-pending");
-    expect(reason({ scratch: true, scratchRoot: null })).toBe("machine-settings-pending");
+    expect(reason({ scratch: true, scratchRoot: null })).toBe("scratch-folder-unknown");
+    expect(reason({ scratch: true, scratchRoot: null, machineSettingsLoaded: false })).toBe(
+      "machine-settings-pending",
+    );
+    const unknown = presentCloudProjectWait(
+      classifyCloudProjectWait(input({ scratch: true, scratchRoot: null })),
+      CLOUD_PROJECT_WAIT_SLOW_SECONDS,
+    );
+    expect(unknown).toMatchObject({
+      detail: "The cloud machine reported no scratch folder",
+      blocking: true,
+    });
+    expect(unknown.text).not.toMatch(/report its settings|has not reported/);
     expect(reason({ scratch: true })).toBe("scratch-opening");
     expect(reason({})).toBe("project-list-pending");
     expect(reason({ projects: [machineProject("/srv/other", null)] })).toBe("project-not-listed");
@@ -139,6 +156,7 @@ describe("presentCloudProjectWait", () => {
 });
 
 describe("cloudProjectWaitSeconds", () => {
+  const projectAt = Date.parse("2026-10-13T08:12:05.000Z");
   const queued = decodeCloudQueuedSend({
     messageId: "msg-1",
     messageText: "hi",
@@ -149,14 +167,64 @@ describe("cloudProjectWaitSeconds", () => {
     interactionMode: "default",
     sessionId: "session-9",
     sessionLabel: "machine",
-    createdAt: "2026-10-13T08:00:00.000Z",
-    stepStartedAt: { project: "2026-10-13T08:02:00.000Z" },
+    createdAt: "2026-10-13T08:12:00.000Z",
+    stepStartedAt: { project: "2026-10-13T08:12:05.000Z" },
+  });
+  const at = (seconds: number) => projectAt + seconds * 1000;
+
+  it("counts from the project step's own stamp on the wall clock", () => {
+    expect(cloudProjectWaitSeconds(queued ?? undefined, at(-3))).toBe(0);
+    expect(cloudProjectWaitSeconds(queued ?? undefined, at(30))).toBe(30);
+    expect(cloudProjectWaitSeconds(undefined, at(30))).toBe(0);
   });
 
-  it("counts from the step's stamp on the card's own clock", () => {
-    expect(cloudProjectWaitSeconds(queued ?? undefined, 100)).toBe(0);
-    expect(cloudProjectWaitSeconds(queued ?? undefined, 150)).toBe(30);
-    expect(cloudProjectWaitSeconds(undefined, 150)).toBe(0);
+  it("names when the wording next changes, and nothing once it is slow", () => {
+    expect(nextCloudProjectWaitChangeMs(queued ?? undefined, at(1))).toBe(
+      at(CLOUD_PROJECT_WAIT_EXPECTED_SECONDS),
+    );
+    expect(nextCloudProjectWaitChangeMs(queued ?? undefined, at(20))).toBe(
+      at(CLOUD_PROJECT_WAIT_SLOW_SECONDS),
+    );
+    expect(nextCloudProjectWaitChangeMs(queued ?? undefined, at(95))).toBeNull();
+    expect(nextCloudProjectWaitChangeMs(undefined, at(1))).toBeNull();
+  });
+
+  it("does not call a send slow because its session was ready long before it was sent", () => {
+    const wait = classifyCloudProjectWait(input({}));
+    const level = (seconds: number) =>
+      presentCloudProjectWaitAt(wait, queued ?? undefined, at(seconds))?.level;
+    expect(level(1)).toBe("waiting");
+    expect(level(CLOUD_PROJECT_WAIT_EXPECTED_SECONDS)).toBe("expected");
+    expect(level(CLOUD_PROJECT_WAIT_SLOW_SECONDS - 1)).toBe("expected");
+    expect(level(CLOUD_PROJECT_WAIT_SLOW_SECONDS)).toBe("slow");
+  });
+
+  it("gives the composer banner the same level as the card at the same instant", () => {
+    const wait = classifyCloudProjectWait(input({}));
+    const session: CloudSession = {
+      sessionId: "session-9",
+      providerKind: "github_actions",
+      phase: "ready",
+      elapsedSeconds: 600,
+      remainingSeconds: null,
+      machineLabel: "machine",
+      failureReason: null,
+      detailsUrl: null,
+    };
+    for (const seconds of [1, 20, 89, 90, 400]) {
+      const banner = presentCloudQueuedSendProgress(
+        {
+          queued: queued ?? undefined,
+          session,
+          machineConnected: true,
+          projectReady: false,
+          projectWait: wait,
+          flushing: false,
+        },
+        at(seconds),
+      ).projectWait;
+      expect(banner).toEqual(presentCloudProjectWaitAt(wait, queued ?? undefined, at(seconds)));
+    }
   });
 });
 

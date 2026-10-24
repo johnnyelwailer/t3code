@@ -14,6 +14,7 @@ import { type ComposerProject, projectMismatchOf } from "./t3team-cloudSessionOw
 
 export type CloudProjectWaitReason =
   | "machine-settings-pending"
+  | "scratch-folder-unknown"
   | "scratch-opening"
   | "project-list-pending"
   | "project-not-listed"
@@ -24,7 +25,10 @@ export type CloudProjectWaitReason =
 export interface CloudProjectWait {
   readonly reason: CloudProjectWaitReason;
   readonly environmentId: string;
-  /** The folder the machine's server registers as its project, when it registers one. */
+  /**
+   * The folder the machine's server registers as its project, when it registers one and the send
+   * binds by it (its Run-on target follows this project); null otherwise, so no reason names it.
+   */
   readonly expectedCwd: string | null;
   /** How many projects this app lists on that environment. */
   readonly projectsSeen: number;
@@ -60,7 +64,7 @@ export function classifyCloudProjectWait(input: CloudProjectWaitInput): CloudPro
   });
   if (!input.machineSettingsLoaded) return wait("machine-settings-pending");
   if (input.scratch) {
-    return wait(input.scratchRoot === null ? "machine-settings-pending" : "scratch-opening");
+    return wait(input.scratchRoot === null ? "scratch-folder-unknown" : "scratch-opening");
   }
   if (input.projects.length === 0) return wait("project-list-pending");
   if (input.expectedCwd === null) return wait("no-matching-project");
