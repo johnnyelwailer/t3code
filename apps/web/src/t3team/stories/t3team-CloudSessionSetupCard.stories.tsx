@@ -115,10 +115,14 @@ export const FirstMessageWaiting: Story = {
   },
 };
 
-/** Up on the fleet; this app is opening its connection. */
+/** A first message is waiting; the session is up and this app is opening its connection. */
 export const Connecting: Story = {
   args: {
-    facts: { session: session({ phase: "ready", elapsedSeconds: 84 }), machineConnected: false },
+    facts: {
+      session: session({ phase: "ready", elapsedSeconds: 84 }),
+      machineConnected: false,
+      delivery: "queued",
+    },
     frozenElapsedSeconds: 84,
   },
 };
@@ -126,7 +130,7 @@ export const Connecting: Story = {
 /** Done: the card says so, lingers a moment, then fades out (watch it in the canvas). */
 export const Ready: Story = {
   args: {
-    facts: { session: session({ phase: "ready", elapsedSeconds: 88 }), machineConnected: true },
+    facts: { session: session({ phase: "ready", elapsedSeconds: 88 }), machineConnected: false },
     frozenElapsedSeconds: 88,
   },
 };

@@ -39,13 +39,12 @@ const MEASURED: CloudSessionTiming = {
 };
 
 describe("buildCloudSessionSetup steps", () => {
-  it("walks a plain session through four steps in user words", () => {
+  it("walks a plain session through three steps in user words", () => {
     const m = model({ session: session("preparing") });
     expect(m.steps.map((s) => [s.label, s.status])).toEqual([
       ["Reserving a machine", "done"],
       ["Preparing your workspace", "current"],
       ["Starting Nexi", "upcoming"],
-      ["Connecting", "upcoming"],
     ]);
     expect(m.shape).toBe("plain");
   });
@@ -80,11 +79,17 @@ describe("buildCloudSessionSetup steps", () => {
     expect(m.stage).toBe("working");
   });
 
-  it("is on Connecting once ready until the machine is connected, then ready", () => {
-    expect(model({ session: session("ready") }).currentStep.id).toBe("connect");
-    const done = model({ session: session("ready"), machineConnected: true });
+  it("is ready, with every step done, as soon as the session is ready and nothing is waiting", () => {
+    const done = model({ session: session("ready") });
     expect(done.stage).toBe("ready");
     expect(done.steps.every((s) => s.status === "done")).toBe(true);
+    expect(done.steps.map((s) => s.id)).not.toContain("connect");
+  });
+
+  it("is on Connecting while a waiting message's machine is not yet connected", () => {
+    const m = model({ session: session("ready"), delivery: "queued" });
+    expect(m.stage).toBe("working");
+    expect(m.currentStep.id).toBe("connect");
   });
 
   it("adds a sending step when a first message waits, and stays working until it is sent", () => {
@@ -234,9 +239,9 @@ describe("progress", () => {
   });
 
   it("reaches 1 only when the session is ready", () => {
-    const m = model({ session: session("ready"), machineConnected: true });
+    const m = model({ session: session("ready") });
     expect(readCloudSetup(m, 100).progress).toBe(1);
-    const pending = model({ session: session("ready") });
+    const pending = model({ session: session("ready"), delivery: "queued" });
     expect(readCloudSetup(pending, 10_000).progress).toBeLessThan(1);
     expect(CLOUD_SETUP_PROGRESS_CEILING).toBeLessThan(1);
   });

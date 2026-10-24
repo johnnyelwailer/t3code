@@ -105,7 +105,7 @@ export function CloudSessionSetupCard({
             {failed
               ? (model.failureReason ?? "Something went wrong while the machine was starting.")
               : model.stage === "ready"
-                ? "Everything is in place."
+                ? "Everything is in place. Send your first message to start."
                 : slow
                   ? `Still working: ${model.currentStep.label.toLowerCase()}. This is taking longer than usual.`
                   : model.activity}
