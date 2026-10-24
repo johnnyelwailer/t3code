@@ -4,6 +4,7 @@ import * as DateTime from "effect/DateTime";
 
 import {
   CLOUD_SESSION_MIN_REMAINING_SECONDS,
+  cloudSessionNameSegment,
   isSameCloudSessionProject,
   ownProjectOnMachine,
   projectCwdOf,
@@ -95,6 +96,43 @@ describe("selectFittingCloudSession", () => {
         excludeSessionIds: ["1"],
       }),
     ).toBeNull();
+  });
+});
+
+describe("selectFittingCloudSession edge cases", () => {
+  it("matches a repository name through the session tag's name segment", () => {
+    const dotted = session({ sessionId: "1", name: "my-repo" });
+    expect(
+      selectFittingCloudSession({ sessions: [dotted], repositoryName: "My.Repo", nowMs: NOW }),
+    ).toEqual({ kind: "ready", session: dotted });
+    const longName = "a-very-long-repository-name-that-goes-past-forty-characters";
+    const truncated = session({ sessionId: "2", name: cloudSessionNameSegment(longName) });
+    expect(truncated.name?.length).toBe(40);
+    expect(
+      selectFittingCloudSession({ sessions: [truncated], repositoryName: longName, nowMs: NOW }),
+    ).toEqual({ kind: "ready", session: truncated });
+  });
+
+  it("treats a ready session whose environment is not linked yet as starting", () => {
+    const unlinked = session({ environmentId: undefined });
+    expect(
+      selectFittingCloudSession({ sessions: [unlinked], repositoryName: "nx-nexi", nowMs: NOW }),
+    ).toEqual({ kind: "starting", session: unlinked });
+  });
+
+  it("does not reuse a ready session whose hold is unknown", () => {
+    const unknown = session({ endsAt: undefined, remainingSeconds: null });
+    expect(
+      selectFittingCloudSession({ sessions: [unknown], repositoryName: "nx-nexi", nowMs: NOW }),
+    ).toBeNull();
+  });
+
+  it("breaks a tie on hold left by session id", () => {
+    const sessions = [session({ sessionId: "9" }), session({ sessionId: "3" })];
+    expect(
+      selectFittingCloudSession({ sessions, repositoryName: "nx-nexi", nowMs: NOW })?.session
+        .sessionId,
+    ).toBe("3");
   });
 });
 
