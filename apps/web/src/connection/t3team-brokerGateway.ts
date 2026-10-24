@@ -75,7 +75,7 @@ export const webBrokerEnvironmentGateway = BrokerEnvironmentGateway.of({
     Effect.gen(function* () {
       yield* requireSameMachine;
       const result = yield* call(() =>
-        cloudBrokerApi.attach(input.sessionId, String(input.expectedEnvironmentId)),
+        cloudBrokerApi.attach(input.sessionId, String(input.expectedEnvironmentId), input.endsAt),
       );
       if (String(result.environmentId) !== String(input.expectedEnvironmentId)) {
         return yield* new ConnectionBlockedError({

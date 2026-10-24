@@ -293,6 +293,19 @@ describe("ConnectionResolver", () => {
     }),
   );
 
+  it.effect("drops the previous session's deadline after attaching its replacement", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeBrokerHarness({ liveSessionId: "299999999" });
+      const target = new BrokerConnectionTarget({
+        ...BROKER_TARGET,
+        endsAt: "2026-10-24T12:00:00Z",
+      });
+      const prepared = yield* harness.resolver.prepare(catalogEntry(target));
+      expect(prepared.target).toMatchObject({ sessionId: BROKER_TARGET.sessionId });
+      expect("endsAt" in prepared.target).toBe(false);
+    }),
+  );
+
   it.effect("follows the workspace's live session when the known one has ended", () =>
     Effect.gen(function* () {
       // A new session in the same workspace serves the same environment (the snapshot keeps its

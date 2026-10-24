@@ -10,22 +10,30 @@
 export const SESSION_ABSENT_GRACE_MS = 5 * 60_000;
 
 export interface AbsenceTracker {
-  /** Records one more attach that did not find the session; returns how long it has been absent. */
+  readonly observe: (sessions: ReadonlyArray<{ readonly runId: string }>, nowMs: number) => void;
+  /** Returns continuous absence measured by the caller's monotonic clock. */
   readonly absent: (sessionId: string, nowMs: number) => number;
   /** The session was found: absence starts over. */
   readonly present: (sessionId: string) => void;
 }
 
 export function makeAbsenceTracker(): AbsenceTracker {
-  const since = new Map<string, number>();
+  const since = new Map<string, number | null>();
   return {
+    observe: (sessions, nowMs) => {
+      const present = new Set(sessions.map((session) => session.runId));
+      for (const sessionId of since.keys()) {
+        if (!present.has(sessionId)) since.set(sessionId, since.get(sessionId) ?? nowMs);
+      }
+      for (const sessionId of present) since.set(sessionId, null);
+    },
     absent: (sessionId, nowMs) => {
       const first = since.get(sessionId) ?? nowMs;
       since.set(sessionId, first);
       return Math.max(0, nowMs - first);
     },
     present: (sessionId) => {
-      since.delete(sessionId);
+      since.set(sessionId, null);
     },
   };
 }

@@ -298,13 +298,19 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
   ) {
     const config = yield* lease.session.initialConfig.pipe(Effect.option);
     const reported = Option.getOrUndefined(config)?.directEndpoints;
-    if (reported === undefined) return;
+    if (reported === undefined && lease.prepared.target._tag !== "BrokerConnectionTarget") return;
     const activeId = connectionRouteId(lease.prepared.target);
     const activeRoute = (yield* currentRoutes).find(
       (route) => connectionRouteId(route.target) === activeId,
     );
     if (activeRoute === undefined) return;
-    const updated = yield* learn({ activeRoute, reported });
+    const updated = yield* learn({
+      activeRoute:
+        lease.prepared.target._tag === "BrokerConnectionTarget"
+          ? { ...activeRoute, target: lease.prepared.target }
+          : activeRoute,
+      reported: reported ?? [],
+    });
     if (Option.isSome(updated)) {
       yield* Ref.set(currentEntry, updated.value);
       yield* requestBetterRouteCheck(lease);

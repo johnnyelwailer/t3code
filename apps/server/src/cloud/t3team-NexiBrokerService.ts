@@ -17,7 +17,8 @@ import {
   makeNexiBrokerClient,
   type StandbyClaim,
 } from "./t3team-NexiBrokerClient.ts";
-import { SESSION_ABSENT_GRACE_MS, makeAbsenceTracker } from "./t3team-brokerAbsence.ts";
+import { makeAbsenceTracker } from "./t3team-brokerAbsence.ts";
+import { attachFailure, sessionToAttach } from "./t3team-brokerAttach.ts";
 import { type BrokerForwarder, startBrokerForwarder } from "./t3team-NexiBrokerForwarder.ts";
 
 /**
@@ -62,60 +63,6 @@ export class NexiBrokerService extends Context.Service<
   }
 >()("t3/cloud/t3team-NexiBrokerService/NexiBrokerService") {}
 
-/**
- * The listed session an attach reaches: the one asked for, else — a workspace's sessions share
- * their environment, since the snapshot keeps its id — the live one serving the same environment.
- */
-export function sessionToAttach<
-  S extends { readonly runId: string; readonly environmentId?: string | null | undefined },
->(sessions: readonly S[], input: CloudSessionAttachInput): S | undefined {
-  const asked = sessions.find(
-    (s) =>
-      s.runId === input.sessionId &&
-      s.environmentId &&
-      (input.environmentId === undefined || s.environmentId === input.environmentId),
-  );
-  if (asked !== undefined || input.environmentId === undefined) return asked;
-  // Two live sessions in one workspace (started side by side) serve the same environment: the
-  // newest run wins, so reconnects stay on one machine instead of following list order.
-  return sessions
-    .filter((s) => s.environmentId === input.environmentId)
-    .reduce<S | undefined>(
-      (newest, s) => (newest === undefined || Number(s.runId) > Number(newest.runId) ? s : newest),
-      undefined,
-    );
-}
-
-/**
- * Why no session can be attached. A session the broker lists without an environment id is still
- * starting (its machine has not registered yet), and one it does not list may be reconnecting to
- * the broker: both are retryable (`unknown_session`). A session missing for longer than
- * `SESSION_ABSENT_GRACE_MS` — past every reconnect and broker restart — has ended, which a client
- * must stop retrying (`session_ended`).
- */
-export function attachFailure(
-  sessions: ReadonlyArray<{ readonly runId: string }>,
-  input: CloudSessionAttachInput,
-  absentForMs: number,
-): CloudSessionFailedError {
-  if (sessions.some((s) => s.runId === input.sessionId)) {
-    return new CloudSessionFailedError({
-      reason: "unknown_session",
-      message: "That cloud session is not running yet: it is still starting.",
-    });
-  }
-  return absentForMs >= SESSION_ABSENT_GRACE_MS
-    ? new CloudSessionFailedError({
-        reason: "session_ended",
-        message: "That cloud session has ended.",
-      })
-    : new CloudSessionFailedError({
-        reason: "unknown_session",
-        message:
-          "That cloud session is not listed by the broker right now. It may be reconnecting.",
-      });
-}
-
 const notEnabled = new CloudSessionFailedError({
   reason: "broker_unavailable",
   message: "This build has no Nexi broker configured.",
@@ -150,6 +97,13 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
   const client = yield* makeNexiBrokerClient(config, accessToken);
   const forwarders = new Map<string, BrokerForwarder>();
   const absence = makeAbsenceTracker();
+  const listSessions = client.listSessions.pipe(
+    Effect.tap((sessions) =>
+      Effect.gen(function* () {
+        absence.observe(sessions, Number((yield* Clock.monotonicTimeNanos) / 1_000_000n));
+      }),
+    ),
+  );
   yield* Effect.addFinalizer(() => Effect.sync(() => forwarders.forEach((f) => f.close())));
   const tokenPromise = () => Effect.runPromise(accessToken);
   const streamUrl = (runId: string) =>
@@ -159,7 +113,7 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
     Effect.gen(function* () {
       // The broker answers only with this user's sessions, so a session id that is not listed is
       // somebody else's, not registered yet, or over — the message must hold for all three.
-      const sessions = yield* client.listSessions;
+      const sessions = yield* listSessions;
       // Forwarders for sessions that ended are closed here rather than on a timer: an idle app
       // spends no broker calls.
       for (const [runId, forwarder] of forwarders) {
@@ -173,10 +127,16 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
         return yield* attachFailure(
           sessions,
           input,
-          absence.absent(input.sessionId, yield* Clock.currentTimeMillis),
+          sessions.some((item) => item.runId === input.sessionId)
+            ? 0
+            : absence.absent(
+                input.sessionId,
+                Number((yield* Clock.monotonicTimeNanos) / 1_000_000n),
+              ),
+          yield* Clock.currentTimeMillis,
         );
       }
-      absence.present(input.sessionId);
+
       const sessionId = session.runId;
       let forwarder = forwarders.get(sessionId);
       if (forwarder === undefined) {
@@ -209,7 +169,7 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
     pair: client.mintPairing,
     claimStandby: client.claimStandby,
     reportInterest: client.reportInterest,
-    sessions: client.listSessions,
+    sessions: listSessions,
   } satisfies NexiBrokerService["Service"];
 });
 

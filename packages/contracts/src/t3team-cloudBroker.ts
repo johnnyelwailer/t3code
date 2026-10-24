@@ -20,6 +20,8 @@ export type CloudBrokerStatus = typeof CloudBrokerStatusSchema.Type;
 
 export const CloudSessionAttachInputSchema = Schema.Struct({
   sessionId: Schema.String,
+  /** Known session hold deadline, retained across desktop/server restarts. */
+  endsAt: Schema.optional(Schema.String),
   /**
    * The environment the client knows the session by. Sessions in one workspace share it (the
    * snapshot keeps it), so when `sessionId` has ended the live session serving it is attached.

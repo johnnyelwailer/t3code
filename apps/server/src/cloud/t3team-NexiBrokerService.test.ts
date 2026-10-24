@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 
 import { SESSION_ABSENT_GRACE_MS, makeAbsenceTracker } from "./t3team-brokerAbsence.ts";
-import { attachFailure, sessionToAttach } from "./t3team-NexiBrokerService.ts";
+import { attachFailure, sessionToAttach } from "./t3team-brokerAttach.ts";
 
 const live = { runId: "300", environmentId: "env-ws" };
 const other = { runId: "301", environmentId: "env-other" };
