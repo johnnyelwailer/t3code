@@ -11,6 +11,11 @@ import {
   readCloudSetup,
   type CloudSetupFacts,
 } from "./t3team-cloudSessionSetupProgress";
+import { CloudProjectWaitNote } from "./t3team-CloudProjectWaitNote";
+import {
+  cloudProjectWaitSeconds,
+  presentCloudProjectWait,
+} from "./t3team-cloudProjectWaitPresentation";
 import { SetupLiveReadout, StepList } from "./t3team-CloudSessionSetupParts";
 import { useCloudSetupElapsedSeconds } from "./t3team-useCloudSetupElapsedSeconds";
 
@@ -55,6 +60,13 @@ export function CloudSessionSetupCard({
   const longWait = cloudSetupLongWaitNote(model);
   const meanwhile = cloudSetupMeanwhileNote(model);
   const failed = model.stage === "failed";
+  const projectWait =
+    model.projectWait === null
+      ? null
+      : presentCloudProjectWait(
+          model.projectWait,
+          cloudProjectWaitSeconds(facts.queued, elapsedSeconds),
+        );
   return (
     <section
       aria-label="Cloud session setup"
@@ -108,6 +120,9 @@ export function CloudSessionSetupCard({
         </div>
       )}
 
+      {projectWait === null ? null : (
+        <CloudProjectWaitNote notice={projectWait} className="mt-3.5" />
+      )}
       {longWait === null ? null : (
         <p
           data-cloud-setup-note="long-wait"

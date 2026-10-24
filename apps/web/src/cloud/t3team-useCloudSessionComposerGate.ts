@@ -114,7 +114,8 @@ export function useCloudSessionComposerGate(input: {
         "aria-hidden": true,
       }),
       title: view.title,
-      description: stepFacts.queued.failureMessage ?? stepFacts.queued.sessionLabel,
+      description:
+        stepFacts.queued.failureMessage ?? view.projectWait?.text ?? stepFacts.queued.sessionLabel,
       actions: createElement(
         Fragment,
         null,
