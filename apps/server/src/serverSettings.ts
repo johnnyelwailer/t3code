@@ -126,11 +126,24 @@ const foldProviderInstanceEnabledFlags = (settings: ServerSettings): ServerSetti
   };
 };
 
+const stripPackProviderInstances = (settings: ServerSettings): ServerSettings => {
+  const overlay = getPackProviderOverlay();
+  const providerInstances = { ...settings.providerInstances };
+  let changed = false;
+  for (const instanceId of Object.keys(providerInstances)) {
+    if (!Object.hasOwn(overlay, instanceId)) continue;
+    delete providerInstances[ProviderInstanceId.make(instanceId)];
+    changed = true;
+  }
+  return changed ? { ...settings, providerInstances } : settings;
+};
+
 const normalizeServerSettings = (
   settings: ServerSettings,
 ): Effect.Effect<ServerSettings, ServerSettingsError> =>
   encodeServerSettings(settings).pipe(
     Effect.flatMap(decodeServerSettings),
+    Effect.map(stripPackProviderInstances),
     Effect.map(foldProviderInstanceEnabledFlags),
     Effect.map((next) => withIdleCompaction(next, globalIdleCompaction(next))),
     Effect.map((next) => ({ ...next, ...deriveLegacyProjectOverrides(next) })),
@@ -150,6 +163,26 @@ export function redactServerSettingsForClient(settings: ServerSettings): ServerS
       ? { value: "", redacted: secret.redacted || secret.value.length > 0 }
       : { value: secret.value, redacted: false },
   );
+}
+
+const projectPackProviderInstances = (settings: ServerSettings): ServerSettings => {
+  const overlay = getPackProviderOverlay();
+  const providerInstances = { ...settings.providerInstances };
+  let changed = false;
+  for (const [instanceId, entry] of Object.entries(overlay)) {
+    if (Object.hasOwn(providerInstances, instanceId)) continue;
+    providerInstances[ProviderInstanceId.make(instanceId)] = {
+      driver: entry.driver,
+      enabled: true,
+      configurationSource: "pack",
+    };
+    changed = true;
+  }
+  return changed ? { ...settings, providerInstances } : settings;
+};
+
+export function projectServerSettingsForClient(settings: ServerSettings): ServerSettings {
+  return projectPackProviderInstances(redactServerSettingsForClient(settings));
 }
 
 export function applyProviderInstanceMutation(

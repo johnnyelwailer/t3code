@@ -516,7 +516,7 @@ it.effect(
         command: "terminal.split",
       });
       const expectedSettings = [duringDiscovery, latestSettings].map(
-        ServerSettings.redactServerSettingsForClient,
+        ServerSettings.projectServerSettingsForClient,
       );
       const expectedKeybindings = [duringAck, latestKeybindings];
       // The two sources can interleave, but each must retain its own publication order.

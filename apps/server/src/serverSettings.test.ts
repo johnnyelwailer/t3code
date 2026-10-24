@@ -6,6 +6,7 @@ import {
   ProjectScript,
   ProviderDriverKind,
   ProviderInstanceId,
+  resolveProjectProviderInstanceEnabled,
   resolveProviderInstanceEnabled,
   ServerSettings,
   UsageLimitSourceId,
@@ -29,6 +30,7 @@ import * as ServerConfig from "./config.ts";
 import * as SqlitePersistence from "./persistence/Sqlite.ts";
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 import * as ServerSettingsModule from "./serverSettings.ts";
+import { setPackProviderOverlay } from "./t3team-pack-providerOverlay.ts";
 import { resolveProviderInstanceTerminalEnvironment } from "./terminal/Manager.ts";
 
 const decodeServerSettings = Schema.decodeUnknownEffect(ServerSettings);
@@ -1176,6 +1178,40 @@ it.layer(NodeServices.layer)("server settings", (it) => {
           sensitiveLast ? "secret-last" : "",
         );
       }).pipe(Effect.provide(layerServerSettings())),
+  );
+
+  it.effect("keeps pack provider instances enabled for stock clients without persisting them", () =>
+    Effect.gen(function* () {
+      const nexploreId = ProviderInstanceId.make("nexplore");
+      setPackProviderOverlay({
+        configMap: {
+          [nexploreId]: {
+            driver: ProviderDriverKind.make("nexplore"),
+            configurationSource: "pack",
+            config: { enabled: true },
+          },
+        },
+        driverDefinitions: new Map(),
+      });
+      try {
+        const service = yield* ServerSettingsModule.ServerSettingsService;
+        const base = yield* service.getSettings;
+        const unprojected = ServerSettingsModule.redactServerSettingsForClient(base);
+        assert.isFalse(resolveProjectProviderInstanceEnabled(unprojected, null, nexploreId));
+        const client = ServerSettingsModule.projectServerSettingsForClient(base);
+        assert.isTrue(resolveProjectProviderInstanceEnabled(client, null, nexploreId));
+        assert.isFalse("config" in (client.providerInstances[nexploreId] ?? {}));
+        const echoed = yield* service.updateSettings({
+          providerInstances: client.providerInstances,
+        });
+        assert.isFalse(Object.hasOwn(echoed.providerInstances, nexploreId));
+      } finally {
+        setPackProviderOverlay({
+          configMap: {},
+          driverDefinitions: new Map(),
+        });
+      }
+    }).pipe(Effect.provide(layerServerSettings())),
   );
 
   it.effect(
