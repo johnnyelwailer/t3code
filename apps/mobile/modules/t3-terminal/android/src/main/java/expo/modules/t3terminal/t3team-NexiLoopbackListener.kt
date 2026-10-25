@@ -29,8 +29,7 @@ data class LoopbackLimits(
   /** How long a registered signed URL admits connections, and how many are kept. */
   val capabilityTtlMs: Long = 60 * 60_000,
   val maxCapabilities: Int = 512,
-  /** Requests one capability connection may carry, and the largest upload body it may frame. */
-  val maxCapabilityRequests: Int = 16,
+  /** The largest upload body a capability connection may frame; it carries one request. */
   val maxCapabilityBodyBytes: Long = 1L shl 30,
   val nanoTime: () -> Long = System::nanoTime,
   /** Test seam: called when a pending socket's first byte has been read. */
@@ -57,19 +56,20 @@ class NexiLoopbackListener(
   private val onAdmitted: (Socket, InputStream) -> Unit,
   private val securityLog: (String) -> Unit,
   private val onClosed: () -> Unit = {},
-  private val limits: LoopbackLimits = LoopbackLimits()
+  private val limits: LoopbackLimits = LoopbackLimits(),
+  revocations: CapabilityRevocations = CapabilityRevocations()
 ) {
   private val server = ServerSocket(0, 16, InetAddress.getByName("127.0.0.1"))
   private val pending = ArrayDeque<Pending>()
   private val admitted = ConcurrentHashMap.newKeySet<Socket>()
   private val closed = AtomicBoolean(false)
   private val denied = AtomicInteger()
-  private val capabilities = LinkedHashMap<String, Long>()
+  private val capabilities = CapabilityStore(limits, revocations)
   private val handshakes = Executors.newCachedThreadPool { task ->
     Thread(task, "nexi-broker-handshake").apply { isDaemon = true }
   }
   val port: Int = server.localPort
-  private val credentials = LoopbackCredentials(port, secret, ::isCapable)
+  private val credentials = LoopbackCredentials(port, secret, capabilities::admits)
   val isClosed: Boolean get() = closed.get()
 
   fun start() {
@@ -84,29 +84,18 @@ class NexiLoopbackListener(
     }, "nexi-broker-accept").apply { isDaemon = true }.start()
   }
 
-  /** Registers a signed URL on this tunnel; false for any other URL or a closed listener. */
+  /**
+   * Registers a signed URL on this tunnel, bound to the methods its shape allows (assets read,
+   * the upload posts). False for any other URL or path shape, a closed listener, or a URL that a
+   * replaced tunnel held.
+   */
   fun allowUrl(url: String): Boolean =
     NexiCapabilityTargets.targetFor(url, port)?.let { allowTarget(it) } ?: false
 
   fun allowTarget(rawTarget: String): Boolean {
     val target = NexiCapabilityTargets.normalize(rawTarget)
-    if (target == null || closed.get()) return false
-    synchronized(capabilities) {
-      capabilities.remove(target)
-      capabilities[target] = limits.nanoTime() + limits.capabilityTtlMs * 1_000_000
-      while (capabilities.size > limits.maxCapabilities) {
-        capabilities.remove(capabilities.keys.first())
-      }
-    }
-    return true
-  }
-
-  private fun isCapable(method: String, target: String): Boolean = synchronized(capabilities) {
-    val expiresAt = capabilities[target]
-    val live = method in NexiCapabilityTargets.METHODS && expiresAt != null &&
-      expiresAt > limits.nanoTime()
-    if (expiresAt != null && !live) capabilities.remove(target)
-    live
+    val methods = target?.let { NexiCapabilityTargets.methodsFor(it) }
+    return target != null && methods != null && !closed.get() && capabilities.allow(methods, target)
   }
 
   fun release(tcp: Socket) {
@@ -126,7 +115,7 @@ class NexiLoopbackListener(
       admitted.forEach { quietly(it) }
       admitted.clear()
     }
-    synchronized(capabilities) { capabilities.clear() }
+    capabilities.revokeAll()
     handshakes.shutdownNow()
     onClosed()
   }
@@ -195,7 +184,12 @@ class NexiLoopbackListener(
    */
   private fun clientBytes(tcp: Socket, allowed: LoopbackAdmission.Allowed): InputStream =
     if (allowed.scoped) {
-      CapabilityRequestStream(tcp.getInputStream(), allowed.initial, ::isCapable, limits) { reason ->
+      CapabilityRequestStream(
+        tcp.getInputStream(),
+        allowed.initial,
+        capabilities::admits,
+        limits
+      ) { reason ->
         deny(tcp, "capability-$reason")
       }
     } else {

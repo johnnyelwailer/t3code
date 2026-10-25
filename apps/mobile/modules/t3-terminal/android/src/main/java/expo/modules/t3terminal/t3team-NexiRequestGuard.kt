@@ -43,7 +43,8 @@ object NexiRequestRules {
   private fun framingProblem(head: String): String? {
     val bare = head.indices.any {
       (head[it] == '\n' && (it == 0 || head[it - 1] != '\r')) ||
-        (head[it] == '\r' && (it + 1 >= head.length || head[it + 1] != '\n')) || head[it] == '\u0000'
+        (head[it] == '\r' && (it + 1 >= head.length || head[it + 1] != '\n')) ||
+        head[it] == '\u0000'
     }
     return if (bare) "bad-framing" else null
   }
@@ -51,23 +52,48 @@ object NexiRequestRules {
   private fun headers(head: String, method: String, limits: LoopbackLimits): RequestVerdict {
     var length: String? = null
     for (line in head.split("\r\n").drop(1)) {
-      val colon = line.indexOf(':')
-      val name = if (colon > 0) line.substring(0, colon) else ""
-      val lower = name.lowercase()
-      val value = line.substring(colon + 1).trim()
-      val problem = when {
-        line.startsWith(" ") || line.startsWith("\t") -> "folded-header"
-        colon <= 0 || name != name.trim() || name.any { it.isWhitespace() } -> "bad-header-name"
-        lower == "transfer-encoding" -> "transfer-encoding"
-        lower == "upgrade" || lower == "expect" -> lower
-        lower == "connection" && value.lowercase().contains("upgrade") -> "upgrade"
-        lower == "content-length" && length != null -> "duplicate-content-length"
-        else -> null
-      }
+      val problem = headerProblem(line, length != null)
       if (problem != null) return RequestVerdict(problem)
-      if (lower == "content-length") length = value
+      if (line.substringBefore(':').lowercase() == "content-length") {
+        length = line.substringAfter(':').trim()
+      }
     }
     return body(length, method, limits)
+  }
+
+  private fun headerProblem(line: String, lengthSeen: Boolean): String? {
+    val colon = line.indexOf(':')
+    val name = if (colon > 0) line.substring(0, colon) else ""
+    return when {
+      line.startsWith(" ") || line.startsWith("\t") -> "folded-header"
+      colon <= 0 || name != name.trim() || name.any { it.isWhitespace() } -> "bad-header-name"
+      else -> fieldProblem(
+        name.lowercase(),
+        line.substring(colon + 1).trim().lowercase(),
+        lengthSeen
+      )
+    }
+  }
+
+  private fun fieldProblem(lower: String, value: String, lengthSeen: Boolean): String? = when {
+    lower == "transfer-encoding" -> "transfer-encoding"
+    lower == "upgrade" || lower == "expect" -> lower
+    lower == "connection" && value.contains("upgrade") -> "upgrade"
+    lower == "content-length" && lengthSeen -> "duplicate-content-length"
+    else -> null
+  }
+
+  /** The head with every `Connection` header replaced by `Connection: close`. */
+  fun closing(head: ByteArray): ByteArray {
+    val end = NexiLoopbackHead.headEnd(head)
+    val lines = String(head, 0, end, StandardCharsets.ISO_8859_1).split("\r\n")
+    val kept = lines.filterIndexed { index, line ->
+      index == 0 || !line.substringBefore(':').trim().equals("connection", ignoreCase = true)
+    }
+    return (kept + "Connection: close").joinToString(
+      "\r\n"
+    ).toByteArray(StandardCharsets.ISO_8859_1) +
+      head.copyOfRange(end, head.size)
   }
 
   private fun body(length: String?, method: String, limits: LoopbackLimits): RequestVerdict {
@@ -83,10 +109,12 @@ object NexiRequestRules {
 }
 
 /**
- * The client-to-host bytes of a capability-admitted connection, passed on only while every request
- * head is allowed. Request bodies are copied through by Content-Length without being inspected, so
- * a body that contains a request line stays a body. On the first violation `onRefused` gets a fixed
- * reason and the read fails, which ends the connection.
+ * The client-to-host bytes of a capability-admitted connection: exactly one request. The head goes
+ * out with `Connection: close` (so the host ends the connection after answering) and any
+ * `t3lb` cookie removed, a POST body is copied through by Content-Length without being inspected, and
+ * after that nothing more may arrive: a byte read past the request (a pipelined request, an upgrade
+ * handshake, anything) is refused and ends the connection. Native clients open a fresh connection per
+ * request, which is admitted afresh against the registered URL. `onRefused` gets a fixed reason.
  */
 class CapabilityRequestStream(
   private val source: InputStream,
@@ -99,7 +127,7 @@ class CapabilityRequestStream(
   private val ready = ArrayDeque<ByteArray>()
   private var offset = 0
   private var bodyLeft = 0L
-  private var requests = 0
+  private var done = false
   private var pendingInitial: ByteArray? = initial
   private var lastFour = 0
 
@@ -133,11 +161,13 @@ class CapabilityRequestStream(
   private fun feed(bytes: ByteArray) {
     var index = 0
     while (index < bytes.size) {
+      if (done) refuse("extra-bytes")
       if (bodyLeft > 0) {
         val take = minOf(bodyLeft, (bytes.size - index).toLong()).toInt()
         ready.addLast(bytes.copyOfRange(index, index + take))
         bodyLeft -= take
         index += take
+        done = bodyLeft == 0L
       } else {
         lastFour = (lastFour shl 8) or (bytes[index].toInt() and 0xff)
         head.write(bytes[index++].toInt())
@@ -149,14 +179,12 @@ class CapabilityRequestStream(
 
   private fun finishHead() {
     val raw = head.toByteArray()
-    head.reset()
-    lastFour = 0
-    if (++requests > limits.maxCapabilityRequests) refuse("too-many-requests")
     val text = String(raw, 0, raw.size - 4, StandardCharsets.ISO_8859_1)
     val verdict = NexiRequestRules.verify(text, allowed, limits)
     verdict.reason?.let { refuse(it) }
-    ready.addLast(NexiLoopbackHead.sanitize(raw))
+    ready.addLast(NexiRequestRules.closing(NexiLoopbackHead.sanitize(raw)))
     bodyLeft = verdict.bodyBytes
+    done = bodyLeft == 0L
   }
 
   private fun refuse(reason: String): Nothing {

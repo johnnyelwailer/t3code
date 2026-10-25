@@ -18,16 +18,39 @@ object NexiCapabilityTargets {
   val METHODS = setOf("GET", "HEAD", "POST")
   private val ESCAPE = Regex("%[0-9a-fA-F]{2}")
 
+  /** What a signed asset URL admits: reads. */
+  private val READS = setOf("GET", "HEAD")
+  private const val ASSET_PREFIX = "/api/assets/"
+  private const val UPLOAD_PREFIX = "/api/attachments/upload/"
+
+  /**
+   * The methods a registered target admits, by the shape of the signed URLs the host mints (assets
+   * and favicons under `/api/assets/`, uploads under `/api/attachments/upload/`); null for any other
+   * path, which is never registered.
+   */
+  fun methodsFor(target: String): Set<String>? = when {
+    target.startsWith(ASSET_PREFIX) -> READS
+    target.startsWith(UPLOAD_PREFIX) -> setOf("POST")
+    else -> null
+  }
+
   /** Origin-form request target, escapes upper-cased; null for anything else (absolute form, `*`). */
   fun normalize(rawTarget: String): String? {
     val originForm = rawTarget.startsWith("/") && !rawTarget.startsWith("//")
     val uri = if (originForm) parse("http://127.0.0.1$rawTarget") else null
-    return if (uri == null || uri.rawAuthority != "127.0.0.1" || uri.rawFragment != null) {
+    return if (uri == null || !isPlainTarget(uri)) {
       null
     } else {
       val path = uri.rawPath.orEmpty().ifEmpty { "/" }
       ESCAPE.replace(uri.rawQuery?.let { "$path?$it" } ?: path) { it.value.uppercase() }
     }
+  }
+
+  /** No fragment, and no dot segment: a host may resolve one, so the target would name something else. */
+  private fun isPlainTarget(uri: URI): Boolean {
+    val segments = uri.rawPath.orEmpty().lowercase().replace("%2e", ".").split('/')
+    return uri.rawAuthority == "127.0.0.1" && uri.rawFragment == null &&
+      segments.none { it == "." || it == ".." }
   }
 
   /** The target of a URL on this tunnel's own loopback port, or null (fragment dropped). */

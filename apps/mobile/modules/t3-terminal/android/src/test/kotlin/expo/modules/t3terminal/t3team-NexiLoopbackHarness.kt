@@ -15,7 +15,8 @@ val PATIENT = LoopbackLimits(headTimeoutMs = 60_000, firstByteMs = 60_000)
 
 class Harness(
   limits: LoopbackLimits = PATIENT,
-  val secret: String = NexiLoopbackAuth.newSecret()
+  val secret: String = NexiLoopbackAuth.newSecret(),
+  revocations: CapabilityRevocations = CapabilityRevocations()
 ) {
   val admitted = LinkedBlockingQueue<Pair<Socket, InputStream>>()
   val logs = CopyOnWriteArrayList<String>()
@@ -30,6 +31,7 @@ class Harness(
     },
     onClosed = { closedCount.incrementAndGet() },
     limits = limits,
+    revocations = revocations
   ).also { it.start() }
   private val sockets = CopyOnWriteArrayList<Socket>()
 
@@ -55,8 +57,13 @@ class Harness(
     true
   }
 
-  fun takeStream(): Pair<Socket, InputStream> =
-    admitted.poll(10, TimeUnit.SECONDS) ?: throw AssertionError("connection was not admitted")
+  fun takeStream(): Pair<Socket, InputStream> {
+    val admission = admitted.poll(10, TimeUnit.SECONDS)
+      ?: throw AssertionError("connection was not admitted")
+    // A read that the listener should have refused must fail fast rather than wait for more bytes.
+    admission.first.soTimeout = 5_000
+    return admission
+  }
 
   /** The first bytes the listener would forward to the host (one read, as the pipe does). */
   fun take(): Pair<Socket, ByteArray> {
