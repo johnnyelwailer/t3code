@@ -18,6 +18,7 @@ import {
   useDraftCloudQueuedSend,
 } from "./t3team-cloudQueuedSendStore";
 import { useCloudQueuedSendDispatching } from "./t3team-cloudQueuedSendDispatching";
+import { useCloudQueuedSendProjectWaitNow } from "./t3team-useCloudProjectWaitNow";
 import { useCloudSessionController } from "./t3team-useCloudSessionController";
 import {
   useCloudSessionProjectFollow,
@@ -98,11 +99,12 @@ export function useCloudSessionComposerGate(input: {
     });
     return { ...facts, queued, projectReady: facts.project !== null, flushing };
   }, [cloud.sessions, draft, environments, flushing, projects, queued, settings]);
+  const projectWaitNow = useCloudQueuedSendProjectWaitNow(stepFacts);
   const canRetry = queued?.failureMessage !== undefined && queued.retryable !== false;
 
   const bannerItem = useMemo<ComposerBannerStackItem | null>(() => {
     if (stepFacts === null) return null;
-    const view = presentCloudQueuedSendProgress(stepFacts, Date.now());
+    const view = presentCloudQueuedSendProgress(stepFacts, projectWaitNow);
     const action = (label: string, onClick: () => void) =>
       createElement(Button, { key: label, size: "xs", variant: "ghost", onClick }, label);
     return {
@@ -114,7 +116,8 @@ export function useCloudSessionComposerGate(input: {
         "aria-hidden": true,
       }),
       title: view.title,
-      description: stepFacts.queued.failureMessage ?? stepFacts.queued.sessionLabel,
+      description:
+        stepFacts.queued.failureMessage ?? view.projectWait?.text ?? stepFacts.queued.sessionLabel,
       actions: createElement(
         Fragment,
         null,
@@ -129,7 +132,7 @@ export function useCloudSessionComposerGate(input: {
           : action("Cancel", cancelQueuedSend),
       ),
     };
-  }, [canRetry, cancelQueuedSend, retryQueuedSend, stepFacts]);
+  }, [canRetry, cancelQueuedSend, projectWaitNow, retryQueuedSend, stepFacts]);
 
   return {
     tryQueueSend,

@@ -11,7 +11,10 @@ import {
   readCloudSetup,
   type CloudSetupFacts,
 } from "./t3team-cloudSessionSetupProgress";
+import { CloudProjectWaitNote } from "./t3team-CloudProjectWaitNote";
+import { presentCloudProjectWaitAt } from "./t3team-cloudProjectWaitClock";
 import { SetupLiveReadout, StepList } from "./t3team-CloudSessionSetupParts";
+import { useCloudProjectWaitNow } from "./t3team-useCloudProjectWaitNow";
 import { useCloudSetupElapsedSeconds } from "./t3team-useCloudSetupElapsedSeconds";
 
 export interface CloudSessionSetupCardProps {
@@ -29,6 +32,8 @@ export interface CloudSessionSetupCardProps {
    * not drift. Omitted in the app, where the snapshot's own elapsed time runs on.
    */
   readonly frozenElapsedSeconds?: number | undefined;
+  /** Pins the wall clock the "Project ready" wording is read at (stories); omitted in the app. */
+  readonly frozenNowMs?: number | undefined;
   /** Force still or live motion (stories); the app follows `prefers-reduced-motion`. */
   readonly motion?: "still" | "live" | undefined;
 }
@@ -40,6 +45,7 @@ export function CloudSessionSetupCard({
   onTryAgain,
   sending = false,
   frozenElapsedSeconds,
+  frozenNowMs,
   motion,
 }: CloudSessionSetupCardProps) {
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
@@ -51,10 +57,16 @@ export function CloudSessionSetupCard({
     model.stage === "working",
     frozenElapsedSeconds,
   );
+  const projectWaitNow = useCloudProjectWaitNow(
+    facts.queued,
+    model.projectWait !== null,
+    frozenNowMs,
+  );
   const slow = model.stage === "working" && readCloudSetup(model, elapsedSeconds).slow;
   const longWait = cloudSetupLongWaitNote(model);
   const meanwhile = cloudSetupMeanwhileNote(model);
   const failed = model.stage === "failed";
+  const projectWait = presentCloudProjectWaitAt(model.projectWait, facts.queued, projectWaitNow);
   return (
     <section
       aria-label="Cloud session setup"
@@ -98,7 +110,11 @@ export function CloudSessionSetupCard({
 
       {failed ? null : (
         <div className="mt-3.5">
-          <SetupLiveReadout model={model} elapsedSeconds={elapsedSeconds} />
+          <SetupLiveReadout
+            model={model}
+            elapsedSeconds={elapsedSeconds}
+            projectWait={projectWait}
+          />
         </div>
       )}
 
@@ -108,6 +124,9 @@ export function CloudSessionSetupCard({
         </div>
       )}
 
+      {projectWait === null ? null : (
+        <CloudProjectWaitNote notice={projectWait} className="mt-3.5" />
+      )}
       {longWait === null ? null : (
         <p
           data-cloud-setup-note="long-wait"

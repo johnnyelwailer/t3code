@@ -33,20 +33,32 @@ const repositoryOf = (project: CloudSessionProjectFacts) =>
 const folderOf = (workspaceRoot: string) =>
   normalizeProjectPathForComparison(workspaceRoot).split(/[\\/]/).pop() ?? "";
 
+/**
+ * Why the machine's own project cannot be the one a session was started for, for this project:
+ * `repository` (a different one), `folder` (a project without a remote only matches its own
+ * folder there); null when it can be.
+ */
+export function cloudSessionProjectMismatchOf(
+  local: CloudSessionLocalProject,
+  own: CloudSessionProjectFacts,
+): "repository" | "folder" | null {
+  const localRepository = repositoryOf(local);
+  const ownRepository = repositoryOf(own);
+  if (localRepository === null) {
+    if (ownRepository !== null) return "repository";
+    return folderOf(own.workspaceRoot) === plainProjectFolderName(local.title, local.id)
+      ? null
+      : "folder";
+  }
+  return isOwnProjectOfRepository(localRepository, own) ? null : "repository";
+}
+
 /** Whether the machine's own project can be the one a session was started for, for this project. */
 export function isSameCloudSessionProject(
   local: CloudSessionLocalProject,
   own: CloudSessionProjectFacts,
 ): boolean {
-  const localRepository = repositoryOf(local);
-  const ownRepository = repositoryOf(own);
-  if (localRepository === null) {
-    return (
-      ownRepository === null &&
-      folderOf(own.workspaceRoot) === plainProjectFolderName(local.title, local.id)
-    );
-  }
-  return isOwnProjectOfRepository(localRepository, own);
+  return cloudSessionProjectMismatchOf(local, own) === null;
 }
 
 /** The machine's own project is this repository's: same grouping key, or none known yet. */

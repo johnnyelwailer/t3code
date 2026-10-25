@@ -19,11 +19,13 @@ import {
   deriveLogicalProjectKeyFromSettings,
   type selectProjectGroupingSettings,
 } from "~/logicalProject";
+import { type CloudProjectWait, classifyCloudProjectWait } from "./t3team-cloudProjectWait";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {
   logicalProjectPerEnvironment,
   projectCwdOf,
   resolveCloudSessionOwnProject,
+  targetFollowsProject,
 } from "./t3team-cloudSessionOwnProject";
 
 export interface CloudQueuedSendFacts {
@@ -33,6 +35,8 @@ export interface CloudQueuedSendFacts {
   readonly machineConnected: boolean;
   /** The draft's project on that machine, once it is there. */
   readonly project: EnvironmentProject | null;
+  /** What the draft's project is still waiting on there; null once it is there. */
+  readonly projectWait: CloudProjectWait | null;
   /** The draft is a "No project" thread: its project on the machine is that machine's scratch. */
   readonly scratch: boolean;
   /** The draft's thread is already known on that machine. */
@@ -84,6 +88,7 @@ export function resolveCloudQueuedSendFacts(input: {
       environmentId,
       machineConnected: false,
       project: null,
+      projectWait: null,
       scratch,
       threadExists: false,
     };
@@ -118,11 +123,30 @@ export function resolveCloudQueuedSendFacts(input: {
       : (projects.find((p) => p.environmentId === environmentId && p.id === entry.projectId) ??
           null);
   };
+  const project = projectOnMachine();
   return {
     session,
     environmentId,
     machineConnected: machine?.connection.phase === "connected",
-    project: projectOnMachine(),
+    project,
+    projectWait:
+      project === null
+        ? classifyCloudProjectWait({
+            environmentId,
+            scratch,
+            machineSettingsLoaded: machine?.serverConfig != null,
+            expectedCwd: targetFollowsProject(
+              { projectKey: input.queued.projectKey ?? null },
+              composerProject,
+              projectKey,
+            )
+              ? projectCwdOf(machine?.serverConfig)
+              : null,
+            scratchRoot: machine?.serverConfig?.scratchWorkspaceRoot ?? null,
+            composer: composerProject,
+            projects: projects.filter((p) => p.environmentId === environmentId),
+          })
+        : null,
     scratch,
     threadExists: input.threadShells.some(
       (shell) => shell.environmentId === environmentId && shell.id === draft.threadId,
