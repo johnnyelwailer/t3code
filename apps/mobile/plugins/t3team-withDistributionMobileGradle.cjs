@@ -9,7 +9,7 @@ const END_MARKER = "// t3team-distribution-mobile end";
  * and CLI properties, so an incremental release build after switching T3CODE_DISTRIBUTION, or after
  * editing only overlay files, is UP-TO-DATE: Metro never runs and the previous bundle ships.
  */
-function bundleInputsSnippet({ distribution, roots }) {
+function bundleInputsSnippet({ distribution, roots, files = [] }) {
   // A file tree, not the directory itself: an overlay's native module builds under its own
   // `build` directory, and Gradle rejects a task input that overlaps another task's output.
   const trees = roots
@@ -18,12 +18,20 @@ function bundleInputsSnippet({ distribution, roots }) {
         `    task.inputs.files(project.fileTree(dir: ${JSON.stringify(root)}, excludes: ['**/build/**', '**/node_modules/**', '**/.gradle/**', '**/.cxx/**'])).withPropertyName('t3codeOverlay${index}')`,
     )
     .join("\n");
+  // Single files (a declared package's manifest: its `main` decides which file is the entry).
+  const singles = files
+    .map(
+      (file, index) =>
+        `    task.inputs.file(${JSON.stringify(file)}).withPropertyName('t3codeOverlayFile${index}')`,
+    )
+    .join("\n");
   return [
     "",
     MARKER,
     "tasks.matching { it.name.startsWith('createBundle') && it.name.endsWith('JsAndAssets') }.configureEach { task ->",
     `    task.inputs.property('t3codeDistribution', ${JSON.stringify(distribution)})`,
     trees,
+    ...(singles ? [singles] : []),
     "}",
     END_MARKER,
     "",

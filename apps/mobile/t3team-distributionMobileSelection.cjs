@@ -9,6 +9,7 @@ const {
   overlayPackageFor,
   overlayRoots,
   readOverlayPackages,
+  trackedFiles,
   trackedRoots,
 } = require("./t3team-distributionMobilePackages.cjs");
 
@@ -201,5 +202,6 @@ module.exports = {
   overlayPackageFor,
   overlayRoots,
   readDistributionMobile,
+  trackedFiles,
   trackedRoots,
 };

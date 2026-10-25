@@ -18,7 +18,7 @@ const canonical = (target) => {
 };
 
 /**
- * @typedef {{ name: string, dir: string, entry: string, sourceDir: string }} OverlayPackage
+ * @typedef {{ name: string, dir: string, entry: string, sourceDir: string, manifest: string }} OverlayPackage
  * @param {unknown} declared `overlay.packages`
  * @param {{ packDir: string, reserved: ReadonlySet<string>, fail: (message: string) => never }} input
  * @returns {OverlayPackage[]}
@@ -41,12 +41,16 @@ function readOverlayPackages(declared, { packDir, reserved, fail }) {
       return fail(`overlay.packages "${name}": ${manifestPath} must have that name and a "main"`);
     }
     const entry = canonical(path.resolve(dir, manifest.main));
-    if (!fs.existsSync(entry) || path.relative(dir, entry).startsWith("..")) {
+    if (
+      !fs.existsSync(entry) ||
+      !fs.statSync(entry).isFile() ||
+      path.relative(dir, entry).startsWith("..")
+    ) {
       return fail(
         `overlay.packages "${name}": main ${manifest.main} must be a file inside the package`,
       );
     }
-    return { name, dir, entry, sourceDir: path.dirname(entry) };
+    return { name, dir, entry, sourceDir: path.dirname(entry), manifest: canonical(manifestPath) };
   });
 }
 
@@ -69,7 +73,8 @@ function overlayRoots(selection) {
 
 /**
  * Every directory the overlay may import from: its code, native modules, assets and the source
- * directories of its declared packages. Relative imports and assets must resolve inside them, so the
+ * directories of its declared packages (the directory of each package's `main`: when `main` sits at
+ * the package root that is the whole package, tests included). Relative imports and assets must resolve inside them, so the
  * runtime version, the Gradle bundle inputs and Tailwind's scan cover everything that can reach a bundle.
  *
  * @param {{ entryPath: string, nativeModulesDir: string | null, assetsDir: string | null, packages: OverlayPackage[] }} selection
@@ -82,4 +87,19 @@ function trackedRoots(selection) {
   ];
 }
 
-module.exports = { overlayPackageFor, overlayRoots, readOverlayPackages, trackedRoots };
+/**
+ * Single files the bundle depends on besides the tracked directories: the declared packages'
+ * manifests. Changing a package's `main` changes which file is the entry without touching any file
+ * under its source directory, so the manifest is hashed and a Gradle input too.
+ *
+ * @param {{ packages: OverlayPackage[] }} selection
+ */
+const trackedFiles = (selection) => selection.packages.map((pkg) => pkg.manifest);
+
+module.exports = {
+  overlayPackageFor,
+  overlayRoots,
+  readOverlayPackages,
+  trackedFiles,
+  trackedRoots,
+};

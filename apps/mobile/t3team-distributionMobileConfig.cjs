@@ -17,6 +17,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const {
+  trackedFiles,
   trackedRoots,
   readDistributionMobile,
 } = require("./t3team-distributionMobileSelection.cjs");
@@ -41,6 +42,10 @@ function overlayContentHash(selection) {
       hash.update(fs.readFileSync(file)).update("\0");
     }
   }
+  for (const file of trackedFiles(selection).sort()) {
+    hash.update(path.relative(selection.packDir, file)).update("\0");
+    hash.update(fs.readFileSync(file)).update("\0");
+  }
   return hash.digest("hex");
 }
 
@@ -58,7 +63,14 @@ function applyDistributionMobile(config, env = process.env) {
     updates: { ...config.updates, enabled: false },
     plugins: [
       ...(config.plugins ?? []),
-      [GRADLE_PLUGIN, { distribution: selection.packDir, roots: trackedRoots(selection) }],
+      [
+        GRADLE_PLUGIN,
+        {
+          distribution: selection.packDir,
+          roots: trackedRoots(selection),
+          files: trackedFiles(selection),
+        },
+      ],
     ],
   };
 }

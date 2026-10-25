@@ -215,6 +215,10 @@ describe("packages the overlay declares outside its pack", () => {
         /distribution-mobile/,
       );
     }
+    declarePackage("src");
+    expect(() => hook.readDistributionMobile({ appRoot, env: selected() })).toThrow(
+      /must be a file/,
+    );
     declarePackage("../../outside.ts");
     expect(() => hook.readDistributionMobile({ appRoot, env: selected() })).toThrow(
       /inside the package/,
