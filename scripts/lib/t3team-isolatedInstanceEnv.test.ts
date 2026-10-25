@@ -2,6 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 
 import {
   isIsolatedInstanceBuild,
+  assertIsolatedBuildSupported,
   isolatedBrandingFields,
   resolveAtlassianCallbackPorts,
   resolvePinnedBackendPort,
@@ -77,6 +78,36 @@ describe("isolated instance build output", () => {
       assert.deepEqual(t3codeProtocolClaims(off), [
         { name: "T3 Code", schemes: ["t3code", "t3code-dev"] },
       ]);
+    }
+  });
+});
+
+describe("isolated instance build support", () => {
+  const on = { T3CODE_DESKTOP_ISOLATED_INSTANCE: "1" };
+
+  it("builds an isolated instance on macOS only", () => {
+    assert.doesNotThrow(() => assertIsolatedBuildSupported(on, "mac", "Nexi Work Dog"));
+    for (const platform of ["win", "linux"] as const) {
+      assert.throws(
+        () => assertIsolatedBuildSupported(on, platform, "Nexi Work Dog"),
+        /isolated instances are macOS-only.*\b(win|linux)\b/su,
+      );
+    }
+  });
+
+  it("refuses an isolated build that has no product name to isolate by", () => {
+    assert.throws(
+      () => assertIsolatedBuildSupported(on, "mac", undefined),
+      /needs a product name/u,
+    );
+  });
+
+  it("leaves every other build alone", () => {
+    for (const platform of ["mac", "win", "linux"] as const) {
+      assert.doesNotThrow(() => assertIsolatedBuildSupported({}, platform, undefined));
+      assert.doesNotThrow(() =>
+        assertIsolatedBuildSupported({ T3CODE_DESKTOP_ISOLATED_INSTANCE: "0" }, platform, "X"),
+      );
     }
   });
 });

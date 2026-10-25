@@ -58,7 +58,12 @@ import {
 } from "./lib/t3team-authoring-types.ts";
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import { preflightInlinedTypeScript } from "./lib/t3team-inlined-typescript-preflight.ts";
-import { isolatedBrandingFields, t3codeProtocolClaims } from "./lib/t3team-isolatedInstanceEnv.ts";
+import {
+  assertIsolatedBuildSupported,
+  isolatedBrandingFields,
+  T3TeamIsolatedBuildError,
+  t3codeProtocolClaims,
+} from "./lib/t3team-isolatedInstanceEnv.ts";
 import {
   findInlinedExternalPackages,
   selectCliRuntimeExternalDependencies,
@@ -4263,6 +4268,13 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   const workspacePatchedDependencies = workspaceConfig.patchedDependencies ?? {};
   const workspaceAllowBuilds = workspaceConfig.allowBuilds ?? {};
 
+  yield* Effect.try({
+    try: () => assertIsolatedBuildSupported(process.env, options.platform, options.productName),
+    catch: (cause) =>
+      new T3TeamIsolatedBuildError({
+        message: cause instanceof Error ? cause.message : String(cause),
+      }),
+  });
   const platformConfig = PLATFORM_CONFIG[options.platform];
   if (!platformConfig) {
     return yield* new UnsupportedDesktopBuildPlatformError({

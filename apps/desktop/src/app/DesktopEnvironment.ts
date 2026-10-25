@@ -21,6 +21,7 @@ import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePat
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
 import { installPackagedFlagPreset } from "./t3team-desktopFlagPreset.ts";
 import {
+  isolatedInstanceStartupProblem,
   resolveEffectiveT3Home,
   resolveIsolatedHome,
   resolveIsolatedProfileDir,
@@ -209,6 +210,12 @@ const make = Effect.fn("desktop.environment.make")(function* (
     : undefined;
   // t3team: an isolated instance behaves as if T3CODE_HOME were its own app-data directory.
   const isolatedUserDataDirName = packagedBranding?.userDataDirName?.trim();
+  const isolatedProblem = isolatedInstanceStartupProblem({
+    isolatedBranding: packagedBranding?.isolatedInstance === true,
+    userDataDirName: isolatedUserDataDirName,
+    platform: input.platform,
+  });
+  if (isolatedProblem !== undefined) return yield* Effect.die(new Error(isolatedProblem));
   const isolatedHome =
     packagedBranding?.isolatedInstance === true && isolatedUserDataDirName
       ? resolveIsolatedHome({

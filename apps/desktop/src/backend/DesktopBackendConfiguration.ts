@@ -17,6 +17,7 @@ import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
+import { explicitBackendHome } from "../app/t3team-isolatedInstance.ts";
 import serverPackageJson from "../../../server/package.json" with { type: "json" };
 
 import * as DesktopBackendManager from "./DesktopBackendManager.ts";
@@ -725,7 +726,10 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       ? environment.path.join(environment.appDataDirectory, environment.userDataDirName)
       : environment.baseDir;
 
-    const explicitT3Home = process.env.T3CODE_HOME?.trim();
+    const explicitT3Home = explicitBackendHome({
+      isolatedInstance: environment.isolatedInstance,
+      envHome: process.env.T3CODE_HOME,
+    });
     // An explicit T3CODE_HOME is an operator decision and is never migrated.
     const resolvedHomeDir =
       explicitT3Home ??

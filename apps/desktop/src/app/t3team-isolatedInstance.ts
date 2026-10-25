@@ -30,17 +30,44 @@ export function resolveIsolatedProfileDir(isolatedHome: string, join: JoinPath):
 }
 
 /**
- * An explicit `T3CODE_HOME` is an operator decision and still wins; an isolated instance otherwise
- * behaves as if `T3CODE_HOME` were its own directory.
+ * An isolated instance's home is part of its identity: it never takes the process environment's
+ * `T3CODE_HOME`, which a terminal inside the installed app exports for the installed app's own
+ * home. Every other build keeps `T3CODE_HOME` as an operator decision.
  */
 export function resolveEffectiveT3Home(input: {
   readonly configured: Option.Option<string>;
   readonly isolatedHome: string | undefined;
 }): Option.Option<string> {
-  if (Option.isSome(input.configured) && input.configured.value.trim().length > 0) {
-    return input.configured;
-  }
   return input.isolatedHome === undefined ? input.configured : Option.some(input.isolatedHome);
+}
+
+/** The backend's explicit home from the environment: never set for an isolated instance. */
+export function explicitBackendHome(input: {
+  readonly isolatedInstance: boolean;
+  readonly envHome: string | undefined;
+}): string | undefined {
+  if (input.isolatedInstance) return undefined;
+  const trimmed = input.envHome?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+/**
+ * Why a packaged build that says `isolatedInstance` cannot start here, or `undefined`. Isolation is
+ * all or nothing: a build that cannot isolate everything must not run half-isolated.
+ */
+export function isolatedInstanceStartupProblem(input: {
+  readonly isolatedBranding: boolean;
+  readonly userDataDirName: string | undefined;
+  readonly platform: NodeJS.Platform;
+}): string | undefined {
+  if (!input.isolatedBranding) return undefined;
+  if (input.platform !== "darwin") {
+    return `This build is an isolated instance, and isolated instances are macOS-only (running on ${input.platform}). It would share state with an installed app. Install the replace-mode build instead.`;
+  }
+  if (!input.userDataDirName) {
+    return "This build is an isolated instance, but its branding has no userDataDirName, so it has no home of its own. Rebuild it with a product name.";
+  }
+  return undefined;
 }
 
 /**

@@ -3,6 +3,7 @@ import * as NodePathLayer from "@effect/platform-node/NodePath";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -14,7 +15,11 @@ import { resolveUserDataPath } from "./DesktopUserData.ts";
 
 const APP_DATA = "/Users/alice/Library/Application Support";
 
-const withBranding = (branding: Record<string, unknown>, env: Record<string, string> = {}) => {
+const withBranding = (
+  branding: Record<string, unknown>,
+  env: Record<string, string> = {},
+  platform: NodeJS.Platform = "darwin",
+) => {
   const resourcesPath = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-branding-"));
   NodeFS.writeFileSync(
     NodePath.join(resourcesPath, "desktop-branding.json"),
@@ -25,7 +30,7 @@ const withBranding = (branding: Record<string, unknown>, env: Record<string, str
       DesktopEnvironment.layer({
         dirname: "/repo/apps/desktop/dist-electron",
         homeDirectory: "/Users/alice",
-        platform: "darwin",
+        platform,
         processArch: "arm64",
         appVersion: "0.1.0",
         appPath: "/Applications/Nexi Work.app/Contents/Resources/app.asar",
@@ -94,19 +99,42 @@ describe("DesktopEnvironment isolated instance", () => {
     }),
   );
 
-  it.effect("an explicit T3CODE_HOME still wins for the state directory", () =>
+  it.effect(
+    "an isolated build ignores an inherited T3CODE_HOME: the home is part of its identity",
+    () =>
+      Effect.gen(function* () {
+        // A terminal inside the installed app exports its own T3CODE_HOME; launching the isolated
+        // build from there must not move it onto the installed app's home.
+        const environment = yield* withBranding(isolated, { T3CODE_HOME: "/Users/alice/.t3" });
+        const home = `${APP_DATA}/nexi-work-nightly-dogfood`;
+        assert.isTrue(environment.isolatedInstance);
+        assert.equal(environment.baseDir, home);
+        assert.equal(environment.stateDir, `${home}/userdata`);
+      }),
+  );
+
+  it.effect("an installed build still honours an explicit T3CODE_HOME", () =>
     Effect.gen(function* () {
-      const environment = yield* withBranding(isolated, { T3CODE_HOME: "/ops/home" });
+      const environment = yield* withBranding(installed, { T3CODE_HOME: "/ops/home" });
       assert.equal(environment.stateDir, "/ops/home/userdata");
-      assert.isTrue(environment.isolatedInstance);
     }),
   );
 
-  it.effect("isolatedInstance without a userDataDirName cannot isolate anything", () =>
+  it.effect("isolatedInstance without a userDataDirName fails instead of sharing ~/.t3", () =>
     Effect.gen(function* () {
-      const environment = yield* withBranding({ baseName: "X", isolatedInstance: true });
-      assert.isFalse(environment.isolatedInstance);
-      assert.equal(environment.stateDir, "/Users/alice/.t3/userdata");
+      const exit = yield* Effect.exit(withBranding({ baseName: "X", isolatedInstance: true }));
+      assert.isTrue(Exit.isFailure(exit));
+      assert.match(String(exit), /no userDataDirName/u);
     }),
+  );
+
+  it.effect.each(["win32", "linux"] as const)(
+    "an isolated build refuses to start on %s: only macOS is isolated",
+    (platform) =>
+      Effect.gen(function* () {
+        const exit = yield* Effect.exit(withBranding(isolated, {}, platform));
+        assert.isTrue(Exit.isFailure(exit));
+        assert.match(String(exit), /isolated instances are macOS-only/u);
+      }),
   );
 });
