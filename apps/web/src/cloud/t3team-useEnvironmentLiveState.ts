@@ -21,7 +21,7 @@ import {
  * derived from the supervisor state, so a row only re-renders when this flips — not on every
  * retry attempt the supervisor reports.
  */
-const sessionEndedAtom = Atom.family((environmentId: EnvironmentId) =>
+export const sessionEndedAtom = Atom.family((environmentId: EnvironmentId) =>
   Atom.make((get) => {
     const state = Option.getOrNull(
       AsyncResult.value(get(environmentCatalog.stateAtom(environmentId))),

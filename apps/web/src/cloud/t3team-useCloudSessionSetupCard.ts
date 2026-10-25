@@ -23,7 +23,7 @@ import { useCloudSessionProjectKey } from "./t3team-useCloudSessionProjectFollow
 /** What the setup card reads from the composer gate's session controller, and nothing more. */
 export type CloudSetupSessionSource = Pick<
   ReturnType<typeof useCloudSessionController>,
-  "sessions" | "loading" | "onCreate" | "primaryEnvironmentId"
+  "sessions" | "loading" | "onCreate" | "createPending" | "primaryEnvironmentId"
 >;
 
 /** How long a session may stay out of the list before the card says it has no status for it. */
@@ -105,6 +105,7 @@ export function useCloudSessionSetupCard(input: {
     },
     onCancel: queued?.onCancel,
     onRetry: recovery.retry ? (queued?.onRetry ?? null) : null,
+    recoveryActions: queued?.recoveryActions ?? [],
     onTryAgain: recovery.tryAgain ? tryAgain : null,
     sending: queued?.facts.flushing ?? false,
   };

@@ -12,7 +12,7 @@ import type {
   EnvironmentProject,
   EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
-import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
+import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
 
 import type { DraftSessionState } from "~/composerDraftStore";
 import {
@@ -21,6 +21,10 @@ import {
 } from "~/logicalProject";
 import { type CloudProjectWait, classifyCloudProjectWait } from "./t3team-cloudProjectWait";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
+import {
+  type MachineProjectBinding,
+  resolveMachineOwnProject,
+} from "./t3team-cloudSessionMachineProject";
 import {
   logicalProjectPerEnvironment,
   projectCwdOf,
@@ -37,6 +41,8 @@ export interface CloudQueuedSendFacts {
   readonly project: EnvironmentProject | null;
   /** What the draft's project is still waiting on there; null once it is there. */
   readonly projectWait: CloudProjectWait | null;
+  /** How `project` was found: by the machine's own welcome id, or by folder / repository match. */
+  readonly projectResolvedBy: MachineProjectBinding | null;
   /** The draft is a "No project" thread: its project on the machine is that machine's scratch. */
   readonly scratch: boolean;
   /** The draft's thread is already known on that machine. */
@@ -67,6 +73,8 @@ export function resolveCloudQueuedSendFacts(input: {
   readonly projects: ReadonlyArray<EnvironmentProject>;
   readonly threadShells: ReadonlyArray<Pick<EnvironmentThreadShell, "environmentId" | "id">>;
   readonly groupingSettings: ReturnType<typeof selectProjectGroupingSettings>;
+  /** The project id an environment's welcome names as its own (`serverEnvironment.welcome`). */
+  readonly bootstrapProjectIdOf?: ((environmentId: EnvironmentId) => ProjectId | null) | undefined;
 }): CloudQueuedSendFacts {
   const { draft, projects, environments } = input;
   const session = input.sessions.find((item) => item.sessionId === input.queued.sessionId) ?? null;
@@ -89,6 +97,7 @@ export function resolveCloudQueuedSendFacts(input: {
       machineConnected: false,
       project: null,
       projectWait: null,
+      projectResolvedBy: null,
       scratch,
       threadExists: false,
     };
@@ -98,12 +107,28 @@ export function resolveCloudQueuedSendFacts(input: {
     composerProject === null
       ? draft.logicalProjectKey
       : deriveLogicalProjectKeyFromSettings(composerProject, input.groupingSettings);
-  const projectOnMachine = (): EnvironmentProject | null => {
+  const projectOnMachine = (): {
+    readonly project: EnvironmentProject | null;
+    readonly by: MachineProjectBinding | null;
+  } => {
     if (scratch) {
       const root = machine?.serverConfig?.scratchWorkspaceRoot;
-      return (
-        projects.find((p) => p.environmentId === environmentId && isScratchProject(p, root)) ?? null
-      );
+      return {
+        project:
+          projects.find((p) => p.environmentId === environmentId && isScratchProject(p, root)) ??
+          null,
+        by: null,
+      };
+    }
+    if (input.queued.sendInMachineProject === true) {
+      // The user's choice: the machine's own project, whatever repository it is.
+      const own = resolveMachineOwnProject({
+        environmentId,
+        bootstrapProjectId: input.bootstrapProjectIdOf?.(environmentId) ?? null,
+        cwd: projectCwdOf(machine?.serverConfig),
+        projects,
+      });
+      return { project: own.project ?? null, by: own.by };
     }
     const own = resolveCloudSessionOwnProject({
       target: { sessionId: input.queued.sessionId, projectKey: input.queued.projectKey ?? null },
@@ -111,6 +136,9 @@ export function resolveCloudQueuedSendFacts(input: {
       projectKey,
       sessions: input.sessions,
       serverCwdOf: (id) => projectCwdOf(environmentOf(id)?.serverConfig),
+      ...(input.bootstrapProjectIdOf === undefined
+        ? {}
+        : { bootstrapProjectIdOf: input.bootstrapProjectIdOf }),
       projects,
     });
     const entry = logicalProjectPerEnvironment(
@@ -118,17 +146,30 @@ export function resolveCloudQueuedSendFacts(input: {
       (p) => deriveLogicalProjectKeyFromSettings(p, input.groupingSettings) === projectKey,
       own,
     ).find((candidate) => candidate.environmentId === environmentId);
-    return entry === undefined
-      ? null
-      : (projects.find((p) => p.environmentId === environmentId && p.id === entry.projectId) ??
+    const found =
+      entry === undefined
+        ? null
+        : (projects.find((p) => p.environmentId === environmentId && p.id === entry.projectId) ??
           null);
+    // Only the session's own project can have come by the welcome id; a grouping match is by
+    // folder / repository.
+    return {
+      project: found,
+      by:
+        found === null
+          ? null
+          : own?.projectId === found.id
+            ? (own.resolvedBy ?? "folder")
+            : "folder",
+    };
   };
-  const project = projectOnMachine();
+  const { project, by: projectResolvedBy } = projectOnMachine();
   return {
     session,
     environmentId,
     machineConnected: machine?.connection.phase === "connected",
     project,
+    projectResolvedBy,
     projectWait:
       project === null
         ? classifyCloudProjectWait({

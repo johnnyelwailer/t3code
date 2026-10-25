@@ -14,6 +14,7 @@ import {
 import { CloudProjectWaitNote } from "./t3team-CloudProjectWaitNote";
 import { presentCloudProjectWaitAt } from "./t3team-cloudProjectWaitClock";
 import { SetupLiveReadout, StepList } from "./t3team-CloudSessionSetupParts";
+import type { CloudQueuedSendRecoveryAction } from "./t3team-cloudProjectNotResolvedActions";
 import { useCloudProjectWaitNow } from "./t3team-useCloudProjectWaitNow";
 import { useCloudSetupElapsedSeconds } from "./t3team-useCloudSetupElapsedSeconds";
 
@@ -23,6 +24,8 @@ export interface CloudSessionSetupCardProps {
   readonly onCancel?: (() => void) | undefined;
   /** Retry a first message that could not be delivered. */
   readonly onRetry?: (() => void) | null | undefined;
+  /** More ways out of a message that gave up waiting for its project (Retry and Cancel stay). */
+  readonly recoveryActions?: ReadonlyArray<CloudQueuedSendRecoveryAction> | undefined;
   /** Start a fresh session after this one failed. */
   readonly onTryAgain?: (() => void) | null | undefined;
   /** A first message is being handed over right now: it can no longer be cancelled. */
@@ -42,6 +45,7 @@ export function CloudSessionSetupCard({
   facts,
   onCancel,
   onRetry,
+  recoveryActions,
   onTryAgain,
   sending = false,
   frozenElapsedSeconds,
@@ -149,6 +153,7 @@ export function CloudSessionSetupCard({
         detailsUrl={model.detailsUrl}
         onCancel={onCancel}
         onRetry={onRetry}
+        recoveryActions={recoveryActions}
         onTryAgain={onTryAgain}
         sending={sending}
       />

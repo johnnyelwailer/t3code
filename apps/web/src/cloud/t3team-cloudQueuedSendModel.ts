@@ -38,6 +38,14 @@ export const CloudQueuedSendSchema = Schema.Struct({
   retryable: Schema.optionalKey(Schema.Boolean),
   /** When each bind step was first seen (step id -> ISO time), for per-step elapsed. */
   stepStartedAt: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+  /** Why the send failed, when the reason is typed (the message is only its wording). */
+  // A string, not a literal union: a record a newer build wrote must still decode (a record that
+  // fails to decode is dropped, and the message with it).
+  failureKind: Schema.optionalKey(Schema.String),
+  /** The classifier's reason (`CloudProjectWaitReason`) for a `project_not_resolved` failure. */
+  failureReason: Schema.optionalKey(Schema.String),
+  /** The user chose to send in the machine's own project instead of the draft's. */
+  sendInMachineProject: Schema.optionalKey(Schema.Boolean),
 });
 
 export interface CloudQueuedSend {
@@ -55,6 +63,9 @@ export interface CloudQueuedSend {
   readonly failureMessage?: string;
   readonly retryable?: boolean;
   readonly stepStartedAt?: Readonly<Record<string, string>>;
+  readonly failureKind?: string;
+  readonly failureReason?: string;
+  readonly sendInMachineProject?: boolean;
 }
 
 const decodeUnknown = Schema.decodeUnknownOption(CloudQueuedSendSchema);
@@ -75,4 +86,9 @@ export function toPersistedCloudQueuedSend(
 
 export function isCloudQueuedSendFailed(queued: CloudQueuedSend): boolean {
   return queued.failureMessage !== undefined;
+}
+
+/** The send gave up waiting for its project: the message is kept and can be resent. */
+export function isProjectNotResolved(queued: CloudQueuedSend): boolean {
+  return queued.failureKind === "project_not_resolved";
 }
