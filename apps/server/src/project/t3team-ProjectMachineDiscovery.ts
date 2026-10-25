@@ -1,5 +1,6 @@
 /**
- * Finds the project's default machine in its own and linked repositories. Local checkouts are
+ * Finds the project's machine. Its own repository's definition is the project's machine; linked
+ * repositories are scanned and reported but never used (`t3team-projectMachineOwnership`). Local checkouts are
  * authoritative; repositories without a checkout use a cached, immutable default-branch scan
  * behind CLOUD_PROJECT_MACHINE. Remote availability failures never reject a definition.
  * Standby callers request cached remote results only, so the background loop cannot fetch.
@@ -24,6 +25,8 @@ import { ProjectService } from "./ProjectService.ts";
 import { scanCheckout } from "./t3team-projectMachineScan.ts";
 import type { ScannedMachine } from "./t3team-machineDefinitionScan.ts";
 import { machineRepositories } from "./t3team-projectMachineRepositories.ts";
+import { logMachineSelection } from "./t3team-projectMachineLog.ts";
+import { selectProjectMachine } from "./t3team-projectMachineOwnership.ts";
 import { makeRemoteMachineCache } from "./t3team-remoteMachineCache.ts";
 import { PullRequestProviderRegistry } from "../pullRequest/PullRequestProviderRegistry.ts";
 import { VcsProcess } from "../vcs/VcsProcess.ts";
@@ -49,7 +52,10 @@ export class ProjectMachineDiscovery extends Context.Service<
     ) => Effect.Effect<
       {
         readonly discovery: Discovery;
+        /** The project's own machine, or null: linked repositories' machines are never used. */
         readonly source: ProjectMachineSource | null;
+        /** Linked repositories whose definitions were found and deliberately not used. */
+        readonly ignoredRepositories: ReadonlyArray<string>;
         /** Checkouts that were scanned, own repository first. Empty when the project has none. */
         readonly checkouts: ReadonlyArray<{ readonly repository: string; readonly root: string }>;
         /** The project's title, so a session without a checkout can name its workspace after it. */
@@ -59,10 +65,6 @@ export class ProjectMachineDiscovery extends Context.Service<
     >;
   }
 >()("t3/project/t3team-ProjectMachineDiscovery/ProjectMachineDiscovery") {}
-
-/** Pointer-backed definitions first: a committed `.nexi/machine.json` is a stated choice. */
-const byIntent = <A extends { readonly machineFilePath: string | null }>(a: A, b: A) =>
-  Number(a.machineFilePath === null) - Number(b.machineFilePath === null);
 
 const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
@@ -151,11 +153,6 @@ const make = Effect.gen(function* () {
           ),
         { concurrency: 4 },
       );
-      const sources = scans
-        .flatMap((scan) => scan.sources)
-        .toSorted((a, b) => byIntent(a.machine, b.machine));
-      const candidates = sources.map(({ machine: { files: _files, ...definition } }) => definition);
-      const first = candidates[0];
       const missing = [
         ...new Set(
           scans.flatMap((scan) =>
@@ -170,23 +167,21 @@ const make = Effect.gen(function* () {
         hints.unshift(
           `No remote machine definition was found in ${missing.join(", ")} at the default branch. Checked .nexi/machine.json, .devcontainer/devcontainer.json and .devcontainer.json; subfolder discovery needs a local checkout or a .nexi/machine.json pointer.`,
         );
+      const selection = selectProjectMachine({
+        sources: scans.flatMap((scan) => scan.sources),
+        rejected: scans.flatMap((scan) => scan.rejected),
+        hints,
+      });
+      yield* logMachineSelection(projectId, repositories, selection);
       return {
-        discovery: {
-          status:
-            first === undefined
-              ? {
-                  _tag: "None",
-                  ...(hints.length > 0 ? { reason: hints.join(" ") } : {}),
-                }
-              : { _tag: "Detected", definition: first },
-          candidates,
-          rejected: scans.flatMap((scan) => scan.rejected),
-        } satisfies Discovery,
-        source: sources[0] ?? null,
+        discovery: selection.discovery,
+        source: selection.source,
+        ignoredRepositories: selection.ignoredRepositories,
         checkouts: roots,
         title: project.value.title,
       };
     }).pipe(
+      Effect.withSpan("projectMachine.resolveDefault"),
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),
       Effect.provideService(PullRequestProviderRegistry, providers),

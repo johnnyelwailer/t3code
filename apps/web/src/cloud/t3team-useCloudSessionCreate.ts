@@ -29,12 +29,18 @@ export function useCloudSessionCreate(input: {
   const [pendingKind, setPendingKind] = useState<null | "session" | "setup">(null);
   const createPending = pendingKind !== null;
   const latestRef = useRef<
-    (projectId?: ProjectId, options?: { readonly machineSetup?: boolean }) => void
+    (
+      projectId?: ProjectId,
+      options?: { readonly machineSetup?: boolean; readonly plain?: boolean },
+    ) => void
   >(() => {});
 
   /** `projectId` (a project on the primary environment) runs the session in its machine. */
   const onCreate = useCallback(
-    (projectId?: ProjectId, options?: { readonly machineSetup?: boolean }) => {
+    (
+      projectId?: ProjectId,
+      options?: { readonly machineSetup?: boolean; readonly plain?: boolean },
+    ) => {
       if (environmentId === null || !canManageRelay || createPending) return;
       setRelayIdsBefore(
         new Set(
@@ -48,6 +54,7 @@ export function useCloudSessionCreate(input: {
           durationSeconds: CLOUD_SESSION_LIFETIME_SECONDS,
           ...(projectId ? { projectId } : {}),
           ...(options?.machineSetup ? { machineSetup: true } : {}),
+          ...(options?.plain ? { plain: true } : {}),
         },
       })
         .then((result) => {
@@ -58,7 +65,11 @@ export function useCloudSessionCreate(input: {
             });
             refreshCloudSessionList();
           } else {
-            reportCloudSessionCreateFailure(result, () => latestRef.current(projectId, options));
+            reportCloudSessionCreateFailure(
+              result,
+              () => latestRef.current(projectId, options),
+              () => latestRef.current(projectId, { ...options, plain: true }),
+            );
           }
         })
         .finally(() => setPendingKind(null));

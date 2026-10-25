@@ -29,7 +29,7 @@ export function presentProjectMachine(
   const broken = discovery.rejected[0];
   if (broken === undefined) {
     return discovery.status._tag === "None" && discovery.status.reason !== undefined
-      ? { label: "Remote machine discovery", detail: discovery.status.reason, tone: "info" }
+      ? { label: "No machine for this project", detail: discovery.status.reason, tone: "info" }
       : null;
   }
   return {

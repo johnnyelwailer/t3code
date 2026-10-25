@@ -14,6 +14,11 @@ import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import { afterEach, beforeEach } from "vite-plus/test";
 
+import {
+  HIDDEN_T3TEAM_DIR,
+  MANIFEST_FILE_NAME,
+  REFERENCES_DIR_NAME,
+} from "../t3team-project-repository-utils.ts";
 import { PullRequestProviderRegistry } from "../pullRequest/PullRequestProviderRegistry.ts";
 import { ProjectService } from "../project/ProjectService.ts";
 import * as ProjectMachineDiscovery from "../project/t3team-ProjectMachineDiscovery.ts";
@@ -64,6 +69,33 @@ const checkout = (
     git(root, "branch", "-q", "--set-upstream-to=origin/main", "main");
   }
   return root;
+};
+
+/** A committed repository with no `origin`, as a planning folder is. */
+const localRepo = (files: Record<string, string>) => {
+  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-machine-local-"));
+  git(root, "init", "-q", "-b", "main");
+  write(root, files);
+  git(root, "add", "-A");
+  git(root, "commit", "-q", "--allow-empty", "-m", "base");
+  return root;
+};
+
+const MANIFEST_PATH = `${HIDDEN_T3TEAM_DIR}/${REFERENCES_DIR_NAME}/${MANIFEST_FILE_NAME}`;
+
+/** Records `entries` as the project's linked repositories, the way the reference manifest does. */
+const link = (root: string, entries: ReadonlyArray<unknown>) =>
+  write(root, { [MANIFEST_PATH]: JSON.stringify({ linkedRepositories: entries }) });
+
+const cloned = (url: string, localPath: string) => ({ url, localPath, status: "cloned" });
+const QA_URL = "https://nexplore.ghe.com/pj/nexi-machine-qa.git";
+const LIB_URL = "https://nexplore.ghe.com/acme/lib.git";
+const POINTER = {
+  ...DEVCONTAINER,
+  ".nexi/machine.json": JSON.stringify({
+    version: 1,
+    devcontainer: ".devcontainer/devcontainer.json",
+  }),
 };
 
 const sessionIn = <A, E>(
@@ -356,9 +388,10 @@ describe("CloudSessionMachines.resolvePlain", () => {
     Effect.gen(function* () {
       const repository = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-plain-"));
       git(repository, "init", "-q", "-b", "main");
-      expect(yield* plainIn(repository)).toEqual({ kind: "workspace", folder: "IES NG-781a8188" });
+      const expected = { kind: "workspace", folder: "IES NG-781a8188", title: "IES NG" };
+      expect(yield* plainIn(repository)).toEqual(expected);
       const folder = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-plain-"));
-      expect(yield* plainIn(folder)).toEqual({ kind: "workspace", folder: "IES NG-781a8188" });
+      expect(yield* plainIn(folder)).toEqual(expected);
     }),
   );
 
@@ -377,4 +410,187 @@ describe("CloudSessionMachines.resolvePlain", () => {
       expect(error.reason).toBe("repository_sign_in_required");
     }),
   );
+});
+
+describe("a project's machine comes from its own repository only", () => {
+  // The reported defect: a planning folder (no origin) linking a QA fixture repository built a
+  // machine from that fixture and named the session after it.
+  const qaRepo = () => checkout(POINTER, { remote: "git@nexplore.ghe.com:pj/nexi-machine-qa.git" });
+  const libRepo = () => checkout(DEVCONTAINER, { remote: "git@nexplore.ghe.com:acme/lib.git" });
+  const planningFolderLinking = (...entries: ReadonlyArray<unknown>) => {
+    const root = localRepo({ "README.md": "planning" });
+    link(root, entries);
+    return root;
+  };
+  const poolKeyIn = (root: string) =>
+    sessionIn(root, "t", (machines) => machines.poolKeyOf(projectId));
+
+  it.effect("does not build a machine from a linked repository for a project with no origin", () =>
+    Effect.gen(function* () {
+      const root = planningFolderLinking(cloned(QA_URL, qaRepo()));
+      expect(yield* resolveIn(root)).toBeNull();
+      expect(yield* plainIn(root)).toEqual({
+        kind: "workspace",
+        folder: "IES NG-781a8188",
+        title: "IES NG",
+      });
+      expect(yield* poolKeyIn(root)).toBeNull();
+    }),
+  );
+
+  it.effect("does not use a linked repository's machine for a project with its own origin", () =>
+    Effect.gen(function* () {
+      const root = checkout({ "README.md": "app" });
+      link(root, [cloned(QA_URL, qaRepo())]);
+      expect(yield* resolveIn(root)).toBeNull();
+    }),
+  );
+
+  it.effect("uses the project's own machine whatever its linked repositories define", () =>
+    Effect.gen(function* () {
+      const root = checkout(DEVCONTAINER);
+      // The linked one has the committed pointer, which used to sort ahead of the project's own.
+      link(root, [cloned(QA_URL, qaRepo())]);
+      const machine = yield* resolveIn(root);
+      expect(machine?.repository.name).toBe("api");
+      expect(machine?.commit).toBe(git(root, "rev-parse", "HEAD"));
+    }),
+  );
+
+  it.effect("makes no guess between two linked repositories, in either manifest order", () =>
+    Effect.gen(function* () {
+      const [qa, lib] = [qaRepo(), libRepo()];
+      for (const order of [
+        [cloned(QA_URL, qa), cloned(LIB_URL, lib)],
+        [cloned(LIB_URL, lib), cloned(QA_URL, qa)],
+      ]) {
+        expect(yield* resolveIn(planningFolderLinking(...order))).toBeNull();
+      }
+    }),
+  );
+
+  it.effect("ignores a linked repository that was never cloned", () =>
+    Effect.gen(function* () {
+      const root = planningFolderLinking({
+        url: QA_URL,
+        localPath: NodePath.join(NodeOS.tmpdir(), "t3team-never-cloned-xyz"),
+        status: "not-cloned",
+      });
+      expect(yield* resolveIn(root)).toBeNull();
+    }),
+  );
+
+  it.effect("survives a missing, corrupt or partly unknown reference manifest", () =>
+    Effect.gen(function* () {
+      const corrupt = checkout(DEVCONTAINER);
+      write(corrupt, { [MANIFEST_PATH]: "{ not json" });
+      const unknown = checkout(DEVCONTAINER);
+      link(unknown, [null, "x", {}, { url: QA_URL }, { status: "weird" }]);
+      for (const root of [checkout(DEVCONTAINER), corrupt, unknown]) {
+        expect((yield* resolveIn(root))?.repository.name).toBe("api");
+      }
+      const bare = localRepo({ "README.md": "planning" });
+      write(bare, { [MANIFEST_PATH]: "{ not json" });
+      expect(yield* resolveIn(bare)).toBeNull();
+    }),
+  );
+
+  it.effect("is not blocked by a broken definition in a linked repository", () =>
+    Effect.gen(function* () {
+      const broken = checkout({ ...DEVCONTAINER, ".nexi/machine.json": `{ "version": 2 }` });
+      expect(yield* resolveIn(planningFolderLinking(cloned(QA_URL, broken)))).toBeNull();
+    }),
+  );
+
+  it.effect("still reports the project's own broken definition", () =>
+    Effect.gen(function* () {
+      const root = checkout({ ...DEVCONTAINER, ".nexi/machine.json": `{ "version": 2 }` });
+      link(root, [cloned(QA_URL, qaRepo())]);
+      const error = yield* Effect.flip(resolveIn(root));
+      expect(error.reason).toBe("machine_unavailable");
+      expect(error.message).toContain(".nexi/machine.json");
+    }),
+  );
+
+  it.effect("fails on the project's own unpushed definition, not switching to a linked one", () =>
+    Effect.gen(function* () {
+      const root = checkout(DEVCONTAINER, { pushed: false });
+      link(root, [cloned(QA_URL, qaRepo())]);
+      const error = yield* Effect.flip(resolveIn(root));
+      expect(error.reason).toBe("machine_unavailable");
+      expect(error.message).toContain("Push");
+    }),
+  );
+
+  it.effect("fails on the project's own dirty definition, not switching to a linked one", () =>
+    Effect.gen(function* () {
+      const root = checkout(DEVCONTAINER);
+      write(root, { ".devcontainer/devcontainer.json": `{ "image": "node:22" }` });
+      link(root, [cloned(QA_URL, qaRepo())]);
+      const error = yield* Effect.flip(resolveIn(root));
+      expect(error.reason).toBe("machine_unavailable");
+      expect(error.message).toContain(".devcontainer/devcontainer.json");
+    }),
+  );
+
+  it.effect("an own machine without an origin fails; the project still has a plain session", () =>
+    Effect.gen(function* () {
+      const root = localRepo(DEVCONTAINER);
+      expect((yield* Effect.flip(resolveIn(root))).reason).toBe("machine_unavailable");
+      expect((yield* plainIn(root)).kind).toBe("workspace");
+    }),
+  );
+
+  it.effect("asks for a gh sign-in for the own machine", () =>
+    Effect.gen(function* () {
+      const root = checkout(DEVCONTAINER);
+      link(root, [cloned(QA_URL, qaRepo())]);
+      expect((yield* Effect.flip(resolveIn(root, ""))).reason).toBe("repository_sign_in_required");
+    }),
+  );
+
+  it.effect("is a plain session while project machines are off, linked machines or not", () =>
+    Effect.gen(function* () {
+      replaceFeatureFlagPresetValues(new Map([["CLOUD_PROJECT_MACHINE", false]]));
+      const root = checkout(DEVCONTAINER);
+      link(root, [cloned(QA_URL, qaRepo())]);
+      expect(yield* resolveIn(root)).toBeNull();
+      expect(yield* poolKeyIn(root)).toBeNull();
+    }),
+  );
+
+  it.effect("resolves the same machine for concurrent creates on one project", () =>
+    Effect.gen(function* () {
+      const root = checkout(DEVCONTAINER);
+      link(root, [cloned(QA_URL, qaRepo())]);
+      const results = yield* sessionIn(root, "t", (machines) =>
+        Effect.all(
+          Array.from({ length: 4 }, () => machines.resolve(projectId)),
+          { concurrency: "unbounded" },
+        ),
+      );
+      expect(new Set(results.map((machine) => machine?.repository.name))).toEqual(new Set(["api"]));
+      expect(new Set(results.map((machine) => machine?.commit)).size).toBe(1);
+    }),
+  );
+
+  describe("setting a machine up", () => {
+    it.effect("sets up the project's own repository although a linked one has a machine", () =>
+      Effect.gen(function* () {
+        const root = checkout({ "README.md": "hi" });
+        link(root, [cloned(QA_URL, qaRepo())]);
+        expect((yield* setupIn(root)).repository.name).toBe("api");
+      }),
+    );
+
+    it.effect("never sets up in a linked repository for a project with no repository", () =>
+      Effect.gen(function* () {
+        const folder = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-no-repo-"));
+        link(folder, [cloned(LIB_URL, libRepo())]);
+        const error = yield* Effect.flip(setupIn(folder));
+        expect(error.reason).toBe("machine_unavailable");
+        expect(error.message).toContain("no repository");
+      }),
+    );
+  });
 });
