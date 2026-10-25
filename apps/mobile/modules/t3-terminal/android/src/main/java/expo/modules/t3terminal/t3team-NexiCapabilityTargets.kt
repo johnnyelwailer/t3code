@@ -23,14 +23,19 @@ object NexiCapabilityTargets {
   private const val ASSET_PREFIX = "/api/assets/"
   private const val UPLOAD_PREFIX = "/api/attachments/upload/"
 
+  /** The preview browser's "save a download": the id and ticket in the query are the capability. */
+  private const val PREVIEW_DOWNLOAD_PREFIX = "/api/preview-stream/download?"
+
   /**
    * The methods a registered target admits, by the shape of the signed URLs the host mints (assets
-   * and favicons under `/api/assets/`, uploads under `/api/attachments/upload/`); null for any other
-   * path, which is never registered.
+   * and favicons under `/api/assets/`, uploads under `/api/attachments/upload/`, the preview
+   * browser's downloads under `/api/preview-stream/download?`); null for any other path, which is
+   * never registered.
    */
   fun methodsFor(target: String): Set<String>? = when {
     target.startsWith(ASSET_PREFIX) -> READS
     target.startsWith(UPLOAD_PREFIX) -> setOf("POST")
+    target.startsWith(PREVIEW_DOWNLOAD_PREFIX) -> READS
     else -> null
   }
 

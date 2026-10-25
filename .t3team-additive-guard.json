@@ -725,7 +725,11 @@
     "packages/client-runtime/src/state/assets.ts",
     "apps/mobile/src/lib/attachmentDownload.ts",
     "packages/client-runtime/src/state/assets.test.ts",
-    "apps/mobile/src/lib/attachmentDownload.test.ts"
+    "apps/mobile/src/lib/attachmentDownload.test.ts",
+    "apps/mobile/src/lib/openExternalUrl.ts",
+    "apps/mobile/src/native/EnrichedMarkdownText.tsx",
+    "apps/mobile/src/features/threads/QuestionAnswerHistory.tsx",
+    "apps/mobile/src/features/files/ThreadFilesRouteScreen.tsx"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",

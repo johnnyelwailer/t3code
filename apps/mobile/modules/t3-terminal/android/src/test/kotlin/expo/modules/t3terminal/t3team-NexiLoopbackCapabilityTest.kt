@@ -113,6 +113,26 @@ class NexiLoopbackCapabilityTest {
     assertTrue(h.isClosedByServer(h.send("GET", "/api/orchestration/dispatch")))
   }
 
+  @Test fun aPreviewBrowserDownloadIsRegistrableAsAReadAndNothingElseOnThatPathIs() {
+    val h = harness()
+    val download = "/api/preview-stream/download?id=d1&wsTicket=t1"
+    val base = "http://127.0.0.1:${h.listener.port}"
+    assertTrue(h.listener.allowUrl("$base$download"))
+    h.send("GET", download)
+    h.take()
+    assertTrue(h.isClosedByServer(h.send("POST", download, "Content-Length: 0")))
+    assertTrue(
+      h.isClosedByServer(h.send("GET", "/api/preview-stream/download?id=d2&wsTicket=guess"))
+    )
+    for (path in listOf(
+      "/api/preview-stream/download",
+      "/api/preview-stream/ws?wsTicket=t",
+      "/api/preview-stream/downloads?x=1"
+    )) {
+      assertFalse(path, h.listener.allowTarget(path))
+    }
+  }
+
   @Test fun aReplacedTunnelsUrlsAreNotAdmittedByItsSuccessor() {
     val revocations = CapabilityRevocations()
     fun tunnel() = Harness(limits, revocations = revocations).also { harnesses.add(it) }

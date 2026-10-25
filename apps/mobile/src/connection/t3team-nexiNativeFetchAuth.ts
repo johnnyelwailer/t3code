@@ -20,3 +20,22 @@ export function authorizeNativeFetch(url: string): boolean {
     return false;
   }
 }
+
+/**
+ * A URL of a live broker tunnel only works inside this app, and the signed asset URLs among them
+ * are capabilities. They are never handed to another app: not opened with an intent, not shared.
+ */
+export function isTunnelUrl(url: string): boolean {
+  try {
+    return isLoopbackTunnelUrl(new URL(url));
+  } catch {
+    return false;
+  }
+}
+
+/** Shares `url` through `share` unless it is a tunnel URL; returns whether it was shared. */
+export function shareUnlessPrivate(url: string, share: (message: string) => unknown): boolean {
+  if (isTunnelUrl(url)) return false;
+  void share(url);
+  return true;
+}

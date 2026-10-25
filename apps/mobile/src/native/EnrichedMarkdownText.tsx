@@ -23,6 +23,7 @@ import { useAppearancePreferences } from "../features/settings/appearance/Appear
 import { Menu } from "../components/ui/Menu";
 import { useEnrichedLinkVariants } from "./useEnrichedLinkVariants";
 import { copyTextWithHaptic } from "../lib/copyTextWithHaptic";
+import { shareUnlessPrivate } from "../connection/t3team-nexiNativeFetchAuth";
 import {
   ENRICHED_INLINE_FILE_LINK_REGEX,
   enrichedSkillLinkRegex,
@@ -200,8 +201,9 @@ export function MobileEnrichedMarkdownText(props: SelectableMarkdownTextProps) {
     (url: string, actionId: string) => {
       if (actionId === "enriched-open-link") onLinkPress?.(url);
       else if (actionId === "enriched-copy-link") copyTextWithHaptic(url);
-      else if (actionId === "enriched-share-link") void Share.share({ message: url });
-      else onFileContextMenuAction?.(url, actionId);
+      else if (actionId === "enriched-share-link") {
+        shareUnlessPrivate(url, (message) => Share.share({ message }));
+      } else onFileContextMenuAction?.(url, actionId);
     },
     [onLinkPress, onFileContextMenuAction],
   );
