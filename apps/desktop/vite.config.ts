@@ -3,6 +3,7 @@ import { defaultInclude, defineConfig } from "vite-plus";
 
 import { isDesktopRuntimeExternalDependency } from "../../scripts/lib/desktop-external-packages.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
+import { resolvePinnedBackendPort } from "../../scripts/lib/t3team-isolatedInstanceEnv.ts";
 
 const repoEnv = loadRepoEnv();
 
@@ -19,10 +20,9 @@ const publicConfigDefine = {
   // The released desktop app pins its backend to the default port (3773) so the Atlassian OAuth
   // callback — registered by exact port in the Atlassian Developer Console — always lands on a
   // listening server. Set VITE_DESKTOP_PIN_BACKEND_PORT=1 in the build env to pin; dev and
-  // self-hosted builds keep the sequential scan.
-  __DESKTOP_PIN_BACKEND_PORT__: JSON.stringify(
-    repoEnv.VITE_DESKTOP_PIN_BACKEND_PORT?.trim() === "1",
-  ),
+  // self-hosted builds keep the sequential scan. T3CODE_DESKTOP_BACKEND_PORT=<port> pins that
+  // port instead (an isolated instance running next to the installed app).
+  __DESKTOP_PIN_BACKEND_PORT__: JSON.stringify(resolvePinnedBackendPort(repoEnv) ?? false),
 };
 
 export default defineConfig({

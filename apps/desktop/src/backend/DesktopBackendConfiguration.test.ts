@@ -224,6 +224,89 @@ const withPackagedWslHarness = <A, E, R>(
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer));
 
 describe("DesktopBackendConfiguration", () => {
+  it.effect(
+    "an isolated build hands the backend child its own home even when the parent environment names the live one",
+    () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const baseDir = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "t3-desktop-backend-config-test-",
+        });
+        const resourcesPath = path.join(baseDir, "resources");
+        yield* fileSystem.makeDirectory(resourcesPath, { recursive: true });
+        yield* fileSystem.writeFileString(
+          path.join(resourcesPath, "desktop-branding.json"),
+          JSON.stringify({
+            baseName: "Nexi Work Nightly Dogfood",
+            displayName: "Nexi Work Nightly Dogfood",
+            userDataDirName: "nexi-work-nightly-dogfood",
+            isolatedInstance: true,
+          }),
+        );
+        // The live app's home, inherited from a terminal inside it (T3CODE_HOME, which
+        // apps/server/src/cli/config.ts ranks above bootstrap.t3Home) and through ~/.t3.
+        const liveHome = path.join(baseDir, "Library", "Application Support", "nexi-work");
+        const previous = process.env.T3CODE_HOME;
+        process.env.T3CODE_HOME = liveHome;
+        yield* Effect.addFinalizer(() => Effect.sync(() => restoreEnv("T3CODE_HOME", previous)));
+        const isolatedHome = path.join(
+          baseDir,
+          "Library",
+          "Application Support",
+          "nexi-work-nightly-dogfood",
+        );
+        // The owner's machine: a live home with a real database, and ~/.t3 a symlink to it. An
+        // isolated build that adopted ~/.t3 would rename all of it into its own empty home.
+        const liveDatabase = path.join(liveHome, "userdata", "statev2.sqlite");
+        yield* fileSystem.makeDirectory(path.dirname(liveDatabase), { recursive: true });
+        yield* fileSystem.writeFileString(liveDatabase, "x".repeat(64 * 1024));
+        yield* fileSystem.symlink(liveHome, path.join(baseDir, ".t3"));
+
+        const started = yield* Effect.gen(function* () {
+          const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
+          return yield* configuration.resolvePrimary;
+        }).pipe(
+          Effect.provide(
+            layerBackendConfiguration().pipe(
+              Layer.provideMerge(layerServerExposure),
+              Layer.provideMerge(DesktopAppSettings.layerTest()),
+              Layer.provideMerge(DesktopWslEnvironment.layerTest()),
+              Layer.provideMerge(DesktopWslServerTree.layerTest()),
+              Layer.provideMerge(
+                // layerEnvironment also puts the live home in the desktop's own T3CODE_HOME config.
+                layerEnvironment(baseDir, { resourcesPath, isPackaged: true, platform: "darwin" }),
+              ),
+            ),
+          ),
+        );
+
+        assert.equal(started.bootstrap.t3Home, isolatedHome);
+        // The child inherits process.env (extendEnv: true), so the patch must override T3CODE_HOME.
+        assert.isTrue(started.extendEnv);
+        assert.equal(started.env.T3CODE_HOME, isolatedHome);
+        const effective = { ...process.env, ...started.env };
+        assert.equal(effective.T3CODE_HOME, isolatedHome);
+        assert.notEqual(effective.T3CODE_HOME, liveHome);
+        // Nothing moved: the live database is where it was and the isolated home took none of it.
+        assert.isTrue(yield* fileSystem.exists(liveDatabase));
+        assert.isFalse(
+          yield* fileSystem.exists(path.join(isolatedHome, "userdata", "statev2.sqlite")),
+        );
+        assert.isFalse(yield* fileSystem.exists(path.join(isolatedHome, "userdata.empty-")));
+      }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("a build that is not isolated leaves the home environment to the operator", () =>
+    withHarness(
+      Effect.gen(function* () {
+        const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
+        const started = yield* configuration.resolvePrimary;
+        assert.isFalse("T3CODE_HOME" in started.env);
+      }),
+    ),
+  );
+
   it.effect("resolvePrimary produces a stable scoped bootstrap token", () =>
     withHarness(
       Effect.gen(function* () {

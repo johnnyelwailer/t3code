@@ -59,6 +59,12 @@ import {
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import { preflightInlinedTypeScript } from "./lib/t3team-inlined-typescript-preflight.ts";
 import {
+  assertIsolatedBuildSupported,
+  isolatedBrandingFields,
+  T3TeamIsolatedBuildError,
+  t3codeProtocolClaims,
+} from "./lib/t3team-isolatedInstanceEnv.ts";
+import {
   findInlinedExternalPackages,
   selectCliRuntimeExternalDependencies,
 } from "./lib/cli-external-packages.ts";
@@ -3266,6 +3272,7 @@ interface PackagedDesktopBrandingResource {
   readonly legacyUserDataDirName: string;
   readonly linuxDesktopEntryName: string;
   readonly linuxWmClass: string;
+  readonly isolatedInstance?: true;
 }
 
 interface BuildConfigOptions {
@@ -3472,10 +3479,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         ],
       },
       protocols: [
-        {
-          name: "T3 Code",
-          schemes: ["t3code", "t3code-dev"],
-        },
+        ...t3codeProtocolClaims(process.env),
         {
           name: "Web site URL",
           schemes: ["http", "https"],
@@ -3529,12 +3533,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       category: "Development",
       synopsis: "Desktop GUI for coding agents",
       maintainer: "T3 Tools <hello@t3.codes>",
-      protocols: [
-        {
-          name: "T3 Code",
-          schemes: ["t3code", "t3code-dev"],
-        },
-      ],
+      protocols: [...t3codeProtocolClaims(process.env)],
       desktop: {
         entry: {
           StartupWMClass: "t3code",
@@ -4269,6 +4268,13 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   const workspacePatchedDependencies = workspaceConfig.patchedDependencies ?? {};
   const workspaceAllowBuilds = workspaceConfig.allowBuilds ?? {};
 
+  yield* Effect.try({
+    try: () => assertIsolatedBuildSupported(process.env, options.platform, options.productName),
+    catch: (cause) =>
+      new T3TeamIsolatedBuildError({
+        message: cause instanceof Error ? cause.message : String(cause),
+      }),
+  });
   const platformConfig = PLATFORM_CONFIG[options.platform];
   if (!platformConfig) {
     return yield* new UnsupportedDesktopBuildPlatformError({
@@ -4585,6 +4591,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       legacyUserDataDirName: options.productName,
       linuxDesktopEntryName: `${slug}.desktop`,
       linuxWmClass: slug,
+      ...isolatedBrandingFields(process.env),
     };
     yield* fs.writeFileString(
       path.join(stageProdResourcesDir, "desktop-branding.json"),

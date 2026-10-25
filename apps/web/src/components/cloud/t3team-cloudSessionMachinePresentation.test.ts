@@ -52,6 +52,6 @@ describe("presentProjectMachine", () => {
       "A subfolder devcontainer needs a local checkout or a .nexi/machine.json pointer.";
     expect(
       presentProjectMachine({ status: { _tag: "None", reason }, candidates: [], rejected: [] }),
-    ).toEqual({ label: "Remote machine discovery", detail: reason, tone: "info" });
+    ).toEqual({ label: "No machine for this project", detail: reason, tone: "info" });
   });
 });

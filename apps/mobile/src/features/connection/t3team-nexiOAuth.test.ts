@@ -397,6 +397,99 @@ describe("Nexplore mobile public-client OAuth", () => {
       expect(error).not.toBeInstanceOf(NexiSignInRequiredError);
       expect(f.raw()).toContain("refresh");
     });
+
+    describe("switching accounts without signing out", () => {
+      const accountB = { access_token: "B", refresh_token: "rB", expires_in: 3600 };
+      /** Completes a device-code sign-in for account B while A's refresh is still in flight. */
+      const signInB = async (f: ReturnType<typeof fixture>) => {
+        f.fetcher.mockResolvedValueOnce(json(accountB));
+        expect(await f.account.poll(code, new AbortController().signal)).toBe("B");
+        expect(JSON.parse(f.raw()!).access_token).toBe("B");
+      };
+
+      it("keeps account B when A's in-flight refresh then succeeds", async () => {
+        const f = fixture();
+        const { pending, issuer } = await startStaleRefresh(f);
+        await signInB(f);
+        issuer.resolve(json({ access_token: "A-new", refresh_token: "rA2", expires_in: 3600 }));
+        await expect(pending).rejects.toThrow("cancelled");
+        expect(JSON.parse(f.raw()!).access_token).toBe("B");
+        expect(await f.account.accessToken()).toBe("B");
+      });
+      it("keeps account B when A's in-flight refresh is then rejected", async () => {
+        const f = fixture();
+        const clears = countClears(f);
+        const { pending, issuer } = await startStaleRefresh(f);
+        await signInB(f);
+        issuer.resolve(json({ error: "invalid_grant" }, 400));
+        await expect(pending).rejects.toThrow("cancelled");
+        expect(clears.count).toBe(0);
+        expect(JSON.parse(f.raw()!).access_token).toBe("B");
+      });
+      it("lets B refresh on its own instead of joining A's in-flight refresh", async () => {
+        const f = fixture();
+        const { pending, issuer } = await startStaleRefresh(f);
+        f.fetcher.mockResolvedValueOnce(json({ ...accountB, expires_in: 30 }));
+        await f.account.poll(code, new AbortController().signal);
+        f.fetcher.mockResolvedValueOnce(json({ access_token: "B2", expires_in: 3600 }));
+        const second = f.account.accessToken();
+        issuer.resolve(json({ access_token: "A-new", expires_in: 3600 }));
+        await expect(pending).rejects.toThrow("cancelled");
+        expect(await second).toBe("B2");
+        const refreshTokens = f.fetcher.mock.calls.map(([, init]) =>
+          new URLSearchParams(init?.body as string).get("refresh_token"),
+        );
+        expect(refreshTokens).toEqual(["refresh", null, "rB"]);
+      });
+      it("keeps the most recent successful sign-in when two polls complete", async () => {
+        const f = fixture();
+        f.fetcher.mockResolvedValueOnce(json({ ...accountB, access_token: "first" }));
+        f.fetcher.mockResolvedValueOnce(json({ ...accountB, access_token: "second" }));
+        expect(await f.account.poll(code, new AbortController().signal)).toBe("first");
+        expect(await f.account.poll(code, new AbortController().signal)).toBe("second");
+        expect(JSON.parse(f.raw()!).access_token).toBe("second");
+      });
+      it("cancels a poll that was started before a sign-out and finishes afterwards", async () => {
+        const f = fixture();
+        const reached = deferred<void>();
+        const issuer = deferred<Response>();
+        f.fetcher.mockImplementationOnce(() => {
+          reached.resolve();
+          return issuer.promise;
+        });
+        const poll = f.account.poll(code, new AbortController().signal);
+        await reached.promise;
+        await f.account.signOut();
+        issuer.resolve(json(accountB));
+        await expect(poll).rejects.toThrow("cancelled");
+        expect(f.raw()).toBeNull();
+      });
+      it("signs in normally after a sign-out", async () => {
+        const f = fixture();
+        f.seed();
+        await f.account.signOut();
+        await signInB(f);
+        expect(await f.account.accessToken()).toBe("B");
+      });
+      it("does not bump the account for a malformed or declined sign-in response", async () => {
+        const f = fixture();
+        const { pending, issuer } = await startStaleRefresh(f);
+        f.fetcher.mockResolvedValueOnce(json({ access_token: "B", expires_in: -1 }));
+        await expect(f.account.poll(code, new AbortController().signal)).rejects.toThrow();
+        issuer.resolve(json({ access_token: "A-new", refresh_token: "rA2", expires_in: 3600 }));
+        expect(await pending).toBe("A-new");
+        expect(JSON.parse(f.raw()!).access_token).toBe("A-new");
+      });
+    });
+    it("never returns a signed-out token to a call made right after sign-out starts", async () => {
+      const f = fixture();
+      f.seed({ expiresAt: 3_600_000 });
+      const signedOut = f.account.signOut();
+      const error = await f.account.accessToken().catch((cause: unknown) => cause);
+      await signedOut;
+      expect(error).toBeInstanceOf(NexiSignInRequiredError);
+      expect(f.raw()).toBeNull();
+    });
   });
   it("rejects corrupt persisted tokens and malformed issuer responses", async () => {
     const f = fixture();

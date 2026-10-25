@@ -78,5 +78,10 @@ export class CloudSessionFailedError extends Schema.TaggedError<CloudSessionFail
      * cannot land on a different one than the request that failed.
      */
     host: Schema.optionalKey(Schema.String),
+    /**
+     * The project's machine failed, but a plain session in the project can start instead:
+     * repeating the create with `plain: true` does it. Absent when plain is not possible either.
+     */
+    plainAvailable: Schema.optionalKey(Schema.Boolean),
   },
 ) {}

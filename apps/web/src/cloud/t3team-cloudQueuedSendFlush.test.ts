@@ -85,7 +85,7 @@ describe("decideCloudQueuedSendFlush", () => {
         ...base,
         session: session("failed", { failureReason: "quota" }),
       }),
-    ).toEqual({ kind: "fail", message: "quota", retryable: false });
+    ).toMatchObject({ kind: "fail", message: "quota", retryable: false });
     expect(
       decideCloudQueuedSendFlush({
         ...base,

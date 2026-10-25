@@ -8,6 +8,7 @@ import {
   cloudSetupAnnouncement,
   formatCloudSetupRemaining,
 } from "./t3team-cloudSessionSetupCopy";
+import type { CloudProjectWaitNotice } from "./t3team-cloudProjectWaitPresentation";
 import type { CloudSetupModel } from "./t3team-cloudSessionSetupModel";
 
 /** The bar never looks finished while something is still being set up. */
@@ -24,10 +25,16 @@ export function cloudSetupElapsedSeconds(
 /**
  * The clock-driven part of the card. The only time figure is the rough one measured for a plain
  * session, so a project machine or setup session gets its elapsed time and no estimate at all.
- * `progress` is null when the bar must not claim a fraction: a long-wait setup, or a plain one past
- * the rough estimate. The bar is then indeterminate rather than parked near full.
+ * `progress` is null when the bar must not claim a fraction: a long-wait setup, a plain one past
+ * the rough estimate, or a waiting message whose "Project ready" step (`projectWait`) has passed
+ * its expected point or cannot end by waiting. The bar is then indeterminate rather than parked
+ * near full; only the short hand-off once the session is ready stays determinate.
  */
-export function readCloudSetup(model: CloudSetupModel, elapsedSeconds: number) {
+export function readCloudSetup(
+  model: CloudSetupModel,
+  elapsedSeconds: number,
+  projectWait: CloudProjectWaitNotice | null = null,
+) {
   const working = model.stage === "working";
   const provisioning = model.session !== null && model.session.phase !== "ready";
   const estimating = working && provisioning && !model.longWait;
@@ -49,7 +56,10 @@ export function readCloudSetup(model: CloudSetupModel, elapsedSeconds: number) {
       ? 0
       : (presentCloudSession({ ...model.session, elapsedSeconds }).progress ??
         (model.session.phase === "ready" ? 1 : 0));
-  const indeterminate = working && provisioning && (model.longWait || slow);
+  const projectStalled =
+    projectWait !== null && (projectWait.level !== "waiting" || projectWait.blocking);
+  const indeterminate =
+    working && ((provisioning && (model.longWait || slow)) || (!provisioning && projectStalled));
   return {
     progress: indeterminate
       ? null

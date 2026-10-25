@@ -13,6 +13,10 @@ import type {
 } from "~/t3team/hooks/t3team-atlassianOAuthTypes";
 import { runAtlassianOAuthAttempt } from "~/t3team/hooks/t3team-atlassianOAuthAttempt";
 import { openOAuthPopup } from "~/t3team/hooks/t3team-atlassianOAuthPopup";
+import {
+  checkAtlassianCallbackRegistered,
+  readRegisteredAtlassianCallbackPorts,
+} from "~/t3team/hooks/t3team-atlassianCallbackPreflight";
 import { readAtlassianOAuthRedirectUri } from "~/t3team/hooks/t3team-atlassianOAuthRedirect";
 import {
   beginAtlassianOAuthServerFlow,
@@ -90,6 +94,15 @@ export function useAtlassianOAuth(): UseAtlassianOAuthResult {
         const message =
           error instanceof Error ? error.message : "OAuth redirect URI is not configured.";
         applyState({ kind: "error", message });
+        return;
+      }
+
+      const unregistered = checkAtlassianCallbackRegistered(
+        redirectUri,
+        readRegisteredAtlassianCallbackPorts(),
+      );
+      if (unregistered !== null) {
+        applyState({ kind: "error", message: unregistered });
         return;
       }
 

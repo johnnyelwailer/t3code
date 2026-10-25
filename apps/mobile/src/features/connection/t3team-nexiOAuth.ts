@@ -26,11 +26,18 @@ export function createNexiOAuth(
   },
 ) {
   let refresh: { readonly generation: number; readonly promise: Promise<string> } | undefined;
+  // `generation` identifies the signed-in account: sign-out and a completed sign-in both start a new one,
+  // so work begun for the previous account (a refresh, a pending write) can neither overwrite nor clear
+  // the new one. `signOuts` lets a poll tell an explicit cancel from a sibling poll replacing the account.
   let generation = 0;
+  let signOuts = 0;
   let persistence = Promise.resolve();
-  const persist = (action: () => Promise<void>) => {
+  const persist = <A>(action: () => Promise<A>) => {
     const next = persistence.then(action);
-    persistence = next.catch(() => undefined);
+    persistence = next.then(
+      () => undefined,
+      () => undefined,
+    );
     return next;
   };
   const scope = `api://${config.app}/relay.access openid profile offline_access`;
@@ -52,6 +59,7 @@ export function createNexiOAuth(
   };
   const signOut = async () => {
     generation++;
+    signOuts++;
     await persist(() => storage.clear());
   };
   return {
@@ -65,7 +73,7 @@ export function createNexiOAuth(
       return code;
     },
     poll: async (code: NexiDeviceCode, signal: AbortSignal) => {
-      const expected = generation;
+      const startedAfterSignOuts = signOuts;
       const deadline = deps.now() + code.expires_in * 1000;
       let interval = (code.interval ?? 5) * 1000;
       while (deps.now() < deadline) {
@@ -89,7 +97,15 @@ export function createNexiOAuth(
         if (response.status >= 500 || response.status === 429) continue;
         const body = await response.json();
         signal.throwIfAborted();
-        if (response.ok) return save(body, undefined, expected);
+        if (response.ok) {
+          decodeToken(body);
+          if (startedAfterSignOuts !== signOuts) throw new Error("Sign-in was cancelled.");
+          // The new account takes over before anything is saved: an in-flight refresh for the previous
+          // account is abandoned and its outcome is ignored.
+          generation++;
+          refresh = undefined;
+          return save(body, undefined, generation);
+        }
         if (body.error === "authorization_pending") continue;
         if (body.error === "slow_down") {
           interval += 5000;
@@ -109,7 +125,8 @@ export function createNexiOAuth(
      */
     accessToken: async (options: { readonly fresh?: boolean } = {}): Promise<string> => {
       const readGeneration = generation;
-      const raw = await storage.read();
+      // Read behind queued writes and clears so a call made right after sign-out cannot see the old tokens.
+      const raw = await persist(() => storage.read());
       if (readGeneration !== generation) throw new Error("Sign-in was cancelled.");
       if (!raw) throw new NexiSignInRequiredError("Sign in to Nexplore first.");
       let tokens: NexiTokens;

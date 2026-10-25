@@ -2398,7 +2398,15 @@ const make = Effect.gen(function* () {
     }),
     taskStatus: Effect.fn("OrchestratorMcpService.taskStatus")(function* (callerScope, taskId) {
       const scope = yield* requireThreadScope(callerScope, "task_status");
-      return yield* readTask(scope, taskId, false, true);
+      const task = yield* readTask(scope, taskId, false, true);
+      const childProvider = (yield* loadProviders).find(
+        (provider) => provider.instanceId === task.providerInstanceId,
+      );
+      const providerUsage =
+        childProvider === undefined
+          ? null
+          : compactProviderUsageLine(providerUsageLabel(childProvider), childProvider.usageLimits);
+      return providerUsage === null ? task : { ...task, providerUsage };
     }),
     cancelTask: Effect.fn("OrchestratorMcpService.cancelTask")(function* (callerScope, input) {
       const scope = yield* requireThreadScope(callerScope, "task_cancel");

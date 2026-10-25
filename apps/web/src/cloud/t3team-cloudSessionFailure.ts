@@ -65,8 +65,24 @@ export function cloudSessionCreateFailureToast(result: { readonly cause: Cause.C
 export function reportCloudSessionCreateFailure(
   result: { readonly cause: Cause.Cause<unknown> },
   retry: () => void,
+  /** Repeats the create as a plain session in the project, which the failure may offer. */
+  retryPlain?: () => void,
 ) {
   const failure = squashAtomCommandFailure(result);
+  if (isCloudSessionFailed(failure) && failure.plainAvailable === true && retryPlain) {
+    const id = toastManager.add({
+      type: "error",
+      ...cloudSessionCreateFailureToast(result),
+      actionProps: {
+        children: "Start a plain session",
+        onClick: () => {
+          toastManager.close(id);
+          retryPlain();
+        },
+      },
+    });
+    return;
+  }
   if (
     isCloudSessionFailed(failure) &&
     (failure.reason === "unauthorized" || failure.reason === "repository_sign_in_required")

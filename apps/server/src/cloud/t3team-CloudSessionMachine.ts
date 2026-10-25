@@ -1,5 +1,6 @@
 /**
- * Resolves a project's discovered machine at a fetchable commit with the user's credentials.
+ * Resolves a project's own machine (never a linked repository's) at a fetchable commit with the
+ * user's credentials.
  * Local definitions must be committed and pushed; remote definitions retain the exact scanned
  * default-branch commit. Invalid definitions block launch, while unavailable remote discovery
  * falls back to a plain session. Standby and plain resolution only consult the remote cache.
@@ -18,6 +19,8 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import { ProjectMachineDiscovery } from "../project/t3team-ProjectMachineDiscovery.ts";
+import { OWN_REPOSITORY } from "../project/t3team-projectMachineOwnership.ts";
+import { logMachineOutcome } from "./t3team-cloudSessionMachineLog.ts";
 import { machineRepositoryAccess } from "./t3team-cloudMachineRepository.ts";
 import { readFeatureFlagFromConfig } from "../t3team-featureFlagConfig.ts";
 import {
@@ -89,17 +92,31 @@ const make = Effect.gen(function* () {
 
   const resolve = Effect.fn("cloud.session_machine.resolve")(function* (projectId: ProjectId) {
     if (!(yield* readFeatureFlagFromConfig("CLOUD_PROJECT_MACHINE"))) return null;
-    const { discovery: found, source } = yield* discovery
+    const {
+      discovery: found,
+      source,
+      ignoredRepositories,
+    } = yield* discovery
       .resolveDefault(projectId)
       .pipe(Effect.mapError((error) => unavailable(error.message)));
     if (source === null) {
       const broken = found.rejected[0];
-      if (broken === undefined) return null;
+      if (broken === undefined) {
+        yield* logMachineOutcome(projectId, { outcome: "plain", ignoredRepositories });
+        return null;
+      }
+      yield* logMachineOutcome(projectId, { outcome: "rejected", rejected: broken.path });
       return yield* unavailable(`${broken.path} cannot be used: ${broken.reason}`);
     }
     const { machine } = source;
-    const { repository, commit } = yield* pinSource(source);
-    const creds = yield* credentials(repository);
+    const unusable = (error: CloudSessionFailedError) =>
+      logMachineOutcome(projectId, { outcome: "unusable", reason: error.reason });
+    const { repository, commit } = yield* pinSource(source).pipe(Effect.tapError(unusable));
+    const creds = yield* credentials(repository).pipe(Effect.tapError(unusable));
+    yield* logMachineOutcome(projectId, {
+      outcome: "machine",
+      repository: `${repository.owner}/${repository.name}`,
+    });
     return {
       repository,
       commit,
@@ -127,7 +144,8 @@ const make = Effect.gen(function* () {
     if (broken !== undefined) {
       return yield* unavailable(`${broken.path} cannot be used: ${broken.reason}`);
     }
-    const checkout = found.checkouts[0];
+    // The project's own checkout: a linked repository is not where the project's machine goes.
+    const checkout = found.checkouts.find((entry) => entry.repository === OWN_REPOSITORY);
     if (checkout === undefined) {
       return yield* unavailable("This project has no repository to set a machine up in.");
     }
@@ -168,7 +186,7 @@ const make = Effect.gen(function* () {
       .resolveDefault(projectId, { remote: "cached-only" })
       .pipe(Effect.mapError((error) => unavailable(error.message)));
     // Only the project's own checkout (its main repository); a linked repository is not the project.
-    const own = found.checkouts.find((checkout) => checkout.repository === ".");
+    const own = found.checkouts.find((entry) => entry.repository === OWN_REPOSITORY);
     const origin =
       own === undefined
         ? null
@@ -177,6 +195,7 @@ const make = Effect.gen(function* () {
       return {
         kind: "workspace",
         folder: plainProjectFolderName(found.title, projectId),
+        title: found.title,
       } satisfies CloudSessionPlainProject;
     }
     const repository = machineRepositoryFromRemote(origin.stdout);
