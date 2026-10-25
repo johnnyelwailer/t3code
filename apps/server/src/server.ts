@@ -281,6 +281,7 @@ import { T3TeamThreadToolContextStoreLive } from "./t3team-threadToolContextStor
 import { turnInactivityPolicyLive } from "./orchestration-v2/t3team-turnInactivityPolicy.ts";
 import { coldLocalCompactionLive } from "./orchestration-v2/t3team-coldLocalCompactionLive.ts";
 import { packCompletionWakeRendererLive } from "./t3team-pack-completionWakeRenderer.ts";
+import { providerUsageWakeRendererLive } from "./t3team-providerUsageWakeRenderer.ts";
 import { t3teamWidgetToolCallRouteLayer } from "./t3team-widget-tool-call-route.ts";
 import { T3TeamWidgetRegistryLive } from "./t3team-widgetRegistry.ts";
 import { T3TeamContextRefreshServiceLive } from "./t3team-contextRefreshService.ts";
@@ -789,8 +790,14 @@ const layerOrchestrationV2Runtime = RuntimeLayer.layerProduction.pipe(
   // t3team: the ONE settle-guard override (workflow run, live child, parent wait, settled
   // parent); other fork guards compose into it (t3team-childSettleGuards.ts).
   Layer.provide(T3TeamSettleGuardsLive),
-  // t3team: pack-registered delegated-completion wake text (default text without a pack).
-  Layer.provide(packCompletionWakeRendererLive.pipe(Layer.provide(ProjectionStoreV2.layer))),
+  // t3team: pack-registered delegated-completion wake text (default text without a pack), then
+  // the children's provider-usage lines appended over whichever renderer that is.
+  Layer.provide(
+    providerUsageWakeRendererLive.pipe(
+      Layer.provide(packCompletionWakeRendererLive.pipe(Layer.provide(ProjectionStoreV2.layer))),
+      Layer.provide(ProjectionStoreV2.layer),
+    ),
+  ),
   // t3team: pack-registered cold-cache local compaction (native `/compact` without a route).
   Layer.provide(coldLocalCompactionLive),
   Layer.provide(layerScheduledTaskWebhookOrigin),

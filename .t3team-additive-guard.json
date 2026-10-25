@@ -59,6 +59,7 @@
     "apps/desktop/src/app/DesktopAssets.test.ts",
     "apps/desktop/src/app/DesktopAssets.ts",
     "apps/desktop/src/app/DesktopBackendPort.ts",
+    "apps/desktop/src/app/DesktopUserData.ts",
     "apps/desktop/src/app/DesktopConfig.ts",
     "apps/desktop/src/app/DesktopEnvironment.test.ts",
     "apps/desktop/src/app/DesktopEnvironment.ts",

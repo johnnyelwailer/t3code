@@ -267,14 +267,14 @@ export const OrchestratorMcpDelegateTaskResult = Schema.Struct({
     }),
   ),
   /**
-   * The target instance's current window state at delegation time, in the
-   * same compact shape as the capabilities view. Omitted when the target has
-   * no window data. Surfaces in delegate_task results only (not task_status).
+   * The child instance's current window state, in the same compact shape as
+   * the capabilities view: at delegation time for delegate_task, at read time
+   * for task_status. Omitted when the instance has no window data.
    */
   providerUsage: Schema.optional(
     Schema.String.annotate({
       description:
-        "delegate_task only: the target instance's current usage windows as one compact line, e.g. 'claudeAgent: session 42% · weekly 71% · severity: warning'.",
+        "delegate_task and task_status: the child instance's current usage windows as one compact line, e.g. 'claudeAgent: Session 42% (resets 2026-09-28 18:00 UTC) · Weekly 71% · severity: warning'. Omitted when the instance has no usage data.",
     }),
   ),
 });

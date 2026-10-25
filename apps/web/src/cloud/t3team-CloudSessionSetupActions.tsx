@@ -7,9 +7,13 @@ export function SetupActions({
   detailsUrl,
   onCancel,
   onRetry,
+  recoveryActions,
   onTryAgain,
   sending,
-}: Pick<CloudSessionSetupCardProps, "onCancel" | "onRetry" | "onTryAgain" | "sending"> & {
+}: Pick<
+  CloudSessionSetupCardProps,
+  "onCancel" | "onRetry" | "recoveryActions" | "onTryAgain" | "sending"
+> & {
   readonly failed: boolean;
   readonly detailsUrl: string | null;
 }) {
@@ -29,6 +33,17 @@ export function SetupActions({
               Retry sending
             </Button>
           ) : null}
+          {recoveryActions?.map((action) => (
+            <Button
+              key={action.id}
+              type="button"
+              size="xs"
+              variant="outline"
+              onClick={action.onClick}
+            >
+              {action.label}
+            </Button>
+          ))}
           {onCancel ? (
             <Button
               type="button"

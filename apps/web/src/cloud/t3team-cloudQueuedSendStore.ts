@@ -96,7 +96,10 @@ export function stampDraftCloudQueuedSendStep(
     ...facts,
     flushing: isCloudQueuedSendDispatching(queued.messageId),
   });
-  if (queued.stepStartedAt?.[stepId] !== undefined) return;
+  const stamped = queued.stepStartedAt?.[stepId];
+  // A stamp from the future is a clock that was set back: it would hold the bound open for as
+  // long as the jump, so it is replaced by the present reading.
+  if (stamped !== undefined && !(Date.parse(stamped) > at.getTime())) return;
   updateDraftCloudQueuedSend(draftId, queued.messageId, (current) => ({
     ...current,
     stepStartedAt: { ...current.stepStartedAt, [stepId]: at.toISOString() },
@@ -108,19 +111,46 @@ export function failDraftCloudQueuedSend(
   messageId: string,
   failureMessage: string,
   retryable: boolean,
+  failure?: { readonly kind: "project_not_resolved"; readonly reason: string | null },
 ): void {
   updateDraftCloudQueuedSend(draftId, messageId, (queued) => ({
     ...queued,
     failureMessage,
     retryable,
+    ...(failure === undefined
+      ? {}
+      : {
+          failureKind: failure.kind,
+          ...(failure.reason === null ? {} : { failureReason: failure.reason }),
+        }),
   }));
 }
 
-export function retryDraftCloudQueuedSend(draftId: string): void {
+/**
+ * Retry: the send is evaluated afresh. The "Project ready" stamp is dropped with the failure, so
+ * the bound counts from this retry (a stale stamp would fail it again at once); the other
+ * stamps stay, they are the history of steps that did complete.
+ */
+export function retryDraftCloudQueuedSend(
+  draftId: string,
+  options?: { readonly sendInMachineProject?: boolean },
+): void {
   const current = getDraftCloudQueuedSend(draftId);
   if (current === null) return;
-  const { failureMessage: _failure, retryable: _retryable, ...rest } = current;
-  writeDraftCloudQueuedSend(draftId, rest);
+  const {
+    failureMessage: _failure,
+    retryable: _retryable,
+    failureKind: _kind,
+    failureReason: _reason,
+    stepStartedAt,
+    ...rest
+  } = current;
+  const { project: _project, ...stamps } = stepStartedAt ?? {};
+  writeDraftCloudQueuedSend(draftId, {
+    ...rest,
+    ...(stepStartedAt === undefined ? {} : { stepStartedAt: stamps }),
+    ...(options?.sendInMachineProject ? { sendInMachineProject: true } : {}),
+  });
 }
 
 /**

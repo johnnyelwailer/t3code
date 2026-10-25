@@ -142,4 +142,59 @@ describe("migrateLegacyHomeIfNeeded", () => {
       cleanup();
     }
   });
+
+  describe("when the legacy home is a symlink", () => {
+    // PJ's machine: `~/.t3` is a symlink to the installed app's branded home. A differently
+    // branded build starting with an empty home of its own must leave that live home alone.
+    it("never moves the live home of another install into a new branded home", () => {
+      const { root, legacyDir, brandedDir, cleanup } = makeTree();
+      try {
+        const liveHome = NodePath.join(root, "live-nexi-work");
+        writeState(liveHome, REAL_DB_BYTES, "statev2.sqlite");
+        NodeFS.symlinkSync(liveHome, legacyDir, "dir");
+
+        assert.strictEqual(run(legacyDir, brandedDir), brandedDir);
+        assert.isFalse(NodeFS.existsSync(brandedDir));
+        assert.strictEqual(
+          NodeFS.statSync(NodePath.join(liveHome, "userdata", "statev2.sqlite")).size,
+          REAL_DB_BYTES,
+        );
+      } finally {
+        cleanup();
+      }
+    });
+
+    it("treats a symlink that resolves to the branded home as the same home", () => {
+      const { legacyDir, brandedDir, cleanup } = makeTree();
+      try {
+        writeState(brandedDir, REAL_DB_BYTES, "statev2.sqlite");
+        NodeFS.symlinkSync(brandedDir, legacyDir, "dir");
+
+        assert.strictEqual(run(legacyDir, brandedDir), brandedDir);
+        assert.strictEqual(
+          NodeFS.statSync(NodePath.join(brandedDir, "userdata", "statev2.sqlite")).size,
+          REAL_DB_BYTES,
+        );
+        assert.isFalse(NodeFS.existsSync(NodePath.join(brandedDir, "userdata.empty-testcase")));
+      } finally {
+        cleanup();
+      }
+    });
+
+    it("also refuses when the branded dir is itself reached through a symlink", () => {
+      const { root, legacyDir, brandedDir, cleanup } = makeTree();
+      try {
+        writeState(legacyDir, REAL_DB_BYTES);
+        const alias = NodePath.join(root, "alias");
+        NodeFS.mkdirSync(brandedDir, { recursive: true });
+        NodeFS.symlinkSync(legacyDir, alias, "dir");
+
+        // `alias` resolves to the legacy dir, so there is nothing to move.
+        assert.strictEqual(run(legacyDir, alias), alias);
+        assert.isTrue(NodeFS.existsSync(NodePath.join(legacyDir, "userdata", "state.sqlite")));
+      } finally {
+        cleanup();
+      }
+    });
+  });
 });

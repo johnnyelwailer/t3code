@@ -27,6 +27,11 @@ import {
   projectCwdOf,
 } from "@t3tools/shared/t3team-cloudSessionFit";
 
+import {
+  type MachineProjectBinding,
+  resolveMachineOwnProject,
+} from "./t3team-cloudSessionMachineProject";
+
 export { projectCwdOf };
 
 export interface CloudSessionOwnProject {
@@ -34,6 +39,8 @@ export interface CloudSessionOwnProject {
   /** Null while the session's server has not listed its own project yet: the environment is
    * held for it rather than offered through another project that merely groups the same. */
   readonly projectId: ProjectId | null;
+  /** Set when the machine's welcome named the project; absent when it was found by folder. */
+  readonly resolvedBy?: MachineProjectBinding;
 }
 
 type ProjectFacts = CloudSessionProjectFacts;
@@ -42,6 +49,20 @@ type ComposerProject = CloudSessionLocalProject;
 
 const repositoryOf = (project: ProjectFacts) =>
   project.repositoryIdentity ? repositoryGroupingKeyOf(project.repositoryIdentity) : null;
+
+/** A Run-on target set up for this project: only then is its machine's working folder this project's. */
+export function targetFollowsProject(
+  target: { readonly projectKey: string | null } | null,
+  project: ComposerProject | null,
+  projectKey: string | null,
+): boolean {
+  return (
+    target !== null &&
+    project !== null &&
+    target.projectKey !== null &&
+    target.projectKey === projectKey
+  );
+}
 
 export function resolveCloudSessionOwnProject(input: {
   /** The composer's Run-on target (null when it targets no cloud session). */
@@ -52,28 +73,40 @@ export function resolveCloudSessionOwnProject(input: {
   readonly sessions: ReadonlyArray<Pick<CloudSession, "sessionId" | "environmentId">>;
   /** The working directory an environment registers as its project (`projectCwdOf`); null when none. */
   readonly serverCwdOf: (environmentId: EnvironmentId) => string | null;
+  /** The project id the environment's welcome names as its own, when it has reached this app. */
+  readonly bootstrapProjectIdOf?: (environmentId: EnvironmentId) => ProjectId | null;
   readonly projects: ReadonlyArray<
     ProjectFacts & { readonly environmentId: EnvironmentId; readonly id: ProjectId }
   >;
 }): CloudSessionOwnProject | null {
   const { target, project } = input;
-  // A target set up for another project (or for none) is not this project's session.
-  if (target === null || project === null || target.projectKey === null) return null;
-  if (target.projectKey !== input.projectKey) return null;
+  if (
+    target === null ||
+    project === null ||
+    !targetFollowsProject(target, project, input.projectKey)
+  ) {
+    return null;
+  }
   const environmentId = input.sessions.find(
     (item) => item.sessionId === target.sessionId,
   )?.environmentId;
   if (environmentId === undefined) return null;
-  const cwd = input.serverCwdOf(EnvironmentId.make(environmentId));
-  if (cwd === null) return null;
-  const own = ownProjectOnMachine(
-    cwd,
-    input.projects.filter((item) => String(item.environmentId) === environmentId),
-  );
-  if (own === undefined)
-    return { environmentId: EnvironmentId.make(environmentId), projectId: null };
+  const machineId = EnvironmentId.make(environmentId);
+  const machine = resolveMachineOwnProject({
+    environmentId: machineId,
+    bootstrapProjectId: input.bootstrapProjectIdOf?.(machineId) ?? null,
+    cwd: input.serverCwdOf(machineId),
+    projects: input.projects,
+  });
+  if (!machine.named) return null;
+  const own = machine.project;
+  if (own === undefined) return { environmentId: machineId, projectId: null };
   if (!isSameCloudSessionProject(project, own)) return null;
-  return { environmentId: own.environmentId, projectId: own.id };
+  return {
+    environmentId: own.environmentId,
+    projectId: own.id,
+    ...(machine.by === "bootstrap-id" ? { resolvedBy: machine.by } : {}),
+  };
 }
 
 /**
