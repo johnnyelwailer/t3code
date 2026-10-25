@@ -138,6 +138,9 @@ export function createNexiOAuth(
       }
       if (!options.fresh && tokens.expiresAt > deps.now() + 60_000) return tokens.access_token;
       if (!tokens.refresh_token) {
+        // A fresh read of an account that cannot refresh must not wipe it: the token is still valid,
+        // so serve it (the host decides whether it is recent enough). Only an expired one is final.
+        if (tokens.expiresAt > deps.now() + 60_000) return tokens.access_token;
         await signOut();
         throw new NexiSignInRequiredError("Sign in to Nexplore again.");
       }

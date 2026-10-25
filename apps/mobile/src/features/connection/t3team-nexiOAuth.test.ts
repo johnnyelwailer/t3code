@@ -184,12 +184,22 @@ describe("Nexplore mobile public-client OAuth", () => {
       ).toEqual(["access", "access"]);
       expect(f.fetcher).toHaveBeenCalledTimes(1);
     });
-    it("asks for sign-in instead of serving a cached token it cannot refresh", async () => {
+    it("serves a still-valid token it cannot refresh and keeps the account signed in", async () => {
       const f = fixture();
       f.seed({ expiresAt: 3600000, refresh_token: undefined });
+      expect(await f.account.accessToken({ fresh: true })).toBe("old");
+      expect(f.fetcher).not.toHaveBeenCalled();
+      // A grant-less account is not wiped by a fresh request: a plain read still works.
+      expect(JSON.parse(f.raw()!)).toMatchObject({ access_token: "old" });
+      expect(await f.account.accessToken()).toBe("old");
+    });
+    it("asks for sign-in when a token without a refresh grant has expired", async () => {
+      const f = fixture();
+      f.seed({ expiresAt: 0, refresh_token: undefined });
       await expect(f.account.accessToken({ fresh: true })).rejects.toBeInstanceOf(
         NexiSignInRequiredError,
       );
+      await expect(f.account.accessToken()).rejects.toBeInstanceOf(NexiSignInRequiredError);
       expect(f.fetcher).not.toHaveBeenCalled();
       expect(f.raw()).toBeNull();
     });
