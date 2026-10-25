@@ -28,7 +28,7 @@ import okio.ByteString.Companion.toByteString
 class NexiBrokerModule : Module() {
   private val client = OkHttpClient.Builder().readTimeout(0, TimeUnit.MILLISECONDS).build()
   private val workers = Executors.newFixedThreadPool(32)
-  private val tunnels = NexiTunnelRegistry<Tunnel> { it.isClosed }
+  private val tunnels: NexiTunnelRegistry<Tunnel> = NexiTunnelRegistry { it.isClosed }
   private val tokens = ConcurrentHashMap<String, CompletableFuture<String>>()
 
   override fun definition() = ModuleDefinition {
@@ -96,8 +96,10 @@ class NexiBrokerModule : Module() {
   }
 
   private inner class Tunnel(private val session: String, private val streamUrl: String) {
-    private val secret = NexiLoopbackAuth.newSecret()
-    val listener = NexiLoopbackListener(
+    private val secret: String = NexiLoopbackAuth.newSecret()
+
+    // Explicit types: `tunnels` needs `isClosed`, which needs `listener`, whose callbacks use `tunnels`.
+    val listener: NexiLoopbackListener = NexiLoopbackListener(
       secret = secret,
       onAdmitted = { tcp, input -> workers.execute { pipe(tcp, input) } },
       securityLog = { Log.w("NexiBroker", it) },
@@ -109,10 +111,10 @@ class NexiBrokerModule : Module() {
       limits = LoopbackLimits(nanoTime = SystemClock::elapsedRealtimeNanos)
     )
     private val streams = ConcurrentHashMap<WebSocket, Boolean>()
-    val isClosed get() = listener.isClosed
+    val isClosed: Boolean get() = listener.isClosed
 
     /** The app's own cookie jar, so every in-app HTTP, WebSocket and WebView client sends it. */
-    private val cookieUrl get() = "http://127.0.0.1:${listener.port}/"
+    private val cookieUrl: String get() = "http://127.0.0.1:${listener.port}/"
 
     fun deliverSecret() {
       try {
