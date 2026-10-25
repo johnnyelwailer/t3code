@@ -91,8 +91,7 @@ import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "./thread-sw
 import { useFabScroll } from "./FabScrollContext";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
 import { ThreadListFilters } from "./ThreadListFilters";
-import { NexiWelcome } from "../connection/t3team-NexiWelcome";
-import { showsNexiWelcome } from "../connection/t3team-nexiFirstRun";
+import { mobileExtensions } from "../../extensions/t3team-extensions";
 import { showsDistributionScrollIndicator } from "../../components/ui/t3team-scrollIndicators";
 
 interface HomeScreenProps {
@@ -744,10 +743,11 @@ export function HomeScreen(props: HomeScreenProps) {
     projectCount: props.projects.length,
   });
 
-  if (!hasAnyThreads && showsNexiWelcome(props.catalogState, Platform.OS)) {
+  const emptyStateSlot = mobileExtensions.homeEmptyState;
+  if (!hasAnyThreads && emptyStateSlot?.shouldRender(props.catalogState, Platform.OS)) {
     return (
       <View className={containerClassName}>
-        <NexiWelcome onOtherWays={props.onAddConnection} />
+        <emptyStateSlot.Component onAddConnection={props.onAddConnection} />
       </View>
     );
   }

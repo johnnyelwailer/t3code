@@ -32,8 +32,10 @@ import { SymbolView } from "../../components/ui/AppSymbol";
 import { hasCloudPublicConfig } from "../cloud/publicConfig";
 import { CloudEnvironmentRows } from "./CloudEnvironmentRows";
 import { splitEnvironmentSections } from "./environmentSections";
-import { NexiHostsSection, NexiOtherWaysHeading } from "./t3team-NexiHostsSection";
+import { mobileExtensions } from "../../extensions/t3team-extensions";
 import { showsDistributionScrollIndicator } from "../../components/ui/t3team-scrollIndicators";
+
+const ConnectionsNewTop = mobileExtensions.connectionsNewTop;
 
 type ConnectionsNewRouteParams = {
   readonly mode?: string;
@@ -219,8 +221,7 @@ export function ConnectionsNewRouteScreen({
         }}
       >
         <View collapsable={false} className="gap-6.5">
-          <NexiHostsSection />
-          <NexiOtherWaysHeading />
+          {ConnectionsNewTop ? <ConnectionsNewTop /> : null}
           <PairingScanCard
             cameraActive={cameraPermission?.granted === true && screenFocused && !scanComplete}
             onScan={handleQrScan}
