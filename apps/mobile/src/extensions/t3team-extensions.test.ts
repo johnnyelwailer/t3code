@@ -1,5 +1,3 @@
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { homeEmptyStateFor, mobileExtensions, runExtensionInstall } from "./t3team-extensions";
@@ -16,8 +14,7 @@ describe("mobileExtensions", () => {
 });
 
 describe("homeEmptyStateFor", () => {
-  const Welcome = (props: { readonly onAddConnection: () => void }) =>
-    createElement("p", null, typeof props.onAddConnection);
+  const Welcome = () => null;
 
   it("returns the registered component when the slot says it applies", () => {
     const Component = homeEmptyStateFor(
@@ -31,9 +28,6 @@ describe("homeEmptyStateFor", () => {
       "android",
     );
     expect(Component).toBe(Welcome);
-    expect(renderToStaticMarkup(createElement(Component!, { onAddConnection: () => {} }))).toBe(
-      "<p>function</p>",
-    );
   });
 
   it("keeps the stock empty home when the slot declines", () => {

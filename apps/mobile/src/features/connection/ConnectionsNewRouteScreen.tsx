@@ -29,7 +29,7 @@ import {
   useRemoteConnections,
 } from "../../state/use-remote-environment-registry";
 import { SymbolView } from "../../components/ui/AppSymbol";
-import { RenderErrorBoundary } from "../../components/RenderErrorBoundary";
+import { ExtensionBoundary } from "../../extensions/t3team-ExtensionBoundary";
 import { mobileExtensions } from "../../extensions/t3team-extensions";
 import { hasCloudPublicConfig } from "../cloud/publicConfig";
 import { CloudEnvironmentRows } from "./CloudEnvironmentRows";
@@ -221,9 +221,9 @@ export function ConnectionsNewRouteScreen({
       >
         <View collapsable={false} className="gap-6.5">
           {ConnectionsNewTop ? (
-            <RenderErrorBoundary renderFallback={() => null}>
+            <ExtensionBoundary>
               <ConnectionsNewTop />
-            </RenderErrorBoundary>
+            </ExtensionBoundary>
           ) : null}
           <PairingScanCard
             cameraActive={cameraPermission?.granted === true && screenFocused && !scanComplete}
