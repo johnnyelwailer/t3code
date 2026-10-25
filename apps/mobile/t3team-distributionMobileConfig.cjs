@@ -26,7 +26,7 @@ const GRADLE_PLUGIN = "./plugins/t3team-withDistributionMobileGradle.cjs";
 /** @param {string} root @returns {string[]} */
 function filesUnder(root) {
   return fs.readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
-    if (entry.name === "node_modules" || entry.name === ".generated") return [];
+    if (["node_modules", ".generated", "build", ".gradle", ".cxx"].includes(entry.name)) return [];
     const file = path.join(root, entry.name);
     return entry.isDirectory() ? filesUnder(file) : [file];
   });

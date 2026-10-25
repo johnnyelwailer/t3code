@@ -9,15 +9,20 @@ const MARKER = "// t3team-distribution-mobile";
  * editing only overlay files, is UP-TO-DATE: Metro never runs and the previous bundle ships.
  */
 function bundleInputsSnippet({ distribution, roots }) {
-  const directories = roots
-    .map((root) => `    task.inputs.dir(${JSON.stringify(root)})`)
+  // A file tree, not the directory itself: an overlay's native module builds under its own
+  // `build` directory, and Gradle rejects a task input that overlaps another task's output.
+  const trees = roots
+    .map(
+      (root, index) =>
+        `    task.inputs.files(fileTree(dir: ${JSON.stringify(root)}) { exclude '**/build/**', '**/node_modules/**', '**/.gradle/**', '**/.cxx/**' }).withPropertyName('t3codeOverlay${index}')`,
+    )
     .join("\n");
   return [
     "",
     MARKER,
     "tasks.matching { it.name.startsWith('createBundle') && it.name.endsWith('JsAndAssets') }.configureEach { task ->",
     `    task.inputs.property('t3codeDistribution', ${JSON.stringify(distribution)})`,
-    directories,
+    trees,
     "}",
     "",
   ].join("\n");

@@ -80,6 +80,12 @@ describe("the runtime version of a build with a selected overlay", () => {
     expect(source()?.contents).toBe(before);
   });
 
+  it("ignores build outputs inside the overlay (a native module builds under its own build directory)", () => {
+    const before = source()?.contents;
+    write(NodePath.join(packDir, "mobile", "modules", "m", "android", "build", "out.class"), "x");
+    expect(source()?.contents).toBe(before);
+  });
+
   it("includes the native modules the overlay declares", () => {
     write(
       NodePath.join(packDir, "mobile.json"),
