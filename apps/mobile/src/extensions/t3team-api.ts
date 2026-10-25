@@ -25,7 +25,6 @@ export { ConnectionStatusDot } from "../features/connection/ConnectionStatusDot"
 export { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
 export { createMobileThemeVariables } from "../lib/mobileTheme";
 export { ListRow } from "../components/ui/ListRow";
-export { SettingsRow } from "../features/settings/components/SettingsRow";
 export { environmentCatalog } from "../connection/catalog";
 export { appAtomRegistry } from "../state/atom-registry";
 export { useServerConfigs } from "../state/entities";
