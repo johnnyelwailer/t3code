@@ -17,7 +17,7 @@ import { nexiFeatureFlagPreset } from "./t3team-nexiConfig";
 import { NexiSignInRequiredError, type NexiDeviceCode } from "./t3team-nexiOAuth";
 import { classifyNexiStartError, type NexiStartError } from "./t3team-nexiStartError";
 import type { NexiStartInput } from "./t3team-nexiStartModel";
-import { nexiStartPreview } from "./t3team-nexiStartPreview";
+import { useNexiStartPreview } from "./t3team-nexiStartPreview";
 
 const flagPreset = nexiFeatureFlagPreset();
 
@@ -32,6 +32,7 @@ export function useNexiHosts(options: { readonly onConnected?: () => void } = {}
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [loadedAt, setLoadedAt] = useState(Date.now);
   const network = useNetworkState();
+  const preview = useNexiStartPreview();
   const operation = useRef<AbortController | null>(null);
   const navigation = useNavigation();
   const register = useAtomCommand(environmentCatalog.register, { reportFailure: false });
@@ -111,7 +112,7 @@ export function useNexiHosts(options: { readonly onConnected?: () => void } = {}
     now: loadedAt,
   };
   return {
-    input: nexiStartPreview() ?? live,
+    input: preview ?? live,
     code,
     cancel,
     setError: (message: string) => setError({ kind: "other", message }),
