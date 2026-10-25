@@ -10,9 +10,8 @@
  * (provider, number, title, refs, state, draft, merged/closed timestamps) so a consumer sees
  * the same shape no matter which SCM provider produced the event.
  *
- * Tier B — work-item source. Payloads use the neutral work-item vocabulary (issueKey, title,
- * state, assignee, labels) — the provider-registry expansion lands later; this source wraps
- * the existing Jira integration.
+ * Tier B — work-item sources (t3team-sdk.builtinSignalsWorkItem.ts), and the project-scope
+ * repository source (t3team-sdk.builtinSignalsProject.ts).
  */
 
 import * as Schema from "effect/Schema";
@@ -29,6 +28,19 @@ import {
   ScmViewerChangeRequestUpdated,
   ViewerChangeRequestPayload,
 } from "./t3team-sdk.builtinSignalsViewer.ts";
+import {
+  ScmProjectItems,
+  ScmProjectItemUpdated,
+  ScmProjectItemPayload,
+  ProjectScopeParams,
+} from "./t3team-sdk.builtinSignalsProject.ts";
+import {
+  WorkItemParams,
+  WorkItemPayload,
+  WorkItemProjectUpdates,
+  WorkItemUpdated,
+  WorkItemUpdates,
+} from "./t3team-sdk.builtinSignalsWorkItem.ts";
 
 // ── ChangeRequest payloads (Tier A) ─────────────────────────────────────────
 
@@ -144,40 +156,6 @@ export const ScmChangeRequestReview: SignalSourceRef<
   emits: [ScmChangeRequestReviewActivity],
 });
 
-// ── Work-item payloads (Tier B) ──────────────────────────────────────────────
-
-/** The neutral work-item snapshot a work-item signal carries. */
-export const WorkItemPayload = Schema.Struct({
-  provider: Schema.String,
-  issueKey: Schema.String,
-  title: Schema.String,
-  url: Schema.optional(Schema.String),
-  state: Schema.optional(Schema.String),
-  assignee: Schema.optional(Schema.String),
-  labels: Schema.optional(Schema.Array(Schema.String)),
-  updatedAt: Schema.optional(Schema.String),
-  changedFields: Schema.optional(Schema.Array(Schema.String)),
-});
-export type WorkItemPayloadType = Schema.Schema.Type<typeof WorkItemPayload>;
-
-export const WorkItemUpdated = defineSignal("work-item.updated", WorkItemPayload);
-
-/** Shared Tier B identity: one work item of one project, for one (local) account. */
-export const WorkItemParams = Schema.Struct({
-  projectId: Schema.String,
-  issueKey: Schema.String,
-  accountId: Schema.optional(Schema.String),
-});
-export type WorkItemParamsType = Schema.Schema.Type<typeof WorkItemParams>;
-
-/** Watches one work item: emits on every observed field change (state, assignee, …). */
-export const WorkItemUpdates: SignalSourceRef<WorkItemParamsType, [typeof WorkItemUpdated]> =
-  builtinSignalSource({
-    name: "work-item.updates",
-    params: WorkItemParams,
-    emits: [WorkItemUpdated],
-  });
-
 // ── Catalog index (host-side cross-check) ───────────────────────────────────
 
 /** Every built-in source declaration, for the host catalog's name → declaration map.
@@ -188,7 +166,9 @@ export const BUILTIN_SIGNAL_SOURCES = [
   ScmChangeRequestChecks,
   ScmChangeRequestReview,
   ScmViewerChangeRequests,
+  ScmProjectItems,
   WorkItemUpdates,
+  WorkItemProjectUpdates,
 ] as const;
 
 /** Every built-in signal, keyed by name (the host's delivery trust boundary). */
@@ -199,6 +179,7 @@ export const BUILTIN_SIGNALS: ReadonlyArray<Signal<unknown>> = [
   ScmChangeRequestChecksConcluded,
   ScmChangeRequestReviewActivity,
   ScmViewerChangeRequestUpdated,
+  ScmProjectItemUpdated,
   WorkItemUpdated,
 ];
 
@@ -213,13 +194,16 @@ export const BUILTIN_SIGNAL_GLOBALS: Readonly<Record<string, unknown>> = {
   ScmChangeRequestChecks,
   ScmChangeRequestReview,
   ScmViewerChangeRequests,
+  ScmProjectItems,
   WorkItemUpdates,
+  WorkItemProjectUpdates,
   ScmChangeRequestMerged,
   ScmChangeRequestClosed,
   ScmChangeRequestDraftReady,
   ScmChangeRequestChecksConcluded,
   ScmChangeRequestReviewActivity,
   ScmViewerChangeRequestUpdated,
+  ScmProjectItemUpdated,
   WorkItemUpdated,
   ChangeRequestPayload,
   ChangeRequestChecksPayload,
@@ -228,5 +212,7 @@ export const BUILTIN_SIGNAL_GLOBALS: Readonly<Record<string, unknown>> = {
   ScmChangeRequestParams,
   ScmViewerChangeRequestsParams,
   ViewerChangeRequestPayload,
+  ScmProjectItemPayload,
+  ProjectScopeParams,
   WorkItemParams,
 };

@@ -40,6 +40,7 @@ import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManag
 import * as ThreadLaunch from "./orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagement from "./orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "./project/ProjectService.ts";
+import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import * as AgentAwarenessRelay from "./relay/AgentAwarenessRelay.ts";
@@ -273,16 +274,21 @@ const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
   const threads = yield* ThreadManagement.ThreadManagementService;
   const threadLaunch = yield* ThreadLaunch.ThreadLaunchService;
   const path = yield* Path.Path;
+  const repositoryIdentityResolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
 
   let bootstrapProjectId: ProjectId | undefined;
   let bootstrapThreadId: ThreadId | undefined;
 
   if (serverConfig.autoBootstrapProjectFromCwd) {
     const threadModelSelection = getAutoBootstrapThreadModelSelection();
+    // A cloud session checks the repository out into a fixed folder name, so the folder says
+    // nothing about the project: prefer the repository's own name.
+    const identity = yield* repositoryIdentityResolver.resolve(serverConfig.cwd);
+    const repositoryName = identity?.displayName?.split("/").filter(Boolean).at(-1);
     const { project, created } = yield* projects.bootstrap({
       commandId: CommandId.make(yield* randomUUID),
       projectId: ProjectId.make(yield* randomUUID),
-      title: path.basename(serverConfig.cwd) || "project",
+      title: repositoryName || path.basename(serverConfig.cwd) || "project",
       workspaceRoot: serverConfig.cwd,
     });
     if (created) {

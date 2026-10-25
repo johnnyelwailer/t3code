@@ -115,9 +115,9 @@ import {
   type TimelineRow,
 } from "./timelineRowContext";
 import { TimelineRowTimestamp, ActivityShimmerOverlay } from "./TimelineRowParts";
+import { T3TeamWorkingTimelineRow } from "~/t3team/chat/t3team-WorkingTimelineRowGate";
 import {
   WorkGroupSection,
-  WorkingTimelineRow,
   ThinkingTimelineRow,
   LiveWorkEntryTimelineRow,
   WorkGroupToggleTimelineRow,
@@ -1465,7 +1465,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       {row.kind === "proposed-plan" ? <ProposedPlanTimelineRow row={row} /> : null}
       {row.kind === "html-render" ? <HtmlRenderTimelineRow row={row} /> : null}
       {row.kind === "mcp-app" ? <McpAppTimelineRow row={row} /> : null}
-      {row.kind === "working" ? <WorkingTimelineRow row={row} /> : null}
+      {row.kind === "working" ? <T3TeamWorkingTimelineRow row={row} /> : null}
       {row.kind === "worktree-setup" ? <WorktreeSetupTimelineRow row={row} /> : null}
       {row.kind === "event" ? <V2EventTimelineRow row={row} /> : null}
     </div>

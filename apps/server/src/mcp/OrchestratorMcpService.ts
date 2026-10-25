@@ -68,6 +68,7 @@ import {
   ThreadId,
   isOrchestrationV2WorkActive,
 } from "@t3tools/contracts";
+import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import { getProviderOptionCurrentValue } from "@t3tools/shared/model";
 import { runRanAfter } from "@t3tools/shared/orchestrationV2ThreadError";
 import {
@@ -2258,6 +2259,9 @@ const make = Effect.gen(function* () {
         explicitTargetOptions: input.target?.options !== undefined,
         workspace: input.workspace,
         extensions: input.extensions,
+        acceptedChildThreadId: isRetryOfAcceptedDelegation
+          ? IdAllocator.derive.delegatedTaskThread({ commandId })
+          : undefined,
       });
       const result = yield* threadManagement
         .dispatch({
@@ -2282,7 +2286,9 @@ const make = Effect.gen(function* () {
         })
         .pipe(
           // t3team: no child was created, so undo what prepare created (its worktree).
-          Effect.tapError(() => prepared.release ?? Effect.void),
+          Effect.onExit((exit) =>
+            Exit.isSuccess(exit) ? Effect.void : (prepared.release ?? Effect.void),
+          ),
           Effect.mapError((error) =>
             error._tag === "ThreadManagementProviderInstanceDisabledError"
               ? threadManagementFailure(error)
@@ -2326,6 +2332,7 @@ const make = Effect.gen(function* () {
         ...prepared.notes,
         ...(childThreadId === null || replayed ? [] : yield* prepared.afterCreate(childThreadId)),
       ];
+      if (replayed) yield* prepared.afterReplay ?? Effect.void;
       const targetProvider = providers.find(
         (provider) => provider.instanceId === target.modelSelection.instanceId,
       );

@@ -20,6 +20,15 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: false,
     requiresRestart: false,
   },
+  AGENTS_PREFER_READY_PROVIDER: {
+    group: "Agent",
+    subgroup: "Providers",
+    label: "Prefer a ready provider",
+    description:
+      "A new thread starts on a provider that is ready when the one it would default to cannot start (CLI missing or failing). Off: the configured default is used as is and shows its error.",
+    defaultEnabled: true,
+    requiresRestart: false,
+  },
   AGENTS_WIDGETS: {
     group: "Agent",
     subgroup: "Tools",

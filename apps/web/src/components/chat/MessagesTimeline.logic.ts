@@ -64,6 +64,7 @@ import { mcpAppReferencesEqual, type McpAppReference } from "@t3tools/shared/mcp
 import { dynamicToolTitle } from "@t3tools/shared/toolActivity";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import { isActorOutboundSendMessageEntry } from "../../t3team/chat/t3team-actorOutbound";
+import { t3teamWorkflowStepRunIds } from "../../t3team/chat/t3team-workflowMessageGroups";
 import {
   collectToolFilePaths,
   formatReadToolLabel,
@@ -603,6 +604,8 @@ type MessagesTimelineRowContent =
       assistantCopyStreaming: boolean;
       assistantTurnDiffSummary?: TurnDiffSummary | undefined;
       revertTurnCount?: number | undefined;
+      /** t3team: an assistant reply in a run a workflow step's prompt started. */
+      workflowStepReply?: boolean | undefined;
     }
   | {
       kind: "assistant-meta";
@@ -1527,9 +1530,11 @@ export function deriveMessagesTimelineRows(input: {
       })
     : new Map<MessageId, number>();
   const nextRows: MessagesTimelineRow[] = [];
-  const durationStartByMessageId = computeMessageDurationStart(
-    timelineEntries.flatMap((entry) => (entry.kind === "message" ? [entry.message] : [])),
+  const timelineMessages = timelineEntries.flatMap((entry) =>
+    entry.kind === "message" ? [entry.message] : [],
   );
+  const durationStartByMessageId = computeMessageDurationStart(timelineMessages);
+  const workflowStepRunIds = t3teamWorkflowStepRunIds(timelineMessages);
   const terminalAssistantMessageIds = deriveTerminalAssistantMessageIds(timelineEntries);
   const failedRunIds = failedTimelineRunIds(timelineEntries, input.latestRun ?? null);
   const liveSubagentEntryIds = liveSubagentCardEntryIds(timelineEntries);
@@ -2012,6 +2017,11 @@ export function deriveMessagesTimelineRows(input: {
         timelineEntry.message.role === "user"
           ? revertTurnCountByUserMessageId.get(timelineEntry.message.id)
           : undefined,
+      ...(timelineEntry.message.role === "assistant" &&
+      timelineEntry.message.runId !== null &&
+      workflowStepRunIds.has(timelineEntry.message.runId)
+        ? { workflowStepReply: true }
+        : {}),
     });
   }
 
@@ -2454,7 +2464,8 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
         a.showAssistantCopyButton === bm.showAssistantCopyButton &&
         a.assistantCopyStreaming === bm.assistantCopyStreaming &&
         a.assistantTurnDiffSummary === bm.assistantTurnDiffSummary &&
-        a.revertTurnCount === bm.revertTurnCount
+        a.revertTurnCount === bm.revertTurnCount &&
+        a.workflowStepReply === bm.workflowStepReply
       );
     }
   }

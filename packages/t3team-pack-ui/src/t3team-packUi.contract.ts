@@ -14,6 +14,7 @@
  * refuses a pack web module that does not include the host's `PACK_UI_VERSION`.
  */
 import type { ComponentType } from "react";
+import type { ConnectionsSettingsRegistration } from "./t3team-packUi.settings.ts";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import type * as Schema from "effect/Schema";
 
@@ -34,6 +35,7 @@ export const PACK_UI_VERSION = 1;
  */
 export type ViewSlot =
   | "message.view"
+  | "settings.connections"
   | "changeRequest.summary"
   | "myWork.changeRequest"
   | "dashboard.widget"
@@ -69,6 +71,7 @@ export interface MessageViewRegistration<P> {
 /** Everything `registerView` takes; `slot` says which. */
 export type ViewRegistration<P> =
   | MessageViewRegistration<P>
+  | ConnectionsSettingsRegistration
   | ChangeRequestSummaryRegistration
   | MyWorkChangeRequestRegistration
   | DashboardWidgetRegistration
@@ -104,6 +107,7 @@ export type PackDocumentState<V> =
   | { readonly status: "ready"; readonly value: V };
 
 export * from "./t3team-packUi.slots.ts";
+export * from "./t3team-packUi.settings.ts";
 export * from "./t3team-packUi.primitives.ts";
 export * from "./t3team-packUi.overlays.ts";
 export * from "./t3team-packUi.icons.ts";

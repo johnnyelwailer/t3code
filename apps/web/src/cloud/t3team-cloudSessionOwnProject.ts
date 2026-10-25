@@ -15,13 +15,19 @@
  */
 import {
   type CloudSession,
-  type EnvironmentId,
-  plainProjectFolderName,
+  EnvironmentId,
   type ProjectId,
-  type RepositoryIdentity,
   repositoryGroupingKeyOf,
 } from "@t3tools/contracts";
-import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
+import {
+  type CloudSessionLocalProject,
+  type CloudSessionProjectFacts,
+  isSameCloudSessionProject,
+  ownProjectOnMachine,
+  projectCwdOf,
+} from "@t3tools/shared/t3team-cloudSessionFit";
+
+export { projectCwdOf };
 
 export interface CloudSessionOwnProject {
   readonly environmentId: EnvironmentId;
@@ -30,43 +36,12 @@ export interface CloudSessionOwnProject {
   readonly projectId: ProjectId | null;
 }
 
-interface ProjectFacts {
-  readonly workspaceRoot: string;
-  readonly repositoryIdentity?: RepositoryIdentity | null | undefined;
-}
+type ProjectFacts = CloudSessionProjectFacts;
 
-type ComposerProject = ProjectFacts & { readonly id: ProjectId; readonly title: string };
+type ComposerProject = CloudSessionLocalProject;
 
 const repositoryOf = (project: ProjectFacts) =>
   project.repositoryIdentity ? repositoryGroupingKeyOf(project.repositoryIdentity) : null;
-
-const folderOf = (workspaceRoot: string) =>
-  normalizeProjectPathForComparison(workspaceRoot).split(/[\\/]/).pop() ?? "";
-
-/** Whether the machine's project can be the one this composer project's session was started for. */
-function isSameProject(composer: ComposerProject, own: ProjectFacts) {
-  const composerRepository = repositoryOf(composer);
-  const ownRepository = repositoryOf(own);
-  if (composerRepository === null) {
-    return (
-      ownRepository === null &&
-      folderOf(own.workspaceRoot) === plainProjectFolderName(composer.title, composer.id)
-    );
-  }
-  // The checkout may not have its identity yet; a different repository is never this project.
-  return ownRepository === null || ownRepository === composerRepository;
-}
-
-/**
- * The working directory a server registers as its project, or null when it registers none there
- * (an older server, or one started without `--auto-bootstrap-project-from-cwd`): only then is a
- * project at that path expected, and worth holding the session's environment for.
- */
-export function projectCwdOf(
-  serverConfig: { readonly cwd?: string; readonly projectFromCwd?: boolean } | null | undefined,
-): string | null {
-  return serverConfig?.projectFromCwd === true && serverConfig.cwd ? serverConfig.cwd : null;
-}
 
 export function resolveCloudSessionOwnProject(input: {
   /** The composer's Run-on target (null when it targets no cloud session). */
@@ -89,16 +64,15 @@ export function resolveCloudSessionOwnProject(input: {
     (item) => item.sessionId === target.sessionId,
   )?.environmentId;
   if (environmentId === undefined) return null;
-  const cwd = input.serverCwdOf(environmentId as EnvironmentId);
+  const cwd = input.serverCwdOf(EnvironmentId.make(environmentId));
   if (cwd === null) return null;
-  const root = normalizeProjectPathForComparison(cwd);
-  const own = input.projects.find(
-    (item) =>
-      String(item.environmentId) === environmentId &&
-      normalizeProjectPathForComparison(item.workspaceRoot) === root,
+  const own = ownProjectOnMachine(
+    cwd,
+    input.projects.filter((item) => String(item.environmentId) === environmentId),
   );
-  if (own === undefined) return { environmentId: environmentId as EnvironmentId, projectId: null };
-  if (!isSameProject(project, own)) return null;
+  if (own === undefined)
+    return { environmentId: EnvironmentId.make(environmentId), projectId: null };
+  if (!isSameCloudSessionProject(project, own)) return null;
   return { environmentId: own.environmentId, projectId: own.id };
 }
 
@@ -130,4 +104,31 @@ export function logicalProjectPerEnvironment<
     picked.push({ environmentId: project.environmentId, projectId: project.id });
   }
   return picked;
+}
+
+export function resolveCloudSessionRestartProjectId(input: {
+  readonly environmentId: EnvironmentId | null;
+  readonly primaryEnvironmentId: EnvironmentId | null;
+  readonly serverCwd: string | null;
+  readonly projects: ReadonlyArray<ComposerProject & { readonly environmentId: EnvironmentId }>;
+}): ProjectId | null {
+  if (
+    input.environmentId === null ||
+    input.primaryEnvironmentId === null ||
+    input.serverCwd === null
+  )
+    return null;
+  const own = ownProjectOnMachine(
+    input.serverCwd,
+    input.projects.filter((project) => project.environmentId === input.environmentId),
+  );
+  if (own === undefined) return null;
+  if (own.environmentId === input.primaryEnvironmentId) return own.id;
+  const candidates = input.projects.filter(
+    (project) =>
+      project.environmentId === input.primaryEnvironmentId &&
+      (repositoryOf(project) === null || repositoryOf(own) !== null) &&
+      isSameCloudSessionProject(project, own),
+  );
+  return candidates.length === 1 ? (candidates[0]?.id ?? null) : null;
 }

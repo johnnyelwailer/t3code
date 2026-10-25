@@ -178,9 +178,9 @@ export function renderWorkflowRecordAsDisplayText(
   }
   const parts = Object.entries(record).map(([key, value]) => formatField(key, value));
   if (parts.length === 0) return options.emptyFallback;
-  // Blank-line separation once anything is multi-line (a table or nested list); a pure
-  // flat result keeps a single-newline join between fields.
-  const body = parts.join(parts.some((p) => p.includes("\n")) ? "\n\n" : "\n");
+  // Blank lines, because the text renders as markdown, where a single newline is a soft break
+  // that runs every field into one paragraph.
+  const body = parts.join("\n\n");
   if (body.length > MAX_TOTAL_CHARS) {
     return `${body.slice(0, MAX_TOTAL_CHARS)}\n\n*(truncated — the full result is larger than shown)*`;
   }

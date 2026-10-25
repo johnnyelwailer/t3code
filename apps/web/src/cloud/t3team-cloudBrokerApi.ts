@@ -21,9 +21,9 @@ export const cloudBrokerApi = {
     credentialRequest<CloudBrokerStatus>("GET", "/api/t3team/cloud-broker/status", {
       fallbackReason,
     }),
-  attach: (sessionId: string, environmentId: string) =>
+  attach: (sessionId: string, environmentId: string, endsAt?: string) =>
     credentialRequest<CloudSessionAttachResult>("POST", "/api/t3team/cloud-broker/attach", {
-      body: { sessionId, environmentId },
+      body: { sessionId, environmentId, ...(endsAt === undefined ? {} : { endsAt }) },
       fallbackReason,
     }),
   pair: (sessionId: string) =>

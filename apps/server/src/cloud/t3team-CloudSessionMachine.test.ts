@@ -5,7 +5,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { type Project, ProjectId } from "@t3tools/contracts";
+import { ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Effect from "effect/Effect";
@@ -14,6 +14,7 @@ import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import { afterEach, beforeEach } from "vite-plus/test";
 
+import { PullRequestProviderRegistry } from "../pullRequest/PullRequestProviderRegistry.ts";
 import { ProjectService } from "../project/ProjectService.ts";
 import * as ProjectMachineDiscovery from "../project/t3team-ProjectMachineDiscovery.ts";
 import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
@@ -50,10 +51,10 @@ const write = (root: string, files: Record<string, string>) => {
  */
 const checkout = (
   files: Record<string, string>,
-  { remote = "git@nexplore.ghe.com:acme/api.git", pushed = true } = {},
+  { remote = "git@nexplore.ghe.com:acme/api.git", pushed = true, objectFormat = "sha1" } = {},
 ) => {
   const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-machine-session-"));
-  git(root, "init", "-q", "-b", "main");
+  git(root, "init", "-q", "-b", "main", `--object-format=${objectFormat}`);
   write(root, files);
   git(root, "add", "-A");
   git(root, "commit", "-q", "--allow-empty", "-m", "base");
@@ -72,14 +73,25 @@ const sessionIn = <A, E>(
 ) => {
   const projects = Layer.mock(ProjectService)({
     getById: () =>
-      Effect.succeed(Option.some({ workspaceRoot: root, title: "IES NG" } as unknown as Project)),
+      Effect.succeed(
+        Option.some({
+          id: projectId,
+          workspaceRoot: root,
+          title: "IES NG",
+          defaultModelSelection: null,
+          scripts: [],
+          createdAt: "2026-10-24T00:00:00Z",
+          updatedAt: "2026-10-24T00:00:00Z",
+          deletedAt: null,
+        }),
+      ),
   });
   const unavailable = (host: string) =>
-    Effect.fail(new GitHubApi.GitHubApiAuthenticationError({ host, operation: "test" }) as never);
+    Effect.fail(new GitHubApi.GitHubApiAuthenticationError({ host, operation: "test" }));
   const gh = Layer.mock(GitHubApi.GitHubApi)({
     credential: (host) =>
       host === "nexplore.ghe.com" && token !== ""
-        ? Effect.succeed({ token: Redacted.make(token), fingerprint: "fp" } as never)
+        ? Effect.succeed({ token: Redacted.make(token), fingerprint: "fp" })
         : unavailable(host),
     rest: (input) =>
       input.host === "nexplore.ghe.com" && input.path === "user" && token !== ""
@@ -89,11 +101,19 @@ const sessionIn = <A, E>(
             body: JSON.stringify({ login: "pj", id: 7, name: "Philip J", email: null }),
             truncated: false,
             invalidUtf8: false,
-          } as never)
+          })
         : unavailable(input.host),
   });
   const dependencies = Layer.mergeAll(
-    ProjectMachineDiscovery.layer.pipe(Layer.provide(projects)),
+    ProjectMachineDiscovery.layer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          projects,
+          VcsProcess.layer,
+          Layer.mock(PullRequestProviderRegistry)({ get: () => null, kinds: [] }),
+        ),
+      ),
+    ),
     VcsProcess.layer,
     gh,
   ).pipe(Layer.provideMerge(NodeServices.layer));
@@ -120,6 +140,15 @@ describe("CloudSessionMachines.resolve", () => {
     Effect.gen(function* () {
       replaceFeatureFlagPresetValues(new Map([["CLOUD_PROJECT_MACHINE", false]]));
       expect(yield* resolveIn(checkout(DEVCONTAINER))).toBeNull();
+    }),
+  );
+
+  it.effect("pins a local SHA-256 machine definition", () =>
+    Effect.gen(function* () {
+      const root = checkout(DEVCONTAINER, { objectFormat: "sha256" });
+      const machine = yield* resolveIn(root);
+      expect(machine?.commit).toBe(git(root, "rev-parse", "HEAD"));
+      expect(machine?.commit).toHaveLength(64);
     }),
   );
 
@@ -288,6 +317,18 @@ describe("CloudSessionMachines.resolvePlain", () => {
           author: { name: "Philip J", email: "7+pj@users.noreply.nexplore.ghe.com" },
         },
       });
+    }),
+  );
+
+  it.effect("uses a SHA-256 default branch for a plain session", () =>
+    Effect.gen(function* () {
+      const root = checkout({ "README.md": "hi" }, { objectFormat: "sha256" });
+      const pushed = git(root, "rev-parse", "HEAD");
+      git(root, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+      git(root, "checkout", "-q", "--orphan", "local-only");
+      git(root, "commit", "-q", "-m", "disconnected local branch");
+      const plain = yield* plainIn(root);
+      expect(plain.kind === "checkout" ? plain.checkout.commit : null).toBe(pushed);
     }),
   );
 

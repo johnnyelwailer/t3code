@@ -1,9 +1,4 @@
-/**
- * One watcher in the indicator's card: status, thread title, upstream's stop eye, then what the
- * thread is doing and the babysitter's chips, then the actions (doc 07 §3.3). *Not mine* and
- * *Take over* are the thread's runtime mode; *Leave it* is "stop including sub-runs" plus the
- * watch command; *Open thread* navigates.
- */
+/** A watched-thread card with status, title, activity, chips, and actions (doc 07 §3.3). */
 import { CommandId, type ThreadPullRequestLink } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -14,6 +9,7 @@ import type { ThreadStatusPill } from "~/components/Sidebar.logic";
 import { StopWatchingButton, ThreadStatusLabel } from "~/components/ThreadStatusIndicators";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useNowMinute } from "~/hooks/useNowMinute";
 import { randomUUID } from "~/lib/utils";
 import { useServerConfigs } from "~/state/entities";
@@ -123,14 +119,28 @@ export function WatchedPullRequestCardRow({
       data-testid="watched-pull-request-row"
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-xs text-foreground/90">
-          {watcher.threadTitle}
-        </span>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span className="min-w-0 flex-1 truncate text-xs text-foreground/90" tabIndex={0} />
+            }
+          >
+            {watcher.threadTitle}
+          </TooltipTrigger>
+          <TooltipPopup side="top">{watcher.threadTitle}</TooltipPopup>
+        </Tooltip>
         <ThreadStatusLabel status={statusPill(watcher, nowMs)} />
         <StopWatchingButton threadRef={watcher.threadRef} link={link} />
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-2xs text-muted-foreground">
-        {underline ? <span className="min-w-0 truncate">{underline}</span> : null}
+        {underline ? (
+          <Tooltip>
+            <TooltipTrigger render={<span className="min-w-0 truncate" tabIndex={0} />}>
+              {underline}
+            </TooltipTrigger>
+            <TooltipPopup side="top">{underline}</TooltipPopup>
+          </Tooltip>
+        ) : null}
         <Badge variant="secondary" size="sm">
           {babysitter ? "Babysitter" : "Thread"}
         </Badge>

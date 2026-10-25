@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { type Project, ProjectId } from "@t3tools/contracts";
+import { ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -8,6 +8,8 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
 
+import { PullRequestProviderRegistry } from "../pullRequest/PullRequestProviderRegistry.ts";
+import * as VcsProcess from "../vcs/VcsProcess.ts";
 import { ProjectService } from "./ProjectService.ts";
 import {
   HIDDEN_T3TEAM_DIR,
@@ -43,14 +45,35 @@ const discoverIn = (
       getById: (id) =>
         Effect.succeed(
           id === projectId
-            ? Option.some({ workspaceRoot: root } as unknown as Project)
+            ? Option.some({
+                id: projectId,
+                workspaceRoot: root,
+                title: "Test",
+                defaultModelSelection: null,
+                scripts: [],
+                createdAt: "2026-10-24T00:00:00Z",
+                updatedAt: "2026-10-24T00:00:00Z",
+                deletedAt: null,
+              })
             : Option.none(),
         ),
     });
     return yield* Effect.gen(function* () {
       const discovery = yield* ProjectMachineDiscovery.ProjectMachineDiscovery;
       return yield* discovery.discover(projectId);
-    }).pipe(Effect.provide(ProjectMachineDiscovery.layer.pipe(Layer.provide(projects))));
+    }).pipe(
+      Effect.provide(
+        ProjectMachineDiscovery.layer.pipe(
+          Layer.provide(
+            Layer.mergeAll(
+              projects,
+              Layer.mock(PullRequestProviderRegistry)({ get: () => null, kinds: [] }),
+              Layer.mock(VcsProcess.VcsProcess)({}),
+            ),
+          ),
+        ),
+      ),
+    );
   });
 
 it.layer(NodeServices.layer)("ProjectMachineDiscovery", (it) => {
@@ -77,11 +100,12 @@ it.layer(NodeServices.layer)("ProjectMachineDiscovery", (it) => {
                 ".git/HEAD": "ref: refs/heads/main\n",
                 ".devcontainer/devcontainer.json": `{ "image": "node:22" }`,
                 [manifest]: `{ "linkedRepositories": [
-                { "url": "https://github.com/acme/api.git", "localPath": "${api}", "status": "cloned" },
-                { "url": "https://github.com/acme/web.git", "localPath": "${broken}", "status": "failed" }
+                { "url": "https://github.com/acme/api.git", "localPath": ${JSON.stringify(api)}, "status": "cloned" },
+                { "url": "https://github.com/acme/web.git", "localPath": ${JSON.stringify(broken)}, "status": "failed" }
               ] }`,
               });
               yield* writeTree(api, {
+                ".git/HEAD": "ref: refs/heads/main\n",
                 ".nexi/machine.json": `{ "version": 1, "devcontainer": ".devcontainer/devcontainer.json" }`,
                 ".devcontainer/devcontainer.json": `{ "image": "node:24" }`,
               });
@@ -123,7 +147,17 @@ it.layer(NodeServices.layer)("ProjectMachineDiscovery", (it) => {
           const discovery = yield* ProjectMachineDiscovery.ProjectMachineDiscovery;
           return yield* discovery.discover(projectId);
         }).pipe(
-          Effect.provide(ProjectMachineDiscovery.layer.pipe(Layer.provide(projects))),
+          Effect.provide(
+            ProjectMachineDiscovery.layer.pipe(
+              Layer.provide(
+                Layer.mergeAll(
+                  projects,
+                  Layer.mock(PullRequestProviderRegistry)({ get: () => null, kinds: [] }),
+                  Layer.mock(VcsProcess.VcsProcess)({}),
+                ),
+              ),
+            ),
+          ),
           Effect.flip,
         );
         expect(error.reason).toBe("unknown_project");
