@@ -4340,6 +4340,12 @@ it.effect("names the host and the fix when a linked repository's host has no cre
         ],
         providers: [
           fakePullRequestProvider(SourceControlProviderKind.make("github"), {
+            // The fix text is the provider's own (upstream moved it onto each forge).
+            unavailableRequirement: {
+              missing: "No GitHub credential on the server.",
+              unauthenticated:
+                "GitHub has no working credential for this host. Run `gh auth login`, or check the account and hosts in Settings → Source Control.",
+            },
             getViewer: (input) =>
               input.host === "nexplore.ghe.com"
                 ? Effect.fail(unusable(SourceControlProviderKind.make("github"), "unauthenticated"))

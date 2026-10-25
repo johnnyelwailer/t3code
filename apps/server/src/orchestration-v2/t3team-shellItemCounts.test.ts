@@ -174,11 +174,21 @@ it.layer(layerTest)("shell item counts", (it) => {
         plan,
         "SEARCH i USING COVERING INDEX orchestration_v2_projection_turn_items_thread_run_idx (thread_id=?)",
       );
-      assert.include(plan, "SEARCH per_run USING PRIMARY KEY (thread_id=?)");
-      assert.include(plan, "SEARCH runless USING PRIMARY KEY (thread_id=? AND run_key=?)");
       assert.include(
         plan,
         "SEARCH message USING INDEX orchestration_v2_projection_messages_latest_user_authored_idx (thread_id=?)",
+      );
+      // Upstream reads the counts in their own statement; it must hit the maintained table.
+      const countStatement = statements.find((statement) =>
+        statement.includes("runless_item_count"),
+      );
+      assert.isDefined(countStatement);
+      const countPlan = (yield* sql.unsafe<{ readonly detail: string }>(
+        `EXPLAIN QUERY PLAN ${countStatement}`,
+      )).map((row) => row.detail);
+      assert.include(countPlan, "SEARCH counts USING PRIMARY KEY (thread_id=?)");
+      assert.isFalse(
+        countPlan.some((detail) => detail.includes("orchestration_v2_projection_turn_items")),
       );
     }),
   );

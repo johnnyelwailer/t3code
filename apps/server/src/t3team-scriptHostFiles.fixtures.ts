@@ -34,6 +34,7 @@ import * as PullRequestReadCache from "./pullRequest/PullRequestReadCache.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import type { ProviderFileAtRevision } from "@t3tools/source-control-core/server/t3team-fileAtRevision";
 import * as ServerSettingsService from "./serverSettings.ts";
+import type { SourceControlProvider } from "@t3tools/source-control-core/server/SourceControlProvider";
 import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
@@ -199,6 +200,8 @@ const scriptHost = Effect.gen(function* () {
       Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
         resolveLink: () => undefined,
         resolveHandle: () => Effect.die("Unexpected provider refinement"),
+        // No host quirks: remote hosts resolve as the remote URL names them.
+        get: () => Effect.succeed({} as SourceControlProvider["Service"]),
       }),
       Layer.mock(ProjectService.ProjectService)({
         listShells: () => Effect.succeed([project(workspace)]),
