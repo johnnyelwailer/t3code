@@ -61,6 +61,13 @@ export const CloudSessionMachineStageSchema = Schema.Literals([
 ]);
 export type CloudSessionMachineStage = typeof CloudSessionMachineStageSchema.Type;
 
+/**
+ * The longest a cloud session holds its machine: the `hold_minutes` the app always dispatches
+ * (345 minutes, under the workflow's 350-minute job timeout). An upper bound on what is left of a
+ * live session: the workflow's idle check can release it sooner.
+ */
+export const CLOUD_SESSION_HOLD_CEILING_SECONDS = 345 * 60;
+
 export const CloudSessionSchema = Schema.Struct({
   /** Stable per attempt. Opaque to the client — do not parse it. */
   sessionId: Schema.String,
@@ -74,6 +81,11 @@ export const CloudSessionSchema = Schema.Struct({
   startedAt: Schema.optional(Schema.String),
   /** Remaining lifetime in seconds; null until the session is running. */
   remainingSeconds: Schema.NullOr(Schema.Int),
+  /**
+   * When a ready session's hold ends (ISO 8601): an upper bound, as the idle check can release it
+   * sooner. Clients count down to this instead of timing when they received `remainingSeconds`.
+   */
+  endsAt: Schema.optional(Schema.String),
   /** Human-readable compute shape, e.g. "ubuntu-slim · 12 GB · 4 cores". */
   machineLabel: Schema.String,
   /** Provider-supplied reason, present only when `phase` is `failed`. */

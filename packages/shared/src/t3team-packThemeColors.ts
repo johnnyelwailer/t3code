@@ -9,7 +9,7 @@
  * Each entry was read off the web derivation block in `apps/web/src/index.css`; the non-obvious
  * ones are commented.
  */
-import type { ThemeColorRole, ThemeColors } from "./themePalettes";
+import type { ThemeColorRole, ThemeColors } from "./themePalettes.ts";
 
 export const T3TEAM_PACK_TOKEN_TO_THEME_ROLE = {
   background: "canvas",

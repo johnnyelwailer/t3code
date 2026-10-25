@@ -27,6 +27,10 @@
       "types": "./src/t3team-packThemeColors.ts",
       "import": "./src/t3team-packThemeColors.ts"
     },
+    "./t3team-cloudSessionFit": {
+      "types": "./src/t3team-cloudSessionFit.ts",
+      "import": "./src/t3team-cloudSessionFit.ts"
+    },
     "./t3team-widgetIconSprite": {
       "types": "./src/t3team-widgetIconSprite.ts",
       "import": "./src/t3team-widgetIconSprite.ts"

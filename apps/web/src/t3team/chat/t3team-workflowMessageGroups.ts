@@ -51,6 +51,25 @@ export function readT3TeamWorkflowAuthor(
 }
 
 /**
+ * Runs started by a workflow step's prompt. Only the prompt carries the workflow author; the
+ * provider's replies in that run carry none, so the run is what ties a reply to its step.
+ */
+export function t3teamWorkflowStepRunIds(
+  messages: ReadonlyArray<{
+    readonly runId: string | null;
+    readonly t3teamExt?: Pick<NonNullable<MessageLike["t3teamExt"]>, "author"> | undefined;
+  }>,
+): ReadonlySet<string> {
+  const runIds = new Set<string>();
+  for (const message of messages) {
+    if (message.runId !== null && message.t3teamExt?.author?.kind === "workflow") {
+      runIds.add(message.runId);
+    }
+  }
+  return runIds;
+}
+
+/**
  * One group per `stepId`, in the order each step first appears.
  *
  * Messages of a step need not be contiguous — a system notice can land between the prompt and its reply — so

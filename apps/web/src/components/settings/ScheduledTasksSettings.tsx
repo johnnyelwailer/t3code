@@ -712,7 +712,14 @@ function ScheduledTaskRow({
   return (
     <SettingsRow
       title={task.title}
-      description={<span className="line-clamp-2">{task.prompt}</span>}
+      description={
+        <Tooltip>
+          <TooltipTrigger render={<span className="line-clamp-2" tabIndex={0} />}>
+            {task.prompt}
+          </TooltipTrigger>
+          <TooltipPopup side="top">{task.prompt}</TooltipPopup>
+        </Tooltip>
+      }
       status={
         <div className="flex flex-wrap items-center gap-2">
           <span>

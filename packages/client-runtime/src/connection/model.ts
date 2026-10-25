@@ -100,6 +100,8 @@ export const ConnectionFailureCause = Schema.Literals([
   "relay_error",
   "tunnel_pending",
   "tunnel_not_enabled",
+  /** A cloud session whose machine is gone for good (`t3team-brokerConnection.ts`). */
+  "session_ended",
 ]);
 export type ConnectionFailureCause = typeof ConnectionFailureCause.Type;
 

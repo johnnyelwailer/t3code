@@ -46,13 +46,19 @@ import { useResourcePressureBannerItem } from "./chat/t3team-ResourcePressureThr
 import { useProviderRetryBannerItem } from "./chat/t3team-ProviderRetryBanner";
 import { useT3TeamThreadHandoff } from "../t3team/chat/t3team-useThreadHandoff";
 import { useThreadHandoffBannerItem } from "./chat/t3team-ThreadHandoffBanner";
+import {
+  useCloudSessionEndedBannerItem,
+  withCloudSessionEndedBanner,
+} from "./chat/t3team-CloudSessionEndedBanner";
 import { useT3TeamChatTimelineProps } from "~/t3team/chat/t3team-useChatTimelineProps";
 import { useT3TeamStopCascade } from "~/t3team/chat/t3team-useStopCascade";
 import { useT3TeamActiveAgents } from "~/t3team/chat/t3team-useActiveAgents";
+import { useCloudSessionRestartProjectId } from "~/cloud/t3team-useCloudSessionOwnProject";
 import { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionComposerGate";
 import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
 import { useCloudQueuedSendOptimisticMessage } from "~/cloud/t3team-useCloudQueuedSendOptimisticMessage";
-import { CloudQueuedSendCard } from "~/cloud/t3team-CloudQueuedSendCard";
+import { CloudSessionSetupHost } from "~/cloud/t3team-CloudSessionSetupHost";
+import { useCloudSessionSetupCard } from "~/cloud/t3team-useCloudSessionSetupCard";
 import type { UsageLimitSourceSnapshots } from "@t3tools/contracts";
 import { feedbackBannerItem } from "./chat/ComposerFeedback";
 import { useUsageLimitsPanel } from "./chat/useUsageLimitsPanel";
@@ -375,7 +381,7 @@ import {
 import { useDraftHeroLayoutTransition } from "./chat/useDraftHeroLayoutTransition";
 import { useLocalDispatchState } from "./chat/useLocalDispatchState";
 import { draftFanoutSelectionsAtom, draftSendState } from "./chat/chatViewSend";
-import { readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
+import { readServerFeatureFlag, readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
 import {
   isCompactCommandMessage,
   type LocalThreadErrorEntry,
@@ -1295,11 +1301,19 @@ export default function ChatView(props: ChatViewProps) {
     environmentId,
     threadId: activeThreadId,
   });
-  const systemComposerBannerItems: ComposerBannerStackItem[] = [
-    ...upstreamSystemComposerBannerItems,
-    ...(resourcePressureBanner ? [resourcePressureBanner] : []),
-    ...(threadHandoffBanner ? [threadHandoffBanner] : []),
-  ];
+  const endedSessionRestartProjectId = useCloudSessionRestartProjectId(environmentId);
+  const cloudSessionEndedBanner = useCloudSessionEndedBannerItem(
+    environmentId,
+    endedSessionRestartProjectId,
+  );
+  const systemComposerBannerItems: ComposerBannerStackItem[] = withCloudSessionEndedBanner(
+    [
+      ...upstreamSystemComposerBannerItems,
+      ...(resourcePressureBanner ? [resourcePressureBanner] : []),
+      ...(threadHandoffBanner ? [threadHandoffBanner] : []),
+    ],
+    cloudSessionEndedBanner,
+  );
   const providerInstanceEntries = sortProviderInstanceEntries(
     applyProviderInstanceSettings(
       deriveProviderInstanceEntries(providerStatuses),
@@ -1318,6 +1332,7 @@ export default function ChatView(props: ChatViewProps) {
     ],
     lockedProvider,
     lockedInstanceId: activeRuntime?.providerInstanceId ?? activeThreadModelInstanceId,
+    preferReadyProvider: readServerFeatureFlag(serverConfig, "AGENTS_PREFER_READY_PROVIDER"),
   });
   const selectedProvider = selectedProviderEntry?.driverKind ?? requestedDriverKind;
   const activeProviderInstanceId = selectedProviderEntry?.instanceId ?? null;
@@ -1892,6 +1907,13 @@ export default function ChatView(props: ChatViewProps) {
     scopeKey: draftId ?? routeThreadKey,
     projectRef: activeProjectRef,
   });
+  const cloudSetupCard = useCloudSessionSetupCard({
+    draftId: draftId ?? null,
+    scopeKey: draftId ?? routeThreadKey,
+    projectRef: activeProjectRef,
+    gate: cloudSessionComposerGate,
+  });
+  const cloudSetupElement = cloudSetupCard ? <CloudSessionSetupHost {...cloudSetupCard} /> : null;
   useCloudQueuedSendOptimisticMessage({ draftId: draftId ?? null, setOptimisticUserMessages });
   const canInterruptRunningThread =
     (canOperateThread &&
@@ -3510,8 +3532,8 @@ export default function ChatView(props: ChatViewProps) {
                 {...(onOpenWorktreeSetupTerminal ? { onOpenWorktreeSetupTerminal } : {})}
                 isPreparingWorktree={!paintOnlyDisplayedTimeline && isPreparingWorktree}
                 footer={
-                  paintOnlyDisplayedTimeline ? null : cloudSessionComposerGate.card ? (
-                    <CloudQueuedSendCard {...cloudSessionComposerGate.card} />
+                  paintOnlyDisplayedTimeline ? null : cloudSetupElement && !isDraftHeroState ? (
+                    cloudSetupElement
                   ) : pendingHandoff === null ? (
                     threadStatusLine
                   ) : (
@@ -3656,6 +3678,7 @@ export default function ChatView(props: ChatViewProps) {
                           activeProjectRef={activeProjectRef}
                           activeProjectTitle={activeProject?.title ?? null}
                         />
+                        {cloudSetupElement}
                       </div>
                     </div>
                   ) : null}

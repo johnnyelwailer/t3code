@@ -26,10 +26,12 @@ import { workflowCompletionDisplayText } from "~/t3team/chat/t3team-workflowComp
 
 export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
-  // t3team: a workflow's terminal result (`t3team-wf-result:<runId>`) stored as raw
-  // JSON re-renders as display text; every other message passes through unchanged.
+  // t3team: a workflow's terminal result (`t3team-wf-result:<runId>`) or a workflow step's
+  // reply stored as raw JSON re-renders as display text; other messages pass through unchanged.
   const messageText = row.message.text
-    ? workflowCompletionDisplayText(row.message.id, row.message.text)
+    ? workflowCompletionDisplayText(row.message.id, row.message.text, {
+        workflowStepReply: row.workflowStepReply === true,
+      })
     : row.message.streaming
       ? ""
       : "(empty response)";

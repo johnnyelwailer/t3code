@@ -16,6 +16,8 @@ import { authCommand } from "./cli/auth.ts";
 import { sharedServerCommandFlags } from "./cli/config.ts";
 import { projectCommand } from "./cli/project.ts";
 import { fixtureCommand } from "./cli/t3team-fixture.ts";
+import { activateCompiledInDistribution } from "./t3team-distribution-bootstrap.ts";
+import { runHostServiceCommand } from "./t3team-hostServiceCommand.ts";
 import {
   runT3TeamServerCommand,
   t3teamServeCommand,
@@ -61,9 +63,12 @@ export { precheckWorkflowSource } from "./t3team-workflowSourcePrecheck.ts";
 export { auditWorkflowSourceStatic } from "@t3team/sdk";
 
 if (import.meta.main) {
-  Command.run(cli, { version: packageJson.version }).pipe(
-    Effect.scoped,
-    Effect.provide(CliRuntimeLayer),
-    NodeRuntime.runMain,
-  );
+  await activateCompiledInDistribution();
+  if (!(await runHostServiceCommand(process.argv.slice(2)))) {
+    Command.run(cli, { version: packageJson.version }).pipe(
+      Effect.scoped,
+      Effect.provide(CliRuntimeLayer),
+      NodeRuntime.runMain,
+    );
+  }
 }
