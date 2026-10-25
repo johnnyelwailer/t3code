@@ -22,9 +22,7 @@ const repoEnv = loadRepoEnv();
 const cliBuildChannel = /^[^-+]+-(?:nightly|preview)\./.test(packageJson.version)
   ? "nightly"
   : "latest";
-// Sent with every analytics event. Release workflows set it for pingdotgg/t3code
-// builds only, so local builds and forks report "dev". A typo fails the build
-// instead of mislabeling events.
+// Official release workflows set the telemetry channel; local builds and forks use "dev".
 const TELEMETRY_CHANNELS = ["stable", "nightly", "preview", "dev"];
 const telemetryChannel = process.env.T3CODE_TELEMETRY_CHANNEL?.trim() || "dev";
 if (!TELEMETRY_CHANNELS.includes(telemetryChannel)) {
@@ -33,10 +31,7 @@ if (!TELEMETRY_CHANNELS.includes(telemetryChannel)) {
   );
 }
 
-// `build:exe` wraps the same bundle in a Node single-executable. tsdown's exe
-// step refuses multi-chunk output and counts the sourcemap as a chunk, and the
-// executable needs a host Node that supports `--build-sea` (25.7+), so this is
-// a separate mode rather than a second entry in the default build.
+// tsdown SEA needs one chunk (sourcemaps count) and Node >=25.7, so package separately.
 const packExecutable = process.env.T3CODE_PACK_EXE === "1";
 const SEA_TARGETS = {
   "darwin-arm64": { platform: "darwin", arch: "arm64" },
@@ -70,9 +65,11 @@ const packExecutableTargets = packExecutableTarget
 // The root config's `projects` route repo-root runs to package configs,
 // including this one. Inheriting them would make this config a container.
 const { projects: _rootTestProjects, ...baseTestConfig } = baseConfig.test ?? {};
+// Workspace cache configuration is invalid on a package config.
+const { run: _rootRunConfig, ...basePackageConfig } = baseConfig;
 
 export default mergeConfig(
-  { ...baseConfig, test: baseTestConfig },
+  { ...basePackageConfig, test: baseTestConfig },
   defineConfig({
     run: {
       tasks: {
@@ -84,10 +81,9 @@ export default mergeConfig(
       },
     },
     pack: {
-      // The executable embeds one entry; the history worker becomes a hidden
-      // subcommand there instead of a sibling script.
-      // The two host-module entries are what the recipe-module resolver falls back to when
-      // `effect` and `@t3team/sdk` are inlined and not installed (a published bundle in a session).
+      // SEA embeds one entry; expose the history worker as a hidden subcommand.
+      // The host-module entries are the recipe-module resolver's fallback when `effect` and
+      // `@t3team/sdk` are inlined and not installed (a published bundle in a session).
       entry: packExecutable
         ? ["src/bin.ts"]
         : [
@@ -97,10 +93,8 @@ export default mergeConfig(
             "src/t3team-hostEffect.ts",
             "src/t3team-hostSdk.ts",
           ],
-      // `?raw` is a vite feature; pack is tsdown/rolldown and has no asset pipeline of its own.
-      // Without this, source that ships as TEXT could not be authored as a typechecked module.
-      // The distribution plugin inlines the compiled-in distribution (see
-      // scripts/t3team-distributionPackPlugin.ts) when T3CODE_DISTRIBUTION names one.
+      // pack (tsdown/rolldown) has no `?raw` asset pipeline; the t3team plugins add it, and
+      // inline the compiled-in distribution when T3CODE_DISTRIBUTION names one.
       plugins: [
         t3teamRawTextPackPlugin(),
         t3teamDistributionPackPlugin(),
@@ -120,17 +114,13 @@ export default mergeConfig(
               fileName: "t3",
               outDir: "dist-exe",
               ...(packExecutableTargets ? { targets: packExecutableTargets } : {}),
-              // Node's SEA docs: `import()` does not work when useCodeCache is
-              // true, and the server reaches several modules that way.
+              // Node SEA useCodeCache breaks import(), which the server needs.
               seaConfig: { useCodeCache: false },
             },
           }
         : {}),
       deps: {
-        // `neverBundle` forces the native packages out: returning false from
-        // `alwaysBundle` only means "no opinion", so a transitive dependency
-        // would still be bundled — which silently inlined native loaders such
-        // as node-gyp-build, losing native acceleration.
+        // alwaysBundle=false has no opinion; neverBundle must retain transitive native acceleration.
         alwaysBundle: shouldBundleCliDependency,
         neverBundle: (id: string) => isExternalCliDependency(id),
         onlyBundle: false,
@@ -174,11 +164,9 @@ export default mergeConfig(
         "integration/**/*.{test,spec}.?(c|m)[jt]s?(x)",
         "../../packages/t3team-sdk/src/**/*.test.ts",
       ],
-      // The server suite exercises sqlite, git, temp worktrees, and orchestration
-      // runtimes heavily. Running files in parallel introduces load-sensitive flakes.
+      // Parallel sqlite/git/worktree/orchestration tests introduce load-sensitive flakes.
       fileParallelism: false,
       sequence: { sequencer: WeightedShardSequencer },
-      // Appended to the root setup, which mergeConfig concatenates.
       setupFiles: ["./src/testUtils/gitConfig.setup.ts"],
       hookTimeout: 120_000,
       testTimeout: 120_000,

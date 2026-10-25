@@ -59,6 +59,7 @@ import type * as ProviderRegistry from "./provider/ProviderRegistry.ts";
 import type * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import type * as PullRequestReviewGuideService from "./pullRequest/PullRequestReviewGuideService.ts";
 import type * as PullRequestService from "./pullRequest/PullRequestService.ts";
+import type * as GuestShareService from "./guest/GuestShareService.ts";
 import type * as HostResources from "./resourceTelemetry/HostResources.ts";
 import type * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import type * as ReviewService from "./review/ReviewService.ts";
@@ -146,6 +147,7 @@ export type WsRpcHandlerServices =
   | ProviderSessionManager.ProviderSessionManagerV2
   | PullRequestReviewGuideService.PullRequestReviewGuideService
   | PullRequestService.PullRequestService
+  | GuestShareService.GuestShareService
   | PullRequestSyncReactor.PullRequestSyncReactor
   | RelayClient.RelayClient
   | RemoteOpenTargets.RemoteOpenTargets

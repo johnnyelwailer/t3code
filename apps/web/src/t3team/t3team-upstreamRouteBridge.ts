@@ -1,5 +1,6 @@
 import { VOICE_WIDGET_ROUTE_PATH } from "@t3tools/contracts";
 import type { T3TeamRouteSearchTarget } from "~/t3team/t3team-routeState";
+import { GUEST_PAGE_PATH } from "~/guestPage";
 
 /**
  * Upstream sidebars navigate with upstream's own route shapes (`/`,
@@ -45,6 +46,8 @@ const PASSTHROUGH_PREFIXES = [
   // MCP OAuth approval page for outside agents (upstream #16336). Matching is exact-or-`prefix/`,
   // so "/connect" does not cover it; translated away it lands on /t3team's pairing gate.
   "/connect-agent",
+  // Guest share links render bare for a visitor with no T3 session (upstream guestPage.tsx).
+  GUEST_PAGE_PATH,
 ] as const;
 
 export function isT3TeamShellPath(pathname: string): boolean {

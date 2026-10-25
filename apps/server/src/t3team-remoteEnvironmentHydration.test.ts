@@ -29,6 +29,7 @@ import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import { RepositoryIdentityResolver } from "./project/RepositoryIdentityResolver.ts";
 import * as AntigravityInstallation from "./provider/AntigravityInstallation.ts";
 import * as CodexInstallation from "./provider/CodexInstallation.ts";
+import * as CodexManagedTokenBroker from "./provider/CodexManagedTokenBroker.ts";
 import * as ModelManifest from "./provider/ModelManifest.ts";
 import * as ProviderInstanceRegistry from "./provider/ProviderInstanceRegistry.ts";
 import * as ProviderInstanceRegistryHydration from "./provider/ProviderInstanceRegistryHydration.ts";
@@ -64,6 +65,9 @@ const registryDependencies = Layer.mergeAll(
   OpenCodeRuntime.layer.pipe(Layer.provide(OpenCodeServerLedger.layerTest)),
   remoteEnvironmentPlacementsMemoryLayer,
   Layer.mock(RepositoryIdentityResolver)({ resolve: () => Effect.succeed(null) }),
+  Layer.mock(CodexManagedTokenBroker.CodexManagedTokenBroker)({
+    endpoint: Effect.succeed("unused-private-pipe"),
+  }),
 ).pipe(
   Layer.provideMerge(ServerSettingsModule.layerTest()),
   Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-remote-environment-" })),

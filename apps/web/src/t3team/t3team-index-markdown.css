@@ -197,7 +197,7 @@
   border-color: color-mix(in srgb, var(--border) 70%, var(--foreground));
 }
 
-.chat-markdown .chat-markdown-shiki .shiki {
+.chat-markdown .chat-markdown-shiki :is(.shiki, .diffs) {
   background: color-mix(in srgb, var(--muted) 78%, var(--background)) !important;
 }
 

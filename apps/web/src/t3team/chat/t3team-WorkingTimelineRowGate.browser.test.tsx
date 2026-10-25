@@ -30,6 +30,8 @@ const context: TimelineRowSharedState = {
   markdownCwd: undefined,
   resolvedTheme: "light",
   workspaceRoot: undefined,
+  renderHtmlRender: undefined,
+  turnItemSource: undefined,
   skills: [],
   runs: [],
   activeThreadEnvironmentId: EnvironmentId.make("cloud"),

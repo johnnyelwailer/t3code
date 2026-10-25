@@ -15,6 +15,7 @@ import { Route as T3teamVoiceWidgetRouteImport } from './routes/t3team-voice-wid
 import { Route as T3teamRouteImport } from './routes/t3team'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PairRouteImport } from './routes/pair'
+import { Route as GuestRouteImport } from './routes/guest'
 import { Route as ConnectAgentRouteImport } from './routes/connect-agent'
 import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as ChatRouteImport } from './routes/_chat'
@@ -36,6 +37,7 @@ import { Route as SettingsFeaturesRouteImport } from './routes/settings.features
 import { Route as SettingsDiagnosticsRouteImport } from './routes/settings.diagnostics'
 import { Route as SettingsConnectionsRouteImport } from './routes/settings.connections'
 import { Route as SettingsConnectedToolsRouteImport } from './routes/settings.connected-tools'
+import { Route as SettingsBetaRouteImport } from './routes/settings.beta'
 import { Route as SettingsArchivedRouteImport } from './routes/settings.archived'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings.appearance'
 import { Route as ProjectsProjectKeyRouteImport } from './routes/projects.$projectKey'
@@ -77,6 +79,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const PairRoute = PairRouteImport.update({
   id: '/pair',
   path: '/pair',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GuestRoute = GuestRouteImport.update({
+  id: '/guest',
+  path: '/guest',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConnectAgentRoute = ConnectAgentRouteImport.update({
@@ -184,6 +191,11 @@ const SettingsConnectedToolsRoute = SettingsConnectedToolsRouteImport.update({
   path: '/connected-tools',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsBetaRoute = SettingsBetaRouteImport.update({
+  id: '/beta',
+  path: '/beta',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsArchivedRoute = SettingsArchivedRouteImport.update({
   id: '/archived',
   path: '/archived',
@@ -252,6 +264,7 @@ export interface FileRoutesByFullPath {
   '/': typeof ChatIndexRoute
   '/connect': typeof ConnectRoute
   '/connect-agent': typeof ConnectAgentRoute
+  '/guest': typeof GuestRoute
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/t3team': typeof T3teamRouteWithChildren
@@ -264,6 +277,7 @@ export interface FileRoutesByFullPath {
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
+  '/settings/beta': typeof SettingsBetaRoute
   '/settings/connected-tools': typeof SettingsConnectedToolsRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
@@ -291,6 +305,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/connect': typeof ConnectRoute
   '/connect-agent': typeof ConnectAgentRoute
+  '/guest': typeof GuestRoute
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/t3team': typeof T3teamRouteWithChildren
@@ -303,6 +318,7 @@ export interface FileRoutesByTo {
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
+  '/settings/beta': typeof SettingsBetaRoute
   '/settings/connected-tools': typeof SettingsConnectedToolsRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
@@ -333,6 +349,7 @@ export interface FileRoutesById {
   '/_chat': typeof ChatRouteWithChildren
   '/connect': typeof ConnectRoute
   '/connect-agent': typeof ConnectAgentRoute
+  '/guest': typeof GuestRoute
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/t3team': typeof T3teamRouteWithChildren
@@ -345,6 +362,7 @@ export interface FileRoutesById {
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
+  '/settings/beta': typeof SettingsBetaRoute
   '/settings/connected-tools': typeof SettingsConnectedToolsRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
@@ -376,6 +394,7 @@ export interface FileRouteTypes {
     | '/'
     | '/connect'
     | '/connect-agent'
+    | '/guest'
     | '/pair'
     | '/settings'
     | '/t3team'
@@ -388,6 +407,7 @@ export interface FileRouteTypes {
     | '/projects/$projectKey'
     | '/settings/appearance'
     | '/settings/archived'
+    | '/settings/beta'
     | '/settings/connected-tools'
     | '/settings/connections'
     | '/settings/diagnostics'
@@ -415,6 +435,7 @@ export interface FileRouteTypes {
   to:
     | '/connect'
     | '/connect-agent'
+    | '/guest'
     | '/pair'
     | '/settings'
     | '/t3team'
@@ -427,6 +448,7 @@ export interface FileRouteTypes {
     | '/projects/$projectKey'
     | '/settings/appearance'
     | '/settings/archived'
+    | '/settings/beta'
     | '/settings/connected-tools'
     | '/settings/connections'
     | '/settings/diagnostics'
@@ -456,6 +478,7 @@ export interface FileRouteTypes {
     | '/_chat'
     | '/connect'
     | '/connect-agent'
+    | '/guest'
     | '/pair'
     | '/settings'
     | '/t3team'
@@ -468,6 +491,7 @@ export interface FileRouteTypes {
     | '/projects/$projectKey'
     | '/settings/appearance'
     | '/settings/archived'
+    | '/settings/beta'
     | '/settings/connected-tools'
     | '/settings/connections'
     | '/settings/diagnostics'
@@ -498,6 +522,7 @@ export interface RootRouteChildren {
   ChatRoute: typeof ChatRouteWithChildren
   ConnectRoute: typeof ConnectRoute
   ConnectAgentRoute: typeof ConnectAgentRoute
+  GuestRoute: typeof GuestRoute
   PairRoute: typeof PairRoute
   SettingsRoute: typeof SettingsRouteWithChildren
   T3teamRoute: typeof T3teamRouteWithChildren
@@ -551,6 +576,13 @@ declare module '@tanstack/react-router' {
       path: '/pair'
       fullPath: '/pair'
       preLoaderRoute: typeof PairRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/guest': {
+      id: '/guest'
+      path: '/guest'
+      fullPath: '/guest'
+      preLoaderRoute: typeof GuestRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/connect-agent': {
@@ -700,6 +732,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsConnectedToolsRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/beta': {
+      id: '/settings/beta'
+      path: '/beta'
+      fullPath: '/settings/beta'
+      preLoaderRoute: typeof SettingsBetaRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/archived': {
       id: '/settings/archived'
       path: '/archived'
@@ -808,6 +847,7 @@ const ChatRouteWithChildren = ChatRoute._addFileChildren(ChatRouteChildren)
 interface SettingsRouteChildren {
   SettingsAppearanceRoute: typeof SettingsAppearanceRoute
   SettingsArchivedRoute: typeof SettingsArchivedRoute
+  SettingsBetaRoute: typeof SettingsBetaRoute
   SettingsConnectedToolsRoute: typeof SettingsConnectedToolsRoute
   SettingsConnectionsRoute: typeof SettingsConnectionsRoute
   SettingsDiagnosticsRoute: typeof SettingsDiagnosticsRoute
@@ -827,6 +867,7 @@ interface SettingsRouteChildren {
 const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsAppearanceRoute: SettingsAppearanceRoute,
   SettingsArchivedRoute: SettingsArchivedRoute,
+  SettingsBetaRoute: SettingsBetaRoute,
   SettingsConnectedToolsRoute: SettingsConnectedToolsRoute,
   SettingsConnectionsRoute: SettingsConnectionsRoute,
   SettingsDiagnosticsRoute: SettingsDiagnosticsRoute,
@@ -886,6 +927,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRouteWithChildren,
   ConnectRoute: ConnectRoute,
   ConnectAgentRoute: ConnectAgentRoute,
+  GuestRoute: GuestRoute,
   PairRoute: PairRoute,
   SettingsRoute: SettingsRouteWithChildren,
   T3teamRoute: T3teamRouteWithChildren,

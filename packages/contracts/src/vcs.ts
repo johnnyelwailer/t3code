@@ -85,8 +85,8 @@ export interface VcsProcessExitFailure {
   readonly exitCode: number;
   /** Retained (already redacted, see redactCommandArgs) stderr. */
   readonly stderr: string;
-  /** Length of the ORIGINAL, pre-redaction stderr. */
-  readonly originalStderrLength: number;
+  /** Length of the ORIGINAL, pre-redaction stderr; defaults to the retained stderr's length. */
+  readonly originalStderrLength?: number;
   readonly stderrTruncated: boolean;
 }
 
@@ -139,7 +139,7 @@ export class VcsProcessExitError extends Schema.TaggedError<VcsProcessExitError>
     context: VcsProcessErrorContext,
     error: VcsProcessExitFailure,
     failureKind: VcsProcessExitFailureKind,
-    retryable?: boolean,
+    options?: { readonly retryable?: boolean; readonly notFoundDetail?: string },
   ) {
     const detail =
       failureKind === "authentication"
@@ -147,11 +147,7 @@ export class VcsProcessExitError extends Schema.TaggedError<VcsProcessExitError>
         : failureKind === "rate-limited"
           ? "API rate limit exceeded."
           : failureKind === "not-found"
-            ? context.command === "glab"
-              ? "Merge request not found."
-              : context.command === "gh" || context.command === "az"
-                ? "Pull request not found."
-                : "VCS resource not found."
+            ? (options?.notFoundDetail ?? "VCS resource not found.")
             : "Process exited with a non-zero status.";
 
     const trimmedStderr = error.stderr.trim();
@@ -161,8 +157,8 @@ export class VcsProcessExitError extends Schema.TaggedError<VcsProcessExitError>
       detail,
       failureKind,
       ...(trimmedStderr.length > 0 ? { stderr: truncateVcsProcessStderr(trimmedStderr) } : {}),
-      ...(retryable === true ? { retryable: true } : {}),
-      stderrLength: error.originalStderrLength,
+      ...(options?.retryable === true ? { retryable: true } : {}),
+      stderrLength: error.originalStderrLength ?? error.stderr.length,
       stderrTruncated: error.stderrTruncated || trimmedStderr.length > VCS_PROCESS_STDERR_CAP,
     });
   }

@@ -1,6 +1,7 @@
 import { ProviderDriverKind, type ToolAuthToolId } from "@t3tools/contracts";
 
-import { ClaudeAI, GitHubIcon, OpenAI, type Icon } from "../Icons";
+import { ClaudeAI, OpenAI, type Icon } from "../Icons";
+import { GitHubIcon } from "~/t3team/t3team-gitHubIcon";
 
 /**
  * Static per-tool metadata for the "Connected tools" card list. Mirrors the

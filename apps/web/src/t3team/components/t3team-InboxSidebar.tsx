@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 
 import ThreadSidebar from "~/components/Sidebar";
+import type { SidebarRouteReveal } from "~/components/sidebar/routeReveal";
 import { useThreadShells } from "~/state/entities";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { isTeamShellEnvironment } from "~/t3team/t3team-upstreamRouteBridge";
@@ -20,6 +21,10 @@ import { setT3TeamThreadNavigationOverride } from "~/t3team/t3team-threadNavigat
  * fork diff and stays cheap to re-merge.
  */
 export function InboxSidebar() {
+  const [routeReveal] = useState<SidebarRouteReveal>(() => ({
+    observedKey: null,
+    pendingKey: null,
+  }));
   const navigate = useNavigate();
   const threadShells = useThreadShells();
 
@@ -68,7 +73,7 @@ export function InboxSidebar() {
   // rows beneath it.
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <ThreadSidebar />
+      <ThreadSidebar routeReveal={routeReveal} />
     </div>
   );
 }

@@ -287,7 +287,8 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
     liveReasoningTrace,
     backgroundWorktreeSetup,
   } = use(TimelineRowActivityCtx);
-  if (isPreparingWorktree || isCompacting) {
+  const compacting = row.compacting ?? (isCompacting ? "Compacting…" : undefined);
+  if (isPreparingWorktree || compacting !== undefined) {
     return (
       <div className="border-b border-border/60 pb-2 pt-1">
         <div className="flex h-6 min-w-0 items-baseline px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
@@ -303,9 +304,9 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
               </>
             ) : (
               <>
-                <CompactingLabel />
+                <CompactingLabel label={compacting ?? "Compacting…"} />
                 <ActivityShimmerOverlay>
-                  <CompactingLabel />
+                  <CompactingLabel label={compacting ?? "Compacting…"} />
                 </ActivityShimmerOverlay>
               </>
             )}
@@ -483,11 +484,11 @@ function BackgroundWorktreeSetupChip({ snapshot }: { snapshot: WorktreeSetupSnap
   );
 }
 
-function CompactingLabel() {
+function CompactingLabel({ label }: { label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <Minimize2Icon aria-hidden="true" className="size-3" />
-      Compacting…
+      {label}
     </span>
   );
 }

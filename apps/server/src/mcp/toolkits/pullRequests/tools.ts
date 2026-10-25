@@ -45,7 +45,7 @@ export const PullRequestTargetInput = Schema.Struct({
   url: Schema.optional(
     TrimmedNonEmptyString.annotate({
       description:
-        "The pull request's web URL, for example https://github.com/owner/repo/pull/123. Preferred when you have it; host, repository and number are read from it.",
+        "The pull request's web URL as its host shows it, for example https://git.example.com/owner/repo/pull/123 or https://git.example.com/group/project/-/merge_requests/123. Preferred when you have it; host, repository and number are read from it.",
     }),
   ),
   repository: Schema.optional(
@@ -62,7 +62,7 @@ export const PullRequestTargetInput = Schema.Struct({
   host: Schema.optional(
     TrimmedNonEmptyString.annotate({
       description:
-        "Host the repository lives on, for example github.com. Defaults to the host of this thread's project, where the pull request is then checked to exist; pass host, or better the url, for a pull request outside that project's repository.",
+        "Host the repository lives on, for example git.example.com. Defaults to the host of this thread's project, where the pull request is then checked to exist; pass host, or better the url, for a pull request outside that project's repository.",
     }),
   ),
 });
@@ -110,6 +110,15 @@ export class PullRequestNotOnProjectHostError extends Schema.TaggedError<PullReq
 ) {
   override get message(): string {
     return `No pull request #${this.number} in ${this.repository} on ${this.host}, the host of this thread's project, so it was not linked. If it lives on another host, pass its full URL.`;
+  }
+}
+
+export class PullRequestUrlUnavailableError extends Schema.TaggedError<PullRequestUrlUnavailableError>()(
+  "PullRequestUrlUnavailableError",
+  {},
+) {
+  override get message(): string {
+    return "This thread's project is on a host with no known pull request URL shape. Pass url.";
   }
 }
 
@@ -210,6 +219,7 @@ export const PullRequestToolError = Schema.Union([
   PullRequestTargetIncompleteError,
   PullRequestHostRequiredError,
   PullRequestNotOnProjectHostError,
+  PullRequestUrlUnavailableError,
   PullRequestThreadRequiredError,
   PullRequestThreadNotFoundError,
   PullRequestLinkFailedError,
@@ -271,7 +281,7 @@ export const ThreadPullRequestEntry = Schema.Struct({
   stack: Schema.NullOr(
     Schema.Struct({
       kind: Schema.Literals(["native", "derived"]),
-      /** 1-based layer, bottom of the stack first. Pull requests built on the same one share it. */
+      /** 1-based layer from the bottom; siblings share a layer. */
       position: Schema.Int,
       size: Schema.Int,
     }),

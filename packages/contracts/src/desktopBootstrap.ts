@@ -9,20 +9,13 @@ export const DesktopBackendBootstrap = Schema.Struct({
   mode: Schema.Literal("desktop"),
   noBrowser: Schema.Boolean,
   port: PortSchema,
-  // Omitted when the desktop launches the backend inside WSL, since the
-  // Windows-side baseDir maps to /mnt/c/... and the Linux side should use its
-  // own home directory instead.
+  // Omit in WSL to use the Linux home instead of the mapped Windows directory.
   t3Home: Schema.optional(Schema.String),
   host: Schema.String,
   desktopBootstrapToken: Schema.String,
-  // Present when the desktop rotates the renderer's bootstrap token: the
-  // backend derives the accepted tokens from this secret instead of trusting
-  // `desktopBootstrapToken` for its whole run. See
-  // `@t3tools/shared/desktopBootstrapToken`.
+  // Derives rotating tokens instead of trusting desktopBootstrapToken indefinitely; see @t3tools/shared/desktopBootstrapToken.
   desktopBootstrapSecret: Schema.optionalKey(Schema.String),
-  // Set only when the desktop already merged the user's shell environment into
-  // the environment it hands this backend. Absent means the backend hydrates
-  // PATH itself, which WSL and older desktops rely on.
+  // Absent means the backend must hydrate PATH, as WSL and older desktops require.
   shellEnvironmentPrepared: Schema.optionalKey(Schema.Boolean),
   tailscaleServeEnabled: Schema.Boolean,
   tailscaleServePort: PortSchema,
@@ -40,11 +33,7 @@ export const DesktopBackendBootstrap = Schema.Struct({
 
 export type DesktopBackendBootstrap = typeof DesktopBackendBootstrap.Type;
 
-/**
- * Written about once a second by a backend worker thread, so it keeps arriving while the
- * backend's event loop is blocked. `stalledForMs` is how long the event loop has not turned;
- * `maxStallMs` is the longest such stall over the recent window.
- */
+/** Worker-thread heartbeat; `stalledForMs` is how long the event loop has not turned, `maxStallMs` the longest recent stall. */
 export const DesktopBackendLivenessBeacon = Schema.Struct({
   version: Schema.Literal(1),
   stalledForMs: Schema.Number,
@@ -53,8 +42,5 @@ export const DesktopBackendLivenessBeacon = Schema.Struct({
 
 export type DesktopBackendLivenessBeacon = typeof DesktopBackendLivenessBeacon.Type;
 
-/** Written to `<t3Home>/runtime` just before the desktop app stops its
-    backend to install an update. The updated app starts a new backend right
-    away, so a backend that sees a fresh marker at shutdown keeps its managed
-    tunnel. */
+/** Written to `<t3Home>/runtime` before update shutdown so the backend retains its managed tunnel. */
 export const DESKTOP_UPDATE_RESTART_MARKER_FILE = "desktop-update-restart";

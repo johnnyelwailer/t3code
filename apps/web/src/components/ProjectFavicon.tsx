@@ -13,10 +13,8 @@ import { ProjectIconGlyph } from "./t3team-ProjectIconGlyph";
 import { ProjectMonogram } from "./ProjectMonogram";
 import { cn } from "~/lib/utils";
 
-// The slice of a project that decides its icon. Every surface must pass the
-// project record itself (or a snapshot spread from it) so the saved title, favicon
-// and icon override always travel together. Passing a display label as the title
-// changes the automatic icon, which is how the command palette drifted once.
+// Every surface must pass the project record itself (or a snapshot spread from it) so the saved
+// title, favicon and icon override travel together; a display label as title changes the automatic icon.
 export type ProjectFaviconProject = Pick<
   EnvironmentProject,
   "environmentId" | "workspaceRoot" | "title" | "faviconPath" | "projectIcon"

@@ -1,6 +1,6 @@
 import type { ToolAuthState } from "@t3tools/contracts";
 
-import { GitHubIcon } from "~/components/Icons";
+import { GitHubIcon } from "~/t3team/t3team-gitHubIcon";
 import { PullRequestCopyableCode } from "~/components/pullRequest/PullRequestCopyableCode";
 import { AwaitingOpenPhase } from "~/components/settings/t3team-ToolAuthCardPhases";
 import { Button } from "~/components/ui/button";

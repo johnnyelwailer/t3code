@@ -1,7 +1,7 @@
 import {
   threadPullRequestKeysEqual,
   threadPullRequestsOf,
-} from "@t3tools/shared/threadPullRequests";
+} from "../../sourceControl/threadPullRequests.ts";
 import {
   ChatAttachment,
   OrchestrationMessageContext,
@@ -22,6 +22,7 @@ import {
   TurnItemId,
 } from "@t3tools/contracts";
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -375,27 +376,27 @@ const make = Effect.gen(function* () {
 
   const listMessages = (threadId: ThreadId) =>
     sql<LegacyMessageRow>`
-SELECT
-message_id,
-thread_id,
-role,
-text,
-attachments_json,
-context_json,
-${forkColumns.ext()},
-is_streaming,
-created_at,
-updated_at,
-ROW_NUMBER() OVER (
-PARTITION BY thread_id
-ORDER BY created_at ASC, message_id ASC
-) AS ordinal
-FROM projection_thread_messages
-WHERE thread_id = ${threadId}
-${forkColumns.importedRoles()}
-${forkColumns.visibleOnly()}
-ORDER BY created_at ASC, message_id ASC
-`;
+      SELECT
+        message_id,
+        thread_id,
+        role,
+        text,
+        attachments_json,
+        context_json,
+        ${forkColumns.ext()},
+        is_streaming,
+        created_at,
+        updated_at,
+        ROW_NUMBER() OVER (
+          PARTITION BY thread_id
+          ORDER BY created_at ASC, message_id ASC
+        ) AS ordinal
+      FROM projection_thread_messages
+      WHERE thread_id = ${threadId}
+        ${forkColumns.importedRoles()}
+        ${forkColumns.visibleOnly()}
+      ORDER BY created_at ASC, message_id ASC
+    `.pipe(NodeSqliteClient.readOnly);
 
   const listShellMessages = Effect.fn("LegacyV1ThreadImporter.listShellMessages")(function* (
     threadId: ThreadId,
@@ -693,34 +694,32 @@ ON CONFLICT(thread_id) DO NOTHING
   );
 
   const pendingThreadCount = sql<{ readonly count: number }>`
-SELECT COUNT(*) AS count
-FROM (
-SELECT thread.thread_id
-FROM projection_threads AS thread
-WHERE NOT EXISTS (
-SELECT 1
-FROM orchestration_events AS event INDEXED BY orchestration_events_v2_created_threads_idx
-WHERE event.application_event_version = 2
-AND event.aggregate_kind = 'thread'
-AND event.stream_id = thread.thread_id
-AND event.event_type = 'thread.created'
-)
-UNION
-SELECT legacy_import.thread_id
-FROM orchestration_v2_legacy_imports AS legacy_import
-WHERE legacy_import.transcript_imported_at IS NULL
-)
-`.pipe(
+    SELECT COUNT(*) AS count
+    FROM (
+      SELECT thread.thread_id
+      FROM projection_threads AS thread
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM orchestration_events AS event INDEXED BY orchestration_events_v2_created_threads_idx
+        WHERE event.application_event_version = 2
+          AND event.aggregate_kind = 'thread'
+          AND event.stream_id = thread.thread_id
+          AND event.event_type = 'thread.created'
+      )
+      UNION
+      SELECT legacy_import.thread_id
+      FROM orchestration_v2_legacy_imports AS legacy_import
+      WHERE legacy_import.transcript_imported_at IS NULL
+    )
+  `.pipe(
+    NodeSqliteClient.readOnly,
     Effect.map((rows) => rows[0]?.count ?? 0),
     Effect.mapError(
       (cause) => new LegacyV1ThreadImportError({ operation: "inspect pending", cause }),
     ),
   );
 
-  // `transcript_imported_at` is never reset to NULL, so a positive answer
-  // stays valid for the process lifetime; ensureTranscript runs on most
-  // thread reads and command dispatches, so skipping the lock + lookup here
-  // keeps that path off the database entirely after first confirmation.
+  // transcript_imported_at never resets; cache confirmed imports for the process lifetime to skip repeated locks and reads.
   const confirmedTranscriptThreadIds = new Set<ThreadId>();
 
   const ensureTranscriptBase = (threadId: ThreadId) =>
@@ -728,11 +727,11 @@ WHERE legacy_import.transcript_imported_at IS NULL
       threadId,
       Effect.gen(function* () {
         const imports = yield* sql<LegacyImportRow>`
-SELECT thread_id, transcript_imported_at
-FROM orchestration_v2_legacy_imports
-WHERE thread_id = ${threadId}
-LIMIT 1
-`;
+          SELECT thread_id, transcript_imported_at
+          FROM orchestration_v2_legacy_imports
+          WHERE thread_id = ${threadId}
+          LIMIT 1
+        `.pipe(NodeSqliteClient.readOnly);
         const imported = imports[0];
         if (imported === undefined || imported.transcript_imported_at !== null) {
           if (imported !== undefined) {
@@ -741,16 +740,15 @@ LIMIT 1
           return { importedThreadCount: 0, importedMessageCount: 0 };
         }
         const messages = yield* listMessages(threadId);
-        // The thread's V1 events are still in the table here. Without the hint
-        // SQLite walks them through the stream index and reads past each payload.
+        // Hint the index to skip V1 events without scanning their payloads.
         const existingRows = yield* sql<{ readonly event_id: string }>`
-SELECT event_id
-FROM orchestration_events INDEXED BY idx_orchestration_events_agent_stream_sequence
-WHERE application_event_version = 2
-AND aggregate_kind = 'thread'
-AND stream_id = ${threadId}
-AND event_id LIKE ${`${IMPORT_EVENT_PREFIX}:message:%`}
-`;
+          SELECT event_id
+          FROM orchestration_events INDEXED BY idx_orchestration_events_agent_stream_sequence
+          WHERE application_event_version = 2
+            AND aggregate_kind = 'thread'
+            AND stream_id = ${threadId}
+            AND event_id LIKE ${`${IMPORT_EVENT_PREFIX}:message:%`}
+        `.pipe(NodeSqliteClient.readOnly);
         const existing = new Set(existingRows.map((row) => row.event_id));
         const missing = messages.filter(
           (message) => !existing.has(`${IMPORT_EVENT_PREFIX}:message:${message.message_id}`),
@@ -810,11 +808,11 @@ WHERE thread_id = ${threadId}
 
   const importPendingTranscripts = Effect.gen(function* () {
     const rows = yield* sql<LegacyImportRow>`
-SELECT thread_id, transcript_imported_at
-FROM orchestration_v2_legacy_imports
-WHERE transcript_imported_at IS NULL
-ORDER BY shell_imported_at ASC, thread_id ASC
-`;
+      SELECT thread_id, transcript_imported_at
+      FROM orchestration_v2_legacy_imports
+      WHERE transcript_imported_at IS NULL
+      ORDER BY shell_imported_at ASC, thread_id ASC
+    `.pipe(NodeSqliteClient.readOnly);
     let importedThreadCount = 0;
     let importedMessageCount = 0;
     for (const row of rows) {
