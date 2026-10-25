@@ -12,6 +12,8 @@
     "apps/mobile/src/lib/mobileThemeVariables.ts",
     "apps/mobile/src/components/LoadingScreen.tsx",
     "apps/mobile/src/lib/time.ts",
+    "apps/mobile/src/lib/mobileTheme.test.ts",
+    "apps/mobile/src/features/workspace/android-workspace-navigation-colors.test.ts",
     "scripts/lib/public-config.ts",
     "apps/web/src/components/settings/FoldedSettingsSection.tsx",
     "scripts/package.json",
