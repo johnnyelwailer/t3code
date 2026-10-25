@@ -7,7 +7,9 @@ import { appAtomRegistry } from "../state/atom-registry";
 import { resolveNexiConfig } from "../features/connection/t3team-nexiConfig";
 import { nexiAccount } from "../features/connection/t3team-nexiAccount";
 import { createMobileBrokerClient, mobileBrokerEnabled } from "./t3team-nexiBrokerClient";
+import { createBrokerFlagWatcher } from "./t3team-nexiBrokerFlag";
 import { nexiNative, closeNexiTunnels } from "./t3team-nexiNative";
+import { wakeNexiBrokerConnections } from "./t3team-nexiWakeups";
 
 const config = resolveNexiConfig();
 let watchingFlags = false;
@@ -16,16 +18,20 @@ export const mobileBroker = createMobileBrokerClient({
   enabled: async () => {
     // Resolve after the connection runtime has initialized; avoid a platform/runtime import cycle.
     const { environmentServerConfigsAtom } = await import("../state/server");
+    const enabled =
+      config !== null &&
+      mobileBrokerEnabled(appAtomRegistry.get(environmentServerConfigsAtom).values());
     if (!watchingFlags) {
       watchingFlags = true;
+      const observe = createBrokerFlagWatcher(enabled, {
+        closeTunnels: closeNexiTunnels,
+        wake: wakeNexiBrokerConnections,
+      });
       appAtomRegistry.subscribe(environmentServerConfigsAtom, (configs) => {
-        if (!mobileBrokerEnabled(configs.values())) closeNexiTunnels();
+        observe(config !== null && mobileBrokerEnabled(configs.values()));
       });
     }
-    return (
-      config !== null &&
-      mobileBrokerEnabled(appAtomRegistry.get(environmentServerConfigsAtom).values())
-    );
+    return enabled;
   },
   accessToken: async () => {
     if (!nexiAccount) throw new Error("Nexplore account is not configured.");
