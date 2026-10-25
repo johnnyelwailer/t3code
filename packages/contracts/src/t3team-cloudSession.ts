@@ -144,11 +144,16 @@ export const CloudSessionCreateInputSchema = Schema.Struct({
   /** How long to hold the machine before it stops itself. */
   durationSeconds: Schema.Int,
   /**
-   * The project the session is for. When the project's checkouts hold a machine definition
+   * The project the session is for. When the project's OWN repository holds a machine definition
    * (`t3team-projectMachine.ts`), the session runs inside that machine; otherwise it is a plain
-   * session, exactly as without a project.
+   * session, exactly as without a project. A definition in a linked repository is never used.
    */
   projectId: Schema.optional(ProjectId),
+  /**
+   * Start a plain session in the project even though it has a machine: the retry a create offers
+   * (`CloudSessionFailedError.plainAvailable`) when the machine cannot be used.
+   */
+  plain: Schema.optional(Schema.Boolean),
   /**
    * Start a host checkout of the project so an agent can write its machine definition.
    * Refused when the flag is off, or when the project already has a definition.

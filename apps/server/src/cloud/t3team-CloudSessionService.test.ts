@@ -551,7 +551,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
   const create = (
     providers: ReturnType<typeof providersWith>,
     projectId?: ProjectId,
-    extra?: { readonly machineSetup?: boolean },
+    extra?: { readonly machineSetup?: boolean; readonly plain?: boolean },
   ) =>
     Effect.service(CloudSessionService.CloudSessionService).pipe(
       Effect.flatMap((svc) =>
@@ -559,6 +559,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
           durationSeconds: 3600,
           ...(projectId ? { projectId } : {}),
           ...(extra?.machineSetup ? { machineSetup: true } : {}),
+          ...(extra?.plain ? { plain: true } : {}),
         }),
       ),
       Effect.provide(
@@ -752,7 +753,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
             rest,
             graphql,
             broker,
-            plainMachines({ kind: "workspace", folder: "IES NG-781a8188" }),
+            plainMachines({ kind: "workspace", folder: "IES NG-781a8188", title: "IES NG" }),
           ),
           ProjectId.make("p1"),
         ),
@@ -762,6 +763,129 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       assert.include(dispatch, '"workspace":"u-pj_"');
       assert.notInclude(dispatch, "project_repository");
       assert.deepEqual(parked, [undefined]);
+      // The session says whose it is: the project's title, not an anonymous "Cloud session".
+      assert.match(dispatch, /"session_tag":"IES-NG\.s[0-9a-z]+"/);
+    }),
+  );
+
+  const machineFailure = new CloudSessionFailedError({
+    reason: "machine_unavailable",
+    message: "Push this project's branch so a cloud session can build its machine.",
+  });
+  const asMachineFailure = (error: unknown): CloudSessionFailedError => {
+    if (!Schema.is(CloudSessionFailedError)(error)) throw new Error("expected a create failure");
+    return error;
+  };
+  const failingMachines = (resolvePlain: CloudSessionMachines["Service"]["resolvePlain"]) =>
+    Layer.mock(CloudSessionMachines)({
+      resolve: () => Effect.fail(machineFailure),
+      resolveSetup: () => Effect.die("not a setup"),
+      poolKeyOf: () => Effect.succeed(null),
+      resolvePlain,
+    });
+
+  it.effect(
+    "a machine that cannot be used fails with a plain session offered, dispatching nothing",
+    () =>
+      Effect.gen(function* () {
+        const { calls, rest, graphql } = makeGithubMock();
+        const machines = failingMachines(() =>
+          Effect.succeed({ kind: "workspace", folder: "IES NG-781a8188", title: "IES NG" }),
+        );
+        const error = asMachineFailure(
+          yield* runPastDiscoveryPoll(
+            create(
+              providersWith(
+                rest,
+                graphql,
+                brokerMock(() => Effect.succeed("g")),
+                machines,
+              ),
+              ProjectId.make("p1"),
+            ),
+          ).pipe(Effect.flip),
+        );
+        assert.strictEqual(error.reason, "machine_unavailable");
+        assert.strictEqual(error.plainAvailable, true);
+        assert.include(error.message, "Push this project's branch");
+        assert.include(error.message, "plain session");
+        assert.isFalse(calls.some((call) => joinedOf(call).includes("/dispatches")));
+      }),
+  );
+
+  it.effect("does not offer a plain session that cannot start either", () =>
+    Effect.gen(function* () {
+      const { rest, graphql } = makeGithubMock();
+      const machines = failingMachines(() => Effect.fail(machineFailure));
+      const error = asMachineFailure(
+        yield* runPastDiscoveryPoll(
+          create(
+            providersWith(
+              rest,
+              graphql,
+              brokerMock(() => Effect.succeed("g")),
+              machines,
+            ),
+            ProjectId.make("p1"),
+          ),
+        ).pipe(Effect.flip),
+      );
+      assert.strictEqual(error.reason, "machine_unavailable");
+      assert.isUndefined(error.plainAvailable);
+      assert.strictEqual(error.message, machineFailure.message);
+    }),
+  );
+
+  it.effect(
+    "without the broker no plain session is offered: a plain project session needs it",
+    () =>
+      Effect.gen(function* () {
+        const { rest, graphql } = makeGithubMock();
+        const machines = failingMachines(() => Effect.die("plain needs the broker"));
+        const brokerless = Layer.succeed(NexiBrokerService.NexiBrokerService, {
+          enabled: false,
+          status: { enabled: false, accountId: null },
+          requestGrant: () => Effect.die("unused"),
+          attach: () => Effect.die("unused"),
+          pair: () => Effect.die("unused"),
+          claimStandby: () => Effect.succeed(null),
+          sessions: Effect.succeed([]),
+          reportInterest: () => Effect.void,
+        });
+        const error = asMachineFailure(
+          yield* runPastDiscoveryPoll(
+            create(
+              providersWith(rest, graphql, brokerless as ReturnType<typeof brokerMock>, machines),
+              ProjectId.make("p1"),
+            ),
+          ).pipe(Effect.flip),
+        );
+        assert.strictEqual(error.reason, "machine_unavailable");
+        assert.isUndefined(error.plainAvailable);
+      }),
+  );
+
+  it.effect("plain: true takes the offered plain session without consulting the machine", () =>
+    Effect.gen(function* () {
+      const { calls, rest, graphql } = makeGithubMock();
+      const machines = failingMachines(() =>
+        Effect.succeed({ kind: "workspace", folder: "IES NG-781a8188", title: "IES NG" }),
+      );
+      yield* runPastDiscoveryPoll(
+        create(
+          providersWith(
+            rest,
+            graphql,
+            brokerMock(() => Effect.succeed("g")),
+            machines,
+          ),
+          ProjectId.make("p1"),
+          { plain: true },
+        ),
+      );
+      const dispatch = calls.find((call) => joinedOf(call).includes("/dispatches"))?.stdin ?? "";
+      assert.include(dispatch, '"project_name":"IES NG-781a8188"');
+      assert.notInclude(dispatch, "machine_");
     }),
   );
 

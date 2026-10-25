@@ -9,6 +9,15 @@ import { useAtomCommand } from "~/state/use-atom-command";
 import { CLOUD_SESSION_LIFETIME_SECONDS } from "./t3team-cloudSessionLifetime";
 import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
 
+export interface CloudSessionCreateOptions {
+  readonly machineSetup?: boolean;
+  readonly plain?: boolean;
+  /** Called with THIS create's own answer, once it succeeded (not a shared "last session"). */
+  readonly onCreated?: (session: CloudSession) => void;
+  /** Called when this create failed, after the failure toast. */
+  readonly onFailed?: () => void;
+}
+
 /**
  * Starting a cloud session: one create at a time, the new session shown locally until the server
  * list carries it. A create that needed a gh sign-in is repeated through the LATEST `onCreate`
@@ -28,14 +37,17 @@ export function useCloudSessionCreate(input: {
   const createSession = useAtomCommand(cloudSessionEnvironment.create, { reportFailure: false });
   const [pendingKind, setPendingKind] = useState<null | "session" | "setup">(null);
   const createPending = pendingKind !== null;
-  const latestRef = useRef<
-    (projectId?: ProjectId, options?: { readonly machineSetup?: boolean }) => void
-  >(() => {});
+  const latestRef = useRef<(projectId?: ProjectId, options?: CloudSessionCreateOptions) => boolean>(
+    () => false,
+  );
 
-  /** `projectId` (a project on the primary environment) runs the session in its machine. */
+  /**
+   * `projectId` (a project on the primary environment) runs the session in its machine. False
+   * when no create was started (none at a time), so its callbacks will never be called.
+   */
   const onCreate = useCallback(
-    (projectId?: ProjectId, options?: { readonly machineSetup?: boolean }) => {
-      if (environmentId === null || !canManageRelay || createPending) return;
+    (projectId?: ProjectId, options?: CloudSessionCreateOptions): boolean => {
+      if (environmentId === null || !canManageRelay || createPending) return false;
       setRelayIdsBefore(
         new Set(
           [...relayDiscovered.values()].map((entry) => String(entry.environment.environmentId)),
@@ -48,6 +60,7 @@ export function useCloudSessionCreate(input: {
           durationSeconds: CLOUD_SESSION_LIFETIME_SECONDS,
           ...(projectId ? { projectId } : {}),
           ...(options?.machineSetup ? { machineSetup: true } : {}),
+          ...(options?.plain ? { plain: true } : {}),
         },
       })
         .then((result) => {
@@ -57,11 +70,18 @@ export function useCloudSessionCreate(input: {
               knownServerSessionIds: new Set(serverSessions.map((session) => session.sessionId)),
             });
             refreshCloudSessionList();
+            options?.onCreated?.(result.value);
           } else {
-            reportCloudSessionCreateFailure(result, () => latestRef.current(projectId, options));
+            reportCloudSessionCreateFailure(
+              result,
+              () => latestRef.current(projectId, options),
+              () => latestRef.current(projectId, { ...options, plain: true }),
+            );
+            options?.onFailed?.();
           }
         })
         .finally(() => setPendingKind(null));
+      return true;
     },
     [
       canManageRelay,

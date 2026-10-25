@@ -5,7 +5,7 @@
  * cloud-session controller only mounts while something is queued.
  */
 import { useLocation } from "@tanstack/react-router";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useComposerDraftStore } from "~/composerDraftStore";
 import { useClientSettings } from "~/hooks/useSettings";
@@ -21,6 +21,11 @@ import {
   pruneCloudQueuedSendRequests,
   type CloudQueuedSendRequests,
 } from "./t3team-cloudQueuedSendActions";
+import {
+  cloudProjectWaitDeadlineMs,
+  isCloudProjectWaitExpired,
+  trackMachineConnectedSince,
+} from "./t3team-cloudProjectWaitBound";
 import { resolveCloudQueuedSendFacts } from "./t3team-cloudQueuedSendFacts";
 import { decideCloudQueuedSendFlush } from "./t3team-cloudQueuedSendFlush";
 import { stampDraftCloudQueuedSendStep, useCloudQueuedSends } from "./t3team-cloudQueuedSendStore";
@@ -28,6 +33,10 @@ import {
   getCloudSessionTargets,
   subscribeCloudSessionTargets,
 } from "./t3team-cloudSessionTargetStore";
+import {
+  queuedSendEnvironmentIds,
+  useCloudQueuedSendEnvironmentFacts,
+} from "./t3team-useCloudQueuedSendEnvironmentFacts";
 import { useCloudSessionController } from "./t3team-useCloudSessionController";
 
 export function CloudQueuedSendFlusher() {
@@ -52,10 +61,20 @@ function ActiveCloudQueuedSendFlusher() {
   const startTurn = useOrchestrationCommand(threadEnvironment.startTurn, { reportFailure: false });
   const { openScratchProject } = useScratchProject();
   const requestsRef = useRef<CloudQueuedSendRequests>(new Map());
+  const connectedSinceRef = useRef(new Map<string, number>());
+  // Re-evaluates when the earliest "Project ready" bound runs out: nothing else would wake it.
+  const [boundClockMs, setBoundClockMs] = useState(0);
+  const queuedList = Object.values(queuedByDraft);
+  const machineFacts = useCloudQueuedSendEnvironmentFacts(
+    queuedSendEnvironmentIds(queuedList, cloud.sessions),
+  );
 
   useEffect(() => {
     const groupingSettings = selectProjectGroupingSettings(settings);
     const requests = requestsRef.current;
+    // The timer's own reading counts even when it fires a hair early.
+    const nowMs = Math.max(Date.now(), boundClockMs);
+    let nextBoundMs: number | null = null;
     for (const [draftId, queued] of Object.entries(queuedByDraft)) {
       const draft = draftThreadsByKey[draftId];
       if (draft === undefined || draft.promotedTo) continue;
@@ -67,7 +86,21 @@ function ActiveCloudQueuedSendFlusher() {
         projects,
         threadShells,
         groupingSettings,
+        bootstrapProjectIdOf: machineFacts.bootstrapProjectIdOf,
       });
+      const connectedSince =
+        facts.environmentId === null
+          ? null
+          : trackMachineConnectedSince(
+              connectedSinceRef.current,
+              facts.environmentId,
+              facts.machineConnected,
+              nowMs,
+            );
+      const deadlineMs = cloudProjectWaitDeadlineMs(queued, connectedSince);
+      if (deadlineMs !== null && deadlineMs > nowMs && !queued.failureMessage) {
+        nextBoundMs = Math.min(nextBoundMs ?? deadlineMs, deadlineMs);
+      }
       stampDraftCloudQueuedSendStep(draftId, {
         ...facts,
         queued,
@@ -85,6 +118,10 @@ function ActiveCloudQueuedSendFlusher() {
         projectId: facts.project?.id ?? null,
         scratch: facts.scratch,
         threadExists: facts.threadExists,
+        projectWait: facts.projectWait,
+        projectWaitExpired: isCloudProjectWaitExpired(queued, connectedSince, nowMs),
+        environmentSessionEnded:
+          facts.environmentId !== null && machineFacts.sessionEndedOf(facts.environmentId),
       });
       applyCloudQueuedSendAction(action, {
         draftId,
@@ -97,10 +134,17 @@ function ActiveCloudQueuedSendFlusher() {
         openScratchProject: (environmentId) =>
           openScratchProject(environmentId, "Could not open the cloud machine's folder"),
         startTurn,
+        projectWaitLog: { nowMs, resolvedBy: facts.projectResolvedBy },
       });
     }
     pruneCloudQueuedSendRequests(requests, Object.values(queuedByDraft));
+    if (nextBoundMs === null) return undefined;
+    const deadlineMs = nextBoundMs;
+    const timer = setTimeout(() => setBoundClockMs(deadlineMs), deadlineMs - Date.now());
+    return () => clearTimeout(timer);
   }, [
+    boundClockMs,
+    machineFacts,
     cloud,
     draftThreadsByKey,
     openScratchProject,

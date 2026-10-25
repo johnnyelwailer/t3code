@@ -101,7 +101,7 @@ it.layer(NodeServices.layer)("remote machine discovery", (it) => {
   );
 
   it.effect.each(["not-cloned", "pending", "failed", "cloned"])(
-    "scans a linked repository with no checkout: %s",
+    "reports, without using, a linked repository with no checkout: %s",
     (status) =>
       Effect.gen(function* () {
         const fixture = yield* remoteFixture({
@@ -118,56 +118,32 @@ it.layer(NodeServices.layer)("remote machine discovery", (it) => {
           Effect.flatMap((service) => service.resolveDefault(remoteProjectId)),
           Effect.provide(fixture.layer),
         );
-        expect(result.source?.machine.repository).toBe("acme/linked");
-        expect(result.source?.remote?.commit).toBe(remoteCommit);
+        // Found and reported, but a linked repository's machine is not the project's.
+        expect(result.source).toBeNull();
+        expect(result.ignoredRepositories).toEqual(["acme/linked"]);
+        expect(result.discovery.candidates.map((c) => c.repository)).toEqual(["acme/linked"]);
+        expect(result.discovery.status._tag).toBe("None");
         expect(result.checkouts).toEqual([]);
       }),
   );
 
-  it.effect("reads a linked local checkout without contacting its remote", () =>
-    Effect.gen(function* () {
-      const linked = `${HIDDEN_T3TEAM_DIR}/${REFERENCES_DIR_NAME}/linked`;
-      const fixture = yield* remoteFixture({
-        ownRemote: false,
-        localFiles: {
-          [`${linked}/.git/HEAD`]: "ref: refs/heads/main",
-          [`${linked}/.devcontainer.json`]: '{"image":"local"}',
-        },
-        manifest: (root) =>
-          JSON.stringify({
-            linkedRepositories: [
-              {
-                url: "https://github.com/acme/linked",
-                localPath: `${root}/${linked}`,
-                status: "cloned",
-              },
-            ],
-          }),
-      });
-      const result = yield* Discovery.ProjectMachineDiscovery.pipe(
-        Effect.flatMap((service) => service.resolveDefault(remoteProjectId)),
-        Effect.provide(fixture.layer),
-      );
-      expect(result.source?.machine.repository).toBe("acme/linked");
-      expect(result.source?.remote).toBeUndefined();
-      expect(fixture.commands).toEqual([]);
-    }),
-  );
-
   it.effect(
-    "uses remote discovery for a stale cloned manifest whose directory is not a checkout",
+    "reports a linked local checkout without contacting its remote, and does not use it",
     () =>
       Effect.gen(function* () {
+        const linked = `${HIDDEN_T3TEAM_DIR}/${REFERENCES_DIR_NAME}/linked`;
         const fixture = yield* remoteFixture({
           ownRemote: false,
-          localFiles: { "missing/README.md": "partial clone" },
-          files: { ".devcontainer.json": '{"image":"node:24"}' },
+          localFiles: {
+            [`${linked}/.git/HEAD`]: "ref: refs/heads/main",
+            [`${linked}/.devcontainer.json`]: '{"image":"local"}',
+          },
           manifest: (root) =>
             JSON.stringify({
               linkedRepositories: [
                 {
                   url: "https://github.com/acme/linked",
-                  localPath: `${root}/missing`,
+                  localPath: `${root}/${linked}`,
                   status: "cloned",
                 },
               ],
@@ -177,9 +153,38 @@ it.layer(NodeServices.layer)("remote machine discovery", (it) => {
           Effect.flatMap((service) => service.resolveDefault(remoteProjectId)),
           Effect.provide(fixture.layer),
         );
-        expect(result.source?.remote?.commit).toBe(remoteCommit);
-        expect(result.checkouts).toEqual([]);
+        expect(result.source).toBeNull();
+        expect(result.ignoredRepositories).toEqual(["acme/linked"]);
+        expect(result.discovery.candidates.map((c) => c.repository)).toEqual(["acme/linked"]);
+        expect(fixture.commands).toEqual([]);
       }),
+  );
+
+  it.effect("reports remote discovery for a stale cloned manifest, and does not use it", () =>
+    Effect.gen(function* () {
+      const fixture = yield* remoteFixture({
+        ownRemote: false,
+        localFiles: { "missing/README.md": "partial clone" },
+        files: { ".devcontainer.json": '{"image":"node:24"}' },
+        manifest: (root) =>
+          JSON.stringify({
+            linkedRepositories: [
+              {
+                url: "https://github.com/acme/linked",
+                localPath: `${root}/missing`,
+                status: "cloned",
+              },
+            ],
+          }),
+      });
+      const result = yield* Discovery.ProjectMachineDiscovery.pipe(
+        Effect.flatMap((service) => service.resolveDefault(remoteProjectId)),
+        Effect.provide(fixture.layer),
+      );
+      expect(result.source).toBeNull();
+      expect(result.discovery.candidates[0]?.repository).toBe("acme/linked");
+      expect(result.checkouts).toEqual([]);
+    }),
   );
 
   it.effect("returns the remote search limitation as a None reason", () =>

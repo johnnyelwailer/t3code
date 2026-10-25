@@ -88,7 +88,7 @@ it.layer(NodeServices.layer)("ProjectMachineDiscovery", (it) => {
     );
 
     it.effect(
-      "defaults to a linked repository's pointer over the project's plain devcontainer",
+      "defaults to the project's own devcontainer, listing a linked repository's pointer after it",
       () =>
         Effect.gen(function* () {
           const path = yield* Path.Path;
@@ -113,13 +113,75 @@ it.layer(NodeServices.layer)("ProjectMachineDiscovery", (it) => {
             });
           });
           expect(result.candidates.map((c) => [c.repository, c.machineFilePath])).toEqual([
-            ["acme/api", ".nexi/machine.json"],
             [".", null],
+            ["acme/api", ".nexi/machine.json"],
           ]);
           expect(result.status).toMatchObject({
             _tag: "Detected",
-            definition: { repository: "acme/api" },
+            definition: { repository: "." },
           });
+        }),
+    );
+
+    const linkedOnly = (...definitions: ReadonlyArray<readonly [string, Record<string, string>]>) =>
+      discoverIn((root) =>
+        Effect.gen(function* () {
+          const path = yield* Path.Path;
+          const entries = definitions.map(([name, files]) => {
+            const localPath = path.join(root, references, name);
+            return { name, files, localPath };
+          });
+          yield* writeTree(root, {
+            ".git/HEAD": "ref: refs/heads/main\n",
+            [manifest]: JSON.stringify({
+              linkedRepositories: entries.map(({ name, localPath }) => ({
+                url: `https://github.com/acme/${name}.git`,
+                localPath,
+                status: "cloned",
+              })),
+            }),
+          });
+          for (const { files, localPath } of entries) {
+            yield* writeTree(localPath, { ".git/HEAD": "ref: refs/heads/main\n", ...files });
+          }
+        }),
+      );
+    const MACHINE = {
+      ".nexi/machine.json": `{ "version": 1, "devcontainer": ".devcontainer/devcontainer.json" }`,
+      ".devcontainer/devcontainer.json": `{ "image": "node:24" }`,
+    };
+
+    it.effect("reports linked machines without making one the project's default", () =>
+      Effect.gen(function* () {
+        const result = yield* linkedOnly(["api", MACHINE], ["web", MACHINE]);
+        expect(result.candidates.map((c) => c.repository)).toEqual(["acme/api", "acme/web"]);
+        expect(result.status._tag).toBe("None");
+        expect(result.status._tag === "None" ? result.status.reason : "").toContain(
+          "acme/api, acme/web define machines that this project does not use",
+        );
+      }),
+    );
+
+    it.effect("lists linked candidates by name whatever order they were linked in", () =>
+      Effect.gen(function* () {
+        const forward = yield* linkedOnly(["api", MACHINE], ["web", MACHINE]);
+        const reverse = yield* linkedOnly(["web", MACHINE], ["api", MACHINE]);
+        expect(reverse.candidates.map((c) => c.repository)).toEqual(
+          forward.candidates.map((c) => c.repository),
+        );
+      }),
+    );
+
+    it.effect(
+      "keeps a linked repository's broken definition from becoming the project's problem",
+      () =>
+        Effect.gen(function* () {
+          const result = yield* linkedOnly([
+            "api",
+            { ".nexi/machine.json": `{ "version": 2 }`, ".devcontainer/devcontainer.json": "{}" },
+          ]);
+          expect(result.rejected).toEqual([]);
+          expect(result.status._tag).toBe("None");
         }),
     );
 

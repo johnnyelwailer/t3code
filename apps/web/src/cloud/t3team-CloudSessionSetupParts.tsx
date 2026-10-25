@@ -6,6 +6,7 @@ import { CheckIcon } from "lucide-react";
 import { type CSSProperties } from "react";
 
 import { cn } from "~/lib/utils";
+import type { CloudProjectWaitNotice } from "./t3team-cloudProjectWaitPresentation";
 import {
   readCloudSetup,
   type CloudSetupModel,
@@ -76,11 +77,13 @@ function SetupFill({ progress }: { readonly progress: number }) {
 export function SetupLiveReadout({
   model,
   elapsedSeconds,
+  projectWait,
 }: {
   readonly model: CloudSetupModel;
   readonly elapsedSeconds: number;
+  readonly projectWait: CloudProjectWaitNotice | null;
 }) {
-  const readout = readCloudSetup(model, elapsedSeconds);
+  const readout = readCloudSetup(model, elapsedSeconds, projectWait);
   const working = model.stage === "working";
   return (
     <div className="space-y-1.5">
