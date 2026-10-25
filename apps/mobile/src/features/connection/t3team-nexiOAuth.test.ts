@@ -160,6 +160,56 @@ describe("Nexplore mobile public-client OAuth", () => {
     expect(await f.account.accessToken()).toBe("old");
     expect(f.fetcher).not.toHaveBeenCalled();
   });
+  describe("fresh access tokens (host pairing needs an Entra token minutes old)", () => {
+    it("refreshes a still-valid cached token and stores the rotated one", async () => {
+      const f = fixture();
+      f.seed({ expiresAt: 3600000 });
+      f.fetcher.mockResolvedValueOnce(json(tokens));
+      expect(await f.account.accessToken({ fresh: true })).toBe("access");
+      expect(f.fetcher).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(f.raw()!)).toMatchObject({
+        access_token: "access",
+        refresh_token: "rotated",
+      });
+      // The refreshed token is then served from the cache, so a later plain read costs nothing.
+      expect(await f.account.accessToken()).toBe("access");
+      expect(f.fetcher).toHaveBeenCalledTimes(1);
+    });
+    it("shares one refresh between concurrent fresh and plain callers", async () => {
+      const f = fixture();
+      f.seed();
+      f.fetcher.mockResolvedValueOnce(json(tokens));
+      expect(
+        await Promise.all([f.account.accessToken({ fresh: true }), f.account.accessToken()]),
+      ).toEqual(["access", "access"]);
+      expect(f.fetcher).toHaveBeenCalledTimes(1);
+    });
+    it("asks for sign-in instead of serving a cached token it cannot refresh", async () => {
+      const f = fixture();
+      f.seed({ expiresAt: 3600000, refresh_token: undefined });
+      await expect(f.account.accessToken({ fresh: true })).rejects.toBeInstanceOf(
+        NexiSignInRequiredError,
+      );
+      expect(f.fetcher).not.toHaveBeenCalled();
+      expect(f.raw()).toBeNull();
+    });
+    it("keeps the cached token and refresh grant through issuer downtime", async () => {
+      const f = fixture();
+      f.seed({ expiresAt: 3600000 });
+      f.fetcher.mockResolvedValueOnce(json({}, 503));
+      await expect(f.account.accessToken({ fresh: true })).rejects.toThrow("refresh");
+      expect(JSON.parse(f.raw()!)).toMatchObject({ access_token: "old", refresh_token: "refresh" });
+    });
+    it("clears a rejected refresh grant", async () => {
+      const f = fixture();
+      f.seed({ expiresAt: 3600000 });
+      f.fetcher.mockResolvedValueOnce(json({ error: "invalid_grant" }, 400));
+      await expect(f.account.accessToken({ fresh: true })).rejects.toBeInstanceOf(
+        NexiSignInRequiredError,
+      );
+      expect(f.raw()).toBeNull();
+    });
+  });
   it("refreshes once for concurrent requests and keeps rotated refresh tokens", async () => {
     const f = fixture();
     f.seed();

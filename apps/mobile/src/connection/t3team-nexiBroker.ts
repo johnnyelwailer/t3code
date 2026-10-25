@@ -33,9 +33,9 @@ export const mobileBroker = createMobileBrokerClient({
     }
     return enabled;
   },
-  accessToken: async () => {
+  accessToken: async (options) => {
     if (!nexiAccount) throw new Error("Nexplore account is not configured.");
-    return nexiAccount.accessToken();
+    return nexiAccount.accessToken(options);
   },
   start: (session, stream) => nexiNative().start(session, stream),
   fetch: (...args) => fetch(...args),

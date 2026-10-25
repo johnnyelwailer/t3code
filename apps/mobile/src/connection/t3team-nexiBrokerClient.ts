@@ -28,7 +28,7 @@ export function mobileBrokerEnabled(
 export function createMobileBrokerClient(deps: {
   brokerUrl: string;
   enabled: () => Promise<boolean>;
-  accessToken: () => Promise<string>;
+  accessToken: (options?: { readonly fresh?: boolean }) => Promise<string>;
   start: (session: string, streamUrl: string) => Promise<number>;
   fetch: typeof fetch;
 }) {
@@ -39,11 +39,11 @@ export function createMobileBrokerClient(deps: {
         detail: "Enable Nexi Work mobile broker in Settings → Features on a paired environment.",
       });
   };
-  const request = async (path: string, method = "GET") => {
+  const request = async (path: string, method = "GET", fresh = false) => {
     await checkEnabled();
     let token: string;
     try {
-      token = await deps.accessToken();
+      token = await deps.accessToken(fresh ? { fresh } : undefined);
     } catch (error) {
       if (error instanceof NexiSignInRequiredError)
         throw new ConnectionBlockedError({
@@ -91,7 +91,10 @@ export function createMobileBrokerClient(deps: {
     attach,
     pair: async (sessionId: string) => {
       if (!/^[\w-]{1,128}$/.test(sessionId)) throw new Error("Invalid broker session.");
-      return decodePairing(await request(`/v1/sessions/${sessionId}/pairing`, "POST")).credential;
+      // The host verifies this token itself and refuses one issued more than ten minutes ago, so a
+      // cached token (valid for hours) would pair on first sign-in and fail ever after.
+      return decodePairing(await request(`/v1/sessions/${sessionId}/pairing`, "POST", true))
+        .credential;
     },
     discoverHost: async (host: NexiHost) => {
       if (!host.online) throw new Error("This desktop host is offline.");
