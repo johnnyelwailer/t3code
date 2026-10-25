@@ -15,6 +15,8 @@ export const SEAM_KINDS = [
 
 // A seam is small by definition: a bigger budget means Nexi behaviour is hiding inside it.
 export const MAX_SEAM_LOC = 300;
+// ...and seams together stay small too, or "many small seams" becomes the loophole.
+export const MAX_TOTAL_SEAM_LOC = 1500;
 
 const KEBAB = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const PLACEHOLDER_POINTERS = new Set(["", "none", "n/a", "na", "tbd", "todo", "-"]);

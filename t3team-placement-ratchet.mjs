@@ -1,5 +1,5 @@
 import { isRestrictedArea } from "./t3team-placement-areas.mjs";
-import { seamFor } from "./t3team-placement-registry.mjs";
+import { MAX_TOTAL_SEAM_LOC, seamFor } from "./t3team-placement-registry.mjs";
 
 // Pure ratchet evaluation. No git, no filesystem: everything arrives as arguments so each rule is
 // unit-testable. The rules:
@@ -64,6 +64,13 @@ export function evaluatePlacement({
         `Seam '${seam.id}' uses ${used} lines but its budget is ${seam.maxLoc}. A seam stays small: move the Nexi behaviour into ${seam.nexiImplementation}, or raise maxLoc with a reason.`,
       );
     }
+  }
+
+  const totalSeamLoc = [...result.seamUsage.values()].reduce((sum, loc) => sum + loc, 0);
+  if (totalSeamLoc > MAX_TOTAL_SEAM_LOC) {
+    result.budget.push(
+      `Registered seams total ${totalSeamLoc} lines, over the ${MAX_TOTAL_SEAM_LOC} cap for all seams together. Move behaviour into nx-nexi or remove seams that nx-nexi no longer fills.`,
+    );
   }
 
   for (const item of result.tracked.values()) {

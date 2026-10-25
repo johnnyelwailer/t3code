@@ -305,6 +305,15 @@ describe("placement ratchet evaluation", () => {
     expect(hasBlockingGrowth(result)).toBe(true);
   });
 
+  it("caps all seams together so many small seams cannot hide a big one", () => {
+    const seams = Array.from({ length: 6 }, (_, index) =>
+      seam({ id: `slot-${index}`, files: [`apps/mobile/src/extensions/Slot${index}.tsx`], maxLoc: 300 }),
+    );
+    const items = seams.map((entry, index) => item(`apps/mobile/src/extensions/Slot${index}.tsx`, 280));
+    const result = evaluate({ items: itemsOf(...items), registry: registryOf(...seams) });
+    expect(result.budget.join()).toMatch(/Registered seams total 1680 lines/);
+  });
+
   it("fails growth of a baseline file and of an upstream-file edit", () => {
     const result = evaluate({
       items: itemsOf(item(legacy.path, 101), item(edited.path, 11, "modified")),
