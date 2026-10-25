@@ -1,0 +1,12 @@
+// Compile-check stub for android.webkit.CookieManager.
+package android.webkit
+
+class CookieManager {
+  fun setCookie(url: String, value: String) = Unit
+
+  fun getCookie(url: String): String? = null
+
+  companion object {
+    fun getInstance(): CookieManager = CookieManager()
+  }
+}

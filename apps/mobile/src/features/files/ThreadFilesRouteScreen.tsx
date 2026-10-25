@@ -25,6 +25,8 @@ import { LoadingScreen } from "../../components/LoadingScreen";
 import { resolveFileSelectionNavigationAction } from "../../lib/adaptive-navigation";
 import { copyTextWithHaptic } from "../../lib/copyTextWithHaptic";
 import { isPdfFile } from "../../lib/filePreview";
+import { openAssetUrl } from "../../connection/t3team-nexiOpenAsset";
+import * as Dialog from "../../components/ui/Dialog";
 import { tryOpenExternalUrl } from "../../lib/openExternalUrl";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import type { MediaVideoPreviewSource } from "../../lib/videoPreviewSource";
@@ -860,7 +862,13 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
             title: Platform.OS === "ios" ? "Open in Safari" : "Open in browser",
             icon: "safari",
             inline: false,
-            onPress: () => tryOpenExternalUrl(assetPreviewUri, "file-preview"),
+            onPress: () =>
+              openAssetUrl({
+                url: assetPreviewUri,
+                attachment: { name: basename(relativePath), mimeType: "text/html" },
+                open: (target) => tryOpenExternalUrl(target, "file-preview"),
+                report: (message) => Dialog.alert("Could not open the file", message),
+              }),
           } as const)
         : null,
       resolvedActiveMode === "preview" &&

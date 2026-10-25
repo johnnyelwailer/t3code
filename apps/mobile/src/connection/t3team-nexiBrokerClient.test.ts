@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { createMobileBrokerClient, mobileBrokerEnabled } from "./t3team-nexiBrokerClient";
+import {
+  isSessionEndedFailure,
+  type ConnectionAttemptError,
+} from "@t3tools/client-runtime/connection";
 import { createNexiOAuth, NexiSignInRequiredError } from "../features/connection/t3team-nexiOAuth";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -127,7 +131,7 @@ describe("Android broker connection", () => {
   });
   it.each([401, 403])("classifies broker refusal %s as authentication blocked", async (status) => {
     const f = fixture();
-    f.fetcher.mockResolvedValueOnce(json({}, status));
+    f.fetcher.mockImplementation(async () => json({}, status));
     await expect(f.client.hosts()).rejects.toMatchObject({ reason: "authentication" });
   });
   it("classifies host support being disabled as retryable remote availability", async () => {
@@ -142,6 +146,152 @@ describe("Android broker connection", () => {
       .mockResolvedValueOnce(json({ credential: "" }));
     await expect(f.client.hosts()).rejects.toThrow();
     await expect(f.client.pair("h-x")).rejects.toThrow();
+  });
+  describe("a 401 from a token the phone still believes is valid (clock moved backwards)", () => {
+    const skewed = () => {
+      const f = fixture();
+      // The cache trusts "stale-token" until a local expiry that the broker's clock has already passed.
+      f.token.mockImplementation(async (options) =>
+        options?.fresh ? "fresh-token" : "stale-token",
+      );
+      f.fetcher.mockImplementation(async (_url, init) => {
+        const bearer = (init?.headers as Record<string, string>).Authorization;
+        return bearer === "Bearer fresh-token"
+          ? json({ hosts: [] })
+          : json({ error: "token expired" }, 401);
+      });
+      return f;
+    };
+    it("retries once with a freshly issued token before blocking", async () => {
+      const f = skewed();
+      expect(await f.client.hosts()).toEqual([]);
+      expect(f.token.mock.calls).toEqual([[undefined], [{ fresh: true }]]);
+      expect(f.fetcher).toHaveBeenCalledTimes(2);
+    });
+    it("blocks when the fresh token is refused too, after exactly one retry", async () => {
+      const f = fixture();
+      f.fetcher.mockResolvedValue(json({ error: "wrong tenant" }, 401));
+      await expect(f.client.hosts()).rejects.toMatchObject({
+        _tag: "ConnectionBlockedError",
+        reason: "authentication",
+        detail: "wrong tenant",
+      });
+      expect(f.fetcher).toHaveBeenCalledTimes(2);
+      expect(f.token.mock.calls).toEqual([[undefined], [{ fresh: true }]]);
+    });
+    it("does not retry pairing, which already asked for a fresh token", async () => {
+      const f = fixture();
+      f.fetcher.mockResolvedValue(json({ error: "fresh owner token required" }, 401));
+      await expect(f.client.pair("h-owned")).rejects.toMatchObject({ reason: "authentication" });
+      expect(f.fetcher).toHaveBeenCalledTimes(1);
+    });
+    it("does not retry other statuses, and parks when the fresh token needs a new sign-in", async () => {
+      const f = fixture();
+      f.fetcher.mockResolvedValueOnce(json({ error: "busy" }, 429));
+      await expect(f.client.hosts()).rejects.toMatchObject({ _tag: "ConnectionTransientError" });
+      expect(f.fetcher).toHaveBeenCalledTimes(1);
+      f.fetcher.mockResolvedValueOnce(json({}, 401));
+      f.token.mockResolvedValueOnce("stale-token");
+      f.token.mockRejectedValueOnce(new NexiSignInRequiredError("Sign in again"));
+      await expect(f.client.hosts()).rejects.toMatchObject({
+        _tag: "ConnectionBlockedError",
+        reason: "authentication",
+        detail: "Sign in to Nexplore again.",
+      });
+    });
+  });
+  describe("pairing failures", () => {
+    const rows = [
+      [400, "ConnectionBlockedError", "configuration"],
+      [401, "ConnectionBlockedError", "authentication"],
+      [403, "ConnectionBlockedError", "authentication"],
+      [410, "ConnectionBlockedError", "configuration"],
+      [429, "ConnectionTransientError", "remote-unavailable"],
+      [500, "ConnectionTransientError", "remote-unavailable"],
+      [502, "ConnectionTransientError", "remote-unavailable"],
+      [503, "ConnectionTransientError", "remote-unavailable"],
+      [504, "ConnectionTransientError", "remote-unavailable"],
+    ] as const;
+    it.each(rows)("classifies HTTP %s as %s (%s)", async (status, tag, reason) => {
+      const f = fixture();
+      f.fetcher.mockResolvedValueOnce(json({ error: "broker says no" }, status));
+      await expect(f.client.pair("h-owned")).rejects.toMatchObject({
+        _tag: tag,
+        reason,
+        detail: "broker says no",
+        httpStatus: status,
+      });
+    });
+    it("treats 404 for a host session as the desktop being offline: the broker deletes it on host.down", async () => {
+      const f = fixture();
+      f.fetcher.mockResolvedValueOnce(json({ error: "no such session" }, 404));
+      await expect(f.client.pair("h-owned")).rejects.toMatchObject({
+        _tag: "ConnectionTransientError",
+        reason: "remote-unavailable",
+        httpStatus: 404,
+        detail: expect.stringContaining("offline or reconnecting"),
+      });
+    });
+    it("treats 404 for a cloud session as ended, the state the UI already renders", async () => {
+      const f = fixture();
+      f.fetcher.mockResolvedValueOnce(json({ error: "no such session" }, 404));
+      const failure = await f.client.pair("run-123").catch((error: unknown) => error);
+      expect(isSessionEndedFailure(failure as ConnectionAttemptError)).toBe(true);
+      expect(failure).toMatchObject({ _tag: "ConnectionBlockedError", detail: "no such session" });
+    });
+    it("classifies a fetch that never answered as a transient network or timeout failure", async () => {
+      const f = fixture();
+      f.fetcher.mockRejectedValueOnce(new TypeError("Network request failed"));
+      await expect(f.client.pair("h-owned")).rejects.toMatchObject({
+        _tag: "ConnectionTransientError",
+        reason: "network",
+      });
+      const timeout = new Error("aborted");
+      timeout.name = "TimeoutError";
+      f.fetcher.mockRejectedValueOnce(timeout);
+      await expect(f.client.pair("h-owned")).rejects.toMatchObject({
+        _tag: "ConnectionTransientError",
+        reason: "timeout",
+      });
+    });
+    it("shows the broker's error text instead of a bare status, bounded and without control characters", async () => {
+      const f = fixture();
+      f.fetcher.mockResolvedValueOnce(json({ error: "agent did not answer" }, 502));
+      await expect(f.client.pair("h-owned")).rejects.toThrow("agent did not answer");
+      f.fetcher.mockResolvedValueOnce(json({ error: "host not connected" }, 502));
+      await expect(f.client.pair("h-owned")).rejects.toThrow("host not connected");
+      f.fetcher.mockResolvedValueOnce(json({ error: `a\u0000b\n${"x".repeat(500)}` }, 400));
+      const bounded = await f.client.pair("h-owned").catch((error: Error) => error.message);
+      expect(bounded).toMatch(/^a b x{196}$/);
+    });
+    it.each([
+      ["a non-JSON body", () => new Response("<html>Bad gateway</html>", { status: 502 })],
+      ["a JSON body without error", () => json({ message: "x" }, 502)],
+      ["a non-string error", () => json({ error: { nested: true } }, 502)],
+      ["a blank error", () => json({ error: "  " }, 502)],
+    ])("falls back to the status text for %s", async (_name, response) => {
+      const f = fixture();
+      f.fetcher.mockResolvedValueOnce(response());
+      await expect(f.client.pair("h-owned")).rejects.toThrow(
+        "The broker is unavailable (HTTP 502)",
+      );
+    });
+    it("keeps a missing host list endpoint retryable: 404 only means definitive for a session", async () => {
+      const f = fixture();
+      f.fetcher.mockResolvedValueOnce(json({ error: "not found" }, 404));
+      await expect(f.client.hosts()).rejects.toMatchObject({ reason: "remote-unavailable" });
+    });
+  });
+  it("never receives or displays a loopback credential: the native side owns it", async () => {
+    const f = fixture();
+    const attached = await f.client.attach("h-owned");
+    expect(f.start.mock.calls[0]).toHaveLength(2);
+    expect(attached).toEqual({
+      sessionId: "h-owned",
+      httpBaseUrl: "http://127.0.0.1:12345",
+      wsBaseUrl: "ws://127.0.0.1:12345",
+    });
+    expect(JSON.stringify(attached)).not.toMatch(/secret|token|credential|@/i);
   });
   describe("attaching a saved connection", () => {
     /** The real account logic behind the client, with an in-memory token store and issuer. */

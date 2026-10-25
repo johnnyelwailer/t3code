@@ -1,0 +1,60 @@
+// Compile-check stub for the OkHttp and Okio calls the broker module makes.
+package okhttp3
+
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.TimeUnit
+import okio.ByteString
+
+class Dispatcher {
+  val executorService: ExecutorService get() = throw NotImplementedError()
+}
+
+class ConnectionPool {
+  fun evictAll() = Unit
+}
+
+class Request {
+  class Builder {
+    fun url(url: String): Builder = this
+
+    fun header(name: String, value: String): Builder = this
+
+    fun build(): Request = Request()
+  }
+}
+
+class Response
+
+interface WebSocket {
+  fun queueSize(): Long
+
+  fun send(bytes: ByteString): Boolean
+
+  fun close(code: Int, reason: String?): Boolean
+
+  fun cancel()
+}
+
+open class WebSocketListener {
+  open fun onOpen(webSocket: WebSocket, response: Response) = Unit
+
+  open fun onMessage(webSocket: WebSocket, bytes: ByteString) = Unit
+
+  open fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = Unit
+
+  open fun onClosing(webSocket: WebSocket, code: Int, reason: String) = Unit
+}
+
+class OkHttpClient {
+  class Builder {
+    fun readTimeout(timeout: Long, unit: TimeUnit): Builder = this
+
+    fun build(): OkHttpClient = OkHttpClient()
+  }
+
+  val dispatcher: Dispatcher = Dispatcher()
+  val connectionPool: ConnectionPool = ConnectionPool()
+
+  fun newWebSocket(request: Request, listener: WebSocketListener): WebSocket =
+    throw NotImplementedError()
+}

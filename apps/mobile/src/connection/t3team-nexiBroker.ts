@@ -2,6 +2,7 @@ import {
   ConnectionBlockedError,
   ConnectionTransientError,
 } from "@t3tools/client-runtime/connection";
+import { setAssetUrlObserver } from "@t3tools/client-runtime/state/assets";
 import * as Effect from "effect/Effect";
 import { appAtomRegistry } from "../state/atom-registry";
 import { resolveNexiConfig } from "../features/connection/t3team-nexiConfig";
@@ -9,7 +10,16 @@ import { nexiAccount } from "../features/connection/t3team-nexiAccount";
 import { createMobileBrokerClient, mobileBrokerEnabled } from "./t3team-nexiBrokerClient";
 import { createBrokerFlagWatcher } from "./t3team-nexiBrokerFlag";
 import { nexiNative, closeNexiTunnels } from "./t3team-nexiNative";
+import { installLoopbackCookieFetch, registerLoopbackPort } from "./t3team-nexiLoopbackFetch";
+import {
+  authorizeNativeFetch,
+  installNativeFetchAuthorization,
+} from "./t3team-nexiNativeFetchAuth";
 import { wakeNexiBrokerConnections } from "./t3team-nexiWakeups";
+
+// Native HTTP clients (downloads, uploads, image and media loaders) cannot send the loopback cookie.
+installNativeFetchAuthorization((url) => nexiNative().allowRequest(url));
+setAssetUrlObserver(authorizeNativeFetch);
 
 const config = resolveNexiConfig();
 let watchingFlags = false;
@@ -37,7 +47,12 @@ export const mobileBroker = createMobileBrokerClient({
     if (!nexiAccount) throw new Error("Nexplore account is not configured.");
     return nexiAccount.accessToken(options);
   },
-  start: (session, stream) => nexiNative().start(session, stream),
+  start: async (session, stream) => {
+    const port = await nexiNative().start(session, stream);
+    registerLoopbackPort(port);
+    installLoopbackCookieFetch();
+    return port;
+  },
   fetch: (...args) => fetch(...args),
 });
 

@@ -1,6 +1,8 @@
 import * as Schema from "effect/Schema";
 import { Linking } from "react-native";
 
+import { isTunnelUrl } from "../connection/t3team-nexiNativeFetchAuth";
+
 const ExternalUrlTarget = Schema.Literals([
   "file-preview",
   "markdown-link",
@@ -42,6 +44,9 @@ function externalUrlMetadata(url: string): { readonly scheme: string; readonly h
 
 export async function tryOpenExternalUrl(url: string, target: ExternalUrlTarget): Promise<boolean> {
   try {
+    // A broker tunnel URL only works inside this app (and signed ones are capabilities): never hand
+    // it to another app.
+    if (isTunnelUrl(url)) throw new Error("This address only works inside this app.");
     await Linking.openURL(url);
     return true;
   } catch (cause) {

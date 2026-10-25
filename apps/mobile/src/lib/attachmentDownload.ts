@@ -2,6 +2,7 @@ import type { ChatFileAttachment } from "@t3tools/contracts";
 import type { Directory } from "expo-file-system";
 import type { SharingOptions } from "expo-sharing";
 
+import { authorizeNativeFetch } from "../connection/t3team-nexiNativeFetchAuth";
 import { beginForegroundHandoff } from "./foreground-handoff";
 import { uuidv4 } from "./uuid";
 
@@ -180,6 +181,8 @@ export async function openAttachmentInViewer(input: {
     if (/^(file|content):/.test(input.uri)) {
       await new File(input.uri).copy(cached.file);
     } else {
+      // Expo's downloader has its own HTTP client: it cannot send the broker loopback cookie.
+      authorizeNativeFetch(input.uri);
       await File.downloadFileAsync(input.uri, cached.file, { signal: input.signal });
     }
     if (input.signal.aborted) return;
@@ -214,6 +217,7 @@ export async function downloadAttachmentForPreview(input: {
       cached.preview.dispose();
       return null;
     }
+    authorizeNativeFetch(input.url);
     await File.downloadFileAsync(input.url, cached.file, { signal: input.signal });
     if (input.signal.aborted) {
       cached.preview.dispose();

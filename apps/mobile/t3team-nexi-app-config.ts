@@ -8,6 +8,11 @@ export function withNexiMobileConfig(
 ): ExpoConfig {
   const publicEnv = resolveNexiMobileEnv(env);
   if (!publicEnv.T3CODE_NEXI_BROKER_URL) return config;
+  // The native broker module refuses to send the Entra bearer to any other origin.
+  const brokerOriginPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
+    "./plugins/t3team-withNexiBrokerOrigin.cjs",
+    { origin: new URL(publicEnv.T3CODE_NEXI_BROKER_URL).origin },
+  ];
   const mark = "./assets/t3team-nexplore-mark.png";
   return {
     ...config,
@@ -24,7 +29,7 @@ export function withNexiMobileConfig(
       adaptiveIcon: { foregroundImage: mark, backgroundColor: "#ffffff" },
     },
     extra: { ...config.extra, nexi: { env: publicEnv } },
-    plugins: (config.plugins ?? []).map((entry) => {
+    plugins: [...(config.plugins ?? []), brokerOriginPlugin].map((entry) => {
       const [name, options = {}] = Array.isArray(entry) ? entry : [entry];
       if (name === "expo-font")
         return [

@@ -1,0 +1,12 @@
+// Compile-check stub for okio.ByteString.
+package okio
+
+open class ByteString {
+  val size: Int = 0
+
+  fun toByteArray(): ByteArray = ByteArray(0)
+
+  companion object {
+    fun ByteArray.toByteString(offset: Int = 0, byteCount: Int = size): ByteString = ByteString()
+  }
+}

@@ -5,8 +5,11 @@ package expo.modules.t3terminal
 
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import java.net.InetAddress
-import java.net.ServerSocket
+import android.content.pm.PackageManager
+import android.os.SystemClock
+import android.util.Log
+import android.webkit.CookieManager
+import java.io.InputStream
 import java.net.Socket
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -25,20 +28,27 @@ import okio.ByteString.Companion.toByteString
 class NexiBrokerModule : Module() {
   private val client = OkHttpClient.Builder().readTimeout(0, TimeUnit.MILLISECONDS).build()
   private val workers = Executors.newFixedThreadPool(32)
-  private val tunnels = ConcurrentHashMap<String, Tunnel>()
+  private val tunnels: NexiTunnelRegistry<Tunnel> = NexiTunnelRegistry { it.isClosed }
   private val tokens = ConcurrentHashMap<String, CompletableFuture<String>>()
 
   override fun definition() = ModuleDefinition {
     Name("NexiBroker")
     Events("tokenRequested")
+    OnCreate { clearStaleCredentials() }
     AsyncFunction("start") { session: String, streamUrl: String ->
-      require(streamUrl.startsWith("wss://")) { "The broker requires TLS" }
-      synchronized(tunnels) {
-        tunnels[session]?.server?.localPort ?: Tunnel(streamUrl).also {
-          tunnels[session] = it
-          it.accept()
-        }.server.localPort
-      }
+      val refusal = NexiStreamPolicy.refusal(streamUrl, pinnedBrokerOrigin())
+      require(refusal == null) { refusal.orEmpty() }
+      val acquired = tunnels.acquire(session) { Tunnel(session, streamUrl) }
+      // Delivered on every start, including reuse: it repairs a cleared cookie jar. The secret
+      // stays native; JS only ever sees the bare loopback port.
+      acquired.tunnel.deliverSecret()
+      if (acquired.fresh) acquired.tunnel.listener.start()
+      acquired.tunnel.listener.port
+    }
+    // Native HTTP clients (downloads, uploads, image and media loaders) cannot send the loopback
+    // cookie. JS registers each signed URL it hands them; only that exact request is admitted.
+    Function("allowRequest") { url: String ->
+      tunnels.snapshot().any { !it.isClosed && it.listener.allowUrl(url) }
     }
     Function("provideToken") { requestId: String, token: String? ->
       tokens.remove(requestId)?.let {
@@ -58,40 +68,77 @@ class NexiBrokerModule : Module() {
     }
   }
 
-  private fun closeAll() {
-    synchronized(tunnels) {
-      tunnels.values.forEach { it.close() }
-      tunnels.clear()
-      tokens.values.forEach { it.cancel(true) }
-      tokens.clear()
+  /** The https broker origin the build was configured with (manifest meta-data), if any. */
+  private fun pinnedBrokerOrigin(): String? = try {
+    val context = appContext.reactContext
+    context?.packageManager
+      ?.getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
+      ?.metaData?.getString(BROKER_ORIGIN_KEY)
+  } catch (_: PackageManager.NameNotFoundException) {
+    null
+  }
+
+  /** A previous process's `t3lb*` cookies authorize nothing, but should not outlive it. */
+  private fun clearStaleCredentials() {
+    try {
+      val manager = CookieManager.getInstance()
+      val stale = NexiLoopbackHead.staleCookieNames(manager.getCookie("http://127.0.0.1/"))
+      stale.forEach { manager.setCookie("http://127.0.0.1/", "$it=; Path=/; Max-Age=0") }
+    } catch (_: RuntimeException) {
+      // No WebView provider: there is no cookie jar to clear.
     }
   }
 
-  private inner class Tunnel(private val streamUrl: String) {
-    val server = ServerSocket(0, 16, InetAddress.getByName("127.0.0.1"))
-    private val sockets = ConcurrentHashMap<Socket, Boolean>()
-    private val streams = ConcurrentHashMap<WebSocket, Boolean>()
+  private fun closeAll() {
+    tunnels.drain().forEach { it.close() }
+    tokens.values.forEach { it.cancel(true) }
+    tokens.clear()
+  }
 
-    fun accept() {
-      // A dedicated accept thread never consumes a worker needed by an active stream.
-      Thread({
-        try {
-          while (!server.isClosed) {
-            val tcp = server.accept()
-            if (sockets.size >= 16) {
-              tcp.close()
-            } else {
-              sockets[tcp] = true
-              workers.execute { pipe(tcp) }
-            }
-          }
-        } catch (_: Exception) {
-          close()
-        }
-      }, "nexi-broker-accept").start()
+  private inner class Tunnel(private val session: String, private val streamUrl: String) {
+    private val secret: String = NexiLoopbackAuth.newSecret()
+
+    // Explicit types: `tunnels` needs `isClosed`, which needs `listener`, whose callbacks use `tunnels`.
+    val listener: NexiLoopbackListener = NexiLoopbackListener(
+      secret = secret,
+      onAdmitted = { tcp, input -> workers.execute { pipe(tcp, input) } },
+      securityLog = { Log.w("NexiBroker", it) },
+      onClosed = {
+        revokeSecret()
+        tunnels.remove(session, this)
+      },
+      // Elapsed realtime keeps counting in deep sleep; the host's asset tokens expire by wall clock.
+      limits = LoopbackLimits(nanoTime = { SystemClock.elapsedRealtimeNanos() })
+    )
+    private val streams = ConcurrentHashMap<WebSocket, Boolean>()
+    val isClosed: Boolean get() = listener.isClosed
+
+    /** The app's own cookie jar, so every in-app HTTP, WebSocket and WebView client sends it. */
+    private val cookieUrl: String get() = "http://127.0.0.1:${listener.port}/"
+
+    fun deliverSecret() {
+      try {
+        val cookie = "${NexiLoopbackAuth.cookieName(
+          listener.port
+        )}=$secret; Path=/; HttpOnly; SameSite=Strict"
+        CookieManager.getInstance().setCookie(cookieUrl, cookie)
+      } catch (_: RuntimeException) {
+        // Fail closed: without the cookie no client could connect, and the cause may name the secret.
+        close()
+        error("The loopback credential could not be installed")
+      }
     }
 
-    private fun pipe(tcp: Socket) {
+    private fun revokeSecret() {
+      try {
+        val expired = "${NexiLoopbackAuth.cookieName(listener.port)}=; Path=/; Max-Age=0"
+        CookieManager.getInstance().setCookie(cookieUrl, expired)
+      } catch (_: RuntimeException) {
+        // The secret dies with the listener regardless; a stale cookie authorizes nothing.
+      }
+    }
+
+    private fun pipe(tcp: Socket, input: InputStream) {
       var ws: WebSocket? = null
       val requestId = UUID.randomUUID().toString()
       try {
@@ -99,7 +146,7 @@ class NexiBrokerModule : Module() {
         tokens[requestId] = token
         sendEvent("tokenRequested", mapOf("requestId" to requestId))
         val bearer = token.get(30, TimeUnit.SECONDS)
-        if (server.isClosed) return
+        if (listener.isClosed) return
         val opened = CompletableFuture<Unit>()
         val request = Request.Builder().url(
           streamUrl
@@ -139,9 +186,8 @@ class NexiBrokerModule : Module() {
         streams[ws] = true
         opened.get(30, TimeUnit.SECONDS)
         val buffer = ByteArray(64 * 1024)
-        val input = tcp.getInputStream()
         var count = input.read(buffer)
-        while (count >= 0 && !tcp.isClosed && !server.isClosed) {
+        while (count >= 0 && !tcp.isClosed && !listener.isClosed) {
           while (ws.queueSize() >= 1024 * 1024 && !tcp.isClosed) Thread.sleep(20)
           if (!ws.send(buffer.toByteString(0, count))) break
           count = input.read(buffer)
@@ -154,15 +200,15 @@ class NexiBrokerModule : Module() {
           streams.remove(it)
           it.cancel()
         }
-        tcp.close()
-        sockets.remove(tcp)
+        listener.release(tcp)
       }
     }
 
     fun close() {
-      server.close()
-      sockets.keys.forEach { it.close() }
+      listener.close()
       streams.keys.forEach { it.cancel() }
     }
   }
 }
+
+private const val BROKER_ORIGIN_KEY = "com.nexplore.nexiwork.NEXI_BROKER_ORIGIN"

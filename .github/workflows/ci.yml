@@ -535,6 +535,11 @@ jobs:
       - name: Lint mobile native sources
         run: vp run lint:mobile
 
+      # ktlint and detekt do not type-check: compile the t3team Kotlin against stubs so an error such
+      # as an inference cycle fails here and not in the first signed APK build.
+      - name: Type-check mobile Kotlin against stubs
+        run: node apps/mobile/scripts/t3team-kotlin-compile-check.mjs
+
   release_smoke:
     name: Release Smoke
     needs: changes

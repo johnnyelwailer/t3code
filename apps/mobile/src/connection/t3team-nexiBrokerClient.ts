@@ -5,6 +5,11 @@ import {
   ConnectionBlockedError,
   ConnectionTransientError,
 } from "@t3tools/client-runtime/connection";
+import {
+  brokerErrorText,
+  classifyBrokerFailure,
+  classifyBrokerNetworkFailure,
+} from "./t3team-nexiBrokerErrors";
 
 const Host = Schema.Struct({
   id: Schema.NonEmptyString,
@@ -39,11 +44,7 @@ export function createMobileBrokerClient(deps: {
         detail: "Enable Nexi Work mobile broker in Settings → Features on a paired environment.",
       });
   };
-  /**
-   * The signed-in account's token, with sign-in failures classified for the connection supervisor.
-   * `fresh` skips the cache: the host refuses a pairing token issued more than ten minutes ago.
-   */
-  const acquireToken = async (fresh = false) => {
+  const issueToken = async (fresh: boolean) => {
     try {
       return await deps.accessToken(fresh ? { fresh } : undefined);
     } catch (error) {
@@ -58,34 +59,34 @@ export function createMobileBrokerClient(deps: {
       });
     }
   };
-  const request = async (path: string, method = "GET", fresh = false) => {
+  /** The signed-in account's token, with sign-in failures classified for the connection supervisor. */
+  const acquireToken = (fresh = false) => issueToken(fresh);
+  const send = async (path: string, method: string, token: string) => {
+    try {
+      return await deps.fetch(`${deps.brokerUrl}${path}`, {
+        method,
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch (error) {
+      throw classifyBrokerNetworkFailure(error);
+    }
+  };
+  const request = async (
+    path: string,
+    method = "GET",
+    fresh = false,
+    sessionId: string | null = null,
+  ) => {
     await checkEnabled();
-    const token = await acquireToken(fresh);
-    const response = await deps.fetch(`${deps.brokerUrl}${path}`, {
-      method,
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (response.status === 401 || response.status === 403)
-      throw new ConnectionBlockedError({
-        reason: "authentication",
-        detail: "The broker refused access. Sign in with the account that owns this host.",
-      });
+    let response = await send(path, method, await issueToken(fresh));
+    // A cached token can be one the broker already considers expired (the phone's clock moved
+    // backwards): ask for a freshly issued one once before parking the user on a 401.
+    if (response.status === 401 && !fresh)
+      response = await send(path, method, await issueToken(true));
     if (!response.ok) {
-      // The host refused a token older than ten minutes and the broker relays that as a 5xx. An
-      // account that cannot issue a newer token never will until the user signs in again, so this
-      // is not a temporary outage and must not be retried.
-      const text = await response.text().catch(() => "");
-      if (/fresh owner token required/i.test(text))
-        throw new ConnectionBlockedError({
-          reason: "authentication",
-          detail: "Sign in again to pair this desktop.",
-          httpStatus: response.status,
-        });
-      throw new ConnectionTransientError({
-        reason: "remote-unavailable",
-        detail: `The broker is unavailable (HTTP ${response.status}). Check host enrollment and broker host support.`,
-      });
+      const text = await brokerErrorText(response);
+      throw classifyBrokerFailure(response.status, text, sessionId);
     }
     return response.json();
   };
@@ -115,8 +116,9 @@ export function createMobileBrokerClient(deps: {
       if (!/^[\w-]{1,128}$/.test(sessionId)) throw new Error("Invalid broker session.");
       // The host verifies this token itself and refuses one issued more than ten minutes ago, so a
       // cached token (valid for hours) would pair on first sign-in and fail ever after.
-      return decodePairing(await request(`/v1/sessions/${sessionId}/pairing`, "POST", true))
-        .credential;
+      return decodePairing(
+        await request(`/v1/sessions/${sessionId}/pairing`, "POST", true, sessionId),
+      ).credential;
     },
     discoverHost: async (host: NexiHost) => {
       if (!host.online) throw new Error("This desktop host is offline.");

@@ -1,0 +1,10 @@
+// Compile-check stubs for android.os.
+package android.os
+
+object SystemClock {
+  fun elapsedRealtimeNanos(): Long = 0L
+}
+
+class Bundle {
+  fun getString(key: String): String? = null
+}

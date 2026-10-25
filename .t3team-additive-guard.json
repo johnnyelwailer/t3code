@@ -719,7 +719,18 @@
     "apps/server/src/orchestration-v2/testkit/fixtures/subagent_v2/muse_transcript.ndjson",
     "apps/server/src/orchestration-v2/testkit/fixtures/turn_interrupt/muse_transcript.ndjson",
     "apps/web/src/components/settings/ScheduledTasksSettings.tsx",
-    "apps/web/src/components/settings/settingsLayout.tsx"
+    "apps/web/src/components/settings/settingsLayout.tsx",
+    "apps/mobile/src/features/browser/PreviewStreamWebView.tsx",
+    "apps/mobile/src/features/devices/device-stream-document.ts",
+    "packages/client-runtime/src/state/assets.ts",
+    "apps/mobile/src/lib/attachmentDownload.ts",
+    "packages/client-runtime/src/state/assets.test.ts",
+    "apps/mobile/src/lib/attachmentDownload.test.ts",
+    "apps/mobile/src/lib/openExternalUrl.ts",
+    "apps/mobile/src/native/EnrichedMarkdownText.tsx",
+    "apps/mobile/src/features/threads/QuestionAnswerHistory.tsx",
+    "apps/mobile/src/features/files/ThreadFilesRouteScreen.tsx",
+    "apps/mobile/Brewfile"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",

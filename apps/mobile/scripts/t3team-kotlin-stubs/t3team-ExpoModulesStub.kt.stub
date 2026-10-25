@@ -1,0 +1,47 @@
+// Compile-check stubs: just enough of expo-modules-core for the t3team Kotlin to type-check. Not
+// shipped, not linted. See apps/mobile/scripts/t3team-kotlin-compile-check.mjs.
+package expo.modules.kotlin.modules
+
+import android.content.Context
+
+class ModuleDefinitionData
+
+class AppContext {
+  val reactContext: Context? = null
+}
+
+class ModuleDefinitionBuilder {
+  fun Name(name: String) = Unit
+
+  fun Events(vararg names: String) = Unit
+
+  fun OnCreate(body: () -> Unit) = Unit
+
+  fun OnDestroy(body: () -> Unit) = Unit
+
+  // Non-generic so a body without parameters is not ambiguous with the one-parameter overload.
+  fun Function(name: String, body: () -> Any?) = Unit
+
+  fun <P0, R> Function(name: String, body: (P0) -> R) = Unit
+
+  fun <P0, P1, R> Function(name: String, body: (P0, P1) -> R) = Unit
+
+  fun AsyncFunction(name: String, body: () -> Any?) = Unit
+
+  fun <P0, R> AsyncFunction(name: String, body: (P0) -> R) = Unit
+
+  fun <P0, P1, R> AsyncFunction(name: String, body: (P0, P1) -> R) = Unit
+}
+
+fun ModuleDefinition(block: ModuleDefinitionBuilder.() -> Unit): ModuleDefinitionData {
+  ModuleDefinitionBuilder().block()
+  return ModuleDefinitionData()
+}
+
+abstract class Module {
+  val appContext: AppContext = AppContext()
+
+  abstract fun definition(): ModuleDefinitionData
+
+  fun sendEvent(name: String, body: Map<String, Any?>) = Unit
+}
