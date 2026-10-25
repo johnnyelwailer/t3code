@@ -15,7 +15,7 @@ export function NexiWelcome(props: { readonly onOtherWays: () => void }) {
   return (
     <ScrollView
       className="flex-1 bg-screen"
-      contentContainerClassName="grow justify-center px-6 py-8"
+      contentContainerClassName="grow px-6 pt-8"
       contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) + 24 }}
       showsVerticalScrollIndicator
       keyboardShouldPersistTaps="handled"

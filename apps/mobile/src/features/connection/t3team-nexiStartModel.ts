@@ -163,7 +163,10 @@ export function deriveNexiStartModel(input: NexiStartInput): NexiStartModel {
     };
   }
   const refresh = (tone: "primary" | "secondary", label = "Refresh desktops") =>
-    action("refresh", label, tone, { disabled: input.busy || input.offline, busy: input.busy });
+    action("refresh", label, tone, {
+      disabled: input.busy || input.offline,
+      busy: input.busy && input.connectingHostId === null,
+    });
   if (input.hosts === null)
     return {
       ...empty,

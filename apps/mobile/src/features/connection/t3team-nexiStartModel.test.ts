@@ -156,7 +156,10 @@ describe("deriveNexiStartModel", () => {
       status: "Connecting…",
     });
     expect(model.hosts.every((h) => h.disabled)).toBe(true);
-    expect(model.actions.find((a) => a.id === "refresh")?.disabled).toBe(true);
+    expect(model.actions.find((a) => a.id === "refresh")).toMatchObject({
+      disabled: true,
+      busy: false,
+    });
   });
 
   it("duplicate labels get an id suffix, case and spacing ignored", () => {
