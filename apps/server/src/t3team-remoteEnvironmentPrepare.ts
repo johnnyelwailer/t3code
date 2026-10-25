@@ -99,7 +99,7 @@ export const checkRemoteTarget = Effect.fn("remoteEnvironment.checkTarget")(func
  * retry after a dropped connection, a restart). `launchThread` with `reuseExistingThread` requires
  * the thread to exist, so the first launch goes without it.
  */
-const ensureRemoteThread =Effect.fn("remoteEnvironment.ensureThread")(function* (
+const ensureRemoteThread = Effect.fn("remoteEnvironment.ensureThread")(function* (
   api: RemoteEnvironmentApi,
   input: Omit<
     Parameters<RemoteEnvironmentApi["launchThread"]>[0],

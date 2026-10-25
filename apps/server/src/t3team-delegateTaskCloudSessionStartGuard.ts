@@ -12,7 +12,7 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 
-const CLOUD_SESSION_START_GUARD_TTL_MS =2 * 60 * 1000;
+const CLOUD_SESSION_START_GUARD_TTL_MS = 2 * 60 * 1000;
 
 export type CloudSessionStartClaim =
   | { readonly claimed: true }

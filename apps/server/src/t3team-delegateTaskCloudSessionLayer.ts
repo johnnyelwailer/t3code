@@ -54,9 +54,9 @@ const noBroker = new CloudSessionFailedError({
 });
 
 /** A delegated child's session holds its machine this long, not the 345-minute ceiling. */
-const DELEGATED_SESSION_HOLD_SECONDS =2 * 60 * 60;
+const DELEGATED_SESSION_HOLD_SECONDS = 2 * 60 * 60;
 
-const makeDelegateCloudSessionPlacement =Effect.gen(function* () {
+const makeDelegateCloudSessionPlacement = Effect.gen(function* () {
   const sessions = yield* CloudSessionService;
   const broker = yield* NexiBrokerService;
   const http = yield* HttpClient.HttpClient;

@@ -32,7 +32,7 @@ const noBroker = new CloudSessionFailedError({
     "This build has no Nexi broker configured, and a server reaches a cloud session only through it.",
 });
 
-const makeCloudSessionAccess =Effect.gen(function* () {
+const makeCloudSessionAccess = Effect.gen(function* () {
   const broker = yield* NexiBrokerService;
   const connector = yield* makeCloudSessionConnector(broker);
   return {
