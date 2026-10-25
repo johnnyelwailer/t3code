@@ -1,6 +1,7 @@
 import type { CloudSession } from "@t3tools/contracts";
 
 import { isTerminalCloudSessionPhase } from "~/components/cloud/t3team-cloudSessionSplit";
+import type { CloudQueuedSendRecoveryAction } from "./t3team-useCloudProjectNotResolvedActions";
 import type { CloudProjectWait } from "./t3team-cloudProjectWait";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {
@@ -15,6 +16,8 @@ export interface CloudQueuedSendCardInput {
   readonly onCancel: () => void;
   /** Null when retrying cannot help (the session ended). */
   readonly onRetry: (() => void) | null;
+  /** The extra ways out of a send that gave up waiting for its project; empty otherwise. */
+  readonly recoveryActions?: ReadonlyArray<CloudQueuedSendRecoveryAction>;
 }
 
 export type CloudSetupStepStatus = "done" | "current" | "upcoming";

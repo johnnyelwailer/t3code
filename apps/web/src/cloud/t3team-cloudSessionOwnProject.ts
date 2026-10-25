@@ -27,6 +27,11 @@ import {
   projectCwdOf,
 } from "@t3tools/shared/t3team-cloudSessionFit";
 
+import {
+  type MachineProjectBinding,
+  resolveMachineOwnProject,
+} from "./t3team-cloudSessionMachineProject";
+
 export { projectCwdOf };
 
 export interface CloudSessionOwnProject {
@@ -34,6 +39,8 @@ export interface CloudSessionOwnProject {
   /** Null while the session's server has not listed its own project yet: the environment is
    * held for it rather than offered through another project that merely groups the same. */
   readonly projectId: ProjectId | null;
+  /** How the project was found on the machine; absent while it is not listed yet. */
+  readonly resolvedBy?: MachineProjectBinding;
 }
 
 type ProjectFacts = CloudSessionProjectFacts;
@@ -66,6 +73,8 @@ export function resolveCloudSessionOwnProject(input: {
   readonly sessions: ReadonlyArray<Pick<CloudSession, "sessionId" | "environmentId">>;
   /** The working directory an environment registers as its project (`projectCwdOf`); null when none. */
   readonly serverCwdOf: (environmentId: EnvironmentId) => string | null;
+  /** The project id the environment's welcome names as its own, when it has reached this app. */
+  readonly bootstrapProjectIdOf?: (environmentId: EnvironmentId) => ProjectId | null;
   readonly projects: ReadonlyArray<
     ProjectFacts & { readonly environmentId: EnvironmentId; readonly id: ProjectId }
   >;
@@ -82,16 +91,22 @@ export function resolveCloudSessionOwnProject(input: {
     (item) => item.sessionId === target.sessionId,
   )?.environmentId;
   if (environmentId === undefined) return null;
-  const cwd = input.serverCwdOf(EnvironmentId.make(environmentId));
-  if (cwd === null) return null;
-  const own = ownProjectOnMachine(
-    cwd,
-    input.projects.filter((item) => String(item.environmentId) === environmentId),
-  );
-  if (own === undefined)
-    return { environmentId: EnvironmentId.make(environmentId), projectId: null };
+  const machineId = EnvironmentId.make(environmentId);
+  const machine = resolveMachineOwnProject({
+    environmentId: machineId,
+    bootstrapProjectId: input.bootstrapProjectIdOf?.(machineId) ?? null,
+    cwd: input.serverCwdOf(machineId),
+    projects: input.projects,
+  });
+  if (!machine.named) return null;
+  const own = machine.project;
+  if (own === undefined) return { environmentId: machineId, projectId: null };
   if (!isSameCloudSessionProject(project, own)) return null;
-  return { environmentId: own.environmentId, projectId: own.id };
+  return {
+    environmentId: own.environmentId,
+    projectId: own.id,
+    ...(machine.by === null ? {} : { resolvedBy: machine.by }),
+  };
 }
 
 /**
