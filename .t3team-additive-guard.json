@@ -729,7 +729,8 @@
     "apps/mobile/src/lib/openExternalUrl.ts",
     "apps/mobile/src/native/EnrichedMarkdownText.tsx",
     "apps/mobile/src/features/threads/QuestionAnswerHistory.tsx",
-    "apps/mobile/src/features/files/ThreadFilesRouteScreen.tsx"
+    "apps/mobile/src/features/files/ThreadFilesRouteScreen.tsx",
+    "apps/mobile/Brewfile"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",

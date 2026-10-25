@@ -1,0 +1,7 @@
+// Compile-check stub for android.content.Context.
+package android.content
+
+abstract class Context {
+  abstract val packageManager: android.content.pm.PackageManager
+  abstract val packageName: String
+}

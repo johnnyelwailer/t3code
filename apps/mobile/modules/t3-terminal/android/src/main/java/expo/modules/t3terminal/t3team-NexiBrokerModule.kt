@@ -108,7 +108,7 @@ class NexiBrokerModule : Module() {
         tunnels.remove(session, this)
       },
       // Elapsed realtime keeps counting in deep sleep; the host's asset tokens expire by wall clock.
-      limits = LoopbackLimits(nanoTime = SystemClock::elapsedRealtimeNanos)
+      limits = LoopbackLimits(nanoTime = { SystemClock.elapsedRealtimeNanos() })
     )
     private val streams = ConcurrentHashMap<WebSocket, Boolean>()
     val isClosed: Boolean get() = listener.isClosed

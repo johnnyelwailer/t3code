@@ -1,0 +1,16 @@
+// Compile-check stubs for android.content.pm.
+package android.content.pm
+
+class ApplicationInfo {
+  val metaData: android.os.Bundle? = null
+}
+
+abstract class PackageManager {
+  class NameNotFoundException : Exception()
+
+  abstract fun getApplicationInfo(packageName: String, flags: Int): ApplicationInfo
+
+  companion object {
+    const val GET_META_DATA = 128
+  }
+}
