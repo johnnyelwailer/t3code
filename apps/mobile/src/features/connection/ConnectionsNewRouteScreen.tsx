@@ -32,6 +32,7 @@ import { SymbolView } from "../../components/ui/AppSymbol";
 import { hasCloudPublicConfig } from "../cloud/publicConfig";
 import { CloudEnvironmentRows } from "./CloudEnvironmentRows";
 import { splitEnvironmentSections } from "./environmentSections";
+import { NexiHostsSection } from "./t3team-NexiHostsSection";
 
 type ConnectionsNewRouteParams = {
   readonly mode?: string;
@@ -265,6 +266,7 @@ export function ConnectionsNewRouteScreen({
           </View>
 
           {hasCloudPublicConfig() ? <T3ConnectSection /> : null}
+          <NexiHostsSection />
         </View>
       </ScrollView>
     </SettingsScreen>

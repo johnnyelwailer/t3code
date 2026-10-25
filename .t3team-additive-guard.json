@@ -1,5 +1,12 @@
 {
   "allowedModifiedFiles": [
+    "apps/mobile/app.config.ts",
+    "apps/mobile/eas.json",
+    "apps/mobile/modules/t3-terminal/android/build.gradle",
+    "apps/mobile/modules/t3-terminal/expo-module.config.json",
+    "apps/mobile/package.json",
+    "apps/mobile/src/features/connection/ConnectionsNewRouteScreen.tsx",
+    "scripts/lib/public-config.ts",
     "apps/web/src/components/settings/FoldedSettingsSection.tsx",
     "scripts/package.json",
     "packages/contracts/src/clientRpcPermissions.ts",
@@ -515,6 +522,8 @@
     "packages/client-runtime/src/connection/resolver.test.ts",
     "packages/client-runtime/src/connection/resolver.ts",
     "packages/client-runtime/src/connection/routes.ts",
+    "packages/client-runtime/src/connection/supervisor.test.ts",
+    "packages/client-runtime/src/connection/wakeups.ts",
     "packages/client-runtime/src/delayedStatus.test.ts",
     "packages/client-runtime/src/delayedStatus.ts",
     "packages/client-runtime/src/operations/commands.test.ts",

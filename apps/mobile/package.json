@@ -4,6 +4,7 @@
   "private": true,
   "main": "index.ts",
   "scripts": {
+    "android:release": "node t3team-build-release.mjs",
     "dev": "expo start",
     "dev:client": "APP_VARIANT=development expo start --dev-client --scheme t3code-dev --lan",
     "dev:client:reset": "APP_VARIANT=development expo start --dev-client --scheme t3code-dev --clear --lan",
@@ -155,6 +156,7 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "babel-preset-expo": "~58.0.17",
+    "fast-check": "4.3.0",
     "jsdom": "^30.0.1",
     "tailwindcss": "^4.0.0",
     "typescript": "catalog:"
