@@ -42,6 +42,15 @@ describe("Android broker connection", () => {
     expect(f.fetcher).not.toHaveBeenCalled();
     expect(f.start).not.toHaveBeenCalled();
   });
+  it("lets a distribution profile enable the broker before any environment is paired", () => {
+    expect(mobileBrokerEnabled([], { NEXI_MOBILE_BROKER: true })).toBe(true);
+    expect(
+      mobileBrokerEnabled([{ featureFlags: { NEXI_MOBILE_BROKER: false } }], {
+        NEXI_MOBILE_BROKER: true,
+      }),
+    ).toBe(true);
+    expect(mobileBrokerEnabled([], { NEXI_MOBILE_BROKER: false })).toBe(false);
+  });
   it("lists owned hosts with Entra identity and pairs the selected host's prefixed session", async () => {
     const f = fixture();
     const host = { id: "owned", label: "My desktop", online: true };

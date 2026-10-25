@@ -45,6 +45,13 @@ describe("Nexi mobile branding", () => {
       "expo-font",
       { fonts: ["base.ttf", "./assets/t3team-buenos-aires-vf.ttf"] },
     ]);
+    expect(next.android?.adaptiveIcon?.foregroundImage).toBe(
+      "./assets/t3team-nexplore-adaptive-mark.png",
+    );
+    expect(next.plugins![1]).toMatchObject([
+      "expo-splash-screen",
+      { android: { image: "./assets/t3team-nexplore-adaptive-mark.png" } },
+    ]);
     expect(next.plugins).toContainEqual([
       "./plugins/t3team-withNexiBrokerOrigin.cjs",
       { origin: "https://broker.test" },

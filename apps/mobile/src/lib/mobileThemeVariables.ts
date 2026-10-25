@@ -7,6 +7,7 @@ import {
   type MobileThemeId,
   type MobileThemeVariables,
 } from "./mobileTheme";
+import { withDistributionTheme } from "./t3team-distributionTheme";
 
 const defaults = defaultThemeVariables as Readonly<
   Record<MobileThemeAppearance, MobileThemeVariables>
@@ -19,7 +20,7 @@ export function getMobileThemeRuntimeVariables(
 ): MobileThemeVariables {
   const usesDefaultPalette = themeId === DEFAULT_MOBILE_THEME_ID || themeId === "material-you";
   const variables = usesDefaultPalette
-    ? defaults[appearance]
+    ? withDistributionTheme(defaults[appearance], appearance)
     : getMobileThemeVariables(themeId, appearance);
   const frame = themeColorWithAlpha(
     variables[usesDefaultPalette ? "--color-row-hover" : "--color-drawer"],

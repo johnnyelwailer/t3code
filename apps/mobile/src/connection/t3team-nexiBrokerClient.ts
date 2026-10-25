@@ -15,6 +15,8 @@ const Host = Schema.Struct({
   id: Schema.NonEmptyString,
   label: Schema.String,
   online: Schema.Boolean,
+  /** ISO time the broker last heard from the host; older brokers omit it. */
+  lastSeen: Schema.optional(Schema.String),
 });
 const Hosts = Schema.Struct({ hosts: Schema.Array(Host) });
 const Descriptor = Schema.Struct({ environmentId: EnvironmentId });
@@ -26,8 +28,12 @@ export type NexiHost = typeof Host.Type;
 
 export function mobileBrokerEnabled(
   configs: Iterable<{ featureFlags?: Readonly<Record<string, boolean>> }>,
+  preset: Readonly<Record<string, boolean>> = {},
 ) {
-  return [...configs].some((config) => config.featureFlags?.NEXI_MOBILE_BROKER === true);
+  return (
+    preset.NEXI_MOBILE_BROKER === true ||
+    [...configs].some((config) => config.featureFlags?.NEXI_MOBILE_BROKER === true)
+  );
 }
 
 export function createMobileBrokerClient(deps: {

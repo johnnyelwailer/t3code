@@ -7,7 +7,7 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
     group: "Cloud & machines",
     label: "Nexi Work mobile broker",
     description:
-      "Allow Nexi Work Android clients to sign in with Entra and attach enrolled desktop hosts. Enable from an existing paired environment before mobile broker onboarding.",
+      "Allow Nexi Work Android clients to sign in with Entra and attach enrolled desktop hosts. Enable from an existing paired environment, or ship it on in a distribution mobile profile (extra.nexi.featureFlags).",
     defaultEnabled: false,
     requiresRestart: false,
   },

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { Hct, SchemeTonalSpot, argbFromHex, hexFromArgb } from "@material/material-color-utilities";
 
 import { MOBILE_THEME_IDS } from "../../lib/mobileTheme";
@@ -6,6 +6,9 @@ import { getMobileThemeRuntimeVariables } from "../../lib/mobileThemeVariables";
 import { materialYouPaletteToMobileThemeVariables } from "../../lib/materialYouTheme.android";
 import type { MaterialYouPalette } from "../../lib/materialYouPalette";
 import { androidWorkspaceNavigationColors } from "./android-workspace-navigation-colors";
+
+// mobileThemeVariables reads the distribution theme from expo-constants, which Vitest cannot load.
+vi.mock("expo-constants", () => ({ default: { expoConfig: { extra: {} } } }));
 
 function luminance(hex: string) {
   const channels = hex

@@ -1,5 +1,27 @@
 import Constants from "expo-constants";
 
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Stock builds carry no `extra.nexi`; the Nexi Work distribution always seeds it. */
+export function isNexiDistribution(extra = Constants.expoConfig?.extra) {
+  return isRecord(extra?.nexi);
+}
+
+/** The distribution's build-time feature flag defaults, below any paired server's value. */
+export function nexiFeatureFlagPreset(
+  extra = Constants.expoConfig?.extra,
+): Readonly<Record<string, boolean>> {
+  const flags: unknown = extra?.nexi?.featureFlags;
+  if (!isRecord(flags)) return {};
+  return Object.fromEntries(
+    Object.entries(flags).filter(
+      (entry): entry is [string, boolean] => typeof entry[1] === "boolean",
+    ),
+  );
+}
+
 export function resolveNexiConfig(extra = Constants.expoConfig?.extra) {
   const env = extra?.nexi?.env;
   const secureUrl = (value: unknown) => {

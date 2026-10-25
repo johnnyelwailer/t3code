@@ -85,7 +85,7 @@ const TS_CONSUMERS: ReadonlyArray<{
     how: "none of these is given a loopback URL: remote pull-request, documentation, sign-in, settings and usage URLs, and the app's own widget URL; asset URLs go through tryOpenExternalUrl (refuses tunnel URLs) or openAssetUrl (downloads tunnel URLs and opens the local copy), as QuestionAnswerHistory does",
     files: [
       "features/connection/ConnectionDiagnosisDetails.tsx",
-      "features/connection/t3team-NexiHostsSection.tsx",
+      "features/connection/t3team-NexiDeviceCodeCard.tsx",
       "features/development/render-counter.ts",
       "features/pull-requests/PullRequestRouteScreen.tsx",
       "features/pull-requests/PullRequestStatusRows.tsx",

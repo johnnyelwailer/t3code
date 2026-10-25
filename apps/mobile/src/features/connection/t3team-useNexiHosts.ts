@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useNetworkState } from "expo-network";
 import { useNavigation } from "@react-navigation/native";
 import {
   BrokerConnectionRegistration,
@@ -12,42 +13,112 @@ import { mobileBroker } from "../../connection/t3team-nexiBroker";
 import { mobileBrokerEnabled, type NexiHost } from "../../connection/t3team-nexiBrokerClient";
 import { closeNexiTunnels } from "../../connection/t3team-nexiNative";
 import { nexiAccount } from "./t3team-nexiAccount";
-import { createNexiOperationRunner } from "./t3team-nexiOperation";
-import type { NexiDeviceCode } from "./t3team-nexiOAuth";
+import { nexiFeatureFlagPreset } from "./t3team-nexiConfig";
+import { NexiSignInRequiredError, type NexiDeviceCode } from "./t3team-nexiOAuth";
+import { classifyNexiStartError, type NexiStartError } from "./t3team-nexiStartError";
+import type { NexiStartInput } from "./t3team-nexiStartModel";
+import { useNexiStartPreview } from "./t3team-nexiStartPreview";
 
-export function useNexiHosts() {
-  const enabled = mobileBrokerEnabled(useServerConfigs().values());
-  const [hosts, setHosts] = useState<readonly NexiHost[]>([]);
+const flagPreset = nexiFeatureFlagPreset();
+
+/** `onConnected` defaults to leaving the add-environment screen the hook was opened from. */
+export function useNexiHosts(options: { readonly onConnected?: () => void } = {}) {
+  const enabled = mobileBrokerEnabled(useServerConfigs().values(), flagPreset);
+  const [hosts, setHosts] = useState<readonly NexiHost[] | null>(null);
   const [code, setCode] = useState<NexiDeviceCode | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<NexiStartError | null>(null);
   const [busy, setBusy] = useState(false);
-  const [operations] = useState(() =>
-    createNexiOperationRunner({ setBusy, setError, clearCode: () => setCode(null) }),
-  );
+  const [connectingHostId, setConnectingHostId] = useState<string | null>(null);
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const [loadedAt, setLoadedAt] = useState(Date.now);
+  const network = useNetworkState();
+  const preview = useNexiStartPreview();
+  const operation = useRef<AbortController | null>(null);
   const navigation = useNavigation();
   const register = useAtomCommand(environmentCatalog.register, { reportFailure: false });
-  const cancel = operations.cancel;
-  useEffect(() => operations.abort, [operations]);
+  const cancel = () => {
+    operation.current?.abort();
+    setCode(null);
+    setBusy(false);
+  };
+  useEffect(
+    () => () => {
+      operation.current?.abort();
+    },
+    [],
+  );
   useEffect(() => {
     if (!enabled) {
-      // Reset as well as abort: an aborted operation never clears its own busy state.
-      operations.cancel();
+      operation.current?.abort();
+      // Reset as well as abort: an aborted operation never clears its own busy state (#658).
+      setBusy(false);
+      setCode(null);
       closeNexiTunnels();
     }
-  }, [enabled, operations]);
-  const run = operations.run;
+  }, [enabled]);
+  const run = (action: (signal: AbortSignal) => Promise<void>, hostId?: string) => {
+    operation.current?.abort();
+    const controller = new AbortController();
+    operation.current = controller;
+    setBusy(true);
+    setError(null);
+    void action(controller.signal)
+      .catch((cause: unknown) => {
+        if (controller.signal.aborted) return;
+        const failure = classifyNexiStartError(cause, { hostId });
+        setError(failure);
+        // An expired or refused token means the account is signed out, not that the list is empty.
+        if (failure.kind === "auth") {
+          setSignedIn(false);
+          setHosts(null);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setBusy(false);
+          setCode(null);
+          setConnectingHostId(null);
+        }
+      });
+  };
   const refresh = async (signal: AbortSignal) => {
     const mine = await mobileBroker.hosts();
-    if (!signal.aborted) setHosts(mine);
+    if (signal.aborted) return;
+    setHosts(mine);
+    setLoadedAt(Date.now());
+    setSignedIn(true);
+  };
+  useEffect(() => {
+    if (!enabled || !nexiAccount) return;
+    void nexiAccount.accessToken().then(
+      () => {
+        setSignedIn(true);
+        run(refresh);
+      },
+      (cause: unknown) => {
+        // Only a missing or revoked token means signed out; a failed refresh is a retryable fault.
+        const signedOut = cause instanceof NexiSignInRequiredError;
+        setSignedIn(!signedOut);
+        if (!signedOut) setError(classifyNexiStartError(cause));
+      },
+    );
+  }, [enabled]);
+  const live: NexiStartInput = {
+    enabled,
+    signedIn,
+    deviceCodePending: code !== null,
+    hosts,
+    busy,
+    connectingHostId,
+    error,
+    offline: network.isConnected === false || network.isInternetReachable === false,
+    now: loadedAt,
   };
   return {
-    enabled,
-    hosts,
+    input: preview ?? live,
     code,
-    error,
-    busy,
     cancel,
-    setError,
+    setError: (message: string) => setError({ kind: "other", message }),
     signIn: () =>
       run(async (signal) => {
         await mobileBroker.checkEnabled();
@@ -55,13 +126,11 @@ export function useNexiHosts() {
         if (signal.aborted) return;
         setCode(next);
         await nexiAccount!.poll(next, signal);
-        // Signing in again replaces the account without a sign-out: streams opened as the previous
-        // account must not outlive it, exactly as on sign-out.
-        closeNexiTunnels();
         await refresh(signal);
       }),
     refresh: () => run(refresh),
-    connect: (host: NexiHost) =>
+    connect: (host: NexiHost) => {
+      setConnectingHostId(host.id);
       run(async (signal) => {
         const discovered = await mobileBroker.discoverHost(host);
         if (signal.aborted) return;
@@ -76,13 +145,17 @@ export function useNexiHosts() {
         );
         if (AsyncResult.isFailure(result))
           throw new Error("Could not attach the desktop. Check its connection and try again.");
-        if (!signal.aborted) navigation.goBack();
-      }),
+        if (signal.aborted) return;
+        if (options.onConnected) options.onConnected();
+        else navigation.goBack();
+      }, host.id);
+    },
     signOut: () =>
       run(async () => {
         closeNexiTunnels();
         await nexiAccount!.signOut();
-        setHosts([]);
+        setHosts(null);
+        setSignedIn(false);
       }),
   };
 }

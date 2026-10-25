@@ -14,7 +14,7 @@ import {
 import type { EnvironmentId } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
 import { useEffect, useRef, useState } from "react";
-import { Linking, Pressable, StyleSheet, View } from "react-native";
+import { Linking, Platform, Pressable, StyleSheet, View } from "react-native";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { cn } from "../../lib/cn";
@@ -32,7 +32,8 @@ import { SymbolView } from "../../components/ui/AppSymbol";
 import { hasCloudPublicConfig } from "../cloud/publicConfig";
 import { CloudEnvironmentRows } from "./CloudEnvironmentRows";
 import { splitEnvironmentSections } from "./environmentSections";
-import { NexiHostsSection } from "./t3team-NexiHostsSection";
+import { NexiHostsSection, NexiOtherWaysHeading } from "./t3team-NexiHostsSection";
+import { showsDistributionScrollIndicator } from "../../components/ui/t3team-scrollIndicators";
 
 type ConnectionsNewRouteParams = {
   readonly mode?: string;
@@ -208,15 +209,18 @@ export function ConnectionsNewRouteScreen({
         nestedScrollEnabled
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={showsDistributionScrollIndicator}
         className="flex-1"
         contentInset={{ bottom: Math.max(insets.bottom, 18) + 18 }}
         contentContainerStyle={{
           paddingHorizontal: 16,
           paddingTop: 4,
+          paddingBottom: Platform.OS === "android" ? Math.max(insets.bottom, 18) + 18 : undefined,
         }}
       >
         <View collapsable={false} className="gap-6.5">
+          <NexiHostsSection />
+          <NexiOtherWaysHeading />
           <PairingScanCard
             cameraActive={cameraPermission?.granted === true && screenFocused && !scanComplete}
             onScan={handleQrScan}
@@ -266,7 +270,6 @@ export function ConnectionsNewRouteScreen({
           </View>
 
           {hasCloudPublicConfig() ? <T3ConnectSection /> : null}
-          <NexiHostsSection />
         </View>
       </ScrollView>
     </SettingsScreen>
@@ -406,11 +409,11 @@ function PairingInputRow({
   readonly label: string;
 }) {
   return (
-    <View collapsable={false} className="h-13 flex-row items-center gap-3 px-4">
+    <View collapsable={false} className="min-h-13 flex-row items-center gap-3 px-4 py-2">
       <Text
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
-        className="w-20 text-base leading-[23px] text-foreground-muted"
+        className="min-w-20 text-base leading-[23px] text-foreground-muted"
       >
         {label}
       </Text>
