@@ -35,8 +35,6 @@ import { hasCloudPublicConfig } from "../cloud/publicConfig";
 import { CloudEnvironmentRows } from "./CloudEnvironmentRows";
 import { splitEnvironmentSections } from "./environmentSections";
 
-const ConnectionsNewTop = mobileExtensions.connectionsNewTop;
-
 type ConnectionsNewRouteParams = {
   readonly mode?: string;
   readonly pairingUrl?: string;
@@ -47,6 +45,7 @@ type ConnectionsNewRouteParams = {
 export function ConnectionsNewRouteScreen({
   route,
 }: StaticScreenProps<ConnectionsNewRouteParams | undefined>) {
+  const ConnectionsNewTop = mobileExtensions.connectionsNewTop;
   const {
     connectionPairingUrl,
     onChangeConnectionPairingUrl,

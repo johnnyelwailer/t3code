@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 const hook = NodeModule.createRequire(import.meta.url)("./t3team-distributionMobileMetro.cjs") as {
   API_SPECIFIER: string;
+  OVERLAY_PACKAGES: ReadonlySet<string>;
   SPECIFIER: string;
   assertOverlayBundled: (
     graph: { dependencies: Map<string, unknown> },
@@ -39,7 +40,11 @@ beforeEach(() => {
   root = real(NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "distribution-mobile-")));
   appRoot = NodePath.join(root, "workspace", "apps", "mobile");
   packDir = NodePath.join(root, "distro", "pack");
-  write(NodePath.join(appRoot, "package.json"), JSON.stringify({ dependencies: { react: "1" } }));
+  write(NodePath.join(packDir, "distribution.json"), "{}");
+  write(
+    NodePath.join(appRoot, "package.json"),
+    JSON.stringify({ dependencies: { react: "1", "left-pad": "1" } }),
+  );
   write(
     NodePath.join(packDir, "mobile.json"),
     JSON.stringify({ overlay: { entry: "mobile/index.tsx" } }),
@@ -70,15 +75,28 @@ const resolveWith = (env: Record<string, string>) => {
 };
 
 describe("a build without a selected overlay is the stock app", () => {
-  it("steps aside without T3CODE_DISTRIBUTION, without mobile.json, or without an overlay field", () => {
+  it("steps aside without T3CODE_DISTRIBUTION or when mobile.json declares no overlay", () => {
     expect(hook.readDistributionMobile({ appRoot, env: {} })).toBeNull();
-    NodeFS.rmSync(NodePath.join(packDir, "mobile.json"));
-    expect(hook.readDistributionMobile({ appRoot, env: selected() })).toBeNull();
+    expect(hook.readDistributionMobile({ appRoot, env: { T3CODE_DISTRIBUTION: "  " } })).toBeNull();
     write(NodePath.join(packDir, "mobile.json"), JSON.stringify({ platform: "mobile" }));
     expect(hook.readDistributionMobile({ appRoot, env: selected() })).toBeNull();
     const config = baseConfig();
     expect(hook.withDistributionMobile(config, { appRoot, env: {} })).toBe(config);
     expect(hook.cssEntryFile("./global.css", { appRoot, env: {} })).toBe("./global.css");
+  });
+
+  it("fails the build when T3CODE_DISTRIBUTION is set but names no usable distribution", () => {
+    const problems = [
+      NodePath.join(root, "missing"), // no such directory
+      NodePath.join(root, "distro"), // a directory without distribution.json
+    ];
+    for (const dir of problems) {
+      expect(() => hook.readDistributionMobile({ appRoot, env: selected(dir) })).toThrow(
+        /distribution-mobile/,
+      );
+    }
+    NodeFS.rmSync(NodePath.join(packDir, "mobile.json"));
+    expect(() => hook.readDistributionMobile({ appRoot, env: selected() })).toThrow(/mobile\.json/);
   });
 });
 
@@ -93,6 +111,7 @@ describe("reading the declared overlay", () => {
     expect(selection).toEqual({
       packDir,
       entryPath: NodePath.join(packDir, "mobile", "index.tsx"),
+      nativeModulesDir: null,
     });
   });
 
@@ -139,11 +158,51 @@ describe("resolution of overlay files", () => {
     expect(seen[0]?.origin).toBe(NodePath.join(real(appRoot), "package.json"));
   });
 
-  it("fails the build for imports that are not app dependencies, even deep app imports", () => {
+  it("fails the build for imports outside the stated list, even app dependencies and deep app imports", () => {
     const { resolve } = resolveWith(selected());
     const origin = NodePath.join(packDir, "mobile", "index.tsx");
-    expect(() => resolve(origin, "left-pad")).toThrow(/neither a dependency/);
-    expect(() => resolve(origin, "@t3tools/mobile-app/lib/time")).toThrow(/neither a dependency/);
+    // left-pad is a direct dependency of this fake app, but not on the overlay's list.
+    expect(() => resolve(origin, "left-pad")).toThrow(/not on the overlay's list/);
+    expect(() => resolve(origin, "@t3tools/mobile-app/lib/time")).toThrow(
+      /not on the overlay's list/,
+    );
+    expect(() => resolve(origin, "@t3tools/provider-core")).toThrow(/not on the overlay's list/);
+  });
+
+  it("lists every package the overlay may use, with no wildcard", () => {
+    expect([...hook.OVERLAY_PACKAGES].sort()).toEqual(
+      [
+        "@react-navigation/native",
+        "@t3tools/client-runtime",
+        "@t3tools/contracts",
+        "effect",
+        "expo",
+        "expo-constants",
+        "expo-font",
+        "expo-image",
+        "expo-secure-store",
+        "react",
+        "react-native",
+      ].sort(),
+    );
+  });
+
+  it("keeps asset resolutions inside the pack too", () => {
+    const config = baseConfig();
+    config.resolver = {
+      resolveRequest: () => ({
+        type: "assetFiles",
+        filePaths: [NodePath.join(root, "outside.png")],
+      }),
+    } as never;
+    const wrapped = hook.withDistributionMobile(config, { appRoot, env: selected() });
+    expect(() =>
+      wrapped.resolver.resolveRequest(
+        { originModulePath: NodePath.join(packDir, "mobile", "index.tsx") },
+        "../../../outside.png",
+        "android",
+      ),
+    ).toThrow(/outside the pack/);
   });
 
   it("fails the build for a relative import that leaves the pack", () => {
