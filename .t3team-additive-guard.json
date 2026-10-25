@@ -1,5 +1,6 @@
 {
   "allowedModifiedFiles": [
+    "apps/mobile/src/features/settings/SettingsRouteScreen.tsx",
     "apps/mobile/src/components/CompactBrandTitle.tsx",
     "apps/mobile/src/components/LoadingScreen.tsx",
     "apps/mobile/src/lib/mobileThemeVariables.ts",

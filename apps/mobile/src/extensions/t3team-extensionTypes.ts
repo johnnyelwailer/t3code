@@ -86,6 +86,8 @@ export interface MobileExtensions {
     defaults: MobileThemeVariables,
     appearance: MobileThemeAppearance,
   ) => MobileThemeVariables;
+  /** Rendered as the last row of the Connections group in Settings (a distribution's account entry). */
+  readonly settingsConnections?: ComponentType;
   /** Rendered above the stock options on the "add connection" screen. */
   readonly connectionsNewTop?: ComponentType;
 }
