@@ -72,7 +72,7 @@ class NexiLoopbackCapabilityTest {
   @Test fun onlyReadsAndUploadsAreAdmittedByACapability() {
     val h = harness()
     h.listener.allowTarget(target)
-    h.send("POST", target, "Content-Type: image/png")
+    h.send("POST", target, "Content-Type: image/png", "Content-Length: 0")
     h.take()
     for (method in listOf("PUT", "DELETE", "PATCH", "CONNECT", "OPTIONS", "get", "TRACE")) {
       val tcp = h.send(method, target)

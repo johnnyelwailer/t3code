@@ -34,12 +34,13 @@ object NexiCapabilityTargets {
   fun targetFor(url: String, port: Int): String? {
     val uri = parse(url)
     val path = uri?.rawPath.orEmpty()
+    val query = uri?.rawQuery
     val onTunnel = uri != null && uri.scheme == "http" && uri.host == "127.0.0.1" &&
       uri.port == port && uri.rawUserInfo == null
     return if (!onTunnel || path.isEmpty() || path == "/") {
       null
     } else {
-      normalize(uri?.rawQuery?.let { "$path?$it" } ?: path)
+      normalize(query?.let { "$path?$it" } ?: path)
     }
   }
 

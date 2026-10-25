@@ -8,6 +8,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import android.content.pm.PackageManager
 import android.util.Log
 import android.webkit.CookieManager
+import java.io.InputStream
 import java.net.Socket
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -97,7 +98,7 @@ class NexiBrokerModule : Module() {
     private val secret = NexiLoopbackAuth.newSecret()
     val listener = NexiLoopbackListener(
       secret = secret,
-      onAdmitted = { tcp, initial -> workers.execute { pipe(tcp, initial) } },
+      onAdmitted = { tcp, input -> workers.execute { pipe(tcp, input) } },
       securityLog = { Log.w("NexiBroker", it) },
       onClosed = {
         revokeSecret()
@@ -132,7 +133,7 @@ class NexiBrokerModule : Module() {
       }
     }
 
-    private fun pipe(tcp: Socket, initial: ByteArray) {
+    private fun pipe(tcp: Socket, input: InputStream) {
       var ws: WebSocket? = null
       val requestId = UUID.randomUUID().toString()
       try {
@@ -180,9 +181,6 @@ class NexiBrokerModule : Module() {
         streams[ws] = true
         opened.get(30, TimeUnit.SECONDS)
         val buffer = ByteArray(64 * 1024)
-        val input = tcp.getInputStream()
-        // The head the handshake already consumed goes first, byte for byte.
-        if (initial.isNotEmpty() && !ws.send(initial.toByteString())) return
         var count = input.read(buffer)
         while (count >= 0 && !tcp.isClosed && !listener.isClosed) {
           while (ws.queueSize() >= 1024 * 1024 && !tcp.isClosed) Thread.sleep(20)

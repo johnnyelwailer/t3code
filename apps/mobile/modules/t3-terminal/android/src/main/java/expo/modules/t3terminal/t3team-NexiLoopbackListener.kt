@@ -4,7 +4,10 @@
 package expo.modules.t3terminal
 
 import java.io.Closeable
+import java.io.ByteArrayInputStream
 import java.io.IOException
+import java.io.InputStream
+import java.io.SequenceInputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
@@ -26,6 +29,9 @@ data class LoopbackLimits(
   /** How long a registered signed URL admits connections, and how many are kept. */
   val capabilityTtlMs: Long = 60 * 60_000,
   val maxCapabilities: Int = 512,
+  /** Requests one capability connection may carry, and the largest upload body it may frame. */
+  val maxCapabilityRequests: Int = 16,
+  val maxCapabilityBodyBytes: Long = 1L shl 30,
   val nanoTime: () -> Long = System::nanoTime,
   /** Test seam: called when a pending socket's first byte has been read. */
   val onFirstByte: () -> Unit = {},
@@ -48,7 +54,7 @@ private class Pending(val tcp: Socket, val acceptedAt: Long) {
  */
 class NexiLoopbackListener(
   private val secret: String,
-  private val onAdmitted: (Socket, ByteArray) -> Unit,
+  private val onAdmitted: (Socket, InputStream) -> Unit,
   private val securityLog: (String) -> Unit,
   private val onClosed: () -> Unit = {},
   private val limits: LoopbackLimits = LoopbackLimits()
@@ -165,7 +171,7 @@ class NexiLoopbackListener(
       deny(tcp, admission.reason)
       return
     }
-    val initial = (admission as LoopbackAdmission.Allowed).initial
+    val allowed = admission as LoopbackAdmission.Allowed
     val accepted = synchronized(admitted) {
       val room = admitted.size < limits.maxAuthenticated && !closed.get()
       limits.insideAdmitLock()
@@ -177,11 +183,24 @@ class NexiLoopbackListener(
       return
     }
     try {
-      onAdmitted(tcp, initial)
+      onAdmitted(tcp, clientBytes(tcp, allowed))
     } catch (_: RuntimeException) {
       release(tcp)
     }
   }
+
+  /**
+   * The bytes to forward to the host. A secret-authenticated connection is forwarded as sent; one
+   * admitted by a registered URL has each of its requests checked on the way through.
+   */
+  private fun clientBytes(tcp: Socket, allowed: LoopbackAdmission.Allowed): InputStream =
+    if (allowed.scoped) {
+      CapabilityRequestStream(tcp.getInputStream(), allowed.initial, ::isCapable, limits) { reason ->
+        deny(tcp, "capability-$reason")
+      }
+    } else {
+      SequenceInputStream(ByteArrayInputStream(allowed.initial), tcp.getInputStream())
+    }
 
   /** The reason is a fixed token: the presented credential is never logged. */
   private fun deny(tcp: Socket, reason: String) {

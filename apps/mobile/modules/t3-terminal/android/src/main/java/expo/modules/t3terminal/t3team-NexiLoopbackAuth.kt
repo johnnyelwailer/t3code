@@ -13,7 +13,8 @@ import java.security.SecureRandom
 
 /** Outcome of the loopback handshake. `initial` holds every byte read, to be forwarded unchanged. */
 sealed interface LoopbackAdmission {
-  class Allowed(val initial: ByteArray) : LoopbackAdmission
+  /** `scoped`: admitted by a registered URL alone, so every later request is checked too. */
+  class Allowed(val initial: ByteArray, val scoped: Boolean = false) : LoopbackAdmission
 
   /** `reason` is a fixed token (never request content) so it is safe to log. */
   class Denied(val reason: String) : LoopbackAdmission
@@ -77,15 +78,16 @@ object NexiLoopbackAuth {
   private fun decide(bytes: ByteArray, credentials: LoopbackCredentials): LoopbackAdmission {
     val head = String(bytes, 0, NexiLoopbackHead.headEnd(bytes), StandardCharsets.ISO_8859_1)
     val parsed = NexiLoopbackHead.parse(head, credentials.port)
+    val secretOk = authorized(parsed, credentials.secret)
     val reason = when {
       parsed.malformed != null -> parsed.malformed
       !NexiLoopbackHead.originAllowed(parsed, credentials.port) -> "bad-origin"
-      authorized(parsed, credentials.secret) || capable(head, credentials) -> null
+      secretOk || capable(head, credentials) -> null
       parsed.credentials.isEmpty() -> "no-credential"
       else -> "bad-credential"
     }
     return if (reason == null) {
-      LoopbackAdmission.Allowed(NexiLoopbackHead.sanitize(bytes))
+      LoopbackAdmission.Allowed(NexiLoopbackHead.sanitize(bytes), scoped = !secretOk)
     } else {
       LoopbackAdmission.Denied(reason)
     }

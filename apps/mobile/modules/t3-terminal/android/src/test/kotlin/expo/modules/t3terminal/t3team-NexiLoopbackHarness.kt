@@ -3,6 +3,7 @@
 
 package expo.modules.t3terminal
 
+import java.io.InputStream
 import java.net.Socket
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.LinkedBlockingQueue
@@ -16,13 +17,13 @@ class Harness(
   limits: LoopbackLimits = PATIENT,
   val secret: String = NexiLoopbackAuth.newSecret()
 ) {
-  val admitted = LinkedBlockingQueue<Pair<Socket, ByteArray>>()
+  val admitted = LinkedBlockingQueue<Pair<Socket, InputStream>>()
   val logs = CopyOnWriteArrayList<String>()
   private val logQueue = LinkedBlockingQueue<String>()
   val closedCount = AtomicInteger()
   val listener = NexiLoopbackListener(
     secret = secret,
-    onAdmitted = { tcp, initial -> admitted.add(tcp to initial) },
+    onAdmitted = { tcp, input -> admitted.add(tcp to input) },
     securityLog = {
       logs.add(it)
       logQueue.add(it)
@@ -54,8 +55,15 @@ class Harness(
     true
   }
 
-  fun take(): Pair<Socket, ByteArray> =
+  fun takeStream(): Pair<Socket, InputStream> =
     admitted.poll(10, TimeUnit.SECONDS) ?: throw AssertionError("connection was not admitted")
+
+  /** The first bytes the listener would forward to the host (one read, as the pipe does). */
+  fun take(): Pair<Socket, ByteArray> {
+    val (tcp, input) = takeStream()
+    val buffer = ByteArray(64 * 1024)
+    return tcp to buffer.copyOf(input.read(buffer))
+  }
 
   /** Blocks until `count` security events have been logged. */
   fun awaitLogs(count: Int) = repeat(count) {
