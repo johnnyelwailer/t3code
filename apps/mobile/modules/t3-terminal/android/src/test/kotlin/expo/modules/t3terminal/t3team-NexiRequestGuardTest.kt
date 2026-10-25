@@ -205,7 +205,7 @@ class NexiRequestGuardTest {
     assertTrue(h.isClosedByServer(h.connect().also { it.write(request("GET", target)) }))
   }
 
-  @Test fun theSecretAuthenticatedPathIsForwardedAsSentWithNoRequestChecks() {
+  @Test fun theSecretAuthenticatedPathStillAllowsAnyMethodAndKeepAlive() {
     val h = harness()
     val client = h.connect()
     val cookie = "Cookie: ${NexiLoopbackHead.cookieName(h.listener.port)}=${h.secret}"

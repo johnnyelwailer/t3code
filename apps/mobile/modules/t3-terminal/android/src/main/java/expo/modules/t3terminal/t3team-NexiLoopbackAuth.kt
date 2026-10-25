@@ -63,7 +63,7 @@ object NexiLoopbackAuth {
 
   /**
    * Reads the first request head within the limits; the caller closes on `Denied`. `Allowed.initial`
-   * is the head with the credential removed, followed by any bytes read past it.
+   * is every byte read so far, unmodified: the request stream rewrites the heads.
    */
   fun admit(
     tcp: Socket,
@@ -87,7 +87,7 @@ object NexiLoopbackAuth {
       else -> "bad-credential"
     }
     return if (reason == null) {
-      LoopbackAdmission.Allowed(NexiLoopbackHead.sanitize(bytes), scoped = !secretOk)
+      LoopbackAdmission.Allowed(bytes, scoped = !secretOk)
     } else {
       LoopbackAdmission.Denied(reason)
     }

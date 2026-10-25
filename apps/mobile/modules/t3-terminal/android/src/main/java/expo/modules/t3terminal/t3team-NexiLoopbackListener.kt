@@ -4,10 +4,8 @@
 package expo.modules.t3terminal
 
 import java.io.Closeable
-import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.InputStream
-import java.io.SequenceInputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
@@ -179,22 +177,21 @@ class NexiLoopbackListener(
   }
 
   /**
-   * The bytes to forward to the host. A secret-authenticated connection is forwarded as sent; one
-   * admitted by a registered URL has each of its requests checked on the way through.
+   * The bytes to forward to the host, one parsed request at a time. A secret-authenticated
+   * connection has the loopback credentials stripped from every request head (keep-alive requests
+   * carry the cookie again) and an upgraded one becomes a raw pipe; a connection admitted by a
+   * registered URL carries that one request and nothing else.
    */
-  private fun clientBytes(tcp: Socket, allowed: LoopbackAdmission.Allowed): InputStream =
-    if (allowed.scoped) {
-      CapabilityRequestStream(
-        tcp.getInputStream(),
-        allowed.initial,
-        capabilities::admits,
-        limits
-      ) { reason ->
-        deny(tcp, "capability-$reason")
-      }
+  private fun clientBytes(tcp: Socket, allowed: LoopbackAdmission.Allowed): InputStream {
+    val plan = if (allowed.scoped) {
+      NexiRequestRules.capabilityPlan(capabilities::admits, limits)
     } else {
-      SequenceInputStream(ByteArrayInputStream(allowed.initial), tcp.getInputStream())
+      NexiRequestRules.authenticatedPlan(port)
     }
+    return RequestStream(tcp.getInputStream(), allowed.initial, plan) { reason ->
+      deny(tcp, if (allowed.scoped) "capability-$reason" else "request-$reason")
+    }
+  }
 
   /** The reason is a fixed token: the presented credential is never logged. */
   private fun deny(tcp: Socket, reason: String) {
