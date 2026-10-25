@@ -130,6 +130,15 @@ describe("resolution of overlay files", () => {
     expect(seen[0]?.origin).toBe(NodePath.join(real(appRoot), "package.json"));
   });
 
+  it("allows the helpers the transform injects into any file", () => {
+    const { resolve, seen } = resolveWith(selected());
+    resolve(
+      NodePath.join(packDir, "mobile", "index.tsx"),
+      "@babel/runtime/helpers/asyncToGenerator",
+    );
+    expect(seen[0]?.origin).toBe(NodePath.join(real(appRoot), "package.json"));
+  });
+
   it("fails the build for imports that are not app dependencies, even deep app imports", () => {
     const { resolve } = resolveWith(selected());
     const origin = NodePath.join(packDir, "mobile", "index.tsx");

@@ -7,6 +7,11 @@ const path = require("node:path");
 
 const SPECIFIER = "@t3code/distribution-mobile";
 const API_SPECIFIER = "@t3code/mobile-api";
+/**
+ * Packages the transform itself injects into any file (the dev profile turns async functions into
+ * `@babel/runtime/helpers/asyncToGenerator` calls): not the overlay's choice, so not restricted.
+ */
+const COMPILER_RUNTIME = new Set(["@babel/runtime"]);
 const PREFIX = "[t3code/distribution-mobile]";
 
 /** @param {string} message @returns {never} */
@@ -87,7 +92,7 @@ function importProblem(source, allowedPackages) {
   if (!isBare(source)) return null;
   if (source === API_SPECIFIER) return null;
   const name = packageName(source);
-  if (allowedPackages.has(name)) return null;
+  if (allowedPackages.has(name) || COMPILER_RUNTIME.has(name)) return null;
   return (
     `imports "${source}", which is neither a dependency of the mobile app nor ${API_SPECIFIER}; ` +
     `an overlay may use only those and its own files`
