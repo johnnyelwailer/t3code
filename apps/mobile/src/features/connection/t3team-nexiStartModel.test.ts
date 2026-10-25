@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { NexiSignInRequiredError } from "./t3team-nexiOAuth";
 import { classifyNexiStartError } from "./t3team-nexiStartError";
 import {

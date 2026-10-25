@@ -10,6 +10,8 @@ const Host = Schema.Struct({
   id: Schema.NonEmptyString,
   label: Schema.String,
   online: Schema.Boolean,
+  /** ISO time the broker last heard from the host; older brokers omit it. */
+  lastSeen: Schema.optional(Schema.String),
 });
 const Hosts = Schema.Struct({ hosts: Schema.Array(Host) });
 const Descriptor = Schema.Struct({ environmentId: EnvironmentId });

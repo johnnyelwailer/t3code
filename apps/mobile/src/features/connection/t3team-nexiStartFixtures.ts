@@ -1,11 +1,12 @@
-import type { NexiHostWithSeen, NexiStartInput } from "./t3team-nexiStartModel";
+import type { NexiHost } from "../../connection/t3team-nexiBrokerClient";
+import type { NexiStartInput } from "./t3team-nexiStartModel";
 
 /** Fixed clock so last-seen text is stable in tests and screenshots. */
 export const FIXTURE_NOW = Date.parse("2026-10-25T10:00:00.000Z");
 const ago = (minutes: number) => new Date(FIXTURE_NOW - minutes * 60_000).toISOString();
 
 /** Shaped like the broker's `GET /v1/hosts` rows (nexi-work/broker/src/broker.ts listHosts). */
-export const FIXTURE_HOSTS: readonly NexiHostWithSeen[] = [
+export const FIXTURE_HOSTS: readonly NexiHost[] = [
   { id: "h-3f9a01c2", label: "PJ's MacBook Pro", online: true, lastSeen: ago(0) },
   { id: "h-7be4d9a0", label: "Mac Studio (office)", online: true, lastSeen: ago(1) },
   { id: "h-c1d2e3f4", label: "Build Mac mini", online: false, lastSeen: ago(190) },
@@ -45,6 +46,7 @@ export const START_FIXTURES = {
         "The broker is unavailable (HTTP 404). Check host enrollment and broker host support.",
     },
   }),
+  connecting: base({ busy: true, connectingHostId: "h-7be4d9a0" }),
   "long-names": base({
     hosts: [
       {

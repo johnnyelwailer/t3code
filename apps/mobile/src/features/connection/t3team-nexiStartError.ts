@@ -20,7 +20,7 @@ const FALLBACK = "Could not connect to Nexplore.";
 
 export function classifyNexiStartError(
   cause: unknown,
-  context: { readonly hostId?: string } = {},
+  context: { readonly hostId?: string | undefined } = {},
 ): NexiStartError {
   const message = cause instanceof Error && cause.message.trim() ? cause.message : FALLBACK;
   if (cause instanceof NexiSignInRequiredError) return { kind: "auth", message };

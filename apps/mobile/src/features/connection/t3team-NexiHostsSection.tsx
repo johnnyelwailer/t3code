@@ -1,27 +1,20 @@
 import { Platform, View } from "react-native";
-import { NexiWordmark, useNexiDisplayFont } from "../../components/t3team-NexiBrand";
 import { AppText as Text } from "../../components/ui/AppText";
 import { resolveNexiConfig } from "./t3team-nexiConfig";
-import { NexiSignInPanel } from "./t3team-NexiSignInPanel";
-import { useNexiHosts } from "./t3team-useNexiHosts";
+import { NexiStartPanel } from "./t3team-NexiStartPanel";
+import { useNexiStart } from "./t3team-useNexiStart";
 
 function showsNexiHosts() {
   return Platform.OS === "android" && resolveNexiConfig() !== null;
 }
 
+/** The same start panel on Add environment, minus the pairing action the screen already shows. */
 export function NexiHostsSection() {
-  const displayFont = useNexiDisplayFont();
-  const state = useNexiHosts();
+  const start = useNexiStart({});
   if (!showsNexiHosts()) return null;
   return (
-    <View className="gap-3">
-      <View className="gap-2 px-4">
-        <NexiWordmark height={28} />
-        <Text className="text-lg text-foreground" style={displayFont}>
-          Nexi Work desktops
-        </Text>
-      </View>
-      <NexiSignInPanel state={state} />
+    <View className="px-4">
+      <NexiStartPanel {...start} hidePair />
     </View>
   );
 }

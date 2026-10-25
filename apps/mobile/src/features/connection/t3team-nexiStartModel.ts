@@ -2,8 +2,6 @@ import type { NexiHost } from "../../connection/t3team-nexiBrokerClient";
 import { relativeTime } from "../../lib/time";
 import type { NexiStartError } from "./t3team-nexiStartError";
 
-export type NexiHostWithSeen = NexiHost & { readonly lastSeen?: string | undefined };
-
 /** Everything the start screen depends on, as plain data. */
 export interface NexiStartInput {
   /** NEXI_MOBILE_BROKER, from the build preset or a paired server. */
@@ -13,7 +11,7 @@ export interface NexiStartInput {
   /** A device-code sign-in is waiting for the user at Microsoft. */
   readonly deviceCodePending: boolean;
   /** `null` until the broker has answered `GET /v1/hosts` once. */
-  readonly hosts: readonly NexiHostWithSeen[] | null;
+  readonly hosts: readonly NexiHost[] | null;
   /** A request (sign-in, host list, connect) is in flight. */
   readonly busy: boolean;
   readonly connectingHostId: string | null;
