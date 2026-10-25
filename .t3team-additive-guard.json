@@ -1,7 +1,12 @@
 {
   "allowedModifiedFiles": [
+    "knip.jsonc",
     "packages/client-runtime/src/connection/wakeups.ts",
     "packages/client-runtime/src/connection/supervisor.test.ts",
+    "apps/mobile/metro.config.js",
+    "apps/mobile/src/App.tsx",
+    "apps/mobile/tsconfig.json",
+    "apps/mobile/vite.config.ts",
     "apps/mobile/src/features/home/HomeScreen.tsx",
     "apps/mobile/src/features/connection/ConnectionsNewRouteScreen.tsx",
     "apps/web/src/components/settings/FoldedSettingsSection.tsx",

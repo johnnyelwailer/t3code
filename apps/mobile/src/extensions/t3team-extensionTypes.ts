@@ -36,6 +36,11 @@ export interface MobileExtensions {
   readonly wakeups?: ReadonlyArray<
     Stream.Stream<"credentials-changed" | "broker-availability-changed">
   >;
+  /**
+   * Runs once at app start, before the first render, for startup work such as registering
+   * observers. Slots are read lazily; do not rely on module import order for startup side effects.
+   */
+  readonly install?: () => void;
   /** Replaces the empty home screen shown before any thread exists. */
   readonly homeEmptyState?: HomeEmptyStateSlot;
   /** Rendered above the stock options on the "add connection" screen. */
