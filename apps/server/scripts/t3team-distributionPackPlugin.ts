@@ -31,6 +31,7 @@ import * as NodePath from "node:path";
 import {
   createDistributionImportResolver,
   isBareSpecifier,
+  isDistributionImporter,
 } from "./t3team-distributionImportResolver.ts";
 
 import { distributionPersistenceModule } from "./t3team-distributionPersistenceModule.ts";
@@ -172,15 +173,17 @@ const distributionModule = (dir: string): string => {
  * (symlink-resolved) path — e.g. /private/tmp on macOS — so canonicalize here or the prefix check
  * in `resolveId` compares different spellings of the same path.
  */
+const realpathOrSelf = (path: string): string => {
+  try {
+    return NodeFS.realpathSync.native(path);
+  } catch {
+    return path;
+  }
+};
+
 const distributionDir = (): string | undefined => {
   const dir = process.env.T3CODE_DISTRIBUTION?.trim();
-  if (!dir) return undefined;
-  const resolved = NodePath.resolve(dir);
-  try {
-    return NodeFS.realpathSync.native(resolved);
-  } catch {
-    return resolved;
-  }
+  return dir ? realpathOrSelf(NodePath.resolve(dir)) : undefined;
 };
 
 export function t3teamDistributionPackPlugin(): {
@@ -189,16 +192,20 @@ export function t3teamDistributionPackPlugin(): {
   load(id: string): string | null;
 } {
   const resolvePackImport = createDistributionImportResolver();
+  // `vp pack` runs with the server package as cwd; the t3code workspace root is two levels up.
+  const workspaceRoot = realpathOrSelf(NodePath.resolve(process.cwd(), "..", ".."));
   return {
     name: "t3code-distribution",
     resolveId(source, importer) {
       if (source === SPECIFIER) return VIRTUAL_ID;
       const dir = distributionDir();
       if (!dir || !importer || !isBareSpecifier(source)) return null;
-      // Only imports made by distribution modules (the compiled-in pack), never imports from the
-      // server's own source, which already resolve in this workspace.
+      // Only imports made by distribution modules (the compiled-in pack and the distribution files
+      // it reaches), never imports from the server's own source, which already resolve here.
       const importerPath = NodePath.resolve(importer);
-      if (!importerPath.startsWith(dir + NodePath.sep)) return null;
+      if (!isDistributionImporter({ importerPath, distributionDir: dir, workspaceRoot })) {
+        return null;
+      }
       return resolvePackImport(source, importerPath);
     },
     load(id) {

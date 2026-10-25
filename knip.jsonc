@@ -116,6 +116,8 @@
         "mobile-native-client.ts",
         "setup-worktree.ts",
         "sign-macos.ts",
+        // Run by the distribution's release workflow against the built app, not imported.
+        "t3team-check-packed-imports.ts",
         "verify-windows-desktop-artifact.ts",
       ],
       "ignoreDependencies": ["esbuild"],
@@ -168,6 +170,9 @@
         "@t3tools/web",
         "@napi-rs/keyring",
         "undici",
+        // Imported only by distribution modules the pack compiles in (nexi-work/broker/agent); the
+        // pack plugin resolves their bare imports against this package so the bundler inlines them.
+        "ws",
       ],
     },
     "apps/desktop": {
