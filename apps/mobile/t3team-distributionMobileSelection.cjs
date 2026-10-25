@@ -14,6 +14,25 @@ const API_SPECIFIER = "@t3code/mobile-api";
 const COMPILER_RUNTIME = new Set(["@babel/runtime"]);
 const PREFIX = "[t3code/distribution-mobile]";
 
+/**
+ * The packages an overlay file may import (besides `@t3code/mobile-api`, `@babel/runtime` and its own
+ * files), as web's pack boundary states its `react`/`effect`/`@t3team/pack-ui`. Every entry is a
+ * reviewed fork edit, justified here; the overlay typecheck links only these into its node_modules.
+ */
+const OVERLAY_PACKAGES = new Set([
+  "react", // components and hooks
+  "react-native", // View, Text, Platform, Linking
+  "expo", // the native module bridge (requireOptionalNativeModule, NativeModule)
+  "expo-constants", // `extra.nexi.env`, the distribution's build-time configuration
+  "expo-font", // the brand display font
+  "expo-image", // the brand wordmark
+  "expo-secure-store", // the Entra refresh token
+  "effect", // the connection errors and Effect-based gateway are the app's own
+  "@t3tools/client-runtime", // connection errors, asset URL observer: the protocol client the app runs on
+  "@t3tools/contracts", // protocol types
+  "@react-navigation/native", // navigation hooks of the hosts list
+]);
+
 /** @param {string} message @returns {never} */
 const fail = (message) => {
   throw new Error(`${PREFIX} ${message}`);
@@ -50,15 +69,26 @@ const packageName = (source) => {
  * error: an overlay that silently drops out of the build reads as "declared, so it must work".
  *
  * @param {{ env?: Record<string, string | undefined>, appRoot: string }} input
- * @returns {{ packDir: string, entryPath: string } | null}
+ * @returns {{ packDir: string, entryPath: string, nativeModulesDir: string | null } | null}
  */
 function readDistributionMobile({ env = process.env, appRoot }) {
   void appRoot;
   const dir = env.T3CODE_DISTRIBUTION?.trim();
+  // Only an unset variable means "stock". A set one that names nothing usable is a mistake that
+  // must not quietly produce a stock app (web fails the same way: readJson(distribution.json)).
   if (!dir) return null;
   const packDir = canonical(dir);
+  if (!fs.existsSync(path.join(packDir, "distribution.json"))) {
+    return fail(
+      `T3CODE_DISTRIBUTION=${dir} is not a distribution directory (no distribution.json)`,
+    );
+  }
   const mobilePath = path.join(packDir, "mobile.json");
-  if (!fs.existsSync(mobilePath)) return null;
+  if (!fs.existsSync(mobilePath)) {
+    return fail(
+      `the distribution ${packDir} has no mobile.json, so it cannot build the mobile app`,
+    );
+  }
   /** @type {{ overlay?: unknown }} */
   let mobile;
   try {
@@ -79,7 +109,32 @@ function readDistributionMobile({ env = process.env, appRoot }) {
     return fail(`overlay entry "${entry}" must stay inside the pack ${packDir}`);
   }
   if (!fs.existsSync(entryPath)) return fail(`overlay entry not found: ${entryPath}`);
-  return { packDir, entryPath };
+  const modules = /** @type {{ nativeModules?: unknown }} */ (mobile.overlay).nativeModules;
+  let nativeModulesDir = null;
+  if (modules !== undefined) {
+    nativeModulesDir = typeof modules === "string" ? canonical(path.resolve(packDir, modules)) : "";
+    if (
+      !nativeModulesDir ||
+      !isInside(packDir, nativeModulesDir) ||
+      !fs.existsSync(nativeModulesDir)
+    ) {
+      return fail(`overlay.nativeModules must name a directory inside the pack ${packDir}`);
+    }
+  }
+  return { packDir, entryPath, nativeModulesDir };
+}
+
+/**
+ * The directories whose files make up the overlay: its entry's directory and its native modules.
+ * They are what Tailwind scans and what the runtime version is hashed from.
+ *
+ * @param {{ entryPath: string, nativeModulesDir: string | null }} selection
+ */
+function overlayRoots(selection) {
+  return [
+    path.dirname(selection.entryPath),
+    ...(selection.nativeModulesDir ? [selection.nativeModulesDir] : []),
+  ];
 }
 
 /**
@@ -88,21 +143,15 @@ function readDistributionMobile({ env = process.env, appRoot }) {
  *
  * @param {string} source @param {ReadonlySet<string>} allowedPackages
  */
-function importProblem(source, allowedPackages) {
+function importProblem(source, allowedPackages = OVERLAY_PACKAGES) {
   if (!isBare(source)) return null;
   if (source === API_SPECIFIER) return null;
   const name = packageName(source);
   if (allowedPackages.has(name) || COMPILER_RUNTIME.has(name)) return null;
   return (
-    `imports "${source}", which is neither a dependency of the mobile app nor ${API_SPECIFIER}; ` +
-    `an overlay may use only those and its own files`
+    `imports "${source}", which is not on the overlay's list (OVERLAY_PACKAGES in ` +
+    `t3team-distributionMobileSelection.cjs) and is not ${API_SPECIFIER}; an overlay may use only those and its own files`
   );
-}
-
-/** @param {string} appRoot */
-function appDependencies(appRoot) {
-  const manifest = JSON.parse(fs.readFileSync(path.join(appRoot, "package.json"), "utf8"));
-  return new Set(Object.keys(manifest.dependencies ?? {}));
 }
 
 /**
@@ -132,12 +181,13 @@ module.exports = {
   API_SPECIFIER,
   PREFIX,
   SPECIFIER,
-  appDependencies,
+  OVERLAY_PACKAGES,
   assertOverlayBundled,
   canonical,
   fail,
   importProblem,
   isBare,
   isInside,
+  overlayRoots,
   readDistributionMobile,
 };

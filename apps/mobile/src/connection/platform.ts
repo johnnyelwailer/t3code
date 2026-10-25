@@ -151,7 +151,10 @@ const layerWakeups = Wakeups.layer({
         Stream.map(() => "credentials-changed" as const),
       ),
       networkPathChanges,
-      ...(mobileExtensions.wakeups ?? []),
+      // Read when the stream runs, not at module load: the registry is inside an import cycle.
+      Stream.suspend(() =>
+        Stream.mergeAll(mobileExtensions.wakeups ?? [], { concurrency: "unbounded" }),
+      ),
     ],
     { concurrency: "unbounded" },
   ),

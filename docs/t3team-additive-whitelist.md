@@ -563,7 +563,6 @@ All already listed in `allowedModifiedFiles`; each gains only the voice-surface 
 
 Reasons for the upstream files the mobile extension registry touches. Each edit is additive and a no-op without a distribution.
 
-- `apps/mobile/src/features/home/HomeScreen.tsx` — reads the `homeEmptyState` slot (inside an error boundary) before the stock empty home.
 - `apps/mobile/src/features/connection/ConnectionsNewRouteScreen.tsx` — renders the `connectionsNewTop` slot (inside an error boundary) above the stock pairing options.
 - `apps/mobile/src/App.tsx` — one call that runs the distribution's startup hook before the first render, instead of relying on import order.
 - `apps/mobile/metro.config.js` — wraps the config with the distribution hook (`t3team-distributionMobileMetro.cjs`) and takes the CSS entry from it; both are identity for a build without a selected overlay.
@@ -583,3 +582,5 @@ Each edit is one call into `apps/mobile/src/lib/t3team-urlPolicy.ts`, a no-op wi
 - `apps/mobile/src/lib/attachmentDownload.ts` — tells the policy before each native download.
 - `apps/mobile/src/features/browser/PreviewStreamWebView.tsx` and `apps/mobile/src/features/devices/device-stream-document.ts` — the stream WebView document base URL may be overridden by the policy.
 - `packages/client-runtime/src/state/assets.ts` and `.../assets.test.ts` — `setAssetUrlObserver`: a platform sees each asset URL before it reaches a consumer (a platform whose native HTTP clients cannot send an environment's credentials authorizes the exact URL).
+- `apps/mobile/app.config.ts` — passes the config through `applyDistributionMobile`: identity for a stock build; with a selected overlay it turns Expo updates off (a stock OTA must not replace overlay JavaScript) and adds a Gradle plugin that makes the overlay an input of the bundle task.
+- `apps/mobile/fingerprint.config.js` — adds the overlay's entry and a hash of its files to the runtime version, so a distribution binary never shares a runtime version with a stock binary (empty for a stock build).

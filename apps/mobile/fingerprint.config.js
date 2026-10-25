@@ -16,7 +16,13 @@ if (!majorVersion) {
   throw new Error("fingerprint.config.js could not read the app version from app.config.ts");
 }
 
+const { fingerprintSources } = require("./t3team-distributionMobileConfig.cjs");
+
 module.exports = {
   nativeModuleSourceType: "files",
-  extraSources: [{ type: "contents", id: "appMajorVersion", contents: majorVersion }],
+  extraSources: [
+    { type: "contents", id: "appMajorVersion", contents: majorVersion },
+    // A distribution overlay is part of the runtime version (none for a stock build).
+    ...fingerprintSources(),
+  ],
 };

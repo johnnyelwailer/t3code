@@ -26,13 +26,14 @@ const path = require("node:path");
 const {
   API_SPECIFIER,
   SPECIFIER,
-  appDependencies,
+  OVERLAY_PACKAGES,
   assertOverlayBundled,
   canonical,
   fail,
   importProblem,
   isBare,
   isInside,
+  overlayRoots,
   readDistributionMobile,
 } = require("./t3team-distributionMobileSelection.cjs");
 
@@ -51,7 +52,7 @@ function cssEntryFile(original, { appRoot, env = process.env }) {
   const css = [
     `@import ${JSON.stringify(path.resolve(appRoot, original))};`,
     `@source ${JSON.stringify(canonical(appRoot))};`,
-    `@source ${JSON.stringify(selection.packDir)};`,
+    ...overlayRoots(selection).map((root) => `@source ${JSON.stringify(root)};`),
     "",
   ].join("\n");
   fs.mkdirSync(path.dirname(generated), { recursive: true });
@@ -80,7 +81,6 @@ function withDistributionMobile(config, { appRoot, env = process.env }) {
   const forkCss = path.join(app, "global.css");
   const pinnedOrigin = path.join(app, "package.json");
   const workspaceRoot = canonical(path.resolve(app, "..", ".."));
-  const allowed = appDependencies(app);
   const previous = config.resolver?.resolveRequest;
   /** @type {Map<string, string>} */
   const canonicalCache = new Map();
@@ -118,7 +118,7 @@ function withDistributionMobile(config, { appRoot, env = process.env }) {
           (!origin.includes(`${path.sep}node_modules${path.sep}`) &&
             !isInside(workspaceRoot, origin));
         if (distributionImporter) {
-          const problem = importProblem(moduleName, allowed);
+          const problem = importProblem(moduleName, OVERLAY_PACKAGES);
           if (problem !== null) fail(`${context.originModulePath}: ${problem}`);
           if (isBare(moduleName)) {
             context = { ...context, originModulePath: pinnedOrigin };
@@ -133,13 +133,17 @@ function withDistributionMobile(config, { appRoot, env = process.env }) {
           return { type: "sourceFile", filePath: generatedCss(app) };
         }
         const resolution = next(context, moduleName, platform);
-        if (
-          fromOverlay &&
-          !isBare(moduleName) &&
-          resolution.type === "sourceFile" &&
-          !isInside(selection.packDir, canon(resolution.filePath))
-        ) {
-          fail(`${origin}: "${moduleName}" resolves outside the pack (${resolution.filePath})`);
+        // Relative imports, assets included, stay inside the pack.
+        const resolved =
+          resolution.type === "sourceFile"
+            ? [resolution.filePath]
+            : resolution.type === "assetFiles"
+              ? resolution.filePaths
+              : [];
+        if (fromOverlay && !isBare(moduleName)) {
+          const outside = resolved.find((file) => !isInside(selection.packDir, canon(file)));
+          if (outside !== undefined)
+            fail(`${origin}: "${moduleName}" resolves outside the pack (${outside})`);
         }
         return resolution;
       },
@@ -156,6 +160,7 @@ function withDistributionMobile(config, { appRoot, env = process.env }) {
 
 module.exports = {
   API_SPECIFIER,
+  OVERLAY_PACKAGES,
   SPECIFIER,
   assertOverlayBundled,
   cssEntryFile,
